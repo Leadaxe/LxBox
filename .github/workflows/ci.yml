@@ -48,9 +48,19 @@ jobs:
       - name: Build APK (debug)
         run: flutter build apk --debug
 
-      - name: Upload APK
+      - name: Build APK (release)
+        run: flutter build apk --release
+
+      - name: Upload APK (debug)
         uses: actions/upload-artifact@v4
         with:
           name: android-apk-debug
-          path: app/build/app/outputs/flutter-apk/*.apk
+          path: app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload APK (release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk-release
+          path: app/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error

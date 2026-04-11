@@ -19,7 +19,7 @@ flutter run   # устройство или эмулятор Android
 
 ## CI (GitHub Actions)
 
-Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) на **push/PR в `main`** выполняет `analyze`, `test`, `flutter build apk --debug` и выкладывает **артефакт** `android-apk-debug` (вкладка **Actions** → последний run → **Artifacts**).
+Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) на **push/PR в `main`** выполняет `analyze`, `test`, `flutter build apk` (**debug** и **release**) и выкладывает артефакты **`android-apk-debug`** и **`android-apk-release`** (вкладка **Actions** → последний run → **Artifacts**). Release в шаблоне подписан debug-keystore (как в `app/android/app/build.gradle.kts`), для магазина нужна своя подпись.
 
 ## Версии
 
