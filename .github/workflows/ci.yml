@@ -15,7 +15,6 @@ concurrency:
 
 jobs:
   flutter:
-    if: ${{ hashFiles('app/pubspec.yaml') != '' }}
     runs-on: ubuntu-latest
     defaults:
       run:

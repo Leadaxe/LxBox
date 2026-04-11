@@ -19,9 +19,7 @@ flutter run   # устройство или эмулятор Android
 
 ## CI (GitHub Actions)
 
-После появления `app/pubspec.yaml` workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) на **push/PR в `main`** выполняет `analyze`, `test`, `flutter build apk --debug` и выкладывает **артефакт** `android-apk-debug` (вкладка **Actions** → последний run → **Artifacts**).
-
-Пока каталога `app/` нет, job **flutter** в CI **пропускается** (условие `hashFiles('app/pubspec.yaml')`).
+Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) на **push/PR в `main`** выполняет `analyze`, `test`, `flutter build apk --debug` и выкладывает **артефакт** `android-apk-debug` (вкладка **Actions** → последний run → **Artifacts**).
 
 ## Версии
 
