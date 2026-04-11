@@ -1,0 +1,26 @@
+# IDE
+.idea/
+.vscode/
+.cursor/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Android / Gradle (на будущее)
+.gradle/
+**/build/
+**/local.properties
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Secrets
+*.jks
+*.keystore
+.env
+.env.*
