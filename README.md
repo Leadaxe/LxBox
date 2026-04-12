@@ -2,6 +2,12 @@
 
 Клиент на базе **sing-box** для Android. Репозиторий: [github.com/Leadaxe/BoxVPN](https://github.com/Leadaxe/BoxVPN).
 
+## MVP (текущее)
+
+- В каталоге **`app/`**: Flutter-приложение **BoxVPN** — **Read** (буфер → JSON sing-box), **Start/Stop** VPN, выбор **группы** (Selector/URLTest) и список **узлов**, переключение и **одиночный ping** через **Clash API** (`experimental.clash_api` в конфиге).
+- Туннель и **libbox** на Android реализованы через плагин **[`flutter_singbox_vpn`](https://pub.dev/packages/flutter_singbox_vpn)** (sing-box/libbox, VpnService). HTTP к API — из Dart (`package:http`).
+- Сборка: [`docs/BUILD.md`](docs/BUILD.md), CI: [`docs/spec/tasks/005 cicd github actions/spec.md`](docs/spec/tasks/005%20cicd%20github%20actions/spec.md).
+
 ## Документация
 
 - Правила для агентов и автоматизации: [`AGENTS.md`](AGENTS.md) (коммиты и push — только по явному указанию оператора)

@@ -2,14 +2,7 @@
 
 ## Flutter-приложение
 
-Каталог **`app/`** должен содержать проект Flutter. Если его ещё нет:
-
-```bash
-cd /path/to/BoxVPN
-flutter create --org com.leadaxe --project-name boxvpn_app app
-```
-
-Дальше:
+Каталог **`app/`** — проект BoxVPN. Зависимости подтягиваются через `flutter pub get` (в т.ч. **`flutter_singbox_vpn`**, libbox на Android с [JitPack](https://jitpack.io) — репозиторий указан в `android/build.gradle.kts`).
 
 ```bash
 cd app
