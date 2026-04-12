@@ -1,0 +1,44 @@
+{
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      { "tag": "local", "type": "local" },
+      { "tag": "remote", "type": "udp", "server": "8.8.8.8", "server_port": 53 }
+    ],
+    "final": "remote",
+    "strategy": "prefer_ipv4"
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "address": ["172.19.0.1/30"],
+      "auto_route": true,
+      "strict_route": false,
+      "stack": "system",
+      "mtu": 1492
+    }
+  ],
+  "outbounds": [
+    { "type": "direct", "tag": "direct" },
+    { "type": "block", "tag": "block" },
+    {
+      "type": "selector",
+      "tag": "proxy",
+      "default": "direct",
+      "outbounds": ["direct", "block"]
+    }
+  ],
+  "route": {
+    "final": "proxy"
+  },
+  "experimental": {
+    "clash_api": {
+      "external_controller": "127.0.0.1:9090",
+      "secret": ""
+    }
+  }
+}
