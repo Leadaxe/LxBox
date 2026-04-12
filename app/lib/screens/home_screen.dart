@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show File, FileSystemException;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_singbox_vpn/flutter_singbox.dart';
 
 import '../config/clash_endpoint.dart';
+import '../config/config_parse.dart';
 import '../services/clash_api_client.dart';
 
 /// Главный экран MVP: Read, Start/Stop, группа, узлы, ping (см. спеки 002/003).
@@ -131,36 +134,87 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _readClipboard() async {
+  Future<void> _saveParsedConfig(String canonicalJson) async {
+    final ok = await _singbox.saveConfig(canonicalJson);
+    if (!ok) {
+      setState(() => _lastError = 'Не удалось сохранить конфиг');
+      return;
+    }
+    setState(() {
+      _configRaw = canonicalJson;
+      _lastError = '';
+    });
+    _rebuildClashEndpoint();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Конфиг сохранён')),
+      );
+    }
+  }
+
+  Future<void> _readFromClipboard() async {
     setState(() {
       _busy = true;
       _lastError = '';
     });
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
-      final text = data?.text?.trim() ?? '';
-      if (text.isEmpty) {
+      final text = data?.text ?? '';
+      if (text.trim().isEmpty) {
         setState(() => _lastError = 'Буфер пуст');
         return;
       }
-      jsonDecode(text);
-      final ok = await _singbox.saveConfig(text);
-      if (!ok) {
-        setState(() => _lastError = 'Не удалось сохранить конфиг');
+      final canonical = canonicalJsonForSingbox(text);
+      await _saveParsedConfig(canonical);
+    } on FormatException catch (e) {
+      setState(() => _lastError = 'Не удалось разобрать конфиг: ${e.message}');
+    } catch (_) {
+      setState(() => _lastError = 'Не удалось разобрать конфиг');
+    } finally {
+      setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _readFromFile() async {
+    setState(() {
+      _busy = true;
+      _lastError = '';
+    });
+    try {
+      final result = await FilePicker.pickFiles(
+        withData: true,
+        allowMultiple: false,
+      );
+      if (result == null || result.files.isEmpty) {
         return;
       }
-      setState(() {
-        _configRaw = text;
-        _lastError = '';
-      });
-      _rebuildClashEndpoint();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Конфиг сохранён')),
-        );
+      final file = result.files.single;
+      final bytes = file.bytes;
+      final path = file.path;
+      late final String text;
+      if (bytes != null && bytes.isNotEmpty) {
+        text = utf8.decode(bytes, allowMalformed: true);
+      } else if (path != null) {
+        try {
+          text = await File(path).readAsString();
+        } on FileSystemException catch (e) {
+          setState(() => _lastError = 'Не удалось прочитать файл: $e');
+          return;
+        }
+      } else {
+        setState(() => _lastError = 'Не удалось прочитать файл');
+        return;
       }
-    } catch (_) {
-      setState(() => _lastError = 'Не удалось разобрать JSON');
+      if (text.trim().isEmpty) {
+        setState(() => _lastError = 'Файл пуст');
+        return;
+      }
+      final canonical = canonicalJsonForSingbox(text);
+      await _saveParsedConfig(canonical);
+    } on FormatException catch (e) {
+      setState(() => _lastError = 'Не удалось разобрать конфиг: ${e.message}');
+    } catch (e) {
+      setState(() => _lastError = 'Файл: $e');
     } finally {
       setState(() => _busy = false);
     }
@@ -244,7 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Вставьте JSON sing-box из буфера — Read, затем Start.',
+              'Конфиг: JSON или JSONC/JSON5 (комментарии // и /* */). Read → from clipboard / from file, затем Start.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 12),
@@ -252,9 +306,42 @@ class _HomeScreenState extends State<HomeScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                FilledButton(
-                  onPressed: _busy ? null : _readClipboard,
-                  child: const Text('Read'),
+                MenuAnchor(
+                  builder: (context, controller, child) {
+                    return FilledButton(
+                      onPressed: _busy
+                          ? null
+                          : () {
+                              if (controller.isOpen) {
+                                controller.close();
+                              } else {
+                                controller.open();
+                              }
+                            },
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Read'),
+                          SizedBox(width: 4),
+                          Icon(Icons.arrow_drop_down, size: 20),
+                        ],
+                      ),
+                    );
+                  },
+                  menuChildren: [
+                    MenuItemButton(
+                      onPressed: _busy
+                          ? null
+                          : () {
+                              unawaited(_readFromClipboard());
+                            },
+                      child: const Text('from clipboard'),
+                    ),
+                    MenuItemButton(
+                      onPressed: _busy ? null : () => unawaited(_readFromFile()),
+                      child: const Text('from file'),
+                    ),
+                  ],
                 ),
                 FilledButton(
                   onPressed: (_busy || _configRaw.isEmpty) ? null : _start,

@@ -13,11 +13,26 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_singbox_vpn: ^1.1.3
   http: ^1.2.2
+  json5: ^0.8.2
+  file_picker: ^11.0.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
+
+# Иконка из sing-box Launcher (macOS .app Resources/app.icns → PNG 1024²).
+flutter_launcher_icons:
+  image_path: assets/icons/app_icon.png
+  android: true
+  ios: true
+  macos:
+    generate: true
+  windows:
+    generate: true
+  web:
+    generate: true
