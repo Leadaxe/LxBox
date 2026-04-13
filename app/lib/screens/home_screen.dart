@@ -114,153 +114,332 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          body: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    startActive
-                        ? FilledButton(
-                            onPressed: startEnabled ? _controller.start : null,
-                            child: const Text('Start'),
-                          )
-                        : OutlinedButton(
-                            onPressed: startEnabled ? _controller.start : null,
-                            child: const Text('Start'),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        startActive
+                            ? FilledButton(
+                                onPressed: startEnabled ? _controller.start : null,
+                                child: const Text('Start'),
+                              )
+                            : OutlinedButton(
+                                onPressed: startEnabled ? _controller.start : null,
+                                child: const Text('Start'),
+                              ),
+                        startActive
+                            ? OutlinedButton(
+                                onPressed: stopEnabled ? _controller.stop : null,
+                                child: const Text('Stop'),
+                              )
+                            : FilledButton(
+                                onPressed: stopEnabled ? _controller.stop : null,
+                                child: const Text('Stop'),
+                              ),
+                        Chip(
+                          label: Text('VPN: ${state.statusText}'),
+                          avatar: Icon(
+                            state.tunnelUp ? Icons.shield : Icons.shield_outlined,
+                            size: 18,
                           ),
-                    startActive
-                        ? OutlinedButton(
-                            onPressed: stopEnabled ? _controller.stop : null,
-                            child: const Text('Stop'),
-                          )
-                        : FilledButton(
-                            onPressed: stopEnabled ? _controller.stop : null,
-                            child: const Text('Stop'),
-                          ),
-                    Chip(
-                      label: Text('VPN: ${state.statusText}'),
-                      avatar: Icon(
-                        state.tunnelUp ? Icons.shield : Icons.shield_outlined,
-                        size: 18,
+                        ),
+                      ],
+                    ),
+                    if (state.lastError.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        state.lastError,
+                        style: TextStyle(color: Theme.of(context).colorScheme.error),
                       ),
+                    ],
+                    const SizedBox(height: 16),
+                    const Text('Group', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: InputDecorator(
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              hintText: 'No data (tunnel and API required)',
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                isExpanded: true,
+                                value: state.groups.contains(state.selectedGroup)
+                                    ? state.selectedGroup
+                                    : null,
+                                hint: const Text('Select group'),
+                                items: state.groups
+                                    .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                                    .toList(),
+                                onChanged: (!state.tunnelUp || state.busy || state.groups.isEmpty)
+                                    ? null
+                                    : (value) async {
+                                        _controller.setSelectedGroup(value);
+                                        await _controller.applyGroup(value);
+                                      },
+                              ),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Reload groups',
+                          onPressed: (!state.tunnelUp || state.busy)
+                              ? null
+                              : () => unawaited(_controller.reloadProxies()),
+                          icon: const Icon(Icons.refresh),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                if (state.lastError.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    state.lastError,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Nodes',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                   ),
-                ],
-                const SizedBox(height: 16),
-                const Text('Group', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 4),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: InputDecorator(
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          hintText: 'No data (tunnel and API required)',
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            isExpanded: true,
-                            value: state.groups.contains(state.selectedGroup)
-                                ? state.selectedGroup
-                                : null,
-                            hint: const Text('Select group'),
-                            items: state.groups
-                                .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                                .toList(),
-                            onChanged: (!state.tunnelUp || state.busy || state.groups.isEmpty)
-                                ? null
-                                : (value) async {
-                                    _controller.setSelectedGroup(value);
-                                    await _controller.applyGroup(value);
-                                  },
-                          ),
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Reload groups',
-                      onPressed: (!state.tunnelUp || state.busy)
-                          ? null
-                          : () => unawaited(_controller.reloadProxies()),
-                      icon: const Icon(Icons.refresh),
-                    ),
-                  ],
                 ),
-                const SizedBox(height: 12),
-                const Text('Nodes', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 4),
-                Expanded(
-                  child: state.nodes.isEmpty
-                      ? Center(
+              ),
+              const SizedBox(height: 4),
+              Expanded(
+                child: state.nodes.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
                           child: Text(
                             state.tunnelUp
                                 ? 'No nodes for selected group'
                                 : 'Start VPN to load nodes',
                             textAlign: TextAlign.center,
                           ),
-                        )
-                      : ListView.builder(
-                          itemCount: state.nodes.length,
-                          itemBuilder: (context, i) {
-                            final tag = state.nodes[i];
-                            final active = tag == state.activeInGroup;
-                            final highlighted = tag == state.highlightedNode;
-                            final delay = state.lastDelay[tag];
-                            final pingLabel = state.pingBusy[tag] == '…'
-                                ? '…'
-                                : (delay == null ? 'ping' : (delay < 0 ? 'err' : '${delay}ms'));
-                            return ListTile(
-                              onTap: () => _controller.setHighlightedNode(tag),
-                              selected: highlighted,
-                              selectedTileColor:
-                                  Theme.of(context).colorScheme.secondaryContainer.withAlpha(90),
-                              title: Text(
-                                tag,
-                                style: active ? const TextStyle(fontWeight: FontWeight.bold) : null,
-                              ),
-                              subtitle: active ? const Text('active') : null,
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    tooltip: 'Activate node',
-                                    onPressed: (!state.tunnelUp || state.busy || active)
-                                        ? null
-                                        : () => unawaited(_controller.switchNode(tag)),
-                                    icon: const Icon(Icons.play_arrow),
-                                  ),
-                                  TextButton(
-                                    onPressed: (!state.tunnelUp ||
-                                            state.busy ||
-                                            (state.pingBusy[tag] == '…'))
-                                        ? null
-                                        : () => unawaited(_controller.pingNode(tag)),
-                                    child: Text(pingLabel),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
                         ),
-                ),
-              ],
-            ),
+                      )
+                    : ListView.separated(
+                        padding: EdgeInsets.zero,
+                        itemCount: state.nodes.length,
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: Theme.of(context).colorScheme.outlineVariant.withAlpha(128),
+                        ),
+                        itemBuilder: (context, i) {
+                          final tag = state.nodes[i];
+                          final active = tag == state.activeInGroup;
+                          final highlighted = tag == state.highlightedNode;
+                          final delay = state.lastDelay[tag];
+                          final pingBusy = state.pingBusy[tag] == '…';
+                          return _NodeRow(
+                            tag: tag,
+                            active: active,
+                            highlighted: highlighted,
+                            delay: delay,
+                            pingBusy: pingBusy,
+                            tunnelUp: state.tunnelUp,
+                            busy: state.busy,
+                            onHighlight: () => _controller.setHighlightedNode(tag),
+                            onActivate: () => unawaited(_controller.switchNode(tag)),
+                            onPing: () => unawaited(_controller.pingNode(tag)),
+                          );
+                        },
+                      ),
+              ),
+            ],
           ),
         );
       },
+    );
+  }
+}
+
+class _NodeRow extends StatelessWidget {
+  const _NodeRow({
+    required this.tag,
+    required this.active,
+    required this.highlighted,
+    required this.delay,
+    required this.pingBusy,
+    required this.tunnelUp,
+    required this.busy,
+    required this.onHighlight,
+    required this.onActivate,
+    required this.onPing,
+  });
+
+  final String tag;
+  final bool active;
+  final bool highlighted;
+  final int? delay;
+  final bool pingBusy;
+  final bool tunnelUp;
+  final bool busy;
+  final VoidCallback onHighlight;
+  final VoidCallback onActivate;
+  final VoidCallback onPing;
+
+  String get _subtitle {
+    if (pingBusy) return 'PING…';
+    if (active) {
+      if (delay != null) {
+        return delay! < 0 ? 'ACTIVE · ERR' : 'ACTIVE · ${delay}MS';
+      }
+      return 'ACTIVE';
+    }
+    if (delay != null) {
+      return delay! < 0 ? 'ERR' : '${delay}MS';
+    }
+    return '';
+  }
+
+  Future<void> _openLongPressMenu(BuildContext context) async {
+    final canPing = tunnelUp && !busy && !pingBusy;
+    final box = context.findRenderObject() as RenderBox?;
+    final overlay = Navigator.of(context).overlay?.context.findRenderObject() as RenderBox?;
+    if (box == null || overlay == null || !box.hasSize) {
+      return;
+    }
+    final a = box.localToGlobal(Offset.zero);
+    final b = box.localToGlobal(box.size.bottomRight(Offset.zero));
+    final position = RelativeRect.fromRect(
+      Rect.fromPoints(a, b),
+      Offset.zero & overlay.size,
+    );
+    final chosen = await showMenu<String>(
+      context: context,
+      position: position,
+      items: [
+        PopupMenuItem<String>(
+          value: 'ping',
+          enabled: canPing,
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+              Icons.speed_outlined,
+              size: 22,
+              color: canPing ? null : Theme.of(context).disabledColor,
+            ),
+            title: const Text('Ping latency'),
+          ),
+        ),
+      ],
+    );
+    if (chosen == 'ping' && context.mounted) {
+      onPing();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final canActivate = tunnelUp && !busy && !active;
+
+    return Material(
+      color: highlighted
+          ? colorScheme.primaryContainer.withAlpha(55)
+          : null,
+      child: InkWell(
+        onTap: onHighlight,
+        onLongPress: () {
+          unawaited(_openLongPressMenu(context));
+        },
+        child: SizedBox(
+          height: 56,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: (active || highlighted) ? 3 : 0,
+                color: (active || highlighted) ? colorScheme.primary : Colors.transparent,
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  color: colorScheme.surfaceContainerHighest,
+                ),
+                child: Icon(
+                  Icons.dns_rounded,
+                  size: 20,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tag,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                          ),
+                    ),
+                    if (_subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        _subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              letterSpacing: 0.6,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
+                tooltip: active ? 'Active' : 'Use node',
+                onPressed: canActivate ? onActivate : null,
+                icon: Icon(
+                  active ? Icons.check_circle : Icons.play_circle_outline,
+                  size: 22,
+                  color: active
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: colorScheme.outline,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
