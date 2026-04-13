@@ -323,7 +323,7 @@ class _DebugScreenState extends State<DebugScreen> {
                       ? const Center(child: Text('Событий нет'))
                       : ListView.separated(
                           itemCount: filtered.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          separatorBuilder: (_, index) => const Divider(height: 1),
                           itemBuilder: (context, i) {
                             final entry = filtered[i];
                             final source =
