@@ -18,6 +18,8 @@ flutter run   # устройство или эмулятор Android
 
 Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) на **push/PR в `main`** выполняет `analyze`, `test`, **`flutter build apk --release`** и выкладывает артефакт **`android-apk-release`**. **Debug APK по умолчанию не собирается** (экономия времени CI).
 
+**Запустить CI вручную:** GitHub → вкладка **Actions** → слева workflow **CI** → кнопка **Run workflow** → ветка **main** → **Run workflow**. Из терминала: `gh workflow run CI` (в каталоге клона с `gh auth login`).
+
 Чтобы в том же workflow получить **debug**-APK, задайте **переменную репозитория** **`BUILD_DEBUG_APK`** = `true`:
 
 - GitHub: **Settings → Secrets and variables → Actions → Variables** → New repository variable.
