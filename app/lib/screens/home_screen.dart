@@ -46,46 +46,56 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListView(
                 children: [
                   const DrawerHeader(child: Text('Menu')),
-                  ListTile(
-                    leading: const Icon(Icons.edit_note_outlined),
+                  ExpansionTile(
+                    leading: const Icon(Icons.settings_outlined),
                     title: const Text('Config'),
-                    subtitle: const Text('View and edit JSON'),
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => ConfigScreen(controller: _controller),
-                        ),
-                      );
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.folder_open),
-                    title: const Text('Read from file'),
-                    enabled: !state.busy,
-                    onTap: () async {
-                      Navigator.of(context).pop();
-                      final ok = await _controller.readFromFile();
-                      if (ok && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Config saved')),
-                        );
-                      }
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.content_paste),
-                    title: const Text('Paste from clipboard'),
-                    enabled: !state.busy,
-                    onTap: () async {
-                      Navigator.of(context).pop();
-                      final ok = await _controller.readFromClipboard();
-                      if (ok && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Config saved')),
-                        );
-                      }
-                    },
+                    subtitle: const Text('Import and edit'),
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.edit_note_outlined),
+                        title: const Text('Editor'),
+                        subtitle: const Text('View and edit JSON'),
+                        contentPadding: const EdgeInsets.only(left: 24, right: 16),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => ConfigScreen(controller: _controller),
+                            ),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.folder_open),
+                        title: const Text('Read from file'),
+                        enabled: !state.busy,
+                        contentPadding: const EdgeInsets.only(left: 24, right: 16),
+                        onTap: () async {
+                          Navigator.of(context).pop();
+                          final ok = await _controller.readFromFile();
+                          if (ok && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Config saved')),
+                            );
+                          }
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.content_paste),
+                        title: const Text('Paste from clipboard'),
+                        enabled: !state.busy,
+                        contentPadding: const EdgeInsets.only(left: 24, right: 16),
+                        onTap: () async {
+                          Navigator.of(context).pop();
+                          final ok = await _controller.readFromClipboard();
+                          if (ok && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Config saved')),
+                            );
+                          }
+                        },
+                      ),
+                    ],
                   ),
                   ListTile(
                     leading: const Icon(Icons.bug_report_outlined),
@@ -128,7 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             onPressed: stopEnabled ? _controller.stop : null,
                             child: const Text('Stop'),
                           )
-                        : FilledButton.tonal(
+                        : FilledButton(
                             onPressed: stopEnabled ? _controller.stop : null,
                             child: const Text('Stop'),
                           ),
@@ -138,13 +148,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         state.tunnelUp ? Icons.shield : Icons.shield_outlined,
                         size: 18,
                       ),
-                    ),
-                    IconButton(
-                      tooltip: 'Reload groups',
-                      onPressed: (!state.tunnelUp || state.busy)
-                          ? null
-                          : () => unawaited(_controller.reloadProxies()),
-                      icon: const Icon(Icons.refresh),
                     ),
                   ],
                 ),
@@ -158,27 +161,43 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 16),
                 const Text('Group', style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
-                InputDecorator(
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    hintText: 'No data (tunnel and API required)',
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      isExpanded: true,
-                      value: state.groups.contains(state.selectedGroup) ? state.selectedGroup : null,
-                      hint: const Text('Select group'),
-                      items: state.groups
-                          .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                          .toList(),
-                      onChanged: (!state.tunnelUp || state.busy || state.groups.isEmpty)
-                          ? null
-                          : (value) async {
-                              _controller.setSelectedGroup(value);
-                              await _controller.applyGroup(value);
-                            },
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          hintText: 'No data (tunnel and API required)',
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            isExpanded: true,
+                            value: state.groups.contains(state.selectedGroup)
+                                ? state.selectedGroup
+                                : null,
+                            hint: const Text('Select group'),
+                            items: state.groups
+                                .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                                .toList(),
+                            onChanged: (!state.tunnelUp || state.busy || state.groups.isEmpty)
+                                ? null
+                                : (value) async {
+                                    _controller.setSelectedGroup(value);
+                                    await _controller.applyGroup(value);
+                                  },
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    IconButton(
+                      tooltip: 'Reload groups',
+                      onPressed: (!state.tunnelUp || state.busy)
+                          ? null
+                          : () => unawaited(_controller.reloadProxies()),
+                      icon: const Icon(Icons.refresh),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 const Text('Nodes', style: TextStyle(fontWeight: FontWeight.w600)),
