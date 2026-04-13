@@ -8,8 +8,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # Ручной запуск: Actions → CI → Run workflow (без inputs — совместимо с push/PR).
   workflow_dispatch:
+    inputs:
+      build_debug_apk:
+        description: Собрать и выложить debug APK
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -72,16 +77,16 @@ jobs:
             echo "storeFile=upload-keystore.jks"
           } > android/key.properties
 
-      # Debug APK только при переменной репозитория BUILD_DEBUG_APK=true (см. docs/BUILD.md).
+      # Debug: vars.BUILD_DEBUG_APK=true ИЛИ ручной запуск с build_debug_apk (&& у workflow_dispatch — не трогает inputs на push).
       - name: Build APK (debug)
-        if: ${{ vars.BUILD_DEBUG_APK == 'true' }}
+        if: ${{ vars.BUILD_DEBUG_APK == 'true' || (github.event_name == 'workflow_dispatch' && inputs.build_debug_apk) }}
         run: flutter build apk --debug
 
       - name: Build APK (release)
         run: flutter build apk --release
 
       - name: Upload APK (debug)
-        if: ${{ vars.BUILD_DEBUG_APK == 'true' }}
+        if: ${{ vars.BUILD_DEBUG_APK == 'true' || (github.event_name == 'workflow_dispatch' && inputs.build_debug_apk) }}
         uses: actions/upload-artifact@v4
         with:
           name: android-apk-debug

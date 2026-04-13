@@ -18,14 +18,21 @@ flutter run   # устройство или эмулятор Android
 
 Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) на **push/PR в `main`** выполняет `analyze`, `test`, **`flutter build apk --release`** и выкладывает артефакт **`android-apk-release`**. **Debug APK по умолчанию не собирается** (экономия времени CI).
 
-**Запустить CI вручную:** GitHub → вкладка **Actions** → слева workflow **CI** → кнопка **Run workflow** → ветка **main** → **Run workflow**. Из терминала: `gh workflow run CI` (в каталоге клона с `gh auth login`).
+**Запустить CI вручную:** GitHub → **Actions** → **CI** → **Run workflow** → ветка **main** → опция **«Собрать и выложить debug APK»** при необходимости → **Run workflow**.
 
-Чтобы в том же workflow получить **debug**-APK, задайте **переменную репозитория** **`BUILD_DEBUG_APK`** = `true`:
+Из терминала (`gh auth login`):
 
-- GitHub: **Settings → Secrets and variables → Actions → Variables** → New repository variable.
-- CLI из клона: `gh variable set BUILD_DEBUG_APK -b true` (затем push или re-run workflow).
+```bash
+gh workflow run CI                        # только release
+gh workflow run CI -f build_debug_apk=true  # + debug APK
+```
 
-После прогона верните `false` или удалите переменную, чтобы снова не собирать debug на каждый push.
+**Debug APK** также собирается, если задана **переменная репозитория** **`BUILD_DEBUG_APK`** = `true` (на любой trigger: push/PR/ручной):
+
+- GitHub: **Settings → Secrets and variables → Actions → Variables**
+- CLI: `gh variable set BUILD_DEBUG_APK -b true`
+
+После прогона верните `false` или удалите переменную, чтобы push/PR снова не тянули debug.
 
 ### Подпись release (один ключ между сборками)
 
