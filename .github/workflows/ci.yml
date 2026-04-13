@@ -70,13 +70,16 @@ jobs:
             echo "storeFile=upload-keystore.jks"
           } > android/key.properties
 
+      # Debug APK только при переменной репозитория BUILD_DEBUG_APK=true (см. docs/BUILD.md).
       - name: Build APK (debug)
+        if: ${{ vars.BUILD_DEBUG_APK == 'true' }}
         run: flutter build apk --debug
 
       - name: Build APK (release)
         run: flutter build apk --release
 
       - name: Upload APK (debug)
+        if: ${{ vars.BUILD_DEBUG_APK == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: android-apk-debug

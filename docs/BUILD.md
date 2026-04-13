@@ -16,7 +16,14 @@ flutter run   # устройство или эмулятор Android
 
 ## CI (GitHub Actions)
 
-Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) на **push/PR в `main`** выполняет `analyze`, `test`, `flutter build apk` (**debug** и **release**) и выкладывает артефакты **`android-apk-debug`** и **`android-apk-release`** (вкладка **Actions** → последний run → **Artifacts**).
+Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) на **push/PR в `main`** выполняет `analyze`, `test`, **`flutter build apk --release`** и выкладывает артефакт **`android-apk-release`**. **Debug APK по умолчанию не собирается** (экономия времени CI).
+
+Чтобы в том же workflow получить **debug**-APK, задайте **переменную репозитория** **`BUILD_DEBUG_APK`** = `true`:
+
+- GitHub: **Settings → Secrets and variables → Actions → Variables** → New repository variable.
+- CLI из клона: `gh variable set BUILD_DEBUG_APK -b true` (затем push или re-run workflow).
+
+После прогона верните `false` или удалите переменную, чтобы снова не собирать debug на каждый push.
 
 ### Подпись release (один ключ между сборками)
 
