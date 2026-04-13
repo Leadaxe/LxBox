@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../controllers/home_controller.dart';
 import '../models/home_state.dart';
@@ -28,31 +29,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  Future<void> _showConfigDialog(String configRaw) async {
-    final text = configRaw.trim().isEmpty ? 'Config is empty' : configRaw;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Current config'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: SingleChildScrollView(
-            child: SelectableText(
-              text,
-              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -70,6 +46,47 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ListView(
                 children: [
                   const DrawerHeader(child: Text('Menu')),
+                  ListTile(
+                    leading: const Icon(Icons.edit_note_outlined),
+                    title: const Text('Config'),
+                    subtitle: const Text('View and edit JSON'),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => ConfigScreen(controller: _controller),
+                        ),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.folder_open),
+                    title: const Text('Read from file'),
+                    enabled: !state.busy,
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      final ok = await _controller.readFromFile();
+                      if (ok && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Config saved')),
+                        );
+                      }
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.content_paste),
+                    title: const Text('Paste from clipboard'),
+                    enabled: !state.busy,
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      final ok = await _controller.readFromClipboard();
+                      if (ok && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Config saved')),
+                        );
+                      }
+                    },
+                  ),
                   ListTile(
                     leading: const Icon(Icons.bug_report_outlined),
                     title: const Text('Debug'),
@@ -92,51 +109,6 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Config: JSON or JSONC/JSON5 (supports // and /* */ comments).',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: state.busy ? null : () => _showConfigDialog(state.configRaw),
-                      icon: const Icon(Icons.visibility_outlined),
-                      label: const Text('View'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: state.busy
-                          ? null
-                          : () async {
-                              final ok = await _controller.readFromFile();
-                              if (ok && context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Config saved')),
-                                );
-                              }
-                            },
-                      icon: const Icon(Icons.folder_open),
-                      label: const Text('Read from file'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: state.busy
-                          ? null
-                          : () async {
-                              final ok = await _controller.readFromClipboard();
-                              if (ok && context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Config saved')),
-                                );
-                              }
-                            },
-                      icon: const Icon(Icons.content_paste),
-                      label: const Text('Paste from clipboard'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -264,6 +236,98 @@ class _HomeScreenState extends State<HomeScreen> {
                             );
                           },
                         ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class ConfigScreen extends StatefulWidget {
+  const ConfigScreen({super.key, required this.controller});
+
+  final HomeController controller;
+
+  @override
+  State<ConfigScreen> createState() => _ConfigScreenState();
+}
+
+class _ConfigScreenState extends State<ConfigScreen> {
+  late final TextEditingController _textController;
+
+  @override
+  void initState() {
+    super.initState();
+    _textController = TextEditingController(text: widget.controller.state.configRaw);
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: _textController.text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Copied to clipboard')),
+    );
+  }
+
+  Future<void> _save() async {
+    final ok = await widget.controller.saveConfigRaw(_textController.text);
+    if (!mounted) return;
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Config saved')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: widget.controller,
+      builder: (context, _) {
+        final busy = widget.controller.state.busy;
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Config'),
+            actions: [
+              IconButton(
+                tooltip: 'Copy',
+                onPressed: _copy,
+                icon: const Icon(Icons.copy_outlined),
+              ),
+              TextButton(
+                onPressed: busy ? null : _save,
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+          body: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _textController,
+                    maxLines: null,
+                    expands: true,
+                    textAlignVertical: TextAlignVertical.top,
+                    keyboardType: TextInputType.multiline,
+                    style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      hintText: 'JSON or JSON5 (// and /* */ comments)',
+                      alignLabelWithHint: true,
+                    ),
+                  ),
                 ),
               ],
             ),

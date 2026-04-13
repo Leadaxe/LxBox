@@ -16,7 +16,30 @@ flutter run   # устройство или эмулятор Android
 
 ## CI (GitHub Actions)
 
-Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) на **push/PR в `main`** выполняет `analyze`, `test`, `flutter build apk` (**debug** и **release**) и выкладывает артефакты **`android-apk-debug`** и **`android-apk-release`** (вкладка **Actions** → последний run → **Artifacts**). Release в шаблоне подписан debug-keystore (как в `app/android/app/build.gradle.kts`), для магазина нужна своя подпись.
+Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) на **push/PR в `main`** выполняет `analyze`, `test`, `flutter build apk` (**debug** и **release**) и выкладывает артефакты **`android-apk-debug`** и **`android-apk-release`** (вкладка **Actions** → последний run → **Artifacts**).
+
+### Подпись release (один ключ между сборками)
+
+Без секретов release APK в CI подписывается **временным debug-keystore раннера** (подпись каждый раз другая → обновление «поверх» невозможно).
+
+Чтобы артефакты с CI ставились как обновление одного и того же приложения, в репозитории GitHub → **Settings → Secrets and variables → Actions** задайте:
+
+| Secret | Содержимое |
+|--------|------------|
+| `ANDROID_KEYSTORE_BASE64` | Содержимое `.jks` в base64 **одной строкой** (удобно: `openssl base64 -A -in upload-keystore.jks`) |
+| `ANDROID_KEYSTORE_PASSWORD` | Пароль хранилища |
+| `ANDROID_KEY_PASSWORD` | Пароль ключа |
+| `ANDROID_KEY_ALIAS` | Alias ключа (как при `keytool -genkey`) |
+
+Перед `flutter build apk --release` workflow создаёт `app/android/upload-keystore.jks` и `app/android/key.properties` (оба в `.gitignore`). Локально для релизной сборки положите свой `key.properties` и `.jks` в `app/android/` по тому же формату (см. [`app/android/.gitignore`](../app/android/.gitignore)).
+
+Пример создания keystore (один раз):
+
+```bash
+keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+```
+
+Файл `upload-keystore.jks` и пароли **не коммитить**.
 
 ## Версии
 

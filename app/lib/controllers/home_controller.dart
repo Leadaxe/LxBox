@@ -163,17 +163,36 @@ class HomeController extends ChangeNotifier {
     );
   }
 
-  Future<bool> saveParsedConfig(String canonicalJson) async {
+  /// Writes [canonicalJson] to native storage; [displayRaw] is what the UI keeps (formatting preserved).
+  Future<bool> saveParsedConfig(String canonicalJson, {String? displayRaw}) async {
     final ok = await _singbox.saveConfig(canonicalJson);
     if (!ok) {
       _emit(_state.copyWith(lastError: 'Failed to save config'));
       _addDebug(DebugSource.app, 'Save config failed');
       return false;
     }
-    _emit(_state.copyWith(configRaw: canonicalJson, lastError: ''));
+    final raw = displayRaw ?? canonicalJson;
+    _emit(_state.copyWith(configRaw: raw, lastError: ''));
     _rebuildClashEndpoint();
     _addDebug(DebugSource.app, 'Config saved (${canonicalJson.length} bytes)');
     return true;
+  }
+
+  /// Validates and persists editor/file/clipboard text; keeps [raw] as stored display string.
+  Future<bool> saveConfigRaw(String raw) async {
+    if (raw.trim().isEmpty) {
+      _emit(_state.copyWith(lastError: 'Config is empty'));
+      _addDebug(DebugSource.app, 'Save rejected: empty config');
+      return false;
+    }
+    try {
+      final canonical = canonicalJsonForSingbox(raw);
+      return saveParsedConfig(canonical, displayRaw: raw);
+    } on FormatException catch (e) {
+      _emit(_state.copyWith(lastError: 'Failed to parse config: ${e.message}'));
+      _addDebug(DebugSource.app, 'Config parse error: ${e.message}');
+      return false;
+    }
   }
 
   Future<bool> readFromClipboard() async {
@@ -187,7 +206,7 @@ class HomeController extends ChangeNotifier {
         return false;
       }
       final canonical = canonicalJsonForSingbox(text);
-      final ok = await saveParsedConfig(canonical);
+      final ok = await saveParsedConfig(canonical, displayRaw: text);
       _emit(_state.copyWith(busy: false));
       return ok;
     } on FormatException catch (e) {
@@ -237,7 +256,7 @@ class HomeController extends ChangeNotifier {
       }
 
       final canonical = canonicalJsonForSingbox(text);
-      final ok = await saveParsedConfig(canonical);
+      final ok = await saveParsedConfig(canonical, displayRaw: text);
       _emit(_state.copyWith(busy: false));
       return ok;
     } on FormatException catch (e) {
