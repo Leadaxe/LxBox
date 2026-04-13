@@ -22,40 +22,45 @@ Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) на **push/P
 
 Без секретов release APK в CI подписывается **временным debug-keystore раннера** (подпись каждый раз другая → обновление «поверх» невозможно).
 
-Чтобы артефакты с CI ставились как обновление одного и того же приложения, задайте четыре секрета в Actions (вручную в веб-интерфейсе или через **`gh`** — см. ниже).
+#### Сделать всё автоматически (рекомендуется)
+
+В корне клонированного репозитория (нужны **JDK** с `keytool`, **openssl**, **`gh auth login`**):
+
+```bash
+./scripts/bootstrap-android-signing-for-ci.sh
+```
+
+Скрипт при необходимости создаст **`app/android/upload-keystore.jks`** и **`app/android/key.properties`** (оба в [`.gitignore`](../app/android/.gitignore)), затем зальёт четыре секрета в GitHub Actions. Случайный пароль при генерации выводится в терминал — **сохраните его** (копия уже в `key.properties` локально).
+
+Отдельные шаги:
+
+```bash
+./scripts/init-android-release-keystore.sh   # только keystore + key.properties
+./scripts/setup-android-ci-secrets.sh        # только gh (пароли из key.properties)
+```
+
+Переопределить пароли при создании keystore: `ANDROID_SIGNING_PASSWORD='…' ./scripts/init-android-release-keystore.sh`. Пересоздать ключ: `FORCE=1 ./scripts/init-android-release-keystore.sh`.
+
+#### Секреты в GitHub (ручная настройка)
 
 | Secret | Содержимое |
 |--------|------------|
-| `ANDROID_KEYSTORE_BASE64` | Содержимое `.jks` в base64 **одной строкой** (удобно: `openssl base64 -A -in upload-keystore.jks`) |
+| `ANDROID_KEYSTORE_BASE64` | `openssl base64 -A -in upload-keystore.jks` (одна строка) |
 | `ANDROID_KEYSTORE_PASSWORD` | Пароль хранилища |
 | `ANDROID_KEY_PASSWORD` | Пароль ключа |
-| `ANDROID_KEY_ALIAS` | Alias ключа (как при `keytool -genkey`) |
+| `ANDROID_KEY_ALIAS` | Alias (например `upload`) |
 
-**Через GitHub CLI** (после `gh auth login` в каталоге клонированного репозитория):
-
-```bash
-./scripts/setup-android-ci-secrets.sh path/to/upload-keystore.jks
-```
-
-Или без запросов пароля в интерактиве:
+Вручную через **`gh`** (если не используете скрипт выше):
 
 ```bash
-ANDROID_KEYSTORE_PATH=./upload-keystore.jks \
-ANDROID_KEYSTORE_PASSWORD='…' ANDROID_KEY_PASSWORD='…' ANDROID_KEY_ALIAS=upload \
-./scripts/setup-android-ci-secrets.sh
+./scripts/setup-android-ci-secrets.sh app/android/upload-keystore.jks
 ```
 
-Другой репозиторий: `GH_REPO=owner/BoxVPN ./scripts/setup-android-ci-secrets.sh ./upload-keystore.jks`.
+Другой репозиторий: `GH_REPO=owner/BoxVPN ./scripts/setup-android-ci-secrets.sh`.
 
-Перед `flutter build apk --release` workflow создаёт `app/android/upload-keystore.jks` и `app/android/key.properties` (оба в `.gitignore`). Локально для релизной сборки положите свой `key.properties` и `.jks` в `app/android/` по тому же формату (см. [`app/android/.gitignore`](../app/android/.gitignore)).
+Перед `flutter build apk --release` workflow на раннере создаёт временные `app/android/upload-keystore.jks` и `app/android/key.properties` из секретов. Локальный **`flutter build apk --release`** после bootstrap использует те же файлы в `app/android/`.
 
-Пример создания keystore (один раз):
-
-```bash
-keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
-```
-
-Файл `upload-keystore.jks` и пароли **не коммитить**.
+Файлы keystore и `key.properties` с секретами **не коммитить**.
 
 ## Версии
 
