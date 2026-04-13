@@ -6,6 +6,7 @@ void main() {
   testWidgets('BoxVPN home loads', (WidgetTester tester) async {
     await tester.pumpWidget(const BoxVpnApp());
     expect(find.text('BoxVPN'), findsOneWidget);
-    expect(find.text('Read'), findsOneWidget);
+    expect(find.text('Просмотр'), findsOneWidget);
+    expect(find.text('Start'), findsOneWidget);
   });
 }
