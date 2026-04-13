@@ -235,7 +235,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     : ListView.separated(
                         padding: EdgeInsets.zero,
                         itemCount: state.nodes.length,
-                        separatorBuilder: (_, __) => Divider(
+                        separatorBuilder: (_, _) => Divider(
                           height: 1,
                           thickness: 1,
                           color: Theme.of(context).colorScheme.outlineVariant.withAlpha(128),
