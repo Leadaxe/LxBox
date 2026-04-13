@@ -29,11 +29,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _showConfigDialog(String configRaw) async {
-    final text = configRaw.trim().isEmpty ? 'Конфиг пуст' : configRaw;
+    final text = configRaw.trim().isEmpty ? 'Config is empty' : configRaw;
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Текущий конфиг'),
+        title: const Text('Current config'),
         content: SizedBox(
           width: double.maxFinite,
           child: SingleChildScrollView(
@@ -46,7 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Закрыть'),
+            child: const Text('Close'),
           ),
         ],
       ),
@@ -69,11 +69,11 @@ class _HomeScreenState extends State<HomeScreen> {
             child: SafeArea(
               child: ListView(
                 children: [
-                  const DrawerHeader(child: Text('Меню')),
+                  const DrawerHeader(child: Text('Menu')),
                   ListTile(
                     leading: const Icon(Icons.bug_report_outlined),
                     title: const Text('Debug'),
-                    subtitle: const Text('Журнал последних 100 событий'),
+                    subtitle: const Text('Last 100 events'),
                     onTap: () {
                       Navigator.of(context).pop();
                       Navigator.of(context).push(
@@ -93,7 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Конфиг: JSON или JSONC/JSON5 (комментарии // и /* */).',
+                  'Config: JSON or JSONC/JSON5 (supports // and /* */ comments).',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 12),
@@ -104,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     OutlinedButton.icon(
                       onPressed: state.busy ? null : () => _showConfigDialog(state.configRaw),
                       icon: const Icon(Icons.visibility_outlined),
-                      label: const Text('Просмотр'),
+                      label: const Text('View'),
                     ),
                     OutlinedButton.icon(
                       onPressed: state.busy
@@ -113,12 +113,12 @@ class _HomeScreenState extends State<HomeScreen> {
                               final ok = await _controller.readFromFile();
                               if (ok && context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Конфиг сохранён')),
+                                  const SnackBar(content: Text('Config saved')),
                                 );
                               }
                             },
                       icon: const Icon(Icons.folder_open),
-                      label: const Text('Из файла'),
+                      label: const Text('Read from file'),
                     ),
                     OutlinedButton.icon(
                       onPressed: state.busy
@@ -127,12 +127,12 @@ class _HomeScreenState extends State<HomeScreen> {
                               final ok = await _controller.readFromClipboard();
                               if (ok && context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Конфиг сохранён')),
+                                  const SnackBar(content: Text('Config saved')),
                                 );
                               }
                             },
                       icon: const Icon(Icons.content_paste),
-                      label: const Text('Из буфера'),
+                      label: const Text('Paste from clipboard'),
                     ),
                   ],
                 ),
@@ -168,7 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Обновить группы',
+                      tooltip: 'Reload groups',
                       onPressed: (!state.tunnelUp || state.busy)
                           ? null
                           : () => unawaited(_controller.reloadProxies()),
@@ -184,18 +184,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
                 const SizedBox(height: 16),
-                const Text('Группа', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text('Group', style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 InputDecorator(
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    hintText: 'Нет данных (нужен туннель и API)',
+                    hintText: 'No data (tunnel and API required)',
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       isExpanded: true,
                       value: state.groups.contains(state.selectedGroup) ? state.selectedGroup : null,
-                      hint: const Text('Выберите группу'),
+                      hint: const Text('Select group'),
                       items: state.groups
                           .map((g) => DropdownMenuItem(value: g, child: Text(g)))
                           .toList(),
@@ -209,13 +209,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text('Узлы', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text('Nodes', style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 Expanded(
                   child: state.nodes.isEmpty
                       ? Center(
                           child: Text(
-                            state.tunnelUp ? 'Нет узлов для группы' : 'Запустите VPN для списка',
+                            state.tunnelUp
+                                ? 'No nodes for selected group'
+                                : 'Start VPN to load nodes',
                             textAlign: TextAlign.center,
                           ),
                         )
@@ -238,12 +240,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                 tag,
                                 style: active ? const TextStyle(fontWeight: FontWeight.bold) : null,
                               ),
-                              subtitle: active ? const Text('активен') : null,
+                              subtitle: active ? const Text('active') : null,
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
-                                    tooltip: 'Включить узел',
+                                    tooltip: 'Activate node',
                                     onPressed: (!state.tunnelUp || state.busy || active)
                                         ? null
                                         : () => unawaited(_controller.switchNode(tag)),
@@ -310,9 +312,9 @@ class _DebugScreenState extends State<DebugScreen> {
               children: [
                 SegmentedButton<DebugFilter>(
                   segments: const [
-                    ButtonSegment<DebugFilter>(value: DebugFilter.all, label: Text('Все')),
-                    ButtonSegment<DebugFilter>(value: DebugFilter.core, label: Text('Ядро')),
-                    ButtonSegment<DebugFilter>(value: DebugFilter.app, label: Text('Приложение')),
+                    ButtonSegment<DebugFilter>(value: DebugFilter.all, label: Text('All')),
+                    ButtonSegment<DebugFilter>(value: DebugFilter.core, label: Text('Core')),
+                    ButtonSegment<DebugFilter>(value: DebugFilter.app, label: Text('App')),
                   ],
                   selected: {_filter},
                   onSelectionChanged: (selection) => setState(() => _filter = selection.first),
@@ -320,14 +322,13 @@ class _DebugScreenState extends State<DebugScreen> {
                 const SizedBox(height: 12),
                 Expanded(
                   child: filtered.isEmpty
-                      ? const Center(child: Text('Событий нет'))
+                      ? const Center(child: Text('No events yet'))
                       : ListView.separated(
                           itemCount: filtered.length,
                           separatorBuilder: (_, index) => const Divider(height: 1),
                           itemBuilder: (context, i) {
                             final entry = filtered[i];
-                            final source =
-                                entry.source == DebugSource.core ? 'ядро' : 'приложение';
+                            final source = entry.source == DebugSource.core ? 'core' : 'app';
                             return ListTile(
                               dense: true,
                               title: Text(

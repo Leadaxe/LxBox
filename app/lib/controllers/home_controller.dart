@@ -166,7 +166,7 @@ class HomeController extends ChangeNotifier {
   Future<bool> saveParsedConfig(String canonicalJson) async {
     final ok = await _singbox.saveConfig(canonicalJson);
     if (!ok) {
-      _emit(_state.copyWith(lastError: 'Не удалось сохранить конфиг'));
+      _emit(_state.copyWith(lastError: 'Failed to save config'));
       _addDebug(DebugSource.app, 'Save config failed');
       return false;
     }
@@ -182,7 +182,7 @@ class HomeController extends ChangeNotifier {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       final text = data?.text ?? '';
       if (text.trim().isEmpty) {
-        _emit(_state.copyWith(lastError: 'Буфер пуст', busy: false));
+        _emit(_state.copyWith(lastError: 'Clipboard is empty', busy: false));
         _addDebug(DebugSource.app, 'Clipboard is empty');
         return false;
       }
@@ -191,11 +191,11 @@ class HomeController extends ChangeNotifier {
       _emit(_state.copyWith(busy: false));
       return ok;
     } on FormatException catch (e) {
-      _emit(_state.copyWith(lastError: 'Не удалось разобрать конфиг: ${e.message}', busy: false));
+      _emit(_state.copyWith(lastError: 'Failed to parse config: ${e.message}', busy: false));
       _addDebug(DebugSource.app, 'Clipboard parse error: ${e.message}');
       return false;
     } catch (_) {
-      _emit(_state.copyWith(lastError: 'Не удалось разобрать конфиг', busy: false));
+      _emit(_state.copyWith(lastError: 'Failed to parse config', busy: false));
       _addDebug(DebugSource.app, 'Clipboard parse failed');
       return false;
     }
@@ -220,18 +220,18 @@ class HomeController extends ChangeNotifier {
         try {
           text = await File(path).readAsString();
         } on FileSystemException catch (e) {
-          _emit(_state.copyWith(lastError: 'Не удалось прочитать файл: $e', busy: false));
+          _emit(_state.copyWith(lastError: 'Failed to read file: $e', busy: false));
           _addDebug(DebugSource.app, 'File read error: $e');
           return false;
         }
       } else {
-        _emit(_state.copyWith(lastError: 'Не удалось прочитать файл', busy: false));
+        _emit(_state.copyWith(lastError: 'Failed to read file', busy: false));
         _addDebug(DebugSource.app, 'File pick failed: no bytes and no path');
         return false;
       }
 
       if (text.trim().isEmpty) {
-        _emit(_state.copyWith(lastError: 'Файл пуст', busy: false));
+        _emit(_state.copyWith(lastError: 'File is empty', busy: false));
         _addDebug(DebugSource.app, 'Selected file is empty');
         return false;
       }
@@ -241,11 +241,11 @@ class HomeController extends ChangeNotifier {
       _emit(_state.copyWith(busy: false));
       return ok;
     } on FormatException catch (e) {
-      _emit(_state.copyWith(lastError: 'Не удалось разобрать конфиг: ${e.message}', busy: false));
+      _emit(_state.copyWith(lastError: 'Failed to parse config: ${e.message}', busy: false));
       _addDebug(DebugSource.app, 'File parse error: ${e.message}');
       return false;
     } catch (e) {
-      _emit(_state.copyWith(lastError: 'Файл: $e', busy: false));
+      _emit(_state.copyWith(lastError: 'File error: $e', busy: false));
       _addDebug(DebugSource.app, 'File read error: $e');
       return false;
     }
@@ -257,7 +257,7 @@ class HomeController extends ChangeNotifier {
       await _singbox.setNotificationTitle('BoxVPN');
       final ok = await _singbox.startVPN();
       if (!ok) {
-        _emit(_state.copyWith(lastError: 'Не удалось запустить VPN'));
+        _emit(_state.copyWith(lastError: 'Failed to start VPN'));
         _addDebug(DebugSource.app, 'startVPN returned false');
       } else {
         _addDebug(DebugSource.app, 'startVPN requested');
@@ -293,7 +293,7 @@ class HomeController extends ChangeNotifier {
       await reloadProxies();
       _addDebug(DebugSource.app, 'Node selected: $nodeTag');
     } catch (e) {
-      _emit(_state.copyWith(lastError: 'Переключение: $e'));
+      _emit(_state.copyWith(lastError: 'Switch failed: $e'));
       _addDebug(DebugSource.app, 'Node switch error: $e');
     } finally {
       _emit(_state.copyWith(busy: false));

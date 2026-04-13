@@ -8,7 +8,7 @@ import 'package:json5/json5.dart';
 String canonicalJsonForSingbox(String text) {
   final trimmed = text.trim();
   if (trimmed.isEmpty) {
-    throw const FormatException('Пустой текст');
+    throw const FormatException('Empty input');
   }
   final dynamic parsed = json5Decode(trimmed);
   return jsonEncode(_toJsonEncodable(parsed));
@@ -24,5 +24,5 @@ dynamic _toJsonEncodable(dynamic value) {
   if (value is List) {
     return value.map(_toJsonEncodable).toList();
   }
-  throw FormatException('Неподдерживаемый тип: ${value.runtimeType}');
+  throw FormatException('Unsupported type: ${value.runtimeType}');
 }
