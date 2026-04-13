@@ -45,8 +45,8 @@ jobs:
       - name: Test
         run: flutter test
 
+      # Не использовать secrets в if: — иначе workflow может не пройти валидацию (run 0s / file issue).
       - name: Android release keystore (optional)
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         working-directory: app
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -55,9 +55,13 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
           set -euo pipefail
-          : "${ANDROID_KEYSTORE_PASSWORD:?Set ANDROID_KEYSTORE_PASSWORD secret}"
-          : "${ANDROID_KEY_PASSWORD:?Set ANDROID_KEY_PASSWORD secret}"
-          : "${ANDROID_KEY_ALIAS:?Set ANDROID_KEY_ALIAS secret}"
+          if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            echo "No ANDROID_KEYSTORE_BASE64 secret; release APK will use debug signing."
+            exit 0
+          fi
+          : "${ANDROID_KEYSTORE_PASSWORD:?Set ANDROID_KEYSTORE_PASSWORD when BASE64 is set}"
+          : "${ANDROID_KEY_PASSWORD:?Set ANDROID_KEY_PASSWORD when BASE64 is set}"
+          : "${ANDROID_KEY_ALIAS:?Set ANDROID_KEY_ALIAS when BASE64 is set}"
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/upload-keystore.jks
           {
             echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
