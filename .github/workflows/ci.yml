@@ -1,5 +1,5 @@
-# BoxVPN — CI на GitHub Actions (сборка Android на сервере GitHub).
-# Требуется каталог app/ с проектом Flutter (см. docs/BUILD.md).
+# BoxVPN — CI на GitHub Actions (см. docs/BUILD.md).
+# По умолчанию на push/PR только analyze + test. APK — вручную или по переменной репозитория.
 
 name: CI
 
@@ -21,7 +21,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  flutter:
+  # Быстрые проверки на каждый push/PR — без Gradle/Java, без APK.
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.41.6"
+          cache: true
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+  # Сборка Android APK — не на каждый коммит: только ручной запуск или BUILD_APK_ON_PUSH=true.
+  android:
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.BUILD_APK_ON_PUSH == 'true' }}
+    needs: checks
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -46,13 +75,6 @@ jobs:
       - name: Dependencies
         run: flutter pub get
 
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Test
-        run: flutter test
-
-      # Не использовать secrets в if: — иначе workflow может не пройти валидацию (run 0s / file issue).
       - name: Android release keystore (optional)
         working-directory: app
         env:
@@ -77,7 +99,6 @@ jobs:
             echo "storeFile=upload-keystore.jks"
           } > android/key.properties
 
-      # Debug: vars.BUILD_DEBUG_APK=true ИЛИ ручной запуск с build_debug_apk (&& у workflow_dispatch — не трогает inputs на push).
       - name: Build APK (debug)
         if: ${{ vars.BUILD_DEBUG_APK == 'true' || (github.event_name == 'workflow_dispatch' && inputs.build_debug_apk) }}
         run: flutter build apk --debug

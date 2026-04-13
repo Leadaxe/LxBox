@@ -27,39 +27,36 @@ flutter run   # устройство или эмулятор Android
 
 ## CI (GitHub Actions)
 
-Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) на **push/PR в `main`**:
+Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml): на **каждый push/PR в `main`** выполняется только джоб **`checks`** (`flutter analyze`, `flutter test`) — **без** сборки APK и без Java/Gradle (быстрее и дешевле).
 
-| Шаг | Отметка |
-|-----|---------|
-| `flutter analyze` | ✓ |
-| `flutter test` | ✓ |
-| `flutter build apk --release` | ✓ |
-| Артефакт **`android-apk-release`** | ✓ |
-| `flutter build apk --debug` + **`android-apk-debug`** | ✗ (см. ниже, как включить) |
+| Что | Когда |
+|-----|--------|
+| `analyze` + `test` | ✓ каждый push/PR |
+| `flutter build apk` + артефакты | ○ **не** на каждый коммит |
 
-**Запустить CI вручную:** GitHub → **Actions** → **CI** → **Run workflow** → ветка **main** → опция **«Собрать и выложить debug APK»** при необходимости → **Run workflow**.
+**Сборка APK** (джоб **`android`**) запускается, если:
+
+- **Ручной запуск:** GitHub → **Actions** → **CI** → **Run workflow** → ветка **main** → при необходимости включить **«Собрать и выложить debug APK»** → **Run workflow**;
+- или переменная репозитория **`BUILD_APK_ON_PUSH`** = `true` (тогда APK собирается и на push — как раньше на каждый коммит).
 
 Из терминала (`gh auth login`):
 
 ```bash
-gh workflow run CI                          # ✓ release
-gh workflow run CI -f build_debug_apk=true  # ○ + debug APK
+gh workflow run CI                          # ✓ checks + release APK
+gh workflow run CI -f build_debug_apk=true    # ○ + debug APK
 ```
 
-**Debug APK** (на любом trigger: push / PR / ручной запуск):
+Включить сборку APK на каждый push: `gh variable set BUILD_APK_ON_PUSH -b true` (потом выключить, если не нужно).
+
+**Debug APK** — только в джобе **`android`** (см. выше). Если джоб не запускался (обычный push без **`BUILD_APK_ON_PUSH`**), debug не собирается.
 
 | Способ | Отметка |
 |--------|---------|
-| Переменная репозитория **`BUILD_DEBUG_APK`** = `true` | ○ (включает debug на каждом прогоне, пока не выключите) |
-| Ручной запуск с **`build_debug_apk`** (см. команду выше) | ○ (один раз) |
-| По умолчанию без переменной и без галочки | ✗ debug не собирается |
+| Переменная **`BUILD_DEBUG_APK`** = `true` | ○ debug в каждом прогоне **`android`** (пока не выключите) |
+| Ручной **`workflow_dispatch`** с **`build_debug_apk`** | ○ один раз |
+| Иначе | ✗ только **release** APK |
 
-Настройка переменной (достаточно одного способа):
-
-- **Веб:** **Settings → Secrets and variables → Actions → Variables**
-- **CLI:** `gh variable set BUILD_DEBUG_APK -b true`
-
-После прогона верните `false` или удалите переменную, чтобы push/PR снова не тянули debug.
+Настройка **`BUILD_DEBUG_APK`:** веб **Variables** или `gh variable set BUILD_DEBUG_APK -b true`.
 
 ### Подпись release (один ключ между сборками)
 
