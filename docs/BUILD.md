@@ -22,7 +22,7 @@ Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) на **push/P
 
 Без секретов release APK в CI подписывается **временным debug-keystore раннера** (подпись каждый раз другая → обновление «поверх» невозможно).
 
-Чтобы артефакты с CI ставились как обновление одного и того же приложения, в репозитории GitHub → **Settings → Secrets and variables → Actions** задайте:
+Чтобы артефакты с CI ставились как обновление одного и того же приложения, задайте четыре секрета в Actions (вручную в веб-интерфейсе или через **`gh`** — см. ниже).
 
 | Secret | Содержимое |
 |--------|------------|
@@ -30,6 +30,22 @@ Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) на **push/P
 | `ANDROID_KEYSTORE_PASSWORD` | Пароль хранилища |
 | `ANDROID_KEY_PASSWORD` | Пароль ключа |
 | `ANDROID_KEY_ALIAS` | Alias ключа (как при `keytool -genkey`) |
+
+**Через GitHub CLI** (после `gh auth login` в каталоге клонированного репозитория):
+
+```bash
+./scripts/setup-android-ci-secrets.sh path/to/upload-keystore.jks
+```
+
+Или без запросов пароля в интерактиве:
+
+```bash
+ANDROID_KEYSTORE_PATH=./upload-keystore.jks \
+ANDROID_KEYSTORE_PASSWORD='…' ANDROID_KEY_PASSWORD='…' ANDROID_KEY_ALIAS=upload \
+./scripts/setup-android-ci-secrets.sh
+```
+
+Другой репозиторий: `GH_REPO=owner/BoxVPN ./scripts/setup-android-ci-secrets.sh ./upload-keystore.jks`.
 
 Перед `flutter build apk --release` workflow создаёт `app/android/upload-keystore.jks` и `app/android/key.properties` (оба в `.gitignore`). Локально для релизной сборки положите свой `key.properties` и `.jks` в `app/android/` по тому же формату (см. [`app/android/.gitignore`](../app/android/.gitignore)).
 
