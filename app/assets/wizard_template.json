@@ -121,10 +121,10 @@
     {
       "name": "dns_default_domain_resolver",
       "type": "text",
-      "default_value": "direct_dns_resolver",
+      "default_value": "cloudflare_udp",
       "wizard_ui": "fix",
       "title": "Default DNS domain resolver",
-      "tooltip": "sing-box config.route.default_domain_resolver."
+      "tooltip": "Tag of a DNS server used to resolve domain names in routing (must exist in dns.servers). cloudflare_udp matches typical libbox/Android setups."
     },
     {
       "name": "dns_final",
@@ -138,18 +138,18 @@
     {
       "name": "tun_address",
       "type": "text",
-      "default_value": "172.19.0.1/30",
+      "default_value": "172.16.0.1/30",
       "wizard_ui": "fix",
       "title": "TUN IPv4 address",
-      "tooltip": "CIDR for the VPN tunnel interface (sing-box tun inbound). Must match what libbox/VpnService expects; default matches flutter_singbox_vpn docs."
+      "tooltip": "Single CIDR string for tun address (not a JSON array). 172.16.0.1/30 is commonly used on Android/libbox; 172.19.x is an alternative if your provider requires it."
     },
     {
       "name": "tun_mtu",
       "type": "text",
-      "default_value": "9000",
+      "default_value": "1492",
       "wizard_ui": "fix",
       "title": "TUN MTU",
-      "tooltip": "MTU for the tun inbound."
+      "tooltip": "Typical 1492 avoids black holes on mobile/Wi‑Fi; very large MTU (e.g. 9000) often breaks tunnel traffic."
     },
     {
       "name": "tun_auto_route",
@@ -162,10 +162,10 @@
     {
       "name": "tun_strict_route",
       "type": "bool",
-      "default_value": "true",
+      "default_value": "false",
       "wizard_ui": "fix",
       "title": "TUN strict_route",
-      "tooltip": "Stricter routing to reduce leaks; disable if LAN/split issues."
+      "tooltip": "true can break connectivity on some Android/VPN setups; false matches many working libbox configs."
     },
     {
       "name": "tun_stack",
@@ -187,6 +187,12 @@
       "servers": [
         { "type": "local", "tag": "local_dns_resolver" },
         { "type": "udp", "tag": "direct_dns_resolver", "server": "8.8.8.8", "server_port": 53 },
+        {
+          "type": "udp",
+          "tag": "cloudflare_udp",
+          "server": "1.1.1.1",
+          "server_port": 53
+        },
         {
           "type": "https",
           "tag": "google_doh",
@@ -216,7 +222,7 @@
       {
         "type": "tun",
         "tag": "tun-in",
-        "address": ["@tun_address"],
+        "address": "@tun_address",
         "mtu": "@tun_mtu",
         "auto_route": "@tun_auto_route",
         "strict_route": "@tun_strict_route",
@@ -233,6 +239,8 @@
         { "tag": "ru-domains", "type": "inline", "format": "domain_suffix", "rules": [{ "domain_suffix": ["ru", "xn--p1ai", "su"] }] }
       ],
       "rules": [
+        { "action": "resolve", "inbound": "tun-in", "strategy": "@resolve_strategy" },
+        { "action": "sniff", "inbound": "tun-in", "timeout": "1s" },
         { "protocol": "dns", "action": "hijack-dns" }
       ],
       "final": "proxy-out",
