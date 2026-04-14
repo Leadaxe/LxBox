@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
+import 'subscription_detail_screen.dart';
 
 class SubscriptionsScreen extends StatefulWidget {
   const SubscriptionsScreen({
@@ -181,116 +182,36 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {
         final entry = ctrl.entries[i];
-        return Dismissible(
-          key: ValueKey('${entry.displayName}-$i'),
-          direction: DismissDirection.endToStart,
-          background: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 16),
-            color: Theme.of(context).colorScheme.error,
-            child: const Icon(Icons.delete, color: Colors.white),
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(
+            entry.displayName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
           ),
-          onDismissed: (_) => unawaited(ctrl.removeAt(i)),
-          child: ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(
-              entry.displayName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          subtitle: entry.subtitle.isNotEmpty
+              ? Text(entry.subtitle, style: const TextStyle(fontSize: 12))
+              : null,
+          trailing: entry.nodeCount > 0
+              ? Chip(
+                  label: Text('${entry.nodeCount}'),
+                  visualDensity: VisualDensity.compact,
+                )
+              : null,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SubscriptionDetailScreen(
+                entry: entry,
+                index: i,
+                controller: widget.subController,
+              ),
             ),
-            subtitle: entry.subtitle.isNotEmpty
-                ? Text(entry.subtitle, style: const TextStyle(fontSize: 12))
-                : null,
-            trailing: entry.nodeCount > 0
-                ? Chip(
-                    label: Text('${entry.nodeCount}'),
-                    visualDensity: VisualDensity.compact,
-                  )
-                : null,
-            onLongPress: () => _showEditSheet(i, entry),
           ),
         );
       },
     );
-  }
-
-  void _showEditSheet(int index, SubscriptionEntry entry) {
-    final nameCtrl = TextEditingController(text: entry.source.name);
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Edit Subscription',
-                style: Theme.of(ctx).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                entry.source.source.isNotEmpty
-                    ? entry.source.source
-                    : entry.source.connections.firstOrNull ?? '',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Display name',
-                  hintText: 'Optional friendly name',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-                autofocus: true,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        unawaited(widget.subController.removeAt(index));
-                      },
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('Delete'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Theme.of(ctx).colorScheme.error,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        unawaited(widget.subController.renameAt(
-                          index,
-                          nameCtrl.text.trim(),
-                        ));
-                      },
-                      child: const Text('Save'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    ).then((_) => nameCtrl.dispose());
   }
 
   Widget _buildBottomBar(SubscriptionController ctrl) {

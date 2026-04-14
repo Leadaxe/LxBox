@@ -243,15 +243,36 @@ BoxVPN прошёл путь от MVP (один экран: Read config → Star
 
 ---
 
+## Этап 7: Нативный VPN и Routing (Features 013–016)
+
+### Native VPN Service (013)
+- Удалён сторонний плагин `flutter_singbox_vpn` (0 звёзд, непопулярный).
+- Весь нативный код перенесён в `android/app/.../vpn/`: VpnPlugin, BoxVpnService, ConfigManager и др.
+- Конфиг хранится в файле (`singbox_config.json`), а не SharedPreferences.
+- Dart-обёртка BoxVpnClient с MethodChannel/EventChannel.
+
+### Subscription Detail View (014)
+- Тап по подписке → полноэкранный detail screen (URL, ноды, дата обновления).
+- Inline rename, delete с подтверждением, refresh.
+- Убраны swipe-to-delete и bottom sheet из основного списка.
+
+### Rule Outbound Selection (015)
+- Дропдаун outbound (direct/proxy/auto/vpn-X) рядом с каждым правилом.
+- Настройка route.final для fallback трафика.
+
+### Routing Screen (016)
+- Отдельный экран Routing: Proxy Groups + Rules + outbound dropdowns.
+- Settings упрощён — только технические vars.
+
+---
+
 ## Что дальше (рекомендации)
 
 | Приоритет | Фича | Описание |
 |-----------|-------|----------|
 | Высокий | **Profile Management** | Сохранение/загрузка нескольких конфигов (wizard states) |
-| Высокий | **Connection Stats** | Отображение трафика (upload/download) на главном экране |
-| Средний | **Subscription Edit** | Редактирование: tag_prefix, name, reorder, включить/выключить отдельную подписку |
 | Средний | **Background Auto-update** | WorkManager / AlarmManager для обновления подписок в фоне |
-| Средний | **Export/Share config** | Экспорт конфига в файл или share sheet |
-| Низкий | **Custom Routing Rules** | UI для добавления пользовательских routing rules (аналог wizard Rules tab) |
+| Средний | **Per-App Tunneling** | Выбор приложений для туннелирования (include/exclude) |
+| Низкий | **Custom Routing Rules** | UI для добавления пользовательских routing rules |
 | Низкий | **Onboarding Tour** | Пошаговый гайд для первого запуска |
 | Низкий | **Widget / Quick Tile** | Android Quick Settings tile для Start/Stop |

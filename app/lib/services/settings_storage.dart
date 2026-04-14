@@ -160,4 +160,37 @@ class SettingsStorage {
 
   /// Clears the in-memory cache (useful for tests).
   static void clearCache() => _cache = null;
+
+  // ---------------------------------------------------------------------------
+  // Rule outbounds: Map<ruleLabel, outboundTag>
+  // ---------------------------------------------------------------------------
+
+  static Future<Map<String, String>> getRuleOutbounds() async {
+    final data = await _load();
+    final map = data['rule_outbounds'] as Map<String, dynamic>? ?? {};
+    return map.map((k, v) => MapEntry(k, v.toString()));
+  }
+
+  static Future<void> saveRuleOutbounds(Map<String, String> outbounds) async {
+    final data = await _load();
+    data['rule_outbounds'] = outbounds;
+    _cache = data;
+    await _save();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Route final outbound
+  // ---------------------------------------------------------------------------
+
+  static Future<String> getRouteFinal() async {
+    final data = await _load();
+    return (data['route_final'] as String?) ?? '';
+  }
+
+  static Future<void> saveRouteFinal(String outbound) async {
+    final data = await _load();
+    data['route_final'] = outbound;
+    _cache = data;
+    await _save();
+  }
 }

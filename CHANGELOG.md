@@ -8,6 +8,34 @@
 
 ## [Unreleased]
 
+### Added — Native VPN Service (Feature 013)
+- **Удалён плагин `flutter_singbox_vpn`**: вся нативная логика перенесена напрямую в `android/app/`.
+- Новый пакет `com.leadaxe.boxvpn_app.vpn`: VpnPlugin, BoxVpnService, ConfigManager, ServiceNotification, PlatformInterfaceWrapper, DefaultNetworkMonitor/Listener.
+- **Конфиг в файле**: хранение в `files/singbox_config.json` вместо SharedPreferences.
+- **BoxVpnClient** Dart-обёртка с MethodChannel/EventChannel — идентичный API.
+- Убраны неиспользуемые компоненты: TileService, BootReceiver, ProxyService, per-app tunneling, traffic EventChannel.
+
+### Added — Subscription Detail View (Feature 014)
+- **Тап по подписке** → полноэкранный detail screen с метаинформацией (URL, дата обновления, кол-во нод).
+- **Список нод**: загружается при открытии через SourceLoader, отображается с иконками протоколов.
+- **Inline rename**: кнопка Edit в AppBar → TextField для переименования.
+- **Delete с подтверждением**: кнопка Delete → confirm dialog → удаление + pop.
+- **Refresh**: кнопка обновления нод прямо из detail screen.
+- Убраны: swipe-to-delete и long press bottom sheet на основном списке.
+
+### Added — Rule Outbound Selection (Feature 015)
+- **Дропдаун outbound** рядом с каждым routing rule (direct/proxy/auto/vpn-1/vpn-2).
+- Варианты динамически зависят от включённых proxy groups.
+- Action-based правила (Block Ads) — без дропдауна.
+- **Route final**: настройка fallback outbound для неизвестного трафика.
+- Backend уже был реализован ранее (SettingsStorage + ConfigBuilder).
+
+### Added — Routing Screen (Feature 016)
+- **Отдельный экран Routing**: Proxy Groups + Routing Rules + outbound dropdowns + route.final.
+- **Settings упрощён**: остались только технические переменные (log level, Clash API, DNS и т.д.).
+- Routing добавлен в drawer навигации.
+- Long-press на заголовке Nodes теперь ведёт на Routing вместо Settings.
+
 ### Fixed — Wizard template TUN inbound
 - **`inbounds` больше не пустой**: обязательный `tun` inbound (`tag: tun-in`), `auto_route`, MTU, `stack`.
 - **Совместимость с рабочими libbox-конфигами**: `address` — одна строка CIDR (не массив), по умолчанию `172.16.0.1/30`; MTU **1492**; `strict_route` по умолчанию **false** (true часто ломает трафик на Android).

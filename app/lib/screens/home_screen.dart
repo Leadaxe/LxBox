@@ -9,6 +9,7 @@ import '../widgets/node_row.dart';
 import 'about_screen.dart';
 import 'config_screen.dart';
 import 'debug_screen.dart';
+import 'routing_screen.dart';
 import 'settings_screen.dart';
 import 'subscriptions_screen.dart';
 import '../services/config_builder.dart';
@@ -106,9 +107,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               )),
             ),
             ListTile(
+              leading: const Icon(Icons.alt_route_outlined),
+              title: const Text('Routing'),
+              subtitle: const Text('Proxy groups and routing rules'),
+              onTap: () => _pushRoute(RoutingScreen(
+                subController: _subController,
+                homeController: _controller,
+              )),
+            ),
+            ListTile(
               leading: const Icon(Icons.tune_outlined),
               title: const Text('Settings'),
-              subtitle: const Text('Config variables and routing rules'),
+              subtitle: const Text('Config variables'),
               onTap: () => _pushRoute(SettingsScreen(
                 subController: _subController,
                 homeController: _controller,
@@ -483,7 +493,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         behavior: HitTestBehavior.opaque,
         onLongPress: () {
           Navigator.of(context).push(MaterialPageRoute<void>(
-            builder: (_) => SettingsScreen(
+            builder: (_) => RoutingScreen(
               subController: _subController,
               homeController: _controller,
             ),

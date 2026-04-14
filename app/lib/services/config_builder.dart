@@ -79,7 +79,20 @@ class ConfigBuilder {
     final baseOutbounds = config['outbounds'] as List<dynamic>? ?? [];
     config['outbounds'] = [...baseOutbounds, ...outbounds];
 
-    _applySelectableRules(config, template.selectableRules, enabledRules);
+    final ruleOutbounds = await SettingsStorage.getRuleOutbounds();
+    _applySelectableRules(
+      config,
+      template.selectableRules,
+      enabledRules,
+      ruleOutbounds,
+      enabledGroups,
+    );
+
+    final routeFinal = await SettingsStorage.getRouteFinal();
+    if (routeFinal.isNotEmpty) {
+      final route = config['route'] as Map<String, dynamic>?;
+      if (route != null) route['final'] = routeFinal;
+    }
 
     onProgress?.call(0.85, 'Downloading rule sets...');
     await _cacheRemoteRuleSets(config, onProgress: onProgress);
@@ -151,55 +164,43 @@ class ConfigBuilder {
   static void _substituteVars(dynamic obj, Map<String, String> vars) {
     if (obj is Map<String, dynamic>) {
       for (final key in obj.keys.toList()) {
-        final value = obj[key];
-        if (value is String && value.startsWith('@')) {
-          final varName = value.substring(1);
-          if (vars.containsKey(varName)) {
-            final resolved = vars[varName]!;
-            if (resolved == 'true') {
-              obj[key] = true;
-            } else if (resolved == 'false') {
-              obj[key] = false;
-            } else {
-              final asInt = int.tryParse(resolved);
-              if (asInt != null) {
-                obj[key] = asInt;
-              } else {
-                obj[key] = resolved;
-              }
-            }
-          }
+        final resolved = _resolveVar(obj[key], vars);
+        if (resolved != null) {
+          obj[key] = resolved;
         } else {
-          _substituteVars(value, vars);
+          _substituteVars(obj[key], vars);
         }
       }
     } else if (obj is List) {
       for (var i = 0; i < obj.length; i++) {
-        final value = obj[i];
-        if (value is String && value.startsWith('@')) {
-          final varName = value.substring(1);
-          if (vars.containsKey(varName)) {
-            final resolved = vars[varName]!;
-            if (resolved == 'true') {
-              obj[i] = true;
-            } else if (resolved == 'false') {
-              obj[i] = false;
-            } else {
-              final asInt = int.tryParse(resolved);
-              obj[i] = asInt ?? resolved;
-            }
-          }
+        final resolved = _resolveVar(obj[i], vars);
+        if (resolved != null) {
+          obj[i] = resolved;
         } else {
-          _substituteVars(value, vars);
+          _substituteVars(obj[i], vars);
         }
       }
     }
+  }
+
+  /// Resolves a `@varName` reference to its typed value, or returns null
+  /// if the value is not a variable reference.
+  static dynamic _resolveVar(dynamic value, Map<String, String> vars) {
+    if (value is! String || !value.startsWith('@')) return null;
+    final varName = value.substring(1);
+    if (!vars.containsKey(varName)) return null;
+    final resolved = vars[varName]!;
+    if (resolved == 'true') return true;
+    if (resolved == 'false') return false;
+    return int.tryParse(resolved) ?? resolved;
   }
 
   static void _applySelectableRules(
     Map<String, dynamic> config,
     List<SelectableRule> allRules,
     Set<String> enabledLabels,
+    Map<String, String> ruleOutbounds,
+    Set<String> enabledGroups,
   ) {
     final route = config['route'] as Map<String, dynamic>? ?? {};
     final ruleSets = route['rule_set'] as List<dynamic>? ?? [];
@@ -218,7 +219,12 @@ class ConfigBuilder {
       }
 
       if (sr.rule.isNotEmpty) {
-        rules.add(sr.rule);
+        final userOutbound = ruleOutbounds[sr.label];
+        final ruleToAdd =
+            (userOutbound != null && userOutbound.isNotEmpty && sr.rule.containsKey('outbound'))
+                ? {...sr.rule, 'outbound': userOutbound}
+                : sr.rule;
+        if (ruleToAdd.isNotEmpty) rules.add(ruleToAdd);
       }
     }
 

@@ -5,15 +5,15 @@ import 'dart:io' show File, FileSystemException;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_singbox_vpn/flutter_singbox.dart';
 
 import '../config/clash_endpoint.dart';
+import '../vpn/box_vpn_client.dart';
 import '../config/config_parse.dart';
 import '../models/home_state.dart';
 import '../services/clash_api_client.dart';
 
 class HomeController extends ChangeNotifier {
-  final FlutterSingbox _singbox = FlutterSingbox();
+  final BoxVpnClient _vpn = BoxVpnClient();
   StreamSubscription<Map<String, dynamic>>? _statusSub;
   ClashApiClient? _clash;
   Timer? _heartbeat;
@@ -32,7 +32,7 @@ class HomeController extends ChangeNotifier {
 
   Future<void> init() async {
     await _loadSavedConfig();
-    _statusSub = _singbox.onStatusChanged.listen(_handleStatusEvent);
+    _statusSub = _vpn.onStatusChanged.listen(_handleStatusEvent);
   }
 
   @override
@@ -162,7 +162,7 @@ class HomeController extends ChangeNotifier {
 
   Future<void> _tryCleanStop() async {
     try {
-      await _singbox.stopVPN();
+      await _vpn.stopVPN();
     } catch (_) {
       // Best-effort: the native VPN is likely already dead
     }
@@ -185,7 +185,7 @@ class HomeController extends ChangeNotifier {
 
   Future<void> _loadSavedConfig() async {
     try {
-      final config = await _singbox.getConfig();
+      final config = await _vpn.getConfig();
       if (config.isNotEmpty) {
         _emit(_state.copyWith(configRaw: config));
         _rebuildClashEndpoint();
@@ -201,7 +201,7 @@ class HomeController extends ChangeNotifier {
   }
 
   Future<bool> saveParsedConfig(String canonicalJson, {String? displayRaw}) async {
-    final ok = await _singbox.saveConfig(canonicalJson);
+    final ok = await _vpn.saveConfig(canonicalJson);
     if (!ok) {
       _emit(_state.copyWith(lastError: 'Failed to save config'));
       _addDebug(DebugSource.app, 'Save config failed');
@@ -316,8 +316,8 @@ class HomeController extends ChangeNotifier {
   Future<void> start() async {
     _emit(_state.copyWith(busy: true, lastError: ''));
     try {
-      await _singbox.setNotificationTitle('BoxVPN');
-      final ok = await _singbox.startVPN();
+      await _vpn.setNotificationTitle('BoxVPN');
+      final ok = await _vpn.startVPN();
       if (!ok) {
         _emit(_state.copyWith(lastError: 'Failed to start VPN'));
         _addDebug(DebugSource.app, 'startVPN returned false');
@@ -335,7 +335,7 @@ class HomeController extends ChangeNotifier {
   Future<void> stop() async {
     _emit(_state.copyWith(busy: true, lastError: ''));
     try {
-      await _singbox.stopVPN();
+      await _vpn.stopVPN();
       _addDebug(DebugSource.app, 'stopVPN requested');
     } catch (e) {
       _emit(_state.copyWith(lastError: '$e'));

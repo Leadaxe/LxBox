@@ -61,35 +61,27 @@ class HomeState {
     final sorted = List<String>.from(nodes);
     switch (sortMode) {
       case NodeSortMode.latencyAsc:
-        sorted.sort((a, b) {
-          final da = lastDelay[a];
-          final db = lastDelay[b];
-          if (da == null && db == null) return 0;
-          if (da == null) return 1;
-          if (db == null) return -1;
-          if (da < 0 && db < 0) return 0;
-          if (da < 0) return 1;
-          if (db < 0) return -1;
-          return da.compareTo(db);
-        });
+        sorted.sort((a, b) => _compareLatency(a, b));
       case NodeSortMode.latencyDesc:
-        sorted.sort((a, b) {
-          final da = lastDelay[a];
-          final db = lastDelay[b];
-          if (da == null && db == null) return 0;
-          if (da == null) return 1;
-          if (db == null) return -1;
-          if (da < 0 && db < 0) return 0;
-          if (da < 0) return 1;
-          if (db < 0) return -1;
-          return db.compareTo(da);
-        });
+        sorted.sort((a, b) => _compareLatency(b, a));
       case NodeSortMode.nameAsc:
         sorted.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
       case NodeSortMode.defaultOrder:
         break;
     }
     return sorted;
+  }
+
+  int _compareLatency(String a, String b) {
+    final da = lastDelay[a];
+    final db = lastDelay[b];
+    if (da == null && db == null) return 0;
+    if (da == null) return 1;
+    if (db == null) return -1;
+    if (da < 0 && db < 0) return 0;
+    if (da < 0) return 1;
+    if (db < 0) return -1;
+    return da.compareTo(db);
   }
 
   HomeState copyWith({

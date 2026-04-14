@@ -1,0 +1,324 @@
+package com.leadaxe.boxvpn_app.vpn
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager.NameNotFoundException
+import android.net.ProxyInfo
+import android.net.VpnService
+import android.os.Build
+import android.os.IBinder
+import android.os.ParcelFileDescriptor
+import android.os.PowerManager
+import android.util.Log
+import androidx.annotation.RequiresApi
+import androidx.core.content.ContextCompat
+import go.Seq
+import io.nekohasekai.libbox.BoxService
+import io.nekohasekai.libbox.CommandServer
+import io.nekohasekai.libbox.CommandServerHandler
+import io.nekohasekai.libbox.Libbox
+import io.nekohasekai.libbox.SystemProxyStatus
+import io.nekohasekai.libbox.TunOptions
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+
+class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandler {
+
+    companion object {
+        private const val TAG = "BoxVpnService"
+        const val ACTION_START = "com.leadaxe.boxvpn.ACTION_START"
+        const val ACTION_STOP = "com.leadaxe.boxvpn.ACTION_STOP"
+        const val BROADCAST_STATUS = "com.leadaxe.boxvpn.BROADCAST_STATUS"
+        const val EXTRA_STATUS = "status"
+
+        fun start(context: Context) {
+            val intent = Intent(context, BoxVpnService::class.java).apply { action = ACTION_START }
+            ContextCompat.startForegroundService(context, intent)
+        }
+
+        fun stop(context: Context) {
+            context.sendBroadcast(
+                Intent(ACTION_STOP).setPackage(context.packageName)
+            )
+        }
+    }
+
+    /// Scoped to service lifetime — all child coroutines are cancelled in onDestroy / doStop.
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    @Volatile private var fileDescriptor: ParcelFileDescriptor? = null
+    private var boxService: BoxService? = null
+    private var commandServer: CommandServer? = null
+    private var receiverRegistered = false
+    private var status = VpnStatus.Stopped
+
+    private val notification: ServiceNotification by lazy { ServiceNotification(this) }
+
+    private val receiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                ACTION_STOP -> doStop()
+                PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) onIdleModeChanged()
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Android lifecycle
+    // -------------------------------------------------------------------------
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "onStartCommand action=${intent?.action}")
+        notification.show(ConfigManager.notificationTitle, "Starting...")
+
+        if (status != VpnStatus.Stopped) return START_NOT_STICKY
+        setStatus(VpnStatus.Starting)
+
+        if (!receiverRegistered) {
+            ContextCompat.registerReceiver(this, receiver, IntentFilter().apply {
+                addAction(ACTION_STOP)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    addAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
+                }
+            }, ContextCompat.RECEIVER_NOT_EXPORTED)
+            receiverRegistered = true
+        }
+
+        serviceScope.launch {
+            try {
+                startCommandServer()
+                startSingbox()
+            } catch (e: Exception) {
+                Log.e(TAG, "Start failed", e)
+                stopAndAlert(e.message ?: "Unknown error")
+            }
+        }
+        return START_NOT_STICKY
+    }
+
+    override fun onBind(intent: Intent): IBinder? = super.onBind(intent) ?: android.os.Binder()
+
+    override fun onDestroy() {
+        serviceScope.cancel()
+        if (receiverRegistered) {
+            runCatching { unregisterReceiver(receiver) }
+            receiverRegistered = false
+        }
+        super.onDestroy()
+    }
+
+    override fun onRevoke() {
+        doStop()
+        super.onRevoke()
+    }
+
+    // -------------------------------------------------------------------------
+    // Start / stop sing-box
+    // -------------------------------------------------------------------------
+
+    private suspend fun startSingbox() {
+        val config = ConfigManager.load()
+        if (config.isBlank() || config == "{}") {
+            stopAndAlert("Empty configuration")
+            return
+        }
+
+        DefaultNetworkMonitor.start(serviceScope)
+        Libbox.setMemoryLimit(true)
+
+        val svc = try {
+            Libbox.newService(config, this as PlatformInterfaceWrapper)
+        } catch (e: Exception) {
+            stopAndAlert("Failed to create service: ${e.message}")
+            return
+        }
+
+        try { svc.start() } catch (e: Exception) {
+            stopAndAlert("Failed to start service: ${e.message}")
+            return
+        }
+
+        boxService = svc
+        commandServer?.setService(svc)
+        setStatus(VpnStatus.Started)
+
+        withContext(Dispatchers.Main) {
+            notification.show(ConfigManager.notificationTitle, "Connected")
+        }
+    }
+
+    private fun startCommandServer() {
+        val cs = CommandServer(this, 300)
+        cs.start()
+        commandServer = cs
+    }
+
+    private fun doStop() {
+        if (status != VpnStatus.Started) return
+        setStatus(VpnStatus.Stopping)
+
+        if (receiverRegistered) {
+            runCatching { unregisterReceiver(receiver) }
+            receiverRegistered = false
+        }
+        notification.stop()
+
+        serviceScope.launch {
+            fileDescriptor?.close()
+            fileDescriptor = null
+            boxService?.apply {
+                runCatching { close() }
+                Seq.destroyRef(refnum)
+            }
+            commandServer?.setService(null)
+            boxService = null
+            DefaultNetworkMonitor.stop()
+            commandServer?.apply {
+                runCatching { close() }
+                Seq.destroyRef(refnum)
+            }
+            commandServer = null
+
+            withContext(Dispatchers.Main) {
+                setStatus(VpnStatus.Stopped)
+                serviceScope.cancel()
+                stopSelf()
+            }
+        }
+    }
+
+    private suspend fun stopAndAlert(message: String) {
+        Log.e(TAG, "stopAndAlert: $message")
+        withContext(Dispatchers.Main) {
+            // CRITICAL: must call startForeground before stopSelf, otherwise
+            // Android kills the app with ForegroundServiceDidNotStartInTimeException.
+            notification.show("Error", message)
+            if (receiverRegistered) {
+                runCatching { unregisterReceiver(receiver) }
+                receiverRegistered = false
+            }
+            notification.stop()
+            setStatus(VpnStatus.Stopped)
+            serviceScope.cancel()
+            stopSelf()
+        }
+    }
+
+    private fun setStatus(newStatus: VpnStatus) {
+        status = newStatus
+        sendBroadcast(
+            Intent(BROADCAST_STATUS).apply {
+                `package` = packageName
+                putExtra(EXTRA_STATUS, newStatus.name)
+            }
+        )
+    }
+
+    // -------------------------------------------------------------------------
+    // PlatformInterface overrides (VpnService-specific)
+    // -------------------------------------------------------------------------
+
+    override fun autoDetectInterfaceControl(fd: Int) {
+        protect(fd)
+    }
+
+    override fun openTun(options: TunOptions): Int {
+        if (prepare(this) != null) error("android: missing vpn permission")
+
+        val builder = Builder()
+            .setSession("sing-box")
+            .setMtu(options.mtu)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) builder.setMetered(false)
+
+        val inet4 = options.inet4Address
+        while (inet4.hasNext()) { val a = inet4.next(); builder.addAddress(a.address(), a.prefix()) }
+        val inet6 = options.inet6Address
+        while (inet6.hasNext()) { val a = inet6.next(); builder.addAddress(a.address(), a.prefix()) }
+
+        if (options.autoRoute) {
+            builder.addDnsServer(options.dnsServerAddress.value)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val r4 = options.inet4RouteAddress
+                if (r4.hasNext()) { while (r4.hasNext()) builder.addRoute(r4.next().toIpPrefix()) }
+                else if (options.inet4Address.hasNext()) builder.addRoute("0.0.0.0", 0)
+
+                val r6 = options.inet6RouteAddress
+                if (r6.hasNext()) { while (r6.hasNext()) builder.addRoute(r6.next().toIpPrefix()) }
+                else if (options.inet6Address.hasNext()) builder.addRoute("::", 0)
+
+                val x4 = options.inet4RouteExcludeAddress
+                while (x4.hasNext()) builder.excludeRoute(x4.next().toIpPrefix())
+                val x6 = options.inet6RouteExcludeAddress
+                while (x6.hasNext()) builder.excludeRoute(x6.next().toIpPrefix())
+            } else {
+                val r4 = options.inet4RouteRange
+                if (r4.hasNext()) { while (r4.hasNext()) { val a = r4.next(); builder.addRoute(a.address(), a.prefix()) } }
+                val r6 = options.inet6RouteRange
+                if (r6.hasNext()) { while (r6.hasNext()) { val a = r6.next(); builder.addRoute(a.address(), a.prefix()) } }
+            }
+
+            val incl = options.includePackage
+            if (incl.hasNext()) { while (incl.hasNext()) { try { builder.addAllowedApplication(incl.next()) } catch (_: NameNotFoundException) {} } }
+            val excl = options.excludePackage
+            if (excl.hasNext()) { while (excl.hasNext()) { try { builder.addDisallowedApplication(excl.next()) } catch (_: NameNotFoundException) {} } }
+        }
+
+        if (options.isHTTPProxyEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            builder.setHttpProxy(
+                ProxyInfo.buildDirectProxy(
+                    options.httpProxyServer,
+                    options.httpProxyServerPort,
+                    options.httpProxyBypassDomain.toList()
+                )
+            )
+        }
+
+        val pfd = builder.establish() ?: error("android: the application is not prepared or is revoked")
+        fileDescriptor = pfd
+        return pfd.fd
+    }
+
+    override fun protect(fd: Int): Boolean = super.protect(fd)
+
+    // -------------------------------------------------------------------------
+    // CommandServerHandler
+    // -------------------------------------------------------------------------
+
+    override fun serviceReload() {
+        notification.stop()
+        setStatus(VpnStatus.Starting)
+        fileDescriptor?.close(); fileDescriptor = null
+        boxService?.apply { runCatching { close() }; Seq.destroyRef(refnum) }
+        commandServer?.setService(null); commandServer?.resetLog()
+        boxService = null
+        runBlocking { startSingbox() }
+    }
+
+    override fun postServiceClose() {}
+
+    override fun getSystemProxyStatus(): SystemProxyStatus = SystemProxyStatus()
+
+    override fun setSystemProxyEnabled(isEnabled: Boolean) { serviceReload() }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun onIdleModeChanged() {
+        if (BoxApplication.powerManager.isDeviceIdleMode) boxService?.pause() else boxService?.wake()
+    }
+
+    fun writeLog(message: String) { commandServer?.writeMessage(message) }
+
+    override fun sendNotification(notification: io.nekohasekai.libbox.Notification) {
+        Log.d(TAG, "Notification: ${notification.title}")
+    }
+}

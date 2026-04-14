@@ -253,12 +253,12 @@ class SubscriptionEntry {
     final parts = <String>[];
     if (status.isNotEmpty) parts.add(status);
     if (source.lastUpdated != null) {
-      parts.add(_formatAgo(source.lastUpdated!));
+      parts.add(formatAgo(source.lastUpdated!));
     }
     return parts.join(' · ');
   }
 
-  static String _formatAgo(DateTime dt) {
+  static String formatAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);
     if (diff.inMinutes < 1) return 'just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';

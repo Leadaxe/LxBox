@@ -11,7 +11,6 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-  flutter_singbox_vpn: ^1.1.3
   http: ^1.2.2
   json5: ^0.8.2
   file_picker: ^11.0.2

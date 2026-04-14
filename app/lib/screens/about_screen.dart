@@ -88,8 +88,8 @@ class AboutScreen extends StatelessWidget {
                 const Divider(height: 1),
                 const ListTile(
                   leading: Icon(Icons.extension_outlined),
-                  title: Text('flutter_singbox_vpn'),
-                  subtitle: Text('Native Android VPN bridge'),
+                  title: Text('Native VPN Service'),
+                  subtitle: Text('Built-in Android VPN bridge (libbox)'),
                 ),
               ],
             ),

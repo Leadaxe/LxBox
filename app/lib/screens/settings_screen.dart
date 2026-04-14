@@ -26,8 +26,6 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   WizardTemplate? _template;
   final _varValues = <String, String>{};
-  final _enabledRules = <String>{};
-  final _enabledGroups = <String>{};
   bool _loading = true;
   bool _dirty = false;
 
@@ -40,27 +38,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _load() async {
     final template = await ConfigBuilder.loadTemplate();
     final storedVars = await SettingsStorage.getAllVars();
-    final storedRules = await SettingsStorage.getEnabledRules();
-    final storedGroups = await SettingsStorage.getEnabledGroups();
 
     for (final v in template.vars) {
       _varValues[v.name] = storedVars[v.name] ?? v.defaultValue;
-    }
-
-    if (storedRules.isEmpty) {
-      for (final r in template.selectableRules) {
-        if (r.defaultEnabled) _enabledRules.add(r.label);
-      }
-    } else {
-      _enabledRules.addAll(storedRules);
-    }
-
-    if (storedGroups.isEmpty) {
-      for (final g in template.presetGroups) {
-        if (g.defaultEnabled) _enabledGroups.add(g.tag);
-      }
-    } else {
-      _enabledGroups.addAll(storedGroups);
     }
 
     setState(() {
@@ -73,8 +53,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     for (final entry in _varValues.entries) {
       await SettingsStorage.setVar(entry.key, entry.value);
     }
-    await SettingsStorage.saveEnabledRules(_enabledRules);
-    await SettingsStorage.saveEnabledGroups(_enabledGroups);
 
     if (!mounted) return;
 
@@ -107,8 +85,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     final template = _template!;
-    final editableVars =
-        template.vars.where((v) => v.isEditable).toList();
+    final editableVars = template.vars.where((v) => v.isEditable).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -120,34 +97,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(12),
-        children: [
-          Text(
-            'Proxy Groups',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Enabled groups appear in the selector on the home screen. '
-            'All subscription nodes are added to each enabled group.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-          const SizedBox(height: 8),
-          ...template.presetGroups.map(_buildGroupWidget),
-          const Divider(height: 32),
-          Text(
-            'Routing Rules',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          ...template.selectableRules.map(_buildRuleWidget),
-          const Divider(height: 32),
-          ...editableVars.map(_buildVarWidget),
-        ],
-      ),
+      body: editableVars.isEmpty
+          ? const Center(child: Text('No configurable variables'))
+          : ListView(
+              padding: const EdgeInsets.all(12),
+              children: editableVars.map(_buildVarWidget).toList(),
+            ),
     );
   }
 
@@ -186,107 +141,121 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         );
       case 'secret':
-        return ListTile(
-          title: Text(v.title.isNotEmpty ? v.title : v.name),
-          subtitle: v.tooltip.isNotEmpty ? Text(v.tooltip, style: const TextStyle(fontSize: 12)) : null,
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 150,
-                child: TextField(
-                  controller: TextEditingController(text: _varValues[v.name]),
-                  obscureText: true,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  ),
-                  onChanged: (val) {
-                    _varValues[v.name] = val;
-                    _dirty = true;
-                  },
-                ),
-              ),
-              IconButton(
-                tooltip: 'Generate random',
-                icon: const Icon(Icons.refresh, size: 20),
-                onPressed: () {
-                  final rng = Random.secure();
-                  final bytes = List.generate(16, (_) => rng.nextInt(256));
-                  final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-                  setState(() {
-                    _varValues[v.name] = hex;
-                    _dirty = true;
-                  });
-                },
-              ),
-            ],
+        return _VarTextField(
+          key: ValueKey('secret-${v.name}'),
+          value: _varValues[v.name] ?? '',
+          obscure: true,
+          width: 150,
+          label: v.title.isNotEmpty ? v.title : v.name,
+          tooltip: v.tooltip,
+          onChanged: (val) {
+            _varValues[v.name] = val;
+            _dirty = true;
+          },
+          trailing: IconButton(
+            tooltip: 'Generate random',
+            icon: const Icon(Icons.refresh, size: 20),
+            onPressed: () {
+              final rng = Random.secure();
+              final bytes = List.generate(16, (_) => rng.nextInt(256));
+              final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+              setState(() {
+                _varValues[v.name] = hex;
+                _dirty = true;
+              });
+            },
           ),
         );
       default: // text
-        return ListTile(
-          title: Text(v.title.isNotEmpty ? v.title : v.name),
-          subtitle: v.tooltip.isNotEmpty ? Text(v.tooltip, style: const TextStyle(fontSize: 12)) : null,
-          trailing: SizedBox(
-            width: 180,
-            child: TextField(
-              controller: TextEditingController(text: _varValues[v.name]),
-              style: const TextStyle(fontSize: 13),
-              decoration: const InputDecoration(
-                isDense: true,
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              ),
-              onChanged: (val) {
-                _varValues[v.name] = val;
-                _dirty = true;
-              },
-            ),
-          ),
+        return _VarTextField(
+          key: ValueKey('text-${v.name}'),
+          value: _varValues[v.name] ?? '',
+          width: 180,
+          label: v.title.isNotEmpty ? v.title : v.name,
+          tooltip: v.tooltip,
+          onChanged: (val) {
+            _varValues[v.name] = val;
+            _dirty = true;
+          },
         );
     }
   }
+}
 
-  Widget _buildGroupWidget(PresetGroup group) {
-    return SwitchListTile(
-      title: Text(group.label.isNotEmpty ? group.label : group.tag),
-      subtitle: Text(
-        '${group.type} · ${group.tag}',
-        style: const TextStyle(fontSize: 12),
-      ),
-      value: _enabledGroups.contains(group.tag),
-      onChanged: (val) {
-        setState(() {
-          if (val) {
-            _enabledGroups.add(group.tag);
-          } else {
-            _enabledGroups.remove(group.tag);
-          }
-          _dirty = true;
-        });
-      },
-    );
+/// A self-contained text field that manages its own TextEditingController.
+/// Avoids the leak of creating TextEditingController inside build().
+class _VarTextField extends StatefulWidget {
+  const _VarTextField({
+    super.key,
+    required this.value,
+    required this.label,
+    required this.onChanged,
+    this.tooltip = '',
+    this.obscure = false,
+    this.width = 180,
+    this.trailing,
+  });
+
+  final String value;
+  final String label;
+  final String tooltip;
+  final bool obscure;
+  final double width;
+  final ValueChanged<String> onChanged;
+  final Widget? trailing;
+
+  @override
+  State<_VarTextField> createState() => _VarTextFieldState();
+}
+
+class _VarTextFieldState extends State<_VarTextField> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.value);
   }
 
-  Widget _buildRuleWidget(SelectableRule rule) {
-    return SwitchListTile(
-      title: Text(rule.label),
-      subtitle: rule.description.isNotEmpty
-          ? Text(rule.description, style: const TextStyle(fontSize: 12))
+  @override
+  void didUpdateWidget(_VarTextField old) {
+    super.didUpdateWidget(old);
+    if (widget.value != old.value && widget.value != _ctrl.text) {
+      _ctrl.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final field = SizedBox(
+      width: widget.width,
+      child: TextField(
+        controller: _ctrl,
+        obscureText: widget.obscure,
+        style: const TextStyle(fontSize: 13),
+        decoration: const InputDecoration(
+          isDense: true,
+          border: OutlineInputBorder(),
+          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        ),
+        onChanged: widget.onChanged,
+      ),
+    );
+
+    return ListTile(
+      title: Text(widget.label),
+      subtitle: widget.tooltip.isNotEmpty
+          ? Text(widget.tooltip, style: const TextStyle(fontSize: 12))
           : null,
-      value: _enabledRules.contains(rule.label),
-      onChanged: (val) {
-        setState(() {
-          if (val) {
-            _enabledRules.add(rule.label);
-          } else {
-            _enabledRules.remove(rule.label);
-          }
-          _dirty = true;
-        });
-      },
+      trailing: widget.trailing != null
+          ? Row(mainAxisSize: MainAxisSize.min, children: [field, widget.trailing!])
+          : field,
     );
   }
 }
