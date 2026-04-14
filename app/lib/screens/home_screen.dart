@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../controllers/home_controller.dart';
+import '../models/home_state.dart';
 import '../widgets/node_row.dart';
 import 'config_screen.dart';
 import 'debug_screen.dart';
@@ -63,7 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildDrawer(state) {
+  Widget _buildDrawer(HomeState state) {
     return Drawer(
       child: SafeArea(
         child: ListView(
@@ -87,12 +88,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   enabled: !state.busy,
                   contentPadding: const EdgeInsets.only(left: 24, right: 16),
                   onTap: () async {
+                    final messenger = ScaffoldMessenger.of(context);
                     Navigator.of(context).pop();
                     final ok = await _controller.readFromFile();
-                    if (ok && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Config saved')),
-                      );
+                    if (ok) {
+                      messenger.showSnackBar(const SnackBar(content: Text('Config saved')));
                     }
                   },
                 ),
@@ -102,12 +102,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   enabled: !state.busy,
                   contentPadding: const EdgeInsets.only(left: 24, right: 16),
                   onTap: () async {
+                    final messenger = ScaffoldMessenger.of(context);
                     Navigator.of(context).pop();
                     final ok = await _controller.readFromClipboard();
-                    if (ok && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Config saved')),
-                      );
+                    if (ok) {
+                      messenger.showSnackBar(const SnackBar(content: Text('Config saved')));
                     }
                   },
                 ),
@@ -127,7 +126,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildControls(
     BuildContext context,
-    state,
+    HomeState state,
     bool startActive,
     bool startEnabled,
     bool stopEnabled,
@@ -239,7 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildNodeList(BuildContext context, state) {
+  Widget _buildNodeList(BuildContext context, HomeState state) {
     if (state.nodes.isEmpty) {
       return Expanded(
         child: Center(
