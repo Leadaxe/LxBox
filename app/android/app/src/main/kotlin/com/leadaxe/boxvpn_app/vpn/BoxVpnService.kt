@@ -316,7 +316,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         if (BoxApplication.powerManager.isDeviceIdleMode) boxService?.pause() else boxService?.wake()
     }
 
-    fun writeLog(message: String) { commandServer?.writeMessage(message) }
+    override fun writeLog(message: String) { commandServer?.writeMessage(message) }
 
     override fun sendNotification(notification: io.nekohasekai.libbox.Notification) {
         Log.d(TAG, "Notification: ${notification.title}")
