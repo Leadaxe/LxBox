@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Fixed — Wizard template TUN inbound
+- **`inbounds` больше не пустой**: добавлен обязательный `tun` inbound (`tag: tun-in`) с адресом по умолчанию `172.19.0.1/30`, `auto_route` / `strict_route`, MTU и `stack` — как в документации **flutter_singbox_vpn** (без TUN libbox не поднимает туннель корректно).
+- Новые переменные шаблона (внизу Settings): `tun_address`, `tun_mtu`, `tun_auto_route`, `tun_strict_route`, `tun_stack`.
+
 ### Added — Xray JSON Array + Chained Proxy (Feature 012)
 - **XrayJsonParser**: парсинг подписок в формате JSON-массив полных Xray/v2ray конфигов (protocol/vnext/streamSettings → sing-box outbound). Автоматическое определение формата.
 - **Chained proxy (Jump)**: поддержка `dialerProxy` / `sockopt.dialer` — SOCKS/VLESS jump-серверы. Генерация отдельного jump outbound + `detour` в основном outbound.

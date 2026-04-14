@@ -133,6 +133,48 @@
       "wizard_ui": "fix",
       "title": "DNS final",
       "tooltip": "sing-box config.dns.final."
+    },
+    { "separator": true },
+    {
+      "name": "tun_address",
+      "type": "text",
+      "default_value": "172.19.0.1/30",
+      "wizard_ui": "fix",
+      "title": "TUN IPv4 address",
+      "tooltip": "CIDR for the VPN tunnel interface (sing-box tun inbound). Must match what libbox/VpnService expects; default matches flutter_singbox_vpn docs."
+    },
+    {
+      "name": "tun_mtu",
+      "type": "text",
+      "default_value": "9000",
+      "wizard_ui": "fix",
+      "title": "TUN MTU",
+      "tooltip": "MTU for the tun inbound."
+    },
+    {
+      "name": "tun_auto_route",
+      "type": "bool",
+      "default_value": "true",
+      "wizard_ui": "fix",
+      "title": "TUN auto_route",
+      "tooltip": "Let sing-box manage default routes through the tunnel."
+    },
+    {
+      "name": "tun_strict_route",
+      "type": "bool",
+      "default_value": "true",
+      "wizard_ui": "fix",
+      "title": "TUN strict_route",
+      "tooltip": "Stricter routing to reduce leaks; disable if LAN/split issues."
+    },
+    {
+      "name": "tun_stack",
+      "type": "enum",
+      "default_value": "system",
+      "options": ["system", "gvisor", "mixed"],
+      "wizard_ui": "fix",
+      "title": "TUN stack",
+      "tooltip": "sing-box tun stack: system (typical on Android), gvisor, or mixed."
     }
   ],
 
@@ -170,7 +212,17 @@
       "strategy": "@dns_strategy",
       "independent_cache": "@dns_independent_cache"
     },
-    "inbounds": [],
+    "inbounds": [
+      {
+        "type": "tun",
+        "tag": "tun-in",
+        "address": ["@tun_address"],
+        "mtu": "@tun_mtu",
+        "auto_route": "@tun_auto_route",
+        "strict_route": "@tun_strict_route",
+        "stack": "@tun_stack"
+      }
+    ],
     "endpoints": [],
     "outbounds": [
       { "type": "direct", "tag": "direct-out" }
