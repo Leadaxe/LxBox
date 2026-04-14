@@ -45,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: SafeArea(
               child: ListView(
                 children: [
-                  const DrawerHeader(child: Text('Menu')),
+                  const SizedBox(height: 12),
                   ExpansionTile(
                     leading: const Icon(Icons.settings_outlined),
                     title: const Text('Config'),
