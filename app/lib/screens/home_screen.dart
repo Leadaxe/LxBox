@@ -404,6 +404,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     }
     await _controller.start();
+    // Show diagnostic if start failed
+    if (mounted && _controller.state.lastError.isNotEmpty && !_controller.state.tunnelUp) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_controller.state.lastError),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
 
   Widget _buildQuickStart(BuildContext context) {

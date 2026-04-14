@@ -213,17 +213,18 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
                 receiverRegistered = false
             }
             notification.stop()
-            setStatus(VpnStatus.Stopped)
+            setStatus(VpnStatus.Stopped, error = message)
             stopSelf()
         }
     }
 
-    private fun setStatus(newStatus: VpnStatus) {
+    private fun setStatus(newStatus: VpnStatus, error: String? = null) {
         status = newStatus
         sendBroadcast(
             Intent(BROADCAST_STATUS).apply {
                 `package` = packageName
                 putExtra(EXTRA_STATUS, newStatus.name)
+                if (error != null) putExtra("error", error)
             }
         )
     }

@@ -37,9 +37,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         override fun onReceive(ctx: Context?, intent: Intent?) {
             if (intent?.action != BoxVpnService.BROADCAST_STATUS) return
             val name = intent.getStringExtra(BoxVpnService.EXTRA_STATUS) ?: return
-            Log.d(TAG, "Status broadcast: $name")
+            val error = intent.getStringExtra("error")
+            Log.d(TAG, "Status broadcast: $name${if (error != null) " error=$error" else ""}")
             mainHandler.post {
-                statusSink?.success(mapOf("status" to name))
+                val event = mutableMapOf<String, Any>("status" to name)
+                if (error != null) event["error"] = error
+                statusSink?.success(event)
             }
         }
     }

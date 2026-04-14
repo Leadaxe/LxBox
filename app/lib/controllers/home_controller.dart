@@ -186,7 +186,7 @@ class HomeController extends ChangeNotifier {
   Future<void> _loadSavedConfig() async {
     try {
       final config = await _vpn.getConfig();
-      if (config.isNotEmpty) {
+      if (config.isNotEmpty && config != '{}') {
         _emit(_state.copyWith(configRaw: config));
         _rebuildClashEndpoint();
       }
