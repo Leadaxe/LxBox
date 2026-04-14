@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class NodeRow extends StatelessWidget {
   const NodeRow({
@@ -42,8 +43,17 @@ class NodeRow extends StatelessWidget {
     return '';
   }
 
+  Color? _delayColor(BuildContext context) {
+    if (delay == null || pingBusy) return null;
+    if (delay! < 0) return Theme.of(context).colorScheme.error;
+    if (delay! < 200) return Colors.green;
+    if (delay! < 500) return Colors.orange;
+    return Theme.of(context).colorScheme.error;
+  }
+
   Future<void> _openLongPressMenu(BuildContext context) async {
     final canPing = tunnelUp && !busy && !pingBusy;
+    final canActivate = tunnelUp && !busy && !active;
     final box = context.findRenderObject() as RenderBox?;
     final overlay =
         Navigator.of(context).overlay?.context.findRenderObject() as RenderBox?;
@@ -67,16 +77,51 @@ class NodeRow extends StatelessWidget {
             contentPadding: EdgeInsets.zero,
             leading: Icon(
               Icons.speed_outlined,
-              size: 22,
+              size: 20,
               color: canPing ? null : Theme.of(context).disabledColor,
             ),
-            title: const Text('Ping latency'),
+            title: const Text('Ping'),
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'activate',
+          enabled: canActivate,
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+              Icons.play_circle_outline,
+              size: 20,
+              color: canActivate ? null : Theme.of(context).disabledColor,
+            ),
+            title: const Text('Use this node'),
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem<String>(
+          value: 'copy',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.copy_outlined, size: 20),
+            title: const Text('Copy name'),
           ),
         ),
       ],
     );
-    if (chosen == 'ping' && context.mounted) {
-      onPing();
+    if (!context.mounted) return;
+    switch (chosen) {
+      case 'ping':
+        onPing();
+      case 'activate':
+        onActivate();
+      case 'copy':
+        await Clipboard.setData(ClipboardData(text: tag));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Copied: $tag')),
+          );
+        }
     }
   }
 
@@ -124,7 +169,7 @@ class NodeRow extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                               letterSpacing: 0.6,
-                              color: colorScheme.onSurfaceVariant,
+                              color: _delayColor(context) ?? colorScheme.onSurfaceVariant,
                             ),
                       ),
                     ],

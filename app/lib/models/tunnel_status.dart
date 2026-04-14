@@ -4,6 +4,7 @@ enum TunnelStatus {
   connecting,
   connected,
   stopping,
+  revoked,
   error;
 
   bool get isUp => this == connected;
@@ -14,6 +15,7 @@ enum TunnelStatus {
       'Starting' => connecting,
       'Stopped' => disconnected,
       'Stopping' => stopping,
+      'Revoked' => revoked,
       _ => disconnected,
     };
   }
@@ -21,8 +23,9 @@ enum TunnelStatus {
   String get label => switch (this) {
         disconnected => 'Disconnected',
         connecting => 'Connecting…',
-        connected => 'Started',
+        connected => 'Connected',
         stopping => 'Stopping…',
+        revoked => 'Revoked by another VPN',
         error => 'Error',
       };
 }

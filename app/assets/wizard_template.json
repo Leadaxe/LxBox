@@ -1,0 +1,206 @@
+{
+  "parser_config": {
+    "version": 5,
+    "proxies": [],
+    "outbounds": [
+      {
+        "tag": "auto-proxy-out",
+        "wizard": { "required": 1 },
+        "type": "urltest",
+        "options": {
+          "url": "https://cp.cloudflare.com/generate_204",
+          "interval": "5m",
+          "tolerance": 100,
+          "interrupt_exist_connections": true
+        },
+        "filters": { "tag": "!/(🇷🇺)/i" },
+        "comment": "Proxy automated group"
+      },
+      {
+        "tag": "proxy-out",
+        "wizard": { "required": 1 },
+        "type": "selector",
+        "options": { "interrupt_exist_connections": true, "default": "auto-proxy-out" },
+        "filters": { "tag": "!/(🇷🇺)/i" },
+        "addOutbounds": ["direct-out", "auto-proxy-out"],
+        "comment": "Proxy selector group"
+      },
+      {
+        "tag": "ru VPN 🇷🇺",
+        "type": "selector",
+        "options": { "default": "direct-out", "interrupt_exist_connections": true },
+        "filters": { "tag": "/(🇷🇺)/i" },
+        "addOutbounds": ["direct-out"],
+        "comment": "Russian VPN group"
+      }
+    ],
+    "parser": {
+      "reload": "12h",
+      "last_updated": ""
+    }
+  },
+
+  "vars": [
+    {
+      "name": "log_level",
+      "type": "enum",
+      "default_value": "warn",
+      "options": ["trace", "debug", "info", "warn", "error", "fatal", "panic"],
+      "wizard_ui": "edit",
+      "title": "Log level",
+      "tooltip": "Sing-box log.level."
+    },
+    { "separator": true },
+    {
+      "name": "clash_api",
+      "type": "text",
+      "default_value": "127.0.0.1:9090",
+      "wizard_ui": "edit",
+      "title": "Clash API address",
+      "tooltip": "Host:port for external_controller."
+    },
+    {
+      "name": "clash_secret",
+      "type": "secret",
+      "default_value": "",
+      "wizard_ui": "edit",
+      "title": "Clash API secret",
+      "tooltip": "Secret for the Clash API."
+    },
+    { "separator": true },
+    {
+      "name": "resolve_strategy",
+      "type": "enum",
+      "default_value": "prefer_ipv4",
+      "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"],
+      "wizard_ui": "edit",
+      "title": "Resolve strategy",
+      "tooltip": "Resolution strategy for route rules."
+    },
+    {
+      "name": "auto_detect_interface",
+      "type": "bool",
+      "default_value": "true",
+      "wizard_ui": "edit",
+      "title": "Auto-detect interface",
+      "tooltip": "Detect default interface for outbound."
+    },
+    { "separator": true },
+    {
+      "name": "dns_strategy",
+      "type": "enum",
+      "default_value": "prefer_ipv4",
+      "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"],
+      "wizard_ui": "fix",
+      "title": "DNS strategy",
+      "tooltip": "sing-box config.dns.strategy."
+    },
+    {
+      "name": "dns_independent_cache",
+      "type": "bool",
+      "default_value": "false",
+      "wizard_ui": "fix",
+      "title": "Independent DNS cache",
+      "tooltip": "sing-box config.dns.independent_cache."
+    },
+    {
+      "name": "dns_default_domain_resolver",
+      "type": "text",
+      "default_value": "direct_dns_resolver",
+      "wizard_ui": "fix",
+      "title": "Default DNS domain resolver",
+      "tooltip": "sing-box config.route.default_domain_resolver."
+    },
+    {
+      "name": "dns_final",
+      "type": "text",
+      "default_value": "direct_dns_resolver",
+      "wizard_ui": "fix",
+      "title": "DNS final",
+      "tooltip": "sing-box config.dns.final."
+    }
+  ],
+
+  "config": {
+    "log": {
+      "level": "@log_level",
+      "timestamp": true
+    },
+    "dns": {
+      "servers": [
+        { "type": "local", "tag": "local_dns_resolver" },
+        { "type": "udp", "tag": "direct_dns_resolver", "server": "8.8.8.8", "server_port": 53 }
+      ],
+      "rules": [
+        { "server": "direct_dns_resolver" }
+      ],
+      "final": "@dns_final",
+      "strategy": "@dns_strategy",
+      "independent_cache": "@dns_independent_cache"
+    },
+    "inbounds": [],
+    "endpoints": [],
+    "outbounds": [
+      { "type": "direct", "tag": "direct-out" }
+    ],
+    "route": {
+      "default_domain_resolver": "@dns_default_domain_resolver",
+      "rule_set": [
+        { "tag": "ru-domains", "type": "inline", "format": "domain_suffix", "rules": [{ "domain_suffix": ["ru", "xn--p1ai", "su"] }] }
+      ],
+      "rules": [
+        { "protocol": "dns", "action": "hijack-dns" }
+      ],
+      "final": "proxy-out",
+      "auto_detect_interface": "@auto_detect_interface"
+    },
+    "experimental": {
+      "clash_api": {
+        "external_controller": "@clash_api",
+        "secret": "@clash_secret"
+      },
+      "cache_file": {
+        "enabled": true,
+        "path": "cache.db"
+      }
+    }
+  },
+
+  "selectable_rules": [
+    {
+      "label": "Block Ads",
+      "description": "Soft-block ads by rejecting connections.",
+      "default": true,
+      "rule_set": [
+        { "tag": "ads-all", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-category-ads-all.srs" }
+      ],
+      "rule": { "rule_set": "ads-all", "action": "reject" }
+    },
+    {
+      "label": "Russian domains direct",
+      "description": "Route Russian domains directly.",
+      "default": true,
+      "rule": { "rule_set": "ru-domains", "outbound": "direct-out" }
+    },
+    {
+      "label": "BitTorrent direct",
+      "description": "Route BitTorrent traffic directly.",
+      "default": true,
+      "rule": { "protocol": ["bittorrent"], "outbound": "direct-out" }
+    },
+    {
+      "label": "Games direct",
+      "description": "Send gaming traffic directly for lower latency.",
+      "default": true,
+      "rule_set": [
+        { "tag": "games", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-category-games.srs" }
+      ],
+      "rule": { "rule_set": "games", "network": ["tcp", "udp"], "outbound": "direct-out" }
+    },
+    {
+      "label": "Private IPs direct",
+      "description": "Route private IP ranges (LAN) directly.",
+      "rule": { "ip_is_private": true, "outbound": "direct-out" }
+    }
+  ]
+}

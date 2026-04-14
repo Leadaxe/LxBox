@@ -4,6 +4,18 @@ import 'tunnel_status.dart';
 export 'debug_entry.dart';
 export 'tunnel_status.dart';
 
+enum NodeSortMode {
+  defaultOrder('Default'),
+  latencyAsc('Latency ↑'),
+  latencyDesc('Latency ↓'),
+  nameAsc('Name A→Z');
+
+  const NodeSortMode(this.label);
+  final String label;
+
+  NodeSortMode get next => NodeSortMode.values[(index + 1) % NodeSortMode.values.length];
+}
+
 class HomeState {
   const HomeState({
     this.configRaw = '',
@@ -19,6 +31,7 @@ class HomeState {
     this.lastDelay = const <String, int>{},
     this.pingBusy = const <String, String>{},
     this.debugEvents = const <DebugEntry>[],
+    this.sortMode = NodeSortMode.defaultOrder,
   });
 
   final String configRaw;
@@ -34,8 +47,45 @@ class HomeState {
   final Map<String, int> lastDelay;
   final Map<String, String> pingBusy;
   final List<DebugEntry> debugEvents;
+  final NodeSortMode sortMode;
 
   bool get tunnelUp => tunnel.isUp;
+
+  List<String> get sortedNodes {
+    if (sortMode == NodeSortMode.defaultOrder) return nodes;
+    final sorted = List<String>.from(nodes);
+    switch (sortMode) {
+      case NodeSortMode.latencyAsc:
+        sorted.sort((a, b) {
+          final da = lastDelay[a];
+          final db = lastDelay[b];
+          if (da == null && db == null) return 0;
+          if (da == null) return 1;
+          if (db == null) return -1;
+          if (da < 0 && db < 0) return 0;
+          if (da < 0) return 1;
+          if (db < 0) return -1;
+          return da.compareTo(db);
+        });
+      case NodeSortMode.latencyDesc:
+        sorted.sort((a, b) {
+          final da = lastDelay[a];
+          final db = lastDelay[b];
+          if (da == null && db == null) return 0;
+          if (da == null) return 1;
+          if (db == null) return -1;
+          if (da < 0 && db < 0) return 0;
+          if (da < 0) return 1;
+          if (db < 0) return -1;
+          return db.compareTo(da);
+        });
+      case NodeSortMode.nameAsc:
+        sorted.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      case NodeSortMode.defaultOrder:
+        break;
+    }
+    return sorted;
+  }
 
   HomeState copyWith({
     String? configRaw,
@@ -51,6 +101,7 @@ class HomeState {
     Map<String, int>? lastDelay,
     Map<String, String>? pingBusy,
     List<DebugEntry>? debugEvents,
+    NodeSortMode? sortMode,
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
@@ -72,6 +123,7 @@ class HomeState {
       lastDelay: lastDelay ?? this.lastDelay,
       pingBusy: pingBusy ?? this.pingBusy,
       debugEvents: debugEvents ?? this.debugEvents,
+      sortMode: sortMode ?? this.sortMode,
     );
   }
 }

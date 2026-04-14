@@ -16,6 +16,12 @@ class HomeController extends ChangeNotifier {
   final FlutterSingbox _singbox = FlutterSingbox();
   StreamSubscription<Map<String, dynamic>>? _statusSub;
   ClashApiClient? _clash;
+  Timer? _heartbeat;
+  int _heartbeatFailures = 0;
+
+  static const _heartbeatInterval = Duration(seconds: 20);
+  static const _heartbeatTimeout = Duration(seconds: 4);
+  static const _maxHeartbeatFailures = 2;
 
   HomeState _state = const HomeState();
   HomeState get state => _state;
@@ -31,6 +37,7 @@ class HomeController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _stopHeartbeat();
     _statusSub?.cancel();
     super.dispose();
   }
@@ -69,8 +76,13 @@ class HomeController extends ChangeNotifier {
 
     if (tunnel == TunnelStatus.connected) {
       unawaited(_refreshClashAfterTunnel());
-    } else if (tunnel == TunnelStatus.disconnected) {
-      final reason = _extractStopReason(event);
+      _startHeartbeat();
+    } else if (tunnel == TunnelStatus.disconnected ||
+        tunnel == TunnelStatus.revoked) {
+      _stopHeartbeat();
+      final reason = tunnel == TunnelStatus.revoked
+          ? 'VPN revoked by another app'
+          : _extractStopReason(event);
       _emit(
         _state.copyWith(
           lastError: reason.isNotEmpty ? reason : _state.lastError,
@@ -83,6 +95,72 @@ class HomeController extends ChangeNotifier {
       if (reason.isNotEmpty) {
         _addDebug(DebugSource.core, reason);
       }
+    } else {
+      _stopHeartbeat();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tunnel heartbeat — detects when another VPN app takes over
+  // ---------------------------------------------------------------------------
+
+  void _startHeartbeat() {
+    _stopHeartbeat();
+    _heartbeatFailures = 0;
+    _heartbeat = Timer.periodic(_heartbeatInterval, (_) => _checkHeartbeat());
+  }
+
+  void _stopHeartbeat() {
+    _heartbeat?.cancel();
+    _heartbeat = null;
+    _heartbeatFailures = 0;
+  }
+
+  Future<void> _checkHeartbeat() async {
+    if (!_state.tunnelUp) {
+      _stopHeartbeat();
+      return;
+    }
+    final clash = _clash;
+    if (clash == null) return;
+
+    try {
+      await clash.pingVersion().timeout(_heartbeatTimeout);
+      _heartbeatFailures = 0;
+    } catch (_) {
+      _heartbeatFailures++;
+      _addDebug(
+        DebugSource.app,
+        'Heartbeat failed ($_heartbeatFailures/$_maxHeartbeatFailures)',
+      );
+      if (_heartbeatFailures >= _maxHeartbeatFailures) {
+        _stopHeartbeat();
+        _onTunnelDead();
+      }
+    }
+  }
+
+  void _onTunnelDead() {
+    _addDebug(DebugSource.app, 'Tunnel appears dead (heartbeat lost)');
+    cancelMassPing();
+    _emit(
+      _state.copyWith(
+        tunnel: TunnelStatus.revoked,
+        lastError: 'VPN tunnel lost — another VPN may have taken over',
+        proxiesJson: <String, dynamic>{},
+        groups: <String>[],
+        nodes: <String>[],
+        highlightedNode: null,
+      ),
+    );
+    unawaited(_tryCleanStop());
+  }
+
+  Future<void> _tryCleanStop() async {
+    try {
+      await _singbox.stopVPN();
+    } catch (_) {
+      // Best-effort: the native VPN is likely already dead
     }
   }
 
@@ -367,6 +445,57 @@ class HomeController extends ChangeNotifier {
     }
   }
 
+  bool _massPingRunning = false;
+  bool get massPingRunning => _massPingRunning;
+  int _massPingEpoch = 0;
+
+  Future<void> pingAllNodes() async {
+    final clash = _clash;
+    if (clash == null || _state.nodes.isEmpty) return;
+
+    if (_massPingRunning) {
+      cancelMassPing();
+      return;
+    }
+
+    _massPingRunning = true;
+    _massPingEpoch++;
+    final epoch = _massPingEpoch;
+    _addDebug(DebugSource.app, 'Mass ping started (${_state.nodes.length} nodes)');
+    notifyListeners();
+
+    final nodes = List<String>.from(_state.nodes);
+    for (final tag in nodes) {
+      if (!_massPingRunning || _massPingEpoch != epoch || !_state.tunnelUp) break;
+      final pingBusy = Map<String, String>.from(_state.pingBusy)..[tag] = '…';
+      _emit(_state.copyWith(pingBusy: pingBusy));
+      try {
+        final ms = await clash.delay(tag);
+        final nextDelay = Map<String, int>.from(_state.lastDelay)..[tag] = ms;
+        final nextBusy = Map<String, String>.from(_state.pingBusy)..[tag] = '';
+        _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
+      } catch (_) {
+        final nextDelay = Map<String, int>.from(_state.lastDelay)..[tag] = -1;
+        final nextBusy = Map<String, String>.from(_state.pingBusy)..[tag] = '';
+        _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
+      }
+    }
+
+    if (_massPingEpoch == epoch) {
+      _massPingRunning = false;
+      _addDebug(DebugSource.app, 'Mass ping finished');
+      notifyListeners();
+    }
+  }
+
+  void cancelMassPing() {
+    if (!_massPingRunning) return;
+    _massPingRunning = false;
+    _massPingEpoch++;
+    _addDebug(DebugSource.app, 'Mass ping cancelled');
+    notifyListeners();
+  }
+
   // ---------------------------------------------------------------------------
   // UI selection helpers
   // ---------------------------------------------------------------------------
@@ -377,5 +506,9 @@ class HomeController extends ChangeNotifier {
 
   void setHighlightedNode(String nodeTag) {
     _emit(_state.copyWith(highlightedNode: nodeTag));
+  }
+
+  void cycleSortMode() {
+    _emit(_state.copyWith(sortMode: _state.sortMode.next));
   }
 }

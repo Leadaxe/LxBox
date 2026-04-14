@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../config/config_parse.dart';
 import '../controllers/home_controller.dart';
 
 class ConfigScreen extends StatefulWidget {
@@ -18,7 +19,9 @@ class _ConfigScreenState extends State<ConfigScreen> {
   @override
   void initState() {
     super.initState();
-    _textController = TextEditingController(text: widget.controller.state.configRaw);
+    _textController = TextEditingController(
+      text: prettyJsonForDisplay(widget.controller.state.configRaw),
+    );
   }
 
   @override

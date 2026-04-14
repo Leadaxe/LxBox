@@ -15,6 +15,8 @@ dependencies:
   http: ^1.2.2
   json5: ^0.8.2
   file_picker: ^11.0.2
+  path_provider: ^2.1.5
+  shared_preferences: ^2.3.4
 
 dev_dependencies:
   flutter_test:
@@ -24,6 +26,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/wizard_template.json
+    - assets/get_free.json
 
 # Иконка из sing-box Launcher (macOS .app Resources/app.icns → PNG 1024²).
 flutter_launcher_icons:

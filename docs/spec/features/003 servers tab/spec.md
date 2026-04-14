@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Статус | черновик |
-| Задачи | [`../../tasks/003%20servers%20tab/spec.md`](../../tasks/003%20servers%20tab/spec.md) |
+| Задачи | [`tasks.md`](tasks.md) |
 | MVP | [`../002%20mvp%20scope/spec.md`](../002%20mvp%20scope/spec.md) |
 | Стек / bridge | [`../001%20mobile%20stack/spec.md`](../001%20mobile%20stack/spec.md) |
 

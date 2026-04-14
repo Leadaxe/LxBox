@@ -1,0 +1,23 @@
+{
+  "get_free": {
+    "title": "Quick Start — Free VPN",
+    "text": "Thank @igareck for providing VPN lists:",
+    "link": "https://github.com/igareck/vpn-configs-for-russia"
+  },
+  "proxy_sources": [
+    {
+      "source": "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt",
+      "tag_prefix": "BL:"
+    },
+    {
+      "source": "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
+      "tag_prefix": "W:"
+    }
+  ],
+  "enabled_rules": [
+    "Block Ads",
+    "Russian domains direct",
+    "BitTorrent direct",
+    "Games direct"
+  ]
+}

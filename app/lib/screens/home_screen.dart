@@ -3,10 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../controllers/home_controller.dart';
+import '../controllers/subscription_controller.dart';
 import '../models/home_state.dart';
 import '../widgets/node_row.dart';
 import 'config_screen.dart';
 import 'debug_screen.dart';
+import 'settings_screen.dart';
+import 'subscriptions_screen.dart';
+import '../services/config_builder.dart';
+import '../services/settings_storage.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,17 +22,21 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late final HomeController _controller;
+  late final SubscriptionController _subController;
 
   @override
   void initState() {
     super.initState();
     _controller = HomeController();
+    _subController = SubscriptionController();
     unawaited(_controller.init());
+    unawaited(_subController.init());
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _subController.dispose();
     super.dispose();
   }
 
@@ -39,12 +48,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _controller,
+      animation: Listenable.merge([_controller, _subController]),
       builder: (context, _) {
         final state = _controller.state;
         final startActive = !state.tunnelUp;
         final startEnabled = !state.busy && !state.tunnelUp && state.configRaw.isNotEmpty;
         final stopEnabled = !state.busy && state.tunnelUp;
+        final isRevoked = state.tunnel == TunnelStatus.revoked;
+
+        final showQuickStart = state.configRaw.isEmpty &&
+            _subController.entries.isEmpty &&
+            !_subController.busy;
 
         return Scaffold(
           appBar: AppBar(title: const Text('BoxVPN')),
@@ -53,6 +67,9 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildControls(context, state, startActive, startEnabled, stopEnabled),
+              if (showQuickStart) _buildQuickStart(context),
+              if (_subController.busy && _subController.progressMessage.isNotEmpty)
+                _buildProgressBanner(context),
               const SizedBox(height: 12),
               _buildNodesHeader(context),
               const SizedBox(height: 4),
@@ -70,8 +87,27 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ListView(
           children: [
             const SizedBox(height: 12),
+            ListTile(
+              leading: const Icon(Icons.subscriptions_outlined),
+              title: const Text('Subscriptions'),
+              subtitle: const Text('Add and manage proxy sources'),
+              onTap: () => _pushRoute(SubscriptionsScreen(
+                subController: _subController,
+                homeController: _controller,
+              )),
+            ),
+            ListTile(
+              leading: const Icon(Icons.tune_outlined),
+              title: const Text('Settings'),
+              subtitle: const Text('Config variables and routing rules'),
+              onTap: () => _pushRoute(SettingsScreen(
+                subController: _subController,
+                homeController: _controller,
+              )),
+            ),
+            const Divider(),
             ExpansionTile(
-              leading: const Icon(Icons.settings_outlined),
+              leading: const Icon(Icons.description_outlined),
               title: const Text('Config'),
               subtitle: const Text('Import and edit'),
               children: [
@@ -143,11 +179,11 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               startActive
                   ? FilledButton(
-                      onPressed: startEnabled ? _controller.start : null,
+                      onPressed: startEnabled ? () => unawaited(_startWithAutoRefresh()) : null,
                       child: const Text('Start'),
                     )
                   : OutlinedButton(
-                      onPressed: startEnabled ? _controller.start : null,
+                      onPressed: startEnabled ? () => unawaited(_startWithAutoRefresh()) : null,
                       child: const Text('Start'),
                     ),
               startActive
@@ -162,9 +198,17 @@ class _HomeScreenState extends State<HomeScreen> {
               Chip(
                 label: Text('VPN: ${state.tunnel.label}'),
                 avatar: Icon(
-                  state.tunnelUp ? Icons.shield : Icons.shield_outlined,
+                  isRevoked
+                      ? Icons.warning_amber_rounded
+                      : state.tunnelUp
+                          ? Icons.shield
+                          : Icons.shield_outlined,
                   size: 18,
+                  color: isRevoked ? Theme.of(context).colorScheme.error : null,
                 ),
+                backgroundColor: isRevoked
+                    ? Theme.of(context).colorScheme.errorContainer
+                    : null,
               ),
             ],
           ),
@@ -210,13 +254,122 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               IconButton(
-                tooltip: 'Reload groups',
-                onPressed: (!state.tunnelUp || state.busy)
+                tooltip: _controller.massPingRunning ? 'Stop ping' : 'Ping all nodes',
+                onPressed: (!state.tunnelUp || state.busy || state.nodes.isEmpty)
                     ? null
-                    : () => unawaited(_controller.reloadProxies()),
-                icon: const Icon(Icons.refresh),
+                    : () {
+                        if (_controller.massPingRunning) {
+                          _controller.cancelMassPing();
+                        } else {
+                          unawaited(_controller.pingAllNodes());
+                        }
+                      },
+                icon: Icon(
+                  _controller.massPingRunning ? Icons.stop_circle_outlined : Icons.speed,
+                ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _startWithAutoRefresh() async {
+    if (_subController.entries.isNotEmpty) {
+      try {
+        final template = await ConfigBuilder.loadTemplate();
+        final shouldRefresh = await SettingsStorage.shouldRefreshSubscriptions(
+          template.parserConfig.reload,
+        );
+        if (shouldRefresh) {
+          final config = await _subController.updateAllAndGenerate();
+          if (config != null && mounted) {
+            await _controller.saveParsedConfig(config);
+            await SettingsStorage.setLastGlobalUpdate(DateTime.now());
+          }
+        }
+      } catch (_) {
+        // Non-blocking: if refresh fails, start with existing config
+      }
+    }
+    await _controller.start();
+  }
+
+  Widget _buildQuickStart(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.rocket_launch_outlined,
+                    color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Quick Start',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'No config yet. Tap below to set up free VPN subscriptions '
+              'and generate a working config automatically.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => unawaited(_applyQuickStart()),
+                icon: const Icon(Icons.flash_on),
+                label: const Text('Set Up Free VPN'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _applyQuickStart() async {
+    final config = await _subController.applyGetFreePreset();
+    if (!mounted || config == null) return;
+    final ok = await _controller.saveParsedConfig(config);
+    if (!mounted) return;
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Config ready! ${_subController.entries.fold<int>(0, (s, e) => s + e.nodeCount)} nodes loaded.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _buildProgressBanner(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _subController.progressMessage,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ),
         ],
       ),
@@ -226,13 +379,60 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildNodesHeader(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          'Nodes',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onLongPress: () {
+          Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => SettingsScreen(
+              subController: _subController,
+              homeController: _controller,
+            ),
+          ));
+        },
+        child: Row(
+          children: [
+            Text(
+              'Nodes',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            if (_controller.state.nodes.isNotEmpty) ...[
+              const SizedBox(width: 4),
+              Text(
+                '(${_controller.state.nodes.length})',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
               ),
+            ],
+            const Spacer(),
+            IconButton(
+              tooltip: _controller.state.sortMode.label,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              onPressed: _controller.state.nodes.isEmpty
+                  ? null
+                  : _controller.cycleSortMode,
+              icon: Icon(
+                _controller.state.sortMode == NodeSortMode.defaultOrder
+                    ? Icons.sort
+                    : Icons.sort_by_alpha,
+                size: 20,
+              ),
+            ),
+            IconButton(
+              tooltip: 'Reload groups',
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              onPressed: (!_controller.state.tunnelUp || _controller.state.busy)
+                  ? null
+                  : () => unawaited(_controller.reloadProxies()),
+              icon: const Icon(Icons.refresh, size: 20),
+            ),
+          ],
         ),
       ),
     );
@@ -254,30 +454,34 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
+    final displayNodes = state.sortedNodes;
     return Expanded(
-      child: ListView.separated(
-        padding: EdgeInsets.zero,
-        itemCount: state.nodes.length,
-        separatorBuilder: (_, _) => Divider(
-          height: 1,
-          thickness: 1,
-          color: Theme.of(context).colorScheme.outlineVariant.withAlpha(128),
+      child: RefreshIndicator(
+        onRefresh: _controller.reloadProxies,
+        child: ListView.separated(
+          padding: EdgeInsets.zero,
+          itemCount: displayNodes.length,
+          separatorBuilder: (_, _) => Divider(
+            height: 1,
+            thickness: 1,
+            color: Theme.of(context).colorScheme.outlineVariant.withAlpha(128),
+          ),
+          itemBuilder: (context, i) {
+            final tag = displayNodes[i];
+            return NodeRow(
+              tag: tag,
+              active: tag == state.activeInGroup,
+              highlighted: tag == state.highlightedNode,
+              delay: state.lastDelay[tag],
+              pingBusy: state.pingBusy[tag] == '…',
+              tunnelUp: state.tunnelUp,
+              busy: state.busy,
+              onHighlight: () => _controller.setHighlightedNode(tag),
+              onActivate: () => unawaited(_controller.switchNode(tag)),
+              onPing: () => unawaited(_controller.pingNode(tag)),
+            );
+          },
         ),
-        itemBuilder: (context, i) {
-          final tag = state.nodes[i];
-          return NodeRow(
-            tag: tag,
-            active: tag == state.activeInGroup,
-            highlighted: tag == state.highlightedNode,
-            delay: state.lastDelay[tag],
-            pingBusy: state.pingBusy[tag] == '…',
-            tunnelUp: state.tunnelUp,
-            busy: state.busy,
-            onHighlight: () => _controller.setHighlightedNode(tag),
-            onActivate: () => unawaited(_controller.switchNode(tag)),
-            onPing: () => unawaited(_controller.pingNode(tag)),
-          );
-        },
       ),
     );
   }

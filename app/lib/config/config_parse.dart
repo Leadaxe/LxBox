@@ -14,6 +14,19 @@ String canonicalJsonForSingbox(String text) {
   return jsonEncode(_toJsonEncodable(parsed));
 }
 
+/// Форматирует JSON / JSON5 / JSONC с отступами для отображения в редакторе.
+/// При ошибке парсинга возвращает исходную строку as-is.
+String prettyJsonForDisplay(String raw) {
+  try {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return raw;
+    final dynamic parsed = json5Decode(trimmed);
+    return const JsonEncoder.withIndent('  ').convert(_toJsonEncodable(parsed));
+  } catch (_) {
+    return raw;
+  }
+}
+
 dynamic _toJsonEncodable(dynamic value) {
   if (value == null || value is num || value is String || value is bool) {
     return value;

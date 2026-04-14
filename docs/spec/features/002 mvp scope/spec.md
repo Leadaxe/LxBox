@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Статус | черновик |
-| Задачи | [`../../tasks/002%20mvp%20scope/spec.md`](../../tasks/002%20mvp%20scope/spec.md) |
+| Задачи | [`tasks.md`](tasks.md) |
 | Технический стек | [`../001%20mobile%20stack/spec.md`](../001%20mobile%20stack/spec.md) |
 | UI узлов / Clash API | [`../003%20servers%20tab/spec.md`](../003%20servers%20tab/spec.md) |
 
