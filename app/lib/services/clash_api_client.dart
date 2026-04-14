@@ -86,15 +86,27 @@ class ClashApiClient {
   }
 
   /// Fetches aggregate traffic from /connections.
+  /// Falls back to summing per-connection upload/download if top-level totals
+  /// are zero (some sing-box builds don't populate uploadTotal/downloadTotal).
   Future<TrafficSnapshot> fetchTraffic() async {
     final r = await _http.get(_u('/connections'), headers: _headers).timeout(_timeout);
     if (r.statusCode != 200) throw ClashHttpException(r.statusCode, r.body);
     final j = jsonDecode(r.body);
     if (j is! Map<String, dynamic>) throw const FormatException('connections: not an object');
 
-    final up = (j['uploadTotal'] as num?)?.toInt() ?? 0;
-    final down = (j['downloadTotal'] as num?)?.toInt() ?? 0;
+    var up = (j['uploadTotal'] as num?)?.toInt() ?? 0;
+    var down = (j['downloadTotal'] as num?)?.toInt() ?? 0;
     final conns = j['connections'] as List<dynamic>? ?? [];
+
+    // Fallback: sum individual connection traffic when global counters are 0
+    if (up == 0 && down == 0 && conns.isNotEmpty) {
+      for (final c in conns) {
+        if (c is Map<String, dynamic>) {
+          up += (c['upload'] as num?)?.toInt() ?? 0;
+          down += (c['download'] as num?)?.toInt() ?? 0;
+        }
+      }
+    }
 
     return TrafficSnapshot(
       uploadTotal: up,
