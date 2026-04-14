@@ -4,6 +4,7 @@ import '../models/parsed_node.dart';
 import '../models/proxy_source.dart';
 import 'node_parser.dart';
 import 'subscription_fetcher.dart';
+import 'xray_json_parser.dart';
 
 /// Loads and processes nodes from a [ProxySource].
 class SourceLoader {
@@ -38,18 +39,37 @@ class SourceLoader {
             .replaceAll('\r', '\n')
             .trim();
 
-        for (var line in text.split('\n')) {
-          line = line.trim();
-          if (line.isEmpty || count >= maxNodesPerSubscription) continue;
-          try {
-            final node = NodeParser.parseNode(line, const []);
-            if (node != null) {
-              _applyPrefix(node, source);
-              node.tag = _makeUnique(node.tag, tagCounts);
-              nodes.add(node);
-              count++;
+        if (XrayJsonParser.isXrayJsonArray(text)) {
+          // Xray JSON Array format (full configs with protocol/vnext)
+          for (final node in XrayJsonParser.parse(text)) {
+            if (count >= maxNodesPerSubscription) break;
+            _applyPrefix(node, source);
+            node.tag = _makeUnique(node.tag, tagCounts);
+            if (node.jump != null) {
+              node.jump!.tag = _makeUnique(node.jump!.tag, tagCounts);
+              if (node.jump!.outbound.isNotEmpty) {
+                node.jump!.outbound['tag'] = node.jump!.tag;
+              }
+              node.outbound['detour'] = node.jump!.tag;
             }
-          } catch (_) {}
+            nodes.add(node);
+            count++;
+          }
+        } else {
+          // Standard format: base64/plain text URI links
+          for (var line in text.split('\n')) {
+            line = line.trim();
+            if (line.isEmpty || count >= maxNodesPerSubscription) continue;
+            try {
+              final node = NodeParser.parseNode(line, const []);
+              if (node != null) {
+                _applyPrefix(node, source);
+                node.tag = _makeUnique(node.tag, tagCounts);
+                nodes.add(node);
+                count++;
+              }
+            } catch (_) {}
+          }
         }
       } else if (NodeParser.isDirectLink(source.source)) {
         try {
@@ -90,6 +110,12 @@ class SourceLoader {
       node.tag = '${source.tagPrefix}${node.tag}';
       if (node.outbound.isNotEmpty) {
         node.outbound['tag'] = node.tag;
+      }
+      if (node.jump != null) {
+        node.jump!.tag = '${source.tagPrefix}${node.jump!.tag}';
+        if (node.jump!.outbound.isNotEmpty) {
+          node.jump!.outbound['tag'] = node.jump!.tag;
+        }
       }
     }
   }

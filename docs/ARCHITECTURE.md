@@ -64,6 +64,7 @@ app/lib/
 │   ├── config_builder.dart       # Template + vars + nodes → sing-box JSON
 │   ├── source_loader.dart        # ProxySource → List<ParsedNode>
 │   ├── node_parser.dart          # URI parsing: vless, vmess, trojan, ss, hy2, ssh, socks, wg
+│   ├── xray_json_parser.dart    # Xray JSON Array → ParsedNode (vnext/streamSettings + jump)
 │   ├── subscription_fetcher.dart # HTTP fetch с User-Agent и лимитами
 │   ├── subscription_decoder.dart # Base64, JSON array, plain text decode
 │   ├── clash_api_client.dart     # HTTP-клиент для Clash API (proxies, delay, select, traffic)

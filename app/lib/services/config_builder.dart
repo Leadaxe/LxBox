@@ -96,12 +96,23 @@ class ConfigBuilder {
     List<ParsedNode> allNodes,
   ) {
     final result = <Map<String, dynamic>>[];
+    final emittedJumpTags = <String>{};
 
-    // Add all node outbounds first
     for (final node in allNodes) {
-      if (node.outbound.isNotEmpty) {
-        result.add(node.outbound);
+      if (node.outbound.isEmpty) continue;
+
+      // If node has a jump server, emit the jump outbound first
+      // and set `detour` on the main outbound to route through it.
+      if (node.jump != null && node.jump!.outbound.isNotEmpty) {
+        final jumpTag = node.jump!.tag;
+        if (!emittedJumpTags.contains(jumpTag)) {
+          result.add(node.jump!.outbound);
+          emittedJumpTags.add(jumpTag);
+        }
+        node.outbound['detour'] = jumpTag;
       }
+
+      result.add(node.outbound);
     }
 
     final allNodeTags = allNodes.map((n) => n.tag).toList();
