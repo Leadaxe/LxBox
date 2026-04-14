@@ -8,7 +8,6 @@ import '../services/get_free_loader.dart';
 import '../services/node_parser.dart';
 import '../services/settings_storage.dart';
 import '../services/source_loader.dart';
-import '../services/subscription_fetcher.dart';
 
 /// Manages subscriptions: add/remove/update, generates config.
 class SubscriptionController extends ChangeNotifier {
@@ -163,7 +162,6 @@ class SubscriptionController extends ChangeNotifier {
       entry.status = 'Fetching...';
       notifyListeners();
 
-      await SubscriptionFetcher.fetch(entry.source.source);
       final tagCounts = <String, int>{};
       final nodes = await SourceLoader.loadNodesFromSource(
         entry.source,
