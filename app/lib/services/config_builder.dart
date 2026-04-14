@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show rootBundle;
 
 import '../models/parsed_node.dart';
 import '../models/parser_config.dart';
+import 'rule_set_downloader.dart';
 import 'settings_storage.dart';
 import 'source_loader.dart';
 
@@ -79,6 +80,9 @@ class ConfigBuilder {
     config['outbounds'] = [...baseOutbounds, ...outbounds];
 
     _applySelectableRules(config, template.selectableRules, enabledRules);
+
+    onProgress?.call(0.85, 'Downloading rule sets...');
+    await _cacheRemoteRuleSets(config, onProgress: onProgress);
 
     onProgress?.call(0.95, 'Finalizing...');
     return jsonEncode(config);
@@ -210,6 +214,42 @@ class ConfigBuilder {
     route['rule_set'] = ruleSets;
     route['rules'] = rules;
     config['route'] = route;
+  }
+
+  /// Downloads remote .srs rule sets and rewrites entries to local paths.
+  /// Non-fatal: on failure the entry stays remote and sing-box fetches it.
+  static Future<void> _cacheRemoteRuleSets(
+    Map<String, dynamic> config, {
+    void Function(double, String)? onProgress,
+  }) async {
+    final route = config['route'] as Map<String, dynamic>?;
+    if (route == null) return;
+    final ruleSets = route['rule_set'] as List<dynamic>?;
+    if (ruleSets == null || ruleSets.isEmpty) return;
+
+    final remoteEntries = <Map<String, dynamic>>[];
+    for (final entry in ruleSets) {
+      if (entry is Map<String, dynamic> && entry['type'] == 'remote') {
+        remoteEntries.add(entry);
+      }
+    }
+    if (remoteEntries.isEmpty) return;
+
+    final cached = await RuleSetDownloader.cacheAll(
+      remoteEntries,
+      onProgress: (tag) => onProgress?.call(0.88, 'Rule set: $tag'),
+    );
+
+    for (final entry in remoteEntries) {
+      final tag = entry['tag'] as String?;
+      if (tag != null && cached.containsKey(tag)) {
+        entry['type'] = 'local';
+        entry['path'] = cached[tag];
+        entry.remove('url');
+        entry.remove('download_detour');
+        entry.remove('update_interval');
+      }
+    }
   }
 
   static Map<String, dynamic> _deepCopy(Map<String, dynamic> source) {

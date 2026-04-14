@@ -72,6 +72,11 @@
 ### Improved — Empty States
 - Контекстные placeholder-ы с иконками: нет конфига, нет нод в группе, VPN не запущен.
 
+### Added — Local Rule Set Cache (Feature 011)
+- **RuleSetDownloader**: при генерации конфига все remote `.srs` rule sets (ads, ru-domains и др.) скачиваются в `<app_dir>/rule_sets/` и подставляются как `"type": "local"` в конфиг. Повторная загрузка только по истечении `parser.reload` интервала.
+- Ускорение первого запуска: sing-box не ждёт скачивания rule sets — всё уже на диске.
+- Graceful fallback: при ошибке скачивания запись остаётся `"type": "remote"`.
+
 ### Changed — Preset Groups (replaces Outbound Constructor)
 - **Outbound constructor удалён**: regex-фильтры, per-source outbound configs, skip rules — всё убрано.
 - **Preset groups**: фиксированные группы `auto-proxy-out`, `proxy-out`, `vpn-1`, `vpn-2` определены в `wizard_template.json`.

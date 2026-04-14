@@ -68,7 +68,8 @@ app/lib/
 │   ├── subscription_decoder.dart # Base64, JSON array, plain text decode
 │   ├── clash_api_client.dart     # HTTP-клиент для Clash API (proxies, delay, select, traffic)
 │   ├── settings_storage.dart     # Persistent JSON-файл: vars, sources, rules, timestamps
-│   └── get_free_loader.dart      # Загрузка встроенного пресета get_free.json
+│   ├── get_free_loader.dart      # Загрузка встроенного пресета get_free.json
+│   └── rule_set_downloader.dart  # Скачивание и кеширование remote .srs rule sets
 └── widgets/
     └── node_row.dart             # Строка узла: статус, задержка, context menu
 ```
@@ -92,10 +93,13 @@ HomeScreen._startWithAutoRefresh()
   │                   ├─ loadTemplate() → WizardTemplate (asset)
   │                   ├─ SettingsStorage.getAllVars() → user overrides
   │                   ├─ _substituteVars(config, vars)
-  │                   ├─ _generateOutbounds(selectors, nodes)
+  │                   ├─ _buildPresetOutbounds(presets, enabled, nodes)
   │                   │    ├─ node outbounds (from ParsedNode.outbound)
-  │                   │    └─ selector/urltest groups (with filters)
+  │                   │    └─ selector/urltest preset groups (all nodes)
   │                   ├─ _applySelectableRules(config, rules, enabled)
+  │                   ├─ _cacheRemoteRuleSets(config)
+  │                   │    └─ RuleSetDownloader.cacheAll() → local .srs
+  │                   │       remote → local type rewrite
   │                   └─ return jsonEncode(config)
   │              ↓
   │   HomeController.saveParsedConfig(json)
