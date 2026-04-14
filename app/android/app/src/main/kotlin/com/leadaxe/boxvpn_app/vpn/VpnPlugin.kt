@@ -49,6 +49,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     // -------------------------------------------------------------------------
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        Log.d(TAG, "onAttachedToEngine")
         context = binding.applicationContext
         BoxApplication.initialize(context)
 
@@ -84,6 +85,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     // -------------------------------------------------------------------------
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        Log.d(TAG, "onMethodCall: ${call.method}")
         when (call.method) {
             "saveConfig" -> {
                 val config = call.argument<String>("config") ?: ""
