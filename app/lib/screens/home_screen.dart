@@ -171,11 +171,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: InputDecorator(
                             decoration: const InputDecoration(
                               border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              isDense: true,
                               hintText: 'No data (tunnel and API required)',
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<String>(
                                 isExpanded: true,
+                                isDense: true,
                                 value: state.groups.contains(state.selectedGroup)
                                     ? state.selectedGroup
                                     : null,
@@ -370,21 +373,6 @@ class _NodeRow extends StatelessWidget {
                 width: (active || highlighted) ? 3 : 0,
                 color: (active || highlighted) ? colorScheme.primary : Colors.transparent,
               ),
-              const SizedBox(width: 8),
-              Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  color: colorScheme.surfaceContainerHighest,
-                ),
-                child: Icon(
-                  Icons.dns_rounded,
-                  size: 20,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -428,14 +416,7 @@ class _NodeRow extends StatelessWidget {
                       : colorScheme.onSurfaceVariant,
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Icon(
-                  Icons.chevron_right,
-                  size: 18,
-                  color: colorScheme.outline,
-                ),
-              ),
+              const SizedBox(width: 8),
             ],
           ),
         ),
