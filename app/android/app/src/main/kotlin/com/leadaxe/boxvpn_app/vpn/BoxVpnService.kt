@@ -51,7 +51,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     }
 
     /// Scoped to service lifetime — all child coroutines are cancelled in onDestroy / doStop.
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /// Recreated on each start since cancel() is terminal for a scope.
+    private var serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private fun resetScope() {
+        serviceScope.cancel()
+        serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    }
 
     @Volatile private var fileDescriptor: ParcelFileDescriptor? = null
     private var boxService: BoxService? = null
@@ -81,6 +87,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         notification.show(ConfigManager.notificationTitle, "Starting...")
 
         if (status != VpnStatus.Stopped) return START_NOT_STICKY
+        resetScope()
         setStatus(VpnStatus.Starting)
 
         if (!receiverRegistered) {
@@ -190,7 +197,6 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
 
             withContext(Dispatchers.Main) {
                 setStatus(VpnStatus.Stopped)
-                serviceScope.cancel()
                 stopSelf()
             }
         }
@@ -208,7 +214,6 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             }
             notification.stop()
             setStatus(VpnStatus.Stopped)
-            serviceScope.cancel()
             stopSelf()
         }
     }
