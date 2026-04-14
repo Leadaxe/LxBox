@@ -1,23 +1,13 @@
-enum DebugSource { app, core }
+import 'debug_entry.dart';
+import 'tunnel_status.dart';
 
-enum DebugFilter { all, core, app }
-
-class DebugEntry {
-  const DebugEntry({
-    required this.time,
-    required this.source,
-    required this.message,
-  });
-
-  final DateTime time;
-  final DebugSource source;
-  final String message;
-}
+export 'debug_entry.dart';
+export 'tunnel_status.dart';
 
 class HomeState {
   const HomeState({
     this.configRaw = '',
-    this.statusText = '—',
+    this.tunnel = TunnelStatus.disconnected,
     this.lastError = '',
     this.busy = false,
     this.proxiesJson = const <String, dynamic>{},
@@ -32,7 +22,7 @@ class HomeState {
   });
 
   final String configRaw;
-  final String statusText;
+  final TunnelStatus tunnel;
   final String lastError;
   final bool busy;
   final Map<String, dynamic> proxiesJson;
@@ -45,11 +35,11 @@ class HomeState {
   final Map<String, String> pingBusy;
   final List<DebugEntry> debugEvents;
 
-  bool get tunnelUp => statusText == 'Started';
+  bool get tunnelUp => tunnel.isUp;
 
   HomeState copyWith({
     String? configRaw,
-    String? statusText,
+    TunnelStatus? tunnel,
     String? lastError,
     bool? busy,
     Map<String, dynamic>? proxiesJson,
@@ -64,7 +54,7 @@ class HomeState {
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
-      statusText: statusText ?? this.statusText,
+      tunnel: tunnel ?? this.tunnel,
       lastError: lastError ?? this.lastError,
       busy: busy ?? this.busy,
       proxiesJson: proxiesJson ?? this.proxiesJson,

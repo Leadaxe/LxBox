@@ -20,6 +20,10 @@ class HomeController extends ChangeNotifier {
   HomeState _state = const HomeState();
   HomeState get state => _state;
 
+  // ---------------------------------------------------------------------------
+  // Lifecycle
+  // ---------------------------------------------------------------------------
+
   Future<void> init() async {
     await _loadSavedConfig();
     _statusSub = _singbox.onStatusChanged.listen(_handleStatusEvent);
@@ -30,6 +34,10 @@ class HomeController extends ChangeNotifier {
     _statusSub?.cancel();
     super.dispose();
   }
+
+  // ---------------------------------------------------------------------------
+  // State helpers
+  // ---------------------------------------------------------------------------
 
   void _emit(HomeState next) {
     _state = next;
@@ -49,14 +57,19 @@ class HomeController extends ChangeNotifier {
     _emit(_state.copyWith(debugEvents: next));
   }
 
-  void _handleStatusEvent(Map<String, dynamic> event) {
-    final status = event['status']?.toString() ?? '';
-    _addDebug(DebugSource.core, event.toString());
-    _emit(_state.copyWith(statusText: status));
+  // ---------------------------------------------------------------------------
+  // Native VPN events
+  // ---------------------------------------------------------------------------
 
-    if (status == 'Started') {
+  void _handleStatusEvent(Map<String, dynamic> event) {
+    final raw = event['status']?.toString() ?? '';
+    final tunnel = TunnelStatus.fromNative(raw);
+    _addDebug(DebugSource.core, event.toString());
+    _emit(_state.copyWith(tunnel: tunnel));
+
+    if (tunnel == TunnelStatus.connected) {
       unawaited(_refreshClashAfterTunnel());
-    } else if (status == 'Stopped') {
+    } else if (tunnel == TunnelStatus.disconnected) {
       final reason = _extractStopReason(event);
       _emit(
         _state.copyWith(
@@ -84,6 +97,10 @@ class HomeController extends ChangeNotifier {
     return '';
   }
 
+  // ---------------------------------------------------------------------------
+  // Config persistence
+  // ---------------------------------------------------------------------------
+
   Future<void> _loadSavedConfig() async {
     try {
       final config = await _singbox.getConfig();
@@ -91,7 +108,9 @@ class HomeController extends ChangeNotifier {
         _emit(_state.copyWith(configRaw: config));
         _rebuildClashEndpoint();
       }
-    } catch (_) {}
+    } catch (e) {
+      _addDebug(DebugSource.app, 'Load config: $e');
+    }
   }
 
   void _rebuildClashEndpoint() {
@@ -99,71 +118,6 @@ class HomeController extends ChangeNotifier {
     _clash = endpoint != null ? ClashApiClient(endpoint) : null;
   }
 
-  Future<void> _refreshClashAfterTunnel() async {
-    _rebuildClashEndpoint();
-    await reloadProxies();
-  }
-
-  Future<void> reloadProxies() async {
-    final clash = _clash;
-    if (clash == null || _state.configRaw.isEmpty) return;
-    try {
-      await clash.pingVersion();
-      final proxies = await clash.fetchProxies();
-      final groups = ClashApiClient.selectorGroupTags(proxies)
-          .where((name) => name != 'GLOBAL')
-          .toList();
-
-      String? initial = _state.selectedGroup;
-      if (initial == null || !groups.contains(initial)) {
-        final finalTag = ClashEndpoint.routeFinalTag(_state.configRaw);
-        if (finalTag != null && groups.contains(finalTag)) {
-          initial = finalTag;
-        } else {
-          initial = groups.isNotEmpty ? groups.first : null;
-        }
-      }
-
-      _emit(
-        _state.copyWith(
-          proxiesJson: proxies,
-          groups: groups,
-          selectedGroup: initial,
-        ),
-      );
-      await applyGroup(initial);
-    } catch (e) {
-      _emit(_state.copyWith(lastError: 'Clash API: $e'));
-      _addDebug(DebugSource.app, 'Clash API error: $e');
-    }
-  }
-
-  Future<void> applyGroup(String? tag) async {
-    if (tag == null) {
-      _emit(
-        _state.copyWith(
-          nodes: <String>[],
-          activeInGroup: null,
-          highlightedNode: null,
-        ),
-      );
-      return;
-    }
-    final entry = ClashApiClient.proxyEntry(_state.proxiesJson, tag);
-    if (entry == null) return;
-    final all = entry['all'];
-    final now = entry['now']?.toString();
-    final nodes = all is List ? all.map((e) => e.toString()).toList() : <String>[];
-    _emit(
-      _state.copyWith(
-        nodes: nodes,
-        activeInGroup: now,
-        highlightedNode: now,
-      ),
-    );
-  }
-
-  /// Writes [canonicalJson] to native storage; [displayRaw] is what the UI keeps (formatting preserved).
   Future<bool> saveParsedConfig(String canonicalJson, {String? displayRaw}) async {
     final ok = await _singbox.saveConfig(canonicalJson);
     if (!ok) {
@@ -178,7 +132,6 @@ class HomeController extends ChangeNotifier {
     return true;
   }
 
-  /// Validates and persists editor/file/clipboard text; keeps [raw] as stored display string.
   Future<bool> saveConfigRaw(String raw) async {
     if (raw.trim().isEmpty) {
       _emit(_state.copyWith(lastError: 'Config is empty'));
@@ -194,6 +147,10 @@ class HomeController extends ChangeNotifier {
       return false;
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Config import (clipboard / file)
+  // ---------------------------------------------------------------------------
 
   Future<bool> readFromClipboard() async {
     _emit(_state.copyWith(busy: true, lastError: ''));
@@ -270,6 +227,10 @@ class HomeController extends ChangeNotifier {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // VPN tunnel control
+  // ---------------------------------------------------------------------------
+
   Future<void> start() async {
     _emit(_state.copyWith(busy: true, lastError: ''));
     try {
@@ -300,6 +261,74 @@ class HomeController extends ChangeNotifier {
     } finally {
       _emit(_state.copyWith(busy: false));
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Clash API — proxies & groups
+  // ---------------------------------------------------------------------------
+
+  Future<void> _refreshClashAfterTunnel() async {
+    _rebuildClashEndpoint();
+    await reloadProxies();
+  }
+
+  Future<void> reloadProxies() async {
+    final clash = _clash;
+    if (clash == null || _state.configRaw.isEmpty) return;
+    try {
+      await clash.pingVersion();
+      final proxies = await clash.fetchProxies();
+      final groups = ClashApiClient.selectorGroupTags(proxies)
+          .where((name) => name != 'GLOBAL')
+          .toList();
+
+      String? initial = _state.selectedGroup;
+      if (initial == null || !groups.contains(initial)) {
+        final finalTag = ClashEndpoint.routeFinalTag(_state.configRaw);
+        if (finalTag != null && groups.contains(finalTag)) {
+          initial = finalTag;
+        } else {
+          initial = groups.isNotEmpty ? groups.first : null;
+        }
+      }
+
+      _emit(
+        _state.copyWith(
+          proxiesJson: proxies,
+          groups: groups,
+          selectedGroup: initial,
+        ),
+      );
+      await applyGroup(initial);
+    } catch (e) {
+      _emit(_state.copyWith(lastError: 'Clash API: $e'));
+      _addDebug(DebugSource.app, 'Clash API error: $e');
+    }
+  }
+
+  Future<void> applyGroup(String? tag) async {
+    if (tag == null) {
+      _emit(
+        _state.copyWith(
+          nodes: <String>[],
+          activeInGroup: null,
+          highlightedNode: null,
+        ),
+      );
+      return;
+    }
+    final entry = ClashApiClient.proxyEntry(_state.proxiesJson, tag);
+    if (entry == null) return;
+    final all = entry['all'];
+    final now = entry['now']?.toString();
+    final nodes = all is List ? all.map((e) => e.toString()).toList() : <String>[];
+    _emit(
+      _state.copyWith(
+        nodes: nodes,
+        activeInGroup: now,
+        highlightedNode: now,
+      ),
+    );
   }
 
   Future<void> switchNode(String nodeTag) async {
@@ -337,6 +366,10 @@ class HomeController extends ChangeNotifier {
       _addDebug(DebugSource.app, 'Ping error for $nodeTag: $e');
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // UI selection helpers
+  // ---------------------------------------------------------------------------
 
   void setSelectedGroup(String? group) {
     _emit(_state.copyWith(selectedGroup: group));
