@@ -27,6 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   WizardTemplate? _template;
   final _varValues = <String, String>{};
   final _enabledRules = <String>{};
+  final _enabledGroups = <String>{};
   bool _loading = true;
   bool _dirty = false;
 
@@ -40,6 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final template = await ConfigBuilder.loadTemplate();
     final storedVars = await SettingsStorage.getAllVars();
     final storedRules = await SettingsStorage.getEnabledRules();
+    final storedGroups = await SettingsStorage.getEnabledGroups();
 
     for (final v in template.vars) {
       _varValues[v.name] = storedVars[v.name] ?? v.defaultValue;
@@ -53,6 +55,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _enabledRules.addAll(storedRules);
     }
 
+    if (storedGroups.isEmpty) {
+      for (final g in template.presetGroups) {
+        if (g.defaultEnabled) _enabledGroups.add(g.tag);
+      }
+    } else {
+      _enabledGroups.addAll(storedGroups);
+    }
+
     setState(() {
       _template = template;
       _loading = false;
@@ -64,6 +74,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await SettingsStorage.setVar(entry.key, entry.value);
     }
     await SettingsStorage.saveEnabledRules(_enabledRules);
+    await SettingsStorage.saveEnabledGroups(_enabledGroups);
 
     if (!mounted) return;
 
@@ -112,7 +123,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          ...editableVars.map(_buildVarWidget),
+          Text(
+            'Proxy Groups',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Enabled groups appear in the selector on the home screen. '
+            'All subscription nodes are added to each enabled group.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 8),
+          ...template.presetGroups.map(_buildGroupWidget),
           const Divider(height: 32),
           Text(
             'Routing Rules',
@@ -120,6 +144,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           ...template.selectableRules.map(_buildRuleWidget),
+          const Divider(height: 32),
+          ...editableVars.map(_buildVarWidget),
         ],
       ),
     );
@@ -221,6 +247,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         );
     }
+  }
+
+  Widget _buildGroupWidget(PresetGroup group) {
+    return SwitchListTile(
+      title: Text(group.label.isNotEmpty ? group.label : group.tag),
+      subtitle: Text(
+        '${group.type} · ${group.tag}',
+        style: const TextStyle(fontSize: 12),
+      ),
+      value: _enabledGroups.contains(group.tag),
+      onChanged: (val) {
+        setState(() {
+          if (val) {
+            _enabledGroups.add(group.tag);
+          } else {
+            _enabledGroups.remove(group.tag);
+          }
+          _dirty = true;
+        });
+      },
+    );
   }
 
   Widget _buildRuleWidget(SelectableRule rule) {

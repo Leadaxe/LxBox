@@ -100,6 +100,23 @@ class SettingsStorage {
   }
 
   // ---------------------------------------------------------------------------
+  // Enabled preset groups
+  // ---------------------------------------------------------------------------
+
+  static Future<Set<String>> getEnabledGroups() async {
+    final data = await _load();
+    final list = data['enabled_groups'] as List<dynamic>? ?? [];
+    return list.map((e) => e.toString()).toSet();
+  }
+
+  static Future<void> saveEnabledGroups(Set<String> groups) async {
+    final data = await _load();
+    data['enabled_groups'] = groups.toList();
+    _cache = data;
+    await _save();
+  }
+
+  // ---------------------------------------------------------------------------
   // Last global update timestamp
   // ---------------------------------------------------------------------------
 

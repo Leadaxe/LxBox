@@ -1,15 +1,15 @@
-import 'proxy_source.dart';
-
 /// Full wizard template loaded from asset.
 class WizardTemplate {
   WizardTemplate({
     required this.parserConfig,
+    required this.presetGroups,
     required this.vars,
     required this.config,
     required this.selectableRules,
   });
 
   final ParserConfigBlock parserConfig;
+  final List<PresetGroup> presetGroups;
   final List<WizardVar> vars;
   final Map<String, dynamic> config;
   final List<SelectableRule> selectableRules;
@@ -18,9 +18,14 @@ class WizardTemplate {
     final pcJson = json['parser_config'] as Map<String, dynamic>? ?? {};
     final varsJson = json['vars'] as List<dynamic>? ?? [];
     final rulesJson = json['selectable_rules'] as List<dynamic>? ?? [];
+    final groupsJson = json['preset_groups'] as List<dynamic>? ?? [];
 
     return WizardTemplate(
       parserConfig: ParserConfigBlock.fromJson(pcJson),
+      presetGroups: groupsJson
+          .whereType<Map<String, dynamic>>()
+          .map(PresetGroup.fromJson)
+          .toList(),
       vars: varsJson
           .whereType<Map<String, dynamic>>()
           .where((v) => v.containsKey('name'))
@@ -37,44 +42,53 @@ class WizardTemplate {
 class ParserConfigBlock {
   ParserConfigBlock({
     this.version = 5,
-    this.proxies = const [],
-    this.outbounds = const [],
     this.reload = '12h',
-    this.lastUpdated = '',
   });
 
   final int version;
-  final List<ProxySource> proxies;
-  final List<OutboundConfig> outbounds;
   final String reload;
-  final String lastUpdated;
 
   factory ParserConfigBlock.fromJson(Map<String, dynamic> json) {
     final parser = json['parser'] as Map<String, dynamic>? ?? {};
     return ParserConfigBlock(
       version: json['version'] as int? ?? 5,
-      proxies: (json['proxies'] as List<dynamic>?)
-              ?.map((e) => ProxySource.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
-      outbounds: (json['outbounds'] as List<dynamic>?)
-              ?.map((e) => OutboundConfig.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
       reload: parser['reload'] as String? ?? '12h',
-      lastUpdated: parser['last_updated'] as String? ?? '',
     );
   }
+}
 
-  Map<String, dynamic> toJson() => {
-        'version': version,
-        'proxies': proxies.map((e) => e.toJson()).toList(),
-        'outbounds': outbounds.map((e) => e.toJson()).toList(),
-        'parser': {
-          'reload': reload,
-          'last_updated': lastUpdated,
-        },
-      };
+/// A fixed preset outbound group (replaces the old OutboundConfig with filters).
+/// All subscription nodes are added to every enabled group.
+class PresetGroup {
+  PresetGroup({
+    required this.tag,
+    required this.type,
+    this.label = '',
+    this.defaultEnabled = true,
+    this.options = const {},
+    this.addOutbounds = const [],
+  });
+
+  final String tag;
+  final String type; // selector, urltest
+  final String label;
+  final bool defaultEnabled;
+  final Map<String, dynamic> options;
+  final List<String> addOutbounds;
+
+  factory PresetGroup.fromJson(Map<String, dynamic> json) {
+    return PresetGroup(
+      tag: json['tag'] as String? ?? '',
+      type: json['type'] as String? ?? 'selector',
+      label: json['label'] as String? ?? '',
+      defaultEnabled: json['default_enabled'] as bool? ?? true,
+      options: json['options'] as Map<String, dynamic>? ?? const {},
+      addOutbounds: (json['add_outbounds'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
+    );
+  }
 }
 
 /// A variable from `vars[]` in the wizard template.
@@ -98,7 +112,6 @@ class WizardVar {
   final String tooltip;
 
   bool get isEditable => wizardUI == 'edit';
-  bool get isSeparator => false;
 
   factory WizardVar.fromJson(Map<String, dynamic> json) {
     var defVal = json['default_value'];

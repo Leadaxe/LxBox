@@ -1,44 +1,59 @@
 {
   "parser_config": {
     "version": 5,
-    "proxies": [],
-    "outbounds": [
-      {
-        "tag": "auto-proxy-out",
-        "wizard": { "required": 1 },
-        "type": "urltest",
-        "options": {
-          "url": "https://cp.cloudflare.com/generate_204",
-          "interval": "5m",
-          "tolerance": 100,
-          "interrupt_exist_connections": true
-        },
-        "filters": { "tag": "!/(🇷🇺)/i" },
-        "comment": "Proxy automated group"
-      },
-      {
-        "tag": "proxy-out",
-        "wizard": { "required": 1 },
-        "type": "selector",
-        "options": { "interrupt_exist_connections": true, "default": "auto-proxy-out" },
-        "filters": { "tag": "!/(🇷🇺)/i" },
-        "addOutbounds": ["direct-out", "auto-proxy-out"],
-        "comment": "Proxy selector group"
-      },
-      {
-        "tag": "ru VPN 🇷🇺",
-        "type": "selector",
-        "options": { "default": "direct-out", "interrupt_exist_connections": true },
-        "filters": { "tag": "/(🇷🇺)/i" },
-        "addOutbounds": ["direct-out"],
-        "comment": "Russian VPN group"
-      }
-    ],
     "parser": {
-      "reload": "12h",
-      "last_updated": ""
+      "reload": "12h"
     }
   },
+
+  "preset_groups": [
+    {
+      "tag": "auto-proxy-out",
+      "type": "urltest",
+      "label": "Auto Proxy",
+      "default_enabled": true,
+      "options": {
+        "url": "https://cp.cloudflare.com/generate_204",
+        "interval": "5m",
+        "tolerance": 100,
+        "interrupt_exist_connections": true
+      },
+      "add_outbounds": []
+    },
+    {
+      "tag": "proxy-out",
+      "type": "selector",
+      "label": "Proxy",
+      "default_enabled": true,
+      "options": {
+        "interrupt_exist_connections": true,
+        "default": "auto-proxy-out"
+      },
+      "add_outbounds": ["direct-out", "auto-proxy-out"]
+    },
+    {
+      "tag": "vpn-1",
+      "type": "selector",
+      "label": "VPN ①",
+      "default_enabled": false,
+      "options": {
+        "default": "direct-out",
+        "interrupt_exist_connections": true
+      },
+      "add_outbounds": ["direct-out"]
+    },
+    {
+      "tag": "vpn-2",
+      "type": "selector",
+      "label": "VPN ②",
+      "default_enabled": false,
+      "options": {
+        "default": "direct-out",
+        "interrupt_exist_connections": true
+      },
+      "add_outbounds": ["direct-out"]
+    }
+  ],
 
   "vars": [
     {
