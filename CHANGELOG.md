@@ -72,6 +72,14 @@
 ### Improved — Empty States
 - Контекстные placeholder-ы с иконками: нет конфига, нет нод в группе, VPN не запущен.
 
+### Changed — Preset Groups (replaces Outbound Constructor)
+- **Outbound constructor удалён**: regex-фильтры, per-source outbound configs, skip rules — всё убрано.
+- **Preset groups**: фиксированные группы `auto-proxy-out`, `proxy-out`, `vpn-1`, `vpn-2` определены в `wizard_template.json`.
+- Все ноды подписок идут в каждую включённую группу — без фильтрации.
+- **ProxySource упрощён**: удалены `skip`, `outbounds`, `tagMask`, `tagPostfix`, `excludeFromGlobal`.
+- **Settings**: новая секция «Proxy Groups» для включения/отключения пресетных групп.
+- Чистое сокращение: -139 строк кода.
+
 ### Changed — Spec Structure
 - Миграция `docs/spec/tasks/` в `docs/spec/features/` (tasks.md внутри каждой фичи).
 - Удалена отдельная папка задач.
