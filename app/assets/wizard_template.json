@@ -215,6 +215,14 @@
       "rule": { "rule_set": "ru-domains", "outbound": "direct-out" }
     },
     {
+      "label": "Russia-only services direct",
+      "description": "Services available only inside Russia — direct.",
+      "rule_set": [
+        { "tag": "ru-inside", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-ru-available-only-inside.srs" }
+      ],
+      "rule": { "rule_set": "ru-inside", "outbound": "direct-out" }
+    },
+    {
       "label": "BitTorrent direct",
       "description": "Route BitTorrent traffic directly.",
       "default": true,
