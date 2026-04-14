@@ -68,7 +68,9 @@ class SourceLoader {
       final trimmed = conn.trim();
       if (trimmed.isEmpty ||
           !NodeParser.isDirectLink(trimmed) ||
-          count >= maxNodesPerSubscription) continue;
+          count >= maxNodesPerSubscription) {
+        continue;
+      }
       try {
         final node = NodeParser.parseNode(trimmed, const []);
         if (node != null) {
