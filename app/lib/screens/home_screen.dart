@@ -6,6 +6,7 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/home_state.dart';
 import '../widgets/node_row.dart';
+import 'about_screen.dart';
 import 'config_screen.dart';
 import 'debug_screen.dart';
 import 'settings_screen.dart';
@@ -63,8 +64,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final startActive = !state.tunnelUp;
         final startEnabled = !state.busy && !state.tunnelUp && state.configRaw.isNotEmpty;
         final stopEnabled = !state.busy && state.tunnelUp;
-        final isRevoked = state.tunnel == TunnelStatus.revoked;
-
         final showQuickStart = state.configRaw.isEmpty &&
             _subController.entries.isEmpty &&
             !_subController.busy;
@@ -164,6 +163,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               subtitle: const Text('Last 100 events'),
               onTap: () => _pushRoute(DebugScreen(controller: _controller)),
             ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('About'),
+              onTap: () => _pushRoute(const AboutScreen()),
+            ),
           ],
         ),
       ),
@@ -177,6 +182,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     bool startEnabled,
     bool stopEnabled,
   ) {
+    final isRevoked = state.tunnel == TunnelStatus.revoked;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       child: Column(
@@ -198,11 +204,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
               startActive
                   ? OutlinedButton(
-                      onPressed: stopEnabled ? _controller.stop : null,
+                      onPressed: stopEnabled ? () => _confirmStop(state) : null,
                       child: const Text('Stop'),
                     )
                   : FilledButton(
-                      onPressed: stopEnabled ? _controller.stop : null,
+                      onPressed: stopEnabled ? () => _confirmStop(state) : null,
                       child: const Text('Stop'),
                     ),
               Chip(
@@ -283,6 +289,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ],
       ),
     );
+  }
+
+  void _confirmStop(HomeState state) {
+    if (state.traffic.activeConnections > 3) {
+      showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Stop VPN?'),
+          content: Text(
+            '${state.traffic.activeConnections} active connections will be closed.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Stop'),
+            ),
+          ],
+        ),
+      ).then((confirmed) {
+        if (confirmed == true) _controller.stop();
+      });
+    } else {
+      _controller.stop();
+    }
   }
 
   Widget _buildTrafficBar(BuildContext context, HomeState state) {

@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../models/parser_config.dart';
 import '../models/proxy_source.dart';
 import '../services/config_builder.dart';
 import '../services/get_free_loader.dart';
@@ -164,7 +163,7 @@ class SubscriptionController extends ChangeNotifier {
       entry.status = 'Fetching...';
       notifyListeners();
 
-      final content = await SubscriptionFetcher.fetch(entry.source.source);
+      await SubscriptionFetcher.fetch(entry.source.source);
       final tagCounts = <String, int>{};
       final nodes = await SourceLoader.loadNodesFromSource(
         entry.source,

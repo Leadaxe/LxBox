@@ -49,9 +49,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/boxvpn_config.json');
       await file.writeAsString(text);
-      await SharePlus.instance.share(
-        ShareParams(files: [XFile(file.path)], text: 'BoxVPN config'),
-      );
+      // ignore: deprecated_member_use
+      await Share.shareXFiles([XFile(file.path)], text: 'BoxVPN config');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
