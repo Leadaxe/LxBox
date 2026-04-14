@@ -85,7 +85,8 @@ class XrayJsonParser {
 
     if (vlessCands.isEmpty) return null;
 
-    final mainOb = _pickMainVless(vlessCands);
+    final mainCand = _pickMainVless(vlessCands);
+    final mainOb = mainCand.ob;
 
     var label = _str(root, 'remarks').trim();
     if (label.isEmpty) label = _str(mainOb, 'tag');
