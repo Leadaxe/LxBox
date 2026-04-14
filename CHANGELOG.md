@@ -48,6 +48,30 @@
 - Умный `displayName`: имя → hostname из URL → raw URL.
 - Отображение "2h ago", "just now" в списке подписок.
 
+### Added — Traffic Stats & Connection Info
+- **Traffic bar** на главном экране: upload/download total, количество активных соединений, uptime (время с момента подключения).
+- Heartbeat теперь запрашивает `/connections` вместо `/version` (двойное назначение: мониторинг + статистика).
+
+### Added — Subscription Editing
+- **Long-press** на подписке → bottom sheet: переименование и удаление.
+- `renameAt()`, `moveEntry()` в SubscriptionController для управления порядком.
+
+### Added — App Lifecycle
+- `WidgetsBindingObserver` на HomeScreen: при возврате из фона немедленная проверка heartbeat для быстрого обнаружения revoke.
+
+### Added — Config Export
+- Кнопка Share в Config Editor → экспорт JSON через system share sheet (share_plus, XFile temp).
+- Кнопка Share в Debug Screen → экспорт логов в .log файл.
+
+### Added — Stop Confirmation
+- Диалог подтверждения перед Stop VPN если > 3 активных соединений.
+
+### Added — About Screen
+- Версия, ссылки на репозиторий и sing-box, кредиты, tech stack.
+
+### Improved — Empty States
+- Контекстные placeholder-ы с иконками: нет конфига, нет нод в группе, VPN не запущен.
+
 ### Changed — Spec Structure
 - Миграция `docs/spec/tasks/` в `docs/spec/features/` (tasks.md внутри каждой фичи).
 - Удалена отдельная папка задач.

@@ -54,18 +54,19 @@ app/lib/
 │   ├── tunnel_status.dart        # Enum TunnelStatus (from native events)
 │   └── debug_entry.dart          # DebugEntry для лога событий
 ├── screens/
-│   ├── home_screen.dart          # Главный экран: VPN controls, groups, nodes, quick start
-│   ├── subscriptions_screen.dart # Управление подписками
+│   ├── home_screen.dart          # Главный экран: VPN controls, groups, nodes, traffic bar, quick start
+│   ├── subscriptions_screen.dart # Управление подписками (add, edit, delete)
 │   ├── settings_screen.dart      # Wizard vars + selectable rules
-│   ├── config_screen.dart        # JSON-редактор конфига
-│   └── debug_screen.dart         # Лог debug-событий
+│   ├── config_screen.dart        # JSON-редактор конфига с share
+│   ├── debug_screen.dart         # Лог debug-событий с export
+│   └── about_screen.dart         # Версия, кредиты, tech stack
 ├── services/
 │   ├── config_builder.dart       # Template + vars + nodes → sing-box JSON
 │   ├── source_loader.dart        # ProxySource → List<ParsedNode>
 │   ├── node_parser.dart          # URI parsing: vless, vmess, trojan, ss, hy2, ssh, socks, wg
 │   ├── subscription_fetcher.dart # HTTP fetch с User-Agent и лимитами
 │   ├── subscription_decoder.dart # Base64, JSON array, plain text decode
-│   ├── clash_api_client.dart     # HTTP-клиент для Clash API (proxies, delay, select)
+│   ├── clash_api_client.dart     # HTTP-клиент для Clash API (proxies, delay, select, traffic)
 │   ├── settings_storage.dart     # Persistent JSON-файл: vars, sources, rules, timestamps
 │   └── get_free_loader.dart      # Загрузка встроенного пресета get_free.json
 └── widgets/
@@ -177,12 +178,14 @@ boxvpn_settings.json (path_provider documents dir)
 
 | Controller | Ответственность |
 |-----------|-----------------|
-| `HomeController` | VPN lifecycle, Clash API, nodes, ping/mass ping, sort mode |
+| `HomeController` | VPN lifecycle, Clash API, nodes, ping/mass ping, sort mode, heartbeat, traffic |
 | `SubscriptionController` | CRUD подписок, fetch, config generation, get_free preset |
 
 `HomeState` — immutable data class с `copyWith`. Nullable поля используют sentinel `_unset` для корректного обнуления.
 
 `HomeScreen` слушает оба контроллера через `Listenable.merge([_controller, _subController])`.
+
+`HomeScreen` implements `WidgetsBindingObserver` — при возврате из фона вызывает `HomeController.onAppResumed()` для немедленной проверки tunnel health.
 
 ---
 
@@ -197,6 +200,9 @@ boxvpn_settings.json (path_provider documents dir)
 | Epoch counter в mass ping | Предотвращает race condition при cancel + restart |
 | `RefreshIndicator` на списке нод | Стандартный мобильный паттерн pull-to-refresh |
 | `ThemeMode.system` | Тема следует за системными настройками без ручного переключения |
+| Heartbeat через `/connections` | Двойное назначение: traffic stats + VPN revoke detection |
+| `WidgetsBindingObserver` | Быстрое обнаружение revoke при возврате из background |
+| `share_plus` для экспорта | Стандартный system share sheet, без platform-specific кода |
 
 ---
 
@@ -210,6 +216,7 @@ boxvpn_settings.json (path_provider documents dir)
 | `file_picker` | Импорт конфига из файловой системы |
 | `path_provider` | Директория для persistent storage |
 | `shared_preferences` | (зарезервировано для будущих настроек) |
+| `share_plus` | Экспорт конфига и логов через system share sheet |
 
 ---
 
@@ -224,9 +231,11 @@ HomeScreen (main)
   │   │   ├─ Editor → ConfigScreen
   │   │   ├─ Read from file
   │   │   └─ Paste from clipboard
-  │   └─ Debug → DebugScreen
+  │   ├─ Debug → DebugScreen (copy/share logs)
+  │   └─ About → AboutScreen
   ├─ Quick Start card (when no config, no subscriptions)
-  ├─ VPN Controls (Start/Stop)
+  ├─ VPN Controls (Start/Stop with confirmation)
+  ├─ Traffic bar (upload, download, connections, uptime)
   ├─ Group selector + Mass Ping button
   └─ Nodes list (sort, pull-to-refresh, long-press menu)
        └─ Long-press on "Nodes" header → SettingsScreen

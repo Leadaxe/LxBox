@@ -539,15 +539,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildNodeList(BuildContext context, HomeState state) {
     if (state.nodes.isEmpty) {
+      final cs = Theme.of(context).colorScheme;
+      final String message;
+      final IconData icon;
+      if (state.configRaw.isEmpty) {
+        message = 'No config loaded.\nUse Quick Start or add a subscription.';
+        icon = Icons.playlist_add;
+      } else if (state.tunnelUp) {
+        message = 'No nodes in this group.\nTry another selector.';
+        icon = Icons.dns_outlined;
+      } else {
+        message = 'Tap Start to connect.';
+        icon = Icons.play_circle_outline;
+      }
       return Expanded(
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Text(
-              state.tunnelUp
-                  ? 'No nodes for selected group'
-                  : 'Start VPN to load nodes',
-              textAlign: TextAlign.center,
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 48, color: cs.onSurfaceVariant.withAlpha(120)),
+                const SizedBox(height: 12),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                ),
+              ],
             ),
           ),
         ),

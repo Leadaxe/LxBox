@@ -1,4 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../controllers/home_controller.dart';
 import '../models/home_state.dart';
@@ -15,6 +20,37 @@ class DebugScreen extends StatefulWidget {
 class _DebugScreenState extends State<DebugScreen> {
   DebugFilter _filter = DebugFilter.all;
 
+  static String _entriesToText(List<DebugEntry> entries) {
+    final buf = StringBuffer();
+    for (final e in entries) {
+      final src = e.source == DebugSource.core ? 'CORE' : 'APP ';
+      buf.writeln('[${e.time.toIso8601String()}] $src  ${e.message}');
+    }
+    return buf.toString();
+  }
+
+  void _copyAll(List<DebugEntry> entries) {
+    Clipboard.setData(ClipboardData(text: _entriesToText(entries)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${entries.length} entries copied')),
+    );
+  }
+
+  Future<void> _shareLogs(List<DebugEntry> entries) async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/boxvpn_debug.log');
+      await file.writeAsString(_entriesToText(entries));
+      // ignore: deprecated_member_use
+      await Share.shareXFiles([XFile(file.path)], text: 'BoxVPN debug log');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Share failed: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -30,7 +66,21 @@ class _DebugScreenState extends State<DebugScreen> {
         }).toList();
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Debug')),
+          appBar: AppBar(
+            title: const Text('Debug'),
+            actions: [
+              IconButton(
+                tooltip: 'Copy all',
+                onPressed: filtered.isEmpty ? null : () => _copyAll(filtered),
+                icon: const Icon(Icons.copy_outlined),
+              ),
+              IconButton(
+                tooltip: 'Share logs',
+                onPressed: filtered.isEmpty ? null : () => _shareLogs(filtered),
+                icon: const Icon(Icons.share_outlined),
+              ),
+            ],
+          ),
           body: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
