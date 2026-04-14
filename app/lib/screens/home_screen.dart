@@ -168,27 +168,32 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
-                          child: DropdownButtonFormField<String>(
-                            isExpanded: true,
-                            isDense: true,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              isDense: true,
+                          child: Container(
+                            height: 40,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Theme.of(context).colorScheme.outline),
+                              borderRadius: BorderRadius.circular(4),
                             ),
-                            value: state.groups.contains(state.selectedGroup)
-                                ? state.selectedGroup
-                                : null,
-                            hint: const Text('Select group'),
-                            items: state.groups
-                                .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                                .toList(),
-                            onChanged: (!state.tunnelUp || state.busy || state.groups.isEmpty)
-                                ? null
-                                : (value) async {
-                                    _controller.setSelectedGroup(value);
-                                    await _controller.applyGroup(value);
-                                  },
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                isExpanded: true,
+                                isDense: true,
+                                value: state.groups.contains(state.selectedGroup)
+                                    ? state.selectedGroup
+                                    : null,
+                                hint: const Text('Select group'),
+                                items: state.groups
+                                    .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                                    .toList(),
+                                onChanged: (!state.tunnelUp || state.busy || state.groups.isEmpty)
+                                    ? null
+                                    : (value) async {
+                                        _controller.setSelectedGroup(value);
+                                        await _controller.applyGroup(value);
+                                      },
+                              ),
+                            ),
                           ),
                         ),
                         IconButton(
