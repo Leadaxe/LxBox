@@ -188,10 +188,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          Row(
             children: [
               startActive
                   ? FilledButton(
@@ -202,6 +199,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       onPressed: startEnabled ? () => unawaited(_startWithAutoRefresh()) : null,
                       child: const Text('Start'),
                     ),
+              const SizedBox(width: 8),
               startActive
                   ? OutlinedButton(
                       onPressed: stopEnabled ? () => _confirmStop(state) : null,
@@ -211,20 +209,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       onPressed: stopEnabled ? () => _confirmStop(state) : null,
                       child: const Text('Stop'),
                     ),
-              Chip(
-                label: Text('VPN: ${state.tunnel.label}'),
-                avatar: Icon(
-                  isRevoked
-                      ? Icons.warning_amber_rounded
-                      : state.tunnelUp
-                          ? Icons.shield
-                          : Icons.shield_outlined,
-                  size: 18,
-                  color: isRevoked ? Theme.of(context).colorScheme.error : null,
+              const SizedBox(width: 8),
+              Flexible(
+                child: Chip(
+                  label: Text('VPN: ${state.tunnel.label}'),
+                  avatar: Icon(
+                    isRevoked
+                        ? Icons.warning_amber_rounded
+                        : state.tunnelUp
+                            ? Icons.shield
+                            : Icons.shield_outlined,
+                    size: 18,
+                    color: isRevoked ? Theme.of(context).colorScheme.error : null,
+                  ),
+                  backgroundColor: isRevoked
+                      ? Theme.of(context).colorScheme.errorContainer
+                      : null,
                 ),
-                backgroundColor: isRevoked
-                    ? Theme.of(context).colorScheme.errorContainer
-                    : null,
               ),
             ],
           ),
