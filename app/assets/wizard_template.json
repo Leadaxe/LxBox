@@ -215,45 +215,6 @@
       "rule": { "rule_set": "ru-domains", "outbound": "direct-out" }
     },
     {
-      "label": "Russia-only services direct",
-      "description": "Services available only inside Russia — direct.",
-      "rule_set": [
-        { "tag": "ru-inside", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-ru-available-only-inside.srs" }
-      ],
-      "rule": { "rule_set": "ru-inside", "outbound": "direct-out" }
-    },
-    {
-      "label": "Russian blocked resources via proxy",
-      "description": "Route resources blocked in Russia through proxy.",
-      "rule_set": [
-        { "tag": "ru-blocked-main", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru-blocked.srs" },
-        { "tag": "ru-blocked-community", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru-blocked-community.srs" }
-      ],
-      "rule": { "rule_set": ["ru-blocked-main", "ru-blocked-community"], "network": ["tcp", "udp"], "outbound": "proxy-out" }
-    },
-    {
-      "label": "Messengers via proxy",
-      "description": "Telegram, WhatsApp, Discord, Signal through proxy.",
-      "rule_set": [
-        {
-          "tag": "messengers",
-          "type": "inline",
-          "format": "domain_suffix",
-          "rules": [
-            {
-              "domain_suffix": [
-                "telegram.org", "t.me", "cdn-telegram.org",
-                "web.whatsapp.com", "whatsapp.com", "whatsapp.net",
-                "discord.com", "discordapp.com", "discord.gg", "discord.media",
-                "signal.org", "whispersystems.org"
-              ]
-            }
-          ]
-        }
-      ],
-      "rule": { "rule_set": "messengers", "network": ["tcp", "udp"], "outbound": "proxy-out" }
-    },
-    {
       "label": "BitTorrent direct",
       "description": "Route BitTorrent traffic directly.",
       "default": true,
@@ -263,21 +224,6 @@
       "label": "Private IPs direct",
       "description": "Route private IP ranges (LAN) directly.",
       "rule": { "ip_is_private": true, "outbound": "direct-out" }
-    },
-    {
-      "label": "2ip.io via proxy",
-      "description": "Check VPN IP via 2ip.io.",
-      "rule": { "domain": ["2ip.io"], "outbound": "proxy-out" }
-    },
-    {
-      "label": "2ip.ru direct",
-      "description": "Check real IP via 2ip.ru.",
-      "rule": { "domain": ["2ip.ru"], "outbound": "direct-out" }
-    },
-    {
-      "label": "Stop HTTP/3 (QUIC)",
-      "description": "Drop UDP:443 — QUIC can't be proxied, may improve stability.",
-      "rule": { "action": "reject", "method": "drop", "network": ["udp"], "port": [443] }
     }
   ]
 }
