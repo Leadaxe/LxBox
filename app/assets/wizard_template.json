@@ -144,10 +144,27 @@
     "dns": {
       "servers": [
         { "type": "local", "tag": "local_dns_resolver" },
-        { "type": "udp", "tag": "direct_dns_resolver", "server": "8.8.8.8", "server_port": 53 }
+        { "type": "udp", "tag": "direct_dns_resolver", "server": "8.8.8.8", "server_port": 53 },
+        {
+          "type": "https",
+          "tag": "google_doh",
+          "server": "dns.google",
+          "server_port": 443,
+          "path": "/dns-query",
+          "domain_resolver": "direct_dns_resolver"
+        },
+        {
+          "type": "https",
+          "tag": "yandex_doh",
+          "server": "77.88.8.88",
+          "server_port": 443,
+          "path": "/dns-query",
+          "domain_strategy": "prefer_ipv4"
+        }
       ],
       "rules": [
-        { "server": "direct_dns_resolver" }
+        { "rule_set": "ru-domains", "server": "yandex_doh" },
+        { "server": "google_doh" }
       ],
       "final": "@dns_final",
       "strategy": "@dns_strategy",
@@ -184,7 +201,7 @@
   "selectable_rules": [
     {
       "label": "Block Ads",
-      "description": "Soft-block ads by rejecting connections.",
+      "description": "Reject ad-related connections.",
       "default": true,
       "rule_set": [
         { "tag": "ads-all", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-category-ads-all.srs" }
@@ -193,9 +210,48 @@
     },
     {
       "label": "Russian domains direct",
-      "description": "Route Russian domains directly.",
+      "description": "Route .ru / .su / .xn--p1ai directly.",
       "default": true,
       "rule": { "rule_set": "ru-domains", "outbound": "direct-out" }
+    },
+    {
+      "label": "Russia-only services direct",
+      "description": "Services available only inside Russia — direct.",
+      "rule_set": [
+        { "tag": "ru-inside", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-ru-available-only-inside.srs" }
+      ],
+      "rule": { "rule_set": "ru-inside", "outbound": "direct-out" }
+    },
+    {
+      "label": "Russian blocked resources via proxy",
+      "description": "Route resources blocked in Russia through proxy.",
+      "rule_set": [
+        { "tag": "ru-blocked-main", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru-blocked.srs" },
+        { "tag": "ru-blocked-community", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru-blocked-community.srs" }
+      ],
+      "rule": { "rule_set": ["ru-blocked-main", "ru-blocked-community"], "network": ["tcp", "udp"], "outbound": "proxy-out" }
+    },
+    {
+      "label": "Messengers via proxy",
+      "description": "Telegram, WhatsApp, Discord, Signal through proxy.",
+      "rule_set": [
+        {
+          "tag": "messengers",
+          "type": "inline",
+          "format": "domain_suffix",
+          "rules": [
+            {
+              "domain_suffix": [
+                "telegram.org", "t.me", "cdn-telegram.org",
+                "web.whatsapp.com", "whatsapp.com", "whatsapp.net",
+                "discord.com", "discordapp.com", "discord.gg", "discord.media",
+                "signal.org", "whispersystems.org"
+              ]
+            }
+          ]
+        }
+      ],
+      "rule": { "rule_set": "messengers", "network": ["tcp", "udp"], "outbound": "proxy-out" }
     },
     {
       "label": "BitTorrent direct",
@@ -204,18 +260,24 @@
       "rule": { "protocol": ["bittorrent"], "outbound": "direct-out" }
     },
     {
-      "label": "Games direct",
-      "description": "Send gaming traffic directly for lower latency.",
-      "default": true,
-      "rule_set": [
-        { "tag": "games", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-category-games.srs" }
-      ],
-      "rule": { "rule_set": "games", "network": ["tcp", "udp"], "outbound": "direct-out" }
-    },
-    {
       "label": "Private IPs direct",
       "description": "Route private IP ranges (LAN) directly.",
       "rule": { "ip_is_private": true, "outbound": "direct-out" }
+    },
+    {
+      "label": "2ip.io via proxy",
+      "description": "Check VPN IP via 2ip.io.",
+      "rule": { "domain": ["2ip.io"], "outbound": "proxy-out" }
+    },
+    {
+      "label": "2ip.ru direct",
+      "description": "Check real IP via 2ip.ru.",
+      "rule": { "domain": ["2ip.ru"], "outbound": "direct-out" }
+    },
+    {
+      "label": "Stop HTTP/3 (QUIC)",
+      "description": "Drop UDP:443 — QUIC can't be proxied, may improve stability.",
+      "rule": { "action": "reject", "method": "drop", "network": ["udp"], "port": [443] }
     }
   ]
 }
