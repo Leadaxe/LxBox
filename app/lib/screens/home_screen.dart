@@ -20,13 +20,14 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late final HomeController _controller;
   late final SubscriptionController _subController;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller = HomeController();
     _subController = SubscriptionController();
     unawaited(_controller.init());
@@ -35,9 +36,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     _subController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _controller.onAppResumed();
+    }
   }
 
   void _pushRoute(Widget screen) {
@@ -67,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildControls(context, state, startActive, startEnabled, stopEnabled),
+              if (state.tunnelUp) _buildTrafficBar(context, state),
               if (showQuickStart) _buildQuickStart(context),
               if (_subController.busy && _subController.progressMessage.isNotEmpty)
                 _buildProgressBanner(context),
@@ -273,6 +283,61 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildTrafficBar(BuildContext context, HomeState state) {
+    final cs = Theme.of(context).colorScheme;
+    final uptime = state.connectedSince != null
+        ? _formatDuration(DateTime.now().difference(state.connectedSince!))
+        : '';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Row(
+        children: [
+          _trafficChip(context, Icons.arrow_upward, state.traffic.uploadFormatted, cs.primary),
+          const SizedBox(width: 8),
+          _trafficChip(context, Icons.arrow_downward, state.traffic.downloadFormatted, cs.tertiary),
+          if (state.traffic.activeConnections > 0) ...[
+            const SizedBox(width: 8),
+            _trafficChip(context, Icons.link, '${state.traffic.activeConnections}', cs.secondary),
+          ],
+          const Spacer(),
+          if (uptime.isNotEmpty)
+            Text(
+              uptime,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _trafficChip(BuildContext context, IconData icon, String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 2),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+        ),
+      ],
+    );
+  }
+
+  static String _formatDuration(Duration d) {
+    if (d.inSeconds < 60) return '${d.inSeconds}s';
+    if (d.inMinutes < 60) return '${d.inMinutes}m ${d.inSeconds % 60}s';
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    if (h < 24) return '${h}h ${m}m';
+    return '${d.inDays}d ${h % 24}h';
   }
 
   Future<void> _startWithAutoRefresh() async {

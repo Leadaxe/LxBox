@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../config/config_parse.dart';
 import '../controllers/home_controller.dart';
@@ -38,6 +42,24 @@ class _ConfigScreenState extends State<ConfigScreen> {
     );
   }
 
+  Future<void> _share() async {
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/boxvpn_config.json');
+      await file.writeAsString(text);
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path)], text: 'BoxVPN config'),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Share failed: $e')),
+      );
+    }
+  }
+
   Future<void> _save() async {
     final ok = await widget.controller.saveConfigRaw(_textController.text);
     if (!mounted) return;
@@ -62,6 +84,11 @@ class _ConfigScreenState extends State<ConfigScreen> {
                 tooltip: 'Copy',
                 onPressed: _copy,
                 icon: const Icon(Icons.copy_outlined),
+              ),
+              IconButton(
+                tooltip: 'Share',
+                onPressed: _share,
+                icon: const Icon(Icons.share_outlined),
               ),
               TextButton(
                 onPressed: busy ? null : _save,

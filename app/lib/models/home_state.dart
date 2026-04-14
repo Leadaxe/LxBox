@@ -1,3 +1,4 @@
+import '../services/clash_api_client.dart';
 import 'debug_entry.dart';
 import 'tunnel_status.dart';
 
@@ -32,6 +33,8 @@ class HomeState {
     this.pingBusy = const <String, String>{},
     this.debugEvents = const <DebugEntry>[],
     this.sortMode = NodeSortMode.defaultOrder,
+    this.traffic = TrafficSnapshot.zero,
+    this.connectedSince,
   });
 
   final String configRaw;
@@ -48,6 +51,8 @@ class HomeState {
   final Map<String, String> pingBusy;
   final List<DebugEntry> debugEvents;
   final NodeSortMode sortMode;
+  final TrafficSnapshot traffic;
+  final DateTime? connectedSince;
 
   bool get tunnelUp => tunnel.isUp;
 
@@ -102,6 +107,8 @@ class HomeState {
     Map<String, String>? pingBusy,
     List<DebugEntry>? debugEvents,
     NodeSortMode? sortMode,
+    TrafficSnapshot? traffic,
+    Object? connectedSince = _unset,
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
@@ -124,6 +131,10 @@ class HomeState {
       pingBusy: pingBusy ?? this.pingBusy,
       debugEvents: debugEvents ?? this.debugEvents,
       sortMode: sortMode ?? this.sortMode,
+      traffic: traffic ?? this.traffic,
+      connectedSince: identical(connectedSince, _unset)
+          ? this.connectedSince
+          : connectedSince as DateTime?,
     );
   }
 }

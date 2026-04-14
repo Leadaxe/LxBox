@@ -208,10 +208,89 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     visualDensity: VisualDensity.compact,
                   )
                 : null,
+            onLongPress: () => _showEditSheet(i, entry),
           ),
         );
       },
     );
+  }
+
+  void _showEditSheet(int index, SubscriptionEntry entry) {
+    final nameCtrl = TextEditingController(text: entry.source.name);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Edit Subscription',
+                style: Theme.of(ctx).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                entry.source.source.isNotEmpty
+                    ? entry.source.source
+                    : entry.source.connections.firstOrNull ?? '',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Display name',
+                  hintText: 'Optional friendly name',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                autofocus: true,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        unawaited(widget.subController.removeAt(index));
+                      },
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('Delete'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Theme.of(ctx).colorScheme.error,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        unawaited(widget.subController.renameAt(
+                          index,
+                          nameCtrl.text.trim(),
+                        ));
+                      },
+                      child: const Text('Save'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    ).then((_) => nameCtrl.dispose());
   }
 
   Widget _buildBottomBar(SubscriptionController ctrl) {

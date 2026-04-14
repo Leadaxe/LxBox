@@ -75,6 +75,7 @@ class HomeController extends ChangeNotifier {
     _emit(_state.copyWith(tunnel: tunnel));
 
     if (tunnel == TunnelStatus.connected) {
+      _emit(_state.copyWith(connectedSince: DateTime.now()));
       unawaited(_refreshClashAfterTunnel());
       _startHeartbeat();
     } else if (tunnel == TunnelStatus.disconnected ||
@@ -90,6 +91,8 @@ class HomeController extends ChangeNotifier {
           groups: <String>[],
           nodes: <String>[],
           highlightedNode: null,
+          traffic: TrafficSnapshot.zero,
+          connectedSince: null,
         ),
       );
       if (reason.isNotEmpty) {
@@ -125,8 +128,9 @@ class HomeController extends ChangeNotifier {
     if (clash == null) return;
 
     try {
-      await clash.pingVersion().timeout(_heartbeatTimeout);
+      final traffic = await clash.fetchTraffic().timeout(_heartbeatTimeout);
       _heartbeatFailures = 0;
+      _emit(_state.copyWith(traffic: traffic));
     } catch (_) {
       _heartbeatFailures++;
       _addDebug(
@@ -510,5 +514,12 @@ class HomeController extends ChangeNotifier {
 
   void cycleSortMode() {
     _emit(_state.copyWith(sortMode: _state.sortMode.next));
+  }
+
+  /// Called when the app returns from background. Verifies tunnel health.
+  void onAppResumed() {
+    if (_state.tunnelUp) {
+      unawaited(_checkHeartbeat());
+    }
   }
 }

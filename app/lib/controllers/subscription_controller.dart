@@ -78,6 +78,22 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> renameAt(int index, String name) async {
+    if (index < 0 || index >= _entries.length) return;
+    _entries[index].source.name = name;
+    await _persistSources();
+    notifyListeners();
+  }
+
+  Future<void> moveEntry(int from, int to) async {
+    if (from < 0 || from >= _entries.length) return;
+    if (to < 0 || to >= _entries.length) return;
+    final entry = _entries.removeAt(from);
+    _entries.insert(to, entry);
+    await _persistSources();
+    notifyListeners();
+  }
+
   /// Fetches all subscriptions and regenerates config.
   Future<String?> updateAllAndGenerate() async {
     _busy = true;
