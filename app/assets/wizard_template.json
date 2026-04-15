@@ -100,15 +100,23 @@
       "title": "Auto-detect interface",
       "tooltip": "Detect default interface for outbound."
     },
+    {
+      "name": "sniff_enabled",
+      "type": "bool",
+      "default_value": "true",
+      "wizard_ui": "edit",
+      "title": "Packet sniffing",
+      "tooltip": "Analyze packets to detect protocol and domain. Recommended for accurate routing."
+    },
     { "separator": true },
     {
       "name": "dns_strategy",
       "type": "enum",
       "default_value": "prefer_ipv4",
       "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"],
-      "wizard_ui": "fix",
-      "title": "DNS strategy",
-      "tooltip": "sing-box config.dns.strategy."
+      "wizard_ui": "edit",
+      "title": "Preferred IP version",
+      "tooltip": "DNS resolution strategy: prefer_ipv4 for most cases, ipv4_only to avoid IPv6 issues."
     },
     {
       "name": "dns_independent_cache",
@@ -147,8 +155,8 @@
       "name": "tun_mtu",
       "type": "text",
       "default_value": "1492",
-      "wizard_ui": "fix",
-      "title": "TUN MTU",
+      "wizard_ui": "edit",
+      "title": "MTU",
       "tooltip": "Typical 1492 avoids black holes on mobile/Wi‑Fi; very large MTU (e.g. 9000) often breaks tunnel traffic."
     },
     {
@@ -172,9 +180,9 @@
       "type": "enum",
       "default_value": "system",
       "options": ["system", "gvisor", "mixed"],
-      "wizard_ui": "fix",
+      "wizard_ui": "edit",
       "title": "TUN stack",
-      "tooltip": "sing-box tun stack: system (typical on Android), gvisor, or mixed."
+      "tooltip": "system (typical on Android), gvisor (userspace), or mixed."
     }
   ],
 

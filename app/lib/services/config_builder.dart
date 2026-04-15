@@ -81,6 +81,15 @@ class ConfigBuilder {
     final config = _deepCopy(template.config);
     _substituteVars(config, vars);
 
+    // Remove sniff rule if disabled
+    if (vars['sniff_enabled'] == 'false') {
+      final route = config['route'] as Map<String, dynamic>?;
+      if (route != null) {
+        final rules = route['rules'] as List<dynamic>?;
+        rules?.removeWhere((r) => r is Map && r['action'] == 'sniff');
+      }
+    }
+
     // Build preset groups and node outbounds
     final outbounds = _buildPresetOutbounds(
       template.presetGroups,
