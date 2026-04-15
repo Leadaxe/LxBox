@@ -179,6 +179,29 @@ class SettingsStorage {
   }
 
   // ---------------------------------------------------------------------------
+  // Per-app proxy
+  // ---------------------------------------------------------------------------
+
+  static Future<String> getPerAppMode() async {
+    final data = await _load();
+    return (data['per_app_mode'] as String?) ?? 'off';
+  }
+
+  static Future<List<String>> getPerAppList() async {
+    final data = await _load();
+    final list = data['per_app_list'] as List<dynamic>? ?? [];
+    return list.map((e) => e.toString()).toList();
+  }
+
+  static Future<void> savePerApp(String mode, List<String> list) async {
+    final data = await _load();
+    data['per_app_mode'] = mode;
+    data['per_app_list'] = list;
+    _cache = data;
+    await _save();
+  }
+
+  // ---------------------------------------------------------------------------
   // Route final outbound
   // ---------------------------------------------------------------------------
 

@@ -105,6 +105,24 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 ConfigManager.setNotificationTitle(title)
                 result.success(true)
             }
+            "getInstalledApps" -> {
+                val pm = context.packageManager
+                val apps = pm.getInstalledApplications(0).map { info ->
+                    val isSystem = (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+                    mapOf(
+                        "packageName" to info.packageName,
+                        "appName" to (pm.getApplicationLabel(info)?.toString() ?: info.packageName),
+                        "isSystemApp" to isSystem,
+                    )
+                }
+                result.success(apps)
+            }
+            "setPerAppProxy" -> {
+                val mode = call.argument<String>("mode") ?: "off"
+                val list = call.argument<List<String>>("list") ?: emptyList()
+                ConfigManager.setPerApp(mode, list)
+                result.success(true)
+            }
             else -> result.notImplemented()
         }
     }
