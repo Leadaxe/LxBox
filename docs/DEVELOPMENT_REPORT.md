@@ -266,13 +266,48 @@ BoxVPN прошёл путь от MVP (один экран: Read config → Star
 
 ---
 
+## Этап 8: Per-App Routing, UX, безопасность (Features 017–018)
+
+### App Routing Rules (017)
+- Именованные группы приложений (App Rules) с выбором outbound (direct/proxy/vpn-X).
+- Каждое правило → sing-box routing rule с `package_name`.
+- AppPickerScreen: иконки приложений, поиск, select all/invert, clipboard import/export.
+- `QUERY_ALL_PACKAGES` для полного списка на Android 11+.
+
+### Custom Nodes — спека (018)
+- Дизайн `custom_nodes`: ручные ноды + override-патчи поверх подписочных.
+- `override` поле привязывает патч к подписочной ноде по тегу.
+- Планируется: JSON editor для нод, переименование тегов, индикация в UI.
+
+### UX Improvements
+- **Start/Stop** — одна toggle кнопка (зелёный/красный).
+- **Get Free VPN** перенесён в Subscriptions.
+- **Mass Ping** — 20 параллельных, сброс при старте.
+- **Clash API** — рандомный порт 49152-65535, автогенерация секрета.
+- **Portrait lock**, diagnostic snackbar, empty config guard.
+- **App Settings** — отдельный экран: тема light/dark/system.
+- **VPN Settings** — MTU, packet sniffing, preferred IP version, TUN stack.
+- **Profile-title** — автоимя подписки из HTTP заголовка.
+- **Copy outbound JSON** в контекстном меню ноды.
+- **Secret visibility toggle** — кнопка-глаз.
+
+### Рефакторинг и баги
+- Outbound tag desync (дубли тегов при одинаковых именах нод).
+- serviceScope вместо GlobalScope (structured concurrency).
+- startForeground перед stopSelf в error paths.
+- TextEditingController leak.
+- libbox 1.12.12 API alignment.
+- ACCESS_NETWORK_STATE permission.
+
+---
+
 ## Что дальше (рекомендации)
 
 | Приоритет | Фича | Описание |
 |-----------|-------|----------|
-| Высокий | **Profile Management** | Сохранение/загрузка нескольких конфигов (wizard states) |
-| Средний | **Background Auto-update** | WorkManager / AlarmManager для обновления подписок в фоне |
-| Средний | **Per-App Tunneling** | Выбор приложений для туннелирования (include/exclude) |
-| Низкий | **Custom Routing Rules** | UI для добавления пользовательских routing rules |
+| Высокий | **Custom Nodes (018)** | Ручные ноды + override патчи, JSON editor, rename тегов |
+| Высокий | **Profile Management** | Сохранение/загрузка нескольких конфигов |
+| Средний | **Background Auto-update** | WorkManager для обновления подписок в фоне |
+| Средний | **Subscription Stats** | Отображение traffic quota из subscription-userinfo |
 | Низкий | **Onboarding Tour** | Пошаговый гайд для первого запуска |
-| Низкий | **Widget / Quick Tile** | Android Quick Settings tile для Start/Stop |
+| Низкий | **Quick Settings Tile** | Android Quick Settings tile для Start/Stop |
