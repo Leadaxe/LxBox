@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 import '../services/clash_api_client.dart';
 import 'debug_entry.dart';
 import 'tunnel_status.dart';
@@ -6,13 +8,15 @@ export 'debug_entry.dart';
 export 'tunnel_status.dart';
 
 enum NodeSortMode {
-  defaultOrder('Default'),
-  latencyAsc('Latency ↑'),
-  latencyDesc('Latency ↓'),
-  nameAsc('Name A→Z');
+  defaultOrder('Default', Icons.format_list_numbered),
+  latencyAsc('Ping ↑', Icons.arrow_upward),
+  latencyDesc('Ping ↓', Icons.arrow_downward),
+  nameAsc('A → Z', Icons.text_rotate_vertical),
+  nameDesc('Z → A', Icons.text_rotation_down);
 
-  const NodeSortMode(this.label);
+  const NodeSortMode(this.label, this.icon);
   final String label;
+  final IconData icon;
 
   NodeSortMode get next => NodeSortMode.values[(index + 1) % NodeSortMode.values.length];
 }
@@ -66,6 +70,8 @@ class HomeState {
         sorted.sort((a, b) => _compareLatency(b, a));
       case NodeSortMode.nameAsc:
         sorted.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      case NodeSortMode.nameDesc:
+        sorted.sort((a, b) => b.toLowerCase().compareTo(a.toLowerCase()));
       case NodeSortMode.defaultOrder:
         break;
     }

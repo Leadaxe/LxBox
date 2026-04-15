@@ -499,12 +499,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onPressed: _controller.state.nodes.isEmpty
                   ? null
                   : _controller.cycleSortMode,
-              icon: Icon(
-                _controller.state.sortMode == NodeSortMode.defaultOrder
-                    ? Icons.sort
-                    : Icons.sort_by_alpha,
-                size: 20,
-              ),
+              icon: Icon(_controller.state.sortMode.icon, size: 20),
             ),
             IconButton(
               tooltip: 'Reload groups',
