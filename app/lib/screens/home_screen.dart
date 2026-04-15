@@ -131,47 +131,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onTap: () => _pushRoute(const AppSettingsScreen()),
             ),
             const Divider(),
-            ExpansionTile(
+            ListTile(
               leading: const Icon(Icons.description_outlined),
-              title: const Text('Config'),
-              subtitle: const Text('Import and edit'),
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.edit_note_outlined),
-                  title: const Text('Editor'),
-                  subtitle: const Text('View and edit JSON'),
-                  contentPadding: const EdgeInsets.only(left: 24, right: 16),
-                  onTap: () => _pushRoute(ConfigScreen(controller: _controller)),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.folder_open),
-                  title: const Text('Read from file'),
-                  enabled: !state.busy,
-                  contentPadding: const EdgeInsets.only(left: 24, right: 16),
-                  onTap: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    Navigator.of(context).pop();
-                    final ok = await _controller.readFromFile();
-                    if (ok) {
-                      messenger.showSnackBar(const SnackBar(content: Text('Config saved')));
-                    }
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.content_paste),
-                  title: const Text('Paste from clipboard'),
-                  enabled: !state.busy,
-                  contentPadding: const EdgeInsets.only(left: 24, right: 16),
-                  onTap: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    Navigator.of(context).pop();
-                    final ok = await _controller.readFromClipboard();
-                    if (ok) {
-                      messenger.showSnackBar(const SnackBar(content: Text('Config saved')));
-                    }
-                  },
-                ),
-              ],
+              title: const Text('Config Editor'),
+              subtitle: const Text('View, edit, import JSON'),
+              onTap: () => _pushRoute(ConfigScreen(controller: _controller)),
             ),
             ListTile(
               leading: const Icon(Icons.bug_report_outlined),
@@ -226,16 +190,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   size: 20,
                 ),
                 label: Text(state.tunnelUp ? 'Stop' : 'Start'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: state.tunnelUp
-                      ? Theme.of(context).colorScheme.error
-                      : null,
-                ),
               ),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Chip(
-                  label: Text(state.tunnel.label),
+              const SizedBox(width: 8),
+              Chip(
+                label: Text(state.tunnel.label),
                   avatar: Icon(
                     isRevoked
                         ? Icons.warning_amber_rounded
@@ -248,7 +206,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   backgroundColor: isRevoked
                       ? Theme.of(context).colorScheme.errorContainer
                       : null,
-                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Rebuild config',
+                onPressed: state.busy || _subController.busy
+                    ? null
+                    : () => unawaited(_rebuildConfig()),
+                icon: const Icon(Icons.build_outlined, size: 20),
               ),
             ],
           ),
@@ -293,19 +258,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ),
               ),
-              IconButton(
-                tooltip: _controller.massPingRunning ? 'Stop ping' : 'Ping all nodes',
-                onPressed: (!state.tunnelUp || state.busy || state.nodes.isEmpty)
-                    ? null
-                    : () {
-                        if (_controller.massPingRunning) {
-                          _controller.cancelMassPing();
-                        } else {
-                          unawaited(_controller.pingAllNodes());
-                        }
-                      },
-                icon: Icon(
-                  _controller.massPingRunning ? Icons.stop_circle_outlined : Icons.speed,
+              GestureDetector(
+                onLongPress: _showPingSettings,
+                child: IconButton(
+                  tooltip: _controller.massPingRunning ? 'Stop ping' : 'Ping all (long press for settings)',
+                  onPressed: (!state.tunnelUp || state.busy || state.nodes.isEmpty)
+                      ? null
+                      : () {
+                          if (_controller.massPingRunning) {
+                            _controller.cancelMassPing();
+                          } else {
+                            unawaited(_controller.pingAllNodes());
+                          }
+                        },
+                  icon: Icon(
+                    _controller.massPingRunning ? Icons.stop_circle_outlined : Icons.speed,
+                  ),
                 ),
               ),
             ],
@@ -515,6 +483,71 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       ),
     );
+  }
+
+  Future<void> _rebuildConfig() async {
+    final config = await _subController.updateAllAndGenerate();
+    if (!mounted) return;
+    if (config != null) {
+      final ok = await _controller.saveParsedConfig(config);
+      if (ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Config rebuilt: ${_subController.entries.fold<int>(0, (s, e) => s + e.nodeCount)} nodes',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showPingSettings() {
+    final urlCtrl = TextEditingController(text: _controller.pingUrl);
+    final timeoutCtrl = TextEditingController(text: '${_controller.pingTimeout}');
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Ping Settings', style: Theme.of(ctx).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            TextField(
+              controller: urlCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Test URL',
+                hintText: 'https://www.gstatic.com/generate_204',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: timeoutCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Timeout (ms)',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () {
+                _controller.pingUrl = urlCtrl.text.trim();
+                _controller.pingTimeout = int.tryParse(timeoutCtrl.text) ?? 5000;
+                Navigator.pop(ctx);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    ).then((_) { urlCtrl.dispose(); timeoutCtrl.dispose(); });
   }
 
   void _copyNodeJson(String tag, HomeState state) {

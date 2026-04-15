@@ -437,7 +437,7 @@ class HomeController extends ChangeNotifier {
     final pingBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '…';
     _emit(_state.copyWith(pingBusy: pingBusy));
     try {
-      final ms = await clash.delay(nodeTag);
+      final ms = await clash.delay(nodeTag, timeoutMs: pingTimeout, url: pingUrl);
       final nextDelay = Map<String, int>.from(_state.lastDelay)..[nodeTag] = ms;
       final nextBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '';
       _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
@@ -453,6 +453,9 @@ class HomeController extends ChangeNotifier {
   bool _massPingRunning = false;
   bool get massPingRunning => _massPingRunning;
   int _massPingEpoch = 0;
+
+  String pingUrl = '';
+  int pingTimeout = 5000;
 
   static const _pingConcurrency = 20;
 
@@ -484,7 +487,7 @@ class HomeController extends ChangeNotifier {
         if (!_massPingRunning || _massPingEpoch != epoch || !_state.tunnelUp) break;
         final tag = nodes[i];
         try {
-          final ms = await clash.delay(tag);
+          final ms = await clash.delay(tag, timeoutMs: pingTimeout, url: pingUrl);
           if (_massPingEpoch != epoch) break;
           final nextDelay = Map<String, int>.from(_state.lastDelay)..[tag] = ms;
           final nextBusy = Map<String, String>.from(_state.pingBusy)..[tag] = '';

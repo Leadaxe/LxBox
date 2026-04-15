@@ -97,10 +97,11 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
   }
 
   Future<void> _load() async {
-    // Yield a frame first so the screen renders with loading indicator
-    await Future.delayed(Duration.zero);
-    final apps = await _loadApps();
-    if (mounted) setState(() { _allApps = apps; _loading = false; });
+    // Wait for screen to render first, then load apps
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final apps = await _loadApps();
+      if (mounted) setState(() { _allApps = apps; _loading = false; });
+    });
   }
 
   List<_AppInfo> get _filtered {

@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -59,6 +61,53 @@ class _ConfigScreenState extends State<ConfigScreen> {
     }
   }
 
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim() ?? '';
+    if (text.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Clipboard is empty')),
+        );
+      }
+      return;
+    }
+    _textController.text = prettyJsonForDisplay(text);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pasted from clipboard')),
+      );
+    }
+  }
+
+  Future<void> _loadFromFile() async {
+    try {
+      final result = await FilePicker.pickFiles(withData: true, allowMultiple: false);
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.single;
+      String text;
+      if (file.bytes != null && file.bytes!.isNotEmpty) {
+        text = String.fromCharCodes(file.bytes!);
+      } else if (file.path != null) {
+        text = await File(file.path!).readAsString();
+      } else {
+        return;
+      }
+      _textController.text = prettyJsonForDisplay(text.trim());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Loaded from file')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _save() async {
     final ok = await widget.controller.saveConfigRaw(_textController.text);
     if (!mounted) return;
@@ -79,19 +128,26 @@ class _ConfigScreenState extends State<ConfigScreen> {
           appBar: AppBar(
             title: const Text('Config'),
             actions: [
-              IconButton(
-                tooltip: 'Copy',
-                onPressed: _copy,
-                icon: const Icon(Icons.copy_outlined),
-              ),
-              IconButton(
-                tooltip: 'Share',
-                onPressed: _share,
-                icon: const Icon(Icons.share_outlined),
-              ),
               TextButton(
                 onPressed: busy ? null : _save,
                 child: const Text('Save'),
+              ),
+              PopupMenuButton<String>(
+                onSelected: (v) {
+                  switch (v) {
+                    case 'paste': unawaited(_pasteFromClipboard());
+                    case 'file': unawaited(_loadFromFile());
+                    case 'copy': unawaited(_copy());
+                    case 'share': unawaited(_share());
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'paste', child: Text('Paste from clipboard')),
+                  PopupMenuItem(value: 'file', child: Text('Load from file')),
+                  PopupMenuDivider(),
+                  PopupMenuItem(value: 'copy', child: Text('Copy to clipboard')),
+                  PopupMenuItem(value: 'share', child: Text('Share')),
+                ],
               ),
             ],
           ),
