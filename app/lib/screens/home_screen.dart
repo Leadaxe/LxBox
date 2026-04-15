@@ -259,20 +259,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
               GestureDetector(
+                onTap: (!state.tunnelUp || state.busy || state.nodes.isEmpty)
+                    ? null
+                    : () {
+                        if (_controller.massPingRunning) {
+                          _controller.cancelMassPing();
+                        } else {
+                          unawaited(_controller.pingAllNodes());
+                        }
+                      },
                 onLongPress: _showPingSettings,
-                child: IconButton(
-                  tooltip: _controller.massPingRunning ? 'Stop ping' : 'Ping all (long press for settings)',
-                  onPressed: (!state.tunnelUp || state.busy || state.nodes.isEmpty)
-                      ? null
-                      : () {
-                          if (_controller.massPingRunning) {
-                            _controller.cancelMassPing();
-                          } else {
-                            unawaited(_controller.pingAllNodes());
-                          }
-                        },
-                  icon: Icon(
-                    _controller.massPingRunning ? Icons.stop_circle_outlined : Icons.speed,
+                child: Tooltip(
+                  message: _controller.massPingRunning ? 'Stop ping' : 'Ping all (hold for settings)',
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Icon(
+                      _controller.massPingRunning ? Icons.stop_circle_outlined : Icons.speed,
+                      color: (!state.tunnelUp || state.busy || state.nodes.isEmpty)
+                          ? Theme.of(context).disabledColor
+                          : null,
+                    ),
                   ),
                 ),
               ),
