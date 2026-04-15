@@ -25,4 +25,5 @@
 | 015 | [`015 rule outbound selection/`](015%20rule%20outbound%20selection/) | Выбор outbound для каждого правила, route.final | ✓ Реализовано |
 | 016 | [`016 routing screen/`](016%20routing%20screen/) | Отдельный экран Routing (groups + rules + outbounds) | ✓ Реализовано |
 | 017 | [`017 per app proxy/`](017%20per%20app%20proxy/) | App Routing Rules — per-app outbound с иконками | ✓ Реализовано |
-| 018 | [`018 custom nodes/`](018%20custom%20nodes/) | Custom Nodes — ручные ноды + override патчи | Спека готова |
+| 018 | [`018 custom nodes/`](018%20custom%20nodes/) | Custom Nodes — ручные ноды + override патчи | Спека |
+| 019 | [`019 loadbalance/`](019%20loadbalance/) | Load Balance через PuerNya fork | Спека |

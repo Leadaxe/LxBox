@@ -66,6 +66,42 @@
 - `startForeground` перед `stopSelf` в error paths.
 - TextEditingController leak в Settings (создавался в build без dispose).
 
+### Added — Connections Screen
+- **Тап на traffic bar** → живой список активных соединений (destination, chain, network, duration, traffic).
+- Закрытие отдельного соединения или всех.
+- Автообновление каждые 2 секунды.
+
+### Added — Ping Settings
+- **Long press на кнопку пинга** → bottom sheet: test URL, timeout (ms).
+- Настройки передаются в Clash API delay.
+
+### Added — Config Editor Improvements
+- Popup menu (3 точки): Paste from clipboard, Load from file, Copy, Share.
+- Drawer упрощён: Config Editor — один пункт вместо expansion tile.
+
+### Added — Subscription Metadata Display
+- **Traffic bar** в detail screen: upload/download/total (progress bar + текст).
+- **Expire date**: "N days left" или "Expired".
+- **Support chip**: иконка телеграма для t.me, help для остальных. Tap → copy URL.
+- **Web page chip**: ссылка на страницу подписки.
+- **Support icon** в списке подписок рядом с node count.
+
+### Changed — UX
+- **Sort icons**: уникальная иконка для каждого режима (Ping↑, Ping↓, A→Z, Z→A, Default).
+- **Z→A сортировка** добавлена.
+- **Stop button**: одинаковый стиль с Start (без красного).
+- **Rebuild config button** на главном экране.
+- **URLTest** убран из dropdown групп, показывает `→ auto-selected` в subtitle.
+- **Routing rules layout**: title + dropdown на одной строке, subtitle full width.
+- **SRS indicator**: иконка облака для правил с remote rule sets.
+- **App Groups**: переименовано из App Rules, название редактируется в picker'е.
+- **App picker**: мгновенное открытие с прелоадером (addPostFrameCallback).
+
+### Fixed — VPN Revoke Handling
+- **onRevoke** шлёт Stopped + error мгновенно (не через doStop).
+- **doStop** разрешён из любого состояния (было только Started).
+- **10с таймаут**: если зависли на Stopping/Connecting — принудительный disconnect.
+
 ### Fixed — Wizard template TUN inbound
 - **`inbounds` больше не пустой**: обязательный `tun` inbound (`tag: tun-in`), `auto_route`, MTU, `stack`.
 - **Совместимость с рабочими libbox-конфигами**: `address` — одна строка CIDR (не массив), по умолчанию `172.16.0.1/30`; MTU **1492**; `strict_route` по умолчанию **false** (true часто ломает трафик на Android).

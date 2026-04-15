@@ -10,6 +10,6 @@ void main() {
     expect(find.text('Start'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.menu));
     await tester.pumpAndSettle();
-    expect(find.text('Config'), findsOneWidget);
+    expect(find.text('Config Editor'), findsOneWidget);
   });
 }
