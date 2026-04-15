@@ -124,7 +124,11 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     }
 
     override fun onRevoke() {
-        doStop()
+        Log.d(TAG, "onRevoke — VPN taken by another app")
+        setStatus(VpnStatus.Stopped, error = "VPN revoked by another app")
+        notification.stop()
+        serviceScope.cancel()
+        stopSelf()
         super.onRevoke()
     }
 
@@ -170,7 +174,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     }
 
     private fun doStop() {
-        if (status != VpnStatus.Started) return
+        if (status == VpnStatus.Stopped || status == VpnStatus.Stopping) return
         setStatus(VpnStatus.Stopping)
 
         if (receiverRegistered) {

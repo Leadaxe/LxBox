@@ -99,6 +99,23 @@ class HomeController extends ChangeNotifier {
       if (reason.isNotEmpty) {
         _addDebug(DebugSource.core, reason);
       }
+    } else if (tunnel == TunnelStatus.stopping || tunnel == TunnelStatus.connecting) {
+      _stopHeartbeat();
+      // Safety timeout: if stuck in transitional state for 10s, force reset
+      Future.delayed(const Duration(seconds: 10), () {
+        if (_state.tunnel == tunnel) {
+          _addDebug(DebugSource.app, 'Timeout in ${tunnel.label}, forcing disconnect');
+          _emit(_state.copyWith(
+            tunnel: TunnelStatus.disconnected,
+            lastError: 'Connection timed out',
+            proxiesJson: <String, dynamic>{},
+            groups: <String>[],
+            nodes: <String>[],
+            traffic: TrafficSnapshot.zero,
+            connectedSince: null,
+          ));
+        }
+      });
     } else {
       _stopHeartbeat();
     }
