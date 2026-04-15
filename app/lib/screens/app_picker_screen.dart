@@ -87,7 +87,8 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
     super.initState();
     _selected = Set<String>.from(widget.selected);
     _nameCtrl = TextEditingController(text: widget.ruleName);
-    unawaited(_load());
+    // Don't load here — let build() render the preloader first
+    Future.delayed(const Duration(milliseconds: 100), _load);
   }
 
   @override
@@ -97,11 +98,8 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
   }
 
   Future<void> _load() async {
-    // Wait for screen to render first, then load apps
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final apps = await _loadApps();
-      if (mounted) setState(() { _allApps = apps; _loading = false; });
-    });
+    final apps = await _loadApps();
+    if (mounted) setState(() { _allApps = apps; _loading = false; });
   }
 
   List<_AppInfo> get _filtered {
