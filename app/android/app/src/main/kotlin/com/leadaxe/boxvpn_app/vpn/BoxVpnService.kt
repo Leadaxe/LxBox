@@ -125,8 +125,27 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
 
     override fun onRevoke() {
         Log.d(TAG, "onRevoke — VPN taken by another app")
-        setStatus(VpnStatus.Stopped, error = "VPN revoked by another app")
+        // Clean up libbox resources synchronously
+        fileDescriptor?.runCatching { close() }
+        fileDescriptor = null
+        boxService?.apply {
+            runCatching { close() }
+            Seq.destroyRef(refnum)
+        }
+        commandServer?.apply {
+            setService(null)
+            runCatching { close() }
+            Seq.destroyRef(refnum)
+        }
+        boxService = null
+        commandServer = null
+
+        if (receiverRegistered) {
+            runCatching { unregisterReceiver(receiver) }
+            receiverRegistered = false
+        }
         notification.stop()
+        setStatus(VpnStatus.Stopped, error = "VPN revoked by another app")
         serviceScope.cancel()
         stopSelf()
         super.onRevoke()
