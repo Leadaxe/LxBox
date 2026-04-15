@@ -105,6 +105,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 ConfigManager.setNotificationTitle(title)
                 result.success(true)
             }
+            "setAutoStart" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                BootReceiver.setEnabled(context, enabled)
+                result.success(true)
+            }
+            "getAutoStart" -> {
+                result.success(BootReceiver.isEnabled(context))
+            }
             "getInstalledApps" -> {
                 val pm = context.packageManager
                 val apps = pm.getInstalledApplications(0).map { info ->

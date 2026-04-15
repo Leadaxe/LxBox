@@ -41,6 +41,18 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// Set auto-start VPN on boot.
+  Future<bool> setAutoStart(bool enabled) async {
+    final ok = await _methods.invokeMethod<bool>('setAutoStart', {'enabled': enabled});
+    return ok ?? false;
+  }
+
+  /// Get auto-start setting.
+  Future<bool> getAutoStart() async {
+    final ok = await _methods.invokeMethod<bool>('getAutoStart');
+    return ok ?? false;
+  }
+
   /// Get list of installed apps: [{packageName, appName, isSystemApp}, ...]
   Future<List<Map<String, dynamic>>> getInstalledApps() async {
     final result = await _methods.invokeMethod<List<dynamic>>('getInstalledApps');

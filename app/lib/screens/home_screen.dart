@@ -14,6 +14,8 @@ import 'config_screen.dart';
 import 'debug_screen.dart';
 import 'app_settings_screen.dart';
 import 'connections_screen.dart';
+import 'speed_test_screen.dart';
+import 'stats_screen.dart';
 import 'routing_screen.dart';
 import 'settings_screen.dart';
 import 'subscriptions_screen.dart';
@@ -131,6 +133,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onTap: () => _pushRoute(const AppSettingsScreen()),
             ),
             const Divider(),
+            ListTile(
+              leading: const Icon(Icons.speed_outlined),
+              title: const Text('Speed Test'),
+              subtitle: const Text('Test download/upload speed'),
+              onTap: () => _pushRoute(const SpeedTestScreen()),
+            ),
+            ListTile(
+              leading: const Icon(Icons.bar_chart_outlined),
+              title: const Text('Statistics'),
+              subtitle: const Text('Traffic by outbound'),
+              enabled: _controller.state.tunnelUp,
+              onTap: () {
+                final clash = _controller.clashClient;
+                if (clash != null) _pushRoute(StatsScreen(clash: clash));
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.description_outlined),
               title: const Text('Config Editor'),
