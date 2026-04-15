@@ -164,14 +164,41 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
+  Future<void> _applyFreePreset() async {
+    final config = await widget.subController.applyGetFreePreset();
+    if (!mounted || config == null) return;
+    final ok = await widget.homeController.saveParsedConfig(config);
+    if (!mounted) return;
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Config ready! ${widget.subController.entries.fold<int>(0, (s, e) => s + e.nodeCount)} nodes loaded.',
+          ),
+        ),
+      );
+    }
+  }
+
   Widget _buildList(SubscriptionController ctrl) {
     if (ctrl.entries.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'No subscriptions yet.\nPaste a subscription URL or proxy link above.',
-            textAlign: TextAlign.center,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'No subscriptions yet.\nPaste a URL above or try free VPN:',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: ctrl.busy ? null : () => unawaited(_applyFreePreset()),
+                icon: const Icon(Icons.flash_on),
+                label: const Text('Get Free VPN'),
+              ),
+            ],
           ),
         ),
       );

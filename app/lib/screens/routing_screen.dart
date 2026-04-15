@@ -309,49 +309,49 @@ class _RoutingScreenState extends State<RoutingScreen> {
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      leading: IconButton(
-        icon: const Icon(Icons.delete_outline, size: 20),
-        tooltip: 'Delete rule',
-        onPressed: () {
-          setState(() {
-            _appRules.removeAt(index);
-            _dirty = true;
-          });
-        },
+      onTap: () => _openAppPicker(index),
+      title: Text(rule.name),
+      subtitle: Text(
+        rule.packages.isEmpty
+            ? 'Tap to select apps'
+            : '${rule.packages.length} apps',
+        style: const TextStyle(fontSize: 12),
       ),
-      title: GestureDetector(
-        onTap: () => _openAppPicker(index),
-        child: Text(rule.name),
-      ),
-      subtitle: GestureDetector(
-        onTap: () => _openAppPicker(index),
-        child: Text(
-          rule.packages.isEmpty
-              ? 'Tap to select apps'
-              : '${rule.packages.length} apps',
-          style: const TextStyle(fontSize: 12),
-        ),
-      ),
-      trailing: SizedBox(
-        width: 120,
-        child: DropdownButton<String>(
-          isExpanded: true,
-          isDense: true,
-          value: options.any((o) => o.tag == rule.outbound) ? rule.outbound : options.first.tag,
-          items: options
-              .map((o) => DropdownMenuItem(
-                    value: o.tag,
-                    child: Text(o.label, style: const TextStyle(fontSize: 13)),
-                  ))
-              .toList(),
-          onChanged: (val) {
-            if (val == null) return;
-            setState(() {
-              rule.outbound = val;
-              _dirty = true;
-            });
-          },
-        ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 100,
+            child: DropdownButton<String>(
+              isExpanded: true,
+              isDense: true,
+              value: options.any((o) => o.tag == rule.outbound) ? rule.outbound : options.first.tag,
+              items: options
+                  .map((o) => DropdownMenuItem(
+                        value: o.tag,
+                        child: Text(o.label, style: const TextStyle(fontSize: 13)),
+                      ))
+                  .toList(),
+              onChanged: (val) {
+                if (val == null) return;
+                setState(() {
+                  rule.outbound = val;
+                  _dirty = true;
+                });
+              },
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 20),
+            tooltip: 'Delete rule',
+            onPressed: () {
+              setState(() {
+                _appRules.removeAt(index);
+                _dirty = true;
+              });
+            },
+          ),
+        ],
       ),
     );
   }

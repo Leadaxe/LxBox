@@ -66,10 +66,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final startActive = !state.tunnelUp;
         final startEnabled = !state.busy && !state.tunnelUp && state.configRaw.isNotEmpty;
         final stopEnabled = !state.busy && state.tunnelUp;
-        final showQuickStart = state.configRaw.isEmpty &&
-            _subController.entries.isEmpty &&
-            !_subController.busy;
-
         return Scaffold(
           appBar: AppBar(title: const Text('BoxVPN')),
           drawer: _buildDrawer(state),
@@ -78,7 +74,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             children: [
               _buildControls(context, state, startActive, startEnabled, stopEnabled),
               if (state.tunnelUp) _buildTrafficBar(context, state),
-              if (showQuickStart) _buildQuickStart(context),
               if (_subController.busy && _subController.progressMessage.isNotEmpty)
                 _buildProgressBanner(context),
               const SizedBox(height: 12),
@@ -200,6 +195,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     bool stopEnabled,
   ) {
     final isRevoked = state.tunnel == TunnelStatus.revoked;
+    final isConnecting = state.tunnel == TunnelStatus.connecting;
+    final isStopping = state.tunnel == TunnelStatus.stopping;
+    final canToggle = !state.busy && !isConnecting && !isStopping;
+    final toggleEnabled = canToggle && (state.tunnelUp || state.configRaw.isNotEmpty);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       child: Column(
@@ -207,29 +207,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         children: [
           Row(
             children: [
-              startActive
-                  ? FilledButton(
-                      onPressed: startEnabled ? () => unawaited(_startWithAutoRefresh()) : null,
-                      child: const Text('Start'),
-                    )
-                  : OutlinedButton(
-                      onPressed: startEnabled ? () => unawaited(_startWithAutoRefresh()) : null,
-                      child: const Text('Start'),
-                    ),
-              const SizedBox(width: 8),
-              startActive
-                  ? OutlinedButton(
-                      onPressed: stopEnabled ? () => _confirmStop(state) : null,
-                      child: const Text('Stop'),
-                    )
-                  : FilledButton(
-                      onPressed: stopEnabled ? () => _confirmStop(state) : null,
-                      child: const Text('Stop'),
-                    ),
-              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: toggleEnabled
+                    ? () {
+                        if (state.tunnelUp) {
+                          _confirmStop(state);
+                        } else {
+                          unawaited(_startWithAutoRefresh());
+                        }
+                      }
+                    : null,
+                icon: Icon(
+                  state.tunnelUp ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                  size: 20,
+                ),
+                label: Text(state.tunnelUp ? 'Stop' : 'Start'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: state.tunnelUp
+                      ? Theme.of(context).colorScheme.error
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 12),
               Flexible(
                 child: Chip(
-                  label: Text('VPN: ${state.tunnel.label}'),
+                  label: Text(state.tunnel.label),
                   avatar: Icon(
                     isRevoked
                         ? Icons.warning_amber_rounded
@@ -417,64 +419,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         SnackBar(
           content: Text(_controller.state.lastError),
           duration: const Duration(seconds: 5),
-        ),
-      );
-    }
-  }
-
-  Widget _buildQuickStart(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.rocket_launch_outlined,
-                    color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  'Quick Start',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'No config yet. Tap below to set up free VPN subscriptions '
-              'and generate a working config automatically.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () => unawaited(_applyQuickStart()),
-                icon: const Icon(Icons.flash_on),
-                label: const Text('Set Up Free VPN'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _applyQuickStart() async {
-    final config = await _subController.applyGetFreePreset();
-    if (!mounted || config == null) return;
-    final ok = await _controller.saveParsedConfig(config);
-    if (!mounted) return;
-    if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Config ready! ${_subController.entries.fold<int>(0, (s, e) => s + e.nodeCount)} nodes loaded.',
-          ),
         ),
       );
     }
