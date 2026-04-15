@@ -48,17 +48,6 @@ class BoxVpnClient {
     return result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
-  /// Set per-app proxy mode and app list.
-  /// [mode]: "off", "include", "exclude"
-  /// [list]: package names
-  Future<bool> setPerAppProxy(String mode, List<String> list) async {
-    final ok = await _methods.invokeMethod<bool>(
-      'setPerAppProxy',
-      {'mode': mode, 'list': list},
-    );
-    return ok ?? false;
-  }
-
   /// Stream of status events: {"status": "Started"|"Starting"|"Stopped"|"Stopping"}
   Stream<Map<String, dynamic>> get onStatusChanged {
     return _statusEvents.receiveBroadcastStream().map((event) {

@@ -88,6 +88,10 @@ class ConfigBuilder {
       enabledGroups,
     );
 
+    // App routing rules (per-app outbound)
+    final appRules = await SettingsStorage.getAppRules();
+    _applyAppRules(config, appRules);
+
     final routeFinal = await SettingsStorage.getRouteFinal();
     if (routeFinal.isNotEmpty) {
       final route = config['route'] as Map<String, dynamic>?;
@@ -229,6 +233,27 @@ class ConfigBuilder {
     }
 
     route['rule_set'] = ruleSets;
+    route['rules'] = rules;
+    config['route'] = route;
+  }
+
+  /// Adds per-app routing rules (package_name → outbound) to the config.
+  static void _applyAppRules(
+    Map<String, dynamic> config,
+    List<AppRule> appRules,
+  ) {
+    if (appRules.isEmpty) return;
+    final route = config['route'] as Map<String, dynamic>? ?? {};
+    final rules = route['rules'] as List<dynamic>? ?? [];
+
+    for (final ar in appRules) {
+      if (ar.packages.isEmpty || ar.outbound.isEmpty) continue;
+      rules.add(<String, dynamic>{
+        'package_name': ar.packages,
+        'outbound': ar.outbound,
+      });
+    }
+
     route['rules'] = rules;
     config['route'] = route;
   }

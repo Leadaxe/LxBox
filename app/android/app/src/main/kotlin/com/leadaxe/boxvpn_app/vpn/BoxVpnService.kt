@@ -274,26 +274,10 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
                 if (r6.hasNext()) { while (r6.hasNext()) { val a = r6.next(); builder.addRoute(a.address(), a.prefix()) } }
             }
 
-            // Per-app proxy: user selection overrides config
-            val perMode = ConfigManager.perAppMode
-            val perList = ConfigManager.perAppList
-            if (perMode == "include" && perList.isNotEmpty()) {
-                for (pkg in perList) {
-                    try { builder.addAllowedApplication(pkg) } catch (_: NameNotFoundException) {}
-                }
-                // Always include ourselves so the app can communicate
-                try { builder.addAllowedApplication(packageName) } catch (_: NameNotFoundException) {}
-            } else if (perMode == "exclude" && perList.isNotEmpty()) {
-                for (pkg in perList) {
-                    try { builder.addDisallowedApplication(pkg) } catch (_: NameNotFoundException) {}
-                }
-            } else {
-                // Default: use config's include/exclude
-                val incl = options.includePackage
-                if (incl.hasNext()) { while (incl.hasNext()) { try { builder.addAllowedApplication(incl.next()) } catch (_: NameNotFoundException) {} } }
-                val excl = options.excludePackage
-                if (excl.hasNext()) { while (excl.hasNext()) { try { builder.addDisallowedApplication(excl.next()) } catch (_: NameNotFoundException) {} } }
-            }
+            val incl = options.includePackage
+            if (incl.hasNext()) { while (incl.hasNext()) { try { builder.addAllowedApplication(incl.next()) } catch (_: NameNotFoundException) {} } }
+            val excl = options.excludePackage
+            if (excl.hasNext()) { while (excl.hasNext()) { try { builder.addDisallowedApplication(excl.next()) } catch (_: NameNotFoundException) {} } }
         }
 
         if (options.isHTTPProxyEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

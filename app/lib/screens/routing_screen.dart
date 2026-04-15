@@ -7,6 +7,7 @@ import '../controllers/subscription_controller.dart';
 import '../models/parser_config.dart';
 import '../services/config_builder.dart';
 import '../services/settings_storage.dart';
+import 'app_picker_screen.dart';
 
 class RoutingScreen extends StatefulWidget {
   const RoutingScreen({
@@ -28,6 +29,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
   final _enabledGroups = <String>{};
   final _ruleOutbounds = <String, String>{};
   String _routeFinal = '';
+  final _appRules = <AppRule>[];
   bool _loading = true;
   bool _dirty = false;
 
@@ -43,6 +45,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
     final storedGroups = await SettingsStorage.getEnabledGroups();
     final storedOutbounds = await SettingsStorage.getRuleOutbounds();
     final storedFinal = await SettingsStorage.getRouteFinal();
+    final storedAppRules = await SettingsStorage.getAppRules();
 
     if (storedRules.isEmpty) {
       for (final r in template.selectableRules) {
@@ -62,6 +65,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
 
     _ruleOutbounds.addAll(storedOutbounds);
     _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'proxy-out';
+    _appRules.addAll(storedAppRules);
 
     setState(() {
       _template = template;
@@ -74,6 +78,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
     await SettingsStorage.saveEnabledGroups(_enabledGroups);
     await SettingsStorage.saveRuleOutbounds(_ruleOutbounds);
     await SettingsStorage.saveRouteFinal(_routeFinal);
+    await SettingsStorage.saveAppRules(_appRules);
 
     if (!mounted) return;
 
@@ -158,6 +163,25 @@ class _RoutingScreenState extends State<RoutingScreen> {
           Text('Routing Rules', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           ...template.selectableRules.map(_buildRuleTile),
+
+          const Divider(height: 32),
+
+          // ---- App Rules ----
+          Text('App Rules', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(
+            'Route specific apps through a chosen outbound.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 8),
+          ...List.generate(_appRules.length, _buildAppRuleTile),
+          TextButton.icon(
+            onPressed: _addAppRule,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add App Rule'),
+          ),
 
           const Divider(height: 24),
 
@@ -270,6 +294,85 @@ class _RoutingScreenState extends State<RoutingScreen> {
         ),
       ),
     );
+  }
+
+  void _addAppRule() {
+    setState(() {
+      _appRules.add(AppRule(name: 'Rule ${_appRules.length + 1}'));
+      _dirty = true;
+    });
+  }
+
+  Widget _buildAppRuleTile(int index) {
+    final rule = _appRules[index];
+    final options = _outboundOptions();
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      leading: IconButton(
+        icon: const Icon(Icons.delete_outline, size: 20),
+        tooltip: 'Delete rule',
+        onPressed: () {
+          setState(() {
+            _appRules.removeAt(index);
+            _dirty = true;
+          });
+        },
+      ),
+      title: GestureDetector(
+        onTap: () => _openAppPicker(index),
+        child: Text(rule.name),
+      ),
+      subtitle: GestureDetector(
+        onTap: () => _openAppPicker(index),
+        child: Text(
+          rule.packages.isEmpty
+              ? 'Tap to select apps'
+              : '${rule.packages.length} apps',
+          style: const TextStyle(fontSize: 12),
+        ),
+      ),
+      trailing: SizedBox(
+        width: 120,
+        child: DropdownButton<String>(
+          isExpanded: true,
+          isDense: true,
+          value: options.any((o) => o.tag == rule.outbound) ? rule.outbound : options.first.tag,
+          items: options
+              .map((o) => DropdownMenuItem(
+                    value: o.tag,
+                    child: Text(o.label, style: const TextStyle(fontSize: 13)),
+                  ))
+              .toList(),
+          onChanged: (val) {
+            if (val == null) return;
+            setState(() {
+              rule.outbound = val;
+              _dirty = true;
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openAppPicker(int index) async {
+    final rule = _appRules[index];
+    final result = await Navigator.push<List<String>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AppPickerScreen(
+          ruleName: rule.name,
+          selected: rule.packages.toSet(),
+        ),
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() {
+        rule.packages = result;
+        _dirty = true;
+      });
+    }
   }
 }
 

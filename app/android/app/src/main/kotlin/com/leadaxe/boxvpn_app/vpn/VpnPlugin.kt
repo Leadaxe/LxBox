@@ -117,12 +117,6 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
                 result.success(apps)
             }
-            "setPerAppProxy" -> {
-                val mode = call.argument<String>("mode") ?: "off"
-                val list = call.argument<List<String>>("list") ?: emptyList()
-                ConfigManager.setPerApp(mode, list)
-                result.success(true)
-            }
             else -> result.notImplemented()
         }
     }

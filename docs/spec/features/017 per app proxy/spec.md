@@ -1,67 +1,113 @@
-# 017 — Per-App Proxy (Split Tunneling)
+# 017 — App Routing Rules (Per-App Outbound)
 
 ## Контекст
 
-Сейчас VPN туннелирует весь трафик всех приложений. Пользователь не может выбрать какие приложения идут через VPN, а какие напрямую. Это нужно для:
-- Банковские приложения — часто блокируют VPN-трафик
-- Игры — не нужен VPN, добавляет латентность
-- Рабочие приложения — должны идти напрямую
+Пользователь хочет направлять трафик определённых приложений через конкретный outbound. Например:
+- Банковские приложения → `direct-out` (VPN мешает)
+- Рабочие приложения → `vpn-1`
+- Торренты → уже есть через selectable rules, но не по приложению
+
+Реализация через sing-box routing rules с `package_name` условием.
 
 ## Что делаем
 
-### Экран Per-App Proxy
+### Концепция: App Rule
 
-Доступен из drawer или из Routing screen.
+**App Rule** — именованный список приложений с назначенным outbound.
+
+```json
+{
+  "name": "Banks",
+  "packages": ["ru.tinkoff.investing", "ru.sberbankmobile"],
+  "outbound": "direct-out"
+}
+```
+
+Пользователь создаёт сколько угодно App Rules. Каждый генерирует одну sing-box routing rule:
+```json
+{
+  "package_name": ["ru.tinkoff.investing", "ru.sberbankmobile"],
+  "outbound": "direct-out"
+}
+```
+
+### UI в Routing Screen
+
+Новая секция **"App Rules"** после Routing Rules, перед Route Final.
+
+#### Список App Rules
+
+Каждая строка:
+```
+[Icon] Rule name          N apps    [dropdown outbound]
+```
+
+- Тап → экран выбора приложений для этого правила
+- Long press / свайп → удалить
+
+Кнопка **"+ Add App Rule"** внизу секции.
+
+#### Экран выбора приложений (AppPickerScreen)
+
+Открывается при тапе на App Rule или при создании нового.
 
 **AppBar:**
-- Заголовок: "Per-App Proxy"
-- Поиск (иконка → SearchBar)
+- Заголовок: имя правила (редактируемое)
+- Popup menu: Select all, Deselect all, Invert, Show/hide system apps, Import/Export clipboard
 
-**Режим (вверху):**
-- SegmentedButton: `Off` / `Include` / `Exclude`
-  - Off — все приложения через VPN (по умолчанию)
-  - Include — только отмеченные через VPN
-  - Exclude — все кроме отмеченных через VPN
+**Список:**
+- Чекбокс + имя + package name
+- Поиск
+- Выбранные сверху
+- Системные скрыты по умолчанию
 
-**Список приложений:**
-- Иконка + имя + package name
-- Чекбокс справа
-- Системные приложения скрыты по умолчанию, toggle "Show system apps"
-- Сортировка: выбранные сверху, потом по алфавиту
+**При выходе** — автосохранение.
 
 ### Хранение
 
 В `boxvpn_settings.json`:
 ```json
-"per_app_mode": "off",
-"per_app_list": ["com.android.chrome", "org.telegram.messenger"]
+"app_rules": [
+  {
+    "name": "Banks",
+    "packages": ["ru.tinkoff.investing", "ru.sberbankmobile"],
+    "outbound": "direct-out"
+  },
+  {
+    "name": "Work",
+    "packages": ["com.slack", "com.microsoft.teams"],
+    "outbound": "vpn-1"
+  }
+]
 ```
+
+### Генерация конфига
+
+В `ConfigBuilder` после selectable rules, перед route.final:
+- Для каждого app_rule генерируется routing rule с `package_name` + `outbound`
+- Правила добавляются в конец `route.rules[]` (перед final)
 
 ### Нативная сторона
 
-**Новые методы в VpnPlugin/MethodChannel:**
-- `getInstalledApps` → List<Map> с `packageName`, `appName`, `isSystemApp`
+**VpnPlugin.getInstalledApps** — уже реализован, возвращает список пакетов.
 
-**В BoxVpnService.openTun():**
-- Читать mode и list из ConfigManager
-- Применять builder.addAllowedApplication / addDisallowedApplication
-
-### Хранение в ConfigManager
-
-ConfigManager получает два новых поля:
-- `perAppMode`: "off" | "include" | "exclude"
-- `perAppList`: List<String> (package names)
-
-Сохраняются через MethodChannel из Dart при нажатии Apply.
+**BoxVpnService.openTun** — убираем per-app include/exclude логику (вместо неё sing-box сам роутит по package_name через конфиг). Возвращаем стандартное поведение.
 
 ## Файлы
 
 | Файл | Изменения |
 |------|-----------|
-| `lib/screens/per_app_screen.dart` | Новый экран |
-| `lib/screens/home_screen.dart` | Пункт в drawer |
-| `lib/services/settings_storage.dart` | per_app_mode, per_app_list |
-| `lib/vpn/box_vpn_client.dart` | getInstalledApps(), setPerAppProxy() |
-| `VpnPlugin.kt` | getInstalledApps, setPerAppMode, setPerAppList |
-| `ConfigManager.kt` | perAppMode, perAppList |
-| `BoxVpnService.kt` | Применение в openTun() |
+| `lib/screens/routing_screen.dart` | Секция App Rules + outbound dropdown |
+| `lib/screens/app_picker_screen.dart` | **Новый** — выбор приложений для правила |
+| `lib/services/settings_storage.dart` | getAppRules/saveAppRules |
+| `lib/services/config_builder.dart` | Генерация package_name routing rules |
+| `lib/vpn/box_vpn_client.dart` | getInstalledApps (уже есть) |
+
+## Критерии приёмки
+
+- [ ] Пользователь может создать App Rule с именем и списком приложений.
+- [ ] Для каждого App Rule можно выбрать outbound (direct/proxy/auto/vpn-X).
+- [ ] Сгенерированный конфиг содержит routing rules с `package_name`.
+- [ ] Приложения из правила реально идут через выбранный outbound.
+- [ ] Экран выбора приложений: поиск, select all, invert, show system.
+- [ ] App Rules отображаются в секции Routing Screen.

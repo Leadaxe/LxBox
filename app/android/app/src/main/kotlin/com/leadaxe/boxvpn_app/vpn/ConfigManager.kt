@@ -49,17 +49,5 @@ object ConfigManager {
     fun setNotificationTitle(title: String) {
         notificationTitle = title
     }
-
-    // --- Per-app proxy ---
-
-    var perAppMode: String = "off"
-        private set
-    var perAppList: List<String> = emptyList()
-        private set
-
-    fun setPerApp(mode: String, list: List<String>) {
-        perAppMode = mode
-        perAppList = list
-    }
 }
 

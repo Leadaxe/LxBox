@@ -179,24 +179,21 @@ class SettingsStorage {
   }
 
   // ---------------------------------------------------------------------------
-  // Per-app proxy
+  // App routing rules (per-app outbound)
   // ---------------------------------------------------------------------------
 
-  static Future<String> getPerAppMode() async {
+  static Future<List<AppRule>> getAppRules() async {
     final data = await _load();
-    return (data['per_app_mode'] as String?) ?? 'off';
+    final list = data['app_rules'] as List<dynamic>? ?? [];
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(AppRule.fromJson)
+        .toList();
   }
 
-  static Future<List<String>> getPerAppList() async {
+  static Future<void> saveAppRules(List<AppRule> rules) async {
     final data = await _load();
-    final list = data['per_app_list'] as List<dynamic>? ?? [];
-    return list.map((e) => e.toString()).toList();
-  }
-
-  static Future<void> savePerApp(String mode, List<String> list) async {
-    final data = await _load();
-    data['per_app_mode'] = mode;
-    data['per_app_list'] = list;
+    data['app_rules'] = rules.map((r) => r.toJson()).toList();
     _cache = data;
     await _save();
   }
@@ -216,4 +213,28 @@ class SettingsStorage {
     _cache = data;
     await _save();
   }
+}
+
+/// A per-app routing rule: a named group of packages with an outbound.
+class AppRule {
+  AppRule({required this.name, this.packages = const [], this.outbound = 'direct-out'});
+
+  String name;
+  List<String> packages;
+  String outbound;
+
+  factory AppRule.fromJson(Map<String, dynamic> json) => AppRule(
+        name: json['name'] as String? ?? '',
+        packages: (json['packages'] as List<dynamic>?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            const [],
+        outbound: json['outbound'] as String? ?? 'direct-out',
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'packages': packages,
+        'outbound': outbound,
+      };
 }
