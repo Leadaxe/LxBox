@@ -213,7 +213,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 onPressed: state.busy || _subController.busy
                     ? null
                     : () => unawaited(_rebuildConfig()),
-                icon: const Icon(Icons.build_outlined, size: 20),
+                icon: const Icon(Icons.sync, size: 20),
               ),
             ],
           ),
