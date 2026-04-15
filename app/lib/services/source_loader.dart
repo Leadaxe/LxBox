@@ -44,7 +44,7 @@ class SourceLoader {
           for (final node in XrayJsonParser.parse(text)) {
             if (count >= maxNodesPerSubscription) break;
             _applyPrefix(node, source);
-            node.tag = _makeUnique(node.tag, tagCounts);
+            _dedup(node, tagCounts);
             if (node.jump != null) {
               node.jump!.tag = _makeUnique(node.jump!.tag, tagCounts);
               if (node.jump!.outbound.isNotEmpty) {
@@ -64,7 +64,7 @@ class SourceLoader {
               final node = NodeParser.parseNode(line, const []);
               if (node != null) {
                 _applyPrefix(node, source);
-                node.tag = _makeUnique(node.tag, tagCounts);
+                _dedup(node, tagCounts);
                 nodes.add(node);
                 count++;
               }
@@ -76,7 +76,7 @@ class SourceLoader {
           final node = NodeParser.parseNode(source.source.trim(), const []);
           if (node != null) {
             _applyPrefix(node, source);
-            node.tag = _makeUnique(node.tag, tagCounts);
+            _dedup(node, tagCounts);
             nodes.add(node);
             count++;
           }
@@ -95,7 +95,7 @@ class SourceLoader {
         final node = NodeParser.parseNode(trimmed, const []);
         if (node != null) {
           _applyPrefix(node, source);
-          node.tag = _makeUnique(node.tag, tagCounts);
+          _dedup(node, tagCounts);
           nodes.add(node);
           count++;
         }
@@ -117,6 +117,14 @@ class SourceLoader {
           node.jump!.outbound['tag'] = node.jump!.tag;
         }
       }
+    }
+  }
+
+  /// Assigns a unique tag to the node and syncs it into outbound['tag'].
+  static void _dedup(ParsedNode node, Map<String, int> tagCounts) {
+    node.tag = _makeUnique(node.tag, tagCounts);
+    if (node.outbound.isNotEmpty) {
+      node.outbound['tag'] = node.tag;
     }
   }
 
