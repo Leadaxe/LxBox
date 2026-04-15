@@ -177,6 +177,15 @@ class SubscriptionController extends ChangeNotifier {
       if (entry.source.name.isEmpty && result.profileTitle != null) {
         entry.source.name = result.profileTitle!;
       }
+      // Store subscription metadata from HTTP headers
+      if (result.userInfo != null) {
+        entry.source.uploadBytes = result.userInfo!.upload;
+        entry.source.downloadBytes = result.userInfo!.download;
+        entry.source.totalBytes = result.userInfo!.total;
+        entry.source.expireTimestamp = result.userInfo!.expire;
+      }
+      if (result.supportUrl != null) entry.source.supportUrl = result.supportUrl!;
+      if (result.webPageUrl != null) entry.source.webPageUrl = result.webPageUrl!;
       await _persistSources();
     } catch (e) {
       entry.status = 'Error: $e';

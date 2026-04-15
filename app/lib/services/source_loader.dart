@@ -8,9 +8,12 @@ import 'xray_json_parser.dart';
 
 /// Result of loading nodes from a source — nodes + optional metadata.
 class LoadResult {
-  LoadResult({required this.nodes, this.profileTitle});
+  LoadResult({required this.nodes, this.profileTitle, this.userInfo, this.supportUrl, this.webPageUrl});
   final List<ParsedNode> nodes;
   final String? profileTitle;
+  final SubscriptionUserInfo? userInfo;
+  final String? supportUrl;
+  final String? webPageUrl;
 }
 
 /// Loads and processes nodes from a [ProxySource].
@@ -27,6 +30,9 @@ class SourceLoader {
     final nodes = <ParsedNode>[];
     var count = 0;
     String? profileTitle;
+    SubscriptionUserInfo? userInfo;
+    String? supportUrl;
+    String? webPageUrl;
 
     if (source.source.isNotEmpty) {
       if (NodeParser.isSubscriptionURL(source.source)) {
@@ -37,6 +43,9 @@ class SourceLoader {
 
         final fetchResult = await SubscriptionFetcher.fetchWithMeta(source.source);
         profileTitle = fetchResult.title;
+        userInfo = fetchResult.userInfo;
+        supportUrl = fetchResult.supportUrl;
+        webPageUrl = fetchResult.webPageUrl;
         final content = fetchResult.content;
         onProgress?.call(
           0.2 + sourceIndex * 0.5 / totalSources + 0.1 / totalSources,
@@ -112,7 +121,13 @@ class SourceLoader {
       } catch (_) {}
     }
 
-    return LoadResult(nodes: nodes, profileTitle: profileTitle);
+    return LoadResult(
+      nodes: nodes,
+      profileTitle: profileTitle,
+      userInfo: userInfo,
+      supportUrl: supportUrl,
+      webPageUrl: webPageUrl,
+    );
   }
 
   /// Simple load — returns nodes only (backward compat).

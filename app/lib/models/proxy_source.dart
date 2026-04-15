@@ -7,6 +7,12 @@ class ProxySource {
     this.name = '',
     this.lastUpdated,
     this.lastNodeCount = 0,
+    this.uploadBytes = 0,
+    this.downloadBytes = 0,
+    this.totalBytes = 0,
+    this.expireTimestamp = 0,
+    this.supportUrl = '',
+    this.webPageUrl = '',
   });
 
   final String source;
@@ -15,6 +21,12 @@ class ProxySource {
   String name;
   DateTime? lastUpdated;
   int lastNodeCount;
+  int uploadBytes;
+  int downloadBytes;
+  int totalBytes;
+  int expireTimestamp; // unix seconds, 0 = unlimited
+  String supportUrl;
+  String webPageUrl;
 
   String get displayName {
     if (name.isNotEmpty) return name;
@@ -40,6 +52,12 @@ class ProxySource {
           ? DateTime.tryParse(json['last_updated'] as String)
           : null,
       lastNodeCount: json['last_node_count'] as int? ?? 0,
+      uploadBytes: json['upload_bytes'] as int? ?? 0,
+      downloadBytes: json['download_bytes'] as int? ?? 0,
+      totalBytes: json['total_bytes'] as int? ?? 0,
+      expireTimestamp: json['expire_timestamp'] as int? ?? 0,
+      supportUrl: json['support_url'] as String? ?? '',
+      webPageUrl: json['web_page_url'] as String? ?? '',
     );
   }
 
@@ -50,6 +68,12 @@ class ProxySource {
         if (name.isNotEmpty) 'name': name,
         if (lastUpdated != null) 'last_updated': lastUpdated!.toIso8601String(),
         if (lastNodeCount > 0) 'last_node_count': lastNodeCount,
+        if (uploadBytes > 0) 'upload_bytes': uploadBytes,
+        if (downloadBytes > 0) 'download_bytes': downloadBytes,
+        if (totalBytes > 0) 'total_bytes': totalBytes,
+        if (expireTimestamp > 0) 'expire_timestamp': expireTimestamp,
+        if (supportUrl.isNotEmpty) 'support_url': supportUrl,
+        if (webPageUrl.isNotEmpty) 'web_page_url': webPageUrl,
       };
 }
 

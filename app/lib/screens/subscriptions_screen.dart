@@ -164,6 +164,16 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
+  Future<void> _launchUrl(String url) async {
+    // Using platform channel is overkill — just copy to clipboard and notify
+    await Clipboard.setData(ClipboardData(text: url));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Copied: $url')),
+      );
+    }
+  }
+
   Future<void> _applyFreePreset() async {
     final config = await widget.subController.applyGetFreePreset();
     if (!mounted || config == null) return;
@@ -220,12 +230,26 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           subtitle: entry.subtitle.isNotEmpty
               ? Text(entry.subtitle, style: const TextStyle(fontSize: 12))
               : null,
-          trailing: entry.nodeCount > 0
-              ? Chip(
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (entry.source.supportUrl.isNotEmpty)
+                IconButton(
+                  icon: Icon(
+                    entry.source.supportUrl.contains('t.me') ? Icons.send : Icons.help_outline,
+                    size: 18,
+                  ),
+                  tooltip: 'Support',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => _launchUrl(entry.source.supportUrl),
+                ),
+              if (entry.nodeCount > 0)
+                Chip(
                   label: Text('${entry.nodeCount}'),
                   visualDensity: VisualDensity.compact,
-                )
-              : null,
+                ),
+            ],
+          ),
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(

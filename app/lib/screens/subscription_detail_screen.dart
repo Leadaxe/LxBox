@@ -202,9 +202,96 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
               ),
             ],
           ),
+          // Traffic quota
+          if (source.totalBytes > 0) ...[
+            const SizedBox(height: 8),
+            _buildTrafficBar(source, theme),
+          ],
+          // Expire
+          if (source.expireTimestamp > 0) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.event_outlined, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 4),
+                Text(
+                  'Expires: ${_formatExpire(source.expireTimestamp)}',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ],
+          // Support & web page links
+          if (source.supportUrl.isNotEmpty || source.webPageUrl.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                if (source.supportUrl.isNotEmpty)
+                  ActionChip(
+                    avatar: Icon(
+                      source.supportUrl.contains('t.me') ? Icons.send : Icons.help_outline,
+                      size: 16,
+                    ),
+                    label: const Text('Support'),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: source.supportUrl));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Copied: ${source.supportUrl}')),
+                      );
+                    },
+                  ),
+                if (source.webPageUrl.isNotEmpty)
+                  ActionChip(
+                    avatar: const Icon(Icons.language, size: 16),
+                    label: const Text('Web page'),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: source.webPageUrl));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Copied: ${source.webPageUrl}')),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Widget _buildTrafficBar(dynamic source, ThemeData theme) {
+    final used = source.uploadBytes + source.downloadBytes;
+    final total = source.totalBytes;
+    final pct = total > 0 ? (used / total).clamp(0.0, 1.0) : 0.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LinearProgressIndicator(value: pct),
+        const SizedBox(height: 2),
+        Text(
+          '${_formatBytes(used)} / ${_formatBytes(total)} used',
+          style: theme.textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+
+  static String _formatBytes(int bytes) {
+    if (bytes <= 0) return '0';
+    if (bytes < 1024) return '${bytes}B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
+    return '${(bytes / 1024 / 1024 / 1024).toStringAsFixed(2)} GB';
+  }
+
+  static String _formatExpire(int timestamp) {
+    if (timestamp <= 0) return 'Unlimited';
+    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
+    final diff = dt.difference(DateTime.now());
+    if (diff.isNegative) return 'Expired';
+    if (diff.inDays > 0) return '${diff.inDays} days left';
+    return '${diff.inHours} hours left';
   }
 
   Widget _buildNodeList(ThemeData theme) {
