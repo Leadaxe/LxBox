@@ -45,6 +45,12 @@ Future<List<_AppInfo>> _loadApps() async {
 
 /// Screen for selecting apps to include in an App Rule.
 /// Returns the updated list of package names on pop.
+class AppPickerResult {
+  AppPickerResult({required this.packages, required this.name});
+  final List<String> packages;
+  final String name;
+}
+
 class AppPickerScreen extends StatefulWidget {
   const AppPickerScreen({
     super.key,
@@ -70,18 +76,29 @@ class _AppInfo {
 class _AppPickerScreenState extends State<AppPickerScreen> {
   List<_AppInfo> _allApps = [];
   late final Set<String> _selected;
+  late final TextEditingController _nameCtrl;
   bool _loading = true;
   bool _showSystem = false;
+  bool _editingName = false;
   String _search = '';
 
   @override
   void initState() {
     super.initState();
     _selected = Set<String>.from(widget.selected);
+    _nameCtrl = TextEditingController(text: widget.ruleName);
     unawaited(_load());
   }
 
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
+    // Yield a frame first so the screen renders with loading indicator
+    await Future.delayed(Duration.zero);
     final apps = await _loadApps();
     if (mounted) setState(() { _allApps = apps; _loading = false; });
   }
@@ -147,10 +164,24 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
       onPopInvokedWithResult: (didPop, _) {},
       child: Scaffold(
         appBar: AppBar(
-          title: Text(widget.ruleName),
+          title: _editingName
+              ? TextField(
+                  controller: _nameCtrl,
+                  autofocus: true,
+                  style: Theme.of(context).textTheme.titleLarge,
+                  decoration: const InputDecoration(border: InputBorder.none, hintText: 'Group name'),
+                  onSubmitted: (_) => setState(() => _editingName = false),
+                )
+              : GestureDetector(
+                  onTap: () => setState(() => _editingName = true),
+                  child: Text(_nameCtrl.text),
+                ),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.pop(context, _selected.toList()),
+            onPressed: () => Navigator.pop(context, AppPickerResult(
+              packages: _selected.toList(),
+              name: _nameCtrl.text.trim(),
+            )),
           ),
           actions: [
             PopupMenuButton<String>(

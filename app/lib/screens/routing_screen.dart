@@ -168,11 +168,11 @@ class _RoutingScreenState extends State<RoutingScreen> {
 
           const Divider(height: 32),
 
-          // ---- App Rules ----
-          Text('App Rules', style: Theme.of(context).textTheme.titleMedium),
+          // ---- App Groups ----
+          Text('App Groups', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
-            'Route specific apps through a chosen outbound.',
+            'Group apps and route them through a chosen outbound.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -182,7 +182,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
           TextButton.icon(
             onPressed: _addAppRule,
             icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add App Rule'),
+            label: const Text('Add App Group'),
           ),
 
           const Divider(height: 24),
@@ -218,62 +218,84 @@ class _RoutingScreenState extends State<RoutingScreen> {
   Widget _buildRuleTile(SelectableRule rule) {
     final isEnabled = _enabledRules.contains(rule.label);
     final hasOutbound = rule.rule.containsKey('outbound');
+    final hasSrs = rule.ruleSets.isNotEmpty;
     final options = _outboundOptions();
     final currentOutbound = _ruleOutbounds[rule.label] ??
         (rule.rule['outbound'] as String? ?? '');
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      leading: _downloadingRules.contains(rule.label)
-          ? const SizedBox(width: 48, height: 48, child: Padding(
-              padding: EdgeInsets.all(12),
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ))
-          : Switch(
-              value: isEnabled,
-              onChanged: (val) {
-                if (val && rule.ruleSets.isNotEmpty) {
-                  _enableRuleWithDownload(rule);
-                } else {
-                  setState(() {
-                    if (val) {
-                      _enabledRules.add(rule.label);
-                    } else {
-                      _enabledRules.remove(rule.label);
-                    }
-                    _dirty = true;
-                  });
-                }
-              },
+    final switchWidget = _downloadingRules.contains(rule.label)
+        ? const SizedBox(
+            width: 48, height: 24,
+            child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+          )
+        : Switch(
+            value: isEnabled,
+            onChanged: (val) {
+              if (val && hasSrs) {
+                _enableRuleWithDownload(rule);
+              } else {
+                setState(() {
+                  if (val) {
+                    _enabledRules.add(rule.label);
+                  } else {
+                    _enabledRules.remove(rule.label);
+                  }
+                  _dirty = true;
+                });
+              }
+            },
+          );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              switchWidget,
+              const SizedBox(width: 8),
+              Expanded(child: Text(rule.label)),
+              if (hasSrs)
+                Tooltip(
+                  message: 'Requires rule set download',
+                  child: Icon(Icons.cloud_download_outlined, size: 16,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+              if (hasOutbound) ...[
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 110,
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    isDense: true,
+                    value: options.any((o) => o.tag == currentOutbound)
+                        ? currentOutbound
+                        : options.first.tag,
+                    items: options
+                        .map((o) => DropdownMenuItem(value: o.tag, child: Text(o.label, style: const TextStyle(fontSize: 13))))
+                        .toList(),
+                    onChanged: isEnabled
+                        ? (val) {
+                            if (val == null) return;
+                            setState(() {
+                              _ruleOutbounds[rule.label] = val;
+                              _dirty = true;
+                            });
+                          }
+                        : null,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (rule.description.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 56),
+              child: Text(rule.description, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ),
-      title: Text(rule.label),
-      subtitle: rule.description.isNotEmpty
-          ? Text(rule.description, style: const TextStyle(fontSize: 12))
-          : null,
-      trailing: hasOutbound
-          ? SizedBox(
-              width: 120,
-              child: DropdownButton<String>(
-                isExpanded: true,
-                isDense: true,
-                value: options.any((o) => o.tag == currentOutbound)
-                    ? currentOutbound
-                    : options.first.tag,
-                items: options
-                    .map((o) => DropdownMenuItem(value: o.tag, child: Text(o.label, style: const TextStyle(fontSize: 13))))
-                    .toList(),
-                onChanged: isEnabled
-                    ? (val) {
-                        if (val == null) return;
-                        setState(() {
-                          _ruleOutbounds[rule.label] = val;
-                          _dirty = true;
-                        });
-                      }
-                    : null,
-              ),
-            )
-          : null,
+        ],
+      ),
     );
   }
 
@@ -343,7 +365,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
 
   void _addAppRule() {
     setState(() {
-      _appRules.add(AppRule(name: 'Rule ${_appRules.length + 1}'));
+      _appRules.add(AppRule(name: 'Group ${_appRules.length + 1}'));
       _dirty = true;
     });
   }
@@ -352,50 +374,67 @@ class _RoutingScreenState extends State<RoutingScreen> {
     final rule = _appRules[index];
     final options = _outboundOptions();
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      onTap: () => _openAppPicker(index),
-      title: Text(rule.name),
-      subtitle: Text(
-        rule.packages.isEmpty
-            ? 'Tap to select apps'
-            : '${rule.packages.length} apps',
-        style: const TextStyle(fontSize: 12),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 100,
-            child: DropdownButton<String>(
-              isExpanded: true,
-              isDense: true,
-              value: options.any((o) => o.tag == rule.outbound) ? rule.outbound : options.first.tag,
-              items: options
-                  .map((o) => DropdownMenuItem(
-                        value: o.tag,
-                        child: Text(o.label, style: const TextStyle(fontSize: 13)),
-                      ))
-                  .toList(),
-              onChanged: (val) {
-                if (val == null) return;
-                setState(() {
-                  rule.outbound = val;
-                  _dirty = true;
-                });
-              },
+          // Row 1: editable name + outbound dropdown + delete
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _openAppPicker(index),
+                  child: Text(rule.name, style: const TextStyle(fontWeight: FontWeight.w500)),
+                ),
+              ),
+              SizedBox(
+                width: 100,
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  isDense: true,
+                  value: options.any((o) => o.tag == rule.outbound) ? rule.outbound : options.first.tag,
+                  items: options
+                      .map((o) => DropdownMenuItem(
+                            value: o.tag,
+                            child: Text(o.label, style: const TextStyle(fontSize: 13)),
+                          ))
+                      .toList(),
+                  onChanged: (val) {
+                    if (val == null) return;
+                    setState(() {
+                      rule.outbound = val;
+                      _dirty = true;
+                    });
+                  },
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 20),
+                tooltip: 'Delete group',
+                onPressed: () {
+                  setState(() {
+                    _appRules.removeAt(index);
+                    _dirty = true;
+                  });
+                },
+              ),
+            ],
+          ),
+          // Row 2: apps count, tap to select
+          GestureDetector(
+            onTap: () => _openAppPicker(index),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                rule.packages.isEmpty
+                    ? 'Tap to select apps'
+                    : '${rule.packages.length} apps — tap to edit',
+                style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary),
+              ),
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, size: 20),
-            tooltip: 'Delete rule',
-            onPressed: () {
-              setState(() {
-                _appRules.removeAt(index);
-                _dirty = true;
-              });
-            },
-          ),
+          const Divider(height: 1),
         ],
       ),
     );
@@ -407,7 +446,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
     if (_pickerOpen) return;
     _pickerOpen = true;
     final rule = _appRules[index];
-    final result = await Navigator.push<List<String>>(
+    final result = await Navigator.push<AppPickerResult>(
       context,
       MaterialPageRoute(
         builder: (_) => AppPickerScreen(
@@ -419,7 +458,8 @@ class _RoutingScreenState extends State<RoutingScreen> {
     _pickerOpen = false;
     if (result != null && mounted) {
       setState(() {
-        rule.packages = result;
+        rule.packages = result.packages;
+        if (result.name.isNotEmpty) rule.name = result.name;
         _dirty = true;
       });
     }
