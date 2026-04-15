@@ -1,9 +1,47 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../vpn/box_vpn_client.dart';
+
+/// Cached app list — loaded once, reused across screen opens.
+List<_AppInfo>? _cachedApps;
+bool _cacheLoading = false;
+
+Future<List<_AppInfo>> _loadApps() async {
+  if (_cachedApps != null) return _cachedApps!;
+  if (_cacheLoading) {
+    // Another call is already loading — wait for it
+    while (_cacheLoading) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+    return _cachedApps ?? [];
+  }
+  _cacheLoading = true;
+  try {
+    final vpn = BoxVpnClient();
+    final apps = await vpn.getInstalledApps();
+    _cachedApps = apps.map((m) {
+      final iconStr = m['icon'] as String? ?? '';
+      Uint8List? iconBytes;
+      if (iconStr.isNotEmpty) {
+        try { iconBytes = base64Decode(iconStr); } catch (_) {}
+      }
+      return _AppInfo(
+        packageName: m['packageName'] as String? ?? '',
+        appName: m['appName'] as String? ?? '',
+        isSystem: m['isSystemApp'] as bool? ?? false,
+        iconBytes: iconBytes,
+      );
+    }).toList()
+      ..sort((a, b) => a.appName.toLowerCase().compareTo(b.appName.toLowerCase()));
+    return _cachedApps!;
+  } finally {
+    _cacheLoading = false;
+  }
+}
 
 /// Screen for selecting apps to include in an App Rule.
 /// Returns the updated list of package names on pop.
@@ -30,7 +68,6 @@ class _AppInfo {
 }
 
 class _AppPickerScreenState extends State<AppPickerScreen> {
-  final _vpn = BoxVpnClient();
   List<_AppInfo> _allApps = [];
   late final Set<String> _selected;
   bool _loading = true;
@@ -45,23 +82,8 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
   }
 
   Future<void> _load() async {
-    final apps = await _vpn.getInstalledApps();
-    final parsed = apps.map((m) {
-      final iconStr = m['icon'] as String? ?? '';
-      Uint8List? iconBytes;
-      if (iconStr.isNotEmpty) {
-        try { iconBytes = base64Decode(iconStr); } catch (_) {}
-      }
-      return _AppInfo(
-        packageName: m['packageName'] as String? ?? '',
-        appName: m['appName'] as String? ?? '',
-        isSystem: m['isSystemApp'] as bool? ?? false,
-        iconBytes: iconBytes,
-      );
-    }).toList()
-      ..sort((a, b) => a.appName.toLowerCase().compareTo(b.appName.toLowerCase()));
-
-    if (mounted) setState(() { _allApps = parsed; _loading = false; });
+    final apps = await _loadApps();
+    if (mounted) setState(() { _allApps = apps; _loading = false; });
   }
 
   List<_AppInfo> get _filtered {
@@ -119,19 +141,10 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return Scaffold(
-        appBar: AppBar(title: Text(widget.ruleName)),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    final apps = _filtered;
+    final apps = _loading ? <_AppInfo>[] : _filtered;
 
     return PopScope(
-      onPopInvokedWithResult: (didPop, _) {
-        // Return selected on pop regardless
-      },
+      onPopInvokedWithResult: (didPop, _) {},
       child: Scaffold(
         appBar: AppBar(
           title: Text(widget.ruleName),
@@ -169,6 +182,7 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
         ),
         body: Column(
           children: [
+            if (_loading) const LinearProgressIndicator(),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: TextField(
@@ -186,47 +200,51 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Text(
-                '${_selected.length} selected · ${apps.length} shown',
+                _loading
+                    ? 'Loading apps...'
+                    : '${_selected.length} selected \u00b7 ${apps.length} shown',
                 style: Theme.of(context).textTheme.labelSmall,
               ),
             ),
             Expanded(
-              child: ListView.builder(
-                itemCount: apps.length,
-                itemBuilder: (context, i) {
-                  final app = apps[i];
-                  final checked = _selected.contains(app.packageName);
-                  return CheckboxListTile(
-                    value: checked,
-                    onChanged: (v) {
-                      setState(() {
-                        if (v == true) {
-                          _selected.add(app.packageName);
-                        } else {
-                          _selected.remove(app.packageName);
-                        }
-                      });
-                    },
-                    secondary: app.iconBytes != null
-                        ? Image.memory(app.iconBytes!, width: 36, height: 36, gaplessPlayback: true)
-                        : const Icon(Icons.android, size: 36),
-                    title: Text(
-                      app.appName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 14),
+              child: _loading
+                  ? const SizedBox.shrink()
+                  : ListView.builder(
+                      itemCount: apps.length,
+                      itemBuilder: (context, i) {
+                        final app = apps[i];
+                        final checked = _selected.contains(app.packageName);
+                        return CheckboxListTile(
+                          value: checked,
+                          onChanged: (v) {
+                            setState(() {
+                              if (v == true) {
+                                _selected.add(app.packageName);
+                              } else {
+                                _selected.remove(app.packageName);
+                              }
+                            });
+                          },
+                          secondary: app.iconBytes != null
+                              ? Image.memory(app.iconBytes!, width: 36, height: 36, gaplessPlayback: true)
+                              : const Icon(Icons.android, size: 36),
+                          title: Text(
+                            app.appName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          subtitle: Text(
+                            app.packageName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.trailing,
+                        );
+                      },
                     ),
-                    subtitle: Text(
-                      app.packageName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                    dense: true,
-                    controlAffinity: ListTileControlAffinity.trailing,
-                  );
-                },
-              ),
             ),
           ],
         ),

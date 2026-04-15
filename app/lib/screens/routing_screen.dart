@@ -401,7 +401,11 @@ class _RoutingScreenState extends State<RoutingScreen> {
     );
   }
 
+  bool _pickerOpen = false;
+
   Future<void> _openAppPicker(int index) async {
+    if (_pickerOpen) return;
+    _pickerOpen = true;
     final rule = _appRules[index];
     final result = await Navigator.push<List<String>>(
       context,
@@ -412,6 +416,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
         ),
       ),
     );
+    _pickerOpen = false;
     if (result != null && mounted) {
       setState(() {
         rule.packages = result;
