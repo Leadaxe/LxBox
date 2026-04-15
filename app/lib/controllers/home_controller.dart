@@ -453,6 +453,8 @@ class HomeController extends ChangeNotifier {
   bool get massPingRunning => _massPingRunning;
   int _massPingEpoch = 0;
 
+  static const _pingConcurrency = 20;
+
   Future<void> pingAllNodes() async {
     final clash = _clash;
     if (clash == null || _state.nodes.isEmpty) return;
@@ -465,25 +467,41 @@ class HomeController extends ChangeNotifier {
     _massPingRunning = true;
     _massPingEpoch++;
     final epoch = _massPingEpoch;
-    _addDebug(DebugSource.app, 'Mass ping started (${_state.nodes.length} nodes)');
-    notifyListeners();
 
+    // Reset all delays and mark all nodes as busy
     final nodes = List<String>.from(_state.nodes);
-    for (final tag in nodes) {
-      if (!_massPingRunning || _massPingEpoch != epoch || !_state.tunnelUp) break;
-      final pingBusy = Map<String, String>.from(_state.pingBusy)..[tag] = '…';
-      _emit(_state.copyWith(pingBusy: pingBusy));
-      try {
-        final ms = await clash.delay(tag);
-        final nextDelay = Map<String, int>.from(_state.lastDelay)..[tag] = ms;
-        final nextBusy = Map<String, String>.from(_state.pingBusy)..[tag] = '';
-        _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
-      } catch (_) {
-        final nextDelay = Map<String, int>.from(_state.lastDelay)..[tag] = -1;
-        final nextBusy = Map<String, String>.from(_state.pingBusy)..[tag] = '';
-        _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
+    final busyMap = {for (final tag in nodes) tag: '…'};
+    _emit(_state.copyWith(lastDelay: <String, int>{}, pingBusy: busyMap));
+    _addDebug(DebugSource.app, 'Mass ping started (${nodes.length} nodes, concurrency=$_pingConcurrency)');
+
+    // Parallel ping with limited concurrency
+    var index = 0;
+    Future<void> worker() async {
+      while (true) {
+        final i = index++;
+        if (i >= nodes.length) break;
+        if (!_massPingRunning || _massPingEpoch != epoch || !_state.tunnelUp) break;
+        final tag = nodes[i];
+        try {
+          final ms = await clash.delay(tag);
+          if (_massPingEpoch != epoch) break;
+          final nextDelay = Map<String, int>.from(_state.lastDelay)..[tag] = ms;
+          final nextBusy = Map<String, String>.from(_state.pingBusy)..[tag] = '';
+          _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
+        } catch (_) {
+          if (_massPingEpoch != epoch) break;
+          final nextDelay = Map<String, int>.from(_state.lastDelay)..[tag] = -1;
+          final nextBusy = Map<String, String>.from(_state.pingBusy)..[tag] = '';
+          _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
+        }
       }
     }
+
+    final workers = List.generate(
+      _pingConcurrency.clamp(1, nodes.length),
+      (_) => worker(),
+    );
+    await Future.wait(workers);
 
     if (_massPingEpoch == epoch) {
       _massPingRunning = false;
