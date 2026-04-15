@@ -301,13 +301,56 @@ BoxVPN прошёл путь от MVP (один экран: Read config → Star
 
 ---
 
+## Этап 9: UX polish, Connections, Ping settings
+
+### Connections Screen
+- Тап на traffic bar → живой список соединений (destination, chain, network, duration).
+- Закрытие отдельного или всех соединений через Clash API.
+
+### UX Improvements
+- Sort icons: уникальная иконка для каждого режима + Z→A.
+- Long press пинг → настройки (URL, timeout).
+- Rebuild config кнопка (sync icon).
+- Config Editor: popup menu (paste/file/copy/share), drawer упрощён.
+- Stop button без красного — одинаковый стиль с Start.
+- Routing rules: title + dropdown на одной строке, SRS cloud icon.
+- App Groups: переименование внутри picker'а.
+- App picker: мгновенное открытие (100ms delay перед загрузкой).
+- URLTest: case-insensitive проверка, now в subtitle.
+- VPN revoke: полная остановка libbox + 10с таймаут на Stopping.
+
+---
+
+## Конкурентный анализ
+
+### Наши преимущества перед SFA / Hiddify / NekoBox / v2rayNG:
+- Multi-subscription в одних группах (у конкурентов один профиль = одна подписка)
+- App Groups с per-group outbound (у конкурентов только include/exclude)
+- Wizard template с auto-генерацией конфига
+- Profile-title/userinfo из HTTP заголовков
+- SRS download on-demand
+- Parallel mass ping (20)
+- Connections screen с live данными
+
+### Чего у конкурентов есть, а у нас нет:
+- QR code scan/generate (v2rayNG)
+- Auto-connect on boot (HappProxy)
+- WebDAV backup/sync (v2rayNG)
+- Built-in speed test (Hiddify)
+- Geo asset manager — geoip/geosite updates (SFA, NekoBox)
+
+---
+
 ## Что дальше (рекомендации)
 
 | Приоритет | Фича | Описание |
 |-----------|-------|----------|
 | Высокий | **Custom Nodes (018)** | Ручные ноды + override патчи, JSON editor, rename тегов |
-| Высокий | **Profile Management** | Сохранение/загрузка нескольких конфигов |
-| Средний | **Background Auto-update** | WorkManager для обновления подписок в фоне |
-| Средний | **Subscription Stats** | Отображение traffic quota из subscription-userinfo |
-| Низкий | **Onboarding Tour** | Пошаговый гайд для первого запуска |
+| Высокий | **Load Balance (019)** | PuerNya fork sing-box, per-connection round-robin |
+| Высокий | **QR Code scan/generate** | Scan proxy URI → add node; generate → share with friends |
+| Высокий | **Auto-connect on boot** | BootReceiver + always-on reconnect |
+| Средний | **Built-in speed test** | Download/upload Mbps через текущий прокси |
+| Средний | **Profile Management** | Сохранение/загрузка нескольких конфигов |
+| Средний | **WebDAV backup/sync** | Синхронизация настроек между устройствами |
 | Низкий | **Quick Settings Tile** | Android Quick Settings tile для Start/Stop |
+| Низкий | **Geo asset manager** | Обновление geoip/geosite баз |
