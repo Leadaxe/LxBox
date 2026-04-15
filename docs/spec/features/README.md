@@ -24,3 +24,4 @@
 | 014 | [`014 subscription detail view/`](014%20subscription%20detail%20view/) | Detail screen подписки с нодами, rename, delete | ✓ Реализовано |
 | 015 | [`015 rule outbound selection/`](015%20rule%20outbound%20selection/) | Выбор outbound для каждого правила, route.final | ✓ Реализовано |
 | 016 | [`016 routing screen/`](016%20routing%20screen/) | Отдельный экран Routing (groups + rules + outbounds) | ✓ Реализовано |
+| 017 | [`017 per app proxy/`](017%20per%20app%20proxy/) | App Routing Rules — per-app outbound с иконками | ✓ Реализовано |

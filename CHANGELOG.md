@@ -36,6 +36,36 @@
 - Routing добавлен в drawer навигации.
 - Long-press на заголовке Nodes теперь ведёт на Routing вместо Settings.
 
+### Added — App Routing Rules (Feature 017)
+- **App Rules**: именованные группы приложений с выбором outbound (direct/proxy/vpn-X).
+- Каждое правило генерирует sing-box routing rule с `package_name`.
+- **AppPickerScreen**: выбор приложений с иконками, поиск, select all, invert, clipboard import/export, show/hide system apps.
+- `QUERY_ALL_PACKAGES` permission для полного списка приложений на Android 11+.
+
+### Added — App Settings
+- **Отдельный экран App Settings**: выбор темы (Light / Dark / System).
+- ThemeNotifier с персистентностью через SharedPreferences.
+- Drawer: разделены "VPN Settings" (config vars) и "App Settings" (тема).
+
+### Changed — UX Improvements
+- **Start/Stop** — одна toggle кнопка вместо двух (зелёный Start / красный Stop).
+- **Get Free VPN** перенесён из главного экрана в Subscriptions (empty state).
+- **Mass Ping** — 20 параллельных пингов (было последовательно), сброс результатов при старте.
+- **Clash API**: рандомный порт (49152-65535) вместо 9090, секрет автогенерируется если пустой.
+- **Secret поля**: кнопка-глаз для toggle видимости.
+- **Portrait lock**: экран не поворачивается.
+- **Diagnostic snackbar**: показывает причину ошибки при неудачном Start.
+- **Empty config guard**: кнопка Start disabled если нет конфига.
+
+### Fixed
+- Outbound tag desync: `_makeUnique` менял `node.tag` но не `outbound['tag']` → дубли тегов при одинаковых именах нод.
+- `ACCESS_NETWORK_STATE` permission для DefaultNetworkMonitor.
+- `QUERY_ALL_PACKAGES` для полного списка приложений.
+- libbox 1.12.12 API: `LocalResolver` с `ExchangeContext`, `writeLog` override.
+- `serviceScope` вместо `GlobalScope` — structured concurrency, нет orphaned coroutines.
+- `startForeground` перед `stopSelf` в error paths.
+- TextEditingController leak в Settings (создавался в build без dispose).
+
 ### Fixed — Wizard template TUN inbound
 - **`inbounds` больше не пустой**: обязательный `tun` inbound (`tag: tun-in`), `auto_route`, MTU, `stack`.
 - **Совместимость с рабочими libbox-конфигами**: `address` — одна строка CIDR (не массив), по умолчанию `172.16.0.1/30`; MTU **1492**; `strict_route` по умолчанию **false** (true часто ломает трафик на Android).
