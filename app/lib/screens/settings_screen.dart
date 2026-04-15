@@ -210,11 +210,13 @@ class _VarTextField extends StatefulWidget {
 
 class _VarTextFieldState extends State<_VarTextField> {
   late final TextEditingController _ctrl;
+  bool _obscured = true;
 
   @override
   void initState() {
     super.initState();
     _ctrl = TextEditingController(text: widget.value);
+    _obscured = widget.obscure;
   }
 
   @override
@@ -237,12 +239,21 @@ class _VarTextFieldState extends State<_VarTextField> {
       width: widget.width,
       child: TextField(
         controller: _ctrl,
-        obscureText: widget.obscure,
+        obscureText: _obscured,
         style: const TextStyle(fontSize: 13),
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           isDense: true,
-          border: OutlineInputBorder(),
-          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          suffixIcon: widget.obscure
+              ? IconButton(
+                  icon: Icon(
+                    _obscured ? Icons.visibility_off : Icons.visibility,
+                    size: 18,
+                  ),
+                  onPressed: () => setState(() => _obscured = !_obscured),
+                )
+              : null,
         ),
         onChanged: widget.onChanged,
       ),

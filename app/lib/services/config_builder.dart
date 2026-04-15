@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/services.dart' show rootBundle;
 
@@ -45,6 +46,17 @@ class ConfigBuilder {
     final vars = <String, String>{};
     for (final v in template.vars) {
       vars[v.name] = userVars[v.name] ?? v.defaultValue;
+    }
+
+    // Ensure Clash API has a random high port and non-empty secret.
+    // Persist so values stay stable across regenerations.
+    if (_ensureClashApiDefaults(vars)) {
+      if (vars.containsKey('clash_api')) {
+        await SettingsStorage.setVar('clash_api', vars['clash_api']!);
+      }
+      if (vars.containsKey('clash_secret')) {
+        await SettingsStorage.setVar('clash_secret', vars['clash_secret']!);
+      }
     }
 
     onProgress?.call(0.1, 'Fetching subscriptions...');
@@ -185,6 +197,31 @@ class ConfigBuilder {
         }
       }
     }
+  }
+
+  /// Ensures Clash API uses a random high port and always has a secret.
+  /// Returns true if any value was changed (caller should persist).
+  static bool _ensureClashApiDefaults(Map<String, String> vars) {
+    final rng = Random.secure();
+    var changed = false;
+
+    // Random port in 49152-65535 if still default 9090
+    final currentApi = vars['clash_api'] ?? '127.0.0.1:9090';
+    if (currentApi == '127.0.0.1:9090' || currentApi.endsWith(':9090')) {
+      final port = 49152 + rng.nextInt(65535 - 49152);
+      vars['clash_api'] = '127.0.0.1:$port';
+      changed = true;
+    }
+
+    // Always generate secret if empty
+    final currentSecret = vars['clash_secret'] ?? '';
+    if (currentSecret.isEmpty) {
+      final bytes = List.generate(16, (_) => rng.nextInt(256));
+      vars['clash_secret'] = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      changed = true;
+    }
+
+    return changed;
   }
 
   /// Resolves a `@varName` reference to its typed value, or returns null
