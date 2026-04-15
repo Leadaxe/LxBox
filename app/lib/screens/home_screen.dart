@@ -13,6 +13,7 @@ import 'about_screen.dart';
 import 'config_screen.dart';
 import 'debug_screen.dart';
 import 'app_settings_screen.dart';
+import 'connections_screen.dart';
 import 'routing_screen.dart';
 import 'settings_screen.dart';
 import 'subscriptions_screen.dart';
@@ -347,7 +348,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final uptime = state.connectedSince != null
         ? _formatDuration(DateTime.now().difference(state.connectedSince!))
         : '';
-    return Padding(
+    return GestureDetector(
+      onTap: () {
+        final clash = _controller.clashClient;
+        if (clash != null) {
+          Navigator.push(context, MaterialPageRoute(
+            builder: (_) => ConnectionsScreen(clash: clash),
+          ));
+        }
+      },
+      child: Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Row(
         children: [
@@ -368,6 +378,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
         ],
       ),
+    ),
     );
   }
 

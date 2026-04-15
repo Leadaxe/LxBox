@@ -16,6 +16,7 @@ class HomeController extends ChangeNotifier {
   final BoxVpnClient _vpn = BoxVpnClient();
   StreamSubscription<Map<String, dynamic>>? _statusSub;
   ClashApiClient? _clash;
+  ClashApiClient? get clashClient => _clash;
   Timer? _heartbeat;
   int _heartbeatFailures = 0;
 

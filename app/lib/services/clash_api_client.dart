@@ -96,6 +96,31 @@ class ClashApiClient {
     if (r.statusCode != 200) throw ClashHttpException(r.statusCode, r.body);
   }
 
+  /// Fetches full connections list.
+  Future<Map<String, dynamic>> fetchConnections() async {
+    final r = await _http.get(_u('/connections'), headers: _headers).timeout(_timeout);
+    if (r.statusCode != 200) throw ClashHttpException(r.statusCode, r.body);
+    final j = jsonDecode(r.body);
+    if (j is! Map<String, dynamic>) throw const FormatException('connections: not an object');
+    return j;
+  }
+
+  /// Close a single connection by ID.
+  Future<void> closeConnection(String id) async {
+    final r = await _http.delete(_u('/connections/$id'), headers: _headers).timeout(_timeout);
+    if (r.statusCode != 204 && r.statusCode != 200) {
+      throw ClashHttpException(r.statusCode, r.body);
+    }
+  }
+
+  /// Close all connections.
+  Future<void> closeAllConnections() async {
+    final r = await _http.delete(_u('/connections'), headers: _headers).timeout(_timeout);
+    if (r.statusCode != 204 && r.statusCode != 200) {
+      throw ClashHttpException(r.statusCode, r.body);
+    }
+  }
+
   /// Fetches aggregate traffic from /connections.
   /// Falls back to summing per-connection upload/download if top-level totals
   /// are zero (some sing-box builds don't populate uploadTotal/downloadTotal).
