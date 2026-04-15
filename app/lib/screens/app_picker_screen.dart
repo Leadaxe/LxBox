@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -22,10 +22,11 @@ class AppPickerScreen extends StatefulWidget {
 }
 
 class _AppInfo {
-  _AppInfo({required this.packageName, required this.appName, required this.isSystem});
+  _AppInfo({required this.packageName, required this.appName, required this.isSystem, this.iconBytes});
   final String packageName;
   final String appName;
   final bool isSystem;
+  final Uint8List? iconBytes;
 }
 
 class _AppPickerScreenState extends State<AppPickerScreen> {
@@ -45,11 +46,19 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
 
   Future<void> _load() async {
     final apps = await _vpn.getInstalledApps();
-    final parsed = apps.map((m) => _AppInfo(
-          packageName: m['packageName'] as String? ?? '',
-          appName: m['appName'] as String? ?? '',
-          isSystem: m['isSystemApp'] as bool? ?? false,
-        )).toList()
+    final parsed = apps.map((m) {
+      final iconStr = m['icon'] as String? ?? '';
+      Uint8List? iconBytes;
+      if (iconStr.isNotEmpty) {
+        try { iconBytes = base64Decode(iconStr); } catch (_) {}
+      }
+      return _AppInfo(
+        packageName: m['packageName'] as String? ?? '',
+        appName: m['appName'] as String? ?? '',
+        isSystem: m['isSystemApp'] as bool? ?? false,
+        iconBytes: iconBytes,
+      );
+    }).toList()
       ..sort((a, b) => a.appName.toLowerCase().compareTo(b.appName.toLowerCase()));
 
     if (mounted) setState(() { _allApps = parsed; _loading = false; });
@@ -198,6 +207,9 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
                         }
                       });
                     },
+                    secondary: app.iconBytes != null
+                        ? Image.memory(app.iconBytes!, width: 36, height: 36, gaplessPlayback: true)
+                        : const Icon(Icons.android, size: 36),
                     title: Text(
                       app.appName,
                       maxLines: 1,

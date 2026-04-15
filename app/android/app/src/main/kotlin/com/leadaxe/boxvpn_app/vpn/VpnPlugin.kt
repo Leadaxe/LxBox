@@ -109,10 +109,26 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val pm = context.packageManager
                 val apps = pm.getInstalledApplications(0).map { info ->
                     val isSystem = (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+                    val iconBase64 = try {
+                        val drawable = pm.getApplicationIcon(info)
+                        val bitmap = if (drawable is android.graphics.drawable.BitmapDrawable) {
+                            drawable.bitmap
+                        } else {
+                            val bmp = android.graphics.Bitmap.createBitmap(48, 48, android.graphics.Bitmap.Config.ARGB_8888)
+                            val canvas = android.graphics.Canvas(bmp)
+                            drawable.setBounds(0, 0, 48, 48)
+                            drawable.draw(canvas)
+                            bmp
+                        }
+                        val stream = java.io.ByteArrayOutputStream()
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 80, stream)
+                        android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP)
+                    } catch (_: Exception) { "" }
                     mapOf(
                         "packageName" to info.packageName,
                         "appName" to (pm.getApplicationLabel(info)?.toString() ?: info.packageName),
                         "isSystemApp" to isSystem,
+                        "icon" to iconBase64,
                     )
                 }
                 result.success(apps)
