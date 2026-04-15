@@ -6,11 +6,18 @@ import 'node_parser.dart';
 import 'subscription_fetcher.dart';
 import 'xray_json_parser.dart';
 
+/// Result of loading nodes from a source — nodes + optional metadata.
+class LoadResult {
+  LoadResult({required this.nodes, this.profileTitle});
+  final List<ParsedNode> nodes;
+  final String? profileTitle;
+}
+
 /// Loads and processes nodes from a [ProxySource].
 class SourceLoader {
   SourceLoader._();
 
-  static Future<List<ParsedNode>> loadNodesFromSource(
+  static Future<LoadResult> loadNodesWithMeta(
     ProxySource source,
     Map<String, int> tagCounts, {
     void Function(double progress, String message)? onProgress,
@@ -19,6 +26,7 @@ class SourceLoader {
   }) async {
     final nodes = <ParsedNode>[];
     var count = 0;
+    String? profileTitle;
 
     if (source.source.isNotEmpty) {
       if (NodeParser.isSubscriptionURL(source.source)) {
@@ -27,7 +35,9 @@ class SourceLoader {
           'Downloading ${sourceIndex + 1}/$totalSources',
         );
 
-        final content = await SubscriptionFetcher.fetch(source.source);
+        final fetchResult = await SubscriptionFetcher.fetchWithMeta(source.source);
+        profileTitle = fetchResult.title;
+        final content = fetchResult.content;
         onProgress?.call(
           0.2 + sourceIndex * 0.5 / totalSources + 0.1 / totalSources,
           'Parsing ${sourceIndex + 1}/$totalSources',
@@ -102,7 +112,24 @@ class SourceLoader {
       } catch (_) {}
     }
 
-    return nodes;
+    return LoadResult(nodes: nodes, profileTitle: profileTitle);
+  }
+
+  /// Simple load — returns nodes only (backward compat).
+  static Future<List<ParsedNode>> loadNodesFromSource(
+    ProxySource source,
+    Map<String, int> tagCounts, {
+    void Function(double progress, String message)? onProgress,
+    int sourceIndex = 0,
+    int totalSources = 1,
+  }) async {
+    final result = await loadNodesWithMeta(
+      source, tagCounts,
+      onProgress: onProgress,
+      sourceIndex: sourceIndex,
+      totalSources: totalSources,
+    );
+    return result.nodes;
   }
 
   static void _applyPrefix(ParsedNode node, ProxySource source) {

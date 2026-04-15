@@ -163,16 +163,20 @@ class SubscriptionController extends ChangeNotifier {
       notifyListeners();
 
       final tagCounts = <String, int>{};
-      final nodes = await SourceLoader.loadNodesFromSource(
+      final result = await SourceLoader.loadNodesWithMeta(
         entry.source,
         tagCounts,
         sourceIndex: index,
         totalSources: _entries.length,
       );
-      entry.nodeCount = nodes.length;
+      entry.nodeCount = result.nodes.length;
       entry.source.lastUpdated = DateTime.now();
-      entry.source.lastNodeCount = nodes.length;
-      entry.status = '${nodes.length} nodes';
+      entry.source.lastNodeCount = result.nodes.length;
+      entry.status = '${result.nodes.length} nodes';
+      // Use profile-title from HTTP headers as default name if not set
+      if (entry.source.name.isEmpty && result.profileTitle != null) {
+        entry.source.name = result.profileTitle!;
+      }
       await _persistSources();
     } catch (e) {
       entry.status = 'Error: $e';
