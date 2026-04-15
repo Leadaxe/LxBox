@@ -8,11 +8,11 @@ export 'debug_entry.dart';
 export 'tunnel_status.dart';
 
 enum NodeSortMode {
-  defaultOrder('Default', Icons.format_list_numbered),
-  latencyAsc('Ping ↑', Icons.arrow_upward),
-  latencyDesc('Ping ↓', Icons.arrow_downward),
-  nameAsc('A → Z', Icons.text_rotate_vertical),
-  nameDesc('Z → A', Icons.text_rotation_down);
+  defaultOrder('Default', Icons.swap_vert),
+  latencyAsc('Ping ↑', Icons.signal_cellular_alt),
+  latencyDesc('Ping ↓', Icons.signal_cellular_alt_2_bar),
+  nameAsc('A → Z', Icons.sort_by_alpha),
+  nameDesc('Z → A', Icons.sort_by_alpha);
 
   const NodeSortMode(this.label, this.icon);
   final String label;
