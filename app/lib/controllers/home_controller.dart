@@ -366,16 +366,11 @@ class HomeController extends ChangeNotifier {
 
       String? initial = _state.selectedGroup;
       if (initial == null || !groups.contains(initial)) {
-        // Prefer proxy-out as default, then route.final, then first group
-        if (groups.contains('proxy-out')) {
-          initial = 'proxy-out';
+        final finalTag = ClashEndpoint.routeFinalTag(_state.configRaw);
+        if (finalTag != null && groups.contains(finalTag)) {
+          initial = finalTag;
         } else {
-          final finalTag = ClashEndpoint.routeFinalTag(_state.configRaw);
-          if (finalTag != null && groups.contains(finalTag)) {
-            initial = finalTag;
-          } else {
-            initial = groups.isNotEmpty ? groups.first : null;
-          }
+          initial = groups.isNotEmpty ? groups.first : null;
         }
       }
 

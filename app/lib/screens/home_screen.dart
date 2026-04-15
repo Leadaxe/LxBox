@@ -586,6 +586,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onActivate: () => unawaited(_controller.switchNode(tag)),
               onPing: () => unawaited(_controller.pingNode(tag)),
               onCopyJson: () => _copyNodeJson(tag, state),
+              urltestNow: ClashApiClient.urltestNow(state.proxiesJson, tag),
             );
           },
         ),

@@ -32,6 +32,7 @@ class ClashApiClient {
     return j;
   }
 
+  /// Returns tags of Selector groups only (excludes URLTest from dropdown).
   static List<String> selectorGroupTags(Map<String, dynamic> proxiesResponse) {
     final proxies = proxiesResponse['proxies'];
     if (proxies is! Map<String, dynamic>) return [];
@@ -40,11 +41,21 @@ class ClashApiClient {
       final v = e.value;
       if (v is! Map<String, dynamic>) continue;
       final t = v['type']?.toString() ?? '';
-      if ((t == 'Selector' || t == 'URLTest') && v['all'] is List) {
+      if (t == 'Selector' && v['all'] is List) {
         names.add(e.key);
       }
     }
     return names;
+  }
+
+  /// For a given node tag, if it's a URLTest group, returns its `now` (auto-selected node).
+  static String? urltestNow(Map<String, dynamic> proxiesResponse, String tag) {
+    final proxies = proxiesResponse['proxies'];
+    if (proxies is! Map<String, dynamic>) return null;
+    final v = proxies[tag];
+    if (v is! Map<String, dynamic>) return null;
+    if (v['type']?.toString() != 'URLTest') return null;
+    return v['now']?.toString();
   }
 
   static Map<String, dynamic>? proxyEntry(Map<String, dynamic> proxiesResponse, String tag) {

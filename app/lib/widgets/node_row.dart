@@ -17,6 +17,7 @@ class NodeRow extends StatelessWidget {
     required this.onActivate,
     required this.onPing,
     this.onCopyJson,
+    this.urltestNow,
   });
 
   final String tag;
@@ -30,9 +31,18 @@ class NodeRow extends StatelessWidget {
   final VoidCallback onActivate;
   final VoidCallback onPing;
   final VoidCallback? onCopyJson;
+  /// If this node is a URLTest group, shows which node it auto-selected.
+  final String? urltestNow;
 
   String get _subtitle {
     if (pingBusy) return 'PING…';
+    if (urltestNow != null) {
+      final base = '→ $urltestNow';
+      if (delay != null) {
+        return delay! < 0 ? '$base · ERR' : '$base · ${delay}MS';
+      }
+      return base;
+    }
     if (active) {
       if (delay != null) {
         return delay! < 0 ? 'ACTIVE · ERR' : 'ACTIVE · ${delay}MS';
