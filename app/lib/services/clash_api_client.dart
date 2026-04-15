@@ -54,7 +54,9 @@ class ClashApiClient {
     if (proxies is! Map<String, dynamic>) return null;
     final v = proxies[tag];
     if (v is! Map<String, dynamic>) return null;
-    if (v['type']?.toString() != 'URLTest') return null;
+    final type = v['type']?.toString() ?? '';
+    // Clash API may return "URLTest" or "urltest" depending on sing-box version
+    if (!type.toLowerCase().contains('urltest')) return null;
     return v['now']?.toString();
   }
 
