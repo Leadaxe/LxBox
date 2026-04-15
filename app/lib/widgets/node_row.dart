@@ -16,6 +16,7 @@ class NodeRow extends StatelessWidget {
     required this.onHighlight,
     required this.onActivate,
     required this.onPing,
+    this.onCopyJson,
   });
 
   final String tag;
@@ -28,6 +29,7 @@ class NodeRow extends StatelessWidget {
   final VoidCallback onHighlight;
   final VoidCallback onActivate;
   final VoidCallback onPing;
+  final VoidCallback? onCopyJson;
 
   String get _subtitle {
     if (pingBusy) return 'PING…';
@@ -99,12 +101,21 @@ class NodeRow extends StatelessWidget {
         ),
         const PopupMenuDivider(),
         PopupMenuItem<String>(
-          value: 'copy',
+          value: 'copy_name',
           child: ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.copy_outlined, size: 20),
             title: const Text('Copy name'),
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'copy_json',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.data_object, size: 20),
+            title: const Text('Copy outbound JSON'),
           ),
         ),
       ],
@@ -115,13 +126,15 @@ class NodeRow extends StatelessWidget {
         onPing();
       case 'activate':
         onActivate();
-      case 'copy':
+      case 'copy_name':
         await Clipboard.setData(ClipboardData(text: tag));
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Copied: $tag')),
           );
         }
+      case 'copy_json':
+        if (onCopyJson != null) onCopyJson!();
     }
   }
 

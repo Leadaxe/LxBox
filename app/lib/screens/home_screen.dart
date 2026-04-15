@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/home_state.dart';
+import '../services/clash_api_client.dart';
 import '../widgets/node_row.dart';
 import 'about_screen.dart';
 import 'config_screen.dart';
@@ -508,6 +511,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  void _copyNodeJson(String tag, HomeState state) {
+    final entry = ClashApiClient.proxyEntry(state.proxiesJson, tag);
+    if (entry == null) return;
+    final json = const JsonEncoder.withIndent('  ').convert(entry);
+    Clipboard.setData(ClipboardData(text: json));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Outbound JSON copied ($tag)')),
+      );
+    }
+  }
+
   Widget _buildNodeList(BuildContext context, HomeState state) {
     if (state.nodes.isEmpty) {
       final cs = Theme.of(context).colorScheme;
@@ -570,6 +585,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onHighlight: () => _controller.setHighlightedNode(tag),
               onActivate: () => unawaited(_controller.switchNode(tag)),
               onPing: () => unawaited(_controller.pingNode(tag)),
+              onCopyJson: () => _copyNodeJson(tag, state),
             );
           },
         ),
