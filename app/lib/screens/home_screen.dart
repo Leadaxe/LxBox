@@ -9,6 +9,7 @@ import '../widgets/node_row.dart';
 import 'about_screen.dart';
 import 'config_screen.dart';
 import 'debug_screen.dart';
+import 'app_settings_screen.dart';
 import 'routing_screen.dart';
 import 'settings_screen.dart';
 import 'subscriptions_screen.dart';
@@ -117,12 +118,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
             ListTile(
               leading: const Icon(Icons.tune_outlined),
-              title: const Text('Settings'),
+              title: const Text('VPN Settings'),
               subtitle: const Text('Config variables'),
               onTap: () => _pushRoute(SettingsScreen(
                 subController: _subController,
                 homeController: _controller,
               )),
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings_outlined),
+              title: const Text('App Settings'),
+              subtitle: const Text('Theme, appearance'),
+              onTap: () => _pushRoute(const AppSettingsScreen()),
             ),
             const Divider(),
             ExpansionTile(
