@@ -269,8 +269,8 @@
   "selectable_rules": [
     {
       "label": "Block Ads",
-      "description": "Reject ad-related connections.",
-      "default": true,
+      "description": "Reject ad-related connections. Downloads rule set (~1 MB).",
+      "default": false,
       "rule_set": [
         { "tag": "ads-all", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-category-ads-all.srs" }
       ],

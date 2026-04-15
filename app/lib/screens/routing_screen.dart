@@ -6,6 +6,7 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/parser_config.dart';
 import '../services/config_builder.dart';
+import '../services/rule_set_downloader.dart';
 import '../services/settings_storage.dart';
 import 'app_picker_screen.dart';
 
@@ -32,6 +33,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
   final _appRules = <AppRule>[];
   bool _loading = true;
   bool _dirty = false;
+  final _downloadingRules = <String>{}; // labels of rules currently downloading SRS
 
   @override
   void initState() {
@@ -222,19 +224,28 @@ class _RoutingScreenState extends State<RoutingScreen> {
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      leading: Switch(
-        value: isEnabled,
-        onChanged: (val) {
-          setState(() {
-            if (val) {
-            _enabledRules.add(rule.label);
-          } else {
-            _enabledRules.remove(rule.label);
-          }
-            _dirty = true;
-          });
-        },
-      ),
+      leading: _downloadingRules.contains(rule.label)
+          ? const SizedBox(width: 48, height: 48, child: Padding(
+              padding: EdgeInsets.all(12),
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ))
+          : Switch(
+              value: isEnabled,
+              onChanged: (val) {
+                if (val && rule.ruleSets.isNotEmpty) {
+                  _enableRuleWithDownload(rule);
+                } else {
+                  setState(() {
+                    if (val) {
+                      _enabledRules.add(rule.label);
+                    } else {
+                      _enabledRules.remove(rule.label);
+                    }
+                    _dirty = true;
+                  });
+                }
+              },
+            ),
       title: Text(rule.label),
       subtitle: rule.description.isNotEmpty
           ? Text(rule.description, style: const TextStyle(fontSize: 12))
@@ -294,6 +305,40 @@ class _RoutingScreenState extends State<RoutingScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _enableRuleWithDownload(SelectableRule rule) async {
+    setState(() => _downloadingRules.add(rule.label));
+
+    // Pre-download all remote SRS rule sets for this rule
+    var allOk = true;
+    for (final rs in rule.ruleSets) {
+      final tag = rs['tag'] as String?;
+      final url = rs['url'] as String?;
+      if (tag == null || url == null || rs['type'] != 'remote') continue;
+      final path = await RuleSetDownloader.ensureCached(tag, url);
+      if (path == null) {
+        allOk = false;
+      }
+    }
+
+    if (!mounted) return;
+
+    if (allOk) {
+      setState(() {
+        _enabledRules.add(rule.label);
+        _downloadingRules.remove(rule.label);
+        _dirty = true;
+      });
+    } else {
+      setState(() => _downloadingRules.remove(rule.label));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to download rule sets for "${rule.label}". Check internet.'),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
   }
 
   void _addAppRule() {
