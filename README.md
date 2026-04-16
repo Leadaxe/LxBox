@@ -1,73 +1,268 @@
 # BoxVPN
 
-Android VPN-клиент на базе **sing-box**. Репозиторий: [github.com/Leadaxe/BoxVPN](https://github.com/Leadaxe/BoxVPN).
+Android VPN client powered by [sing-box](https://sing-box.sagernet.org/). Multi-subscription, smart routing, built-in speed test.
 
-## Возможности
+**[Download latest release](https://github.com/Leadaxe/BoxVPN/releases/latest)**
 
-### Подписки
-- Добавление по URL или direct link (VLESS, VMess, Trojan, SS, Hysteria2, SSH, SOCKS, WireGuard)
-- Форматы: Base64, Xray JSON Array (с chained proxy/jump), plain text
-- Auto-refresh по интервалу при старте VPN
-- Profile-title и subscription-userinfo из HTTP заголовков
-- Detail screen: список нод, трафик/лимит, expire, support link
-- Quick Start: встроенный пресет бесплатных подписок
+---
 
-### VPN и управление
-- Нативный VPN-сервис (без сторонних плагинов, structured concurrency)
-- Start/Stop одной toggle кнопкой
-- Clash API: выбор группы (Selector), список узлов, переключение
-- Mass Ping: 20 параллельных пингов со сбросом
-- URLTest группы показывают auto-selected ноду
-- Connections screen: живой список соединений, закрытие
+## Screenshots
+
+<p align="center">
+<img src="docs/screenshots/home.png" width="240" alt="Home Screen"/>
+<img src="docs/screenshots/routing.png" width="240" alt="Routing"/>
+<img src="docs/screenshots/statistics.png" width="240" alt="Statistics"/>
+</p>
+<p align="center">
+<img src="docs/screenshots/speed_test.png" width="240" alt="Speed Test"/>
+<img src="docs/screenshots/dns_settings.png" width="240" alt="DNS Settings"/>
+<img src="docs/screenshots/vpn_settings.png" width="240" alt="VPN Settings"/>
+</p>
+<p align="center">
+<img src="docs/screenshots/app_picker.png" width="240" alt="App Picker"/>
+<img src="docs/screenshots/app_settings.png" width="240" alt="App Settings"/>
+<img src="docs/screenshots/config_editor.png" width="240" alt="Config Editor"/>
+</p>
+
+---
+
+## Features
+
+### Subscriptions
+- Add subscriptions by URL or direct proxy link
+- Supported protocols: **VLESS, VMess, Trojan, Shadowsocks, Hysteria2, SSH, SOCKS, WireGuard**
+- Formats: Base64, Xray JSON Array (with chained proxy/jump), plain text
+- **Enable/disable** individual subscriptions without deleting
+- Auto-refresh on VPN start (configurable interval)
+- Profile title and traffic stats from HTTP headers (subscription-userinfo)
+- Subscription detail: node list, traffic quota bar, expiry date, support/web links
+- **Offline caching**: subscriptions cached on disk, work without internet
+- Quick Start: built-in free VPN preset
+- Telegram support links open natively
+
+### Home Screen
+- **Start/Stop** VPN with one button
+- Group selector (proxy-out, auto-proxy-out, vpn-1, vpn-2)
+- Node list sorted by **Ping**, **A-Z**, or **Default** order
+- Active node highlighted with checkmark
+- Traffic bar: upload/download speed, connection count, uptime
+- Tap traffic bar to open **Statistics**
+- **Mass Ping**: parallel ping all nodes (20 concurrent)
+- Long press ping button for **Ping Settings** with URL presets (Google, Cloudflare, Apple, Firefox, Yandex)
+
+### Node Filter (auto-proxy-out)
+- Full node list from proxy-out with checkboxes
+- Checked nodes included in auto-proxy-out (urltest)
+- Unchecked nodes excluded from auto selection but remain in manual selector
+- Search, Select All / Deselect All
+- Reads from config (offline, instant)
 
 ### Routing
-- Отдельный экран Routing: Proxy Groups + Routing Rules + App Groups
-- Выбор outbound для каждого правила (direct/proxy/auto/vpn-X)
-- App Groups: именованные группы приложений с outbound (per-app routing через sing-box)
-- Route.final: настройка fallback трафика
-- SRS rule sets: скачивание при включении, graceful fallback
+- **Proxy Groups**: enable/disable preset groups (Auto Proxy, Proxy, VPN 1, VPN 2)
+- **Routing Rules**: Block Ads, Russian domains direct, Russia-only services, BitTorrent direct, Private IPs direct
+- Per-rule **outbound selection** (direct/proxy/auto/vpn-X)
+- **App Groups**: named groups of apps routed through chosen outbound
+  - App picker with icons, search, select all/invert, clipboard import/export
+- **Default traffic** (route.final): fallback outbound for unmatched traffic
+- All changes **autosaved** (no Apply button)
 
-### Настройки
-- **VPN Settings**: MTU, packet sniffing, preferred IP, TUN stack, log level, Clash API
-- **App Settings**: тема (Light / Dark / System)
-- Clash API: рандомный порт, автогенерация секрета
-- Portrait lock
+### DNS Settings
+- **16 DNS server presets**: Cloudflare (UDP/DoT/DoH), Google (UDP/DoT/DoH), Yandex (UDP/Safe/Family/DoT/DoH), Quad9, AdGuard, via-VPN variants
+- Enable/disable servers with switches
+- Add custom servers via JSON editor
+- **DNS Strategy**: prefer_ipv4 / prefer_ipv6 / ipv4_only / ipv6_only
+- **Independent cache** toggle
+- **DNS Rules** editor (JSON)
+- **DNS Final** and **Default Domain Resolver** dropdowns from enabled servers
+- All presets defined in `wizard_template.json` (single source of truth)
 
-## Быстрый старт
+### VPN Settings
+- Log level (warn/info/debug/trace)
+- Clash API address and secret (auto-generated)
+- Resolve strategy
+- Auto-detect interface
+- Packet sniffing
+- **URLTest URL** — endpoint for auto-proxy latency testing
+- **URLTest interval** — how often to test (e.g. 5m)
+- **URLTest tolerance** — minimum latency difference to switch (ms)
+- TUN address, MTU, strict route, TUN stack
+- All changes autosaved
 
+### Speed Test
+- **4 parallel download streams** (configurable: 1/4/10)
+- **Real-time** speed updates every 500ms
+- Ping: 5 measurements, trimmed mean
+- Server selection: **Cloudflare, Hetzner (EU), OVH (EU), Yandex (RU)**
+- Shows current proxy or "Direct" indicator
+- **Session history** (last 10 tests, persists while app is running)
+- All settings from `wizard_template.json`
+
+### Statistics
+- Total upload/download and connection count
+- **Traffic by Outbound**: expandable cards per proxy node
+- Each connection: host:port, protocol (TCP/UDP), rule, traffic, duration, chain
+- Tap **Connections** counter to open full connection list with close buttons
+
+### App Settings
+- Theme: **System / Light / Dark**
+- **Auto-start on boot**: VPN starts when device boots
+- **Keep VPN on exit**: VPN stays active when app is swiped away
+
+### Config Editor
+- View and edit raw sing-box JSON config
+- Pretty-printed display
+- Save, paste from clipboard, load from file
+
+---
+
+## Architecture
+
+```
+wizard_template.json          <- Single source of truth for all defaults
+    |
+    +-- dns_options            (16 DNS servers + rules)
+    +-- ping_options           (URL, timeout, presets)
+    +-- speed_test_options     (servers, streams, ping URLs)
+    +-- preset_groups          (proxy groups: auto/selector/vpn)
+    +-- vars                   (all config variables)
+    +-- selectable_rules       (routing rules with SRS)
+    +-- config                 (sing-box config skeleton)
+
+boxvpn_settings.json          <- User overrides (SharedPreferences)
+    |
+    +-- vars                   (user-changed variables)
+    +-- proxy_sources          (subscriptions)
+    +-- dns_options            (user DNS server/rule changes)
+    +-- enabled_rules          (routing rule toggles)
+    +-- excluded_nodes         (node filter)
+    +-- app_rules              (per-app routing)
+
+ConfigBuilder.generateConfig()
+    |
+    1. Load wizard_template
+    2. Substitute @vars
+    3. Load & parse subscriptions (with disk cache fallback)
+    4. Filter excluded nodes (urltest only)
+    5. Build preset groups
+    6. Apply routing rules
+    7. Apply DNS servers & rules
+    8. Cache remote SRS rule sets
+    9. Output sing-box JSON
+```
+
+### Tech Stack
+- **Flutter** (Dart 3.11+), Material 3
+- **sing-box** native library (libbox 1.12.12 via JitPack)
+- **Clash API** for real-time proxy management
+- Gradle Kotlin DSL, AGP 8.11.1, Kotlin 2.2.20, Java 17
+
+### Project Structure
+```
+app/
+  lib/
+    controllers/        HomeController, SubscriptionController
+    models/             HomeState, ProxySource, ParsedNode, WizardTemplate
+    screens/            12 screens (home, routing, subscriptions, DNS, speed test, etc.)
+    services/           ConfigBuilder, SourceLoader, ClashApiClient, UrlLauncher, etc.
+    widgets/            NodeRow
+    vpn/                BoxVpnClient (MethodChannel/EventChannel)
+  android/
+    app/src/main/kotlin/
+      vpn/              VpnPlugin, BoxVpnService, ConfigManager
+      MainActivity.kt   MethodChannel for URL opening
+  assets/
+    wizard_template.json
+    get_free.json
+```
+
+---
+
+## Build
+
+### Prerequisites
+- Flutter SDK 3.41+
+- Java 17 (Temurin)
+- Android SDK with platforms 34-36, build-tools 35, NDK 28
+
+### Local build
 ```bash
 cd app
 flutter pub get
-flutter run
+flutter build apk --release
 ```
 
-На главном экране: drawer → **Subscriptions** → **Get Free VPN** → Start.
+### CI/CD
+GitHub Actions workflow supports:
 
-## Документация
+| Trigger | What happens |
+|---------|-------------|
+| Push to `main` | Checks only (analyze + test) |
+| Push tag `v*` | Checks + Build APK + GitHub Release (draft) |
+| Manual `run_mode=build` | Checks + Build APK |
+| Manual `run_mode=release` | Checks + Build APK + GitHub Release |
 
-| Документ | Описание |
-|----------|----------|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Архитектура: пакеты, потоки данных, native код |
-| [`docs/BUILD.md`](docs/BUILD.md) | Сборка, CI, подпись APK |
-| [`docs/DEVELOPMENT_REPORT.md`](docs/DEVELOPMENT_REPORT.md) | Полная история разработки |
-| [`CHANGELOG.md`](CHANGELOG.md) | Список изменений |
-| [`docs/spec/features/`](docs/spec/features/) | Спецификации всех фич |
+```bash
+# Stable release
+git tag v1.2.0
+git push origin v1.2.0
 
-### Фичи
+# Manual build
+gh workflow run CI --repo Leadaxe/BoxVPN -f run_mode=build
 
-| # | Фича | Статус |
-|---|-------|--------|
-| 001–010 | MVP → Quick Start | Реализовано |
-| 011 | Local Rule Set Cache | Реализовано |
-| 012 | Xray JSON Array + Chained Proxy | Реализовано |
-| 013 | Native VPN Service | Реализовано |
-| 014 | Subscription Detail View | Реализовано |
-| 015 | Rule Outbound Selection | Реализовано |
-| 016 | Routing Screen | Реализовано |
-| 017 | App Groups (Per-App Outbound) | Реализовано |
-| 018 | Custom Nodes (Manual + Override) | Спека |
-| 019 | Load Balance (PuerNya fork) | Спека |
+# Manual release
+gh workflow run CI --repo Leadaxe/BoxVPN -f run_mode=release
+```
 
-## Лицензия
+---
 
-Уточнится при первом релизе.
+## Supported Protocols
+
+| Protocol | URI scheme | Transport |
+|----------|-----------|-----------|
+| VLESS | `vless://` | TCP, WebSocket, gRPC, H2, REALITY |
+| VMess | `vmess://` (v2rayN base64) | TCP, WebSocket, gRPC, H2 |
+| Trojan | `trojan://` | TCP, WebSocket, gRPC |
+| Shadowsocks | `ss://` (SIP002 + legacy) | TCP, UDP |
+| Hysteria2 | `hy2://` / `hysteria2://` | QUIC |
+| SSH | `ssh://` | TCP |
+| SOCKS | `socks://` / `socks5://` | TCP |
+| WireGuard | `wireguard://` | UDP |
+
+---
+
+## Feature Specs
+
+| # | Feature | Status |
+|---|---------|--------|
+| 001-012 | MVP through Xray JSON Array | Done |
+| 013 | Native VPN Service | Done |
+| 014 | Subscription Detail View | Done |
+| 015 | Rule Outbound Selection | Done |
+| 016 | Routing Screen | Done |
+| 017 | Per-App Proxy (Split Tunneling) | Done |
+| 018 | Custom Nodes (Manual + Override) | Spec |
+| 019 | Load Balance | Spec |
+| 020 | Multi-hop / Chained Proxy UI | Spec |
+| 021 | Speed Test | Done |
+| 022 | Node Filter | Done |
+| 023 | Auto-connect on Boot | Done |
+| 024 | Statistics & Connections | Done |
+| 025 | DNS Settings | Done |
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture, data flows, native code |
+| [`docs/BUILD.md`](docs/BUILD.md) | Build instructions, CI, APK signing |
+| [`docs/DEVELOPMENT_REPORT.md`](docs/DEVELOPMENT_REPORT.md) | Full development history (10 stages) |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release changelog |
+| [`docs/spec/features/`](docs/spec/features/) | Feature specifications (025 specs) |
+
+---
+
+## License
+
+TBD
