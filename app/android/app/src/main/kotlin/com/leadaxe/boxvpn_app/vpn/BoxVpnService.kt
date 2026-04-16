@@ -25,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -155,12 +156,38 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     // Start / stop sing-box
     // -------------------------------------------------------------------------
 
+    /** Force-close any leftover libbox resources from a previous run (e.g. after onRevoke). */
+    private fun cleanupStaleResources() {
+        boxService?.let { svc ->
+            Log.w(TAG, "cleanupStaleResources: closing leftover boxService")
+            runCatching { svc.close() }
+            runCatching { Seq.destroyRef(svc.refnum) }
+            boxService = null
+        }
+        commandServer?.let { cs ->
+            Log.w(TAG, "cleanupStaleResources: closing leftover commandServer")
+            cs.setService(null)
+            runCatching { cs.close() }
+            runCatching { Seq.destroyRef(cs.refnum) }
+            commandServer = null
+        }
+        fileDescriptor?.let { fd ->
+            Log.w(TAG, "cleanupStaleResources: closing leftover fileDescriptor")
+            runCatching { fd.close() }
+            fileDescriptor = null
+        }
+    }
+
     private suspend fun startSingbox() {
         val config = ConfigManager.load()
         if (config.isBlank() || config == "{}") {
             stopAndAlert("Empty configuration")
             return
         }
+
+        cleanupStaleResources()
+        // Give OS time to release the port after closing stale resources
+        delay(500)
 
         DefaultNetworkMonitor.start(serviceScope)
         Libbox.setMemoryLimit(true)
