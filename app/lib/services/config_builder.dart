@@ -170,11 +170,22 @@ class ConfigBuilder {
       return enabledGroupTags.contains(p.tag);
     }).toList();
 
-    // Build known tags for validation
+    // First pass: determine which groups will actually be emitted (non-empty)
+    final emittedGroupTags = <String>{};
+    for (final preset in activePresets) {
+      final nodeTags = preset.type == 'urltest' && excludedNodes.isNotEmpty
+          ? allNodeTags.where((t) => !excludedNodes.contains(t)).toList()
+          : allNodeTags;
+      if (nodeTags.isNotEmpty || preset.type != 'urltest') {
+        emittedGroupTags.add(preset.tag);
+      }
+    }
+
+    // Build known tags for validation — only include groups that will be emitted
     final knownTags = <String>{
       'direct-out',
       ...allNodeTags,
-      ...activePresets.map((p) => p.tag),
+      ...emittedGroupTags,
     };
 
     for (final preset in activePresets) {
@@ -186,8 +197,7 @@ class ConfigBuilder {
         ...nodeTags,
         ...preset.addOutbounds.where(knownTags.contains),
       ];
-      // Always emit groups — sing-box needs them for dependency resolution.
-      // For selector groups, add direct-out as fallback. For urltest, skip if empty.
+      // Skip empty urltest; for others add direct-out fallback
       if (tags.isEmpty) {
         if (preset.type == 'urltest') continue;
         tags.add('direct-out');
