@@ -199,14 +199,14 @@ BoxVPN прошёл путь от MVP (один экран: Read config → Star
 
 | Категория | Файлов | Примерно строк |
 |-----------|--------|----------------|
-| Controllers | 2 | ~650 |
-| Models | 6 | ~430 |
-| Screens | 5 | ~1200 |
-| Services | 8 | ~1800 |
+| Controllers | 2 | ~700 |
+| Models | 6 | ~450 |
+| Screens | 12 | ~2500 |
+| Services | 10 | ~2100 |
 | Config | 2 | ~100 |
-| Widgets | 1 | ~200 |
+| Widgets | 1 | ~150 |
 | Assets | 2 | ~310 |
-| **Итого (lib/)** | **25** | **~4400** |
+| **Итого (lib/)** | **35** | **~6300** |
 
 ### Документация
 
@@ -321,36 +321,91 @@ BoxVPN прошёл путь от MVP (один экран: Read config → Star
 
 ---
 
+## Этап 10: UX overhaul, Speed Test, Node Filter, Subscription Toggles (16 апреля 2026)
+
+### Autosave вместо Apply
+- **Routing Screen** — убрана кнопка Apply, автосохранение с debounce 500мс.
+- **VPN Settings** — аналогично.
+- **Subscriptions** — убрана кнопка "Generate Config", конфиг пересобирается при выходе с экрана.
+
+### Subscription Management
+- **Enable/Disable** — switch на каждой подписке. Отключённые не попадают в конфиг и не фетчатся при обновлении.
+- **Long-press context menu** — Copy URL, Update, Delete с подтверждением.
+- **Telegram иконка** — `Icons.telegram` с фирменным синим (#2AABEE) рядом с заголовком подписки.
+- **Ссылки открываются** через Intent.ACTION_VIEW (не копируются в буфер).
+- **Subscription detail** — без автозагрузки при открытии, refresh по кнопке.
+- **Кэширование подписок на диск** — при ошибке сети используются закэшированные данные, nodeCount не обнуляется.
+
+### Node Filter (Spec 022)
+- Экран с чекбоксами нод — include/exclude из конфига.
+- Читает ноды из configRaw (offline, мгновенно).
+- Кнопка "Manage Nodes" внизу экрана подписок.
+- Select All / Deselect All, поиск, счётчик.
+- Исключённые теги хранятся в settings, новые ноды включены по умолчанию.
+
+### Speed Test (Spec 021)
+- 4 параллельных потока download (streamed response).
+- Real-time обновление скорости каждые 500мс.
+- Ping: 5 замеров, trimmed mean, fallback серверы.
+- **Настройки**: выбор сервера (Cloudflare, Hetzner, OVH, Yandex), количество потоков (1/4/10).
+- Proxy индикатор — показывает через какой прокси идёт тест или "Direct".
+- История за сессию — до 10 записей, не хранится между запусками.
+
+### Statistics Screen
+- Outbound-карточки раскрываются по тапу → список соединений с деталями.
+- Каждое соединение: host:port, протокол, rule, трафик, длительность, chain.
+- Клик на Connections → полноценный ConnectionsScreen с возможностью закрытия.
+
+### Сортировка нод
+- 3 режима: Default (↕), Ping (signal), A–Z (sort_by_alpha).
+- Убраны Ping↓ и Z→A для простоты.
+
+### Прочие улучшения
+- **App picker** — задержка 300мс, иконка карандаша для rename title.
+- **Ping settings** — long press работает корректно (убран конфликт с Tooltip).
+- **Node context menu** — убран пункт "Copy name", оставлен "Copy outbound JSON".
+- **UrlLauncher** — вынесен в отдельный сервис, убрано дублирование.
+- **Android MainActivity** — MethodChannel для открытия URL через Intent.
+- **Stop VPN on app swipe** + keep on exit setting.
+
+---
+
 ## Конкурентный анализ
 
 ### Наши преимущества перед SFA / Hiddify / NekoBox / v2rayNG:
 - Multi-subscription в одних группах (у конкурентов один профиль = одна подписка)
+- Enable/disable подписок без удаления
+- Node filter — включение/исключение отдельных нод
 - App Groups с per-group outbound (у конкурентов только include/exclude)
 - Wizard template с auto-генерацией конфига
 - Profile-title/userinfo из HTTP заголовков
 - SRS download on-demand
 - Parallel mass ping (20)
-- Connections screen с live данными
+- Built-in speed test с настройками серверов и потоков
+- Statistics с drill-down по соединениям
+- Connections screen с live данными и закрытием
+- Subscription caching — работа offline
+- Autosave — без кнопок Apply
 
 ### Чего у конкурентов есть, а у нас нет:
 - QR code scan/generate (v2rayNG)
-- Auto-connect on boot (HappProxy)
 - WebDAV backup/sync (v2rayNG)
-- Built-in speed test (Hiddify)
 - Geo asset manager — geoip/geosite updates (SFA, NekoBox)
+- Multi-hop / chained proxy UI (Hiddify)
+- Export/import settings
 
 ---
 
 ## Что дальше (рекомендации)
 
-| Приоритет | Фича | Описание |
-|-----------|-------|----------|
-| Высокий | **Custom Nodes (018)** | Ручные ноды + override патчи, JSON editor, rename тегов |
-| Высокий | **Load Balance (019)** | PuerNya fork sing-box, per-connection round-robin |
-| Высокий | **QR Code scan/generate** | Scan proxy URI → add node; generate → share with friends |
-| Высокий | **Auto-connect on boot** | BootReceiver + always-on reconnect |
-| Средний | **Built-in speed test** | Download/upload Mbps через текущий прокси |
-| Средний | **Profile Management** | Сохранение/загрузка нескольких конфигов |
-| Средний | **WebDAV backup/sync** | Синхронизация настроек между устройствами |
-| Низкий | **Quick Settings Tile** | Android Quick Settings tile для Start/Stop |
-| Низкий | **Geo asset manager** | Обновление geoip/geosite баз |
+| Приоритет | Фича | Спека | Описание |
+|-----------|-------|-------|----------|
+| Высокий | **Custom Nodes (018)** | ✓ | Ручные ноды + override патчи, JSON editor, rename тегов |
+| Высокий | **Load Balance (019)** | ✓ | PuerNya fork sing-box, per-connection round-robin |
+| Высокий | **Multi-hop / Chained Proxy (020)** | ✓ | UI для цепочек прокси |
+| Высокий | **QR Code scan/generate** | — | Scan proxy URI → add node; generate → share |
+| Средний | **Export/Import settings** | — | Бэкап/восстановление настроек, подписок |
+| Средний | **Profile Management** | — | Сохранение/загрузка нескольких конфигов |
+| Средний | **WebDAV backup/sync** | — | Синхронизация настроек между устройствами |
+| Низкий | **Quick Settings Tile** | — | Android Quick Settings tile для Start/Stop |
+| Низкий | **Geo asset manager** | — | Обновление geoip/geosite баз |
