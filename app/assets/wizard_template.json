@@ -66,9 +66,9 @@
       "label": "Auto Proxy",
       "default_enabled": true,
       "options": {
-        "url": "https://cp.cloudflare.com/generate_204",
-        "interval": "5m",
-        "tolerance": 100,
+        "url": "@urltest_url",
+        "interval": "@urltest_interval",
+        "tolerance": "@urltest_tolerance",
         "interrupt_exist_connections": true
       },
       "add_outbounds": []
@@ -160,6 +160,31 @@
       "wizard_ui": "edit",
       "title": "Packet sniffing",
       "tooltip": "Analyze packets to detect protocol and domain. Recommended for accurate routing."
+    },
+    { "separator": true },
+    {
+      "name": "urltest_url",
+      "type": "text",
+      "default_value": "https://cp.cloudflare.com/generate_204",
+      "wizard_ui": "edit",
+      "title": "URLTest URL",
+      "tooltip": "URL used to test proxy latency in auto-proxy-out group."
+    },
+    {
+      "name": "urltest_interval",
+      "type": "text",
+      "default_value": "5m",
+      "wizard_ui": "edit",
+      "title": "URLTest interval",
+      "tooltip": "How often to test proxies (e.g. 1m, 5m, 30s)."
+    },
+    {
+      "name": "urltest_tolerance",
+      "type": "text",
+      "default_value": "100",
+      "wizard_ui": "edit",
+      "title": "URLTest tolerance (ms)",
+      "tooltip": "Switch proxy only if latency difference exceeds this value."
     },
     { "separator": true },
     {
