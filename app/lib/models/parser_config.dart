@@ -7,6 +7,8 @@ class WizardTemplate {
     required this.config,
     required this.selectableRules,
     required this.dnsOptions,
+    required this.pingOptions,
+    required this.speedTestOptions,
   });
 
   final ParserConfigBlock parserConfig;
@@ -15,6 +17,8 @@ class WizardTemplate {
   final Map<String, dynamic> config;
   final List<SelectableRule> selectableRules;
   final Map<String, dynamic> dnsOptions;
+  final Map<String, dynamic> pingOptions;
+  final Map<String, dynamic> speedTestOptions;
 
   factory WizardTemplate.fromJson(Map<String, dynamic> json) {
     final pcJson = json['parser_config'] as Map<String, dynamic>? ?? {};
@@ -37,6 +41,8 @@ class WizardTemplate {
       selectableRules:
           rulesJson.map((e) => SelectableRule.fromJson(e as Map<String, dynamic>)).toList(),
       dnsOptions: json['dns_options'] as Map<String, dynamic>? ?? {},
+      pingOptions: json['ping_options'] as Map<String, dynamic>? ?? {},
+      speedTestOptions: json['speed_test_options'] as Map<String, dynamic>? ?? {},
     );
   }
 }

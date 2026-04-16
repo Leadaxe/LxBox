@@ -31,6 +31,34 @@
     ]
   },
 
+  "ping_options": {
+    "url": "https://www.gstatic.com/generate_204",
+    "timeout_ms": 5000,
+    "presets": [
+      {"name": "Google 204", "url": "https://www.gstatic.com/generate_204"},
+      {"name": "Cloudflare", "url": "https://cp.cloudflare.com/"},
+      {"name": "Apple", "url": "https://captive.apple.com/hotspot-detect.html"},
+      {"name": "Firefox", "url": "https://detectportal.firefox.com/canonical.html"},
+      {"name": "Yandex", "url": "https://ya.ru/"}
+    ]
+  },
+
+  "speed_test_options": {
+    "servers": [
+      {"name": "Cloudflare", "download_url": "https://speed.cloudflare.com/__down?bytes=25000000", "upload_url": "https://speed.cloudflare.com/__up"},
+      {"name": "Hetzner (EU)", "download_url": "https://speed.hetzner.de/10MB.bin"},
+      {"name": "OVH (EU)", "download_url": "https://proof.ovh.net/files/10Mb.dat"},
+      {"name": "Yandex (RU)", "download_url": "https://cdn.yandex.net/speed/1MB"}
+    ],
+    "stream_options": [1, 4, 10],
+    "default_streams": 4,
+    "ping_urls": [
+      "https://www.gstatic.com/generate_204",
+      "https://cp.cloudflare.com/",
+      "https://detectportal.firefox.com/canonical.html"
+    ]
+  },
+
   "preset_groups": [
     {
       "tag": "auto-proxy-out",

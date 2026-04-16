@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../controllers/home_controller.dart';
+import '../services/config_builder.dart';
 
 class SpeedTestScreen extends StatefulWidget {
   const SpeedTestScreen({super.key, required this.homeController});
@@ -33,13 +34,6 @@ class _SpeedTestResult {
   final bool vpnEnabled;
 }
 
-class _SpeedTestServer {
-  const _SpeedTestServer({required this.name, required this.downloadUrl, this.uploadUrl});
-  final String name;
-  final String downloadUrl;
-  final String? uploadUrl;
-}
-
 /// Session-scoped history — survives screen close, cleared on app restart.
 final _sessionHistory = <_SpeedTestResult>[];
 
@@ -52,35 +46,43 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
   double _progress = 0;
   List<_SpeedTestResult> get _history => _sessionHistory;
   int _streams = 4;
-  int _selectedServer = 0; // index into _servers
+  int _selectedServer = 0;
 
-  static const _servers = [
-    _SpeedTestServer(
-      name: 'Cloudflare',
-      downloadUrl: 'https://speed.cloudflare.com/__down?bytes=25000000',
-      uploadUrl: 'https://speed.cloudflare.com/__up',
-    ),
-    _SpeedTestServer(
-      name: 'Hetzner (EU)',
-      downloadUrl: 'https://speed.hetzner.de/10MB.bin',
-    ),
-    _SpeedTestServer(
-      name: 'OVH (EU)',
-      downloadUrl: 'https://proof.ovh.net/files/10Mb.dat',
-    ),
-    _SpeedTestServer(
-      name: 'Yandex (RU)',
-      downloadUrl: 'https://ya.ru/logo_desktoptransparent.png', // small but always available
-    ),
-  ];
+  // Loaded from wizard_template
+  var _servers = <Map<String, dynamic>>[];
+  var _streamOptions = <int>[1, 4, 10];
+  var _pingUrls = <String>['https://www.gstatic.com/generate_204'];
 
-  static const _streamOptions = [1, 4, 10];
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadConfig());
+  }
 
-  static const _pingUrls = [
-    'https://www.gstatic.com/generate_204',
-    'https://cp.cloudflare.com/',
-    'https://detectportal.firefox.com/canonical.html',
-  ];
+  Future<void> _loadConfig() async {
+    final template = await ConfigBuilder.loadTemplate();
+    final opts = template.speedTestOptions;
+    final servers = (opts['servers'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+    final streams = (opts['stream_options'] as List<dynamic>?)
+        ?.whereType<num>()
+        .map((n) => n.toInt())
+        .toList();
+    final pings = (opts['ping_urls'] as List<dynamic>?)
+        ?.whereType<String>()
+        .toList();
+    final defaultStreams = (opts['default_streams'] as num?)?.toInt();
+
+    if (mounted) {
+      setState(() {
+        if (servers.isNotEmpty) _servers = servers;
+        if (streams != null && streams.isNotEmpty) _streamOptions = streams;
+        if (pings != null && pings.isNotEmpty) _pingUrls = pings;
+        if (defaultStreams != null) _streams = defaultStreams;
+      });
+    }
+  }
 
   String get _currentProxy {
     final state = widget.homeController.state;
@@ -176,18 +178,26 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
     return times.reduce((a, b) => a + b) / times.length;
   }
 
+  String _serverName(int i) => _servers[i]['name']?.toString() ?? 'Server $i';
+  String _serverDownloadUrl(int i) => _servers[i]['download_url']?.toString() ?? '';
+  String? _serverUploadUrl(int i) => _servers[i]['upload_url']?.toString();
+
   /// Download test: parallel streams with real-time speed updates.
   Future<double> _testDownload() async {
-    final server = _servers[_selectedServer];
-    try {
-      final result = await _multiStreamDownload(server.downloadUrl, _streams);
-      if (result > 0) return result;
-    } catch (_) {}
+    final url = _serverDownloadUrl(_selectedServer);
+    if (url.isNotEmpty) {
+      try {
+        final result = await _multiStreamDownload(url, _streams);
+        if (result > 0) return result;
+      } catch (_) {}
+    }
     // Fallback to other servers
     for (var i = 0; i < _servers.length; i++) {
       if (i == _selectedServer) continue;
+      final fallbackUrl = _serverDownloadUrl(i);
+      if (fallbackUrl.isEmpty) continue;
       try {
-        final result = await _multiStreamDownload(_servers[i].downloadUrl, _streams);
+        final result = await _multiStreamDownload(fallbackUrl, _streams);
         if (result > 0) return result;
       } catch (_) {}
     }
@@ -275,7 +285,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
 
   Future<int> _uploadStream(http.Client client, Uint8List data) async {
     try {
-      final uploadUrl = _servers[_selectedServer].uploadUrl ?? 'https://speed.cloudflare.com/__up';
+      final uploadUrl = _serverUploadUrl(_selectedServer) ?? 'https://speed.cloudflare.com/__up';
       final response = await http.post(
         Uri.parse(uploadUrl),
         body: data,
@@ -371,7 +381,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                     ),
                     style: TextStyle(fontSize: 13, color: cs.onSurface),
                     items: List.generate(_servers.length, (i) =>
-                      DropdownMenuItem(value: i, child: Text(_servers[i].name)),
+                      DropdownMenuItem(value: i, child: Text(_serverName(i))),
                     ),
                     onChanged: (v) { if (v != null) setState(() => _selectedServer = v); },
                   ),

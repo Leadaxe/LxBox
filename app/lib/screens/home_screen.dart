@@ -532,49 +532,79 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _showPingSettings() {
-    final urlCtrl = TextEditingController(text: _controller.pingUrl);
-    final timeoutCtrl = TextEditingController(text: '${_controller.pingTimeout}');
+  Future<void> _showPingSettings() async {
+    final template = await ConfigBuilder.loadTemplate();
+    final pingOpts = template.pingOptions;
+    final presets = (pingOpts['presets'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+
+    if (!mounted) return;
+    final urlCtrl = TextEditingController(text: _controller.pingUrl.isEmpty
+        ? (pingOpts['url']?.toString() ?? '')
+        : _controller.pingUrl);
+    final timeoutCtrl = TextEditingController(text: '${_controller.pingTimeout > 0
+        ? _controller.pingTimeout
+        : (pingOpts['timeout_ms'] as num?)?.toInt() ?? 5000}');
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Ping Settings', style: Theme.of(ctx).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            TextField(
-              controller: urlCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Test URL',
-                hintText: 'https://www.gstatic.com/generate_204',
-                border: OutlineInputBorder(),
-                isDense: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Ping Settings', style: Theme.of(ctx).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              if (presets.isNotEmpty) ...[
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: presets.map((p) {
+                    final name = p['name']?.toString() ?? '';
+                    final url = p['url']?.toString() ?? '';
+                    final selected = urlCtrl.text == url;
+                    return ChoiceChip(
+                      label: Text(name, style: const TextStyle(fontSize: 12)),
+                      selected: selected,
+                      onSelected: (_) => setSheetState(() => urlCtrl.text = url),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+              ],
+              TextField(
+                controller: urlCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Test URL',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: timeoutCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Timeout (ms)',
-                border: OutlineInputBorder(),
-                isDense: true,
+              const SizedBox(height: 12),
+              TextField(
+                controller: timeoutCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Timeout (ms)',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                keyboardType: TextInputType.number,
               ),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () {
-                _controller.pingUrl = urlCtrl.text.trim();
-                _controller.pingTimeout = int.tryParse(timeoutCtrl.text) ?? 5000;
-                Navigator.pop(ctx);
-              },
-              child: const Text('Save'),
-            ),
-          ],
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () {
+                  _controller.pingUrl = urlCtrl.text.trim();
+                  _controller.pingTimeout = int.tryParse(timeoutCtrl.text) ?? 5000;
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
         ),
       ),
     ).then((_) { urlCtrl.dispose(); timeoutCtrl.dispose(); });
