@@ -15,6 +15,7 @@ class AppSettingsScreen extends StatefulWidget {
 class _AppSettingsScreenState extends State<AppSettingsScreen> {
   final _vpn = BoxVpnClient();
   bool _autoStart = false;
+  bool _keepOnExit = false;
   bool _loaded = false;
 
   @override
@@ -24,8 +25,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   }
 
   Future<void> _loadAutoStart() async {
-    final val = await _vpn.getAutoStart();
-    if (mounted) setState(() { _autoStart = val; _loaded = true; });
+    final auto = await _vpn.getAutoStart();
+    final keep = await _vpn.getKeepOnExit();
+    if (mounted) setState(() { _autoStart = auto; _keepOnExit = keep; _loaded = true; });
   }
 
   @override
@@ -74,6 +76,16 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                 onChanged: _loaded ? (val) {
                   setState(() => _autoStart = val);
                   unawaited(_vpn.setAutoStart(val));
+                } : null,
+              ),
+              SwitchListTile(
+                title: const Text('Keep VPN on exit'),
+                subtitle: const Text('VPN stays active when app is closed'),
+                secondary: const Icon(Icons.exit_to_app),
+                value: _keepOnExit,
+                onChanged: _loaded ? (val) {
+                  setState(() => _keepOnExit = val);
+                  unawaited(_vpn.setKeepOnExit(val));
                 } : null,
               ),
             ],

@@ -124,6 +124,15 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         super.onDestroy()
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // App swiped from recents — stop VPN unless "keep on exit" is enabled
+        if (!BootReceiver.isKeepOnExit(this)) {
+            Log.d(TAG, "App removed from recents — stopping VPN")
+            doStop()
+        }
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onRevoke() {
         Log.d(TAG, "onRevoke — VPN taken by another app")
         // Clean up libbox resources synchronously

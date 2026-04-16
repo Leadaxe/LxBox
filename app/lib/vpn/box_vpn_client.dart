@@ -53,6 +53,18 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// Set keep VPN running when app is closed.
+  Future<bool> setKeepOnExit(bool enabled) async {
+    final ok = await _methods.invokeMethod<bool>('setKeepOnExit', {'enabled': enabled});
+    return ok ?? false;
+  }
+
+  /// Get keep on exit setting.
+  Future<bool> getKeepOnExit() async {
+    final ok = await _methods.invokeMethod<bool>('getKeepOnExit');
+    return ok ?? false;
+  }
+
   /// Get list of installed apps: [{packageName, appName, isSystemApp}, ...]
   Future<List<Map<String, dynamic>>> getInstalledApps() async {
     final result = await _methods.invokeMethod<List<dynamic>>('getInstalledApps');
