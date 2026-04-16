@@ -115,6 +115,14 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                   onPressed: ctrl.busy ? null : () => unawaited(_updateAll()),
                   icon: const Icon(Icons.refresh),
                 ),
+                PopupMenuButton<String>(
+                  onSelected: (v) {
+                    if (v == 'free') unawaited(_applyFreePreset());
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'free', child: Text('Get Free VPN')),
+                  ],
+                ),
               ],
             ),
             body: Column(
