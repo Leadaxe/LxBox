@@ -186,8 +186,12 @@ class ConfigBuilder {
         ...nodeTags,
         ...preset.addOutbounds.where(knownTags.contains),
       ];
-      // Always emit groups even if empty — sing-box needs them for dependency resolution
-      if (tags.isEmpty) tags.add('direct-out');
+      // Always emit groups — sing-box needs them for dependency resolution.
+      // For selector groups, add direct-out as fallback. For urltest, skip if empty.
+      if (tags.isEmpty) {
+        if (preset.type == 'urltest') continue;
+        tags.add('direct-out');
+      }
 
       result.add(<String, dynamic>{
         'tag': preset.tag,
