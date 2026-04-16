@@ -16,6 +16,12 @@ class _NodeInfo {
   final int port;
 }
 
+class _ParseResult {
+  _ParseResult(this.nodes, this.excluded);
+  final List<_NodeInfo> nodes;
+  final Set<String> excluded;
+}
+
 class NodeFilterScreen extends StatefulWidget {
   const NodeFilterScreen({
     super.key,
@@ -44,49 +50,58 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
   }
 
   Future<void> _load() async {
-    final excluded = await SettingsStorage.getExcludedNodes();
-    final nodes = _parseNodesFromConfig(widget.homeController.state.configRaw);
+    final savedExcluded = await SettingsStorage.getExcludedNodes();
+    final result = _parseNodesFromConfig(widget.homeController.state.configRaw);
 
     if (mounted) {
       setState(() {
-        _allNodes = nodes;
-        _excluded.addAll(excluded);
+        _allNodes = result.nodes;
+        // Use saved excluded if available, otherwise derive from config diff
+        _excluded.addAll(savedExcluded.isNotEmpty ? savedExcluded : result.excluded);
         _loading = false;
       });
     }
   }
 
-  /// Extract nodes that belong to auto-proxy-out from the saved config JSON.
-  /// Only shows nodes listed in the auto-proxy-out group outbounds —
-  /// jump servers are never in that list (they're only referenced via detour).
-  List<_NodeInfo> _parseNodesFromConfig(String configRaw) {
-    if (configRaw.isEmpty) return [];
+  /// Parse all user nodes from proxy-out (full list) and auto-proxy-out (checked subset).
+  /// Returns all nodes; excluded = nodes in proxy-out but NOT in auto-proxy-out.
+  _ParseResult _parseNodesFromConfig(String configRaw) {
+    if (configRaw.isEmpty) return _ParseResult([], {});
     try {
       final config = jsonDecode(configRaw) as Map<String, dynamic>;
       final outbounds = config['outbounds'] as List<dynamic>? ?? [];
 
-      // Find auto-proxy-out group and its member tags
+      // Collect member tags for proxy-out (all nodes) and auto-proxy-out (urltest subset)
+      final proxyOutTags = <String>{};
       final autoProxyTags = <String>{};
       for (final ob in outbounds) {
         if (ob is! Map<String, dynamic>) continue;
         final tag = ob['tag']?.toString() ?? '';
-        if (tag == 'auto-proxy-out') {
-          final members = ob['outbounds'] as List<dynamic>? ?? [];
+        final members = ob['outbounds'] as List<dynamic>?;
+        if (members == null) continue;
+        if (tag == 'proxy-out') {
+          for (final m in members) {
+            proxyOutTags.add(m.toString());
+          }
+        } else if (tag == 'auto-proxy-out') {
           for (final m in members) {
             autoProxyTags.add(m.toString());
           }
-          break;
         }
       }
 
-      if (autoProxyTags.isEmpty) return [];
+      // Use proxy-out as full list; fall back to auto-proxy-out if proxy-out empty
+      final allTags = proxyOutTags.isNotEmpty ? proxyOutTags : autoProxyTags;
+      if (allTags.isEmpty) return _ParseResult([], {});
 
-      // Build list: only nodes that are members of auto-proxy-out
+      // Remove group references (auto-proxy-out, direct-out etc) — keep only real nodes
+      final groupTags = <String>{'proxy-out', 'auto-proxy-out', 'direct-out'};
+
       final nodes = <_NodeInfo>[];
       for (final ob in outbounds) {
         if (ob is! Map<String, dynamic>) continue;
         final tag = ob['tag']?.toString() ?? '';
-        if (!autoProxyTags.contains(tag)) continue;
+        if (!allTags.contains(tag) || groupTags.contains(tag)) continue;
         nodes.add(_NodeInfo(
           tag: tag,
           type: ob['type']?.toString() ?? '',
@@ -94,9 +109,18 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
           port: ob['server_port'] as int? ?? 0,
         ));
       }
-      return nodes;
+
+      // Excluded = in proxy-out but NOT in auto-proxy-out
+      final excludedFromAuto = <String>{};
+      if (autoProxyTags.isNotEmpty) {
+        for (final n in nodes) {
+          if (!autoProxyTags.contains(n.tag)) excludedFromAuto.add(n.tag);
+        }
+      }
+
+      return _ParseResult(nodes, excludedFromAuto);
     } catch (_) {
-      return [];
+      return _ParseResult([], {});
     }
   }
 
