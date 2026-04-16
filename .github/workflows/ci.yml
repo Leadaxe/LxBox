@@ -1,27 +1,70 @@
-# BoxVPN — CI на GitHub Actions (см. docs/BUILD.md).
-# По умолчанию на push/PR только analyze + test. APK — вручную или по переменной репозитория.
+# BoxVPN — CI/CD
+#
+# 1) Tag push (v*):     checks → build → GitHub Release (draft)
+# 2) workflow_dispatch:  checks → build (optional)
+# 3) push to main / PR: checks only
 
 name: CI
 
 on:
   push:
     branches: [main]
+    tags:
+      - "v*"
   pull_request:
     branches: [main]
   workflow_dispatch:
     inputs:
-      build_debug_apk:
-        description: Собрать и выложить debug APK
-        required: false
-        type: boolean
-        default: false
+      run_mode:
+        description: "checks | build | release"
+        required: true
+        default: "checks"
+        type: choice
+        options: [checks, build, release]
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # Быстрые проверки на каждый push/PR — без Gradle/Java, без APK.
+  meta:
+    name: Meta
+    if: startsWith(github.ref, 'refs/tags/v') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.run_mode != 'checks')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      is_release: ${{ steps.meta.outputs.is_release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compute version
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event.inputs.run_mode }}" == "release" ]]; then
+            VERSION="$(git describe --tags --always)"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+          else
+            SHORT_SHA="$(git rev-parse --short=7 HEAD)"
+            echo "version=dev-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
   checks:
     runs-on: ubuntu-latest
     defaults:
@@ -47,10 +90,10 @@ jobs:
       - name: Test
         run: flutter test
 
-  # Сборка Android APK — не на каждый коммит: только ручной запуск или BUILD_APK_ON_PUSH=true.
   android:
-    if: ${{ github.event_name == 'workflow_dispatch' || vars.BUILD_APK_ON_PUSH == 'true' }}
-    needs: checks
+    if: startsWith(github.ref, 'refs/tags/v') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.run_mode != 'checks')
+    needs: [meta, checks]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -99,20 +142,8 @@ jobs:
             echo "storeFile=upload-keystore.jks"
           } > android/key.properties
 
-      - name: Build APK (debug)
-        if: ${{ vars.BUILD_DEBUG_APK == 'true' || (github.event_name == 'workflow_dispatch' && inputs.build_debug_apk) }}
-        run: flutter build apk --debug
-
       - name: Build APK (release)
         run: flutter build apk --release
-
-      - name: Upload APK (debug)
-        if: ${{ vars.BUILD_DEBUG_APK == 'true' || (github.event_name == 'workflow_dispatch' && inputs.build_debug_apk) }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-apk-debug
-          path: app/build/app/outputs/flutter-apk/app-debug.apk
-          if-no-files-found: error
 
       - name: Upload APK (release)
         uses: actions/upload-artifact@v4
@@ -120,3 +151,36 @@ jobs:
           name: android-apk-release
           path: app/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+          retention-days: ${{ startsWith(github.ref, 'refs/tags/') && 1 || 30 }}
+
+  release:
+    name: Create Release
+    needs: [meta, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: needs.meta.outputs.is_release == 'true'
+    steps:
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk-release
+          path: release-artifacts
+
+      - name: Rename APK
+        run: mv release-artifacts/app-release.apk release-artifacts/BoxVPN-${{ needs.meta.outputs.version }}.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.tag }}
+          name: BoxVPN ${{ needs.meta.outputs.version }}
+          draft: true
+          files: release-artifacts/BoxVPN-${{ needs.meta.outputs.version }}.apk
+          body: |
+            ## BoxVPN ${{ needs.meta.outputs.version }}
+
+            ### Installation
+            1. Download `BoxVPN-${{ needs.meta.outputs.version }}.apk`
+            2. Install on Android device
+            3. Allow installation from unknown sources if prompted
