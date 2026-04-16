@@ -232,9 +232,22 @@ gh workflow run CI --repo Leadaxe/BoxVPN -f run_mode=release
 
 ## Feature Specs
 
+Every feature is documented as a spec in [`docs/spec/features/`](docs/spec/features/). This is the core of the **spec-driven development** approach.
+
 | # | Feature | Status |
 |---|---------|--------|
-| 001-012 | MVP through Xray JSON Array | Done |
+| 001 | Mobile Stack (Android + iOS) | Done |
+| 002 | MVP Scope | Done |
+| 003 | Home Screen (Groups & Nodes via Clash API) | Done |
+| 004 | Subscription Parser (8 protocols) | Done |
+| 005 | Config Generator (Wizard Template) | Done |
+| 006 | Subscription & Settings UI | Done |
+| 007 | Config Editor (JSON formatting) | Done |
+| 008 | Ping & Node Management | Done |
+| 009 | Dark Theme & UX | Done |
+| 010 | Quick Start & Auto-refresh | Done |
+| 011 | Local Rule Set Cache | Done |
+| 012 | Xray JSON Array + Chained Proxy | Done |
 | 013 | Native VPN Service | Done |
 | 014 | Subscription Detail View | Done |
 | 015 | Rule Outbound Selection | Done |
@@ -244,10 +257,23 @@ gh workflow run CI --repo Leadaxe/BoxVPN -f run_mode=release
 | 019 | Load Balance | Spec |
 | 020 | Multi-hop / Chained Proxy UI | Spec |
 | 021 | Speed Test | Done |
-| 022 | Node Filter | Done |
+| 022 | Node Filter (auto-proxy-out) | Done |
 | 023 | Auto-connect on Boot | Done |
 | 024 | Statistics & Connections | Done |
 | 025 | DNS Settings | Done |
+| 026 | Subscription Toggles (Enable/Disable) | Done |
+| 027 | Autosave (No Apply Buttons) | Done |
+| 028 | Subscription Caching (Offline Fallback) | Done |
+| 029 | Subscription Context Menu | Done |
+| 030 | URL Launcher (Intent-based Links) | Done |
+| 031 | Wizard Template Architecture | Done |
+| 032 | Ping Settings (URL Presets) | Done |
+| 033 | URLTest Configuration | Done |
+| 034 | Node Context Menu | Done |
+| 035 | Traffic Bar & Navigation | Done |
+| 036 | Sort Modes (Default/Ping/A-Z) | Done |
+| 037 | CI/CD Pipeline (Tag → Release) | Done |
+| 038 | Subscription Detail Enhancements | Done |
 
 ---
 
@@ -255,11 +281,12 @@ gh workflow run CI --repo Leadaxe/BoxVPN -f run_mode=release
 
 | Document | Description |
 |----------|-------------|
+| [`docs/DEVELOPMENT_GUIDE.md`](docs/DEVELOPMENT_GUIDE.md) | **How to develop**: principles, risks, testing, AI workflow |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture, data flows, native code |
 | [`docs/BUILD.md`](docs/BUILD.md) | Build instructions, CI, APK signing |
 | [`docs/DEVELOPMENT_REPORT.md`](docs/DEVELOPMENT_REPORT.md) | Full development history (10 stages) |
 | [`CHANGELOG.md`](CHANGELOG.md) | Release changelog |
-| [`docs/spec/features/`](docs/spec/features/) | Feature specifications (025 specs) |
+| [`docs/spec/features/`](docs/spec/features/) | **38 feature specifications** (spec-driven development) |
 
 ---
 
