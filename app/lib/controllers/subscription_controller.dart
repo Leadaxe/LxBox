@@ -88,6 +88,13 @@ class SubscriptionController extends ChangeNotifier {
     await _fetchEntry(index);
   }
 
+  Future<void> toggleAt(int index) async {
+    if (index < 0 || index >= _entries.length) return;
+    _entries[index].source.enabled = !_entries[index].source.enabled;
+    await _persistSources();
+    notifyListeners();
+  }
+
   Future<void> moveEntry(int from, int to) async {
     if (from < 0 || from >= _entries.length) return;
     if (to < 0 || to >= _entries.length) return;
@@ -106,6 +113,7 @@ class SubscriptionController extends ChangeNotifier {
 
     try {
       for (var i = 0; i < _entries.length; i++) {
+        if (!_entries[i].source.enabled) continue;
         if (_entries[i].source.source.isNotEmpty &&
             NodeParser.isSubscriptionURL(_entries[i].source.source)) {
           await _fetchEntry(i);

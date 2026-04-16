@@ -9,10 +9,8 @@ export 'tunnel_status.dart';
 
 enum NodeSortMode {
   defaultOrder('Default', Icons.swap_vert),
-  latencyAsc('Ping ↑', Icons.signal_cellular_alt),
-  latencyDesc('Ping ↓', Icons.signal_cellular_alt_2_bar),
-  nameAsc('A → Z', Icons.sort_by_alpha),
-  nameDesc('Z → A', Icons.sort_by_alpha);
+  latencyAsc('Ping', Icons.signal_cellular_alt),
+  nameAsc('A–Z', Icons.sort_by_alpha);
 
   const NodeSortMode(this.label, this.icon);
   final String label;
@@ -36,7 +34,7 @@ class HomeState {
     this.lastDelay = const <String, int>{},
     this.pingBusy = const <String, String>{},
     this.debugEvents = const <DebugEntry>[],
-    this.sortMode = NodeSortMode.defaultOrder,
+    this.sortMode = NodeSortMode.latencyAsc,
     this.traffic = TrafficSnapshot.zero,
     this.connectedSince,
   });
@@ -66,12 +64,8 @@ class HomeState {
     switch (sortMode) {
       case NodeSortMode.latencyAsc:
         sorted.sort((a, b) => _compareLatency(a, b));
-      case NodeSortMode.latencyDesc:
-        sorted.sort((a, b) => _compareLatency(b, a));
       case NodeSortMode.nameAsc:
         sorted.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-      case NodeSortMode.nameDesc:
-        sorted.sort((a, b) => b.toLowerCase().compareTo(a.toLowerCase()));
       case NodeSortMode.defaultOrder:
         break;
     }

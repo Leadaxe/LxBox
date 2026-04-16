@@ -27,7 +27,7 @@ class SubscriptionDetailScreen extends StatefulWidget {
 
 class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
   List<ParsedNode>? _nodes;
-  bool _loading = true;
+  bool _loading = false;
   String? _error;
   bool _editing = false;
   late TextEditingController _nameCtrl;

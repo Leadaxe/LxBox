@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 class NodeRow extends StatelessWidget {
   const NodeRow({
@@ -111,15 +110,6 @@ class NodeRow extends StatelessWidget {
         ),
         const PopupMenuDivider(),
         PopupMenuItem<String>(
-          value: 'copy_name',
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.copy_outlined, size: 20),
-            title: const Text('Copy name'),
-          ),
-        ),
-        PopupMenuItem<String>(
           value: 'copy_json',
           child: ListTile(
             dense: true,
@@ -136,13 +126,6 @@ class NodeRow extends StatelessWidget {
         onPing();
       case 'activate':
         onActivate();
-      case 'copy_name':
-        await Clipboard.setData(ClipboardData(text: tag));
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Copied: $tag')),
-          );
-        }
       case 'copy_json':
         if (onCopyJson != null) onCopyJson!();
     }

@@ -13,6 +13,7 @@ class ProxySource {
     this.expireTimestamp = 0,
     this.supportUrl = '',
     this.webPageUrl = '',
+    this.enabled = true,
   });
 
   final String source;
@@ -27,6 +28,7 @@ class ProxySource {
   int expireTimestamp; // unix seconds, 0 = unlimited
   String supportUrl;
   String webPageUrl;
+  bool enabled;
 
   String get displayName {
     if (name.isNotEmpty) return name;
@@ -58,6 +60,7 @@ class ProxySource {
       expireTimestamp: json['expire_timestamp'] as int? ?? 0,
       supportUrl: json['support_url'] as String? ?? '',
       webPageUrl: json['web_page_url'] as String? ?? '',
+      enabled: json['enabled'] as bool? ?? true,
     );
   }
 
@@ -74,6 +77,7 @@ class ProxySource {
         if (expireTimestamp > 0) 'expire_timestamp': expireTimestamp,
         if (supportUrl.isNotEmpty) 'support_url': supportUrl,
         if (webPageUrl.isNotEmpty) 'web_page_url': webPageUrl,
+        if (!enabled) 'enabled': false,
       };
 }
 

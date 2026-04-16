@@ -64,6 +64,7 @@ class ConfigBuilder {
     final tagCounts = <String, int>{};
     final allNodes = <ParsedNode>[];
     for (var i = 0; i < sources.length; i++) {
+      if (!sources[i].enabled) continue;
       try {
         final nodes = await SourceLoader.loadNodesFromSource(
           sources[i],

@@ -33,6 +33,13 @@ class _SpeedTestResult {
   final bool vpnEnabled;
 }
 
+class _SpeedTestServer {
+  const _SpeedTestServer({required this.name, required this.downloadUrl, this.uploadUrl});
+  final String name;
+  final String downloadUrl;
+  final String? uploadUrl;
+}
+
 class _SpeedTestScreenState extends State<SpeedTestScreen> {
   bool _running = false;
   String _status = 'Tap Start to begin';
@@ -41,18 +48,36 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
   double _ping = 0;
   double _progress = 0;
   final _history = <_SpeedTestResult>[];
+  int _streams = 4;
+  int _selectedServer = 0; // index into _servers
 
-  static const _downloadUrls = [
-    'https://speed.cloudflare.com/__down?bytes=25000000', // 25MB
-    'https://speed.hetzner.de/10MB.bin',
-    'https://proof.ovh.net/files/10Mb.dat',
+  static const _servers = [
+    _SpeedTestServer(
+      name: 'Cloudflare',
+      downloadUrl: 'https://speed.cloudflare.com/__down?bytes=25000000',
+      uploadUrl: 'https://speed.cloudflare.com/__up',
+    ),
+    _SpeedTestServer(
+      name: 'Hetzner (EU)',
+      downloadUrl: 'https://speed.hetzner.de/10MB.bin',
+    ),
+    _SpeedTestServer(
+      name: 'OVH (EU)',
+      downloadUrl: 'https://proof.ovh.net/files/10Mb.dat',
+    ),
+    _SpeedTestServer(
+      name: 'Yandex (RU)',
+      downloadUrl: 'https://ya.ru/logo_desktoptransparent.png', // small but always available
+    ),
   ];
+
+  static const _streamOptions = [1, 4, 10];
+
   static const _pingUrls = [
     'https://www.gstatic.com/generate_204',
     'https://cp.cloudflare.com/',
     'https://detectportal.firefox.com/canonical.html',
   ];
-  static const _uploadUrl = 'https://speed.cloudflare.com/__up';
 
   String get _currentProxy {
     final state = widget.homeController.state;
@@ -148,15 +173,20 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
     return times.reduce((a, b) => a + b) / times.length;
   }
 
-  /// Download test: 4 parallel streams with real-time speed updates.
+  /// Download test: parallel streams with real-time speed updates.
   Future<double> _testDownload() async {
-    for (final baseUrl in _downloadUrls) {
+    final server = _servers[_selectedServer];
+    try {
+      final result = await _multiStreamDownload(server.downloadUrl, _streams);
+      if (result > 0) return result;
+    } catch (_) {}
+    // Fallback to other servers
+    for (var i = 0; i < _servers.length; i++) {
+      if (i == _selectedServer) continue;
       try {
-        final result = await _multiStreamDownload(baseUrl, 4);
+        final result = await _multiStreamDownload(_servers[i].downloadUrl, _streams);
         if (result > 0) return result;
-      } catch (_) {
-        continue;
-      }
+      } catch (_) {}
     }
     return 0;
   }
@@ -242,8 +272,9 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
 
   Future<int> _uploadStream(http.Client client, Uint8List data) async {
     try {
+      final uploadUrl = _servers[_selectedServer].uploadUrl ?? 'https://speed.cloudflare.com/__up';
       final response = await http.post(
-        Uri.parse(_uploadUrl),
+        Uri.parse(uploadUrl),
         body: data,
         headers: {'Content-Type': 'application/octet-stream'},
       ).timeout(const Duration(seconds: 15));
@@ -321,6 +352,49 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
           const SizedBox(height: 8),
           Text(_status, style: theme.textTheme.bodyMedium, textAlign: TextAlign.center),
           const SizedBox(height: 24),
+
+          // Settings
+          if (!_running) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    initialValue: _selectedServer,
+                    decoration: const InputDecoration(
+                      labelText: 'Server',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    style: TextStyle(fontSize: 13, color: cs.onSurface),
+                    items: List.generate(_servers.length, (i) =>
+                      DropdownMenuItem(value: i, child: Text(_servers[i].name)),
+                    ),
+                    onChanged: (v) { if (v != null) setState(() => _selectedServer = v); },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 100,
+                  child: DropdownButtonFormField<int>(
+                    initialValue: _streams,
+                    decoration: const InputDecoration(
+                      labelText: 'Streams',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    style: TextStyle(fontSize: 13, color: cs.onSurface),
+                    items: _streamOptions.map((n) =>
+                      DropdownMenuItem(value: n, child: Text('$n')),
+                    ).toList(),
+                    onChanged: (v) { if (v != null) setState(() => _streams = v); },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // Start button
           SizedBox(

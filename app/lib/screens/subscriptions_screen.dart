@@ -111,19 +111,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
               title: const Text('Subscriptions'),
               actions: [
                 IconButton(
-                  tooltip: 'Node filter',
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => NodeFilterScreen(
-                        subController: widget.subController,
-                        homeController: widget.homeController,
-                      ),
-                    ),
-                  ),
-                  icon: const Icon(Icons.filter_list),
-                ),
-                IconButton(
                   tooltip: 'Update all & generate',
                   onPressed: ctrl.busy ? null : () => unawaited(_updateAll()),
                   icon: const Icon(Icons.refresh),
@@ -157,6 +144,28 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     ),
                   ),
                 Expanded(child: _buildList(ctrl)),
+                if (ctrl.entries.isNotEmpty)
+                  SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => NodeFilterScreen(
+                                subController: widget.subController,
+                                homeController: widget.homeController,
+                              ),
+                            ),
+                          ),
+                          icon: const Icon(Icons.filter_list, size: 18),
+                          label: const Text('Manage Nodes'),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -317,8 +326,19 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {
         final entry = ctrl.entries[i];
+        final enabled = entry.source.enabled;
         return ListTile(
           contentPadding: EdgeInsets.zero,
+          leading: SizedBox(
+            width: 40,
+            child: Switch(
+              value: enabled,
+              onChanged: (_) {
+                unawaited(widget.subController.toggleAt(i));
+                _dirty = true;
+              },
+            ),
+          ),
           title: Row(
             children: [
               Flexible(
@@ -326,7 +346,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                   entry.displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: enabled ? null : Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
               if (entry.source.supportUrl.isNotEmpty)
@@ -346,7 +370,10 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
             ],
           ),
           subtitle: entry.subtitle.isNotEmpty
-              ? Text(entry.subtitle, style: const TextStyle(fontSize: 12))
+              ? Text(entry.subtitle, style: TextStyle(
+                  fontSize: 12,
+                  color: enabled ? null : Theme.of(context).colorScheme.onSurfaceVariant,
+                ))
               : null,
           trailing: entry.nodeCount > 0
               ? Chip(

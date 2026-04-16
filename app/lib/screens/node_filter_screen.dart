@@ -1,12 +1,20 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
-import '../models/parsed_node.dart';
 import '../services/settings_storage.dart';
-import '../services/source_loader.dart';
+
+/// A lightweight node representation parsed from the config JSON.
+class _NodeInfo {
+  _NodeInfo({required this.tag, required this.type, this.server = '', this.port = 0});
+  final String tag;
+  final String type;
+  final String server;
+  final int port;
+}
 
 class NodeFilterScreen extends StatefulWidget {
   const NodeFilterScreen({
@@ -23,11 +31,16 @@ class NodeFilterScreen extends StatefulWidget {
 }
 
 class _NodeFilterScreenState extends State<NodeFilterScreen> {
-  List<ParsedNode> _allNodes = [];
+  List<_NodeInfo> _allNodes = [];
   final _excluded = <String>{};
   bool _loading = true;
   String _search = '';
   bool _dirty = false;
+
+  // Outbound types that are groups/system, not user nodes
+  static const _groupTypes = {
+    'selector', 'urltest', 'direct', 'block', 'dns', 'loadbalance',
+  };
 
   @override
   void initState() {
@@ -36,22 +49,8 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
   }
 
   Future<void> _load() async {
-    final sources = await SettingsStorage.getProxySources();
     final excluded = await SettingsStorage.getExcludedNodes();
-
-    final tagCounts = <String, int>{};
-    final nodes = <ParsedNode>[];
-    for (var i = 0; i < sources.length; i++) {
-      try {
-        final result = await SourceLoader.loadNodesFromSource(
-          sources[i],
-          tagCounts,
-          sourceIndex: i,
-          totalSources: sources.length,
-        );
-        nodes.addAll(result);
-      } catch (_) {}
-    }
+    final nodes = _parseNodesFromConfig(widget.homeController.state.configRaw);
 
     if (mounted) {
       setState(() {
@@ -62,18 +61,41 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
     }
   }
 
-  List<ParsedNode> get _filtered {
+  /// Extract node outbounds from the saved config JSON — no network needed.
+  List<_NodeInfo> _parseNodesFromConfig(String configRaw) {
+    if (configRaw.isEmpty) return [];
+    try {
+      final config = jsonDecode(configRaw) as Map<String, dynamic>;
+      final outbounds = config['outbounds'] as List<dynamic>? ?? [];
+      final nodes = <_NodeInfo>[];
+      for (final ob in outbounds) {
+        if (ob is! Map<String, dynamic>) continue;
+        final type = ob['type']?.toString() ?? '';
+        final tag = ob['tag']?.toString() ?? '';
+        if (tag.isEmpty || _groupTypes.contains(type)) continue;
+        nodes.add(_NodeInfo(
+          tag: tag,
+          type: type,
+          server: ob['server']?.toString() ?? '',
+          port: ob['server_port'] as int? ?? 0,
+        ));
+      }
+      return nodes;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  List<_NodeInfo> get _filtered {
     if (_search.isEmpty) return _allNodes;
     final q = _search.toLowerCase();
     return _allNodes.where((n) {
-      final label = n.label.isNotEmpty ? n.label : n.tag;
-      return label.toLowerCase().contains(q) ||
-          n.tag.toLowerCase().contains(q) ||
+      return n.tag.toLowerCase().contains(q) ||
           n.server.toLowerCase().contains(q);
     }).toList();
   }
 
-  int get _includedCount => _allNodes.length - _excluded.length;
+  int get _includedCount => _allNodes.where((n) => !_excluded.contains(n.tag)).length;
 
   void _selectAll() => setState(() {
         _excluded.clear();
@@ -135,7 +157,6 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
       ),
       body: Column(
         children: [
-          // Search
           Padding(
             padding: const EdgeInsets.all(12),
             child: TextField(
@@ -150,8 +171,6 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
               onChanged: (v) => setState(() => _search = v),
             ),
           ),
-
-          // Counter
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
@@ -160,24 +179,23 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
             ),
           ),
           const SizedBox(height: 4),
-
-          // Node list
           if (_loading)
             const Expanded(child: Center(child: CircularProgressIndicator()))
+          else if (_allNodes.isEmpty)
+            const Expanded(child: Center(child: Text('No config loaded. Generate config first.')))
           else
             Expanded(
               child: ListView.builder(
                 itemCount: nodes.length,
                 itemBuilder: (context, i) {
                   final node = nodes[i];
-                  final label = node.label.isNotEmpty ? node.label : node.tag;
                   final included = !_excluded.contains(node.tag);
 
                   return CheckboxListTile(
                     value: included,
                     dense: true,
                     title: Text(
-                      label,
+                      node.tag,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -186,7 +204,7 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
                       ),
                     ),
                     subtitle: Text(
-                      '${node.scheme} · ${node.server}:${node.port}',
+                      '${node.type} · ${node.server}:${node.port}',
                       style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                     ),
                     onChanged: (val) {
@@ -203,8 +221,6 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
                 },
               ),
             ),
-
-          // Apply button
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(12),

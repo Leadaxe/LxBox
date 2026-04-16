@@ -286,19 +286,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         }
                       },
                 onLongPress: _showPingSettings,
-                child: Tooltip(
-                  message: _controller.massPingRunning ? 'Stop ping' : 'Ping all (hold for settings)',
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Icon(
-                      _controller.massPingRunning ? Icons.stop_circle_outlined : Icons.speed,
-                      color: (!state.tunnelUp || state.busy || state.nodes.isEmpty)
-                          ? Theme.of(context).disabledColor
-                          : null,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Icon(
+                    _controller.massPingRunning ? Icons.stop_circle_outlined : Icons.speed,
+                    color: (!state.tunnelUp || state.busy || state.nodes.isEmpty)
+                        ? Theme.of(context).disabledColor
+                        : null,
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ],
@@ -490,9 +487,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onPressed: _controller.state.nodes.isEmpty
                   ? null
                   : _controller.cycleSortMode,
-              icon: _controller.state.sortMode == NodeSortMode.nameDesc
-                  ? Transform.flip(flipY: true, child: Icon(_controller.state.sortMode.icon, size: 20))
-                  : Icon(_controller.state.sortMode.icon, size: 20),
+              icon: Icon(_controller.state.sortMode.icon, size: 20),
             ),
             IconButton(
               tooltip: 'Reload groups',

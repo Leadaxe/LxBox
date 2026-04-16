@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/clash_api_client.dart';
+import 'connections_screen.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key, required this.clash});
@@ -118,7 +119,13 @@ class _StatsScreenState extends State<StatsScreen> {
                       children: [
                         _totalChip(context, 'Upload', _formatBytes(_totalUp), Icons.arrow_upward, Theme.of(context).colorScheme.primary),
                         _totalChip(context, 'Download', _formatBytes(_totalDown), Icons.arrow_downward, Theme.of(context).colorScheme.tertiary),
-                        _totalChip(context, 'Connections', '$_totalConns', Icons.link, Theme.of(context).colorScheme.secondary),
+                        GestureDetector(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => ConnectionsScreen(clash: widget.clash)),
+                          ),
+                          child: _totalChip(context, 'Connections', '$_totalConns', Icons.link, Theme.of(context).colorScheme.secondary),
+                        ),
                       ],
                     ),
                   ),
