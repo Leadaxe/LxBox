@@ -126,6 +126,9 @@ class ConfigBuilder {
       if (route != null) route['final'] = routeFinal;
     }
 
+    // Apply custom DNS servers and rules
+    await _applyCustomDns(config);
+
     onProgress?.call(0.85, 'Downloading rule sets...');
     await _cacheRemoteRuleSets(config, onProgress: onProgress);
 
@@ -291,6 +294,46 @@ class ConfigBuilder {
   }
 
   /// Adds per-app routing rules (package_name → outbound) to the config.
+  /// Applies DNS servers and rules.
+  /// Source: user settings if saved, otherwise dns_options from template.
+  /// Strips wizard-only fields (enabled, description) before writing to config.
+  static Future<void> _applyCustomDns(Map<String, dynamic> config) async {
+    final template = await loadTemplate();
+    final userServers = await SettingsStorage.getDnsServers();
+    final userRulesJson = await SettingsStorage.getDnsRules();
+
+    final templateDns = template.dnsOptions;
+    final dns = (config['dns'] as Map<String, dynamic>?) ?? {};
+
+    // Servers: user override or template dns_options
+    final sourceServers = userServers.isNotEmpty
+        ? userServers
+        : (templateDns['servers'] as List<dynamic>? ?? []).whereType<Map<String, dynamic>>().toList();
+
+    final servers = <Map<String, dynamic>>[];
+    for (final s in sourceServers) {
+      if (s['enabled'] == false) continue;
+      final clean = Map<String, dynamic>.from(s);
+      clean.remove('enabled');
+      clean.remove('description');
+      servers.add(clean);
+    }
+    dns['servers'] = servers;
+
+    // Rules: user override or template dns_options
+    if (userRulesJson.isNotEmpty) {
+      try {
+        final rules = jsonDecode(userRulesJson);
+        if (rules is List) dns['rules'] = rules;
+      } catch (_) {}
+    } else {
+      final templateRules = templateDns['rules'] as List<dynamic>?;
+      if (templateRules != null) dns['rules'] = templateRules;
+    }
+
+    config['dns'] = dns;
+  }
+
   static void _applyAppRules(
     Map<String, dynamic> config,
     List<AppRule> appRules,

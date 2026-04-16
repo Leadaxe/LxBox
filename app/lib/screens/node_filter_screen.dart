@@ -37,11 +37,6 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
   String _search = '';
   bool _dirty = false;
 
-  // Outbound types that are groups/system, not user nodes
-  static const _groupTypes = {
-    'selector', 'urltest', 'direct', 'block', 'dns', 'loadbalance',
-  };
-
   @override
   void initState() {
     super.initState();
@@ -61,21 +56,40 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
     }
   }
 
-  /// Extract node outbounds from the saved config JSON — no network needed.
+  /// Extract nodes that belong to auto-proxy-out from the saved config JSON.
+  /// Only shows nodes listed in the auto-proxy-out group outbounds —
+  /// jump servers are never in that list (they're only referenced via detour).
   List<_NodeInfo> _parseNodesFromConfig(String configRaw) {
     if (configRaw.isEmpty) return [];
     try {
       final config = jsonDecode(configRaw) as Map<String, dynamic>;
       final outbounds = config['outbounds'] as List<dynamic>? ?? [];
+
+      // Find auto-proxy-out group and its member tags
+      final autoProxyTags = <String>{};
+      for (final ob in outbounds) {
+        if (ob is! Map<String, dynamic>) continue;
+        final tag = ob['tag']?.toString() ?? '';
+        if (tag == 'auto-proxy-out') {
+          final members = ob['outbounds'] as List<dynamic>? ?? [];
+          for (final m in members) {
+            autoProxyTags.add(m.toString());
+          }
+          break;
+        }
+      }
+
+      if (autoProxyTags.isEmpty) return [];
+
+      // Build list: only nodes that are members of auto-proxy-out
       final nodes = <_NodeInfo>[];
       for (final ob in outbounds) {
         if (ob is! Map<String, dynamic>) continue;
-        final type = ob['type']?.toString() ?? '';
         final tag = ob['tag']?.toString() ?? '';
-        if (tag.isEmpty || _groupTypes.contains(type)) continue;
+        if (!autoProxyTags.contains(tag)) continue;
         nodes.add(_NodeInfo(
           tag: tag,
-          type: type,
+          type: ob['type']?.toString() ?? '',
           server: ob['server']?.toString() ?? '',
           port: ob['server_port'] as int? ?? 0,
         ));
@@ -143,7 +157,7 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Node Filter'),
+        title: const Text('auto-proxy-out'),
         actions: [
           TextButton(
             onPressed: _selectAll,

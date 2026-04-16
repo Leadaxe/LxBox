@@ -6,6 +6,31 @@
     }
   },
 
+  "dns_options": {
+    "servers": [
+      {"type": "local", "tag": "local_dns_resolver", "description": "System DNS", "enabled": true},
+      {"type": "udp", "tag": "direct_dns_resolver", "server": "8.8.8.8", "server_port": 53, "description": "Google DNS (direct)", "enabled": true},
+      {"type": "udp", "tag": "cloudflare_udp", "server": "1.1.1.1", "server_port": 53, "description": "Cloudflare UDP", "enabled": true},
+      {"type": "https", "tag": "google_doh", "server": "dns.google", "server_port": 443, "path": "/dns-query", "domain_resolver": "direct_dns_resolver", "description": "Google DoH", "enabled": true},
+      {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "domain_strategy": "prefer_ipv4", "description": "Yandex DoH", "enabled": true},
+      {"type": "tls", "tag": "cloudflare_dot", "server": "1.1.1.1", "server_port": 853, "description": "Cloudflare DoT", "enabled": false},
+      {"type": "tls", "tag": "google_dot", "server": "8.8.8.8", "server_port": 853, "description": "Google DoT", "enabled": false},
+      {"type": "udp", "tag": "yandex_udp", "server": "77.88.8.8", "server_port": 53, "description": "Yandex UDP", "enabled": false},
+      {"type": "udp", "tag": "yandex_safe", "server": "77.88.8.88", "server_port": 53, "description": "Yandex Safe (anti-phishing)", "enabled": false},
+      {"type": "udp", "tag": "yandex_family", "server": "77.88.8.7", "server_port": 53, "description": "Yandex Family (+ adult block)", "enabled": false},
+      {"type": "tls", "tag": "yandex_dot", "server": "common.dot.dns.yandex.net", "server_port": 853, "description": "Yandex DoT", "enabled": false},
+      {"type": "tls", "tag": "quad9_dot", "server": "9.9.9.9", "server_port": 853, "description": "Quad9 (anti-malware)", "enabled": false},
+      {"type": "tls", "tag": "adguard_dot", "server": "dns.adguard-dns.com", "server_port": 853, "description": "AdGuard (ad block)", "enabled": false},
+      {"type": "tls", "tag": "adguard_family", "server": "family.adguard-dns.com", "server_port": 853, "description": "AdGuard Family (+ adult)", "enabled": false},
+      {"type": "https", "tag": "google_doh_vpn", "server": "dns.google", "server_port": 443, "path": "/dns-query", "domain_resolver": "direct_dns_resolver", "detour": "proxy-out", "description": "Google DoH via VPN", "enabled": false},
+      {"type": "udp", "tag": "yandex_vpn", "server": "77.88.8.2", "server_port": 53, "detour": "proxy-out", "domain_strategy": "prefer_ipv4", "description": "Yandex DNS via VPN", "enabled": false}
+    ],
+    "rules": [
+      {"rule_set": "ru-domains", "server": "yandex_doh"},
+      {"server": "google_doh"}
+    ]
+  },
+
   "preset_groups": [
     {
       "tag": "auto-proxy-out",
@@ -192,36 +217,8 @@
       "timestamp": true
     },
     "dns": {
-      "servers": [
-        { "type": "local", "tag": "local_dns_resolver" },
-        { "type": "udp", "tag": "direct_dns_resolver", "server": "8.8.8.8", "server_port": 53 },
-        {
-          "type": "udp",
-          "tag": "cloudflare_udp",
-          "server": "1.1.1.1",
-          "server_port": 53
-        },
-        {
-          "type": "https",
-          "tag": "google_doh",
-          "server": "dns.google",
-          "server_port": 443,
-          "path": "/dns-query",
-          "domain_resolver": "direct_dns_resolver"
-        },
-        {
-          "type": "https",
-          "tag": "yandex_doh",
-          "server": "77.88.8.88",
-          "server_port": 443,
-          "path": "/dns-query",
-          "domain_strategy": "prefer_ipv4"
-        }
-      ],
-      "rules": [
-        { "rule_set": "ru-domains", "server": "yandex_doh" },
-        { "server": "google_doh" }
-      ],
+      "servers": [],
+      "rules": [],
       "final": "@dns_final",
       "strategy": "@dns_strategy",
       "independent_cache": "@dns_independent_cache"

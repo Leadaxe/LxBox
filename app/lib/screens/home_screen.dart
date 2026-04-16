@@ -12,6 +12,7 @@ import '../widgets/node_row.dart';
 import 'about_screen.dart';
 import 'config_screen.dart';
 import 'debug_screen.dart';
+import 'dns_settings_screen.dart';
 import 'app_settings_screen.dart';
 import 'speed_test_screen.dart';
 import 'stats_screen.dart';
@@ -112,6 +113,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               title: const Text('Routing'),
               subtitle: const Text('Proxy groups and routing rules'),
               onTap: () => _pushRoute(RoutingScreen(
+                subController: _subController,
+                homeController: _controller,
+              )),
+            ),
+            ListTile(
+              leading: const Icon(Icons.dns_outlined),
+              title: const Text('DNS Settings'),
+              subtitle: const Text('DNS servers and rules'),
+              onTap: () => _pushRoute(DnsSettingsScreen(
                 subController: _subController,
                 homeController: _controller,
               )),

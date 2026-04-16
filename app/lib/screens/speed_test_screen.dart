@@ -40,6 +40,9 @@ class _SpeedTestServer {
   final String? uploadUrl;
 }
 
+/// Session-scoped history — survives screen close, cleared on app restart.
+final _sessionHistory = <_SpeedTestResult>[];
+
 class _SpeedTestScreenState extends State<SpeedTestScreen> {
   bool _running = false;
   String _status = 'Tap Start to begin';
@@ -47,7 +50,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
   double _uploadMbps = 0;
   double _ping = 0;
   double _progress = 0;
-  final _history = <_SpeedTestResult>[];
+  List<_SpeedTestResult> get _history => _sessionHistory;
   int _streams = 4;
   int _selectedServer = 0; // index into _servers
 

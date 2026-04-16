@@ -227,6 +227,40 @@ class SettingsStorage {
     _cache = data;
     await _save();
   }
+
+  static Future<List<Map<String, dynamic>>> getDnsServers() async {
+    final data = await _load();
+    final dns = data['dns_options'] as Map<String, dynamic>?;
+    if (dns == null) return [];
+    final servers = dns['servers'] as List<dynamic>?;
+    if (servers == null) return [];
+    return servers.whereType<Map<String, dynamic>>().toList();
+  }
+
+  static Future<void> saveDnsServers(List<Map<String, dynamic>> servers) async {
+    final data = await _load();
+    final dns = (data['dns_options'] as Map<String, dynamic>?) ?? {};
+    dns['servers'] = servers;
+    data['dns_options'] = dns;
+    _cache = data;
+    await _save();
+  }
+
+  static Future<String> getDnsRules() async {
+    final data = await _load();
+    final dns = data['dns_options'] as Map<String, dynamic>?;
+    if (dns == null) return '';
+    return dns['rules_json'] as String? ?? '';
+  }
+
+  static Future<void> saveDnsRules(String rulesJson) async {
+    final data = await _load();
+    final dns = (data['dns_options'] as Map<String, dynamic>?) ?? {};
+    dns['rules_json'] = rulesJson;
+    data['dns_options'] = dns;
+    _cache = data;
+    await _save();
+  }
 }
 
 /// A per-app routing rule: a named group of packages with an outbound.

@@ -161,7 +161,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                             ),
                           ),
                           icon: const Icon(Icons.filter_list, size: 18),
-                          label: const Text('Manage Nodes'),
+                          label: const Text('auto-proxy-out'),
                         ),
                       ),
                     ),
