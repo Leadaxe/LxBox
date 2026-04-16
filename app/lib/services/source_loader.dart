@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:path_provider/path_provider.dart';
 
 import '../models/parsed_node.dart';
 import '../models/proxy_source.dart';
@@ -41,7 +44,32 @@ class SourceLoader {
           'Downloading ${sourceIndex + 1}/$totalSources',
         );
 
-        final fetchResult = await SubscriptionFetcher.fetchWithMeta(source.source);
+        final cacheKey = source.source.hashCode.toRadixString(16);
+        FetchResult? fetchResult;
+        try {
+          fetchResult = await SubscriptionFetcher.fetchWithMeta(source.source);
+          // Cache raw response on success
+          try {
+            final dir = await getApplicationSupportDirectory();
+            final cacheDir = Directory('${dir.path}/sub_cache');
+            if (!cacheDir.existsSync()) cacheDir.createSync(recursive: true);
+            await File('${cacheDir.path}/$cacheKey').writeAsBytes(fetchResult.content);
+          } catch (_) {}
+        } catch (_) {
+          // Network error — try reading from cache
+          try {
+            final dir = await getApplicationSupportDirectory();
+            final cached = File('${dir.path}/sub_cache/$cacheKey');
+            if (cached.existsSync()) {
+              final bytes = await cached.readAsBytes();
+              fetchResult = FetchResult(content: bytes);
+            } else {
+              rethrow;
+            }
+          } catch (_) {
+            rethrow;
+          }
+        }
         profileTitle = fetchResult.title;
         userInfo = fetchResult.userInfo;
         supportUrl = fetchResult.supportUrl;

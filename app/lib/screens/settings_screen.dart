@@ -27,12 +27,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
   WizardTemplate? _template;
   final _varValues = <String, String>{};
   bool _loading = true;
-  bool _dirty = false;
+  Timer? _saveTimer;
 
   @override
   void initState() {
     super.initState();
     unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    _saveTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleSave() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 500), () => unawaited(_apply()));
   }
 
   Future<void> _load() async {
@@ -71,7 +82,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     }
 
-    _dirty = false;
     setState(() {});
   }
 
@@ -90,12 +100,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
-        actions: [
-          TextButton(
-            onPressed: _dirty ? () => unawaited(_apply()) : null,
-            child: const Text('Apply'),
-          ),
-        ],
       ),
       body: editableVars.isEmpty
           ? const Center(child: Text('No configurable variables'))
@@ -116,7 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onChanged: (val) {
             setState(() {
               _varValues[v.name] = val.toString();
-              _dirty = true;
+              _scheduleSave();
             });
           },
         );
@@ -135,7 +139,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (val == null) return;
               setState(() {
                 _varValues[v.name] = val;
-                _dirty = true;
+                _scheduleSave();
               });
             },
           ),
@@ -150,7 +154,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           tooltip: v.tooltip,
           onChanged: (val) {
             _varValues[v.name] = val;
-            _dirty = true;
+            _scheduleSave();
           },
           trailing: IconButton(
             tooltip: 'Generate random',
@@ -161,7 +165,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
               setState(() {
                 _varValues[v.name] = hex;
-                _dirty = true;
+                _scheduleSave();
               });
             },
           ),
@@ -175,7 +179,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           tooltip: v.tooltip,
           onChanged: (val) {
             _varValues[v.name] = val;
-            _dirty = true;
+            _scheduleSave();
           },
         );
     }

@@ -213,6 +213,20 @@ class SettingsStorage {
     _cache = data;
     await _save();
   }
+
+  static Future<Set<String>> getExcludedNodes() async {
+    final data = await _load();
+    final list = data['excluded_nodes'] as List<dynamic>?;
+    if (list == null) return {};
+    return list.map((e) => e.toString()).toSet();
+  }
+
+  static Future<void> saveExcludedNodes(Set<String> excluded) async {
+    final data = await _load();
+    data['excluded_nodes'] = excluded.toList();
+    _cache = data;
+    await _save();
+  }
 }
 
 /// A per-app routing rule: a named group of packages with an outbound.

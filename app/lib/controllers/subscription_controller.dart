@@ -83,6 +83,11 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateAt(int index) async {
+    if (index < 0 || index >= _entries.length) return;
+    await _fetchEntry(index);
+  }
+
   Future<void> moveEntry(int from, int to) async {
     if (from < 0 || from >= _entries.length) return;
     if (to < 0 || to >= _entries.length) return;
@@ -188,8 +193,10 @@ class SubscriptionController extends ChangeNotifier {
       if (result.webPageUrl != null) entry.source.webPageUrl = result.webPageUrl!;
       await _persistSources();
     } catch (e) {
-      entry.status = 'Error: $e';
-      entry.nodeCount = 0;
+      // Keep cached data — only update status to show the error
+      entry.status = entry.nodeCount > 0
+          ? '${entry.nodeCount} nodes (update failed)'
+          : 'Error: $e';
     }
     notifyListeners();
   }

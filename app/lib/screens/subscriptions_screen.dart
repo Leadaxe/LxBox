@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
+import '../services/url_launcher.dart';
+import 'node_filter_screen.dart';
 import 'subscription_detail_screen.dart';
 
 class SubscriptionsScreen extends StatefulWidget {
@@ -24,10 +26,19 @@ class SubscriptionsScreen extends StatefulWidget {
 class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   final _inputController = TextEditingController();
 
+  bool _dirty = false;
+
   @override
   void dispose() {
     _inputController.dispose();
     super.dispose();
+  }
+
+  Future<bool> _onWillPop() async {
+    if (_dirty) {
+      await _generateOnly();
+    }
+    return true;
   }
 
   Future<void> _add() async {
@@ -36,6 +47,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     await widget.subController.addFromInput(text);
     if (widget.subController.lastError.isEmpty) {
       _inputController.clear();
+      _dirty = true;
     }
   }
 
@@ -52,6 +64,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     if (config != null) {
       final ok = await widget.homeController.saveParsedConfig(config);
       if (!mounted) return;
+      _dirty = false;
       if (ok) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -85,46 +98,67 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       animation: widget.subController,
       builder: (context, _) {
         final ctrl = widget.subController;
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Subscriptions'),
-            actions: [
-              IconButton(
-                tooltip: 'Update all & generate',
-                onPressed: ctrl.busy ? null : () => unawaited(_updateAll()),
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
-          ),
-          body: Column(
-            children: [
-              _buildInputBar(ctrl),
-              if (ctrl.lastError.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    ctrl.lastError,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
-                  ),
-                ),
-              if (ctrl.progressMessage.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) async {
+            if (didPop) return;
+            if (await _onWillPop()) {
+              if (context.mounted) Navigator.of(context).pop();
+            }
+          },
+          child: Scaffold(
+            appBar: AppBar(
+              title: const Text('Subscriptions'),
+              actions: [
+                IconButton(
+                  tooltip: 'Node filter',
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => NodeFilterScreen(
+                        subController: widget.subController,
+                        homeController: widget.homeController,
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(ctrl.progressMessage)),
-                    ],
+                    ),
                   ),
+                  icon: const Icon(Icons.filter_list),
                 ),
-              Expanded(child: _buildList(ctrl)),
-              if (ctrl.entries.isNotEmpty) _buildBottomBar(ctrl),
-            ],
+                IconButton(
+                  tooltip: 'Update all & generate',
+                  onPressed: ctrl.busy ? null : () => unawaited(_updateAll()),
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
+            body: Column(
+              children: [
+                _buildInputBar(ctrl),
+                if (ctrl.lastError.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      ctrl.lastError,
+                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    ),
+                  ),
+                if (ctrl.progressMessage.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(ctrl.progressMessage)),
+                      ],
+                    ),
+                  ),
+                Expanded(child: _buildList(ctrl)),
+              ],
+            ),
           ),
         );
       },
@@ -164,10 +198,74 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
+  void _showContextMenu(BuildContext context, int index, SubscriptionEntry entry) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('Copy URL'),
+              onTap: () {
+                final url = entry.source.source.isNotEmpty
+                    ? entry.source.source
+                    : entry.source.connections.isNotEmpty
+                        ? entry.source.connections.first
+                        : '';
+                if (url.isNotEmpty) {
+                  Clipboard.setData(ClipboardData(text: url));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('URL copied')),
+                  );
+                }
+                Navigator.pop(ctx);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.refresh),
+              title: const Text('Update'),
+              onTap: () {
+                Navigator.pop(ctx);
+                unawaited(widget.subController.updateAt(index));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
+              title: Text('Delete', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (dCtx) => AlertDialog(
+                    title: const Text('Delete subscription?'),
+                    content: Text('Remove "${entry.displayName}"?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Cancel')),
+                      TextButton(
+                        onPressed: () => Navigator.pop(dCtx, true),
+                        style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+                        child: const Text('Delete'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  await widget.subController.removeAt(index);
+                  _dirty = true;
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _launchUrl(String url) async {
-    // Using platform channel is overkill — just copy to clipboard and notify
-    await Clipboard.setData(ClipboardData(text: url));
-    if (mounted) {
+    final opened = await UrlLauncher.open(url);
+    if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Copied: $url')),
       );
@@ -221,35 +319,42 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         final entry = ctrl.entries[i];
         return ListTile(
           contentPadding: EdgeInsets.zero,
-          title: Text(
-            entry.displayName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          title: Row(
+            children: [
+              Flexible(
+                child: Text(
+                  entry.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              ),
+              if (entry.source.supportUrl.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: GestureDetector(
+                    onTap: () => _launchUrl(entry.source.supportUrl),
+                    child: Icon(
+                      entry.source.supportUrl.contains('t.me') ? Icons.telegram : Icons.open_in_new,
+                      size: 16,
+                      color: entry.source.supportUrl.contains('t.me')
+                          ? const Color(0xFF2AABEE)
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+            ],
           ),
           subtitle: entry.subtitle.isNotEmpty
               ? Text(entry.subtitle, style: const TextStyle(fontSize: 12))
               : null,
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (entry.source.supportUrl.isNotEmpty)
-                IconButton(
-                  icon: Icon(
-                    entry.source.supportUrl.contains('t.me') ? Icons.send : Icons.help_outline,
-                    size: 18,
-                  ),
-                  tooltip: 'Support',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => _launchUrl(entry.source.supportUrl),
-                ),
-              if (entry.nodeCount > 0)
-                Chip(
+          trailing: entry.nodeCount > 0
+              ? Chip(
                   label: Text('${entry.nodeCount}'),
                   visualDensity: VisualDensity.compact,
-                ),
-            ],
-          ),
+                )
+              : null,
+          onLongPress: () => _showContextMenu(context, i, entry),
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -265,19 +370,4 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
-  Widget _buildBottomBar(SubscriptionController ctrl) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            onPressed: ctrl.busy ? null : () => unawaited(_generateOnly()),
-            icon: const Icon(Icons.build_outlined),
-            label: const Text('Generate Config'),
-          ),
-        ),
-      ),
-    );
-  }
 }

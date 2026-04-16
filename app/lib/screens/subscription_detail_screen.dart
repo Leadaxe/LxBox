@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/parsed_node.dart';
 import '../services/source_loader.dart';
+import '../services/url_launcher.dart';
 
 class SubscriptionDetailScreen extends StatefulWidget {
   const SubscriptionDetailScreen({
@@ -35,7 +36,6 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.entry.source.name);
-    unawaited(_loadNodes());
   }
 
   @override
@@ -80,6 +80,15 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
     if (confirmed != true || !mounted) return;
     await widget.controller.removeAt(widget.index);
     if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _openUrl(String url) async {
+    final opened = await UrlLauncher.open(url);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Copied: $url')),
+      );
+    }
   }
 
   void _toggleEdit() {
@@ -230,27 +239,20 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
                 if (source.supportUrl.isNotEmpty)
                   ActionChip(
                     avatar: Icon(
-                      source.supportUrl.contains('t.me') ? Icons.send : Icons.help_outline,
+                      source.supportUrl.contains('t.me') ? Icons.telegram : Icons.open_in_new,
                       size: 16,
+                      color: source.supportUrl.contains('t.me')
+                          ? const Color(0xFF2AABEE)
+                          : null,
                     ),
                     label: const Text('Support'),
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: source.supportUrl));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Copied: ${source.supportUrl}')),
-                      );
-                    },
+                    onPressed: () => unawaited(_openUrl(source.supportUrl)),
                   ),
                 if (source.webPageUrl.isNotEmpty)
                   ActionChip(
                     avatar: const Icon(Icons.language, size: 16),
                     label: const Text('Web page'),
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: source.webPageUrl));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Copied: ${source.webPageUrl}')),
-                      );
-                    },
+                    onPressed: () => unawaited(_openUrl(source.webPageUrl)),
                   ),
               ],
             ),

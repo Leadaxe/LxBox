@@ -32,13 +32,24 @@ class _RoutingScreenState extends State<RoutingScreen> {
   String _routeFinal = '';
   final _appRules = <AppRule>[];
   bool _loading = true;
-  bool _dirty = false;
   final _downloadingRules = <String>{}; // labels of rules currently downloading SRS
+  Timer? _saveTimer;
 
   @override
   void initState() {
     super.initState();
     unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    _saveTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleSave() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 500), () => unawaited(_apply()));
   }
 
   Future<void> _load() async {
@@ -99,7 +110,6 @@ class _RoutingScreenState extends State<RoutingScreen> {
       }
     }
 
-    _dirty = false;
     setState(() {});
   }
 
@@ -137,12 +147,6 @@ class _RoutingScreenState extends State<RoutingScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Routing'),
-        actions: [
-          TextButton(
-            onPressed: _dirty ? () => unawaited(_apply()) : null,
-            child: const Text('Apply'),
-          ),
-        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(12),
@@ -209,7 +213,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
           } else {
             _enabledGroups.remove(group.tag);
           }
-          _dirty = true;
+          _scheduleSave();
         });
       },
     );
@@ -240,7 +244,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
                   } else {
                     _enabledRules.remove(rule.label);
                   }
-                  _dirty = true;
+                  _scheduleSave();
                 });
               }
             },
@@ -280,7 +284,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
                             if (val == null) return;
                             setState(() {
                               _ruleOutbounds[rule.label] = val;
-                              _dirty = true;
+                              _scheduleSave();
                             });
                           }
                         : null,
@@ -321,7 +325,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
             if (val == null) return;
             setState(() {
               _routeFinal = val;
-              _dirty = true;
+              _scheduleSave();
             });
           },
         ),
@@ -350,7 +354,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
       setState(() {
         _enabledRules.add(rule.label);
         _downloadingRules.remove(rule.label);
-        _dirty = true;
+        _scheduleSave();
       });
     } else {
       setState(() => _downloadingRules.remove(rule.label));
@@ -366,7 +370,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
   void _addAppRule() {
     setState(() {
       _appRules.add(AppRule(name: 'Group ${_appRules.length + 1}'));
-      _dirty = true;
+      _scheduleSave();
     });
   }
 
@@ -404,7 +408,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
                     if (val == null) return;
                     setState(() {
                       rule.outbound = val;
-                      _dirty = true;
+                      _scheduleSave();
                     });
                   },
                 ),
@@ -415,7 +419,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
                 onPressed: () {
                   setState(() {
                     _appRules.removeAt(index);
-                    _dirty = true;
+                    _scheduleSave();
                   });
                 },
               ),
@@ -460,7 +464,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
       setState(() {
         rule.packages = result.packages;
         if (result.name.isNotEmpty) rule.name = result.name;
-        _dirty = true;
+        _scheduleSave();
       });
     }
   }

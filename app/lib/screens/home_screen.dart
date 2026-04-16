@@ -13,7 +13,6 @@ import 'about_screen.dart';
 import 'config_screen.dart';
 import 'debug_screen.dart';
 import 'app_settings_screen.dart';
-import 'connections_screen.dart';
 import 'speed_test_screen.dart';
 import 'stats_screen.dart';
 import 'routing_screen.dart';
@@ -137,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               leading: const Icon(Icons.speed_outlined),
               title: const Text('Speed Test'),
               subtitle: const Text('Test download/upload speed'),
-              onTap: () => _pushRoute(const SpeedTestScreen()),
+              onTap: () => _pushRoute(SpeedTestScreen(homeController: _controller)),
             ),
             ListTile(
               leading: const Icon(Icons.bar_chart_outlined),
@@ -345,7 +344,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final clash = _controller.clashClient;
         if (clash != null) {
           Navigator.push(context, MaterialPageRoute(
-            builder: (_) => ConnectionsScreen(clash: clash),
+            builder: (_) => StatsScreen(clash: clash),
           ));
         }
       },

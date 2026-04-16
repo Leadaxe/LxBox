@@ -88,7 +88,7 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
     _selected = Set<String>.from(widget.selected);
     _nameCtrl = TextEditingController(text: widget.ruleName);
     // Don't load here — let build() render the preloader first
-    Future.delayed(const Duration(milliseconds: 100), _load);
+    Future.delayed(const Duration(milliseconds: 300), _load);
   }
 
   @override
@@ -183,6 +183,10 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
             )),
           ),
           actions: [
+            IconButton(
+              icon: Icon(_editingName ? Icons.check : Icons.edit),
+              onPressed: () => setState(() => _editingName = !_editingName),
+            ),
             PopupMenuButton<String>(
               onSelected: (v) {
                 switch (v) {

@@ -90,6 +90,12 @@ class ConfigBuilder {
       }
     }
 
+    // Filter excluded nodes
+    final excludedNodes = await SettingsStorage.getExcludedNodes();
+    if (excludedNodes.isNotEmpty) {
+      allNodes.removeWhere((n) => excludedNodes.contains(n.tag));
+    }
+
     // Build preset groups and node outbounds
     final outbounds = _buildPresetOutbounds(
       template.presetGroups,
