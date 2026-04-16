@@ -100,6 +100,7 @@ class ConfigBuilder {
       enabledGroups,
       allNodes,
       excludedNodes,
+      vars,
     );
 
     final baseOutbounds = config['outbounds'] as List<dynamic>? ?? [];
@@ -141,6 +142,7 @@ class ConfigBuilder {
     Set<String> enabledGroupTags,
     List<ParsedNode> allNodes,
     Set<String> excludedNodes,
+    Map<String, String> vars,
   ) {
     final result = <Map<String, dynamic>>[];
     final emittedJumpTags = <String>{};
@@ -203,11 +205,13 @@ class ConfigBuilder {
         tags.add('direct-out');
       }
 
+      final options = _deepCopy(preset.options);
+      _substituteVars(options, vars);
       result.add(<String, dynamic>{
         'tag': preset.tag,
         'type': preset.type,
         'outbounds': tags,
-        ...preset.options,
+        ...options,
       });
     }
 

@@ -92,7 +92,7 @@ Android VPN client powered by [sing-box](https://sing-box.sagernet.org/). Multi-
 - **4 parallel download streams** (configurable: 1/4/10)
 - **Real-time** speed updates every 500ms
 - Ping: 5 measurements, trimmed mean
-- Server selection: **Cloudflare, Hetzner (EU), OVH (EU), Yandex (RU)**
+- Server selection: **Cloudflare, Hetzner (EU), OVH (EU), Selectel (RU)**
 - Shows current proxy or "Direct" indicator
 - **Session history** (last 10 tests, persists while app is running)
 - All settings from `wizard_template.json`

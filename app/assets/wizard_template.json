@@ -45,10 +45,16 @@
 
   "speed_test_options": {
     "servers": [
-      {"name": "Cloudflare", "download_url": "https://speed.cloudflare.com/__down?bytes=25000000", "upload_url": "https://speed.cloudflare.com/__up"},
-      {"name": "Hetzner (EU)", "download_url": "https://speed.hetzner.de/10MB.bin"},
-      {"name": "OVH (EU)", "download_url": "https://proof.ovh.net/files/10Mb.dat"},
-      {"name": "Yandex (RU)", "download_url": "https://cdn.yandex.net/speed/1MB"}
+      {"name": "Cloudflare", "download_url": "https://speed.cloudflare.com/__down?bytes=25000000", "upload_url": "https://speed.cloudflare.com/__up", "upload_method": "POST"},
+      {"name": "Hostkey (Moscow)", "download_url": "https://spd-rudp.hostkey.ru/files/10mb.bin"},
+      {"name": "Selectel (RU)", "download_url": "https://speedtest.selectel.ru/10MB"},
+      {"name": "Hostkey (Frankfurt)", "download_url": "https://spd-desrv.hostkey.com/files/10mb.bin"},
+      {"name": "Hostkey (Amsterdam)", "download_url": "https://spd-nlsrv.hostkey.com/files/10mb.bin"},
+      {"name": "Hostkey (Helsinki)", "download_url": "https://spd-fisrv.hostkey.com/files/10mb.bin"},
+      {"name": "Hostkey (New York)", "download_url": "https://spd-uswb.hostkey.com/files/10mb.bin"},
+      {"name": "Tele2 (EU)", "download_url": "http://speedtest.tele2.net/10MB.zip", "upload_url": "http://speedtest.tele2.net/upload.php"},
+      {"name": "OVH (France)", "download_url": "https://proof.ovh.net/files/10Mb.dat"},
+      {"name": "ThinkBroadband (UK)", "download_url": "http://ipv4.download.thinkbroadband.com/10MB.zip"}
     ],
     "stream_options": [1, 4, 10],
     "default_streams": 4,

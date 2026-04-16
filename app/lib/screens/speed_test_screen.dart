@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -24,6 +25,7 @@ class _SpeedTestResult {
     required this.upload,
     required this.proxy,
     required this.vpnEnabled,
+    required this.server,
   });
 
   final DateTime timestamp;
@@ -32,6 +34,7 @@ class _SpeedTestResult {
   final double upload;
   final String proxy;
   final bool vpnEnabled;
+  final String server;
 }
 
 /// Session-scoped history — survives screen close, cleared on app restart.
@@ -141,6 +144,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
           upload: _uploadMbps,
           proxy: _currentProxy,
           vpnEnabled: _vpnEnabled,
+          server: _serverName(_selectedServer),
         ),
       );
       if (_history.length > 10) _history.removeLast();
@@ -181,6 +185,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
   String _serverName(int i) => _servers[i]['name']?.toString() ?? 'Server $i';
   String _serverDownloadUrl(int i) => _servers[i]['download_url']?.toString() ?? '';
   String? _serverUploadUrl(int i) => _servers[i]['upload_url']?.toString();
+  String _serverUploadMethod(int i) => _servers[i]['upload_method']?.toString() ?? 'PUT';
 
   /// Download test: parallel streams with real-time speed updates.
   Future<double> _testDownload() async {
@@ -259,7 +264,12 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
     // 2 parallel upload streams, 2MB each
     final client = http.Client();
     try {
-      final data = Uint8List(2 * 1024 * 1024); // 2MB zeros
+      final data = Uint8List(10 * 1024 * 1024);
+      // Fill with random data to avoid compression
+      final rng = math.Random();
+      for (var i = 0; i < data.length; i++) {
+        data[i] = rng.nextInt(256);
+      }
       var totalBytes = 0;
       final sw = Stopwatch()..start();
 
@@ -285,14 +295,16 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
 
   Future<int> _uploadStream(http.Client client, Uint8List data) async {
     try {
-      final uploadUrl = _serverUploadUrl(_selectedServer) ?? 'https://speed.cloudflare.com/__up';
-      final response = await http.post(
-        Uri.parse(uploadUrl),
-        body: data,
-        headers: {'Content-Type': 'application/octet-stream'},
-      ).timeout(const Duration(seconds: 15));
-      if (response.statusCode < 400) return data.length;
-      return 0;
+      final uploadUrl = _serverUploadUrl(_selectedServer) ?? _serverDownloadUrl(_selectedServer);
+      final uri = Uri.parse(uploadUrl);
+      final headers = {'Content-Type': 'application/octet-stream'};
+      final method = _serverUploadMethod(_selectedServer);
+      if (method == 'POST') {
+        await http.post(uri, body: data, headers: headers).timeout(const Duration(seconds: 15));
+      } else {
+        await http.put(uri, body: data, headers: headers).timeout(const Duration(seconds: 15));
+      }
+      return data.length;
     } catch (_) {
       return 0;
     }
@@ -464,10 +476,23 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
           ),
           const SizedBox(width: 4),
           Expanded(
-            child: Text(
-              r.proxy,
-              style: theme.textTheme.bodySmall,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  r.proxy,
+                  style: theme.textTheme.bodySmall,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  r.server,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: 10,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
           Text(
