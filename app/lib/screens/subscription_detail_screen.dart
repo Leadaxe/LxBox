@@ -27,7 +27,7 @@ class SubscriptionDetailScreen extends StatefulWidget {
 
 class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
   List<ParsedNode>? _nodes;
-  bool _loading = false;
+  bool _loading = true;
   String? _error;
   bool _editing = false;
   late TextEditingController _nameCtrl;
@@ -36,6 +36,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.entry.source.name);
+    // Load from cache (offline) on open
+    unawaited(_loadNodes());
   }
 
   @override

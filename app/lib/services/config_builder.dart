@@ -91,17 +91,15 @@ class ConfigBuilder {
       }
     }
 
-    // Filter excluded nodes
+    // Excluded nodes — filtered only from urltest groups, not from all outbounds
     final excludedNodes = await SettingsStorage.getExcludedNodes();
-    if (excludedNodes.isNotEmpty) {
-      allNodes.removeWhere((n) => excludedNodes.contains(n.tag));
-    }
 
     // Build preset groups and node outbounds
     final outbounds = _buildPresetOutbounds(
       template.presetGroups,
       enabledGroups,
       allNodes,
+      excludedNodes,
     );
 
     final baseOutbounds = config['outbounds'] as List<dynamic>? ?? [];
@@ -142,6 +140,7 @@ class ConfigBuilder {
     List<PresetGroup> presets,
     Set<String> enabledGroupTags,
     List<ParsedNode> allNodes,
+    Set<String> excludedNodes,
   ) {
     final result = <Map<String, dynamic>>[];
     final emittedJumpTags = <String>{};
@@ -179,11 +178,16 @@ class ConfigBuilder {
     };
 
     for (final preset in activePresets) {
+      // For urltest groups, exclude filtered nodes; for selectors, include all
+      final nodeTags = preset.type == 'urltest' && excludedNodes.isNotEmpty
+          ? allNodeTags.where((t) => !excludedNodes.contains(t)).toList()
+          : allNodeTags;
       final tags = <String>[
-        ...allNodeTags,
+        ...nodeTags,
         ...preset.addOutbounds.where(knownTags.contains),
       ];
-      if (tags.isEmpty) continue;
+      // Always emit groups even if empty — sing-box needs them for dependency resolution
+      if (tags.isEmpty) tags.add('direct-out');
 
       result.add(<String, dynamic>{
         'tag': preset.tag,
