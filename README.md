@@ -9,19 +9,19 @@ Android VPN client powered by [sing-box](https://sing-box.sagernet.org/). Multi-
 ## Screenshots
 
 <p align="center">
-<img src="docs/screenshots/home.png" width="240" alt="Home Screen"/>
-<img src="docs/screenshots/routing.png" width="240" alt="Routing"/>
-<img src="docs/screenshots/statistics.png" width="240" alt="Statistics"/>
+<img src="docs/screenshots/home.jpg" width="240" alt="Home Screen"/>
+<img src="docs/screenshots/routing.jpg" width="240" alt="Routing"/>
+<img src="docs/screenshots/statistics.jpg" width="240" alt="Statistics"/>
 </p>
 <p align="center">
-<img src="docs/screenshots/speed_test.png" width="240" alt="Speed Test"/>
-<img src="docs/screenshots/dns_settings.png" width="240" alt="DNS Settings"/>
-<img src="docs/screenshots/vpn_settings.png" width="240" alt="VPN Settings"/>
+<img src="docs/screenshots/speed_test.jpg" width="240" alt="Speed Test"/>
+<img src="docs/screenshots/dns_settings.jpg" width="240" alt="DNS Settings"/>
+<img src="docs/screenshots/vpn_settings.jpg" width="240" alt="VPN Settings"/>
 </p>
 <p align="center">
-<img src="docs/screenshots/app_picker.png" width="240" alt="App Picker"/>
-<img src="docs/screenshots/app_settings.png" width="240" alt="App Settings"/>
-<img src="docs/screenshots/config_editor.png" width="240" alt="Config Editor"/>
+<img src="docs/screenshots/routing_rules.jpg" width="240" alt="Routing Rules & App Groups"/>
+<img src="docs/screenshots/app_picker.jpg" width="240" alt="App Picker"/>
+<img src="docs/screenshots/app_settings.jpg" width="240" alt="App Settings"/>
 </p>
 
 ---
