@@ -170,6 +170,12 @@ jobs:
       - name: Rename APK
         run: mv release-artifacts/app-release.apk release-artifacts/BoxVPN-${{ needs.meta.outputs.version }}.apk
 
+      - name: Checkout (for release notes)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: RELEASE_NOTES.md
+          sparse-checkout-cone-mode: false
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -177,10 +183,4 @@ jobs:
           name: BoxVPN ${{ needs.meta.outputs.version }}
           draft: true
           files: release-artifacts/BoxVPN-${{ needs.meta.outputs.version }}.apk
-          body: |
-            ## BoxVPN ${{ needs.meta.outputs.version }}
-
-            ### Installation
-            1. Download `BoxVPN-${{ needs.meta.outputs.version }}.apk`
-            2. Install on Android device
-            3. Allow installation from unknown sources if prompted
+          body_path: RELEASE_NOTES.md

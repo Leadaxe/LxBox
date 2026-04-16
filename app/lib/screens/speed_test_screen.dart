@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -264,12 +263,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
     // 2 parallel upload streams, 2MB each
     final client = http.Client();
     try {
-      final data = Uint8List(10 * 1024 * 1024);
-      // Fill with random data to avoid compression
-      final rng = math.Random();
-      for (var i = 0; i < data.length; i++) {
-        data[i] = rng.nextInt(256);
-      }
+      final data = Uint8List(5 * 1024 * 1024);
       var totalBytes = 0;
       final sw = Stopwatch()..start();
 
@@ -278,7 +272,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
         futures.add(_uploadStream(client, data));
       }
 
-      final results = await Future.wait(futures).timeout(const Duration(seconds: 15));
+      final results = await Future.wait(futures).timeout(const Duration(seconds: 30));
       sw.stop();
 
       for (final bytes in results) {
@@ -300,9 +294,9 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
       final headers = {'Content-Type': 'application/octet-stream'};
       final method = _serverUploadMethod(_selectedServer);
       if (method == 'POST') {
-        await http.post(uri, body: data, headers: headers).timeout(const Duration(seconds: 15));
+        await http.post(uri, body: data, headers: headers).timeout(const Duration(seconds: 30));
       } else {
-        await http.put(uri, body: data, headers: headers).timeout(const Duration(seconds: 15));
+        await http.put(uri, body: data, headers: headers).timeout(const Duration(seconds: 30));
       }
       return data.length;
     } catch (_) {
