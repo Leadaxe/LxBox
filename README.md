@@ -2,7 +2,7 @@
 
 Android VPN client powered by [sing-box](https://sing-box.sagernet.org/). Multi-subscription, smart routing, built-in speed test.
 
-**[Download latest release](https://github.com/Leadaxe/BoxVPN/releases/latest)**
+**[Download latest release](https://github.com/Leadaxe/BoxVPN/releases/latest)** | **[Документация на русском](README_RU.md)**
 
 ---
 
