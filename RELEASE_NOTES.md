@@ -1,4 +1,4 @@
-# L×Box v1.2.0
+# L×Box v1.1.2
 
 Android VPN client powered by [sing-box](https://sing-box.sagernet.org/).
 
@@ -54,4 +54,4 @@ Android VPN client powered by [sing-box](https://sing-box.sagernet.org/).
 - Comprehensive protocol documentation
 
 ## Install
-Download `LxBox-v1.2.0.apk` and install on Android device.
+Download `LxBox-v1.1.2.apk` and install on Android device.
