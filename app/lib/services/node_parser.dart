@@ -54,10 +54,29 @@ class NodeParser {
       throw const FormatException('WireGuard config missing required fields');
     }
 
-    // endpoint is host:port
-    final epParts = endpoint.split(':');
-    final host = epParts[0];
-    final port = epParts.length > 1 ? epParts[1] : '51820';
+    // endpoint is host:port (handle IPv6 like [::1]:51820)
+    String host;
+    String port;
+    if (endpoint.startsWith('[')) {
+      final closeBracket = endpoint.indexOf(']');
+      host = endpoint.substring(1, closeBracket > 0 ? closeBracket : endpoint.length);
+      final afterBracket = closeBracket > 0 ? endpoint.substring(closeBracket + 1) : '';
+      port = afterBracket.startsWith(':') ? afterBracket.substring(1) : '51820';
+    } else {
+      final lastColon = endpoint.lastIndexOf(':');
+      if (lastColon > 0 && endpoint.indexOf(':') == lastColon) {
+        // Single colon — IPv4:port
+        host = endpoint.substring(0, lastColon);
+        port = endpoint.substring(lastColon + 1);
+      } else if (lastColon > 0) {
+        // Multiple colons — bare IPv6, no port
+        host = endpoint;
+        port = '51820';
+      } else {
+        host = endpoint;
+        port = '51820';
+      }
+    }
 
     final params = <String, String>{
       'publickey': publicKey,

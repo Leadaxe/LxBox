@@ -11,6 +11,7 @@ class SettingsStorage {
 
   static const _fileName = 'lxbox_settings.json';
   static Map<String, dynamic>? _cache;
+  static Future<void>? _pendingSave;
 
   static Future<File> _file() async {
     final dir = await getApplicationDocumentsDirectory();
@@ -19,6 +20,8 @@ class SettingsStorage {
 
   static Future<Map<String, dynamic>> _load() async {
     if (_cache != null) return _cache!;
+    // Wait for any pending save to complete before loading
+    if (_pendingSave != null) await _pendingSave;
     try {
       final f = await _file();
       if (await f.exists()) {
@@ -34,10 +37,14 @@ class SettingsStorage {
   static Future<void> _save() async {
     // Clean up removed keys
     _cache?.remove('node_overrides');
+    _cache?.remove('show_detour_servers');
+    final data = Map<String, dynamic>.from(_cache ?? {});
     final f = await _file();
-    await f.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(_cache ?? {}),
+    _pendingSave = f.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(data),
     );
+    await _pendingSave;
+    _pendingSave = null;
   }
 
   // ---------------------------------------------------------------------------
