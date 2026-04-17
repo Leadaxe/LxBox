@@ -235,18 +235,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               const SizedBox(width: 8),
               _buildStatusChip(state, isRevoked, isConnecting),
               const SizedBox(width: 8),
-              IconButton(
-                tooltip: _subController.configDirty ? 'Config changed — rebuild' : 'Rebuild config',
-                onPressed: state.busy || _subController.busy
-                    ? null
-                    : () {
-                        _subController.configDirty = false;
-                        unawaited(_rebuildConfig());
-                      },
-                icon: Icon(
-                  Icons.refresh,
-                  size: 20,
-                  color: _subController.configDirty ? Theme.of(context).colorScheme.error : null,
+              Container(
+                decoration: _subController.configDirty
+                    ? BoxDecoration(
+                        color: Theme.of(context).colorScheme.errorContainer,
+                        shape: BoxShape.circle,
+                      )
+                    : null,
+                child: IconButton(
+                  tooltip: _subController.configDirty ? 'Config changed — rebuild' : 'Rebuild config',
+                  onPressed: state.busy || _subController.busy
+                      ? null
+                      : () {
+                          _subController.configDirty = false;
+                          unawaited(_rebuildConfig());
+                        },
+                  icon: Icon(
+                    Icons.refresh,
+                    size: 20,
+                    color: _subController.configDirty ? Theme.of(context).colorScheme.onErrorContainer : null,
+                  ),
                 ),
               ),
             ],
