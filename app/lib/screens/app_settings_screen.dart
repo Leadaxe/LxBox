@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../main.dart';
+import '../services/settings_storage.dart';
 import '../vpn/box_vpn_client.dart';
 
 class AppSettingsScreen extends StatefulWidget {
@@ -16,6 +17,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   final _vpn = BoxVpnClient();
   bool _autoStart = false;
   bool _keepOnExit = false;
+  bool _autoRebuild = false;
   bool _loaded = false;
 
   @override
@@ -27,7 +29,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   Future<void> _loadAutoStart() async {
     final auto = await _vpn.getAutoStart();
     final keep = await _vpn.getKeepOnExit();
-    if (mounted) setState(() { _autoStart = auto; _keepOnExit = keep; _loaded = true; });
+    final rebuild = await SettingsStorage.getVar('auto_rebuild', 'false');
+    if (mounted) setState(() { _autoStart = auto; _keepOnExit = keep; _autoRebuild = rebuild == 'true'; _loaded = true; });
   }
 
   @override
@@ -86,6 +89,16 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                 onChanged: _loaded ? (val) {
                   setState(() => _keepOnExit = val);
                   unawaited(_vpn.setKeepOnExit(val));
+                } : null,
+              ),
+              SwitchListTile(
+                title: const Text('Auto-rebuild config'),
+                subtitle: const Text('Rebuild config automatically when settings change'),
+                secondary: const Icon(Icons.build_circle_outlined),
+                value: _autoRebuild,
+                onChanged: _loaded ? (val) {
+                  setState(() => _autoRebuild = val);
+                  unawaited(SettingsStorage.setVar('auto_rebuild', val.toString()));
                 } : null,
               ),
             ],

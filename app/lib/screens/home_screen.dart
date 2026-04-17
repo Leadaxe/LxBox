@@ -34,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   late final SubscriptionController _subController;
   late final AnimationController _connectingAnim;
   bool _showDetourNodes = false;
+  bool _autoRebuild = false;
 
   @override
   void initState() {
@@ -47,6 +48,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     );
     unawaited(_controller.init());
     unawaited(_subController.init());
+    unawaited(_loadAutoRebuild());
+  }
+
+  Future<void> _loadAutoRebuild() async {
+    final val = await SettingsStorage.getVar('auto_rebuild', 'false');
+    _autoRebuild = val == 'true';
   }
 
   @override
@@ -60,8 +67,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     Navigator.of(context).pop();
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen)).then((_) {
       if (_subController.configDirty) {
-        _subController.configDirty = false;
-        unawaited(_rebuildConfig());
+        if (_autoRebuild) {
+          _subController.configDirty = false;
+          unawaited(_rebuildConfig());
+        } else {
+          setState(() {}); // refresh to show highlighted rebuild button
+        }
       }
     });
   }
@@ -225,11 +236,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               _buildStatusChip(state, isRevoked, isConnecting),
               const SizedBox(width: 8),
               IconButton(
-                tooltip: 'Rebuild config',
+                tooltip: _subController.configDirty ? 'Config changed — rebuild' : 'Rebuild config',
                 onPressed: state.busy || _subController.busy
                     ? null
-                    : () => unawaited(_rebuildConfig()),
-                icon: const Icon(Icons.refresh, size: 20),
+                    : () {
+                        _subController.configDirty = false;
+                        unawaited(_rebuildConfig());
+                      },
+                icon: Icon(
+                  Icons.refresh,
+                  size: 20,
+                  color: _subController.configDirty ? Theme.of(context).colorScheme.error : null,
+                ),
               ),
             ],
           ),
