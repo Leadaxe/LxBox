@@ -65,12 +65,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
 
   void _pushRoute(Widget screen) {
     Navigator.of(context).pop();
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen)).then((_) {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen)).then((_) async {
+      // Re-read auto-rebuild in case it changed in App Settings
+      final val = await SettingsStorage.getVar('auto_rebuild', 'false');
+      _autoRebuild = val == 'true';
       if (_subController.configDirty) {
         if (_autoRebuild) {
           unawaited(_rebuildAndClearDirty());
         } else {
-          setState(() {}); // refresh to show highlighted rebuild button
+          setState(() {});
         }
       }
     });
