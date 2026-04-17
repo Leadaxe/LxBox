@@ -64,15 +64,15 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
     }
   }
 
-  /// Parse all user nodes from proxy-out (full list) and auto-proxy-out (checked subset).
-  /// Returns all nodes; excluded = nodes in proxy-out but NOT in auto-proxy-out.
+  /// Parse all user nodes from vpn-1 (full list) and auto-proxy-out (checked subset).
+  /// Returns all nodes; excluded = nodes in vpn-1 but NOT in auto-proxy-out.
   _ParseResult _parseNodesFromConfig(String configRaw) {
     if (configRaw.isEmpty) return _ParseResult([], {});
     try {
       final config = jsonDecode(configRaw) as Map<String, dynamic>;
       final outbounds = config['outbounds'] as List<dynamic>? ?? [];
 
-      // Collect member tags for proxy-out (all nodes) and auto-proxy-out (urltest subset)
+      // Collect member tags for vpn-1 (all nodes) and auto-proxy-out (urltest subset)
       final proxyOutTags = <String>{};
       final autoProxyTags = <String>{};
       for (final ob in outbounds) {
@@ -80,7 +80,7 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
         final tag = ob['tag']?.toString() ?? '';
         final members = ob['outbounds'] as List<dynamic>?;
         if (members == null) continue;
-        if (tag == 'proxy-out') {
+        if (tag == 'vpn-1') {
           for (final m in members) {
             proxyOutTags.add(m.toString());
           }
@@ -91,12 +91,12 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
         }
       }
 
-      // Use proxy-out as full list; fall back to auto-proxy-out if proxy-out empty
+      // Use vpn-1 as full list; fall back to auto-proxy-out if vpn-1 empty
       final allTags = proxyOutTags.isNotEmpty ? proxyOutTags : autoProxyTags;
       if (allTags.isEmpty) return _ParseResult([], {});
 
-      // Remove group references (auto-proxy-out, direct-out etc) — keep only real nodes
-      final groupTags = <String>{'proxy-out', 'auto-proxy-out', 'direct-out'};
+      // Remove group references — keep only real nodes
+      final groupTags = <String>{'vpn-1', 'vpn-2', 'vpn-3', 'auto-proxy-out', 'direct-out'};
 
       final nodes = <_NodeInfo>[];
       for (final ob in outbounds) {

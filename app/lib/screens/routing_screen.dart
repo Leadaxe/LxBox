@@ -77,9 +77,11 @@ class _RoutingScreenState extends State<RoutingScreen> {
     } else {
       _enabledGroups.addAll(storedGroups);
     }
+    // vpn-1 is required — always enabled
+    _enabledGroups.add('vpn-1');
 
     _ruleOutbounds.addAll(storedOutbounds);
-    _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'proxy-out';
+    _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'vpn-1';
     _appRules.addAll(storedAppRules);
 
     // Check rule set cache status
@@ -129,14 +131,12 @@ class _RoutingScreenState extends State<RoutingScreen> {
   List<_OutboundOption> _outboundOptions() {
     final opts = <_OutboundOption>[
       const _OutboundOption(label: 'direct', tag: 'direct-out'),
-      const _OutboundOption(label: 'proxy', tag: 'proxy-out'),
       const _OutboundOption(label: 'auto', tag: 'auto-proxy-out'),
     ];
     final template = _template;
     if (template != null) {
       for (final g in template.presetGroups) {
         if (_enabledGroups.contains(g.tag) &&
-            g.tag != 'proxy-out' &&
             g.tag != 'auto-proxy-out') {
           opts.add(_OutboundOption(label: g.label.isNotEmpty ? g.label : g.tag, tag: g.tag));
         }
@@ -211,14 +211,18 @@ class _RoutingScreenState extends State<RoutingScreen> {
   }
 
   Widget _buildGroupTile(PresetGroup group) {
+    // VPN ① is always enabled — can't be disabled
+    final isRequired = group.tag == 'vpn-1';
     return SwitchListTile(
       title: Text(group.label.isNotEmpty ? group.label : group.tag),
       subtitle: Text(
-        '${group.type} \u00b7 ${group.tag}',
+        isRequired
+            ? '${group.type} \u00b7 ${group.tag} \u00b7 required'
+            : '${group.type} \u00b7 ${group.tag}',
         style: const TextStyle(fontSize: 12),
       ),
-      value: _enabledGroups.contains(group.tag),
-      onChanged: (val) {
+      value: isRequired ? true : _enabledGroups.contains(group.tag),
+      onChanged: isRequired ? null : (val) {
         setState(() {
           if (val) {
             _enabledGroups.add(group.tag);

@@ -22,8 +22,8 @@
       {"type": "tls", "tag": "quad9_dot", "server": "9.9.9.9", "server_port": 853, "description": "Quad9 (anti-malware)", "enabled": false},
       {"type": "tls", "tag": "adguard_dot", "server": "dns.adguard-dns.com", "server_port": 853, "description": "AdGuard (ad block)", "enabled": false},
       {"type": "tls", "tag": "adguard_family", "server": "family.adguard-dns.com", "server_port": 853, "description": "AdGuard Family (+ adult)", "enabled": false},
-      {"type": "https", "tag": "google_doh_vpn", "server": "dns.google", "server_port": 443, "path": "/dns-query", "domain_resolver": "direct_dns_resolver", "detour": "proxy-out", "description": "Google DoH via VPN", "enabled": false},
-      {"type": "udp", "tag": "yandex_vpn", "server": "77.88.8.2", "server_port": 53, "detour": "proxy-out", "domain_strategy": "prefer_ipv4", "description": "Yandex DNS via VPN", "enabled": false}
+      {"type": "https", "tag": "google_doh_vpn", "server": "dns.google", "server_port": 443, "path": "/dns-query", "domain_resolver": "direct_dns_resolver", "detour": "vpn-1", "description": "Google DoH via VPN", "enabled": false},
+      {"type": "udp", "tag": "yandex_vpn", "server": "77.88.8.2", "server_port": 53, "detour": "vpn-1", "domain_strategy": "prefer_ipv4", "description": "Yandex DNS via VPN", "enabled": false}
     ],
     "rules": [
       {"rule_set": "ru-domains", "server": "yandex_doh"},
@@ -75,9 +75,9 @@
       "add_outbounds": []
     },
     {
-      "tag": "proxy-out",
+      "tag": "vpn-1",
       "type": "selector",
-      "label": "Proxy",
+      "label": "VPN ①",
       "default_enabled": true,
       "options": {
         "interrupt_exist_connections": true,
@@ -86,9 +86,9 @@
       "add_outbounds": ["direct-out", "auto-proxy-out"]
     },
     {
-      "tag": "vpn-1",
+      "tag": "vpn-2",
       "type": "selector",
-      "label": "VPN ①",
+      "label": "VPN ②",
       "default_enabled": false,
       "options": {
         "default": "direct-out",
@@ -97,9 +97,9 @@
       "add_outbounds": ["direct-out"]
     },
     {
-      "tag": "vpn-2",
+      "tag": "vpn-3",
       "type": "selector",
-      "label": "VPN ②",
+      "label": "VPN ③",
       "default_enabled": false,
       "options": {
         "default": "direct-out",
@@ -329,7 +329,7 @@
         { "action": "sniff", "inbound": "tun-in", "timeout": "1s" },
         { "protocol": "dns", "action": "hijack-dns" }
       ],
-      "final": "proxy-out",
+      "final": "vpn-1",
       "auto_detect_interface": "@auto_detect_interface"
     },
     "experimental": {
