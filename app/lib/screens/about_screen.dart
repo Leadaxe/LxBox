@@ -147,7 +147,7 @@ class AboutScreen extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('USDT (TRC20)', style: TextStyle(fontWeight: FontWeight.bold)),
+                            const Text('USDT (ERC20)', style: TextStyle(fontWeight: FontWeight.bold)),
                             const SizedBox(height: 4),
                             GestureDetector(
                               onTap: () => _copyToClipboard(ctx, '0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea'),
