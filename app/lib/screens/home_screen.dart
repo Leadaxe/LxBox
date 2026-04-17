@@ -58,7 +58,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
 
   void _pushRoute(Widget screen) {
     Navigator.of(context).pop();
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen)).then((_) {
+      if (_subController.configDirty) {
+        _subController.configDirty = false;
+        unawaited(_rebuildConfig());
+      }
+    });
   }
 
   @override
