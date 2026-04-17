@@ -6,7 +6,47 @@
 
 ---
 
-## [Unreleased]
+## [Unreleased] — since v1.1.1
+
+### Added — TLS Fragment (DPI bypass)
+- **TLS Fragment**: фрагментация TLS ClientHello для обхода DPI. Record fragment support.
+- Настраивается в VPN Settings.
+
+### Added — WireGuard Endpoint Support
+- **WireGuard endpoint**: поддержка WireGuard endpoint в подписках (не outbound).
+- **WireGuard INI auto-detection**: автоматическое определение INI-формата WireGuard конфигов при импорте.
+
+### Added — JSON Outbound Import
+- **Paste dialog**: вставка JSON outbound через диалог (Smart Paste). Автоопределение формата.
+
+### Added — Node Settings Screen
+- **Node Settings**: экран с JSON-редактором outbound'а и dropdown для выбора detour.
+
+### Added — Per-Subscription Settings
+- **Register / Use / Override**: настройки detour-серверов на уровне подписки.
+- Register — зарегистрировать detour-серверы из подписки.
+- Use — использовать detour-серверы для нод этой подписки.
+- Override — принудительно назначить detour для всех нод подписки.
+
+### Added — Detour Server Naming
+- **⚙ prefix**: detour-серверы отображаются с префиксом ⚙ вместо `_jump_server`.
+
+### Added — Tune Button
+- **Tune button**: кнопка для управления видимостью detour-серверов в списке нод.
+
+### Changed — UX (since v1.1.1)
+- **Servers**: «Subscriptions» переименовано в «Servers».
+- **Speed test**: 10 серверов, upload через PUT.
+- **Connections screen**: отображение process/app name.
+- **Animated VPN status chip**: анимированный индикатор статуса VPN.
+- **Copy menu**: server/detour/both; detour убран из копирования по умолчанию.
+- **Settings with sections**: настройки разбиты на секции.
+- **Compact + button**: компактная кнопка добавления, smart paste dialog.
+- **Ping timeout**: увеличен до 10 секунд.
+
+---
+
+## [1.1.1] — Previous release
 
 ### Added — Native VPN Service (Feature 013)
 - **Удалён плагин `flutter_singbox_vpn`**: вся нативная логика перенесена напрямую в `android/app/`.

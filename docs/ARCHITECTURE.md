@@ -319,3 +319,28 @@ HomeScreen
 | 017 | App Groups (Per-App Outbound) | Implemented |
 | 018 | Custom Nodes (Manual + Override) | Spec ready |
 | 019 | Load Balance (PuerNya fork) | Spec ready |
+| 020 | Multi-Hop Chained Proxy | Implemented |
+| 021 | Speed Test | Implemented |
+| 022 | Node Filter | Implemented |
+| 023 | Auto Connect on Boot | Implemented |
+| 024 | Statistics and Connections | Implemented |
+| 025 | DNS Settings | Implemented |
+| 026 | Subscription Toggles | Implemented |
+| 027 | Autosave | Implemented |
+| 028 | Subscription Caching | Implemented |
+| 029 | Subscription Context Menu | Implemented |
+| 030 | URL Launcher | Implemented |
+| 031 | Wizard Template Architecture | Implemented |
+| 032 | Ping Settings | Implemented |
+| 033 | URLTest Configuration | Implemented |
+| 034 | Node Context Menu | Implemented |
+| 035 | Traffic Bar and Navigation | Implemented |
+| 036 | Sort Modes | Implemented |
+| 037 | CI/CD Pipeline | Implemented |
+| 038 | Subscription Detail Enhancements | Implemented |
+| 039 | Security Hardening | Implemented |
+| 040 | TLS Fragment (DPI bypass) | Implemented |
+| 041 | WireGuard Support | Implemented |
+| 042 | Node Settings | Implemented |
+| 043 | Paste Dialog | Implemented |
+| 044 | Jump Server Naming / WARP Integration | Implemented |
