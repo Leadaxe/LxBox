@@ -110,7 +110,7 @@ Real-time traffic by outbound with expandable cards. Each connection shows host,
 <details>
 <summary><strong>VPN Settings</strong> — tune the engine</summary>
 
-Organized in sections: General, Clash API, Network, Auto Proxy, DNS, TUN, DPI Bypass. URLTest parameters for auto-proxy latency testing. All changes autosaved.
+Organized in sections: General, Clash API, Network, Include Auto, DNS, TUN, DPI Bypass. URLTest parameters for auto-proxy latency testing. All changes autosaved.
 </details>
 
 <details>

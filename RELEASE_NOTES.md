@@ -1,57 +1,35 @@
-# L×Box v1.1.2
+# L×Box v1.2.0
 
 Android VPN client powered by [sing-box](https://sing-box.sagernet.org/).
 
-## What's New
+## What's New in v1.2.0
 
-### Detour Server Management
-- **⚙ prefix** for intermediate/detour servers — clear visual distinction
-- **Per-subscription control**: Register (show in node list), Use (enable routing), Override (replace with your server)
-- Detour dropdown in node settings for building multi-hop chains
+### Outbound Groups Overhaul
+- Renamed **proxy-out → vpn-1**, added **vpn-3** (now VPN ①/②/③ all available)
+- **VPN ①** is always generated — toggle is locked (required base group)
+- **auto-proxy-out** is now controlled by an **Include Auto** toggle — when on, it's generated as urltest and added to `vpn-*` groups; when off, no auto section is produced at all
 
-### JSON Outbound Import
-- Paste raw sing-box JSON outbound from clipboard
-- Smart paste dialog auto-detects format (subscription URL, proxy link, WireGuard config, JSON)
-- Each server as separate entry with full JSON editor
+### Node List UX
+- **direct-out** and **auto-proxy-out** are pinned at the top of the node list in every sort mode (direct first, then auto), with a subtle highlight so they stand out
+- Long-press context menu cleaned up:
+  - No Copy actions for `direct-out` / `auto-proxy-out` (they're not real servers)
+  - *Copy detour* and *Copy server + detour* hidden when a node has no detour
 
-### Node Settings
-- Edit any server as JSON — tag, detour, all parameters
-- Save button + copy button in JSON editor
-- Works for both URI-parsed and JSON-imported servers
+### Defaults
+- `urltest_tolerance` default changed from 100 → 30 ms (switches faster when latency improves)
 
-### TLS Fragment (DPI Bypass)
-- Fragment and Record Fragment toggles
-- Applied only to first-hop outbounds
-- Configurable fallback delay
+## Prior highlights (v1.1.x)
 
-### WireGuard Endpoint
-- Correct sing-box 1.12+ endpoint structure (not deprecated outbound)
-- Auto-detect WireGuard INI config from clipboard
-- IPv6 endpoint support
-
-### Speed Test
-- 10 servers worldwide (Cloudflare, Hostkey 5 cities, Selectel, Tele2, OVH, ThinkBroadband)
-- Per-server ping URL for accurate latency measurement
-- Upload test with configurable method (PUT/POST)
-
-### UI Improvements
-- Animated VPN status chip (spinning on connect)
-- Config dirty indicator — rebuild button highlights when changes pending
-- Auto-rebuild config option in App Settings
-- Subscription detail: Nodes / Settings / Source tabs
-- Source tab shows HTTP headers and raw subscription data
-- Connections screen: process/app name, expanded layout
-- Copy menu: server / detour / both (detour stripped from copies)
-- Compact + button for adding servers
-- Sections in VPN Settings
-
-### Other
-- Renamed from BoxVPN to L×Box
-- Free VPN dialog with checkboxes and credits
-- Donate dialog (USDT ERC20/TRC20, Boosty)
-- Ping concurrency reduced to 10, timeout increased to 10s
-- 25 restructured feature specs
-- Comprehensive protocol documentation
+- Detour server management (⚙ prefix), per-subscription register/use/override, multi-hop chains
+- Smart Paste dialog (subscription URL / proxy link / WireGuard INI / JSON)
+- Node Settings JSON editor
+- TLS Fragment / Record Fragment DPI bypass
+- WireGuard endpoint (sing-box 1.12+) with IPv6 support
+- Speed Test with 10 global servers
+- Animated status chip, config-dirty banner, restart-VPN banner, auto-rebuild
+- SRS rule-set cloud status (green = cached, red = download error)
+- Subscription HTTP headers: `subscription-userinfo`, `profile-title`, `profile-web-page-url`, `profile-update-interval`
 
 ## Install
-Download `LxBox-v1.1.2.apk` and install on Android device.
+
+Download `app-release.apk` from this release, enable "Install unknown apps" for your browser, tap the APK to install.

@@ -6,7 +6,25 @@
 
 ---
 
-## [Unreleased] — since v1.1.1
+## [1.2.0] — 2026-04-18
+
+### Changed — Outbound groups overhaul
+- Переименование: **proxy-out → vpn-1**, добавлен **vpn-3** (VPN ①/②/③).
+- **VPN ①** всегда генерируется, галочка заблокирована.
+- **auto-proxy-out** теперь управляется галочкой **Include Auto**: при включении генерируется как urltest и добавляется в `vpn-*`; при выключении секция не создаётся вовсе.
+
+### Changed — Node list UX
+- **direct-out** и **auto-proxy-out** всегда вверху списка (в любом режиме сортировки, сначала direct, потом auto), с лёгкой подсветкой.
+- Контекстное меню (long-press):
+  - Copy-действия скрыты для `direct-out` / `auto-proxy-out`.
+  - *Copy detour* и *Copy server + detour* скрыты, если у ноды нет detour.
+
+### Changed — Defaults
+- `urltest_tolerance` по умолчанию 30 ms (было 100).
+
+---
+
+## [Unreleased] — since v1.2.0
 
 ### Added — TLS Fragment (DPI bypass)
 - **TLS Fragment**: фрагментация TLS ClientHello для обхода DPI. Record fragment support.

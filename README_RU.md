@@ -110,7 +110,7 @@ TLS Fragment разбивает начальный handshake для обхода
 <details>
 <summary><strong>Настройки VPN</strong> — настройка ядра</summary>
 
-Организованы по секциям: General, Clash API, Network, Auto Proxy, DNS, TUN, DPI Bypass. URLTest параметры для авто-подбора прокси. Все изменения сохраняются автоматически.
+Организованы по секциям: General, Clash API, Network, Include Auto, DNS, TUN, DPI Bypass. URLTest параметры для авто-подбора прокси. Все изменения сохраняются автоматически.
 </details>
 
 <details>
