@@ -313,6 +313,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
             _headerRow('support-url', source.supportUrl, theme),
           if (source.webPageUrl.isNotEmpty)
             _headerRow('profile-web-page-url', source.webPageUrl, theme),
+          if (source.updateIntervalHours > 0)
+            _headerRow('profile-update-interval', '${source.updateIntervalHours} hours', theme),
           if (source.totalBytes > 0)
             _headerRow('subscription-userinfo',
               'upload=${source.uploadBytes}; download=${source.downloadBytes}; total=${source.totalBytes}'

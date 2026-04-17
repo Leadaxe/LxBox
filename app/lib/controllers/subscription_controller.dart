@@ -252,6 +252,9 @@ class SubscriptionController extends ChangeNotifier {
       }
       if (result.supportUrl != null) entry.source.supportUrl = result.supportUrl!;
       if (result.webPageUrl != null) entry.source.webPageUrl = result.webPageUrl!;
+      if (result.updateIntervalHours != null && result.updateIntervalHours! > 0) {
+        entry.source.updateIntervalHours = result.updateIntervalHours!;
+      }
       await _persistSources();
     } catch (e) {
       // Keep cached data — only update status to show the error

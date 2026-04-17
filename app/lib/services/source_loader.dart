@@ -11,12 +11,13 @@ import 'xray_json_parser.dart';
 
 /// Result of loading nodes from a source — nodes + optional metadata.
 class LoadResult {
-  LoadResult({required this.nodes, this.profileTitle, this.userInfo, this.supportUrl, this.webPageUrl});
+  LoadResult({required this.nodes, this.profileTitle, this.userInfo, this.supportUrl, this.webPageUrl, this.updateIntervalHours});
   final List<ParsedNode> nodes;
   final String? profileTitle;
   final SubscriptionUserInfo? userInfo;
   final String? supportUrl;
   final String? webPageUrl;
+  final int? updateIntervalHours;
 }
 
 /// Loads and processes nodes from a [ProxySource].
@@ -37,6 +38,7 @@ class SourceLoader {
     SubscriptionUserInfo? userInfo;
     String? supportUrl;
     String? webPageUrl;
+    int? updateIntervalHours;
 
     if (source.source.isNotEmpty) {
       if (NodeParser.isSubscriptionURL(source.source)) {
@@ -90,6 +92,7 @@ class SourceLoader {
         userInfo = fetchResult.userInfo;
         supportUrl = fetchResult.supportUrl;
         webPageUrl = fetchResult.webPageUrl;
+        updateIntervalHours = fetchResult.updateIntervalHours;
         final content = fetchResult.content;
         onProgress?.call(
           0.2 + sourceIndex * 0.5 / totalSources + 0.1 / totalSources,
@@ -208,6 +211,7 @@ class SourceLoader {
       userInfo: userInfo,
       supportUrl: supportUrl,
       webPageUrl: webPageUrl,
+      updateIntervalHours: updateIntervalHours,
     );
   }
 

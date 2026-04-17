@@ -13,6 +13,7 @@ class ProxySource {
     this.expireTimestamp = 0,
     this.supportUrl = '',
     this.webPageUrl = '',
+    this.updateIntervalHours = 0,
     this.enabled = true,
     this.registerDetourServers = true,
     this.useDetourServers = true,
@@ -31,6 +32,7 @@ class ProxySource {
   int expireTimestamp; // unix seconds, 0 = unlimited
   String supportUrl;
   String webPageUrl;
+  int updateIntervalHours;
   bool enabled;
   bool registerDetourServers;
   bool useDetourServers;
@@ -85,6 +87,7 @@ class ProxySource {
       expireTimestamp: json['expire_timestamp'] as int? ?? 0,
       supportUrl: json['support_url'] as String? ?? '',
       webPageUrl: json['web_page_url'] as String? ?? '',
+      updateIntervalHours: json['update_interval_hours'] as int? ?? 0,
       enabled: json['enabled'] as bool? ?? true,
       registerDetourServers: json['register_detour_servers'] as bool? ?? true,
       useDetourServers: json['use_detour_servers'] as bool? ?? true,
@@ -105,6 +108,7 @@ class ProxySource {
         if (expireTimestamp > 0) 'expire_timestamp': expireTimestamp,
         if (supportUrl.isNotEmpty) 'support_url': supportUrl,
         if (webPageUrl.isNotEmpty) 'web_page_url': webPageUrl,
+        if (updateIntervalHours > 0) 'update_interval_hours': updateIntervalHours,
         if (!enabled) 'enabled': false,
         if (!registerDetourServers) 'register_detour_servers': false,
         if (!useDetourServers) 'use_detour_servers': false,

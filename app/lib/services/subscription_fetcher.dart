@@ -8,12 +8,13 @@ import 'subscription_decoder.dart';
 
 /// Result of a subscription fetch — decoded content + metadata from HTTP headers.
 class FetchResult {
-  FetchResult({required this.content, this.title, this.userInfo, this.supportUrl, this.webPageUrl});
+  FetchResult({required this.content, this.title, this.userInfo, this.supportUrl, this.webPageUrl, this.updateIntervalHours});
   final Uint8List content;
   final String? title;
   final SubscriptionUserInfo? userInfo;
   final String? supportUrl;
   final String? webPageUrl;
+  final int? updateIntervalHours;
 }
 
 /// Parsed `subscription-userinfo` header.
@@ -92,6 +93,10 @@ class SubscriptionFetcher {
 
       final supportUrl = streamed.headers['support-url'];
       final webPageUrl = streamed.headers['profile-web-page-url'];
+      final updateIntervalRaw = streamed.headers['profile-update-interval'];
+      final updateInterval = updateIntervalRaw != null
+          ? int.tryParse(updateIntervalRaw.trim())
+          : null;
 
       return FetchResult(
         content: SubscriptionDecoder.decode(Uint8List.fromList(bytes)),
@@ -99,6 +104,7 @@ class SubscriptionFetcher {
         userInfo: userInfo,
         supportUrl: supportUrl,
         webPageUrl: webPageUrl,
+        updateIntervalHours: updateInterval,
       );
     } finally {
       client.close();
