@@ -35,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   late final AnimationController _connectingAnim;
   bool _showDetourNodes = false;
   bool _autoRebuild = false;
+  bool _needsRestart = false;
 
   @override
   void initState() {
@@ -221,6 +222,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               FilledButton.icon(
                 onPressed: toggleEnabled
                     ? () {
+                        _needsRestart = false;
                         if (state.tunnelUp) {
                           _confirmStop(state);
                         } else {
@@ -258,6 +260,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               ),
             ],
           ),
+          if (_needsRestart && state.tunnelUp) ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () {
+                _needsRestart = false;
+                _confirmStop(_controller.state);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.tertiaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 16, color: Theme.of(context).colorScheme.onTertiaryContainer),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Config changed — restart VPN to apply',
+                        style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onTertiaryContainer),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
           if (state.lastError.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
@@ -611,10 +641,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (config != null) {
       final ok = await _controller.saveParsedConfig(config);
       if (ok && mounted) {
+        final nodeCount = _countNodesInConfig(config);
+        if (_controller.state.tunnelUp) {
+          setState(() => _needsRestart = true);
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Config rebuilt: ${_countNodesInConfig(config)} nodes',
+              'Config rebuilt: $nodeCount nodes${_controller.state.tunnelUp ? " — restart VPN to apply" : ""}',
             ),
           ),
         );
