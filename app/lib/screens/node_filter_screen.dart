@@ -55,7 +55,8 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
 
     if (mounted) {
       setState(() {
-        _allNodes = result.nodes;
+        // Hide detour servers (⚙ prefix) from filter
+        _allNodes = result.nodes.where((n) => !n.tag.startsWith('⚙ ')).toList();
         // Use saved excluded if available, otherwise derive from config diff
         _excluded.addAll(savedExcluded.isNotEmpty ? savedExcluded : result.excluded);
         _loading = false;

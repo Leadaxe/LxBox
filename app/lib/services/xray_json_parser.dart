@@ -8,7 +8,7 @@ class XrayJsonParser {
   XrayJsonParser._();
 
   static const _tagBaseMaxRunes = 48;
-  static const _jumpSuffix = '_jump_server';
+  static const detourPrefix = '⚙ ';
 
   /// Returns true if [text] is a JSON array where elements have Xray-style
   /// `outbounds` with `protocol` field (not sing-box `type`).
@@ -97,7 +97,6 @@ class XrayJsonParser {
 
     final base = _tagBaseFromRemarks(label, index);
     final mainTag = base;
-    final jumpTag = '$base$_jumpSuffix';
 
     node.tag = mainTag;
     if (node.outbound.isNotEmpty) {
@@ -109,11 +108,14 @@ class XrayJsonParser {
       streamSettings is Map<String, dynamic> ? streamSettings : null,
     );
     if (dialerRef.isNotEmpty) {
-      final jumpOb = byTag[dialerRef];
-      if (jumpOb == null) return null;
-      final jump = _buildJumpFromOutbound(jumpOb, jumpTag, label);
-      if (jump == null) return null;
-      node.jump = jump;
+      final detourOb = byTag[dialerRef];
+      if (detourOb == null) return null;
+      // Build jump tag from original Xray tag or protocol+host
+      final detourName = _detourTagName(detourOb, dialerRef);
+      final detourTag = '$detourPrefix$detourName';
+      final detour = _buildDetourFromOutbound(detourOb, detourTag, label);
+      if (detour == null) return null;
+      node.detourServer = detour;
     }
 
     return node;
@@ -328,25 +330,48 @@ class XrayJsonParser {
   // Jump outbound (SOCKS / VLESS)
   // ---------------------------------------------------------------------------
 
-  static ParsedJump? _buildJumpFromOutbound(
-    Map<String, dynamic> jumpOb,
-    String jumpTag,
+  /// Builds a human-readable name for a jump server from its Xray outbound.
+  static String _detourTagName(Map<String, dynamic> ob, String originalTag) {
+    // Try original Xray tag first
+    final tag = _str(ob, 'tag').trim();
+    if (tag.isNotEmpty && tag != originalTag) return tag;
+
+    // Fallback: protocol + host:port
+    final protocol = _str(ob, 'protocol').toLowerCase();
+    final settings = ob['settings'];
+    if (settings is Map<String, dynamic>) {
+      final servers = settings['servers'];
+      if (servers is List && servers.isNotEmpty) {
+        final s0 = servers[0];
+        if (s0 is Map<String, dynamic>) {
+          final host = _str(s0, 'address');
+          final port = _int(s0['port']);
+          if (host.isNotEmpty) return '$protocol $host:$port';
+        }
+      }
+    }
+    return '$protocol $originalTag';
+  }
+
+  static ParsedDetour? _buildDetourFromOutbound(
+    Map<String, dynamic> detourOb,
+    String detourTag,
     String label,
   ) {
-    final protocol = _str(jumpOb, 'protocol').toLowerCase();
+    final protocol = _str(detourOb, 'protocol').toLowerCase();
     switch (protocol) {
       case 'socks':
-        return _buildSocksJump(jumpOb, jumpTag);
+        return _buildSocksDetour(detourOb, detourTag);
       case 'vless':
-        return _buildVlessJump(jumpOb, jumpTag, label);
+        return _buildVlessDetour(detourOb, detourTag, label);
       default:
         return null;
     }
   }
 
-  static ParsedJump? _buildSocksJump(
+  static ParsedDetour? _buildSocksDetour(
     Map<String, dynamic> ob,
-    String jumpTag,
+    String detourTag,
   ) {
     final settings = ob['settings'];
     if (settings is! Map<String, dynamic>) return null;
@@ -361,7 +386,7 @@ class XrayJsonParser {
 
     final outbound = <String, dynamic>{
       'type': 'socks',
-      'tag': jumpTag,
+      'tag': detourTag,
       'server': addr,
       'server_port': port,
       'version': '5',
@@ -378,8 +403,8 @@ class XrayJsonParser {
       }
     }
 
-    return ParsedJump(
-      tag: jumpTag,
+    return ParsedDetour(
+      tag: detourTag,
       scheme: 'socks',
       server: addr,
       port: port,
@@ -387,17 +412,17 @@ class XrayJsonParser {
     );
   }
 
-  static ParsedJump? _buildVlessJump(
+  static ParsedDetour? _buildVlessDetour(
     Map<String, dynamic> ob,
-    String jumpTag,
+    String detourTag,
     String label,
   ) {
     final node = _buildVlessFromOutbound(ob, label);
     if (node == null || node.outbound.isEmpty) return null;
     final outbound = Map<String, dynamic>.from(node.outbound);
-    outbound['tag'] = jumpTag;
-    return ParsedJump(
-      tag: jumpTag,
+    outbound['tag'] = detourTag;
+    return ParsedDetour(
+      tag: detourTag,
       scheme: 'vless',
       server: node.server,
       port: node.port,

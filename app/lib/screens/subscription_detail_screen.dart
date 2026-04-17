@@ -25,7 +25,8 @@ class SubscriptionDetailScreen extends StatefulWidget {
       _SubscriptionDetailScreenState();
 }
 
-class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
+class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tabCtrl;
   List<ParsedNode>? _nodes;
   bool _loading = true;
   String? _error;
@@ -35,13 +36,14 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
     _nameCtrl = TextEditingController(text: widget.entry.source.name);
-    // Load from cache (offline) on open
     unawaited(_loadNodes());
   }
 
   @override
   void dispose() {
+    _tabCtrl.dispose();
     _nameCtrl.dispose();
     super.dispose();
   }
@@ -58,7 +60,22 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
         tagCounts,
         cacheOnly: cacheOnly,
       );
-      if (mounted) setState(() { _nodes = nodes; _loading = false; });
+      // Include jump servers as separate entries
+      final expanded = <ParsedNode>[];
+      for (final node in nodes) {
+        expanded.add(node);
+        if (node.detourServer != null) {
+          expanded.add(ParsedNode(
+            tag: node.detourServer!.tag,
+            scheme: node.detourServer!.scheme,
+            server: node.detourServer!.server,
+            port: node.detourServer!.port,
+            label: node.detourServer!.tag,
+            outbound: node.detourServer!.outbound,
+          ));
+        }
+      }
+      if (mounted) setState(() { _nodes = expanded; _loading = false; });
     } catch (e) {
       if (mounted) setState(() { _error = e.toString(); _loading = false; });
     }
@@ -143,16 +160,64 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
             onPressed: _delete,
           ),
         ],
+        bottom: TabBar(
+          controller: _tabCtrl,
+          tabs: const [
+            Tab(text: 'Nodes'),
+            Tab(text: 'Settings'),
+          ],
+        ),
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: TabBarView(
+        controller: _tabCtrl,
         children: [
-          if (_loading) const LinearProgressIndicator(),
-          _buildMeta(entry, theme),
-          const Divider(height: 1),
-          Expanded(child: _buildNodeList(theme)),
+          // Tab 1: Nodes
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_loading) const LinearProgressIndicator(),
+              _buildMeta(entry, theme),
+              const Divider(height: 1),
+              Expanded(child: _buildNodeList(theme)),
+            ],
+          ),
+          // Tab 2: Settings
+          _buildSettingsTab(theme),
         ],
       ),
+    );
+  }
+
+  Widget _buildSettingsTab(ThemeData theme) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text('Display', style: theme.textTheme.titleSmall?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.bold,
+        )),
+        const Divider(),
+        SwitchListTile(
+          title: const Text('Show detour servers'),
+          subtitle: const Text('Display ⚙ intermediate detour servers in node list'),
+          value: widget.entry.source.showDetourServers,
+          onChanged: (val) {
+            setState(() => widget.entry.source.showDetourServers = val);
+            unawaited(widget.controller.persistSources());
+          },
+        ),
+        SwitchListTile(
+          title: const Text('Use detour servers'),
+          subtitle: Text(widget.entry.source.useDetourServers
+              ? 'Nodes connect through detour servers (default)'
+              : 'Detour servers disabled — nodes connect directly'),
+          value: widget.entry.source.useDetourServers,
+          onChanged: (val) {
+            setState(() => widget.entry.source.useDetourServers = val);
+            unawaited(widget.controller.persistSources());
+          },
+        ),
+      ],
     );
   }
 
@@ -329,12 +394,15 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
       );
     }
 
+    final showJump = widget.entry.source.showDetourServers;
+    final filtered = showJump ? nodes : nodes.where((n) => !n.tag.startsWith('⚙ ')).toList();
+
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      itemCount: nodes.length,
+      itemCount: filtered.length,
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {
-        final node = nodes[i];
+        final node = filtered[i];
         return ListTile(
           contentPadding: EdgeInsets.zero,
           leading: _protocolIcon(node.scheme),

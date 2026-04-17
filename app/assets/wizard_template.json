@@ -269,6 +269,15 @@
       "title": "Stack",
       "tooltip": "system (default), gvisor (userspace), mixed"
     },
+    { "section": "Nodes", "description": "Node list behavior" },
+    {
+      "name": "register_detour_servers",
+      "type": "bool",
+      "default_value": "true",
+      "wizard_ui": "edit",
+      "title": "Register detour servers",
+      "tooltip": "Add ⚙ detour servers (⚙) to proxy groups so they appear in node list"
+    },
     { "section": "DPI Bypass", "description": "TLS fragmentation to bypass censorship" },
     {
       "name": "tls_fragment",

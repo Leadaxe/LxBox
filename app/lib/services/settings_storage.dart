@@ -263,6 +263,19 @@ class SettingsStorage {
     _cache = data;
     await _save();
   }
+  // ─── UI preferences ───
+
+  static Future<bool> getShowDetourServers() async {
+    final data = await _load();
+    return data['show_detour_servers'] as bool? ?? false;
+  }
+
+  static Future<void> setShowDetourServers(bool value) async {
+    final data = await _load();
+    data['show_detour_servers'] = value;
+    _cache = data;
+    await _save();
+  }
 }
 
 /// A per-app routing rule: a named group of packages with an outbound.

@@ -90,6 +90,13 @@ class ConfigBuilder {
           sourceIndex: i,
           totalSources: sources.length,
         );
+        // Strip detour servers if disabled for this source
+        if (!sources[i].useDetourServers) {
+          for (final node in nodes) {
+            node.detourServer = null;
+            node.outbound.remove('detour');
+          }
+        }
         allNodes.addAll(nodes);
       } catch (_) {}
     }
@@ -112,12 +119,14 @@ class ConfigBuilder {
     final excludedNodes = await SettingsStorage.getExcludedNodes();
 
     // Build preset groups and node outbounds
+    final registerDetour = vars['register_detour_servers'] != 'false';
     final outbounds = _buildPresetOutbounds(
       template.presetGroups,
       enabledGroups,
       allNodes,
       excludedNodes,
       vars,
+      registerDetourServers: registerDetour,
     );
 
     // Separate WireGuard endpoints from regular outbounds
@@ -171,29 +180,34 @@ class ConfigBuilder {
     Set<String> enabledGroupTags,
     List<ParsedNode> allNodes,
     Set<String> excludedNodes,
-    Map<String, String> vars,
-  ) {
+    Map<String, String> vars, {
+    bool registerDetourServers = true,
+  }) {
     final result = <Map<String, dynamic>>[];
-    final emittedJumpTags = <String>{};
+    final emittedDetourTags = <String>{};
 
     for (final node in allNodes) {
       if (node.outbound.isEmpty) continue;
 
       // If node has a jump server, emit the jump outbound first
       // and set `detour` on the main outbound to route through it.
-      if (node.jump != null && node.jump!.outbound.isNotEmpty) {
-        final jumpTag = node.jump!.tag;
-        if (!emittedJumpTags.contains(jumpTag)) {
-          result.add(node.jump!.outbound);
-          emittedJumpTags.add(jumpTag);
+      if (node.detourServer != null && node.detourServer!.outbound.isNotEmpty) {
+        final detourTag = node.detourServer!.tag;
+        if (!emittedDetourTags.contains(detourTag)) {
+          result.add(node.detourServer!.outbound);
+          emittedDetourTags.add(detourTag);
         }
-        node.outbound['detour'] = jumpTag;
+        node.outbound['detour'] = detourTag;
       }
 
       result.add(node.outbound);
     }
 
     final allNodeTags = allNodes.map((n) => n.tag).toList();
+    // Optionally add jump server tags to groups so they appear in Clash API
+    if (registerDetourServers) {
+      allNodeTags.addAll(emittedDetourTags);
+    }
 
     // Determine which presets are active
     final activePresets = presets.where((p) {

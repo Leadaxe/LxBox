@@ -108,12 +108,12 @@ class SourceLoader {
             if (count >= maxNodesPerSubscription) break;
             _applyPrefix(node, source);
             _dedup(node, tagCounts);
-            if (node.jump != null) {
-              node.jump!.tag = _makeUnique(node.jump!.tag, tagCounts);
-              if (node.jump!.outbound.isNotEmpty) {
-                node.jump!.outbound['tag'] = node.jump!.tag;
+            if (node.detourServer != null) {
+              node.detourServer!.tag = _makeUnique(node.detourServer!.tag, tagCounts);
+              if (node.detourServer!.outbound.isNotEmpty) {
+                node.detourServer!.outbound['tag'] = node.detourServer!.tag;
               }
-              node.outbound['detour'] = node.jump!.tag;
+              node.outbound['detour'] = node.detourServer!.tag;
             }
             nodes.add(node);
             count++;
@@ -236,10 +236,10 @@ class SourceLoader {
       if (node.outbound.isNotEmpty) {
         node.outbound['tag'] = node.tag;
       }
-      if (node.jump != null) {
-        node.jump!.tag = '${source.tagPrefix}${node.jump!.tag}';
-        if (node.jump!.outbound.isNotEmpty) {
-          node.jump!.outbound['tag'] = node.jump!.tag;
+      if (node.detourServer != null) {
+        node.detourServer!.tag = '${source.tagPrefix}${node.detourServer!.tag}';
+        if (node.detourServer!.outbound.isNotEmpty) {
+          node.detourServer!.outbound['tag'] = node.detourServer!.tag;
         }
       }
     }

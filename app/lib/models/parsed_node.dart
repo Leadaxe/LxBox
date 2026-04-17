@@ -10,7 +10,7 @@ class ParsedNode {
     this.label = '',
     this.comment = '',
     this.sourceUri = '',
-    this.jump,
+    this.detourServer,
     Map<String, String>? query,
     Map<String, dynamic>? outbound,
   })  : query = query ?? {},
@@ -30,12 +30,12 @@ class ParsedNode {
 
   /// Optional chained proxy (jump server) — the main outbound uses `detour`
   /// pointing at this jump's tag so traffic is tunneled through it first.
-  ParsedJump? jump;
+  ParsedDetour? detourServer;
 }
 
 /// A chained proxy outbound (SOCKS or VLESS) used as a jump/detour server.
-class ParsedJump {
-  ParsedJump({
+class ParsedDetour {
+  ParsedDetour({
     required this.tag,
     required this.scheme,
     required this.server,
