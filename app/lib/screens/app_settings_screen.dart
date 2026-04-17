@@ -29,7 +29,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   Future<void> _loadAutoStart() async {
     final auto = await _vpn.getAutoStart();
     final keep = await _vpn.getKeepOnExit();
-    final rebuild = await SettingsStorage.getVar('auto_rebuild', 'false');
+    final rebuild = await SettingsStorage.getVar('auto_rebuild', 'true');
     if (mounted) setState(() { _autoStart = auto; _keepOnExit = keep; _autoRebuild = rebuild == 'true'; _loaded = true; });
   }
 

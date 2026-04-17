@@ -34,7 +34,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   late final SubscriptionController _subController;
   late final AnimationController _connectingAnim;
   bool _showDetourNodes = false;
-  bool _autoRebuild = false;
+  bool _autoRebuild = true;
   bool _needsRestart = false;
 
   @override
@@ -53,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   }
 
   Future<void> _loadAutoRebuild() async {
-    final val = await SettingsStorage.getVar('auto_rebuild', 'false');
+    final val = await SettingsStorage.getVar('auto_rebuild', 'true');
     _autoRebuild = val == 'true';
   }
 
@@ -68,7 +68,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     Navigator.of(context).pop();
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen)).then((_) async {
       // Re-read auto-rebuild in case it changed in App Settings
-      final val = await SettingsStorage.getVar('auto_rebuild', 'false');
+      final val = await SettingsStorage.getVar('auto_rebuild', 'true');
       _autoRebuild = val == 'true';
       if (_subController.configDirty) {
         if (_autoRebuild) {
