@@ -94,7 +94,7 @@
         "default": "direct-out",
         "interrupt_exist_connections": true
       },
-      "add_outbounds": ["direct-out"]
+      "add_outbounds": ["direct-out", "auto-proxy-out"]
     },
     {
       "tag": "vpn-3",
@@ -105,7 +105,7 @@
         "default": "direct-out",
         "interrupt_exist_connections": true
       },
-      "add_outbounds": ["direct-out"]
+      "add_outbounds": ["direct-out", "auto-proxy-out"]
     }
   ],
 

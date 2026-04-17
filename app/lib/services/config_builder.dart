@@ -223,8 +223,15 @@ class ConfigBuilder {
       }
     }
 
+    // auto-proxy-out is always generated (used as urltest backend for selectors).
+    // The "Auto Proxy" toggle only controls whether it's added to vpn-* groups.
+    final autoProxyEnabled = enabledGroupTags.isEmpty
+        ? presets.any((p) => p.tag == 'auto-proxy-out' && p.defaultEnabled)
+        : enabledGroupTags.contains('auto-proxy-out');
+
     // Determine which presets are active
     final activePresets = presets.where((p) {
+      if (p.tag == 'auto-proxy-out') return true; // always generated
       if (enabledGroupTags.isEmpty) return p.defaultEnabled;
       return enabledGroupTags.contains(p.tag);
     }).toList();
@@ -252,9 +259,13 @@ class ConfigBuilder {
       final nodeTags = preset.type == 'urltest' && excludedNodes.isNotEmpty
           ? allNodeTags.where((t) => !excludedNodes.contains(t)).toList()
           : allNodeTags;
+      // Filter auto-proxy-out from add_outbounds if not enabled
+      final addOutbounds = preset.addOutbounds
+          .where(knownTags.contains)
+          .where((t) => t != 'auto-proxy-out' || autoProxyEnabled);
       final tags = <String>[
         ...nodeTags,
-        ...preset.addOutbounds.where(knownTags.contains),
+        ...addOutbounds,
       ];
       // Skip empty urltest; for others add direct-out fallback
       if (tags.isEmpty) {
@@ -264,6 +275,10 @@ class ConfigBuilder {
 
       final options = _deepCopy(preset.options);
       _substituteVars(options, vars);
+      // If default points to auto-proxy-out but it's not enabled, switch to first tag
+      if (!autoProxyEnabled && options['default'] == 'auto-proxy-out' && tags.isNotEmpty) {
+        options['default'] = tags.first;
+      }
       result.add(<String, dynamic>{
         'tag': preset.tag,
         'type': preset.type,
