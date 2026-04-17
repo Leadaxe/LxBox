@@ -61,6 +61,8 @@ class _StatsScreenState extends State<StatsScreen> {
         final down = (c['download'] as num?)?.toInt() ?? 0;
         final start = c['start']?.toString() ?? '';
 
+        final process = meta['process']?.toString() ?? meta['processPath']?.toString() ?? '';
+
         final conn = _Connection(
           host: host,
           destPort: destPort,
@@ -71,6 +73,7 @@ class _StatsScreenState extends State<StatsScreen> {
           upload: up,
           download: down,
           start: start,
+          process: process,
         );
 
         final existing = perChain[chain];
@@ -246,6 +249,15 @@ class _StatsScreenState extends State<StatsScreen> {
               style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
             ),
           ),
+          if (c.process.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 20, top: 2),
+              child: Text(
+                c.process,
+                style: TextStyle(fontSize: 10, color: cs.primary),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           if (c.chains.length > 1)
             Padding(
               padding: const EdgeInsets.only(left: 20, top: 2),
@@ -300,6 +312,7 @@ class _Connection {
     this.upload = 0,
     this.download = 0,
     this.start = '',
+    this.process = '',
   });
 
   final String host;
@@ -311,4 +324,5 @@ class _Connection {
   final int upload;
   final int download;
   final String start;
+  final String process;
 }

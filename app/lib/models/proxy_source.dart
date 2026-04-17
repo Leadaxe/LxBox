@@ -37,7 +37,26 @@ class ProxySource {
       if (uri != null && uri.host.isNotEmpty) return uri.host;
       return source.length > 40 ? '${source.substring(0, 40)}…' : source;
     }
-    if (connections.isNotEmpty) return connections.first;
+    if (connections.isNotEmpty) {
+      final c = connections.first;
+      // JSON outbound — extract tag
+      if (c.startsWith('{')) {
+        final tagMatch = RegExp(r'"tag"\s*:\s*"([^"]+)"').firstMatch(c);
+        if (tagMatch != null) return tagMatch.group(1)!;
+        final typeMatch = RegExp(r'"type"\s*:\s*"([^"]+)"').firstMatch(c);
+        if (typeMatch != null) return typeMatch.group(1)!;
+      }
+      // URI — extract label from fragment (#name)
+      final uri = Uri.tryParse(c);
+      if (uri != null && uri.fragment.isNotEmpty) {
+        return Uri.decodeComponent(uri.fragment);
+      }
+      // Fallback: scheme + host:port
+      if (uri != null && uri.host.isNotEmpty) {
+        return '${uri.scheme}://${uri.host}:${uri.port}';
+      }
+      return c.length > 40 ? '${c.substring(0, 40)}...' : c;
+    }
     return '(empty)';
   }
 

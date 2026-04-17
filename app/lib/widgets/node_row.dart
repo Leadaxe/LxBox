@@ -15,8 +15,7 @@ class NodeRow extends StatelessWidget {
     required this.onHighlight,
     required this.onActivate,
     required this.onPing,
-    this.onCopyJson,
-    this.onCopyUrl,
+    this.onCopy,
     this.urltestNow,
   });
 
@@ -30,8 +29,8 @@ class NodeRow extends StatelessWidget {
   final VoidCallback onHighlight;
   final VoidCallback onActivate;
   final VoidCallback onPing;
-  final VoidCallback? onCopyJson;
-  final VoidCallback? onCopyUrl;
+  /// Called with 'server', 'detour', or 'both'.
+  final void Function(String mode)? onCopy;
   /// If this node is a URLTest group, shows which node it auto-selected.
   final String? urltestNow;
 
@@ -111,23 +110,31 @@ class NodeRow extends StatelessWidget {
           ),
         ),
         const PopupMenuDivider(),
-        if (onCopyUrl != null)
-          PopupMenuItem<String>(
-            value: 'copy_url',
-            child: ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.link, size: 20),
-              title: const Text('Copy URL'),
-            ),
-          ),
         PopupMenuItem<String>(
-          value: 'copy_json',
+          value: 'copy_server',
           child: ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.data_object, size: 20),
-            title: const Text('Copy outbound JSON'),
+            leading: const Icon(Icons.content_copy, size: 20),
+            title: const Text('Copy server'),
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'copy_detour',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.alt_route, size: 20),
+            title: const Text('Copy detour'),
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'copy_both',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.copy_all, size: 20),
+            title: const Text('Copy server + detour'),
           ),
         ),
       ],
@@ -138,10 +145,12 @@ class NodeRow extends StatelessWidget {
         onPing();
       case 'activate':
         onActivate();
-      case 'copy_url':
-        if (onCopyUrl != null) onCopyUrl!();
-      case 'copy_json':
-        if (onCopyJson != null) onCopyJson!();
+      case 'copy_server':
+        if (onCopy != null) onCopy!('server');
+      case 'copy_detour':
+        if (onCopy != null) onCopy!('detour');
+      case 'copy_both':
+        if (onCopy != null) onCopy!('both');
     }
   }
 

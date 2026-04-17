@@ -232,7 +232,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 onPressed: state.busy || _subController.busy
                     ? null
                     : () => unawaited(_rebuildConfig()),
-                icon: const Icon(Icons.sync, size: 20),
+                icon: const Icon(Icons.refresh, size: 20),
               ),
             ],
           ),
@@ -650,41 +650,57 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     ).then((_) { urlCtrl.dispose(); timeoutCtrl.dispose(); });
   }
 
-  void _copyNodeJson(String tag, HomeState state) {
-    // Try to find full outbound from configRaw (complete config)
-    final entries = <Map<String, dynamic>>[];
-    if (state.configRaw.isNotEmpty) {
-      try {
-        final config = jsonDecode(state.configRaw) as Map<String, dynamic>;
-        final outbounds = config['outbounds'] as List<dynamic>? ?? [];
-        final endpoints = config['endpoints'] as List<dynamic>? ?? [];
-        final all = [...outbounds, ...endpoints].whereType<Map<String, dynamic>>();
-        final main = all.where((o) => o['tag'] == tag).firstOrNull;
-        if (main != null) {
-          // Include detour (jump server) if present
-          final detourTag = main['detour'] as String?;
-          if (detourTag != null && detourTag.isNotEmpty) {
-            final detour = all.where((o) => o['tag'] == detourTag).firstOrNull;
-            if (detour != null) entries.add(detour);
-          }
-          entries.add(main);
+  void _copyNodeJson(String tag, HomeState state, String mode) {
+    if (state.configRaw.isEmpty) return;
+
+    Map<String, dynamic>? server;
+    Map<String, dynamic>? detour;
+    try {
+      final config = jsonDecode(state.configRaw) as Map<String, dynamic>;
+      final outbounds = config['outbounds'] as List<dynamic>? ?? [];
+      final endpoints = config['endpoints'] as List<dynamic>? ?? [];
+      final all = [...outbounds, ...endpoints].whereType<Map<String, dynamic>>();
+      server = all.where((o) => o['tag'] == tag).firstOrNull;
+      if (server != null) {
+        final detourTag = server['detour'] as String?;
+        if (detourTag != null && detourTag.isNotEmpty) {
+          detour = all.where((o) => o['tag'] == detourTag).firstOrNull;
         }
-      } catch (_) {}
+      }
+    } catch (_) {}
+
+    if (server == null) return;
+
+    Object toCopy;
+    String label;
+    switch (mode) {
+      case 'detour':
+        if (detour == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No detour for this node')),
+            );
+          }
+          return;
+        }
+        toCopy = detour;
+        label = 'Detour copied';
+      case 'both':
+        if (detour != null) {
+          toCopy = [detour, server];
+        } else {
+          toCopy = server;
+        }
+        label = 'Server${detour != null ? " + detour" : ""} copied';
+      default: // 'server'
+        toCopy = server;
+        label = 'Server copied';
     }
-    // Fallback to Clash API (partial)
-    if (entries.isEmpty) {
-      final entry = ClashApiClient.proxyEntry(state.proxiesJson, tag);
-      if (entry != null) entries.add(entry);
-    }
-    if (entries.isEmpty) return;
-    final json = const JsonEncoder.withIndent('  ').convert(
-      entries.length == 1 ? entries.first : entries,
-    );
+
+    final json = const JsonEncoder.withIndent('  ').convert(toCopy);
     Clipboard.setData(ClipboardData(text: json));
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Outbound JSON copied ($tag)')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(label)));
     }
   }
 
@@ -750,7 +766,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               onHighlight: () => _controller.setHighlightedNode(tag),
               onActivate: () => unawaited(_controller.switchNode(tag)),
               onPing: () => unawaited(_controller.pingNode(tag)),
-              onCopyJson: () => _copyNodeJson(tag, state),
+              onCopy: (mode) => _copyNodeJson(tag, state, mode),
               urltestNow: ClashApiClient.urltestNow(state.proxiesJson, tag),
             );
           },

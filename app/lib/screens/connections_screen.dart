@@ -99,6 +99,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     final destPort = meta['destinationPort']?.toString() ?? '';
     final network = meta['network']?.toString() ?? '';
     final connType = meta['type']?.toString() ?? '';
+    final process = meta['process']?.toString() ?? meta['processPath']?.toString() ?? '';
 
     final destination = host.isNotEmpty ? host : destIp;
     final display = destPort.isNotEmpty ? '$destination:$destPort' : destination;
@@ -116,34 +117,78 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
         ? DateTime.now().difference(startTime)
         : null;
 
-    return ListTile(
-      dense: true,
-      title: Text(
-        display,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-      ),
-      subtitle: Text(
-        '$chain  ·  $network/$connType'
-        '${duration != null ? '  ·  ${_formatDuration(duration)}' : ''}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 11),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
+    final cs = Theme.of(context).colorScheme;
+    final rule = conn['rule']?.toString() ?? '';
+    final rulePayload = conn['rulePayload']?.toString() ?? '';
+    final ruleText = rulePayload.isNotEmpty ? '$rule ($rulePayload)' : rule;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '↑${_formatBytes(upload)} ↓${_formatBytes(download)}',
-            style: const TextStyle(fontSize: 11),
+          // Row 1: host:port + traffic + close button
+          Row(
+            children: [
+              Icon(
+                network == 'udp' ? Icons.swap_horiz : Icons.arrow_forward,
+                size: 14,
+                color: cs.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  display,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text(
+                '↑${_formatBytes(upload)} ↓${_formatBytes(download)}',
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(width: 4),
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: IconButton(
+                  icon: const Icon(Icons.close, size: 14),
+                  padding: EdgeInsets.zero,
+                  tooltip: 'Close',
+                  onPressed: id.isNotEmpty ? () => _closeConnection(id) : null,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 4),
-          IconButton(
-            icon: const Icon(Icons.close, size: 16),
-            tooltip: 'Close',
-            visualDensity: VisualDensity.compact,
-            onPressed: id.isNotEmpty ? () => _closeConnection(id) : null,
+          // Row 2: process (app name)
+          if (process.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 20, top: 2),
+              child: Text(
+                process,
+                style: TextStyle(fontSize: 11, color: cs.primary),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          // Row 3: chain
+          Padding(
+            padding: const EdgeInsets.only(left: 20, top: 2),
+            child: Text(
+              chain,
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          // Row 4: protocol + rule + duration
+          Padding(
+            padding: const EdgeInsets.only(left: 20, top: 2),
+            child: Text(
+              '$network/$connType'
+              '${ruleText.isNotEmpty ? '  ·  $ruleText' : ''}'
+              '${duration != null ? '  ·  ${_formatDuration(duration)}' : ''}',
+              style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
