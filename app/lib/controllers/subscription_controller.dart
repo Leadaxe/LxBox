@@ -183,6 +183,7 @@ class SubscriptionController extends ChangeNotifier {
 
       _lastGeneratedConfig = config;
       _progressMessage = '';
+      configDirty = false; // rebuild clears dirty
       await SettingsStorage.setLastGlobalUpdate(DateTime.now());
       return config;
     } catch (e) {
@@ -209,6 +210,7 @@ class SubscriptionController extends ChangeNotifier {
         },
       );
       _lastGeneratedConfig = config;
+      configDirty = false;
       return config;
     } catch (e) {
       _lastError = e.toString();

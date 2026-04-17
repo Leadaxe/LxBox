@@ -237,7 +237,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               Container(
                 decoration: _subController.configDirty
                     ? BoxDecoration(
-                        color: Theme.of(context).colorScheme.errorContainer,
+                        color: Theme.of(context).colorScheme.primaryContainer,
                         shape: BoxShape.circle,
                       )
                     : null,
@@ -249,7 +249,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   icon: Icon(
                     Icons.refresh,
                     size: 20,
-                    color: _subController.configDirty ? Theme.of(context).colorScheme.onErrorContainer : null,
+                    color: _subController.configDirty ? Theme.of(context).colorScheme.onPrimaryContainer : null,
                   ),
                 ),
               ),
