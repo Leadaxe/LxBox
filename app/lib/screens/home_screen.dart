@@ -545,6 +545,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     );
   }
 
+  int _countNodesInConfig(String configJson) {
+    try {
+      final config = jsonDecode(configJson) as Map<String, dynamic>;
+      final outbounds = (config['outbounds'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .where((o) {
+            final type = o['type']?.toString() ?? '';
+            // Skip groups and built-in outbounds
+            return type != 'selector' && type != 'urltest' && type != 'direct' && type != 'block' && type != 'dns';
+          }).length;
+      final endpoints = (config['endpoints'] as List<dynamic>? ?? []).length;
+      return outbounds + endpoints;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   Future<void> _rebuildConfig() async {
     final config = await _subController.updateAllAndGenerate();
     if (!mounted) return;
@@ -554,7 +571,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Config rebuilt: ${_subController.entries.fold<int>(0, (s, e) => s + e.nodeCount)} nodes',
+              'Config rebuilt: ${_countNodesInConfig(config)} nodes',
             ),
           ),
         );
@@ -673,17 +690,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           }
           return;
         }
-        toCopy = detour;
+        toCopy = Map<String, dynamic>.from(detour)..remove('detour');
         label = 'Detour copied';
       case 'both':
+        final cleanServer = Map<String, dynamic>.from(server)..remove('detour');
         if (detour != null) {
-          toCopy = [detour, server];
+          final cleanDetour = Map<String, dynamic>.from(detour)..remove('detour');
+          toCopy = [cleanDetour, cleanServer];
         } else {
-          toCopy = server;
+          toCopy = cleanServer;
         }
         label = 'Server${detour != null ? " + detour" : ""} copied';
       default: // 'server'
-        // Remove detour field so server is standalone
         toCopy = Map<String, dynamic>.from(server)..remove('detour');
         label = 'Server copied';
     }

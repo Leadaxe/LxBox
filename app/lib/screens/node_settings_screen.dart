@@ -26,13 +26,11 @@ class NodeSettingsScreen extends StatefulWidget {
 class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   late TextEditingController _tagCtrl;
   late TextEditingController _jsonCtrl;
-  String _detour = '';
-  List<String> _availableNodes = [];
   String _originalTag = '';
   String _scheme = '';
   String _serverInfo = '';
-  bool _isJson = false;
-  Timer? _saveTimer;
+  String _detour = '';
+  List<String> _availableNodes = [];
 
   @override
   void initState() {
@@ -44,7 +42,6 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
 
   @override
   void dispose() {
-    _saveTimer?.cancel();
     _tagCtrl.dispose();
     _jsonCtrl.dispose();
     super.dispose();
@@ -56,9 +53,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
 
     final first = connections.first;
 
-    // Detect JSON outbound
+
     if (first.trimLeft().startsWith('{')) {
-      _isJson = true;
+      // Already JSON
       try {
         final parsed = jsonDecode(first) as Map<String, dynamic>;
         _originalTag = parsed['tag']?.toString() ?? '';
@@ -66,19 +63,13 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
         final server = parsed['server']?.toString() ?? '';
         final port = parsed['server_port']?.toString() ?? '';
         _serverInfo = port.isNotEmpty ? '$server:$port' : server;
-        // Pretty-print all connections as JSON
-        final allJson = connections.map((c) {
-          try { return jsonDecode(c); } catch (_) { return c; }
-        }).toList();
-        _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(
-          allJson.length == 1 ? allJson.first : allJson,
-        );
+        _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(parsed);
       } catch (_) {
         _originalTag = first.length > 30 ? first.substring(0, 30) : first;
         _jsonCtrl.text = first;
       }
     } else {
-      // URI-based node
+      // URI-based node — parse to outbound JSON
       final tagCounts = <String, int>{};
       final nodes = await ConfigBuilder.loadAndParseNodes(
         [widget.entry.source],
@@ -89,15 +80,20 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
       _originalTag = node.tag;
       _scheme = node.scheme;
       _serverInfo = '${node.server}:${node.port}';
+      _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(node.outbound);
     }
 
-    // Load existing overrides
-    final overrides = await SettingsStorage.getNodeOverrides();
-    final ov = overrides[_originalTag] ?? {};
-    _tagCtrl.text = ov['custom_tag'] ?? _originalTag;
-    _detour = ov['detour'] ?? '';
+    _tagCtrl.text = _originalTag;
 
-    // Load only direct servers for detour dropdown (not subscriptions — they change)
+    // Read detour from JSON
+    try {
+      final parsed = jsonDecode(_jsonCtrl.text);
+      if (parsed is Map<String, dynamic>) {
+        _detour = parsed['detour']?.toString() ?? '';
+      }
+    } catch (_) {}
+
+    // Load available direct servers for detour dropdown
     final allSources = await SettingsStorage.getProxySources();
     final directSources = allSources
         .where((s) => s.source.isEmpty && s.connections.isNotEmpty)
@@ -109,36 +105,6 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
         .toList();
 
     if (mounted) setState(() {});
-  }
-
-  void _scheduleSave() {
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 500), () => unawaited(_save()));
-  }
-
-
-  void _updateJsonTag() {
-    try {
-      final parsed = jsonDecode(_jsonCtrl.text);
-      if (parsed is Map<String, dynamic>) {
-        parsed['tag'] = _tagCtrl.text.trim();
-        _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(parsed);
-      }
-    } catch (_) {}
-  }
-
-  void _updateJsonDetour() {
-    try {
-      final parsed = jsonDecode(_jsonCtrl.text);
-      if (parsed is Map<String, dynamic>) {
-        if (_detour.isNotEmpty) {
-          parsed['detour'] = _detour;
-        } else {
-          parsed.remove('detour');
-        }
-        _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(parsed);
-      }
-    } catch (_) {}
   }
 
   void _saveJson() {
@@ -162,35 +128,18 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     }
   }
 
-  Future<void> _save() async {
-    final customTag = _tagCtrl.text.trim();
-    await SettingsStorage.saveNodeOverride(
-      _originalTag,
-      customTag: customTag == _originalTag ? '' : customTag,
-      detour: _detour,
-    );
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Settings saved, regenerate config to apply')),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
     return Scaffold(
       appBar: AppBar(
         title: Text(_tagCtrl.text.isNotEmpty ? _tagCtrl.text : 'Node Settings'),
         actions: [
-          if (_isJson)
-            IconButton(
-              tooltip: 'Save JSON',
-              icon: const Icon(Icons.save),
-              onPressed: _saveJson,
-            ),
+          IconButton(
+            tooltip: 'Save',
+            icon: const Icon(Icons.save),
+            onPressed: _saveJson,
+          ),
         ],
       ),
       body: _originalTag.isEmpty
@@ -212,27 +161,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // --- Tag section ---
-                _sectionHeader('Display Name', 'How this node appears in lists and statistics', theme),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: TextField(
-                    controller: _tagCtrl,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Node name',
-                      isDense: true,
-                    ),
-                    onChanged: (_) {
-                      _scheduleSave();
-                      if (_isJson) _updateJsonTag();
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-
                 // --- Detour section ---
-                _sectionHeader('Detour', 'Route through another server', theme),
+                _sectionHeader('Detour', 'Route through another server first', theme),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: DropdownButtonFormField<String>(
@@ -249,8 +179,18 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                     ],
                     onChanged: (v) {
                       setState(() => _detour = v ?? '');
-                      _scheduleSave();
-                      if (_isJson) _updateJsonDetour();
+                      // Update detour in JSON
+                      try {
+                        final parsed = jsonDecode(_jsonCtrl.text);
+                        if (parsed is Map<String, dynamic>) {
+                          if (_detour.isNotEmpty) {
+                            parsed['detour'] = _detour;
+                          } else {
+                            parsed.remove('detour');
+                          }
+                          _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(parsed);
+                        }
+                      } catch (_) {}
                     },
                   ),
                 ),
@@ -259,25 +199,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                   child: Text(
                     _detour.isEmpty
                         ? 'Traffic goes directly to this server.'
-                        : 'Phone \u2192 $_detour \u2192 ${_tagCtrl.text} \u2192 Internet',
-                    style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                        : 'Phone \u2192 $_detour \u2192 $_originalTag \u2192 Internet',
+                    style: theme.textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Text(
-                    'Useful for bypassing blocks or adding an extra hop for privacy.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
+                const SizedBox(height: 16),
 
-                // --- JSON editor (for JSON outbounds only) ---
-                if (_isJson) ...[
-                  const SizedBox(height: 16),
-                  _sectionHeader('Outbound JSON', 'Edit raw outbound configuration', theme),
+                // --- JSON editor ---
+                _sectionHeader('Outbound JSON', 'Edit tag, detour, and all server parameters', theme),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Stack(
@@ -311,7 +240,6 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                       ],
                     ),
                   ),
-                ],
               ],
             ),
     );
