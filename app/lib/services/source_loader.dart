@@ -147,13 +147,40 @@ class SourceLoader {
       }
     }
 
+    // Track tag renames from dedup for fixing detour references
+    final tagRenames = <String, String>{};
+
     for (final conn in source.connections) {
       final trimmed = conn.trim();
-      if (trimmed.isEmpty ||
-          !NodeParser.isDirectLink(trimmed) ||
-          count >= maxNodesPerSubscription) {
+      if (trimmed.isEmpty || count >= maxNodesPerSubscription) continue;
+
+      // JSON outbound — parse directly
+      if (trimmed.startsWith('{') && trimmed.contains('"type"')) {
+        try {
+          final parsed = jsonDecode(trimmed) as Map<String, dynamic>;
+          final originalTag = parsed['tag']?.toString() ?? 'json-${count + 1}';
+          final type = parsed['type']?.toString() ?? '';
+          final server = parsed['server']?.toString() ?? '';
+          final port = parsed['server_port'] as int? ?? 0;
+          final node = ParsedNode(
+            tag: originalTag,
+            scheme: type,
+            server: server,
+            port: port,
+            label: originalTag,
+            sourceUri: trimmed,
+            outbound: parsed,
+          );
+          _applyPrefix(node, source);
+          _dedup(node, tagCounts);
+          if (node.tag != originalTag) tagRenames[originalTag] = node.tag;
+          nodes.add(node);
+          count++;
+        } catch (_) {}
         continue;
       }
+
+      if (!NodeParser.isDirectLink(trimmed)) continue;
       try {
         final node = NodeParser.parseNode(trimmed, const []);
         if (node != null) {
@@ -163,6 +190,16 @@ class SourceLoader {
           count++;
         }
       } catch (_) {}
+    }
+
+    // Fix detour references that were renamed by dedup
+    if (tagRenames.isNotEmpty) {
+      for (final node in nodes) {
+        final detour = node.outbound['detour']?.toString();
+        if (detour != null && tagRenames.containsKey(detour)) {
+          node.outbound['detour'] = tagRenames[detour];
+        }
+      }
     }
 
     return LoadResult(

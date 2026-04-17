@@ -107,14 +107,14 @@ class SubscriptionController extends ChangeNotifier {
       return;
     }
 
-    // Store each outbound as a JSON string in connections
-    final jsonStrings = outbounds.map((o) => jsonEncode(o)).toList();
-    final entry = SubscriptionEntry(
-      source: ProxySource(connections: jsonStrings),
-      nodeCount: outbounds.length,
-      status: 'JSON outbound',
-    );
-    _entries.add(entry);
+    // Each outbound is a separate entry in the list
+    for (final ob in outbounds) {
+      _entries.add(SubscriptionEntry(
+        source: ProxySource(connections: [jsonEncode(ob)]),
+        nodeCount: 1,
+        status: 'JSON outbound',
+      ));
+    }
     await _persistSources();
   }
 
@@ -306,6 +306,23 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   Future<void> persistSources() async => _persistSources();
+
+  Future<void> updateConnectionAt(int index, List<String> connections) async {
+    if (index < 0 || index >= _entries.length) return;
+    final old = _entries[index].source;
+    _entries[index] = SubscriptionEntry(
+      source: ProxySource(
+        connections: connections,
+        tagPrefix: old.tagPrefix,
+        name: old.name,
+        enabled: old.enabled,
+      ),
+      nodeCount: connections.length,
+      status: 'JSON outbound',
+    );
+    await _persistSources();
+    notifyListeners();
+  }
 
   Future<void> _persistSources() async {
     await SettingsStorage.saveProxySources(

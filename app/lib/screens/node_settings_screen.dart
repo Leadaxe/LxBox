@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
 import '../controllers/subscription_controller.dart';
 import '../services/config_builder.dart';
 import '../services/settings_storage.dart';
@@ -117,28 +116,42 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     _saveTimer = Timer(const Duration(milliseconds: 500), () => unawaited(_save()));
   }
 
+
+  void _updateJsonTag() {
+    try {
+      final parsed = jsonDecode(_jsonCtrl.text);
+      if (parsed is Map<String, dynamic>) {
+        parsed['tag'] = _tagCtrl.text.trim();
+        _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(parsed);
+      }
+    } catch (_) {}
+  }
+
+  void _updateJsonDetour() {
+    try {
+      final parsed = jsonDecode(_jsonCtrl.text);
+      if (parsed is Map<String, dynamic>) {
+        if (_detour.isNotEmpty) {
+          parsed['detour'] = _detour;
+        } else {
+          parsed.remove('detour');
+        }
+        _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(parsed);
+      }
+    } catch (_) {}
+  }
+
   void _saveJson() {
     try {
       final parsed = jsonDecode(_jsonCtrl.text);
-      // Re-serialize connections
-      final connections = <String>[];
-      if (parsed is List) {
-        for (final item in parsed) {
-          connections.add(jsonEncode(item));
-        }
-      } else if (parsed is Map) {
-        connections.add(jsonEncode(parsed));
-      }
-      if (connections.isNotEmpty) {
-        widget.entry.source.connections
-          ..clear()
-          ..addAll(connections);
-        widget.subController.persistSources();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('JSON saved')),
-          );
-        }
+      // Re-serialize as single connection
+      final jsonStr = jsonEncode(parsed is List ? parsed.first : parsed);
+      // Update the source via controller
+      widget.subController.updateConnectionAt(widget.index, [jsonStr]);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('JSON saved')),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -171,6 +184,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_tagCtrl.text.isNotEmpty ? _tagCtrl.text : 'Node Settings'),
+        actions: [
+          if (_isJson)
+            IconButton(
+              tooltip: 'Save JSON',
+              icon: const Icon(Icons.save),
+              onPressed: _saveJson,
+            ),
+        ],
       ),
       body: _originalTag.isEmpty
           ? const Center(child: CircularProgressIndicator())
@@ -202,7 +223,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                       labelText: 'Node name',
                       isDense: true,
                     ),
-                    onChanged: (_) => _scheduleSave(),
+                    onChanged: (_) {
+                      _scheduleSave();
+                      if (_isJson) _updateJsonTag();
+                    },
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -226,6 +250,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                     onChanged: (v) {
                       setState(() => _detour = v ?? '');
                       _scheduleSave();
+                      if (_isJson) _updateJsonDetour();
                     },
                   ),
                 ),
@@ -255,36 +280,35 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                   _sectionHeader('Outbound JSON', 'Edit raw outbound configuration', theme),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: TextField(
-                      controller: _jsonCtrl,
-                      maxLines: null,
-                      minLines: 8,
-                      style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                      decoration: InputDecoration(
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                        suffixIcon: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.content_paste, size: 18),
-                              tooltip: 'Paste',
-                              onPressed: () async {
-                                final data = await Clipboard.getData(Clipboard.kTextPlain);
-                                if (data?.text != null) {
-                                  _jsonCtrl.text = data!.text!;
-                                  _saveJson();
-                                }
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.save, size: 18),
-                              tooltip: 'Save',
-                              onPressed: _saveJson,
-                            ),
-                          ],
+                    child: Stack(
+                      children: [
+                        TextField(
+                          controller: _jsonCtrl,
+                          maxLines: null,
+                          minLines: 8,
+                          style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                            contentPadding: EdgeInsets.fromLTRB(12, 12, 40, 12),
+                          ),
                         ),
-                      ),
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: IconButton(
+                            icon: const Icon(Icons.copy, size: 16),
+                            tooltip: 'Copy JSON',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: _jsonCtrl.text));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('JSON copied')),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

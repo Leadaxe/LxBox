@@ -153,18 +153,38 @@ class _ConfigScreenState extends State<ConfigScreen> {
           ),
           body: Padding(
             padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: _textController,
-              maxLines: null,
-              expands: true,
-              textAlignVertical: TextAlignVertical.top,
-              keyboardType: TextInputType.multiline,
-              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'JSON or JSON5 (// and /* */ comments)',
-                alignLabelWithHint: true,
-              ),
+            child: Stack(
+              children: [
+                TextField(
+                  controller: _textController,
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  keyboardType: TextInputType.multiline,
+                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'JSON or JSON5 (// and /* */ comments)',
+                    alignLabelWithHint: true,
+                    contentPadding: EdgeInsets.fromLTRB(12, 12, 40, 12),
+                  ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: IconButton(
+                    icon: const Icon(Icons.copy, size: 16),
+                    tooltip: 'Copy',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: _textController.text));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Config copied')),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
         );
