@@ -1,381 +1,57 @@
-# L×Box v1.1.1 — First Public Release
+# L×Box v1.2.0
 
-**Date**: 2026-04-16  
-**Tag**: [`v1.1.1`](https://github.com/Leadaxe/LxBox/releases/tag/v1.1.1)  
-**APK**: [LxBox-v1.1.1.apk](https://github.com/Leadaxe/LxBox/releases/download/v1.1.1/LxBox-v1.1.1.apk)
+Android VPN client powered by [sing-box](https://sing-box.sagernet.org/).
 
----
+## What's New
 
-<details>
-<summary><strong>VPN Core</strong></summary>
+### Detour Server Management
+- **⚙ prefix** for intermediate/detour servers — clear visual distinction
+- **Per-subscription control**: Register (show in node list), Use (enable routing), Override (replace with your server)
+- Detour dropdown in node settings for building multi-hop chains
 
-- **sing-box** native library (libbox 1.12.12) — high-performance VPN kernel
-- **TUN-only** inbound — no SOCKS5/HTTP proxy on localhost (protects against IP leak via local port scanning)
-- Start/Stop VPN with one tap
-- Auto-start VPN on device boot
-- Keep VPN active when app is swiped away
-- Clash API on random port (49152-65535) with mandatory secret for real-time proxy management
+### JSON Outbound Import
+- Paste raw sing-box JSON outbound from clipboard
+- Smart paste dialog auto-detects format (subscription URL, proxy link, WireGuard config, JSON)
+- Each server as separate entry with full JSON editor
 
-</details>
+### Node Settings
+- Edit any server as JSON — tag, detour, all parameters
+- Save button + copy button in JSON editor
+- Works for both URI-parsed and JSON-imported servers
 
-<details>
-<summary><strong>Subscriptions</strong></summary>
+### TLS Fragment (DPI Bypass)
+- Fragment and Record Fragment toggles
+- Applied only to first-hop outbounds
+- Configurable fallback delay
 
-- Add subscriptions by URL or direct proxy link
-- **8 protocols**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, SSH, SOCKS, WireGuard
-- **Transport**: TCP, WebSocket, gRPC, H2, REALITY, QUIC
-- Formats: Base64, Xray JSON Array (with chained proxy/jump), plain text
-- Enable/disable individual subscriptions without deleting them
-- Auto-refresh subscriptions on VPN start (configurable interval)
-- Profile title and traffic stats from HTTP headers (subscription-userinfo)
-- Subscription detail: node list, traffic quota bar, expiry date, support/web links
-- **Offline caching**: subscriptions cached on disk, work without internet
-- Quick Start: built-in free VPN preset
-- Telegram support links open natively
+### WireGuard Endpoint
+- Correct sing-box 1.12+ endpoint structure (not deprecated outbound)
+- Auto-detect WireGuard INI config from clipboard
+- IPv6 endpoint support
 
-</details>
+### Speed Test
+- 10 servers worldwide (Cloudflare, Hostkey 5 cities, Selectel, Tele2, OVH, ThinkBroadband)
+- Per-server ping URL for accurate latency measurement
+- Upload test with configurable method (PUT/POST)
 
-<details>
-<summary><strong>Home Screen</strong></summary>
+### UI Improvements
+- Animated VPN status chip (spinning on connect)
+- Config dirty indicator — rebuild button highlights when changes pending
+- Auto-rebuild config option in App Settings
+- Subscription detail: Nodes / Settings / Source tabs
+- Source tab shows HTTP headers and raw subscription data
+- Connections screen: process/app name, expanded layout
+- Copy menu: server / detour / both (detour stripped from copies)
+- Compact + button for adding servers
+- Sections in VPN Settings
 
-- Proxy group selector (proxy-out, auto-proxy-out, vpn-1, vpn-2)
-- Node list sorted by **Ping**, **A-Z**, or **Default** order
-- Active node highlighted with checkmark
-- Traffic bar: upload/download speed, connection count, uptime
-- Tap traffic bar to open Statistics
-- **Mass Ping**: parallel ping all nodes (20 concurrent)
-- Long press ping button for **Ping Settings** with URL presets (Google, Cloudflare, Apple, Firefox, Yandex)
-
-</details>
-
-<details>
-<summary><strong>Node Filter (auto-proxy-out)</strong></summary>
-
-- Full node list from proxy-out with checkboxes
-- Checked nodes included in auto-proxy-out (urltest)
-- Unchecked nodes excluded from auto selection but remain in manual selector
-- Search, Select All / Deselect All
-- Reads from config (offline, instant)
-
-</details>
-
-<details>
-<summary><strong>Routing</strong></summary>
-
-- **Proxy Groups**: enable/disable preset groups (Auto Proxy, Proxy, VPN 1, VPN 2)
-- **Routing Rules**: Block Ads, Russian domains direct, Russia-only services, BitTorrent direct, Private IPs direct
-- Per-rule **outbound selection** (direct/proxy/auto/vpn-X)
-- **App Groups**: named groups of apps routed through chosen outbound
-  - App picker with icons, search, select all/invert, clipboard import/export
-- **Default traffic** (route.final): fallback outbound for unmatched traffic
-- All changes autosaved (no Apply button)
-
-</details>
-
-<details>
-<summary><strong>DNS Settings</strong></summary>
-
-- **16 DNS server presets**: Cloudflare (UDP/DoT/DoH), Google (UDP/DoT/DoH), Yandex (UDP/Safe/Family/DoT/DoH), Quad9, AdGuard, via-VPN variants
-- Enable/disable servers with switches
-- Add custom servers via JSON editor
-- **DNS Strategy**: prefer_ipv4 / prefer_ipv6 / ipv4_only / ipv6_only
-- **Independent cache** toggle
-- **DNS Rules** editor (JSON)
-- **DNS Final** and **Default Domain Resolver** dropdowns from enabled servers
-
-</details>
-
-<details>
-<summary><strong>VPN Settings</strong></summary>
-
-- Log level (warn/info/debug/trace)
-- Clash API address and secret (auto-generated)
-- Resolve strategy, auto-detect interface, packet sniffing
-- **URLTest URL** — endpoint for auto-proxy latency testing
-- **URLTest interval** — how often to test (e.g. 5m)
-- **URLTest tolerance** — minimum latency difference to switch (ms)
-- TUN address, MTU, strict route, TUN stack
-- All changes autosaved
-
-</details>
-
-<details>
-<summary><strong>Speed Test</strong></summary>
-
-- **4 parallel download streams** (configurable: 1/4/10)
-- **Real-time** speed updates every 500ms
-- Ping: 5 measurements, trimmed mean
-- **10 servers**: Cloudflare, Hostkey (Moscow, Frankfurt, Amsterdam, Helsinki, New York), Selectel (RU), Tele2 (EU), OVH (France), ThinkBroadband (UK)
-- Upload test with configurable method (PUT/POST) per server
-- Shows current proxy or "Direct" indicator
-- **Session history** with server name (last 10 tests)
-
-</details>
-
-<details>
-<summary><strong>Statistics</strong></summary>
-
-- Total upload/download and connection count
-- **Traffic by Outbound**: expandable cards per proxy node
-- Each connection: host:port, protocol (TCP/UDP), rule, traffic, duration, chain
-- Tap Connections counter to open full connection list with close buttons
-
-</details>
-
-<details>
-<summary><strong>App Settings</strong></summary>
-
-- Theme: **System / Light / Dark**
-- **Auto-start on boot**: VPN starts when device boots
-- **Keep VPN on exit**: VPN stays active when app is swiped away
-
-</details>
-
-<details>
-<summary><strong>Config Editor</strong></summary>
-
-- View and edit raw sing-box JSON config
-- Pretty-printed display
-- Save, paste from clipboard, load from file
-
-</details>
-
-<details>
-<summary><strong>Security</strong></summary>
-
-- **TUN-only inbound** — no SOCKS5/HTTP proxy on localhost (IP leak protection)
-- **Clash API** on random port (49152-65535) with mandatory secret
-- **VPN Service** not exported (`android:exported="false"` + `BIND_VPN_SERVICE`)
-- **Geo-routing**: Russian domains routed direct (not through proxy)
-- Secret generated with cryptographically secure PRNG (`Random.secure()`)
-- Config Editor accessible only from drawer (not exposed)
-
-</details>
-
-<details>
-<summary><strong>Architecture</strong></summary>
-
-- **wizard_template.json** — single source of truth for all defaults (DNS, ping, speed test, groups, routing rules, config skeleton)
-- **Autosave** with 500ms debounce — no Apply buttons anywhere
-- **Offline-first**: subscription disk cache, config generation from cache on network failure
-- Flutter (Dart 3.11+), Material 3
-- sing-box native library (libbox 1.12.12 via JitPack)
-- Clash API for real-time proxy management
-- Gradle Kotlin DSL, AGP 8.11.1, Kotlin 2.2.20, Java 17
-
-</details>
-
----
-
-## Supported Protocols
-
-| Protocol | URI scheme | Transport |
-|----------|-----------|-----------|
-| VLESS | `vless://` | TCP, WebSocket, gRPC, H2, REALITY |
-| VMess | `vmess://` (v2rayN base64) | TCP, WebSocket, gRPC, H2 |
-| Trojan | `trojan://` | TCP, WebSocket, gRPC |
-| Shadowsocks | `ss://` (SIP002 + legacy) | TCP, UDP |
-| Hysteria2 | `hy2://` / `hysteria2://` | QUIC |
-| SSH | `ssh://` | TCP |
-| SOCKS | `socks://` / `socks5://` | TCP |
-| WireGuard | `wireguard://` | UDP |
-
----
+### Other
+- Renamed from BoxVPN to L×Box
+- Free VPN dialog with checkboxes and credits
+- Donate dialog (USDT ERC20/TRC20, Boosty)
+- Ping concurrency reduced to 10, timeout increased to 10s
+- 25 restructured feature specs
+- Comprehensive protocol documentation
 
 ## Install
-
-1. Download `LxBox-v1.1.1.apk`
-2. Install on Android device
-3. Allow installation from unknown sources if prompted
-
----
-
-# L×Box v1.1.1 — Первый публичный релиз
-
-**Дата**: 16.04.2026  
-**Тег**: [`v1.1.1`](https://github.com/Leadaxe/LxBox/releases/tag/v1.1.1)  
-**APK**: [LxBox-v1.1.1.apk](https://github.com/Leadaxe/LxBox/releases/download/v1.1.1/LxBox-v1.1.1.apk)
-
----
-
-<details>
-<summary><strong>Ядро VPN</strong></summary>
-
-- **sing-box** нативная библиотека (libbox 1.12.12) — высокопроизводительное ядро VPN
-- **Только TUN** inbound — нет SOCKS5/HTTP прокси на localhost (защита от утечки IP через сканирование портов)
-- Запуск/остановка VPN одним нажатием
-- Автозапуск VPN при загрузке устройства
-- VPN остаётся активным при свайпе приложения
-- Clash API на рандомном порту (49152-65535) с обязательным секретом
-
-</details>
-
-<details>
-<summary><strong>Подписки</strong></summary>
-
-- Добавление подписок по URL или прямой ссылке на прокси
-- **8 протоколов**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, SSH, SOCKS, WireGuard
-- **Транспорт**: TCP, WebSocket, gRPC, H2, REALITY, QUIC
-- Форматы: Base64, Xray JSON Array (с поддержкой chained proxy/jump), plain text
-- Включение/отключение отдельных подписок без удаления
-- Автообновление подписок при запуске VPN (настраиваемый интервал)
-- Имя профиля и статистика трафика из HTTP-заголовков (subscription-userinfo)
-- Детальный экран: список нод, полоса квоты трафика, срок действия, ссылки на поддержку
-- **Офлайн-кэширование**: подписки кэшируются на диск, работают без интернета
-- Быстрый старт: встроенный пресет бесплатного VPN
-- Ссылки на Telegram-поддержку открываются нативно
-
-</details>
-
-<details>
-<summary><strong>Главный экран</strong></summary>
-
-- Выбор группы прокси (proxy-out, auto-proxy-out, vpn-1, vpn-2)
-- Список нод с сортировкой по **Пингу**, **A-Z** или **по умолчанию**
-- Активная нода выделена галочкой
-- Панель трафика: скорость загрузки/отдачи, количество соединений, аптайм
-- Тап по панели трафика открывает Статистику
-- **Массовый пинг**: параллельный пинг всех нод (20 одновременно)
-- Долгое нажатие на кнопку пинга — **Настройки пинга** с пресетами URL (Google, Cloudflare, Apple, Firefox, Yandex)
-
-</details>
-
-<details>
-<summary><strong>Фильтр нод (auto-proxy-out)</strong></summary>
-
-- Полный список нод из proxy-out с чекбоксами
-- Отмеченные ноды включены в auto-proxy-out (urltest)
-- Неотмеченные ноды исключены из автовыбора, но остаются в ручном селекторе
-- Поиск, Выбрать все / Снять все
-- Читает из конфига (офлайн, мгновенно)
-
-</details>
-
-<details>
-<summary><strong>Маршрутизация</strong></summary>
-
-- **Группы прокси**: включение/отключение предустановленных групп (Auto Proxy, Proxy, VPN 1, VPN 2)
-- **Правила маршрутизации**: Блокировка рекламы, Российские домены напрямую, Сервисы только для России, BitTorrent напрямую, Приватные IP напрямую
-- **Выбор outbound** для каждого правила (direct/proxy/auto/vpn-X)
-- **Группы приложений**: именованные группы приложений с маршрутизацией через выбранный outbound
-  - Выбор приложений с иконками, поиск, выбрать все/инвертировать, импорт/экспорт через буфер обмена
-- **Трафик по умолчанию** (route.final): fallback outbound для нераспознанного трафика
-- Все изменения сохраняются автоматически
-
-</details>
-
-<details>
-<summary><strong>Настройки DNS</strong></summary>
-
-- **16 пресетов DNS-серверов**: Cloudflare (UDP/DoT/DoH), Google (UDP/DoT/DoH), Yandex (UDP/Safe/Family/DoT/DoH), Quad9, AdGuard, варианты через VPN
-- Включение/отключение серверов переключателями
-- Добавление своих серверов через JSON-редактор
-- **Стратегия DNS**: prefer_ipv4 / prefer_ipv6 / ipv4_only / ipv6_only
-- **Нез��висимый кэш** — переключатель
-- **Правила DNS** — редактор (JSON)
-- **DNS Final** и **Default Domain Resolver** — выпадающие списки из включённых серверов
-
-</details>
-
-<details>
-<summary><strong>Настройки VPN</strong></summary>
-
-- Уровень логирования (warn/info/debug/trace)
-- Адрес и секрет Clash API (автогенерация)
-- Стратегия резолва, автоопределение интерфейса, анализ пакетов
-- **URLTest URL** — эндпоинт для тестирования латентности прокси
-- **URLTest interval** — как часто тестировать (напр. 5m)
-- **URLTest tolerance** — минимальная разница латентности для переключения (мс)
-- TUN адрес, MTU, strict route, TUN стек
-- Все изменения сохраняются автоматически
-
-</details>
-
-<details>
-<summary><strong>Тест скорости</strong></summary>
-
-- **4 параллельных потока загрузки** (настраивается: 1/4/10)
-- **Обновление в реальном времени** каждые 500мс
-- Пинг: 5 ��змерений, усечённое среднее
-- **10 серверов**: Cloudflare, Hostkey (Москва, Франкфурт, Амстердам, Хельсинки, Нью-Йорк), Selectel (RU), Tele2 (EU), OVH (Франция), ThinkBroadband (UK)
-- Тест загрузки с настраиваемым методом (PUT/POST) для каждого сервера
-- Показывает текущий прокси или индикатор "Direct"
-- **История за сессию** с именем сервера (последние 10 тестов)
-
-</details>
-
-<details>
-<summary><strong>Статистика</strong></summary>
-
-- Общий upload/download и количество соединений
-- **Трафик по Outbound**: раскрываемые карточки по каждой proxy-ноде
-- Каждое соединение: host:port, протокол (TCP/UDP), правило, трафик, длительность, цепочка
-- Тап на счётчик Connections — полный список соединений с кнопками закрытия
-
-</details>
-
-<details>
-<summary><strong>Настройки приложения</strong></summary>
-
-- Тема: **Системная / Светлая / Тёмная**
-- **Автозапуск при загрузке**: VPN запускается при включении устройства
-- **Сохранять VPN при выходе**: VPN остаётся активным при свайпе приложения
-
-</details>
-
-<details>
-<summary><strong>Редактор конфига</strong></summary>
-
-- Просмотр и редактирование raw JSON конфига sing-box
-- Форматированное отображение
-- Сохранение, вставка из буфера обмена, загрузка из файла
-
-</details>
-
-<details>
-<summary><strong>Безопасность</strong></summary>
-
-- **Только TUN inbound** — нет SOCKS5/HTTP прокси на localhost (защита от утечки IP)
-- **Clash API** на рандомном порту (49152-65535) с обязательным секретом
-- **VPN Service** не экспортирован (`android:exported="false"` + `BIND_VPN_SERVICE`)
-- **Геомаршрутизация**: российские домены → direct (не через прокси)
-- Secret генерируется криптографически безопасным ГПСЧ (`Random.secure()`)
-- Редактор конфига доступен только из drawer
-
-</details>
-
-<details>
-<summary><strong>Архитектура</strong></summary>
-
-- **wizard_template.json** — единый источник всех настроек по умолчанию (DNS, пинг, спидтест, группы, правила маршрутизации, каркас конфига)
-- **Автосохранение** с debounce 500мс — нигде нет кнопок Apply
-- **Offline-first**: дисковый кэш подписок, генерация конфига из кэша при сетевой ошибке
-- Flutter (Dart 3.11+), Material 3
-- sing-box нативная библиотека (libbox 1.12.12 через JitPack)
-- Clash API для управления прокси в реальном времени
-- Gradle Kotlin DSL, AGP 8.11.1, Kotlin 2.2.20, Java 17
-
-</details>
-
----
-
-## Поддерживаемые протоколы
-
-| Протокол | URI-схема | Транспорт |
-|----------|-----------|-----------|
-| VLESS | `vless://` | TCP, WebSocket, gRPC, H2, REALITY |
-| VMess | `vmess://` (v2rayN base64) | TCP, WebSocket, gRPC, H2 |
-| Trojan | `trojan://` | TCP, WebSocket, gRPC |
-| Shadowsocks | `ss://` (SIP002 + legacy) | TCP, UDP |
-| Hysteria2 | `hy2://` / `hysteria2://` | QUIC |
-| SSH | `ssh://` | TCP |
-| SOCKS | `socks://` / `socks5://` | TCP |
-| WireGuard | `wireguard://` | UDP |
-
----
-
-## Установка
-
-1. Скачайте `LxBox-v1.1.1.apk`
-2. Установите на Android-устройство
-3. Разрешите установку из неизвестных источников при запросе
+Download `LxBox-v1.2.0.apk` and install on Android device.
