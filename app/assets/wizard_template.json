@@ -36,7 +36,7 @@
     "timeout_ms": 5000,
     "presets": [
       {"name": "Google 204", "url": "https://www.gstatic.com/generate_204"},
-      {"name": "Cloudflare", "url": "https://cp.cloudflare.com/"},
+      {"name": "Cloudflare", "url": "https://cp.cloudflare.com/generate_204"},
       {"name": "Apple", "url": "https://captive.apple.com/hotspot-detect.html"},
       {"name": "Firefox", "url": "https://detectportal.firefox.com/canonical.html"},
       {"name": "Yandex", "url": "https://ya.ru/"}
@@ -45,24 +45,19 @@
 
   "speed_test_options": {
     "servers": [
-      {"name": "Cloudflare", "download_url": "https://speed.cloudflare.com/__down?bytes=25000000", "upload_url": "https://speed.cloudflare.com/__up", "upload_method": "POST"},
-      {"name": "Hostkey (Moscow)", "download_url": "https://spd-rudp.hostkey.ru/files/10mb.bin"},
-      {"name": "Selectel (RU)", "download_url": "https://speedtest.selectel.ru/10MB"},
-      {"name": "Hostkey (Frankfurt)", "download_url": "https://spd-desrv.hostkey.com/files/10mb.bin"},
-      {"name": "Hostkey (Amsterdam)", "download_url": "https://spd-nlsrv.hostkey.com/files/10mb.bin"},
-      {"name": "Hostkey (Helsinki)", "download_url": "https://spd-fisrv.hostkey.com/files/10mb.bin"},
-      {"name": "Hostkey (New York)", "download_url": "https://spd-uswb.hostkey.com/files/10mb.bin"},
-      {"name": "Tele2 (EU)", "download_url": "http://speedtest.tele2.net/10MB.zip", "upload_url": "http://speedtest.tele2.net/upload.php"},
-      {"name": "OVH (France)", "download_url": "https://proof.ovh.net/files/10Mb.dat"},
-      {"name": "ThinkBroadband (UK)", "download_url": "http://ipv4.download.thinkbroadband.com/10MB.zip"}
+      {"name": "Cloudflare", "download_url": "https://speed.cloudflare.com/__down?bytes=25000000", "upload_url": "https://speed.cloudflare.com/__up", "upload_method": "POST", "ping_url": "https://speed.cloudflare.com/__down?bytes=0"},
+      {"name": "Hostkey (Moscow)", "download_url": "https://spd-rudp.hostkey.ru/files/10mb.bin", "ping_url": "https://spd-rudp.hostkey.ru/"},
+      {"name": "Selectel (RU)", "download_url": "https://speedtest.selectel.ru/10MB", "ping_url": "https://speedtest.selectel.ru/"},
+      {"name": "Hostkey (Frankfurt)", "download_url": "https://spd-desrv.hostkey.com/files/10mb.bin", "ping_url": "https://spd-desrv.hostkey.com/"},
+      {"name": "Hostkey (Amsterdam)", "download_url": "https://spd-nlsrv.hostkey.com/files/10mb.bin", "ping_url": "https://spd-nlsrv.hostkey.com/"},
+      {"name": "Hostkey (Helsinki)", "download_url": "https://spd-fisrv.hostkey.com/files/10mb.bin", "ping_url": "https://spd-fisrv.hostkey.com/"},
+      {"name": "Hostkey (New York)", "download_url": "https://spd-uswb.hostkey.com/files/10mb.bin", "ping_url": "https://spd-uswb.hostkey.com/"},
+      {"name": "Tele2 (EU)", "download_url": "http://speedtest.tele2.net/10MB.zip", "upload_url": "http://speedtest.tele2.net/upload.php", "ping_url": "http://speedtest.tele2.net/"},
+      {"name": "OVH (France)", "download_url": "https://proof.ovh.net/files/10Mb.dat", "ping_url": "https://proof.ovh.net/"},
+      {"name": "ThinkBroadband (UK)", "download_url": "http://ipv4.download.thinkbroadband.com/10MB.zip", "ping_url": "http://ipv4.download.thinkbroadband.com/"}
     ],
     "stream_options": [1, 4, 10],
-    "default_streams": 4,
-    "ping_urls": [
-      "https://www.gstatic.com/generate_204",
-      "https://cp.cloudflare.com/",
-      "https://detectportal.firefox.com/canonical.html"
-    ]
+    "default_streams": 4
   },
 
   "preset_groups": [

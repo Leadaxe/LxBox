@@ -53,7 +53,6 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
   // Loaded from wizard_template
   var _servers = <Map<String, dynamic>>[];
   var _streamOptions = <int>[1, 4, 10];
-  var _pingUrls = <String>['https://www.gstatic.com/generate_204'];
 
   @override
   void initState() {
@@ -71,16 +70,12 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
         ?.whereType<num>()
         .map((n) => n.toInt())
         .toList();
-    final pings = (opts['ping_urls'] as List<dynamic>?)
-        ?.whereType<String>()
-        .toList();
     final defaultStreams = (opts['default_streams'] as num?)?.toInt();
 
     if (mounted) {
       setState(() {
         if (servers.isNotEmpty) _servers = servers;
         if (streams != null && streams.isNotEmpty) _streamOptions = streams;
-        if (pings != null && pings.isNotEmpty) _pingUrls = pings;
         if (defaultStreams != null) _streams = defaultStreams;
       });
     }
@@ -154,21 +149,20 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
     }
   }
 
+  String _serverPingUrl(int i) => _servers[i]['ping_url']?.toString() ?? _serverDownloadUrl(i);
+
   Future<double> _testPing() async {
+    final url = _serverPingUrl(_selectedServer);
     final times = <int>[];
-    for (final url in _pingUrls) {
-      for (var i = 0; i < 2; i++) {
-        try {
-          final sw = Stopwatch()..start();
-          final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
-          sw.stop();
-          if (response.statusCode < 400) {
-            times.add(sw.elapsedMilliseconds);
-          }
-        } catch (_) {}
-        if (times.length >= 5) break;
-      }
-      if (times.length >= 5) break;
+    for (var i = 0; i < 5; i++) {
+      try {
+        final sw = Stopwatch()..start();
+        final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
+        sw.stop();
+        if (response.statusCode < 400) {
+          times.add(sw.elapsedMilliseconds);
+        }
+      } catch (_) {}
     }
 
     if (times.isEmpty) return -1;

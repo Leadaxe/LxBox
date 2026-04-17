@@ -15,7 +15,9 @@
 ### Фазы теста
 
 #### 1. Ping (латентность)
-- HTTP GET на `gstatic.com/generate_204`
+- HTTP GET на `ping_url` выбранного сервера (не общий URL, а конкретный сервер)
+- Каждый speed test сервер имеет свой `ping_url` в `wizard_template.json`
+- Fallback: если `ping_url` не указан, используется `download_url`
 - 5 замеров, trimmed mean (без min/max)
 
 #### 2. Download
