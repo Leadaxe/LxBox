@@ -319,6 +319,7 @@
       { "type": "direct", "tag": "direct-out" }
     ],
     "route": {
+      "find_process": true,
       "default_domain_resolver": "@dns_default_domain_resolver",
       "rule_set": [
         { "tag": "ru-domains", "type": "inline", "format": "domain_suffix", "rules": [{ "domain_suffix": ["ru", "xn--p1ai", "su"] }] }
