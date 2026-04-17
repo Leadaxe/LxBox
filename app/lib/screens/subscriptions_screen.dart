@@ -485,7 +485,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                 }
               },
               icon: const Icon(Icons.add),
-              label: Text('Add ${checked.length} list${checked.length != 1 ? "s" : ""}'),
+              label: const Text('Add'),
             ),
           ],
         ),
