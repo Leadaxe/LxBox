@@ -260,6 +260,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               ),
             ],
           ),
+          if (_subController.configDirty && !_subController.busy) ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => unawaited(_rebuildAndClearDirty()),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.build_circle_outlined, size: 16, color: Theme.of(context).colorScheme.onPrimaryContainer),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Settings changed — tap to rebuild config',
+                        style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onPrimaryContainer),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
           if (_needsRestart && state.tunnelUp) ...[
             const SizedBox(height: 8),
             GestureDetector(
