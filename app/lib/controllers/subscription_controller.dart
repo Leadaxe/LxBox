@@ -17,6 +17,9 @@ class SubscriptionController extends ChangeNotifier {
   bool _busy = false;
   bool get busy => _busy;
 
+  /// Set when sources/settings change and config needs rebuild.
+  bool configDirty = false;
+
   String _lastError = '';
   String get lastError => _lastError;
 
@@ -297,7 +300,10 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
-  Future<void> persistSources() async => _persistSources();
+  Future<void> persistSources() async {
+    configDirty = true;
+    await _persistSources();
+  }
 
   Future<void> updateConnectionAt(int index, List<String> connections) async {
     if (index < 0 || index >= _entries.length) return;
@@ -317,6 +323,7 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   Future<void> _persistSources() async {
+    configDirty = true;
     await SettingsStorage.saveProxySources(
       _entries.map((e) => e.source).toList(),
     );

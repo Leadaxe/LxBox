@@ -168,7 +168,9 @@ jobs:
           path: release-artifacts
 
       - name: Rename APK
-        run: mv release-artifacts/app-release.apk release-artifacts/LxBox-${{ needs.meta.outputs.version }}.apk
+        run: |
+          find release-artifacts/ -name "*.apk" -exec mv {} release-artifacts/LxBox-${{ needs.meta.outputs.version }}.apk \;
+          ls -la release-artifacts/
 
       - name: Checkout (for release notes)
         uses: actions/checkout@v4
@@ -182,5 +184,5 @@ jobs:
           tag_name: ${{ needs.meta.outputs.tag }}
           name: LxBox ${{ needs.meta.outputs.version }}
           draft: false
-          files: release-artifacts/LxBox-${{ needs.meta.outputs.version }}.apk
+          files: release-artifacts/*.apk
           body_path: RELEASE_NOTES.md
