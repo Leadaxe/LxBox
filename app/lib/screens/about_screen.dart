@@ -135,7 +135,7 @@ class AboutScreen extends StatelessWidget {
                 const TabBar(
                   tabs: [
                     Tab(text: 'Crypto'),
-                    Tab(text: 'Card'),
+                    Tab(text: 'Boosty'),
                   ],
                 ),
                 Expanded(
@@ -162,33 +162,10 @@ class AboutScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      // Card tab
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('T-Bank (Tinkoff)', style: TextStyle(fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 8),
-                            FilledButton.tonal(
-                              onPressed: () => unawaited(UrlLauncher.open('https://tbank.ru/cf/4pB1x5CoPxA')),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.open_in_new, size: 16),
-                                  SizedBox(width: 8),
-                                  Text('Open T-Bank payment'),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            TextButton.icon(
-                              onPressed: () => _copyToClipboard(ctx, 'https://tbank.ru/cf/4pB1x5CoPxA'),
-                              icon: const Icon(Icons.copy, size: 14),
-                              label: const Text('Copy link', style: TextStyle(fontSize: 12)),
-                            ),
-                          ],
-                        ),
+                      // Boosty tab
+                      const Padding(
+                        padding: EdgeInsets.only(top: 16),
+                        child: Center(child: Text('Coming soon')),
                       ),
                     ],
                   ),
