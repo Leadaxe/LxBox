@@ -28,100 +28,104 @@ Android VPN client powered by [sing-box](https://sing-box.sagernet.org/). Multi-
 
 ## Features
 
-### Subscriptions
-- Add subscriptions by URL or direct proxy link
-- Supported protocols: **VLESS, VMess, Trojan, Shadowsocks, Hysteria2, SSH, SOCKS, WireGuard**
-- Formats: Base64, Xray JSON Array (with chained proxy/jump), plain text
-- **Enable/disable** individual subscriptions without deleting
-- Auto-refresh on VPN start (configurable interval)
-- Profile title and traffic stats from HTTP headers (subscription-userinfo)
-- Subscription detail: node list, traffic quota bar, expiry date, support/web links
-- **Offline caching**: subscriptions cached on disk, work without internet
-- Quick Start: built-in free VPN preset
-- Telegram support links open natively
+<details>
+<summary><strong>Servers & Subscriptions</strong> — manage proxy sources in one place</summary>
 
-### Home Screen
-- **Start/Stop** VPN with one button
-- Group selector (proxy-out, auto-proxy-out, vpn-1, vpn-2)
-- Node list sorted by **Ping**, **A-Z**, or **Default** order
-- Active node highlighted with checkmark
-- Traffic bar: upload/download speed, connection count, uptime
-- Tap traffic bar to open **Statistics**
-- **Mass Ping**: parallel ping all nodes (20 concurrent)
-- Long press ping button for **Ping Settings** with URL presets (Google, Cloudflare, Apple, Firefox, Yandex)
+Add servers by subscription URL, direct proxy link, WireGuard config, or raw JSON outbound. Smart paste dialog auto-detects format. Enable/disable subscriptions without deleting. Offline caching — works without internet. Per-subscription settings for detour servers.
 
-### Node Filter (auto-proxy-out)
-- Full node list from proxy-out with checkboxes
-- Checked nodes included in auto-proxy-out (urltest)
-- Unchecked nodes excluded from auto selection but remain in manual selector
-- Search, Select All / Deselect All
-- Reads from config (offline, instant)
+- 8 protocols: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, SSH, SOCKS, WireGuard
+- Formats: Base64, Xray JSON Array (chained proxy), plain text, raw JSON
+- Auto-refresh on VPN start, traffic quota bar, expiry date
+- Quick Start with built-in free VPN preset
+</details>
 
-### Routing
-- **Proxy Groups**: enable/disable preset groups (Auto Proxy, Proxy, VPN 1, VPN 2)
-- **Routing Rules**: Block Ads, Russian domains direct, Russia-only services, BitTorrent direct, Private IPs direct
-- Per-rule **outbound selection** (direct/proxy/auto/vpn-X)
-- **App Groups**: named groups of apps routed through chosen outbound
-  - App picker with icons, search, select all/invert, clipboard import/export
-- **Default traffic** (route.final): fallback outbound for unmatched traffic
-- All changes **autosaved** (no Apply button)
+<details>
+<summary><strong>Home Screen</strong> — connect and manage nodes</summary>
 
-### DNS Settings
-- **16 DNS server presets**: Cloudflare (UDP/DoT/DoH), Google (UDP/DoT/DoH), Yandex (UDP/Safe/Family/DoT/DoH), Quad9, AdGuard, via-VPN variants
-- Enable/disable servers with switches
-- Add custom servers via JSON editor
-- **DNS Strategy**: prefer_ipv4 / prefer_ipv6 / ipv4_only / ipv6_only
-- **Independent cache** toggle
-- **DNS Rules** editor (JSON)
-- **DNS Final** and **Default Domain Resolver** dropdowns from enabled servers
-- All presets defined in `wizard_template.json` (single source of truth)
+One-tap VPN start/stop with animated status. Choose proxy group, sort nodes by ping/name, mass-ping all servers. Traffic bar shows real-time speed, connections count, and uptime.
 
-### VPN Settings
-- Log level (warn/info/debug/trace)
-- Clash API address and secret (auto-generated)
-- Resolve strategy
-- Auto-detect interface
-- Packet sniffing
-- **URLTest URL** — endpoint for auto-proxy latency testing
-- **URLTest interval** — how often to test (e.g. 5m)
-- **URLTest tolerance** — minimum latency difference to switch (ms)
-- TUN address, MTU, strict route, TUN stack
+- Proxy groups: auto-proxy, manual selector, VPN-1, VPN-2
+- Node filter: choose which nodes participate in auto-selection
+- Detour servers (⚙) visibility toggle
+- Long press ping button for URL presets
+</details>
+
+<details>
+<summary><strong>Routing</strong> — control where traffic goes</summary>
+
+Fine-grained control over traffic routing. Block ads, route Russian domains directly, send BitTorrent through specific proxy. Create named app groups with per-app routing.
+
+- Preset routing rules with per-rule outbound selection
+- App Groups: route specific apps through chosen proxy
+- Default traffic fallback (route.final)
 - All changes autosaved
+</details>
 
-### Speed Test
-- **4 parallel download streams** (configurable: 1/4/10)
-- **Real-time** speed updates every 500ms
-- Ping: 5 measurements, trimmed mean
-- **10 servers**: Cloudflare, Hostkey (Moscow, Frankfurt, Amsterdam, Helsinki, New York), Selectel (RU), Tele2 (EU), OVH (France), ThinkBroadband (UK)
-- Shows current proxy or "Direct" indicator
-- **Session history** (last 10 tests, persists while app is running)
-- All settings from `wizard_template.json`
+<details>
+<summary><strong>Detour Servers</strong> — chain proxies for extra privacy</summary>
 
-### Statistics
-- Total upload/download and connection count
-- **Traffic by Outbound**: expandable cards per proxy node
-- Each connection: host:port, protocol (TCP/UDP), rule, traffic, duration, chain
-- Tap **Connections** counter to open full connection list with close buttons
+Build multi-hop chains: your traffic goes through an intermediate server before reaching the final proxy. Per-subscription control: register detour servers in node list, enable/disable their use, or override all detours with your own server.
 
-### App Settings
-- Theme: **System / Light / Dark**
-- **Auto-start on boot**: VPN starts when device boots
-- **Keep VPN on exit**: VPN stays active when app is swiped away
+- ⚙ prefix for detour servers
+- Register / Use / Override per subscription
+- Detour dropdown in node settings
+</details>
 
-### Config Editor
-- View and edit raw sing-box JSON config
-- Pretty-printed display
-- Save, paste from clipboard, load from file
+<details>
+<summary><strong>DNS Settings</strong> — full control over name resolution</summary>
 
----
+16 DNS server presets (Cloudflare, Google, Yandex, Quad9, AdGuard) with UDP/DoT/DoH variants. Custom servers via JSON editor. Strategy, cache, rules — all configurable.
 
-## For Developers
+- Enable/disable servers with switches
+- DNS Strategy: prefer_ipv4 / prefer_ipv6 / ipv4_only / ipv6_only
+- DNS Rules editor, DNS Final, Default Domain Resolver
+</details>
 
-See [docs/](docs/) for architecture, build instructions, and development guide:
-- [Architecture](docs/ARCHITECTURE.md)
-- [Build](docs/BUILD.md)
-- [Development Guide](docs/DEVELOPMENT_GUIDE.md)
-- [Development Report](docs/DEVELOPMENT_REPORT.md)
+<details>
+<summary><strong>DPI Bypass</strong> — bypass internet censorship</summary>
+
+TLS Fragment splits the initial handshake to bypass Deep Packet Inspection. Two modes: TCP fragmentation and TLS record fragmentation. Applied only to first-hop connections — detour traffic is already tunneled.
+
+- TLS Fragment / Record Fragment toggles
+- Fallback delay setting
+- First-hop only (inner hops skip fragmentation)
+</details>
+
+<details>
+<summary><strong>Speed Test</strong> — measure your connection</summary>
+
+Built-in speed test with 10 servers worldwide. Per-server ping measures latency to the actual download server. Parallel download streams, upload test, session history.
+
+- Servers: Cloudflare, Hostkey (5 cities), Selectel, Tele2, OVH, ThinkBroadband
+- Configurable streams (1/4/10), upload method per server
+- Session history with server name
+</details>
+
+<details>
+<summary><strong>Statistics & Connections</strong> — see what's happening</summary>
+
+Real-time traffic by outbound with expandable cards. Each connection shows host, protocol, routing rule, traffic, duration, proxy chain, and app/process name. Close individual connections.
+</details>
+
+<details>
+<summary><strong>VPN Settings</strong> — tune the engine</summary>
+
+Organized in sections: General, Clash API, Network, Auto Proxy, DNS, TUN, DPI Bypass. URLTest parameters for auto-proxy latency testing. All changes autosaved.
+</details>
+
+<details>
+<summary><strong>Config Editor</strong> — for power users</summary>
+
+View and edit raw sing-box JSON config. Pretty-printed display with copy button. Save, paste from clipboard, load from file, share.
+</details>
+
+<details>
+<summary><strong>App Settings</strong> — personalize</summary>
+
+- Theme: System / Light / Dark
+- Auto-start VPN on boot
+- Keep VPN active when app is closed
+</details>
 
 ---
 
@@ -142,63 +146,17 @@ See [Protocol Documentation](docs/PROTOCOLS.md) for full URI format details and 
 
 ---
 
-## Feature Specs
+## Development
 
-Every feature is documented as a spec in [`docs/spec/features/`](docs/spec/features/). This is the core of the **spec-driven development** approach.
-
-### Implemented (23)
-
-| # | Feature |
-|---|---------|
-| [001](docs/spec/features/001%20mobile%20stack/) | Mobile Stack (Android + iOS) |
-| [002](docs/spec/features/002%20mvp%20scope/) | MVP Scope |
-| [003](docs/spec/features/003%20home%20screen/) | Home Screen (groups, nodes, traffic, sort, filter) |
-| [004](docs/spec/features/004%20subscription%20parser/) | Subscription Parser (8 protocols + Xray JSON) |
-| [005](docs/spec/features/005%20config%20generator/) | Config Generator (Wizard Template) |
-| [006](docs/spec/features/006%20servers%20ui/) | Servers UI (subscriptions, toggles, detail tabs, paste dialog) |
-| [007](docs/spec/features/007%20config%20editor/) | Config Editor |
-| [008](docs/spec/features/008%20ping%20and%20node%20management/) | Ping & Node Management (mass ping, settings, URLTest) |
-| [009](docs/spec/features/009%20ux%20and%20theme/) | UX & Theme (dark mode, autosave, animations) |
-| [010](docs/spec/features/010%20quick%20start%20and%20offline/) | Quick Start & Offline (caching, fallback) |
-| [011](docs/spec/features/011%20local%20ruleset%20cache/) | Local Rule Set Cache |
-| [012](docs/spec/features/012%20native%20vpn%20service/) | Native VPN Service (auto-start, keep on exit) |
-| [013](docs/spec/features/013%20routing/) | Routing (groups, rules, per-app proxy) |
-| [014](docs/spec/features/014%20dns%20settings/) | DNS Settings (16 presets, JSON editor) |
-| [015](docs/spec/features/015%20speed%20test/) | Speed Test (10 servers, per-server ping, upload) |
-| [016](docs/spec/features/016%20statistics%20and%20connections/) | Statistics & Connections (process/app name) |
-| [017](docs/spec/features/017%20custom%20nodes%20and%20node%20settings/) | Custom Nodes & Node Settings (JSON editor, detour) |
-| [018](docs/spec/features/018%20detour%20server%20management/) | Detour Server Management (⚙ prefix, register/use/override) |
-| [019](docs/spec/features/019%20wireguard%20endpoint/) | WireGuard Endpoint (URI + INI config) |
-| [021](docs/spec/features/021%20ci%20cd%20pipeline/) | CI/CD Pipeline (tag → release) |
-| [022](docs/spec/features/022%20app%20settings/) | App Settings (theme, boot, keep on exit) |
-| [023](docs/spec/features/023%20debug%20and%20logging/) | Debug & Logging |
-
-### Partial
-
-| # | Feature | Status |
-|---|---------|--------|
-| [020](docs/spec/features/020%20security%20and%20dpi%20bypass/) | Security & DPI Bypass | TLS fragment done; encrypted storage planned |
-
-### Planned
-
-| # | Feature |
-|---|---------|
-| [024](docs/spec/features/024%20load%20balance/) | Load Balance |
-| [025](docs/spec/features/025%20warp%20integration/) | WARP Integration (Cloudflare) |
-
----
-
-## Documentation
+This project follows **spec-driven development** — [25 feature specifications](docs/spec/features/) document every capability.
 
 | Document | Description |
 |----------|-------------|
-| [`docs/PROTOCOLS.md`](docs/PROTOCOLS.md) | Protocol URI formats, parameters, and sing-box mapping |
-| [`docs/DEVELOPMENT_GUIDE.md`](docs/DEVELOPMENT_GUIDE.md) | **How to develop**: principles, risks, testing, AI workflow |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture, data flows, native code |
-| [`docs/BUILD.md`](docs/BUILD.md) | Build instructions, CI, APK signing |
-| [`docs/DEVELOPMENT_REPORT.md`](docs/DEVELOPMENT_REPORT.md) | Full development history (10 stages) |
-| [`CHANGELOG.md`](CHANGELOG.md) | Release changelog |
-| [`docs/spec/features/`](docs/spec/features/) | **44 feature specifications** (spec-driven development) |
+| [Protocol Reference](docs/PROTOCOLS.md) | URI formats, parameters, sing-box mapping |
+| [Architecture](docs/ARCHITECTURE.md) | Data flows, config pipeline, native code |
+| [Build](docs/BUILD.md) | Build instructions, CI, APK signing |
+| [Development Guide](docs/DEVELOPMENT_GUIDE.md) | Principles, risks, AI workflow |
+| [Changelog](CHANGELOG.md) | Release history |
 
 ---
 
