@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
@@ -34,11 +37,12 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   String? _error;
   bool _editing = false;
   late TextEditingController _nameCtrl;
+  String _rawSource = '';
 
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 2, vsync: this);
+    _tabCtrl = TabController(length: 3, vsync: this);
     _nameCtrl = TextEditingController(text: widget.entry.source.name);
     unawaited(_loadNodes());
   }
@@ -76,6 +80,20 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
             outbound: node.detourServer!.outbound,
           ));
         }
+      }
+      // Load raw source from cache
+      if (widget.entry.source.source.isNotEmpty) {
+        try {
+          final cacheKey = widget.entry.source.source.hashCode.toRadixString(16);
+          final dir = await getApplicationSupportDirectory();
+          final cached = File('${dir.path}/sub_cache/$cacheKey');
+          if (cached.existsSync()) {
+            final bytes = await cached.readAsBytes();
+            _rawSource = utf8.decode(bytes, allowMalformed: true);
+          }
+        } catch (_) {}
+      } else if (widget.entry.source.connections.isNotEmpty) {
+        _rawSource = widget.entry.source.connections.join('\n');
       }
       if (mounted) setState(() { _nodes = expanded; _loading = false; });
     } catch (e) {
@@ -167,6 +185,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
           tabs: const [
             Tab(text: 'Nodes'),
             Tab(text: 'Settings'),
+            Tab(text: 'Source'),
           ],
         ),
       ),
@@ -185,6 +204,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
           ),
           // Tab 2: Settings
           _buildSettingsTab(theme),
+          // Tab 3: Source
+          _buildSourceTab(theme),
         ],
       ),
     );
@@ -271,6 +292,38 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     if (chosen == null) return;
     setState(() => widget.entry.source.overrideDetour = chosen);
     unawaited(widget.controller.persistSources());
+  }
+
+  Widget _buildSourceTab(ThemeData theme) {
+    if (_rawSource.isEmpty) {
+      return const Center(child: Text('No cached source data'));
+    }
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Stack(
+        children: [
+          SelectableText(
+            _rawSource,
+            style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: IconButton(
+              icon: const Icon(Icons.copy, size: 16),
+              tooltip: 'Copy source',
+              visualDensity: VisualDensity.compact,
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: _rawSource));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Source copied')),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildMeta(SubscriptionEntry entry, ThemeData theme) {
