@@ -29,6 +29,7 @@ class SourceLoader {
     void Function(double progress, String message)? onProgress,
     int sourceIndex = 0,
     int totalSources = 1,
+    bool cacheOnly = false,
   }) async {
     final nodes = <ParsedNode>[];
     var count = 0;
@@ -46,28 +47,43 @@ class SourceLoader {
 
         final cacheKey = source.source.hashCode.toRadixString(16);
         FetchResult? fetchResult;
-        try {
-          fetchResult = await SubscriptionFetcher.fetchWithMeta(source.source);
-          // Cache raw response on success
-          try {
-            final dir = await getApplicationSupportDirectory();
-            final cacheDir = Directory('${dir.path}/sub_cache');
-            if (!cacheDir.existsSync()) cacheDir.createSync(recursive: true);
-            await File('${cacheDir.path}/$cacheKey').writeAsBytes(fetchResult.content);
-          } catch (_) {}
-        } catch (_) {
-          // Network error — try reading from cache
+        if (cacheOnly) {
+          // Read from cache only — no network request
           try {
             final dir = await getApplicationSupportDirectory();
             final cached = File('${dir.path}/sub_cache/$cacheKey');
             if (cached.existsSync()) {
               final bytes = await cached.readAsBytes();
               fetchResult = FetchResult(content: bytes);
-            } else {
+            }
+          } catch (_) {}
+          if (fetchResult == null) {
+            return LoadResult(nodes: []);
+          }
+        } else {
+          try {
+            fetchResult = await SubscriptionFetcher.fetchWithMeta(source.source);
+            // Cache raw response on success
+            try {
+              final dir = await getApplicationSupportDirectory();
+              final cacheDir = Directory('${dir.path}/sub_cache');
+              if (!cacheDir.existsSync()) cacheDir.createSync(recursive: true);
+              await File('${cacheDir.path}/$cacheKey').writeAsBytes(fetchResult.content);
+            } catch (_) {}
+          } catch (_) {
+            // Network error — try reading from cache
+            try {
+              final dir = await getApplicationSupportDirectory();
+              final cached = File('${dir.path}/sub_cache/$cacheKey');
+              if (cached.existsSync()) {
+                final bytes = await cached.readAsBytes();
+                fetchResult = FetchResult(content: bytes);
+              } else {
+                rethrow;
+              }
+            } catch (_) {
               rethrow;
             }
-          } catch (_) {
-            rethrow;
           }
         }
         profileTitle = fetchResult.title;
@@ -165,12 +181,14 @@ class SourceLoader {
     void Function(double progress, String message)? onProgress,
     int sourceIndex = 0,
     int totalSources = 1,
+    bool cacheOnly = false,
   }) async {
     final result = await loadNodesWithMeta(
       source, tagCounts,
       onProgress: onProgress,
       sourceIndex: sourceIndex,
       totalSources: totalSources,
+      cacheOnly: cacheOnly,
     );
     return result.nodes;
   }

@@ -651,9 +651,35 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   }
 
   void _copyNodeJson(String tag, HomeState state) {
-    final entry = ClashApiClient.proxyEntry(state.proxiesJson, tag);
-    if (entry == null) return;
-    final json = const JsonEncoder.withIndent('  ').convert(entry);
+    // Try to find full outbound from configRaw (complete config)
+    final entries = <Map<String, dynamic>>[];
+    if (state.configRaw.isNotEmpty) {
+      try {
+        final config = jsonDecode(state.configRaw) as Map<String, dynamic>;
+        final outbounds = config['outbounds'] as List<dynamic>? ?? [];
+        final endpoints = config['endpoints'] as List<dynamic>? ?? [];
+        final all = [...outbounds, ...endpoints].whereType<Map<String, dynamic>>();
+        final main = all.where((o) => o['tag'] == tag).firstOrNull;
+        if (main != null) {
+          // Include detour (jump server) if present
+          final detourTag = main['detour'] as String?;
+          if (detourTag != null && detourTag.isNotEmpty) {
+            final detour = all.where((o) => o['tag'] == detourTag).firstOrNull;
+            if (detour != null) entries.add(detour);
+          }
+          entries.add(main);
+        }
+      } catch (_) {}
+    }
+    // Fallback to Clash API (partial)
+    if (entries.isEmpty) {
+      final entry = ClashApiClient.proxyEntry(state.proxiesJson, tag);
+      if (entry != null) entries.add(entry);
+    }
+    if (entries.isEmpty) return;
+    final json = const JsonEncoder.withIndent('  ').convert(
+      entries.length == 1 ? entries.first : entries,
+    );
     Clipboard.setData(ClipboardData(text: json));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

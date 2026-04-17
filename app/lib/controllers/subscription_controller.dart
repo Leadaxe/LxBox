@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -67,8 +68,10 @@ class SubscriptionController extends ChangeNotifier {
         );
         _entries.add(entry);
         await _persistSources();
+      } else if (_isJsonOutbound(trimmed)) {
+        await _addJsonOutbounds(trimmed);
       } else {
-        _lastError = 'Input is not a subscription URL or proxy link';
+        _lastError = 'Input is not a subscription URL, proxy link, or outbound JSON';
       }
     } catch (e) {
       _lastError = e.toString();
@@ -76,6 +79,43 @@ class SubscriptionController extends ChangeNotifier {
       _busy = false;
       notifyListeners();
     }
+  }
+
+  bool _isJsonOutbound(String text) {
+    if (!text.startsWith('{') && !text.startsWith('[')) return false;
+    if (!text.contains('"type"')) return false;
+    try {
+      final parsed = jsonDecode(text);
+      if (parsed is Map<String, dynamic> && parsed.containsKey('type')) return true;
+      if (parsed is List && parsed.isNotEmpty) {
+        return parsed.first is Map<String, dynamic> && (parsed.first as Map).containsKey('type');
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<void> _addJsonOutbounds(String text) async {
+    final parsed = jsonDecode(text);
+    final outbounds = <Map<String, dynamic>>[];
+    if (parsed is Map<String, dynamic>) {
+      outbounds.add(parsed);
+    } else if (parsed is List) {
+      outbounds.addAll(parsed.whereType<Map<String, dynamic>>());
+    }
+    if (outbounds.isEmpty) {
+      _lastError = 'No valid outbounds in JSON';
+      return;
+    }
+
+    // Store each outbound as a JSON string in connections
+    final jsonStrings = outbounds.map((o) => jsonEncode(o)).toList();
+    final entry = SubscriptionEntry(
+      source: ProxySource(connections: jsonStrings),
+      nodeCount: outbounds.length,
+      status: 'JSON outbound',
+    );
+    _entries.add(entry);
+    await _persistSources();
   }
 
   Future<void> removeAt(int index) async {

@@ -46,7 +46,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
     super.dispose();
   }
 
-  Future<void> _loadNodes() async {
+  Future<void> _loadNodes({bool cacheOnly = true}) async {
     setState(() {
       _loading = true;
       _error = null;
@@ -56,6 +56,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
       final nodes = await SourceLoader.loadNodesFromSource(
         widget.entry.source,
         tagCounts,
+        cacheOnly: cacheOnly,
       );
       if (mounted) setState(() { _nodes = nodes; _loading = false; });
     } catch (e) {
@@ -134,7 +135,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
           IconButton(
             tooltip: 'Refresh',
             icon: const Icon(Icons.refresh),
-            onPressed: _loading ? null : _loadNodes,
+            onPressed: _loading ? null : () => _loadNodes(cacheOnly: false),
           ),
           IconButton(
             tooltip: 'Delete',

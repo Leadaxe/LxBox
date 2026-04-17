@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
+import '../services/node_parser.dart';
 import '../services/url_launcher.dart';
 import 'node_filter_screen.dart';
 import 'node_settings_screen.dart';
@@ -52,13 +54,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     }
   }
 
-  Future<void> _paste() async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final text = data?.text?.trim() ?? '';
-    if (text.isEmpty) return;
-    _inputController.text = text;
-  }
-
   Future<void> _pasteFromClipboard() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text?.trim() ?? '';
@@ -70,8 +65,135 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       }
       return;
     }
+
+    final analysis = _analyzeClipboard(text);
+    if (!mounted) return;
+
+    if (analysis.type == 'unknown') {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Add from clipboard'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.warning_amber, color: Theme.of(context).colorScheme.error),
+                  const SizedBox(width: 8),
+                  const Text('Unknown format', style: TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                text.length > 100 ? '${text.substring(0, 100)}...' : text,
+                style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add from clipboard'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Detected: ${analysis.title}', style: const TextStyle(fontWeight: FontWeight.bold)),
+            if (analysis.subtitle.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(analysis.subtitle, style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Add')),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
     await widget.subController.addFromInput(text);
-    if (widget.subController.lastError.isEmpty) _dirty = true;
+    if (widget.subController.lastError.isEmpty) {
+      _dirty = true;
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.subController.lastError)),
+      );
+    }
+  }
+
+  _ClipboardAnalysis _analyzeClipboard(String text) {
+    if (NodeParser.isSubscriptionURL(text)) {
+      final uri = Uri.tryParse(text);
+      return _ClipboardAnalysis(
+        type: 'subscription',
+        title: 'Subscription URL',
+        subtitle: uri?.host ?? text,
+      );
+    }
+    if (NodeParser.isWireGuardConfig(text)) {
+      final lines = text.split('\n');
+      final endpoint = lines
+          .where((l) => l.trim().toLowerCase().startsWith('endpoint'))
+          .map((l) => l.split('=').last.trim())
+          .firstOrNull ?? '';
+      return _ClipboardAnalysis(
+        type: 'wireguard_config',
+        title: 'WireGuard config',
+        subtitle: endpoint.isNotEmpty ? endpoint : '[Interface] + [Peer]',
+      );
+    }
+    if (NodeParser.isDirectLink(text)) {
+      final uri = Uri.tryParse(text);
+      final scheme = text.split('://').first.toUpperCase();
+      final label = uri?.fragment ?? '';
+      final server = uri != null ? '${uri.host}:${uri.port}' : '';
+      return _ClipboardAnalysis(
+        type: 'direct',
+        title: '$scheme link',
+        subtitle: '${label.isNotEmpty ? "$label\n" : ""}$server',
+      );
+    }
+    // JSON outbound
+    if ((text.startsWith('{') || text.startsWith('[')) && text.contains('"type"')) {
+      try {
+        final parsed = jsonDecode(text);
+        if (parsed is Map<String, dynamic>) {
+          final type = parsed['type'] ?? 'unknown';
+          final tag = parsed['tag'] ?? '';
+          return _ClipboardAnalysis(
+            type: 'json_outbound',
+            title: 'Outbound JSON',
+            subtitle: '$type${tag.toString().isNotEmpty ? " — $tag" : ""}',
+          );
+        }
+        if (parsed is List) {
+          final types = parsed
+              .whereType<Map<String, dynamic>>()
+              .map((o) => o['type']?.toString() ?? '?')
+              .toList();
+          return _ClipboardAnalysis(
+            type: 'json_outbound',
+            title: 'Outbound JSON',
+            subtitle: '${parsed.length} outbounds (${types.join(" + ")})',
+          );
+        }
+      } catch (_) {}
+    }
+    return _ClipboardAnalysis(type: 'unknown', title: 'Unknown', subtitle: '');
   }
 
   Future<void> _scanQrCode() async {
@@ -234,16 +356,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
               style: const TextStyle(fontSize: 13),
             ),
           ),
-          const SizedBox(width: 4),
-          IconButton(
-            tooltip: 'Paste',
-            onPressed: _paste,
-            icon: const Icon(Icons.content_paste, size: 20),
-          ),
-          const SizedBox(width: 4),
-          FilledButton(
+          const SizedBox(width: 8),
+          IconButton.filled(
+            tooltip: 'Add',
             onPressed: ctrl.busy ? null : () => unawaited(_add()),
-            child: const Text('Add'),
+            icon: const Icon(Icons.add, size: 20),
           ),
         ],
       ),
@@ -450,5 +567,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       },
     );
   }
+}
 
+class _ClipboardAnalysis {
+  _ClipboardAnalysis({required this.type, required this.title, required this.subtitle});
+  final String type;
+  final String title;
+  final String subtitle;
 }
