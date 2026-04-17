@@ -5,7 +5,7 @@ class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   static const _version = '1.1.0';
-  static const _repoUrl = 'https://github.com/Leadaxe/BoxVPN';
+  static const _repoUrl = 'https://github.com/Leadaxe/LxBox';
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +21,7 @@ class AboutScreen extends StatelessWidget {
                 Icon(Icons.shield, size: 56, color: cs.primary),
                 const SizedBox(height: 8),
                 Text(
-                  'BoxVPN',
+                  'L×Box',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),

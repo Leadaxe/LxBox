@@ -1,4 +1,4 @@
-package com.leadaxe.boxvpn_app.vpn
+package com.leadaxe.lxbox.vpn
 
 import android.util.Log
 import java.io.File
@@ -11,7 +11,7 @@ object ConfigManager {
     private const val TAG = "ConfigManager"
     private const val CONFIG_FILE = "singbox_config.json"
 
-    var notificationTitle: String = "BoxVPN"
+    var notificationTitle: String = "L×Box"
         private set
 
     private var cachedConfig: String? = null

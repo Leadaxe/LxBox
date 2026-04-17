@@ -1,6 +1,6 @@
 {
-    "name": "boxvpn_app",
-    "short_name": "boxvpn_app",
+    "name": "lxbox",
+    "short_name": "lxbox",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

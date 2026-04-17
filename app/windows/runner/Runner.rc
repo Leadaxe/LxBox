@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.leadaxe" "\0"
-            VALUE "FileDescription", "boxvpn_app" "\0"
+            VALUE "FileDescription", "lxbox" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "boxvpn_app" "\0"
+            VALUE "InternalName", "lxbox" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.leadaxe. All rights reserved." "\0"
-            VALUE "OriginalFilename", "boxvpn_app.exe" "\0"
-            VALUE "ProductName", "boxvpn_app" "\0"
+            VALUE "OriginalFilename", "lxbox.exe" "\0"
+            VALUE "ProductName", "lxbox" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

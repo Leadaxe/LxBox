@@ -1,4 +1,4 @@
-# boxvpn_app
+# lxbox
 
 A new Flutter project.
 

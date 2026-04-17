@@ -46,7 +46,7 @@ class RuleSetDownloader {
       }
 
       final response = await http
-          .get(Uri.parse(url), headers: {'User-Agent': 'BoxVPN'})
+          .get(Uri.parse(url), headers: {'User-Agent': 'LxBox'})
           .timeout(_timeout);
 
       if (response.statusCode != 200) return null;

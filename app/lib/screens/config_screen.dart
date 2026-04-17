@@ -49,10 +49,10 @@ class _ConfigScreenState extends State<ConfigScreen> {
     if (text.isEmpty) return;
     try {
       final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/boxvpn_config.json');
+      final file = File('${dir.path}/lxbox_config.json');
       await file.writeAsString(text);
       // ignore: deprecated_member_use
-      await Share.shareXFiles([XFile(file.path)], text: 'BoxVPN config');
+      await Share.shareXFiles([XFile(file.path)], text: 'LxBox config');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

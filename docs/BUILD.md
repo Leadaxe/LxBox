@@ -1,4 +1,4 @@
-# Сборка BoxVPN
+# Сборка L×Box
 
 **Условные обозначения в этом файле**
 
@@ -13,7 +13,7 @@
 
 ## Flutter-приложение
 
-Каталог **`app/`** — проект BoxVPN. Зависимости подтягиваются через `flutter pub get` (в т.ч. **`flutter_singbox_vpn`**, libbox на Android с [JitPack](https://jitpack.io) — репозиторий указан в `android/build.gradle.kts`). Импорт конфига по кнопке **Read**: **JSON** или **JSON5/JSONC** (комментарии `//`, `/* */` — парсер `json5`), затем в ядро уходит канонический JSON; источник — буфер или системный диалог выбора файла.
+Каталог **`app/`** — проект L×Box. Зависимости подтягиваются через `flutter pub get` (в т.ч. **`flutter_singbox_vpn`**, libbox на Android с [JitPack](https://jitpack.io) — репозиторий указан в `android/build.gradle.kts`). Импорт конфига по кнопке **Read**: **JSON** или **JSON5/JSONC** (комментарии `//`, `/* */` — парсер `json5`), затем в ядро уходит канонический JSON; источник — буфер или системный диалог выбора файла.
 
 ```bash
 cd app
@@ -104,7 +104,7 @@ gh workflow run CI -f build_debug_apk=true    # ○ + debug APK
 ./scripts/setup-android-ci-secrets.sh app/android/upload-keystore.jks
 ```
 
-- ○ Другой репозиторий: `GH_REPO=owner/BoxVPN ./scripts/setup-android-ci-secrets.sh`
+- ○ Другой репозиторий: `GH_REPO=owner/L×Box ./scripts/setup-android-ci-secrets.sh`
 
 Перед `flutter build apk --release` workflow на раннере создаёт временные `app/android/upload-keystore.jks` и `app/android/key.properties` из секретов. Локальный **`flutter build apk --release`** после bootstrap использует те же файлы в `app/android/`.
 

@@ -39,10 +39,10 @@ class _DebugScreenState extends State<DebugScreen> {
   Future<void> _shareLogs(List<DebugEntry> entries) async {
     try {
       final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/boxvpn_debug.log');
+      final file = File('${dir.path}/lxbox_debug.log');
       await file.writeAsString(_entriesToText(entries));
       // ignore: deprecated_member_use
-      await Share.shareXFiles([XFile(file.path)], text: 'BoxVPN debug log');
+      await Share.shareXFiles([XFile(file.path)], text: 'LxBox debug log');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

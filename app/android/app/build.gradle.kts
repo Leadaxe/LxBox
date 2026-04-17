@@ -19,7 +19,7 @@ fun hasReleaseKeystore(): Boolean =
         !keystoreProperties.getProperty("storeFile").isNullOrBlank()
 
 android {
-    namespace = "com.leadaxe.boxvpn_app"
+    namespace = "com.leadaxe.lxbox"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -34,7 +34,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.leadaxe.boxvpn_app"
+        applicationId = "com.leadaxe.lxbox"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

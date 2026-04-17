@@ -1,12 +1,12 @@
-# Архитектура BoxVPN
+# Архитектура L×Box
 
-Документ описывает структуру Flutter-приложения BoxVPN, зоны ответственности, потоки данных и ключевые решения.
+Документ описывает структуру Flutter-приложения L×Box, зоны ответственности, потоки данных и ключевые решения.
 
 ---
 
 ## Обзор
 
-BoxVPN — Android VPN-клиент на базе **sing-box** (через **libbox**). Полный цикл: подписки → парсинг → конфиг → VPN-туннель → управление через **Clash API**.
+L×Box — Android VPN-клиент на базе **sing-box** (через **libbox**). Полный цикл: подписки → парсинг → конфиг → VPN-туннель → управление через **Clash API**.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -91,7 +91,7 @@ app/lib/
 └── widgets/
     └── node_row.dart                  # Node row: status, delay, urltest now, context menu
 
-app/android/app/src/main/kotlin/com/leadaxe/boxvpn_app/
+app/android/app/src/main/kotlin/com/leadaxe/lxbox/
 ├── MainActivity.kt                    # FlutterActivity + VpnPlugin registration
 └── vpn/
     ├── VpnPlugin.kt                   # Flutter ↔ Android bridge (MethodChannel + EventChannel)
@@ -178,7 +178,7 @@ Displayed in:
 ### 3. Persistent storage
 
 ```
-boxvpn_settings.json (path_provider)
+lxbox_settings.json (path_provider)
   ├─ vars: { "log_level": "warn", "clash_api": "127.0.0.1:52341", ... }
   ├─ proxy_sources: [ { source, name, tag_prefix, last_updated, traffic stats, ... } ]
   ├─ enabled_rules: [ "Russian domains direct", ... ]
@@ -216,7 +216,7 @@ BoxVpnService
 
 ### Channel Contract
 
-**MethodChannel** `com.leadaxe.boxvpn/methods`:
+**MethodChannel** `com.leadaxe.lxbox/methods`:
 
 | Method | Input | Output |
 |--------|-------|--------|
@@ -227,7 +227,7 @@ BoxVpnService
 | setNotificationTitle | title: String | bool |
 | getInstalledApps | — | List<Map> |
 
-**EventChannel** `com.leadaxe.boxvpn/status_events`:
+**EventChannel** `com.leadaxe.lxbox/status_events`:
 
 ```json
 { "status": "Started" | "Starting" | "Stopped" | "Stopping", "error": "..." }

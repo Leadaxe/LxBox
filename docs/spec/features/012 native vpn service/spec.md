@@ -16,7 +16,7 @@
 
 ### Нативный код в `android/app/`
 
-Пакет: `com.leadaxe.boxvpn_app.vpn`
+Пакет: `com.leadaxe.lxbox.vpn`
 
 | Файл | Назначение |
 |------|-----------|
@@ -28,11 +28,11 @@
 
 ### Хранение конфига
 
-Файл: `/data/data/com.leadaxe.boxvpn_app/files/singbox_config.json`
+Файл: `/data/data/com.leadaxe.lxbox/files/singbox_config.json`
 
 ### Контракт Flutter <-> Android
 
-**MethodChannel**: `"com.leadaxe.boxvpn/methods"`
+**MethodChannel**: `"com.leadaxe.lxbox/methods"`
 
 | Метод | Вход | Выход |
 |-------|------|-------|
@@ -42,7 +42,7 @@
 | `stopVPN` | — | `bool` |
 | `setNotificationTitle` | `title: String` | `bool` |
 
-**EventChannel**: `"com.leadaxe.boxvpn/status_events"`
+**EventChannel**: `"com.leadaxe.lxbox/status_events"`
 
 ```json
 {"status": "Started" | "Starting" | "Stopped" | "Stopping"}

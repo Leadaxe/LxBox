@@ -1,4 +1,4 @@
-package com.leadaxe.boxvpn_app.vpn
+package com.leadaxe.lxbox.vpn
 
 import android.net.Network
 import android.os.Build

@@ -73,7 +73,7 @@ keytool -genkeypair -v \
   -storetype JKS \
   -storepass "$STORE_PW" \
   -keypass "$KEY_PW" \
-  -dname "CN=BoxVPN Release, OU=Mobile, O=Leadaxe, L=Unknown, ST=Unknown, C=US"
+  -dname "CN=LxBox Release, OU=Mobile, O=Leadaxe, L=Unknown, ST=Unknown, C=US"
 
 umask 077
 cat >"$PROPS" <<EOF

@@ -30,7 +30,7 @@
 - APK retention: 1 день для тегов, 30 дней для builds.
 
 ### 4. release
-Только для тегов `v*`. Draft GitHub Release с APK (`BoxVPN-vX.Y.Z.apk`).
+Только для тегов `v*`. Draft GitHub Release с APK (`L×Box-vX.Y.Z.apk`).
 
 ## Файлы
 
@@ -43,5 +43,5 @@
 - [x] Push в main → только checks
 - [x] Push тега v* → полный pipeline до release
 - [x] Draft GitHub Release с APK
-- [x] APK называется BoxVPN-vX.Y.Z.apk
+- [x] APK называется L×Box-vX.Y.Z.apk
 - [x] workflow_dispatch с выбором run_mode

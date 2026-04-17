@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:boxvpn_app/config/config_parse.dart';
+import 'package:lxbox/config/config_parse.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

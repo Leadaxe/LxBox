@@ -334,7 +334,7 @@ class HomeController extends ChangeNotifier {
   Future<void> start() async {
     _emit(_state.copyWith(busy: true, lastError: ''));
     try {
-      await _vpn.setNotificationTitle('BoxVPN');
+      await _vpn.setNotificationTitle('L×Box');
       final ok = await _vpn.startVPN();
       if (!ok) {
         _emit(_state.copyWith(lastError: 'Failed to start VPN'));

@@ -1,6 +1,6 @@
 # Protocol Documentation
 
-BoxVPN parses proxy URIs from subscriptions and converts them into [sing-box](https://sing-box.sagernet.org/) outbound (or endpoint) JSON. This document describes every supported protocol, its URI format, parsed parameters, and the resulting sing-box configuration.
+L×Box parses proxy URIs from subscriptions and converts them into [sing-box](https://sing-box.sagernet.org/) outbound (or endpoint) JSON. This document describes every supported protocol, its URI format, parsed parameters, and the resulting sing-box configuration.
 
 Source code: [`app/lib/services/node_parser.dart`](../app/lib/services/node_parser.dart), [`app/lib/services/xray_json_parser.dart`](../app/lib/services/xray_json_parser.dart).
 

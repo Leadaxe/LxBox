@@ -1,6 +1,6 @@
 # Changelog
 
-Все заметные изменения в проекте BoxVPN документируются здесь.
+Все заметные изменения в проекте L×Box документируются здесь.
 
 Формат основан на [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
@@ -50,7 +50,7 @@
 
 ### Added — Native VPN Service (Feature 013)
 - **Удалён плагин `flutter_singbox_vpn`**: вся нативная логика перенесена напрямую в `android/app/`.
-- Новый пакет `com.leadaxe.boxvpn_app.vpn`: VpnPlugin, BoxVpnService, ConfigManager, ServiceNotification, PlatformInterfaceWrapper, DefaultNetworkMonitor/Listener.
+- Новый пакет `com.leadaxe.lxbox.vpn`: VpnPlugin, BoxVpnService, ConfigManager, ServiceNotification, PlatformInterfaceWrapper, DefaultNetworkMonitor/Listener.
 - **Конфиг в файле**: хранение в `files/singbox_config.json` вместо SharedPreferences.
 - **BoxVpnClient** Dart-обёртка с MethodChannel/EventChannel — идентичный API.
 - Убраны неиспользуемые компоненты: TileService, BootReceiver, ProxyService, per-app tunneling, traffic EventChannel.
@@ -159,7 +159,7 @@
 - **Subscription Parser** (Feature 004): полный порт парсера подписок из singbox-launcher (Go → Dart). Поддержка форматов: Base64 (standard, URL-safe, padded/unpadded), Xray JSON array, plain text. Протоколы: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, SSH, SOCKS, WireGuard.
 - **Config Generator** (Feature 005): wizard template + user vars + parsed nodes → sing-box JSON. 3-pass outbound generation: node outbounds, selector/urltest groups с regex-фильтрами, selectable routing rules.
 - **Wizard Template** (`assets/wizard_template.json`): встроенный шаблон конфига с переменными (`@log_level`, `@clash_api`, etc.), outbound-группами (proxy-out, auto-proxy-out, ru VPN) и selectable routing rules (Block Ads, Russian domains direct, BitTorrent direct, Games direct, Private IPs direct).
-- **Settings Storage** (`boxvpn_settings.json`): persistent хранилище через `path_provider` для user vars, proxy sources, enabled rules, last update timestamp.
+- **Settings Storage** (`lxbox_settings.json`): persistent хранилище через `path_provider` для user vars, proxy sources, enabled rules, last update timestamp.
 
 ### Added — Subscription & Settings UI (Feature 006)
 - **Subscriptions Screen**: добавление подписок по URL или direct link, отображение списка с node count и статусом, swipe-to-delete, кнопки "Update All & Generate" и "Generate Config".
@@ -241,7 +241,7 @@
 ## [1.0.0] — MVP
 
 ### Added
-- Flutter-приложение BoxVPN — Start/Stop VPN через libbox.
+- Flutter-приложение L×Box — Start/Stop VPN через libbox.
 - Импорт конфига: чтение из файла, вставка из буфера обмена, JSON-редактор.
 - JSON5/JSONC поддержка (комментарии в конфигах).
 - Clash API: выбор группы (Selector/URLTest), список узлов, переключение, одиночный ping.

@@ -1,4 +1,4 @@
-package com.leadaxe.boxvpn_app.vpn
+package com.leadaxe.lxbox.vpn
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -34,9 +34,9 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
 
     companion object {
         private const val TAG = "BoxVpnService"
-        const val ACTION_START = "com.leadaxe.boxvpn.ACTION_START"
-        const val ACTION_STOP = "com.leadaxe.boxvpn.ACTION_STOP"
-        const val BROADCAST_STATUS = "com.leadaxe.boxvpn.BROADCAST_STATUS"
+        const val ACTION_START = "com.leadaxe.lxbox.ACTION_START"
+        const val ACTION_STOP = "com.leadaxe.lxbox.ACTION_STOP"
+        const val BROADCAST_STATUS = "com.leadaxe.lxbox.BROADCAST_STATUS"
         const val EXTRA_STATUS = "status"
 
         fun start(context: Context) {

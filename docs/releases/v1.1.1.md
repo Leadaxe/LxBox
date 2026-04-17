@@ -1,8 +1,8 @@
-# BoxVPN v1.1.1 — First Public Release
+# L×Box v1.1.1 — First Public Release
 
 **Date**: 2026-04-16  
-**Tag**: [`v1.1.1`](https://github.com/Leadaxe/BoxVPN/releases/tag/v1.1.1)  
-**APK**: [BoxVPN-v1.1.1.apk](https://github.com/Leadaxe/BoxVPN/releases/download/v1.1.1/BoxVPN-v1.1.1.apk)
+**Tag**: [`v1.1.1`](https://github.com/Leadaxe/LxBox/releases/tag/v1.1.1)  
+**APK**: [LxBox-v1.1.1.apk](https://github.com/Leadaxe/LxBox/releases/download/v1.1.1/LxBox-v1.1.1.apk)
 
 ---
 
@@ -184,17 +184,17 @@
 
 ## Install
 
-1. Download `BoxVPN-v1.1.1.apk`
+1. Download `LxBox-v1.1.1.apk`
 2. Install on Android device
 3. Allow installation from unknown sources if prompted
 
 ---
 
-# BoxVPN v1.1.1 — Первый публичный релиз
+# L×Box v1.1.1 — Первый публичный релиз
 
 **Дата**: 16.04.2026  
-**Тег**: [`v1.1.1`](https://github.com/Leadaxe/BoxVPN/releases/tag/v1.1.1)  
-**APK**: [BoxVPN-v1.1.1.apk](https://github.com/Leadaxe/BoxVPN/releases/download/v1.1.1/BoxVPN-v1.1.1.apk)
+**Тег**: [`v1.1.1`](https://github.com/Leadaxe/LxBox/releases/tag/v1.1.1)  
+**APK**: [LxBox-v1.1.1.apk](https://github.com/Leadaxe/LxBox/releases/download/v1.1.1/LxBox-v1.1.1.apk)
 
 ---
 
@@ -376,6 +376,6 @@
 
 ## Установка
 
-1. Скачайте `BoxVPN-v1.1.1.apk`
+1. Скачайте `LxBox-v1.1.1.apk`
 2. Установите на Android-устройство
 3. Разрешите установку из неизвестных источников при запросе

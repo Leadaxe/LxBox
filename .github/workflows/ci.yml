@@ -1,4 +1,4 @@
-# BoxVPN — CI/CD
+# LxBox — CI/CD
 #
 # 1) Tag push (v*):     checks → build → GitHub Release (draft)
 # 2) workflow_dispatch:  checks → build (optional)
@@ -168,7 +168,7 @@ jobs:
           path: release-artifacts
 
       - name: Rename APK
-        run: mv release-artifacts/app-release.apk release-artifacts/BoxVPN-${{ needs.meta.outputs.version }}.apk
+        run: mv release-artifacts/app-release.apk release-artifacts/LxBox-${{ needs.meta.outputs.version }}.apk
 
       - name: Checkout (for release notes)
         uses: actions/checkout@v4
@@ -180,7 +180,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.meta.outputs.tag }}
-          name: BoxVPN ${{ needs.meta.outputs.version }}
+          name: LxBox ${{ needs.meta.outputs.version }}
           draft: true
-          files: release-artifacts/BoxVPN-${{ needs.meta.outputs.version }}.apk
+          files: release-artifacts/LxBox-${{ needs.meta.outputs.version }}.apk
           body_path: RELEASE_NOTES.md

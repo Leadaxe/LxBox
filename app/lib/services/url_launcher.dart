@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 class UrlLauncher {
   UrlLauncher._();
 
-  static const _channel = MethodChannel('com.leadaxe.boxvpn/utils');
+  static const _channel = MethodChannel('com.leadaxe.lxbox/utils');
 
   /// Returns true if opened, false if copied to clipboard as fallback.
   static Future<bool> open(String url) async {

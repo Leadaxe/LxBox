@@ -1,8 +1,8 @@
-# BoxVPN
+# L×Box
 
 Android VPN client powered by [sing-box](https://sing-box.sagernet.org/). Multi-subscription, smart routing, built-in speed test.
 
-**[Download latest release](https://github.com/Leadaxe/BoxVPN/releases/latest)** | **[Документация на русском](README_RU.md)**
+**[Download latest release](https://github.com/Leadaxe/LxBox/releases/latest)** | **[Документация на русском](README_RU.md)**
 
 ---
 

@@ -1,4 +1,4 @@
-# Отчёт о разработке BoxVPN
+# Отчёт о разработке L×Box
 
 **Дата:** 14 апреля 2026  
 **Период:** Эволюция от MVP до полноценного приложения
@@ -7,7 +7,7 @@
 
 ## Резюме
 
-BoxVPN прошёл путь от MVP (один экран: Read config → Start/Stop VPN → список нод) до полнофункционального Android VPN-клиента с:
+L×Box прошёл путь от MVP (один экран: Read config → Start/Stop VPN → список нод) до полнофункционального Android VPN-клиента с:
 - Полным парсером подписок (порт из singbox-launcher).
 - Генератором конфигов на основе wizard template.
 - Управлением подписками и настройками через UI.
@@ -87,7 +87,7 @@ BoxVPN прошёл путь от MVP (один экран: Read config → Star
 4. `_applySelectableRules()` — добавление rule_set и rules по enabled-списку.
 
 **SettingsStorage** (`services/settings_storage.dart`):
-- JSON-файл `boxvpn_settings.json` через `path_provider`.
+- JSON-файл `lxbox_settings.json` через `path_provider`.
 - Секции: `vars`, `proxy_sources`, `enabled_rules`, `last_global_update`.
 - In-memory cache для быстрого доступа.
 

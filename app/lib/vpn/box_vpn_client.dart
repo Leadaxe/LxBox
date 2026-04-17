@@ -5,8 +5,8 @@ import 'package:flutter/services.dart';
 /// Thin Dart wrapper over native MethodChannel/EventChannel for VPN control.
 /// Replaces flutter_singbox_vpn plugin with identical public API surface.
 class BoxVpnClient {
-  static const _methods = MethodChannel('com.leadaxe.boxvpn/methods');
-  static const _statusEvents = EventChannel('com.leadaxe.boxvpn/status_events');
+  static const _methods = MethodChannel('com.leadaxe.lxbox/methods');
+  static const _statusEvents = EventChannel('com.leadaxe.lxbox/status_events');
 
   /// Save sing-box JSON config to native storage.
   Future<bool> saveConfig(String config) async {

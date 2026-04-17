@@ -9,7 +9,7 @@ import '../models/proxy_source.dart';
 class SettingsStorage {
   SettingsStorage._();
 
-  static const _fileName = 'boxvpn_settings.json';
+  static const _fileName = 'lxbox_settings.json';
   static Map<String, dynamic>? _cache;
 
   static Future<File> _file() async {

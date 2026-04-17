@@ -1,8 +1,8 @@
-# BoxVPN
+# L×Box
 
 Android VPN-клиент на базе [sing-box](https://sing-box.sagernet.org/). Мульти-подписки, умная маршрутизация, встроенный тест скорости.
 
-**[Скачать последний релиз](https://github.com/Leadaxe/BoxVPN/releases/latest)**
+**[Скачать последний релиз](https://github.com/Leadaxe/LxBox/releases/latest)**
 
 ---
 

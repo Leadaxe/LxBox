@@ -63,7 +63,7 @@ JSON editor (MultiLineEntry) для массива DNS rules.
 
 ## Хранение
 
-В `boxvpn_settings.json`:
+В `lxbox_settings.json`:
 
 ```json
 "dns_options": {

@@ -59,7 +59,7 @@ class BoxVpnApp extends StatelessWidget {
       animation: themeNotifier,
       builder: (context, _) {
         return MaterialApp(
-          title: 'BoxVPN',
+          title: 'L×Box',
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: _seed),
             useMaterial3: true,

@@ -83,14 +83,14 @@ UI-режимы:
 
 ### 2.3 Пользовательские переопределения
 
-Пользовательские настройки хранятся в `boxvpn_settings.json` в application support directory. Содержит только то, что пользователь изменил — не полную копию шаблона.
+Пользовательские настройки хранятся в `lxbox_settings.json` в application support directory. Содержит только то, что пользователь изменил — не полную копию шаблона.
 
 ## 3. Config Builder
 
 ### 3.1 Процесс генерации
 
 1. **Загрузка шаблона** из Flutter asset
-2. **Загрузка переменных** из хранилища (boxvpn_settings.json)
+2. **Загрузка переменных** из хранилища (lxbox_settings.json)
 3. **Мерж**: user overrides имеют приоритет над template defaults
 4. **Подстановка переменных** в секцию `config`: `@var_name` → значение
 5. **Загрузка подписок** через Source Loader (фича 004)
@@ -136,7 +136,7 @@ UI-режимы:
 | `assets/wizard_template.json` | Единый шаблон со всеми секциями |
 | `lib/models/parser_config.dart` | Модель WizardTemplate и вложенные модели |
 | `lib/services/config_builder.dart` | Мерж template + user overrides при генерации |
-| `lib/services/settings_storage.dart` | CRUD для boxvpn_settings.json |
+| `lib/services/settings_storage.dart` | CRUD для lxbox_settings.json |
 
 ## 7. Критерии приёмки
 
@@ -148,5 +148,5 @@ UI-режимы:
 - [x] Selectable rules добавляют rule_set и rules при включении.
 - [x] Сгенерированный конфиг принимается ядром sing-box.
 - [x] Настройки сохраняются между запусками приложения.
-- [x] Пользовательские переопределения хранятся отдельно в boxvpn_settings.json.
+- [x] Пользовательские переопределения хранятся отдельно в lxbox_settings.json.
 - [x] ConfigBuilder мержит template defaults с user overrides.

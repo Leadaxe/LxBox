@@ -1,4 +1,4 @@
-import 'package:boxvpn_app/config/clash_endpoint.dart';
+import 'package:lxbox/config/clash_endpoint.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

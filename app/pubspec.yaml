@@ -1,5 +1,5 @@
-name: boxvpn_app
-description: BoxVPN — Android MVP (sing-box + Clash API).
+name: lxbox
+description: L×Box — Android MVP (sing-box + Clash API).
 publish_to: 'none'
 
 version: 1.1.1+2

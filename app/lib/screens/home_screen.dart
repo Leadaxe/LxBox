@@ -71,7 +71,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         final startEnabled = !state.busy && !state.tunnelUp && state.configRaw.isNotEmpty;
         final stopEnabled = !state.busy && state.tunnelUp;
         return Scaffold(
-          appBar: AppBar(title: const Text('BoxVPN')),
+          appBar: AppBar(title: const Text('L×Box')),
           drawer: _buildDrawer(state),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

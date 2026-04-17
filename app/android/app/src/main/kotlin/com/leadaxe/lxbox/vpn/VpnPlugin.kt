@@ -1,4 +1,4 @@
-package com.leadaxe.boxvpn_app.vpn
+package com.leadaxe.lxbox.vpn
 
 import android.app.Activity
 import android.content.BroadcastReceiver
@@ -20,8 +20,8 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
 
     companion object {
         private const val TAG = "VpnPlugin"
-        private const val METHOD_CHANNEL = "com.leadaxe.boxvpn/methods"
-        private const val STATUS_CHANNEL = "com.leadaxe.boxvpn/status_events"
+        private const val METHOD_CHANNEL = "com.leadaxe.lxbox/methods"
+        private const val STATUS_CHANNEL = "com.leadaxe.lxbox/status_events"
         private const val VPN_REQUEST_CODE = 24
     }
 
@@ -101,7 +101,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(true)
             }
             "setNotificationTitle" -> {
-                val title = call.argument<String>("title") ?: "BoxVPN"
+                val title = call.argument<String>("title") ?: "L×Box"
                 ConfigManager.setNotificationTitle(title)
                 result.success(true)
             }

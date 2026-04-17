@@ -12,7 +12,7 @@
 
 ### Хранение
 
-В `boxvpn_settings.json`:
+В `lxbox_settings.json`:
 
 ```json
 "custom_nodes": [
