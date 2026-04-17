@@ -17,6 +17,7 @@ class NodeRow extends StatelessWidget {
     required this.onPing,
     this.onCopy,
     this.urltestNow,
+    this.hasDetour = false,
   });
 
   final String tag;
@@ -33,6 +34,7 @@ class NodeRow extends StatelessWidget {
   final void Function(String mode)? onCopy;
   /// If this node is a URLTest group, shows which node it auto-selected.
   final String? urltestNow;
+  final bool hasDetour;
 
   String get _subtitle {
     if (pingBusy) return 'PING…';
@@ -63,9 +65,12 @@ class NodeRow extends StatelessWidget {
     return Theme.of(context).colorScheme.error;
   }
 
+  bool get _isSpecial => tag == 'direct-out' || tag == 'auto-proxy-out';
+
   Future<void> _openLongPressMenu(BuildContext context) async {
     final canPing = tunnelUp && !busy && !pingBusy;
     final canActivate = tunnelUp && !busy && !active;
+    final showCopy = !_isSpecial;
     final box = context.findRenderObject() as RenderBox?;
     final overlay =
         Navigator.of(context).overlay?.context.findRenderObject() as RenderBox?;
@@ -109,34 +114,37 @@ class NodeRow extends StatelessWidget {
             title: const Text('Use this node'),
           ),
         ),
-        const PopupMenuDivider(),
-        PopupMenuItem<String>(
-          value: 'copy_server',
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.content_copy, size: 20),
-            title: const Text('Copy server'),
+        if (showCopy) const PopupMenuDivider(),
+        if (showCopy)
+          PopupMenuItem<String>(
+            value: 'copy_server',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.content_copy, size: 20),
+              title: const Text('Copy server'),
+            ),
           ),
-        ),
-        PopupMenuItem<String>(
-          value: 'copy_detour',
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.alt_route, size: 20),
-            title: const Text('Copy detour'),
+        if (showCopy && hasDetour)
+          PopupMenuItem<String>(
+            value: 'copy_detour',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.alt_route, size: 20),
+              title: const Text('Copy detour'),
+            ),
           ),
-        ),
-        PopupMenuItem<String>(
-          value: 'copy_both',
-          child: ListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.copy_all, size: 20),
-            title: const Text('Copy server + detour'),
+        if (showCopy && hasDetour)
+          PopupMenuItem<String>(
+            value: 'copy_both',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.copy_all, size: 20),
+              title: const Text('Copy server + detour'),
+            ),
           ),
-        ),
       ],
     );
     if (!context.mounted) return;
@@ -160,7 +168,9 @@ class NodeRow extends StatelessWidget {
     final canActivate = tunnelUp && !busy && !active;
 
     return Material(
-      color: highlighted ? colorScheme.primaryContainer.withAlpha(55) : null,
+      color: highlighted
+          ? colorScheme.primaryContainer.withAlpha(55)
+          : (_isSpecial ? colorScheme.secondaryContainer.withAlpha(40) : null),
       child: InkWell(
         onTap: onHighlight,
         onLongPress: () => unawaited(_openLongPressMenu(context)),

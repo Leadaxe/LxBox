@@ -60,16 +60,18 @@ class HomeState {
 
   List<String> get sortedNodes {
     if (sortMode == NodeSortMode.defaultOrder) return nodes;
-    final sorted = List<String>.from(nodes);
+    const pinnedOrder = ['direct-out', 'auto-proxy-out'];
+    final pinned = pinnedOrder.where(nodes.contains).toList();
+    final rest = nodes.where((n) => !pinnedOrder.contains(n)).toList();
     switch (sortMode) {
       case NodeSortMode.latencyAsc:
-        sorted.sort((a, b) => _compareLatency(a, b));
+        rest.sort((a, b) => _compareLatency(a, b));
       case NodeSortMode.nameAsc:
-        sorted.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        rest.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
       case NodeSortMode.defaultOrder:
         break;
     }
-    return sorted;
+    return [...pinned, ...rest];
   }
 
   int _compareLatency(String a, String b) {

@@ -64,7 +64,7 @@
     {
       "tag": "auto-proxy-out",
       "type": "urltest",
-      "label": "Auto Proxy",
+      "label": "Include Auto",
       "default_enabled": true,
       "options": {
         "url": "@urltest_url",
@@ -183,7 +183,7 @@
     {
       "name": "urltest_tolerance",
       "type": "text",
-      "default_value": "100",
+      "default_value": "30",
       "wizard_ui": "edit",
       "title": "Tolerance (ms)",
       "tooltip": "Only switch proxy if latency difference exceeds this"

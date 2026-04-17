@@ -855,6 +855,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     final displayNodes = _showDetourNodes
         ? state.sortedNodes
         : state.sortedNodes.where((t) => !t.startsWith('⚙ ')).toList();
+    final detourTags = <String>{};
+    if (state.configRaw.isNotEmpty) {
+      try {
+        final cfg = jsonDecode(state.configRaw) as Map<String, dynamic>;
+        final all = [
+          ...(cfg['outbounds'] as List<dynamic>? ?? []),
+          ...(cfg['endpoints'] as List<dynamic>? ?? []),
+        ].whereType<Map<String, dynamic>>();
+        for (final o in all) {
+          final d = o['detour'];
+          final t = o['tag'];
+          if (t is String && d is String && d.isNotEmpty) detourTags.add(t);
+        }
+      } catch (_) {}
+    }
     return Expanded(
       child: RefreshIndicator(
         onRefresh: _controller.reloadProxies,
@@ -881,6 +896,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               onPing: () => unawaited(_controller.pingNode(tag)),
               onCopy: (mode) => _copyNodeJson(tag, state, mode),
               urltestNow: ClashApiClient.urltestNow(state.proxiesJson, tag),
+              hasDetour: detourTags.contains(tag),
             );
           },
         ),
