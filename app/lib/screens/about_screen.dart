@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import '../services/url_launcher.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -76,16 +80,6 @@ class AboutScreen extends StatelessWidget {
                   subtitle: Text('Config wizard and parser reference'),
                 ),
                 const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.volunteer_activism),
-                  title: const Text('@igareck'),
-                  subtitle: const Text('Free VPN lists for Quick Start'),
-                  onTap: () => _copyToClipboard(
-                    context,
-                    'https://github.com/igareck/vpn-configs-for-russia',
-                  ),
-                ),
-                const Divider(height: 1),
                 const ListTile(
                   leading: Icon(Icons.extension_outlined),
                   title: Text('Native VPN Service'),
@@ -93,6 +87,12 @@ class AboutScreen extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: () => _showDonateDialog(context),
+            icon: const Icon(Icons.favorite),
+            label: const Text('Support the project'),
           ),
           const SizedBox(height: 16),
           Text(
@@ -115,6 +115,91 @@ class AboutScreen extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _showDonateDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => DefaultTabController(
+        length: 2,
+        child: AlertDialog(
+          title: const Text('Support L\u00D7Box'),
+          contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 200,
+            child: Column(
+              children: [
+                const TabBar(
+                  tabs: [
+                    Tab(text: 'Crypto'),
+                    Tab(text: 'Card'),
+                  ],
+                ),
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      // Crypto tab
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('USDT (TRC20)', style: TextStyle(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            GestureDetector(
+                              onTap: () => _copyToClipboard(ctx, '0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea'),
+                              child: const Text('0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea', style: TextStyle(fontSize: 11)),
+                            ),
+                            const SizedBox(height: 4),
+                            TextButton.icon(
+                              onPressed: () => _copyToClipboard(ctx, '0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea'),
+                              icon: const Icon(Icons.copy, size: 14),
+                              label: const Text('Copy', style: TextStyle(fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Card tab
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('T-Bank (Tinkoff)', style: TextStyle(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 8),
+                            FilledButton.tonal(
+                              onPressed: () => unawaited(UrlLauncher.open('https://tbank.ru/cf/4pB1x5CoPxA')),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.open_in_new, size: 16),
+                                  SizedBox(width: 8),
+                                  Text('Open T-Bank payment'),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            TextButton.icon(
+                              onPressed: () => _copyToClipboard(ctx, 'https://tbank.ru/cf/4pB1x5CoPxA'),
+                              icon: const Icon(Icons.copy, size: 14),
+                              label: const Text('Copy link', style: TextStyle(fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          ],
+        ),
       ),
     );
   }
