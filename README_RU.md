@@ -92,7 +92,7 @@ Android VPN-клиент на базе [sing-box](https://sing-box.sagernet.org/
 - **4 параллельных потока загрузки** (настраивается: 1/4/10)
 - **Обновление в реальном времени** каждые 500мс
 - Пинг: 5 измерений, усечённое среднее
-- Выбор сервера: **Cloudflare, Hetzner (EU), OVH (EU), Selectel (RU)**
+- **10 серверов**: Cloudflare, Hostkey (Москва, Франкфурт, Амстердам, Хельсинки, Нью-Йорк), Selectel (RU), Tele2 (EU), OVH (Франция), ThinkBroadband (UK)
 - Показывает текущий прокси или индикатор "Direct"
 - **История за сессию** (последние 10 тестов, сохраняется пока приложение работает)
 - Все настройки из `wizard_template.json`
@@ -275,6 +275,11 @@ gh workflow run CI --repo Leadaxe/BoxVPN -f run_mode=release
 | 037 | CI/CD Pipeline (тег → релиз) | Готово |
 | 038 | Улучшения экрана подписки | Готово |
 | 039 | Security Hardening | Частично |
+| 040 | TLS Fragment (обход DPI) | Готово |
+| 041 | WireGuard Endpoint | Готово |
+| 042 | Настройки ноды (JSON Editor, Detour) | Готово |
+| 043 | Умная вставка из буфера | Готово |
+| 044 | Именование detour серверов (⚙) | Готово |
 
 ---
 
@@ -287,7 +292,7 @@ gh workflow run CI --repo Leadaxe/BoxVPN -f run_mode=release
 | [`docs/BUILD.md`](docs/BUILD.md) | Инструкции по сборке, CI, подпись APK |
 | [`docs/DEVELOPMENT_REPORT.md`](docs/DEVELOPMENT_REPORT.md) | Полная история разработки (10 этапов) |
 | [`CHANGELOG.md`](CHANGELOG.md) | Список изменений по релизам |
-| [`docs/spec/features/`](docs/spec/features/) | **39 спецификаций фич** (spec-driven development) |
+| [`docs/spec/features/`](docs/spec/features/) | **44 спецификации фич** (spec-driven development) |
 
 ---
 

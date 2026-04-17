@@ -28,12 +28,12 @@ class ParsedNode {
   Map<String, String> query;
   Map<String, dynamic> outbound;
 
-  /// Optional chained proxy (jump server) — the main outbound uses `detour`
-  /// pointing at this jump's tag so traffic is tunneled through it first.
+  /// Optional chained proxy (detour server) — the main outbound uses `detour`
+  /// pointing at this server's tag so traffic is tunneled through it first.
   ParsedDetour? detourServer;
 }
 
-/// A chained proxy outbound (SOCKS or VLESS) used as a jump/detour server.
+/// A chained proxy outbound (SOCKS or VLESS) used as a detour server.
 class ParsedDetour {
   ParsedDetour({
     required this.tag,

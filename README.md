@@ -92,7 +92,7 @@ Android VPN client powered by [sing-box](https://sing-box.sagernet.org/). Multi-
 - **4 parallel download streams** (configurable: 1/4/10)
 - **Real-time** speed updates every 500ms
 - Ping: 5 measurements, trimmed mean
-- Server selection: **Cloudflare, Hetzner (EU), OVH (EU), Selectel (RU)**
+- **10 servers**: Cloudflare, Hostkey (Moscow, Frankfurt, Amsterdam, Helsinki, New York), Selectel (RU), Tele2 (EU), OVH (France), ThinkBroadband (UK)
 - Shows current proxy or "Direct" indicator
 - **Session history** (last 10 tests, persists while app is running)
 - All settings from `wizard_template.json`
@@ -274,6 +274,12 @@ Every feature is documented as a spec in [`docs/spec/features/`](docs/spec/featu
 | 036 | Sort Modes (Default/Ping/A-Z) | Done |
 | 037 | CI/CD Pipeline (Tag → Release) | Done |
 | 038 | Subscription Detail Enhancements | Done |
+| 039 | Security Hardening | Partial |
+| 040 | TLS Fragment (DPI Bypass) | Done |
+| 041 | WireGuard Endpoint Support | Done |
+| 042 | Node Settings (JSON Editor, Detour) | Done |
+| 043 | Smart Paste Dialog | Done |
+| 044 | Detour Server Naming (⚙ Prefix) | Done |
 
 ---
 
@@ -286,7 +292,7 @@ Every feature is documented as a spec in [`docs/spec/features/`](docs/spec/featu
 | [`docs/BUILD.md`](docs/BUILD.md) | Build instructions, CI, APK signing |
 | [`docs/DEVELOPMENT_REPORT.md`](docs/DEVELOPMENT_REPORT.md) | Full development history (10 stages) |
 | [`CHANGELOG.md`](CHANGELOG.md) | Release changelog |
-| [`docs/spec/features/`](docs/spec/features/) | **38 feature specifications** (spec-driven development) |
+| [`docs/spec/features/`](docs/spec/features/) | **44 feature specifications** (spec-driven development) |
 
 ---
 

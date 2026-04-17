@@ -201,7 +201,7 @@ class ConfigBuilder {
     for (final node in allNodes) {
       if (node.outbound.isEmpty) continue;
 
-      // If node has a jump server, emit the jump outbound first
+      // If node has a detour server, emit its outbound first
       // and set `detour` on the main outbound to route through it.
       if (node.detourServer != null && node.detourServer!.outbound.isNotEmpty) {
         final detourTag = node.detourServer!.tag;

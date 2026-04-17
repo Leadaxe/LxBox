@@ -110,7 +110,7 @@ class XrayJsonParser {
     if (dialerRef.isNotEmpty) {
       final detourOb = byTag[dialerRef];
       if (detourOb == null) return null;
-      // Build jump tag from original Xray tag or protocol+host
+      // Build detour tag from original Xray tag or protocol+host
       final detourName = _detourTagName(detourOb, dialerRef);
       final detourTag = '$detourPrefix$detourName';
       final detour = _buildDetourFromOutbound(detourOb, detourTag, label);
@@ -330,7 +330,7 @@ class XrayJsonParser {
   // Jump outbound (SOCKS / VLESS)
   // ---------------------------------------------------------------------------
 
-  /// Builds a human-readable name for a jump server from its Xray outbound.
+  /// Builds a human-readable name for a detour server from its Xray outbound.
   static String _detourTagName(Map<String, dynamic> ob, String originalTag) {
     // Try original Xray tag first
     final tag = _str(ob, 'tag').trim();

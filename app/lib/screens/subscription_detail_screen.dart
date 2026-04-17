@@ -239,7 +239,6 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
           style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 8),
-        // TODO: populate with available direct servers
         ListTile(
           title: const Text('Override detour'),
           subtitle: Text(widget.entry.source.overrideDetour.isEmpty
