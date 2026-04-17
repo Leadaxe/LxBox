@@ -539,16 +539,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   : _controller.cycleSortMode,
               icon: Icon(_controller.state.sortMode.icon, size: 20),
             ),
-            IconButton(
-              tooltip: 'Reload groups',
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              onPressed: (!_controller.state.tunnelUp || _controller.state.busy)
-                  ? null
-                  : () => unawaited(_controller.reloadProxies()),
-              icon: const Icon(Icons.refresh, size: 20),
-            ),
           ],
         ),
       ),
@@ -693,7 +683,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         }
         label = 'Server${detour != null ? " + detour" : ""} copied';
       default: // 'server'
-        toCopy = server;
+        // Remove detour field so server is standalone
+        toCopy = Map<String, dynamic>.from(server)..remove('detour');
         label = 'Server copied';
     }
 

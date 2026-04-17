@@ -305,6 +305,8 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
+  Future<void> persistSources() async => _persistSources();
+
   Future<void> _persistSources() async {
     await SettingsStorage.saveProxySources(
       _entries.map((e) => e.source).toList(),

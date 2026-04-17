@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
 import '../services/config_builder.dart';
@@ -24,17 +26,20 @@ class NodeSettingsScreen extends StatefulWidget {
 
 class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   late TextEditingController _tagCtrl;
+  late TextEditingController _jsonCtrl;
   String _detour = '';
   List<String> _availableNodes = [];
   String _originalTag = '';
   String _scheme = '';
   String _serverInfo = '';
+  bool _isJson = false;
   Timer? _saveTimer;
 
   @override
   void initState() {
     super.initState();
     _tagCtrl = TextEditingController();
+    _jsonCtrl = TextEditingController();
     unawaited(_load());
   }
 
@@ -42,25 +47,50 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   void dispose() {
     _saveTimer?.cancel();
     _tagCtrl.dispose();
+    _jsonCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
-    // Parse the node to get info
     final connections = widget.entry.source.connections;
     if (connections.isEmpty) return;
 
-    final tagCounts = <String, int>{};
-    final nodes = await ConfigBuilder.loadAndParseNodes(
-      [widget.entry.source],
-      tagCounts,
-    );
+    final first = connections.first;
 
-    if (nodes.isEmpty) return;
-    final node = nodes.first;
-    _originalTag = node.tag;
-    _scheme = node.scheme;
-    _serverInfo = '${node.server}:${node.port}';
+    // Detect JSON outbound
+    if (first.trimLeft().startsWith('{')) {
+      _isJson = true;
+      try {
+        final parsed = jsonDecode(first) as Map<String, dynamic>;
+        _originalTag = parsed['tag']?.toString() ?? '';
+        _scheme = parsed['type']?.toString() ?? '';
+        final server = parsed['server']?.toString() ?? '';
+        final port = parsed['server_port']?.toString() ?? '';
+        _serverInfo = port.isNotEmpty ? '$server:$port' : server;
+        // Pretty-print all connections as JSON
+        final allJson = connections.map((c) {
+          try { return jsonDecode(c); } catch (_) { return c; }
+        }).toList();
+        _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(
+          allJson.length == 1 ? allJson.first : allJson,
+        );
+      } catch (_) {
+        _originalTag = first.length > 30 ? first.substring(0, 30) : first;
+        _jsonCtrl.text = first;
+      }
+    } else {
+      // URI-based node
+      final tagCounts = <String, int>{};
+      final nodes = await ConfigBuilder.loadAndParseNodes(
+        [widget.entry.source],
+        tagCounts,
+      );
+      if (nodes.isEmpty) return;
+      final node = nodes.first;
+      _originalTag = node.tag;
+      _scheme = node.scheme;
+      _serverInfo = '${node.server}:${node.port}';
+    }
 
     // Load existing overrides
     final overrides = await SettingsStorage.getNodeOverrides();
@@ -85,6 +115,38 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   void _scheduleSave() {
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 500), () => unawaited(_save()));
+  }
+
+  void _saveJson() {
+    try {
+      final parsed = jsonDecode(_jsonCtrl.text);
+      // Re-serialize connections
+      final connections = <String>[];
+      if (parsed is List) {
+        for (final item in parsed) {
+          connections.add(jsonEncode(item));
+        }
+      } else if (parsed is Map) {
+        connections.add(jsonEncode(parsed));
+      }
+      if (connections.isNotEmpty) {
+        widget.entry.source.connections
+          ..clear()
+          ..addAll(connections);
+        widget.subController.persistSources();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('JSON saved')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invalid JSON: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _save() async {
@@ -186,6 +248,46 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                     ),
                   ),
                 ),
+
+                // --- JSON editor (for JSON outbounds only) ---
+                if (_isJson) ...[
+                  const SizedBox(height: 16),
+                  _sectionHeader('Outbound JSON', 'Edit raw outbound configuration', theme),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: TextField(
+                      controller: _jsonCtrl,
+                      maxLines: null,
+                      minLines: 8,
+                      style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                      decoration: InputDecoration(
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                        suffixIcon: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.content_paste, size: 18),
+                              tooltip: 'Paste',
+                              onPressed: () async {
+                                final data = await Clipboard.getData(Clipboard.kTextPlain);
+                                if (data?.text != null) {
+                                  _jsonCtrl.text = data!.text!;
+                                  _saveJson();
+                                }
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.save, size: 18),
+                              tooltip: 'Save',
+                              onPressed: _saveJson,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
     );
