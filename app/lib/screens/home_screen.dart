@@ -33,7 +33,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   late final HomeController _controller;
   late final SubscriptionController _subController;
   late final AnimationController _connectingAnim;
-  bool _showDetourServers = false;
 
   @override
   void initState() {
@@ -47,21 +46,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     );
     unawaited(_controller.init());
     unawaited(_subController.init());
-    unawaited(_loadPrefs());
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _connectingAnim.dispose();
-    _controller.dispose();
-    _subController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadPrefs() async {
-    _showDetourServers = await SettingsStorage.getShowDetourServers();
-    if (mounted) setState(() {});
   }
 
   @override
@@ -546,25 +530,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   : _controller.cycleSortMode,
               icon: Icon(_controller.state.sortMode.icon, size: 20),
             ),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.tune, size: 20),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              onSelected: (v) async {
-                if (v == 'detour') {
-                  _showDetourServers = !_showDetourServers;
-                  await SettingsStorage.setShowDetourServers(_showDetourServers);
-                  setState(() {});
-                }
-              },
-              itemBuilder: (_) => [
-                CheckedPopupMenuItem(
-                  value: 'detour',
-                  checked: _showDetourServers,
-                  child: const Text('Show detour servers'),
-                ),
-              ],
-            ),
           ],
         ),
       ),
@@ -776,9 +741,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         ),
       );
     }
-    final displayNodes = _showDetourServers
-        ? state.sortedNodes
-        : state.sortedNodes.where((t) => !t.startsWith('⚙ ')).toList();
+    final displayNodes = state.sortedNodes;
     return Expanded(
       child: RefreshIndicator(
         onRefresh: _controller.reloadProxies,

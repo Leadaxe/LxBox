@@ -200,15 +200,6 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
         )),
         const Divider(),
         SwitchListTile(
-          title: const Text('Show detour servers'),
-          subtitle: const Text('Display ⚙ intermediate detour servers in node list'),
-          value: widget.entry.source.showDetourServers,
-          onChanged: (val) {
-            setState(() => widget.entry.source.showDetourServers = val);
-            unawaited(widget.controller.persistSources());
-          },
-        ),
-        SwitchListTile(
           title: const Text('Register detour servers'),
           subtitle: const Text('Add ⚙ servers to proxy groups (visible in node list)'),
           value: widget.entry.source.registerDetourServers,
@@ -455,15 +446,12 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       );
     }
 
-    final showJump = widget.entry.source.showDetourServers;
-    final filtered = showJump ? nodes : nodes.where((n) => !n.tag.startsWith('⚙ ')).toList();
-
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      itemCount: filtered.length,
+      itemCount: nodes.length,
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {
-        final node = filtered[i];
+        final node = nodes[i];
         return ListTile(
           contentPadding: EdgeInsets.zero,
           leading: _protocolIcon(node.scheme),
