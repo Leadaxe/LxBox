@@ -181,6 +181,6 @@ jobs:
         with:
           tag_name: ${{ needs.meta.outputs.tag }}
           name: LxBox ${{ needs.meta.outputs.version }}
-          draft: true
+          draft: false
           files: release-artifacts/LxBox-${{ needs.meta.outputs.version }}.apk
           body_path: RELEASE_NOTES.md
