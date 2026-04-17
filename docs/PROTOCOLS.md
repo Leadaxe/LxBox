@@ -8,17 +8,87 @@ Source code: [`app/lib/services/node_parser.dart`](../app/lib/services/node_pars
 
 ## Table of Contents
 
-1. [VLESS](#1-vless)
-2. [VMess](#2-vmess)
-3. [Trojan](#3-trojan)
-4. [Shadowsocks](#4-shadowsocks)
-5. [Hysteria2](#5-hysteria2)
-6. [SSH](#6-ssh)
-7. [SOCKS](#7-socks)
-8. [WireGuard](#8-wireguard)
-9. [WireGuard INI Config](#9-wireguard-ini-config)
-10. [JSON Outbound (raw sing-box)](#10-json-outbound)
-11. [Xray JSON Array](#11-xray-json-array)
+1. [Subscription HTTP Headers](#0-subscription-http-headers)
+2. [VLESS](#1-vless)
+3. [VMess](#2-vmess)
+4. [Trojan](#3-trojan)
+5. [Shadowsocks](#4-shadowsocks)
+6. [Hysteria2](#5-hysteria2)
+7. [SSH](#6-ssh)
+8. [SOCKS](#7-socks)
+9. [WireGuard](#8-wireguard)
+10. [WireGuard INI Config](#9-wireguard-ini-config)
+11. [JSON Outbound (raw sing-box)](#10-json-outbound)
+12. [Xray JSON Array](#11-xray-json-array)
+
+---
+
+## 0. Subscription HTTP Headers
+
+When fetching a subscription URL, L×Box reads several **de facto standard** HTTP response headers. These are **not formally standardized** (no RFC), but the convention is universally adopted across V2Ray/Clash/sing-box client ecosystem since ~2019. Backends like [V2Board](https://github.com/v2board/v2board), [Xboard](https://github.com/cedar2025/Xboard), [Marzban](https://github.com/Gozargah/Marzban) emit them out of the box.
+
+### Parsed Headers
+
+| Header | Format | Purpose |
+|--------|--------|---------|
+| `subscription-userinfo` | `upload=N; download=N; total=N; expire=UNIX` | Traffic quota and expiry |
+| `profile-title` | plain text or **base64-encoded UTF-8** | Display name for subscription |
+| `profile-update-interval` | integer hours | Auto-refresh interval hint |
+| `support-url` | URL (often `https://t.me/...`) | Link to provider support |
+| `profile-web-page-url` | URL | Provider's website |
+| `content-disposition` | `attachment; filename="..."` | Fallback for title |
+
+### Example Response
+
+```
+HTTP/1.1 200 OK
+Content-Type: text/plain; charset=utf-8
+subscription-userinfo: upload=12345678; download=987654321; total=107374182400; expire=1735689600
+profile-title: My VPN Provider
+profile-update-interval: 24
+support-url: https://t.me/myvpn_support
+profile-web-page-url: https://myvpn.com
+
+vless://uuid@server1.example.com:443?...
+vless://uuid@server2.example.com:443?...
+...
+```
+
+### Where They Come From
+
+| Client | Role |
+|--------|------|
+| [v2rayN](https://github.com/2dust/v2rayN) (2018) | First to parse `subscription-userinfo` |
+| [Clash](https://github.com/Dreamacro/clash) (2020) | Formalized header list in [Clash Wiki](https://clash.wiki/configuration/subscription-userinfo) |
+| [Clash.Meta / Mihomo](https://github.com/MetaCubeX/mihomo) | Extended with additional fields |
+| [subconverter](https://github.com/tindy2013/subconverter) | De facto reference converter — reads/writes all headers |
+| [Hiddify](https://github.com/hiddify/hiddify-next) | Full set support |
+
+### Traffic Quota Display
+
+The `subscription-userinfo` header drives the **traffic quota bar** in subscription detail:
+
+```
+Used:     1.05 GB uploaded + 920 MB downloaded = 1.97 GB / 100 GB
+Expires:  2026-12-31 (8 months remaining)
+```
+
+Backend reference: any of V2Board, Xboard, Marzban panels. These are PHP/Go backends that generate subscription responses with correct headers automatically — provider admins don't need to configure them manually.
+
+### Why No RFC
+
+This is **cargo cult convention** — works because all clients parse identically. Similar to how `X-Forwarded-For` was de facto standard for ~10 years before [RFC 7239](https://datatracker.ietf.org/doc/html/rfc7239). If a new client introduced its own header, no provider would emit it, so the ecosystem stays consistent through inertia.
+
+### Implementation in L×Box
+
+See [`app/lib/services/subscription_fetcher.dart`](../app/lib/services/subscription_fetcher.dart). After fetching a subscription, headers are parsed and stored in `ProxySource` fields:
+
+- `ProxySource.name` ← `profile-title`
+- `ProxySource.totalBytes`, `uploadBytes`, `downloadBytes`, `expireTimestamp` ← `subscription-userinfo`
+- `ProxySource.supportUrl` ← `support-url`
+- `ProxySource.webPageUrl` ← `profile-web-page-url`
+
+Displayed in subscription detail → **Source tab** → Headers section.
 
 ---
 
