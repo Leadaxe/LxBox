@@ -29,9 +29,10 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, TickerProviderStateMixin {
   late final HomeController _controller;
   late final SubscriptionController _subController;
+  late final AnimationController _connectingAnim;
 
   @override
   void initState() {
@@ -39,6 +40,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _controller = HomeController();
     _subController = SubscriptionController();
+    _connectingAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    );
     unawaited(_controller.init());
     unawaited(_subController.init());
   }
@@ -46,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _connectingAnim.dispose();
     _controller.dispose();
     _subController.dispose();
     super.dispose();
@@ -219,21 +225,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 label: Text(state.tunnelUp ? 'Stop' : 'Start'),
               ),
               const SizedBox(width: 8),
-              Chip(
-                label: Text(state.tunnel.label),
-                  avatar: Icon(
-                    isRevoked
-                        ? Icons.warning_amber_rounded
-                        : state.tunnelUp
-                            ? Icons.shield
-                            : Icons.shield_outlined,
-                    size: 18,
-                    color: isRevoked ? Theme.of(context).colorScheme.error : null,
-                  ),
-                  backgroundColor: isRevoked
-                      ? Theme.of(context).colorScheme.errorContainer
-                      : null,
-              ),
+              _buildStatusChip(state, isRevoked, isConnecting),
               const SizedBox(width: 8),
               IconButton(
                 tooltip: 'Rebuild config',
@@ -339,6 +331,54 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } else {
       _controller.stop();
     }
+  }
+
+  Widget _buildStatusChip(HomeState state, bool isRevoked, bool isConnecting) {
+    // Manage animation state
+    if (isConnecting && !_connectingAnim.isAnimating) {
+      _connectingAnim.repeat();
+    } else if (!isConnecting && _connectingAnim.isAnimating) {
+      _connectingAnim.stop();
+      _connectingAnim.reset();
+    }
+
+    final icon = isRevoked
+        ? Icons.warning_amber_rounded
+        : state.tunnelUp
+            ? Icons.shield
+            : isConnecting
+                ? Icons.sync
+                : Icons.shield_outlined;
+
+    final color = isRevoked
+        ? Theme.of(context).colorScheme.error
+        : state.tunnelUp
+            ? Theme.of(context).colorScheme.primary
+            : null;
+
+    final bgColor = isRevoked
+        ? Theme.of(context).colorScheme.errorContainer
+        : state.tunnelUp
+            ? Theme.of(context).colorScheme.primaryContainer
+            : null;
+
+    Widget iconWidget = Icon(icon, size: 18, color: color);
+    if (isConnecting) {
+      iconWidget = AnimatedBuilder(
+        animation: _connectingAnim,
+        builder: (_, child) => Transform.rotate(
+          angle: _connectingAnim.value * 2 * 3.14159,
+          child: child,
+        ),
+        child: iconWidget,
+      );
+    }
+
+    return Chip(
+      label: Text(state.tunnel.label),
+      avatar: iconWidget,
+      backgroundColor: bgColor,
+    );
   }
 
   Widget _buildTrafficBar(BuildContext context, HomeState state) {
