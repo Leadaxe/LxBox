@@ -151,10 +151,6 @@ class ConfigBuilder {
       if (route != null) route['final'] = routeFinal;
     }
 
-    // Apply node overrides (custom tag, detour)
-    final nodeOverrides = await SettingsStorage.getNodeOverrides();
-    _applyNodeOverrides(config, nodeOverrides);
-
     // Apply TLS fragment settings to all outbounds with TLS
     _applyTlsFragment(config, vars);
 
@@ -351,53 +347,6 @@ class ConfigBuilder {
   /// Applies TLS fragment settings to first-hop outbounds only.
   /// Outbounds with `detour` are inner hops (traffic already tunneled),
   /// so DPI cannot see their TLS handshake — no need to fragment.
-  /// Applies node overrides (custom tag, detour) to outbounds and endpoints.
-  static void _applyNodeOverrides(
-    Map<String, dynamic> config,
-    Map<String, Map<String, String>> overrides,
-  ) {
-    if (overrides.isEmpty) return;
-
-    final outbounds = config['outbounds'] as List<dynamic>? ?? [];
-    final endpoints = config['endpoints'] as List<dynamic>? ?? [];
-    final allEntries = [...outbounds, ...endpoints];
-
-    // Collect renames for updating references in groups
-    final renames = <String, String>{};
-
-    for (final ob in allEntries) {
-      if (ob is! Map<String, dynamic>) continue;
-      final tag = ob['tag'] as String?;
-      if (tag == null || !overrides.containsKey(tag)) continue;
-      final ov = overrides[tag]!;
-
-      // Apply detour
-      if (ov['detour']?.isNotEmpty == true) {
-        ob['detour'] = ov['detour'];
-      }
-
-      // Apply custom tag (rename)
-      if (ov['custom_tag']?.isNotEmpty == true) {
-        renames[tag] = ov['custom_tag']!;
-        ob['tag'] = ov['custom_tag'];
-      }
-    }
-
-    // Update tag references in proxy groups
-    if (renames.isNotEmpty) {
-      for (final ob in outbounds) {
-        if (ob is! Map<String, dynamic>) continue;
-        final groupOutbounds = ob['outbounds'] as List<dynamic>?;
-        if (groupOutbounds == null) continue;
-        for (var i = 0; i < groupOutbounds.length; i++) {
-          final oldTag = groupOutbounds[i] as String?;
-          if (oldTag != null && renames.containsKey(oldTag)) {
-            groupOutbounds[i] = renames[oldTag];
-          }
-        }
-      }
-    }
-  }
 
   static void _applyTlsFragment(
     Map<String, dynamic> config,

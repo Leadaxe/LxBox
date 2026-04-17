@@ -29,7 +29,6 @@ class SubscriptionsScreen extends StatefulWidget {
 class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   final _inputController = TextEditingController();
 
-  bool _dirty = false;
 
   @override
   void dispose() {
@@ -38,9 +37,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   }
 
   Future<bool> _onWillPop() async {
-    if (_dirty) {
-      await _generateOnly();
-    }
     return true;
   }
 
@@ -50,7 +46,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     await widget.subController.addFromInput(text);
     if (widget.subController.lastError.isEmpty) {
       _inputController.clear();
-      _dirty = true;
     }
   }
 
@@ -127,7 +122,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     if (confirmed != true || !mounted) return;
     await widget.subController.addFromInput(text);
     if (widget.subController.lastError.isEmpty) {
-      _dirty = true;
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(widget.subController.lastError)),
@@ -210,7 +204,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     if (config != null) {
       final ok = await widget.homeController.saveParsedConfig(config);
       if (!mounted) return;
-      _dirty = false;
       if (ok) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -219,20 +212,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
               '${widget.subController.entries.fold<int>(0, (s, e) => s + e.nodeCount)} nodes',
             ),
           ),
-        );
-      }
-    }
-  }
-
-  Future<void> _generateOnly() async {
-    final config = await widget.subController.generateConfig();
-    if (!mounted) return;
-    if (config != null) {
-      final ok = await widget.homeController.saveParsedConfig(config);
-      if (!mounted) return;
-      if (ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Config generated and saved')),
         );
       }
     }
@@ -422,8 +401,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                 );
                 if (confirmed == true) {
                   await widget.subController.removeAt(index);
-                  _dirty = true;
-                }
+                            }
               },
             ),
           ],
@@ -495,8 +473,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
               value: enabled,
               onChanged: (_) {
                 unawaited(widget.subController.toggleAt(i));
-                _dirty = true;
-              },
+                        },
             ),
           ),
           title: Row(
