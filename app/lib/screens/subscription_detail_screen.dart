@@ -295,31 +295,82 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   }
 
   Widget _buildSourceTab(ThemeData theme) {
-    if (_rawSource.isEmpty) {
-      return const Center(child: Text('No cached source data'));
-    }
-    return Padding(
+    final source = widget.entry.source;
+    final cs = theme.colorScheme;
+
+    return ListView(
       padding: const EdgeInsets.all(12),
-      child: Stack(
-        children: [
-          SelectableText(
-            _rawSource,
-            style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+      children: [
+        // Headers section
+        if (source.source.isNotEmpty) ...[
+          Text('Headers', style: theme.textTheme.titleSmall?.copyWith(
+            color: cs.primary, fontWeight: FontWeight.bold,
+          )),
+          const Divider(),
+          if (source.name.isNotEmpty)
+            _headerRow('profile-title', source.name, theme),
+          if (source.supportUrl.isNotEmpty)
+            _headerRow('support-url', source.supportUrl, theme),
+          if (source.webPageUrl.isNotEmpty)
+            _headerRow('profile-web-page-url', source.webPageUrl, theme),
+          if (source.totalBytes > 0)
+            _headerRow('subscription-userinfo',
+              'upload=${source.uploadBytes}; download=${source.downloadBytes}; total=${source.totalBytes}'
+              '${source.expireTimestamp > 0 ? "; expire=${source.expireTimestamp}" : ""}',
+              theme),
+          const SizedBox(height: 16),
+        ],
+
+        // Raw source
+        Text('Raw response', style: theme.textTheme.titleSmall?.copyWith(
+          color: cs.primary, fontWeight: FontWeight.bold,
+        )),
+        const Divider(),
+        if (_rawSource.isEmpty)
+          const Text('No cached source data')
+        else
+          Stack(
+            children: [
+              SelectableText(
+                _rawSource,
+                style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+              ),
+              Positioned(
+                top: 0,
+                right: 0,
+                child: IconButton(
+                  icon: const Icon(Icons.copy, size: 16),
+                  tooltip: 'Copy source',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: _rawSource));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Source copied')),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
-          Positioned(
-            top: 0,
-            right: 0,
-            child: IconButton(
-              icon: const Icon(Icons.copy, size: 16),
-              tooltip: 'Copy source',
-              visualDensity: VisualDensity.compact,
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: _rawSource));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Source copied')),
-                );
-              },
-            ),
+      ],
+    );
+  }
+
+  Widget _headerRow(String name, String value, ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(name, style: TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurfaceVariant,
+            )),
+          ),
+          Expanded(
+            child: SelectableText(value, style: const TextStyle(fontSize: 11)),
           ),
         ],
       ),
