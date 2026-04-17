@@ -189,7 +189,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('DNS Settings')),
       body: ListView(
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.fromLTRB(12, 12, 12, MediaQuery.of(context).padding.bottom + 24),
         children: [
           // --- Servers ---
           Row(

@@ -29,6 +29,8 @@ class _RoutingScreenState extends State<RoutingScreen> {
   final _enabledRules = <String>{};
   final _enabledGroups = <String>{};
   final _ruleOutbounds = <String, String>{};
+  /// Status of each rule set: 'cached' | 'failed' | 'pending'
+  final _ruleSetStatus = <String, String>{};
   String _routeFinal = '';
   final _appRules = <AppRule>[];
   bool _loading = true;
@@ -79,6 +81,16 @@ class _RoutingScreenState extends State<RoutingScreen> {
     _ruleOutbounds.addAll(storedOutbounds);
     _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'proxy-out';
     _appRules.addAll(storedAppRules);
+
+    // Check rule set cache status
+    for (final rule in template.selectableRules) {
+      for (final rs in rule.ruleSets) {
+        final tag = rs['tag']?.toString() ?? '';
+        if (tag.isEmpty) continue;
+        final cached = await RuleSetDownloader.isCached(tag);
+        _ruleSetStatus[rule.label] = cached ? 'cached' : 'missing';
+      }
+    }
 
     setState(() {
       _template = template;
@@ -149,7 +161,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
         title: const Text('Routing'),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.fromLTRB(12, 12, 12, MediaQuery.of(context).padding.bottom + 24),
         children: [
           // ---- Proxy Groups ----
           Text('Proxy Groups', style: Theme.of(context).textTheme.titleMedium),
@@ -262,9 +274,24 @@ class _RoutingScreenState extends State<RoutingScreen> {
               Expanded(child: Text(rule.label)),
               if (hasSrs)
                 Tooltip(
-                  message: 'Requires rule set download',
-                  child: Icon(Icons.cloud_download_outlined, size: 16,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  message: switch (_ruleSetStatus[rule.label]) {
+                    'cached' => 'Rule set downloaded',
+                    'failed' => 'Rule set download failed',
+                    _ => 'Requires rule set download',
+                  },
+                  child: Icon(
+                    switch (_ruleSetStatus[rule.label]) {
+                      'cached' => Icons.cloud_done_outlined,
+                      'failed' => Icons.cloud_off_outlined,
+                      _ => Icons.cloud_download_outlined,
+                    },
+                    size: 16,
+                    color: switch (_ruleSetStatus[rule.label]) {
+                      'cached' => Colors.green,
+                      'failed' => Theme.of(context).colorScheme.error,
+                      _ => Theme.of(context).colorScheme.onSurfaceVariant,
+                    },
+                  ),
                 ),
               if (hasOutbound) ...[
                 const SizedBox(width: 8),

@@ -25,6 +25,17 @@ class RuleSetDownloader {
     return dir;
   }
 
+  /// Checks if a rule set is already cached.
+  static Future<bool> isCached(String tag) async {
+    try {
+      final dir = await _getCacheDir();
+      final file = File('${dir.path}/$tag.srs');
+      return await file.exists();
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Returns the local path for a cached rule set, downloading if needed.
   /// [tag] is used as the filename (e.g. "ads-all" → "ads-all.srs").
   /// [maxAge] — skip download if cached file is younger than this.

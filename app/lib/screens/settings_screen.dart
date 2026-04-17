@@ -104,7 +104,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: editableVars.isEmpty
           ? const Center(child: Text('No configurable variables'))
           : ListView(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.fromLTRB(12, 12, 12, MediaQuery.of(context).padding.bottom + 24),
               children: _buildSectionedList(editableVars, template),
             ),
     );

@@ -194,7 +194,9 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
           ),
         ],
       ),
-      body: Column(
+      body: SafeArea(
+        top: false,
+        child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
@@ -274,6 +276,7 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }

@@ -145,7 +145,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
       body: _originalTag.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
               children: [
                 // --- Info section ---
                 _sectionHeader('Info', 'Protocol and server details', theme),

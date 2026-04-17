@@ -41,7 +41,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         return Scaffold(
           appBar: AppBar(title: const Text('App Settings')),
           body: ListView(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.fromLTRB(12, 12, 12, MediaQuery.of(context).padding.bottom + 24),
             children: [
               Text('Appearance', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
