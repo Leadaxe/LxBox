@@ -424,50 +424,71 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     final preset = await GetFreeLoader.load();
     if (!mounted) return;
 
+    final checked = <int>{};
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(preset.title),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(preset.text),
-            if (preset.link.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: GestureDetector(
-                  onTap: () => unawaited(UrlLauncher.open(preset.link)),
-                  child: Text(
-                    preset.link,
-                    style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 12),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(preset.title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.volunteer_activism, size: 18, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(preset.text, style: const TextStyle(fontSize: 13))),
+                ],
+              ),
+              if (preset.link.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: GestureDetector(
+                    onTap: () => unawaited(UrlLauncher.open(preset.link)),
+                    child: Text(
+                      preset.link,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontSize: 12,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            const SizedBox(height: 16),
-            ...preset.lists.map((list) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: FilledButton.tonal(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  unawaited(_addFreeList(list.source, list.tagPrefix));
-                },
-                child: SizedBox(
-                  width: double.infinity,
-                  child: Column(
-                    children: [
-                      Text(list.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Text(list.description, style: const TextStyle(fontSize: 11)),
-                    ],
-                  ),
-                ),
-              ),
-            )),
+              const SizedBox(height: 16),
+              ...List.generate(preset.lists.length, (i) {
+                final list = preset.lists[i];
+                return CheckboxListTile(
+                  value: checked.contains(i),
+                  onChanged: (val) {
+                    setDialogState(() {
+                      if (val == true) { checked.add(i); } else { checked.remove(i); }
+                    });
+                  },
+                  title: Text(list.name, style: const TextStyle(fontSize: 13)),
+                  subtitle: Text(list.description, style: const TextStyle(fontSize: 11)),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                );
+              }),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton.icon(
+              onPressed: checked.isEmpty ? null : () {
+                Navigator.pop(ctx);
+                for (final i in checked) {
+                  unawaited(_addFreeList(preset.lists[i].source, preset.lists[i].tagPrefix));
+                }
+              },
+              icon: const Icon(Icons.add),
+              label: Text('Add ${checked.length} list${checked.length != 1 ? "s" : ""}'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        ],
       ),
     );
   }
