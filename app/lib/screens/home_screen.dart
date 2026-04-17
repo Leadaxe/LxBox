@@ -247,7 +247,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   onPressed: state.busy || _subController.busy
                       ? null
                       : () {
-                          _subController.configDirty = false;
+                          setState(() => _subController.configDirty = false);
                           unawaited(_rebuildConfig());
                         },
                   icon: Icon(
