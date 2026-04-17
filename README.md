@@ -146,65 +146,45 @@ See [Protocol Documentation](docs/PROTOCOLS.md) for full URI format details and 
 
 Every feature is documented as a spec in [`docs/spec/features/`](docs/spec/features/). This is the core of the **spec-driven development** approach.
 
-### Implemented (42)
+### Implemented (23)
 
 | # | Feature |
 |---|---------|
-| 001 | Mobile Stack (Android + iOS) |
-| 002 | MVP Scope |
-| 003 | Home Screen (Groups & Nodes via Clash API) |
-| 004 | Subscription Parser (8 protocols) |
-| 005 | Config Generator (Wizard Template) |
-| 006 | Subscription & Settings UI |
-| 007 | Config Editor (JSON formatting) |
-| 008 | Ping & Node Management |
-| 009 | Dark Theme & UX |
-| 010 | Quick Start & Auto-refresh |
-| 011 | Local Rule Set Cache |
-| 012 | Xray JSON Array + Chained Proxy |
-| 013 | Native VPN Service |
-| 014 | Subscription Detail View |
-| 015 | Rule Outbound Selection |
-| 016 | Routing Screen |
-| 017 | Per-App Proxy (Split Tunneling) |
-| 018 | Custom Nodes (Manual + JSON Editor) |
-| 020 | Multi-hop / Chained Proxy (Detour UI) |
-| 021 | Speed Test (10 servers, upload, history) |
-| 022 | Node Filter (auto-proxy-out) |
-| 023 | Auto-connect on Boot |
-| 024 | Statistics & Connections (process/app name) |
-| 025 | DNS Settings (16 presets, JSON editor) |
-| 026 | Subscription Toggles (Enable/Disable) |
-| 027 | Autosave (No Apply Buttons) |
-| 028 | Subscription Caching (Offline Fallback) |
-| 029 | Subscription Context Menu |
-| 030 | URL Launcher (Intent-based Links) |
-| 031 | Wizard Template Architecture |
-| 032 | Ping Settings (URL Presets) |
-| 033 | URLTest Configuration |
-| 034 | Node Context Menu (Copy server/detour/both) |
-| 035 | Traffic Bar & Navigation |
-| 036 | Sort Modes (Default/Ping/A-Z) |
-| 037 | CI/CD Pipeline (Tag → Release) |
-| 038 | Subscription Detail (Tabs, Per-sub settings) |
-| 040 | TLS Fragment (DPI Bypass) |
-| 041 | WireGuard Endpoint Support |
-| 042 | Node Settings (JSON Editor, Detour dropdown) |
-| 043 | Smart Paste Dialog (type detection) |
-| 044 | Detour Server Management (⚙ prefix, register/use/override) |
+| [001](docs/spec/features/001%20mobile%20stack/) | Mobile Stack (Android + iOS) |
+| [002](docs/spec/features/002%20mvp%20scope/) | MVP Scope |
+| [003](docs/spec/features/003%20home%20screen/) | Home Screen (groups, nodes, traffic, sort, filter) |
+| [004](docs/spec/features/004%20subscription%20parser/) | Subscription Parser (8 protocols + Xray JSON) |
+| [005](docs/spec/features/005%20config%20generator/) | Config Generator (Wizard Template) |
+| [006](docs/spec/features/006%20servers%20ui/) | Servers UI (subscriptions, toggles, detail tabs, paste dialog) |
+| [007](docs/spec/features/007%20config%20editor/) | Config Editor |
+| [008](docs/spec/features/008%20ping%20and%20node%20management/) | Ping & Node Management (mass ping, settings, URLTest) |
+| [009](docs/spec/features/009%20ux%20and%20theme/) | UX & Theme (dark mode, autosave, animations) |
+| [010](docs/spec/features/010%20quick%20start%20and%20offline/) | Quick Start & Offline (caching, fallback) |
+| [011](docs/spec/features/011%20local%20ruleset%20cache/) | Local Rule Set Cache |
+| [012](docs/spec/features/012%20native%20vpn%20service/) | Native VPN Service (auto-start, keep on exit) |
+| [013](docs/spec/features/013%20routing/) | Routing (groups, rules, per-app proxy) |
+| [014](docs/spec/features/014%20dns%20settings/) | DNS Settings (16 presets, JSON editor) |
+| [015](docs/spec/features/015%20speed%20test/) | Speed Test (10 servers, per-server ping, upload) |
+| [016](docs/spec/features/016%20statistics%20and%20connections/) | Statistics & Connections (process/app name) |
+| [017](docs/spec/features/017%20custom%20nodes%20and%20node%20settings/) | Custom Nodes & Node Settings (JSON editor, detour) |
+| [018](docs/spec/features/018%20detour%20server%20management/) | Detour Server Management (⚙ prefix, register/use/override) |
+| [019](docs/spec/features/019%20wireguard%20endpoint/) | WireGuard Endpoint (URI + INI config) |
+| [021](docs/spec/features/021%20ci%20cd%20pipeline/) | CI/CD Pipeline (tag → release) |
+| [022](docs/spec/features/022%20app%20settings/) | App Settings (theme, boot, keep on exit) |
+| [023](docs/spec/features/023%20debug%20and%20logging/) | Debug & Logging |
 
 ### Partial
 
 | # | Feature | Status |
 |---|---------|--------|
-| 039 | Security Hardening | TUN-only, Clash API secret, geo-routing done; encrypted storage planned |
+| [020](docs/spec/features/020%20security%20and%20dpi%20bypass/) | Security & DPI Bypass | TLS fragment done; encrypted storage planned |
 
 ### Planned
 
 | # | Feature |
 |---|---------|
-| 019 | Load Balance |
-| 045 | WARP Integration (Cloudflare) |
+| [024](docs/spec/features/024%20load%20balance/) | Load Balance |
+| [025](docs/spec/features/025%20warp%20integration/) | WARP Integration (Cloudflare) |
 
 ---
 
