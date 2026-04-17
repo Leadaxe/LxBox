@@ -15,7 +15,9 @@ class ProxySource {
     this.webPageUrl = '',
     this.enabled = true,
     this.showDetourServers = true,
+    this.registerDetourServers = true,
     this.useDetourServers = true,
+    this.overrideDetour = '',
   });
 
   final String source;
@@ -32,7 +34,9 @@ class ProxySource {
   String webPageUrl;
   bool enabled;
   bool showDetourServers;
+  bool registerDetourServers;
   bool useDetourServers;
+  String overrideDetour;
 
   String get displayName {
     if (name.isNotEmpty) return name;
@@ -85,7 +89,9 @@ class ProxySource {
       webPageUrl: json['web_page_url'] as String? ?? '',
       enabled: json['enabled'] as bool? ?? true,
       showDetourServers: json['show_detour_servers'] as bool? ?? true,
+      registerDetourServers: json['register_detour_servers'] as bool? ?? true,
       useDetourServers: json['use_detour_servers'] as bool? ?? true,
+      overrideDetour: json['override_detour'] as String? ?? '',
     );
   }
 
@@ -104,7 +110,9 @@ class ProxySource {
         if (webPageUrl.isNotEmpty) 'web_page_url': webPageUrl,
         if (!enabled) 'enabled': false,
         if (!showDetourServers) 'show_detour_servers': false,
+        if (!registerDetourServers) 'register_detour_servers': false,
         if (!useDetourServers) 'use_detour_servers': false,
+        if (overrideDetour.isNotEmpty) 'override_detour': overrideDetour,
       };
 }
 

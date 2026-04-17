@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
 import '../models/parsed_node.dart';
+import '../services/config_builder.dart';
+import '../services/settings_storage.dart';
 import '../services/source_loader.dart';
 import '../services/url_launcher.dart';
 
@@ -207,18 +209,78 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
           },
         ),
         SwitchListTile(
+          title: const Text('Register detour servers'),
+          subtitle: const Text('Add ⚙ servers to proxy groups (visible in node list)'),
+          value: widget.entry.source.registerDetourServers,
+          onChanged: (val) {
+            setState(() => widget.entry.source.registerDetourServers = val);
+            unawaited(widget.controller.persistSources());
+          },
+        ),
+        SwitchListTile(
           title: const Text('Use detour servers'),
           subtitle: Text(widget.entry.source.useDetourServers
-              ? 'Nodes connect through detour servers (default)'
-              : 'Detour servers disabled — nodes connect directly'),
+              ? 'Nodes connect through detour servers'
+              : 'Nodes connect directly (detour skipped)'),
           value: widget.entry.source.useDetourServers,
           onChanged: (val) {
             setState(() => widget.entry.source.useDetourServers = val);
             unawaited(widget.controller.persistSources());
           },
         ),
+        const Divider(),
+        Text('Override', style: theme.textTheme.titleSmall?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.bold,
+        )),
+        const SizedBox(height: 4),
+        Text(
+          'Replace all detour servers with a different one',
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 8),
+        // TODO: populate with available direct servers
+        ListTile(
+          title: const Text('Override detour'),
+          subtitle: Text(widget.entry.source.overrideDetour.isEmpty
+              ? 'None (use original)'
+              : widget.entry.source.overrideDetour),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _showOverrideDetourPicker(),
+        ),
       ],
     );
+  }
+
+  Future<void> _showOverrideDetourPicker() async {
+    // Load direct servers for picker
+    final allSources = await SettingsStorage.getProxySources();
+    final directSources = allSources
+        .where((s) => s.source.isEmpty && s.connections.isNotEmpty)
+        .toList();
+    final directNodes = await ConfigBuilder.loadAndParseNodes(directSources, {});
+    final tags = directNodes.map((n) => n.tag).toList();
+
+    if (!mounted) return;
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Override detour'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, ''),
+            child: const Text('None (use original)'),
+          ),
+          ...tags.map((tag) => SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, tag),
+            child: Text(tag),
+          )),
+        ],
+      ),
+    );
+    if (chosen == null) return;
+    setState(() => widget.entry.source.overrideDetour = chosen);
+    unawaited(widget.controller.persistSources());
   }
 
   Widget _buildMeta(SubscriptionEntry entry, ThemeData theme) {

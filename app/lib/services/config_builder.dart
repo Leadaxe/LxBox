@@ -80,6 +80,7 @@ class ConfigBuilder {
 
     final tagCounts = <String, int>{};
     final allNodes = <ParsedNode>[];
+    final unregisteredDetourTags = <String>{};
     for (var i = 0; i < sources.length; i++) {
       if (!sources[i].enabled) continue;
       try {
@@ -90,11 +91,23 @@ class ConfigBuilder {
           sourceIndex: i,
           totalSources: sources.length,
         );
-        // Strip detour servers if disabled for this source
-        if (!sources[i].useDetourServers) {
+        final src = sources[i];
+        for (final node in nodes) {
+          if (node.detourServer != null) {
+            if (!src.useDetourServers) {
+              node.detourServer = null;
+              node.outbound.remove('detour');
+            } else if (src.overrideDetour.isNotEmpty) {
+              node.outbound['detour'] = src.overrideDetour;
+              node.detourServer = null;
+            }
+          }
+        }
+        if (!src.registerDetourServers) {
           for (final node in nodes) {
-            node.detourServer = null;
-            node.outbound.remove('detour');
+            if (node.detourServer != null) {
+              unregisteredDetourTags.add(node.detourServer!.tag);
+            }
           }
         }
         allNodes.addAll(nodes);
@@ -119,14 +132,13 @@ class ConfigBuilder {
     final excludedNodes = await SettingsStorage.getExcludedNodes();
 
     // Build preset groups and node outbounds
-    final registerDetour = vars['register_detour_servers'] != 'false';
     final outbounds = _buildPresetOutbounds(
       template.presetGroups,
       enabledGroups,
       allNodes,
       excludedNodes,
       vars,
-      registerDetourServers: registerDetour,
+      unregisteredDetourTags: unregisteredDetourTags,
     );
 
     // Separate WireGuard endpoints from regular outbounds
@@ -181,7 +193,7 @@ class ConfigBuilder {
     List<ParsedNode> allNodes,
     Set<String> excludedNodes,
     Map<String, String> vars, {
-    bool registerDetourServers = true,
+    Set<String> unregisteredDetourTags = const {},
   }) {
     final result = <Map<String, dynamic>>[];
     final emittedDetourTags = <String>{};
@@ -204,9 +216,11 @@ class ConfigBuilder {
     }
 
     final allNodeTags = allNodes.map((n) => n.tag).toList();
-    // Optionally add jump server tags to groups so they appear in Clash API
-    if (registerDetourServers) {
-      allNodeTags.addAll(emittedDetourTags);
+    // Add detour server tags to groups (skip unregistered)
+    for (final tag in emittedDetourTags) {
+      if (!unregisteredDetourTags.contains(tag)) {
+        allNodeTags.add(tag);
+      }
     }
 
     // Determine which presets are active
