@@ -9,6 +9,7 @@ class ParsedNode {
     this.flow = '',
     this.label = '',
     this.comment = '',
+    this.sourceUri = '',
     this.jump,
     Map<String, String>? query,
     Map<String, dynamic>? outbound,
@@ -23,6 +24,7 @@ class ParsedNode {
   String flow;
   String label;
   String comment;
+  String sourceUri;
   Map<String, String> query;
   Map<String, dynamic> outbound;
 

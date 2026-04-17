@@ -348,8 +348,49 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> {
             style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
           ),
           dense: true,
+          onLongPress: () => _showNodeMenu(node),
         );
       },
+    );
+  }
+
+  void _showNodeMenu(ParsedNode node) {
+    final info = node.sourceUri.isNotEmpty
+        ? node.sourceUri
+        : '${node.scheme}://${node.server}:${node.port}';
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('Copy node info'),
+              subtitle: Text(info, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)),
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: info));
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Node info copied')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.label_outline),
+              title: const Text('Copy tag'),
+              subtitle: Text(node.tag, style: const TextStyle(fontSize: 11)),
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: node.tag));
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Tag copied')),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 

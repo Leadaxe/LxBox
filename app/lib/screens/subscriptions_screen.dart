@@ -7,6 +7,7 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/url_launcher.dart';
 import 'node_filter_screen.dart';
+import 'node_settings_screen.dart';
 import 'subscription_detail_screen.dart';
 
 class SubscriptionsScreen extends StatefulWidget {
@@ -417,23 +418,34 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                   color: enabled ? null : Theme.of(context).colorScheme.onSurfaceVariant,
                 ))
               : null,
-          trailing: entry.nodeCount > 0
-              ? Chip(
-                  label: Text('${entry.nodeCount}'),
-                  visualDensity: VisualDensity.compact,
-                )
-              : null,
+          trailing: entry.source.source.isEmpty && entry.source.connections.isNotEmpty
+              ? Icon(Icons.dns, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant)
+              : entry.nodeCount > 0
+                  ? Chip(
+                      label: Text('${entry.nodeCount}'),
+                      visualDensity: VisualDensity.compact,
+                    )
+                  : null,
           onLongPress: () => _showContextMenu(context, i, entry),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => SubscriptionDetailScreen(
-                entry: entry,
-                index: i,
-                controller: widget.subController,
+          onTap: () {
+            final isDirectServer = entry.source.source.isEmpty && entry.source.connections.isNotEmpty;
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => isDirectServer
+                    ? NodeSettingsScreen(
+                        entry: entry,
+                        index: i,
+                        subController: widget.subController,
+                      )
+                    : SubscriptionDetailScreen(
+                        entry: entry,
+                        index: i,
+                        controller: widget.subController,
+                      ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );

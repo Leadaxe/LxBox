@@ -16,6 +16,7 @@ class NodeRow extends StatelessWidget {
     required this.onActivate,
     required this.onPing,
     this.onCopyJson,
+    this.onCopyUrl,
     this.urltestNow,
   });
 
@@ -30,6 +31,7 @@ class NodeRow extends StatelessWidget {
   final VoidCallback onActivate;
   final VoidCallback onPing;
   final VoidCallback? onCopyJson;
+  final VoidCallback? onCopyUrl;
   /// If this node is a URLTest group, shows which node it auto-selected.
   final String? urltestNow;
 
@@ -109,6 +111,16 @@ class NodeRow extends StatelessWidget {
           ),
         ),
         const PopupMenuDivider(),
+        if (onCopyUrl != null)
+          PopupMenuItem<String>(
+            value: 'copy_url',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.link, size: 20),
+              title: const Text('Copy URL'),
+            ),
+          ),
         PopupMenuItem<String>(
           value: 'copy_json',
           child: ListTile(
@@ -126,6 +138,8 @@ class NodeRow extends StatelessWidget {
         onPing();
       case 'activate':
         onActivate();
+      case 'copy_url':
+        if (onCopyUrl != null) onCopyUrl!();
       case 'copy_json':
         if (onCopyJson != null) onCopyJson!();
     }

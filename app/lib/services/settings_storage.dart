@@ -261,6 +261,41 @@ class SettingsStorage {
     _cache = data;
     await _save();
   }
+  // ─── Node overrides (custom tag, detour) ───
+
+  static Future<Map<String, Map<String, String>>> getNodeOverrides() async {
+    final data = await _load();
+    final raw = data['node_overrides'] as Map<String, dynamic>? ?? {};
+    return raw.map((k, v) => MapEntry(
+      k,
+      (v as Map<String, dynamic>).map((k2, v2) => MapEntry(k2, v2.toString())),
+    ));
+  }
+
+  static Future<void> saveNodeOverride(
+    String originalTag, {
+    String? customTag,
+    String? detour,
+  }) async {
+    final data = await _load();
+    final overrides = (data['node_overrides'] as Map<String, dynamic>?) ?? {};
+    final entry = (overrides[originalTag] as Map<String, dynamic>?) ?? {};
+    if (customTag != null) entry['custom_tag'] = customTag;
+    if (detour != null) entry['detour'] = detour;
+    overrides[originalTag] = entry;
+    data['node_overrides'] = overrides;
+    _cache = data;
+    await _save();
+  }
+
+  static Future<void> removeNodeOverride(String originalTag) async {
+    final data = await _load();
+    final overrides = (data['node_overrides'] as Map<String, dynamic>?) ?? {};
+    overrides.remove(originalTag);
+    data['node_overrides'] = overrides;
+    _cache = data;
+    await _save();
+  }
 }
 
 /// A per-app routing rule: a named group of packages with an outbound.

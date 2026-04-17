@@ -107,8 +107,16 @@ class NodeParser {
       );
     }
 
-    if (uri.startsWith('vmess://')) return _parseVMess(uri, skipFilters);
-    if (uri.startsWith('wireguard://')) return _parseWireGuard(uri, skipFilters);
+    if (uri.startsWith('vmess://')) {
+      final node = _parseVMess(uri, skipFilters);
+      node?.sourceUri = uri;
+      return node;
+    }
+    if (uri.startsWith('wireguard://')) {
+      final node = _parseWireGuard(uri, skipFilters);
+      node?.sourceUri = uri;
+      return node;
+    }
 
     String scheme;
     String uriToParse = uri;
@@ -197,6 +205,7 @@ class NodeParser {
 
     if (_shouldSkipNode(node, skipFilters)) return null;
 
+    node.sourceUri = uri;
     node.outbound = _buildOutbound(node);
     return node;
   }
