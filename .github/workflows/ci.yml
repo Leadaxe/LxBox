@@ -161,6 +161,12 @@ jobs:
       contents: write
     if: needs.meta.outputs.is_release == 'true'
     steps:
+      - name: Checkout (for release notes)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: RELEASE_NOTES.md
+          sparse-checkout-cone-mode: false
+
       - name: Download APK
         uses: actions/download-artifact@v4
         with:
@@ -169,8 +175,6 @@ jobs:
 
       - name: Prepare APK
         run: |
-          echo "=== Contents of release-artifacts ==="
-          find release-artifacts/ -type f
           APK=$(find release-artifacts/ -name "*.apk" -type f | head -1)
           if [ -z "$APK" ]; then
             echo "ERROR: No APK found!"
@@ -178,12 +182,6 @@ jobs:
           fi
           cp "$APK" "LxBox-${{ needs.meta.outputs.version }}.apk"
           ls -la "LxBox-${{ needs.meta.outputs.version }}.apk"
-
-      - name: Checkout (for release notes)
-        uses: actions/checkout@v4
-        with:
-          sparse-checkout: RELEASE_NOTES.md
-          sparse-checkout-cone-mode: false
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
