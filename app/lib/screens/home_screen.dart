@@ -100,9 +100,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           children: [
             const SizedBox(height: 12),
             ListTile(
-              leading: const Icon(Icons.subscriptions_outlined),
-              title: const Text('Subscriptions'),
-              subtitle: const Text('Add and manage proxy sources'),
+              leading: const Icon(Icons.dns_outlined),
+              title: const Text('Servers'),
+              subtitle: const Text('Subscriptions & proxy'),
               onTap: () => _pushRoute(SubscriptionsScreen(
                 subController: _subController,
                 homeController: _controller,

@@ -105,9 +105,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ? const Center(child: Text('No configurable variables'))
           : ListView(
               padding: const EdgeInsets.all(12),
-              children: editableVars.map(_buildVarWidget).toList(),
+              children: _buildSectionedList(editableVars, template),
             ),
     );
+  }
+
+  List<Widget> _buildSectionedList(List<WizardVar> vars, WizardTemplate template) {
+    final widgets = <Widget>[];
+    String lastSection = '';
+    final sectionDescriptions = {
+      for (final s in template.varSections) s.title: s.description,
+    };
+
+    for (final v in vars) {
+      if (v.section.isNotEmpty && v.section != lastSection) {
+        lastSection = v.section;
+        if (widgets.isNotEmpty) widgets.add(const SizedBox(height: 16));
+        widgets.add(Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                v.section,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              if (sectionDescriptions[v.section]?.isNotEmpty == true)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    sectionDescriptions[v.section]!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ),
+              const Divider(),
+            ],
+          ),
+        ));
+      }
+      widgets.add(_buildVarWidget(v));
+    }
+    return widgets;
   }
 
   Widget _buildVarWidget(WizardVar v) {

@@ -50,6 +50,15 @@ class SubscriptionController extends ChangeNotifier {
         await _persistSources();
         // Fetch immediately to show node count
         await _fetchEntry(_entries.length - 1);
+      } else if (NodeParser.isWireGuardConfig(trimmed)) {
+        final uri = NodeParser.wireGuardConfigToUri(trimmed);
+        final entry = SubscriptionEntry(
+          source: ProxySource(connections: [uri]),
+          nodeCount: 1,
+          status: 'WireGuard config',
+        );
+        _entries.add(entry);
+        await _persistSources();
       } else if (NodeParser.isDirectLink(trimmed)) {
         final entry = SubscriptionEntry(
           source: ProxySource(connections: [trimmed]),

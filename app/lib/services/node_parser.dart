@@ -7,6 +7,74 @@ import '../models/proxy_source.dart';
 class NodeParser {
   NodeParser._();
 
+  /// Returns true if [input] looks like a WireGuard INI config ([Interface] + [Peer]).
+  static bool isWireGuardConfig(String input) {
+    final t = input.trim();
+    return t.contains('[Interface]') && t.contains('[Peer]');
+  }
+
+  /// Converts a WireGuard INI config to a wireguard:// URI.
+  static String wireGuardConfigToUri(String config) {
+    final lines = config.split(RegExp(r'\r?\n'));
+    String section = '';
+    String privateKey = '';
+    String address = '';
+    String dns = '';
+    String publicKey = '';
+    String endpoint = '';
+    String presharedKey = '';
+    int mtu = 0;
+    int keepalive = 0;
+
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.startsWith('[')) {
+        section = trimmed.toLowerCase();
+        continue;
+      }
+      final parts = trimmed.split('=');
+      if (parts.length < 2) continue;
+      final key = parts[0].trim().toLowerCase();
+      final value = parts.sublist(1).join('=').trim();
+
+      if (section == '[interface]') {
+        if (key == 'privatekey') privateKey = value;
+        if (key == 'address') address = value;
+        if (key == 'dns') dns = value;
+        if (key == 'mtu') mtu = int.tryParse(value) ?? 0;
+      } else if (section == '[peer]') {
+        if (key == 'publickey') publicKey = value;
+        if (key == 'endpoint') endpoint = value;
+        if (key == 'presharedkey') presharedKey = value;
+        if (key == 'persistentkeepalive') keepalive = int.tryParse(value) ?? 0;
+      }
+    }
+
+    if (privateKey.isEmpty || publicKey.isEmpty || endpoint.isEmpty) {
+      throw const FormatException('WireGuard config missing required fields');
+    }
+
+    // endpoint is host:port
+    final epParts = endpoint.split(':');
+    final host = epParts[0];
+    final port = epParts.length > 1 ? epParts[1] : '51820';
+
+    final params = <String, String>{
+      'publickey': publicKey,
+      'privatekey': privateKey,
+    };
+    if (address.isNotEmpty) params['address'] = address;
+    if (dns.isNotEmpty) params['dns'] = dns;
+    if (mtu > 0) params['mtu'] = mtu.toString();
+    if (presharedKey.isNotEmpty) params['presharedkey'] = presharedKey;
+    if (keepalive > 0) params['keepalive'] = keepalive.toString();
+
+    final query = params.entries.map((e) =>
+      '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}').join('&');
+
+    return 'wireguard://$host:$port?$query#WireGuard';
+  }
+
   /// Returns true if [input] looks like a direct proxy link (vless://, vmess://, etc.)
   static bool isDirectLink(String input) {
     final t = input.trim();
@@ -366,19 +434,16 @@ class NodeParser {
     final q = parsed.queryParameters;
     final publicKey = q['publickey'] ?? '';
     final address = q['address'] ?? '';
-    final allowedips = q['allowedips'] ?? '';
-
+    final allowedips = q['allowedips'] ?? '0.0.0.0/0, ::/0';
     if (publicKey.isEmpty) throw FormatException('WireGuard: missing publickey');
     if (address.isEmpty) throw FormatException('WireGuard: missing address');
-    if (allowedips.isEmpty) throw FormatException('WireGuard: missing allowedips');
 
     final addressList =
         address.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
     final allowedipsList =
         allowedips.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
 
-    final mtu = int.tryParse(q['mtu'] ?? '') ?? 1420;
-    final name = q['name'] ?? 'singbox-wg0';
+    final mtu = int.tryParse(q['mtu'] ?? '') ?? 1408;
 
     final peer = <String, dynamic>{
       'address': parsed.host,
@@ -396,7 +461,7 @@ class NodeParser {
 
     var label = parsed.fragment;
     if (label.isNotEmpty) label = Uri.decodeComponent(label);
-    if (label.isEmpty) label = name;
+    if (label.isEmpty) label = parsed.host;
     label = _sanitizeForDisplay(label);
 
     final tag = _tagFromLabel(label, 'wireguard', parsed.host, port);
@@ -404,17 +469,11 @@ class NodeParser {
     final endpoint = <String, dynamic>{
       'type': 'wireguard',
       'tag': tag,
-      'name': name,
-      'system': false,
       'mtu': mtu,
       'address': addressList,
       'private_key': privateKey,
       'peers': [peer],
     };
-    if (q.containsKey('listenport')) {
-      final lp = int.tryParse(q['listenport']!);
-      if (lp != null && lp > 0) endpoint['listen_port'] = lp;
-    }
 
     final node = ParsedNode(
       tag: tag,

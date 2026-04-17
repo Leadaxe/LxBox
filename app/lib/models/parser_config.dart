@@ -4,6 +4,7 @@ class WizardTemplate {
     required this.parserConfig,
     required this.presetGroups,
     required this.vars,
+    required this.varSections,
     required this.config,
     required this.selectableRules,
     required this.dnsOptions,
@@ -20,11 +21,38 @@ class WizardTemplate {
   final Map<String, dynamic> pingOptions;
   final Map<String, dynamic> speedTestOptions;
 
+  final List<VarSection> varSections;
+
   factory WizardTemplate.fromJson(Map<String, dynamic> json) {
     final pcJson = json['parser_config'] as Map<String, dynamic>? ?? {};
     final varsJson = json['vars'] as List<dynamic>? ?? [];
     final rulesJson = json['selectable_rules'] as List<dynamic>? ?? [];
     final groupsJson = json['preset_groups'] as List<dynamic>? ?? [];
+
+    // Parse vars with sections
+    final allVars = <WizardVar>[];
+    final sections = <VarSection>[];
+    String currentSection = '';
+    for (final item in varsJson.whereType<Map<String, dynamic>>()) {
+      if (item.containsKey('section')) {
+        currentSection = item['section'] as String? ?? '';
+        continue;
+      }
+      if (!item.containsKey('name')) continue;
+      final v = WizardVar.fromJson(item, section: currentSection);
+      allVars.add(v);
+    }
+    // Build section list
+    final seenSections = <String>{};
+    for (final v in allVars) {
+      if (v.section.isNotEmpty && seenSections.add(v.section)) {
+        final desc = varsJson.whereType<Map<String, dynamic>>()
+            .where((m) => m['section'] == v.section)
+            .map((m) => m['description'] as String? ?? '')
+            .firstOrNull ?? '';
+        sections.add(VarSection(title: v.section, description: desc));
+      }
+    }
 
     return WizardTemplate(
       parserConfig: ParserConfigBlock.fromJson(pcJson),
@@ -32,11 +60,8 @@ class WizardTemplate {
           .whereType<Map<String, dynamic>>()
           .map(PresetGroup.fromJson)
           .toList(),
-      vars: varsJson
-          .whereType<Map<String, dynamic>>()
-          .where((v) => v.containsKey('name'))
-          .map(WizardVar.fromJson)
-          .toList(),
+      vars: allVars,
+      varSections: sections,
       config: json['config'] as Map<String, dynamic>? ?? {},
       selectableRules:
           rulesJson.map((e) => SelectableRule.fromJson(e as Map<String, dynamic>)).toList(),
@@ -110,6 +135,7 @@ class WizardVar {
     this.options = const [],
     this.title = '',
     this.tooltip = '',
+    this.section = '',
   });
 
   final String name;
@@ -119,10 +145,11 @@ class WizardVar {
   final List<String> options; // for enum type
   final String title;
   final String tooltip;
+  final String section;
 
   bool get isEditable => wizardUI == 'edit';
 
-  factory WizardVar.fromJson(Map<String, dynamic> json) {
+  factory WizardVar.fromJson(Map<String, dynamic> json, {String section = ''}) {
     var defVal = json['default_value'];
     String defaultStr;
     if (defVal is Map) {
@@ -139,8 +166,16 @@ class WizardVar {
       options: (json['options'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       title: json['title'] as String? ?? '',
       tooltip: json['tooltip'] as String? ?? '',
+      section: section,
     );
   }
+}
+
+/// A section header for grouping vars in the settings UI.
+class VarSection {
+  VarSection({required this.title, this.description = ''});
+  final String title;
+  final String description;
 }
 
 /// A selectable routing rule from the wizard template.

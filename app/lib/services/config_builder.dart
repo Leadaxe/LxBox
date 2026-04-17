@@ -103,8 +103,17 @@ class ConfigBuilder {
       vars,
     );
 
+    // Separate WireGuard endpoints from regular outbounds
+    final wgEndpoints = outbounds.where((o) => o['type'] == 'wireguard').toList();
+    final regularOutbounds = outbounds.where((o) => o['type'] != 'wireguard').toList();
+
     final baseOutbounds = config['outbounds'] as List<dynamic>? ?? [];
-    config['outbounds'] = [...baseOutbounds, ...outbounds];
+    config['outbounds'] = [...baseOutbounds, ...regularOutbounds];
+
+    if (wgEndpoints.isNotEmpty) {
+      final baseEndpoints = config['endpoints'] as List<dynamic>? ?? [];
+      config['endpoints'] = [...baseEndpoints, ...wgEndpoints];
+    }
 
     final ruleOutbounds = await SettingsStorage.getRuleOutbounds();
     _applySelectableRules(
@@ -124,6 +133,9 @@ class ConfigBuilder {
       final route = config['route'] as Map<String, dynamic>?;
       if (route != null) route['final'] = routeFinal;
     }
+
+    // Apply TLS fragment settings to all outbounds with TLS
+    _applyTlsFragment(config, vars);
 
     // Apply custom DNS servers and rules
     await _applyCustomDns(config);
@@ -313,6 +325,35 @@ class ConfigBuilder {
     route['rule_set'] = ruleSets;
     route['rules'] = rules;
     config['route'] = route;
+  }
+
+  /// Applies TLS fragment settings to first-hop outbounds only.
+  /// Outbounds with `detour` are inner hops (traffic already tunneled),
+  /// so DPI cannot see their TLS handshake — no need to fragment.
+  static void _applyTlsFragment(
+    Map<String, dynamic> config,
+    Map<String, String> vars,
+  ) {
+    final fragment = vars['tls_fragment'] == 'true';
+    final recordFragment = vars['tls_record_fragment'] == 'true';
+    if (!fragment && !recordFragment) return;
+
+    final fallbackDelay = vars['tls_fragment_fallback_delay'] ?? '500ms';
+    final outbounds = config['outbounds'] as List<dynamic>? ?? [];
+
+    for (final ob in outbounds) {
+      if (ob is! Map<String, dynamic>) continue;
+      // Skip inner hops — their traffic goes through the tunnel,
+      // DPI only sees the first hop's TLS handshake
+      if (ob.containsKey('detour')) continue;
+      final tls = ob['tls'];
+      if (tls is! Map<String, dynamic>) continue;
+      if (tls['enabled'] != true) continue;
+
+      if (fragment) tls['fragment'] = true;
+      if (recordFragment) tls['record_fragment'] = true;
+      tls['fragment_fallback_delay'] = fallbackDelay;
+    }
   }
 
   /// Adds per-app routing rules (package_name → outbound) to the config.

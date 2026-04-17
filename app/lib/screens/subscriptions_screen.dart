@@ -58,6 +58,29 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     _inputController.text = text;
   }
 
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim() ?? '';
+    if (text.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Clipboard is empty')),
+        );
+      }
+      return;
+    }
+    await widget.subController.addFromInput(text);
+    if (widget.subController.lastError.isEmpty) _dirty = true;
+  }
+
+  Future<void> _scanQrCode() async {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('QR scanner coming soon')),
+      );
+    }
+  }
+
   Future<void> _updateAll() async {
     final config = await widget.subController.updateAllAndGenerate();
     if (!mounted) return;
@@ -108,7 +131,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           },
           child: Scaffold(
             appBar: AppBar(
-              title: const Text('Subscriptions'),
+              title: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Servers'),
+                  Text('Subscriptions & proxy', style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal)),
+                ],
+              ),
               actions: [
                 IconButton(
                   tooltip: 'Update all & generate',
@@ -118,8 +147,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                 PopupMenuButton<String>(
                   onSelected: (v) {
                     if (v == 'free') unawaited(_applyFreePreset());
+                    if (v == 'paste') unawaited(_pasteFromClipboard());
+                    if (v == 'qr') unawaited(_scanQrCode());
                   },
                   itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'paste', child: Text('Paste from clipboard')),
+                    PopupMenuItem(value: 'qr', child: Text('Scan QR code')),
+                    PopupMenuDivider(),
                     PopupMenuItem(value: 'free', child: Text('Get Free VPN')),
                   ],
                 ),
