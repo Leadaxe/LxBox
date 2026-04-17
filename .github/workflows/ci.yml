@@ -167,10 +167,17 @@ jobs:
           name: android-apk-release
           path: release-artifacts
 
-      - name: Rename APK
+      - name: Prepare APK
         run: |
-          find release-artifacts/ -name "*.apk" -exec mv {} release-artifacts/LxBox-${{ needs.meta.outputs.version }}.apk \;
-          ls -la release-artifacts/
+          echo "=== Contents of release-artifacts ==="
+          find release-artifacts/ -type f
+          APK=$(find release-artifacts/ -name "*.apk" -type f | head -1)
+          if [ -z "$APK" ]; then
+            echo "ERROR: No APK found!"
+            exit 1
+          fi
+          cp "$APK" "LxBox-${{ needs.meta.outputs.version }}.apk"
+          ls -la "LxBox-${{ needs.meta.outputs.version }}.apk"
 
       - name: Checkout (for release notes)
         uses: actions/checkout@v4
@@ -184,5 +191,5 @@ jobs:
           tag_name: ${{ needs.meta.outputs.tag }}
           name: LxBox ${{ needs.meta.outputs.version }}
           draft: false
-          files: release-artifacts/*.apk
+          files: LxBox-${{ needs.meta.outputs.version }}.apk
           body_path: RELEASE_NOTES.md
