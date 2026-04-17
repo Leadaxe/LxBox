@@ -68,8 +68,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen)).then((_) {
       if (_subController.configDirty) {
         if (_autoRebuild) {
-          _subController.configDirty = false;
-          unawaited(_rebuildConfig());
+          unawaited(_rebuildAndClearDirty());
         } else {
           setState(() {}); // refresh to show highlighted rebuild button
         }
@@ -246,10 +245,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   tooltip: _subController.configDirty ? 'Config changed — rebuild' : 'Rebuild config',
                   onPressed: state.busy || _subController.busy
                       ? null
-                      : () {
-                          setState(() => _subController.configDirty = false);
-                          unawaited(_rebuildConfig());
-                        },
+                      : () => unawaited(_rebuildAndClearDirty()),
                   icon: Icon(
                     Icons.refresh,
                     size: 20,
@@ -598,6 +594,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     } catch (_) {
       return 0;
     }
+  }
+
+  Future<void> _rebuildAndClearDirty() async {
+    await _rebuildConfig();
+    _subController.configDirty = false;
+    if (mounted) setState(() {});
   }
 
   Future<void> _rebuildConfig() async {
