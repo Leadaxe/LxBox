@@ -1,9 +1,6 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../services/url_launcher.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -129,7 +126,7 @@ class AboutScreen extends StatelessWidget {
           contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
           content: SizedBox(
             width: double.maxFinite,
-            height: 200,
+            height: 300,
             child: Column(
               children: [
                 const TabBar(
@@ -143,9 +140,8 @@ class AboutScreen extends StatelessWidget {
                     children: [
                       // Crypto tab
                       Padding(
-                        padding: const EdgeInsets.only(top: 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        padding: const EdgeInsets.only(top: 12),
+                        child: ListView(
                           children: [
                             const Text('USDT (ERC20)', style: TextStyle(fontWeight: FontWeight.bold)),
                             const SizedBox(height: 4),
@@ -153,11 +149,22 @@ class AboutScreen extends StatelessWidget {
                               onTap: () => _copyToClipboard(ctx, '0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea'),
                               child: const Text('0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea', style: TextStyle(fontSize: 11)),
                             ),
-                            const SizedBox(height: 4),
                             TextButton.icon(
                               onPressed: () => _copyToClipboard(ctx, '0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea'),
                               icon: const Icon(Icons.copy, size: 14),
-                              label: const Text('Copy', style: TextStyle(fontSize: 12)),
+                              label: const Text('Copy ERC20', style: TextStyle(fontSize: 12)),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text('USDT (TRC20)', style: TextStyle(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            GestureDetector(
+                              onTap: () => _copyToClipboard(ctx, 'TBBEANETx2YTysG1bwg3HjxZjiZWhhBWun'),
+                              child: const Text('TBBEANETx2YTysG1bwg3HjxZjiZWhhBWun', style: TextStyle(fontSize: 11)),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => _copyToClipboard(ctx, 'TBBEANETx2YTysG1bwg3HjxZjiZWhhBWun'),
+                              icon: const Icon(Icons.copy, size: 14),
+                              label: const Text('Copy TRC20', style: TextStyle(fontSize: 12)),
                             ),
                           ],
                         ),
