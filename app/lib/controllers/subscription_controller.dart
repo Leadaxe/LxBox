@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 
 import '../models/proxy_source.dart';
 import '../services/config_builder.dart';
-import '../services/get_free_loader.dart';
 import '../services/node_parser.dart';
 import '../services/settings_storage.dart';
 import '../services/source_loader.dart';
@@ -259,30 +258,23 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   /// Applies the built-in "Get Free VPN" preset: adds sources, sets rules, generates config.
-  Future<String?> applyGetFreePreset() async {
+  /// Adds a single free VPN list by source URL and tag prefix.
+  Future<String?> addFreeList(String source, String tagPrefix) async {
     _busy = true;
     _lastError = '';
-    _progressMessage = 'Loading preset...';
+    _progressMessage = 'Adding free list...';
     notifyListeners();
 
     try {
-      final preset = await GetFreeLoader.load();
-
-      _entries = preset.proxySources
-          .map((s) => SubscriptionEntry(source: s))
-          .toList();
+      final entry = SubscriptionEntry(
+        source: ProxySource(source: source, tagPrefix: tagPrefix),
+      );
+      _entries.add(entry);
       await _persistSources();
 
-      await SettingsStorage.saveEnabledRules(preset.enabledRules.toSet());
-
-      _progressMessage = 'Fetching subscriptions...';
+      _progressMessage = 'Fetching...';
       notifyListeners();
-
-      for (var i = 0; i < _entries.length; i++) {
-        if (_entries[i].source.source.isNotEmpty) {
-          await _fetchEntry(i);
-        }
-      }
+      await _fetchEntry(_entries.length - 1);
 
       _progressMessage = 'Generating config...';
       notifyListeners();

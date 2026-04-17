@@ -4,20 +4,19 @@
     "text": "Thank @igareck for providing VPN lists:",
     "link": "https://github.com/igareck/vpn-configs-for-russia"
   },
-  "proxy_sources": [
+  "lists": [
     {
+      "name": "Black List (bypass blocks)",
+      "description": "Servers optimized for bypassing internet restrictions",
       "source": "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt",
       "tag_prefix": "BL:"
     },
     {
+      "name": "White List (privacy)",
+      "description": "Servers for general privacy and geo-unblock",
       "source": "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt",
       "tag_prefix": "W:"
     }
   ],
-  "enabled_rules": [
-    "Block Ads",
-    "Russian domains direct",
-    "BitTorrent direct",
-    "Games direct"
-  ]
+  "enabled_rules": []
 }

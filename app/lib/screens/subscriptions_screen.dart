@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
+import '../services/get_free_loader.dart';
 import '../services/node_parser.dart';
 import '../services/url_launcher.dart';
 import 'node_filter_screen.dart';
@@ -420,7 +421,59 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   }
 
   Future<void> _applyFreePreset() async {
-    final config = await widget.subController.applyGetFreePreset();
+    final preset = await GetFreeLoader.load();
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(preset.title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(preset.text),
+            if (preset.link.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: GestureDetector(
+                  onTap: () => unawaited(UrlLauncher.open(preset.link)),
+                  child: Text(
+                    preset.link,
+                    style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 12),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 16),
+            ...preset.lists.map((list) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: FilledButton.tonal(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  unawaited(_addFreeList(list.source, list.tagPrefix));
+                },
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Column(
+                    children: [
+                      Text(list.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text(list.description, style: const TextStyle(fontSize: 11)),
+                    ],
+                  ),
+                ),
+              ),
+            )),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addFreeList(String source, String tagPrefix) async {
+    final config = await widget.subController.addFreeList(source, tagPrefix);
     if (!mounted || config == null) return;
     final ok = await widget.homeController.saveParsedConfig(config);
     if (!mounted) return;
@@ -428,7 +481,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Config ready! ${widget.subController.entries.fold<int>(0, (s, e) => s + e.nodeCount)} nodes loaded.',
+            'List added! ${widget.subController.entries.where((e) => e.source.enabled).fold<int>(0, (s, e) => s + e.nodeCount)} nodes.',
           ),
         ),
       );
