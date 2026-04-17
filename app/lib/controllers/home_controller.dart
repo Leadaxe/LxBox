@@ -472,7 +472,7 @@ class HomeController extends ChangeNotifier {
   int _massPingEpoch = 0;
 
   String pingUrl = '';
-  int pingTimeout = 5000;
+  int pingTimeout = 10000;
 
   static const _pingConcurrency = 20;
 

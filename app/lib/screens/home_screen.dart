@@ -33,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   late final HomeController _controller;
   late final SubscriptionController _subController;
   late final AnimationController _connectingAnim;
+  bool _showDetourNodes = false;
 
   @override
   void initState() {
@@ -530,6 +531,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   : _controller.cycleSortMode,
               icon: Icon(_controller.state.sortMode.icon, size: 20),
             ),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.tune, size: 20),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              onSelected: (v) {
+                if (v == 'detour') setState(() => _showDetourNodes = !_showDetourNodes);
+              },
+              itemBuilder: (_) => [
+                CheckedPopupMenuItem(
+                  value: 'detour',
+                  checked: _showDetourNodes,
+                  child: const Text('Show detour servers'),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -583,7 +599,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         : _controller.pingUrl);
     final timeoutCtrl = TextEditingController(text: '${_controller.pingTimeout > 0
         ? _controller.pingTimeout
-        : (pingOpts['timeout_ms'] as num?)?.toInt() ?? 5000}');
+        : (pingOpts['timeout_ms'] as num?)?.toInt() ?? 10000}');
 
     showModalBottomSheet<void>(
       context: context,
@@ -741,7 +757,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         ),
       );
     }
-    final displayNodes = state.sortedNodes;
+    final displayNodes = _showDetourNodes
+        ? state.sortedNodes
+        : state.sortedNodes.where((t) => !t.startsWith('⚙ ')).toList();
     return Expanded(
       child: RefreshIndicator(
         onRefresh: _controller.reloadProxies,
