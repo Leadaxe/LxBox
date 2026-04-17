@@ -2,9 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | черновик |
-| Задачи | [`tasks.md`](tasks.md) |
-| План | [`plan.md`](plan.md) |
+| Статус | Реализовано |
 | Зависимости | [`004 subscription parser`](../004%20subscription%20parser/spec.md) |
 | Референс | singbox-launcher `bin/wizard_template.json`, `core/config/outbound_generator.go` |
 
@@ -15,21 +13,45 @@
 - **переменных** (пользовательские настройки: log level, clash API, DNS);
 - **подписок** (распарсенные ноды → outbounds и selectors).
 
-## 2. Wizard Template
+## 2. Wizard Template Architecture
 
-Файл `assets/wizard_template.json` — копия шаблона из лаунчера, адаптированная для мобильной платформы.
+**Status:** Реализовано
 
-### 2.1 Структура шаблона
+### wizard_template.json — единый источник истины
+
+Файл `assets/wizard_template.json` содержит ВСЕ дефолтные настройки приложения. Секции:
 
 | Секция | Назначение |
-|--------|------------|
+|--------|-----------|
 | `parser_config` | Конфигурация парсера: outbounds (selectors), настройки reload |
 | `vars` | Переменные: имя, тип, значение по умолчанию, UI-режим, tooltip |
 | `config` | Базовый скелет sing-box конфига (log, dns, inbounds, outbounds, route, experimental) |
-| `dns_options` | Варианты DNS-серверов и правил |
-| `selectable_rules` | Готовые правила маршрутизации (ads, RU domains, games и т.д.) |
+| `dns_options` | DNS серверы (`servers`) и правила (`rules`) по умолчанию |
+| `ping_options` | URL пинга, timeout, пресеты (`presets`) |
+| `speed_test_options` | Серверы спид-теста, потоки, ping URLs |
+| `preset_groups` | Группы outbound (auto-proxy, manual-proxy и т.д.) |
+| `selectable_rules` | Правила маршрутизации с выбором outbound |
 
-### 2.2 Переменные (vars)
+### Модель WizardTemplate
+
+```dart
+class WizardTemplate {
+  final ParserConfig parserConfig;
+  final List<PresetGroup> presetGroups;
+  final Map<String, dynamic> vars;
+  final Map<String, dynamic> config;
+  final List<SelectableRule> selectableRules;
+  final DnsOptions dnsOptions;
+  final PingOptions pingOptions;
+  final SpeedTestOptions speedTestOptions;
+
+  factory WizardTemplate.fromJson(Map<String, dynamic> json) => ...;
+}
+```
+
+Загружается из asset при старте приложения и хранится в памяти.
+
+### 2.1 Переменные (vars)
 
 Типы переменных:
 - `bool` — переключатель (true/false)
@@ -44,7 +66,7 @@ UI-режимы:
 
 Подстановка: `@var_name` в шаблоне config → значение переменной.
 
-### 2.3 Адаптация для мобильной платформы
+### 2.2 Адаптация для мобильной платформы
 
 Из шаблона лаунчера убираются или скрываются:
 - TUN-related vars (TUN уже управляется нативным VPN-сервисом)
@@ -59,17 +81,22 @@ UI-режимы:
 - `resolve_strategy` — стратегия резолва маршрутов
 - `auto_detect_interface` — автоопределение интерфейса
 
+### 2.3 Пользовательские переопределения
+
+Пользовательские настройки хранятся в `boxvpn_settings.json` в application support directory. Содержит только то, что пользователь изменил — не полную копию шаблона.
+
 ## 3. Config Builder
 
 ### 3.1 Процесс генерации
 
 1. **Загрузка шаблона** из Flutter asset
-2. **Загрузка переменных** из хранилища (SharedPreferences / JSON-файл)
-3. **Подстановка переменных** в секцию `config`: `@var_name` → значение
-4. **Загрузка подписок** через Source Loader (фича 004)
-5. **Генерация outbounds**: ноды + локальные selectors + глобальные selectors
-6. **Сборка конфига**: merge inbounds, outbounds, route rules, DNS
-7. **Валидация** и **сохранение** через `FlutterSingbox.saveConfig()`
+2. **Загрузка переменных** из хранилища (boxvpn_settings.json)
+3. **Мерж**: user overrides имеют приоритет над template defaults
+4. **Подстановка переменных** в секцию `config`: `@var_name` → значение
+5. **Загрузка подписок** через Source Loader (фича 004)
+6. **Генерация outbounds**: ноды + локальные selectors + глобальные selectors
+7. **Сборка конфига**: merge inbounds, outbounds, route rules, DNS
+8. **Валидация** и **сохранение** через `FlutterSingbox.saveConfig()`
 
 ### 3.2 Генерация outbounds (порт outbound_generator)
 
@@ -94,7 +121,7 @@ UI-режимы:
 - Включённых selectable_rules
 - Последнего времени обновления подписок
 
-Реализация: JSON-файл в `getApplicationDocumentsDirectory()` (чтобы хранить сложные структуры).
+Реализация: JSON-файл в `getApplicationDocumentsDirectory()`.
 
 ## 5. Нецели
 
@@ -102,13 +129,24 @@ UI-режимы:
 - DNS tab с drag-and-drop серверов — упрощённо через vars.
 - Автообновление подписок по таймеру.
 
-## 6. Критерии приёмки
+## 6. Файлы
 
-- [ ] Шаблон загружается из asset и парсится.
-- [ ] Подстановка переменных работает для всех типов (`@var` → значение).
-- [ ] Генерация outbounds из подписок создаёт валидный sing-box JSON.
-- [ ] Selectors корректно ссылаются на ноды и друг на друга.
-- [ ] Пустые selectors (0 нод) не попадают в конфиг.
-- [ ] Selectable rules добавляют rule_set и rules при включении.
-- [ ] Сгенерированный конфиг принимается ядром sing-box.
-- [ ] Настройки сохраняются между запусками приложения.
+| Файл | Изменения |
+|------|-----------|
+| `assets/wizard_template.json` | Единый шаблон со всеми секциями |
+| `lib/models/parser_config.dart` | Модель WizardTemplate и вложенные модели |
+| `lib/services/config_builder.dart` | Мерж template + user overrides при генерации |
+| `lib/services/settings_storage.dart` | CRUD для boxvpn_settings.json |
+
+## 7. Критерии приёмки
+
+- [x] Шаблон загружается из asset и парсится.
+- [x] Подстановка переменных работает для всех типов (`@var` → значение).
+- [x] Генерация outbounds из подписок создаёт валидный sing-box JSON.
+- [x] Selectors корректно ссылаются на ноды и друг на друга.
+- [x] Пустые selectors (0 нод) не попадают в конфиг.
+- [x] Selectable rules добавляют rule_set и rules при включении.
+- [x] Сгенерированный конфиг принимается ядром sing-box.
+- [x] Настройки сохраняются между запусками приложения.
+- [x] Пользовательские переопределения хранятся отдельно в boxvpn_settings.json.
+- [x] ConfigBuilder мержит template defaults с user overrides.

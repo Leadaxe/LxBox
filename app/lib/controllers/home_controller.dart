@@ -474,7 +474,7 @@ class HomeController extends ChangeNotifier {
   String pingUrl = '';
   int pingTimeout = 10000;
 
-  static const _pingConcurrency = 20;
+  static const _pingConcurrency = 10;
 
   Future<void> pingAllNodes() async {
     final clash = _clash;

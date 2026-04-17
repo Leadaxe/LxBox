@@ -2,9 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | черновик |
-| Задачи | [`tasks.md`](tasks.md) |
-| План | [`plan.md`](plan.md) |
+| Статус | Реализовано |
 | Референс | singbox-launcher `core/config/subscription/` |
 
 ## 1. Цель
@@ -107,24 +105,79 @@ class ParsedNode {
 }
 ```
 
-## 5. Допущения
+## 5. Xray JSON Array Parser + Chained Proxy (Jump)
+
+### Проблема
+
+Некоторые провайдеры возвращают JSON массив полных Xray/v2ray конфигов вместо base64-encoded URI. Каждый элемент — полный конфиг с `outbounds`, `dns`, `routing`, `remarks`. Proxy outbound использует Xray формат (`protocol`/`vnext`/`streamSettings`).
+
+Дополнительно, эти конфиги часто используют **chained proxies** через `dialerProxy` в `streamSettings.sockopt`.
+
+### Решение
+
+Порт Xray JSON Array парсера из singbox-launcher (Go) в Dart:
+
+1. **Detect** Xray JSON Array формат в `SubscriptionDecoder`
+2. **Parse** каждый элемент массива: извлечь основной VLESS outbound + опциональный jump server
+3. **Convert** Xray outbound fields в sing-box outbound формат
+4. **Generate** jump outbounds с `detour` полем в `ConfigBuilder`
+
+### Формат примера
+
+```json
+[
+  {
+    "remarks": "🇨🇦Канада|Gemini bypass",
+    "outbounds": [
+      {
+        "protocol": "vless",
+        "tag": "proxy",
+        "settings": { "vnext": [{ "address": "...", "port": 443, "users": [...] }] },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": { "serverName": "...", "publicKey": "...", "shortId": "..." },
+          "sockopt": { "dialerProxy": "ru-upstream" }
+        }
+      },
+      {
+        "protocol": "socks",
+        "tag": "ru-upstream",
+        "settings": { "servers": [{ "address": "...", "port": 62531, "users": [...] }] }
+      }
+    ]
+  }
+]
+```
+
+## 6. Допущения
 
 - Сетевые запросы выполняются из Dart (пакет `http`); нет необходимости в нативном коде.
 - Формат outbound JSON идентичен лаунчеру — совместимость с тем же sing-box ядром.
 - Валидация Shadowsocks методов: только поддерживаемые sing-box (2022-blake3-*, AEAD, none).
 
-## 6. Нецели
+## 7. Нецели
 
 - Автообновление подписок по таймеру (отдельная фича при необходимости).
-- Xray `dialerProxy` → sing-box `detour` chain (ParsedJump) — упрощённо в первой версии.
 
-## 7. Критерии приёмки
+## 8. Файлы
 
-- [ ] Fetch подписки по URL возвращает декодированный контент.
-- [ ] Base64-encoded подписка корректно декодируется (все 4 варианта).
-- [ ] Plain text подписка парсится построчно.
-- [ ] Xray JSON array корректно распознаётся и парсится.
-- [ ] Каждый поддерживаемый протокол (§2.2) парсится в `ParsedNode` с корректным outbound JSON.
-- [ ] Skip-фильтры применяются корректно.
-- [ ] Теги уникализируются при дубликатах.
-- [ ] Unit-тесты покрывают основные сценарии парсинга.
+| Файл | Изменения |
+|------|-----------|
+| `lib/models/parsed_node.dart` | ParsedNode, ParsedJump |
+| `lib/services/xray_json_parser.dart` | Xray JSON Array → List<ParsedNode> |
+| `lib/services/source_loader.dart` | Detect format, branch to xray parser |
+| `lib/services/config_builder.dart` | Emit jump outbounds with `detour` |
+
+## 9. Критерии приёмки
+
+- [x] Fetch подписки по URL возвращает декодированный контент.
+- [x] Base64-encoded подписка корректно декодируется (все 4 варианта).
+- [x] Plain text подписка парсится построчно.
+- [x] Xray JSON array корректно распознаётся и парсится.
+- [x] Каждый поддерживаемый протокол (§2.2) парсится в `ParsedNode` с корректным outbound JSON.
+- [x] Skip-фильтры применяются корректно.
+- [x] Теги уникализируются при дубликатах.
+- [x] SOCKS/VLESS jump серверы создают отдельный outbound с `detour`.
+- [x] Non-Xray элементы в массиве пропускаются gracefully.
+- [x] Существующие base64/URI подписки продолжают работать без изменений.

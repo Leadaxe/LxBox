@@ -115,103 +115,13 @@ Android VPN-клиент на базе [sing-box](https://sing-box.sagernet.org/
 
 ---
 
-## Архитектура
+## Для разработчиков
 
-```
-wizard_template.json          ← Единый источник всех настроек по умолчанию
-    |
-    +-- dns_options            (16 DNS-серверов + правила)
-    +-- ping_options           (URL, таймаут, пресеты)
-    +-- speed_test_options     (серверы, потоки, ping URLs)
-    +-- preset_groups          (группы прокси: auto/selector/vpn)
-    +-- vars                   (все конфигурационные переменные)
-    +-- selectable_rules       (правила маршрутизации с SRS)
-    +-- config                 (каркас конфига sing-box)
-
-boxvpn_settings.json          ← Пользовательские переопределения
-    |
-    +-- vars                   (изменённые пользователем переменные)
-    +-- proxy_sources          (подписки)
-    +-- dns_options            (пользовательские DNS серверы/правила)
-    +-- enabled_rules          (переключатели правил маршрутизации)
-    +-- excluded_nodes         (фильтр нод)
-    +-- app_rules              (маршрутизация по приложениям)
-
-ConfigBuilder.generateConfig()
-    |
-    1. Загрузка wizard_template
-    2. Подстановка @переменных
-    3. Загрузка и парсинг подписок (с fallback на дисковый кэш)
-    4. Фильтрация исключённых нод (только urltest)
-    5. Сборка групп прокси
-    6. Применение правил маршрутизации
-    7. Применение DNS серверов и правил
-    8. Кэширование удалённых SRS rule sets
-    9. Выход: JSON для sing-box
-```
-
-### Технологии
-- **Flutter** (Dart 3.11+), Material 3
-- **sing-box** нативная библиотека (libbox 1.12.12 через JitPack)
-- **Clash API** для управления прокси в реальном времени
-- Gradle Kotlin DSL, AGP 8.11.1, Kotlin 2.2.20, Java 17
-
-### Структура проекта
-```
-app/
-  lib/
-    controllers/        HomeController, SubscriptionController
-    models/             HomeState, ProxySource, ParsedNode, WizardTemplate
-    screens/            12 экранов (home, routing, subscriptions, DNS, speed test и др.)
-    services/           ConfigBuilder, SourceLoader, ClashApiClient, UrlLauncher и др.
-    widgets/            NodeRow
-    vpn/                BoxVpnClient (MethodChannel/EventChannel)
-  android/
-    app/src/main/kotlin/
-      vpn/              VpnPlugin, BoxVpnService, ConfigManager
-      MainActivity.kt   MethodChannel для открытия URL
-  assets/
-    wizard_template.json
-    get_free.json
-```
-
----
-
-## Сборка
-
-### Требования
-- Flutter SDK 3.41+
-- Java 17 (Temurin)
-- Android SDK с platforms 34-36, build-tools 35, NDK 28
-
-### Локальная сборка
-```bash
-cd app
-flutter pub get
-flutter build apk --release
-```
-
-### CI/CD
-GitHub Actions workflow поддерживает:
-
-| Триггер | Что происходит |
-|---------|---------------|
-| Push в `main` | Только проверки (analyze + test) |
-| Push тега `v*` | Проверки + Сборка APK + GitHub Release (draft) |
-| Ручной `run_mode=build` | Проверки + Сборка APK |
-| Ручной `run_mode=release` | Проверки + Сборка APK + GitHub Release |
-
-```bash
-# Стабильный релиз
-git tag v1.2.0
-git push origin v1.2.0
-
-# Ручная сборка
-gh workflow run CI --repo Leadaxe/BoxVPN -f run_mode=build
-
-# Ручной релиз
-gh workflow run CI --repo Leadaxe/BoxVPN -f run_mode=release
-```
+Смотрите [docs/](docs/) для архитектуры, инструкций по сборке и руководства по разработке:
+- [Архитектура](docs/ARCHITECTURE.md)
+- [Сборка](docs/BUILD.md)
+- [Руководство по разработке](docs/DEVELOPMENT_GUIDE.md)
+- [Отчёт о разработке](docs/DEVELOPMENT_REPORT.md)
 
 ---
 
@@ -227,6 +137,8 @@ gh workflow run CI --repo Leadaxe/BoxVPN -f run_mode=release
 | SSH | `ssh://` | TCP |
 | SOCKS | `socks://` / `socks5://` | TCP |
 | WireGuard | `wireguard://` | UDP |
+
+Подробная документация по протоколам: [docs/PROTOCOLS.md](docs/PROTOCOLS.md).
 
 ---
 
@@ -287,6 +199,7 @@ gh workflow run CI --repo Leadaxe/BoxVPN -f run_mode=release
 
 | Документ | Описание |
 |----------|----------|
+| [`docs/PROTOCOLS.md`](docs/PROTOCOLS.md) | Форматы URI протоколов, параметры и маппинг в sing-box |
 | [`docs/DEVELOPMENT_GUIDE.md`](docs/DEVELOPMENT_GUIDE.md) | **Как вести разработку**: принципы, риски, тестирование, работа с AI |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Архитектура, потоки данных, нативный код |
 | [`docs/BUILD.md`](docs/BUILD.md) | Инструкции по сборке, CI, подпись APK |

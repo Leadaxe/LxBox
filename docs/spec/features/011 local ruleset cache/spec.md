@@ -1,5 +1,9 @@
 # 011 — Local Rule Set Cache
 
+| Поле | Значение |
+|------|----------|
+| Статус | Реализовано |
+
 ## Problem
 
 Selectable rules reference remote `.srs` binary rule sets (e.g. `ads-all`, `ru-inside`).
@@ -35,12 +39,12 @@ or auto-refresh on Start).
 
 | File | Change |
 |------|--------|
-| `lib/services/rule_set_downloader.dart` | **New** — download + cache logic |
+| `lib/services/rule_set_downloader.dart` | Download + cache logic |
 | `lib/services/config_builder.dart` | Call downloader, rewrite entries |
 
 ## Acceptance
 
-- [ ] Enabled remote rule_sets are downloaded to local storage before config is saved.
-- [ ] Generated config has `"type": "local"` for all previously-remote rule_sets.
-- [ ] Re-download happens when cache is older than `parser.reload` interval.
-- [ ] Download errors are non-fatal — falls back to remote in generated config.
+- [x] Enabled remote rule_sets are downloaded to local storage before config is saved.
+- [x] Generated config has `"type": "local"` for all previously-remote rule_sets.
+- [x] Re-download happens when cache is older than `parser.reload` interval.
+- [x] Download errors are non-fatal — falls back to remote in generated config.

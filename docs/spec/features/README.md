@@ -8,22 +8,28 @@
 
 | # | Папка | Кратко | Статус |
 |---|-------|--------|--------|
-| 001 | [`001 mobile stack/`](001%20mobile%20stack/) | Стек: Flutter + нативный VPN + libbox | ✓ Реализовано |
-| 002 | [`002 mvp scope/`](002%20mvp%20scope/) | MVP: Start–Stop / группы / узлы (Android) | ✓ Реализовано |
-| 003 | [`003 servers tab/`](003%20servers%20tab/) | Clash API, группа, узлы, одиночный ping | ✓ Реализовано |
-| 004 | [`004 subscription parser/`](004%20subscription%20parser/) | Парсер подписок: fetch, decode, parse (порт из singbox-launcher) | ✓ Реализовано |
-| 005 | [`005 config generator/`](005%20config%20generator/) | Генератор конфига: wizard template + vars + подписки → sing-box config | ✓ Реализовано |
-| 006 | [`006 subscription and settings ui/`](006%20subscription%20and%20settings%20ui/) | UI подписок и настроек на мобильном | ✓ Реализовано |
-| 007 | [`007 config editor improvements/`](007%20config%20editor%20improvements/) | Форматирование JSON в редакторе конфига | ✓ Реализовано |
-| 008 | [`008 ping and node management/`](008%20ping%20and%20node%20management/) | Mass ping, расширенное контекстное меню, цветовая индикация задержки | ✓ Реализовано |
-| 009 | [`009 dark theme and ux/`](009%20dark%20theme%20and%20ux/) | Dark theme, сортировка нод, pull-to-refresh, быстрый доступ к настройкам | ✓ Реализовано |
-| 010 | [`010 quick start and auto refresh/`](010%20quick%20start%20and%20auto%20refresh/) | Quick Start (Get Free VPN), авто-обновление подписок, метаданные | ✓ Реализовано |
-| 011 | [`011 local ruleset cache/`](011%20local%20ruleset%20cache/) | Локальный кэш remote .srs rule set файлов | ✓ Реализовано |
-| 012 | [`012 xray json array/`](012%20xray%20json%20array/) | Парсер Xray JSON Array + chained proxy (jump) | ✓ Реализовано |
-| 013 | [`013 native vpn service/`](013%20native%20vpn%20service/) | Нативный VPN-сервис, удаление flutter_singbox_vpn | ✓ Реализовано |
-| 014 | [`014 subscription detail view/`](014%20subscription%20detail%20view/) | Detail screen подписки с нодами, rename, delete | ✓ Реализовано |
-| 015 | [`015 rule outbound selection/`](015%20rule%20outbound%20selection/) | Выбор outbound для каждого правила, route.final | ✓ Реализовано |
-| 016 | [`016 routing screen/`](016%20routing%20screen/) | Отдельный экран Routing (groups + rules + outbounds) | ✓ Реализовано |
-| 017 | [`017 per app proxy/`](017%20per%20app%20proxy/) | App Routing Rules — per-app outbound с иконками | ✓ Реализовано |
-| 018 | [`018 custom nodes/`](018%20custom%20nodes/) | Custom Nodes — ручные ноды + override патчи | Спека |
-| 019 | [`019 loadbalance/`](019%20loadbalance/) | Load Balance через PuerNya fork | Спека |
+| 001 | [`001 mobile stack/`](001%20mobile%20stack/) | Стек: Flutter + нативный VPN + libbox | Принято |
+| 002 | [`002 mvp scope/`](002%20mvp%20scope/) | MVP: Start-Stop / группы / узлы (Android) | Реализовано |
+| 003 | [`003 home screen/`](003%20home%20screen/) | Главный экран: группы, узлы, контекст-меню, traffic bar, сортировка, node filter | Реализовано |
+| 004 | [`004 subscription parser/`](004%20subscription%20parser/) | Парсер подписок: fetch, decode, parse, Xray JSON array, jump | Реализовано |
+| 005 | [`005 config generator/`](005%20config%20generator/) | Генератор конфига: wizard template + vars + подписки → sing-box config | Реализовано |
+| 006 | [`006 servers ui/`](006%20servers%20ui/) | UI подписок: detail view, toggles, context menu, paste dialog | Реализовано |
+| 007 | [`007 config editor/`](007%20config%20editor/) | Форматирование JSON в редакторе конфига | Реализовано |
+| 008 | [`008 ping and node management/`](008%20ping%20and%20node%20management/) | Mass ping, ping settings, URLTest config, цветовая индикация | Реализовано |
+| 009 | [`009 ux and theme/`](009%20ux%20and%20theme/) | Dark theme, pull-to-refresh, autosave | Реализовано |
+| 010 | [`010 quick start and offline/`](010%20quick%20start%20and%20offline/) | Quick Start, auto-refresh, subscription caching | Реализовано |
+| 011 | [`011 local ruleset cache/`](011%20local%20ruleset%20cache/) | Локальный кэш remote .srs rule set файлов | Реализовано |
+| 012 | [`012 native vpn service/`](012%20native%20vpn%20service/) | Нативный VPN-сервис, auto-connect on boot | Реализовано |
+| 013 | [`013 routing/`](013%20routing/) | Rule outbound selection, routing screen, per-app proxy | Реализовано |
+| 014 | [`014 dns settings/`](014%20dns%20settings/) | DNS серверы, правила, strategy, presets | Спека |
+| 015 | [`015 speed test/`](015%20speed%20test/) | Built-in speed test: ping, download, upload | Реализовано |
+| 016 | [`016 statistics and connections/`](016%20statistics%20and%20connections/) | Statistics by outbound, live connections | Реализовано |
+| 017 | [`017 custom nodes and node settings/`](017%20custom%20nodes%20and%20node%20settings/) | Custom nodes, overrides, node settings (tag, detour) | Спека |
+| 018 | [`018 detour server management/`](018%20detour%20server%20management/) | Multi-hop chains, jump server naming & visibility | Спека |
+| 019 | [`019 wireguard endpoint/`](019%20wireguard%20endpoint/) | WireGuard URI + INI → sing-box endpoint | Реализовано |
+| 020 | [`020 security and dpi bypass/`](020%20security%20and%20dpi%20bypass/) | Security hardening, TLS fragment | Частично |
+| 021 | [`021 ci cd pipeline/`](021%20ci%20cd%20pipeline/) | GitHub Actions: checks, build, release | Реализовано |
+| 022 | [`022 app settings/`](022%20app%20settings/) | Theme, auto-start on boot, keep VPN on exit | Реализовано |
+| 023 | [`023 debug and logging/`](023%20debug%20and%20logging/) | Debug screen, log level, sing-box log viewer | Частично |
+| 024 | [`024 load balance/`](024%20load%20balance/) | Load Balance через PuerNya fork | Спека |
+| 025 | [`025 warp integration/`](025%20warp%20integration/) | Cloudflare WARP регистрация и интеграция | Спека |
