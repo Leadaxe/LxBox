@@ -37,12 +37,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   bool _showDetourNodes = true;
   bool _autoRebuild = true;
   bool _needsRestart = false;
+  Timer? _errorTimer;
+  String _errorTimerFor = '';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _controller = HomeController();
+    // _errorTimer будет отменён в dispose()
     _subController = SubscriptionController();
     _connectingAnim = AnimationController(
       vsync: this,
@@ -56,6 +59,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   Future<void> _loadAutoRebuild() async {
     final val = await SettingsStorage.getVar('auto_rebuild', 'true');
     _autoRebuild = val == 'true';
+  }
+
+  @override
+  void dispose() {
+    _errorTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override
@@ -316,10 +326,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           ],
           if (state.lastError.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(
-              state.lastError,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
+            Builder(builder: (_) {
+              if (_errorTimerFor != state.lastError) {
+                _errorTimer?.cancel();
+                _errorTimerFor = state.lastError;
+                _errorTimer = Timer(const Duration(seconds: 15), () {
+                  if (mounted) _controller.clearError();
+                });
+              }
+              return Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      state.lastError,
+                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Dismiss',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: () {
+                      _errorTimer?.cancel();
+                      _controller.clearError();
+                    },
+                  ),
+                ],
+              );
+            }),
           ],
           const SizedBox(height: 16),
           const Text('Group', style: TextStyle(fontWeight: FontWeight.w600)),

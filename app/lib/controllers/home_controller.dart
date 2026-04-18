@@ -555,6 +555,12 @@ class HomeController extends ChangeNotifier {
     _emit(_state.copyWith(sortMode: _state.sortMode.next));
   }
 
+  void clearError() {
+    if (_state.lastError.isNotEmpty) {
+      _emit(_state.copyWith(lastError: ''));
+    }
+  }
+
   /// Called when the app returns from background. Verifies tunnel health.
   void onAppResumed() {
     if (_state.tunnelUp) {

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import '../models/parsed_node.dart';
 import '../models/proxy_source.dart';
 
@@ -309,8 +311,9 @@ class NodeParser {
       if (aidStr != '0' && aidStr.isNotEmpty) node.query['alter_id'] = aidStr;
     }
 
-    var net = (cfg['net']?.toString() ?? 'tcp').toLowerCase().trim();
-    if (net == 'xhttp' || net == 'httpupgrade') net = 'httpupgrade';
+    // Храним raw-значение `net` — нормализация XHTTP (и warning) делается
+    // в `_transportFromQuery` при сборке outbound'а.
+    final net = (cfg['net']?.toString() ?? 'tcp').toLowerCase().trim();
     node.query['network'] = net;
 
     if (cfg['path'] != null) node.query['path'] = cfg['path'].toString();
@@ -567,7 +570,7 @@ class NodeParser {
   static void _buildVLESS(ParsedNode node, Map<String, dynamic> out) {
     out['uuid'] = node.uuid;
 
-    final transport = _transportFromQuery(node.query);
+    final transport = _transportFromQuery(node.query, node: node);
     final hasTransport = transport != null;
     if (hasTransport) out['transport'] = transport;
 
@@ -653,40 +656,16 @@ class NodeParser {
       if (aid != null) out['alter_id'] = aid;
     }
 
-    var net = (node.query['network'] ?? 'tcp').toLowerCase().trim();
-    if (net == 'xhttp') net = 'httpupgrade';
-
-    switch (net) {
-      case 'httpupgrade':
-        final tr = <String, dynamic>{'type': 'httpupgrade'};
-        if (node.query['path']?.isNotEmpty ?? false) tr['path'] = node.query['path'];
-        final host = node.query['host'] ?? node.query['sni'] ?? '';
-        if (host.isNotEmpty) tr['host'] = host;
-        out['transport'] = tr;
-      case 'h2':
-        final tr = <String, dynamic>{'type': 'http'};
-        if (node.query['path']?.isNotEmpty ?? false) tr['path'] = node.query['path'];
-        var host = node.query['host'] ?? node.query['sni'] ?? '';
-        if (host.isEmpty) host = node.server;
-        if (host.isNotEmpty) tr['host'] = [host];
-        out['transport'] = tr;
-      case 'ws':
-        final tr = <String, dynamic>{'type': 'ws'};
-        if (node.query['path']?.isNotEmpty ?? false) tr['path'] = node.query['path'];
-        final host = node.query['host'] ?? node.query['sni'] ?? '';
-        if (host.isNotEmpty) tr['headers'] = {'Host': host};
-        out['transport'] = tr;
-      case 'grpc':
-        final tr = <String, dynamic>{'type': 'grpc'};
-        if (node.query['path']?.isNotEmpty ?? false) tr['service_name'] = node.query['path'];
-        out['transport'] = tr;
-      case 'http':
-        final tr = <String, dynamic>{'type': 'http'};
-        if (node.query['path']?.isNotEmpty ?? false) tr['path'] = node.query['path'];
-        final host = node.query['host'] ?? '';
-        if (host.isNotEmpty) tr['host'] = [host];
-        out['transport'] = tr;
-    }
+    // Transport — делегируем в общий helper (см. `_transportFromQuery`).
+    // VMess хранит тип транспорта в `network` (а не в `type`).
+    // `defaultHost=node.server` нужен для `h2`-fallback'а (было в старой inline-ветке).
+    final transport = _transportFromQuery(
+      node.query,
+      node: node,
+      networkOverride: node.query['network'] ?? 'tcp',
+      defaultHost: node.server,
+    );
+    if (transport != null) out['transport'] = transport;
 
     if (node.query['tls_enabled'] == 'true') {
       final tls = <String, dynamic>{'enabled': true};
@@ -713,7 +692,7 @@ class NodeParser {
   static void _buildTrojan(ParsedNode node, Map<String, dynamic> out) {
     out['password'] = node.uuid;
 
-    final transport = _transportFromQuery(node.query);
+    final transport = _transportFromQuery(node.query, node: node);
     if (transport != null) out['transport'] = transport;
 
     final sec = (node.query['security'] ?? '').toLowerCase().trim();
@@ -810,8 +789,24 @@ class NodeParser {
   // Transport (VLESS/Trojan)
   // ---------------------------------------------------------------------------
 
-  static Map<String, dynamic>? _transportFromQuery(Map<String, String> q) {
-    final typ = (q['type'] ?? '').toLowerCase().trim();
+  /// Единая точка сборки v2ray-transport для VLESS/VMess/Trojan.
+  ///
+  /// sing-box принимает transport `type`: http | ws | quic | grpc | httpupgrade.
+  /// XHTTP — silent fallback на httpupgrade + `node.warning` (см. docs/PROTOCOLS.md
+  /// §"XHTTP transport fallback").
+  ///
+  /// - [networkOverride] — если транспорт лежит под другим ключом, чем `type`
+  ///   (VMess хранит в `network`).
+  /// - [defaultHost] — fallback host когда `q['host']`/`q['sni']` пусты
+  ///   (используется для h2 из VMess).
+  /// - [node] — нужен только чтобы выставить `warning` при XHTTP.
+  static Map<String, dynamic>? _transportFromQuery(
+    Map<String, String> q, {
+    ParsedNode? node,
+    String? networkOverride,
+    String? defaultHost,
+  }) {
+    var typ = ((networkOverride ?? q['type']) ?? '').toLowerCase().trim();
     final headerType = (q['headerType'] ?? '').toLowerCase().trim();
 
     if ((typ == 'raw' || typ == 'tcp') && headerType == 'http') {
@@ -820,6 +815,14 @@ class NodeParser {
       final host = q['host'] ?? '';
       if (host.isNotEmpty) t['host'] = [host];
       return t;
+    }
+
+    if (typ == 'xhttp') {
+      if (node != null && node.warning.isEmpty) {
+        node.warning = 'XHTTP не поддерживается sing-box, используется httpupgrade (может не работать)';
+        debugPrint('[node_parser] WARN ${node.tag}: ${node.warning}');
+      }
+      typ = 'httpupgrade';
     }
 
     switch (typ) {
@@ -839,13 +842,23 @@ class NodeParser {
       case 'http':
         final t = <String, dynamic>{'type': 'http'};
         if (q['path']?.isNotEmpty ?? false) t['path'] = q['path'];
-        final host = q['host'] ?? '';
+        final host = (q['host'] ?? '').trim();
         if (host.isNotEmpty) t['host'] = [host];
         return t;
-      case 'xhttp' || 'httpupgrade':
+      case 'h2':
+        // VMess: h2 с fallback host=server (до рефактора было только в _buildVMess).
+        final t = <String, dynamic>{'type': 'http'};
+        if (q['path']?.isNotEmpty ?? false) t['path'] = q['path'];
+        var host = (q['host'] ?? '').trim();
+        if (host.isEmpty) host = (q['sni'] ?? '').trim();
+        if (host.isEmpty && defaultHost != null) host = defaultHost;
+        if (host.isNotEmpty) t['host'] = [host];
+        return t;
+      case 'httpupgrade':
         final t = <String, dynamic>{'type': 'httpupgrade'};
         if (q['path']?.isNotEmpty ?? false) t['path'] = q['path'];
-        final host = q['host'] ?? '';
+        var host = (q['host'] ?? '').trim();
+        if (host.isEmpty) host = (q['sni'] ?? '').trim();
         if (host.isNotEmpty) t['host'] = host;
         return t;
       case 'raw' || 'tcp' || '':

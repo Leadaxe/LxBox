@@ -14,15 +14,37 @@ class ConnectionsScreen extends StatefulWidget {
 }
 
 class _ConnectionsScreenState extends State<ConnectionsScreen> {
+  static const _intervals = [500, 1000, 2000, 3000, 5000, 10000, 0]; // ms, 0 = off
   List<Map<String, dynamic>> _connections = [];
+  final Set<String> _closedIds = {};
+  final Map<String, DateTime> _closedAt = {};
   bool _loading = true;
+  bool _accumulate = false;
   Timer? _timer;
+  int _intervalMs = 2000;
 
   @override
   void initState() {
     super.initState();
     unawaited(_refresh());
-    _timer = Timer.periodic(const Duration(seconds: 2), (_) => _refresh());
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    if (_intervalMs <= 0) return;
+    _timer = Timer.periodic(Duration(milliseconds: _intervalMs), (_) => _refresh());
+  }
+
+  void _setInterval(int ms) {
+    setState(() => _intervalMs = ms);
+    _startTimer();
+  }
+
+  String _intervalLabel(int ms) {
+    if (ms == 0) return 'Off';
+    if (ms < 1000) return '${(ms / 1000).toStringAsFixed(1)}s';
+    return '${ms ~/ 1000}s';
   }
 
   @override
@@ -37,14 +59,37 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       if (!mounted) return;
       final conns = (data['connections'] as List<dynamic>? ?? [])
           .whereType<Map<String, dynamic>>()
-          .toList()
-        ..sort((a, b) {
-          final aStart = a['start']?.toString() ?? '';
-          final bStart = b['start']?.toString() ?? '';
-          return bStart.compareTo(aStart); // newest first
-        });
+          .toList();
+      List<Map<String, dynamic>> next;
+      if (_accumulate) {
+        final liveIds = conns.map((c) => c['id']?.toString() ?? '').toSet();
+        final byId = <String, Map<String, dynamic>>{};
+        for (final c in _connections) {
+          final id = c['id']?.toString() ?? '';
+          if (id.isEmpty) continue;
+          byId[id] = c;
+          if (!liveIds.contains(id)) {
+            if (_closedIds.add(id)) _closedAt[id] = DateTime.now();
+          }
+        }
+        for (final c in conns) {
+          final id = c['id']?.toString() ?? '';
+          if (id.isEmpty) continue;
+          byId[id] = c;
+        }
+        next = byId.values.toList();
+      } else {
+        _closedIds.clear();
+        _closedAt.clear();
+        next = conns;
+      }
+      next.sort((a, b) {
+        final aStart = a['start']?.toString() ?? '';
+        final bStart = b['start']?.toString() ?? '';
+        return bStart.compareTo(aStart); // newest first
+      });
       setState(() {
-        _connections = conns;
+        _connections = next;
         _loading = false;
       });
     } catch (_) {
@@ -68,27 +113,87 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: Text('Connections (${_connections.length})'),
-        actions: [
-          if (_connections.isNotEmpty)
-            IconButton(
-              tooltip: 'Close all',
-              icon: const Icon(Icons.close_rounded),
-              onPressed: _closeAll,
+      ),
+      body: Column(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerLow,
+              border: Border(bottom: BorderSide(color: cs.outlineVariant)),
             ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Row(
+              children: [
+                IconButton(
+                  tooltip: 'Refresh now',
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () => unawaited(_refresh()),
+                ),
+                IconButton(
+                  tooltip: _accumulate ? 'Accumulating (tap to clear)' : 'Live (tap to keep closed)',
+                  icon: Icon(_accumulate ? Icons.history_toggle_off : Icons.history),
+                  onPressed: () {
+                    setState(() {
+                      _accumulate = !_accumulate;
+                      if (!_accumulate) {
+                        _closedIds.clear();
+                        _closedAt.clear();
+                      }
+                    });
+                  },
+                ),
+                PopupMenuButton<int>(
+                  tooltip: 'Auto-refresh',
+                  initialValue: _intervalMs,
+                  onSelected: _setInterval,
+                  itemBuilder: (_) => [
+                    for (final ms in _intervals)
+                      CheckedPopupMenuItem<int>(
+                        value: ms,
+                        checked: _intervalMs == ms,
+                        child: Text(_intervalLabel(ms)),
+                      ),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.timer_outlined, size: 20),
+                        const SizedBox(width: 4),
+                        Text(_intervalLabel(_intervalMs),
+                            style: const TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                if (_connections.isNotEmpty)
+                  IconButton(
+                    tooltip: 'Close all',
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: _closeAll,
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _connections.isEmpty
+                    ? const Center(child: Text('No active connections'))
+                    : ListView.separated(
+                        itemCount: _connections.length,
+                        separatorBuilder: (_, _) => const Divider(height: 1),
+                        itemBuilder: (context, i) => _buildTile(_connections[i]),
+                      ),
+          ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _connections.isEmpty
-              ? const Center(child: Text('No active connections'))
-              : ListView.separated(
-                  itemCount: _connections.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, i) => _buildTile(_connections[i]),
-                ),
     );
   }
 
@@ -110,19 +215,21 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     final upload = conn['upload'] as int? ?? 0;
     final download = conn['download'] as int? ?? 0;
     final id = conn['id']?.toString() ?? '';
+    final closed = _closedIds.contains(id);
 
     final start = conn['start']?.toString() ?? '';
     final startTime = DateTime.tryParse(start);
-    final duration = startTime != null
-        ? DateTime.now().difference(startTime)
-        : null;
+    final endTime = closed ? (_closedAt[id] ?? DateTime.now()) : DateTime.now();
+    final duration = startTime != null ? endTime.difference(startTime) : null;
 
     final cs = Theme.of(context).colorScheme;
     final rule = conn['rule']?.toString() ?? '';
     final rulePayload = conn['rulePayload']?.toString() ?? '';
     final ruleText = rulePayload.isNotEmpty ? '$rule ($rulePayload)' : rule;
 
-    return Padding(
+    return Opacity(
+      opacity: closed ? 0.45 : 1.0,
+      child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -155,7 +262,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                   icon: const Icon(Icons.close, size: 14),
                   padding: EdgeInsets.zero,
                   tooltip: 'Close',
-                  onPressed: id.isNotEmpty ? () => _closeConnection(id) : null,
+                  onPressed: (closed || id.isEmpty) ? null : () => _closeConnection(id),
                 ),
               ),
             ],
@@ -191,6 +298,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

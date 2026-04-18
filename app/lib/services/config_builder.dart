@@ -225,7 +225,10 @@ class ConfigBuilder {
       result.add(node.outbound);
     }
 
-    final allNodeTags = allNodes.map((n) => n.tag).toList();
+    final allNodeTags = allNodes
+        .where((n) => n.outbound.isNotEmpty)
+        .map((n) => n.tag)
+        .toList();
     // Detour-tag visibility in groups — see docs/spec/features/018.
     for (final tag in emittedDetourTags) {
       if (!unregisteredDetourTags.contains(tag)) {

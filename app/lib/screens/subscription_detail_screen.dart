@@ -564,7 +564,29 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       );
     }
 
-    return ListView.separated(
+    final warningCount = nodes.where((n) => n.warning.isNotEmpty).length;
+    return Column(
+      children: [
+        if (warningCount > 0)
+          Container(
+            width: double.infinity,
+            color: Colors.orange.withValues(alpha: 0.15),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.warning_amber, size: 16, color: Colors.orange),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '$warningCount ${warningCount == 1 ? "узел" : "узлов"} с предупреждениями (XHTTP fallback)',
+                    style: const TextStyle(fontSize: 12, color: Colors.orange),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       itemCount: nodes.length,
       separatorBuilder: (_, _) => const Divider(height: 1),
@@ -579,14 +601,35 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 13),
           ),
-          subtitle: Text(
-            '${node.scheme}  ${node.server}:${node.port}',
-            style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${node.scheme}  ${node.server}:${node.port}',
+                style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+              ),
+              if (node.warning.isNotEmpty)
+                Row(
+                  children: [
+                    Icon(Icons.warning_amber, size: 12, color: Colors.orange),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        node.warning,
+                        style: const TextStyle(fontSize: 10, color: Colors.orange),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
           ),
           dense: true,
           onLongPress: () => _showNodeMenu(node),
         );
       },
+          ),
+        ),
+      ],
     );
   }
 

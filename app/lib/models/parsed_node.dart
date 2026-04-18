@@ -28,6 +28,10 @@ class ParsedNode {
   Map<String, String> query;
   Map<String, dynamic> outbound;
 
+  /// Non-empty = соединение построено с компромиссом/фоллбэком.
+  /// UI показывает warning-иконку и пояснение; config_builder не скипает ноду.
+  String warning = '';
+
   /// Optional chained proxy (detour server) — the main outbound uses `detour`
   /// pointing at this server's tag so traffic is tunneled through it first.
   ParsedDetour? detourServer;

@@ -161,6 +161,8 @@ vless://UUID@host:port?query_params#label
 | HTTP/2 | `http` | `{"type": "http", "path": ..., "host": [...]}` |
 | HTTPUpgrade | `httpupgrade`, `xhttp` | `{"type": "httpupgrade", "path": ..., "host": ...}` |
 
+> **⚠️ Note on XHTTP.** sing-box (up to 1.12.x, Apr 2026) **не поддерживает** XHTTP как отдельный transport. PR [SagerNet/sing-box#3879](https://github.com/SagerNet/sing-box/pull/3879) закрыт без мержа. L×Box при обнаружении `net=xhttp` / `type=xhttp` делает fallback на `httpupgrade`, ставит `ParsedNode.warning` и пишет в debug-log через `debugPrint`. UI (subscription detail, node list) показывает предупреждение. В большинстве случаев такой узел **не заработает** — XHTTP и HTTPUpgrade семантически различны. Единая точка — `_transportFromQuery` в `node_parser.dart`. Подробнее: [XHTTP transport fallback](#xhttp-transport-fallback).
+
 ### TLS Behavior
 
 - If `pbk` (REALITY public key) is present: REALITY TLS is enabled, `flow` defaults to `xtls-rprx-vision` when no transport and no explicit flow.
@@ -251,7 +253,7 @@ Decoded as `method:uuid@host:port`. The method is normalized to a sing-box VMess
 | `grpc` | `{"type": "grpc", "service_name": ...}` |
 | `h2` | `{"type": "http", "path": ..., "host": [...]}` (forces TLS) |
 | `http` | `{"type": "http", "path": ..., "host": [...]}` |
-| `xhttp`, `httpupgrade` | `{"type": "httpupgrade", "path": ..., "host": ...}` |
+| `xhttp`, `httpupgrade` | `{"type": "httpupgrade", "path": ..., "host": ...}` — `xhttp` fallback, см. [XHTTP transport fallback](#xhttp-transport-fallback) |
 
 ### sing-box Outbound Mapping
 
@@ -304,7 +306,7 @@ trojan://password@host:port?query_params#label
 | Fingerprint | `fp` | UTLS fingerprint |
 | ALPN | `alpn` | Comma-separated ALPN |
 | Insecure | `insecure`, `allowInsecure` | Skip cert verify |
-| Transport | `type` | `ws`, `grpc`, `http`, `httpupgrade`, `xhttp` |
+| Transport | `type` | `ws`, `grpc`, `http`, `httpupgrade`, `xhttp` (fallback, см. [XHTTP transport fallback](#xhttp-transport-fallback)) |
 | Path | `path` | Transport path |
 | Host | `host` | Transport host |
 | Service name | `serviceName` | gRPC service name |
@@ -833,3 +835,22 @@ URIs exceeding the maximum length (defined by `maxURILength`) are rejected with 
 ### TLS Insecure Flag
 
 Multiple query keys are checked: `insecure`, `allowInsecure`, `allowinsecure`. Values `1`, `true`, `yes` all enable insecure mode.
+
+---
+
+## XHTTP transport fallback
+
+**Контекст.** XHTTP — эволюция HTTP-транспорта в Xray (packet-up/stream-up/stream-one, добавлен в конце 2024). В подписках появляется как `type=xhttp` (VLESS, Trojan) или `net=xhttp` (VMess).
+
+**Статус в sing-box.** На апрель 2026 (ветка 1.12.x) XHTTP **не поддерживается**:
+- Доступные `type` в `v2ray-transport`: `http`, `ws`, `quic`, `grpc`, `httpupgrade` (см. [docs](https://sing-box.sagernet.org/configuration/shared/v2ray-transport/)).
+- PR [SagerNet/sing-box#3879](https://github.com/SagerNet/sing-box/pull/3879) ("Add xhttp and kcp transport") закрыт без мержа 2026-03-09.
+- С `"type": "xhttp"` в конфиге sing-box падает на загрузке (`unknown transport type`).
+
+**Поведение L×Box.** Единая точка обработки — `_transportFromQuery` в `lib/services/node_parser.dart`. При обнаружении `xhttp`:
+1. Устанавливается `ParsedNode.warning = 'XHTTP не поддерживается sing-box, используется httpupgrade (может не работать)'`.
+2. `debugPrint('[node_parser] WARN ...')` — попадает во Flutter debug log.
+3. Транспорт собирается как `{"type": "httpupgrade", "path": ..., "host": ...}` — синтаксически валидный, но семантически отличный от XHTTP протокол. Узел попадает в конфиг, но с большой вероятностью **не соединится** с сервером.
+4. UI (`subscription_detail_screen`) показывает оранжевый баннер "N узлов с предупреждениями (XHTTP fallback)" + per-node warning-строку.
+
+**Когда снимется fallback.** Когда sing-box добавит XHTTP в апстрим. Мы уберём warning и генерацию `{"type": "xhttp", ...}` будет прямой. До тех пор — стратегия "валидный конфиг + громкий warning", а не "крашим парс всей подписки".
