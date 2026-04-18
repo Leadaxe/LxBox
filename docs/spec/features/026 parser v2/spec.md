@@ -137,7 +137,7 @@ class ServerRegistry {
   /// с применённым tagPrefix и разрешёнными коллизиями тегов.
   List<NodeSpec> get allNodes;
 
-  NodeSpec? findByTag(String tag);
+  NodeSpec? findByTag(String tag);        // линейный поиск O(n), приемлемо до ~10k узлов
 }
 ```
 
@@ -145,6 +145,8 @@ class ServerRegistry {
 - применяется `tagPrefix`
 - разрешаются коллизии (`-1`, `-2` суффиксы)
 - раздаются глобальные tag'и для Clash API и UI
+
+**Сложность.** `findByTag` — линейный поиск по `allNodes`. Внутри может лениво строиться `Map<String, NodeSpec>` при первом вызове, если профайлинг покажет горячий путь. До ~10k узлов линейного достаточно.
 
 ### 1.6 UI
 
@@ -241,7 +243,9 @@ final class XhttpTransport extends TransportSpec {
 ```dart
 sealed class NodeWarning {
   const NodeWarning();
-  String userMessage(Locale l);           // локализованная строка для UI
+  String get message;                     // пока plain string на английском;
+                                          // локализация — отдельным шагом, когда
+                                          // появится i18n-infra в проекте
   WarningSeverity get severity;           // info | warning | error
 }
 
@@ -324,11 +328,11 @@ enum JsonFlavor { xrayArray, singboxOutbound, clashYaml, unknown }
 ### 3.3 PARSE
 
 ```dart
-List<NodeSpec> parseAll(DecodedBody decoded, {required String rawUriFallback}) {
+List<NodeSpec> parseAll(DecodedBody decoded) {
   return switch (decoded) {
     UriLines(lines: final ls)        => ls.map(parseUri).whereType<NodeSpec>().toList(),
     IniConfig(text: final t)         => [parseWireguardIni(t)].whereType<NodeSpec>().toList(),
-    JsonConfig(value: _, flavor: _)  => parseJson(decoded as JsonConfig),
+    JsonConfig()                     => parseJson(decoded as JsonConfig),
     DecodeFailure()                  => const [],
   };
 }
@@ -351,6 +355,8 @@ NodeSpec? parseUri(String uri) {
 ```
 
 Каждая `parseXxx` — отдельный файл, pure-функция `String → NodeSpec?`. Ошибки парсинга возвращают `null` (не throw) — caller при необходимости собирает причины.
+
+**`NodeSpec.rawUri`** заполняется парсером из своего входа: для UriLines — сама строка URI; для IniConfig — конвертированный `wg://`-URI (исходный INI хранится в отдельном поле `WireguardSpec.rawIni` при необходимости); для JsonConfig — `jsonEncode` одного element-map (чтобы round-trip через copy/paste JSON работал).
 
 JSON-ветка — `parseJson(JsonConfig j)`:
 - `xrayArray` → каждый элемент через `parseXrayOutbound`.
@@ -496,29 +502,34 @@ lib/services/
 
 Strategy: **переписываем в отдельных файлах, переключаем один раз, старое удаляем.** Без feature-flag'а в релизе — v2 попадает либо работающим, либо не попадает (test coverage должен это гарантировать). Feature-flag используется только локально во время разработки для A/B сравнения.
 
-### Фаза 1 — модели (3-4 дня)
+### Фаза 0 — подготовка
+- Собрать корпус тестовых URI / подписок в `test/fixtures/<protocol>/` (VLESS, VMess, Trojan, SS, Hysteria2, TUIC, SSH, SOCKS, WireGuard URI + INI, Xray JSON array, sing-box single outbound). Минимум 5 кейсов на протокол, включая edge-case'ы. Анонимизированные реальные подписки — в `test/fixtures/subscriptions/`.
+- Добавить `sing-box` CLI в CI (GitHub Actions step) как toolchain-зависимость для §7.4. Если выполнимо — опциональный шаг; фичу `config check` нельзя запустить без бинарника.
+- Настроить `build_runner` в CI: кеш `.dart_tool/build` между билдами.
+
+### Фаза 1 — модели
 - Ввести `NodeSpec`, `TransportSpec`, `TlsSpec`, `NodeWarning`, `SingboxEntry`, `ServerList`, `ServerRegistry`.
 - Freezed + build_runner в CI.
 - Тесты моделей: equality, copyWith, JSON serialisation.
 - v1 не трогаем.
 
-### Фаза 2 — парсеры + decoder (5-7 дней)
+### Фаза 2 — парсеры + decoder
 - Перенести логику из `node_parser.dart` в `lib/services/parser/uri/*.dart`.
 - `body_decoder.dart`, `parse_all.dart`.
-- Parity-тесты: `v1.parse(uri).toJson == v2.parse(uri).emit().map` на корпусе URI из `test/fixtures/`.
+- **Новый протокол — TUIC v5.** В v1 отсутствует, добавляется с нуля: `parseTuic` + `TuicSpec` + `emit`. Корпус тест-URI для golden-fixtures.
+- Parity-тесты: `v1.parse(uri).toJson == v2.parse(uri).emit().map` на корпусе URI из `test/fixtures/`. TUIC тестируется только в v2 (в v1 парсинга нет).
 - v1 всё ещё активен для продакшна.
 
-### Фаза 3 — assembler + validator (4-5 дней)
+### Фаза 3 — assembler + validator
 - `build_config.dart` + post-steps.
 - Parity-тесты: v1 и v2 собирают конфиг из одних и тех же источников, `jsonDiff == {}`.
 - Переключить `HomeController` / `SubscriptionController` на v2. v1 ещё в файлах, но не вызывается.
 
-### Фаза 4 — удаление v1 (1 день)
+### Фаза 4 — удаление v1
 - Физически удалить: `node_parser.dart`, `config_builder.dart`, `proxy_source.dart`, `models/parsed_node.dart`, `source_loader.dart`.
 - `grep -rn "ParsedNode\|ProxySource\|_buildVMess\|_buildVLESS\|_transportFromQuery"` возвращает пусто.
 - Никаких "deprecated" комментариев в остаточном коде.
 
-Оценка: **~3 недели** выделенного времени.
 
 ---
 
@@ -541,7 +552,9 @@ expect(jsonDiff(v1, v2.singboxConfig), isEmpty);
 ```
 
 ### 7.4 Интеграция
-End-to-end: source → parseFromSource → ServerRegistry → buildConfig → sing-box CLI `check` (в CI как шаг, sing-box binary).
+End-to-end: source → parseFromSource → ServerRegistry → buildConfig → `sing-box check -c config.json` (CLI).
+
+Требует установленного `sing-box` бинарника в CI — toolchain-шаг настраивается в Фазе 0. Локально — опционально (если бинарник не найден, шаг пропускается с warning).
 
 ---
 
@@ -556,7 +569,7 @@ End-to-end: source → parseFromSource → ServerRegistry → buildConfig → si
 | `NodeFilterScreen` | без изменений (работает с тегами-строками). |
 | `RoutingScreen` | без изменений. |
 
-Локализация warning-сообщений — через `NodeWarning.userMessage(locale)` (см. [`027 localization`](../027%20localization/spec.md) — ещё нет, но ожидается).
+Warning-сообщения — `NodeWarning.message` plain-строкой. Локализация добавится отдельным рефактором, когда в проекте появится i18n-инфраструктура (пока её нет — все строки UI hardcoded en).
 
 ---
 
@@ -571,6 +584,7 @@ End-to-end: source → parseFromSource → ServerRegistry → buildConfig → si
 - [ ] XHTTP fallback живёт в `XhttpTransport.toSingbox` единственный раз; компилятор не даёт забыть за счёт sealed.
 - [ ] После Фазы 4: `grep -rn "ParsedNode\|ProxySource"` → пусто.
 - [ ] Новый протокол добавляется тремя шагами: новый `XxxSpec` + `parseXxx(uri)` + ветка в `parseUri` switch.
+- [ ] TUIC v5 — реализован в рамках этой работы (`TuicSpec`, `parseTuic`, `emit → Outbound`). URI: `tuic://UUID:PASSWORD@host:port?congestion_control=...&udp_relay_mode=...&alpn=...&sni=...#label`. sing-box: [outbound docs](https://sing-box.sagernet.org/configuration/outbound/tuic/).
 
 ---
 
@@ -583,6 +597,9 @@ End-to-end: source → parseFromSource → ServerRegistry → buildConfig → si
 | ANR на больших подписках (1000+ нод) | Опционально — `compute()` Isolate для `parseAll`, не в scope v2 |
 | Миграция `ProxySource` → `List<ServerList>` ломает существующие настройки пользователя | Одноразовая миграция в `SettingsStorage.load`: `ProxySource` → `SubscriptionServers` / `UserServers` (по наличию URL). Тест. |
 | XHTTP в будущем поддержат в sing-box | `XhttpTransport.toSingbox` переделываем на прямой emit, `UnsupportedTransportWarning` убираем. Один коммит. |
+| Нет фикстур / недостаточное покрытие перед фазой 2 | Блокирует parity-тесты v1↔v2. Собрать корпус в Фазе 0, это гейт на старт Фазы 2 |
+| Нет `sing-box` бинарника в CI | Интеграционный тест §7.4 отключается. В Фазе 0 добавить install-step; при сбое — warn, не fail. Основное покрытие — юнит + parity |
+| Нет i18n-инфраструктуры для warning'ов | `NodeWarning.message` — plain en-string в v2. Локализация — отдельным рефактором |
 
 ---
 
@@ -600,6 +617,7 @@ End-to-end: source → parseFromSource → ServerRegistry → buildConfig → si
 | 8 | `EmitContext` с begin/end | убран. Warnings в `NodeSpec.warnings` напрямую | 2026-04-18 |
 | 9 | `warnings` mutable на freezed-классе | компромисс принят. Единственное mutable поле в spec'е, пересоздаётся на каждый parse/emit | 2026-04-18 |
 | 10 | Feature-flag в релизе | нет. Релиз с v2 — релиз с v2. Flag только локально для dev-сравнения | 2026-04-18 |
+| 11 | TUIC v5 | включаем в scope v2 (в Фазу 2). Новый протокол, в v1 отсутствует | 2026-04-18 |
 
 ---
 
