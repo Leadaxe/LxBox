@@ -24,3 +24,7 @@ captures/
 *.keystore
 .env
 .env.*
+
+# Private research / competitor analysis — never commit
+research/
+.private/
