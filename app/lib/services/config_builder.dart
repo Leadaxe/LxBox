@@ -81,6 +81,7 @@ class ConfigBuilder {
     final tagCounts = <String, int>{};
     final allNodes = <ParsedNode>[];
     final unregisteredDetourTags = <String>{};
+    final detoursExcludedFromAuto = <String>{};
     for (var i = 0; i < sources.length; i++) {
       if (!sources[i].enabled) continue;
       try {
@@ -107,6 +108,13 @@ class ConfigBuilder {
           for (final node in nodes) {
             if (node.detourServer != null) {
               unregisteredDetourTags.add(node.detourServer!.tag);
+            }
+          }
+        }
+        if (!src.registerDetourInAuto) {
+          for (final node in nodes) {
+            if (node.detourServer != null) {
+              detoursExcludedFromAuto.add(node.detourServer!.tag);
             }
           }
         }
@@ -139,6 +147,7 @@ class ConfigBuilder {
       excludedNodes,
       vars,
       unregisteredDetourTags: unregisteredDetourTags,
+      detoursExcludedFromAuto: detoursExcludedFromAuto,
     );
 
     // Separate WireGuard endpoints from regular outbounds
@@ -194,6 +203,7 @@ class ConfigBuilder {
     Set<String> excludedNodes,
     Map<String, String> vars, {
     Set<String> unregisteredDetourTags = const {},
+    Set<String> detoursExcludedFromAuto = const {},
   }) {
     final result = <Map<String, dynamic>>[];
     final emittedDetourTags = <String>{};
@@ -216,7 +226,7 @@ class ConfigBuilder {
     }
 
     final allNodeTags = allNodes.map((n) => n.tag).toList();
-    // Add detour server tags to groups (skip unregistered)
+    // Detour-tag visibility in groups — see docs/spec/features/018.
     for (final tag in emittedDetourTags) {
       if (!unregisteredDetourTags.contains(tag)) {
         allNodeTags.add(tag);
@@ -235,8 +245,11 @@ class ConfigBuilder {
     // First pass: determine which groups will actually be emitted (non-empty)
     final emittedGroupTags = <String>{};
     for (final preset in activePresets) {
-      final nodeTags = preset.type == 'urltest' && excludedNodes.isNotEmpty
-          ? allNodeTags.where((t) => !excludedNodes.contains(t)).toList()
+      final nodeTags = preset.type == 'urltest'
+          ? allNodeTags
+              .where((t) => !excludedNodes.contains(t))
+              .where((t) => !detoursExcludedFromAuto.contains(t))
+              .toList()
           : allNodeTags;
       if (nodeTags.isNotEmpty || preset.type != 'urltest') {
         emittedGroupTags.add(preset.tag);
@@ -252,8 +265,11 @@ class ConfigBuilder {
 
     for (final preset in activePresets) {
       // For urltest groups, exclude filtered nodes; for selectors, include all
-      final nodeTags = preset.type == 'urltest' && excludedNodes.isNotEmpty
-          ? allNodeTags.where((t) => !excludedNodes.contains(t)).toList()
+      final nodeTags = preset.type == 'urltest'
+          ? allNodeTags
+              .where((t) => !excludedNodes.contains(t))
+              .where((t) => !detoursExcludedFromAuto.contains(t))
+              .toList()
           : allNodeTags;
       // Filter auto-proxy-out from add_outbounds if not enabled
       final addOutbounds = preset.addOutbounds

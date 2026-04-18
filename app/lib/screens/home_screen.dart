@@ -9,6 +9,7 @@ import '../controllers/subscription_controller.dart';
 import '../models/home_state.dart';
 import '../services/clash_api_client.dart';
 import '../widgets/node_row.dart';
+import 'outbound_view_screen.dart';
 import 'about_screen.dart';
 import 'config_screen.dart';
 import 'debug_screen.dart';
@@ -33,7 +34,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   late final HomeController _controller;
   late final SubscriptionController _subController;
   late final AnimationController _connectingAnim;
-  bool _showDetourNodes = false;
+  bool _showDetourNodes = true;
   bool _autoRebuild = true;
   bool _needsRestart = false;
 
@@ -172,7 +173,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               enabled: _controller.state.tunnelUp,
               onTap: () {
                 final clash = _controller.clashClient;
-                if (clash != null) _pushRoute(StatsScreen(clash: clash));
+                if (clash != null) _pushRoute(StatsScreen(clash: clash, configRaw: _controller.state.configRaw));
               },
             ),
             ListTile(
@@ -468,7 +469,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         final clash = _controller.clashClient;
         if (clash != null) {
           Navigator.push(context, MaterialPageRoute(
-            builder: (_) => StatsScreen(clash: clash),
+            builder: (_) => StatsScreen(clash: clash, configRaw: _controller.state.configRaw),
           ));
         }
       },
@@ -759,6 +760,59 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     ).then((_) { urlCtrl.dispose(); timeoutCtrl.dispose(); });
   }
 
+  void _viewOutboundJson(String tag, HomeState state) {
+    if (state.configRaw.isEmpty) return;
+    Map<String, Map<String, dynamic>> byTag = {};
+    Map<String, String> kindByTag = {};
+    try {
+      final cfg = jsonDecode(state.configRaw) as Map<String, dynamic>;
+      for (final o in (cfg['outbounds'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()) {
+        final t = o['tag'];
+        if (t is String) {
+          byTag[t] = o;
+          kindByTag[t] = 'outbound';
+        }
+      }
+      for (final o in (cfg['endpoints'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()) {
+        final t = o['tag'];
+        if (t is String) {
+          byTag[t] = o;
+          kindByTag[t] = 'endpoint';
+        }
+      }
+    } catch (_) {}
+
+    final entry = byTag[tag];
+    if (entry == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Not found: $tag')),
+      );
+      return;
+    }
+
+    final chain = <Map<String, dynamic>>[entry];
+    final seen = <String>{tag};
+    var cur = entry['detour'];
+    while (cur is String && cur.isNotEmpty && seen.add(cur)) {
+      final next = byTag[cur];
+      if (next == null) break;
+      chain.add(next);
+      cur = next['detour'];
+    }
+
+    final payload = chain.length == 1 ? chain.first : chain;
+    final json = const JsonEncoder.withIndent('  ').convert(payload);
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => OutboundViewScreen(
+        tag: tag,
+        kind: kindByTag[tag] ?? 'outbound',
+        json: json,
+      ),
+    ));
+  }
+
   void _copyNodeJson(String tag, HomeState state, String mode) {
     if (state.configRaw.isEmpty) return;
 
@@ -895,6 +949,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               onActivate: () => unawaited(_controller.switchNode(tag)),
               onPing: () => unawaited(_controller.pingNode(tag)),
               onCopy: (mode) => _copyNodeJson(tag, state, mode),
+              onViewJson: () => _viewOutboundJson(tag, state),
               urltestNow: ClashApiClient.urltestNow(state.proxiesJson, tag),
               hasDetour: detourTags.contains(tag),
             );

@@ -16,16 +16,16 @@ Routing охватывает: выбор outbound для каждого прав
 
 **Доступные варианты** (динамически):
 - `direct` → `direct-out`
-- `proxy` → `proxy-out`
-- `auto` → `auto-proxy-out`
-- `vpn-1` → `vpn-1` (только если группа включена)
-- `vpn-2` → `vpn-2` (только если группа включена)
+- `auto` → `auto-proxy-out` (если галка Include Auto включена)
+- `vpn-1` → `vpn-1` (всегда — базовая группа, галку выключить нельзя)
+- `vpn-2` → `vpn-2` (если группа включена)
+- `vpn-3` → `vpn-3` (если группа включена)
 
 **Правила с `action`** (Block Ads → `action: reject`) — дропдаун не показывается.
 
 ### Настройка route.final
 
-Строка **"Default traffic"** с дропдауном. Определяет `route.final` в конфиге. Default: `proxy-out`.
+Строка **"Default traffic"** с дропдауном. Определяет `route.final` в конфиге. Default: `vpn-1`.
 
 ### Хранение
 
@@ -34,7 +34,7 @@ Routing охватывает: выбор outbound для каждого прав
   "Russian domains direct": "direct-out",
   "BitTorrent direct": "vpn-1"
 },
-"route_final": "proxy-out"
+"route_final": "vpn-1"
 ```
 
 ## 2. Routing Screen
@@ -44,9 +44,13 @@ Routing охватывает: выбор outbound для каждого прав
 ### Секция "Proxy Groups"
 
 Список групп из `template.presetGroups`. Каждая группа — SwitchListTile:
-- Title: `group.label` (Auto Proxy, Proxy, VPN 1, VPN 2)
+- Title: `group.label` (Include Auto, VPN ①, VPN ②, VPN ③)
 - Subtitle: тип (`urltest` / `selector`)
 - Switch: включена / выключена
+
+**VPN ① — всегда включена (isRequired)**, свитч задизейблен. Это базовая группа, которая обязательно генерируется, чтобы у `route.final` был валидный target.
+
+**Include Auto** — особая галка: управляет не отдельной группой, а **включением `auto-proxy-out` как urltest-outbound'а и ссылкой на него в `add_outbounds` групп `vpn-*`**. Если off — секция `auto-proxy-out` не генерируется вовсе, vpn-группы её не видят.
 
 ### Секция "Routing Rules"
 
@@ -119,7 +123,9 @@ Fallback for unmatched traffic
 - [x] Routing — отдельный экран из навигации.
 - [x] Proxy Groups и Routing Rules убраны из Settings.
 - [x] Каждое outbound-правило имеет дропдаун выбора outbound.
-- [x] vpn-1/vpn-2 появляются в дропдауне только если группы включены.
+- [x] vpn-1 всегда доступен (галка заблокирована).
+- [x] vpn-2/vpn-3 появляются в дропдауне только если группы включены.
+- [x] Include Auto контролирует генерацию `auto-proxy-out` и его добавление в `vpn-*`.
 - [x] Строка "Default traffic" управляет `route.final`.
 - [x] App Rules: создание с именем и списком приложений.
 - [x] Для каждого App Rule можно выбрать outbound.

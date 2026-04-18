@@ -24,7 +24,7 @@
 
 ## 3. Селектор группы
 
-- Группы: outbound'ы с `type: selector` (`tag`); значение по умолчанию — из `route.final`, если указывает на selector, иначе первый из списка; если пусто — fallback (например `proxy-out`) на усмотрение реализации.
+- Группы: outbound'ы с `type: selector` (`tag`); значение по умолчанию — из `route.final`, если указывает на selector, иначе первый из списка; fallback — `vpn-1` (всегда генерируется).
 - Смена группы — перезагрузка списка узлов для этой группы.
 
 ## 4. Список узлов
@@ -42,7 +42,20 @@ Long-press на `NodeRow` показывает popup menu:
 |-------|----------|
 | **Ping** | Запускает пинг конкретного узла |
 | **Use this node** | Переключает текущий outbound на выбранный узел через Clash API |
-| **Copy outbound JSON** | Сериализует proxy entry в JSON и копирует в буфер обмена |
+| **View JSON** | Открывает read-only страницу с форматированным JSON outbound/endpoint. Если у узла есть detour — выдаёт массив `[node, detour1, detour2, ...]` (рекурсивный обход по `detour`) |
+| **Copy server** | Копирует outbound узла в JSON (без поля `detour`) |
+| **Copy detour** | Копирует только detour-outbound (скрыт для узлов без detour) |
+| **Copy server + detour** | Массив `[detour, server]` (скрыт для узлов без detour) |
+
+Для системных строк `direct-out` и `auto-proxy-out` Copy-пункты **скрыты** — это не настоящие серверы.
+
+### Pinned special rows
+
+`direct-out` и `auto-proxy-out` при любой сортировке (latencyAsc / nameAsc) всегда **вверху** списка, в строгом порядке: сначала `direct-out`, потом `auto-proxy-out`. Визуально выделены лёгкой подсветкой фона (`secondaryContainer.withAlpha(40)`).
+
+### Show detour servers
+
+Toggle в popup menu AppBar. По умолчанию **включён** — `⚙ ` серверы (посредники-dialer'ы) видны в списке. Если выключить — строки с префиксом `⚙ ` скрываются.
 
 ```dart
 showMenu(

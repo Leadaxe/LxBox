@@ -182,9 +182,9 @@ lxbox_settings.json (path_provider)
   ├─ vars: { "log_level": "warn", "clash_api": "127.0.0.1:52341", ... }
   ├─ proxy_sources: [ { source, name, tag_prefix, last_updated, traffic stats, ... } ]
   ├─ enabled_rules: [ "Russian domains direct", ... ]
-  ├─ enabled_groups: [ "proxy-out", "auto-proxy-out" ]
+  ├─ enabled_groups: [ "vpn-1", "auto-proxy-out" ]
   ├─ rule_outbounds: { "BitTorrent direct": "direct-out" }
-  ├─ route_final: "proxy-out"
+  ├─ route_final: "vpn-1"
   ├─ app_rules: [ { name, packages, outbound } ]
   └─ last_global_update: "2026-04-15T..."
 

@@ -16,6 +16,7 @@ class ProxySource {
     this.updateIntervalHours = 0,
     this.enabled = true,
     this.registerDetourServers = true,
+    this.registerDetourInAuto = false,
     this.useDetourServers = true,
     this.overrideDetour = '',
   });
@@ -35,6 +36,7 @@ class ProxySource {
   int updateIntervalHours;
   bool enabled;
   bool registerDetourServers;
+  bool registerDetourInAuto;
   bool useDetourServers;
   String overrideDetour;
 
@@ -90,6 +92,7 @@ class ProxySource {
       updateIntervalHours: json['update_interval_hours'] as int? ?? 0,
       enabled: json['enabled'] as bool? ?? true,
       registerDetourServers: json['register_detour_servers'] as bool? ?? true,
+      registerDetourInAuto: json['register_detour_in_auto'] as bool? ?? false,
       useDetourServers: json['use_detour_servers'] as bool? ?? true,
       overrideDetour: json['override_detour'] as String? ?? '',
     );
@@ -111,6 +114,7 @@ class ProxySource {
         if (updateIntervalHours > 0) 'update_interval_hours': updateIntervalHours,
         if (!enabled) 'enabled': false,
         if (!registerDetourServers) 'register_detour_servers': false,
+        if (registerDetourInAuto) 'register_detour_in_auto': true,
         if (!useDetourServers) 'use_detour_servers': false,
         if (overrideDetour.isNotEmpty) 'override_detour': overrideDetour,
       };

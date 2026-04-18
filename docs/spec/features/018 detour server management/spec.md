@@ -117,6 +117,26 @@ bool isJumpServer(String tag) => tag.startsWith('⚙ ');
 - [ ] По умолчанию jump серверы скрыты из списка нод.
 - [ ] Jump серверы всегда доступны в detour dropdown.
 
+## Per-subscription detour flags (proxy_source.dart)
+
+Подписка хранит три независимых флага поведения detour-серверов:
+
+| Флаг | Default | Эффект |
+|------|---------|--------|
+| `useDetourServers` | true | Узлы подписки соединяются через свой detour. Если off — `detour` удаляется у outbound-а, трафик идёт напрямую. |
+| `registerDetourServers` | true | ⚙ серверы попадают в список нод (proxy-группы vpn-*). Если off — detour-outbound остаётся в конфиге (нужен как dialer), но в группах его нет. |
+| `registerDetourInAuto` | **false** | Дополнительно контролирует попадание ⚙ в `auto-proxy-out` (urltest). Даже если `registerDetourServers=true`, ⚙ из этой подписки не попадают в auto-группу, пока этот флаг не включён явно. |
+
+**Зачем разделение register/registerInAuto:**
+⚙ сервер — это транзитный dialer, а не конечная точка. Если он включён в urltest auto-proxy-out, автовыбор может назначить его финальным egress по минимальной задержке, хотя логически трафик должен идти через ⚙ → настоящий узел. Разделение позволяет показывать ⚙ в `vpn-*` (ручной выбор) и одновременно исключать из auto (автоподбор).
+
+**UI:**
+Галки Register/Register-in-auto/Use показываются только если в подписке есть хотя бы одна нода с detour-сервером.
+
+**Реализация (config_builder.dart):**
+- `unregisteredDetourTags` — набор detour-тегов с `registerDetourServers=false`, не добавляются в `allNodeTags`.
+- `detoursExcludedFromAuto` — набор detour-тегов с `registerDetourInAuto=false`, фильтруются из `nodeTags` при сборке urltest-группы.
+
 ## See also
 
 - [006 servers ui](../006%20servers%20ui/spec.md) — per-subscription settings

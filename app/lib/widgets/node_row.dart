@@ -16,6 +16,7 @@ class NodeRow extends StatelessWidget {
     required this.onActivate,
     required this.onPing,
     this.onCopy,
+    this.onViewJson,
     this.urltestNow,
     this.hasDetour = false,
   });
@@ -32,6 +33,7 @@ class NodeRow extends StatelessWidget {
   final VoidCallback onPing;
   /// Called with 'server', 'detour', or 'both'.
   final void Function(String mode)? onCopy;
+  final VoidCallback? onViewJson;
   /// If this node is a URLTest group, shows which node it auto-selected.
   final String? urltestNow;
   final bool hasDetour;
@@ -114,6 +116,17 @@ class NodeRow extends StatelessWidget {
             title: const Text('Use this node'),
           ),
         ),
+        if (onViewJson != null) const PopupMenuDivider(),
+        if (onViewJson != null)
+          PopupMenuItem<String>(
+            value: 'view_json',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.code, size: 20),
+              title: const Text('View JSON'),
+            ),
+          ),
         if (showCopy) const PopupMenuDivider(),
         if (showCopy)
           PopupMenuItem<String>(
@@ -159,6 +172,8 @@ class NodeRow extends StatelessWidget {
         if (onCopy != null) onCopy!('detour');
       case 'copy_both':
         if (onCopy != null) onCopy!('both');
+      case 'view_json':
+        if (onViewJson != null) onViewJson!();
     }
   }
 

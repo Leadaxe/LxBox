@@ -41,7 +41,7 @@ Body:
 ### Кастомный endpoint
 
 1. **Ручной ввод** — рабочий IP:port из сканера
-2. **Через прокси** — `"detour": "proxy-out"` (chained: proxy → WARP → интернет)
+2. **Через прокси** — `"detour": "vpn-1"` (chained: proxy → WARP → интернет)
 3. **Встроенный сканер** (будущее)
 
 ### UI — WARP Setup Screen

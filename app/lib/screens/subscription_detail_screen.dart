@@ -212,35 +212,47 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   }
 
   Widget _buildSettingsTab(ThemeData theme) {
+    final hasDetour = (_nodes ?? const []).any((n) => n.detourServer != null);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('Display', style: theme.textTheme.titleSmall?.copyWith(
-          color: theme.colorScheme.primary,
-          fontWeight: FontWeight.bold,
-        )),
-        const Divider(),
-        SwitchListTile(
-          title: const Text('Register detour servers'),
-          subtitle: const Text('Add ⚙ servers to proxy groups (visible in node list)'),
-          value: widget.entry.source.registerDetourServers,
-          onChanged: (val) {
-            setState(() => widget.entry.source.registerDetourServers = val);
-            unawaited(widget.controller.persistSources());
-          },
-        ),
-        SwitchListTile(
-          title: const Text('Use detour servers'),
-          subtitle: Text(widget.entry.source.useDetourServers
-              ? 'Nodes connect through detour servers'
-              : 'Nodes connect directly (detour skipped)'),
-          value: widget.entry.source.useDetourServers,
-          onChanged: (val) {
-            setState(() => widget.entry.source.useDetourServers = val);
-            unawaited(widget.controller.persistSources());
-          },
-        ),
-        const Divider(),
+        if (hasDetour) ...[
+          Text('Display', style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.bold,
+          )),
+          const Divider(),
+          SwitchListTile(
+            title: const Text('Register detour servers'),
+            subtitle: const Text('Add ⚙ servers to proxy groups (visible in node list)'),
+            value: widget.entry.source.registerDetourServers,
+            onChanged: (val) {
+              setState(() => widget.entry.source.registerDetourServers = val);
+              unawaited(widget.controller.persistSources());
+            },
+          ),
+          SwitchListTile(
+            title: const Text('Register detour in auto group'),
+            subtitle: const Text('Include ⚙ servers in auto-proxy-out urltest'),
+            value: widget.entry.source.registerDetourInAuto,
+            onChanged: (val) {
+              setState(() => widget.entry.source.registerDetourInAuto = val);
+              unawaited(widget.controller.persistSources());
+            },
+          ),
+          SwitchListTile(
+            title: const Text('Use detour servers'),
+            subtitle: Text(widget.entry.source.useDetourServers
+                ? 'Nodes connect through detour servers'
+                : 'Nodes connect directly (detour skipped)'),
+            value: widget.entry.source.useDetourServers,
+            onChanged: (val) {
+              setState(() => widget.entry.source.useDetourServers = val);
+              unawaited(widget.controller.persistSources());
+            },
+          ),
+          const Divider(),
+        ],
         Text('Override', style: theme.textTheme.titleSmall?.copyWith(
           color: theme.colorScheme.primary,
           fontWeight: FontWeight.bold,

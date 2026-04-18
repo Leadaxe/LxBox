@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
@@ -6,9 +7,10 @@ import '../services/clash_api_client.dart';
 import 'connections_screen.dart';
 
 class StatsScreen extends StatefulWidget {
-  const StatsScreen({super.key, required this.clash});
+  const StatsScreen({super.key, required this.clash, this.configRaw = ''});
 
   final ClashApiClient clash;
+  final String configRaw;
 
   @override
   State<StatsScreen> createState() => _StatsScreenState();
@@ -22,12 +24,41 @@ class _StatsScreenState extends State<StatsScreen> {
   bool _loading = true;
   Timer? _timer;
   final _expanded = <String>{};
+  final _detourMap = <String, String>{};
 
   @override
   void initState() {
     super.initState();
+    _parseDetourMap();
     unawaited(_refresh());
     _timer = Timer.periodic(const Duration(seconds: 3), (_) => _refresh());
+  }
+
+  void _parseDetourMap() {
+    if (widget.configRaw.isEmpty) return;
+    try {
+      final cfg = jsonDecode(widget.configRaw) as Map<String, dynamic>;
+      final all = [
+        ...(cfg['outbounds'] as List<dynamic>? ?? []),
+        ...(cfg['endpoints'] as List<dynamic>? ?? []),
+      ].whereType<Map<String, dynamic>>();
+      for (final o in all) {
+        final t = o['tag'];
+        final d = o['detour'];
+        if (t is String && d is String && d.isNotEmpty) _detourMap[t] = d;
+      }
+    } catch (_) {}
+  }
+
+  List<String> _detourChain(String tag) {
+    final chain = <String>[];
+    final seen = <String>{tag};
+    var cur = _detourMap[tag];
+    while (cur != null && cur.isNotEmpty && seen.add(cur)) {
+      chain.add(cur);
+      cur = _detourMap[cur];
+    }
+    return chain;
   }
 
   @override
@@ -177,9 +208,28 @@ class _StatsScreenState extends State<StatsScreen> {
               }
             }),
             title: Text(group.name, style: const TextStyle(fontWeight: FontWeight.w500)),
-            subtitle: Text(
-              '${group.connections.length} connections',
-              style: const TextStyle(fontSize: 11),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < _detourChain(group.name).length; i++)
+                  Padding(
+                    padding: EdgeInsets.only(left: 8.0 + i * 12.0, top: 2),
+                    child: Text(
+                      '↳ via ${_detourChain(group.name)[i]}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    '${group.connections.length} connections',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                ),
+              ],
             ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,

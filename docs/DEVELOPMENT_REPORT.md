@@ -73,7 +73,7 @@ L×Box прошёл путь от MVP (один экран: Read config → Star
 ### Реализация
 
 **Wizard Template** (`assets/wizard_template.json`, 206 строк):
-- `parser_config`: outbound-группы (auto-proxy-out/urltest, proxy-out/selector, ru VPN), regex-фильтры по тегам.
+- `parser_config`: outbound-группы (auto-proxy-out/urltest, vpn-1/vpn-2/vpn-3 selector'ы), regex-фильтры по тегам.
 - `vars`: 10 переменных (log_level, clash_api, clash_secret, resolve_strategy, auto_detect_interface, dns_strategy, dns_independent_cache, dns_default_domain_resolver, dns_final). Типы: enum, text, secret, bool.
 - `config`: базовый sing-box JSON с плейсхолдерами `@var_name`.
 - `selectable_rules`: 5 предустановленных правил (Block Ads, Russian domains direct, BitTorrent direct, Games direct, Private IPs direct) со ссылками на remote SRS rule sets.
