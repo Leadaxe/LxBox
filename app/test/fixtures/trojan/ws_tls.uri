@@ -1,0 +1,1 @@
+trojan://testpass123@example-2.com:443?type=ws&security=tls&path=%2Ftr&host=example-2.com&sni=example-2.com#Trojan%20WS

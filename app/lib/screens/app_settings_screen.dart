@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../main.dart';
+import '../services/haptic_service.dart';
 import '../services/settings_storage.dart';
 import '../vpn/box_vpn_client.dart';
 
@@ -18,6 +19,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   bool _autoStart = false;
   bool _keepOnExit = false;
   bool _autoRebuild = false;
+  bool _haptic = true;
   bool _loaded = false;
 
   @override
@@ -30,7 +32,16 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     final auto = await _vpn.getAutoStart();
     final keep = await _vpn.getKeepOnExit();
     final rebuild = await SettingsStorage.getVar('auto_rebuild', 'true');
-    if (mounted) setState(() { _autoStart = auto; _keepOnExit = keep; _autoRebuild = rebuild == 'true'; _loaded = true; });
+    final haptic = await SettingsStorage.getVar(HapticService.prefsKey, 'true');
+    if (mounted) {
+      setState(() {
+        _autoStart = auto;
+        _keepOnExit = keep;
+        _autoRebuild = rebuild == 'true';
+        _haptic = haptic != 'false';
+        _loaded = true;
+      });
+    }
   }
 
   @override
@@ -99,6 +110,24 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                 onChanged: _loaded ? (val) {
                   setState(() => _autoRebuild = val);
                   unawaited(SettingsStorage.setVar('auto_rebuild', val.toString()));
+                } : null,
+              ),
+              const Divider(height: 32),
+              Text('Feedback', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                title: const Text('Haptic feedback'),
+                subtitle: const Text('Vibrate on connect, disconnect and errors. Respects system "Touch feedback" setting'),
+                secondary: const Icon(Icons.vibration),
+                value: _haptic,
+                onChanged: _loaded ? (val) {
+                  setState(() => _haptic = val);
+                  HapticService.I.enabled = val;
+                  unawaited(SettingsStorage.setVar(HapticService.prefsKey, val.toString()));
+                  // Подтверждаем юзеру что включилось — короткий tick.
+                  if (val) {
+                    HapticService.I.onConnectTap();
+                  }
                 } : null,
               ),
             ],

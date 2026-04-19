@@ -4,8 +4,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../controllers/subscription_controller.dart';
-import '../services/config_builder.dart';
-import '../services/settings_storage.dart';
+import '../models/server_list.dart';
+import '../models/template_vars.dart';
 
 class NodeSettingsScreen extends StatefulWidget {
   const NodeSettingsScreen({
@@ -48,61 +48,30 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   }
 
   Future<void> _load() async {
-    final connections = widget.entry.source.connections;
-    if (connections.isEmpty) return;
+    // v2: узел уже распарсен в entry.list.nodes.first.
+    final nodes = widget.entry.list.nodes;
+    if (nodes.isEmpty) return;
+    final node = nodes.first;
 
-    final first = connections.first;
-
-
-    if (first.trimLeft().startsWith('{')) {
-      // Already JSON
-      try {
-        final parsed = jsonDecode(first) as Map<String, dynamic>;
-        _originalTag = parsed['tag']?.toString() ?? '';
-        _scheme = parsed['type']?.toString() ?? '';
-        final server = parsed['server']?.toString() ?? '';
-        final port = parsed['server_port']?.toString() ?? '';
-        _serverInfo = port.isNotEmpty ? '$server:$port' : server;
-        _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(parsed);
-      } catch (_) {
-        _originalTag = first.length > 30 ? first.substring(0, 30) : first;
-        _jsonCtrl.text = first;
-      }
-    } else {
-      // URI-based node — parse to outbound JSON
-      final tagCounts = <String, int>{};
-      final nodes = await ConfigBuilder.loadAndParseNodes(
-        [widget.entry.source],
-        tagCounts,
-      );
-      if (nodes.isEmpty) return;
-      final node = nodes.first;
-      _originalTag = node.tag;
-      _scheme = node.scheme;
-      _serverInfo = '${node.server}:${node.port}';
-      _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(node.outbound);
-    }
-
+    _originalTag = node.tag;
+    _scheme = node.protocol;
+    _serverInfo = '${node.server}:${node.port}';
+    _jsonCtrl.text = const JsonEncoder.withIndent('  ')
+        .convert(node.emit(TemplateVars.empty).map);
     _tagCtrl.text = _originalTag;
 
-    // Read detour from JSON
-    try {
-      final parsed = jsonDecode(_jsonCtrl.text);
-      if (parsed is Map<String, dynamic>) {
-        _detour = parsed['detour']?.toString() ?? '';
-      }
-    } catch (_) {}
+    // Detour текущего узла.
+    _detour = node.chained?.tag ?? '';
 
-    // Load available direct servers for detour dropdown
-    final allSources = await SettingsStorage.getProxySources();
-    final directSources = allSources
-        .where((s) => s.source.isEmpty && s.connections.isNotEmpty)
-        .toList();
-    final directNodes = await ConfigBuilder.loadAndParseNodes(directSources, {});
-    _availableNodes = directNodes
-        .map((n) => n.tag)
-        .where((t) => t != _originalTag)
-        .toList();
+    // Доступные detour-теги: все узлы всех `UserServers` кроме себя.
+    final tags = <String>[];
+    for (final e in widget.subController.entries) {
+      if (e.list is! UserServers) continue;
+      for (final n in e.list.nodes) {
+        if (n.tag.isNotEmpty && n.tag != _originalTag) tags.add(n.tag);
+      }
+    }
+    _availableNodes = tags;
 
     if (mounted) setState(() {});
   }

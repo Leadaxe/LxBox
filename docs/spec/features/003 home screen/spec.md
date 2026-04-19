@@ -181,6 +181,36 @@ enum NodeSortMode {
 - Удалённые ноды — автоматически пропадут
 - Переименованные ноды — потеряют excluded статус (по тегу), это ок
 
+## 8a. Warning "Restart VPN to apply"
+
+Когда пользователь меняет конфиг (routing, settings, подписки) **при работающем туннеле**, в памяти/на диске уже новый конфиг, но туннель крутит старый. Нужно уведомить:
+
+> **Config changed — restart VPN to apply**
+
+Показывается в `_buildControls` под рядом кнопок Start/Stop, розовой плашкой (`tertiaryContainer`). Тап по плашке открывает диалог подтверждения остановки VPN.
+
+### Derived flag
+
+`_needsRestart` — **derived getter**, не mutable bool. Возвращает `true`, если:
+
+```dart
+state.tunnelUp && (state.configStaleSinceStart || _subController.configDirty)
+```
+
+Где:
+- `state.configStaleSinceStart` — sticky-флаг в `HomeState`, ставится в `saveParsedConfig` при `tunnelUp`, сбрасывается на tunnel транзитах (up→connected, down→disconnected/revoked).
+- `_subController.configDirty` — settings изменены, конфиг ещё не пересобран (через `persistSources()` / `_persist()`).
+
+### Почему явный флаг, а не diff
+
+Ранний подход сравнивал `state.configRaw` с snapshot'ом, взятым на tunnel up. Хрупко: canonical JSON может совпасть при разных настройках (редко, но возможно), плюс AnimatedBuilder может не поймать промежуточные изменения. Явный флаг в HomeState проще и детерминирован.
+
+### Инварианты
+
+- Гасится **только** реальным tunnel транзитом — не тапами по кнопкам Stop/Cancel. Иначе юзер отменяет Stop-диалог и warning пропадает, хотя рестарт всё ещё нужен.
+- Любой путь, который зовёт `HomeController.saveParsedConfig` при `tunnelUp` (Routing Apply, Source import, Debug, Home ⟳), автоматически поднимает флаг. Не нужно пробрасывать setState'ы через виджеты.
+- Sticky до следующего `connected` → любая цепочка saveConfig'ов во время работы туннеля схлопывается в один warning.
+
 ## 9. Ошибки и состояния
 
 - Ядро не запущено / API не отвечает — короткие тексты, блокировка операций, требующих API.

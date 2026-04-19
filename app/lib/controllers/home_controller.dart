@@ -10,10 +10,16 @@ import '../config/clash_endpoint.dart';
 import '../vpn/box_vpn_client.dart';
 import '../config/config_parse.dart';
 import '../models/home_state.dart';
+import '../services/app_log.dart';
 import '../services/clash_api_client.dart';
+import '../services/haptic_service.dart';
+import '../services/subscription/auto_updater.dart';
 
 class HomeController extends ChangeNotifier {
+  HomeController({AutoUpdater? autoUpdater}) : _autoUpdater = autoUpdater;
+
   final BoxVpnClient _vpn = BoxVpnClient();
+  final AutoUpdater? _autoUpdater;
   StreamSubscription<Map<String, dynamic>>? _statusSub;
   ClashApiClient? _clash;
   ClashApiClient? get clashClient => _clash;
@@ -26,6 +32,11 @@ class HomeController extends ChangeNotifier {
 
   HomeState _state = const HomeState();
   HomeState get state => _state;
+
+  /// Сторожок: heartbeat fail haptic стреляет один раз на серию,
+  /// сбрасывается при успешном heartbeat (см. `_startHeartbeat`).
+  /// Иначе — каждые 20 сек вибро-спам пока туннель лежит.
+  bool _heartbeatFailNotified = false;
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -53,16 +64,11 @@ class HomeController extends ChangeNotifier {
   }
 
   void _addDebug(DebugSource source, String message) {
-    final line = message.trim();
-    if (line.isEmpty) return;
-    final next = <DebugEntry>[
-      DebugEntry(time: DateTime.now(), source: source, message: line),
-      ..._state.debugEvents,
-    ];
-    if (next.length > 100) {
-      next.removeRange(100, next.length);
-    }
-    _emit(_state.copyWith(debugEvents: next));
+    AppLog.I.log(
+      source == DebugSource.core ? DebugLevel.info : DebugLevel.debug,
+      message,
+      source: source,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -72,13 +78,21 @@ class HomeController extends ChangeNotifier {
   void _handleStatusEvent(Map<String, dynamic> event) {
     final raw = event['status']?.toString() ?? '';
     final tunnel = TunnelStatus.fromNative(raw);
+    final prevTunnel = _state.tunnel;
     _addDebug(DebugSource.core, event.toString());
     _emit(_state.copyWith(tunnel: tunnel));
 
     if (tunnel == TunnelStatus.connected) {
-      _emit(_state.copyWith(connectedSince: DateTime.now()));
+      _emit(_state.copyWith(
+        connectedSince: DateTime.now(),
+        configStaleSinceStart: false,
+      ));
       unawaited(_refreshClashAfterTunnel());
       _startHeartbeat();
+      _heartbeatFailNotified = false;
+      HapticService.I.onVpnConnected();
+      // AutoUpdater триггер #2: через 2 мин после connected.
+      _autoUpdater?.onVpnConnected();
     } else if (tunnel == TunnelStatus.disconnected ||
         tunnel == TunnelStatus.revoked) {
       _stopHeartbeat();
@@ -94,8 +108,21 @@ class HomeController extends ChangeNotifier {
           highlightedNode: null,
           traffic: TrafficSnapshot.zero,
           connectedSince: null,
+          configStaleSinceStart: false,
         ),
       );
+      // Haptic — на революд/краш тяжёлый, на user-инициированный stop лёгкий.
+      // Триггерим только если был up (не из connecting → disconnect).
+      if (prevTunnel == TunnelStatus.connected) {
+        if (tunnel == TunnelStatus.revoked) {
+          HapticService.I.onVpnCrashed();
+        } else {
+          HapticService.I.onVpnDisconnected();
+        }
+        // AutoUpdater триггер #4: только если реально ушли из connected
+        // (чтобы не срабатывать при revoked → disconnected дубле).
+        _autoUpdater?.onVpnStopped();
+      }
       if (reason.isNotEmpty) {
         _addDebug(DebugSource.core, reason);
       }
@@ -157,6 +184,10 @@ class HomeController extends ChangeNotifier {
       );
       if (_heartbeatFailures >= _maxHeartbeatFailures) {
         _stopHeartbeat();
+        if (!_heartbeatFailNotified) {
+          HapticService.I.onHeartbeatFail();
+          _heartbeatFailNotified = true;
+        }
         _onTunnelDead();
       }
     }
@@ -226,7 +257,14 @@ class HomeController extends ChangeNotifier {
       return false;
     }
     final raw = displayRaw ?? canonicalJson;
-    _emit(_state.copyWith(configRaw: raw, lastError: ''));
+    // Если туннель уже крутит старый конфиг, поставим флаг — UI покажет
+    // warning "Restart VPN to apply changes". Флаг sticky до up↔down.
+    final stale = _state.tunnelUp || _state.configStaleSinceStart;
+    _emit(_state.copyWith(
+      configRaw: raw,
+      lastError: '',
+      configStaleSinceStart: stale,
+    ));
     _rebuildClashEndpoint();
     _addDebug(DebugSource.app, 'Config saved (${canonicalJson.length} bytes)');
     return true;

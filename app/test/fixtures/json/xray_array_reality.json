@@ -1,0 +1,28 @@
+[
+  {
+    "remarks": "Xray VLESS Reality",
+    "outbounds": [
+      {
+        "tag": "proxy",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [{
+            "address": "example-1.com",
+            "port": 443,
+            "users": [{ "id": "11111111-2222-3333-4444-555555555555", "flow": "xtls-rprx-vision" }]
+          }]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "reality",
+          "realitySettings": {
+            "serverName": "www.example.com",
+            "fingerprint": "chrome",
+            "publicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "shortId": "abcd1234"
+          }
+        }
+      }
+    ]
+  }
+]

@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/parser_config.dart';
-import '../services/config_builder.dart';
+import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -47,7 +47,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _load() async {
-    final template = await ConfigBuilder.loadTemplate();
+    final template = await TemplateLoader.load();
     final storedVars = await SettingsStorage.getAllVars();
 
     for (final v in template.vars) {

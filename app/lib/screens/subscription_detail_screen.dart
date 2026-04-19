@@ -1,16 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
-import '../models/parsed_node.dart';
-import '../services/config_builder.dart';
-import '../services/settings_storage.dart';
-import '../services/source_loader.dart';
+import '../models/node_spec.dart';
+import '../models/server_list.dart';
+import '../services/subscription/sources.dart';
 import '../services/url_launcher.dart';
 
 class SubscriptionDetailScreen extends StatefulWidget {
@@ -32,19 +28,42 @@ class SubscriptionDetailScreen extends StatefulWidget {
 
 class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> with SingleTickerProviderStateMixin {
   late final TabController _tabCtrl;
-  List<ParsedNode>? _nodes;
+  List<NodeSpec>? _nodes;
   bool _loading = true;
   String? _error;
   bool _editing = false;
   late TextEditingController _nameCtrl;
   String _rawSource = '';
+  Map<String, String> _rawHeaders = const {};
+  bool _sourceLoaded = false;
+  bool _sourceLoading = false;
+  String? _sourceError;
+  bool _showAllHeaders = false;
+
+  /// Headers, которые нам реально нужны — подписочные метаданные.
+  /// Остальное (server, date, cookies, content-length, ddos-guard, etc.) —
+  /// под раскрывашкой.
+  static const _importantHeaders = {
+    'profile-title',
+    'profile-update-interval',
+    'profile-web-page-url',
+    'support-url',
+    'subscription-userinfo',
+    'content-type',
+  };
 
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
-    _nameCtrl = TextEditingController(text: widget.entry.source.name);
+    _nameCtrl = TextEditingController(text: widget.entry.name);
     unawaited(_loadNodes());
+    // При первом заходе на Source — живой GET.
+    _tabCtrl.addListener(() {
+      if (_tabCtrl.index == 2 && !_sourceLoaded && !_sourceLoading) {
+        unawaited(_fetchSourceLive());
+      }
+    });
   }
 
   @override
@@ -54,46 +73,63 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     super.dispose();
   }
 
+  List<MapEntry<String, String>> _filteredHeaders({required bool important}) {
+    final entries = _rawHeaders.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return entries
+        .where((e) => _importantHeaders.contains(e.key.toLowerCase()) == important)
+        .toList();
+  }
+
+  bool get _hasMoreHeaders =>
+      _rawHeaders.entries
+          .any((e) => !_importantHeaders.contains(e.key.toLowerCase()));
+
+  Future<void> _fetchSourceLive() async {
+    if (widget.entry.url.isEmpty) return;
+    setState(() {
+      _sourceLoading = true;
+      _sourceError = null;
+    });
+    try {
+      final r = await fetchRaw(UrlSource(widget.entry.url));
+      if (!mounted) return;
+      setState(() {
+        _rawSource = r.body;
+        _rawHeaders = r.headers;
+        _sourceLoaded = true;
+        _sourceLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _sourceError = e.toString();
+        _sourceLoading = false;
+      });
+    }
+  }
+
   Future<void> _loadNodes({bool cacheOnly = true}) async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final tagCounts = <String, int>{};
-      final nodes = await SourceLoader.loadNodesFromSource(
-        widget.entry.source,
-        tagCounts,
-        cacheOnly: cacheOnly,
-      );
-      // Include jump servers as separate entries
-      final expanded = <ParsedNode>[];
-      for (final node in nodes) {
-        expanded.add(node);
-        if (node.detourServer != null) {
-          expanded.add(ParsedNode(
-            tag: node.detourServer!.tag,
-            scheme: node.detourServer!.scheme,
-            server: node.detourServer!.server,
-            port: node.detourServer!.port,
-            label: node.detourServer!.tag,
-            outbound: node.detourServer!.outbound,
-          ));
-        }
+      if (!cacheOnly) {
+        await widget.controller.updateAt(widget.index);
       }
-      // Load raw source from cache
-      if (widget.entry.source.source.isNotEmpty) {
-        try {
-          final cacheKey = widget.entry.source.source.hashCode.toRadixString(16);
-          final dir = await getApplicationSupportDirectory();
-          final cached = File('${dir.path}/sub_cache/$cacheKey');
-          if (cached.existsSync()) {
-            final bytes = await cached.readAsBytes();
-            _rawSource = utf8.decode(bytes, allowMalformed: true);
-          }
-        } catch (_) {}
-      } else if (widget.entry.source.connections.isNotEmpty) {
-        _rawSource = widget.entry.source.connections.join('\n');
+      // v2: узлы уже распарсены в entry.list.nodes. Детоур-узлы показываем
+      // отдельной строкой под родителем.
+      final expanded = <NodeSpec>[];
+      for (final node in widget.entry.list.nodes) {
+        expanded.add(node);
+        if (node.chained != null) expanded.add(node.chained!);
+      }
+      // Source-вкладка теперь подтягивается живым GET при переключении туда.
+      // Для UserServers (connections) показываем сразу что есть.
+      if (widget.entry.connections.isNotEmpty) {
+        _rawSource = widget.entry.connections.join('\n');
+        _sourceLoaded = true;
       }
       if (mounted) setState(() { _nodes = expanded; _loading = false; });
     } catch (e) {
@@ -212,10 +248,39 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   }
 
   Widget _buildSettingsTab(ThemeData theme) {
-    final hasDetour = (_nodes ?? const []).any((n) => n.detourServer != null);
+    final hasDetour = (_nodes ?? const []).any((n) => n.chained != null);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        Text('Tag prefix', style: theme.textTheme.titleSmall?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.bold,
+        )),
+        const SizedBox(height: 4),
+        Text(
+          'Prefix applied to every tag from this subscription '
+          '(e.g. "BL:" → "BL: Frankfurt"). Used to distinguish servers '
+          'from different subscriptions and resolve name collisions.',
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: TextFormField(
+            initialValue: widget.entry.tagPrefix,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Prefix',
+              hintText: 'empty = no prefix',
+              isDense: true,
+            ),
+            onChanged: (val) {
+              widget.entry.tagPrefix = val.trim();
+              unawaited(widget.controller.persistSources());
+            },
+          ),
+        ),
+        const SizedBox(height: 24),
         if (hasDetour) ...[
           Text('Display', style: theme.textTheme.titleSmall?.copyWith(
             color: theme.colorScheme.primary,
@@ -225,29 +290,29 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
           SwitchListTile(
             title: const Text('Register detour servers'),
             subtitle: const Text('Add ⚙ servers to proxy groups (visible in node list)'),
-            value: widget.entry.source.registerDetourServers,
+            value: widget.entry.registerDetourServers,
             onChanged: (val) {
-              setState(() => widget.entry.source.registerDetourServers = val);
+              setState(() => widget.entry.registerDetourServers = val);
               unawaited(widget.controller.persistSources());
             },
           ),
           SwitchListTile(
             title: const Text('Register detour in auto group'),
             subtitle: const Text('Include ⚙ servers in auto-proxy-out urltest'),
-            value: widget.entry.source.registerDetourInAuto,
+            value: widget.entry.registerDetourInAuto,
             onChanged: (val) {
-              setState(() => widget.entry.source.registerDetourInAuto = val);
+              setState(() => widget.entry.registerDetourInAuto = val);
               unawaited(widget.controller.persistSources());
             },
           ),
           SwitchListTile(
             title: const Text('Use detour servers'),
-            subtitle: Text(widget.entry.source.useDetourServers
+            subtitle: Text(widget.entry.useDetourServers
                 ? 'Nodes connect through detour servers'
                 : 'Nodes connect directly (detour skipped)'),
-            value: widget.entry.source.useDetourServers,
+            value: widget.entry.useDetourServers,
             onChanged: (val) {
-              setState(() => widget.entry.source.useDetourServers = val);
+              setState(() => widget.entry.useDetourServers = val);
               unawaited(widget.controller.persistSources());
             },
           ),
@@ -265,24 +330,184 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
         const SizedBox(height: 8),
         ListTile(
           title: const Text('Override detour'),
-          subtitle: Text(widget.entry.source.overrideDetour.isEmpty
+          subtitle: Text(widget.entry.overrideDetour.isEmpty
               ? 'None (use original)'
-              : widget.entry.source.overrideDetour),
+              : widget.entry.overrideDetour),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => _showOverrideDetourPicker(),
+        ),
+        if (widget.entry.list is SubscriptionServers) ...[
+          const SizedBox(height: 24),
+          Text('Subscription', style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.bold,
+          )),
+          const Divider(),
+          _buildSubscriptionInfo(theme),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSubscriptionInfo(ThemeData theme) {
+    final list = widget.entry.list as SubscriptionServers;
+    final cs = theme.colorScheme;
+    final statusLabel = _statusLabel(list);
+    final statusColor = _statusColor(list, cs);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ListTile(
+          leading: const Icon(Icons.link, size: 20),
+          title: const Text('URL'),
+          subtitle: Text(list.url, maxLines: 2, overflow: TextOverflow.ellipsis),
+          trailing: const Icon(Icons.content_copy, size: 18),
+          onTap: () async {
+            await Clipboard.setData(ClipboardData(text: list.url));
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('URL copied'), duration: Duration(seconds: 1)),
+            );
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.sync, size: 20),
+          title: const Text('Update interval'),
+          subtitle: Text('${list.updateIntervalHours}h '
+              '(auto-refresh every ${_intervalHuman(list.updateIntervalHours)})'),
+          trailing: const Icon(Icons.edit, size: 18),
+          onTap: _showIntervalPicker,
+        ),
+        ListTile(
+          leading: Icon(_statusIcon(list), size: 20, color: statusColor),
+          title: Text(statusLabel, style: TextStyle(color: statusColor)),
+          subtitle: Text(_subscriptionStatusSubtitle(list)),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 8),
+          child: OutlinedButton.icon(
+            onPressed: _refreshNow,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Refresh now'),
+          ),
         ),
       ],
     );
   }
 
+  String _statusLabel(SubscriptionServers list) {
+    switch (list.lastUpdateStatus) {
+      case UpdateStatus.ok:
+        return 'OK';
+      case UpdateStatus.failed:
+        final n = list.consecutiveFails;
+        return n > 1 ? 'Failed ($n in a row)' : 'Failed';
+      case UpdateStatus.inProgress:
+        return 'Refreshing…';
+      case UpdateStatus.never:
+        return 'Never updated';
+    }
+  }
+
+  Color _statusColor(SubscriptionServers list, ColorScheme cs) {
+    switch (list.lastUpdateStatus) {
+      case UpdateStatus.ok:
+        return cs.primary;
+      case UpdateStatus.failed:
+        return cs.error;
+      case UpdateStatus.inProgress:
+        return cs.secondary;
+      case UpdateStatus.never:
+        return cs.onSurfaceVariant;
+    }
+  }
+
+  IconData _statusIcon(SubscriptionServers list) {
+    switch (list.lastUpdateStatus) {
+      case UpdateStatus.ok:
+        return Icons.check_circle_outline;
+      case UpdateStatus.failed:
+        return Icons.error_outline;
+      case UpdateStatus.inProgress:
+        return Icons.hourglass_empty;
+      case UpdateStatus.never:
+        return Icons.schedule;
+    }
+  }
+
+  String _subscriptionStatusSubtitle(SubscriptionServers list) {
+    final parts = <String>[];
+    if (list.lastUpdated != null) {
+      parts.add('Last success: ${SubscriptionEntry.formatAgo(list.lastUpdated!)}');
+    }
+    if (list.lastUpdateAttempt != null &&
+        list.lastUpdateAttempt != list.lastUpdated) {
+      parts.add('Last attempt: ${SubscriptionEntry.formatAgo(list.lastUpdateAttempt!)}');
+    }
+    if (list.lastNodeCount > 0) {
+      parts.add('${list.lastNodeCount} nodes');
+    }
+    return parts.isEmpty ? '—' : parts.join(' · ');
+  }
+
+  String _intervalHuman(int hours) {
+    if (hours < 24) return '${hours}h';
+    final d = hours ~/ 24;
+    final rem = hours % 24;
+    if (rem == 0) return d == 1 ? 'day' : '$d days';
+    return '${d}d ${rem}h';
+  }
+
+  Future<void> _showIntervalPicker() async {
+    final list = widget.entry.list as SubscriptionServers;
+    final presets = <int>[1, 3, 6, 12, 24, 48, 72, 168];
+    final chosen = await showDialog<int>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Update interval'),
+        children: [
+          for (final h in presets)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, h),
+              child: Row(
+                children: [
+                  if (h == list.updateIntervalHours)
+                    const Icon(Icons.check, size: 18)
+                  else
+                    const SizedBox(width: 18),
+                  const SizedBox(width: 8),
+                  Text('${h}h (${_intervalHuman(h)})'),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    setState(() {
+      widget.entry.updateIntervalHours = chosen;
+    });
+    await widget.controller.persistSources();
+  }
+
+  Future<void> _refreshNow() async {
+    final idx = widget.controller.entries.indexOf(widget.entry);
+    if (idx < 0) return;
+    await widget.controller.updateAt(idx);
+    if (!mounted) return;
+    setState(() {});
+  }
+
   Future<void> _showOverrideDetourPicker() async {
-    // Load direct servers for picker
-    final allSources = await SettingsStorage.getProxySources();
-    final directSources = allSources
-        .where((s) => s.source.isEmpty && s.connections.isNotEmpty)
-        .toList();
-    final directNodes = await ConfigBuilder.loadAndParseNodes(directSources, {});
-    final tags = directNodes.map((n) => n.tag).toList();
+    // Direct-server picker: все UserServers-узлы из других entries.
+    final tags = <String>[];
+    for (final e in widget.controller.entries) {
+      if (e.list is! UserServers) continue;
+      for (final n in e.list.nodes) {
+        if (n.tag.isNotEmpty) tags.add(n.tag);
+      }
+    }
 
     if (!mounted) return;
     final chosen = await showDialog<String>(
@@ -302,36 +527,85 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       ),
     );
     if (chosen == null) return;
-    setState(() => widget.entry.source.overrideDetour = chosen);
+    setState(() => widget.entry.overrideDetour = chosen);
     unawaited(widget.controller.persistSources());
   }
 
   Widget _buildSourceTab(ThemeData theme) {
-    final source = widget.entry.source;
+    final entry = widget.entry;
     final cs = theme.colorScheme;
 
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
-        // Headers section
-        if (source.source.isNotEmpty) ...[
-          Text('Headers', style: theme.textTheme.titleSmall?.copyWith(
-            color: cs.primary, fontWeight: FontWeight.bold,
-          )),
+        // HTTP Response Headers — живой GET с сервера, без кеша.
+        if (entry.url.isNotEmpty) ...[
+          Row(
+            children: [
+              Text(
+                _sourceLoading ? 'Fetching…' : 'Response headers',
+                style: theme.textTheme.titleSmall?.copyWith(
+                    color: cs.primary, fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 18),
+                tooltip: 'Re-fetch live',
+                visualDensity: VisualDensity.compact,
+                onPressed:
+                    _sourceLoading ? null : () => unawaited(_fetchSourceLive()),
+              ),
+              if (_rawHeaders.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.copy, size: 16),
+                  tooltip: 'Copy headers',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {
+                    final text = _rawHeaders.entries
+                        .map((e) => '${e.key}: ${e.value}')
+                        .join('\n');
+                    Clipboard.setData(ClipboardData(text: text));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Headers copied')),
+                    );
+                  },
+                ),
+            ],
+          ),
           const Divider(),
-          if (source.name.isNotEmpty)
-            _headerRow('profile-title', source.name, theme),
-          if (source.supportUrl.isNotEmpty)
-            _headerRow('support-url', source.supportUrl, theme),
-          if (source.webPageUrl.isNotEmpty)
-            _headerRow('profile-web-page-url', source.webPageUrl, theme),
-          if (source.updateIntervalHours > 0)
-            _headerRow('profile-update-interval', '${source.updateIntervalHours} hours', theme),
-          if (source.totalBytes > 0)
-            _headerRow('subscription-userinfo',
-              'upload=${source.uploadBytes}; download=${source.downloadBytes}; total=${source.totalBytes}'
-              '${source.expireTimestamp > 0 ? "; expire=${source.expireTimestamp}" : ""}',
-              theme),
+          if (_sourceError != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text('Fetch failed: $_sourceError',
+                  style: TextStyle(fontSize: 12, color: cs.error)),
+            )
+          else if (_sourceLoading && _rawHeaders.isEmpty)
+            const LinearProgressIndicator()
+          else if (_rawHeaders.isEmpty)
+            const Text('No data — tap refresh above',
+                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic))
+          else ...[
+            for (final h in _filteredHeaders(important: true))
+              _headerRow(h.key, h.value, theme),
+            if (_hasMoreHeaders) ...[
+              const SizedBox(height: 4),
+              TextButton.icon(
+                onPressed: () =>
+                    setState(() => _showAllHeaders = !_showAllHeaders),
+                icon: Icon(
+                    _showAllHeaders
+                        ? Icons.expand_less
+                        : Icons.expand_more,
+                    size: 16),
+                label: Text(_showAllHeaders
+                    ? 'Hide others'
+                    : 'Show all (${_rawHeaders.length - _filteredHeaders(important: true).length})'),
+              ),
+              if (_showAllHeaders)
+                for (final h in _filteredHeaders(important: false))
+                  _headerRow(h.key, h.value, theme),
+            ],
+          ],
           const SizedBox(height: 16),
         ],
 
@@ -392,11 +666,10 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   }
 
   Widget _buildMeta(SubscriptionEntry entry, ThemeData theme) {
-    final source = entry.source;
-    final url = source.source.isNotEmpty
-        ? source.source
-        : source.connections.isNotEmpty
-            ? source.connections.first
+    final url = entry.url.isNotEmpty
+        ? entry.url
+        : entry.connections.isNotEmpty
+            ? entry.connections.first
             : '';
 
     return Padding(
@@ -432,11 +705,11 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
           ],
           Row(
             children: [
-              if (source.lastUpdated != null) ...[
+              if (entry.lastUpdated != null) ...[
                 Icon(Icons.schedule, size: 14, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 4),
                 Text(
-                  SubscriptionEntry.formatAgo(source.lastUpdated!),
+                  SubscriptionEntry.formatAgo(entry.lastUpdated!),
                   style: theme.textTheme.bodySmall,
                 ),
                 const SizedBox(width: 16),
@@ -444,53 +717,55 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
               Icon(Icons.dns_outlined, size: 14, color: theme.colorScheme.onSurfaceVariant),
               const SizedBox(width: 4),
               Text(
-                '${_nodes?.length ?? entry.nodeCount} nodes',
+                entry.detourCount > 0
+                    ? '${entry.nodeCount} +${entry.detourCount}⚙ nodes'
+                    : '${entry.nodeCount} nodes',
                 style: theme.textTheme.bodySmall,
               ),
             ],
           ),
           // Traffic quota
-          if (source.totalBytes > 0) ...[
+          if (entry.totalBytes > 0) ...[
             const SizedBox(height: 8),
-            _buildTrafficBar(source, theme),
+            _buildTrafficBar(entry, theme),
           ],
           // Expire
-          if (source.expireTimestamp > 0) ...[
+          if (entry.expireTimestamp > 0) ...[
             const SizedBox(height: 4),
             Row(
               children: [
                 Icon(Icons.event_outlined, size: 14, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 4),
                 Text(
-                  'Expires: ${_formatExpire(source.expireTimestamp)}',
+                  'Expires: ${_formatExpire(entry.expireTimestamp)}',
                   style: theme.textTheme.bodySmall,
                 ),
               ],
             ),
           ],
           // Support & web page links
-          if (source.supportUrl.isNotEmpty || source.webPageUrl.isNotEmpty) ...[
+          if (entry.supportUrl.isNotEmpty || entry.webPageUrl.isNotEmpty) ...[
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               children: [
-                if (source.supportUrl.isNotEmpty)
+                if (entry.supportUrl.isNotEmpty)
                   ActionChip(
                     avatar: Icon(
-                      source.supportUrl.contains('t.me') ? Icons.telegram : Icons.open_in_new,
+                      entry.supportUrl.contains('t.me') ? Icons.telegram : Icons.open_in_new,
                       size: 16,
-                      color: source.supportUrl.contains('t.me')
+                      color: entry.supportUrl.contains('t.me')
                           ? const Color(0xFF2AABEE)
                           : null,
                     ),
                     label: const Text('Support'),
-                    onPressed: () => unawaited(_openUrl(source.supportUrl)),
+                    onPressed: () => unawaited(_openUrl(entry.supportUrl)),
                   ),
-                if (source.webPageUrl.isNotEmpty)
+                if (entry.webPageUrl.isNotEmpty)
                   ActionChip(
                     avatar: const Icon(Icons.language, size: 16),
                     label: const Text('Web page'),
-                    onPressed: () => unawaited(_openUrl(source.webPageUrl)),
+                    onPressed: () => unawaited(_openUrl(entry.webPageUrl)),
                   ),
               ],
             ),
@@ -500,9 +775,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     );
   }
 
-  Widget _buildTrafficBar(dynamic source, ThemeData theme) {
-    final used = source.uploadBytes + source.downloadBytes;
-    final total = source.totalBytes;
+  Widget _buildTrafficBar(SubscriptionEntry entry, ThemeData theme) {
+    final used = entry.uploadBytes + entry.downloadBytes;
+    final total = entry.totalBytes;
     final pct = total > 0 ? (used / total).clamp(0.0, 1.0) : 0.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -564,7 +839,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       );
     }
 
-    final warningCount = nodes.where((n) => n.warning.isNotEmpty).length;
+    final warningCount = nodes.where((n) => n.warnings.isNotEmpty).length;
     return Column(
       children: [
         if (warningCount > 0)
@@ -578,7 +853,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '$warningCount ${warningCount == 1 ? "узел" : "узлов"} с предупреждениями (XHTTP fallback)',
+                    '$warningCount node${warningCount == 1 ? "" : "s"} with warnings (XHTTP fallback)',
                     style: const TextStyle(fontSize: 12, color: Colors.orange),
                   ),
                 ),
@@ -594,7 +869,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
         final node = nodes[i];
         return ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: _protocolIcon(node.scheme),
+          leading: _protocolIcon(node.protocol),
           title: Text(
             node.label.isNotEmpty ? node.label : node.tag,
             maxLines: 1,
@@ -605,17 +880,17 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${node.scheme}  ${node.server}:${node.port}',
+                '${node.protocol}  ${node.server}:${node.port}',
                 style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
               ),
-              if (node.warning.isNotEmpty)
+              if (node.warnings.isNotEmpty)
                 Row(
                   children: [
                     Icon(Icons.warning_amber, size: 12, color: Colors.orange),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        node.warning,
+                        node.warnings.isEmpty ? '' : node.warnings.first.message,
                         style: const TextStyle(fontSize: 10, color: Colors.orange),
                       ),
                     ),
@@ -633,10 +908,10 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     );
   }
 
-  void _showNodeMenu(ParsedNode node) {
-    final info = node.sourceUri.isNotEmpty
-        ? node.sourceUri
-        : '${node.scheme}://${node.server}:${node.port}';
+  void _showNodeMenu(NodeSpec node) {
+    final info = node.rawUri.isNotEmpty
+        ? node.rawUri
+        : '${node.protocol}://${node.server}:${node.port}';
     showModalBottomSheet(
       context: context,
       builder: (ctx) => SafeArea(

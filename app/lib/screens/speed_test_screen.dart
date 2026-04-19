@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../controllers/home_controller.dart';
-import '../services/config_builder.dart';
+import '../services/template_loader.dart';
 
 class SpeedTestScreen extends StatefulWidget {
   const SpeedTestScreen({super.key, required this.homeController});
@@ -61,7 +61,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
   }
 
   Future<void> _loadConfig() async {
-    final template = await ConfigBuilder.loadTemplate();
+    final template = await TemplateLoader.load();
     final opts = template.speedTestOptions;
     final servers = (opts['servers'] as List<dynamic>? ?? [])
         .whereType<Map<String, dynamic>>()

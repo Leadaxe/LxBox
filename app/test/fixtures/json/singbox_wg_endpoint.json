@@ -1,0 +1,13 @@
+{
+  "type": "wireguard",
+  "tag": "singbox-wg-1",
+  "address": ["10.0.0.2/32"],
+  "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",
+  "peers": [{
+    "address": "example-1.com",
+    "port": 51820,
+    "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",
+    "allowed_ips": ["0.0.0.0/0", "::/0"]
+  }],
+  "mtu": 1420
+}

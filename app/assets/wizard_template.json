@@ -26,7 +26,7 @@
       {"type": "udp", "tag": "yandex_vpn", "server": "77.88.8.2", "server_port": 53, "detour": "vpn-1", "domain_strategy": "prefer_ipv4", "description": "Yandex DNS via VPN", "enabled": false}
     ],
     "rules": [
-      {"rule_set": "ru-domains", "server": "yandex_doh"},
+      {"domain_suffix": ["ru", "xn--p1ai", "su"], "server": "yandex_doh"},
       {"server": "google_doh"}
     ]
   },
@@ -288,6 +288,14 @@
       "wizard_ui": "edit",
       "title": "Fallback delay",
       "tooltip": "Wait time when automatic detection fails"
+    },
+    {
+      "name": "tls_mixed_case_sni",
+      "type": "bool",
+      "default_value": "false",
+      "wizard_ui": "edit",
+      "title": "Mixed-case SNI",
+      "tooltip": "Randomize letter case in server_name (WwW.gOoGle.CoM). Bypasses simple exact-match DPI; ineffective against GFW-class filtering"
     }
   ],
 

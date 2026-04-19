@@ -3,21 +3,216 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
-import '../models/proxy_source.dart';
-import '../services/config_builder.dart';
-import '../services/node_parser.dart';
+import '../models/node_spec.dart';
+import '../models/server_list.dart';
+import '../models/subscription_meta.dart';
+import '../services/app_log.dart';
+import '../services/builder/build_config.dart';
+import '../services/parser/body_decoder.dart';
+import '../services/parser/ini_parser.dart';
+import '../services/parser/parse_all.dart';
+import '../services/parser/uri_parsers.dart';
+import '../services/parser/uri_utils.dart';
+import '../services/haptic_service.dart';
 import '../services/settings_storage.dart';
-import '../services/source_loader.dart';
+import '../services/subscription/auto_updater.dart';
+import '../services/subscription/http_cache.dart';
+import '../services/subscription/input_helpers.dart';
+import '../services/subscription/sources.dart';
 
-/// Manages subscriptions: add/remove/update, generates config.
+/// UI-обёртка вокруг `ServerList`. Хранит кэшированный nodeCount и статус.
+/// Делегирует мутации полей на wrapped список через `copyWith` + persist
+/// через контроллер.
+class SubscriptionEntry extends ChangeNotifier {
+  ServerList _list;
+  int nodeCount;
+  String status;
+
+  SubscriptionEntry({
+    required ServerList list,
+    int? nodeCount,
+    this.status = '',
+  })  : _list = list,
+        nodeCount = nodeCount ??
+            (list is SubscriptionServers ? list.lastNodeCount : list.nodes.length);
+
+  ServerList get list => _list;
+
+  String get id => _list.id;
+  String get name => _list.name;
+  bool get enabled => _list.enabled;
+  String get tagPrefix => _list.tagPrefix;
+  DetourPolicy get detourPolicy => _list.detourPolicy;
+  String get type => _list.type;
+
+  /// URL подписки (пусто для UserServers).
+  String get url => _list is SubscriptionServers ? (_list as SubscriptionServers).url : '';
+
+  /// Inline-URI строки (пусто для SubscriptionServers).
+  List<String> get connections {
+    if (_list is UserServers) {
+      final raw = (_list as UserServers).rawBody;
+      if (raw.isEmpty) return const [];
+      return raw
+          .split(RegExp(r'\r?\n'))
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    return const [];
+  }
+
+  DateTime? get lastUpdated =>
+      _list is SubscriptionServers ? (_list as SubscriptionServers).lastUpdated : null;
+
+  SubscriptionMeta? get meta =>
+      _list is SubscriptionServers ? (_list as SubscriptionServers).meta : null;
+
+  int get uploadBytes => meta?.uploadBytes ?? 0;
+  int get downloadBytes => meta?.downloadBytes ?? 0;
+  int get totalBytes => meta?.totalBytes ?? 0;
+  int get expireTimestamp => meta?.expireTimestamp ?? 0;
+  String get supportUrl => meta?.supportUrl ?? '';
+  String get webPageUrl => meta?.webPageUrl ?? '';
+  int get updateIntervalHours => _list is SubscriptionServers
+      ? (_list as SubscriptionServers).updateIntervalHours
+      : 0;
+
+  int get consecutiveFails => _list is SubscriptionServers
+      ? (_list as SubscriptionServers).consecutiveFails
+      : 0;
+
+  UpdateStatus get lastUpdateStatus => _list is SubscriptionServers
+      ? (_list as SubscriptionServers).lastUpdateStatus
+      : UpdateStatus.never;
+
+  /// Количество chained-детур узлов (⚙). В `nodeCount` они не включены,
+  /// потому что в списке `.nodes` детуры живут как поле `.chained` у
+  /// главного узла, не отдельным элементом.
+  int get detourCount =>
+      _list.nodes.where((n) => n.chained != null).length;
+
+  bool get registerDetourServers => detourPolicy.registerDetourServers;
+  bool get registerDetourInAuto => detourPolicy.registerDetourInAuto;
+  bool get useDetourServers => detourPolicy.useDetourServers;
+  String get overrideDetour => detourPolicy.overrideDetour;
+
+  static String formatAgo(DateTime dt) => _formatAgo(dt);
+
+  String get displayName {
+    if (name.isNotEmpty) return name;
+    if (url.isNotEmpty) {
+      final uri = Uri.tryParse(url);
+      if (uri != null && uri.host.isNotEmpty) return uri.host;
+      return url.length > 40 ? '${url.substring(0, 40)}…' : url;
+    }
+    if (_list.nodes.isNotEmpty) {
+      return _list.nodes.first.label.isNotEmpty
+          ? _list.nodes.first.label
+          : _list.nodes.first.tag;
+    }
+    final conns = connections;
+    if (conns.isNotEmpty) {
+      final c = conns.first;
+      if (c.startsWith('{')) {
+        final tagMatch = RegExp(r'"tag"\s*:\s*"([^"]+)"').firstMatch(c);
+        if (tagMatch != null) return tagMatch.group(1)!;
+      }
+      return c.length > 40 ? '${c.substring(0, 40)}...' : c;
+    }
+    return '(empty)';
+  }
+
+  String get subtitle {
+    final parts = <String>[];
+    if (status.isNotEmpty) parts.add(status);
+    if (lastUpdated != null) parts.add(_formatAgo(lastUpdated!));
+    return parts.join(' · ');
+  }
+
+  static String _formatAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  void _replaceList(ServerList next) {
+    _list = next;
+    notifyListeners();
+  }
+
+  // ─── UI-facing mutable setters (persist via controller.persistSources) ───
+  //
+  // Каждый setter мутирует обёрнутый ServerList через `copyWith` по типу.
+  // UI после каждого set должен вызвать `controller.persistSources()`, чтобы
+  // записать на диск. Так же было в v1 ProxySource-паттерне.
+
+  set name(String v) => _replaceList(_copy(name: v));
+  set enabled(bool v) => _replaceList(_copy(enabled: v));
+  set tagPrefix(String v) => _replaceList(_copy(tagPrefix: v));
+
+  /// Только для SubscriptionServers. Пользовательский override дефолта
+  /// `profile-update-interval` (24ч). AutoUpdater читает значение через
+  /// `updateIntervalHours` каждый раз при проверке — persist'им через
+  /// `controller.persistSources()` на стороне UI.
+  set updateIntervalHours(int v) {
+    final list = _list;
+    if (list is! SubscriptionServers) return;
+    final clamped = v < 1 ? 1 : v;
+    _replaceList(list.copyWith(updateIntervalHours: clamped));
+  }
+
+  set registerDetourServers(bool v) =>
+      _replaceList(_copy(detourPolicy: detourPolicy.copyWith(registerDetourServers: v)));
+  set registerDetourInAuto(bool v) =>
+      _replaceList(_copy(detourPolicy: detourPolicy.copyWith(registerDetourInAuto: v)));
+  set useDetourServers(bool v) =>
+      _replaceList(_copy(detourPolicy: detourPolicy.copyWith(useDetourServers: v)));
+  set overrideDetour(String v) =>
+      _replaceList(_copy(detourPolicy: detourPolicy.copyWith(overrideDetour: v)));
+
+  ServerList _copy({
+    String? name,
+    bool? enabled,
+    String? tagPrefix,
+    DetourPolicy? detourPolicy,
+  }) {
+    if (_list is SubscriptionServers) {
+      return (_list as SubscriptionServers).copyWith(
+        name: name,
+        enabled: enabled,
+        tagPrefix: tagPrefix,
+        detourPolicy: detourPolicy,
+      );
+    }
+    return (_list as UserServers).copyWith(
+      name: name,
+      enabled: enabled,
+      tagPrefix: tagPrefix,
+      detourPolicy: detourPolicy,
+    );
+  }
+}
+
+/// Основной контроллер подписок. Владеет `List<ServerList>`, делает
+/// fetch/parse через `parseFromSource`, собирает конфиг через `buildConfig`.
 class SubscriptionController extends ChangeNotifier {
   List<SubscriptionEntry> _entries = [];
   List<SubscriptionEntry> get entries => _entries;
 
+  /// AutoUpdater устанавливается внешним кодом (HomeScreen) после construction —
+  /// конструкторы циклические (AutoUpdater хочет controller, controller хочет
+  /// updater для ручного resetFailCount). Optional — контроллер работает и без.
+  AutoUpdater? _autoUpdater;
+  void bindAutoUpdater(AutoUpdater u) {
+    _autoUpdater = u;
+  }
+
   bool _busy = false;
   bool get busy => _busy;
 
-  /// Set when sources/settings change and config needs rebuild.
   bool configDirty = false;
 
   String _lastError = '';
@@ -30,12 +225,57 @@ class SubscriptionController extends ChangeNotifier {
   String? get lastGeneratedConfig => _lastGeneratedConfig;
 
   Future<void> init() async {
-    final sources = await SettingsStorage.getProxySources();
-    _entries = sources.map((s) => SubscriptionEntry(source: s)).toList();
+    final lists = await SettingsStorage.getServerLists();
+    _entries = lists.map((l) => SubscriptionEntry(list: l)).toList();
+    // Если app был убит во время fetch'а, status=inProgress остаётся
+    // на диске и залочит подписку навсегда (guard в _fetchEntryByRef).
+    // Sweep: inProgress → failed. lastUpdateAttempt сохраняем — min-retry
+    // 15 мин продолжит работать.
+    var swept = false;
+    for (var i = 0; i < _entries.length; i++) {
+      final l = _entries[i].list;
+      if (l is SubscriptionServers &&
+          l.lastUpdateStatus == UpdateStatus.inProgress) {
+        _entries[i]._replaceList(
+            l.copyWith(lastUpdateStatus: UpdateStatus.failed));
+        swept = true;
+      }
+    }
+    if (swept) await _persist();
+    notifyListeners();
+    // Восстанавливаем узлы из кэша тел HTTP-подписок — офлайн доступ.
+    // Без этого после перезапуска app узлы пропадали, пока пользователь
+    // вручную не нажимал refresh.
+    unawaited(_rehydrateFromCache());
+  }
+
+  Future<void> _rehydrateFromCache() async {
+    for (var i = 0; i < _entries.length; i++) {
+      final list = _entries[i].list;
+      if (list is! SubscriptionServers) continue;
+      if (list.nodes.isNotEmpty) continue;
+      final body = await HttpCache.loadBody(list.url);
+      if (body == null || body.isEmpty) continue;
+      try {
+        final decoded = decode(body);
+        final nodes = parseAll(decoded);
+        if (nodes.isEmpty) continue;
+        final next = list.copyWith(nodes: nodes, lastNodeCount: nodes.length);
+        _entries[i]._replaceList(next);
+        final detours = nodes.where((n) => n.chained != null).length;
+        _entries[i].nodeCount = nodes.length;
+        _entries[i].status = detours > 0
+            ? '${nodes.length} +$detours⚙ nodes (cached)'
+            : '${nodes.length} nodes (cached)';
+        AppLog.I.info(
+            'Re-hydrated ${nodes.length} nodes from cache: ${list.url.length > 60 ? "${list.url.substring(0, 60)}…" : list.url}');
+      } catch (e) {
+        AppLog.I.warning('Re-hydrate failed for ${list.url}: $e');
+      }
+    }
     notifyListeners();
   }
 
-  /// Adds a subscription URL or direct link from user input.
   Future<void> addFromInput(String input) async {
     final trimmed = input.trim();
     if (trimmed.isEmpty) return;
@@ -43,33 +283,65 @@ class SubscriptionController extends ChangeNotifier {
     _busy = true;
     _lastError = '';
     notifyListeners();
+    AppLog.I.info('addFromInput: ${trimmed.length > 60 ? "${trimmed.substring(0, 60)}…" : trimmed}');
 
     try {
-      if (NodeParser.isSubscriptionURL(trimmed)) {
-        final entry = SubscriptionEntry(
-          source: ProxySource(source: trimmed),
+      if (isSubscriptionUrl(trimmed)) {
+        final list = SubscriptionServers(
+          id: newUuidV4(),
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          url: trimmed,
         );
-        _entries.add(entry);
-        await _persistSources();
-        // Fetch immediately to show node count
+        _entries.add(SubscriptionEntry(list: list));
+        await _persist();
         await _fetchEntry(_entries.length - 1);
-      } else if (NodeParser.isWireGuardConfig(trimmed)) {
-        final uri = NodeParser.wireGuardConfigToUri(trimmed);
-        final entry = SubscriptionEntry(
-          source: ProxySource(connections: [uri]),
+      } else if (isWireGuardConfig(trimmed)) {
+        final spec = parseWireguardIni(trimmed);
+        if (spec == null) {
+          _lastError = 'Invalid WireGuard config';
+          return;
+        }
+        _entries.add(SubscriptionEntry(
+          list: UserServers(
+            id: newUuidV4(),
+            name: '',
+            enabled: true,
+            tagPrefix: '',
+            detourPolicy: DetourPolicy.defaults,
+            origin: UserSource.paste,
+            createdAt: DateTime.now(),
+            rawBody: spec.rawUri,
+            nodes: [spec],
+          ),
           nodeCount: 1,
           status: 'WireGuard config',
-        );
-        _entries.add(entry);
-        await _persistSources();
-      } else if (NodeParser.isDirectLink(trimmed)) {
-        final entry = SubscriptionEntry(
-          source: ProxySource(connections: [trimmed]),
+        ));
+        await _persist();
+      } else if (isDirectLink(trimmed)) {
+        final spec = parseUri(trimmed);
+        if (spec == null) {
+          _lastError = 'Could not parse direct link';
+          return;
+        }
+        _entries.add(SubscriptionEntry(
+          list: UserServers(
+            id: newUuidV4(),
+            name: '',
+            enabled: true,
+            tagPrefix: '',
+            detourPolicy: DetourPolicy.defaults,
+            origin: UserSource.paste,
+            createdAt: DateTime.now(),
+            rawBody: trimmed,
+            nodes: [spec],
+          ),
           nodeCount: 1,
           status: 'Direct link',
-        );
-        _entries.add(entry);
-        await _persistSources();
+        ));
+        await _persist();
       } else if (_isJsonOutbound(trimmed)) {
         await _addJsonOutbounds(trimmed);
       } else {
@@ -88,9 +360,12 @@ class SubscriptionController extends ChangeNotifier {
     if (!text.contains('"type"')) return false;
     try {
       final parsed = jsonDecode(text);
-      if (parsed is Map<String, dynamic> && parsed.containsKey('type')) return true;
+      if (parsed is Map<String, dynamic>) {
+        return parsed.containsKey('type');
+      }
       if (parsed is List && parsed.isNotEmpty) {
-        return parsed.first is Map<String, dynamic> && (parsed.first as Map).containsKey('type');
+        return parsed.first is Map<String, dynamic> &&
+            (parsed.first as Map).containsKey('type');
       }
     } catch (_) {}
     return false;
@@ -109,40 +384,68 @@ class SubscriptionController extends ChangeNotifier {
       return;
     }
 
-    // Each outbound is a separate entry in the list
+    // Each JSON outbound → own UserServers entry (v1 behavior parity).
     for (final ob in outbounds) {
+      final decoded = decode(jsonEncode(ob));
+      final nodes = parseAll(decoded);
+      if (nodes.isEmpty) continue;
       _entries.add(SubscriptionEntry(
-        source: ProxySource(connections: [jsonEncode(ob)]),
-        nodeCount: 1,
+        list: UserServers(
+          id: newUuidV4(),
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          origin: UserSource.paste,
+          createdAt: DateTime.now(),
+          rawBody: jsonEncode(ob),
+          nodes: nodes,
+        ),
+        nodeCount: nodes.length,
         status: 'JSON outbound',
       ));
     }
-    await _persistSources();
+    await _persist();
   }
 
   Future<void> removeAt(int index) async {
     if (index < 0 || index >= _entries.length) return;
     _entries.removeAt(index);
-    await _persistSources();
+    await _persist();
     notifyListeners();
   }
 
   Future<void> renameAt(int index, String name) async {
     if (index < 0 || index >= _entries.length) return;
-    _entries[index].source.name = name;
-    await _persistSources();
+    _entries[index]._replaceList(_renameList(_entries[index].list, name));
+    await _persist();
     notifyListeners();
   }
 
   Future<void> updateAt(int index) async {
     if (index < 0 || index >= _entries.length) return;
-    await _fetchEntry(index);
+    final list = _entries[index].list;
+    // Сбрасываем session fail-count для этой подписки — ручной refresh =
+    // осознанное действие юзера, замороженная подписка должна разморозиться.
+    if (list is SubscriptionServers) {
+      _autoUpdater?.resetFailCount(list.url);
+    }
+    await _fetchEntry(index, trigger: UpdateTrigger.manual);
+  }
+
+  /// Публичный refresh для AutoUpdater. Помечает попытку
+  /// (`lastUpdateAttempt` + `lastUpdateStatus`) и персистит, чтобы триггер #1
+  /// (app start) после рестарта мог принять решение.
+  Future<void> refreshEntry(SubscriptionEntry entry,
+      {UpdateTrigger? trigger}) async {
+    await _fetchEntryByRef(entry, trigger: trigger);
   }
 
   Future<void> toggleAt(int index) async {
     if (index < 0 || index >= _entries.length) return;
-    _entries[index].source.enabled = !_entries[index].source.enabled;
-    await _persistSources();
+    _entries[index]._replaceList(
+        _toggleEnabled(_entries[index].list, !_entries[index].enabled));
+    await _persist();
     notifyListeners();
   }
 
@@ -151,11 +454,20 @@ class SubscriptionController extends ChangeNotifier {
     if (to < 0 || to >= _entries.length) return;
     final entry = _entries.removeAt(from);
     _entries.insert(to, entry);
-    await _persistSources();
+    await _persist();
     notifyListeners();
   }
 
-  /// Fetches all subscriptions and regenerates config.
+  /// Замена `entry.list` на новый ServerList (для экранов, меняющих политику
+  /// или tagPrefix). Сам ServerList immutable; вызывающий строит новый через
+  /// `copyWith` на subscription/user-обёртке.
+  Future<void> replaceList(int index, ServerList next) async {
+    if (index < 0 || index >= _entries.length) return;
+    _entries[index]._replaceList(next);
+    await _persist();
+    notifyListeners();
+  }
+
   Future<String?> updateAllAndGenerate() async {
     _busy = true;
     _lastError = '';
@@ -164,26 +476,19 @@ class SubscriptionController extends ChangeNotifier {
 
     try {
       for (var i = 0; i < _entries.length; i++) {
-        if (!_entries[i].source.enabled) continue;
-        if (_entries[i].source.source.isNotEmpty &&
-            NodeParser.isSubscriptionURL(_entries[i].source.source)) {
+        if (!_entries[i].enabled) continue;
+        if (_entries[i].list is SubscriptionServers &&
+            (_entries[i].list as SubscriptionServers).url.isNotEmpty) {
           await _fetchEntry(i);
         }
       }
-
       _progressMessage = 'Generating config...';
       notifyListeners();
 
-      final config = await ConfigBuilder.generateConfig(
-        onProgress: (p, msg) {
-          _progressMessage = msg;
-          notifyListeners();
-        },
-      );
-
+      final config = await _generate();
       _lastGeneratedConfig = config;
       _progressMessage = '';
-      configDirty = false; // rebuild clears dirty
+      configDirty = false;
       await SettingsStorage.setLastGlobalUpdate(DateTime.now());
       return config;
     } catch (e) {
@@ -196,19 +501,12 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
-  /// Generates config without re-fetching subscriptions.
   Future<String?> generateConfig() async {
     _busy = true;
     _lastError = '';
     notifyListeners();
-
     try {
-      final config = await ConfigBuilder.generateConfig(
-        onProgress: (p, msg) {
-          _progressMessage = msg;
-          notifyListeners();
-        },
-      );
+      final config = await _generate();
       _lastGeneratedConfig = config;
       configDirty = false;
       return config;
@@ -222,51 +520,148 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
-  Future<void> _fetchEntry(int index) async {
-    final entry = _entries[index];
+  Future<String> _generate() async {
+    AppLog.I.info('Generating config...');
+    _progressMessage = 'Building config...';
+    notifyListeners();
+
+    final settings = BuildSettings(
+      userVars: await SettingsStorage.getAllVars(),
+      enabledRules: await SettingsStorage.getEnabledRules(),
+      enabledGroups: await SettingsStorage.getEnabledGroups(),
+      excludedNodes: await SettingsStorage.getExcludedNodes(),
+      ruleOutbounds: await SettingsStorage.getRuleOutbounds(),
+      appRules: await SettingsStorage.getAppRules(),
+      routeFinal: await SettingsStorage.getRouteFinal(),
+    );
+
+    final lists = _entries.map((e) => e.list).toList();
+    final result = await buildConfig(lists: lists, settings: settings);
+
+    // Записываем обратно то, что buildConfig сгенерил (clash_api/secret на
+    // первом запуске). GUI не обязано знать про этот механизм — достаточно
+    // пройти по `generatedVars` и сохранить.
+    for (final e in result.generatedVars.entries) {
+      await SettingsStorage.setVar(e.key, e.value);
+    }
+
+    final outs = (result.config['outbounds'] as List?)?.length ?? 0;
+    final eps = (result.config['endpoints'] as List?)?.length ?? 0;
+    AppLog.I.info('Config built: $outs outbounds + $eps endpoints, ${lists.length} lists');
+    if (result.validation.hasFatal) {
+      for (final issue in result.validation.fatal) {
+        AppLog.I.error('Validation: ${issue.message}');
+      }
+    }
+    for (final w in result.emitWarnings) {
+      AppLog.I.warning(w);
+    }
+    return result.configJson;
+  }
+
+  Future<void> _fetchEntry(int index, {UpdateTrigger? trigger}) async {
+    if (index < 0 || index >= _entries.length) return;
+    await _fetchEntryByRef(_entries[index], trigger: trigger);
+  }
+
+  /// Fetch по ссылке на entry, а не индексу. Защищает от race conditions:
+  /// если между добавлением entry и `await _persist` подмешался ещё один
+  /// `addFreeList` / `addFromInput`, индекс уже сместился, но ссылка валидна.
+  ///
+  /// Записывает `lastUpdateAttempt` (всегда) и `lastUpdateStatus` (ok|failed)
+  /// в `SubscriptionServers` и сразу персистит — чтобы AutoUpdater после
+  /// рестарта app не пытался обновить ту же подписку через 5 секунд.
+  Future<void> _fetchEntryByRef(SubscriptionEntry entry,
+      {UpdateTrigger? trigger}) async {
+    final list = entry.list;
+    if (list is! SubscriptionServers) return;
+
+    // Дедупликация: если предыдущий fetch этой же подписки ещё идёт
+    // (ручной refresh нажали 2 раза подряд, или manual + триггер совпали),
+    // не стартуем второй HTTP. Guard снимается по успеху/фейлу в том же
+    // вызове (status→ok|failed). Crash-safe: init() sweep чистит зависший
+    // inProgress.
+    if (list.lastUpdateStatus == UpdateStatus.inProgress) {
+      AppLog.I.debug('Fetch skipped — already inProgress: ${list.url}');
+      return;
+    }
+
+    final shortUrl = list.url.length > 60 ? '${list.url.substring(0, 60)}…' : list.url;
+    final triggerName = trigger?.name ?? 'manual';
+    AppLog.I.info('Fetching subscription [$triggerName]: $shortUrl');
+    final attemptAt = DateTime.now();
     try {
       entry.status = 'Fetching...';
+      // Помечаем попытку до начала fetch'а, чтобы при крэше app
+      // (или kill процесса) AutoUpdater всё равно увидел, что мы пробовали.
+      entry._replaceList(list.copyWith(
+        lastUpdateAttempt: attemptAt,
+        lastUpdateStatus: UpdateStatus.inProgress,
+      ));
+      await _persist();
       notifyListeners();
 
-      final tagCounts = <String, int>{};
-      final result = await SourceLoader.loadNodesWithMeta(
-        entry.source,
-        tagCounts,
-        sourceIndex: index,
-        totalSources: _entries.length,
-      );
+      final result = await parseFromSource(UrlSource(list.url));
+      // Кешируем сырое тело и заголовки на диск для офлайн-реактивации после
+      // перезапуска (см. `_rehydrateFromCache`) и для Source-вкладки (fallback).
+      unawaited(HttpCache.save(list.url, result.rawBody, result.headers));
+      AppLog.I.info(
+          'Fetched ${result.nodes.length} nodes from $shortUrl'
+          '${result.meta?.profileTitle == null ? "" : " (title: ${result.meta!.profileTitle})"}');
+      final warnNodes = result.nodes.where((n) => n.warnings.isNotEmpty).length;
+      if (warnNodes > 0) {
+        AppLog.I.warning('$warnNodes nodes with warnings (XHTTP fallback etc.)');
+      }
       entry.nodeCount = result.nodes.length;
-      entry.source.lastUpdated = DateTime.now();
-      entry.source.lastNodeCount = result.nodes.length;
-      entry.status = '${result.nodes.length} nodes';
-      // Use profile-title from HTTP headers as default name if not set
-      if (entry.source.name.isEmpty && result.profileTitle != null) {
-        entry.source.name = result.profileTitle!;
-      }
-      // Store subscription metadata from HTTP headers
-      if (result.userInfo != null) {
-        entry.source.uploadBytes = result.userInfo!.upload;
-        entry.source.downloadBytes = result.userInfo!.download;
-        entry.source.totalBytes = result.userInfo!.total;
-        entry.source.expireTimestamp = result.userInfo!.expire;
-      }
-      if (result.supportUrl != null) entry.source.supportUrl = result.supportUrl!;
-      if (result.webPageUrl != null) entry.source.webPageUrl = result.webPageUrl!;
-      if (result.updateIntervalHours != null && result.updateIntervalHours! > 0) {
-        entry.source.updateIntervalHours = result.updateIntervalHours!;
-      }
-      await _persistSources();
+      final detours = result.nodes.where((n) => n.chained != null).length;
+      entry.status = detours > 0
+          ? '${result.nodes.length} +$detours⚙ nodes'
+          : '${result.nodes.length} nodes';
+
+      final current = entry.list as SubscriptionServers;
+      final nextName = current.name.isEmpty && result.meta?.profileTitle != null
+          ? result.meta!.profileTitle!
+          : current.name;
+
+      final next = current.copyWith(
+        name: nextName,
+        meta: result.meta,
+        lastUpdated: DateTime.now(),
+        lastUpdateAttempt: attemptAt,
+        lastUpdateStatus: UpdateStatus.ok,
+        lastNodeCount: result.nodes.length,
+        consecutiveFails: 0,
+        updateIntervalHours: result.meta?.updateIntervalHours ??
+            current.updateIntervalHours,
+        nodes: result.nodes,
+      );
+      entry._replaceList(next);
+      await _persist();
+      // Haptic только на user-инициированные fetch'и — auto/periodic тихие.
+      if (trigger == UpdateTrigger.manual) HapticService.I.onFetchSuccess();
     } catch (e) {
-      // Keep cached data — only update status to show the error
+      AppLog.I.error('Fetch failed for $shortUrl: $e');
       entry.status = entry.nodeCount > 0
           ? '${entry.nodeCount} nodes (update failed)'
           : 'Error: $e';
+      // Записываем factual fail-статус: nodes/lastUpdated сохраняем
+      // (последнее успешное состояние), но lastUpdateAttempt + status=failed
+      // обновляем — чтобы AutoUpdater видел fail и считал в `_failCounts`.
+      final current = entry.list;
+      if (current is SubscriptionServers) {
+        entry._replaceList(current.copyWith(
+          lastUpdateAttempt: attemptAt,
+          lastUpdateStatus: UpdateStatus.failed,
+          consecutiveFails: current.consecutiveFails + 1,
+        ));
+        await _persist();
+      }
+      if (trigger == UpdateTrigger.manual) HapticService.I.onFetchError();
     }
     notifyListeners();
   }
 
-  /// Applies the built-in "Get Free VPN" preset: adds sources, sets rules, generates config.
-  /// Adds a single free VPN list by source URL and tag prefix.
+  /// Добавляет подписку по пресету "Get Free VPN" и сразу генерит конфиг.
   Future<String?> addFreeList(String source, String tagPrefix) async {
     _busy = true;
     _lastError = '';
@@ -275,24 +670,23 @@ class SubscriptionController extends ChangeNotifier {
 
     try {
       final entry = SubscriptionEntry(
-        source: ProxySource(source: source, tagPrefix: tagPrefix),
+        list: SubscriptionServers(
+          id: newUuidV4(),
+          name: '',
+          enabled: true,
+          tagPrefix: tagPrefix,
+          detourPolicy: DetourPolicy.defaults,
+          url: source,
+        ),
       );
       _entries.add(entry);
-      await _persistSources();
-
+      await _persist();
       _progressMessage = 'Fetching...';
       notifyListeners();
-      await _fetchEntry(_entries.length - 1);
-
+      await _fetchEntryByRef(entry);
       _progressMessage = 'Generating config...';
       notifyListeners();
-
-      final config = await ConfigBuilder.generateConfig(
-        onProgress: (p, msg) {
-          _progressMessage = msg;
-          notifyListeners();
-        },
-      );
+      final config = await _generate();
       _lastGeneratedConfig = config;
       return config;
     } catch (e) {
@@ -307,62 +701,45 @@ class SubscriptionController extends ChangeNotifier {
 
   Future<void> persistSources() async {
     configDirty = true;
-    await _persistSources();
+    await _persist();
   }
 
+  /// Обновляет inline-узлы `UserServers` из нового списка URI/JSON строк.
   Future<void> updateConnectionAt(int index, List<String> connections) async {
     if (index < 0 || index >= _entries.length) return;
-    final old = _entries[index].source;
-    _entries[index] = SubscriptionEntry(
-      source: ProxySource(
-        connections: connections,
-        tagPrefix: old.tagPrefix,
-        name: old.name,
-        enabled: old.enabled,
-      ),
-      nodeCount: connections.length,
-      status: 'JSON outbound',
+    final list = _entries[index].list;
+    if (list is! UserServers) return;
+
+    final nodes = <NodeSpec>[];
+    for (final c in connections) {
+      final decoded = decode(c);
+      nodes.addAll(parseAll(decoded));
+    }
+    final next = list.copyWith(
+      rawBody: connections.join('\n'),
+      nodes: nodes,
     );
-    await _persistSources();
+    _entries[index]._replaceList(next);
+    _entries[index].nodeCount = nodes.length;
+    _entries[index].status = 'JSON outbound';
+    await _persist();
     notifyListeners();
   }
 
-  Future<void> _persistSources() async {
+  Future<void> _persist() async {
     if (!_busy) configDirty = true;
-    await SettingsStorage.saveProxySources(
-      _entries.map((e) => e.source).toList(),
-    );
-  }
-}
-
-/// UI-visible entry for a subscription.
-class SubscriptionEntry {
-  SubscriptionEntry({
-    required this.source,
-    int? nodeCount,
-    this.status = '',
-  }) : nodeCount = nodeCount ?? source.lastNodeCount;
-
-  final ProxySource source;
-  int nodeCount;
-  String status;
-
-  String get displayName => source.displayName;
-
-  String get subtitle {
-    final parts = <String>[];
-    if (status.isNotEmpty) parts.add(status);
-    if (source.lastUpdated != null) {
-      parts.add(formatAgo(source.lastUpdated!));
-    }
-    return parts.join(' · ');
+    await SettingsStorage.saveServerLists(_entries.map((e) => e.list).toList());
   }
 
-  static String formatAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
+  ServerList _renameList(ServerList l, String name) {
+    if (l is SubscriptionServers) return l.copyWith(name: name);
+    if (l is UserServers) return l.copyWith(name: name);
+    return l;
+  }
+
+  ServerList _toggleEnabled(ServerList l, bool enabled) {
+    if (l is SubscriptionServers) return l.copyWith(enabled: enabled);
+    if (l is UserServers) return l.copyWith(enabled: enabled);
+    return l;
   }
 }

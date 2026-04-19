@@ -5,9 +5,10 @@ import 'package:flutter/material.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/parser_config.dart';
-import '../services/config_builder.dart';
+import '../services/app_log.dart';
 import '../services/rule_set_downloader.dart';
 import '../services/settings_storage.dart';
+import '../services/template_loader.dart';
 import 'app_picker_screen.dart';
 
 class RoutingScreen extends StatefulWidget {
@@ -55,7 +56,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
   }
 
   Future<void> _load() async {
-    final template = await ConfigBuilder.loadTemplate();
+    final template = await TemplateLoader.load();
     final storedRules = await SettingsStorage.getEnabledRules();
     final storedGroups = await SettingsStorage.getEnabledGroups();
     final storedOutbounds = await SettingsStorage.getRuleOutbounds();
@@ -274,29 +275,36 @@ class _RoutingScreenState extends State<RoutingScreen> {
           Row(
             children: [
               switchWidget,
-              const SizedBox(width: 8),
-              Expanded(child: Text(rule.label)),
               if (hasSrs)
-                Tooltip(
-                  message: switch (_ruleSetStatus[rule.label]) {
-                    'cached' => 'Rule set downloaded',
-                    'failed' => 'Rule set download failed',
-                    _ => 'Requires rule set download',
+                IconButton(
+                  iconSize: 18,
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
+                  tooltip: switch (_ruleSetStatus[rule.label]) {
+                    'cached' => 'Загружено — нажми для повторной загрузки',
+                    'failed' => 'Ошибка загрузки — нажми чтобы повторить',
+                    _ => 'Загрузить rule-set',
                   },
-                  child: Icon(
+                  icon: Icon(
                     switch (_ruleSetStatus[rule.label]) {
                       'cached' => Icons.cloud_done_outlined,
                       'failed' => Icons.cloud_off_outlined,
                       _ => Icons.cloud_download_outlined,
                     },
-                    size: 16,
                     color: switch (_ruleSetStatus[rule.label]) {
                       'cached' => Colors.green,
                       'failed' => Theme.of(context).colorScheme.error,
                       _ => Theme.of(context).colorScheme.onSurfaceVariant,
                     },
                   ),
-                ),
+                  onPressed: _downloadingRules.contains(rule.label)
+                      ? null
+                      : () => unawaited(_downloadRuleSets(rule)),
+                )
+              else
+                const SizedBox(width: 8),
+              Expanded(child: Text(rule.label)),
               if (hasOutbound) ...[
                 const SizedBox(width: 8),
                 SizedBox(
@@ -365,37 +373,57 @@ class _RoutingScreenState extends State<RoutingScreen> {
   }
 
   Future<void> _enableRuleWithDownload(SelectableRule rule) async {
-    setState(() => _downloadingRules.add(rule.label));
-
-    // Pre-download all remote SRS rule sets for this rule
-    var allOk = true;
-    for (final rs in rule.ruleSets) {
-      final tag = rs['tag'] as String?;
-      final url = rs['url'] as String?;
-      if (tag == null || url == null || rs['type'] != 'remote') continue;
-      final path = await RuleSetDownloader.ensureCached(tag, url);
-      if (path == null) {
-        allOk = false;
-      }
-    }
-
+    final ok = await _downloadRuleSets(rule);
     if (!mounted) return;
-
-    if (allOk) {
+    if (ok) {
       setState(() {
         _enabledRules.add(rule.label);
-        _downloadingRules.remove(rule.label);
         _scheduleSave();
       });
-    } else {
-      setState(() => _downloadingRules.remove(rule.label));
+    }
+  }
+
+  /// Качает все rule-sets правила параллельно. Обновляет `_ruleSetStatus`
+  /// (`cached` / `failed`) и пишет в AppLog каждый attempt/fail.
+  /// Возвращает true если все успешны.
+  Future<bool> _downloadRuleSets(SelectableRule rule) async {
+    setState(() => _downloadingRules.add(rule.label));
+    AppLog.I.info('Rule-set download started: ${rule.label}');
+
+    final remoteSets = rule.ruleSets
+        .where((rs) =>
+            rs['type'] == 'remote' && rs['tag'] != null && rs['url'] != null)
+        .toList();
+
+    // Параллельно — N таймаутов по 30s выполняются одновременно (суммарно ≤ 30s).
+    final results = await Future.wait(remoteSets.map((rs) async {
+      final tag = rs['tag'] as String;
+      final url = rs['url'] as String;
+      final path = await RuleSetDownloader.ensureCached(tag, url);
+      if (path == null) {
+        AppLog.I.error('Rule-set fail: $tag ← $url');
+      } else {
+        AppLog.I.debug('Rule-set ok: $tag');
+      }
+      return path != null;
+    }));
+    final allOk = results.isEmpty ? true : results.every((v) => v);
+
+    if (!mounted) return allOk;
+    setState(() {
+      _downloadingRules.remove(rule.label);
+      _ruleSetStatus[rule.label] = allOk ? 'cached' : 'failed';
+    });
+    if (!allOk) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to download rule sets for "${rule.label}". Check internet.'),
+          content: Text(
+              'Не удалось загрузить rule-sets для "${rule.label}". Проверь интернет.'),
           duration: const Duration(seconds: 4),
         ),
       );
     }
+    return allOk;
   }
 
   void _addAppRule() {

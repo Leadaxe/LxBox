@@ -1,0 +1,2 @@
+# Triggers UnsupportedTransportWarning('xhttp', 'httpupgrade').
+vless://11111111-2222-3333-4444-555555555555@example-4.com:443?type=xhttp&security=tls&path=%2Fxh&host=example-4.com&sni=example-4.com#VLESS%20XHTTP

@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
-import '../services/config_builder.dart';
+import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
 
 class DnsSettingsScreen extends StatefulWidget {
@@ -49,7 +49,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
   }
 
   Future<void> _load() async {
-    final template = await ConfigBuilder.loadTemplate();
+    final template = await TemplateLoader.load();
     final userServers = await SettingsStorage.getDnsServers();
     final rulesJson = await SettingsStorage.getDnsRules();
     final vars = await SettingsStorage.getAllVars();

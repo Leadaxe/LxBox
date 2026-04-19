@@ -20,8 +20,10 @@ import 'stats_screen.dart';
 import 'routing_screen.dart';
 import 'settings_screen.dart';
 import 'subscriptions_screen.dart';
-import '../services/config_builder.dart';
+import '../services/haptic_service.dart';
+import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
+import '../services/subscription/auto_updater.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,10 +35,20 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, TickerProviderStateMixin {
   late final HomeController _controller;
   late final SubscriptionController _subController;
+  late final AutoUpdater _autoUpdater;
   late final AnimationController _connectingAnim;
   bool _showDetourNodes = true;
   bool _autoRebuild = true;
-  bool _needsRestart = false;
+  /// Derived UI flag. True когда:
+  /// (а) `state.configStaleSinceStart` (sticky-флаг в HomeState: saveConfig
+  ///     происходил при tunnelUp, сбрасывается на up↔down переходах), или
+  /// (б) `_subController.configDirty` при tunnelUp (settings изменены,
+  ///     конфиг ещё не пересобран).
+  bool get _needsRestart {
+    final state = _controller.state;
+    if (!state.tunnelUp) return false;
+    return state.configStaleSinceStart || _subController.configDirty;
+  }
   Timer? _errorTimer;
   String _errorTimerFor = '';
 
@@ -44,16 +56,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _controller = HomeController();
-    // _errorTimer будет отменён в dispose()
+    // Порядок: subController first → AutoUpdater видит entries,
+    // HomeController holds AutoUpdater для VPN-transitions callback.
     _subController = SubscriptionController();
+    _autoUpdater = AutoUpdater(_subController);
+    _subController.bindAutoUpdater(_autoUpdater);
+    _controller = HomeController(autoUpdater: _autoUpdater);
     _connectingAnim = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     );
     unawaited(_controller.init());
-    unawaited(_subController.init());
+    unawaited(_initSubsAndAutoUpdate());
     unawaited(_loadAutoRebuild());
+    unawaited(_loadHapticPref());
+  }
+
+  /// init подписок + затем `start()` AutoUpdater'а (триггер #1 appStart
+  /// и заведение periodic-таймера на 1 час). Порядок важен — AutoUpdater
+  /// итерирует `entries`, они должны быть загружены с диска.
+  Future<void> _initSubsAndAutoUpdate() async {
+    await _subController.init();
+    _autoUpdater.start();
+  }
+
+  Future<void> _loadHapticPref() async {
+    await HapticService.I.loadFromPrefs();
   }
 
   Future<void> _loadAutoRebuild() async {
@@ -64,6 +92,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   @override
   void dispose() {
     _errorTimer?.cancel();
+    _autoUpdater.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -134,6 +163,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               onTap: () => _pushRoute(SubscriptionsScreen(
                 subController: _subController,
                 homeController: _controller,
+                autoUpdater: _autoUpdater,
               )),
             ),
             ListTile(
@@ -196,7 +226,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               leading: const Icon(Icons.bug_report_outlined),
               title: const Text('Debug'),
               subtitle: const Text('Last 100 events'),
-              onTap: () => _pushRoute(DebugScreen(controller: _controller)),
+              onTap: () => _pushRoute(const DebugScreen()),
             ),
             const Divider(),
             ListTile(
@@ -233,7 +263,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               FilledButton.icon(
                 onPressed: toggleEnabled
                     ? () {
-                        _needsRestart = false;
+                        HapticService.I.onConnectTap();
                         if (state.tunnelUp) {
                           _confirmStop(state);
                         } else {
@@ -299,10 +329,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           if (_needsRestart && state.tunnelUp) ...[
             const SizedBox(height: 8),
             GestureDetector(
-              onTap: () {
-                _needsRestart = false;
-                _confirmStop(_controller.state);
-              },
+              // Не гасим `_needsRestart` на тап — если юзер отменит Stop-диалог,
+              // banner должен остаться. Гаснет только реальным tunnel up↔down.
+              onTap: () => _confirmStop(_controller.state),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
@@ -559,23 +588,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   }
 
   Future<void> _startWithAutoRefresh() async {
-    if (_subController.entries.isNotEmpty) {
-      try {
-        final template = await ConfigBuilder.loadTemplate();
-        final shouldRefresh = await SettingsStorage.shouldRefreshSubscriptions(
-          template.parserConfig.reload,
-        );
-        if (shouldRefresh) {
-          final config = await _subController.updateAllAndGenerate();
-          if (config != null && mounted) {
-            await _controller.saveParsedConfig(config);
-            await SettingsStorage.setLastGlobalUpdate(DateTime.now());
-          }
-        }
-      } catch (_) {
-        // Non-blocking: if refresh fails, start with existing config
-      }
-    }
+    // Обновление подписок теперь через AutoUpdater (см. services/subscription/
+    // auto_updater.dart) — 4 триггера, общая логика. При Start никакого
+    // синхронного HTTP-fetch'а не делаем: если подписки протухли, trigger 2
+    // (VPN connected + 2 мин) подтянет их через туннель.
     await _controller.start();
     // Show diagnostic if start failed
     if (mounted && _controller.state.lastError.isNotEmpty && !_controller.state.tunnelUp) {
@@ -696,15 +712,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   }
 
   Future<void> _rebuildConfig() async {
-    final config = await _subController.updateAllAndGenerate();
+    // Только пересборка конфига — без HTTP-fetch'а подписок. За fetch
+    // отвечает AutoUpdater (по 4 триггерам) и manual ⟳ на Servers.
+    final config = await _subController.generateConfig();
     if (!mounted) return;
     if (config != null) {
       final ok = await _controller.saveParsedConfig(config);
       if (ok && mounted) {
         final nodeCount = _countNodesInConfig(config);
-        if (_controller.state.tunnelUp) {
-          setState(() => _needsRestart = true);
-        }
+        // configStaleSinceStart выставляется внутри saveParsedConfig,
+        // AnimatedBuilder переотрисует через _needsRestart getter.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -717,7 +734,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   }
 
   Future<void> _showPingSettings() async {
-    final template = await ConfigBuilder.loadTemplate();
+    final template = await TemplateLoader.load();
     final pingOpts = template.pingOptions;
     final presets = (pingOpts['presets'] as List<dynamic>? ?? [])
         .whereType<Map<String, dynamic>>()

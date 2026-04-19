@@ -1,67 +1,84 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../controllers/home_controller.dart';
-import '../models/home_state.dart';
+import '../models/debug_entry.dart';
+import '../services/app_log.dart';
+import '../services/dump_builder.dart';
 
 class DebugScreen extends StatefulWidget {
-  const DebugScreen({super.key, required this.controller});
-
-  final HomeController controller;
+  const DebugScreen({super.key});
 
   @override
   State<DebugScreen> createState() => _DebugScreenState();
 }
 
+enum _DebugAction { clear, copy }
+
 class _DebugScreenState extends State<DebugScreen> {
-  DebugFilter _filter = DebugFilter.all;
+  DebugFilter _sourceFilter = DebugFilter.all;
+  final Set<DebugLevel> _levels = {...DebugLevel.values};
+  bool _buildingDump = false;
 
   static String _entriesToText(List<DebugEntry> entries) {
     final buf = StringBuffer();
     for (final e in entries) {
       final src = e.source == DebugSource.core ? 'CORE' : 'APP ';
-      buf.writeln('[${e.time.toIso8601String()}] $src  ${e.message}');
+      buf.writeln(
+          '[${e.time.toIso8601String()}] ${e.level.name.toUpperCase().padRight(7)} $src  ${e.message}');
     }
     return buf.toString();
   }
 
-  void _copyAll(List<DebugEntry> entries) {
-    Clipboard.setData(ClipboardData(text: _entriesToText(entries)));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${entries.length} entries copied')),
-    );
+  void _snack(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
-  Future<void> _shareLogs(List<DebugEntry> entries) async {
+  void _copyAll(List<DebugEntry> entries) {
+    Clipboard.setData(ClipboardData(text: _entriesToText(entries)));
+    _snack('${entries.length} entries copied');
+  }
+
+  /// Собирает единый dump (config + vars + server_lists + debug-log)
+  /// и открывает системный share-диалог.
+  Future<void> _shareDump() async {
+    if (_buildingDump) return;
+    setState(() => _buildingDump = true);
     try {
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/lxbox_debug.log');
-      await file.writeAsString(_entriesToText(entries));
+      final path = await DumpBuilder.build();
+      final name = path.split('/').last;
       // ignore: deprecated_member_use
-      await Share.shareXFiles([XFile(file.path)], text: 'LxBox debug log');
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Share failed: $e')),
+      await Share.shareXFiles(
+        [XFile(path, name: name, mimeType: 'application/json')],
+        text: 'LxBox diagnostic dump',
+        subject: name,
       );
+    } catch (e) {
+      _snack('Share failed: $e');
+    } finally {
+      if (mounted) setState(() => _buildingDump = false);
     }
   }
+
+  Color _levelColor(DebugLevel l) => switch (l) {
+        DebugLevel.debug => Colors.grey,
+        DebugLevel.info => Colors.blue,
+        DebugLevel.warning => Colors.orange,
+        DebugLevel.error => Colors.red,
+      };
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: widget.controller,
+      animation: AppLog.I,
       builder: (context, _) {
-        final entries = widget.controller.state.debugEvents;
-        final filtered = entries.where((entry) {
-          return switch (_filter) {
+        final filtered = AppLog.I.entries.where((e) {
+          if (!_levels.contains(e.level)) return false;
+          return switch (_sourceFilter) {
             DebugFilter.all => true,
-            DebugFilter.core => entry.source == DebugSource.core,
-            DebugFilter.app => entry.source == DebugSource.app,
+            DebugFilter.core => e.source == DebugSource.core,
+            DebugFilter.app => e.source == DebugSource.app,
           };
         }).toList();
 
@@ -70,14 +87,48 @@ class _DebugScreenState extends State<DebugScreen> {
             title: const Text('Debug'),
             actions: [
               IconButton(
-                tooltip: 'Copy all',
-                onPressed: filtered.isEmpty ? null : () => _copyAll(filtered),
-                icon: const Icon(Icons.copy_outlined),
+                icon: _buildingDump
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.ios_share),
+                tooltip: 'Отправить дамп (config + vars + subs + log)',
+                onPressed: _buildingDump ? null : _shareDump,
               ),
-              IconButton(
-                tooltip: 'Share logs',
-                onPressed: filtered.isEmpty ? null : () => _shareLogs(filtered),
-                icon: const Icon(Icons.share_outlined),
+              PopupMenuButton<_DebugAction>(
+                icon: const Icon(Icons.more_vert),
+                onSelected: (a) {
+                  switch (a) {
+                    case _DebugAction.clear:
+                      AppLog.I.clear();
+                    case _DebugAction.copy:
+                      _copyAll(filtered);
+                  }
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: _DebugAction.copy,
+                    enabled: filtered.isNotEmpty,
+                    child: const ListTile(
+                      leading: Icon(Icons.copy_outlined),
+                      title: Text('Copy log'),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _DebugAction.clear,
+                    enabled: AppLog.I.entries.isNotEmpty,
+                    child: const ListTile(
+                      leading: Icon(Icons.delete_sweep_outlined),
+                      title: Text('Clear'),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -88,14 +139,34 @@ class _DebugScreenState extends State<DebugScreen> {
               children: [
                 SegmentedButton<DebugFilter>(
                   segments: const [
-                    ButtonSegment<DebugFilter>(value: DebugFilter.all, label: Text('All')),
-                    ButtonSegment<DebugFilter>(value: DebugFilter.core, label: Text('Core')),
-                    ButtonSegment<DebugFilter>(value: DebugFilter.app, label: Text('App')),
+                    ButtonSegment(value: DebugFilter.all, label: Text('All')),
+                    ButtonSegment(value: DebugFilter.core, label: Text('Core')),
+                    ButtonSegment(value: DebugFilter.app, label: Text('App')),
                   ],
-                  selected: {_filter},
-                  onSelectionChanged: (selection) => setState(() => _filter = selection.first),
+                  selected: {_sourceFilter},
+                  onSelectionChanged: (s) =>
+                      setState(() => _sourceFilter = s.first),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  children: DebugLevel.values.map((l) {
+                    final on = _levels.contains(l);
+                    return FilterChip(
+                      label: Text(l.name),
+                      selected: on,
+                      selectedColor: _levelColor(l).withValues(alpha: 0.2),
+                      onSelected: (v) => setState(() {
+                        if (v) {
+                          _levels.add(l);
+                        } else {
+                          _levels.remove(l);
+                        }
+                      }),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 8),
                 Expanded(
                   child: filtered.isEmpty
                       ? const Center(child: Text('No events yet'))
@@ -104,15 +175,26 @@ class _DebugScreenState extends State<DebugScreen> {
                           separatorBuilder: (_, _) => const Divider(height: 1),
                           itemBuilder: (context, i) {
                             final entry = filtered[i];
-                            final source = entry.source == DebugSource.core ? 'core' : 'app';
+                            final src = entry.source == DebugSource.core
+                                ? 'core'
+                                : 'app';
                             return ListTile(
                               dense: true,
+                              leading: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: _levelColor(entry.level),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
                               title: Text(
                                 entry.message,
-                                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                                style: const TextStyle(
+                                    fontSize: 12, fontFamily: 'monospace'),
                               ),
                               subtitle: Text(
-                                '${entry.time.toIso8601String()} · $source',
+                                '${entry.time.toIso8601String()} · ${entry.level.name} · $src',
                                 style: const TextStyle(fontSize: 11),
                               ),
                             );

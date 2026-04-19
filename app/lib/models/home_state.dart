@@ -37,6 +37,7 @@ class HomeState {
     this.sortMode = NodeSortMode.latencyAsc,
     this.traffic = TrafficSnapshot.zero,
     this.connectedSince,
+    this.configStaleSinceStart = false,
   });
 
   final String configRaw;
@@ -55,6 +56,10 @@ class HomeState {
   final NodeSortMode sortMode;
   final TrafficSnapshot traffic;
   final DateTime? connectedSince;
+  /// True, если `saveParsedConfig` был вызван при работающем туннеле
+  /// с момента его последнего up-перехода. Значит туннель крутит config
+  /// старее, чем сохранённый. Сбрасывается на каждом up↔down переходе.
+  final bool configStaleSinceStart;
 
   bool get tunnelUp => tunnel.isUp;
 
@@ -103,6 +108,7 @@ class HomeState {
     NodeSortMode? sortMode,
     TrafficSnapshot? traffic,
     Object? connectedSince = _unset,
+    bool? configStaleSinceStart,
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
@@ -129,6 +135,7 @@ class HomeState {
       connectedSince: identical(connectedSince, _unset)
           ? this.connectedSince
           : connectedSince as DateTime?,
+      configStaleSinceStart: configStaleSinceStart ?? this.configStaleSinceStart,
     );
   }
 }

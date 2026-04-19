@@ -6,8 +6,10 @@ import 'package:flutter/services.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
+import '../models/server_list.dart';
 import '../services/get_free_loader.dart';
-import '../services/node_parser.dart';
+import '../services/subscription/auto_updater.dart';
+import '../services/subscription/input_helpers.dart';
 import '../services/url_launcher.dart';
 import 'node_filter_screen.dart';
 import 'node_settings_screen.dart';
@@ -18,10 +20,12 @@ class SubscriptionsScreen extends StatefulWidget {
     super.key,
     required this.subController,
     required this.homeController,
+    required this.autoUpdater,
   });
 
   final SubscriptionController subController;
   final HomeController homeController;
+  final AutoUpdater autoUpdater;
 
   @override
   State<SubscriptionsScreen> createState() => _SubscriptionsScreenState();
@@ -131,7 +135,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   }
 
   _ClipboardAnalysis _analyzeClipboard(String text) {
-    if (NodeParser.isSubscriptionURL(text)) {
+    if (isSubscriptionUrl(text)) {
       final uri = Uri.tryParse(text);
       return _ClipboardAnalysis(
         type: 'subscription',
@@ -139,7 +143,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         subtitle: uri?.host ?? text,
       );
     }
-    if (NodeParser.isWireGuardConfig(text)) {
+    if (isWireGuardConfig(text)) {
       final lines = text.split('\n');
       final endpoint = lines
           .where((l) => l.trim().toLowerCase().startsWith('endpoint'))
@@ -151,7 +155,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         subtitle: endpoint.isNotEmpty ? endpoint : '[Interface] + [Peer]',
       );
     }
-    if (NodeParser.isDirectLink(text)) {
+    if (isDirectLink(text)) {
       final uri = Uri.tryParse(text);
       final scheme = text.split('://').first.toUpperCase();
       final label = uri?.fragment ?? '';
@@ -200,7 +204,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   }
 
   Future<void> _updateAll() async {
-    final config = await widget.subController.updateAllAndGenerate();
+    // Ручной force-refresh: сбрасываем session-cap (5 фейлов) и форсим через
+    // AutoUpdater — так получаем `_running` guard от дубль-кликов и общий
+    // логирующий путь. После fetch'а — локальный generateConfig (без HTTP).
+    widget.autoUpdater.resetAllFailCounts();
+    await widget.autoUpdater.maybeUpdateAll(UpdateTrigger.manual, force: true);
+    if (!mounted) return;
+    final config = await widget.subController.generateConfig();
     if (!mounted) return;
     if (config != null) {
       final ok = await widget.homeController.saveParsedConfig(config);
@@ -358,10 +368,10 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
               leading: const Icon(Icons.copy),
               title: const Text('Copy URL'),
               onTap: () {
-                final url = entry.source.source.isNotEmpty
-                    ? entry.source.source
-                    : entry.source.connections.isNotEmpty
-                        ? entry.source.connections.first
+                final url = entry.url.isNotEmpty
+                    ? entry.url
+                    : entry.connections.isNotEmpty
+                        ? entry.connections.first
                         : '';
                 if (url.isNotEmpty) {
                   Clipboard.setData(ClipboardData(text: url));
@@ -480,9 +490,15 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
             FilledButton.icon(
               onPressed: checked.isEmpty ? null : () {
                 Navigator.pop(ctx);
-                for (final i in checked) {
-                  unawaited(_addFreeList(preset.lists[i].source, preset.lists[i].tagPrefix));
-                }
+                // Последовательно, а не параллельно — addFreeList
+                // индексирует `_entries` и race приводит к тому, что
+                // первая добавленная подписка не фетчится.
+                unawaited(() async {
+                  for (final i in checked) {
+                    await _addFreeList(
+                        preset.lists[i].source, preset.lists[i].tagPrefix);
+                  }
+                }());
               },
               icon: const Icon(Icons.add),
               label: const Text('Add'),
@@ -502,7 +518,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'List added! ${widget.subController.entries.where((e) => e.source.enabled).fold<int>(0, (s, e) => s + e.nodeCount)} nodes.',
+            'List added! ${widget.subController.entries.where((e) => e.enabled).fold<int>(0, (s, e) => s + e.nodeCount)} nodes.',
           ),
         ),
       );
@@ -538,7 +554,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {
         final entry = ctrl.entries[i];
-        final enabled = entry.source.enabled;
+        final enabled = entry.enabled;
         return ListTile(
           contentPadding: EdgeInsets.zero,
           leading: SizedBox(
@@ -564,15 +580,15 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                   ),
                 ),
               ),
-              if (entry.source.supportUrl.isNotEmpty)
+              if (entry.supportUrl.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(left: 4),
                   child: GestureDetector(
-                    onTap: () => _launchUrl(entry.source.supportUrl),
+                    onTap: () => _launchUrl(entry.supportUrl),
                     child: Icon(
-                      entry.source.supportUrl.contains('t.me') ? Icons.telegram : Icons.open_in_new,
+                      entry.supportUrl.contains('t.me') ? Icons.telegram : Icons.open_in_new,
                       size: 16,
-                      color: entry.source.supportUrl.contains('t.me')
+                      color: entry.supportUrl.contains('t.me')
                           ? const Color(0xFF2AABEE)
                           : Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -580,23 +596,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                 ),
             ],
           ),
-          subtitle: entry.subtitle.isNotEmpty
-              ? Text(entry.subtitle, style: TextStyle(
-                  fontSize: 12,
-                  color: enabled ? null : Theme.of(context).colorScheme.onSurfaceVariant,
-                ))
-              : null,
-          trailing: entry.source.source.isEmpty && entry.source.connections.isNotEmpty
+          subtitle: _buildEntrySubtitle(context, entry),
+          trailing: entry.url.isEmpty && entry.connections.isNotEmpty
               ? Icon(Icons.dns, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant)
-              : entry.nodeCount > 0
-                  ? Chip(
-                      label: Text('${entry.nodeCount}'),
-                      visualDensity: VisualDensity.compact,
-                    )
-                  : null,
+              : null,
           onLongPress: () => _showContextMenu(context, i, entry),
           onTap: () {
-            final isDirectServer = entry.source.source.isEmpty && entry.source.connections.isNotEmpty;
+            final isDirectServer = entry.url.isEmpty && entry.connections.isNotEmpty;
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -617,6 +623,69 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         );
       },
     );
+  }
+
+  /// Строка под именем подписки. Для SubscriptionServers показываем:
+  /// `{nodes} · 🔄 24h · 🕐 3h ago · (2 fails)`
+  /// где fail-часть только если consecutiveFails > 0.
+  Widget? _buildEntrySubtitle(BuildContext context, SubscriptionEntry entry) {
+    final scheme = Theme.of(context).colorScheme;
+    final muted = entry.enabled ? scheme.onSurfaceVariant : scheme.onSurfaceVariant.withValues(alpha: 0.6);
+    final parts = <Widget>[];
+    final textStyle = TextStyle(fontSize: 12, color: muted);
+
+    final statusText = entry.status.isNotEmpty
+        ? entry.status
+        : (entry.nodeCount > 0 ? '${entry.nodeCount} nodes' : '');
+    if (statusText.isNotEmpty) {
+      parts.add(Text(statusText, style: textStyle));
+    }
+
+    if (entry.list is SubscriptionServers) {
+      final intervalH = entry.updateIntervalHours;
+      if (intervalH > 0) {
+        parts.add(Icon(Icons.sync, size: 12, color: muted));
+        parts.add(Text(_compactHours(intervalH), style: textStyle));
+      }
+
+      final last = entry.lastUpdated;
+      if (last != null) {
+        parts.add(Icon(Icons.schedule, size: 12, color: muted));
+        parts.add(Text(SubscriptionEntry.formatAgo(last), style: textStyle));
+      } else if (entry.lastUpdateStatus == UpdateStatus.never) {
+        parts.add(Icon(Icons.schedule, size: 12, color: muted));
+        parts.add(Text('never', style: textStyle));
+      }
+
+      final fails = entry.consecutiveFails;
+      if (fails > 0) {
+        final failColor = entry.enabled ? scheme.error : muted;
+        parts.add(Text(
+          '($fails fail${fails == 1 ? '' : 's'})',
+          style: TextStyle(fontSize: 12, color: failColor),
+        ));
+      }
+    }
+
+    if (parts.isEmpty) return null;
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 2,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: parts,
+      ),
+    );
+  }
+
+  static String _compactHours(int hours) {
+    if (hours <= 0) return '';
+    if (hours < 24) return '${hours}h';
+    final d = hours ~/ 24;
+    final rem = hours % 24;
+    if (rem == 0) return '${d}d';
+    return '${d}d${rem}h';
   }
 }
 

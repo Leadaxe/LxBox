@@ -1,0 +1,1 @@
+vless://11111111-2222-3333-4444-555555555555@example-2.com:443?type=ws&security=tls&path=%2Fvless&host=example-2.com&sni=example-2.com#VLESS%20WS

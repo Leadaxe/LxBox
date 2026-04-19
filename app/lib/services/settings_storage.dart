@@ -3,7 +3,8 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-import '../models/proxy_source.dart';
+import '../models/server_list.dart';
+import 'migration/proxy_source_migration.dart';
 
 /// Persistent storage for user settings: vars, proxy sources, enabled rules.
 class SettingsStorage {
@@ -73,20 +74,38 @@ class SettingsStorage {
   }
 
   // ---------------------------------------------------------------------------
-  // Proxy sources
+  // Server lists (v2). Ключ на диске: `server_lists`.
+  //
+  // Миграция с v1 (`proxy_sources`): при первом чтении, если старый ключ
+  // есть и новый пустой — конвертируем через `migrateProxySources`, пишем
+  // в новый ключ, старый удаляем. Необратимо.
   // ---------------------------------------------------------------------------
 
-  static Future<List<ProxySource>> getProxySources() async {
+  static Future<List<ServerList>> getServerLists() async {
     final data = await _load();
-    final list = data['proxy_sources'] as List<dynamic>? ?? [];
-    return list
-        .map((e) => ProxySource.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final v2 = data['server_lists'] as List<dynamic>?;
+    if (v2 != null) {
+      return v2
+          .whereType<Map<String, dynamic>>()
+          .map(ServerList.fromJson)
+          .toList();
+    }
+    final v1 = data['proxy_sources'] as List<dynamic>?;
+    if (v1 == null || v1.isEmpty) return const [];
+    final migrated = migrateProxySources(
+      v1.whereType<Map<String, dynamic>>().toList(),
+    );
+    data['server_lists'] = migrated.map((e) => e.toJson()).toList();
+    data.remove('proxy_sources');
+    _cache = data;
+    await _save();
+    return migrated;
   }
 
-  static Future<void> saveProxySources(List<ProxySource> sources) async {
+  static Future<void> saveServerLists(List<ServerList> lists) async {
     final data = await _load();
-    data['proxy_sources'] = sources.map((e) => e.toJson()).toList();
+    data['server_lists'] = lists.map((e) => e.toJson()).toList();
+    data.remove('proxy_sources');
     _cache = data;
     await _save();
   }

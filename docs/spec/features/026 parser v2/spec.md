@@ -1,631 +1,546 @@
-# 026 — Parser v2: типизированные NodeSpec и упрощённый pipeline
+# 026 — Parser v2: типизированные NodeSpec и трёхслойный pipeline
 
 | Поле | Значение |
 |------|----------|
-| Статус | Спека |
+| Статус | **Реализовано и в продакшене** (2026-04-18) |
 | Дата | 2026-04-18 |
-| Зависимости | [`004`](../004%20subscription%20parser/spec.md), [`005`](../005%20config%20generator/spec.md), [`018`](../018%20detour%20server%20management/spec.md), [`docs/PROTOCOLS.md`](../../../PROTOCOLS.md) |
+| Зависимости | [`docs/PROTOCOLS.md`](../../../PROTOCOLS.md), [`004`](../004%20subscription%20parser/spec.md) (заменено), [`005`](../005%20config%20generator/spec.md) (заменено), [`018`](../018%20detour%20server%20management/spec.md), [`020`](../020%20security%20and%20dpi%20bypass/spec.md) |
+
+## Прогресс
+
+| Фаза | Статус |
+|------|--------|
+| 0 — fixtures + pubspec + docs deprecation | ✅ |
+| 1 — модели (sealed NodeSpec/ServerList/Transport/TLS/Warning/…) | ✅ |
+| 2 — парсеры, body_decoder, emit/toUri, TUIC v5, round-trip | ✅ |
+| 3 — builder (`ServerList.build` + `buildConfig`), validator, миграция, controller | ✅ |
+| 4 — физическое удаление v1 (node_parser, config_builder, source_loader, xray_json_parser, subscription_fetcher/decoder, parsed_node, proxy_source) | ✅ |
+| 5 — post-refactor рефактор до 3-слойной архитектуры (EmitContext/NodeEntries, удаление ServerRegistry) | ✅ |
+
+**Тесты:** 106/106. Debug + release APK собираются (release ≈ 71 MB).
+**LOC:** `lib/` = 13843; `models/` 2115; `services/` 3579. v1 удалено ≈ 2700 LOC.
 
 ---
 
-## Оглавление
+## Принципы (зафиксированы при старте, все соблюдены)
 
-- [Принципы](#принципы)
-- [Контекст](#контекст)
-- [§1. Контейнеры узлов — `ServerList`](#1-контейнеры-узлов--serverlist)
-- [§2. Модель — `NodeSpec`](#2-модель--nodespec)
-- [§3. Pipeline](#3-pipeline)
-  - §3.1 Fetch
-  - §3.2 Decode
-  - §3.3 Parse
-  - §3.4 Assemble
-  - §3.5 Validate
-- [§4. Round-trip](#4-round-trip)
-- [§5. Структура файлов](#5-структура-файлов)
-- [§6. Миграция](#6-миграция)
-- [§7. Тестирование](#7-тестирование)
-- [§8. UI impact](#8-ui-impact)
-- [§9. Критерии приёмки](#9-критерии-приёмки)
-- [§10. Риски](#10-риски)
-- [§11. Решения](#11-решения)
+1. **Слои только по логике.** Каждый слой — ради конкретной задачи, не «для симметрии». Registry / Chain-of-Responsibility не добавляются, пока нет второго пользователя.
+2. **Без обёрток и адаптеров.** Заменяем `A` на `B` — `A` удаляется, callers переписываются.
+3. **Никакого мусора после миграции.** Удаляем физически. `// TODO remove`, `// deprecated`, feature-flag ветки — вычищены до нуля.
+4. **YAGNI.** Inline-шаги, одна реализация.
+5. **Функции > классы.** Класс — только при необходимости состояния.
+6. **Sealed + exhaustive switch.** Любое ветвление по типу — sealed + `switch` без `default`.
+7. **Immutability по умолчанию.** Mutable — только где структурно необходимо (`NodeSpec.warnings`, `ServerList.nodes` при refresh).
 
 ---
 
-## Принципы
+## Архитектура — 3 слоя
 
-Зафиксировано до начала имплементации — применяется к self-review каждого PR в рамках 026:
+```
+UI / Controller
+        │  SubscriptionEntry.list (ServerList), SubscriptionController.generateConfig()
+        ▼
+buildConfig(lists, settings, {template?})         — оркестратор
+        │  создаёт _BuildCtx : EmitContext,
+        │  загружает template (TemplateLoader), мержит vars, randomize clash_api,
+        │  для каждого list → list.build(ctx),
+        │  post-steps (selectableRules, appRules, tlsFragment, customDns),
+        │  validateConfig, BuildResult.
+        ▼
+ServerList.build(ctx)                              — политика подписки
+        │  skipDetour = !useDetourServers || overrideDetour != '',
+        │  for server in nodes:
+        │    raw = server.getEntries(ctx, skipDetour),
+        │    allocateTag с tagPrefix (сначала detours, потом main),
+        │    patch map['detour'] (override / remove / chain),
+        │    ctx.addEntry(each), addToSelectorTagList(main + policy detours),
+        │    addToAutoList(main + policy detours).
+        ▼
+NodeSpec.getEntries(ctx, skipDetour)               — чистая трансформация
+        │  emit(ctx.vars) → SingboxEntry,
+        │  если chained != null и !skipDetour — recurse,
+        │  возвращает NodeEntries{main, detours[]}.
+```
 
-1. **Слои — только по логике.** Каждый слой существует ради конкретной задачи, не "для симметрии". Registry / Pipeline / Chain-of-Responsibility не добавляются, пока не выросла потребность.
-2. **Без обёрток и адаптеров.** Заменяем `A` на `B` — `A` удаляется, callers переписываются. Никаких `LegacyAdapter`, `A.fromV2(B)`, мостиков.
-3. **Никакого мусора после миграции.** Удаляем физически. `// TODO remove after v2`, `// deprecated`, остаточные ветки по feature-flag'у — вычищаются до нуля в Фазе 4.
-4. **YAGNI.** Конкретный список шагов inline, одна реализация. Plugin-системы — только когда появится второй пользователь.
-5. **Функции > классы.** Класс заводим, только если есть состояние, которое нужно хранить между вызовами (`ServerRegistry` — да, `BodyDecoder` — нет, `ParserRegistry` — нет).
-6. **Sealed + exhaustive switch.** Любое ветвление по типу — sealed class + `switch` без `default`. Компилятор ловит пропуск при добавлении варианта.
-7. **Immutability по умолчанию.** `freezed` для data-классов. Mutable — только там, где это структурно нужно (`NodeSpec.warnings`, `ServerList.nodes` при fetch — документируется явно).
+**Ключевые контракты:**
+- `NodeSpec` не знает про `ServerList`, `tagPrefix`, детур-политику. `list` back-ref отсутствует.
+- `EmitContext` — абстракция, реализуемая `_BuildCtx` в `buildConfig`. Единственное место, где живёт `taken`-set для уникализации тегов. `_taken` преднаполнен `{'direct-out', 'dns-out', 'block-out'}` — сервисные теги шаблона никогда не конфликтнут с пользовательскими.
+- `SingboxEntry.tag` — живой getter из `map['tag']`. Регистрируем **entry** в ctx, а не строку: post-step может переименовать тэг, preset-группы подхватят.
+- Формат prefixed-тега — `"<tagPrefix> <tag>"` (через пробел), т.е. `"BL: 🇩🇪 Germany"`. Коллизии → суффиксы `-1`, `-2`, … (`BL: Frankfurt`, `BL: Frankfurt-1`). Fixed в `server_list_build.dart::_withPrefix`.
 
 ---
 
-## Контекст
+## §1. `ServerList` (контейнер подписки)
 
-Текущая реализация (v1):
-- `app/lib/services/node_parser.dart` — ~1100 строк, парсинг URI + генерация sing-box JSON в одном файле.
-- `app/lib/services/config_builder.dart` — ~550 строк, сборка итогового конфига + применение policies + post-processing.
-- `app/lib/models/parsed_node.dart` — mutable bag: `Map<String,String> query` + `Map<String,dynamic> outbound` + `String warning`.
-- `app/lib/models/proxy_source.dart` — плоская модель "подписка или вставка", совмещает URL и inline.
-
-Конкретные боли:
-- Нет типизации полей узла — только `Map<String,dynamic>`.
-- Outbound vs endpoint определяется рантайм-фильтрацией `o['type'] == 'wireguard'` в ассемблере.
-- Один warning на узел (`String`) — не типизирован, нельзя агрегировать.
-- Парсинг и генерация нельзя тестировать независимо.
-- `tagPrefix` есть в модели, но задаётся только из GetFree-пресетов, пользователь не видит.
-- XHTTP-fallback сейчас в двух местах (VMess JSON parse + outbound build) — один из них после рефактора `_transportFromQuery` стал единой точкой, но это временно держится на одном helper'е.
-
-Цель v2: типизированные модели, полиморфный emit (узел сам знает, куда — outbound или endpoint), функциональный pipeline без лишних абстракций.
-
----
-
-## §1. Контейнеры узлов — `ServerList`
-
-Узлы всегда живут внутри контейнера. Два типа контейнеров — от разных источников.
-
-### 1.1 Sealed-иерархия
+Код: `lib/models/server_list.dart`.
 
 ```dart
 sealed class ServerList {
-  String get id;                         // uuid, генерируется при создании
-  String get name;                       // редактируемое
-  bool get enabled;
-  String get tagPrefix;                  // auto-generated, editable
-  DetourPolicy get detourPolicy;
-  List<NodeSpec> get nodes;
+  final String id;                 // uuid, стабилен на всём жизненном цикле
+  final String name;               // редактируемое
+  final bool enabled;
+  final String tagPrefix;          // пользовательская строка (по умолчанию '')
+  final DetourPolicy detourPolicy;
+  final List<NodeSpec> nodes;      // mutable-bag: перезаписывается на refresh/reparse
+
+  String get type;                 // 'subscription' | 'user' — JSON-дискриминатор
+  Map<String, dynamic> toJson();
+  static ServerList fromJson(Map<String, dynamic> j);
 }
 
 final class SubscriptionServers extends ServerList {
   final String url;
-  final SubscriptionMeta? meta;          // subscription-userinfo, profile-title, expire
+  final SubscriptionMeta? meta;    // profile-title, traffic, expire, support-url, web-page
   final DateTime? lastUpdated;
-  final int updateIntervalHours;         // auto из profile-update-interval
-  // nodes — результат последнего fetch+parse, перезаписываются на refresh
+  final int updateIntervalHours;
+  final int lastNodeCount;
+  // copyWith(...) — для refresh, rename, policy-change
 }
 
 final class UserServers extends ServerList {
-  final UserSource origin;               // paste | file | qr | manual
+  final UserSource origin;         // paste | file | qr | manual
   final DateTime createdAt;
-  // nodes редактируются пользователем, refresh не делается
+  final String rawBody;            // оригинал (для reparse)
 }
-```
 
-**Персистится:** `List<ServerList>` с дискриминатором `type` в JSON. Никакой `ServerRegistry` на диск не попадает.
-
-### 1.2 Семантика
-
-| | `SubscriptionServers` | `UserServers` |
-|---|---|---|
-| Lifecycle | fetch(url) → parse → nodes | parse(pastedText) → nodes |
-| Refresh | ✅ manual + auto-interval | — |
-| Редактировать ноду | ❌ (перезапишется) | ✅ |
-| Add/remove ноду | ❌ | ✅ |
-| Traffic quota | ✅ (из заголовков) | — |
-
-`UserServers` создаётся **на каждую вставку**. Два разных paste'а = два разных `UserServers` (можно переименовать, удалить независимо).
-
-### 1.3 `DetourPolicy`
-
-```dart
 class DetourPolicy {
-  final bool registerDetourServers;      // default true
-  final bool registerDetourInAuto;       // default false (см. 018)
-  final bool useDetourServers;           // default true
-  final String overrideDetour;           // '' = no override
+  final bool registerDetourServers = false;   // ⚙ в proxy-группах — по умолчанию off (user feedback)
+  final bool registerDetourInAuto  = false;   // ⚙ в auto-proxy-out (urltest)
+  final bool useDetourServers      = true;
+  final String overrideDetour      = '';       // '' = no override
 }
 ```
 
-`ServerList` хранит **политику**. `NodeSpec` хранит **факт** (`chained: NodeSpec?`). Политика применяется в `buildConfig` inline (см. §3.4), не в отдельном "transform-слое".
-
-### 1.4 `tagPrefix`
-
-Автогенерируется при создании `ServerList` (короткий hash от URL/`createdAt`, ~3 символа). Пустым не бывает. Редактируется в UI. Применяется в `ServerRegistry.allNodes` (см. §1.5) — рекурсивно к `tag` и `chained.tag`.
-
-### 1.5 `ServerRegistry` — transient aggregator
-
-```dart
-class ServerRegistry {
-  ServerRegistry(List<ServerList> lists);
-
-  /// Плоский список всех узлов всех включённых списков,
-  /// с применённым tagPrefix и разрешёнными коллизиями тегов.
-  List<NodeSpec> get allNodes;
-
-  NodeSpec? findByTag(String tag);        // линейный поиск O(n), приемлемо до ~10k узлов
-}
-```
-
-Не сериализуется. Не хранит состояние между вызовами (пересоздаётся каждый раз, когда поменялся `List<ServerList>`). Единственное место, где:
-- применяется `tagPrefix`
-- разрешаются коллизии (`-1`, `-2` суффиксы)
-- раздаются глобальные tag'и для Clash API и UI
-
-**Сложность.** `findByTag` — линейный поиск по `allNodes`. Внутри может лениво строиться `Map<String, NodeSpec>` при первом вызове, если профайлинг покажет горячий путь. До ~10k узлов линейного достаточно.
-
-### 1.6 UI
-
-Один плоский список всех `ServerList` в экране Subscriptions (иконка слева различает тип). Pattern-match при рендере:
-
-```dart
-Widget tile(ServerList s) => switch (s) {
-  SubscriptionServers() => _SubTile(...),   // 🌐 + update-кнопка
-  UserServers()         => _UserTile(...),  // 🔗
-};
-```
-
-### 1.7 Smart-Paste routing
-
-- URL подписки → `SubscriptionServers`, fetch + parse.
-- Одиночный proxy-URI / JSON outbound / JSON-array / WG INI → `UserServers(origin: paste)`.
-- QR / File → `UserServers(origin: qr | file)`.
+**Персистится на диск** через `SettingsStorage` (ключ `server_lists` в `lxbox_settings.json`). `nodes` не сохраняется в JSON — восстанавливается из `HttpCache` (тело подписки) при запуске app (`_rehydrateFromCache`).
 
 ---
 
-## §2. Модель — `NodeSpec`
+## §2. `NodeSpec` (сервер, не нода)
 
-### 2.1 Sealed-иерархия
+Код: `lib/models/node_spec.dart` + `node_spec_emit.dart` + `node_entries.dart`.
+
+Именование: в UI/подписке «сервер» = `NodeSpec`; в sing-box «нода» = `SingboxEntry` (outbound/endpoint). Один `NodeSpec` → 1–2 `SingboxEntry`.
 
 ```dart
 sealed class NodeSpec {
-  String get id;                         // uuid узла
-  String get tag;                        // может быть перепрефикшен в Registry
-  String get label;                      // display name
-  String get server;
-  int get port;
-  String get rawUri;                     // исходный URI, для revert / debug
-  NodeSpec? get chained;                 // detour, рекурсивно
-  List<NodeWarning> get warnings;        // mutable — растёт при emit (см. 2.4)
+  final String id, tag, label, server, rawUri;
+  final int port;
+  final NodeSpec? chained;                 // опциональный детур-сервер
+  final List<NodeWarning> warnings;        // mutable-bag
 
-  /// Полиморфная генерация sing-box entry.
-  /// Реализация может дописать в `warnings` при fallback'ах.
-  SingboxEntry emit(TemplateVars vars);
-
-  /// Round-trip в URI. Инвариант: parseUri(spec.toUri()) ≈ spec (см. §4).
-  String toUri();
+  SingboxEntry emit(TemplateVars vars);    // чистая функция spec → map
+  String toUri();                          // canonical URI, round-trip
+  String get protocol;
+  NodeEntries getEntries(EmitContext? ctx, {bool skipDetour = false});
 }
 
-final class VlessSpec extends NodeSpec { ... SingboxEntry emit() => Outbound(...); }
-final class VmessSpec extends NodeSpec { ... => Outbound(...); }
-final class TrojanSpec extends NodeSpec { ... => Outbound(...); }
-final class ShadowsocksSpec extends NodeSpec { ... }
-final class Hysteria2Spec extends NodeSpec { ... }
-final class TuicSpec extends NodeSpec { ... }
-final class SshSpec extends NodeSpec { ... }
-final class SocksSpec extends NodeSpec { ... }
-final class WireguardSpec extends NodeSpec { ... => Endpoint(...); }
+// 9 вариантов — каждый со своим emit/toUri:
+final class VlessSpec        extends NodeSpec { String uuid, flow, encryption, packetEncoding; TlsSpec tls; TransportSpec? transport; }
+final class VmessSpec        extends NodeSpec { String uuid, security, packetEncoding; int alterId; TlsSpec tls; TransportSpec? transport; }
+final class TrojanSpec       extends NodeSpec { String password; TlsSpec tls; TransportSpec? transport; }
+final class ShadowsocksSpec  extends NodeSpec { String method, password, plugin, pluginOpts; }
+final class Hysteria2Spec    extends NodeSpec { String password, obfs, obfsPassword; TlsSpec tls; int? upMbps, downMbps; }
+final class TuicSpec         extends NodeSpec { String uuid, password, congestionControl, udpRelayMode; bool zeroRtt; TlsSpec tls; }
+final class SshSpec          extends NodeSpec { String user, password, privateKey, privateKeyPassphrase; List<String> hostKey, hostKeyAlgorithms; }
+final class SocksSpec        extends NodeSpec { String version, username, password; }
+final class WireguardSpec    extends NodeSpec { String privateKey; List<String> localAddresses; List<WireguardPeer> peers; int? mtu; String? rawIni; }
 ```
 
-Полиморфизм `emit()` убирает `if (type == 'wireguard')` в ассемблере.
+**`SingboxEntry`** — sealed `Outbound | Endpoint`. `WireguardSpec.emit()` возвращает `Endpoint`, остальные — `Outbound`. Builder раскладывает через sealed-switch, без runtime-проверки `type == 'wireguard'`.
 
-### 2.2 `SingboxEntry`
+### 2.1 `NodeEntries` — результат `getEntries`
 
 ```dart
-sealed class SingboxEntry {
-  Map<String, dynamic> get map;
+class NodeEntries {
+  final SingboxEntry main;
+  final List<SingboxEntry> detours;
+  Iterable<SingboxEntry> get all sync* { yield main; yield* detours; }
 }
-final class Outbound extends SingboxEntry { ... }
-final class Endpoint extends SingboxEntry { ... }
 ```
 
-Ассемблер раскладывает по двум массивам через `switch (entry)`.
+Именованная структура (не позиционный `List`): защита от опечаток «[0] главный».
 
-### 2.3 `TransportSpec`
+### 2.2 `TransportSpec` (sealed, `transport_spec.dart`)
+
+`Ws | Grpc | Http | HttpUpgrade | Xhttp`. Каждый variant сам знает `toSingbox(vars)`. `Xhttp` в `toSingbox` делегирует `HttpUpgrade` и возвращает `UnsupportedTransportWarning('xhttp', 'httpupgrade')` — компилятор не даёт забыть fallback.
+
+### 2.3 `NodeWarning` (sealed, `node_warning.dart`)
+
+`UnsupportedTransportWarning | UnsupportedProtocolWarning | MissingFieldWarning | DeprecatedFlowWarning | InsecureTlsWarning`.
+`warnings` — единственное mutable поле на spec'е. Парсер заполняет при конструировании; `emit` дописывает при fallback'ах. UI рендерит по `severity` (info/warning/error).
+
+### 2.4 `EmitContext` (абстракт, `emit_context.dart`)
 
 ```dart
-sealed class TransportSpec {
-  (Map<String, dynamic> map, List<NodeWarning> warnings) toSingbox(TemplateVars vars);
-}
-
-final class WsTransport(...) extends TransportSpec { ... }
-final class GrpcTransport(...) extends TransportSpec { ... }
-final class HttpTransport(...) extends TransportSpec { ... }      // h2 = HttpTransport
-final class HttpUpgradeTransport(...) extends TransportSpec { ... }
-
-final class XhttpTransport extends TransportSpec {
-  // sing-box не поддерживает — см. PROTOCOLS.md §XHTTP transport fallback.
-  @override toSingbox(vars) {
-    final (m, _) = HttpUpgradeTransport(path, host).toSingbox(vars);
-    return (m, [const UnsupportedTransportWarning('xhttp', 'httpupgrade')]);
-  }
+abstract class EmitContext {
+  TemplateVars get vars;
+  String allocateTag(String baseTag);
+  void addEntry(SingboxEntry entry);
+  void addToSelectorTagList(SingboxEntry entry);  // → vpn-1/2/3
+  void addToAutoList(SingboxEntry entry);          // → auto-proxy-out (urltest)
 }
 ```
 
-Компилятор не даст забыть XHTTP-fallback — это вариант sealed-типа.
-
-### 2.4 `NodeWarning`
-
-```dart
-sealed class NodeWarning {
-  const NodeWarning();
-  String get message;                     // пока plain string на английском;
-                                          // локализация — отдельным шагом, когда
-                                          // появится i18n-infra в проекте
-  WarningSeverity get severity;           // info | warning | error
-}
-
-final class UnsupportedTransportWarning(String name, String fallback) extends NodeWarning;
-final class UnsupportedProtocolWarning(String scheme) extends NodeWarning;
-final class MissingFieldWarning(String field) extends NodeWarning;
-final class DeprecatedFlowWarning(String flow) extends NodeWarning;
-final class InsecureTlsWarning() extends NodeWarning;
-```
-
-`NodeSpec.warnings` — mutable `List<NodeWarning>` (единственное mutable поле в freezed-spec). Парсер заполняет при конструировании; `emit` дописывает при fallback'ах. Это компромисс ради простоты: альтернатива — emit возвращает кортеж и ассемблер копирует spec через `copyWith`, что делает call sites неприятными.
-
-Warnings не сериализуются — пересоздаются на каждом `parseUri` / `emit`.
+Реализация — `_BuildCtx` в `build_config.dart`.
 
 ---
 
 ## §3. Pipeline
 
-Три функции верхнего уровня:
+Верхнеуровневые функции:
 
 ```dart
-/// Fetch + decode + parse. Только для источников с body (URL, File, Clipboard, QR).
-Future<ParseResult> parseFromSource(SubscriptionSource source);
+// fetch + decode + parse. В т.ч. извлекает inline pseudo-headers (# profile-title:)
+// и мержит с HTTP-заголовками.
+Future<ParseResult> parseFromSource(SubscriptionSource source, {http.Client? client});
 
-/// Собрать sing-box JSON.
-BuildResult buildConfig(
-  ServerRegistry registry,
-  WizardTemplate template,
-  BuildSettings settings,
-);
+// Прямой HTTP GET без декода — для UI Source-вкладки.
+Future<FetchResult> fetchRaw(SubscriptionSource source, {http.Client? client});
 
-/// Round-trip: sing-box outbound/endpoint JSON → NodeSpec.
-/// Используется в JSON-editor и для Smart-Paste одиночного singbox-entry.
+// Единственная точка сборки sing-box конфига.
+Future<BuildResult> buildConfig({
+  required List<ServerList> lists,
+  BuildSettings settings = const BuildSettings(),
+  WizardTemplate? template,   // override для тестов; прод → TemplateLoader.load()
+});
+
+// sing-box outbound/endpoint Map → NodeSpec (для round-trip / JSON editor).
 NodeSpec? parseSingboxEntry(Map<String, dynamic> entry);
 ```
 
-`ParseResult`, `BuildResult` — простые records/data-классы.
+### §3.1 Fetch
 
-### 3.1 FETCH
+Код: `lib/services/subscription/sources.dart`.
 
 ```dart
-sealed class SubscriptionSource {}
-final class UrlSource(String url) extends SubscriptionSource;
-final class FileSource(File file) extends SubscriptionSource;
-final class ClipboardSource() extends SubscriptionSource;
-final class InlineSource(String body) extends SubscriptionSource;
-final class QrSource(String content) extends SubscriptionSource;
-
-Future<FetchResult> fetch(SubscriptionSource source);
-
-class FetchResult {
-  final String body;
-  final SubscriptionMeta? meta;           // только для UrlSource (HTTP заголовки)
-}
+sealed class SubscriptionSource { }
+final class UrlSource        (String url, {userAgent, timeout}) extends SubscriptionSource;
+final class FileSource       (File file)                         extends SubscriptionSource;
+final class ClipboardSource  (String contents)                   extends SubscriptionSource;
+final class InlineSource     (String body)                       extends SubscriptionSource;
+final class QrSource         (String content)                    extends SubscriptionSource;
 ```
 
-### 3.2 DECODE
+`UrlSource` — default UA `SubscriptionParserClient` (некоторые сервера выбирают формат тела по UA; `ClashForAndroid/*` триггерит YAML, `SubscriptionParserClient` — URI-list). Default timeout 9с; `_fetch` делает **2 попытки с паузой 2с** между (cap ≈ 20с). Ретрай — против transient'ов мобильной сети (DNS/RST/DDoS-guard challenge).
 
-Одна функция, не throws. Exhaustive результат:
+`FetchResult.headers` — сырые HTTP response headers. `profile-title: base64:...` автоматически декодируется в `_decodeBase64Title`.
+
+**Fallback-цепочка имени подписки**: `profile-title` → `content-disposition` → `list.name` (уже установленное).
+Если провайдер не ставит кастомный `profile-title`, но отдаёт стандартный RFC 6266 `Content-Disposition: attachment; filename="..."` (Marzban / 3x-ui / XrayR делают это автоматически), `_parseContentDispositionFilename` извлекает имя. Поддерживаются `filename="…"`, `filename=…` без кавычек, и RFC 5987 `filename*=UTF-8''<percent-encoded>` для юникода. Расширения `.txt/.yaml/.yml/.json/.conf` срезаются.
+
+**Inline pseudo-headers**: `parseFromSource` сканирует первые `# key: value` / `// key: value` / `; key: value` строки тела. Принимает только «подписочные» ключи (`profile-title`, `profile-update-interval`, `profile-web-page-url`, `support-url`, `subscription-userinfo`, `content-disposition`). HTTP-headers первичны; inline как fallback.
+
+### §3.2 Decode
+
+Код: `lib/services/parser/body_decoder.dart`.
 
 ```dart
-DecodedBody decode(String body);
-
-sealed class DecodedBody {}
-final class UriLines extends DecodedBody      { List<String> lines; int skippedComments; }
-final class IniConfig extends DecodedBody     { String text; }
-final class JsonConfig extends DecodedBody    { Object value; JsonFlavor flavor; }
-final class DecodeFailure extends DecodedBody { String reason; String? sample; }
+sealed class DecodedBody { }
+final class UriLines      (List<String> lines, int skippedComments) extends DecodedBody;
+final class IniConfig     (String text)                             extends DecodedBody;
+final class JsonConfig    (Object value, JsonFlavor flavor)         extends DecodedBody;
+final class DecodeFailure (String reason, String? sample)           extends DecodedBody;
 
 enum JsonFlavor { xrayArray, singboxOutbound, clashYaml, unknown }
 ```
 
 Алгоритм:
-1. Попробовать base64 (standard/url-safe × padded/unpadded). Успех + валидный UTF-8 → заменить body, перейти к шагу 2.
-2. Trim начинается с `{` или `[`? Попробовать `jsonDecode`. По содержимому присвоить `JsonFlavor`.
-3. Первая непустая строка = `[Interface]`? → `IniConfig`.
-4. Иначе — разбить на строки, выкинуть пустые и комментарии (`#`, `//`, `;`). Если остались — `UriLines`.
-5. Пусто или ничего не сработало → `DecodeFailure`.
+1. Если body похож на base64 — раскодировать (4 варианта: standard/url-safe × padded/unpadded). Успех + валидный UTF-8 → заменить body.
+2. `trim` начинается с `{`/`[` → `jsonDecode` + `JsonFlavor`.
+3. Первая непустая не-comment строка `[Interface]` + есть `[Peer]` → `IniConfig`.
+4. Иначе — строки: `#`/`//`/`;` считаются комментариями; остаток → `UriLines`.
+5. Пусто → `DecodeFailure`.
 
-### 3.3 PARSE
+`clashYaml` **в текущей реализации не парсится** — возвращает пустой список узлов. Обходится на уровне UA (см. §3.1).
 
+### §3.3 Parse
+
+Код: `lib/services/parser/{uri_parsers,json_parsers,ini_parser,parse_all,transport,uri_utils}.dart`.
+
+Топ-switch по схеме:
 ```dart
-List<NodeSpec> parseAll(DecodedBody decoded) {
-  return switch (decoded) {
-    UriLines(lines: final ls)        => ls.map(parseUri).whereType<NodeSpec>().toList(),
-    IniConfig(text: final t)         => [parseWireguardIni(t)].whereType<NodeSpec>().toList(),
-    JsonConfig()                     => parseJson(decoded as JsonConfig),
-    DecodeFailure()                  => const [],
-  };
-}
+NodeSpec? parseUri(String uri) => switch (scheme) {
+  'vless'               => parseVless(uri),
+  'vmess'               => parseVmess(uri),
+  'trojan'              => parseTrojan(uri),
+  'ss'                  => parseShadowsocks(uri),
+  'hysteria2' || 'hy2'  => parseHysteria2(uri),
+  'tuic'                => parseTuic(uri),
+  'ssh'                 => parseSsh(uri),
+  'socks' || 'socks5'   => parseSocks(uri),
+  'wg' || 'wireguard'   => parseWireguardUri(uri),
+  _                     => null,
+};
+```
 
-NodeSpec? parseUri(String uri) {
-  final scheme = uri.split('://').first.toLowerCase();
-  return switch (scheme) {
-    'vless'               => parseVless(uri),
-    'vmess'               => parseVmess(uri),
-    'trojan'              => parseTrojan(uri),
-    'ss'                  => parseShadowsocks(uri),
-    'hysteria2' || 'hy2'  => parseHysteria2(uri),
-    'tuic'                => parseTuic(uri),
-    'ssh'                 => parseSsh(uri),
-    'socks' || 'socks5'   => parseSocks(uri),
-    'wg' || 'wireguard'   => parseWireguardUri(uri),
-    _                     => null,
-  };
+`parseAll(DecodedBody)` диспатчит по типу: `UriLines → parseUri` per-line; `IniConfig → parseWireguardIni`; `JsonConfig` → `xrayArray` через `parseXrayOutbound` / `singboxOutbound` через `parseSingboxEntry`.
+
+Парсеры — pure, ошибки возвращают `null` (не throw). SIP003 plugin split (`plugin=name;k=v;…`) — в `parseShadowsocks`.
+
+### §3.4 Assemble
+
+Код: `lib/services/builder/{build_config,post_steps,validator}.dart` + `services/template_loader.dart`.
+
+Шаги внутри `buildConfig`:
+
+1. `template ??= await TemplateLoader.load()`.
+2. Merge `template.vars` (defaults) + `settings.userVars` → `vars`. Рандомизация `clash_api` (порт 49152-65535) и `clash_secret` (32 hex), если defaults (:9090 / пустой). Сгенерированное записывается в `result.generatedVars` — controller персистит назад в `SettingsStorage`.
+3. Deep-copy `template.config`, `_substituteVars` на `@var`-ссылки.
+4. Убрать `sniff`-rule если `sniff_enabled=false`.
+5. Создать `_BuildCtx(tvars)` — реализация `EmitContext`.
+6. `for list in lists: list.build(ctx)` — подписка сама применяет политику и регистрирует entries.
+7. `_buildPresetGroups(presets, enabledGroups, selectorTags, autoTags, excludedNodes, vars)` — vpn-1/2/3 (selector) + auto-proxy-out (urltest). Теги берутся из `ctx.selectorEntries` / `ctx.autoEntries`.
+8. Склеить `config['outbounds']` = `baseOutbounds` + `ctx.outbounds` + preset-группы. `config['endpoints']` = `baseEndpoints` + `ctx.endpoints`.
+9. Post-steps: `applySelectableRules` → `applyAppRules` → `route.final` override → `applyTlsFragment` → `applyCustomDns`.
+10. `validateConfig(config)` → `ValidationResult`.
+11. Вернуть `BuildResult { configJson, config, validation, emitWarnings, generatedVars }`.
+
+#### §3.4.1 Инвариант TLS Fragment
+
+`tls.fragment` / `tls.record_fragment` ставится **только на outbound'ы без поля `detour`** — т.е. на first-hop с устройства.
+
+**Почему.** TLS fragment — клиентский приём обхода локального DPI: режет ClientHello на мелкие TLS-records, чтобы SNI-шаблон не собрался ровно. DPI видит **только первый** TLS-handshake с устройства. Если у узла есть `detour`, он — inner hop; его TLS уходит внутри туннеля первого хопа, DPI его не видит.
+
+Нарушение инварианта:
+- **Бесполезность** — inner handshake не видит никто.
+- **Разрыв цепочки** — REALITY / kcp чувствительны к формату TLS-records.
+- **Двойная фрагментация** — inner handshake попадает в уже-фрагментированные TCP-пакеты первого хопа; повторная фрагментация → хаос MTU.
+
+Реализация — `post_steps.dart::applyTlsFragment`:
+```dart
+for (final ob in outbounds) {
+  if (ob.containsKey('detour')) continue;  // inner hop — skip
+  final tls = ob['tls'];
+  if (tls is! Map || tls['enabled'] != true) continue;
+  if (fragment) tls['fragment'] = true;
+  if (recordFragment) tls['record_fragment'] = true;
+  tls['fragment_fallback_delay'] = fallbackDelay;
 }
 ```
 
-Каждая `parseXxx` — отдельный файл, pure-функция `String → NodeSpec?`. Ошибки парсинга возвращают `null` (не throw) — caller при необходимости собирает причины.
+#### §3.4.2 HTTP-кэш + offline rehydrate
 
-**`NodeSpec.rawUri`** заполняется парсером из своего входа: для UriLines — сама строка URI; для IniConfig — конвертированный `wg://`-URI (исходный INI хранится в отдельном поле `WireguardSpec.rawIni` при необходимости); для JsonConfig — `jsonEncode` одного element-map (чтобы round-trip через copy/paste JSON работал).
+Код: `lib/services/subscription/http_cache.dart`.
 
-JSON-ветка — `parseJson(JsonConfig j)`:
-- `xrayArray` → каждый элемент через `parseXrayOutbound`.
-- `singboxOutbound` → один entry через `parseSingboxEntry`.
-- `clashYaml` → пока пустой список + `UnsupportedProtocolWarning('clash')`.
-- `unknown` → пустой список.
+- `HttpCache.save(url, body, headers)` — на каждом успешном fetch пишет сырое body и headers в `app_support/sub_cache/<url-hash>`.
+- `SubscriptionController._rehydrateFromCache` на `init` проходит по `SubscriptionServers` с пустыми `nodes`, читает body, `decode → parseAll`, заливает в `list.nodes`. Статус помечает `(cached)`.
+- **Почему body, а не parsed-JSON**: одна истина (parsed — derived view); фиксы парсера автоматически долетают до старых подписок; Source-вкладка и так нужна body; re-parse 150 узлов ≤50ms.
 
-INI → `parseWireguardIni` конвертирует в `wg://`-URI, потом вызывает `parseWireguardUri`.
+### §3.5 Validate
 
-### 3.4 ASSEMBLE
-
-Одна функция `buildConfig(registry, template, settings) → BuildResult`. Порядок шагов внутри (все inline, без класс-ассемблера):
-
-1. Склонировать `template.config`.
-2. Пройти `registry.allNodes`:
-   - Применить `DetourPolicy` конкретной ноды: `useDetourServers=false` → `chained = null`; `overrideDetour != ''` → заменить `chained`.
-   - Если `chained != null` и ещё не эмитили этот detour-tag — `chained.emit(vars)` → добавить в соответствующий массив.
-   - `node.emit(vars)` → разложить по `outbounds`/`endpoints`.
-3. Сгенерировать preset-группы (`vpn-1`, `vpn-2`, `vpn-3`, `auto-proxy-out`) — логика из v1 `_buildPresetOutbounds`, но над `List<NodeSpec>` вместо `List<ParsedNode>`. Учёт `registerDetourServers`, `registerDetourInAuto`, `excluded tags` — inline.
-4. Применить post-steps по порядку (все — plain-функции над `Map`):
-   - `applyTlsFragmentFirstHop(config, settings)`
-   - `randomizeClashApi(config)` (каждый раз новый port + secret)
-   - `applyDnsFinal(config, settings)`
-   - `applyAppRules(config, settings)`
-5. `validateConfig(config)` → `ValidationResult`.
-6. Вернуть `BuildResult(config, validation)`.
-
-### 3.5 VALIDATE
-
-Функция, не класс.
+Код: `lib/services/builder/validator.dart`.
 
 ```dart
 ValidationResult validateConfig(Map<String, dynamic> config);
 
 sealed class ValidationIssue {
-  Severity get severity;
+  Severity get severity;    // fatal | warn
+  String get message;
 }
-final class DanglingOutboundRef(String rule, String tag) extends ValidationIssue;   // fatal
-final class EmptyUrltestGroup(String tag) extends ValidationIssue;                  // fatal
-final class InvalidDefault(String group, String tag) extends ValidationIssue;       // fatal
-final class UnknownField(String path) extends ValidationIssue;                      // warn
+final class DanglingOutboundRef (String rule, String tag) extends ValidationIssue; // fatal
+final class EmptyUrltestGroup   (String tag)              extends ValidationIssue; // fatal
+final class InvalidDefault      (String group, String tag) extends ValidationIssue; // fatal
+final class UnknownField        (String path)             extends ValidationIssue; // warn
 ```
 
-Fatal → отказ запускать VPN, показываем в UI. Warn → debug log.
+Fatal → controller отказывается запускать VPN (в текущем UI только логируется в AppLog).
 
 ---
 
 ## §4. Round-trip
 
 ```
-         parseUri(uri)
-URI ───────────────────▶ NodeSpec ──spec.emit(vars)──▶ SingboxEntry (Map)
- ▲                         │                              │
- │                         │                              │
- └──── spec.toUri() ───────┘        parseSingboxEntry ────┘
+URI ─parseUri─▶ NodeSpec ─emit(vars)─▶ SingboxEntry(Map)
+ ▲                                        │
+ └─── spec.toUri() ──────── parseSingboxEntry(map) ──┘
 ```
 
-**Use cases:**
-- Copy URI в контекстном меню → `spec.toUri()`.
-- View JSON (read-only) → `spec.emit(vars).map` с pretty-print.
-- JSON editor: user редактирует map → `parseSingboxEntry(edited)` → новый `NodeSpec` → replace в `ServerList`.
-- Revert override: при сбросе `overrideDetour` пересобираем emit из исходного spec.
-
-**Инварианты (обязательны, тестами):**
-
-| Инвариант | Тест |
-|-----------|------|
-| `parseUri(spec.toUri()) ≈ spec` (сравнение без `rawUri` и `warnings`) | `round_trip_uri_test.dart` |
-| `parseSingboxEntry(spec.emit(vars).map) ≈ spec` | `round_trip_singbox_test.dart` |
-| property-based: `parseUri(toUri(random(VlessSpec))) ≈ random(VlessSpec)` | `property_round_trip_test.dart` |
+Инварианты (тесты `test/parser/round_trip_test.dart`):
+- `parseUri(spec.toUri()) ≈ spec` — сравнение без `id`, `rawUri`, `warnings`.
+- `parseSingboxEntry(spec.emit(vars).map) ≈ spec`.
 
 **Ограничения:**
-- XHTTP после `emit` превращается в httpupgrade. Обратно `parseSingboxEntry` вернёт `HttpUpgradeTransport` — информация о xhttp потеряна. Если нужен оригинал — есть `NodeSpec.rawUri`.
+- XHTTP после `emit` → `httpupgrade`. Обратный `parseSingboxEntry` вернёт `HttpUpgradeTransport` — инфа о `xhttp` потеряна (есть `spec.rawUri`).
 - Legacy VMess (v2rayN base64 JSON) → эмитим в модерный `vmess://`. Обратно не конвертируем.
 
 ---
 
-## §5. Структура файлов
+## §5. Раскладка файлов (фактическая)
 
 ```
-lib/models/
-├── server_list/
-│   ├── server_list.dart                 # sealed + DetourPolicy + UserSource
-│   ├── subscription_servers.dart
-│   ├── user_servers.dart
-│   └── subscription_meta.dart           # traffic + expire + title
-├── node_spec/
-│   ├── node_spec.dart                   # sealed NodeSpec
-│   ├── vless_spec.dart
-│   ├── vmess_spec.dart
-│   ├── trojan_spec.dart
-│   ├── shadowsocks_spec.dart
-│   ├── hysteria2_spec.dart
-│   ├── tuic_spec.dart
-│   ├── ssh_spec.dart
-│   ├── socks_spec.dart
-│   └── wireguard_spec.dart
-├── transport_spec.dart                  # sealed + toSingbox
-├── tls_spec.dart                        # TlsSpec + RealitySpec
-├── singbox_entry.dart                   # sealed Outbound | Endpoint
-├── node_warning.dart                    # sealed NodeWarning
-└── validation.dart                      # sealed ValidationIssue + Result
-
-lib/services/
-├── server_registry.dart                 # transient aggregator (§1.5)
-├── subscription/
-│   ├── sources.dart                     # sealed SubscriptionSource + fetch()
-│   └── http_fetcher.dart                # HTTP GET + headers
-├── parser/
-│   ├── body_decoder.dart                # §3.2 function
-│   ├── parse_all.dart                   # §3.3 top switch
-│   ├── uri/
-│   │   ├── vless.dart
-│   │   ├── vmess.dart
-│   │   ├── trojan.dart
-│   │   ├── shadowsocks.dart
-│   │   ├── hysteria2.dart
-│   │   ├── tuic.dart
-│   │   ├── ssh.dart
-│   │   ├── socks.dart
-│   │   └── wireguard.dart
-│   ├── json/
-│   │   ├── xray_outbound.dart           # один элемент Xray JSON
-│   │   └── singbox_entry.dart           # parseSingboxEntry
-│   ├── ini/
-│   │   └── wireguard_ini.dart           # INI → wg:// → parseWireguardUri
-│   └── transport.dart                   # Map → TransportSpec
-├── assembler/
-│   ├── build_config.dart                # §3.4 top function
-│   ├── preset_groups.dart               # vpn-*/auto-proxy-out logic
-│   ├── tls_fragment.dart                # post-step
-│   ├── clash_api_randomizer.dart        # post-step
-│   ├── dns_final.dart                   # post-step
-│   └── app_rules.dart                   # post-step
-└── validator.dart                       # §3.5 function
+lib/
+├── controllers/
+│   ├── subscription_controller.dart      # SubscriptionEntry façade + _rehydrate + generate
+│   └── home_controller.dart
+├── models/
+│   ├── server_list.dart                   # sealed ServerList + DetourPolicy + UserSource
+│   ├── subscription_meta.dart
+│   ├── node_spec.dart                     # sealed NodeSpec + 9 variants (+ NodeEntries deps)
+│   ├── node_spec_emit.dart                # emit/toUri реализации per protocol
+│   ├── node_entries.dart                  # {main, detours[]}
+│   ├── emit_context.dart                  # abstract EmitContext
+│   ├── singbox_entry.dart                 # sealed Outbound | Endpoint + .tag getter
+│   ├── transport_spec.dart                # sealed 5 variants + toSingbox
+│   ├── tls_spec.dart                      # TlsSpec + RealitySpec
+│   ├── node_warning.dart                  # sealed 5 variants
+│   ├── validation.dart                    # sealed ValidationIssue + ValidationResult
+│   ├── template_vars.dart
+│   ├── debug_entry.dart                   # AppLog DTO
+│   └── (home_state.dart, tunnel_status.dart, parser_config.dart — existing)
+├── services/
+│   ├── app_log.dart                       # глобальный логгер (debug/info/warning/error)
+│   ├── dump_builder.dart                  # config + log + subs + vars → JSON
+│   ├── download_saver.dart                # /sdcard/Download/lxbox-dump/*
+│   ├── template_loader.dart
+│   ├── settings_storage.dart              # server_lists, vars, dns, rules, …
+│   ├── parser/
+│   │   ├── uri_parsers.dart               # 9 parse{Vless,…}(String) → NodeSpec?
+│   │   ├── json_parsers.dart              # parseXrayOutbound + parseSingboxEntry
+│   │   ├── ini_parser.dart                # WG INI → wg:// → parseWireguardUri
+│   │   ├── body_decoder.dart              # base64/JSON/INI/URI-lines
+│   │   ├── parse_all.dart                 # DecodedBody → List<NodeSpec>
+│   │   ├── transport.dart                 # query → TransportSpec
+│   │   └── uri_utils.dart
+│   ├── subscription/
+│   │   ├── sources.dart                   # SubscriptionSource + parseFromSource + fetchRaw
+│   │   ├── input_helpers.dart             # isSubscriptionUrl / isWireGuardConfig / isDirectLink
+│   │   └── http_cache.dart                # body + headers кэш на диске
+│   ├── get_free_loader.dart               # (existing) «Get Free VPN» presets из assets/get_free.json
+│   ├── rule_set_downloader.dart           # (existing) .srs rule-sets кэш для селектабельных правил
+│   ├── clash_api_client.dart              # (existing) REST-клиент Clash API (connections/proxies/delay)
+│   ├── url_launcher.dart                  # (existing) утилитка на `url_launcher`
+│   ├── builder/
+│   │   ├── build_config.dart              # buildConfig + _BuildCtx + _buildPresetGroups
+│   │   ├── server_list_build.dart         # extension ServerList.build(ctx)
+│   │   ├── post_steps.dart                # applySelectableRules/AppRules/TlsFragment/CustomDns
+│   │   └── validator.dart
+│   └── migration/
+│       └── proxy_source_migration.dart    # proxy_sources → server_lists (v1 → v2)
+└── screens/ (UI, адаптированы под SubscriptionEntry)
 ```
-
-~10 файлов моделей, ~25 сервисных — каждый ≤150 строк. Никаких "registry/pipeline/context" классов.
 
 ---
 
-## §6. Миграция
+## §6. Миграция (выполнено)
 
-Strategy: **переписываем в отдельных файлах, переключаем один раз, старое удаляем.** Без feature-flag'а в релизе — v2 попадает либо работающим, либо не попадает (test coverage должен это гарантировать). Feature-flag используется только локально во время разработки для A/B сравнения.
+Стратегия: переписали в новых файлах, переключили один раз, v1 удалили. Без feature-flag в релизе.
 
-### Фаза 0 — подготовка
-- Собрать корпус тестовых URI / подписок в `test/fixtures/<protocol>/` (VLESS, VMess, Trojan, SS, Hysteria2, TUIC, SSH, SOCKS, WireGuard URI + INI, Xray JSON array, sing-box single outbound). Минимум 5 кейсов на протокол, включая edge-case'ы. Анонимизированные реальные подписки — в `test/fixtures/subscriptions/`.
-- Добавить `sing-box` CLI в CI (GitHub Actions step) как toolchain-зависимость для §7.4. Если выполнимо — опциональный шаг; фичу `config check` нельзя запустить без бинарника.
-- Настроить `build_runner` в CI: кеш `.dart_tool/build` между билдами.
+- **Фаза 0** — собраны фикстуры (`app/test/fixtures/`, 37 файлов), обновлён `pubspec.yaml`, добавлен TUIC раздел в `docs/PROTOCOLS.md`, deprecation-баннеры на 004/005/018.
+- **Фаза 1** — модели sealed, тесты equality/JSON round-trip.
+- **Фаза 2** — парсеры всех 9 протоколов (включая новый TUIC v5), `body_decoder`, `emit`/`toUri`, round-trip, parity v1↔v2.
+- **Фаза 3** — builder, validator, миграция `ProxySource → ServerList` в `SettingsStorage.getServerLists`, controllers переведены на v2, UI-экраны адаптированы через façade `SubscriptionEntry`.
+- **Фаза 4** — удалены `node_parser.dart` (1100 LOC), `config_builder.dart` (550), `source_loader.dart` (235), `subscription_fetcher.dart`, `subscription_decoder.dart`, `xray_json_parser.dart` (435), `models/parsed_node.dart`, `models/proxy_source.dart`. `grep ParsedNode|ProxySource|NodeParser|ConfigBuilder` по `lib/` — только комментарии в `proxy_source_migration.dart` (легитимно).
+- **Фаза 5 (post-refactor)** — первоначальный inline-dedup в `buildConfig` + `ServerRegistry` заменены на 3-слойную архитектуру (`EmitContext` + `ServerList.build(ctx)` + `NodeSpec.getEntries`). `ServerRegistry` физически удалён.
 
-### Фаза 1 — модели
-- Ввести `NodeSpec`, `TransportSpec`, `TlsSpec`, `NodeWarning`, `SingboxEntry`, `ServerList`, `ServerRegistry`.
-- Freezed + build_runner в CI.
-- Тесты моделей: equality, copyWith, JSON serialisation.
-- v1 не трогаем.
+### 6.1 Миграция настроек пользователя
 
-### Фаза 2 — парсеры + decoder
-- Перенести логику из `node_parser.dart` в `lib/services/parser/uri/*.dart`.
-- `body_decoder.dart`, `parse_all.dart`.
-- **Новый протокол — TUIC v5.** В v1 отсутствует, добавляется с нуля: `parseTuic` + `TuicSpec` + `emit`. Корпус тест-URI для golden-fixtures.
-- Parity-тесты: `v1.parse(uri).toJson == v2.parse(uri).emit().map` на корпусе URI из `test/fixtures/`. TUIC тестируется только в v2 (в v1 парсинга нет).
-- v1 всё ещё активен для продакшна.
-
-### Фаза 3 — assembler + validator
-- `build_config.dart` + post-steps.
-- Parity-тесты: v1 и v2 собирают конфиг из одних и тех же источников, `jsonDiff == {}`.
-- Переключить `HomeController` / `SubscriptionController` на v2. v1 ещё в файлах, но не вызывается.
-
-### Фаза 4 — удаление v1
-- Физически удалить: `node_parser.dart`, `config_builder.dart`, `proxy_source.dart`, `models/parsed_node.dart`, `source_loader.dart`.
-- `grep -rn "ParsedNode\|ProxySource\|_buildVMess\|_buildVLESS\|_transportFromQuery"` возвращает пусто.
-- Никаких "deprecated" комментариев в остаточном коде.
-
+`SettingsStorage.getServerLists()` при первом чтении:
+- Если есть ключ `server_lists` — читает v2 напрямую.
+- Если только `proxy_sources` (v1) — конвертирует через `migrateProxySources` (`services/migration/proxy_source_migration.dart`): URL → `SubscriptionServers`, inline → `UserServers(paste)`, переносит detour-флаги, meta-поля, `lastUpdated`. Пишет в `server_lists`, удаляет `proxy_sources`. Одноразово.
 
 ---
 
-## §7. Тестирование
+## §7. Тестирование (106 тестов)
 
-### 7.1 Юнит
-Каждый парсер + каждый `NodeSpec.emit` — свой тест. Корпус валидных и edge-case URI. Для каждого — золотой файл `test/fixtures/<protocol>/<case>.uri` + `<case>.expected.json`.
+### 7.1 Модели
+`test/models/*` — equality, `copyWith`, JSON round-trip `ServerList`, exhaustive switch компилируется на всех 9 `NodeSpec` variants, `NodeWarning` severity mapping.
 
-### 7.2 Round-trip
-- `parseUri(spec.toUri()) ≈ spec`
-- `parseSingboxEntry(spec.emit().map) ≈ spec`
-- property-based на сгенерированных `NodeSpec`.
+### 7.2 Парсеры (per-protocol + fixtures)
+`test/parser/*` — каждый парсер + emit на corpus URI в `test/fixtures/<protocol>/`. Round-trip `parseUri(spec.toUri()) ≈ spec` на всех 9 variants. Отдельные тесты TUIC, VLESS Reality, INI, JSON (xray, singbox), body_decoder (base64, INI, URI list, Xray array, singbox outbound, comment-only, empty).
 
-### 7.3 Parity v1↔v2
-`test/parity/` — реальные подписки (анонимизированные), для каждой:
-```dart
-final v1 = oldBuild(parseV1(body));
-final v2 = buildConfig(ServerRegistry([...]), template, settings);
-expect(jsonDiff(v1, v2.singboxConfig), isEmpty);
-```
+### 7.3 Builder
+`test/builder/*`:
+- `build_config_test.dart` — smoke (2 vless → 2 outbounds + vpn-1 + auto), WG → endpoints, tls_fragment только first-hop, dedup тэгов `BL: Frankfurt-1/-2` с префиксом, `clash_api` randomize в `generatedVars`, configJson валиден.
+- `validator_test.dart` — dangling refs (fatal), empty urltest (fatal), invalid selector default (fatal), endpoint tag ссылки.
 
-### 7.4 Интеграция
-End-to-end: source → parseFromSource → ServerRegistry → buildConfig → `sing-box check -c config.json` (CLI).
+### 7.4 End-to-end pipeline
+`test/pipeline_e2e_test.dart` — `InlineSource(body)` → `parseFromSource` → `UserServers` → `buildConfig(lists, {template})` → проверка preset-групп, disabled list ignored, XHTTP warning пролетает до `result.emitWarnings`.
 
-Требует установленного `sing-box` бинарника в CI — toolchain-шаг настраивается в Фазе 0. Локально — опционально (если бинарник не найден, шаг пропускается с warning).
+### 7.5 Subscription
+`test/subscription/*` — InlineSource URI list / base64 / QR, inline pseudo-headers (`# profile-title:` → `meta.profileTitle`).
+
+### 7.6 Migration
+`test/migration/proxy_source_migration_test.dart` — URL → Sub, inline → User(paste), detour defaults preserve, JSON round-trip.
+
+### 7.7 Parity v1↔v2
+**Удалено** в Фазе 4 вместе с v1. На этапе Фаз 2-3 тесты подтвердили эквивалентность outbound-JSON на корпусе фикстур, после чего контракт переходит на fixtures-golden + round-trip.
 
 ---
 
 ## §8. UI impact
 
-| Экран | Что меняется |
-|-------|---------------|
-| `SubscriptionsScreen` | читает `List<ServerList>`, рендерит через pattern-match (§1.6). Новая кнопка "Add servers" (UserServers). |
-| `SubscriptionDetailScreen` | поля `SubscriptionServers.meta` (quota, expire). Warning-баннер типизирован (по классу `NodeWarning` иконка+цвет). |
-| `NodeSettingsScreen` | работает через `spec.emit().map` ↔ `parseSingboxEntry(edited)`. Legacy `ParsedNode.outbound` не используется. |
-| `HomeScreen` | node-list из Clash API — без изменений; при копировании/View JSON берёт `ServerRegistry.findByTag`. |
-| `NodeFilterScreen` | без изменений (работает с тегами-строками). |
-| `RoutingScreen` | без изменений. |
+| Экран | Что |
+|-------|-----|
+| `SubscriptionsScreen` | `List<SubscriptionEntry>`, чип `+N⚙` над nodeCount если есть chained. «Add servers» через smart-paste → `UserServers`. |
+| `SubscriptionDetailScreen` | Tabs: Nodes / Settings / Source. Settings: редактор `tagPrefix`, `DetourPolicy` toggles, override-picker. Source: живой HTTP GET (`fetchRaw`), важные headers сразу + «показать все». Warning-баннер по `NodeWarning.severity`. |
+| `NodeSettingsScreen` | Работает через `spec.emit(TemplateVars.empty).map` для view/edit JSON; `parseSingboxEntry(edited)` для save. |
+| `RoutingScreen` | Облачко rule-set кликабельное (параллельный download N×9s, cap ~20с), error красный, cached зелёный. Post-steps в buildConfig перестраивает конфиг. |
+| `DebugScreen` | `AppLog.I` с фильтрами severity + source. Кнопка «📤 Dump» — `DumpBuilder.build()` собирает `{config, vars, server_lists, debug_log}` в `/tmp/lxbox-dump-<ts>.json`, открывает системный share-диалог. |
+| `HomeScreen` | Без изменений поверх парсера. |
+| `StatsScreen` | Group по `chains.first` из Clash connections — детур отображается как `node via ⚙ detour`. |
 
-Warning-сообщения — `NodeWarning.message` plain-строкой. Локализация добавится отдельным рефактором, когда в проекте появится i18n-инфраструктура (пока её нет — все строки UI hardcoded en).
+Warning-тексты — plain en-string (i18n-инфры в проекте нет).
 
 ---
 
 ## §9. Критерии приёмки
 
-- [ ] Sealed: `NodeSpec`, `TransportSpec`, `TlsSpec`, `NodeWarning`, `SingboxEntry`, `ServerList`, `SubscriptionSource`, `DecodedBody`, `ValidationIssue`.
-- [ ] `WireguardSpec.emit() => Endpoint`, все остальные → `Outbound`. Никакой проверки `type == 'wireguard'` в ассемблере.
-- [ ] `parseFromSource(UrlSource('https://...'))` → `ParseResult` с `nodes` и `meta`.
-- [ ] `buildConfig(registry, template, settings)` возвращает `Map<String, dynamic>` + `ValidationResult`.
-- [ ] Parity-тесты `v1 ↔ v2` на корпусе фикстур — `jsonDiff == {}`.
-- [ ] Round-trip тесты для каждого типа `NodeSpec` (URI + singbox).
-- [ ] XHTTP fallback живёт в `XhttpTransport.toSingbox` единственный раз; компилятор не даёт забыть за счёт sealed.
-- [ ] После Фазы 4: `grep -rn "ParsedNode\|ProxySource"` → пусто.
-- [ ] Новый протокол добавляется тремя шагами: новый `XxxSpec` + `parseXxx(uri)` + ветка в `parseUri` switch.
-- [ ] TUIC v5 — реализован в рамках этой работы (`TuicSpec`, `parseTuic`, `emit → Outbound`). URI: `tuic://UUID:PASSWORD@host:port?congestion_control=...&udp_relay_mode=...&alpn=...&sni=...#label`. sing-box: [outbound docs](https://sing-box.sagernet.org/configuration/outbound/tuic/).
+- [x] Sealed на всех местах ветвления: `NodeSpec`, `TransportSpec`, `TlsSpec*`, `NodeWarning`, `SingboxEntry`, `ServerList`, `SubscriptionSource`, `DecodedBody`, `ValidationIssue`.
+- [x] `WireguardSpec.emit()` → `Endpoint`, остальные → `Outbound`. В builder'е `switch(entry)` по sealed, без `type == 'wireguard'`.
+- [x] `parseFromSource(UrlSource)` → `ParseResult{nodes, meta, rawBody, headers}`.
+- [x] `buildConfig({lists, settings, template?})` → `Future<BuildResult>` с `configJson`, `validation`, `emitWarnings`, `generatedVars`.
+- [x] Round-trip `parseUri(spec.toUri()) ≈ spec` для 9 вариантов + `parseSingboxEntry(emit().map) ≈ spec`.
+- [x] XHTTP fallback — `XhttpTransport.toSingbox()` единственный раз, sealed-switch не даёт забыть.
+- [x] После Фазы 4: `grep ParsedNode\|ProxySource` в `lib/` — только комментарии в миграционном файле.
+- [x] Новый протокол: добавление = `XxxSpec` + `parseXxx` + `emitXxx`/`toUriXxx` + ветка в `parseUri` switch. Остальное компилятор ловит как пропущенный sealed-case. *(Edge-case: если протокол эмитит не-Outbound и не-Endpoint, потребуется новый вариант в sealed `SingboxEntry`. На 2026-04-18 ни один не требует — все укладываются в Outbound/Endpoint.)*
+- [x] TUIC v5 — реализован: `TuicSpec`, `parseTuic`, `emitTuic → Outbound`. URI `tuic://UUID:PASSWORD@host:port?congestion_control=…&udp_relay_mode=…&alpn=…&sni=…#label`.
+- [x] Дедуп тэгов + `tagPrefix` — единственная точка `ctx.allocateTag(base)` в `_BuildCtx`, вызывается из `ServerList.build`. `base` = `prefix + tag` если `tagPrefix != ''`, иначе `tag`.
+- [x] TLS fragment инвариант — только first-hop (§3.4.1).
+- [x] Offline-rehydrate — `HttpCache.save` на каждом fetch, `_rehydrateFromCache` на init.
+- [x] Retry fetch — 2 попытки × 9s + 2s пауза, cap ≈ 20s.
+- [x] `profile-title: base64:...` декодируется.
+- [x] Inline pseudo-headers (`# profile-title:` и др.) извлекаются из тела и мержатся с HTTP-headers.
+- [x] `Content-Disposition` fallback для имени — `filename="…"` / `filename=…` / RFC 5987 `filename*=UTF-8''…`, срез расширений `.txt/.yaml/.yml/.json/.conf`.
+- [x] SIP003 plugin split — `?plugin=name;k=v;…` корректно делится на `plugin` / `plugin_opts`.
 
 ---
 
-## §10. Риски
+## §10. Риски и пост-мортем
 
-| Риск | Смягчение |
-|------|-----------|
-| Codegen build-step замедляет CI | Кешируем `.dart_tool/build` между билдами |
-| Parity-тесты ловят расхождение на редком URI-формате | Фикстуры обновляются из реальных подписок, отдельный PR с багфиксом до Фазы 3 |
-| ANR на больших подписках (1000+ нод) | Опционально — `compute()` Isolate для `parseAll`, не в scope v2 |
-| Миграция `ProxySource` → `List<ServerList>` ломает существующие настройки пользователя | Одноразовая миграция в `SettingsStorage.load`: `ProxySource` → `SubscriptionServers` / `UserServers` (по наличию URL). Тест. |
-| XHTTP в будущем поддержат в sing-box | `XhttpTransport.toSingbox` переделываем на прямой emit, `UnsupportedTransportWarning` убираем. Один коммит. |
-| Нет фикстур / недостаточное покрытие перед фазой 2 | Блокирует parity-тесты v1↔v2. Собрать корпус в Фазе 0, это гейт на старт Фазы 2 |
-| Нет `sing-box` бинарника в CI | Интеграционный тест §7.4 отключается. В Фазе 0 добавить install-step; при сбое — warn, не fail. Основное покрытие — юнит + parity |
-| Нет i18n-инфраструктуры для warning'ов | `NodeWarning.message` — plain en-string в v2. Локализация — отдельным рефактором |
+| Риск (плановый) | Факт |
+|-----------------|------|
+| Codegen build-step замедляет CI | freezed не использовали — остались ручные sealed. Codegen-времени = 0. |
+| Parity-тесты ловят расхождение | В Фазах 2-3 ловили 3-4 тонких случая (h2→http, flow=xtls-rprx-vision-udp443, Reality без transport). Исправлено до удаления v1. |
+| ANR на 1000+ нодах | 150-200 нод парсятся <50ms. Lazy rehydrate в фоне пока не нужен (YAGNI). |
+| `ProxySource → ServerList` ломает юзер-настройки | Покрыто тестом `proxy_source_migration_test.dart`; в проде миграция сработала без потерь. |
+| XHTTP в будущем поддержат в sing-box | `XhttpTransport.toSingbox` переписать на прямой emit — один коммит. |
+| YAML-подписки (Clash) | Не поддержаны парсером. Обходится через UA `SubscriptionParserClient` — сервер отдаёт URI-list. Документировано в §3.1. |
+| Liberty / DDoS-guard серверы на мобильной сети | Решено retry (2 попытки × 9s + 2s). |
 
 ---
 
-## §11. Решения
+## §11. Ключевые решения
 
-| # | Вопрос | Решение | Когда |
-|---|--------|---------|-------|
-| 1 | Freezed vs ручной sealed | freezed — экономит ~80 строк/класс на copyWith/==/hashCode/toJson | 2026-04-18 |
-| 2 | Где живут detour-флаги | на `ServerList`, не на `NodeSpec`. Политика применяется inline в `buildConfig` | 2026-04-18 |
-| 3 | Backward-compat для `ParsedNode` в `NodeSettingsScreen` | переписать сразу на `NodeSpec + parseSingboxEntry`, адаптер не делаем | 2026-04-18 |
-| 4 | Один `UserServers` или список | `List<UserServers>`, один на каждую вставку/файл/QR | 2026-04-18 |
-| 5 | `tagPrefix` default | автогенерируется при создании `ServerList`, редактируется в UI | 2026-04-18 |
-| 6 | Pipelines / registries / transform-chain | не нужны. Функции + switch. Inline-шаги в `buildConfig` | 2026-04-18 |
-| 7 | `ServerRegistry` | transient runtime-аггрегатор, не персистится | 2026-04-18 |
-| 8 | `EmitContext` с begin/end | убран. Warnings в `NodeSpec.warnings` напрямую | 2026-04-18 |
-| 9 | `warnings` mutable на freezed-классе | компромисс принят. Единственное mutable поле в spec'е, пересоздаётся на каждый parse/emit | 2026-04-18 |
-| 10 | Feature-flag в релизе | нет. Релиз с v2 — релиз с v2. Flag только локально для dev-сравнения | 2026-04-18 |
-| 11 | TUIC v5 | включаем в scope v2 (в Фазу 2). Новый протокол, в v1 отсутствует | 2026-04-18 |
+| # | Вопрос | Решение |
+|---|--------|---------|
+| 1 | Freezed vs ручной sealed | **Ручной sealed** — freezed добавили в pubspec, но в итоге не использовали: для методов-heavy `NodeSpec` (emit/toUri/getEntries) freezed даёт меньше чем стоит codegen complexity. |
+| 2 | Где живут detour-флаги | На `ServerList.detourPolicy`. Применяются в `ServerList.build(ctx)`. `NodeSpec` не знает о подписке. |
+| 3 | `ServerRegistry` | Сначала был как thin wrapper, потом переведён в полноценного владельца дедупа, потом **удалён** — логика переехала в `ServerList.build(ctx)` с аллокатором `ctx.allocateTag`. |
+| 4 | `NodeSpec.list` back-ref | Отвергнут — узел не знает о своём контейнере. `list` передаётся только через `assemble(list, ctx)` (факт.: узел использует `ctx.vars`, остальное знает `ServerList`). |
+| 5 | sink vs `List<SingboxEntry>` из `getEntries` | `NodeEntries{main, detours[]}` — именованная структура, не позиционный список. Sink-паттерн (`ctx.add(entry)` на узле) был в промежуточной версии, отвергнут как усложнение. |
+| 6 | Feature-flag в релизе | Нет. v2 либо работает, либо не релизится. |
+| 7 | `warnings` mutable на spec | Оставлено — единственное mutable поле в иерархии, пересоздаётся на каждом parse/emit. |
+| 8 | `registerDetourServers` default | Поменяли с `true` → `false` по юзер-фидбеку (лишние ⚙ в proxy-группах). Existing подписки сохраняют свои сохранённые значения. |
+| 9 | TUIC v5 | Добавлен с нуля (в v1 отсутствовал). |
+| 10 | preset_groups.dart как отдельный файл | Удалён, слит в `build_config.dart` как приватный `_buildPresetGroups` — вызывается из одного места. |
+| 11 | User-Agent default | `SubscriptionParserClient` (v1-совместимость). `ClashForAndroid/*` триггерит YAML, который мы не парсим. |
 
 ---
 
 ## See also
 
-- [`004 subscription parser`](../004%20subscription%20parser/spec.md) — legacy, заменяется этим
-- [`005 config generator`](../005%20config%20generator/spec.md) — заменяется §3.4
-- [`018 detour server management`](../018%20detour%20server%20management/spec.md) — `DetourPolicy` остаётся, применение inline
-- [`020 security and dpi bypass`](../020%20security%20and%20dpi%20bypass/spec.md) — `tls_fragment.dart` в §5
-- [`docs/PROTOCOLS.md`](../../../PROTOCOLS.md) — per-protocol URI + XHTTP fallback note
-- [`docs/private/research/hiddify-comparison/REPORT.md`](../../../private/research/hiddify-comparison/REPORT.md) — референс типизации через freezed
+- [`004 subscription parser`](../004%20subscription%20parser/spec.md) — v1 legacy, заменено этим.
+- [`005 config generator`](../005%20config%20generator/spec.md) — v1 сборщик заменён §3.4.
+- [`018 detour server management`](../018%20detour%20server%20management/spec.md) — `DetourPolicy` на `ServerList`, применение в `ServerList.build(ctx)`.
+- [`020 security and dpi bypass`](../020%20security%20and%20dpi%20bypass/spec.md) — TLS fragment first-hop invariant (§3.4.1 этой спеки).
+- [`docs/PROTOCOLS.md`](../../../PROTOCOLS.md) — URI-формат каждого протокола + TUIC v5 + XHTTP fallback note.

@@ -652,6 +652,56 @@ Missing any of these throws a `FormatException`.
 
 ---
 
+## 9.5 TUIC v5
+
+Добавлен в Parser v2 (спека [`026`](./spec/features/026%20parser%20v2/spec.md)). В v1 парсинг TUIC отсутствовал.
+
+### URI format
+
+```
+tuic://<UUID>:<PASSWORD>@<host>:<port>?<params>#<label>
+```
+
+### Параметры
+
+| Ключ | Значение |
+|------|---------|
+| `congestion_control` | `bbr` \| `cubic` \| `new_reno` (default `cubic`) |
+| `udp_relay_mode` | `native` \| `quic` (default `native`) |
+| `alpn` | CSV список (`h3`, `h3-29`) |
+| `sni` | SNI для TLS |
+| `allow_insecure` / `insecure` | `1` \| `true` — пропустить проверку сертификата |
+| `disable_sni` | `1` — не отправлять SNI |
+| `reduce_rtt` | `1` — включить 0-RTT / early data |
+
+### sing-box outbound (emit)
+
+```json
+{
+  "type": "tuic",
+  "tag": "<tag>",
+  "server": "<host>",
+  "server_port": <port>,
+  "uuid": "<UUID>",
+  "password": "<PASSWORD>",
+  "congestion_control": "bbr",
+  "udp_relay_mode": "native",
+  "zero_rtt_handshake": true,
+  "tls": {
+    "enabled": true,
+    "server_name": "<sni>",
+    "alpn": ["h3"],
+    "insecure": false
+  }
+}
+```
+
+### Reference
+
+- sing-box outbound: https://sing-box.sagernet.org/configuration/outbound/tuic/
+
+---
+
 ## 10. JSON Outbound
 
 ### Format
