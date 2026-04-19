@@ -2,7 +2,13 @@
 
 L×Box parses proxy URIs from subscriptions and converts them into [sing-box](https://sing-box.sagernet.org/) outbound (or endpoint) JSON. This document describes every supported protocol, its URI format, parsed parameters, and the resulting sing-box configuration.
 
-Source code: [`app/lib/services/node_parser.dart`](../app/lib/services/node_parser.dart), [`app/lib/services/xray_json_parser.dart`](../app/lib/services/xray_json_parser.dart).
+**Source code (Parser v2, spec 026):**
+- [`app/lib/services/parser/uri_parsers.dart`](../app/lib/services/parser/uri_parsers.dart) — URI-форматы всех 9 протоколов
+- [`app/lib/services/parser/transport.dart`](../app/lib/services/parser/transport.dart) — парсинг `TransportSpec`, XHTTP fallback
+- [`app/lib/services/parser/json_parsers.dart`](../app/lib/services/parser/json_parsers.dart) — `parseSingboxEntry`, `parseXrayOutbound`
+- [`app/lib/services/parser/ini_parser.dart`](../app/lib/services/parser/ini_parser.dart) — WireGuard INI
+- [`app/lib/services/parser/parse_all.dart`](../app/lib/services/parser/parse_all.dart) — orchestrator
+- [`app/lib/models/node_spec.dart`](../app/lib/models/node_spec.dart), [`node_spec_emit.dart`](../app/lib/models/node_spec_emit.dart) — sealed `NodeSpec` + `emit()` / `toUri()`
 
 ---
 
@@ -18,8 +24,10 @@ Source code: [`app/lib/services/node_parser.dart`](../app/lib/services/node_pars
 8. [SOCKS](#7-socks)
 9. [WireGuard](#8-wireguard)
 10. [WireGuard INI Config](#9-wireguard-ini-config)
-11. [JSON Outbound (raw sing-box)](#10-json-outbound)
-12. [Xray JSON Array](#11-xray-json-array)
+11. [TUIC v5](#95-tuic-v5)
+12. [JSON Outbound (raw sing-box)](#10-json-outbound)
+13. [Xray JSON Array](#11-xray-json-array)
+14. [XHTTP transport fallback](#xhttp-transport-fallback)
 
 ---
 
@@ -81,14 +89,17 @@ This is **cargo cult convention** — works because all clients parse identicall
 
 ### Implementation in L×Box
 
-See [`app/lib/services/subscription_fetcher.dart`](../app/lib/services/subscription_fetcher.dart). After fetching a subscription, headers are parsed and stored in `ProxySource` fields:
+Парсинг в [`app/lib/services/subscription/sources.dart`](../app/lib/services/subscription/sources.dart) (`_metaFromHeaders` + `_parseContentDispositionFilename`). После fetch'а заголовки превращаются в `SubscriptionMeta` и кладутся в `SubscriptionServers.meta`:
 
-- `ProxySource.name` ← `profile-title`
-- `ProxySource.totalBytes`, `uploadBytes`, `downloadBytes`, `expireTimestamp` ← `subscription-userinfo`
-- `ProxySource.supportUrl` ← `support-url`
-- `ProxySource.webPageUrl` ← `profile-web-page-url`
+- `SubscriptionServers.name` ← `profile-title` (с fallback на `content-disposition: filename=...`, v1.3.0+)
+- `SubscriptionMeta.{totalBytes, uploadBytes, downloadBytes, expireTimestamp}` ← `subscription-userinfo`
+- `SubscriptionMeta.supportUrl` ← `support-url`
+- `SubscriptionMeta.webPageUrl` ← `profile-web-page-url`
+- `SubscriptionServers.updateIntervalHours` ← `profile-update-interval` (используется в [spec 027](./spec/features/027%20subscription%20auto%20update/spec.md))
 
-Displayed in subscription detail → **Source tab** → Headers section.
+User-Agent HTTP-запросов: `LxBox Android subscription client` (v1.3.0+; ранее `SubscriptionParserClient`).
+
+Displayed в subscription detail → **Source tab** → Headers section.
 
 ---
 
@@ -161,7 +172,7 @@ vless://UUID@host:port?query_params#label
 | HTTP/2 | `http` | `{"type": "http", "path": ..., "host": [...]}` |
 | HTTPUpgrade | `httpupgrade`, `xhttp` | `{"type": "httpupgrade", "path": ..., "host": ...}` |
 
-> **⚠️ Note on XHTTP.** sing-box (up to 1.12.x, Apr 2026) **не поддерживает** XHTTP как отдельный transport. PR [SagerNet/sing-box#3879](https://github.com/SagerNet/sing-box/pull/3879) закрыт без мержа. L×Box при обнаружении `net=xhttp` / `type=xhttp` делает fallback на `httpupgrade`, ставит `ParsedNode.warning` и пишет в debug-log через `debugPrint`. UI (subscription detail, node list) показывает предупреждение. В большинстве случаев такой узел **не заработает** — XHTTP и HTTPUpgrade семантически различны. Единая точка — `_transportFromQuery` в `node_parser.dart`. Подробнее: [XHTTP transport fallback](#xhttp-transport-fallback).
+> **⚠️ Note on XHTTP.** sing-box (до 1.12.x, April 2026) **не поддерживает** XHTTP как отдельный transport. PR [SagerNet/sing-box#3879](https://github.com/SagerNet/sing-box/pull/3879) закрыт без мержа. L×Box (Parser v2) при обнаружении `net=xhttp` / `type=xhttp` собирает sealed `XhttpTransport`; на `emit()` fallback'ится на `httpupgrade` с warning'ом через `NodeSpec.warnings`. UI показывает предупреждение (см. [XHTTP transport fallback](#xhttp-transport-fallback)). В большинстве случаев такой узел **не заработает** — XHTTP и HTTPUpgrade семантически различны.
 
 ### TLS Behavior
 
@@ -897,10 +908,13 @@ Multiple query keys are checked: `insecure`, `allowInsecure`, `allowinsecure`. V
 - PR [SagerNet/sing-box#3879](https://github.com/SagerNet/sing-box/pull/3879) ("Add xhttp and kcp transport") закрыт без мержа 2026-03-09.
 - С `"type": "xhttp"` в конфиге sing-box падает на загрузке (`unknown transport type`).
 
-**Поведение L×Box.** Единая точка обработки — `_transportFromQuery` в `lib/services/node_parser.dart`. При обнаружении `xhttp`:
-1. Устанавливается `ParsedNode.warning = 'XHTTP не поддерживается sing-box, используется httpupgrade (может не работать)'`.
-2. `debugPrint('[node_parser] WARN ...')` — попадает во Flutter debug log.
-3. Транспорт собирается как `{"type": "httpupgrade", "path": ..., "host": ...}` — синтаксически валидный, но семантически отличный от XHTTP протокол. Узел попадает в конфиг, но с большой вероятностью **не соединится** с сервером.
-4. UI (`subscription_detail_screen`) показывает оранжевый баннер "N узлов с предупреждениями (XHTTP fallback)" + per-node warning-строку.
+**Поведение L×Box (Parser v2).** При обнаружении `xhttp` в URI парсер собирает sealed `XhttpTransport` в [`lib/services/parser/transport.dart`](../app/lib/services/parser/transport.dart). На `emit()` в [`models/transport_spec.dart`](../app/lib/models/transport_spec.dart):
+
+1. Возвращается `{"type": "httpupgrade", "path": ..., "host": ...}` — fallback на httpupgrade — плюс `UnsupportedTransportWarning('xhttp', 'httpupgrade')` в tuple.
+2. `NodeSpec.emit` (в [`node_spec_emit.dart`](../app/lib/models/node_spec_emit.dart)) дописывает warning в `node.warnings`.
+3. `buildConfig` собирает все `node.warnings` в `result.emitWarnings` — пишутся в `AppLog` и UI.
+4. UI (`subscription_detail_screen`) показывает оранжевый баннер "N nodes with warnings (XHTTP fallback etc.)" + per-node warning-строку с сортировкой по severity (v1.3.1+).
+
+Узел попадает в конфиг, но с большой вероятностью **не соединится** с сервером — httpupgrade и xhttp семантически разные протоколы.
 
 **Когда снимется fallback.** Когда sing-box добавит XHTTP в апстрим. Мы уберём warning и генерацию `{"type": "xhttp", ...}` будет прямой. До тех пор — стратегия "валидный конфиг + громкий warning", а не "крашим парс всей подписки".

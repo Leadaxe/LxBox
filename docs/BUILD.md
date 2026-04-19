@@ -13,13 +13,40 @@
 
 ## Flutter-приложение
 
-Каталог **`app/`** — проект L×Box. Зависимости подтягиваются через `flutter pub get` (в т.ч. **`flutter_singbox_vpn`**, libbox на Android с [JitPack](https://jitpack.io) — репозиторий указан в `android/build.gradle.kts`). Импорт конфига по кнопке **Read**: **JSON** или **JSON5/JSONC** (комментарии `//`, `/* */` — парсер `json5`), затем в ядро уходит канонический JSON; источник — буфер или системный диалог выбора файла.
+Каталог **`app/`** — проект L×Box. Зависимости подтягиваются через `flutter pub get`. Нативный VPN — `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/` (свой `BoxVpnService`, не Flutter plugin). libbox на Android — [JitPack](https://jitpack.io), пакет `io.github.sagernet:libbox:1.12.12`, репозиторий указан в `android/build.gradle.kts`.
+
+Импорт конфига по кнопке **Read**: **JSON** или **JSON5/JSONC** (комментарии `//`, `/* */` — парсер `json5`), затем в ядро уходит канонический JSON; источник — буфер или системный диалог выбора файла.
 
 ```bash
 cd app
 flutter pub get
 flutter run   # устройство или эмулятор Android
 ```
+
+### Локальная release-сборка с LOCAL BUILD маркером
+
+Скрипт [`scripts/build-local-apk.sh`](../scripts/build-local-apk.sh) оборачивает `flutter build apk --release` с `--dart-define`'ами, которые подмешивают git describe:
+
+```bash
+./scripts/build-local-apk.sh
+```
+
+В About screen появится розовая плашка **«🧪 LOCAL BUILD · N commits since vX.Y.Z»** с git describe и временем сборки.
+
+CI-сборки (через `flutter build apk --release` напрямую в `.github/workflows/ci.yml`) не передают эти defines → чистый релизный APK без маркера.
+
+Передаваемые defines:
+
+| `--dart-define` | Источник |
+|-----------------|----------|
+| `BUILD_LOCAL=true` | всегда (триггерит рендер плашки в About) |
+| `BUILD_GIT_DESC` | `git describe --tags --long --dirty` |
+| `BUILD_GIT_SHA` | `git rev-parse --short HEAD` |
+| `BUILD_LAST_TAG` | `git describe --tags --abbrev=0` |
+| `BUILD_COMMITS_SINCE_TAG` | `git rev-list <tag>..HEAD --count` |
+| `BUILD_TIME` | `date -u +"%Y-%m-%d %H:%M UTC"` |
+
+Скрипт требует `git` и JDK (для gradle). Остальные flutter-аргументы передаются через `"$@"`.
 
 ## Минимальный конфиг для проверки на телефоне
 

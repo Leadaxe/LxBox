@@ -1,7 +1,7 @@
 # Отчёт о разработке L×Box
 
-**Дата:** 14 апреля 2026  
-**Период:** Эволюция от MVP до полноценного приложения
+**Дата:** 19 апреля 2026 (обновлено до v1.3.1)
+**Период:** Эволюция от MVP до полноценного приложения + Parser v2 landmark-рефакторинг
 
 ---
 
@@ -396,16 +396,83 @@ L×Box прошёл путь от MVP (один экран: Read config → Star
 
 ---
 
+## Этап 11: Parser v2 landmark-рефакторинг (v1.3.0 — 18 апреля 2026)
+
+Полная переработка внутреннего парсер/билдер pipeline согласно [spec 026](./spec/features/026%20parser%20v2/spec.md). 5 фаз за 1 день, ~9.5k/-3.8k LOC.
+
+### Что сделано
+
+- **Типизированная sealed `NodeSpec`** — 9 вариантов (VLESS, VMess, Trojan, SS, Hy2, TUIC v5 новый, SSH, SOCKS, WireGuard) с полиморфным `emit(vars)` и `toUri()`.
+- **Round-trip invariant** — `parseUri(spec.toUri()) ≈ spec` протестирован per variant.
+- **Sealed `TransportSpec`** — TcpTransport, WsTransport, GrpcTransport, HttpTransport, HttpUpgradeTransport, XhttpTransport. Компилятор enforc'ит fallback для XHTTP (→ httpupgrade + `UnsupportedTransportWarning`).
+- **3-слойный pipeline** — `parseFromSource(source) → ServerList.build(ctx) → buildConfig(lists, settings) → BuildResult{config, validation, warnings}`.
+- **`ServerList` sealed** — `SubscriptionServers` vs `UserServer` (в v1.3.1 singular после rename).
+- **`EmitContext` + `NodeEntries{main, detours[]}`** — замена плоского `ServerRegistry` (v1) на named struct с чётким контрактом.
+- **`ValidationResult`** — типизированные `ValidationIssue`: dangling refs, empty urltest, invalid selector default.
+- **Миграция v1→v2** — one-shot `migrateProxySources` в `SettingsStorage.getServerLists`: `proxy_sources` → `server_lists` при первом чтении.
+- **Удалено** — `node_parser.dart` (~1100 LOC), `config_builder.dart` (~550), `source_loader.dart`, `subscription_decoder.dart`, `subscription_fetcher.dart`, `xray_json_parser.dart`, `parsed_node.dart`, `proxy_source.dart`. Суммарно ~2700 LOC.
+- **116 тестов** покрывают models, parser, round-trip, builder, validator, migration, subscription pipeline, e2e.
+
+### Подтестовые фичи
+
+- **Subscription auto-update** (spec 027) — 4 триггера (appStart, vpnConnected+2min, periodic 1h, vpnStopped) + manual force. Жёсткие gates: `minRetryInterval=15min` (persisted), `maxFailsPerSession=5` (in-memory), `perSubscriptionDelay=10s±2s`, `_running`/`_inFlight` dedup, `inProgress` crash-safe guard. Rebuild config **не** триггерит HTTP.
+- **AntiDPI mixed-case SNI** (spec 028) — `applyMixedCaseSni` post-step рандомизирует `server_name` (`WwW.gOoGle.CoM`). First-hop only, punycode-метки не трогаем. RFC 6066 compliance. 10 unit-тестов.
+- **Haptic feedback** (spec 029) — `HapticService` singleton, event-based API, throttle 100ms, respects system Touch feedback. Wired в HomeController transitions + tap Start/Stop + manual fetch success/fail + heartbeat fail (только первый).
+- **Restart warning sticky flag** (spec 003 §8a) — `HomeState.configStaleSinceStart` флаг, derived getter `_needsRestart`. Показывается надёжно после Routing Apply / Settings / Debug import / Rebuild; не пропадает при отмене Stop-диалога. Сбрасывается только на реальном tunnel up↔down.
+- **Subscription title fallback** — из `Content-Disposition: filename=...` (RFC 5987) если нет `profile-title` header. Стрип `.txt`/`.yaml`/`.json`/`.conf`.
+- **Local build marker** — `scripts/build-local-apk.sh` оборачивает `flutter build` с `--dart-define`'ами (git describe + commits since tag). About screen показывает розовую плашку «🧪 LOCAL BUILD · N commits since vX.Y.Z». CI не маркирует.
+
+### Результат
+
+- **v1.3.0** зарелизен, CI собирает release APK на тег. 116 тестов зелёные.
+- Архитектура стала принципиально проще: UI → controller → функциональный pipeline → sing-box JSON. Никаких mutable registry.
+
+---
+
+## Этап 12: UX polish + critical fixes (v1.3.1 — 19 апреля 2026)
+
+Патч-релиз через ~сутки после v1.3.0, фокус на UX и багфиксы.
+
+### Critical fixes
+- **`UserServer` показывал infinite spinner после рестарта** — `toJson` хранил только `rawBody`, `fromJson` не парсил обратно → NodeSettingsScreen._load() видел пустые `nodes` → `_originalTag` не сетился → спиннер. Фикс: `fromJson` реконструирует nodes через `parseAll(decode(rawBody))`.
+- **Detour dropdown в Node Settings не сохранялся** — писал `detour` в JSON ноды, `parseSingboxEntry` это поле не восстанавливает → при save→reparse detour терялся. Фикс: persist через `entry.detourPolicy.overrideDetour`, сразу при выборе.
+- **XHTTP warning перекрывался TLS-insecure** — `node.warnings.first` бралось безусловно, `InsecureTlsWarning` (parse-time) затмевал `UnsupportedTransportWarning('xhttp')` (emit-time). Фикс: сортировка по severity, `_NodeWarningRow` widget.
+- **TLS-insecure severity → info (grey)** — провайдеры часто намеренно ставят флаг (REALITY, IP-литералы, self-signed), не должен кричать. Banner вверху detail-экрана теперь считает только actionable.
+
+### UI polish
+- **NodeRow новый layout** — `[ACTIVE green pill] PROTOCOL · · · 50MS →`. ACTIVE зелёная пилюля; протокол серый (VLESS, Hy2, WG, TUIC, SS); ping справа цветом по latency. Для urltest-группы показывает proto **выбранной** ноды.
+- **Long-press → Copy URI** — оригинальный `vless://` / `wireguard://` / etc через `node.toUri()`. `Copy server` → `Copy server (JSON)` для ясности.
+- **Editable Tag field в NodeSettingsScreen** — отдельный TextField (раньше тег правился через JSON-редактор).
+- **Mark as detour server** switch — добавляет/убирает префикс `⚙ ` к tag'у. Хранится прямо в `tag`, без отдельных флагов.
+- **Empty input + tap `+` = paste from clipboard** — экономит тап.
+- **Auto-regenerate config после addFromInput** — paste/QR/file автоматом пересобирают config + saveParsedConfig.
+- **Subscription row subtitle** — для UserServer единообразно `<PROTOCOL> server` (раньше разнобой `WireGuard config` / `Direct link` / `JSON outbound` / "1 node").
+
+### Rename: `UserServers` → `UserServer`
+Исторически plural, но всегда 1 node. 10 файлов. JSON discriminator `'type': 'user'` сохранён — миграция не нужна.
+
+### Docs sweep
+003 (NodeRow layout, Copy URI), 006 (UserServer subtitle, paste-on-empty-+), 017 (editable Tag, Mark as detour, overrideDetour persistence), 026 (UserServer rename + rehydrate invariant).
+
+---
+
+## Текущая статистика (v1.3.1)
+
+- **Тесты:** 128/128 зелёные
+- **Спецификации:** 001–029 (29 feature-специфик)
+- **Релизы:** v0.0.1, v1.1.1, v1.1.2, v1.2.0, v1.3.0, v1.3.1 (6)
+- **LOC:** `lib/` ≈ 14k, удалено v1 ≈ 2.7k при parser v2 landmark
+- **Release APK:** 71.3 MB
+
 ## Что дальше (рекомендации)
 
-| Приоритет | Фича | Спека | Описание |
-|-----------|-------|-------|----------|
-| Высокий | **Custom Nodes (018)** | ✓ | Ручные ноды + override патчи, JSON editor, rename тегов |
-| Высокий | **Load Balance (019)** | ✓ | PuerNya fork sing-box, per-connection round-robin |
-| Высокий | **Multi-hop / Chained Proxy (020)** | ✓ | UI для цепочек прокси |
-| Высокий | **QR Code scan/generate** | — | Scan proxy URI → add node; generate → share |
-| Средний | **Export/Import settings** | — | Бэкап/восстановление настроек, подписок |
-| Средний | **Profile Management** | — | Сохранение/загрузка нескольких конфигов |
-| Средний | **WebDAV backup/sync** | — | Синхронизация настроек между устройствами |
-| Низкий | **Quick Settings Tile** | — | Android Quick Settings tile для Start/Stop |
-| Низкий | **Geo asset manager** | — | Обновление geoip/geosite баз |
+| Приоритет | Фича | Статус |
+|-----------|-------|--------|
+| Высокий | **Custom Nodes UI extensions** | Базовое готово (spec 017); добавить rename в списке нод, bulk operations |
+| Высокий | **QR Code scan/generate** | Заготовка `_scanQrCode` — "QR scanner coming soon" snackbar. Нужна интеграция mobile_scanner |
+| Средний | **Load Balance** | spec 024 — ready, не реализовано (PuerNya fork или кастомный post-step) |
+| Средний | **Export/Import settings** | Backup всей конфигурации (server_lists, vars, rules, app_rules) |
+| Средний | **Profile Management** | Несколько конфигов + быстрое переключение |
+| Средний | **WARP integration** | spec 025 — ready, не реализовано |
+| Низкий | **Background subscription update** | Сейчас только foreground (AutoUpdater работает пока app открыт). Android WorkManager + permissions |
+| Низкий | **Quick Settings Tile** | Android QS tile для Start/Stop |
