@@ -30,6 +30,6 @@ research/
 .private/
 docs/private/
 
-# Claude Code local settings (personal, not team-wide)
-.claude/settings.local.json
-.claude/worktrees/
+# Claude Code local (personal, never commit)
+.claude/
+CLAUDE.md
