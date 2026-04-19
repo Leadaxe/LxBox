@@ -95,19 +95,19 @@ Jump серверам добавляется **префикс** `⚙ `, сохр
 bool isJumpServer(String tag) => tag.startsWith('⚙ ');
 ```
 
-## Файлы
+## Файлы (обновлено под Parser v2)
 
 | Файл | Изменения |
 |------|-----------|
-| `lib/models/proxy_chain.dart` | Модель ProxyChain |
-| `lib/services/settings_storage.dart` | getChains / saveChains, show_jump_servers |
-| `lib/services/config_builder.dart` | Генерация outbound'ов с detour-цепочкой |
-| `lib/screens/chain_editor_screen.dart` | Экран редактирования цепочки |
-| `lib/widgets/node_row.dart` | Иконка и subtitle для цепочки |
-| `xray_json_parser.dart` | `jumpPrefix` вместо `_jumpSuffix` |
-| `node_parser.dart` | Prefix `⚙ ` для ParsedJump |
-| `home_screen.dart` | Фильтрация jump серверов |
-| `node_filter_screen.dart` | Фильтрация jump серверов |
+| `lib/models/server_list.dart` | `DetourPolicy` (ранее был на `ProxySource`): `registerDetourServers`, `registerDetourInAuto`, `useDetourServers`, `overrideDetour` |
+| `lib/models/node_spec.dart` | `NodeSpec.chained` (NodeSpec?) — optional chain; `getEntries(ctx, skipDetour)` возвращает `NodeEntries{main, detours[]}` |
+| `lib/services/builder/server_list_build.dart` | `ServerList.build(ctx)` extension: политика skipDetour, apply override/use, register в selector/auto per-policy |
+| `lib/services/parser/json_parsers.dart` | `parseXrayOutbound` сохраняет `chained` из dialerProxy |
+| `lib/services/parser/uri_parsers.dart` | Префикс `⚙ ` на chained-tag (жёстко в парсере) |
+| `lib/screens/subscription_detail_screen.dart` | Settings tab: Register / Register in auto / Use / Override-picker |
+| `lib/screens/node_settings_screen.dart` | Detour dropdown для single UserServer — пишет в `entry.overrideDetour` (v1.3.1) |
+| `lib/widgets/node_row.dart` | ⚙-префикс в tag, hasDetour флаг для copy-меню |
+| `lib/screens/node_filter_screen.dart` | Фильтрация ⚙-нод |
 
 ## Критерии приёмки
 
@@ -120,7 +120,7 @@ bool isJumpServer(String tag) => tag.startsWith('⚙ ');
 - [ ] По умолчанию jump серверы скрыты из списка нод.
 - [ ] Jump серверы всегда доступны в detour dropdown.
 
-## Per-subscription detour flags (proxy_source.dart)
+## Per-subscription detour flags (`ServerList.detourPolicy`, Parser v2)
 
 Подписка хранит три независимых флага поведения detour-серверов:
 
@@ -136,9 +136,14 @@ bool isJumpServer(String tag) => tag.startsWith('⚙ ');
 **UI:**
 Галки Register/Register-in-auto/Use показываются только если в подписке есть хотя бы одна нода с detour-сервером.
 
-**Реализация (config_builder.dart):**
-- `unregisteredDetourTags` — набор detour-тегов с `registerDetourServers=false`, не добавляются в `allNodeTags`.
-- `detoursExcludedFromAuto` — набор detour-тегов с `registerDetourInAuto=false`, фильтруются из `nodeTags` при сборке urltest-группы.
+**Реализация (Parser v2, `services/builder/server_list_build.dart`):**
+```dart
+for (final d in detours) {
+  if (detourPolicy.registerDetourServers) ctx.addToSelectorTagList(d);
+  if (detourPolicy.registerDetourInAuto)  ctx.addToAutoList(d);
+}
+```
+Main нода регистрируется в selector и auto всегда. Детуры — по флагам. Если `!registerDetourServers`, детур всё равно попадает в config через `ctx.addEntry` (нужен как dialer), но не появляется в proxy-группах.
 
 ## See also
 

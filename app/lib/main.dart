@@ -9,7 +9,7 @@ void main() {
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
   ]);
-  runApp(const BoxVpnApp());
+  runApp(const LxBoxApp());
 }
 
 /// Global theme notifier — allows changing theme from anywhere.
@@ -48,8 +48,8 @@ class ThemeNotifier extends ChangeNotifier {
 
 final themeNotifier = ThemeNotifier();
 
-class BoxVpnApp extends StatelessWidget {
-  const BoxVpnApp({super.key});
+class LxBoxApp extends StatelessWidget {
+  const LxBoxApp({super.key});
 
   static const _seed = Colors.indigo;
 

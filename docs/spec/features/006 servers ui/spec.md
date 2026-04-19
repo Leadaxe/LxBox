@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Статус | Реализовано |
-| Зависимости | [`004`](../004%20subscription%20parser/spec.md), [`005`](../005%20config%20generator/spec.md) |
+| Зависимости | [`004`](../004x%20subscription%20parser/spec.md), [`005`](../005x%20config%20generator/spec.md) |
 
 ## 1. Цель
 

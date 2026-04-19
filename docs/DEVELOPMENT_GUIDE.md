@@ -207,14 +207,32 @@ adb install -r app/build/app/outputs/flutter-apk/app-release.apk
 
 # Релизная сборка без маркера (как CI)
 cd app && flutter build apk --release
-
-# Релиз через тег — CI автоматически создаст GitHub Release с APK
-git tag v1.3.1
-git push origin main
-git push origin v1.3.1
 ```
 
-### 4. Версионирование
+### 4. Процесс релиза
+
+CI workflow (`.github/workflows/ci.yml`) при push тега `v*` собирает release APK и создаёт GitHub Release с телом из `RELEASE_NOTES.md`. Нужно:
+
+1. **Обновить `app/pubspec.yaml`** — `version: X.Y.Z+N` (bump patch/minor, +build number).
+2. **Обновить `app/lib/screens/about_screen.dart`** — `static const _version = 'X.Y.Z';` (hardcoded — хочется поменять на `package_info_plus`, но пока так).
+3. **Добавить секцию в `CHANGELOG.md`** `## [X.Y.Z] — YYYY-MM-DD` — вверху, под `# Changelog`.
+4. **Создать `docs/releases/vX.Y.Z.md`** — подробные release notes (EN видимые + RU под `<details>`, см. v1.3.0/v1.3.1 как эталон).
+5. **Синхронизировать `RELEASE_NOTES.md`** ← `docs/releases/vX.Y.Z.md` (CI читает корневой файл для тела GitHub release).
+6. **Коммит + tag + push:**
+   ```bash
+   git add -A
+   git commit -m "release: vX.Y.Z"
+   git tag -a vX.Y.Z -m "vX.Y.Z — short description"
+   git push origin main
+   git push origin vX.Y.Z
+   ```
+7. CI автоматически собирает APK и публикует Release.
+
+**Не забыть:** если `RELEASE_NOTES.md` осталось со старой версии — тело автоматического релиза будет неправильным. Для таких случаев — `gh release edit vX.Y.Z --notes-file docs/releases/vX.Y.Z.md` (было с v1.3.0, v1.3.1).
+
+### 5. Версионирование
+
+### 6. Версионирование
 - `pubspec.yaml`: `version: X.Y.Z+N`
 - Git tag: `vX.Y.Z`
 - X — мажор (breaking changes)

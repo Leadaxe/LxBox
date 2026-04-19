@@ -1,11 +1,17 @@
 # 004 — Парсер подписок
 
-> ⚠️ **Заменено спекой [`026 parser v2`](../026%20parser%20v2/spec.md)** (2026-04-18).
-> v1 (`node_parser.dart`, `source_loader.dart`, `ParsedNode`, `ProxySource`) удаляется в Фазе 4 спеки 026. Документ оставлен как исторический контекст.
+> # 🚫 SUPERSEDED
+>
+> **Полностью заменено спекой [`026 parser v2`](../026%20parser%20v2/spec.md)** (2026-04-18, v1.3.0).
+> Все файлы, упомянутые здесь (`node_parser.dart`, `source_loader.dart`, `subscription_fetcher.dart`, `subscription_decoder.dart`, `xray_json_parser.dart`, модели `ParsedNode`, `ProxySource`), **удалены** в Фазе 4 спеки 026.
+>
+> **Текущая реализация:** `lib/services/parser/` + `lib/services/subscription/sources.dart`. Sealed `NodeSpec` вместо `ParsedNode`, sealed `ServerList` (`SubscriptionServers` / `UserServer`) вместо `ProxySource`.
+>
+> Документ оставлен **только как исторический контекст** — для понимания эволюции архитектуры. Не использовать как reference для актуального кода.
 
 | Поле | Значение |
 |------|----------|
-| Статус | Заменено (v1 удаляется в 026 Фаза 4) |
+| Статус | 🚫 Superseded — v1 удалён, см. 026 |
 | Референс | singbox-launcher `core/config/subscription/` |
 
 ## 1. Цель

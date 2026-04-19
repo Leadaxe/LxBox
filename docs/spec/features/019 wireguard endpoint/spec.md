@@ -67,31 +67,37 @@ PresharedKey = base64...
 
 ## Реализация
 
-### NodeParser
+### Parser v2
 
-- `isWireGuardConfig(input)` — определяет INI формат
-- `wireGuardConfigToUri(config)` — конвертирует INI → URI
-- `_parseWireGuard(uri)` — парсит URI в `ParsedNode` с endpoint-структурой
+- `isWireGuardConfig(input)` в [`services/subscription/input_helpers.dart`](../../../../app/lib/services/subscription/input_helpers.dart) — определяет INI (`[Interface]` + `[Peer]`)
+- `parseWireguardIni(config)` в [`services/parser/ini_parser.dart`](../../../../app/lib/services/parser/ini_parser.dart) — INI → canonical `wireguard://` URI → `WireguardSpec` через `parseWireguardUri`
+- `parseWireguardUri(uri)` в [`services/parser/uri_parsers.dart`](../../../../app/lib/services/parser/uri_parsers.dart) — URI → `WireguardSpec` (sealed variant of `NodeSpec`)
+- `WireguardSpec.emit(vars)` в [`models/node_spec_emit.dart`](../../../../app/lib/models/node_spec_emit.dart) → `Endpoint` (sealed variant of `SingboxEntry`, отдельно от `Outbound`)
 
-### ConfigBuilder
+### Builder (Parser v2)
 
-- WireGuard ноды (type == 'wireguard') добавляются в `config['endpoints']`, не в `config['outbounds']`
-- Tag используется в proxy groups наравне с outbound'ами
+Полиморфный `emit(vars)` возвращает `SingboxEntry`, который — sealed: `Outbound | Endpoint`. `EmitContext.addEntry` делает exhaustive switch и кладёт Endpoint в `config['endpoints']`, остальные — в `config['outbounds']`. Никаких runtime-проверок `type == 'wireguard'` в builder'е. Tag используется в proxy groups наравне с outbound'ами.
 
 ### Способы добавления
 
-1. Вставить URI в поле ввода
-2. Paste from clipboard
-3. Вставить INI конфиг — автоконвертация
+1. Вставить URI в поле ввода → `parseUri` → `WireguardSpec`
+2. Paste from clipboard → smart-detect → Paste Dialog
+3. Вставить INI конфиг → `parseWireguardIni` → `UserServer` с single-node
+4. После любого добавления — auto-regenerate config (v1.3.1+)
 
-## Файлы
+## Файлы (обновлено под Parser v2)
 
 | Файл | Изменения |
 |------|-----------|
-| `node_parser.dart` | `isWireGuardConfig`, `wireGuardConfigToUri`, `_parseWireGuard` |
-| `config_builder.dart` | Разделение WG endpoints от outbounds |
-| `subscription_controller.dart` | Определение WireGuard INI конфига |
-| `subscriptions_screen.dart` | "Paste from clipboard" в popup menu |
+| `lib/services/parser/uri_parsers.dart` | `parseWireguardUri(uri)` → `WireguardSpec` |
+| `lib/services/parser/ini_parser.dart` | `parseWireguardIni(config)` → INI → URI → `WireguardSpec` |
+| `lib/services/subscription/input_helpers.dart` | `isWireGuardConfig(input)` — detection |
+| `lib/models/node_spec.dart` | sealed `WireguardSpec` (variant of `NodeSpec`), `WireguardPeer` |
+| `lib/models/node_spec_emit.dart` | `emitWireguard(spec, vars)` → `Endpoint(map)` |
+| `lib/models/singbox_entry.dart` | sealed `SingboxEntry` = `Outbound \| Endpoint` |
+| `lib/services/builder/build_config.dart` | `EmitContext.addEntry` делает sealed-switch на Outbound/Endpoint |
+| `lib/controllers/subscription_controller.dart` | `addFromInput` → WG branch создаёт `UserServer(nodes: [spec])` |
+| `lib/screens/subscriptions_screen.dart` | Smart-paste detection + dialog |
 
 ## Критерии приёмки
 
@@ -103,5 +109,5 @@ PresharedKey = base64...
 
 ## See also
 
-- [004 subscription parser](../004%20subscription%20parser/spec.md) — parser supports wireguard:// scheme
+- [004x subscription parser](../004x%20subscription%20parser/spec.md) — parser supports wireguard:// scheme
 - [018 detour server management](../018%20detour%20server%20management/spec.md) — WireGuard as detour for other nodes

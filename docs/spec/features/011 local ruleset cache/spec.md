@@ -32,15 +32,15 @@ Config generation (ConfigBuilder.generateConfig)
   └─ Continue with normal config assembly
 ```
 
-Refresh happens together with subscription updates (same trigger: `updateAllAndGenerate`
-or auto-refresh on Start).
+Refresh happens together with subscription updates (triggered by `AutoUpdater` — see [spec 027](../027%20subscription%20auto%20update/spec.md)) или вручную через `SubscriptionController.generateConfig()`.
 
 ## Files
 
 | File | Change |
 |------|--------|
-| `lib/services/rule_set_downloader.dart` | Download + cache logic |
-| `lib/services/config_builder.dart` | Call downloader, rewrite entries |
+| `lib/services/rule_set_downloader.dart` | Download + cache logic (parallel, v1.3.0+) |
+| `lib/services/builder/post_steps.dart` (`applySelectableRules`) | Rewrite remote→local entries + trigger downloader (v2; ранее был `config_builder.dart::_applySelectableRules`) |
+| `lib/services/builder/build_config.dart` | Оркестратор: после `applySelectableRules` — `_cacheRemoteRuleSets` на `rule_set_downloader` |
 
 ## Acceptance
 

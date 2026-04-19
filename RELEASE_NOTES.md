@@ -1,35 +1,86 @@
-# L×Box v1.2.0
+# L×Box vX.Y.Z
 
 Android VPN client powered by [sing-box](https://sing-box.sagernet.org/).
 
-## What's New in v1.2.0
+<!--
+  Release-notes TEMPLATE. This file is consumed by CI (softprops/action-gh-release
+  as `body_path`) and becomes the GitHub Release description on tag push.
 
-### Outbound Groups Overhaul
-- Renamed **proxy-out → vpn-1**, added **vpn-3** (now VPN ①/②/③ all available)
-- **VPN ①** is always generated — toggle is locked (required base group)
-- **auto-proxy-out** is now controlled by an **Include Auto** toggle — when on, it's generated as urltest and added to `vpn-*` groups; when off, no auto section is produced at all
+  Before tagging a new version:
+    1. Replace the placeholders below with the actual release content.
+    2. Copy the final body to `docs/releases/vX.Y.Z.md` (bilingual: EN visible +
+       RU under `<details>` — see v1.3.0 / v1.3.1 for reference).
+    3. Bump `app/pubspec.yaml` version, `app/lib/screens/about_screen.dart`
+       `_version`, add the same section to top of `CHANGELOG.md`.
+    4. `git commit` → `git tag -a vX.Y.Z -m "…"` → push main + tag.
+    5. CI builds APK and publishes the Release.
 
-### Node List UX
-- **direct-out** and **auto-proxy-out** are pinned at the top of the node list in every sort mode (direct first, then auto), with a subtle highlight so they stand out
-- Long-press context menu cleaned up:
-  - No Copy actions for `direct-out` / `auto-proxy-out` (they're not real servers)
-  - *Copy detour* and *Copy server + detour* hidden when a node has no detour
+  Remove placeholder sections that don't apply.
+-->
 
-### Defaults
-- `urltest_tolerance` default changed from 100 → 30 ms (switches faster when latency improves)
+One-paragraph summary: release type (major feature / patch / UX polish / critical fixes) + headline change.
 
-## Prior highlights (v1.1.x)
+## ✨ Highlights
 
-- Detour server management (⚙ prefix), per-subscription register/use/override, multi-hop chains
-- Smart Paste dialog (subscription URL / proxy link / WireGuard INI / JSON)
-- Node Settings JSON editor
-- TLS Fragment / Record Fragment DPI bypass
-- WireGuard endpoint (sing-box 1.12+) with IPv6 support
-- Speed Test with 10 global servers
-- Animated status chip, config-dirty banner, restart-VPN banner, auto-rebuild
-- SRS rule-set cloud status (green = cached, red = download error)
-- Subscription HTTP headers: `subscription-userinfo`, `profile-title`, `profile-web-page-url`, `profile-update-interval`
+- **Feature A** — one-line benefit.
+- **Feature B** — one-line benefit.
+- **Fix C** — one-line what was broken.
 
-## Install
+---
 
-Download `app-release.apk` from this release, enable "Install unknown apps" for your browser, tap the APK to install.
+## 🔧 <Feature A>
+
+Context and user-visible behaviour. Link to the spec, e.g. [spec 0NN](docs/spec/features/0NN%20name/spec.md).
+
+- Details
+- Edge cases
+- Defaults, toggle location
+
+## 🐛 Critical fixes
+
+- **Short title** — what was broken, how it manifested, what the fix changed.
+
+## ✨ UI polish
+
+- One bullet per change.
+
+## ♻️ Rename / refactor (if any)
+
+Scope + migration/compat note.
+
+## 📝 Docs
+
+Touched specs + doc files.
+
+## 📦 Install
+
+Grab the APK below and install on Android (8.0+). **N/N tests pass.** Release APK ≈ NN MB.
+
+---
+
+<details>
+<summary><strong>🇷🇺 На русском</strong></summary>
+
+Краткое summary одним абзацем на русском.
+
+### ✨ Главное
+
+- **Фича A** — что даёт юзеру.
+
+### 🔧 <Фича A>
+
+Контекст + user-visible поведение.
+
+### 🐛 Critical fixes
+
+### ✨ UI polish
+
+### ♻️ Rename / refactor
+
+### 📝 Docs
+
+### 📦 Установка
+
+Скачай APK ниже, установи на Android (8.0+). **N/N тестов.** Release APK ≈ NN MB.
+
+</details>

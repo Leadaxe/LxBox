@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | **Реализовано и в продакшене** (2026-04-19, 10/10 тестов) |
 | Дата | 2026-04-19 |
-| Зависимости | [`005`](../005%20config%20generator/spec.md), [`020`](../020%20security%20and%20dpi%20bypass/spec.md) |
+| Зависимости | [`005`](../005x%20config%20generator/spec.md), [`020`](../020%20security%20and%20dpi%20bypass/spec.md) |
 | Связано | [`018`](../018%20detour%20server%20management/spec.md), [`026`](../026%20parser%20v2/spec.md) |
 
 ---

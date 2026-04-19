@@ -11,8 +11,8 @@
 | 001 | [`001 mobile stack/`](001%20mobile%20stack/) | Стек: Flutter + нативный VPN + libbox | Принято |
 | 002 | [`002 mvp scope/`](002%20mvp%20scope/) | MVP: Start-Stop / группы / узлы (Android) | Реализовано |
 | 003 | [`003 home screen/`](003%20home%20screen/) | Главный экран: группы, узлы, контекст-меню, traffic bar, сортировка, node filter | Реализовано |
-| 004 | [`004 subscription parser/`](004%20subscription%20parser/) | Парсер подписок: fetch, decode, parse, Xray JSON array, jump | Реализовано |
-| 005 | [`005 config generator/`](005%20config%20generator/) | Генератор конфига: wizard template + vars + подписки → sing-box config | Реализовано |
+| 004 | [`004x subscription parser/`](004x%20subscription%20parser/) | Парсер подписок: fetch, decode, parse, Xray JSON array, jump | Реализовано |
+| 005 | [`005x config generator/`](005x%20config%20generator/) | Генератор конфига: wizard template + vars + подписки → sing-box config | Реализовано |
 | 006 | [`006 servers ui/`](006%20servers%20ui/) | UI подписок: detail view, toggles, context menu, paste dialog | Реализовано |
 | 007 | [`007 config editor/`](007%20config%20editor/) | Форматирование JSON в редакторе конфига | Реализовано |
 | 008 | [`008 ping and node management/`](008%20ping%20and%20node%20management/) | Mass ping, ping settings, URLTest config, цветовая индикация | Реализовано |

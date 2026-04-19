@@ -32,7 +32,7 @@
 | `fatal` | Только фатальные |
 | `panic` | Только паники |
 
-Настраивается на экране VPN Settings (см. 005 config generator → vars).
+Настраивается на экране VPN Settings (см. 005x config generator → vars).
 
 ## Sing-box Log Viewer
 

@@ -130,16 +130,16 @@ Long press на ноде в detail screen:
 
 Debounce 500ms, без кнопки Apply.
 
-## Файлы
+## Файлы (обновлено под Parser v2)
 
 | Файл | Изменения |
 |------|-----------|
-| `lib/services/settings_storage.dart` | getCustomNodes, saveCustomNodes, getNodeOverrides, saveNodeOverride |
-| `lib/services/config_builder.dart` | Overrides, manual nodes, _applyNodeOverrides |
-| `lib/screens/node_edit_screen.dart` | JSON editor для ноды |
-| `lib/screens/node_settings_screen.dart` | Tag, detour dropdown, info |
-| `lib/screens/subscriptions_screen.dart` | Различие trailing, разный onTap |
-| `lib/widgets/node_row.dart` | Индикация override/manual |
+| `lib/services/settings_storage.dart` | `server_lists` (v2); `UserServer(origin, createdAt, rawBody)` entries — каждая = 1 user-added node |
+| `lib/models/server_list.dart` | `UserServer.fromJson` реконструирует `nodes` через `parseAll(decode(rawBody))` (v1.3.1) |
+| `lib/services/builder/server_list_build.dart` | Применяет `detourPolicy.overrideDetour` к `main.map['detour']` |
+| `lib/screens/node_settings_screen.dart` | Editable Tag + `Mark as detour server` switch + detour dropdown (persist через `entry.overrideDetour`) |
+| `lib/screens/subscriptions_screen.dart` | trailing `Icons.dns` для UserServer, subtitle `<PROTOCOL> server`; тап → NodeSettingsScreen |
+| `lib/widgets/node_row.dart` | NodeRow layout (ACTIVE pill + proto + ping right-aligned) |
 
 ## Критерии приёмки
 
