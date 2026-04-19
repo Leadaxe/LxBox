@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/server_list.dart';
-import '../services/get_free_loader.dart';
+import '../services/community_servers_loader.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/url_launcher.dart';
@@ -282,7 +282,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                 ),
                 PopupMenuButton<String>(
                   onSelected: (v) {
-                    if (v == 'free') unawaited(_applyFreePreset());
+                    if (v == 'public') unawaited(_pickPublicTestServer());
                     if (v == 'paste') unawaited(_pasteFromClipboard());
                     if (v == 'qr') unawaited(_scanQrCode());
                   },
@@ -290,7 +290,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     PopupMenuItem(value: 'paste', child: Text('Paste from clipboard')),
                     PopupMenuItem(value: 'qr', child: Text('Scan QR code')),
                     PopupMenuDivider(),
-                    PopupMenuItem(value: 'free', child: Text('Get Free VPN')),
+                    PopupMenuItem(value: 'public', child: Text('Get Public Test Servers')),
                   ],
                 ),
               ],
@@ -453,99 +453,85 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     }
   }
 
-  Future<void> _applyFreePreset() async {
-    final preset = await GetFreeLoader.load();
+  Future<void> _pickPublicTestServer() async {
+    CommunityManifest manifest;
+    try {
+      manifest = await CommunityServersLoader.load();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Test servers list unavailable')),
+      );
+      return;
+    }
     if (!mounted) return;
+    if (manifest.lists.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Test servers list unavailable')),
+      );
+      return;
+    }
 
-    final checked = <int>{};
-
-    showDialog(
+    showDialog<void>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(preset.title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+      builder: (ctx) => AlertDialog(
+        title: const Text('Get Public Test Servers'),
+        contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (manifest.attribution != null) ...[
               Row(
                 children: [
-                  Icon(Icons.volunteer_activism, size: 18, color: Theme.of(context).colorScheme.primary),
+                  Icon(
+                    Icons.volunteer_activism,
+                    size: 18,
+                    color: Theme.of(ctx).colorScheme.primary,
+                  ),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(preset.text, style: const TextStyle(fontSize: 13))),
-                ],
-              ),
-              if (preset.link.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: GestureDetector(
-                    onTap: () => unawaited(UrlLauncher.open(preset.link)),
+                  Expanded(
                     child: Text(
-                      preset.link,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontSize: 12,
-                        decoration: TextDecoration.underline,
-                      ),
+                      manifest.attribution!.text,
+                      style: const TextStyle(fontSize: 13),
                     ),
                   ),
-                ),
-              const SizedBox(height: 16),
-              ...List.generate(preset.lists.length, (i) {
-                final list = preset.lists[i];
-                return CheckboxListTile(
-                  value: checked.contains(i),
-                  onChanged: (val) {
-                    setDialogState(() {
-                      if (val == true) { checked.add(i); } else { checked.remove(i); }
-                    });
-                  },
-                  title: Text(list.name, style: const TextStyle(fontSize: 13)),
-                  subtitle: Text(list.description, style: const TextStyle(fontSize: 11)),
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                );
-              }),
+                  if (manifest.attribution!.link.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.open_in_new, size: 18),
+                      tooltip: 'View on GitHub',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () =>
+                          unawaited(UrlLauncher.open(manifest.attribution!.link)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
             ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            FilledButton.icon(
-              onPressed: checked.isEmpty ? null : () {
-                Navigator.pop(ctx);
-                // Последовательно, а не параллельно — addFreeList
-                // индексирует `_entries` и race приводит к тому, что
-                // первая добавленная подписка не фетчится.
-                unawaited(() async {
-                  for (final i in checked) {
-                    await _addFreeList(
-                        preset.lists[i].source, preset.lists[i].tagPrefix);
-                  }
-                }());
-              },
-              icon: const Icon(Icons.add),
-              label: const Text('Add'),
-            ),
+            ...List.generate(manifest.lists.length, (i) {
+              final list = manifest.lists[i];
+              return ListTile(
+                leading: const Icon(Icons.list_alt),
+                title: Text('List ${i + 1}'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _inputController.text = list.source;
+                },
+              );
+            }),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+        ],
       ),
     );
-  }
-
-  Future<void> _addFreeList(String source, String tagPrefix) async {
-    final config = await widget.subController.addFreeList(source, tagPrefix);
-    if (!mounted || config == null) return;
-    final ok = await widget.homeController.saveParsedConfig(config);
-    if (!mounted) return;
-    if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'List added! ${widget.subController.entries.where((e) => e.enabled).fold<int>(0, (s, e) => s + e.nodeCount)} nodes.',
-          ),
-        ),
-      );
-    }
   }
 
   Widget _buildList(SubscriptionController ctrl) {
@@ -557,14 +543,14 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'No subscriptions yet.\nPaste a URL above or try free VPN:',
+                'No subscriptions yet.\nPaste a URL above or pick a public test server:',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               FilledButton.icon(
-                onPressed: ctrl.busy ? null : () => unawaited(_applyFreePreset()),
+                onPressed: ctrl.busy ? null : () => unawaited(_pickPublicTestServer()),
                 icon: const Icon(Icons.flash_on),
-                label: const Text('Get Free VPN'),
+                label: const Text('Get Public Test Servers'),
               ),
             ],
           ),

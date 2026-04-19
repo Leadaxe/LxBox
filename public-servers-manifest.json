@@ -1,0 +1,10 @@
+{
+  "attribution": {
+    "text": "Thank @igareck for providing testing servers",
+    "link": "https://github.com/igareck/vpn-configs-for-russia"
+  },
+  "lists": [
+    { "source": "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt" },
+    { "source": "https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt" }
+  ]
+}

@@ -529,6 +529,7 @@ class SubscriptionController extends ChangeNotifier {
       excludedNodes: await SettingsStorage.getExcludedNodes(),
       ruleOutbounds: await SettingsStorage.getRuleOutbounds(),
       appRules: await SettingsStorage.getAppRules(),
+      customRules: await SettingsStorage.getCustomRules(),
       routeFinal: await SettingsStorage.getRouteFinal(),
     );
 
@@ -656,44 +657,6 @@ class SubscriptionController extends ChangeNotifier {
       if (trigger == UpdateTrigger.manual) HapticService.I.onFetchError();
     }
     notifyListeners();
-  }
-
-  /// Добавляет подписку по пресету "Get Free VPN" и сразу генерит конфиг.
-  Future<String?> addFreeList(String source, String tagPrefix) async {
-    _busy = true;
-    _lastError = '';
-    _progressMessage = 'Adding free list...';
-    notifyListeners();
-
-    try {
-      final entry = SubscriptionEntry(
-        list: SubscriptionServers(
-          id: newUuidV4(),
-          name: '',
-          enabled: true,
-          tagPrefix: tagPrefix,
-          detourPolicy: DetourPolicy.defaults,
-          url: source,
-        ),
-      );
-      _entries.add(entry);
-      await _persist();
-      _progressMessage = 'Fetching...';
-      notifyListeners();
-      await _fetchEntryByRef(entry);
-      _progressMessage = 'Generating config...';
-      notifyListeners();
-      final config = await _generate();
-      _lastGeneratedConfig = config;
-      return config;
-    } catch (e) {
-      _lastError = e.toString();
-      return null;
-    } finally {
-      _busy = false;
-      _progressMessage = '';
-      notifyListeners();
-    }
   }
 
   Future<void> persistSources() async {

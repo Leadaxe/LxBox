@@ -33,7 +33,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/wizard_template.json
-    - assets/get_free.json
 
 # Иконка из sing-box Launcher (macOS .app Resources/app.icns → PNG 1024²).
 flutter_launcher_icons:
