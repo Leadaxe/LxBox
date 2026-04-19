@@ -24,6 +24,54 @@
 
 ---
 
+## [1.3.1] — 2026-04-19
+
+### Fixed — `UserServer.fromJson` теряла `nodes`
+- `toJson` хранит только `rawBody`, но `fromJson` не парсил его обратно — после рестарта app узлы UserServer пропадали → `NodeSettingsScreen._load()` видел пустой `nodes` → бесконечный спиннер.
+- Теперь `fromJson` зовёт `parseAll(decode(rawBody))` для восстановления nodes. `rawBody` остаётся источником истины, nodes — derivable.
+
+### Fixed — Detour dropdown в Node Settings не сохранялся
+- Раньше писал `detour` в JSON ноды через `_jsonCtrl`, но `parseSingboxEntry` это поле не восстанавливает → save → reparse → detour терялся.
+- Теперь сохраняется в `entry.detourPolicy.overrideDetour` (которое builder уже умеет применять). `persistSources()` сразу при выборе в dropdown'е, без отдельного Save.
+
+### Fixed — XHTTP warning перекрывался TLS-insecure
+- `node.warnings.first` бралось безусловно, и `InsecureTlsWarning` (parse-time) затмевал `UnsupportedTransportWarning('xhttp')` (emit-time).
+- Теперь `_NodeWarningRow` сортирует по severity (error → warning → info), показывает первый по приоритету. XHTTP-fallback отображается оранжевым, TLS-insecure — серым (info severity).
+- TLS-insecure понижен до `info`: провайдеры часто намеренно ставят флаг (REALITY, IP-литералы, self-signed). Banner вверху detail-экрана теперь считает только actionable warning'и.
+
+### Added — Auto-regenerate config после `addFromInput`
+- Раньше после paste/QR/file подписки/нода — нужно было вручную нажать ⟳ для применения. Теперь после успешного `addFromInput` автоматом `generateConfig` + `saveParsedConfig` + snackbar `Config regenerated: N nodes`.
+
+### Added — Empty `+` button = paste from clipboard
+- Если поле ввода пустое и пользователь жмёт `+` — открывается поток `paste-from-clipboard` (анализ типа + диалог подтверждения). Без поля — экономит шаг.
+
+### Added — Editable Tag field в `NodeSettingsScreen`
+- Отдельное поле `Tag` под секцией `Server` (раньше тег был зашит в JSON-редакторе и неудобно правился).
+- AppBar title обновляется live при редактировании.
+- На save идёт в `tag` outbound JSON-а.
+
+### Added — "Mark as detour server" switch
+- Toggle в `NodeSettingsScreen` — добавляет/убирает префикс `⚙ ` к tag'у. Префикс хранится в самом tag'е (никаких отдельных флагов в JSON), визуально отделяет detour-серверы в списках и в Override-detour picker'е.
+
+### Added — Long-press → "Copy URI"
+- Ранее long-press по ноде на главном давал только `Copy server (JSON)`. Теперь есть `Copy URI` — оригинальный `vless://` / `wireguard://` / etc через `node.toUri()` (round-trip parser v2). Для control-узлов (`direct-out`, `auto-proxy-out`) показывает snackbar "No source URI for this node".
+- `Copy server` переименован в `Copy server (JSON)` для ясности.
+
+### Added — Subtitle на главном: `[ACTIVE] [PROTOCOL]   [50MS →]`
+- ACTIVE — зелёный pill (вместо текстовой "ACTIVE · 50MS"), протокол слева серым, ping справа цветом по latency.
+- Протокол берётся из outbound JSON: `VLESS`, `Hy2`, `WG`, `TUIC`, `SS` etc. TLS-суффикс убран — у большинства протоколов TLS дефолт, метить каждый = шум.
+- Для `auto-proxy-out` (urltest) показывает proto **выбранной** ноды: `→ BL: Frankfurt   VLESS`.
+
+### Changed — `UserServers` → `UserServer` (rename)
+- Названо во множественном числе исторически, но всегда ровно один node (paste/QR/file/manual). Sealed-класс переименован в singular для ясности. JSON discriminator `'type': 'user'` сохранён — миграции не нужны.
+- 10 файлов затронуто (1 модель, 2 контроллера, 4 экрана, 4 теста, миграция).
+
+### Changed — Subtitle для UserServer: `WIREGUARD server` / `VLESS server`
+- Раньше: разные строки в зависимости от формы импорта (`WireGuard config` / `Direct link` / `JSON outbound`) — описывало форму копипасты, не суть. После рестарта (когда `entry.status` теряется) показывало "1 node" — бессмысленно для single-node entries.
+- Теперь единообразно: `<PROTOCOL> server` для любых UserServer независимо от формы добавления.
+
+---
+
 ## [1.3.0] — 2026-04-19
 
 ### Added — Subscription auto-update (spec 027)
