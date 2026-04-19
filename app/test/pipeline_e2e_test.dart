@@ -4,7 +4,7 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/subscription/sources.dart';
 
-/// E2E: тело подписки → parseFromSource → UserServers → ServerRegistry →
+/// E2E: тело подписки → parseFromSource → UserServer → ServerRegistry →
 /// buildConfig → валидный sing-box config без fatal issues.
 void main() {
   final template = WizardTemplate(
@@ -51,7 +51,7 @@ tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=t
     final r = await parseFromSource(const InlineSource(body));
     expect(r.nodes, hasLength(5));
 
-    final userList = UserServers(
+    final userList = UserServer(
       id: 'e2e-1',
       name: 'E2E',
       enabled: true,
@@ -87,11 +87,11 @@ tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=t
     expect(vpn1['outbounds'], containsAll(['VLESS', 'Trojan', 'SS', 'Hy2', 'TUIC']));
   });
 
-  test('disabled UserServers excluded from config', () async {
+  test('disabled UserServer excluded from config', () async {
     final r = await parseFromSource(
       const InlineSource('vless://u@h.example:443#A\n'),
     );
-    final list = UserServers(
+    final list = UserServer(
       id: 'disabled',
       name: 'D',
       enabled: false,
@@ -116,7 +116,7 @@ tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=t
       const InlineSource(
           'vless://u@h.example:443?type=xhttp&security=tls&path=/x&sni=h.example#XH\n'),
     );
-    final list = UserServers(
+    final list = UserServer(
       id: 'xh',
       name: 'XH',
       enabled: true,

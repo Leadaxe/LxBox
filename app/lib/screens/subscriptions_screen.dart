@@ -47,11 +47,33 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   Future<void> _add() async {
     final text = _inputController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty) {
+      // Пустое поле + тап «+» = paste-from-clipboard поток с диалогом
+      // подтверждения (анализ + предпросмотр).
+      await _pasteFromClipboard();
+      return;
+    }
     await widget.subController.addFromInput(text);
     if (widget.subController.lastError.isEmpty) {
       _inputController.clear();
+      await _regenerateAndSave();
     }
+  }
+
+  /// После любого add'а — пересобрать конфиг и сохранить, чтобы новые
+  /// узлы попали в выбираемые group'ы без ручного нажатия rebuild.
+  Future<void> _regenerateAndSave() async {
+    final config = await widget.subController.generateConfig();
+    if (!mounted || config == null) return;
+    await widget.homeController.saveParsedConfig(config);
+    if (!mounted) return;
+    final n = widget.subController.entries
+        .where((e) => e.enabled)
+        .fold<int>(0, (s, e) => s + e.nodeCount);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Config regenerated: $n nodes'),
+          duration: const Duration(seconds: 2)),
+    );
   }
 
   Future<void> _pasteFromClipboard() async {
@@ -127,6 +149,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     if (confirmed != true || !mounted) return;
     await widget.subController.addFromInput(text);
     if (widget.subController.lastError.isEmpty) {
+      await _regenerateAndSave();
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(widget.subController.lastError)),
@@ -634,9 +657,18 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     final parts = <Widget>[];
     final textStyle = TextStyle(fontSize: 12, color: muted);
 
-    final statusText = entry.status.isNotEmpty
-        ? entry.status
-        : (entry.nodeCount > 0 ? '${entry.nodeCount} nodes' : '');
+    // UserServer всегда single-node — показываем протокол (VLESS/WG/...).
+    // SubscriptionServers — нодcount + ⚙ если есть detour-цепочки.
+    final isUser = entry.list is UserServer;
+    String statusText;
+    if (isUser) {
+      final node = entry.list.nodes.isNotEmpty ? entry.list.nodes.first : null;
+      statusText = node != null ? '${node.protocol.toUpperCase()} server' : '';
+    } else if (entry.status.isNotEmpty) {
+      statusText = entry.status;
+    } else {
+      statusText = entry.nodeCount > 0 ? '${entry.nodeCount} nodes' : '';
+    }
     if (statusText.isNotEmpty) {
       parts.add(Text(statusText, style: textStyle));
     }

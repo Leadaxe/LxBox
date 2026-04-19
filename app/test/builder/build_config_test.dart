@@ -38,12 +38,12 @@ void main() {
       speedTestOptions: const {},
     );
 
-    test('two VLESS nodes from UserServers → 2 outbounds + vpn-1 + auto', () async {
+    test('two VLESS nodes from UserServer → 2 outbounds + vpn-1 + auto', () async {
       final specs = [
         parseUri('vless://u1@h1.com:443?type=ws&security=tls#A')!,
         parseUri('vless://u2@h2.com:443?type=ws&security=tls#B')!,
       ];
-      final list = UserServers(
+      final list = UserServer(
         id: 'u1',
         name: 'Test',
         enabled: true,
@@ -81,7 +81,7 @@ void main() {
       final wg = parseWireguardUri(
         'wireguard://pk_a@wg.example.com:51820?publickey=pk_b&address=10.0.0.2%2F32&mtu=1420#WG',
       )!;
-      final list = UserServers(
+      final list = UserServer(
         id: 'u2',
         name: 'WG',
         enabled: true,
@@ -107,7 +107,7 @@ void main() {
 
     test('tls_fragment=true fragments first-hop TLS only', () async {
       final spec = parseUri('vless://u@h:443?type=tcp&security=tls&sni=h#A')!;
-      final list = UserServers(
+      final list = UserServer(
         id: 'u3',
         name: 'F',
         enabled: true,
@@ -136,13 +136,13 @@ void main() {
       final a1 = parseUri('vless://u1@h1:443?type=ws&security=tls#Frankfurt')!;
       final a2 = parseUri('vless://u2@h2:443?type=ws&security=tls#Frankfurt')!;
       final b1 = parseUri('vless://u3@h3:443?type=ws&security=tls#Frankfurt')!;
-      final listA = UserServers(
+      final listA = UserServer(
         id: 'A', name: 'A', enabled: true, tagPrefix: 'BL:',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste, createdAt: DateTime.now(),
         nodes: [a1, a2],
       );
-      final listB = UserServers(
+      final listB = UserServer(
         id: 'B', name: 'B', enabled: true, tagPrefix: 'W:',
         detourPolicy: DetourPolicy.defaults,
         origin: UserSource.paste, createdAt: DateTime.now(),
@@ -166,7 +166,7 @@ void main() {
     });
 
     test('clash_api default :9090 randomized to 49152-65535 range', () async {
-      final list = UserServers(
+      final list = UserServer(
         id: 'u4',
         name: 'E',
         enabled: true,

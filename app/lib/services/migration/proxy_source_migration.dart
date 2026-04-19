@@ -5,7 +5,7 @@ import '../parser/uri_utils.dart' show newUuidV4;
 /// Одноразовая миграция `ProxySource` (v1) → `ServerList` (v2).
 ///
 /// Правило: `source` non-empty URL → `SubscriptionServers`; иначе
-/// (inline-вставка через `connections`) → `UserServers` с `origin=paste`.
+/// (inline-вставка через `connections`) → `UserServer` с `origin=paste`.
 /// Nodes **не переносятся** — они пересчитаются при первом рефреше/парсе.
 ///
 /// Вход: `List<Map<String, dynamic>>` из shared_preferences ключа
@@ -66,7 +66,7 @@ List<ServerList> migrateProxySources(List<Map<String, dynamic>> rawSources) {
         lastNodeCount: (s['last_node_count'] as num?)?.toInt() ?? 0,
       ));
     } else {
-      out.add(UserServers(
+      out.add(UserServer(
         id: id,
         name: name,
         enabled: enabled,

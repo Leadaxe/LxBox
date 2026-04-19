@@ -20,7 +20,9 @@ void main() {
 
     test('severity maps per type', () {
       expect(const MissingFieldWarning('sni').severity, WarningSeverity.error);
-      expect(const InsecureTlsWarning().severity, WarningSeverity.warning);
+      // info, не warning — провайдеры часто намеренно ставят флаг (REALITY,
+      // self-signed, IP-литералы); UI красит серым, не пугает.
+      expect(const InsecureTlsWarning().severity, WarningSeverity.info);
       expect(const DeprecatedFlowWarning('xtls').severity, WarningSeverity.info);
     });
 

@@ -60,13 +60,15 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
         .convert(node.emit(TemplateVars.empty).map);
     _tagCtrl.text = _originalTag;
 
-    // Detour текущего узла.
-    _detour = node.chained?.tag ?? '';
+    // Detour хранится в `entry.detourPolicy.overrideDetour` (применяется
+    // builder'ом в server_list_build). Раньше писали в JSON node.detour,
+    // но parseSingboxEntry это поле не восстанавливает — терялось при save.
+    _detour = widget.entry.overrideDetour;
 
-    // Доступные detour-теги: все узлы всех `UserServers` кроме себя.
+    // Доступные detour-теги: все узлы всех `UserServer` кроме себя.
     final tags = <String>[];
     for (final e in widget.subController.entries) {
-      if (e.list is! UserServers) continue;
+      if (e.list is! UserServer) continue;
       for (final n in e.list.nodes) {
         if (n.tag.isNotEmpty && n.tag != _originalTag) tags.add(n.tag);
       }
@@ -76,16 +78,37 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     if (mounted) setState(() {});
   }
 
+  /// Префикс для нод которые юзер маркает как detour-сервера. Внутри
+  /// конфига это просто часть `tag`'а — никаких отдельных флагов. Префикс
+  /// `⚙ ` удобно сортировать/фильтровать в UI и понятно что это детур.
+  static const String _detourPrefix = '⚙ ';
+  bool get _isMarkedDetour => _tagCtrl.text.startsWith(_detourPrefix);
+
+  void _toggleDetourMark(bool on) {
+    setState(() {
+      if (on && !_isMarkedDetour) {
+        _tagCtrl.text = '$_detourPrefix${_tagCtrl.text}';
+      } else if (!on && _isMarkedDetour) {
+        _tagCtrl.text = _tagCtrl.text.substring(_detourPrefix.length);
+      }
+    });
+  }
+
   void _saveJson() {
     try {
       final parsed = jsonDecode(_jsonCtrl.text);
-      // Re-serialize as single connection
-      final jsonStr = jsonEncode(parsed is List ? parsed.first : parsed);
-      // Update the source via controller
+      final map = parsed is List ? parsed.first : parsed;
+      // Подмешиваем edited tag из отдельного поля (юзер мог менять
+      // только tag и забыть про JSON-редактор).
+      if (map is Map<String, dynamic>) {
+        final newTag = _tagCtrl.text.trim();
+        if (newTag.isNotEmpty) map['tag'] = newTag;
+      }
+      final jsonStr = jsonEncode(map);
       widget.subController.updateConnectionAt(widget.index, [jsonStr]);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('JSON saved')),
+          const SnackBar(content: Text('Saved')),
         );
       }
     } catch (e) {
@@ -128,6 +151,29 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                   title: const Text('Server'),
                   trailing: Text(_serverInfo, style: theme.textTheme.bodyMedium),
                 ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: TextField(
+                    controller: _tagCtrl,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Tag',
+                      hintText: 'Display name in node list',
+                      isDense: true,
+                      prefixIcon: Icon(Icons.label_outline, size: 18),
+                    ),
+                  ),
+                ),
+                SwitchListTile(
+                  secondary: const Icon(Icons.alt_route, size: 20),
+                  title: const Text('Mark as detour server'),
+                  subtitle: const Text(
+                      'Adds ⚙ prefix — use when this node serves as the first '
+                      'hop for other nodes (Override detour in subscription)'),
+                  value: _isMarkedDetour,
+                  onChanged: _toggleDetourMark,
+                ),
                 const SizedBox(height: 16),
 
                 // --- Detour section ---
@@ -148,18 +194,12 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                     ],
                     onChanged: (v) {
                       setState(() => _detour = v ?? '');
-                      // Update detour in JSON
-                      try {
-                        final parsed = jsonDecode(_jsonCtrl.text);
-                        if (parsed is Map<String, dynamic>) {
-                          if (_detour.isNotEmpty) {
-                            parsed['detour'] = _detour;
-                          } else {
-                            parsed.remove('detour');
-                          }
-                          _jsonCtrl.text = const JsonEncoder.withIndent('  ').convert(parsed);
-                        }
-                      } catch (_) {}
+                      // Persist через ServerList.detourPolicy.overrideDetour —
+                      // builder подхватит и перезапишет main.map['detour'].
+                      // Не трогаем JSON ноды, иначе после save через
+                      // parseSingboxEntry поле снова потеряется.
+                      widget.entry.overrideDetour = _detour;
+                      unawaited(widget.subController.persistSources());
                     },
                   ),
                 ),

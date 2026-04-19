@@ -77,6 +77,9 @@ final class InsecureTlsWarning extends NodeWarning {
   @override
   String get message => 'TLS certificate verification is disabled.';
 
+  /// Info, не warning — это часто **намеренный** выбор провайдера (REALITY,
+  /// IP-литералы, self-signed). Не должен крадовать XHTTP-fallback и прочие
+  /// honestly-warning'и. UI красит info серым.
   @override
-  WarningSeverity get severity => WarningSeverity.warning;
+  WarningSeverity get severity => WarningSeverity.info;
 }

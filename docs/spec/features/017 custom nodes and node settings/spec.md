@@ -71,15 +71,21 @@
 
 ### NodeSettingsScreen
 
-**Секция: Основное**
+**Секция: Info (read-only)**
+- Protocol — `node.protocol` (vless / wireguard / etc.)
+- Server — `host:port`
 
-**Tag (название ноды)** — TextField с подписью.
+**Tag** (1.3.1) — отдельный editable TextField под Server. Раньше тег приходилось править через JSON-редактор. AppBar title обновляется live.
 
-**Секция: Routing**
+**Mark as detour server** (1.3.1) — switch. Добавляет/убирает префикс `⚙ ` к tag'у. Хранится прямо в `tag` (никаких отдельных флагов в JSON), визуально выделяет detour-серверы в node list и в Override-detour picker'е.
+
+**Секция: Detour**
 
 **Detour (цепочка серверов)** — DropdownButton:
 - "None (direct)" — без цепочки
 - Все ноды из всех источников, кроме самой себя
+
+**Persistence (1.3.1):** значение пишется в `entry.detourPolicy.overrideDetour` (а не в JSON ноды), сохраняется через `subController.persistSources()` сразу при выборе. Builder в `server_list_build.dart` подхватывает `overrideDetour` и перезаписывает `main.map['detour']`. Раньше писали в JSON ноды — `parseSingboxEntry` это поле не восстанавливал, при save → reparse detour терялся.
 
 ```
 ┌─────────────────────────────────────────┐

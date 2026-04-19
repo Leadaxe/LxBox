@@ -97,10 +97,15 @@ final class SubscriptionServers extends ServerList {
   // copyWith(...) — для refresh, rename, policy-change
 }
 
-final class UserServers extends ServerList {
+final class UserServer extends ServerList {
   final UserSource origin;         // paste | file | qr | manual
   final DateTime createdAt;
-  final String rawBody;            // оригинал (для reparse)
+  final String rawBody;            // источник истины — оригинал paste'а
+  // Всегда single-node (rename: было UserServers → 1.3.1).
+  // toJson хранит только rawBody, fromJson реконструирует `nodes` через
+  // `parseAll(decode(rawBody))` — экономия места + защита от drift'а
+  // сериализации NodeSpec. Без этого после рестарта app узлы пропадали
+  // → NodeSettingsScreen видел пустой `nodes` → бесконечный спиннер.
 }
 
 class DetourPolicy {
@@ -436,7 +441,7 @@ lib/
 
 `SettingsStorage.getServerLists()` при первом чтении:
 - Если есть ключ `server_lists` — читает v2 напрямую.
-- Если только `proxy_sources` (v1) — конвертирует через `migrateProxySources` (`services/migration/proxy_source_migration.dart`): URL → `SubscriptionServers`, inline → `UserServers(paste)`, переносит detour-флаги, meta-поля, `lastUpdated`. Пишет в `server_lists`, удаляет `proxy_sources`. Одноразово.
+- Если только `proxy_sources` (v1) — конвертирует через `migrateProxySources` (`services/migration/proxy_source_migration.dart`): URL → `SubscriptionServers`, inline → `UserServer(paste)`, переносит detour-флаги, meta-поля, `lastUpdated`. Пишет в `server_lists`, удаляет `proxy_sources`. Одноразово.
 
 ---
 
@@ -454,7 +459,7 @@ lib/
 - `validator_test.dart` — dangling refs (fatal), empty urltest (fatal), invalid selector default (fatal), endpoint tag ссылки.
 
 ### 7.4 End-to-end pipeline
-`test/pipeline_e2e_test.dart` — `InlineSource(body)` → `parseFromSource` → `UserServers` → `buildConfig(lists, {template})` → проверка preset-групп, disabled list ignored, XHTTP warning пролетает до `result.emitWarnings`.
+`test/pipeline_e2e_test.dart` — `InlineSource(body)` → `parseFromSource` → `UserServer` → `buildConfig(lists, {template})` → проверка preset-групп, disabled list ignored, XHTTP warning пролетает до `result.emitWarnings`.
 
 ### 7.5 Subscription
 `test/subscription/*` — InlineSource URI list / base64 / QR, inline pseudo-headers (`# profile-title:` → `meta.profileTitle`).
@@ -471,7 +476,7 @@ lib/
 
 | Экран | Что |
 |-------|-----|
-| `SubscriptionsScreen` | `List<SubscriptionEntry>`, чип `+N⚙` над nodeCount если есть chained. «Add servers» через smart-paste → `UserServers`. |
+| `SubscriptionsScreen` | `List<SubscriptionEntry>`, чип `+N⚙` над nodeCount если есть chained. «Add servers» через smart-paste → `UserServer`. |
 | `SubscriptionDetailScreen` | Tabs: Nodes / Settings / Source. Settings: редактор `tagPrefix`, `DetourPolicy` toggles, override-picker. Source: живой HTTP GET (`fetchRaw`), важные headers сразу + «показать все». Warning-баннер по `NodeWarning.severity`. |
 | `NodeSettingsScreen` | Работает через `spec.emit(TemplateVars.empty).map` для view/edit JSON; `parseSingboxEntry(edited)` для save. |
 | `RoutingScreen` | Облачко rule-set кликабельное (параллельный download N×9s, cap ~20с), error красный, cached зелёный. Post-steps в buildConfig перестраивает конфиг. |

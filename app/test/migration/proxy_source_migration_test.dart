@@ -37,7 +37,7 @@ void main() {
       expect(s.detourPolicy.registerDetourInAuto, true);
     });
 
-    test('inline connections → UserServers.paste with rawBody', () {
+    test('inline connections → UserServer.paste with rawBody', () {
       final out = migrateProxySources([
         {
           'id': 'user-1',
@@ -46,7 +46,7 @@ void main() {
           'name': 'Pasted',
         }
       ]);
-      final u = out.single as UserServers;
+      final u = out.single as UserServer;
       expect(u.origin, UserSource.paste);
       expect(u.rawBody, contains('vless://'));
       expect(u.rawBody, contains('trojan://'));

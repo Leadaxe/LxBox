@@ -45,13 +45,13 @@ class SubscriptionEntry extends ChangeNotifier {
   DetourPolicy get detourPolicy => _list.detourPolicy;
   String get type => _list.type;
 
-  /// URL подписки (пусто для UserServers).
+  /// URL подписки (пусто для UserServer).
   String get url => _list is SubscriptionServers ? (_list as SubscriptionServers).url : '';
 
   /// Inline-URI строки (пусто для SubscriptionServers).
   List<String> get connections {
-    if (_list is UserServers) {
-      final raw = (_list as UserServers).rawBody;
+    if (_list is UserServer) {
+      final raw = (_list as UserServer).rawBody;
       if (raw.isEmpty) return const [];
       return raw
           .split(RegExp(r'\r?\n'))
@@ -187,7 +187,7 @@ class SubscriptionEntry extends ChangeNotifier {
         detourPolicy: detourPolicy,
       );
     }
-    return (_list as UserServers).copyWith(
+    return (_list as UserServer).copyWith(
       name: name,
       enabled: enabled,
       tagPrefix: tagPrefix,
@@ -305,7 +305,7 @@ class SubscriptionController extends ChangeNotifier {
           return;
         }
         _entries.add(SubscriptionEntry(
-          list: UserServers(
+          list: UserServer(
             id: newUuidV4(),
             name: '',
             enabled: true,
@@ -317,7 +317,6 @@ class SubscriptionController extends ChangeNotifier {
             nodes: [spec],
           ),
           nodeCount: 1,
-          status: 'WireGuard config',
         ));
         await _persist();
       } else if (isDirectLink(trimmed)) {
@@ -327,7 +326,7 @@ class SubscriptionController extends ChangeNotifier {
           return;
         }
         _entries.add(SubscriptionEntry(
-          list: UserServers(
+          list: UserServer(
             id: newUuidV4(),
             name: '',
             enabled: true,
@@ -339,7 +338,6 @@ class SubscriptionController extends ChangeNotifier {
             nodes: [spec],
           ),
           nodeCount: 1,
-          status: 'Direct link',
         ));
         await _persist();
       } else if (_isJsonOutbound(trimmed)) {
@@ -384,13 +382,13 @@ class SubscriptionController extends ChangeNotifier {
       return;
     }
 
-    // Each JSON outbound → own UserServers entry (v1 behavior parity).
+    // Each JSON outbound → own UserServer entry (v1 behavior parity).
     for (final ob in outbounds) {
       final decoded = decode(jsonEncode(ob));
       final nodes = parseAll(decoded);
       if (nodes.isEmpty) continue;
       _entries.add(SubscriptionEntry(
-        list: UserServers(
+        list: UserServer(
           id: newUuidV4(),
           name: '',
           enabled: true,
@@ -402,7 +400,6 @@ class SubscriptionController extends ChangeNotifier {
           nodes: nodes,
         ),
         nodeCount: nodes.length,
-        status: 'JSON outbound',
       ));
     }
     await _persist();
@@ -704,11 +701,11 @@ class SubscriptionController extends ChangeNotifier {
     await _persist();
   }
 
-  /// Обновляет inline-узлы `UserServers` из нового списка URI/JSON строк.
+  /// Обновляет inline-узлы `UserServer` из нового списка URI/JSON строк.
   Future<void> updateConnectionAt(int index, List<String> connections) async {
     if (index < 0 || index >= _entries.length) return;
     final list = _entries[index].list;
-    if (list is! UserServers) return;
+    if (list is! UserServer) return;
 
     final nodes = <NodeSpec>[];
     for (final c in connections) {
@@ -733,13 +730,13 @@ class SubscriptionController extends ChangeNotifier {
 
   ServerList _renameList(ServerList l, String name) {
     if (l is SubscriptionServers) return l.copyWith(name: name);
-    if (l is UserServers) return l.copyWith(name: name);
+    if (l is UserServer) return l.copyWith(name: name);
     return l;
   }
 
   ServerList _toggleEnabled(ServerList l, bool enabled) {
     if (l is SubscriptionServers) return l.copyWith(enabled: enabled);
-    if (l is UserServers) return l.copyWith(enabled: enabled);
+    if (l is UserServer) return l.copyWith(enabled: enabled);
     return l;
   }
 }

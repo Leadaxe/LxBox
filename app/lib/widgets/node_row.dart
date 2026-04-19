@@ -16,9 +16,11 @@ class NodeRow extends StatelessWidget {
     required this.onActivate,
     required this.onPing,
     this.onCopy,
+    this.onCopyUri,
     this.onViewJson,
     this.urltestNow,
     this.hasDetour = false,
+    this.protocolLabel,
   });
 
   final String tag;
@@ -33,30 +35,21 @@ class NodeRow extends StatelessWidget {
   final VoidCallback onPing;
   /// Called with 'server', 'detour', or 'both'.
   final void Function(String mode)? onCopy;
+  /// Called when user wants the original URI (vless://, wireguard://, …).
+  final VoidCallback? onCopyUri;
   final VoidCallback? onViewJson;
   /// If this node is a URLTest group, shows which node it auto-selected.
   final String? urltestNow;
   final bool hasDetour;
+  /// Compact protocol label (e.g. "Hy2 + TLS", "VLESS + TLS", "WG").
+  /// Shown справа от имени ноды, ниже delay'я не лезет, серый цвет.
+  final String? protocolLabel;
 
-  String get _subtitle {
+  /// Right-side delay label (или PING… / ERR), цвет по latency.
+  String get _delayLabel {
     if (pingBusy) return 'PING…';
-    if (urltestNow != null) {
-      final base = '→ $urltestNow';
-      if (delay != null) {
-        return delay! < 0 ? '$base · ERR' : '$base · ${delay}MS';
-      }
-      return base;
-    }
-    if (active) {
-      if (delay != null) {
-        return delay! < 0 ? 'ACTIVE · ERR' : 'ACTIVE · ${delay}MS';
-      }
-      return 'ACTIVE';
-    }
-    if (delay != null) {
-      return delay! < 0 ? 'ERR' : '${delay}MS';
-    }
-    return '';
+    if (delay == null) return '';
+    return delay! < 0 ? 'ERR' : '${delay}MS';
   }
 
   Color? _delayColor(BuildContext context) {
@@ -65,6 +58,84 @@ class NodeRow extends StatelessWidget {
     if (delay! < 200) return Colors.green;
     if (delay! < 500) return Colors.orange;
     return Theme.of(context).colorScheme.error;
+  }
+
+  /// `[ACTIVE] [protocol]              [50MS]` — left part flex, ping right-aligned.
+  Widget _buildSubtitleRow(BuildContext context, ColorScheme cs) {
+    final left = <Widget>[];
+    if (active) {
+      left.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        decoration: BoxDecoration(
+          color: Colors.green.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: Text(
+          'ACTIVE',
+          style: TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            color: Colors.green.shade700,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ));
+    }
+    if (urltestNow != null && urltestNow!.isNotEmpty) {
+      left.add(Text(
+        '→ $urltestNow',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 10,
+          fontStyle: FontStyle.italic,
+          color: cs.onSurfaceVariant,
+        ),
+      ));
+    }
+    if (protocolLabel != null && protocolLabel!.isNotEmpty) {
+      left.add(Text(
+        protocolLabel!,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: cs.onSurfaceVariant,
+          letterSpacing: 0.3,
+        ),
+      ));
+    }
+
+    final dl = _delayLabel;
+    final right = dl.isEmpty
+        ? const SizedBox.shrink()
+        : Text(
+            dl,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+              color: _delayColor(context) ?? cs.onSurfaceVariant,
+            ),
+          );
+
+    if (left.isEmpty && dl.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Row(
+        children: [
+          Expanded(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 2,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: left,
+            ),
+          ),
+          right,
+        ],
+      ),
+    );
   }
 
   bool get _isSpecial => tag == 'direct-out' || tag == 'auto-proxy-out';
@@ -128,6 +199,16 @@ class NodeRow extends StatelessWidget {
             ),
           ),
         if (showCopy) const PopupMenuDivider(),
+        if (showCopy && onCopyUri != null)
+          PopupMenuItem<String>(
+            value: 'copy_uri',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.link, size: 20),
+              title: const Text('Copy URI'),
+            ),
+          ),
         if (showCopy)
           PopupMenuItem<String>(
             value: 'copy_server',
@@ -135,7 +216,7 @@ class NodeRow extends StatelessWidget {
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.content_copy, size: 20),
-              title: const Text('Copy server'),
+              title: const Text('Copy server (JSON)'),
             ),
           ),
         if (showCopy && hasDetour)
@@ -166,6 +247,8 @@ class NodeRow extends StatelessWidget {
         onPing();
       case 'activate':
         onActivate();
+      case 'copy_uri':
+        if (onCopyUri != null) onCopyUri!();
       case 'copy_server':
         if (onCopy != null) onCopy!('server');
       case 'copy_detour':
@@ -215,18 +298,7 @@ class NodeRow extends StatelessWidget {
                             fontWeight: active ? FontWeight.w600 : FontWeight.w500,
                           ),
                     ),
-                    if (_subtitle.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        _subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              letterSpacing: 0.6,
-                              color: _delayColor(context) ?? colorScheme.onSurfaceVariant,
-                            ),
-                      ),
-                    ],
+                    _buildSubtitleRow(context, colorScheme),
                   ],
                 ),
               ),

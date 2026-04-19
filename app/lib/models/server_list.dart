@@ -1,8 +1,10 @@
+import '../services/parser/body_decoder.dart';
+import '../services/parser/parse_all.dart';
 import 'node_spec.dart';
 import 'subscription_meta.dart';
 
 /// Контейнер узлов (§1 спеки 026). Sealed: `SubscriptionServers` (fetch по
-/// URL) vs `UserServers` (paste/file/qr/manual). Персистится на диск
+/// URL) vs `UserServer` (paste/file/qr/manual). Персистится на диск
 /// `List<ServerList>` с дискриминатором `type`.
 sealed class ServerList {
   final String id; // uuid, стабилен на всём жизненном цикле
@@ -31,7 +33,7 @@ sealed class ServerList {
       case 'subscription':
         return SubscriptionServers.fromJson(j);
       case 'user':
-        return UserServers.fromJson(j);
+        return UserServer.fromJson(j);
       default:
         throw FormatException('Unknown ServerList type: $t');
     }
@@ -158,12 +160,12 @@ final class SubscriptionServers extends ServerList {
 
 enum UserSource { paste, file, qr, manual }
 
-final class UserServers extends ServerList {
+final class UserServer extends ServerList {
   final UserSource origin;
   final DateTime createdAt;
   final String rawBody; // оригинал paste'а для reparse в случае багов
 
-  UserServers({
+  UserServer({
     required super.id,
     required super.name,
     required super.enabled,
@@ -191,23 +193,40 @@ final class UserServers extends ServerList {
         if (rawBody.isNotEmpty) 'raw_body': rawBody,
       };
 
-  factory UserServers.fromJson(Map<String, dynamic> j) => UserServers(
-        id: j['id'] as String,
-        name: (j['name'] as String?) ?? '',
-        enabled: (j['enabled'] as bool?) ?? true,
-        tagPrefix: (j['tag_prefix'] as String?) ?? '',
-        detourPolicy: DetourPolicy.fromJson(
-            (j['detour_policy'] as Map?)?.cast<String, dynamic>() ?? const {}),
-        origin: UserSource.values.firstWhere(
-          (e) => e.name == j['origin'],
-          orElse: () => UserSource.manual,
-        ),
-        createdAt: DateTime.tryParse((j['created_at'] as String?) ?? '') ??
-            DateTime.now(),
-        rawBody: (j['raw_body'] as String?) ?? '',
-      );
+  factory UserServer.fromJson(Map<String, dynamic> j) {
+    final rawBody = (j['raw_body'] as String?) ?? '';
+    // Реконструируем `nodes` из rawBody — toJson хранит только raw,
+    // экономя место и избегая дрейфа сериализации NodeSpec. Без этого
+    // после рестарта app узлы UserServer пропадают (NodeSettingsScreen
+    // → пустой `nodes` → бесконечный спиннер на `_load()`).
+    final nodes = <NodeSpec>[];
+    if (rawBody.isNotEmpty) {
+      try {
+        nodes.addAll(parseAll(decode(rawBody)));
+      } catch (_) {
+        // Некорректный raw — оставляем nodes пустым, пользователь увидит
+        // empty entry и сможет удалить.
+      }
+    }
+    return UserServer(
+      id: j['id'] as String,
+      name: (j['name'] as String?) ?? '',
+      enabled: (j['enabled'] as bool?) ?? true,
+      tagPrefix: (j['tag_prefix'] as String?) ?? '',
+      detourPolicy: DetourPolicy.fromJson(
+          (j['detour_policy'] as Map?)?.cast<String, dynamic>() ?? const {}),
+      origin: UserSource.values.firstWhere(
+        (e) => e.name == j['origin'],
+        orElse: () => UserSource.manual,
+      ),
+      createdAt: DateTime.tryParse((j['created_at'] as String?) ?? '') ??
+          DateTime.now(),
+      rawBody: rawBody,
+      nodes: nodes,
+    );
+  }
 
-  UserServers copyWith({
+  UserServer copyWith({
     String? name,
     bool? enabled,
     String? tagPrefix,
@@ -217,7 +236,7 @@ final class UserServers extends ServerList {
     String? rawBody,
     List<NodeSpec>? nodes,
   }) =>
-      UserServers(
+      UserServer(
         id: id,
         name: name ?? this.name,
         enabled: enabled ?? this.enabled,

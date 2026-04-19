@@ -37,8 +37,8 @@ void main() {
       expect(roundtripped.lastNodeCount, 42);
     });
 
-    test('UserServers → JSON → UserServers', () {
-      final original = UserServers(
+    test('UserServer → JSON → UserServer', () {
+      final original = UserServer(
         id: 'user-1',
         name: 'Pasted',
         enabled: true,
@@ -52,7 +52,7 @@ void main() {
       final j = original.toJson();
       expect(j['type'], 'user');
 
-      final rt = ServerList.fromJson(j) as UserServers;
+      final rt = ServerList.fromJson(j) as UserServer;
       expect(rt.origin, UserSource.paste);
       expect(rt.createdAt, original.createdAt);
       expect(rt.rawBody, original.rawBody);

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/home_state.dart';
+import '../models/node_spec.dart';
 import '../services/clash_api_client.dart';
 import '../widgets/node_row.dart';
 import 'outbound_view_screen.dart';
@@ -920,6 +921,48 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     }
   }
 
+  /// Lookup исходного `NodeSpec` по display-тэгу (с префиксом подписки).
+  /// Возвращает `null` если не нашли (control-узлы direct/auto, чужой
+  /// конфиг, или collision-suffix от `allocateTag`). Используется для
+  /// "Copy URI" в long-press меню.
+  NodeSpec? _findNodeByDisplayTag(String displayTag) {
+    for (final e in _subController.entries) {
+      final prefix = e.tagPrefix;
+      var base = displayTag;
+      if (prefix.isNotEmpty && displayTag.startsWith('$prefix ')) {
+        base = displayTag.substring(prefix.length + 1);
+      }
+      for (final n in e.list.nodes) {
+        if (n.tag == base) return n;
+        // Detour-нода живёт под главным как `chained` — в config она тоже
+        // получает prefix. Поищем и там.
+        final ch = n.chained;
+        if (ch != null && ch.tag == base) return ch;
+      }
+    }
+    return null;
+  }
+
+  void _copyNodeUri(String tag) {
+    final node = _findNodeByDisplayTag(tag);
+    if (node == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No source URI for this node')),
+        );
+      }
+      return;
+    }
+    final uri = node.toUri();
+    if (uri.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: uri));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('URI copied')),
+      );
+    }
+  }
+
   Widget _buildNodeList(BuildContext context, HomeState state) {
     if (state.nodes.isEmpty) {
       final cs = Theme.of(context).colorScheme;
@@ -961,6 +1004,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         ? state.sortedNodes
         : state.sortedNodes.where((t) => !t.startsWith('⚙ ')).toList();
     final detourTags = <String>{};
+    final protoByTag = <String, _NodeProto>{};
     if (state.configRaw.isNotEmpty) {
       try {
         final cfg = jsonDecode(state.configRaw) as Map<String, dynamic>;
@@ -969,9 +1013,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           ...(cfg['endpoints'] as List<dynamic>? ?? []),
         ].whereType<Map<String, dynamic>>();
         for (final o in all) {
-          final d = o['detour'];
           final t = o['tag'];
-          if (t is String && d is String && d.isNotEmpty) detourTags.add(t);
+          if (t is! String) continue;
+          final d = o['detour'];
+          if (d is String && d.isNotEmpty) detourTags.add(t);
+          final type = (o['type'] as String?) ?? '';
+          if (type.isEmpty) continue;
+          // selector/urltest/direct/block/dns не показываем — это control-узлы.
+          const skip = {'selector', 'urltest', 'direct', 'block', 'dns'};
+          if (skip.contains(type)) continue;
+          protoByTag[t] = _NodeProto(type: type);
         }
       } catch (_) {}
     }
@@ -988,6 +1039,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           ),
           itemBuilder: (context, i) {
             final tag = displayNodes[i];
+            final urltestNow = ClashApiClient.urltestNow(state.proxiesJson, tag);
+            // Для urltest-группы (auto-proxy-out) сам тэг — control-узел без
+            // протокола; берём proto той ноды, которую urltest сейчас выбрал.
+            final proto = protoByTag[tag] ??
+                (urltestNow != null ? protoByTag[urltestNow] : null);
             return NodeRow(
               tag: tag,
               active: tag == state.activeInGroup,
@@ -1000,13 +1056,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               onActivate: () => unawaited(_controller.switchNode(tag)),
               onPing: () => unawaited(_controller.pingNode(tag)),
               onCopy: (mode) => _copyNodeJson(tag, state, mode),
+              onCopyUri: () => _copyNodeUri(tag),
               onViewJson: () => _viewOutboundJson(tag, state),
-              urltestNow: ClashApiClient.urltestNow(state.proxiesJson, tag),
+              urltestNow: urltestNow,
               hasDetour: detourTags.contains(tag),
+              protocolLabel: proto?.label,
             );
           },
         ),
       ),
     );
   }
+}
+
+/// Сборка ярлыка протокола для строки ноды на главном экране.
+/// Берётся из outbound JSON в `state.configRaw`, мапится в короткое имя.
+/// TLS опускаем — у большинства протоколов (VLESS/Trojan/Hy2/TUIC) он
+/// дефолт, помечать каждую — шум.
+class _NodeProto {
+  const _NodeProto({required this.type});
+  final String type;
+
+  String get label => switch (type) {
+        'vless' => 'VLESS',
+        'vmess' => 'VMess',
+        'trojan' => 'Trojan',
+        'shadowsocks' => 'SS',
+        'hysteria2' => 'Hy2',
+        'tuic' => 'TUIC',
+        'wireguard' => 'WG',
+        'ssh' => 'SSH',
+        'socks' => 'SOCKS',
+        'http' => 'HTTP',
+        _ => type.toUpperCase(),
+      };
 }

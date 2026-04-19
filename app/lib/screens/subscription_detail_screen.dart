@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
 import '../models/node_spec.dart';
+import '../models/node_warning.dart';
 import '../models/server_list.dart';
 import '../services/subscription/sources.dart';
 import '../services/url_launcher.dart';
@@ -126,7 +127,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
         if (node.chained != null) expanded.add(node.chained!);
       }
       // Source-вкладка теперь подтягивается живым GET при переключении туда.
-      // Для UserServers (connections) показываем сразу что есть.
+      // Для UserServer (connections) показываем сразу что есть.
       if (widget.entry.connections.isNotEmpty) {
         _rawSource = widget.entry.connections.join('\n');
         _sourceLoaded = true;
@@ -500,10 +501,10 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   }
 
   Future<void> _showOverrideDetourPicker() async {
-    // Direct-server picker: все UserServers-узлы из других entries.
+    // Direct-server picker: все UserServer-узлы из других entries.
     final tags = <String>[];
     for (final e in widget.controller.entries) {
-      if (e.list is! UserServers) continue;
+      if (e.list is! UserServer) continue;
       for (final n in e.list.nodes) {
         if (n.tag.isNotEmpty) tags.add(n.tag);
       }
@@ -839,10 +840,15 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       );
     }
 
-    final warningCount = nodes.where((n) => n.warnings.isNotEmpty).length;
+    // Считаем только actionable (warning/error). Info (TLS-insecure) тут
+    // не учитываем — это часто намеренный выбор провайдера, чтобы не пугать.
+    final actionableCount = nodes
+        .where((n) => n.warnings
+            .any((w) => w.severity != WarningSeverity.info))
+        .length;
     return Column(
       children: [
-        if (warningCount > 0)
+        if (actionableCount > 0)
           Container(
             width: double.infinity,
             color: Colors.orange.withValues(alpha: 0.15),
@@ -853,7 +859,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '$warningCount node${warningCount == 1 ? "" : "s"} with warnings (XHTTP fallback)',
+                    '$actionableCount node${actionableCount == 1 ? "" : "s"} with warnings (XHTTP fallback etc.)',
                     style: const TextStyle(fontSize: 12, color: Colors.orange),
                   ),
                 ),
@@ -883,19 +889,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                 '${node.protocol}  ${node.server}:${node.port}',
                 style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
               ),
-              if (node.warnings.isNotEmpty)
-                Row(
-                  children: [
-                    Icon(Icons.warning_amber, size: 12, color: Colors.orange),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        node.warnings.isEmpty ? '' : node.warnings.first.message,
-                        style: const TextStyle(fontSize: 10, color: Colors.orange),
-                      ),
-                    ),
-                  ],
-                ),
+              if (node.warnings.isNotEmpty) _NodeWarningRow(node.warnings),
             ],
           ),
           dense: true,
@@ -959,5 +953,39 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       _ => Icons.public,
     };
     return Icon(icon, size: 20);
+  }
+}
+
+/// Inline warning-line под нодой. Сортируем по severity (error → warning →
+/// info), показываем первый. Цвет: error=красный, warning=оранжевый,
+/// info=серый (TLS-insecure часто намеренное → не должен орать).
+class _NodeWarningRow extends StatelessWidget {
+  const _NodeWarningRow(this.warnings);
+  final List<NodeWarning> warnings;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final sorted = [...warnings]
+      ..sort((a, b) => b.severity.index.compareTo(a.severity.index));
+    final w = sorted.first;
+    final (color, icon) = switch (w.severity) {
+      WarningSeverity.error => (cs.error, Icons.error_outline),
+      WarningSeverity.warning => (Colors.orange, Icons.warning_amber),
+      WarningSeverity.info => (cs.onSurfaceVariant, Icons.info_outline),
+    };
+    final more = warnings.length - 1;
+    return Row(
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            more > 0 ? '${w.message} (+$more more)' : w.message,
+            style: TextStyle(fontSize: 10, color: color),
+          ),
+        ),
+      ],
+    );
   }
 }

@@ -32,6 +32,27 @@
 - Строка: имя (отображаемое по данным API), индикация **активного** узла, кнопка **переключить** (или tap по строке), кнопка **ping** — только **одиночный** запрос delay.
 - Обновление списка при смене группы и после успешного switch; при обновлении с сервера можно сохранять последний известный delay по имени узла.
 
+### 4.1. NodeRow subtitle layout
+
+```
+┌────────────────────────────────────────────────────┐
+│ Tag                                                │
+│ [ACTIVE✓]  PROTOCOL                          50MS  │
+└────────────────────────────────────────────────────┘
+                                                ^right-aligned
+```
+
+Subtitle строится в `_buildSubtitleRow` (`lib/widgets/node_row.dart`):
+
+| Элемент | Источник | Формат |
+|---------|----------|--------|
+| `[ACTIVE]` pill | `tag == state.activeInGroup` | Зелёный pill с `tertiaryContainer` фоном, fontSize 9, bold |
+| `→ urltestNow` | Для urltest-группы — текущий выбранный узел | `→ BL: Frankfurt`, italic, серый |
+| Protocol | `protocolLabel` пропс из `home_screen` (по `outbound['type']`) | `VLESS`, `Hy2`, `WG`, `TUIC`, `SS` etc. **Без `+ TLS` суффикса** — TLS дефолт у большинства, метить = шум. Для urltest-группы — proto **выбранной** ноды |
+| Ping | `delay` ms (или `PING…` / `ERR`) | Right-aligned, цвет по latency: `<200ms` зелёный, `<500` оранжевый, `>500`/err красный |
+
+Все элементы flex-Wrap слева, ping абсолютно справа через `Spacer`-Expanded.
+
 ## 5. Node Context Menu (long-press)
 
 **Status:** Реализовано
@@ -43,7 +64,8 @@ Long-press на `NodeRow` показывает popup menu:
 | **Ping** | Запускает пинг конкретного узла |
 | **Use this node** | Переключает текущий outbound на выбранный узел через Clash API |
 | **View JSON** | Открывает read-only страницу с форматированным JSON outbound/endpoint. Если у узла есть detour — выдаёт массив `[node, detour1, detour2, ...]` (рекурсивный обход по `detour`) |
-| **Copy server** | Копирует outbound узла в JSON (без поля `detour`) |
+| **Copy URI** | Канонический URI: `vless://`, `wireguard://`, `hy2://`, etc через `node.toUri()` (round-trip parser v2). Если NodeSpec не находится по display-tag (control-узел / collision-suffix) — snackbar `No source URI for this node` |
+| **Copy server (JSON)** | Копирует outbound узла в JSON (без поля `detour`) |
 | **Copy detour** | Копирует только detour-outbound (скрыт для узлов без detour) |
 | **Copy server + detour** | Массив `[detour, server]` (скрыт для узлов без detour) |
 
