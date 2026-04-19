@@ -5,8 +5,17 @@ import 'package:flutter/services.dart';
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  static const _version = '1.1.0';
+  static const _version = '1.3.0';
   static const _repoUrl = 'https://github.com/Leadaxe/LxBox';
+
+  // Заполняются `scripts/build-local-apk.sh` через --dart-define.
+  // CI build (без define'ов) → пустые строки → метка "local" не показывается.
+  static const _buildLocal = bool.fromEnvironment('BUILD_LOCAL');
+  static const _buildGitDesc = String.fromEnvironment('BUILD_GIT_DESC');
+  static const _buildLastTag = String.fromEnvironment('BUILD_LAST_TAG');
+  static const _buildCommitsSinceTag =
+      String.fromEnvironment('BUILD_COMMITS_SINCE_TAG');
+  static const _buildTime = String.fromEnvironment('BUILD_TIME');
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +43,15 @@ class AboutScreen extends StatelessWidget {
                         color: cs.onSurfaceVariant,
                       ),
                 ),
+                if (_buildLocal) ...[
+                  const SizedBox(height: 6),
+                  _LocalBuildBadge(
+                    gitDesc: _buildGitDesc,
+                    lastTag: _buildLastTag,
+                    commitsSinceTag: _buildCommitsSinceTag,
+                    buildTime: _buildTime,
+                  ),
+                ],
               ],
             ),
           ),
@@ -186,6 +204,79 @@ class AboutScreen extends StatelessWidget {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Copied: $text')),
+    );
+  }
+}
+
+class _LocalBuildBadge extends StatelessWidget {
+  const _LocalBuildBadge({
+    required this.gitDesc,
+    required this.lastTag,
+    required this.commitsSinceTag,
+    required this.buildTime,
+  });
+
+  final String gitDesc;
+  final String lastTag;
+  final String commitsSinceTag;
+  final String buildTime;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final commitsLine = lastTag.isEmpty
+        ? 'no tag yet'
+        : '$commitsSinceTag commit${commitsSinceTag == "1" ? "" : "s"} '
+            'since $lastTag';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: cs.tertiaryContainer,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.science_outlined,
+                  size: 14, color: cs.onTertiaryContainer),
+              const SizedBox(width: 6),
+              Text(
+                'LOCAL BUILD · $commitsLine',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onTertiaryContainer,
+                ),
+              ),
+            ],
+          ),
+          if (gitDesc.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                gitDesc,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontFamily: 'monospace',
+                  color: cs.onTertiaryContainer.withValues(alpha: 0.85),
+                ),
+              ),
+            ),
+          if (buildTime.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Text(
+                buildTime,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: cs.onTertiaryContainer.withValues(alpha: 0.7),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
