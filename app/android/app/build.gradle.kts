@@ -34,16 +34,20 @@ android {
 
     defaultConfig {
         applicationId = "com.leadaxe.lxbox"
-        // Android 11 (API 30) minimum — явно фиксируем support window.
-        // Причины:
-        //   - ActivityManager.getHistoricalProcessExitReasons (API 30+) — нужен
-        //     для silent-kill detection (см. docs/spec/tasks/007).
-        //   - Современные VpnService API (metered flag, setMetered) — API 29+.
-        //   - RECEIVER_NOT_EXPORTED явный флаг — требуется на API 33+, но мы
-        //     используем его уже сейчас (ContextCompat делает fallback для <33).
-        //   - Стабильные FGS-constraint'ы (Android 11 зачищает lifecycle).
-        // Старые версии (API <30) — вне поддержки проекта. См. ARCHITECTURE.md.
-        minSdk = 30
+        // Android 8.0 (API 26) minimum — historical claim из release notes
+        // 1.3.x / 1.4.0. Не закрываем дверь пользователям Android 8-10, хотя
+        // приоритет тестирования и поддержки — 11+ (primary target window).
+        //
+        // Tiers:
+        //   - Primary (11+, API 30+)  — все фичи, тестируется.
+        //   - Best-effort (8-10, API 26-29) — compile/install OK, фичи API 30+
+        //     деградируют. Например, silent-kill detection
+        //     (getHistoricalProcessExitReasons) обёрнута в SDK_INT check.
+        //   - Unsupported (<8, API <26) — install blocked.
+        //
+        // Если всплывут жалобы с 8-10, возможно придётся понизить до 24
+        // (Flutter default). См. ARCHITECTURE.md → Supported platforms.
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

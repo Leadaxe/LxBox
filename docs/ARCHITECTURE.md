@@ -10,21 +10,30 @@
 
 | Параметр | Значение |
 |----------|----------|
-| Android minSdk | **30** (Android 11) |
+| Android minSdk | **26** (Android 8.0) |
 | Android targetSdk | `flutter.targetSdkVersion` (актуальная target, обычно API 34/35) |
 | Android compileSdk | `flutter.compileSdkVersion` |
 | JVM | Java 17 |
 | NDK | 28.2.13676358 |
 
-**Android <11 (API <30) — вне scope проекта.** Не тестируется, не поддерживается, не оптимизируется. Обоснование:
+### Поддержка по тирам
 
-- **`ActivityManager.getHistoricalProcessExitReasons`** — нужен для silent-kill detection (см. `docs/spec/tasks/007-silent-kill-handling.md`), доступен с API 30.
-- **Foreground-service lifecycle на Android 11+** — стабильнее, чище доз-state transitions.
-- **VpnService API** (`setMetered`, `setUnderlyingNetworks`) — современные поля и callback'и доступны с API 29+.
-- **Scoped Storage** — по умолчанию на API 30+, старые workaround'ы не нужны.
-- **`RECEIVER_NOT_EXPORTED` flag** — обязателен с API 33, мы и так его выставляем.
+| Tier | Android | Статус |
+|------|---------|--------|
+| **Primary** | 11+ (API 30+) | Тестируется, все фичи работают, production-ready |
+| **Best-effort** | 8.0–10 (API 26–29) | Compile OK, install OK, базовый VPN-функционал должен работать. Фичи требующие API 30+ (например, silent-kill detection через `getHistoricalProcessExitReasons`) деградируют к no-op. Не тестируется регулярно; жалобы принимаются, но fix'ы на best-effort основе. |
+| **Unsupported** | <8 (API <26) | Установка заблокирована `minSdk=26` |
 
-Поднятие minSdk до 30 зафиксировано в `app/android/app/build.gradle.kts` (`minSdk = 30`). Legacy `Build.VERSION.SDK_INT` checks в nativе оставлены как есть (часть libbox-adjacent кода) — очистка в отдельном рефакторинг-коммите после стабилизации 1.4.0.
+### Почему именно 26 как minSdk
+
+- **Исторически** в release notes 1.3.x и draft 1.4.0 заявлено «Android 8.0+» — не закрываем дверь пользователям которые видели эту декларацию.
+- **VpnService API** (`setMetered`, `setUnderlyingNetworks`) доступны с API 29+, для старых есть fallback-пути (без setMetered — vpn работает нормально, просто не маркируется как non-metered).
+- **`ActivityManager.getHistoricalProcessExitReasons`** (API 30+) — нужен для silent-kill detection в task 007. В коде обёрнут в `if (Build.VERSION.SDK_INT >= 30)` — на старых просто не триггерит snackbar.
+- **Foreground-service lifecycle** на API 26+ достаточно стабилен для наших целей.
+
+### Legacy `Build.VERSION.SDK_INT` проверки
+
+В Kotlin (DefaultNetworkMonitor, ServiceNotification, BoxApplication, etc.) остались старые version guards — часть libbox-adjacent кода. С `minSdk=26` некоторые из них (`>= M (23)`, `>= N (24)`) всегда true, их можно упростить. Отдельный cleanup-pass после стабилизации 1.4.0, чтобы не мешать с другими изменениями.
 
 ---
 

@@ -253,7 +253,7 @@ Memory invariant `feedback_no_unplanned_autoupdates` — явная не-фун�
 
 ## 📦 Install
 
-Grab the APK below and install on **Android 11+ (API 30+)** — older versions are no longer in scope. **242/242 tests pass.** Release APK ≈ 56 MB (arm64) / 72 MB (universal from CI).
+Grab the APK below. **Primary target: Android 11+ (API 30+)** — fully tested, all features work. **Best-effort: Android 8.0–10** — should install and run the basics, but API 30+ features (e.g. silent-kill detection) gracefully no-op. **242/242 tests pass.** Release APK ≈ 56 MB (arm64) / 72 MB (universal from CI).
 
 ---
 
@@ -339,6 +339,6 @@ Grab the APK below and install on **Android 11+ (API 30+)** — older versions a
 
 ### 📦 Установка
 
-Скачай APK ниже, установи на **Android 11+ (API 30+)** — старые версии больше не поддерживаются. **242/242 тестов.** Release APK ≈ 56 MB (arm64) / 72 MB (universal).
+Скачай APK ниже. **Основная цель: Android 11+ (API 30+)** — полностью тестируется, все фичи работают. **Best-effort: Android 8.0–10** — базовый функционал должен работать, но фичи API 30+ (например, silent-kill detection) gracefully no-op. **242/242 тестов.** Release APK ≈ 56 MB (arm64) / 72 MB (universal).
 
 </details>
