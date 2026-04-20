@@ -14,6 +14,13 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.PluginRegistry
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     PluginRegistry.ActivityResultListener {
@@ -32,6 +39,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     private var statusSink: EventChannel.EventSink? = null
     private var pendingVpnResult: MethodChannel.Result? = null
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /// Scope для suspend-обработчиков method channel — сейчас нужен только
+    /// для stopVPN (async wait на setStatus(Stopped)), но переиспользуем
+    /// для любых будущих awaitable операций. Отменяется в onDetachedFromEngine.
+    private val pluginScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val statusReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -85,6 +97,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         statusEventChannel.setStreamHandler(null)
         statusSink = null
         runCatching { context.unregisterReceiver(statusReceiver) }
+        pluginScope.cancel()
     }
 
     // -------------------------------------------------------------------------
@@ -100,10 +113,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
             "getConfig" -> result.success(ConfigManager.load())
             "startVPN" -> startVpn(result)
-            "stopVPN" -> {
-                BoxVpnService.stop(context)
-                result.success(true)
-            }
+            "stopVPN" -> stopVpn(result)
             "getVpnStatus" -> {
                 // Pull-метод для re-sync UI после reattach Flutter-процесса
                 // (broadcast'ятся только переходы — если service уже Started,
@@ -289,6 +299,31 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         } else {
             BoxVpnService.start(context)
             result.success(true)
+        }
+    }
+
+    /// Blocking stop: на native-стороне ждём пока setStatus(Stopped) реально
+    /// отработает (после async cleanup libbox-ресурсов), чтобы caller в Dart
+    /// мог последовательно сделать `await stopVPN()` → `await startVPN()`
+    /// без race'а в onStartCommand guard (`status != Stopped` → silent).
+    ///
+    /// Таймаут 5с — если doStop не доиграл, возвращаем `false`. Caller
+    /// (обычно reconnect) сам решит отменить или повторить.
+    private fun stopVpn(result: MethodChannel.Result) {
+        pluginScope.launch {
+            val ok = try {
+                withTimeout(5_000) {
+                    BoxVpnService.stopAwait(context).await()
+                }
+                true
+            } catch (e: TimeoutCancellationException) {
+                Log.w(TAG, "[vpn] stopVPN: 5s timeout — native не отдал Stopped")
+                false
+            } catch (e: Exception) {
+                Log.e(TAG, "[vpn] stopVPN: exception $e")
+                false
+            }
+            result.success(ok)
         }
     }
 

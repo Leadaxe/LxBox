@@ -26,7 +26,11 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
-  /// Request VPN stop.
+  /// Request VPN stop. **Blocks** (on native side) until `setStatus(Stopped)`
+  /// реально отработал — cleanup libbox + broadcast Stopped. Returns true on
+  /// success, false on 5-second timeout. Позволяет caller'у безопасно делать
+  /// `await stopVPN()` → `await startVPN()` без гонки в `onStartCommand`
+  /// (guard там `if (status != Stopped) silent return`).
   Future<bool> stopVPN() async {
     final ok = await _methods.invokeMethod<bool>('stopVPN');
     return ok ?? false;

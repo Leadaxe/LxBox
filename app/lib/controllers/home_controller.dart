@@ -412,16 +412,65 @@ class HomeController extends ChangeNotifier {
   // VPN tunnel control
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // stop/start/reconnect — intent-based primitives
+  //
+  // Дизайн (после sink-fix в BoxVpnClient + blocking stopVPN на native):
+  //   - `_stopInternal` / `_startInternal` — внутренние примитивы, делают
+  //     один native call + intent-based reset `configStaleSinceStart=false`
+  //     на успехе. Без busy-management.
+  //   - `stop` / `start` — public, оборачивают internal в `busy=true/false`
+  //     try/finally + error surfacing в `lastError`.
+  //   - `reconnect` — композиция `_stopInternal` → `_startInternal` под
+  //     одним `busy`-wrap'ом. Никакого `firstWhere`/`timeout` на Dart
+  //     стороне: `stopVPN` теперь блокирующий на native, caller получает
+  //     control только после `setStatus(Stopped)`.
+  //
+  // Почему intent-based reset `configStaleSinceStart=false` в _stopInternal
+  // и _startInternal (а не только в _handleStatusEvent на Stopped/Started):
+  //   1. Семантическая чистота. Юзер явно применил namерение (stop = "туннель
+  //      прекращается, saved больше не vs running"; start = "running теперь
+  //      и есть saved"). Флаг сбрасывается по причине, а не по следствию.
+  //   2. Broadcast-канал остаётся unreliable-by-design на системном уровне
+  //      (Doze, OOM, process kill) — intent reset не зависит от доставки.
+  //   3. `_handleStatusEvent` reset (строки 101/127) остаётся как defense
+  //      in depth: если transition пришёл без intent (например, revoke
+  //      от другого VPN), флаг тоже сбросится. Идемпотентно, конфликтов нет.
+  // ---------------------------------------------------------------------------
+
+  /// Atomic stop: blocking native call + intent-based sticky reset.
+  /// Returns true если native реально остановился, false на timeout.
+  Future<bool> _stopInternal() async {
+    final ok = await _vpn.stopVPN();
+    _addDebug(DebugSource.app, '[vpn] stopVPN returned $ok');
+    if (ok) {
+      // Intent-based reset: юзер остановил туннель, saved конфиг больше
+      // не "stale vs running" — running перестал существовать.
+      _emit(_state.copyWith(configStaleSinceStart: false));
+    }
+    return ok;
+  }
+
+  /// Atomic start: native call + intent-based sticky reset.
+  /// Returns true если startVPN принят (reached Starting), false иначе.
+  Future<bool> _startInternal() async {
+    await _vpn.setNotificationTitle('L×Box');
+    final ok = await _vpn.startVPN();
+    _addDebug(DebugSource.app, '[vpn] startVPN returned $ok');
+    if (ok) {
+      // Intent-based reset: running теперь = saved (или станет через
+      // мгновение на Started). Плашка "нужен restart" неактуальна.
+      _emit(_state.copyWith(configStaleSinceStart: false));
+    }
+    return ok;
+  }
+
   Future<void> start() async {
     _emit(_state.copyWith(busy: true, lastError: ''));
     try {
-      await _vpn.setNotificationTitle('L×Box');
-      final ok = await _vpn.startVPN();
+      final ok = await _startInternal();
       if (!ok) {
         _emit(_state.copyWith(lastError: 'Failed to start VPN'));
-        _addDebug(DebugSource.app, 'startVPN returned false');
-      } else {
-        _addDebug(DebugSource.app, 'startVPN requested');
       }
     } catch (e) {
       _emit(_state.copyWith(lastError: '$e'));
@@ -434,8 +483,10 @@ class HomeController extends ChangeNotifier {
   Future<void> stop() async {
     _emit(_state.copyWith(busy: true, lastError: ''));
     try {
-      await _vpn.stopVPN();
-      _addDebug(DebugSource.app, 'stopVPN requested');
+      final ok = await _stopInternal();
+      if (!ok) {
+        _emit(_state.copyWith(lastError: 'Stop timed out'));
+      }
     } catch (e) {
       _emit(_state.copyWith(lastError: '$e'));
       _addDebug(DebugSource.app, 'stopVPN exception: $e');
@@ -444,60 +495,36 @@ class HomeController extends ChangeNotifier {
     }
   }
 
-  /// Stop (if up) → wait for disconnected → start. Если туннель уже
-  /// disconnected/revoked — просто start. Подписываемся ДО вызова stop чтобы
-  /// не упустить быстрый event; broadcast-stream allows parallel listeners.
-  /// Держим busy=true на всё время цепочки, чтобы UI не дал повторно нажать
-  /// между stop и start.
+  /// Reconnect = `_stopInternal` → `_startInternal`. Blocking на native
+  /// даёт нам уверенность что между stop и start нет race окна в
+  /// `onStartCommand` guard'е. busy=true держится на всю цепочку, чтобы
+  /// UI не дал повторно нажать.
+  ///
+  /// Если туннель уже down — просто делегируем в `start()`.
   Future<void> reconnect() async {
-    final t0 = DateTime.now();
     final wasUp = _state.tunnel == TunnelStatus.connected ||
         _state.tunnel == TunnelStatus.connecting;
-    _addDebug(DebugSource.app,
-        '[vpn] reconnect ENTER tunnel=${_state.tunnel.name} wasUp=$wasUp stale=${_state.configStaleSinceStart}');
     if (!wasUp) {
       await start();
-      _addDebug(DebugSource.app, '[vpn] reconnect EXIT (was down → start only)');
       return;
     }
     _emit(_state.copyWith(busy: true, lastError: ''));
     try {
-      final wait = _vpn.onStatusChanged.firstWhere((e) {
-        final s = TunnelStatus.fromNative(e['status']?.toString() ?? '');
-        final match = s == TunnelStatus.disconnected || s == TunnelStatus.revoked;
-        _addDebug(DebugSource.app,
-            '[vpn] reconnect firstWhere sees raw="${e['status']}" → ${s.name} match=$match');
-        return match;
-      }).timeout(const Duration(seconds: 10),
-          onTimeout: () {
-            _addDebug(DebugSource.app,
-                '[vpn] reconnect firstWhere TIMEOUT 10s — no disconnected/revoked event received');
-            return <String, dynamic>{};
-          });
-      await _vpn.stopVPN();
-      _addDebug(DebugSource.app, 'reconnect: stopVPN requested');
-      try {
-        await wait;
-        final dt = DateTime.now().difference(t0).inMilliseconds;
-        _addDebug(DebugSource.app, '[vpn] reconnect wait resolved after ${dt}ms');
-      } catch (e) {
-        _addDebug(DebugSource.app, '[vpn] reconnect wait threw $e');
+      final stopped = await _stopInternal();
+      if (!stopped) {
+        _emit(_state.copyWith(lastError: 'Stop timed out — reconnect aborted'));
+        _addDebug(DebugSource.app, 'reconnect: stop timed out, aborting start');
+        return;
       }
-      await _vpn.setNotificationTitle('L×Box');
-      final ok = await _vpn.startVPN();
-      if (!ok) {
+      final started = await _startInternal();
+      if (!started) {
         _emit(_state.copyWith(lastError: 'Failed to start VPN'));
-        _addDebug(DebugSource.app, 'reconnect: startVPN returned false');
-      } else {
-        _addDebug(DebugSource.app, 'reconnect: startVPN requested');
       }
     } catch (e) {
       _emit(_state.copyWith(lastError: '$e'));
       _addDebug(DebugSource.app, 'reconnect exception: $e');
     } finally {
       _emit(_state.copyWith(busy: false));
-      _addDebug(DebugSource.app,
-          '[vpn] reconnect EXIT tunnel=${_state.tunnel.name} stale=${_state.configStaleSinceStart}');
     }
   }
 

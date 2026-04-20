@@ -21,7 +21,9 @@ import io.nekohasekai.libbox.CommandServerHandler
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.SystemProxyStatus
 import io.nekohasekai.libbox.TunOptions
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -46,6 +48,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         var currentStatus: VpnStatus = VpnStatus.Stopped
             private set
 
+        /// Completer для `stopAwait` — completes когда `setStatus(Stopped)`
+        /// отработал, т.е. все cleanup стадии завершились. Null когда stop
+        /// никем не ожидается. Volatile т.к. читается/пишется из разных
+        /// потоков (caller plugin scope + service main/IO).
+        @Volatile
+        private var stopCompleter: CompletableDeferred<Unit>? = null
+
         fun start(context: Context) {
             Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${currentStatus.name}")
             val intent = Intent(context, BoxVpnService::class.java).apply { action = ACTION_START }
@@ -57,6 +66,34 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             context.sendBroadcast(
                 Intent(ACTION_STOP).setPackage(context.packageName)
             )
+        }
+
+        /// Async stop с гарантированным ack'ом: возвращает `Deferred<Unit>`
+        /// который completes когда `setStatus(Stopped)` реально отработал
+        /// (после async cleanup'а libbox-ресурсов). Caller должен обернуть
+        /// в `withTimeout(...)` чтобы не зависнуть навсегда при ошибке
+        /// native-пути.
+        ///
+        /// Если service уже Stopped — возвращает immediately-completed.
+        ///
+        /// Почему через Completer, а не просто ждать broadcast Stopped на
+        /// plugin-стороне: broadcast-канал unreliable (см. историю с
+        /// statusSink). Direct Completer — гарантированный signal
+        /// "stop реально завершён".
+        fun stopAwait(context: Context): Deferred<Unit> {
+            Log.d(TAG, "[vpn] companion.stopAwait() current status=${currentStatus.name}")
+            if (currentStatus == VpnStatus.Stopped) {
+                return CompletableDeferred(Unit)
+            }
+            val completer = CompletableDeferred<Unit>()
+            // Отменяем предыдущий ожидающий, если есть — защита от re-entry
+            // (напр. два одновременных stopVPN вызова).
+            stopCompleter?.cancel()
+            stopCompleter = completer
+            context.sendBroadcast(
+                Intent(ACTION_STOP).setPackage(context.packageName)
+            )
+            return completer
         }
     }
 
@@ -305,6 +342,14 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         Log.d(TAG, "[vpn] setStatus(${newStatus.name})${if (error != null) " error=$error" else ""} — sendBroadcast")
         status = newStatus
         currentStatus = newStatus
+        // Ack для `stopAwait` caller'ов — broadcast-канал мы считаем unreliable
+        // (см. историю с statusSink), поэтому finality-signal идёт через
+        // direct Completer, а не через broadcast. Идемпотентно: если
+        // completer уже completed или cancelled, повторный complete no-op.
+        if (newStatus == VpnStatus.Stopped) {
+            stopCompleter?.complete(Unit)
+            stopCompleter = null
+        }
         sendBroadcast(
             Intent(BROADCAST_STATUS).apply {
                 `package` = packageName
