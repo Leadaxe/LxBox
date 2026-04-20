@@ -14,9 +14,10 @@ L×Box — Android VPN-клиент на базе **sing-box** (через **lib
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Flutter UI                               │
 │  HomeScreen · RoutingScreen · SubscriptionsScreen                │
-│  AppSettingsScreen · ConnectionsScreen · SubscriptionDetail      │
-│  NodeSettingsScreen · NodeFilterScreen · SpeedTestScreen         │
-│  ConfigScreen · DebugScreen · AboutScreen · DnsSettingsScreen    │
+│  AppSettingsScreen · StatsScreen (Overview + Connections tabs)   │
+│  SubscriptionDetail · NodeSettingsScreen · NodeFilterScreen      │
+│  SpeedTestScreen · ConfigScreen · CustomRuleEditScreen           │
+│  DebugScreen · AboutScreen · DnsSettingsScreen                   │
 ├─────────────────────────────────────────────────────────────────┤
 │                       Controllers                                │
 │     HomeController              SubscriptionController           │
@@ -28,26 +29,34 @@ L×Box — Android VPN-клиент на базе **sing-box** (через **lib
 │  services/parser/       — uri_parsers, json_parsers, ini_parser, │
 │                           transport, body_decoder, parse_all     │
 │  services/builder/      — build_config, server_list_build,       │
-│                           validator, post_steps (DPI/DNS/rules)  │
+│                           rule_set_registry, post_steps (DPI/DNS/│
+│                           custom rules — §030), validator        │
 │  services/subscription/ — sources (fetch/parse), http_cache,     │
 │                           auto_updater, input_helpers            │
 │  services/migration/    — proxy_source_migration (one-shot v1→v2)│
+│  services/debug/        — Debug API server (§031): transport     │
+│                           (middleware: host-check/auth/timeout), │
+│                           handlers (/state, /device, /clash,     │
+│                           /action, /files, /logs, /config, /ping)│
 ├─────────────────────────────────────────────────────────────────┤
 │                    Services — Infrastructure                     │
-│  clash_api_client · settings_storage · get_free_loader           │
-│  rule_set_downloader · template_loader · app_log                 │
-│  haptic_service · download_saver · dump_builder · url_launcher   │
+│  clash_api_client · settings_storage · app_info_cache            │
+│  rule_set_downloader · selectable_to_custom · template_loader    │
+│  haptic_service · get_free_loader · app_log · download_saver     │
+│  dump_builder · url_launcher                                     │
 ├─────────────────────────────────────────────────────────────────┤
 │                         Models                                   │
 │  NodeSpec (sealed 9 вариантов) · node_spec_emit · emit_context   │
 │  node_entries · node_warning · tls_spec · transport_spec         │
 │  ServerList (sealed: SubscriptionServers, UserServer)            │
+│  CustomRule (unified routing model — §030)                       │
 │  SubscriptionMeta · SingboxEntry · TemplateVars · ValidationResult│
 │  HomeState · TunnelStatus · DebugEntry · parser_config           │
 ├─────────────────────────────────────────────────────────────────┤
 │                   Native (Kotlin)                                │
 │  vpn/VpnPlugin         MethodChannel/EventChannel bridge         │
-│  vpn/BoxVpnService     Android VpnService + libbox               │
+│  vpn/BoxVpnService     Android VpnService + libbox;              │
+│                        companion.currentStatus (volatile mirror) │
 │  vpn/ConfigManager     File-based config storage                 │
 │  vpn/BoxApplication    Context + libbox initialization           │
 │  vpn/ServiceNotification  Foreground notification                │
@@ -55,7 +64,12 @@ L×Box — Android VPN-клиент на базе **sing-box** (через **lib
 │  vpn/DefaultNetworkMonitor/Listener  Network detection           │
 ├─────────────────────────────────────────────────────────────────┤
 │                      Dart ↔ Native                               │
-│  BoxVpnClient          Typed Dart wrapper over channels          │
+│  BoxVpnClient          Typed Dart wrapper: startVPN/stopVPN,     │
+│                        getVpnStatus (pull), onStatusChanged      │
+│                        (broadcast stream), getInstalledApps,     │
+│                        getAppInfo, setNotificationTitle,         │
+│                        auto-start/keep-on-exit toggles,          │
+│                        battery-optimization navigation           │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -337,16 +351,80 @@ BoxVpnService
 | getConfig | — | String |
 | startVPN | — | bool |
 | stopVPN | — | bool |
+| getVpnStatus | — | "Started" \| "Starting" \| "Stopped" \| "Stopping" |
 | setNotificationTitle | title: String | bool |
-| getInstalledApps | — | List<Map> |
+| getInstalledApps | — | List<Map> (package/appName/isSystemApp) |
+| getAppIcon | packageName: String | String (base64 PNG) |
+| getAppInfo | packageName: String | Map (name+icon+isSystem) \| null |
 | getAutoStart/setAutoStart | bool | bool |
 | getKeepOnExit/setKeepOnExit | bool | bool |
+| isIgnoringBatteryOptimizations | — | bool |
+| openBatteryOptimizationSettings | — | bool |
+| openAppDetailsSettings | — | bool |
+| showToast | msg: String, duration: "short"\|"long" | bool |
 
 **EventChannel** `com.leadaxe.lxbox/status_events`:
 
 ```json
 { "status": "Started" | "Starting" | "Stopped" | "Stopping", "error": "..." }
 ```
+
+---
+
+### VPN Lifecycle & Status Sync
+
+Модель туннеля: **`BoxVpnService` — это Android foreground-service, живущий **отдельно от Flutter-процесса**. Это даёт три состояния проекта которые надо координировать:
+
+1. **Flutter-процесс живой, сервис живой** — нормальная работа. `setStatus(new)` в сервисе отправляет broadcast `BROADCAST_STATUS`, `VpnPlugin.statusReceiver` ловит и толкает в EventChannel sink → `HomeController._handleStatusEvent`. Всё в реальном времени.
+
+2. **Flutter-процесс умер, сервис жив** — случается при `keep-on-exit = true` + swipe из recents / OOM-kill / system trimming. Android завершает Flutter activity + engine, но foreground-service (START_STICKY для touch-like policy) продолжает крутить sing-box и гнать трафик. Юзер возвращается → новый процесс, новый `HomeController.init`, новый listener. Broadcast'ы идут только на **transition**, а сервис уже в steady-state — никто не шлёт "I'm Started" повторно.
+
+3. **Сервис умер системой** — OOM, краш libbox, revoked другим VPN. `setStatus(Stopped, error=...)` уходит в broadcast (если плагин ещё жив) или просто в `companion.currentStatus = Stopped` (если плагин мёртв вместе с процессом).
+
+#### Pull-sync механика
+
+Источник правды — `BoxVpnService.companion.currentStatus: VpnStatus` (`@Volatile`, обновляется в каждом `setStatus`). `VpnPlugin` выставляет его через MethodChannel `getVpnStatus`.
+
+```
+HomeController.init()
+  ├─ _loadSavedConfig()
+  ├─ _statusSub = _vpn.onStatusChanged.listen(_handleStatusEvent)  ← подписка на delta
+  └─ raw = await _vpn.getVpnStatus()                               ← pull текущего
+     └─ _handleStatusEvent({status: raw})  ← тот же handler, он сам решит что emit'ить
+```
+
+Без `getVpnStatus`-pull'а кейс №2 ломался: UI вечно "Disconnected" пока не случится следующий transition (а его может и не случиться, пока юзер не нажмёт Stop).
+
+#### Broadcast vs pull — когда что
+
+| Событие | Механика |
+|---------|----------|
+| Транзит (`Starting` → `Started`) | broadcast → EventChannel |
+| App reattach (новый Flutter-процесс, сервис жив) | pull `getVpnStatus` в `init` |
+| Heartbeat failed (`/traffic` timeout'ит) | `HomeController._onTunnelDead` → `TunnelStatus.revoked` |
+| Safety-timeout (застряли в Starting/Stopping 10s) | `Future.delayed` в `_handleStatusEvent` форс'ит disconnected |
+
+#### Reconnect flow
+
+`HomeController.reconnect()` — атомарный stop → wait → start:
+
+```
+1. Если tunnel уже down — просто start() и выход.
+2. Подписываемся на onStatusChanged ДО вызова stopVPN (чтобы не упустить быстрый event).
+3. stopVPN (MethodChannel), busy=true держим.
+4. firstWhere на disconnected|revoked с 10s timeout.
+5. setNotificationTitle → startVPN.
+```
+
+Broadcast-stream позволяет параллельных listener'ов — свежий `firstWhere` подписчик не мешает главному `_statusSub`.
+
+#### Keep-on-exit настройка
+
+Toggle в App Settings. Персистится в `SettingsStorage.keep_on_exit`, передаётся в native через `setKeepOnExit(bool)` (`BootReceiver.setKeepOnExit` — имя исторически от BootReceiver, но флаг используется и для keep-on-exit).
+
+При значении `true` и killе Flutter-процесса система не обязана останавливать foreground-service, а на `onTaskRemoved` service сам стоп не делает. Значение `false` → service слушает task-removed и вызывает `doStop()`.
+
+Pull-sync работает независимо от значения keep-on-exit: если сервис как-то пережил процесс, UI всё равно синхронизируется.
 
 ---
 
