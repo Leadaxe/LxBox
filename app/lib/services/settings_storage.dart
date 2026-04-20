@@ -74,6 +74,20 @@ class SettingsStorage {
     return vars.map((k, v) => MapEntry(k, v.toString()));
   }
 
+  /// Удаляет var из storage. Разница с `setVar(k, '')`:
+  /// пустая строка — legitimate value, `getVar(k, default)` возвращает `''`;
+  /// `removeVar` → ключ отсутствует, `getVar(k, default)` возвращает default.
+  /// Используется в Debug API `DELETE /settings/vars/{key}`.
+  static Future<void> removeVar(String name) async {
+    final data = await _load();
+    final vars = data['vars'] as Map<String, dynamic>?;
+    if (vars == null || !vars.containsKey(name)) return;
+    vars.remove(name);
+    data['vars'] = vars;
+    _cache = data;
+    await _save();
+  }
+
   // ---------------------------------------------------------------------------
   // Server lists (v2). Ключ на диске: `server_lists`.
   //
@@ -340,6 +354,18 @@ class SettingsStorage {
     _cache = data;
     await _save();
   }
+
+  // ---------------------------------------------------------------------------
+  // Auto-update subscriptions (§027) — global on/off gate. Manual refresh
+  // работает всегда; affects только автоматические триггеры (appStart /
+  // vpnConnected / periodic / vpnStopped).
+  // ---------------------------------------------------------------------------
+
+  static Future<bool> getAutoUpdateSubs() async =>
+      (await getVar('auto_update_subs', 'true')) != 'false';
+
+  static Future<void> setAutoUpdateSubs(bool enabled) =>
+      setVar('auto_update_subs', enabled ? 'true' : 'false');
 
   // ---------------------------------------------------------------------------
   // Debug API (§031) — runtime toggle, bearer token, port.

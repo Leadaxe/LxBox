@@ -13,7 +13,10 @@ import '../handlers/device.dart';
 import '../handlers/files.dart';
 import '../handlers/logs.dart';
 import '../handlers/ping.dart';
+import '../handlers/rules.dart';
+import '../handlers/settings.dart';
 import '../handlers/state.dart';
+import '../handlers/subs.dart';
 import 'config.dart';
 import 'middleware/access_log.dart';
 import 'middleware/auth.dart';
@@ -161,7 +164,10 @@ class DebugServer {
       ..mount('/logs', logsHandler)
       ..mount('/clash', clashHandler)
       ..mount('/action', actionHandler)
-      ..mount('/files', filesHandler);
+      ..mount('/files', filesHandler)
+      ..mount('/rules', rulesHandler)
+      ..mount('/subs', subsHandler)
+      ..mount('/settings', settingsHandler);
   }
 
   List<Middleware> _buildPipeline(DebugServerConfig config) {

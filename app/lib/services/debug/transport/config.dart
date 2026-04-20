@@ -5,7 +5,7 @@ class DebugServerConfig {
     required this.port,
     required this.token,
     this.requestTimeout = const Duration(seconds: 30),
-    this.maxBodyBytes = 64 * 1024,
+    this.maxBodyBytes = 1024 * 1024,
     this.unauthenticatedPaths = const {'/ping'},
   });
 
@@ -19,6 +19,9 @@ class DebugServerConfig {
   final Duration requestTimeout;
 
   /// Максимальный размер тела запроса. Больше → `413 payload_too_large`.
+  /// Default 1 MiB — `PUT /config` может принимать многокилобайтные
+  /// sing-box JSON'ы (70–300 KB реально), мелкие CRUD body'ы (rules/subs/
+  /// settings) всё равно <4 KB. Auth + host check отсекают злоупотребления.
   final int maxBodyBytes;
 
   /// Paths, которые пропускаются без `Authorization` header. Host check
