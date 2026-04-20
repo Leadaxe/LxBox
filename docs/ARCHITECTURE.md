@@ -404,19 +404,23 @@ HomeController.init()
 | Heartbeat failed (`/traffic` timeout'ит) | `HomeController._onTunnelDead` → `TunnelStatus.revoked` |
 | Safety-timeout (застряли в Starting/Stopping 10s) | `Future.delayed` в `_handleStatusEvent` форс'ит disconnected |
 
-#### Reconnect flow
+#### Reconnect flow (v1.4.0+)
 
-`HomeController.reconnect()` — атомарный stop → wait → start:
+`HomeController.reconnect()` — композиция `_stopInternal + _startInternal` с blocking семантикой на native:
 
 ```
 1. Если tunnel уже down — просто start() и выход.
-2. Подписываемся на onStatusChanged ДО вызова stopVPN (чтобы не упустить быстрый event).
-3. stopVPN (MethodChannel), busy=true держим.
-4. firstWhere на disconnected|revoked с 10s timeout.
-5. setNotificationTitle → startVPN.
+2. busy=true.
+3. _stopInternal: await _vpn.stopVPN() — native блокирует до
+   setStatus(Stopped) или 5с timeout. Intent-based reset sticky флага.
+4. Если stop timed out — abort, lastError="Stop timed out".
+5. _startInternal: setNotificationTitle + startVPN + intent-based reset.
+6. busy=false в finally.
 ```
 
-Broadcast-stream позволяет параллельных listener'ов — свежий `firstWhere` подписчик не мешает главному `_statusSub`.
+Никакого `firstWhere`/timeout на Dart стороне. Blocking `stopVPN` на native через `BoxVpnService.stopAwait` (Completer, сompletes в `setStatus(Stopped)`) гарантирует `status=Stopped` до `startVPN` — race в `onStartCommand` guard исключён.
+
+До v1.4.0 reconnect строился на Dart-side координации через `firstWhere(disconnected|revoked)` и был уязвим к sink-leak в `BoxVpnClient.onStatusChanged` (исправлен через `asBroadcastStream`). Детали — `docs/spec/tasks/001-reconnect-sink-leak.md`, `002-blocking-stopvpn-intent-reset.md`.
 
 #### Keep-on-exit настройка
 
