@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import '../models/custom_rule.dart';
 import '../models/server_list.dart';
 import 'migration/proxy_source_migration.dart';
 
@@ -207,21 +208,71 @@ class SettingsStorage {
   }
 
   // ---------------------------------------------------------------------------
-  // App routing rules (per-app outbound)
+  // Custom rules (§030) — единая модель для domain/IP/port/package/protocol/srs.
+  // Per-app rules сюда же (поле `packages`), отдельного типа больше нет.
   // ---------------------------------------------------------------------------
 
-  static Future<List<AppRule>> getAppRules() async {
+  static Future<List<CustomRule>> getCustomRules() async {
     final data = await _load();
-    final list = data['app_rules'] as List<dynamic>? ?? [];
+    await _absorbLegacyAppRules(data);
+    final list = data['custom_rules'] as List<dynamic>? ?? [];
     return list
         .whereType<Map<String, dynamic>>()
-        .map(AppRule.fromJson)
+        .map(CustomRule.fromJson)
         .toList();
   }
 
-  static Future<void> saveAppRules(List<AppRule> rules) async {
+  /// One-shot: legacy `app_rules` (отдельная таба до v1.3.2) → `custom_rules`
+  /// с полем `packages`. Запускается один раз — после конверсии ключ удаляется.
+  /// Оставлен внутри getter'а чтобы автоматически подхватиться при первом
+  /// открытии Rules-таба после апдейта.
+  static Future<void> _absorbLegacyAppRules(Map<String, dynamic> data) async {
+    final legacy = data['app_rules'] as List<dynamic>?;
+    if (legacy == null || legacy.isEmpty) return;
+    final existing = (data['custom_rules'] as List<dynamic>?)
+            ?.whereType<Map<String, dynamic>>()
+            .toList() ??
+        <Map<String, dynamic>>[];
+    for (final e in legacy.whereType<Map<String, dynamic>>()) {
+      final packages = (e['packages'] as List<dynamic>?)
+              ?.map((p) => p.toString())
+              .toList() ??
+          const <String>[];
+      if (packages.isEmpty) continue;
+      final migrated = CustomRule(
+        id: (e['id'] as String?)?.trim().isNotEmpty == true
+            ? e['id'] as String
+            : null,
+        name: (e['name'] as String?) ?? 'App group',
+        enabled: (e['enabled'] as bool?) ?? true,
+        packages: packages,
+        target: (e['outbound'] as String?) ?? 'direct-out',
+      );
+      existing.add(migrated.toJson());
+    }
+    data['custom_rules'] = existing;
+    data.remove('app_rules');
+    _cache = data;
+    await _save();
+  }
+
+  static Future<void> saveCustomRules(List<CustomRule> rules) async {
     final data = await _load();
-    data['app_rules'] = rules.map((r) => r.toJson()).toList();
+    data['custom_rules'] = rules.map((r) => r.toJson()).toList();
+    _cache = data;
+    await _save();
+  }
+
+  /// Флаг one-shot миграции `enabled_rules` + `rule_outbounds` → `custom_rules`.
+  /// Выставляется после первого прохода миграции в `RoutingScreen._load`.
+  static Future<bool> hasPresetsMigrated() async {
+    final data = await _load();
+    return data['presets_migrated'] == true;
+  }
+
+  static Future<void> markPresetsMigrated() async {
+    final data = await _load();
+    data['presets_migrated'] = true;
     _cache = data;
     await _save();
   }
@@ -289,28 +340,41 @@ class SettingsStorage {
     _cache = data;
     await _save();
   }
-}
 
-/// A per-app routing rule: a named group of packages with an outbound.
-class AppRule {
-  AppRule({required this.name, this.packages = const [], this.outbound = 'direct-out'});
+  // ---------------------------------------------------------------------------
+  // Debug API (§031) — runtime toggle, bearer token, port.
+  // ---------------------------------------------------------------------------
 
-  String name;
-  List<String> packages;
-  String outbound;
+  static const int debugPortDefault = 9269;
 
-  factory AppRule.fromJson(Map<String, dynamic> json) => AppRule(
-        name: json['name'] as String? ?? '',
-        packages: (json['packages'] as List<dynamic>?)
-                ?.map((e) => e.toString())
-                .toList() ??
-            const [],
-        outbound: json['outbound'] as String? ?? 'direct-out',
-      );
+  static Future<bool> getDebugEnabled() async =>
+      (await getVar('debug_enabled', 'false')) == 'true';
 
-  Map<String, dynamic> toJson() => {
-        'name': name,
-        'packages': packages,
-        'outbound': outbound,
-      };
+  static Future<void> setDebugEnabled(bool enabled) =>
+      setVar('debug_enabled', enabled ? 'true' : 'false');
+
+  static Future<String> getDebugToken() async => getVar('debug_token', '');
+
+  static Future<void> setDebugToken(String token) =>
+      setVar('debug_token', token);
+
+  static Future<int> getDebugPort() async {
+    final raw = await getVar('debug_port', '$debugPortDefault');
+    final parsed = int.tryParse(raw);
+    if (parsed == null || parsed < 1024 || parsed > 49151) {
+      return debugPortDefault;
+    }
+    return parsed;
+  }
+
+  static Future<void> setDebugPort(int port) =>
+      setVar('debug_port', port.toString());
+
+  /// Снимок всего `_cache` для `/state/storage` (§031). Возвращает
+  /// глубокую копию — сериализатор сам фильтрует по allow-list,
+  /// чтобы не утекли чувствительные поля (debug_token, subscription URLs).
+  static Future<Map<String, dynamic>> dumpCache() async {
+    final data = await _load();
+    return jsonDecode(jsonEncode(data)) as Map<String, dynamic>;
+  }
 }

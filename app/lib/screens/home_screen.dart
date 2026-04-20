@@ -21,6 +21,8 @@ import 'stats_screen.dart';
 import 'routing_screen.dart';
 import 'settings_screen.dart';
 import 'subscriptions_screen.dart';
+import '../services/debug/bootstrap.dart';
+import '../services/debug/debug_registry.dart';
 import '../services/haptic_service.dart';
 import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
@@ -67,6 +69,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       vsync: this,
       duration: const Duration(seconds: 2),
     );
+    // §031 Debug API: публикуем контроллеры в реестр и, если пользователь
+    // включал Debug API раньше, поднимаем сервер на старте.
+    DebugRegistry.I.home = _controller;
+    DebugRegistry.I.sub = _subController;
+    DebugRegistry.I.autoUpdater = _autoUpdater;
+    unawaited(applyDebugApiSettings());
     unawaited(_controller.init());
     unawaited(_initSubsAndAutoUpdate());
     unawaited(_loadAutoRebuild());
@@ -281,25 +289,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               const SizedBox(width: 8),
               _buildStatusChip(state, isRevoked, isConnecting),
               const SizedBox(width: 8),
-              Container(
-                decoration: _subController.configDirty
-                    ? BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        shape: BoxShape.circle,
-                      )
-                    : null,
-                child: IconButton(
-                  tooltip: _subController.configDirty ? 'Config changed — rebuild' : 'Rebuild config',
-                  onPressed: state.busy || _subController.busy
-                      ? null
-                      : () => unawaited(_rebuildAndClearDirty()),
-                  icon: Icon(
-                    Icons.refresh,
-                    size: 20,
-                    color: _subController.configDirty ? Theme.of(context).colorScheme.onPrimaryContainer : null,
-                  ),
-                ),
-              ),
+              _buildReloadButton(context, state),
             ],
           ),
           if (_subController.configDirty && !_subController.busy) ...[
@@ -445,6 +435,138 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         ],
       ),
     );
+  }
+
+  /// Кнопка справа от status chip. Short tap = умный default (reconnect /
+  /// rebuild+start / rebuild+reconnect в зависимости от состояния), long
+  /// press = меню с 3 явными действиями. Иконка refresh читается как
+  /// «переподключиться», что и является default-поведением.
+  Widget _buildReloadButton(BuildContext context, HomeState state) {
+    final cs = Theme.of(context).colorScheme;
+    final dirty = _subController.configDirty || _needsRestart;
+    final enabled = !state.busy && !_subController.busy;
+    final fg = dirty ? cs.onPrimaryContainer : null;
+    final bg = dirty ? cs.primaryContainer : Colors.transparent;
+    final tooltip = _defaultReloadLabel(state, dirty);
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: bg,
+        shape: const CircleBorder(),
+        // Builder нужен чтобы `findRenderObject` в _showReloadMenu нашёл саму
+        // кнопку, а не родительский Row/Column (иначе меню всплывёт с краю).
+        child: Builder(builder: (inkCtx) => InkResponse(
+          radius: 24,
+          onTap: enabled ? () => _runDefaultReload(state) : null,
+          onLongPress: enabled ? () => _showReloadMenu(inkCtx, state) : null,
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Icon(Icons.refresh, size: 20, color: fg),
+          ),
+        )),
+      ),
+    );
+  }
+
+  String _defaultReloadLabel(HomeState state, bool dirty) {
+    if (!state.tunnelUp) return 'Rebuild config + connect';
+    return dirty ? 'Rebuild config + reconnect' : 'Reconnect';
+  }
+
+  void _runDefaultReload(HomeState state) {
+    HapticService.I.onConnectTap();
+    if (!state.tunnelUp) {
+      unawaited(_rebuildAndStart());
+      return;
+    }
+    final dirty = _subController.configDirty || _needsRestart;
+    if (dirty) {
+      unawaited(_rebuildAndReconnect());
+    } else {
+      unawaited(_controller.reconnect());
+    }
+  }
+
+  Future<void> _showReloadMenu(BuildContext anchorCtx, HomeState state) async {
+    final box = anchorCtx.findRenderObject() as RenderBox?;
+    final overlay = Overlay.of(anchorCtx).context.findRenderObject() as RenderBox?;
+    if (box == null || overlay == null) return;
+    final pos = box.localToGlobal(Offset.zero, ancestor: overlay);
+    final size = box.size;
+    final rect = RelativeRect.fromLTRB(
+      pos.dx,
+      pos.dy + size.height,
+      overlay.size.width - pos.dx - size.width,
+      overlay.size.height - pos.dy,
+    );
+    final reconnectLabel = state.tunnelUp ? 'Reconnect' : 'Connect';
+    final rebuildReconnectLabel =
+        state.tunnelUp ? 'Rebuild config + reconnect' : 'Rebuild config + connect';
+    final choice = await showMenu<String>(
+      context: context,
+      position: rect,
+      items: [
+        PopupMenuItem(
+          value: 'reconnect',
+          child: Row(children: [
+            const Icon(Icons.sync, size: 18),
+            const SizedBox(width: 12),
+            Text(reconnectLabel),
+          ]),
+        ),
+        const PopupMenuItem(
+          value: 'rebuild',
+          child: Row(children: [
+            Icon(Icons.build_circle_outlined, size: 18),
+            SizedBox(width: 12),
+            Text('Rebuild config only'),
+          ]),
+        ),
+        PopupMenuItem(
+          value: 'rebuild_reconnect',
+          child: Row(children: [
+            const Icon(Icons.refresh, size: 18),
+            const SizedBox(width: 12),
+            Text(rebuildReconnectLabel),
+          ]),
+        ),
+      ],
+    );
+    if (!mounted || choice == null) return;
+    HapticService.I.onConnectTap();
+    switch (choice) {
+      case 'reconnect':
+        unawaited(_controller.reconnect());
+      case 'rebuild':
+        unawaited(_rebuildAndClearDirty());
+      case 'rebuild_reconnect':
+        unawaited(_rebuildAndReconnect());
+    }
+  }
+
+  /// Rebuild config → reconnect (если up) или start (если down). Очищает
+  /// dirty-флаг как и `_rebuildAndClearDirty`.
+  Future<void> _rebuildAndReconnect() async {
+    await _rebuildConfig();
+    _subController.configDirty = false;
+    if (!mounted) return;
+    await _controller.reconnect();
+  }
+
+  /// Off-state: rebuild then start. Используется как default когда VPN off.
+  Future<void> _rebuildAndStart() async {
+    await _rebuildConfig();
+    _subController.configDirty = false;
+    if (!mounted) return;
+    await _controller.start();
+    if (mounted && _controller.state.lastError.isNotEmpty && !_controller.state.tunnelUp) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_controller.state.lastError),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
 
   void _confirmStop(HomeState state) {
@@ -1039,8 +1161,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           ),
           itemBuilder: (context, i) {
             final tag = displayNodes[i];
-            final urltestNow = ClashApiClient.urltestNow(state.proxiesJson, tag);
-            // Для urltest-группы (auto-proxy-out) сам тэг — control-узел без
+            final urltestNow =
+                ClashApiClient.urltestNow(state.proxiesJson, tag);
+            // Определяем URLTest-ли тэг (даже если now пустой — тип есть).
+            final proxyEntry =
+                ClashApiClient.proxyEntry(state.proxiesJson, tag);
+            final isUrltestGroup = proxyEntry != null &&
+                (proxyEntry['type']?.toString().toLowerCase() ?? '')
+                    .contains('urltest');
+            // Для urltest-группы (auto) сам тэг — control-узел без
             // протокола; берём proto той ноды, которую urltest сейчас выбрал.
             final proto = protoByTag[tag] ??
                 (urltestNow != null ? protoByTag[urltestNow] : null);
@@ -1059,6 +1188,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               onCopyUri: () => _copyNodeUri(tag),
               onViewJson: () => _viewOutboundJson(tag, state),
               urltestNow: urltestNow,
+              onRunUrltest: isUrltestGroup
+                  ? () => unawaited(_controller.runGroupUrltest(tag))
+                  : null,
               hasDetour: detourTags.contains(tag),
               protocolLabel: proto?.label,
             );

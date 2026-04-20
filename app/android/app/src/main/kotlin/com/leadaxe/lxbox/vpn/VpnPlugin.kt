@@ -100,6 +100,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 BoxVpnService.stop(context)
                 result.success(true)
             }
+            "getVpnStatus" -> {
+                // Pull-метод для re-sync UI после reattach Flutter-процесса
+                // (broadcast'ятся только переходы — если service уже Started,
+                // новый плагин ничего не получит без явного запроса).
+                result.success(BoxVpnService.currentStatus.name)
+            }
             "setNotificationTitle" -> {
                 val title = call.argument<String>("title") ?: "L×Box"
                 ConfigManager.setNotificationTitle(title)
@@ -122,34 +128,147 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(BootReceiver.isKeepOnExit(context))
             }
             "getInstalledApps" -> {
+                // Lightweight metadata only — иконки лениво подгружаются
+                // через getAppIcon по пакету. PNG-encode всех иконок в одном
+                // проходе — 500*20ms = 10s блокировки UI, недопустимо.
                 val pm = context.packageManager
                 val apps = pm.getInstalledApplications(0).map { info ->
                     val isSystem = (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
-                    val iconBase64 = try {
-                        val drawable = pm.getApplicationIcon(info)
-                        val bitmap = if (drawable is android.graphics.drawable.BitmapDrawable) {
-                            drawable.bitmap
-                        } else {
-                            val bmp = android.graphics.Bitmap.createBitmap(48, 48, android.graphics.Bitmap.Config.ARGB_8888)
-                            val canvas = android.graphics.Canvas(bmp)
-                            drawable.setBounds(0, 0, 48, 48)
-                            drawable.draw(canvas)
-                            bmp
-                        }
-                        val stream = java.io.ByteArrayOutputStream()
-                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 80, stream)
-                        android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP)
-                    } catch (_: Exception) { "" }
                     mapOf(
                         "packageName" to info.packageName,
                         "appName" to (pm.getApplicationLabel(info)?.toString() ?: info.packageName),
                         "isSystemApp" to isSystem,
-                        "icon" to iconBase64,
                     )
                 }
                 result.success(apps)
             }
+            "getAppIcon" -> {
+                val pkg = call.argument<String>("packageName") ?: ""
+                result.success(encodeAppIcon(pkg))
+            }
+            "getAppInfo" -> {
+                // Combined: name + icon + isSystem в одном round-trip'е, для
+                // stats-экрана где нужно и то и другое.
+                val pkg = call.argument<String>("packageName") ?: ""
+                val pm = context.packageManager
+                try {
+                    val info = pm.getApplicationInfo(pkg, 0)
+                    val isSystem = (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+                    result.success(mapOf(
+                        "packageName" to pkg,
+                        "appName" to (pm.getApplicationLabel(info)?.toString() ?: pkg),
+                        "isSystemApp" to isSystem,
+                        "icon" to encodeAppIcon(pkg),
+                    ))
+                } catch (_: Exception) {
+                    // Package uninstalled / not found — возвращаем null, Dart
+                    // сторона покажет placeholder с именем = packageName.
+                    result.success(null)
+                }
+            }
+            "isIgnoringBatteryOptimizations" -> {
+                val pm = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                result.success(pm.isIgnoringBatteryOptimizations(context.packageName))
+            }
+            "openBatteryOptimizationSettings" -> {
+                // Primary — общая страница battery-optimization с списком всех
+                // apps (надёжно открывается на всех OEM, включая ColorOS/MIUI,
+                // где direct-prompt молча игнорируется).
+                // Fallback — direct-prompt (удобнее, но не на всех устройствах).
+                result.success(openSystemSettings(
+                    primaryAction = android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS,
+                    primaryWithPackage = false,
+                    fallbackAction = android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                ))
+            }
+            "openAppDetailsSettings" -> {
+                result.success(openSystemSettings(
+                    primaryAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    primaryWithPackage = true,
+                ))
+            }
+            "showToast" -> {
+                // §031 Debug API. Вызов со стороны Dart через
+                // /action/toast?msg=...&duration=short|long. Безопасно на
+                // любом потоке — android.widget.Toast требует main looper,
+                // постим туда.
+                val msg = call.argument<String>("msg") ?: ""
+                val duration = when (call.argument<String>("duration")) {
+                    "long" -> android.widget.Toast.LENGTH_LONG
+                    else -> android.widget.Toast.LENGTH_SHORT
+                }
+                mainHandler.post {
+                    android.widget.Toast.makeText(context, msg, duration).show()
+                }
+                result.success(true)
+            }
             else -> result.notImplemented()
+        }
+    }
+
+    /// Запуск системного settings-activity. Сперва через activity-context
+    /// (если есть), иначе через app-context с FLAG_ACTIVITY_NEW_TASK.
+    /// Пакет в URI добавляется автоматически для actions требующих его
+    /// (REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, APPLICATION_DETAILS_SETTINGS).
+    private fun openSystemSettings(
+        primaryAction: String,
+        primaryWithPackage: Boolean,
+        fallbackAction: String? = null,
+    ): Boolean {
+        val act = activity
+        val launchCtx: Context = act ?: context
+        val useNewTask = act == null
+
+        fun needsPackage(action: String) = action in setOf(
+            android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+            android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+        )
+
+        fun tryLaunch(action: String, withPackage: Boolean): Boolean {
+            val intent = android.content.Intent(action).apply {
+                if (withPackage) {
+                    data = android.net.Uri.parse("package:${context.packageName}")
+                }
+                if (useNewTask) addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            return try {
+                launchCtx.startActivity(intent)
+                Log.d(TAG, "openSystemSettings launched: $action")
+                true
+            } catch (e: Exception) {
+                Log.e(TAG, "openSystemSettings failed for $action: ${e.message}", e)
+                false
+            }
+        }
+
+        if (tryLaunch(primaryAction, primaryWithPackage)) return true
+        if (fallbackAction != null &&
+            tryLaunch(fallbackAction, needsPackage(fallbackAction))) return true
+        return false
+    }
+
+    /// PNG-base64 иконки одного приложения. Пустая строка если не удалось.
+    /// Выделено в функцию чтобы переиспользовать из getAppIcon и getAppInfo.
+    private fun encodeAppIcon(pkg: String): String {
+        return try {
+            val pm = context.packageManager
+            val drawable = pm.getApplicationIcon(pkg)
+            val bitmap = if (drawable is android.graphics.drawable.BitmapDrawable) {
+                drawable.bitmap
+            } else {
+                val bmp = android.graphics.Bitmap.createBitmap(
+                    48, 48, android.graphics.Bitmap.Config.ARGB_8888
+                )
+                val canvas = android.graphics.Canvas(bmp)
+                drawable.setBounds(0, 0, 48, 48)
+                drawable.draw(canvas)
+                bmp
+            }
+            val stream = java.io.ByteArrayOutputStream()
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 80, stream)
+            android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP)
+        } catch (_: Exception) {
+            ""
         }
     }
 

@@ -3,9 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/home_screen.dart';
+import 'services/debug/bootstrap.dart' as debug_bootstrap;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Первый read `appStartedAt` фиксирует момент старта для /device и /ping.
+  // ignore: unused_local_variable
+  final _ = debug_bootstrap.appStartedAt;
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
   ]);
