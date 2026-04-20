@@ -5,7 +5,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Частично перенесено в 026 (политика), UX остаётся здесь |
+| Статус | Политика в 026 parser v2 · per-subscription UX на subscription detail · **per-node UX в node settings (v1.4.0)** |
 
 ## Контекст
 
@@ -145,7 +145,25 @@ for (final d in detours) {
 ```
 Main нода регистрируется в selector и auto всегда. Детуры — по флагам. Если `!registerDetourServers`, детур всё равно попадает в config через `ctx.addEntry` (нужен как dialer), но не появляется в proxy-группах.
 
+## Per-node detour toggles (UserServer, v1.4.0)
+
+В v1.4.0 аналогичные флаги `registerDetourServers` / `registerDetourInAuto` доступны **per-UserServer** через экран Node Settings (не только per-subscription). Рычаг — тот же `DetourPolicy`, который `UserServer` наследует от `ServerList` — отдельной per-node модели нет.
+
+**UX (`node_settings_screen.dart`):**
+Под существующим переключателем «Mark as detour server» (который ставит `⚙ ` префикс в tag) появляются **две дополнительные галки**, когда префикс ON:
+
+- **Register in VPN groups** → `entry.registerDetourServers`
+- **Register in auto group** → `entry.registerDetourInAuto`
+
+Default обе OFF. Галки скрыты, когда `⚙ ` снят (но значения сохраняются в entry — при повторном включении префикса они снова активны). `persistSources()` вызывается на каждый toggle.
+
+**Расширение builder'а:**
+В `server_list_build.dart` main-нода теперь тоже проходит check `isMainAsDetour = main.tag.startsWith(kDetourTagPrefix)`. Если true — применяется та же политика что и к chained detours. Subscription main-ноды обычно без `⚙ ` (парсер ставит только на chained), поведение подписок не изменяется.
+
+**Scope:** только `UserServer` (инвариант проекта: 1 server = 1 node). Полная спецификация: [`docs/spec/tasks/006-per-node-detour-toggles.md`](../../tasks/006-per-node-detour-toggles.md).
+
 ## See also
 
 - [006 servers ui](../006%20servers%20ui/spec.md) — per-subscription settings
 - [019 wireguard endpoint](../019%20wireguard%20endpoint/spec.md) — WireGuard as detour
+- [tasks/006](../../tasks/006-per-node-detour-toggles.md) — per-node v1.4.0 extension

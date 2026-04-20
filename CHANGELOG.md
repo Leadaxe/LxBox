@@ -6,6 +6,84 @@
 
 ---
 
+## [1.4.0] — Unreleased
+
+Major release: unified routing rules, local-only SRS, Stats tabs + Top apps, Debug API, reliability overhaul, per-server detour toggles, perf pass. Заметки — `RELEASE_NOTES.md`, детальные отчёты задач — `docs/spec/tasks/001..007`.
+
+### Fixed — VPN reconnect reliability
+
+- **Reconnect не сбрасывал плашку «Config changed — restart VPN to apply»** — root cause в `BoxVpnClient.onStatusChanged`. Каждое обращение к getter'у создавало новый `receiveBroadcastStream()` → новый `onListen` на native → перезаписывал shared `statusSink` в plugin; следующий `onCancel` (при завершении `firstWhere` в reconnect) обнулял его. Основной `_statusSub` в HomeController становился зомби: Dart думал что подписан, native давно выбросил sink → все последующие transition events терялись. Фикс — `late final _statusStream` + `asBroadcastStream()`. Заодно починило потерю heartbeat/traffic updates и ревоке-detection после первого reconnect'а. См. `docs/spec/tasks/001`.
+- **`TunnelStatus.unknown`** — default для неизвестного raw вместо `disconnected`. Убирает ложные срабатывания `firstWhere(disconnected|revoked)` на мусорных events. UI маппит unknown → Disconnected label.
+
+### Added — Blocking `stopVPN` + intent-based reset
+
+- **`BoxVpnService.stopAwait(context)`** возвращает `Deferred<Unit>`, completes в `setStatus(Stopped)` (после async cleanup libbox-ресурсов). `VpnPlugin.stopVPN` handler теперь на `pluginScope.launch` + `withTimeout(5s).await` — method channel ждёт реального завершения. Dart caller получает честный `bool ok`.
+- **`_stopInternal` / `_startInternal`** — single-intent примитивы с intent-based reset `configStaleSinceStart=false`. `reconnect()` = композиция обоих под одним busy-wrap'ом, без `firstWhere/timeout` координации на Dart-стороне — race в `onStartCommand` guard исключён на native.
+- Semantic: sticky-флаг теперь сбрасывается по факту юзер-намерения (stop/start), не только по transition event'у. Robust к Doze/OOM потерям broadcast'ов.
+
+См. `docs/spec/tasks/002`.
+
+### Added — Revoke UX
+
+- **SnackBar «VPN taken by another app»** с action Start (5 сек) когда другое VPN-приложение захватывает туннель. Раньше — пугающая красная пилюля «Revoked by another VPN» в status chip. Теперь chip показывает нейтральный Disconnected; transition в `revoked` детектится отдельным listener'ом на `HomeController`.
+- **Unified cleanup**: heartbeat-driven `_onTunnelDead` теперь сбрасывает те же поля что broadcast-driven `_handleStatusEvent` (`_clash=null`, `traffic=zero`, `connectedSince=null`, `configStaleSinceStart=false`, `_autoPingTimer.cancel`) — единый контракт.
+- **`_clash = null`** в revoked/disconnected ветке — endpoint прошлой сессии невалиден (secret от убитого sing-box, port мог быть переиспользован).
+
+См. `docs/spec/tasks/003`.
+
+### Added — Lifecycle resume re-sync
+
+- На `AppLifecycleState.resumed` — one-shot pull `getVpnStatus()` с сравнением с Dart state; при divergence прогон raw через `_handleStatusEvent`. Покрывает случаи когда Doze/OOM убили service в background без broadcast'а. Никакого polling'а — event-driven. См. `docs/spec/tasks/004`.
+
+### Added — Per-server detour toggles (UserServer)
+
+- Две новые галки в Node Settings (появляются только когда `⚙` префикс ON):
+  - **Register in VPN groups** — показывать detour-сервер в proxy selector.
+  - **Register in auto group** — включать в ✨auto urltest.
+- Default обе OFF: detour-сервер по умолчанию скрыт в selector и ✨auto, остаётся доступен только как звено цепочки. Для случаев когда нужны обе роли — явные override'ы через галки.
+- Используется существующий `UserServer.detourPolicy` (через наследование от `ServerList`), никаких новых моделей. Builder детектит `kDetourTagPrefix` в `main.tag` и применяет per-server политику вместо дефолтной регистрации.
+- Scope: только UserServer (1 server = 1 node — инвариант проекта). Subscription-нод не затронут.
+
+См. `docs/spec/tasks/006`.
+
+### Added — Reload button (right of status chip)
+
+- **Short tap** — smart default по состоянию: `Connect` (VPN off) / `Reconnect` (on, clean) / `Rebuild config + reconnect` (on, dirty).
+- **Long-press** — меню из 3 действий: `Reconnect`, `Rebuild config only`, `Rebuild config + reconnect`.
+- Dirty-подсветка (primary-container фон), когда конфиг изменялся при активном VPN.
+- **Fix:** Flutter `Tooltip` на Android использовал long-press как свой trigger и перехватывал `InkWell.onLongPress`. Tooltip заменён на `Semantics(label: ...)` — accessibility сохранена, жесты не перехватываются.
+
+### Performance
+
+- **ConfigCache** в `HomeState`: парсинг outbound JSON (`detourTags` + `protoByTag`) делается один раз при `saveParsedConfig`, не на каждый rebuild ListView. С 50+ нодами и сортировкой по ping — убирает заметный jank в node list hot-path'е.
+- **`sortedNodes` memoize** через `late final` — один sort на HomeState instance, не на каждый getter access.
+- **Batched `_emit`** в `_handleStatusEvent` — 2-3 последовательных notifyListeners на один status event схлопнуты в один.
+- **Single safety-timer** для transient-фазы (Starting/Stopping): переиспользуемый `Timer?` вместо плодящихся `Future.delayed` на каждое transient event.
+- **Background-paused timers** в Stats/Connections screens (`WidgetsBindingObserver`): polling Clash API останавливается когда app в background; возобновляется на resume. Экономит battery + method-channel round-trips.
+- **Lint cleanup**: unused `dart:typed_data` import, `?proto` null-aware marker, docstring escapes.
+
+См. `docs/spec/tasks/005`.
+
+### Changed — Build: Android 11+ primary, 8.0+ best-effort
+
+- `minSdk = 26` (Android 8.0) в `app/android/app/build.gradle.kts`. Tiered support:
+  - **Primary (11+, API 30+)** — тестируется, все фичи, production-ready.
+  - **Best-effort (8.0–10, API 26–29)** — compile/install OK, фичи требующие API 30+ деградируют к no-op через runtime SDK_INT check.
+  - **Unsupported (<8, API <26)** — install blocked.
+- Раньше было `minSdk = flutter.minSdkVersion` = 24 по default'у (факт), в release notes декларировалось 8.0+ (доки). Теперь код соответствует реальному тестированию.
+
+### Diagnostic
+
+- Полный logging pipeline для VPN lifecycle (префикс `[vpn]` в logcat): `onStartCommand`, `doStop`, `setStatus`, `receiver.onReceive`, `statusReceiver.onReceive` с `sink` флагом, Dart `_handleStatusEvent` / `reconnect` / `saveParsedConfig`. Позволяет воспроизводить VPN-lifecycle баги по логам.
+- `StackTrace.current` в `saveParsedConfig` обёрнут в `kDebugMode` guard (hot-path в routing apply / settings / auto-updater — stacktrace allocation дорогая в release).
+
+### Process
+
+- Новая папка **`docs/spec/tasks/`** — журнал выполненных задач с развёрнутыми отчётами (проблема → диагностика → решение → риски → верификация → follow-up). 7 задач в 1.4.0. README с форматом.
+- **Peer review** получен от внешнего агента ([007](docs/spec/tasks/007-peer-review-tasks-001-006.md)) — отловлен критичный bug в task 006 (`persistSources()` не вызывался после per-node toggle'ов — настройки терялись после рестарта app'а). Закрыто.
+
+---
+
 ## [1.2.0] — 2026-04-18
 
 ### Changed — Outbound groups overhaul

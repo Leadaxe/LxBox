@@ -211,6 +211,28 @@ Event-driven страховка от platform-level потерь broadcast'ов:
 
 Побочный фикс: Flutter `Tooltip` на Android использует long-press как свой trigger показа тултипа. Это перехватывало long-press GestureRecognizer до нашего `InkWell.onLongPress` — меню не открывалось. Tooltip заменён на `Semantics(label: ...)` (accessibility сохранена, жесты не перехватываются).
 
+## ⚙️ Per-server detour toggles (UserServer)
+
+На экране **Node Settings** ручного сервера (не подписка) под переключателем «Mark as detour server» (который ставит `⚙ ` префикс) теперь появляются **две дополнительные галки**, когда префикс включён:
+
+- **Register in VPN groups** — показывать detour-сервер в proxy-selector'е. Default OFF.
+- **Register in auto group** — включать в ✨auto urltest polling. Default OFF.
+
+По дефолту detour-сервер **скрыт** и в selector, и в ✨auto — остаётся доступен только как звено цепочки (через «Detour server» dropdown у других серверов). Это решает давний косяк: `⚙ ` префикс до 1.4.0 был чисто UI-декорацией, а сервер всё равно попадал в auto и выбирался как обычный endpoint. Для случаев когда detour нужен и как звено, и как самостоятельный endpoint — явные галки-override'ы.
+
+Реализация использует существующий `UserServer.detourPolicy` (через наследование от `ServerList`), никаких новых моделей. Builder детектит `kDetourTagPrefix` в `main.tag` и применяет per-server политику. Scope — только UserServer (1 server = 1 node в этом проекте); subscription-нод изменение не касается. Детально: [docs/spec/tasks/006](docs/spec/tasks/006-per-node-detour-toggles.md).
+
+## ⚡ Performance pass
+
+- **`ConfigCache`** в `HomeState`: парсинг outbound JSON (`detourTags` + `protoByTag`) делается **один раз** при `saveParsedConfig`, не на каждый rebuild ListView. С 50+ нодами + сортировкой по ping это убирает заметный jank в node list hot-path'е (раньше `jsonDecode` шёл в itemBuilder'е).
+- **`sortedNodes` memoize** через `late final` — один sort на `HomeState` instance, builder'ы обращаются несколько раз (detour-фильтр + itemCount + itemBuilder) без повторных пересортировок.
+- **Batched `_emit`** в `_handleStatusEvent` — раньше 2-3 `notifyListeners` на один status event, теперь один.
+- **Single safety-timer** для transient-фазы (Starting/Stopping) — переиспользуемый `Timer?` вместо плодящихся `Future.delayed` на каждый transient event. Плюс в timeout-emit добавлен `configStaleSinceStart: false` (было пропущено).
+- **Background-paused polling** в Stats/Connections screens (`WidgetsBindingObserver`): polling Clash API останавливается когда app уходит в background, возобновляется на resume. Экономит battery и method-channel round-trips — раньше 3-секундный polling stats и до 500мс в connections крутились в фоне.
+- **Lint cleanup**: unused `dart:typed_data` import, `?proto` null-aware marker, docstring escapes.
+
+Детально: [docs/spec/tasks/005](docs/spec/tasks/005-optimization-pass.md).
+
 ## 📚 Clash API reference
 
 Новый документ [docs/api/clash-api-reference.md](docs/api/clash-api-reference.md) — полный разбор sing-box 1.12.12 Clash API endpoints: структура `/proxies`, поля `connections[].metadata` (включая `processPath` с uid-суффиксом, `dnsMode`, `rule`+`rulePayload`, chains ordering), `/group/<tag>/delay` с pitfall'ом "force-urltest не обновляет `.now` персистентно", `/traffic` streaming vs snapshot. Используется как reference при доработке `clash_api_client` и `TrafficSnapshot`.
