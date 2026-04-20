@@ -54,11 +54,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     return state.configStaleSinceStart || _subController.configDirty;
   }
   Timer? _errorTimer;
-  String _errorTimerFor = '';
 
-  /// Для side-effect'ов на transition tunnel (SnackBar при → revoked).
-  /// Обновляется в `_onControllerChange` после каждого notifyListeners.
+  /// Для side-effect'ов на transition tunnel (SnackBar при → revoked,
+  /// управление `_connectingAnim`, авто-dismiss timer для lastError).
+  /// Обновляются в `_onControllerChange` после каждого notifyListeners.
+  /// Ключевое: side-effects **НЕ** в `build` (анти-паттерн Flutter) —
+  /// вся мутация state/timers/animations идёт через этот listener.
   TunnelStatus _prevTunnel = TunnelStatus.disconnected;
+  String _prevError = '';
 
   @override
   void initState() {
@@ -84,20 +87,53 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     unawaited(_initSubsAndAutoUpdate());
     unawaited(_loadAutoRebuild());
     unawaited(_loadHapticPref());
-    // Track tunnel transitions для side-effect'ов (SnackBar при revoke).
+    // Track tunnel transitions для side-effect'ов (SnackBar при revoke,
+    // animation для connecting, auto-dismiss timer для lastError).
     // AnimatedBuilder уже rebuildит UI на notifyListeners; listener здесь
     // нужен только для эффектов вне build-фазы.
     _prevTunnel = _controller.state.tunnel;
+    _prevError = _controller.state.lastError;
     _controller.addListener(_onControllerChange);
   }
 
   void _onControllerChange() {
-    final now = _controller.state.tunnel;
+    final state = _controller.state;
+    final now = state.tunnel;
+    final nowError = state.lastError;
+
+    // Animation control — вне build. Раньше было в _buildStatusChip, что
+    // нарушало «build чистый» (multiple rebuilds в секунду на hot path'е
+    // heartbeat'а / ping'а → лишние .repeat/.stop/.reset вызовы).
+    final isConnecting = now == TunnelStatus.connecting;
+    if (isConnecting && !_connectingAnim.isAnimating) {
+      _connectingAnim.repeat();
+    } else if (!isConnecting && _connectingAnim.isAnimating) {
+      _connectingAnim.stop();
+      _connectingAnim.reset();
+    }
+
+    // Revoke → SnackBar.
     if (_prevTunnel != TunnelStatus.revoked &&
         now == TunnelStatus.revoked) {
       _showRevokedSnackBar();
     }
+
+    // Auto-dismiss timer для lastError. Раньше жил в Builder внутри build —
+    // логика завязана на прохождение build, хрупко при агрессивных
+    // rebuild'ах. Теперь явный transition detection: ошибка изменилась —
+    // перезапускаем 15с таймер; ошибка очистилась — cancel.
+    if (nowError != _prevError) {
+      _errorTimer?.cancel();
+      _errorTimer = null;
+      if (nowError.isNotEmpty) {
+        _errorTimer = Timer(const Duration(seconds: 15), () {
+          if (mounted) _controller.clearError();
+        });
+      }
+    }
+
     _prevTunnel = now;
+    _prevError = nowError;
   }
 
   void _showRevokedSnackBar() {
@@ -137,10 +173,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
 
   @override
   void dispose() {
+    // Порядок: сначала отменяем side-effects (timer, listener),
+    // потом сами владельцы (autoUpdater имеет ref на subController,
+    // controller имеет ref на autoUpdater — dispose в обратном порядке
+    // созданию).
     _errorTimer?.cancel();
+    _errorTimer = null;
     _controller.removeListener(_onControllerChange);
-    _autoUpdater.dispose();
     WidgetsBinding.instance.removeObserver(this);
+    _autoUpdater.dispose();
+    // Ownership contract: HomeScreen владеет controller'ами + анимацией.
+    // Раньше dispose пропускался — на проде ОС гасит процесс, но в
+    // тестах / hot reload / будущем смене root widget'а получали бы
+    // утечку _statusSub, heartbeat timer, transient timer, ChangeNotifier
+    // listeners.
+    _controller.dispose();
+    _subController.dispose();
+    _connectingAnim.dispose();
     super.dispose();
   }
 
@@ -384,34 +433,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           ],
           if (state.lastError.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Builder(builder: (_) {
-              if (_errorTimerFor != state.lastError) {
-                _errorTimer?.cancel();
-                _errorTimerFor = state.lastError;
-                _errorTimer = Timer(const Duration(seconds: 15), () {
-                  if (mounted) _controller.clearError();
-                });
-              }
-              return Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      state.lastError,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
-                    ),
+            // Pure render — auto-dismiss timer завведён в _onControllerChange
+            // при изменении state.lastError (вне build-фазы).
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    state.lastError,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
-                  IconButton(
-                    tooltip: 'Dismiss',
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.close, size: 18),
-                    onPressed: () {
-                      _errorTimer?.cancel();
-                      _controller.clearError();
-                    },
-                  ),
-                ],
-              );
-            }),
+                ),
+                IconButton(
+                  tooltip: 'Dismiss',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () {
+                    _errorTimer?.cancel();
+                    _errorTimer = null;
+                    _controller.clearError();
+                  },
+                ),
+              ],
+            ),
           ],
           const SizedBox(height: 16),
           const Text('Group', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -639,14 +682,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   }
 
   Widget _buildStatusChip(HomeState state, bool isRevoked, bool isConnecting) {
-    // Manage animation state
-    if (isConnecting && !_connectingAnim.isAnimating) {
-      _connectingAnim.repeat();
-    } else if (!isConnecting && _connectingAnim.isAnimating) {
-      _connectingAnim.stop();
-      _connectingAnim.reset();
-    }
-
+    // Pure render — animation state (`_connectingAnim.repeat/stop/reset`)
+    // управляется в _onControllerChange при смене tunnel. Раньше было
+    // здесь, что нарушало Flutter-правило «build чистый» (hot-path из
+    // heartbeat'а и ping'а дёргал .repeat/.stop лишний раз).
+    //
     // UI mapping: revoked отображаем как disconnected. Факт "нас выкинули"
     // юзер получает через SnackBar (см. _showRevokedSnackBar), а chip
     // показывает нейтральный off-state — так видна обычная Start кнопка,
