@@ -37,6 +37,11 @@
   - Показывает инструкционный диалог ("Find these toggles in the next screen — Autostart / Background activity / Battery / Battery saver exceptions").
   - После Cancel/Open: Open запускает `Settings.ACTION_APPLICATION_DETAILS_SETTINGS` с package URI — system app info screen, где у OEM (Xiaomi/MIUI, Samsung, Oppo/ColorOS, Huawei) живут их тоглы.
 
+### Subscriptions (v1.4.0)
+
+- **Auto-update subscriptions** — глобальный toggle, дефолт ON. Ключ `auto_update_subs`. Когда OFF, `AutoUpdater.maybeUpdateAll` ранним return'ом скипает проход для триггеров `appStart/vpnConnected/periodic/vpnStopped`. Manual (`UpdateTrigger.manual`) и `force=true` проходят сквозь. См. [spec 027 §Global toggle](../027%20subscription%20auto%20update/spec.md#global-toggle-ui-контракт).
+- **Дубль в `SubscriptionsScreen` PopupMenu** — три точки справа-сверху на экране серверов имеют `CheckedPopupMenuItem` на тот же ключ. Оба surface читают/пишут один `SettingsStorage.vars['auto_update_subs']`. Рассинхрон между двумя открытыми экранами acceptable — подхватывается на `initState`/переоткрытии.
+
 ### Feedback
 
 - **Auto-ping after connect** (v1.4.0) — через 5 секунд после перехода в connected, `HomeController` триггерит `pingAllNodes()` для активной группы. Одноразово per connect. Дефолт ON. Ключ `auto_ping_on_start`. При disconnect — pending-timer cancel'ится.
@@ -64,6 +69,10 @@
 │   ⚙ App info (OEM power settings)  >     │
 │      "OEM-specific toggles..."           │
 ├──────────────────────────────────────────┤
+│  Subscriptions                           │
+│   ☁ Auto-update subscriptions    [☑]    │
+│      "Refresh on app start, after..."    │
+├──────────────────────────────────────────┤
 │  Feedback                                │
 │   Auto-ping after connect        [☑]    │
 │   Haptic feedback                [☑]    │
@@ -80,6 +89,7 @@
 | `auto_start_on_boot` | bool | false | native (BootReceiver) |
 | `keep_vpn_on_exit` | bool | false | native |
 | `auto_rebuild` | String | `"true"` | settings |
+| `auto_update_subs` | String | `"true"` | settings |
 | `auto_ping_on_start` | String | `"true"` | settings |
 | `haptic_enabled` | String | `"true"` | settings |
 

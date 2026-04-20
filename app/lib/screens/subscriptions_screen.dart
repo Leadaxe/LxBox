@@ -9,6 +9,7 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/server_list.dart';
 import '../services/community_servers_loader.dart';
+import '../services/settings_storage.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/url_launcher.dart';
@@ -34,7 +35,26 @@ class SubscriptionsScreen extends StatefulWidget {
 
 class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   final _inputController = TextEditingController();
+  bool _autoUpdateEnabled = true;
 
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadAutoUpdateFlag());
+  }
+
+  Future<void> _loadAutoUpdateFlag() async {
+    final v = await SettingsStorage.getAutoUpdateSubs();
+    if (!mounted) return;
+    setState(() => _autoUpdateEnabled = v);
+  }
+
+  Future<void> _toggleAutoUpdate() async {
+    final next = !_autoUpdateEnabled;
+    await SettingsStorage.setAutoUpdateSubs(next);
+    if (!mounted) return;
+    setState(() => _autoUpdateEnabled = next);
+  }
 
   @override
   void dispose() {
@@ -286,12 +306,19 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     if (v == 'public') unawaited(_pickPublicTestServer());
                     if (v == 'paste') unawaited(_pasteFromClipboard());
                     if (v == 'qr') unawaited(_scanQrCode());
+                    if (v == 'auto_update') unawaited(_toggleAutoUpdate());
                   },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'paste', child: Text('Paste from clipboard')),
-                    PopupMenuItem(value: 'qr', child: Text('Scan QR code')),
-                    PopupMenuDivider(),
-                    PopupMenuItem(value: 'public', child: Text('Get Public Test Servers')),
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'paste', child: Text('Paste from clipboard')),
+                    const PopupMenuItem(value: 'qr', child: Text('Scan QR code')),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(value: 'public', child: Text('Get Public Test Servers')),
+                    const PopupMenuDivider(),
+                    CheckedPopupMenuItem<String>(
+                      value: 'auto_update',
+                      checked: _autoUpdateEnabled,
+                      child: const Text('Auto-update subscriptions'),
+                    ),
                   ],
                 ),
               ],

@@ -52,6 +52,7 @@ Sing-box клиент потребляет URL-подписки, список у
 
 | Gate | Значение | Переживает рестарт? | Что защищает |
 |------|----------|---------------------|---------------|
+| **`auto_update_subs` global toggle** | `true` default, stored в `SettingsStorage.vars['auto_update_subs']` | ✅ JSON | **Выключает все автоматические триггеры (appStart/vpnConnected/periodic/vpnStopped).** Manual (⟳) и `force=true` флаг обходят. Тоггл дублируется в двух местах UI: App Settings → Subscriptions и PopupMenu в `SubscriptionsScreen` (три точки справа-сверху). |
 | `updateIntervalHours` | 24ч default, override из `profile-update-interval` header или UI | ✅ JSON | Основной «пора ли»: `now - lastUpdated >= interval`. |
 | `minRetryInterval` | 15 мин | ✅ JSON (через `lastUpdateAttempt`) | Не дёргать ту же подписку чаще раз в 15 мин. Спасает при fail-шторме на каждом триггере. |
 | `maxFailsPerSession` | 5 | ❌ (in-memory) | После 5 фейлов подряд подписка заморожена **до рестарта app**. Спек-решение: не переживать рестарт, чтобы юзер с «поправленной подпиской» не ждал сброса. |
@@ -59,6 +60,14 @@ Sing-box клиент потребляет URL-подписки, список у
 | `_running` flag | — | n/a | `maybeUpdateAll` не запускается параллельно сам в себе. |
 | `_inFlight` Set | URL-level | n/a | Внутри одного прохода дедуп по URL (на случай если один URL в двух entries). |
 | `lastUpdateStatus == inProgress` guard | per-entry | ✅ JSON | **`_fetchEntryByRef` возвращается сразу, если попытка уже в процессе.** Закрывает: ручная кнопка ⟳ нажата 2 раза подряд; триггер + manual совпали в миллисекунде. |
+
+### Global toggle: UI контракт
+
+- **App Settings → Subscriptions → "Auto-update subscriptions"** (`SwitchListTile`) — primary surface.
+- **SubscriptionsScreen → три точки справа-сверху → "Auto-update subscriptions"** (`CheckedPopupMenuItem`) — быстрый доступ с экрана серверов.
+- Оба читают/пишут **один ключ** `SettingsStorage.vars['auto_update_subs']`. Рассинхронизация UI после изменения в одном месте — acceptable: второй экран подхватит значение на следующем `initState` / при переоткрытии (тонкая согласованность).
+- Manual-обновление (⟳ на Servers / Detail / тап по конкретной подписке) **не зависит** от флага — юзер явно попросил, не наше дело гейтить.
+- Семантика "выключил тоггл → ничего не ломается": просто `AutoUpdater.maybeUpdateAll(trigger != manual, force=false)` ранним return'ом скипает проход. `updateIntervalHours` всё равно растёт, на UI можно будет показать "stale" бейдж (отложено).
 
 **Почему `lastUpdateAttempt` надо персистить:** иначе юзер рестартует app 10 раз за час — каждый раз appStart триггер видит "lastUpdated час назад, interval 24h → пора" и дёргает HTTP. С персистом: `now - lastUpdateAttempt < 15min → skip`.
 

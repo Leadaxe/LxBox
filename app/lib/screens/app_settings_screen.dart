@@ -25,6 +25,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _haptic = true;
   bool _batteryWhitelisted = false;
   bool _autoPing = true;
+  bool _autoUpdateSubs = true;
   bool _loaded = false;
 
   // §031 Debug API.
@@ -64,6 +65,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final haptic = await SettingsStorage.getVar(HapticService.prefsKey, 'true');
     final autoPing = await SettingsStorage.getVar('auto_ping_on_start', 'true');
     final battery = await _vpn.isIgnoringBatteryOptimizations();
+    final autoUpdateSubs = await SettingsStorage.getAutoUpdateSubs();
     final debugEnabled = await SettingsStorage.getDebugEnabled();
     final debugToken = await SettingsStorage.getDebugToken();
     final debugPort = await SettingsStorage.getDebugPort();
@@ -75,6 +77,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _haptic = haptic != 'false';
         _autoPing = autoPing != 'false';
         _batteryWhitelisted = battery;
+        _autoUpdateSubs = autoUpdateSubs;
         _debugEnabled = debugEnabled;
         _debugToken = debugToken;
         _debugPort = debugPort;
@@ -272,6 +275,23 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
                     'OEM-specific toggles to keep VPN alive in background.'),
                 trailing: const Icon(Icons.chevron_right, size: 18),
                 onTap: _openAppInfoWithHint,
+              ),
+              const Divider(height: 32),
+              Text('Subscriptions', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                title: const Text('Auto-update subscriptions'),
+                subtitle: const Text(
+                    'Refresh on app start, after VPN connects, and periodically. '
+                    'Manual ⟳ works regardless.'),
+                secondary: const Icon(Icons.cloud_sync_outlined),
+                value: _autoUpdateSubs,
+                onChanged: _loaded
+                    ? (val) {
+                        setState(() => _autoUpdateSubs = val);
+                        unawaited(SettingsStorage.setAutoUpdateSubs(val));
+                      }
+                    : null,
               ),
               const Divider(height: 32),
               Text('Feedback', style: Theme.of(context).textTheme.titleMedium),

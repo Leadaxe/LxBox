@@ -4,6 +4,7 @@ import 'dart:math';
 import '../../controllers/subscription_controller.dart';
 import '../../models/server_list.dart';
 import '../app_log.dart';
+import '../settings_storage.dart';
 
 /// Триггеры, по которым зовётся `maybeUpdateAll`. Нужны только для
 /// телеметрии/логов — логика решения «пора?» одинаковая.
@@ -90,6 +91,16 @@ class AutoUpdater {
     if (_running) {
       AppLog.I.debug('AutoUpdater: skip ${trigger.name} — already running');
       return;
+    }
+    // Global toggle: `auto_update_subs` в App Settings → Subscriptions.
+    // Manual refresh (юзер нажал ⟳) и любой force обходят флаг — юзер
+    // явно запросил, не наше дело блокировать.
+    if (trigger != UpdateTrigger.manual && !force) {
+      final enabled = await SettingsStorage.getAutoUpdateSubs();
+      if (!enabled) {
+        AppLog.I.debug('AutoUpdater: skip ${trigger.name} — auto-update disabled');
+        return;
+      }
     }
     _running = true;
     AppLog.I.info('AutoUpdater: trigger=${trigger.name}${force ? ' force' : ''}');
