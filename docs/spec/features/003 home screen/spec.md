@@ -233,6 +233,15 @@ state.tunnelUp && (state.configStaleSinceStart || _subController.configDirty)
 - Любой путь, который зовёт `HomeController.saveParsedConfig` при `tunnelUp` (Routing Apply, Source import, Debug, Home ⟳), автоматически поднимает флаг. Не нужно пробрасывать setState'ы через виджеты.
 - Sticky до следующего `connected` → любая цепочка saveConfig'ов во время работы туннеля схлопывается в один warning.
 
+### Intent-based reset (v1.4.0)
+
+Поверх «гасится на tunnel-транзите» добавлен **intent-based** reset: `_stopInternal`/`_startInternal` сбрасывают `configStaleSinceStart=false` сразу после успешного native call'а, не дожидаясь broadcast'а. Мотивация:
+
+1. **Семантика чище.** Юзер явно применил намерение («stop → running=nothing» / «start → running=saved»); флаг «saved vs running» теряет смысл независимо от того, дошёл ли до нас transition event.
+2. **Robust к platform-level потерям.** Broadcast-канал остаётся unreliable на уровне Android (Doze, OOM, background restrictions). Intent-based reset не зависит от доставки события.
+
+Reset через `_handleStatusEvent` (Stopped/Started branches) **остаётся** как defense-in-depth для external transitions (revoke от другого VPN, system kill). Идемпотентно — двойной reset не вредит.
+
 ## 8b. Reload button (справа от status chip)
 
 **Status:** Реализовано
@@ -249,19 +258,97 @@ state.tunnelUp && (state.configStaleSinceStart || _subController.configDirty)
 
 Dirty-подсветка: кнопка рисуется с `primaryContainer` фоном (circle) и `onPrimaryContainer` иконкой, чтобы визуально показать что конфиг требует пересборки. Tooltip меняется по состоянию (равен default-label'у).
 
-### Reconnect-цепочка
+### Reconnect-цепочка (v1.4.0)
 
-`HomeController.reconnect()`:
+`HomeController.reconnect()` теперь — тонкая композиция `_stopInternal` + `_startInternal`:
 
-1. Если туннель не up — просто `start()` (меню-пункт «Reconnect» при VPN off = Connect).
-2. Иначе: подписаться на `onStatusChanged.firstWhere(disconnected|revoked)` **до** вызова stop (broadcast-stream, чтобы не упустить быстрый event), вызвать `stopVPN`, дождаться (timeout 10 сек), затем `startVPN`.
-3. `busy=true` держится на всю цепочку — UI не даст повторно нажать между stop и start.
+1. Если туннель не up — делегируем в `start()`.
+2. Иначе — `busy=true`, `await _stopInternal()` (blocking на native — см. spec [`012`](../012%20native%20vpn%20service/spec.md) про `BoxVpnService.stopAwait`), если stopped — `await _startInternal()`, иначе abort с lastError. `busy=false` в finally.
+
+Никакого `firstWhere` на broadcast stream'е, никаких timeout fallback'ов, никакой wait-координации на Dart стороне. Blocking `stopVPN` на native гарантирует `status=Stopped` до следующего `startVPN` — race в `onStartCommand:97` guard исключён.
+
+```dart
+Future<void> reconnect() async {
+  final wasUp = _state.tunnel == TunnelStatus.connected ||
+      _state.tunnel == TunnelStatus.connecting;
+  if (!wasUp) { await start(); return; }
+  _emit(_state.copyWith(busy: true, lastError: ''));
+  try {
+    final stopped = await _stopInternal();
+    if (!stopped) {
+      _emit(_state.copyWith(lastError: 'Stop timed out — reconnect aborted'));
+      return;
+    }
+    final started = await _startInternal();
+    if (!started) _emit(_state.copyWith(lastError: 'Failed to start VPN'));
+  } finally {
+    _emit(_state.copyWith(busy: false));
+  }
+}
+```
 
 ### Инварианты
 
 - Long-press меню всегда показывает все 3 пункта, даже когда часть из них совпадает с default tap — это намеренно, чтобы поведение было предсказуемым.
 - Лейбл «Reconnect» в off-state заменяется на «Connect»; «Rebuild config + reconnect» — на «Rebuild config + connect». Действие одно и то же (`reconnect()` само разветвляется).
-- Rebuild всегда очищает `_subController.configDirty` (как и существующий `_rebuildAndClearDirty`). Sticky-флаг `configStaleSinceStart` гасится естественным путём на tunnel-транзите — в новую сессию цикл стартует чистым.
+- Rebuild всегда очищает `_subController.configDirty` (как и существующий `_rebuildAndClearDirty`). Sticky-флаг `configStaleSinceStart` сбрасывается intent-based путём в `_stopInternal`/`_startInternal` (reset по намерению), плюс остаётся reset на tunnel-транзите в `_handleStatusEvent` как defense in depth.
+
+## 8c. Revoke UX — «VPN taken by another app»
+
+**Status:** Реализовано (v1.4.0)
+
+Когда другое VPN-приложение захватывает слот (Android позволяет только одному VPN активным) — native ловит `VpnService.onRevoke()` → `setStatus(Stopped, error='VPN revoked by another app')` → Dart получает `TunnelStatus.revoked`.
+
+### UI
+
+- **SnackBar** при transition `prevTunnel != revoked && state.tunnel == revoked`:
+  - Текст: *«VPN taken by another app»*
+  - Action: **Start** — вызывает `_controller.start()`. Проходит через existing `VpnPlugin.startVpn` путь: `VpnService.prepare(activity)` возвращает non-null intent (слот занят) → `startActivityForResult` → system dialog «VPN connection request» → approve → конкурент получает свой `onRevoke` → мы поднимаемся.
+  - Duration: 5s. Перед показом `clearSnackBars()` — не спам при нескольких revoke подряд.
+- **Status chip** маппится как обычный Disconnected (иконка `shield_outlined`, нейтральный фон, label «Disconnected»). Внутреннее значение `state.tunnel == revoked` **сохраняется** — оно нужно для side-effect detection в HomeScreen listener'е.
+
+Listener на `HomeController` — отдельный (не AnimatedBuilder), для side-effect'ов вне build-фазы:
+
+```dart
+_controller.addListener(_onControllerChange);
+// ...
+void _onControllerChange() {
+  final now = _controller.state.tunnel;
+  if (_prevTunnel != TunnelStatus.revoked && now == TunnelStatus.revoked) {
+    _showRevokedSnackBar();
+  }
+  _prevTunnel = now;
+}
+```
+
+`removeListener` в `dispose`.
+
+### Cleanup в `_handleStatusEvent` revoked-branch
+
+`_clash = null` — endpoint прошлой сессии держал secret убитого sing-box и port который Android мог переиспользовать. Пересоздаётся на следующем `connected` через `_refreshClashAfterTunnel` → `_rebuildClashEndpoint`. Все callers `_clash` в коде уже идут через null-check, safe.
+
+### Инварианты
+
+- SnackBar показывается только на **transition** в revoked, не каждый раз при `revoked`. Защита от повторного показа через `_prevTunnel` tracking.
+- Внутренний `state.tunnel` остаётся `revoked` — UI-слой маппит только на output chip'а. Side-effect layer (listener) видит реальное transition.
+
+## 8d. Lifecycle resume re-sync
+
+**Status:** Реализовано (v1.4.0)
+
+Event-driven страховка от platform-level потерь broadcast'ов. При `AppLifecycleState.resumed` → `HomeController.onAppResumed()` → `_resyncOnResume()`:
+
+1. Pull `getVpnStatus` у native.
+2. Сравнение `TunnelStatus.fromNative(raw)` с `_state.tunnel`.
+3. Если divergent — прогон raw через `_handleStatusEvent({'status': raw})`. Это идёт тем же кодом что и штатный broadcast, со всеми правильными side-effect'ами (cleanup, haptic, autoupdater hooks, clash endpoint rebuild, SnackBar при revoked через listener).
+4. Heartbeat если после re-sync всё ещё up — дополнительная проверка что Clash отвечает.
+
+Покрываемые случаи:
+- Процесс был в background долго, Doze убил broadcast'ы.
+- OOM killer убил service силой пока app был suspended.
+- Revoke от другого VPN пропал мимо broadcast'а — re-sync увидит `Revoked` → SnackBar через listener flow.
+
+**В steady-state ничего не крутится** — только одноразовый pull на resume. Никакого polling'а/таймеров (намеренный отказ по запросу юзера — паразитная нагрузка в foreground неприемлема).
 
 ## 9. Ошибки и состояния
 
@@ -276,9 +363,12 @@ Dirty-подсветка: кнопка рисуется с `primaryContainer` ф
 
 | Файл | Изменения |
 |------|-----------|
-| `lib/screens/home_screen.dart` | Traffic bar, sort button, node count, RefreshIndicator, progress banner, reload button (§8b) |
+| `lib/screens/home_screen.dart` | Traffic bar, sort button, node count, RefreshIndicator, progress banner, reload button (§8b), revoke SnackBar listener (§8c) |
 | `lib/models/home_state.dart` | `NodeSortMode` enum, `sortedNodes` getter |
-| `lib/controllers/home_controller.dart` | `cycleSortMode()`, `reconnect()` (§8b) |
+| `lib/controllers/home_controller.dart` | `cycleSortMode()`, `reconnect()` (§8b — композиция), `_stopInternal`/`_startInternal` (intent-based reset §8a), revoked-branch cleanup (§8c), `_resyncOnResume` (§8d) |
+| `lib/vpn/box_vpn_client.dart` | `onStatusChanged` как `late final asBroadcastStream` (фикс sink leak), blocking `stopVPN` docstring |
+| `android/.../BoxVpnService.kt` | `stopAwait` + `stopCompleter` hook в `setStatus(Stopped)` |
+| `android/.../VpnPlugin.kt` | `stopVPN` handler через `pluginScope` + `withTimeout(5s)` |
 | `lib/widgets/node_row.dart` | Long-press handler, popup menu, `_delayColor()` |
 | `lib/screens/node_filter_screen.dart` | Список нод с чекбоксами |
 | `lib/services/settings_storage.dart` | getExcludedNodes / saveExcludedNodes |
