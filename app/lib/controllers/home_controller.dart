@@ -43,6 +43,14 @@ class HomeController extends ChangeNotifier {
   /// при disconnect чтобы не стрельнул в уже отключённом состоянии.
   Timer? _autoPingTimer;
 
+  /// Safety-timeout для transient-состояний (Starting/Stopping): если
+  /// native застрял дольше 10 сек — форсим disconnected в UI. Один
+  /// Timer на всю жизнь контроллера, cancel'им при любой смене статуса
+  /// (чтобы не срабатывал на уже разрешённом состоянии) и пересоздаём
+  /// при новой transient-фазе.
+  Timer? _transientTimeoutTimer;
+  static const _transientTimeout = Duration(seconds: 10);
+
   // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
@@ -63,6 +71,7 @@ class HomeController extends ChangeNotifier {
   void dispose() {
     _stopHeartbeat();
     _autoPingTimer?.cancel();
+    _transientTimeoutTimer?.cancel();
     _statusSub?.cancel();
     super.dispose();
   }
@@ -158,25 +167,38 @@ class HomeController extends ChangeNotifier {
     } else if (tunnel == TunnelStatus.stopping || tunnel == TunnelStatus.connecting) {
       _stopHeartbeat();
       _emit(_state.copyWith(tunnel: tunnel));
-      // Safety timeout: if stuck in transitional state for 10s, force reset
-      Future.delayed(const Duration(seconds: 10), () {
-        if (_state.tunnel == tunnel) {
-          _addDebug(DebugSource.app, 'Timeout in ${tunnel.label}, forcing disconnect');
-          _emit(_state.copyWith(
-            tunnel: TunnelStatus.disconnected,
-            lastError: 'Connection timed out',
-            proxiesJson: <String, dynamic>{},
-            groups: <String>[],
-            nodes: <String>[],
-            traffic: TrafficSnapshot.zero,
-            connectedSince: null,
-          ));
-        }
-      });
+      _armTransientTimeout(tunnel);
+      return;
     } else {
       _stopHeartbeat();
       _emit(_state.copyWith(tunnel: tunnel));
     }
+
+    // non-transient terminal event — safety-timer больше не нужен.
+    _transientTimeoutTimer?.cancel();
+    _transientTimeoutTimer = null;
+  }
+
+  /// Перезапускает safety-timer на transient-фазу. Cancel'ит предыдущий
+  /// (защита от спама `Future.delayed` при множественных stopping/
+  /// connecting подряд) и стартует новый на 10 сек.
+  void _armTransientTimeout(TunnelStatus expected) {
+    _transientTimeoutTimer?.cancel();
+    _transientTimeoutTimer = Timer(_transientTimeout, () {
+      if (_state.tunnel != expected) return;
+      _addDebug(
+          DebugSource.app, 'Timeout in ${expected.label}, forcing disconnect');
+      _emit(_state.copyWith(
+        tunnel: TunnelStatus.disconnected,
+        lastError: 'Connection timed out',
+        proxiesJson: <String, dynamic>{},
+        groups: <String>[],
+        nodes: <String>[],
+        traffic: TrafficSnapshot.zero,
+        connectedSince: null,
+        configStaleSinceStart: false,
+      ));
+    });
   }
 
   // ---------------------------------------------------------------------------
