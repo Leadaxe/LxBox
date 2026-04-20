@@ -17,7 +17,7 @@ class StatsScreen extends StatefulWidget {
   State<StatsScreen> createState() => _StatsScreenState();
 }
 
-class _StatsScreenState extends State<StatsScreen> {
+class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
   Map<String, _OutboundGroup> _groups = {};
   int _totalUp = 0;
   int _totalDown = 0;
@@ -30,12 +30,44 @@ class _StatsScreenState extends State<StatsScreen> {
   final _expanded = <String>{};
   final _detourMap = <String, String>{};
 
+  static const _refreshInterval = Duration(seconds: 3);
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _parseDetourMap();
     unawaited(_refresh());
-    _timer = Timer.periodic(const Duration(seconds: 3), (_) => _refresh());
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(_refreshInterval, (_) => _refresh());
+  }
+
+  void _stopTimer() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Battery-friendly: stop'имся когда app уходит в background. 3-секундный
+    // polling Clash API не имеет смысла когда юзер даже не видит экран.
+    // На resume — immediate refresh + перезапуск таймера.
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.inactive:
+        _stopTimer();
+      case AppLifecycleState.resumed:
+        if (_timer == null) {
+          unawaited(_refresh());
+          _startTimer();
+        }
+    }
   }
 
   void _parseDetourMap() {
@@ -67,6 +99,7 @@ class _StatsScreenState extends State<StatsScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
   }

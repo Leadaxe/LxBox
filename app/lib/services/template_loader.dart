@@ -29,7 +29,7 @@ class TemplateLoader {
     return _cached!;
   }
 
-  /// Собирает Map<name, default> для vars где `wizard_ui == "hidden"`.
+  /// Собирает `Map<name, default>` для vars где `wizard_ui == "hidden"`.
   /// Обходит nested-структуру `sections[].vars[]`. Редактируемые vars
   /// (edit/fix) подставляются позже `build_config`'ом на уровне `config`.
   static Map<String, String> _hiddenDefaults(List<dynamic>? sectionsJson) {

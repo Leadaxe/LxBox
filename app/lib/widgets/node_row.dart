@@ -150,7 +150,7 @@ class NodeRow extends StatelessWidget {
                 child: arrow,
               ),
             ),
-          if (proto != null) proto,
+          ?proto,
           const Spacer(),
           right,
         ],

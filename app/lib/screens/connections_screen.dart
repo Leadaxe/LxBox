@@ -15,7 +15,8 @@ class ConnectionsView extends StatefulWidget {
   State<ConnectionsView> createState() => _ConnectionsViewState();
 }
 
-class _ConnectionsViewState extends State<ConnectionsView> {
+class _ConnectionsViewState extends State<ConnectionsView>
+    with WidgetsBindingObserver {
   static const _intervals = [500, 1000, 2000, 3000, 5000, 10000, 0]; // ms, 0 = off
   List<Map<String, dynamic>> _connections = [];
   final Set<String> _closedIds = {};
@@ -24,10 +25,12 @@ class _ConnectionsViewState extends State<ConnectionsView> {
   bool _accumulate = false;
   Timer? _timer;
   int _intervalMs = 2000;
+  bool _backgrounded = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_refresh());
     _startTimer();
   }
@@ -35,12 +38,35 @@ class _ConnectionsViewState extends State<ConnectionsView> {
   void _startTimer() {
     _timer?.cancel();
     if (_intervalMs <= 0) return;
+    if (_backgrounded) return;  // Не запускаем таймер в background.
     _timer = Timer.periodic(Duration(milliseconds: _intervalMs), (_) => _refresh());
   }
 
   void _setInterval(int ms) {
     setState(() => _intervalMs = ms);
     _startTimer();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Connections view опрашивает Clash API каждые 500мс–10с. В background
+    // это бесполезный трафик и батарея — юзер экран не видит. Pause/resume
+    // по lifecycle-эвенту.
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.inactive:
+        _backgrounded = true;
+        _timer?.cancel();
+        _timer = null;
+      case AppLifecycleState.resumed:
+        _backgrounded = false;
+        if (_timer == null && _intervalMs > 0) {
+          unawaited(_refresh());
+          _startTimer();
+        }
+    }
   }
 
   String _intervalLabel(int ms) {
@@ -51,6 +77,7 @@ class _ConnectionsViewState extends State<ConnectionsView> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
   }
