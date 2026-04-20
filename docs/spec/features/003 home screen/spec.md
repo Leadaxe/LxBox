@@ -233,6 +233,36 @@ state.tunnelUp && (state.configStaleSinceStart || _subController.configDirty)
 - Любой путь, который зовёт `HomeController.saveParsedConfig` при `tunnelUp` (Routing Apply, Source import, Debug, Home ⟳), автоматически поднимает флаг. Не нужно пробрасывать setState'ы через виджеты.
 - Sticky до следующего `connected` → любая цепочка saveConfig'ов во время работы туннеля схлопывается в один warning.
 
+## 8b. Reload button (справа от status chip)
+
+**Status:** Реализовано
+
+Круглая кнопка с иконкой `refresh` справа от status chip. Иконка читается как «переподключиться», что и является default-поведением. Полный набор действий — через long press.
+
+### Поведение
+
+| Состояние | Short tap (default) | Long press меню |
+|-----------|---------------------|-----------------|
+| VPN off | Rebuild config + connect | **Connect** / Rebuild config only / Rebuild config + connect |
+| VPN on, clean | Reconnect | **Reconnect** / Rebuild config only / Rebuild config + reconnect |
+| VPN on, dirty (`_subController.configDirty \|\| _needsRestart`) | Rebuild config + reconnect | то же, что в clean |
+
+Dirty-подсветка: кнопка рисуется с `primaryContainer` фоном (circle) и `onPrimaryContainer` иконкой, чтобы визуально показать что конфиг требует пересборки. Tooltip меняется по состоянию (равен default-label'у).
+
+### Reconnect-цепочка
+
+`HomeController.reconnect()`:
+
+1. Если туннель не up — просто `start()` (меню-пункт «Reconnect» при VPN off = Connect).
+2. Иначе: подписаться на `onStatusChanged.firstWhere(disconnected|revoked)` **до** вызова stop (broadcast-stream, чтобы не упустить быстрый event), вызвать `stopVPN`, дождаться (timeout 10 сек), затем `startVPN`.
+3. `busy=true` держится на всю цепочку — UI не даст повторно нажать между stop и start.
+
+### Инварианты
+
+- Long-press меню всегда показывает все 3 пункта, даже когда часть из них совпадает с default tap — это намеренно, чтобы поведение было предсказуемым.
+- Лейбл «Reconnect» в off-state заменяется на «Connect»; «Rebuild config + reconnect» — на «Rebuild config + connect». Действие одно и то же (`reconnect()` само разветвляется).
+- Rebuild всегда очищает `_subController.configDirty` (как и существующий `_rebuildAndClearDirty`). Sticky-флаг `configStaleSinceStart` гасится естественным путём на tunnel-транзите — в новую сессию цикл стартует чистым.
+
 ## 9. Ошибки и состояния
 
 - Ядро не запущено / API не отвечает — короткие тексты, блокировка операций, требующих API.
@@ -246,9 +276,9 @@ state.tunnelUp && (state.configStaleSinceStart || _subController.configDirty)
 
 | Файл | Изменения |
 |------|-----------|
-| `lib/screens/home_screen.dart` | Traffic bar, sort button, node count, RefreshIndicator, progress banner |
+| `lib/screens/home_screen.dart` | Traffic bar, sort button, node count, RefreshIndicator, progress banner, reload button (§8b) |
 | `lib/models/home_state.dart` | `NodeSortMode` enum, `sortedNodes` getter |
-| `lib/controllers/home_controller.dart` | `cycleSortMode()` |
+| `lib/controllers/home_controller.dart` | `cycleSortMode()`, `reconnect()` (§8b) |
 | `lib/widgets/node_row.dart` | Long-press handler, popup menu, `_delayColor()` |
 | `lib/screens/node_filter_screen.dart` | Список нод с чекбоксами |
 | `lib/services/settings_storage.dart` | getExcludedNodes / saveExcludedNodes |
@@ -265,3 +295,4 @@ state.tunnelUp && (state.configStaleSinceStart || _subController.configDirty)
 - [x] Три режима сортировки: defaultOrder, latencyAsc, nameAsc.
 - [x] Node Filter: чекбоксы, поиск, Select All/Deselect All, Apply.
 - [x] Исключённые ноды не попадают в конфиг.
+- [x] Reload button: short tap = reconnect / rebuild+connect / rebuild+reconnect по состоянию; long press = меню из 3 пунктов.

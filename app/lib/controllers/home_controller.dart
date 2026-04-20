@@ -401,6 +401,46 @@ class HomeController extends ChangeNotifier {
     }
   }
 
+  /// Stop (if up) → wait for disconnected → start. Если туннель уже
+  /// disconnected/revoked — просто start. Подписываемся ДО вызова stop чтобы
+  /// не упустить быстрый event; broadcast-stream allows parallel listeners.
+  /// Держим busy=true на всё время цепочки, чтобы UI не дал повторно нажать
+  /// между stop и start.
+  Future<void> reconnect() async {
+    final wasUp = _state.tunnel == TunnelStatus.connected ||
+        _state.tunnel == TunnelStatus.connecting;
+    if (!wasUp) {
+      await start();
+      return;
+    }
+    _emit(_state.copyWith(busy: true, lastError: ''));
+    try {
+      final wait = _vpn.onStatusChanged.firstWhere((e) {
+        final s = TunnelStatus.fromNative(e['status']?.toString() ?? '');
+        return s == TunnelStatus.disconnected || s == TunnelStatus.revoked;
+      }).timeout(const Duration(seconds: 10),
+          onTimeout: () => <String, dynamic>{});
+      await _vpn.stopVPN();
+      _addDebug(DebugSource.app, 'reconnect: stopVPN requested');
+      try {
+        await wait;
+      } catch (_) {}
+      await _vpn.setNotificationTitle('L×Box');
+      final ok = await _vpn.startVPN();
+      if (!ok) {
+        _emit(_state.copyWith(lastError: 'Failed to start VPN'));
+        _addDebug(DebugSource.app, 'reconnect: startVPN returned false');
+      } else {
+        _addDebug(DebugSource.app, 'reconnect: startVPN requested');
+      }
+    } catch (e) {
+      _emit(_state.copyWith(lastError: '$e'));
+      _addDebug(DebugSource.app, 'reconnect exception: $e');
+    } finally {
+      _emit(_state.copyWith(busy: false));
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Clash API — proxies & groups
   // ---------------------------------------------------------------------------
