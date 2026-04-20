@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../config/consts.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/server_list.dart';
@@ -339,7 +340,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                             ),
                           ),
                           icon: const Icon(Icons.filter_list, size: 18),
-                          label: const Text('auto-proxy-out'),
+                          label: const Text(kAutoOutboundTag),
                         ),
                       ),
                     ),

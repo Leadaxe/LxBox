@@ -1,15 +1,18 @@
 import 'dart:convert';
 import 'dart:math';
 
+import '../../models/custom_rule.dart';
 import '../../models/emit_context.dart';
 import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
 import '../../models/singbox_entry.dart';
 import '../../models/template_vars.dart';
+import '../../config/consts.dart';
 import '../../models/validation.dart';
-import '../settings_storage.dart' show AppRule;
+import '../rule_set_downloader.dart';
 import '../template_loader.dart';
 import 'post_steps.dart';
+import 'rule_set_registry.dart';
 import 'server_list_build.dart';
 import 'validator.dart';
 
@@ -34,20 +37,16 @@ class BuildResult {
 /// Настройки сборки — то что UI/контроллер прокидывает в `buildConfig`.
 class BuildSettings {
   final Map<String, String> userVars;
-  final Set<String> enabledRules;
   final Set<String> enabledGroups;
   final Set<String> excludedNodes;
-  final Map<String, String> ruleOutbounds;
-  final List<AppRule> appRules;
+  final List<CustomRule> customRules;
   final String routeFinal;
 
   const BuildSettings({
     this.userVars = const {},
-    this.enabledRules = const {},
     this.enabledGroups = const {},
     this.excludedNodes = const {},
-    this.ruleOutbounds = const {},
-    this.appRules = const [],
+    this.customRules = const [],
     this.routeFinal = '',
   });
 }
@@ -64,7 +63,7 @@ class BuildSettings {
 /// 3. Deep-copy template.config, substitute vars.
 /// 4. Пройти по `lists` → `nodes`, применить `DetourPolicy`, дедуп тегов с
 ///    учётом `tagPrefix`, emit() → разложить по outbounds/endpoints.
-/// 5. Собрать preset-группы (vpn-1/2/3 + auto-proxy-out).
+/// 5. Собрать preset-группы (vpn-1/2/3 + auto).
 /// 6. Applied selectable rules, app rules, route final.
 /// 7. Post-steps: tls_fragment, custom DNS.
 /// 8. Validate → вернуть BuildResult с готовым `configJson`.
@@ -104,9 +103,19 @@ Future<BuildResult> buildConfig({
     tlsRecordFragment: vars['tls_record_fragment'] == 'true',
   );
 
+  // Реестр rule_set/rules инициализируется из template — template может
+  // содержать built-in inline rule_set (например `ru-domains`). Реестр
+  // живёт один на весь buildConfig, доступен post-steps'ам через прямой
+  // параметр, а ServerList.build'у — через `ctx.ruleSets`.
+  final route = config['route'] as Map<String, dynamic>? ?? {};
+  final ruleSets = RuleSetRegistry(
+    initialRuleSets: route['rule_set'] as List<dynamic>? ?? const [],
+    initialRules: route['rules'] as List<dynamic>? ?? const [],
+  );
+
   // buildConfig — тонкий оркестратор. ServerList.build(ctx) сам решает
   // политику, аллоцирует теги через ctx, регистрирует в selector/auto.
-  final ctx = _BuildCtx(tvars);
+  final ctx = _BuildCtx(tvars, ruleSets);
   for (final list in lists) {
     list.build(ctx);
   }
@@ -152,19 +161,28 @@ Future<BuildResult> buildConfig({
     ];
   }
 
-  applySelectableRules(
-    config,
-    template.selectableRules,
-    settings.enabledRules,
-    settings.ruleOutbounds,
-    settings.enabledGroups,
-  );
+  // Pre-resolve srs local paths (sing-box получает file:// — rule set
+  // `{type: local, path: …}`). Удалённо ничего не качается.
+  final srsPaths = <String, String>{};
+  for (final cr in settings.customRules) {
+    if (cr.kind != CustomRuleKind.srs) continue;
+    final p = await RuleSetDownloader.cachedPath(cr.id);
+    if (p != null) srsPaths[cr.id] = p;
+  }
+  emitWarnings.addAll(applyCustomRules(
+    ruleSets,
+    settings.customRules,
+    srsPaths: srsPaths,
+  ));
 
-  applyAppRules(config, settings.appRules);
+  // Flush реестра в config.route. Один раз в конце — следующие post-steps
+  // (tls_fragment, mixed_case_sni) не трогают rule_set/rules.
+  route['rule_set'] = ruleSets.getRuleSets();
+  route['rules'] = ruleSets.getRules();
+  config['route'] = route;
 
   if (settings.routeFinal.isNotEmpty) {
-    final route = config['route'] as Map<String, dynamic>?;
-    if (route != null) route['final'] = settings.routeFinal;
+    route['final'] = settings.routeFinal;
   }
 
   applyTlsFragment(config, vars);
@@ -183,10 +201,11 @@ Future<BuildResult> buildConfig({
 }
 
 /// Реализация `EmitContext`: vars + аллокатор уникальных тегов +
-/// аккумуляторы entries.
+/// аккумуляторы entries + RuleSetRegistry.
 class _BuildCtx implements EmitContext {
-  _BuildCtx(this._vars);
+  _BuildCtx(this._vars, this._ruleSets);
   final TemplateVars _vars;
+  final RuleSetRegistry _ruleSets;
   final _taken = <String>{'direct-out', 'dns-out', 'block-out'};
 
   final outbounds = <Outbound>[];
@@ -196,6 +215,9 @@ class _BuildCtx implements EmitContext {
 
   @override
   TemplateVars get vars => _vars;
+
+  @override
+  RuleSetRegistry get ruleSets => _ruleSets;
 
   @override
   String allocateTag(String baseTag) {
@@ -230,7 +252,7 @@ class _BuildCtx implements EmitContext {
   void addToAutoList(SingboxEntry entry) => autoEntries.add(entry);
 }
 
-/// Собирает preset-группы (vpn-1/vpn-2/vpn-3/auto-proxy-out). Приватный
+/// Собирает preset-группы (vpn-1/vpn-2/vpn-3/auto). Приватный
 /// helper `buildConfig` — специфичен для одного вызова, выделение в
 /// отдельный файл/модуль не даёт пользы (YAGNI, решение §Принципы #4).
 List<Map<String, dynamic>> _buildPresetGroups({
@@ -248,7 +270,7 @@ List<Map<String, dynamic>> _buildPresetGroups({
   }).toList();
 
   final autoProxyEnabled =
-      activePresets.any((p) => p.tag == 'auto-proxy-out');
+      activePresets.any((p) => p.tag == kAutoOutboundTag);
 
   List<String> tagsFor(PresetGroup p) {
     if (p.type == 'urltest') {
@@ -277,7 +299,7 @@ List<Map<String, dynamic>> _buildPresetGroups({
     final nodes = tagsFor(preset);
     final addOutbounds = preset.addOutbounds
         .where(knownTags.contains)
-        .where((t) => t != 'auto-proxy-out' || autoProxyEnabled);
+        .where((t) => t != kAutoOutboundTag || autoProxyEnabled);
     final tags = <String>[...nodes, ...addOutbounds];
     if (tags.isEmpty) {
       if (preset.type == 'urltest') continue;

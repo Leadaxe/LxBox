@@ -32,6 +32,15 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// Pull-запрос текущего status'а у native-сервиса. Нужен на init —
+  /// `onStatusChanged` шлёт только переходы, поэтому если Flutter-процесс
+  /// перезапустился, а сервис всё ещё `Started` — без явного pull'а UI
+  /// останется в `Disconnected`.
+  Future<String> getVpnStatus() async {
+    final s = await _methods.invokeMethod<String>('getVpnStatus');
+    return s ?? 'Stopped';
+  }
+
   /// Set the notification title shown while VPN is active.
   Future<bool> setNotificationTitle(String title) async {
     final ok = await _methods.invokeMethod<bool>(
@@ -65,11 +74,51 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
-  /// Get list of installed apps: [{packageName, appName, isSystemApp}, ...]
+  /// Get list of installed apps — lightweight metadata only, no icons.
+  /// Icons are loaded lazily per-package via [getAppIcon].
   Future<List<Map<String, dynamic>>> getInstalledApps() async {
     final result = await _methods.invokeMethod<List<dynamic>>('getInstalledApps');
     if (result == null) return [];
     return result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  /// Fetch a single app icon as base64-encoded PNG. Empty string on failure
+  /// (package not found, cannot render icon).
+  Future<String> getAppIcon(String packageName) async {
+    final s = await _methods
+        .invokeMethod<String>('getAppIcon', {'packageName': packageName});
+    return s ?? '';
+  }
+
+  /// Fetch full app info (name + icon + isSystem) in a single native call.
+  /// Returns null if package not installed.
+  Future<Map<String, dynamic>?> getAppInfo(String packageName) async {
+    final r = await _methods
+        .invokeMethod<Map<dynamic, dynamic>>('getAppInfo', {'packageName': packageName});
+    if (r == null) return null;
+    return Map<String, dynamic>.from(r);
+  }
+
+  /// Whether this app is whitelisted from battery optimization (Doze/App Standby).
+  Future<bool> isIgnoringBatteryOptimizations() async {
+    final ok = await _methods
+        .invokeMethod<bool>('isIgnoringBatteryOptimizations');
+    return ok ?? false;
+  }
+
+  /// Open system dialog / settings page to whitelist the app from battery
+  /// optimization. Returns false if no settings activity is reachable.
+  Future<bool> openBatteryOptimizationSettings() async {
+    final ok = await _methods
+        .invokeMethod<bool>('openBatteryOptimizationSettings');
+    return ok ?? false;
+  }
+
+  /// Open per-app Settings page (where OEM "Autostart", "Background activity"
+  /// and "Battery saver" toggles live). Pure navigation, no result state.
+  Future<bool> openAppDetailsSettings() async {
+    final ok = await _methods.invokeMethod<bool>('openAppDetailsSettings');
+    return ok ?? false;
   }
 
   /// Stream of status events: {"status": "Started"|"Starting"|"Stopped"|"Stopping"}

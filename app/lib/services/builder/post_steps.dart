@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:math';
 
-import '../../models/parser_config.dart';
-import '../settings_storage.dart' show AppRule, SettingsStorage;
+import '../../models/custom_rule.dart';
+import '../settings_storage.dart' show SettingsStorage;
+import 'rule_set_registry.dart';
 
 /// Post-step: рандомизация регистра букв в `server_name` first-hop outbound'ов
 /// (§028 spec). Mixed-case SNI ломает exact-match DPI без изменения поведения
@@ -70,45 +71,6 @@ void applyTlsFragment(Map<String, dynamic> config, Map<String, String> vars) {
   }
 }
 
-/// Post-step: selectable rules (rule_set + rules).
-void applySelectableRules(
-  Map<String, dynamic> config,
-  List<SelectableRule> allRules,
-  Set<String> enabledLabels,
-  Map<String, String> ruleOutbounds,
-  Set<String> enabledGroups,
-) {
-  final route = config['route'] as Map<String, dynamic>? ?? {};
-  final ruleSets = route['rule_set'] as List<dynamic>? ?? [];
-  final rules = route['rules'] as List<dynamic>? ?? [];
-
-  for (final sr in allRules) {
-    final enabled = enabledLabels.contains(sr.label) ||
-        (enabledLabels.isEmpty && sr.defaultEnabled);
-    if (!enabled) continue;
-
-    for (final rs in sr.ruleSets) {
-      final tag = rs['tag'];
-      if (tag != null && !ruleSets.any((e) => e is Map && e['tag'] == tag)) {
-        ruleSets.add(rs);
-      }
-    }
-    if (sr.rule.isNotEmpty) {
-      final userOut = ruleOutbounds[sr.label];
-      final ruleToAdd = (userOut != null &&
-              userOut.isNotEmpty &&
-              sr.rule.containsKey('outbound'))
-          ? {...sr.rule, 'outbound': userOut}
-          : sr.rule;
-      if (ruleToAdd.isNotEmpty) rules.add(ruleToAdd);
-    }
-  }
-
-  route['rule_set'] = ruleSets;
-  route['rules'] = rules;
-  config['route'] = route;
-}
-
 /// Post-step: наполнение `config.dns`. В шаблоне `dns_options.servers`
 /// (плюс override от пользователя в SettingsStorage). Шаблон использует
 /// имена серверов (`cloudflare_udp`, `google_doh`) в `route.default_domain_resolver`
@@ -151,15 +113,128 @@ Future<void> applyCustomDns(
   config['dns'] = dns;
 }
 
-/// Post-step: per-app routing rules.
-void applyAppRules(Map<String, dynamic> config, List<AppRule> appRules) {
-  if (appRules.isEmpty) return;
-  final route = config['route'] as Map<String, dynamic>? ?? {};
-  final rules = route['rules'] as List<dynamic>? ?? [];
-  for (final ar in appRules) {
-    if (ar.packages.isEmpty || ar.outbound.isEmpty) continue;
-    rules.add({'package_name': ar.packages, 'outbound': ar.outbound});
+/// Post-step: пользовательские routing-правила (spec §030).
+///
+/// Эмит зависит от `cr.kind`:
+///
+/// - `inline` — headless rule со всеми непустыми match-полями сразу. Per
+///   sing-box default rule: внутри domain-family (domain/suffix/keyword/ip_cidr)
+///   — OR; внутри port-family — OR; между категориями — AND. `package_name`
+///   — отдельная категория (AND). `protocol` в headless rule **не
+///   поддерживается**, выносим на routing-rule level.
+///
+/// - `srs` — **local** rule_set по пути из `srsPaths[cr.id]` (pre-resolved
+///   caller'ом через `RuleSetDownloader`). Если правило srs но файла нет
+///   — скипаем и пушим warning. URL в конфиг не попадает: sing-box сам
+///   ничего не качает, всё managed'ится юзером через download button.
+///
+/// Collision handling — auto-suffix через `RuleSetRegistry`.
+List<String> applyCustomRules(
+  RuleSetRegistry registry,
+  List<CustomRule> rules, {
+  Map<String, String> srsPaths = const {},
+}) {
+  final warnings = <String>[];
+  for (final cr in rules) {
+    if (!cr.enabled || cr.target.isEmpty) continue;
+    final requestedTag =
+        cr.name.trim().isEmpty ? 'unnamed' : cr.name.trim();
+
+    if (cr.kind == CustomRuleKind.srs) {
+      final path = srsPaths[cr.id];
+      if (path == null) {
+        warnings.add('SRS rule "${cr.name}" skipped: no cached file (Download first).');
+        continue;
+      }
+      final tag = registry.addRuleSet({
+        'type': 'local',
+        'tag': requestedTag,
+        'format': 'binary',
+        'path': path,
+      });
+      registry.addRule(_targetToRoute(
+        tag,
+        cr.target,
+        ports: cr.intPorts,
+        portRanges: cr.portRanges,
+        packages: cr.packages,
+        protocols: cr.protocols,
+        ipIsPrivate: cr.ipIsPrivate,
+      ));
+      continue;
+    }
+
+    // Inline: all non-empty match fields в один headless rule.
+    final match = <String, dynamic>{};
+    if (cr.domains.isNotEmpty) match['domain'] = cr.domains;
+    if (cr.domainSuffixes.isNotEmpty) match['domain_suffix'] = cr.domainSuffixes;
+    if (cr.domainKeywords.isNotEmpty) match['domain_keyword'] = cr.domainKeywords;
+    if (cr.ipCidrs.isNotEmpty) match['ip_cidr'] = cr.ipCidrs;
+    final intPorts = cr.intPorts;
+    if (intPorts.isNotEmpty) match['port'] = intPorts;
+    if (cr.portRanges.isNotEmpty) match['port_range'] = cr.portRanges;
+    if (cr.packages.isNotEmpty) match['package_name'] = cr.packages;
+    // `ip_is_private` НЕ поддерживается в headless rule — sing-box отрежет
+    // конфиг на парсинге. Выносим на routing-rule level (там OR с rule_set
+    // per default-rule formula).
+
+    if (match.isEmpty) {
+      // Нет полей для inline headless rule. Если есть routing-level
+      // поля (protocol / ip_is_private) — эмитим routing rule без
+      // rule_set, иначе правило пустое, скипаем.
+      if (cr.protocols.isEmpty && !cr.ipIsPrivate) continue;
+      registry.addRule(_targetToRoute(
+        '',
+        cr.target,
+        protocols: cr.protocols,
+        ipIsPrivate: cr.ipIsPrivate,
+      ));
+      continue;
+    }
+
+    final tag = registry.addRuleSet({
+      'type': 'inline',
+      'tag': requestedTag,
+      'rules': [match],
+    });
+    // Protocol + ip_is_private — на routing rule level (headless их не
+    // support'ит). `ip_is_private` становится OR с rule_set (per sing-box
+    // default-rule formula) — это ровно то что юзер ожидает.
+    registry.addRule(_targetToRoute(
+      tag,
+      cr.target,
+      protocols: cr.protocols,
+      ipIsPrivate: cr.ipIsPrivate,
+    ));
   }
-  route['rules'] = rules;
-  config['route'] = route;
+  return warnings;
+}
+
+/// `target` (outbound tag или `kRejectTarget`) → routing rule. Опциональные
+/// AND-поля (port/port_range/packages/protocol) — для srs-режима, где эти
+/// фильтры нельзя зашить в remote rule_set.
+Map<String, dynamic> _targetToRoute(
+  String tag,
+  String target, {
+  List<int>? ports,
+  List<String>? portRanges,
+  List<String>? packages,
+  List<String>? protocols,
+  bool ipIsPrivate = false,
+}) {
+  final rule = <String, dynamic>{};
+  if (tag.isNotEmpty) rule['rule_set'] = tag;
+  if (ports != null && ports.isNotEmpty) rule['port'] = ports;
+  if (portRanges != null && portRanges.isNotEmpty) {
+    rule['port_range'] = portRanges;
+  }
+  if (packages != null && packages.isNotEmpty) rule['package_name'] = packages;
+  if (protocols != null && protocols.isNotEmpty) rule['protocol'] = protocols;
+  if (ipIsPrivate) rule['ip_is_private'] = true;
+  if (target == kRejectTarget) {
+    rule['action'] = 'reject';
+  } else {
+    rule['outbound'] = target;
+  }
+  return rule;
 }

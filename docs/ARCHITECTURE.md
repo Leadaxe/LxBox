@@ -81,8 +81,8 @@ ServerList (sealed)  —  SubscriptionServers | UserServer
   ▼
 buildConfig(lists, settings)
   │ template (assets/wizard_template.json)
-  │ post-steps: applyTlsFragment, applyMixedCaseSni, applyCustomDns,
-  │             applySelectableRules, applyAppRules
+  │ post-steps: applyCustomRules (inline + local-SRS, см. spec 030),
+  │             applyTlsFragment, applyMixedCaseSni, applyCustomDns
   │ validator → ValidationResult{ fatal[], warnings[] }
   ▼
 BuildResult{ config, configJson, validation, emitWarnings, generatedVars }

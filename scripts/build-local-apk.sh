@@ -5,6 +5,14 @@
 
 set -euo pipefail
 
+# Ensure flutter / Android SDK are on PATH even when invoked from a clean
+# shell (e.g. background tasks, IDEs). No-op if already configured.
+if ! command -v flutter >/dev/null 2>&1; then
+  export PATH="/Users/macbook/projects/flutter-sdk/bin:$PATH"
+fi
+: "${ANDROID_SDK_ROOT:=/usr/local/share/android-commandlinetools}"
+export ANDROID_SDK_ROOT
+
 cd "$(dirname "$0")/.."
 
 GIT_DESC=$(git describe --tags --long --dirty 2>/dev/null || echo "no-tag")
@@ -30,6 +38,7 @@ echo "────────────────────────�
 cd app
 
 flutter build apk --release \
+  --target-platform android-arm64 \
   --dart-define=BUILD_LOCAL=true \
   --dart-define=BUILD_GIT_DESC="$GIT_DESC" \
   --dart-define=BUILD_GIT_SHA="$GIT_SHA" \

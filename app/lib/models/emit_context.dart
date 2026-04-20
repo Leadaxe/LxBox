@@ -1,3 +1,4 @@
+import '../services/builder/rule_set_registry.dart';
 import 'singbox_entry.dart';
 import 'template_vars.dart';
 
@@ -29,4 +30,9 @@ abstract class EmitContext {
 
   /// Пометить, что этот entry попадает в auto-proxy-out (urltest).
   void addToAutoList(SingboxEntry entry);
+
+  /// Общий реестр для `route.rule_set` / `route.rules` секций. Живёт один
+  /// на весь `buildConfig`, доступен post-steps и ServerList.build'у.
+  /// Flush в `config.route` делает сам `buildConfig` в конце.
+  RuleSetRegistry get ruleSets;
 }

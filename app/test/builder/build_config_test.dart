@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
@@ -12,12 +13,12 @@ void main() {
         PresetGroup(
           tag: 'vpn-1',
           type: 'selector',
-          options: {'default': 'auto-proxy-out'},
+          options: {'default': kAutoOutboundTag},
           defaultEnabled: true,
-          addOutbounds: ['direct-out', 'auto-proxy-out'],
+          addOutbounds: ['direct-out', kAutoOutboundTag],
         ),
         PresetGroup(
-          tag: 'auto-proxy-out',
+          tag: kAutoOutboundTag,
           type: 'urltest',
           options: {'url': 'https://x', 'interval': '30s'},
           defaultEnabled: true,
@@ -61,7 +62,7 @@ void main() {
           userVars: {
             'clash_api': '127.0.0.1:9090',
           },
-          enabledGroups: {'vpn-1', 'auto-proxy-out'},
+          enabledGroups: {'vpn-1', kAutoOutboundTag},
         ),
       );
 
@@ -69,7 +70,7 @@ void main() {
           reason: result.validation.issues.join('\n'));
       final outs = result.config['outbounds'] as List;
       final tags = outs.map((o) => (o as Map)['tag']).toList();
-      expect(tags, containsAll(['A', 'B', 'direct-out', 'vpn-1', 'auto-proxy-out']));
+      expect(tags, containsAll(['A', 'B', 'direct-out', 'vpn-1', kAutoOutboundTag]));
 
       // vpn-1 includes node tags.
       final vpn1 =

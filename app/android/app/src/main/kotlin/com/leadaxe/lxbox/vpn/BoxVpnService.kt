@@ -39,6 +39,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         const val BROADCAST_STATUS = "com.leadaxe.lxbox.BROADCAST_STATUS"
         const val EXTRA_STATUS = "status"
 
+        /// Mirror of the live service status, readable from anywhere.
+        /// VpnPlugin.getVpnStatus читает это чтобы Flutter мог пересинхрониться
+        /// после re-attach (process killed но service выжил из-за keep-on-exit).
+        @Volatile
+        var currentStatus: VpnStatus = VpnStatus.Stopped
+            private set
+
         fun start(context: Context) {
             val intent = Intent(context, BoxVpnService::class.java).apply { action = ACTION_START }
             ContextCompat.startForegroundService(context, intent)
@@ -279,6 +286,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
 
     private fun setStatus(newStatus: VpnStatus, error: String? = null) {
         status = newStatus
+        currentStatus = newStatus
         sendBroadcast(
             Intent(BROADCAST_STATUS).apply {
                 `package` = packageName

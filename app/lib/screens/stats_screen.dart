@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../services/app_info_cache.dart';
 import '../services/clash_api_client.dart';
 import 'connections_screen.dart';
 
@@ -21,6 +22,9 @@ class _StatsScreenState extends State<StatsScreen> {
   int _totalUp = 0;
   int _totalDown = 0;
   int _totalConns = 0;
+  int _memory = 0;
+  Map<String, int> _byRule = const {};
+  Map<String, AppStat> _byApp = const {};
   bool _loading = true;
   Timer? _timer;
   final _expanded = <String>{};
@@ -77,6 +81,13 @@ class _StatsScreenState extends State<StatsScreen> {
       _totalUp = (data['uploadTotal'] as num?)?.toInt() ?? 0;
       _totalDown = (data['downloadTotal'] as num?)?.toInt() ?? 0;
       _totalConns = conns.length;
+
+      // Breakdown-агрегации (memory, byRule, byDnsMode, byApp) — парсим
+      // тот же response'ом через TrafficSnapshot, чтобы не дублировать логику.
+      final snap = TrafficSnapshot.fromConnectionsJson(data);
+      _memory = snap.memory;
+      _byRule = snap.byRule;
+      _byApp = snap.byApp;
 
       final perChain = <String, _OutboundGroup>{};
       for (final c in conns) {
@@ -135,44 +146,62 @@ class _StatsScreenState extends State<StatsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Statistics'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(icon: Icon(Icons.dashboard_outlined), text: 'Overview'),
+              Tab(icon: Icon(Icons.link), text: 'Connections'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _buildOverview(context),
+            ConnectionsView(clash: widget.clash),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOverview(BuildContext context) {
     final sorted = _groups.values.toList()
       ..sort((a, b) => (b.upload + b.download).compareTo(a.upload + a.download));
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Statistics')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(12),
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _totalChip(context, 'Upload', _formatBytes(_totalUp), Icons.arrow_upward, Theme.of(context).colorScheme.primary),
-                        _totalChip(context, 'Download', _formatBytes(_totalDown), Icons.arrow_downward, Theme.of(context).colorScheme.tertiary),
-                        GestureDetector(
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => ConnectionsScreen(clash: widget.clash)),
-                          ),
-                          child: _totalChip(context, 'Connections', '$_totalConns', Icons.link, Theme.of(context).colorScheme.secondary),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text('Traffic by Outbound', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                if (sorted.isEmpty)
-                  const Center(child: Text('No active connections'))
-                else
-                  ...sorted.map(_buildOutboundCard),
+                _totalChip(context, 'Upload', _formatBytes(_totalUp), Icons.arrow_upward, Theme.of(context).colorScheme.primary),
+                _totalChip(context, 'Download', _formatBytes(_totalDown), Icons.arrow_downward, Theme.of(context).colorScheme.tertiary),
+                _totalChip(context, 'Connections', '$_totalConns', Icons.link, Theme.of(context).colorScheme.secondary),
+                _totalChip(context, 'sing-box', _formatBytes(_memory), Icons.memory, Theme.of(context).colorScheme.secondary),
               ],
             ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text('Traffic by Outbound', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        if (sorted.isEmpty)
+          const Center(child: Text('No active connections'))
+        else
+          ...sorted.map(_buildOutboundCard),
+        const SizedBox(height: 8),
+        _buildByRuleCard(context),
+        _buildTopAppsCard(context),
+      ],
     );
   }
 
@@ -321,6 +350,174 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
+  Widget _buildByRuleCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final entries = _byRule.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final total = entries.fold<int>(0, (s, e) => s + e.value);
+    return Card(
+      child: ExpansionTile(
+        initiallyExpanded: true,
+        title: Text('By routing rule', style: theme.textTheme.titleSmall),
+        subtitle: Text('$total conns', style: const TextStyle(fontSize: 11)),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        children: entries.isEmpty
+            ? [
+                Text('No rule data',
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))
+              ]
+            : [
+                for (final e in entries)
+                  _distributionRow(cs, e.key, e.value, total),
+              ],
+      ),
+    );
+  }
+
+  Widget _buildTopAppsCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final entries = _byApp.entries.toList()
+      ..sort((a, b) => b.value.totalBytes.compareTo(a.value.totalBytes));
+    final top = entries.take(10).toList();
+    // Kick info fetch для каждого видимого pkg'а — сразу при build'е.
+    for (final e in top) {
+      AppInfoCache.ensure(e.key);
+    }
+    return Card(
+      child: ExpansionTile(
+        initiallyExpanded: true,
+        title: Text('Top apps', style: theme.textTheme.titleSmall),
+        subtitle: Text('${_byApp.length} total',
+            style: const TextStyle(fontSize: 11)),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        children: top.isEmpty
+            ? [
+                Text('No app data',
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))
+              ]
+            : [
+                // Пере-билдим каждую строку когда в cache подъехали данные.
+                AnimatedBuilder(
+                  animation: AppInfoCache.revision,
+                  builder: (_, _) => Column(
+                    children: [for (final e in top) _appRow(cs, e.key, e.value)],
+                  ),
+                ),
+              ],
+      ),
+    );
+  }
+
+  Widget _distributionRow(ColorScheme cs, String label, int count, int total) {
+    final pct = total == 0 ? 0.0 : count / total;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 13)),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 70,
+            child: LinearProgressIndicator(
+              value: pct,
+              minHeight: 6,
+              backgroundColor: cs.surfaceContainerHighest,
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 60,
+            child: Text(
+              '$count (${(pct * 100).toStringAsFixed(0)}%)',
+              textAlign: TextAlign.right,
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _appRow(ColorScheme cs, String pkg, AppStat s) {
+    final info = AppInfoCache.of(pkg);
+    final displayName = info?.appName ?? pkg;
+    final Widget leading;
+    if (info?.icon != null) {
+      leading = ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Image.memory(info!.icon!, width: 28, height: 28, gaplessPlayback: true),
+      );
+    } else {
+      final letter = displayName.isNotEmpty
+          ? displayName.characters.first.toUpperCase()
+          : '?';
+      leading = SizedBox(
+        width: 28,
+        height: 28,
+        child: CircleAvatar(
+          backgroundColor: cs.surfaceContainerHighest,
+          child: Text(letter,
+              style: TextStyle(fontSize: 12, color: cs.onSurface)),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          leading,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+                Text(
+                  pkg,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                      color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('${s.count} conns',
+                  style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+              Text('↑ ${_formatBytes(s.upload)}',
+                  style: const TextStyle(fontSize: 10)),
+              Text('↓ ${_formatBytes(s.download)}',
+                  style: const TextStyle(fontSize: 10)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   String _formatDuration(String startIso) {
     if (startIso.isEmpty) return '';
     try {
@@ -376,3 +573,4 @@ class _Connection {
   final String start;
   final String process;
 }
+

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../config/consts.dart';
 import '../services/clash_api_client.dart';
 import 'debug_entry.dart';
 import 'tunnel_status.dart';
@@ -65,7 +66,7 @@ class HomeState {
 
   List<String> get sortedNodes {
     if (sortMode == NodeSortMode.defaultOrder) return nodes;
-    const pinnedOrder = ['direct-out', 'auto-proxy-out'];
+    const pinnedOrder = ['direct-out', kAutoOutboundTag];
     final pinned = pinnedOrder.where(nodes.contains).toList();
     final rest = nodes.where((n) => !pinnedOrder.contains(n)).toList();
     switch (sortMode) {

@@ -19,9 +19,13 @@
 
 **Не в скопе:**
 - Production use — только dev/staging
-- Write-access к storage (для MVP — read-only на файлы/settings; actions — через известные методы контроллеров)
 - Web UI — только JSON endpoints
 - Не-adb-доступ (LAN / remote) — bind строго на 127.0.0.1
+
+**Scope writes:** чтение состояния, проксирование Clash API, триггеры (ping/urltest/rebuild/refresh)
+плюс **CRUD на доменные ресурсы** — custom rules, subscriptions, scoped SettingsStorage writes,
+прямой override сохранённого sing-box конфига. Детально — раздел
+[CRUD endpoints](#crud-endpoints--доменные-мутации).
 
 ---
 
@@ -141,7 +145,8 @@ lib/services/debug/
 
   handlers/                    — бизнес-логика endpoints, bridge contract→domain
     ping.dart, state.dart, device.dart, config.dart,
-    logs.dart, clash.dart, action.dart, files.dart
+    logs.dart, clash.dart, action.dart, files.dart,
+    rules.dart, subs.dart, settings.dart      — CRUD на доменные ресурсы
 
   serializers/                 — pure Map<String, Object?>-продюсеры для JSON
     home_state.dart            — HomeState → Map
@@ -392,6 +397,20 @@ Native VPN flags:
 {"path": "/data/user/0/com.leadaxe.lxbox/files/singbox_config.json"}
 ```
 
+#### `PUT /config` (body: raw sing-box JSON)
+
+Прямой override сохранённого конфига — минуя `buildConfig(...)`, подписки, custom rules, вообще всё. Body = любой валидный JSON объект. Вызывает `HomeController.saveParsedConfig(raw)`, что пишет на диск + reload'ит TUN если VPN запущен.
+
+Зачем: тестить руками кастомные поля в `dns.rules`, pre-computed outbounds, изменения, которые нет в UI wizard'е. После перегенерации через `/action/rebuild-config` всё сотрётся — это **временный override**, не персистится в settings.
+
+**Quirk:** размер бандл-конфига L×Box обычно 70-200 KB — дефолтный `maxBodyBytes=64KB` не хватит. Config-path имеет override до **1 MiB**.
+
+Ответ: `{"ok": true, "action": "config-put", "bytes": N, "reloaded": true|false}`.
+
+Предусловия:
+- JSON-body должен парситься. Невалидный → 400.
+- Если `tunnel_up == true` — пытаемся reload TUN через `home.restartWithConfig`; фейл reload → 502.
+
 ---
 
 ### Logs
@@ -496,6 +515,187 @@ AppLog entries. По умолчанию limit=200, source=all.
 Зачем: sanity-check "моё ли это устройство сейчас подключено к adb", подтверждение что команда дошла, лайфхак для remote-handoff ("попроси юзера подтвердить что видит toast"). Message — URL-encoded string, обрезается до 200 символов (toast всё равно больше не покажет).
 
 Реализация: расширить `VpnPlugin` (или завести отдельный `DebugPlugin`) method `showToast(msg, duration)`. Dart-сторона просто вызывает platform channel.
+
+---
+
+### CRUD endpoints — доменные мутации
+
+Чтения через `/state/*` дают snapshot; **мутировать** тот же домен (правила, подписки, настройки) можно только через UI — это делает автотестирование изменений невозможным без AOT-ребилда. Блок ниже закрывает CRUD на:
+
+1. **Custom rules** (`/rules/*`) — create / update / delete / reorder.
+2. **Subscriptions** (`/subs/*`) — add / update meta / change URL / delete / reorder / refresh single.
+3. **Settings storage** (`/settings/*`) — scoped writes на `route_final`, `excluded_nodes`, `vars/<key>`, `dns_options`.
+4. **Direct sing-box config override** — уже описано выше (`PUT /config`).
+
+Все CRUD endpoints возвращают либо `{"ok": true, "action": "<name>", ...extras}` (если результат асимметричен Create/Delete), либо полный созданный/изменённый ресурс (при GET-after-write pattern'е на Create). Ошибки — стандартные `DebugError`'ы.
+
+**После любой мутации** config в sing-box не меняется автоматически. Чтобы применить — `POST /action/rebuild-config`. Либо вызов с query `?rebuild=true` — endpoint'ы CRUD поддерживают это как удобный shortcut (эквивалент `rebuild-config` сразу после изменения).
+
+Write-rate limit: встроенного нет. adb-forward single-user → rate-limit не нужен; если потенциально появится remote-доступ, добавим токен-bucket в `middleware/ratelimit.dart`.
+
+---
+
+#### Rules — `/rules/*`
+
+Тонкая обёртка над `SettingsStorage.getCustomRules` / `saveCustomRules`. Модель ресурса — `CustomRule` ([`custom_rule.dart`](../../../../app/lib/models/custom_rule.dart)), JSON-shape как в `/state/rules` GET'е.
+
+##### `GET /rules`
+Alias для `/state/rules` (с `srs_cached`/`srs_mtime`).
+
+##### `POST /rules`
+Создать новое правило. Body — `CustomRule` без `id`:
+```json
+{
+  "name": "YouTube via Trojan",
+  "enabled": true,
+  "kind": "inline",
+  "domain_suffixes": ["googlevideo.com","youtube.com"],
+  "target": "vpn-1"
+}
+```
+Server генерит `id` (UUID v4). Response: полный созданный ресурс (с `id`), status 201.
+
+Опции: `?rebuild=true` — после create триггерит `rebuild-config`.
+
+##### `PATCH /rules/{id}`
+Частичное обновление. Body — любой subset полей `CustomRule` (кроме `id`). Поля переданные = overwrite, непереданные = as-is. Response: 200 + обновлённый ресурс.
+
+Примеры:
+```bash
+# Выключить
+curl -X PATCH ... -d '{"enabled": false}' /rules/<id>
+
+# Добавить суффикс
+curl -X PATCH ... -d '{"domain_suffixes": ["tube.com","googlevideo.com","youtube.com"]}' /rules/<id>
+
+# Сменить target
+curl -X PATCH ... -d '{"target": "reject"}' /rules/<id>
+```
+
+**Quirk:** обновить массив — только целиком (replace). Нет `add_item`/`remove_item` — это избыточно для debug-tool'а, и вероятность race условий выше.
+
+`{id}` не существует → 404.
+
+##### `DELETE /rules/{id}`
+Удалить. Response: `{"ok": true, "action": "rules-delete", "id": "..."}`, status 200. Неизвестный id → 404.
+
+##### `POST /rules/reorder`
+Сменить порядок (приоритет matcher'а). Body — полный список ID в новом порядке:
+```json
+{ "order": ["id1", "id2", "id3", ...] }
+```
+Проверки:
+- Длина `order` === текущему числу правил — иначе 400 `bad_request`.
+- Множество ID совпадает — иначе 400.
+
+Response: `{"ok": true, "action": "rules-reorder", "count": N}`.
+
+---
+
+#### Subscriptions — `/subs/*`
+
+Обёртка над `SubscriptionController` public методами. Shape ресурса — как в `/state/subs`, плюс `id` (уже есть).
+
+##### `GET /subs`
+Alias для `/state/subs`. Query `?reveal=true` — не маскирует URL.
+
+##### `POST /subs`
+Добавить подписку или inline user server. Body:
+```json
+{ "input": "<url | URI | wireguard-ini | json-outbound>" }
+```
+Делегирует в `SubscriptionController.addFromInput(input)`. Поддерживаемые форматы (§027/028): subscription URL, direct VLESS/Trojan/SS/Hysteria/WG URI, paste'нутый WireGuard INI, JSON outbound (`{ "type": "vless", ... }`).
+
+Response: `{"ok": true, "action": "subs-add", "id": "<new-id>", "kind": "SubscriptionServers|UserServer"}`.
+
+Fail cases:
+- Input нераспознан → 400 + `lastError` в `message`.
+- Fetch подписки свалился (URL unreachable) → 502 (но запись всё равно создастся — status=failed).
+
+Опции: `?rebuild=true` — после add + fetch перегенерирует config.
+
+##### `PATCH /subs/{id}`
+Update meta. Body — subset следующих полей:
+```json
+{
+  "name": "My provider",
+  "enabled": true,
+  "tag_prefix": "BL",
+  "update_interval_hours": 6,
+  "override_detour": "",
+  "register_detour_servers": true,
+  "register_detour_in_auto": false,
+  "use_detour_servers": true,
+  "url": "https://new-url/sub"
+}
+```
+
+- `url` переписывается **только для SubscriptionServers**; для UserServer `url` игнорируется (или 400?). Берём "silently ignored" для консистентности с UI-переименованиями.
+- Остальные поля — через `SubscriptionEntry` setters + `controller.persistSources()`.
+- После PATCH **fetch не триггерится** автоматически — это manual action. Если нужно — `POST /subs/{id}/refresh`.
+
+Response: 200 + обновлённый ресурс.
+
+##### `DELETE /subs/{id}`
+`SubscriptionController.removeAt(index_of_id)`. Response: `{"ok": true, "action": "subs-delete", "id": "..."}`.
+
+##### `POST /subs/{id}/refresh`
+Триггер одиночного refresh'а — `controller.refreshEntry(entry, trigger: UpdateTrigger.manual)`. Async — endpoint возвращает сразу после kick-off (`unawaited`). Смотри состояние через `/state/subs`.
+
+Response: `{"ok": true, "action": "subs-refresh", "id": "..."}`.
+
+Предусловия: для UserServer это no-op (нет URL'а) → 409 `Conflict`.
+
+##### `POST /subs/reorder`
+Body `{"order":["id1","id2",...]}`. Аналогично `/rules/reorder`.
+
+---
+
+#### Settings storage — `/settings/*`
+
+**Scoped writes на отдельные поля `SettingsStorage`** — не generic `POST /state/storage?key=X&value=Y`, потому что некоторые ключи критичны (`debug_token`, `debug_enabled`, `debug_port` — сменить через API = заблокировать самому себе доступ). Ниже — явный allow-list.
+
+##### `PUT /settings/route_final`
+Body: `{"outbound": "<tag>"}`. Save via `saveRouteFinal`. Response: `{"ok": true, "action": "settings-route-final", "outbound": "..."}`.
+
+Пустая строка — легальное значение (тогда sing-box использует дефолт `direct-out`).
+
+##### `PUT /settings/excluded_nodes`
+Body: `{"nodes": ["tag1","tag2",...]}`. Replace set. Response: `{"ok": true, "action": "settings-excluded-nodes", "count": N}`.
+
+##### `PUT /settings/vars/{key}`
+Body: `{"value": "..."}`. `SettingsStorage.setVar(key, value)`.
+
+**Blocklist (403 Forbidden):**
+- `debug_token`
+- `debug_enabled`
+- `debug_port`
+
+Этот blocklist отдельно хранится в хендлере; любой другой var — свободно write/delete.
+
+##### `DELETE /settings/vars/{key}`
+Удалить var (через `_cache['vars'].remove(key)` + save). Те же forbidden keys.
+
+##### `PUT /settings/dns_options/servers`
+Body: `{"servers": [ {dns-server-object}, ... ]}`. Save via `saveDnsServers`.
+
+Shape `dns-server-object` — sing-box native schema: `{"tag":"dns-google","type":"udp","server":"8.8.8.8"}` etc. **Не валидируем здесь** — sing-box сам скажет при reload'е; endpoint сугубо proxy.
+
+##### `PUT /settings/dns_options/rules`
+Body: `{"rules": "<json-string>"}`. Save via `saveDnsRules`. Шторы: в storage лежит именно JSON-строка (legacy-shape), **не массив** — это отражение текущей реализации, не меняем.
+
+##### `POST /settings/rebuild-config`
+Alias для `/action/rebuild-config`. Исключительно для удобства — чтобы после batch'а PUT/PATCH можно было сделать один вызов "применить все" без context switch'а.
+
+---
+
+Любой из `/settings/*`, `/rules/*`, `/subs/*` принимает `?rebuild=true` query — endpoint после успешного write триггерит `rebuild-config` и возвращает **расширенный** response:
+
+```json
+{"ok": true, "action": "rules-update", "id": "...", "rebuilt": true, "config_bytes": 71234}
+```
+
+Если rebuild свалился — `rebuilt: false` + `rebuild_error: "<msg>"`, статус всё равно 200 (write прошёл, rebuild — отдельная ошибка).
 
 ---
 

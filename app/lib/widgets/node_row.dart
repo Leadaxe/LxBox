@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../config/consts.dart';
+
 class NodeRow extends StatelessWidget {
   const NodeRow({
     super.key,
@@ -19,6 +21,7 @@ class NodeRow extends StatelessWidget {
     this.onCopyUri,
     this.onViewJson,
     this.urltestNow,
+    this.onRunUrltest,
     this.hasDetour = false,
     this.protocolLabel,
   });
@@ -40,6 +43,9 @@ class NodeRow extends StatelessWidget {
   final VoidCallback? onViewJson;
   /// If this node is a URLTest group, shows which node it auto-selected.
   final String? urltestNow;
+  /// Non-null only for URLTest group tags — triggers `/group/<tag>/delay`
+  /// which forces sing-box to re-test all members and update `now`.
+  final VoidCallback? onRunUrltest;
   final bool hasDetour;
   /// Compact protocol label (e.g. "Hy2 + TLS", "VLESS + TLS", "WG").
   /// Shown справа от имени ноды, ниже delay'я не лезет, серый цвет.
@@ -62,50 +68,60 @@ class NodeRow extends StatelessWidget {
 
   /// `[ACTIVE] [protocol]              [50MS]` — left part flex, ping right-aligned.
   Widget _buildSubtitleRow(BuildContext context, ColorScheme cs) {
-    final left = <Widget>[];
-    if (active) {
-      left.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-        decoration: BoxDecoration(
-          color: Colors.green.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(3),
-        ),
-        child: Text(
-          'ACTIVE',
-          style: TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-            color: Colors.green.shade700,
-            letterSpacing: 0.5,
-          ),
-        ),
-      ));
-    }
-    if (urltestNow != null && urltestNow!.isNotEmpty) {
-      left.add(Text(
-        '→ $urltestNow',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 10,
-          fontStyle: FontStyle.italic,
-          color: cs.onSurfaceVariant,
-        ),
-      ));
-    }
-    if (protocolLabel != null && protocolLabel!.isNotEmpty) {
-      left.add(Text(
-        protocolLabel!,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: cs.onSurfaceVariant,
-          letterSpacing: 0.3,
-        ),
-      ));
+    final hasActive = active;
+    final hasArrow = urltestNow != null && urltestNow!.isNotEmpty;
+    final hasProto = protocolLabel != null && protocolLabel!.isNotEmpty;
+    final dl = _delayLabel;
+
+    if (!hasActive && !hasArrow && !hasProto && dl.isEmpty) {
+      return const SizedBox.shrink();
     }
 
-    final dl = _delayLabel;
+    final Widget? activePill = hasActive
+        ? Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(3),
+            ),
+            child: Text(
+              'ACTIVE',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                color: Colors.green.shade700,
+                letterSpacing: 0.5,
+              ),
+            ),
+          )
+        : null;
+
+    final Widget? arrow = hasArrow
+        ? Text(
+            '→ $urltestNow',
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 10,
+              fontStyle: FontStyle.italic,
+              color: cs.onSurfaceVariant,
+            ),
+          )
+        : null;
+
+    final Widget? proto = hasProto
+        ? Text(
+            protocolLabel!,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurfaceVariant,
+              letterSpacing: 0.3,
+            ),
+          )
+        : null;
+
     final right = dl.isEmpty
         ? const SizedBox.shrink()
         : Text(
@@ -118,27 +134,31 @@ class NodeRow extends StatelessWidget {
             ),
           );
 
-    if (left.isEmpty && dl.isEmpty) return const SizedBox.shrink();
-
     return Padding(
       padding: const EdgeInsets.only(top: 3),
       child: Row(
         children: [
-          Expanded(
-            child: Wrap(
-              spacing: 6,
-              runSpacing: 2,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: left,
+          if (activePill != null) ...[activePill, const SizedBox(width: 6)],
+          // Стрелка → <node>: занимает сколько есть места, но при нехватке
+          // ellipsis'ом обрезается, НЕ переносит на новую строку.
+          // protocol-label фикс. ширины идёт после — стрелка уступает ему.
+          if (arrow != null)
+            Flexible(
+              fit: FlexFit.loose,
+              child: Padding(
+                padding: EdgeInsets.only(right: proto != null ? 6 : 0),
+                child: arrow,
+              ),
             ),
-          ),
+          if (proto != null) proto,
+          const Spacer(),
           right,
         ],
       ),
     );
   }
 
-  bool get _isSpecial => tag == 'direct-out' || tag == 'auto-proxy-out';
+  bool get _isSpecial => tag == 'direct-out' || tag == kAutoOutboundTag;
 
   Future<void> _openLongPressMenu(BuildContext context) async {
     final canPing = tunnelUp && !busy && !pingBusy;
@@ -187,6 +207,23 @@ class NodeRow extends StatelessWidget {
             title: const Text('Use this node'),
           ),
         ),
+        if (onRunUrltest != null)
+          PopupMenuItem<String>(
+            value: 'run_urltest',
+            enabled: tunnelUp && !busy,
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                Icons.auto_awesome,
+                size: 20,
+                color: (tunnelUp && !busy)
+                    ? null
+                    : Theme.of(context).disabledColor,
+              ),
+              title: const Text('Run URLTest'),
+            ),
+          ),
         if (onViewJson != null) const PopupMenuDivider(),
         if (onViewJson != null)
           PopupMenuItem<String>(
@@ -247,6 +284,8 @@ class NodeRow extends StatelessWidget {
         onPing();
       case 'activate':
         onActivate();
+      case 'run_urltest':
+        if (onRunUrltest != null) onRunUrltest!();
       case 'copy_uri':
         if (onCopyUri != null) onCopyUri!();
       case 'copy_server':
@@ -290,13 +329,27 @@ class NodeRow extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      tag,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                    Row(
+                      children: [
+                        if (tag == kAutoOutboundTag) ...[
+                          Icon(Icons.speed,
+                              size: 18, color: colorScheme.primary),
+                          const SizedBox(width: 6),
+                        ],
+                        Flexible(
+                          child: Text(
+                            tag,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style:
+                                Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      fontWeight: active
+                                          ? FontWeight.w600
+                                          : FontWeight.w500,
+                                    ),
                           ),
+                        ),
+                      ],
                     ),
                     _buildSubtitleRow(context, colorScheme),
                   ],

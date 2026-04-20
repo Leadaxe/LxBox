@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../config/consts.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/settings_storage.dart';
@@ -84,7 +85,7 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
           for (final m in members) {
             proxyOutTags.add(m.toString());
           }
-        } else if (tag == 'auto-proxy-out') {
+        } else if (tag == kAutoOutboundTag) {
           for (final m in members) {
             autoProxyTags.add(m.toString());
           }
@@ -96,7 +97,7 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
       if (allTags.isEmpty) return _ParseResult([], {});
 
       // Remove group references — keep only real nodes
-      final groupTags = <String>{'vpn-1', 'vpn-2', 'vpn-3', 'auto-proxy-out', 'direct-out'};
+      final groupTags = <String>{'vpn-1', 'vpn-2', 'vpn-3', kAutoOutboundTag, 'direct-out'};
 
       final nodes = <_NodeInfo>[];
       for (final ob in outbounds) {
@@ -182,7 +183,7 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('auto-proxy-out'),
+        title: const Text(kAutoOutboundTag),
         actions: [
           TextButton(
             onPressed: _selectAll,

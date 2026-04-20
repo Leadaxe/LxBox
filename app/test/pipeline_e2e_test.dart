@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/config/consts.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
@@ -13,12 +14,12 @@ void main() {
       PresetGroup(
         tag: 'vpn-1',
         type: 'selector',
-        options: {'default': 'auto-proxy-out'},
+        options: {'default': kAutoOutboundTag},
         defaultEnabled: true,
-        addOutbounds: ['direct-out', 'auto-proxy-out'],
+        addOutbounds: ['direct-out', kAutoOutboundTag],
       ),
       PresetGroup(
-        tag: 'auto-proxy-out',
+        tag: kAutoOutboundTag,
         type: 'urltest',
         options: {'url': 'https://example.com', 'interval': '30s'},
         defaultEnabled: true,
@@ -68,7 +69,7 @@ tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=t
         template: template,
         settings: const BuildSettings(
         userVars: {'clash_api': '127.0.0.1:9090'},
-        enabledGroups: {'vpn-1', 'auto-proxy-out'},
+        enabledGroups: {'vpn-1', kAutoOutboundTag},
       ),
     );
 
@@ -79,7 +80,7 @@ tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=t
     final tags = outs.map((o) => (o as Map)['tag']).toSet();
     expect(tags, containsAll(['VLESS', 'Trojan', 'SS', 'Hy2', 'TUIC']));
     expect(tags, contains('vpn-1'));
-    expect(tags, contains('auto-proxy-out'));
+    expect(tags, contains(kAutoOutboundTag));
     expect(tags, contains('direct-out'));
 
     final vpn1 =

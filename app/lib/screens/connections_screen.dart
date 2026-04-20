@@ -4,16 +4,18 @@ import 'package:flutter/material.dart';
 
 import '../services/clash_api_client.dart';
 
-class ConnectionsScreen extends StatefulWidget {
-  const ConnectionsScreen({super.key, required this.clash});
+/// Embeddable view: toolbar + список соединений. Без Scaffold, без AppBar —
+/// сидит во вкладке StatsScreen.
+class ConnectionsView extends StatefulWidget {
+  const ConnectionsView({super.key, required this.clash});
 
   final ClashApiClient clash;
 
   @override
-  State<ConnectionsScreen> createState() => _ConnectionsScreenState();
+  State<ConnectionsView> createState() => _ConnectionsViewState();
 }
 
-class _ConnectionsScreenState extends State<ConnectionsScreen> {
+class _ConnectionsViewState extends State<ConnectionsView> {
   static const _intervals = [500, 1000, 2000, 3000, 5000, 10000, 0]; // ms, 0 = off
   List<Map<String, dynamic>> _connections = [];
   final Set<String> _closedIds = {};
@@ -114,86 +116,84 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Connections (${_connections.length})'),
-      ),
-      body: Column(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerLow,
-              border: Border(bottom: BorderSide(color: cs.outlineVariant)),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: 'Refresh now',
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () => unawaited(_refresh()),
-                ),
-                IconButton(
-                  tooltip: _accumulate ? 'Accumulating (tap to clear)' : 'Live (tap to keep closed)',
-                  icon: Icon(_accumulate ? Icons.history_toggle_off : Icons.history),
-                  onPressed: () {
-                    setState(() {
-                      _accumulate = !_accumulate;
-                      if (!_accumulate) {
-                        _closedIds.clear();
-                        _closedAt.clear();
-                      }
-                    });
-                  },
-                ),
-                PopupMenuButton<int>(
-                  tooltip: 'Auto-refresh',
-                  initialValue: _intervalMs,
-                  onSelected: _setInterval,
-                  itemBuilder: (_) => [
-                    for (final ms in _intervals)
-                      CheckedPopupMenuItem<int>(
-                        value: ms,
-                        checked: _intervalMs == ms,
-                        child: Text(_intervalLabel(ms)),
-                      ),
-                  ],
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.timer_outlined, size: 20),
-                        const SizedBox(width: 4),
-                        Text(_intervalLabel(_intervalMs),
-                            style: const TextStyle(fontSize: 12)),
-                      ],
+    return Column(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerLow,
+            border: Border(bottom: BorderSide(color: cs.outlineVariant)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: 'Refresh now',
+                icon: const Icon(Icons.refresh),
+                onPressed: () => unawaited(_refresh()),
+              ),
+              IconButton(
+                tooltip: _accumulate ? 'Accumulating (tap to clear)' : 'Live (tap to keep closed)',
+                icon: Icon(_accumulate ? Icons.history_toggle_off : Icons.history),
+                onPressed: () {
+                  setState(() {
+                    _accumulate = !_accumulate;
+                    if (!_accumulate) {
+                      _closedIds.clear();
+                      _closedAt.clear();
+                    }
+                  });
+                },
+              ),
+              PopupMenuButton<int>(
+                tooltip: 'Auto-refresh',
+                initialValue: _intervalMs,
+                onSelected: _setInterval,
+                itemBuilder: (_) => [
+                  for (final ms in _intervals)
+                    CheckedPopupMenuItem<int>(
+                      value: ms,
+                      checked: _intervalMs == ms,
+                      child: Text(_intervalLabel(ms)),
                     ),
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.timer_outlined, size: 20),
+                      const SizedBox(width: 4),
+                      Text(_intervalLabel(_intervalMs),
+                          style: const TextStyle(fontSize: 12)),
+                    ],
                   ),
                 ),
-                const Spacer(),
-                if (_connections.isNotEmpty)
-                  IconButton(
-                    tooltip: 'Close all',
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: _closeAll,
-                  ),
-              ],
-            ),
+              ),
+              const Spacer(),
+              Text('${_connections.length}',
+                  style: TextStyle(
+                      fontSize: 12, color: cs.onSurfaceVariant)),
+              if (_connections.isNotEmpty)
+                IconButton(
+                  tooltip: 'Close all',
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: _closeAll,
+                ),
+            ],
           ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _connections.isEmpty
-                    ? const Center(child: Text('No active connections'))
-                    : ListView.separated(
-                        itemCount: _connections.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (context, i) => _buildTile(_connections[i]),
-                      ),
-          ),
-        ],
-      ),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _connections.isEmpty
+                  ? const Center(child: Text('No active connections'))
+                  : ListView.separated(
+                      itemCount: _connections.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, i) => _buildTile(_connections[i]),
+                    ),
+        ),
+      ],
     );
   }
 

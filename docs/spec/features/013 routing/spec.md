@@ -2,7 +2,9 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Реализовано |
+| Статус | Исторический (superseded by [030](../030%20custom%20routing%20rules/spec.md) в v1.4.0) |
+
+> **v1.4.0:** модель роутинга полностью пересобрана, см. [`030 custom routing rules`](../030%20custom%20routing%20rules/spec.md). `AppRule`, `SelectableRule` toggle-механизм и отдельные типы `CustomRule` объединены в единый `CustomRule` с параллельными match-полями. Ниже — исторический snapshot до v1.4.0.
 
 ## Контекст
 

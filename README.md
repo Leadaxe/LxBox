@@ -67,14 +67,18 @@ One-tap VPN start/stop with animated status chip. Choose proxy group, sort nodes
 </details>
 
 <details>
-<summary><strong>Routing</strong> — control where traffic goes</summary>
+<summary><strong>Routing</strong> — unified rule model (v1.4.0)</summary>
 
-Fine-grained control over traffic routing. Block ads, route Russian domains directly, send BitTorrent through specific proxy. Create named app groups with per-app routing.
+Block ads, route Russian domains directly, send BitTorrent through specific proxy, route per-app, match private IPs. Every user rule goes through a single `CustomRule` model with all match fields in parallel (OR within category, AND across — per sing-box default rule formula).
 
-- Preset routing rules with per-rule outbound selection
-- App Groups: route specific apps through chosen proxy
+- **3 tabs**: Channels (proxy groups) · Presets (read-only catalog → Copy to Rules) · Rules (your registry)
+- **Match fields**: domain, domain_suffix, domain_keyword, ip_cidr, port, port_range, packages (per-app), protocols (tls/quic/bittorrent/…), ip_is_private, remote .srs rule-set
+- **SRS local-only** — no auto-update, manual download via ☁ icon, rule disabled until cached
+- **Drag-reorder** + **long-press → Delete with confirm**
+- **Params / View tabs** in rule editor — View shows live sing-box config preview
+- **Dirty-aware save** — unsaved back → "Discard changes?" dialog
 - Default traffic fallback (`route.final`)
-- All changes autosaved, restart warning pops up automatically
+- See [spec 030](docs/spec/features/030%20custom%20routing%20rules/spec.md), [spec 011](docs/spec/features/011%20local%20ruleset%20cache/spec.md)
 </details>
 
 <details>
@@ -161,7 +165,11 @@ View and edit raw sing-box JSON config. Pretty-printed display with copy button.
 - Auto-start VPN on boot
 - Keep VPN active when app is closed
 - Auto-rebuild config on settings change
+- **Battery optimization** tile — status + shortcut to system whitelist (v1.4.0)
+- **App info (OEM power settings)** with hint dialog for Autostart / Background activity toggles (v1.4.0)
+- **Auto-ping after connect** — ping active group 5s after VPN up (default on, v1.4.0)
 - Haptic feedback toggle
+- See [spec 022](docs/spec/features/022%20app%20settings/spec.md)
 </details>
 
 ---
@@ -217,14 +225,14 @@ See [Architecture](docs/ARCHITECTURE.md) for the full picture.
 
 ## Development
 
-Spec-driven development — 29 feature specifications document every capability.
+Spec-driven development — 30 feature specifications document every capability.
 
 | Document | Description |
 |----------|-------------|
 | [Protocol Reference](docs/PROTOCOLS.md) | URI formats, parameters, sing-box mapping |
 | [Architecture](docs/ARCHITECTURE.md) | 3-layer pipeline, data flows, native bridge |
 | [Build](docs/BUILD.md) | Build instructions, CI, APK signing, local-build marker |
-| [Development Guide](docs/DEVELOPMENT_GUIDE.md) | Principles, testing (128 tests), spec organisation |
+| [Development Guide](docs/DEVELOPMENT_GUIDE.md) | Principles, testing (167 tests), spec organisation |
 | [Changelog](CHANGELOG.md) | Release history |
 | [Release Notes](docs/releases/) | Detailed per-version notes (EN + RU) |
 
