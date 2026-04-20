@@ -6,6 +6,28 @@
 
 ---
 
+## Supported platforms
+
+| Параметр | Значение |
+|----------|----------|
+| Android minSdk | **30** (Android 11) |
+| Android targetSdk | `flutter.targetSdkVersion` (актуальная target, обычно API 34/35) |
+| Android compileSdk | `flutter.compileSdkVersion` |
+| JVM | Java 17 |
+| NDK | 28.2.13676358 |
+
+**Android <11 (API <30) — вне scope проекта.** Не тестируется, не поддерживается, не оптимизируется. Обоснование:
+
+- **`ActivityManager.getHistoricalProcessExitReasons`** — нужен для silent-kill detection (см. `docs/spec/tasks/007-silent-kill-handling.md`), доступен с API 30.
+- **Foreground-service lifecycle на Android 11+** — стабильнее, чище доз-state transitions.
+- **VpnService API** (`setMetered`, `setUnderlyingNetworks`) — современные поля и callback'и доступны с API 29+.
+- **Scoped Storage** — по умолчанию на API 30+, старые workaround'ы не нужны.
+- **`RECEIVER_NOT_EXPORTED` flag** — обязателен с API 33, мы и так его выставляем.
+
+Поднятие minSdk до 30 зафиксировано в `app/android/app/build.gradle.kts` (`minSdk = 30`). Legacy `Build.VERSION.SDK_INT` checks в nativе оставлены как есть (часть libbox-adjacent кода) — очистка в отдельном рефакторинг-коммите после стабилизации 1.4.0.
+
+---
+
 ## Обзор
 
 L×Box — Android VPN-клиент на базе **sing-box** (через **libbox**). Полный цикл: подписки → парсинг → конфиг → VPN-туннель → управление через **Clash API**.

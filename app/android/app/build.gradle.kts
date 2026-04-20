@@ -33,11 +33,17 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.leadaxe.lxbox"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Android 11 (API 30) minimum — явно фиксируем support window.
+        // Причины:
+        //   - ActivityManager.getHistoricalProcessExitReasons (API 30+) — нужен
+        //     для silent-kill detection (см. docs/spec/tasks/007).
+        //   - Современные VpnService API (metered flag, setMetered) — API 29+.
+        //   - RECEIVER_NOT_EXPORTED явный флаг — требуется на API 33+, но мы
+        //     используем его уже сейчас (ContextCompat делает fallback для <33).
+        //   - Стабильные FGS-constraint'ы (Android 11 зачищает lifecycle).
+        // Старые версии (API <30) — вне поддержки проекта. См. ARCHITECTURE.md.
+        minSdk = 30
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

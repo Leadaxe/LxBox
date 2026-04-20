@@ -253,7 +253,7 @@ Memory invariant `feedback_no_unplanned_autoupdates` — явная не-фун�
 
 ## 📦 Install
 
-Grab the APK below and install on Android (8.0+). **213/213 tests pass.** Release APK ≈ 56 MB (arm64) / 72 MB (universal from CI).
+Grab the APK below and install on **Android 11+ (API 30+)** — older versions are no longer in scope. **242/242 tests pass.** Release APK ≈ 56 MB (arm64) / 72 MB (universal from CI).
 
 ---
 
@@ -339,6 +339,6 @@ Grab the APK below and install on Android (8.0+). **213/213 tests pass.** Releas
 
 ### 📦 Установка
 
-Скачай APK ниже, установи на Android (8.0+). **213/213 тестов.** Release APK ≈ 56 MB (arm64) / 72 MB (universal).
+Скачай APK ниже, установи на **Android 11+ (API 30+)** — старые версии больше не поддерживаются. **242/242 тестов.** Release APK ≈ 56 MB (arm64) / 72 MB (universal).
 
 </details>
