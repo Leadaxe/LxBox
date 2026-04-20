@@ -1168,29 +1168,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     final displayNodes = _showDetourNodes
         ? state.sortedNodes
         : state.sortedNodes.where((t) => !t.startsWith('⚙ ')).toList();
-    final detourTags = <String>{};
-    final protoByTag = <String, _NodeProto>{};
-    if (state.configRaw.isNotEmpty) {
-      try {
-        final cfg = jsonDecode(state.configRaw) as Map<String, dynamic>;
-        final all = [
-          ...(cfg['outbounds'] as List<dynamic>? ?? []),
-          ...(cfg['endpoints'] as List<dynamic>? ?? []),
-        ].whereType<Map<String, dynamic>>();
-        for (final o in all) {
-          final t = o['tag'];
-          if (t is! String) continue;
-          final d = o['detour'];
-          if (d is String && d.isNotEmpty) detourTags.add(t);
-          final type = (o['type'] as String?) ?? '';
-          if (type.isEmpty) continue;
-          // selector/urltest/direct/block/dns не показываем — это control-узлы.
-          const skip = {'selector', 'urltest', 'direct', 'block', 'dns'};
-          if (skip.contains(type)) continue;
-          protoByTag[t] = _NodeProto(type: type);
-        }
-      } catch (_) {}
-    }
+    // configCache парсится один раз при saveParsedConfig (см. HomeState),
+    // здесь просто читаем. Раньше jsonDecode шёл на каждый rebuild
+    // ListView — с 50+ нодами и сортировкой это был hot-path выжиматель.
+    final cache = state.configCache;
     return Expanded(
       child: RefreshIndicator(
         onRefresh: _controller.reloadProxies,
@@ -1214,8 +1195,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                     .contains('urltest');
             // Для urltest-группы (auto) сам тэг — control-узел без
             // протокола; берём proto той ноды, которую urltest сейчас выбрал.
-            final proto = protoByTag[tag] ??
-                (urltestNow != null ? protoByTag[urltestNow] : null);
+            final protoType = cache.protoByTag[tag] ??
+                (urltestNow != null ? cache.protoByTag[urltestNow] : null);
             return NodeRow(
               tag: tag,
               active: tag == state.activeInGroup,
@@ -1234,8 +1215,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               onRunUrltest: isUrltestGroup
                   ? () => unawaited(_controller.runGroupUrltest(tag))
                   : null,
-              hasDetour: detourTags.contains(tag),
-              protocolLabel: proto?.label,
+              hasDetour: cache.detourTags.contains(tag),
+              protocolLabel: protoType != null ? _protoLabel(protoType) : null,
             );
           },
         ),
@@ -1244,25 +1225,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   }
 }
 
-/// Сборка ярлыка протокола для строки ноды на главном экране.
-/// Берётся из outbound JSON в `state.configRaw`, мапится в короткое имя.
-/// TLS опускаем — у большинства протоколов (VLESS/Trojan/Hy2/TUIC) он
-/// дефолт, помечать каждую — шум.
-class _NodeProto {
-  const _NodeProto({required this.type});
-  final String type;
-
-  String get label => switch (type) {
-        'vless' => 'VLESS',
-        'vmess' => 'VMess',
-        'trojan' => 'Trojan',
-        'shadowsocks' => 'SS',
-        'hysteria2' => 'Hy2',
-        'tuic' => 'TUIC',
-        'wireguard' => 'WG',
-        'ssh' => 'SSH',
-        'socks' => 'SOCKS',
-        'http' => 'HTTP',
-        _ => type.toUpperCase(),
-      };
-}
+/// Короткий label протокола для строки ноды. TLS опускаем — у большинства
+/// протоколов (VLESS/Trojan/Hy2/TUIC) он дефолт, метить каждую — шум.
+String _protoLabel(String type) => switch (type) {
+      'vless' => 'VLESS',
+      'vmess' => 'VMess',
+      'trojan' => 'Trojan',
+      'shadowsocks' => 'SS',
+      'hysteria2' => 'Hy2',
+      'tuic' => 'TUIC',
+      'wireguard' => 'WG',
+      'ssh' => 'SSH',
+      'socks' => 'SOCKS',
+      'http' => 'HTTP',
+      _ => type.toUpperCase(),
+    };

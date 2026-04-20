@@ -31,7 +31,7 @@ class HomeController extends ChangeNotifier {
   static const _heartbeatTimeout = Duration(seconds: 4);
   static const _maxHeartbeatFailures = 2;
 
-  HomeState _state = const HomeState();
+  HomeState _state = HomeState();
   HomeState get state => _state;
 
   /// Сторожок: heartbeat fail haptic стреляет один раз на серию,
@@ -95,10 +95,15 @@ class HomeController extends ChangeNotifier {
     _addDebug(DebugSource.core, event.toString());
     _addDebug(DebugSource.app,
         '[vpn] _handleStatusEvent raw="$raw" tunnel=${tunnel.name} prev=${prevTunnel.name} stale_before=${_state.configStaleSinceStart}');
-    _emit(_state.copyWith(tunnel: tunnel));
+
+    // Все мутации state складываем в **одно** copyWith в конце — было три
+    // отдельных _emit (tunnel; then connectedSince+stale; then cleanup-
+    // поля), каждый триггерил notifyListeners → 3 rebuild'а UI на одно
+    // событие. Теперь один emit, одно rebuild.
 
     if (tunnel == TunnelStatus.connected) {
       _emit(_state.copyWith(
+        tunnel: tunnel,
         connectedSince: DateTime.now(),
         configStaleSinceStart: false,
       ));
@@ -124,6 +129,7 @@ class HomeController extends ChangeNotifier {
           : _extractStopReason(event);
       _emit(
         _state.copyWith(
+          tunnel: tunnel,
           lastError: reason.isNotEmpty ? reason : _state.lastError,
           proxiesJson: <String, dynamic>{},
           groups: <String>[],
@@ -151,6 +157,7 @@ class HomeController extends ChangeNotifier {
       }
     } else if (tunnel == TunnelStatus.stopping || tunnel == TunnelStatus.connecting) {
       _stopHeartbeat();
+      _emit(_state.copyWith(tunnel: tunnel));
       // Safety timeout: if stuck in transitional state for 10s, force reset
       Future.delayed(const Duration(seconds: 10), () {
         if (_state.tunnel == tunnel) {
@@ -168,6 +175,7 @@ class HomeController extends ChangeNotifier {
       });
     } else {
       _stopHeartbeat();
+      _emit(_state.copyWith(tunnel: tunnel));
     }
   }
 
