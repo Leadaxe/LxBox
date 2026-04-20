@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../config/consts.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/server_list.dart';
 import '../models/template_vars.dart';
@@ -78,18 +79,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     if (mounted) setState(() {});
   }
 
-  /// Префикс для нод которые юзер маркает как detour-сервера. Внутри
-  /// конфига это просто часть `tag`'а — никаких отдельных флагов. Префикс
-  /// `⚙ ` удобно сортировать/фильтровать в UI и понятно что это детур.
-  static const String _detourPrefix = '⚙ ';
-  bool get _isMarkedDetour => _tagCtrl.text.startsWith(_detourPrefix);
+  bool get _isMarkedDetour => _tagCtrl.text.startsWith(kDetourTagPrefix);
 
   void _toggleDetourMark(bool on) {
     setState(() {
       if (on && !_isMarkedDetour) {
-        _tagCtrl.text = '$_detourPrefix${_tagCtrl.text}';
+        _tagCtrl.text = '$kDetourTagPrefix${_tagCtrl.text}';
       } else if (!on && _isMarkedDetour) {
-        _tagCtrl.text = _tagCtrl.text.substring(_detourPrefix.length);
+        _tagCtrl.text = _tagCtrl.text.substring(kDetourTagPrefix.length);
       }
     });
   }
@@ -174,6 +171,37 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                   value: _isMarkedDetour,
                   onChanged: _toggleDetourMark,
                 ),
+                // Per-server detour registration policy. Появляются только
+                // когда ⚙ ON — когда сервер помечен как detour, его по
+                // умолчанию прячем из selector-списка и ✨auto (ведёт себя
+                // как звено цепочки, а не endpoint). Галки ниже — явные
+                // overrides для кейсов когда хочется оба ролей.
+                if (_isMarkedDetour) ...[
+                  SwitchListTile(
+                    secondary: const Icon(Icons.list_alt, size: 20),
+                    title: const Text('Register in VPN groups'),
+                    subtitle: const Text(
+                        'Show this detour server in the outbound selector'),
+                    value: widget.entry.registerDetourServers,
+                    onChanged: (v) {
+                      setState(() {
+                        widget.entry.registerDetourServers = v;
+                      });
+                    },
+                  ),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.speed, size: 20),
+                    title: const Text('Register in auto group'),
+                    subtitle: const Text(
+                        'Include in ✨auto urltest polling'),
+                    value: widget.entry.registerDetourInAuto,
+                    onChanged: (v) {
+                      setState(() {
+                        widget.entry.registerDetourInAuto = v;
+                      });
+                    },
+                  ),
+                ],
                 const SizedBox(height: 16),
 
                 // --- Detour section ---

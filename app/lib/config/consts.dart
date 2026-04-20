@@ -13,3 +13,13 @@ library;
 /// either side, change the other AND add a one-shot migration in
 /// `SettingsStorage` for existing user data (`CustomRule.target` renamed).
 const kAutoOutboundTag = '✨auto';
+
+/// Префикс в `tag`, помечающий ноду как detour-сервер (посредник-dialer,
+/// не endpoint). Ставится:
+///   - парсером при разборе chained-нод подписки (автоматически);
+///   - юзером через toggle «Mark as detour server» в `node_settings_screen`.
+///
+/// Builder детектит этот префикс у main-ноды и применяет per-server
+/// `DetourPolicy` вместо дефолтной регистрации в selector/auto (см.
+/// `server_list_build.dart`). См. `docs/spec/tasks/006-per-node-detour-toggles.md`.
+const kDetourTagPrefix = '⚙ ';

@@ -1,3 +1,4 @@
+import '../../config/consts.dart';
 import '../../models/emit_context.dart';
 import '../../models/server_list.dart';
 
@@ -41,9 +42,21 @@ extension ServerListBuild on ServerList {
         ctx.addEntry(e);
       }
 
-      // Preset-группы: main всегда в selector и auto; детуры — по политике.
-      ctx.addToSelectorTagList(main);
-      ctx.addToAutoList(main);
+      // Preset-группы:
+      //   - main без `⚙` префикса (обычный endpoint) — всегда в selector и auto;
+      //   - main с `⚙` (сам юзер пометил ноду как detour-сервер, см. toggle
+      //     в node_settings_screen) — регистрируется по per-server политике,
+      //     как обычные chained-detours. Default обе OFF → main-as-detour
+      //     скрыт в selector и ✨auto, доступен только как звено цепочки.
+      //   - chained-detours (raw.detours) — как раньше, по той же политике.
+      final isMainAsDetour = main.tag.startsWith(kDetourTagPrefix);
+      if (!isMainAsDetour) {
+        ctx.addToSelectorTagList(main);
+        ctx.addToAutoList(main);
+      } else {
+        if (detourPolicy.registerDetourServers) ctx.addToSelectorTagList(main);
+        if (detourPolicy.registerDetourInAuto) ctx.addToAutoList(main);
+      }
       for (final d in detours) {
         if (detourPolicy.registerDetourServers) ctx.addToSelectorTagList(d);
         if (detourPolicy.registerDetourInAuto) ctx.addToAutoList(d);
