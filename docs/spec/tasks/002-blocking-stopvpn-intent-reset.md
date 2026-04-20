@@ -145,6 +145,6 @@ Future<bool> _startInternal() async {
 
 ## Нерешённое / follow-up
 
-- 003 revoke UX, 004 resume pull — отдельные задачи.
-- После этого — spec 012 native vpn service обновить с описанием `stopAwait` контракта.
-- `TunnelStatus.fromNative` default `disconnected` на unknown раз — мелкая defensive правка, имеет смысл после revoke UX.
+- ~~003 revoke UX, 004 resume pull~~ — закрыто, см. [003](./003-revoke-ux.md), [004](./004-lifecycle-resume-resync.md).
+- ~~Spec 012 native vpn service обновить с описанием `stopAwait` контракта~~ — закрыто коммитом `ee3b6c1`, раздел «Status pipeline reliability» добавлен.
+- ~~`TunnelStatus.fromNative` default `disconnected` на unknown~~ — закрыто в рамках follow-up из peer review [007](./007-peer-review-tasks-001-006.md). `TunnelStatus.unknown` добавлен в enum, default в `fromNative` переключён с `disconnected` на `unknown`, UI маппит unknown → Disconnected label.

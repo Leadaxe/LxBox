@@ -187,6 +187,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                       setState(() {
                         widget.entry.registerDetourServers = v;
                       });
+                      unawaited(widget.subController.persistSources());
                     },
                   ),
                   SwitchListTile(
@@ -199,6 +200,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                       setState(() {
                         widget.entry.registerDetourInAuto = v;
                       });
+                      unawaited(widget.subController.persistSources());
                     },
                   ),
                 ],

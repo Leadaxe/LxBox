@@ -145,6 +145,7 @@ _clash = null;
 
 ## Нерешённое / follow-up
 
-- **`TunnelStatus.unknown`** — default для неизвестного raw. Отдельная задача (mini).
-- **Battery/Doze silent kill detection** — отдельная задача, нужна если после многих отзывов юзеры начнут жаловаться на «silent disconnect без snackbar».
-- Spec `003 home screen` будет обновлён отдельной задачей (actualization phase).
+- ~~**`TunnelStatus.unknown`**~~ — закрыто, см. [007](./007-peer-review-tasks-001-006.md) follow-up.
+- ~~**Unified cleanup `_onTunnelDead` vs `_handleStatusEvent`**~~ — закрыто после peer review: `_onTunnelDead` теперь сбрасывает `_clash=null`, `traffic=zero`, `connectedSince=null`, `configStaleSinceStart=false`, `_autoPingTimer.cancel` — совпадает с ветвью revoked/disconnected в `_handleStatusEvent`. Единый контракт очистки.
+- **Battery/Doze silent kill detection** — отдельная задача (отложено пользователем).
+- Spec `003 home screen` обновлён в коммите `fa248b5` (§8c Revoke UX).

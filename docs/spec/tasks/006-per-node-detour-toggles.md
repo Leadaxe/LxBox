@@ -2,8 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done |
 | Дата старта | 2026-04-20 |
+| Дата завершения | 2026-04-20 |
+| Коммиты | `d94f604` feat(node): per-server detour registration toggles · follow-up persistSources (см. ниже) |
 | Связанные spec'ы | [`018 detour server management`](../features/018%20detour%20server%20management/spec.md), [`003 home screen`](../features/003%20home%20screen/spec.md) |
 
 ## Проблема
@@ -123,5 +125,13 @@ const String kDetourTagPrefix = '⚙ ';
 | Файл | Изменение |
 |------|-----------|
 | `lib/config/consts.dart` | + `kDetourTagPrefix = '⚙ '` |
-| `lib/screens/node_settings_screen.dart` | Замена приватной `_detourPrefix` на импорт. + 2 SwitchListTile под существующим «Mark as detour server» (visible только когда `⚙` ON). |
+| `lib/screens/node_settings_screen.dart` | Замена приватной `_detourPrefix` на импорт. + 2 SwitchListTile под существующим «Mark as detour server» (visible только когда `⚙` ON). Follow-up: добавлен `persistSources()` в `onChanged` обоих (изначально забыл — поймано peer review, см. 007). |
 | `lib/services/builder/server_list_build.dart` | + import `kDetourTagPrefix`. Branch для main-as-detour (`isMainAsDetour = main.tag.startsWith(kDetourTagPrefix)`) — селективно регистрировать в selector/auto. |
+
+## Follow-up (peer review)
+
+Сводный review [007](./007-peer-review-tasks-001-006.md) указал:
+
+1. **`persistSources()` в SwitchListTile.onChanged** — без него setter обновляет `SubscriptionEntry` только в памяти, после рестарта app значения теряются. Fix: добавлен `unawaited(widget.subController.persistSources())` после `setState` в обоих переключателях, по аналогии с detour dropdown (line 202) и subscription-level toggle'ами ([subscription_detail_screen.dart:297, 306](../../../app/lib/screens/subscription_detail_screen.dart:297)).
+2. **Консистентность `⚙ ` префикса.** Литералы `'⚙ '` в `home_screen.dart:1170` и `node_filter_screen.dart:60` заменены на `kDetourTagPrefix` — единый источник правды.
+3. **Scope UserServer подтверждён.** `NodeSettingsScreen` открывается только для direct-server entries (см. subscriptions_screen routing) — scope 006 соблюдается без дополнительных проверок внутри экрана.

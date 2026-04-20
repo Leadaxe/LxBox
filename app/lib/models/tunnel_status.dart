@@ -5,7 +5,14 @@ enum TunnelStatus {
   connected,
   stopping,
   revoked,
-  error;
+  error,
+  /// Native прислал raw, который мы не знаем как мапить. Был раньше default
+  /// на `disconnected` — это ложно резолвило predicate'ы типа
+  /// `firstWhere(disconnected|revoked)` на мусор из stream'а. Отдельный
+  /// `unknown` позволяет `_handleStatusEvent` явно не делать cleanup и
+  /// просто залогировать событие (см. handler). В reconnect/pull — тоже
+  /// explicit no-op ветка.
+  unknown;
 
   bool get isUp => this == connected;
 
@@ -16,7 +23,7 @@ enum TunnelStatus {
       'Stopped' => disconnected,
       'Stopping' => stopping,
       'Revoked' => revoked,
-      _ => disconnected,
+      _ => unknown,
     };
   }
 
@@ -27,5 +34,6 @@ enum TunnelStatus {
         stopping => 'Stopping…',
         revoked => 'Revoked by another VPN',
         error => 'Error',
+        unknown => 'Unknown',
       };
 }

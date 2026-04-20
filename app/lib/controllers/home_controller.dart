@@ -261,6 +261,15 @@ class HomeController extends ChangeNotifier {
   void _onTunnelDead() {
     _addDebug(DebugSource.app, 'Tunnel appears dead (heartbeat lost)');
     cancelMassPing();
+    _autoPingTimer?.cancel();
+    _autoPingTimer = null;
+    // Полный cleanup как в `_handleStatusEvent` revoked/disconnected ветке —
+    // включая _clash=null (старый endpoint с невалидным secret'ом), traffic
+    // reset, connectedSince=null, configStaleSinceStart=false. Единый
+    // контракт очистки: через какой бы путь ни попали в «tunnel down»
+    // (broadcast от native или heartbeat-timeout) — state в одинаковом
+    // финальном виде.
+    _clash = null;
     _emit(
       _state.copyWith(
         tunnel: TunnelStatus.revoked,
@@ -269,6 +278,9 @@ class HomeController extends ChangeNotifier {
         groups: <String>[],
         nodes: <String>[],
         highlightedNode: null,
+        traffic: TrafficSnapshot.zero,
+        connectedSince: null,
+        configStaleSinceStart: false,
       ),
     );
     unawaited(_tryCleanStop());

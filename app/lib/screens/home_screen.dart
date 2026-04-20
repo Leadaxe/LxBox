@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../config/consts.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/home_state.dart';
@@ -666,8 +667,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         ? Theme.of(context).colorScheme.primaryContainer
         : null;
 
-    final label =
-        isRevoked ? TunnelStatus.disconnected.label : state.tunnel.label;
+    // Unknown от native (мусор в stream, неизвестный raw) маппим на
+    // Disconnected label — внутренний state.tunnel=unknown сохраняется
+    // для логики (см. TunnelStatus.fromNative), но юзеру не показываем
+    // loadable loading "Unknown" — просто off-state.
+    final label = (isRevoked || state.tunnel == TunnelStatus.unknown)
+        ? TunnelStatus.disconnected.label
+        : state.tunnel.label;
 
     Widget iconWidget = Icon(icon, size: 18, color: color);
     if (isConnecting) {
@@ -1167,7 +1173,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     }
     final displayNodes = _showDetourNodes
         ? state.sortedNodes
-        : state.sortedNodes.where((t) => !t.startsWith('⚙ ')).toList();
+        : state.sortedNodes.where((t) => !t.startsWith(kDetourTagPrefix)).toList();
     // configCache парсится один раз при saveParsedConfig (см. HomeState),
     // здесь просто читаем. Раньше jsonDecode шёл на каждый rebuild
     // ListView — с 50+ нодами и сортировкой это был hot-path выжиматель.
