@@ -2,135 +2,227 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Done (отчёт) |
+| Статус | Done (отчёт, обновлённое глубокое чтение) |
 | Дата старта | 2026-04-20 |
 | Дата завершения | 2026-04-20 |
 | Коммиты | — (только документация) |
-| Связанные spec'ы | [`003 home screen`](../features/003%20home%20screen/spec.md), серия [001](./001-reconnect-sink-leak.md)–[007](./007-peer-review-tasks-001-006.md) |
-| Объём ревью | `app/lib/**/*.dart` (фокус: hot path Home, контроллеры, Clash, таймеры, JSON); Android Kotlin не входил в глубину |
+| Связанные spec'ы | [`003 home screen`](../features/003%20home%20screen/spec.md), [005](./005-optimization-pass.md), [007](./007-peer-review-tasks-001-006.md), [009](./009-p0-correctness-fixes.md) |
+| Объём ревью | Пошаговое чтение целых горячих модулей: `home_screen.dart` (drawer/build/list), `home_controller.dart` (init/heartbeat/reload/mass ping), `subscription_controller.dart` (init/rehydrate/fetch/generate/persist), `clash_api_client.dart` (+ `TrafficSnapshot`), `clash_endpoint.dart`, `build_config.dart` (deep copy), `settings_storage.dart` (кэш/save), `app_log.dart`; Kotlin не разбирался |
 
-## Проблема
+## Статус выполнения (2026-04-21)
 
-После серии задач **001–006** и правок по **007** нужна свежая картина: где ещё тратятся CPU/аллокации, что усложняет сопровождение, что имеет смысл отложить до появления метрик.
+| Секция | Приоритет | Статус |
+|--------|-----------|--------|
+| §A (A1 animation, A2 timer, A3 dispose) | **P0** | ✅ Closed в коммите `2593152`, см. [009](./009-p0-correctness-fixes.md) |
+| §B (heartbeat reduce fetchProxies) | P1 | Открыто — отложено до 1.4.1+ (требует design review по свежести UI vs battery) |
+| §C (Listenable.merge split) | P1 | Открыто — отложено до 1.4.1+ (архитектурная правка, высокий риск сломать reactive зоны без re-test) |
+| §D1 (кэш route.final) | P2 | Открыто |
+| §D2 (mass-ping batched emit) | P2 | Открыто |
+| §D3 (displayNodes кэш) | P2 | Открыто |
+| §D5 (параллельный rehydrate) | P3 | Открыто |
+| §E (SettingsStorage batched save) | P3 | Открыто |
+| §H (разрез файлов / контроллеров) | P4 | Открыто |
 
-## Диагностика
-
-Статический обход: `grep` по `notifyListeners`, `jsonDecode`, `Timer.periodic`, `AnimatedBuilder` / `Listenable.merge`; чтение фрагментов `home_screen.dart`, `home_controller.dart`, `home_state.dart`, `clash_api_client.dart`, `subscription_controller.dart`, `app_log.dart`, `auto_updater.dart`, `speed_test_screen.dart`, `settings_storage.dart`.
-
-**Профилирование (Flutter DevTools / systrace) в этом отчёте не выполнялось** — приоритеты ниже по «силе сигнала» кода и опыту типичных Flutter/Android узких мест.
-
-## Резюме
-
-| Категория | Вердикт |
-|-----------|---------|
-| Главный экран после **005** | База здоровая: `ConfigCache`, memo `sortedNodes`, батч `_emit` по статусу |
-| Риск роста техдолга | Крупные монолиты (`home_screen`, `home_controller`) — главный рефакторинг-кандидат |
-| Сеть / JSON | На hot path в основном осознанные decode после HTTP; дублирующий parse `configRaw` в редких UI-действиях |
+P0 — закрыто перед релизом 1.4.0. P1+ идут отдельными task'ами с design review по каждой.
 
 ---
 
-## Performance — рекомендации
+## Методология (что сделано по-настоящему)
 
-### P1 — Массовый пинг: частые `_emit` под параллельными воркерами
+1. **Прочитаны большие непрерывные куски** `home_screen.dart` (init, `build`, drawer, controls, status chip, node list builder), не только grep.
+2. **Прослежен полный steady-state цикл** «туннель поднят»: `_startHeartbeat` → `_checkHeartbeat` → `fetchTraffic` + опционально `fetchProxies` → `_emit` → что пересобирается в UI.
+3. **Прослежен** `reloadProxies` / `ClashEndpoint` — сколько раз парсится весь конфиг.
+4. **Просмотрены** `pingAllNodes`, `SubscriptionController._rehydrateFromCache`, `_generate` / `buildConfig` вход, `_persist` / `SettingsStorage._save`.
 
-**Файл:** `app/lib/controllers/home_controller.dart` (`pingAllNodes`, воркеры с `_pingConcurrency`).
-
-На **каждый** завершённый `delay` делается `Map.from` + `_emit` → новый `HomeState` → пересчёт `late final sortedNodes` + `notifyListeners` → полный rebuild `AnimatedBuilder` на Home с `Listenable.merge([_controller, _subController])`.
-
-При 50 нодах и concurrency 10 это до **десятков emit’ов в секунду** в пике. Раньше в **005** уже отмечали «batched emit для ping» как возможный следующий шаг.
-
-**Рекомендации (на выбор):**
-
-1. **Батчинг:** накапливать `lastDelay`/`pingBusy` в локальной мапе в воркере-координаторе и вызывать `_emit` раз в 100–200 ms или после пачки из K завершений (с финальным emit в конце эпохи).
-2. **Throttling notify:** реже дергать UI при том же обновлении данных (осторожно с финальным консистентным state).
-
-**Риск:** сложнее отлаживать отмену (`_massPingEpoch`); нужны тесты на cancel mid-flight.
-
-### P2 — `pingNode` (одиночный): два `_emit` подряд
-
-Сначала `pingBusy`, потом результат — два rebuild подряд. Низкий приоритет; можно слить в один `copyWith`, если заметят микролаг на слабых устройствах.
-
-### P3 — Повторный `jsonDecode(state.configRaw)` в Home UI
-
-**Файл:** `app/lib/screens/home_screen.dart`.
-
-- `_viewOutboundJson` / `_copyNodeJson` при пользовательском действии парсят весь `configRaw` заново.
-- `_countNodesInConfig` после rebuild вызывается из snackbar-пути — не hot path каждые 20 s, но лишний полный parse большого JSON.
-
-**Рекомендация:** для «посмотреть JSON ноды» достаточно редко — ок как есть. Если появятся частые вызовы — вынести «индекс tag → outbound map» в `ConfigCache` / отдельный lazy-кэш на `HomeState` (по аналогии с detour/proto).
-
-### P4 — `ClashApiClient`: новый `http.Client()` по умолчанию
-
-Каждый `ClashApiClient(...)` без внешнего клиента создаёт свой `http.Client`. Сейчас жизненный цикл привязан к `HomeController` (`_rebuildClashEndpoint`) — обычно один клиент на сессию. Если когда-нибудь начнут плодить клиенты в цикле — стоит явный **singleton / пул** или передача shared `Client` из DI.
-
-### P5 — `AppLog`: `notifyListeners` на каждую строку лога
-
-**Файл:** `app/lib/services/app_log.dart`.
-
-В шумном логировании (core + app) `DebugScreen` может перестраиваться очень часто. В **005** сознательно не батчили.
-
-**Рекомендация (низкий приоритет):** при открытом DebugScreen — coalesce через `SchedulerBinding.scheduleFrameCallback` или debounce 32–50 ms; при закрытом экране listeners часто нет — оставить как есть.
-
-### P6 — `AutoUpdater`: `Timer.periodic` раз в час всегда
-
-**Файл:** `app/lib/services/subscription/auto_updater.dart`.
-
-Таймер живёт, пока жив контроллер, **независимо от lifecycle приложения** (в отличие от Stats/Connections после **005**).
-
-**Рекомендация:** по желанию согласовать с продуктом — пауза при `AppLifecycleState.paused` (как у опроса Clash), если не хотят фоновых `maybeUpdateAll` пока пользователь не в приложении. Иначе оставить: интервал большой, нагрузка низкая.
-
-### P7 — `SpeedTestScreen`: `Timer.periodic` 500 ms на время download-теста
-
-**Файл:** `app/lib/screens/speed_test_screen.dart` (`_multiStreamDownload`).
-
-Таймер **короткоживущий** и отменяется по завершении теста — нормально. Если пользователь уходит с экрана во время теста — имеет смысл `dispose`/`RouteAware` отменять тест и таймер (защита от утечек и лишних setState); проверить наличие отмены при `pop`.
-
-### P8 — `settings_storage.dumpCache`
-
-**Файл:** `app/lib/services/settings_storage.dart` — `jsonDecode(jsonEncode(data))` для глубокой копии.
-
-Дорого на больших кэшах; вызывается с debug API, не в user hot path. Оставить до появления жалоб или заменить на структурную копию по allow-list.
+Профиль **DevTools / Timeline** здесь по-прежнему не снимался: ниже — выводы из **структуры алгоритмов и частоты вызовов**, которые профиль почти наверняка подтвердит как «красные», если их замерить.
 
 ---
 
-## Упрощения и читаемость
+## A. Критично: корректность и анти-паттерны Flutter
 
-1. **`home_screen.dart`** — очень большой файл (Drawer + ноды + диалоги + ping settings + JSON viewer). Имеет смысл поэтапно вынести: панель нод, chip статуса, меню действий, bottom sheets — в `widgets/` или `screens/home/` без смены поведения.
-2. **`home_controller.dart`** — много ответственности (VPN события, Clash, heartbeat, ping, auto ping, clash reload, debug). Возможные границы выделения: **туннель/VPN**, **Clash+прокси**, **ping/mass ping** — с узким публичным API для UI.
-3. **`routing_screen.dart`**, **`custom_rule_edit_screen.dart`** — много `setState`; при следующем касании экрана — вынести секции в `StatelessWidget` + колбэки, чтобы уменьшить пересборки (локальный рефакторинг без ValueNotifier там, где не нужно).
-4. **Дублирование логики «parse config for tags»** между `ConfigCache`, `_countNodesInConfig`, `_viewOutboundJson` — единая утилита или расширение кэша снизит риск расхождения фильтров типов outbounds.
+### A1. Побочные эффекты внутри `build`
+
+**Файл:** `app/lib/screens/home_screen.dart`, `_buildStatusChip` (около строк 641–648).
+
+Внутри метода, который вызывается из `AnimatedBuilder` → фактически из **`build`**, вызываются `_connectingAnim.repeat()` / `stop()` / `reset()` в зависимости от `isConnecting`. Это нарушает правило «build чистый»: лишние вызовы при любом родительском rebuild, риск предупреждений framework'а, лишняя работа на каждом кадре уведомлений от контроллера.
+
+**Рекомендация:** перенести управление `AnimationController` в `didUpdateWidget`, listener контроллера по `tunnel == connecting`, или отдельный `TickerMode` / виджет, где `initState`/`dispose` владеют анимацией.
+
+### A2. Планирование `Timer` из `build` через `Builder`
+
+Тот же файл, блок `state.lastError` (около 387–414): внутри `Builder` при смене `state.lastError` создаётся `_errorTimer`. Любой rebuild с тем же `lastError` не должен дублировать, но логика завязана на проход `build` — хрупко при агрессивных rebuild'ах.
+
+**Рекомендация:** перенести в `didUpdateWidget` или в listener `HomeController` с сравнением предыдущего `lastError`.
+
+### A3. `HomeController` не `dispose()`-ится из `HomeScreen`
+
+**Файл:** `app/lib/screens/home_screen.dart`, `dispose` (строки ~139–145).
+
+Вызываются `_autoUpdater.dispose()`, `removeListener`, `removeObserver`, но **нет** `_controller.dispose()`. `HomeController.dispose` отменяет `_statusSub`, heartbeat, transient timer — сейчас `HomeScreen` — корень `MaterialApp` и почти никогда не уничтожается, поэтому на проде процесс гасится ОС. Для **тестов, hot restart, возможного будущего** смены корневого виджета — это дыра в контракте владения.
+
+**Рекомендация:** явно `unawaited`/`await` `_controller.dispose()` (и при необходимости жизненный цикл для `SubscriptionController`, если появятся подписки/таймеры).
 
 ---
 
-## Кандидаты на рефакторинг (архитектура)
+## B. Steady-state: heartbeat — главный скрытый «двигатель» нагрузки
 
-| Область | Зачем | Риск |
-|---------|--------|------|
-| Разбиение `HomeScreen` | Тестируемость, code review, меньше конфликтов в git | Средний — нужна дисциплина не менять UX |
-| Выделение сервиса «Tunnel state machine» из `HomeController` | Явные переходы, проще тесты на 001/002/004 сценарии | Высокий — трогает много call site’ов |
-| `SubscriptionController` + множественные `notifyListeners` | При росте списка подписок — debounce/coalesce persist | Средний — не сломать сохранение |
+**Файл:** `app/lib/controllers/home_controller.dart`, `_checkHeartbeat` (~220–258).
+
+Каждые **`_heartbeatInterval` (20 s)** при поднятом туннеле:
+
+1. **`fetchTraffic()`** — HTTP `GET /connections`, затем **`TrafficSnapshot.fromConnectionsJson`** проходит **весь** массив `connections`: суммы, `byRule`, `byApp` с мапами. Для сотен активных соединений это заметный CPU на UI-isolate, хотя на главном экране в traffic bar используются в основном агрегаты (`upload`/`download`/`activeConnections`/memory).
+2. Опционально **`fetchProxies()`** — второй полноразмерный JSON (весь каталог прокси), затем **`_emit`** с заменой `proxiesJson`.
+
+После этого срабатывает **`notifyListeners`** на `HomeController` → см. раздел **C**.
+
+**Точки роста (по убыванию важности):**
+
+| # | Что | Почему больно |
+|---|-----|----------------|
+| B1 | Полный разбор `/connections` каждые 20 s | Много аллокаций Map + цикл по всем conn даже если UI не показывает byRule/byApp на Home |
+| B2 | `fetchProxies` каждые 20 s вместе с traffic | Удваивает трафик и JSON decode на localhost при большом числе outbounds |
+| B3 | После emit — полный rebuild Home | См. C |
+
+**Идеи (нужна оценка продукта):**
+
+- Лёгкий эндпоинт / отдельный запрос только для totals, если когда-нибудь появится в API ядра; иначе — **реже** вызывать `fetchProxies` (например, раз в N heartbeat'ов или только если `nodes`/`urltest now` подозрительно stale).
+- Разделить модель: «лёгкий снимок для chip» vs «полный снимок для Statistics» — не тащить `byApp`/`byRule` на главный экран каждые 20 s.
 
 ---
 
-## Риски и edge cases
+## C. Радиус поражения rebuild: `Listenable.merge([_controller, _subController])`
 
-- Любой **батчинг emit** для ping должен уважать `_massPingEpoch` и `cancelMassPing`, иначе гонки UI.
-- Пауза `AutoUpdater` в background может **задерживать** обновление подписок до следующего resume — продуктовое решение.
-- Рефакторинг без метрик может быть **преждевременной оптимизацией**; для P1 имеет смысл снять один профиль на реальном девайсе с 50+ нодами и mass ping.
+**Файл:** `app/lib/screens/home_screen.dart`, корневой `AnimatedBuilder` (~172–197).
 
-## Верификация
+Любой **`notifyListeners()`** с **любого** из двух контроллеров пересобирает **весь** `Scaffold`: drawer, кнопки, группа, **весь** `ListView.separated` нод.
 
-- Обход исходников и сопоставление с отчётом **005** (уже сделанные оптимизации не дублировать как «новые»).
-- Сборка/тесты для этого task-файла не запускались (документация только).
+Следствия:
 
-## Нерешённое / follow-up
+1. **Heartbeat** (раздел B) → каждые 20 s полная перерисовка списка нод + все closure в `itemBuilder`.
+2. **`SubscriptionController`** при `_rehydrateFromCache`, fetch подписок, `notifyListeners` в конце `_fetchEntryByRef` и т.д. — **тоже** качает Home, даже если пользователь на главном экране и не трогал список подписок.
+3. Сочетается с **mass ping** (многие `_emit`/сек) — эффект усиливается.
+
+**Это главный архитектурный рычаг производительности**, сильнее чем микро-оптимизации в `NodeRow`.
+
+**Направления работы:**
+
+- Разнести подписки: например **`Listenable.merge` только на зону статуса/трафика**, список нод — `Selector<HomeController, …>` / отдельный `AnimatedBuilder` только на `_controller` с `child:` для статичного дерева — или хранить «лёгкий» `ValueNotifier` для списка нод.
+- Либо ввести **слой ViewModel** с более гранularными notifiers (tunnel, traffic, nodes, subscriptions metadata).
+
+---
+
+## D. Пиковые и фоновые нагрузки (кроме уже известного mass ping)
+
+### D1. `reloadProxies`: повторный полный **json5Decode** конфига
+
+**Файлы:** `app/lib/controllers/home_controller.dart` (`reloadProxies` ~587–618), `app/lib/config/clash_endpoint.dart`.
+
+В `reloadProxies` после `fetchProxies` вызывается **`ClashEndpoint.routeFinalTag(_state.configRaw)`**, который снова делает **`json5Decode(trimmed)`** всего конфига — это **отдельный полный разбор** того же JSON, который уже лежит в памяти как строка и частично кэшируется в `ConfigCache` только для outbounds/endpoints, не для `route.final`.
+
+Параллельно **`ClashEndpoint.fromConfigJson`** при `_rebuildClashEndpoint` тоже гоняет json5 по конфигу при смене endpoint.
+
+**Точка роста:** кэшировать распарсенный `route.final` (или весь мелкий «индекс» из experimental + route) при `saveParsedConfig` / смене `configRaw`, чтобы не парсить мегабайтный JSON лишний раз на каждый reload.
+
+### D2. Mass ping — не только emit (уже было в первой версии отчёта), но контекст C
+
+Каждый завершённый ping → новый `HomeState` → **пересортировка** `sortedNodes` (новый инстанс state) → **полный** rebuild по **C**. Итог: сочетание **D2 + C** даёт основной визуальный jank при mass ping на больших списках.
+
+### D3. `displayNodes`: новый список на каждый rebuild
+
+**Файл:** `home_screen.dart` ~1174–1176.
+
+```dart
+final displayNodes = _showDetourNodes
+    ? state.sortedNodes
+    : state.sortedNodes.where((t) => !t.startsWith(kDetourTagPrefix)).toList();
+```
+
+При скрытых detour каждый rebuild (в т.ч. каждые 20 s от heartbeat) аллоцирует **новый `List`**, даже если состав не менялся.
+
+**Рекомендация:** кэшировать `(bool showDetour, int nodesVersion)` → `List` в `State` виджета или derived поле в `HomeState` только при смене `nodes`/`sortMode`/флага.
+
+### D4. `itemBuilder`: повторные вызовы `ClashApiClient.urltestNow` / `proxyEntry`
+
+На каждую **видимую** строку каждый rebuild — несколько map-lookup по `proxiesJson`. Сложность линейна по числу видимых строк, не по всем нодам — приемлемо; узкое место именно **частота rebuild** из **C**, а не эти lookup сами.
+
+### D5. `SubscriptionController._rehydrateFromCache`
+
+Цикл по всем подпискам: последовательные `await HttpCache.loadBody` + `decode` + `parseAll`. На старте с многими подписками это **длинный критический путь** до первого `notifyListeners` после цикла (один раз в конце). Параллелить осторожно (ограничить concurrency 2–3), если станет заметно на слабых устройствах.
+
+### D6. `buildConfig` / `_deepCopy`
+
+**Файл:** `app/lib/services/builder/build_config.dart` — `jsonDecode(jsonEncode(s))` для копии шаблона.
+
+Это **O(размер шаблона)** на каждую сборку конфига. Для GUI это ожидаемо; узкое место — частота вызова `generateConfig` (ручной rebuild, auto updater после триггеров). Не трогать без профиля сборки.
+
+### D7. `_addJsonOutbounds`: `decode(jsonEncode(ob))`
+
+**Файл:** `subscription_controller.dart` ~385–388.
+
+Round-trip JSON ради нормализации — понятно по истории парсера, но дорого на больших paste. Альтернатива: явный «канонизатор» map без строкового round-trip, если парсер это позволит.
+
+---
+
+## E. `SettingsStorage`: полная перезапись файла
+
+**Файл:** `app/lib/services/settings_storage.dart`, `_save`.
+
+Каждый `setVar` / логически завершённое изменение ведёт к **`JsonEncoder.withIndent` всего `_cache`** и записи на диск. При пакетных обновлениях (debug API, генерация vars из `buildConfig`) — **много полных перезаписей подряд**.
+
+**Точка роста:** батчить записи (очередь + debounce 100–300 ms) или API `setVars(Map)` с одним save.
+
+---
+
+## F. Остальное (средний / низкий приоритет)
+
+| ID | Тема | Комментарий |
+|----|------|-------------|
+| F1 | `AppLog.notifyListeners` на каждую строку | Уже в первой версии; критично только при открытом Debug + шумном core |
+| F2 | `AutoUpdater` + часовой таймер при paused app | Продуктово; нагрузка мала |
+| F3 | `SpeedTestScreen` + `Timer.periodic` 500 ms | Таймер короткий; проверить отмену при `dispose`/`pop` во время теста |
+| F4 | `pingNode` — два `_emit` | Мелочь |
+| F5 | `http.Client` в `ClashApiClient` | Один на жизнь endpoint'а — ок |
+
+---
+
+## G. Что уже хорошо после 005 (не регрессировать)
+
+- `ConfigCache` + `sortedNodes` как `late final` на инстансе `HomeState` — убрали **jsonDecode на каждый** item build.
+- Батч `_emit` в `_handleStatusEvent` по VPN-переходам.
+- Пауза таймеров Stats/Connections в background.
+
+---
+
+## H. Рефакторинг (структура кода, не только perf)
+
+1. **Разрезать `home_screen.dart`** на модули (drawer / controls / node list / sheets) — снижает риск и ускоряет review.
+2. **Выделить из `HomeController`** слои: (VPN статус + native), (Clash API + proxies state), (ping orchestration) — сужает публичную поверхность для тестов.
+3. **Унифицировать парсинг конфига** для UI (detour/proto/route.final/clash port) — одна точка правды, меньше дублирующих json5/jsonDecode.
+
+---
+
+## Риски при внедрении
+
+- Любой батчинг `_emit` при mass ping должен сохранять семантику `_massPingEpoch` и `cancelMassPing`.
+- Узкие `AnimatedBuilder` — не сломать подписку на `_subController.configDirty` / баннеры rebuild.
+- Кэш `route.final` должен инвалидироваться ровно при смене `configRaw`.
+
+## Верификация отчёта
+
+- Повторное чтение исходников с фиксацией номеров строк по grep/read (сессия 2026-04-20).
+- Runtime-профиль по-прежнему рекомендуется для приоритизации B vs D2.
+
+## Нерешённое / follow-up (приоритизировано)
 
 | Приоритет | Действие |
-|-------------|----------|
-| Высокий | P1: профиль + при необходимости batched emit при mass ping |
-| Средний | Разрезать `home_screen` на подвиджеты (инкрементально) |
-| Средний | P6: решить, нужна ли пауза `AutoUpdater` в background |
-| Низкий | P2, P3, P5, P8 — по сигналу от профиля или жалоб |
-| Долгий | Выделение подсистем из `HomeController` (VPN vs Clash vs ping) |
+|-----------|----------|
+| **P0** | Исправить **A1** (анимация) и **A2** (timer) — корректность Flutter |
+| **P0** | Добавить **`_controller.dispose()`** в `HomeScreen.dispose` — контракт владения |
+| **P1** | Снизить радиус rebuild: разделить **C** (`Listenable.merge`) |
+| **P1** | Heartbeat: ослабить **B1/B2** (реже proxies / легче snapshot для Home) |
+| **P2** | Кэш **`route.final`** или индекс из конфига — **D1** |
+| **P2** | Batched/throttled emit при mass ping + **D3** кэш filtered list |
+| **P3** | Батч save в **E**; параллельный rehydrate **D5** — по метрикам старта |
+| **P4** | Разрез файлов / контроллеров **H** |
 
-После реализации любого пункта — отдельный task в `docs/spec/tasks/` с коммитами и критериями приёмки, по стилю [README](./README.md).
+После реализации — отдельные task-файлы с коммитами и критериями, см. [README](./README.md).

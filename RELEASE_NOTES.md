@@ -1,18 +1,8 @@
-# L×Box v1.4.0 (draft)
+# L×Box v1.4.0
 
 Android VPN client powered by [sing-box](https://sing-box.sagernet.org/).
 
-<!--
-  Draft release notes for v1.4.0. Changes are still accumulating — do not tag yet.
-  When ready to release:
-    1. Finalise the sections below (remove "draft" suffix).
-    2. Copy the final body to `docs/releases/v1.4.0.md` (bilingual EN + RU details).
-    3. Bump `app/pubspec.yaml` version + `about_screen._version`; add section to CHANGELOG.
-    4. `git commit` → `git tag -a v1.4.0 -m "…"` → push main + tag.
-    5. CI builds APK, publishes GitHub Release.
--->
-
-Major release: unified routing rules model, local-only SRS, Stats tabs + Top apps, Debug API, background/power settings, auto-ping on connect.
+Major release: unified routing rules model, local-only SRS, Stats tabs + Top apps, Debug API, VPN reliability overhaul, per-server detour toggles, performance pass, correctness fixes.
 
 ## ✨ Highlights
 
@@ -232,6 +222,16 @@ Event-driven страховка от platform-level потерь broadcast'ов:
 - **Lint cleanup**: unused `dart:typed_data` import, `?proto` null-aware marker, docstring escapes.
 
 Детально: [docs/spec/tasks/005](docs/spec/tasks/005-optimization-pass.md).
+
+## ✅ Flutter correctness (P0 code-review fixes)
+
+По результатам deep code review закрыты три анти-паттерна Flutter в `home_screen.dart` — корректность, не оптимизации.
+
+- **Side-effects в `build` убраны.** Управление `AnimationController` (`_connectingAnim.repeat/stop/reset`) жило в `_buildStatusChip`, вызывающемся из `AnimatedBuilder` (т.е. из build-фазы). Hot path из heartbeat (каждые 20с) и mass ping (десятки emit/sec) дёргал контроллер анимации лишний раз. Перенесено в listener `_onControllerChange`, триггерится только при реальной смене `tunnel`.
+- **`Timer` не создаётся из `build`.** Auto-dismiss таймер для `lastError` жил в `Builder` внутри build — хрупко при агрессивных rebuild'ах. Перенесён в тот же listener с явным transition detection через `_prevError`.
+- **`HomeScreen.dispose()` complete.** Добавлены `_controller.dispose()` (отменяет `_statusSub`, heartbeat, transient timer), `_subController.dispose()`, `_connectingAnim.dispose()`. На prod ОС убивала процесс, но hot reload / тесты / потенциальная смена root widget'а давали бы утечку.
+
+Детально: [docs/spec/tasks/009](docs/spec/tasks/009-p0-correctness-fixes.md) + peer review [008 §A](docs/spec/tasks/008-deep-code-review-perf-refactor.md).
 
 ## 📚 Clash API reference
 

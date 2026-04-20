@@ -6,9 +6,9 @@
 
 ---
 
-## [1.4.0] — Unreleased
+## [1.4.0] — 2026-04-21
 
-Major release: unified routing rules, local-only SRS, Stats tabs + Top apps, Debug API, VPN reliability overhaul, per-server detour toggles, perf pass. 33 коммита с [1.3.1]. Полные заметки — `RELEASE_NOTES.md`, детальные отчёты задач — `docs/spec/tasks/001..008`.
+Major release: unified routing rules, local-only SRS, Stats tabs + Top apps, Debug API, VPN reliability overhaul, per-server detour toggles, perf pass, Flutter correctness fixes. Полные заметки — `RELEASE_NOTES.md`, детальные отчёты задач — `docs/spec/tasks/001..009`.
 
 ### Added — Unified routing rules model (spec 030)
 
@@ -125,6 +125,14 @@ Major release: unified routing rules, local-only SRS, Stats tabs + Top apps, Deb
 - **`ip_is_private` unknown field** — sing-box отклонял конфиг с `ip_is_private` в headless rule. Поле не поддерживается в rule_set inline, работает только на routing-rule level. Перенесено, где per sing-box formula становится OR с `rule_set`.
 - **Protocol-only rules skip'ались** — когда в rule только `protocol: [bittorrent]` (без domain/ip_cidr), `match` был пустой → skip. Теперь эмитится routing rule без rule_set, всё работает.
 - **AppPicker crashed при parallel tap** — `setState` без `mounted` guard'а + double `Navigator.pop`.
+
+### Fixed — Flutter correctness (P0 code-review fixes)
+
+По результатам глубокого code review (`docs/spec/tasks/008` §A) закрыты три анти-паттерна Flutter в `home_screen.dart`. Это корректность, не оптимизации — затрагивают устойчивость анимации, таймеров и dispose-контракта. Fix в коммите `2593152`, отчёт — `docs/spec/tasks/009`.
+
+- **Side-effects в `build` убраны.** Управление `_connectingAnim.repeat/stop/reset` жило в `_buildStatusChip` (вызывается из `AnimatedBuilder` — т.е. в build-фазе). Hot path из heartbeat (каждые 20с) и mass ping (десятки emit/sec) дёргал контроллер анимации лишний раз. Перенесено в listener `_onControllerChange`, триггерится только при реальной смене tunnel state.
+- **`Timer` не создаётся из build.** Auto-dismiss таймер для `lastError` жил в `Builder` внутри build (`if (_errorTimerFor != state.lastError) { cancel + new Timer }`) — хрупко при агрессивных rebuild'ах. Перенесён в тот же listener с явным transition detection через `_prevError`.
+- **`HomeScreen.dispose()` теперь полный.** Добавлены `_controller.dispose()` (отменяет `_statusSub`, heartbeat, transient timer), `_subController.dispose()`, `_connectingAnim.dispose()`. Раньше пропускались — production ОС убивала процесс, но hot reload / тесты / смена root widget'а давали бы утечку.
 
 ### Performance
 

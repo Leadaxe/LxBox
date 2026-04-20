@@ -2,10 +2,30 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Done |
-| Дата | 2026-04-20 |
+| Статус | **Closed** — actionable code-level замечания все закрыты (2026-04-21) |
+| Дата | 2026-04-20 (ревью) · 2026-04-21 (закрытие) |
 | Объект ревью | [001](./001-reconnect-sink-leak.md), [002](./002-blocking-stopvpn-intent-reset.md), [003](./003-revoke-ux.md), [004](./004-lifecycle-resume-resync.md), [005](./005-optimization-pass.md), [006](./006-per-node-detour-toggles.md) |
+| Коммит-закрытие | `e0e7213` fix(review): address peer review follow-ups for tasks 001-006 |
 | Связанные spec'ы | [`003 home screen`](../features/003%20home%20screen/spec.md), [`012 native vpn service`](../features/012%20native%20vpn%20service/spec.md), [`018 detour server management`](../features/018%20detour%20server%20management/spec.md) |
+
+## Резюме закрытия (2026-04-21)
+
+Все code-level замечания peer review закрыты в коммите `e0e7213`:
+
+| # | Замечание | Статус |
+|---|-----------|--------|
+| 006 critical | `persistSources()` в `SwitchListTile.onChanged` | ✅ Fixed |
+| 003 | `_onTunnelDead` полный cleanup (unified с `_handleStatusEvent`) | ✅ Fixed |
+| 004 | `TunnelStatus.unknown` default вместо `disconnected` | ✅ Fixed |
+| 006 | `'⚙ '` literal → `kDetourTagPrefix` в `home_screen` / `node_filter_screen` | ✅ Fixed |
+| 006 docs | Статус `In progress` → `Done` + секция Follow-up | ✅ Fixed |
+| 002 docs | Зачёркнуты устаревшие follow-up (spec 012 / TunnelStatus) | ✅ Fixed |
+| 003 docs | Зачёркнуты follow-up (unknown, unified cleanup) | ✅ Fixed |
+
+**Открытые non-code пункты** (не требуют кода):
+
+- Ручные чеклисты 002/003/004/006 на устройстве — передано пользователю для manual verification перед tag 1.4.0.
+- 004 edge-case мониторинг (лишние resync через `unknown`) — наблюдать в production, точечно править если всплывёт.
 
 ## Контекст
 
