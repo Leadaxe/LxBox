@@ -38,7 +38,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             if (intent?.action != BoxVpnService.BROADCAST_STATUS) return
             val name = intent.getStringExtra(BoxVpnService.EXTRA_STATUS) ?: return
             val error = intent.getStringExtra("error")
-            Log.d(TAG, "Status broadcast: $name${if (error != null) " error=$error" else ""}")
+            Log.d(TAG, "[DIAG] plugin.statusReceiver.onReceive name=$name${if (error != null) " error=$error" else ""} sink=${statusSink != null}")
             mainHandler.post {
                 val event = mutableMapOf<String, Any>("status" to name)
                 if (error != null) event["error"] = error
@@ -62,13 +62,16 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         statusEventChannel = EventChannel(binding.binaryMessenger, STATUS_CHANNEL)
         statusEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(args: Any?, sink: EventChannel.EventSink?) {
+                Log.d(TAG, "[DIAG] statusEventChannel.onListen — sink installed")
                 statusSink = sink
             }
             override fun onCancel(args: Any?) {
+                Log.d(TAG, "[DIAG] statusEventChannel.onCancel — sink cleared")
                 statusSink = null
             }
         })
 
+        Log.d(TAG, "[DIAG] onAttachedToEngine: registerReceiver(statusReceiver)")
         context.registerReceiver(
             statusReceiver,
             IntentFilter(BoxVpnService.BROADCAST_STATUS),
@@ -77,6 +80,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        Log.d(TAG, "[DIAG] onDetachedFromEngine: unregisterReceiver(statusReceiver)")
         methodChannel.setMethodCallHandler(null)
         statusEventChannel.setStreamHandler(null)
         statusSink = null
