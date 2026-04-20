@@ -122,10 +122,28 @@ class BoxVpnClient {
   }
 
   /// Stream of status events: {"status": "Started"|"Starting"|"Stopped"|"Stopping"}
-  Stream<Map<String, dynamic>> get onStatusChanged {
-    return _statusEvents.receiveBroadcastStream().map((event) {
-      if (event is Map) return Map<String, dynamic>.from(event);
-      return <String, dynamic>{};
-    });
-  }
+  ///
+  /// **Важно:** shared broadcast stream, один `receiveBroadcastStream()` на
+  /// весь lifecycle клиента. Раньше getter возвращал свежий stream на каждый
+  /// вызов — каждое обращение создавало новый Dart `StreamController`, что
+  /// дёргало `EventChannel.onListen` на native-стороне. В `VpnPlugin`
+  /// `statusSink` — одно mutable поле, и последний `onListen` перезаписывал
+  /// его, а следующий `onCancel` (при завершении короткоживущей подписки,
+  /// напр. `firstWhere` в `reconnect`) обнулял — после этого **основной**
+  /// listener в `HomeController._statusSub` становился зомби: Dart-сторона
+  /// считает что подписан, native-сторона давно выбросила sink и никуда
+  /// больше не шлёт. Все последующие broadcast'ы в сессии терялись —
+  /// отсюда reconnect без сброса `configStaleSinceStart`, сломанные
+  /// heartbeat-обновления и т.д.
+  ///
+  /// `asBroadcastStream()` даёт один underlying controller с несколькими
+  /// Dart-listener'ами; `late final` кэширует его. `onListen` на native
+  /// вызывается ровно один раз, `statusSink` стабилен.
+  late final Stream<Map<String, dynamic>> _statusStream =
+      _statusEvents.receiveBroadcastStream().map((event) {
+    if (event is Map) return Map<String, dynamic>.from(event);
+    return <String, dynamic>{};
+  }).asBroadcastStream();
+
+  Stream<Map<String, dynamic>> get onStatusChanged => _statusStream;
 }
