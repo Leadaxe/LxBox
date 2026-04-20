@@ -23,34 +23,42 @@ class WizardTemplate {
 
   final List<VarSection> varSections;
 
+  /// Все переменные заданного `chapter` в порядке объявления в template.
+  /// `chapter` — категория экрана-владельца: `core` (VPN Settings), `routing`
+  /// (Routing), `dns` (DNS Settings). Переменные с `wizard_ui: hidden`
+  /// исключаются — они запекаются в template до UI.
+  List<WizardVar> varsFor(String chapter) => vars
+      .where((v) => v.chapter == chapter && v.wizardUI != 'hidden')
+      .toList(growable: false);
+
+  /// Секции заданного `chapter` для построения UI. Нужно для отображения
+  /// заголовков-группировок и описаний на экранах.
+  List<VarSection> sectionsFor(String chapter) =>
+      varSections.where((s) => s.chapter == chapter).toList(growable: false);
+
   factory WizardTemplate.fromJson(Map<String, dynamic> json) {
     final pcJson = json['parser_config'] as Map<String, dynamic>? ?? {};
-    final varsJson = json['vars'] as List<dynamic>? ?? [];
     final rulesJson = json['selectable_rules'] as List<dynamic>? ?? [];
     final groupsJson = json['preset_groups'] as List<dynamic>? ?? [];
 
-    // Parse vars with sections
+    // Парсим nested `sections` — секция → chapter → vars.
+    // Каждая WizardVar наследует chapter+section от своей секции-родителя.
     final allVars = <WizardVar>[];
     final sections = <VarSection>[];
-    String currentSection = '';
-    for (final item in varsJson.whereType<Map<String, dynamic>>()) {
-      if (item.containsKey('section')) {
-        currentSection = item['section'] as String? ?? '';
-        continue;
-      }
-      if (!item.containsKey('name')) continue;
-      final v = WizardVar.fromJson(item, section: currentSection);
-      allVars.add(v);
-    }
-    // Build section list
-    final seenSections = <String>{};
-    for (final v in allVars) {
-      if (v.section.isNotEmpty && seenSections.add(v.section)) {
-        final desc = varsJson.whereType<Map<String, dynamic>>()
-            .where((m) => m['section'] == v.section)
-            .map((m) => m['description'] as String? ?? '')
-            .firstOrNull ?? '';
-        sections.add(VarSection(title: v.section, description: desc));
+    final sectionsJson = json['sections'] as List<dynamic>? ?? [];
+    for (final s in sectionsJson.whereType<Map<String, dynamic>>()) {
+      final name = s['name'] as String? ?? '';
+      final chapter = s['chapter'] as String? ?? 'core';
+      final description = s['description'] as String? ?? '';
+      sections.add(VarSection(
+        title: name,
+        description: description,
+        chapter: chapter,
+      ));
+      final varsArr = s['vars'] as List<dynamic>? ?? [];
+      for (final v in varsArr.whereType<Map<String, dynamic>>()) {
+        if (!v.containsKey('name')) continue;
+        allVars.add(WizardVar.fromJson(v, section: name, chapter: chapter));
       }
     }
 
@@ -63,8 +71,9 @@ class WizardTemplate {
       vars: allVars,
       varSections: sections,
       config: json['config'] as Map<String, dynamic>? ?? {},
-      selectableRules:
-          rulesJson.map((e) => SelectableRule.fromJson(e as Map<String, dynamic>)).toList(),
+      selectableRules: rulesJson
+          .map((e) => SelectableRule.fromJson(e as Map<String, dynamic>))
+          .toList(),
       dnsOptions: json['dns_options'] as Map<String, dynamic>? ?? {},
       pingOptions: json['ping_options'] as Map<String, dynamic>? ?? {},
       speedTestOptions: json['speed_test_options'] as Map<String, dynamic>? ?? {},
@@ -125,7 +134,10 @@ class PresetGroup {
   }
 }
 
-/// A variable from `vars[]` in the wizard template.
+/// A variable from a section's `vars[]` in the wizard template.
+/// `chapter` определяет, какому экрану принадлежит переменная:
+/// `core` (VPN Settings — sing-box низкоуровневое), `routing` (Routing),
+/// `dns` (DNS Settings). Переменные без chapter при парсинге получают `core`.
 class WizardVar {
   WizardVar({
     required this.name,
@@ -136,6 +148,7 @@ class WizardVar {
     this.title = '',
     this.tooltip = '',
     this.section = '',
+    this.chapter = 'core',
   });
 
   final String name;
@@ -146,10 +159,15 @@ class WizardVar {
   final String title;
   final String tooltip;
   final String section;
+  final String chapter;
 
   bool get isEditable => wizardUI == 'edit';
 
-  factory WizardVar.fromJson(Map<String, dynamic> json, {String section = ''}) {
+  factory WizardVar.fromJson(
+    Map<String, dynamic> json, {
+    String section = '',
+    String chapter = 'core',
+  }) {
     var defVal = json['default_value'];
     String defaultStr;
     if (defVal is Map) {
@@ -167,15 +185,23 @@ class WizardVar {
       title: json['title'] as String? ?? '',
       tooltip: json['tooltip'] as String? ?? '',
       section: section,
+      chapter: chapter,
     );
   }
 }
 
 /// A section header for grouping vars in the settings UI.
+/// `chapter` наследуется на все переменные этой секции и определяет
+/// экран-владелец (см. [WizardVar.chapter]).
 class VarSection {
-  VarSection({required this.title, this.description = ''});
+  VarSection({
+    required this.title,
+    this.description = '',
+    this.chapter = 'core',
+  });
   final String title;
   final String description;
+  final String chapter;
 }
 
 /// A selectable routing rule from the wizard template.

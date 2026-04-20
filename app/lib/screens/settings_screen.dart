@@ -1,14 +1,17 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/parser_config.dart';
-import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
+import '../services/template_loader.dart';
+import '../widgets/template_var_list.dart';
 
+/// VPN Settings — экран для sing-box core variables (`chapter: core`).
+/// Routing- и DNS-специфичные vars (chapter: routing/dns) живут на своих
+/// экранах (Routing, DNS Settings). Фильтрация по chapter — в [build].
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
@@ -41,48 +44,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
-  void _scheduleSave() {
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 500), () => unawaited(_apply()));
-  }
-
   Future<void> _load() async {
     final template = await TemplateLoader.load();
     final storedVars = await SettingsStorage.getAllVars();
-
     for (final v in template.vars) {
       _varValues[v.name] = storedVars[v.name] ?? v.defaultValue;
     }
-
     setState(() {
       _template = template;
       _loading = false;
     });
   }
 
-  Future<void> _apply() async {
-    for (final entry in _varValues.entries) {
-      await SettingsStorage.setVar(entry.key, entry.value);
-    }
+  void _onVarChanged(String name, String value) {
+    _varValues[name] = value;
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 500), () async {
+      await SettingsStorage.setVar(name, value);
+      await _regenerateConfig();
+    });
+  }
 
+  Future<void> _regenerateConfig() async {
     if (!mounted) return;
-
     final config = await widget.subController.generateConfig();
-    if (config != null && mounted) {
-      final ok = await widget.homeController.saveParsedConfig(config);
-      if (ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Settings applied, config regenerated')),
-        );
-        if (widget.homeController.state.tunnelUp) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Restart VPN to apply changes')),
-          );
-        }
-      }
+    if (config == null || !mounted) return;
+    final ok = await widget.homeController.saveParsedConfig(config);
+    if (!ok || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Settings applied, config regenerated')),
+    );
+    if (widget.homeController.state.tunnelUp && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Restart VPN to apply changes')),
+      );
     }
-
-    setState(() {});
   }
 
   @override
@@ -95,225 +91,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     final template = _template!;
-    final editableVars = template.vars.where((v) => v.isEditable).toList();
+    final editableVars = template
+        .varsFor('core')
+        .where((v) => v.isEditable)
+        .toList();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-      ),
-      body: editableVars.isEmpty
-          ? const Center(child: Text('No configurable variables'))
-          : ListView(
-              padding: EdgeInsets.fromLTRB(12, 12, 12, MediaQuery.of(context).padding.bottom + 24),
-              children: _buildSectionedList(editableVars, template),
-            ),
-    );
-  }
+    if (editableVars.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Settings')),
+        body: const Center(child: Text('No configurable variables')),
+      );
+    }
 
-  List<Widget> _buildSectionedList(List<WizardVar> vars, WizardTemplate template) {
-    final widgets = <Widget>[];
-    String lastSection = '';
     final sectionDescriptions = {
-      for (final s in template.varSections) s.title: s.description,
+      for (final s in template.sectionsFor('core')) s.title: s.description,
     };
 
-    for (final v in vars) {
-      if (v.section.isNotEmpty && v.section != lastSection) {
-        lastSection = v.section;
-        if (widgets.isNotEmpty) widgets.add(const SizedBox(height: 16));
-        widgets.add(Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                v.section,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              if (sectionDescriptions[v.section]?.isNotEmpty == true)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    sectionDescriptions[v.section]!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ),
-              const Divider(),
-            ],
-          ),
-        ));
-      }
-      widgets.add(_buildVarWidget(v));
-    }
-    return widgets;
-  }
-
-  Widget _buildVarWidget(WizardVar v) {
-    switch (v.type) {
-      case 'bool':
-        return SwitchListTile(
-          title: Text(v.title.isNotEmpty ? v.title : v.name),
-          subtitle: v.tooltip.isNotEmpty ? Text(v.tooltip, style: const TextStyle(fontSize: 12)) : null,
-          value: _varValues[v.name] == 'true',
-          onChanged: (val) {
-            setState(() {
-              _varValues[v.name] = val.toString();
-              _scheduleSave();
-            });
-          },
-        );
-      case 'enum':
-        return ListTile(
-          title: Text(v.title.isNotEmpty ? v.title : v.name),
-          subtitle: v.tooltip.isNotEmpty ? Text(v.tooltip, style: const TextStyle(fontSize: 12)) : null,
-          trailing: DropdownButton<String>(
-            value: v.options.contains(_varValues[v.name])
-                ? _varValues[v.name]
-                : v.defaultValue,
-            items: v.options
-                .map((o) => DropdownMenuItem(value: o, child: Text(o)))
-                .toList(),
-            onChanged: (val) {
-              if (val == null) return;
-              setState(() {
-                _varValues[v.name] = val;
-                _scheduleSave();
-              });
-            },
-          ),
-        );
-      case 'secret':
-        return _VarTextField(
-          key: ValueKey('secret-${v.name}'),
-          value: _varValues[v.name] ?? '',
-          obscure: true,
-          width: 150,
-          label: v.title.isNotEmpty ? v.title : v.name,
-          tooltip: v.tooltip,
-          onChanged: (val) {
-            _varValues[v.name] = val;
-            _scheduleSave();
-          },
-          trailing: IconButton(
-            tooltip: 'Generate random',
-            icon: const Icon(Icons.refresh, size: 20),
-            onPressed: () {
-              final rng = Random.secure();
-              final bytes = List.generate(16, (_) => rng.nextInt(256));
-              final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-              setState(() {
-                _varValues[v.name] = hex;
-                _scheduleSave();
-              });
-            },
-          ),
-        );
-      default: // text
-        return _VarTextField(
-          key: ValueKey('text-${v.name}'),
-          value: _varValues[v.name] ?? '',
-          width: 180,
-          label: v.title.isNotEmpty ? v.title : v.name,
-          tooltip: v.tooltip,
-          onChanged: (val) {
-            _varValues[v.name] = val;
-            _scheduleSave();
-          },
-        );
-    }
-  }
-}
-
-/// A self-contained text field that manages its own TextEditingController.
-/// Avoids the leak of creating TextEditingController inside build().
-class _VarTextField extends StatefulWidget {
-  const _VarTextField({
-    super.key,
-    required this.value,
-    required this.label,
-    required this.onChanged,
-    this.tooltip = '',
-    this.obscure = false,
-    this.width = 180,
-    this.trailing,
-  });
-
-  final String value;
-  final String label;
-  final String tooltip;
-  final bool obscure;
-  final double width;
-  final ValueChanged<String> onChanged;
-  final Widget? trailing;
-
-  @override
-  State<_VarTextField> createState() => _VarTextFieldState();
-}
-
-class _VarTextFieldState extends State<_VarTextField> {
-  late final TextEditingController _ctrl;
-  bool _obscured = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = TextEditingController(text: widget.value);
-    _obscured = widget.obscure;
-  }
-
-  @override
-  void didUpdateWidget(_VarTextField old) {
-    super.didUpdateWidget(old);
-    if (widget.value != old.value && widget.value != _ctrl.text) {
-      _ctrl.text = widget.value;
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final field = SizedBox(
-      width: widget.width,
-      child: TextField(
-        controller: _ctrl,
-        obscureText: _obscured,
-        style: const TextStyle(fontSize: 13),
-        decoration: InputDecoration(
-          isDense: true,
-          border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          suffixIcon: widget.obscure
-              ? IconButton(
-                  icon: Icon(
-                    _obscured ? Icons.visibility_off : Icons.visibility,
-                    size: 18,
-                  ),
-                  onPressed: () => setState(() => _obscured = !_obscured),
-                )
-              : null,
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(
+          12,
+          12,
+          12,
+          MediaQuery.of(context).padding.bottom + 24,
         ),
-        onChanged: widget.onChanged,
+        children: [
+          TemplateVarListView(
+            vars: editableVars,
+            initialValues: _varValues,
+            sectionDescriptions: sectionDescriptions,
+            onChanged: _onVarChanged,
+          ),
+        ],
       ),
-    );
-
-    return ListTile(
-      title: Text(widget.label),
-      subtitle: widget.tooltip.isNotEmpty
-          ? Text(widget.tooltip, style: const TextStyle(fontSize: 12))
-          : null,
-      trailing: widget.trailing != null
-          ? Row(mainAxisSize: MainAxisSize.min, children: [field, widget.trailing!])
-          : field,
     );
   }
 }

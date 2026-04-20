@@ -62,7 +62,7 @@
 
   "preset_groups": [
     {
-      "tag": "auto-proxy-out",
+      "tag": "@auto_proxy_tag",
       "type": "urltest",
       "label": "Include Auto",
       "default_enabled": true,
@@ -81,9 +81,9 @@
       "default_enabled": true,
       "options": {
         "interrupt_exist_connections": true,
-        "default": "auto-proxy-out"
+        "default": "@auto_proxy_tag"
       },
-      "add_outbounds": ["direct-out", "auto-proxy-out"]
+      "add_outbounds": ["direct-out", "@auto_proxy_tag"]
     },
     {
       "tag": "vpn-2",
@@ -94,7 +94,7 @@
         "default": "direct-out",
         "interrupt_exist_connections": true
       },
-      "add_outbounds": ["direct-out", "auto-proxy-out"]
+      "add_outbounds": ["direct-out", "@auto_proxy_tag"]
     },
     {
       "tag": "vpn-3",
@@ -105,197 +105,267 @@
         "default": "direct-out",
         "interrupt_exist_connections": true
       },
-      "add_outbounds": ["direct-out", "auto-proxy-out"]
+      "add_outbounds": ["direct-out", "@auto_proxy_tag"]
     }
   ],
 
-  "vars": [
-    { "section": "General", "description": "Logging and core settings" },
+  "sections": [
     {
-      "name": "log_level",
-      "type": "enum",
-      "default_value": "warn",
-      "options": ["trace", "debug", "info", "warn", "error", "fatal", "panic"],
-      "wizard_ui": "edit",
-      "title": "Log level",
-      "tooltip": "Verbosity of sing-box logs"
-    },
-    { "section": "Clash API", "description": "Real-time proxy management interface" },
-    {
-      "name": "clash_api",
-      "type": "text",
-      "default_value": "127.0.0.1:9090",
-      "wizard_ui": "edit",
-      "title": "Address",
-      "tooltip": "Host:port for Clash API"
-    },
-    {
-      "name": "clash_secret",
-      "type": "secret",
-      "default_value": "",
-      "wizard_ui": "edit",
-      "title": "Secret",
-      "tooltip": "Authentication secret for Clash API"
-    },
-    { "section": "Network", "description": "Connection and routing behavior" },
-    {
-      "name": "resolve_strategy",
-      "type": "enum",
-      "default_value": "prefer_ipv4",
-      "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"],
-      "wizard_ui": "edit",
-      "title": "Resolve strategy",
-      "tooltip": "IP version preference for DNS resolution"
+      "name": "General",
+      "chapter": "core",
+      "description": "Logging and core settings",
+      "vars": [
+        {
+          "name": "log_level",
+          "type": "enum",
+          "default_value": "warn",
+          "options": ["trace", "debug", "info", "warn", "error", "fatal", "panic"],
+          "wizard_ui": "edit",
+          "title": "Log level",
+          "tooltip": "Verbosity of sing-box logs"
+        },
+        {
+          "name": "auto_proxy_tag",
+          "type": "text",
+          "default_value": "✨auto",
+          "wizard_ui": "hidden",
+          "title": "Auto proxy tag",
+          "tooltip": "Internal — tag of the URLTest group. Не редактируется."
+        }
+      ]
     },
     {
-      "name": "auto_detect_interface",
-      "type": "bool",
-      "default_value": "true",
-      "wizard_ui": "edit",
-      "title": "Auto-detect interface",
-      "tooltip": "Automatically detect the default network interface"
+      "name": "Clash API",
+      "chapter": "core",
+      "description": "Real-time proxy management interface",
+      "vars": [
+        {
+          "name": "clash_api",
+          "type": "text",
+          "default_value": "127.0.0.1:9090",
+          "wizard_ui": "edit",
+          "title": "Address",
+          "tooltip": "Host:port for Clash API"
+        },
+        {
+          "name": "clash_secret",
+          "type": "secret",
+          "default_value": "",
+          "wizard_ui": "edit",
+          "title": "Secret",
+          "tooltip": "Authentication secret for Clash API"
+        }
+      ]
     },
     {
-      "name": "sniff_enabled",
-      "type": "bool",
-      "default_value": "true",
-      "wizard_ui": "edit",
-      "title": "Packet sniffing",
-      "tooltip": "Detect protocol and domain from packets for accurate routing"
-    },
-    { "section": "Auto Proxy", "description": "Automatic proxy selection (urltest)" },
-    {
-      "name": "urltest_url",
-      "type": "text",
-      "default_value": "https://cp.cloudflare.com/generate_204",
-      "wizard_ui": "edit",
-      "title": "Test URL",
-      "tooltip": "Endpoint for measuring proxy latency"
-    },
-    {
-      "name": "urltest_interval",
-      "type": "text",
-      "default_value": "5m",
-      "wizard_ui": "edit",
-      "title": "Test interval",
-      "tooltip": "How often to check proxy latency (e.g. 30s, 1m, 5m)"
-    },
-    {
-      "name": "urltest_tolerance",
-      "type": "text",
-      "default_value": "30",
-      "wizard_ui": "edit",
-      "title": "Tolerance (ms)",
-      "tooltip": "Only switch proxy if latency difference exceeds this"
-    },
-    { "section": "DNS", "description": "Domain name resolution" },
-    {
-      "name": "dns_strategy",
-      "type": "enum",
-      "default_value": "prefer_ipv4",
-      "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"],
-      "wizard_ui": "edit",
-      "title": "Preferred IP version",
-      "tooltip": "DNS resolution strategy"
+      "name": "Network",
+      "chapter": "core",
+      "description": "Connection and routing behavior",
+      "vars": [
+        {
+          "name": "resolve_strategy",
+          "type": "enum",
+          "default_value": "prefer_ipv4",
+          "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"],
+          "wizard_ui": "edit",
+          "title": "Resolve strategy",
+          "tooltip": "IP version preference for DNS resolution"
+        },
+        {
+          "name": "auto_detect_interface",
+          "type": "bool",
+          "default_value": "true",
+          "wizard_ui": "edit",
+          "title": "Auto-detect interface",
+          "tooltip": "Automatically detect the default network interface"
+        },
+        {
+          "name": "sniff_enabled",
+          "type": "bool",
+          "default_value": "true",
+          "wizard_ui": "edit",
+          "title": "Packet sniffing",
+          "tooltip": "Detect protocol and domain from packets for accurate routing"
+        }
+      ]
     },
     {
-      "name": "dns_independent_cache",
-      "type": "bool",
-      "default_value": "false",
-      "wizard_ui": "fix",
-      "title": "Independent DNS cache",
-      "tooltip": "Separate cache per DNS server"
+      "name": "Auto Proxy",
+      "chapter": "routing",
+      "description": "URLTest tuning for the ✨auto group",
+      "vars": [
+        {
+          "name": "urltest_url",
+          "type": "text",
+          "default_value": "https://cp.cloudflare.com/generate_204",
+          "options": [
+            "https://cp.cloudflare.com/generate_204",
+            "https://www.gstatic.com/generate_204",
+            "https://captive.apple.com/hotspot-detect.html"
+          ],
+          "wizard_ui": "edit",
+          "title": "Test URL",
+          "tooltip": "Endpoint for measuring proxy latency. Pick a preset or type any URL — 204 / tiny-body endpoints are best."
+        },
+        {
+          "name": "urltest_interval",
+          "type": "text",
+          "default_value": "5m",
+          "options": [
+            "30s",
+            "1m",
+            "3m",
+            "5m",
+            "10m",
+            "30m"
+          ],
+          "wizard_ui": "edit",
+          "title": "Test interval",
+          "tooltip": "How often sing-box re-tests and re-picks. Lower → faster first pick after connect, but more background traffic (1m typical, 5m conservative)."
+        },
+        {
+          "name": "urltest_tolerance",
+          "type": "text",
+          "default_value": "30",
+          "options": [
+            "10",
+            "30",
+            "50",
+            "100",
+            "200"
+          ],
+          "wizard_ui": "edit",
+          "title": "Tolerance (ms)",
+          "tooltip": "Only switch proxy if latency difference exceeds this"
+        }
+      ]
     },
     {
-      "name": "dns_default_domain_resolver",
-      "type": "text",
-      "default_value": "cloudflare_udp",
-      "wizard_ui": "fix",
-      "title": "Default domain resolver",
-      "tooltip": "DNS server tag for resolving domains in routing rules"
+      "name": "DNS",
+      "chapter": "dns",
+      "description": "Domain name resolution",
+      "vars": [
+        {
+          "name": "dns_strategy",
+          "type": "enum",
+          "default_value": "prefer_ipv4",
+          "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"],
+          "wizard_ui": "edit",
+          "title": "Preferred IP version",
+          "tooltip": "DNS resolution strategy"
+        },
+        {
+          "name": "dns_default_domain_resolver",
+          "type": "text",
+          "default_value": "cloudflare_udp",
+          "wizard_ui": "fix",
+          "title": "Default domain resolver",
+          "tooltip": "DNS server tag for resolving domains in routing rules"
+        },
+        {
+          "name": "dns_final",
+          "type": "text",
+          "default_value": "direct_dns_resolver",
+          "wizard_ui": "fix",
+          "title": "DNS final",
+          "tooltip": "Fallback DNS server for unmatched queries"
+        }
+      ]
     },
     {
-      "name": "dns_final",
-      "type": "text",
-      "default_value": "direct_dns_resolver",
-      "wizard_ui": "fix",
-      "title": "DNS final",
-      "tooltip": "Fallback DNS server for unmatched queries"
-    },
-    { "section": "TUN", "description": "Virtual network interface" },
-    {
-      "name": "tun_address",
-      "type": "text",
-      "default_value": "172.16.0.1/30",
-      "wizard_ui": "fix",
-      "title": "IPv4 address",
-      "tooltip": "TUN interface address (CIDR)"
-    },
-    {
-      "name": "tun_mtu",
-      "type": "text",
-      "default_value": "1492",
-      "wizard_ui": "edit",
-      "title": "MTU",
-      "tooltip": "1492 recommended for mobile/WiFi"
-    },
-    {
-      "name": "tun_auto_route",
-      "type": "bool",
-      "default_value": "true",
-      "wizard_ui": "fix",
-      "title": "Auto route",
-      "tooltip": "Let sing-box manage routing table"
-    },
-    {
-      "name": "tun_strict_route",
-      "type": "bool",
-      "default_value": "false",
-      "wizard_ui": "fix",
-      "title": "Strict route",
-      "tooltip": "May break connectivity on some devices"
-    },
-    {
-      "name": "tun_stack",
-      "type": "enum",
-      "default_value": "system",
-      "options": ["system", "gvisor", "mixed"],
-      "wizard_ui": "edit",
-      "title": "Stack",
-      "tooltip": "system (default), gvisor (userspace), mixed"
-    },
-    { "section": "DPI Bypass", "description": "TLS fragmentation to bypass censorship" },
-    {
-      "name": "tls_fragment",
-      "type": "bool",
-      "default_value": "false",
-      "wizard_ui": "edit",
-      "title": "TLS Fragment",
-      "tooltip": "Split TLS ClientHello into small TCP segments"
+      "name": "TUN",
+      "chapter": "core",
+      "description": "Virtual network interface",
+      "vars": [
+        {
+          "name": "tun_address",
+          "type": "text",
+          "default_value": "172.16.0.1/30",
+          "wizard_ui": "edit",
+          "title": "IPv4 address",
+          "tooltip": "TUN interface address (CIDR)"
+        },
+        {
+          "name": "tun_name",
+          "type": "text",
+          "default_value": "lxbox",
+          "wizard_ui": "edit",
+          "title": "TUN interface",
+          "tooltip": "system name"
+        },
+        {
+          "name": "tun_mtu",
+          "type": "text",
+          "default_value": "1492",
+          "wizard_ui": "edit",
+          "title": "MTU",
+          "tooltip": "1492 recommended for mobile/WiFi"
+        },
+        {
+          "name": "tun_auto_route",
+          "type": "bool",
+          "default_value": "true",
+          "wizard_ui": "edit",
+          "title": "Auto route",
+          "tooltip": "Let sing-box manage routing table"
+        },
+        {
+          "name": "tun_strict_route",
+          "type": "bool",
+          "default_value": "false",
+          "wizard_ui": "edit",
+          "title": "Strict route",
+          "tooltip": "May break connectivity on some devices"
+        },
+        {
+          "name": "tun_stack",
+          "type": "enum",
+          "default_value": "system",
+          "options": ["system", "gvisor", "mixed"],
+          "wizard_ui": "edit",
+          "title": "Stack",
+          "tooltip": "system (default), gvisor (userspace), mixed"
+        }
+      ]
     },
     {
-      "name": "tls_record_fragment",
-      "type": "bool",
-      "default_value": "false",
-      "wizard_ui": "edit",
-      "title": "TLS Record Fragment",
-      "tooltip": "Split handshake into multiple TLS records (try this first)"
-    },
-    {
-      "name": "tls_fragment_fallback_delay",
-      "type": "text",
-      "default_value": "500ms",
-      "wizard_ui": "edit",
-      "title": "Fallback delay",
-      "tooltip": "Wait time when automatic detection fails"
-    },
-    {
-      "name": "tls_mixed_case_sni",
-      "type": "bool",
-      "default_value": "false",
-      "wizard_ui": "edit",
-      "title": "Mixed-case SNI",
-      "tooltip": "Randomize letter case in server_name (WwW.gOoGle.CoM). Bypasses simple exact-match DPI; ineffective against GFW-class filtering"
+      "name": "DPI Bypass",
+      "chapter": "core",
+      "description": "TLS fragmentation to bypass censorship",
+      "vars": [
+        {
+          "name": "tls_fragment",
+          "type": "bool",
+          "default_value": "false",
+          "wizard_ui": "edit",
+          "title": "TLS Fragment",
+          "tooltip": "Split TLS ClientHello into small TCP segments"
+        },
+        {
+          "name": "tls_record_fragment",
+          "type": "bool",
+          "default_value": "false",
+          "wizard_ui": "edit",
+          "title": "TLS Record Fragment",
+          "tooltip": "Split handshake into multiple TLS records (try this first)"
+        },
+        {
+          "name": "tls_fragment_fallback_delay",
+          "type": "text",
+          "default_value": "500ms",
+          "wizard_ui": "edit",
+          "title": "Fallback delay",
+          "tooltip": "Wait time when automatic detection fails"
+        },
+        {
+          "name": "tls_mixed_case_sni",
+          "type": "bool",
+          "default_value": "false",
+          "wizard_ui": "edit",
+          "title": "Mixed-case SNI",
+          "tooltip": "Randomize letter case in server_name (WwW.gOoGle.CoM). Bypasses simple exact-match DPI; ineffective against GFW-class filtering"
+        }
+      ]
     }
   ],
 
@@ -308,13 +378,13 @@
       "servers": [],
       "rules": [],
       "final": "@dns_final",
-      "strategy": "@dns_strategy",
-      "independent_cache": "@dns_independent_cache"
+      "strategy": "@dns_strategy"
     },
     "inbounds": [
       {
         "type": "tun",
         "tag": "tun-in",
+        "interface_name": "@tun_name",
         "address": "@tun_address",
         "mtu": "@tun_mtu",
         "auto_route": "@tun_auto_route",
