@@ -447,20 +447,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     final enabled = !state.busy && !_subController.busy;
     final fg = dirty ? cs.onPrimaryContainer : null;
     final bg = dirty ? cs.primaryContainer : Colors.transparent;
-    final tooltip = _defaultReloadLabel(state, dirty);
-    return Tooltip(
-      message: tooltip,
+    // Без Tooltip: на mobile он сам хватает long-press (его default trigger)
+    // и наш `onLongPress` на InkWell никогда не срабатывает. Label доступен
+    // через Semantics для accessibility.
+    return Semantics(
+      button: true,
+      label: _defaultReloadLabel(state, dirty),
       child: Material(
         color: bg,
         shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
         // Builder нужен чтобы `findRenderObject` в _showReloadMenu нашёл саму
         // кнопку, а не родительский Row/Column (иначе меню всплывёт с краю).
-        child: Builder(builder: (inkCtx) => InkResponse(
-          radius: 24,
+        child: Builder(builder: (inkCtx) => InkWell(
           onTap: enabled ? () => _runDefaultReload(state) : null,
           onLongPress: enabled ? () => _showReloadMenu(inkCtx, state) : null,
           child: Padding(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             child: Icon(Icons.refresh, size: 20, color: fg),
           ),
         )),
