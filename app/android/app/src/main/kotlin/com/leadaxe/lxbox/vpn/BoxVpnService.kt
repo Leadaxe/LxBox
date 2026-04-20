@@ -47,13 +47,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             private set
 
         fun start(context: Context) {
-            Log.d(TAG, "[DIAG] companion.start() → startForegroundService, current status=${currentStatus.name}")
+            Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${currentStatus.name}")
             val intent = Intent(context, BoxVpnService::class.java).apply { action = ACTION_START }
             ContextCompat.startForegroundService(context, intent)
         }
 
         fun stop(context: Context) {
-            Log.d(TAG, "[DIAG] companion.stop() → sendBroadcast(ACTION_STOP), current status=${currentStatus.name}")
+            Log.d(TAG, "[vpn] companion.stop() → sendBroadcast(ACTION_STOP), current status=${currentStatus.name}")
             context.sendBroadcast(
                 Intent(ACTION_STOP).setPackage(context.packageName)
             )
@@ -79,7 +79,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            Log.d(TAG, "[DIAG] service.receiver.onReceive action=${intent.action} status=${status.name} registered=$receiverRegistered")
+            Log.d(TAG, "[vpn] service.receiver.onReceive action=${intent.action} status=${status.name} registered=$receiverRegistered")
             when (intent.action) {
                 ACTION_STOP -> doStop()
                 PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> {
@@ -94,18 +94,18 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     // -------------------------------------------------------------------------
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "[DIAG] onStartCommand action=${intent?.action} status=${status.name} startId=$startId receiverRegistered=$receiverRegistered")
+        Log.d(TAG, "[vpn] onStartCommand action=${intent?.action} status=${status.name} startId=$startId receiverRegistered=$receiverRegistered")
         notification.show(ConfigManager.notificationTitle, "Starting...")
 
         if (status != VpnStatus.Stopped) {
-            Log.w(TAG, "[DIAG] onStartCommand GUARD — status=${status.name} != Stopped, silent return (no setStatus, no broadcast)")
+            Log.w(TAG, "[vpn] onStartCommand GUARD — status=${status.name} != Stopped, silent return (no setStatus, no broadcast)")
             return START_NOT_STICKY
         }
         resetScope()
         setStatus(VpnStatus.Starting)
 
         if (!receiverRegistered) {
-            Log.d(TAG, "[DIAG] registerReceiver from onStartCommand")
+            Log.d(TAG, "[vpn] registerReceiver from onStartCommand")
             ContextCompat.registerReceiver(this, receiver, IntentFilter().apply {
                 addAction(ACTION_STOP)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -114,7 +114,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             }, ContextCompat.RECEIVER_NOT_EXPORTED)
             receiverRegistered = true
         } else {
-            Log.d(TAG, "[DIAG] onStartCommand: receiver already registered, skipping")
+            Log.d(TAG, "[vpn] onStartCommand: receiver already registered, skipping")
         }
 
         serviceScope.launch {
@@ -132,10 +132,10 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     override fun onBind(intent: Intent): IBinder? = super.onBind(intent) ?: android.os.Binder()
 
     override fun onDestroy() {
-        Log.d(TAG, "[DIAG] onDestroy status=${status.name} receiverRegistered=$receiverRegistered")
+        Log.d(TAG, "[vpn] onDestroy status=${status.name} receiverRegistered=$receiverRegistered")
         serviceScope.cancel()
         if (receiverRegistered) {
-            Log.d(TAG, "[DIAG] unregisterReceiver from onDestroy")
+            Log.d(TAG, "[vpn] unregisterReceiver from onDestroy")
             runCatching { unregisterReceiver(receiver) }
             receiverRegistered = false
         }
@@ -247,15 +247,15 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     }
 
     private fun doStop() {
-        Log.d(TAG, "[DIAG] doStop ENTER status=${status.name} receiverRegistered=$receiverRegistered")
+        Log.d(TAG, "[vpn] doStop ENTER status=${status.name} receiverRegistered=$receiverRegistered")
         if (status == VpnStatus.Stopped || status == VpnStatus.Stopping) {
-            Log.w(TAG, "[DIAG] doStop GUARD — already ${status.name}, return without action")
+            Log.w(TAG, "[vpn] doStop GUARD — already ${status.name}, return without action")
             return
         }
         setStatus(VpnStatus.Stopping)
 
         if (receiverRegistered) {
-            Log.d(TAG, "[DIAG] unregisterReceiver from doStop")
+            Log.d(TAG, "[vpn] unregisterReceiver from doStop")
             runCatching { unregisterReceiver(receiver) }
             receiverRegistered = false
         }
@@ -278,7 +278,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             commandServer = null
 
             withContext(Dispatchers.Main) {
-                Log.d(TAG, "[DIAG] doStop cleanup done → setStatus(Stopped) + stopSelf()")
+                Log.d(TAG, "[vpn] doStop cleanup done → setStatus(Stopped) + stopSelf()")
                 setStatus(VpnStatus.Stopped)
                 stopSelf()
             }
@@ -302,7 +302,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     }
 
     private fun setStatus(newStatus: VpnStatus, error: String? = null) {
-        Log.d(TAG, "[DIAG] setStatus(${newStatus.name})${if (error != null) " error=$error" else ""} — sendBroadcast")
+        Log.d(TAG, "[vpn] setStatus(${newStatus.name})${if (error != null) " error=$error" else ""} — sendBroadcast")
         status = newStatus
         currentStatus = newStatus
         sendBroadcast(

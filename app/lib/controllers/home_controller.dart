@@ -94,7 +94,7 @@ class HomeController extends ChangeNotifier {
     final prevTunnel = _state.tunnel;
     _addDebug(DebugSource.core, event.toString());
     _addDebug(DebugSource.app,
-        '[DIAG] _handleStatusEvent raw="$raw" tunnel=${tunnel.name} prev=${prevTunnel.name} stale_before=${_state.configStaleSinceStart}');
+        '[vpn] _handleStatusEvent raw="$raw" tunnel=${tunnel.name} prev=${prevTunnel.name} stale_before=${_state.configStaleSinceStart}');
     _emit(_state.copyWith(tunnel: tunnel));
 
     if (tunnel == TunnelStatus.connected) {
@@ -280,9 +280,17 @@ class HomeController extends ChangeNotifier {
   }
 
   Future<bool> saveParsedConfig(String canonicalJson, {String? displayRaw}) async {
-    final callerFrames = StackTrace.current.toString().split('\n').take(4).join(' | ');
-    _addDebug(DebugSource.app,
-        '[DIAG] saveParsedConfig ENTER tunnelUp=${_state.tunnelUp} stale_before=${_state.configStaleSinceStart} caller=$callerFrames');
+    if (kDebugMode) {
+      // StackTrace.current — аллокация + toString + split на каждый save,
+      // на hot-path'е затратно (save дергается из routing apply, settings,
+      // auto-updater, rebuild). В release выключено, оставляем для dev-диагностики.
+      final callerFrames = StackTrace.current.toString().split('\n').take(4).join(' | ');
+      _addDebug(DebugSource.app,
+          '[vpn] saveParsedConfig ENTER tunnelUp=${_state.tunnelUp} stale_before=${_state.configStaleSinceStart} caller=$callerFrames');
+    } else {
+      _addDebug(DebugSource.app,
+          '[vpn] saveParsedConfig ENTER tunnelUp=${_state.tunnelUp} stale_before=${_state.configStaleSinceStart}');
+    }
     final ok = await _vpn.saveConfig(canonicalJson);
     if (!ok) {
       _emit(_state.copyWith(lastError: 'Failed to save config'));
@@ -294,7 +302,7 @@ class HomeController extends ChangeNotifier {
     // warning "Restart VPN to apply changes". Флаг sticky до up↔down.
     final stale = _state.tunnelUp || _state.configStaleSinceStart;
     _addDebug(DebugSource.app,
-        '[DIAG] saveParsedConfig EXIT stale_after=$stale (tunnelUp=${_state.tunnelUp} || prev=${_state.configStaleSinceStart})');
+        '[vpn] saveParsedConfig EXIT stale_after=$stale (tunnelUp=${_state.tunnelUp} || prev=${_state.configStaleSinceStart})');
     _emit(_state.copyWith(
       configRaw: raw,
       lastError: '',
@@ -446,10 +454,10 @@ class HomeController extends ChangeNotifier {
     final wasUp = _state.tunnel == TunnelStatus.connected ||
         _state.tunnel == TunnelStatus.connecting;
     _addDebug(DebugSource.app,
-        '[DIAG] reconnect ENTER tunnel=${_state.tunnel.name} wasUp=$wasUp stale=${_state.configStaleSinceStart}');
+        '[vpn] reconnect ENTER tunnel=${_state.tunnel.name} wasUp=$wasUp stale=${_state.configStaleSinceStart}');
     if (!wasUp) {
       await start();
-      _addDebug(DebugSource.app, '[DIAG] reconnect EXIT (was down → start only)');
+      _addDebug(DebugSource.app, '[vpn] reconnect EXIT (was down → start only)');
       return;
     }
     _emit(_state.copyWith(busy: true, lastError: ''));
@@ -458,12 +466,12 @@ class HomeController extends ChangeNotifier {
         final s = TunnelStatus.fromNative(e['status']?.toString() ?? '');
         final match = s == TunnelStatus.disconnected || s == TunnelStatus.revoked;
         _addDebug(DebugSource.app,
-            '[DIAG] reconnect firstWhere sees raw="${e['status']}" → ${s.name} match=$match');
+            '[vpn] reconnect firstWhere sees raw="${e['status']}" → ${s.name} match=$match');
         return match;
       }).timeout(const Duration(seconds: 10),
           onTimeout: () {
             _addDebug(DebugSource.app,
-                '[DIAG] reconnect firstWhere TIMEOUT 10s — no disconnected/revoked event received');
+                '[vpn] reconnect firstWhere TIMEOUT 10s — no disconnected/revoked event received');
             return <String, dynamic>{};
           });
       await _vpn.stopVPN();
@@ -471,9 +479,9 @@ class HomeController extends ChangeNotifier {
       try {
         await wait;
         final dt = DateTime.now().difference(t0).inMilliseconds;
-        _addDebug(DebugSource.app, '[DIAG] reconnect wait resolved after ${dt}ms');
+        _addDebug(DebugSource.app, '[vpn] reconnect wait resolved after ${dt}ms');
       } catch (e) {
-        _addDebug(DebugSource.app, '[DIAG] reconnect wait threw $e');
+        _addDebug(DebugSource.app, '[vpn] reconnect wait threw $e');
       }
       await _vpn.setNotificationTitle('L×Box');
       final ok = await _vpn.startVPN();
@@ -489,7 +497,7 @@ class HomeController extends ChangeNotifier {
     } finally {
       _emit(_state.copyWith(busy: false));
       _addDebug(DebugSource.app,
-          '[DIAG] reconnect EXIT tunnel=${_state.tunnel.name} stale=${_state.configStaleSinceStart}');
+          '[vpn] reconnect EXIT tunnel=${_state.tunnel.name} stale=${_state.configStaleSinceStart}');
     }
   }
 
