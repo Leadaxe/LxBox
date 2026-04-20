@@ -114,6 +114,11 @@ class HomeController extends ChangeNotifier {
       _stopHeartbeat();
       _autoPingTimer?.cancel();
       _autoPingTimer = null;
+      // Clash endpoint прошлой сессии теперь невалиден — secret был у
+      // убитого sing-box, port может быть переиспользован системой. На
+      // следующем `connected` event мы пересоберём его через
+      // `_refreshClashAfterTunnel` → `_rebuildClashEndpoint`.
+      _clash = null;
       final reason = tunnel == TunnelStatus.revoked
           ? 'VPN revoked by another app'
           : _extractStopReason(event);
@@ -777,8 +782,32 @@ class HomeController extends ChangeNotifier {
     }
   }
 
-  /// Called when the app returns from background. Verifies tunnel health.
+  /// Called when the app returns from background. Verifies tunnel health:
+  ///   1. One-shot pull `getVpnStatus` → если native divergent от Dart state
+  ///      (напр., service умер силой Doze/OOM пока app был suspended, и
+  ///      broadcast'а не было) — прогоняем через тот же `_handleStatusEvent`,
+  ///      чтобы UI синхронизировался.
+  ///   2. Если после pull'а туннель всё ещё up — heartbeat для проверки что
+  ///      Clash отвечает.
+  ///
+  /// Event-driven (не polling) — дёргается только на lifecycle resume,
+  /// в steady-state ничего не крутится.
   void onAppResumed() {
+    unawaited(_resyncOnResume());
+  }
+
+  Future<void> _resyncOnResume() async {
+    try {
+      final raw = await _vpn.getVpnStatus();
+      final native = TunnelStatus.fromNative(raw);
+      if (native != _state.tunnel) {
+        _addDebug(DebugSource.app,
+            '[vpn] onAppResumed: divergence native=${native.name} state=${_state.tunnel.name} — re-sync');
+        _handleStatusEvent({'status': raw});
+      }
+    } catch (e) {
+      _addDebug(DebugSource.app, '[vpn] onAppResumed pull error: $e');
+    }
     if (_state.tunnelUp) {
       unawaited(_checkHeartbeat());
     }

@@ -55,6 +55,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   Timer? _errorTimer;
   String _errorTimerFor = '';
 
+  /// Для side-effect'ов на transition tunnel (SnackBar при → revoked).
+  /// Обновляется в `_onControllerChange` после каждого notifyListeners.
+  TunnelStatus _prevTunnel = TunnelStatus.disconnected;
+
   @override
   void initState() {
     super.initState();
@@ -79,6 +83,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     unawaited(_initSubsAndAutoUpdate());
     unawaited(_loadAutoRebuild());
     unawaited(_loadHapticPref());
+    // Track tunnel transitions для side-effect'ов (SnackBar при revoke).
+    // AnimatedBuilder уже rebuildит UI на notifyListeners; listener здесь
+    // нужен только для эффектов вне build-фазы.
+    _prevTunnel = _controller.state.tunnel;
+    _controller.addListener(_onControllerChange);
+  }
+
+  void _onControllerChange() {
+    final now = _controller.state.tunnel;
+    if (_prevTunnel != TunnelStatus.revoked &&
+        now == TunnelStatus.revoked) {
+      _showRevokedSnackBar();
+    }
+    _prevTunnel = now;
+  }
+
+  void _showRevokedSnackBar() {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('VPN taken by another app'),
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Start',
+            onPressed: () => unawaited(_controller.start()),
+          ),
+        ),
+      );
   }
 
   /// init подписок + затем `start()` AutoUpdater'а (триггер #1 appStart
@@ -101,6 +137,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   @override
   void dispose() {
     _errorTimer?.cancel();
+    _controller.removeListener(_onControllerChange);
     _autoUpdater.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -609,25 +646,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       _connectingAnim.reset();
     }
 
-    final icon = isRevoked
-        ? Icons.warning_amber_rounded
-        : state.tunnelUp
-            ? Icons.shield
-            : isConnecting
-                ? Icons.sync
-                : Icons.shield_outlined;
+    // UI mapping: revoked отображаем как disconnected. Факт "нас выкинули"
+    // юзер получает через SnackBar (см. _showRevokedSnackBar), а chip
+    // показывает нейтральный off-state — так видна обычная Start кнопка,
+    // без алармирующего красного. Само значение state.tunnel=revoked
+    // внутри контроллера не меняется — это нужно для side-effect
+    // transition detection в _onControllerChange.
+    final icon = state.tunnelUp
+        ? Icons.shield
+        : isConnecting
+            ? Icons.sync
+            : Icons.shield_outlined;
 
-    final color = isRevoked
-        ? Theme.of(context).colorScheme.error
-        : state.tunnelUp
-            ? Theme.of(context).colorScheme.primary
-            : null;
+    final color = state.tunnelUp
+        ? Theme.of(context).colorScheme.primary
+        : null;
 
-    final bgColor = isRevoked
-        ? Theme.of(context).colorScheme.errorContainer
-        : state.tunnelUp
-            ? Theme.of(context).colorScheme.primaryContainer
-            : null;
+    final bgColor = state.tunnelUp
+        ? Theme.of(context).colorScheme.primaryContainer
+        : null;
+
+    final label =
+        isRevoked ? TunnelStatus.disconnected.label : state.tunnel.label;
 
     Widget iconWidget = Icon(icon, size: 18, color: color);
     if (isConnecting) {
@@ -642,7 +682,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     }
 
     return Chip(
-      label: Text(state.tunnel.label),
+      label: Text(label),
       avatar: iconWidget,
       backgroundColor: bgColor,
     );
