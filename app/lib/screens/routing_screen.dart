@@ -588,7 +588,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
         (cr is CustomRulePreset && _remoteRuleSetsOf(rule).isNotEmpty);
     if (needsSrs) cr = cr.withEnabled(false);
 
-    final insertAt = _computeInsertIndex(cr!);
+    final insertAt = _computeInsertIndex(cr);
     setState(() {
       _customRules.insert(insertAt, cr!);
       _scheduleSave();

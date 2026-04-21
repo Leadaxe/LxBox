@@ -198,23 +198,33 @@ class CustomRuleInline extends CustomRule {
   });
 
   // OR-группа #1 (domain-family + ip). Внутри OR, между остальными — AND.
+  @override
   List<String> domains;
+  @override
   List<String> domainSuffixes;
+  @override
   List<String> domainKeywords;
+  @override
   List<String> ipCidrs;
 
   // OR-группа #2 (port-family). AND с domain-family.
+  @override
   List<String> ports;       // user-input, int-parse на emit
+  @override
   List<String> portRanges;  // "8000:9000", ":3000", "4000:"
 
   // OR-группа #3 (package_name). AND с остальными.
+  @override
   List<String> packages;
 
   // Routing-rule-level AND (не в headless).
+  @override
   List<String> protocols;   // subset of kKnownProtocols
+  @override
   bool ipIsPrivate;
 
   /// Outbound-тег либо `kOutboundReject` (→ action: reject).
+  @override
   String outbound;
 
   @override
@@ -326,17 +336,24 @@ class CustomRuleSrs extends CustomRule {
     this.outbound = 'direct-out',
   });
 
+  @override
   String srsUrl;
 
   /// Доп-фильтры на routing-rule level (AND с `.srs`-match внутри rule_set).
   /// Используются когда remote `.srs` слишком широкий: например, «только
   /// на 443 + только Firefox».
+  @override
   List<String> ports;
+  @override
   List<String> portRanges;
+  @override
   List<String> packages;
+  @override
   List<String> protocols;
+  @override
   bool ipIsPrivate;
 
+  @override
   String outbound;
 
   @override
@@ -431,6 +448,7 @@ class CustomRulePreset extends CustomRule {
     Map<String, String>? varsValues,
   }) : varsValues = Map<String, String>.from(varsValues ?? const {});
 
+  @override
   String presetId;
 
   /// Значения переменных пресета, выставленные юзером в UI.
@@ -441,6 +459,7 @@ class CustomRulePreset extends CustomRule {
   /// - ключ **есть, значение непустое** → явный выбор.
   /// - ключ **есть, значение пустое** → explicit "— (none)" для optional var;
   ///   фрагменты с unresolved `@name` выкидываются.
+  @override
   Map<String, String> varsValues;
 
   @override
