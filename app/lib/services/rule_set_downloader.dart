@@ -59,16 +59,22 @@ class RuleSetDownloader {
   /// 3 попытки с exp backoff (1s, 3s) — total worst case ~34s.
   /// Retry только на transient (timeout/network/5xx); 4xx = permanent skip.
   ///
+  /// `client` инжектится только в тестах (night T3-1); в проде `http.get`.
   /// Возвращает абсолютный путь при успехе, null при финальной ошибке.
-  static Future<String?> download(String id, String url) async {
+  static Future<String?> download(
+    String id,
+    String url, {
+    http.Client? client,
+  }) async {
     const backoffs = [Duration(seconds: 1), Duration(seconds: 3)];
     for (var attempt = 0; attempt < 3; attempt++) {
       try {
         final f = await _file(id);
         final tmp = File('${f.path}.tmp');
 
-        final resp = await http
-            .get(Uri.parse(url), headers: {'User-Agent': 'LxBox'})
+        final resp = await (client != null
+                ? client.get(Uri.parse(url), headers: {'User-Agent': 'LxBox'})
+                : http.get(Uri.parse(url), headers: {'User-Agent': 'LxBox'}))
             .timeout(_timeout);
 
         if (resp.statusCode >= 400 && resp.statusCode < 500) return null;

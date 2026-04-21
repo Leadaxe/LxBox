@@ -8,6 +8,7 @@ import '../models/server_list.dart';
 import '../models/subscription_meta.dart';
 import '../services/app_log.dart';
 import '../services/error_humanize.dart';
+import '../services/parse_hints.dart';
 import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
 import '../services/parser/body_decoder.dart';
@@ -621,11 +622,23 @@ class SubscriptionController extends ChangeNotifier {
       if (warnNodes > 0) {
         AppLog.I.warning('$warnNodes nodes with warnings (XHTTP fallback etc.)');
       }
+      // Parse hint (night T3-3): 0 узлов при успешном HTTP → вероятно
+      // body не распознан. Диагностируем и логируем подсказку, чтобы юзер
+      // знал что делать (HTML / Clash YAML / error page / full config).
+      if (result.nodes.isEmpty) {
+        final hint = diagnoseEmptyParse(result.rawBody);
+        if (hint != null) AppLog.I.warning('Parse hint: $hint');
+      }
       entry.nodeCount = result.nodes.length;
       final detours = result.nodes.where((n) => n.chained != null).length;
-      entry.status = detours > 0
-          ? '${result.nodes.length} +$detours⚙ nodes'
-          : '${result.nodes.length} nodes';
+      if (result.nodes.isEmpty) {
+        final hint = diagnoseEmptyParse(result.rawBody);
+        entry.status = hint != null ? '0 nodes — $hint' : '0 nodes';
+      } else {
+        entry.status = detours > 0
+            ? '${result.nodes.length} +$detours⚙ nodes'
+            : '${result.nodes.length} nodes';
+      }
 
       final current = entry.list as SubscriptionServers;
       final nextName = current.name.isEmpty && result.meta?.profileTitle != null

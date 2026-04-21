@@ -349,7 +349,18 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                       ],
                     ),
                   ),
-                Expanded(child: _buildList(ctrl)),
+                Expanded(
+                  child: RefreshIndicator(
+                    // Pull-to-refresh (night T3-2): стандартный Android UX-жест,
+                    // альтернативный кнопке refresh в AppBar. Эквивалент
+                    // `_updateAll()`; noop если уже busy.
+                    onRefresh: () async {
+                      if (ctrl.busy) return;
+                      await _updateAll();
+                    },
+                    child: _buildList(ctrl),
+                  ),
+                ),
                 if (ctrl.entries.isNotEmpty)
                   SafeArea(
                     child: Padding(
@@ -564,28 +575,36 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   Widget _buildList(SubscriptionController ctrl) {
     if (ctrl.entries.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'No subscriptions yet.\nPaste a URL above or pick a public test server:',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: ctrl.busy ? null : () => unawaited(_pickPublicTestServer()),
-                icon: const Icon(Icons.flash_on),
-                label: const Text('Get Public Test Servers'),
-              ),
-            ],
+      // Оборачиваем empty-state в ListView чтобы RefreshIndicator мог
+      // сработать даже без записей (night T3-2).
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'No subscriptions yet.\nPaste a URL above or pick a public test server:',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: ctrl.busy ? null : () => unawaited(_pickPublicTestServer()),
+                  icon: const Icon(Icons.flash_on),
+                  label: const Text('Get Public Test Servers'),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       );
     }
     return ListView.separated(
+      // AlwaysScrollable — чтобы pull-to-refresh работал и на коротких
+      // списках, не заполняющих экран (night T3-2).
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       itemCount: ctrl.entries.length,
       separatorBuilder: (_, _) => const Divider(height: 1),
