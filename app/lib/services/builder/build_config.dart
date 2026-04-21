@@ -169,6 +169,47 @@ Future<BuildResult> buildConfig({
     final p = await RuleSetDownloader.cachedPath(cr.id);
     if (p != null) srsPaths[cr.id] = p;
   }
+  // Bundle presets (spec §033, task 011) — expansion + merge. Регистрирует
+  // rule-set и routing-правила в registry, extra DNS-данные возвращает для
+  // передачи в applyCustomDns. Выполняется **до** applyCustomRules, чтобы
+  // bundle получал свои tag'и чисто (без auto-suffix), а inline/srs правила
+  // пользователя, если вдруг совпадают по name с bundle-tag'ом, ушли
+  // в auto-suffix.
+  //
+  // Pre-resolve локально закэшированных remote rule_set'ов пресета:
+  // spec §011 требует `type: local, path: <кэш>` вместо `type: remote`.
+  // Ключ плоский: `<presetId>|<rule_set_tag>`.
+  final presetSrsPaths = <String, String>{};
+  for (final cr in settings.customRules) {
+    if (cr is! CustomRulePreset) continue;
+    if (cr.presetId.isEmpty) continue;
+    SelectableRule? preset;
+    for (final p in template.selectableRules) {
+      if (p.presetId == cr.presetId) {
+        preset = p;
+        break;
+      }
+    }
+    if (preset == null) continue;
+    for (final rs in preset.ruleSets) {
+      if (rs['type'] != 'remote') continue;
+      final tag = rs['tag'];
+      if (tag is! String || tag.isEmpty) continue;
+      final path = await RuleSetDownloader.cachedPathForPreset(cr.presetId, tag);
+      if (path != null) {
+        presetSrsPaths['${cr.presetId}|$tag'] = path;
+      }
+    }
+  }
+
+  final presetApply = applyPresetBundles(
+    ruleSets,
+    settings.customRules,
+    template.selectableRules,
+    presetSrsPaths: presetSrsPaths,
+  );
+  emitWarnings.addAll(presetApply.warnings);
+
   emitWarnings.addAll(applyCustomRules(
     ruleSets,
     settings.customRules,
@@ -188,7 +229,12 @@ Future<BuildResult> buildConfig({
   applyTlsFragment(config, vars);
   applyMixedCaseSni(config, vars);
 
-  await applyCustomDns(config, template.dnsOptions);
+  await applyCustomDns(
+    config,
+    template.dnsOptions,
+    extraServers: presetApply.extraDnsServers,
+    extraRules: presetApply.extraDnsRules,
+  );
 
   final validation = validateConfig(config);
   return BuildResult(

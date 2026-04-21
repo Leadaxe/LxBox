@@ -9,11 +9,11 @@ void main() {
     test('domain only → inline rule_set + outbound route', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRule(
+        CustomRuleInline(
           id: 'id-1',
           name: 'Pin Yandex',
           domains: ['ya.ru', 'yandex.ru'],
-          target: 'direct-out',
+          outbound: 'direct-out',
         ),
       ]);
       final sets = reg.getRuleSets();
@@ -33,10 +33,10 @@ void main() {
     test('domain_suffix-only rule emits domain_suffix field', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRule(
+        CustomRuleInline(
           name: 'RU',
           domainSuffixes: ['ru', 'xn--p1ai'],
-          target: 'vpn-1',
+          outbound: 'vpn-1',
         ),
       ]);
       expect(reg.getRuleSets().first['rules'].first,
@@ -46,10 +46,10 @@ void main() {
     test('ip_cidr rule emits ip_cidr field', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRule(
+        CustomRuleInline(
           name: 'Home LAN',
           ipCidrs: ['10.0.0.0/8', '192.168.0.0/16'],
-          target: 'direct-out',
+          outbound: 'direct-out',
         ),
       ]);
       expect(reg.getRuleSets().first['rules'].first,
@@ -59,12 +59,12 @@ void main() {
     test('domain + suffix + ip в одном правиле → все в одном headless rule', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRule(
+        CustomRuleInline(
           name: 'Mixed',
           domains: ['foo.com'],
           domainSuffixes: ['bar.com'],
           ipCidrs: ['10.0.0.0/8'],
-          target: 'direct-out',
+          outbound: 'direct-out',
         ),
       ]);
       final match = reg.getRuleSets().first['rules'].first as Map;
@@ -78,12 +78,12 @@ void main() {
     test('ports → int list, port_range → string list, в одном headless rule', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRule(
+        CustomRuleInline(
           name: 'HTTPS+range',
           domainSuffixes: ['example.com'],
           ports: ['443', '8443'],
           portRanges: ['8000:9000', ':3000'],
-          target: 'vpn-1',
+          outbound: 'vpn-1',
         ),
       ]);
       final match = reg.getRuleSets().first['rules'].first as Map;
@@ -94,11 +94,11 @@ void main() {
     test('packages → package_name в inline headless rule', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRule(
+        CustomRuleInline(
           name: 'Firefox RU',
           domainSuffixes: ['.ru'],
           packages: ['org.mozilla.firefox'],
-          target: 'direct-out',
+          outbound: 'direct-out',
         ),
       ]);
       final match = reg.getRuleSets().first['rules'].first as Map;
@@ -111,10 +111,10 @@ void main() {
     test('packages-only rule → inline с одним package_name', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRule(
+        CustomRuleInline(
           name: 'Block bad app',
           packages: ['com.evil.app'],
-          target: kRejectTarget,
+          outbound: kOutboundReject,
         ),
       ]);
       final match = reg.getRuleSets().first['rules'].first as Map;
@@ -126,11 +126,11 @@ void main() {
     test('protocols идут на routing-rule level (headless не поддерживает)', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRule(
+        CustomRuleInline(
           name: 'TLS quic',
           domainSuffixes: ['example.com'],
           protocols: ['tls', 'quic'],
-          target: 'vpn-1',
+          outbound: 'vpn-1',
         ),
       ]);
       final match = reg.getRuleSets().first['rules'].first as Map;
@@ -144,11 +144,11 @@ void main() {
     test('reject + protocol → action:reject со сохранением protocol', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRule(
+        CustomRuleInline(
           name: 'Block BT',
           domainSuffixes: ['.torrent'],
           protocols: ['bittorrent'],
-          target: kRejectTarget,
+          outbound: kOutboundReject,
         ),
       ]);
       final rule = reg.getRules().first;
@@ -160,11 +160,11 @@ void main() {
     test('disabled → skipped', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRule(
+        CustomRuleInline(
           name: 'Never',
           enabled: false,
           domains: ['example.com'],
-          target: 'direct-out',
+          outbound: 'direct-out',
         ),
       ]);
       expect(reg.getRuleSets(), isEmpty);
@@ -174,7 +174,7 @@ void main() {
     test('no match fields → skipped', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRule(name: 'Empty inline', target: 'vpn-1'),
+        CustomRuleInline(name: 'Empty inline', outbound: 'vpn-1'),
       ]);
       expect(reg.getRuleSets(), isEmpty);
       expect(reg.getRules(), isEmpty);
@@ -183,10 +183,10 @@ void main() {
     test('invalid port strings → отбрасываются на intPorts getter', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRule(
+        CustomRuleInline(
           name: 'Bad ports',
           ports: ['443', 'abc', '99999', '80'],
-          target: 'vpn-1',
+          outbound: 'vpn-1',
         ),
       ]);
       final match = reg.getRuleSets().first['rules'].first as Map;
@@ -201,10 +201,10 @@ void main() {
         ],
       );
       applyCustomRules(reg, [
-        CustomRule(
+        CustomRuleInline(
           name: 'Block',
           domainSuffixes: ['x.com'],
-          target: kRejectTarget,
+          outbound: kOutboundReject,
         ),
       ]);
       expect(reg.getRuleSets().map((s) => s['tag']).toList(),
@@ -216,12 +216,11 @@ void main() {
   group('applyCustomRules — srs (local-file mode)', () {
     test('srs с cached path → local rule_set + routing rule', () {
       final reg = RuleSetRegistry();
-      final rule = CustomRule(
+      final rule = CustomRuleSrs(
         id: 'rule-1',
         name: 'GeoIP CN',
-        kind: CustomRuleKind.srs,
         srsUrl: 'https://example.com/geoip-cn.srs',
-        target: 'direct-out',
+        outbound: 'direct-out',
       );
       final warn = applyCustomRules(reg, [rule], srsPaths: {
         'rule-1': '/cache/rule_sets/rule-1.srs',
@@ -240,12 +239,11 @@ void main() {
 
     test('srs без cached path → skip + warning', () {
       final reg = RuleSetRegistry();
-      final rule = CustomRule(
+      final rule = CustomRuleSrs(
         id: 'r2',
         name: 'Not yet downloaded',
-        kind: CustomRuleKind.srs,
         srsUrl: 'https://example.com/foo.srs',
-        target: 'vpn-1',
+        outbound: 'vpn-1',
       );
       final warn = applyCustomRules(reg, [rule]);
       expect(reg.getRuleSets(), isEmpty);
@@ -256,16 +254,15 @@ void main() {
 
     test('srs + ports + packages + protocol → AND на routing rule level', () {
       final reg = RuleSetRegistry();
-      final rule = CustomRule(
+      final rule = CustomRuleSrs(
         id: 'r3',
         name: 'SRS filtered',
-        kind: CustomRuleKind.srs,
         srsUrl: 'https://example.com/rules.srs',
         ports: ['443'],
         portRanges: ['8000:9000'],
         packages: ['org.mozilla.firefox'],
         protocols: ['tls'],
-        target: 'vpn-1',
+        outbound: 'vpn-1',
       );
       applyCustomRules(reg, [rule],
           srsPaths: {'r3': '/cache/rule_sets/r3.srs'});
@@ -281,7 +278,7 @@ void main() {
 
   group('CustomRule JSON round-trip', () {
     test('inline со всеми полями', () {
-      final src = CustomRule(
+      final src = CustomRuleInline(
         id: 'id-x',
         name: 'Mixed',
         domains: ['a.com'],
@@ -289,40 +286,54 @@ void main() {
         ports: ['443'],
         portRanges: ['8000:9000'],
         protocols: ['tls'],
-        target: kRejectTarget,
+        outbound: kOutboundReject,
       );
       final back = CustomRule.fromJson(src.toJson());
-      expect(back.id, 'id-x');
-      expect(back.name, 'Mixed');
-      expect(back.kind, CustomRuleKind.inline);
-      expect(back.domains, ['a.com']);
-      expect(back.domainSuffixes, ['b.com']);
-      expect(back.ports, ['443']);
-      expect(back.portRanges, ['8000:9000']);
-      expect(back.protocols, ['tls']);
-      expect(back.target, kRejectTarget);
+      expect(back, isA<CustomRuleInline>());
+      final inline = back as CustomRuleInline;
+      expect(inline.id, 'id-x');
+      expect(inline.name, 'Mixed');
+      expect(inline.domains, ['a.com']);
+      expect(inline.domainSuffixes, ['b.com']);
+      expect(inline.ports, ['443']);
+      expect(inline.portRanges, ['8000:9000']);
+      expect(inline.protocols, ['tls']);
+      expect(inline.outbound, kOutboundReject);
     });
 
     test('srs kind preserved', () {
-      final src = CustomRule(
+      final src = CustomRuleSrs(
         name: 'Remote',
-        kind: CustomRuleKind.srs,
         srsUrl: 'https://example.com/rules.srs',
-        target: 'vpn-1',
+        outbound: 'vpn-1',
       );
       final back = CustomRule.fromJson(src.toJson());
-      expect(back.kind, CustomRuleKind.srs);
-      expect(back.srsUrl, 'https://example.com/rules.srs');
+      expect(back, isA<CustomRuleSrs>());
+      final srs = back as CustomRuleSrs;
+      expect(srs.srsUrl, 'https://example.com/rules.srs');
+    });
+
+    test('legacy target field → outbound', () {
+      final back = CustomRule.fromJson({
+        'id': 'legacy-1',
+        'name': 'Legacy',
+        'enabled': true,
+        'kind': 'inline',
+        'domains': ['foo.com'],
+        'target': 'vpn-1',
+      });
+      expect(back, isA<CustomRuleInline>());
+      expect((back as CustomRuleInline).outbound, 'vpn-1');
     });
   });
 
   group('CustomRule.summary', () {
     test('пустой inline → empty', () {
-      expect(CustomRule(name: 'x').summary, '');
+      expect(CustomRuleInline(name: 'x').summary, '');
     });
 
     test('inline с полями → разделённый dot', () {
-      final s = CustomRule(
+      final s = CustomRuleInline(
         name: 'x',
         domainSuffixes: ['a', 'b'],
         ports: ['443'],
@@ -334,9 +345,8 @@ void main() {
     });
 
     test('srs → хост из URL', () {
-      final s = CustomRule(
+      final s = CustomRuleSrs(
         name: 'x',
-        kind: CustomRuleKind.srs,
         srsUrl: 'https://rules.example.com/geo.srs',
       ).summary;
       expect(s, 'SRS: rules.example.com');

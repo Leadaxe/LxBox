@@ -33,3 +33,6 @@ docs/private/
 # Claude Code local (personal, never commit)
 .claude/
 CLAUDE.md
+
+# Night autonomous session reports (personal, never commit)
+docs/night-reports/

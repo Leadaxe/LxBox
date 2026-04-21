@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg6" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#1E293B"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg6)"/>
+  <!-- three subway lines with 90° bends, converging at center -->
+  <g fill="none" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+    <!-- line 1 red: top-left to center then down-right -->
+    <path d="M 100 150 L 220 150 L 220 256 L 256 256" stroke="#EF4444"/>
+    <!-- line 2 yellow: top-right to center -->
+    <path d="M 412 130 L 412 220 L 300 220 L 300 256 L 256 256" stroke="#F59E0B"/>
+    <!-- line 3 cyan: bottom to center -->
+    <path d="M 130 412 L 256 412 L 256 320 L 256 256" stroke="#22D3EE"/>
+  </g>
+  <!-- central station -->
+  <rect x="216" y="216" width="80" height="80" rx="18" fill="#F8FAFC"/>
+  <text x="256" y="280" font-family="Inter, -apple-system, Segoe UI, sans-serif" font-weight="800" font-size="56" text-anchor="middle" fill="#0F172A">L×</text>
+  <!-- endpoint dots -->
+  <g fill="#F8FAFC" stroke-width="6">
+    <circle cx="100" cy="150" r="14" stroke="#EF4444"/>
+    <circle cx="412" cy="130" r="14" stroke="#F59E0B"/>
+    <circle cx="130" cy="412" r="14" stroke="#22D3EE"/>
+  </g>
+</svg>

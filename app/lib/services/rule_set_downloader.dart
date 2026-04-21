@@ -83,4 +83,70 @@ class RuleSetDownloader {
       if (await f.exists()) await f.delete();
     } catch (_) {}
   }
+
+  // ─── Preset bundles (spec §033 / task 011) ─────────────────────────────
+  //
+  // Для bundle-пресетов с remote `rule_set` в шаблоне мы кэшируем файл
+  // локально по составному ключу `preset__<presetId>__<tag>`. Тот же
+  // принцип spec 011: sing-box получает `type: local, path: <кэш>`,
+  // никаких auto-download в рантайме.
+  //
+  // Ключ namespace'ится префиксом `preset__` чтобы не столкнуться с
+  // UUID'ами `CustomRuleSrs.id`. Два двойных-подчёркивания в роли
+  // разделителя — UUID'ы не содержат их подряд.
+
+  static String presetCacheId(String presetId, String ruleSetTag) =>
+      'preset__${presetId}__$ruleSetTag';
+
+  static Future<String?> cachedPathForPreset(
+    String presetId,
+    String ruleSetTag,
+  ) =>
+      cachedPath(presetCacheId(presetId, ruleSetTag));
+
+  static Future<String?> downloadForPreset(
+    String presetId,
+    String ruleSetTag,
+    String url,
+  ) =>
+      download(presetCacheId(presetId, ruleSetTag), url);
+
+  static Future<void> deleteForPreset(String presetId, String ruleSetTag) =>
+      delete(presetCacheId(presetId, ruleSetTag));
+
+  /// Удаляет `.srs`-файлы, чей id не присутствует в [activeCacheIds].
+  ///
+  /// Мотивация: после миграций схемы (inline → preset bundle, smena
+  /// RuleSet'ов в шаблоне), удаления правил и т.п. в каталоге остаются
+  /// osiротевшие файлы, занимая место без пользы. UI чистит по конкретным
+  /// id (`delete`), но не видит «мусор» неизвестного происхождения.
+  ///
+  /// Принцип: список всех `.srs`-файлов, сравнить basename с
+  /// [activeCacheIds], удалить всё чего нет в наборе. Идемпотентно:
+  /// повторный вызов с тем же набором — noop.
+  ///
+  /// Не трогает файлы с расширением != `.srs` (на случай будущих
+  /// co-located метаданных вроде `<id>.etag`).
+  ///
+  /// Возвращает число удалённых файлов.
+  static Future<int> pruneOrphans(Set<String> activeCacheIds) async {
+    try {
+      final dir = await _dir();
+      var pruned = 0;
+      await for (final entity in dir.list()) {
+        if (entity is! File) continue;
+        final name = entity.uri.pathSegments.last;
+        if (!name.endsWith('.srs')) continue;
+        final id = name.substring(0, name.length - '.srs'.length);
+        if (activeCacheIds.contains(id)) continue;
+        try {
+          await entity.delete();
+          pruned++;
+        } catch (_) {}
+      }
+      return pruned;
+    } catch (_) {
+      return 0;
+    }
+  }
 }

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg7" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#450A0A"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="dirty7" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#991B1B"/>
+      <stop offset="1" stop-color="#DC2626"/>
+    </linearGradient>
+    <linearGradient id="clean7" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset="1" stop-color="#A7F3D0"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg7)"/>
+  <!-- dirty input: wavy -->
+  <path d="M 60 200 Q 100 180 140 200 T 220 200" stroke="url(#dirty7)" stroke-width="24" fill="none" stroke-linecap="round"/>
+  <path d="M 60 256 Q 100 276 140 256 T 220 256" stroke="url(#dirty7)" stroke-width="24" fill="none" stroke-linecap="round"/>
+  <path d="M 60 312 Q 100 292 140 312 T 220 312" stroke="url(#dirty7)" stroke-width="24" fill="none" stroke-linecap="round"/>
+  <!-- L-box filter -->
+  <rect x="200" y="150" width="120" height="212" rx="20" fill="#0F172A" stroke="#F8FAFC" stroke-width="8"/>
+  <text x="260" y="284" font-family="Inter, sans-serif" font-weight="900" font-size="100" text-anchor="middle" fill="#F8FAFC">L</text>
+  <!-- clean output straight arrow -->
+  <path d="M 320 256 L 440 256" stroke="url(#clean7)" stroke-width="32" stroke-linecap="round" fill="none"/>
+  <path d="M 440 256 L 410 226 M 440 256 L 410 286" stroke="#A7F3D0" stroke-width="32" stroke-linecap="round" fill="none"/>
+</svg>

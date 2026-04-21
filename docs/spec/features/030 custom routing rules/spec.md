@@ -195,6 +195,28 @@ Routing
 - tap → open `CustomRuleEditScreen`
 - Reorder через drag за `||` handle
 
+### Initial insertion sort
+
+При **добавлении** нового правила (через `Presets → Copy to Rules` или `+ Add rule`) позиция вставки определяется его effective outbound'ом — reject и direct идут в начало списка, остальное в хвост. Цель — нужный first-match-wins порядок (`specific-first`) из коробки, без необходимости тащить каждое новое правило drag-handle'ом наверх.
+
+Алгоритм (`_computeInsertIndex`):
+- **effective outbound == `reject`** → index `0` (самый верх). Reject — всегда самое специфичное "не пускай никуда", должно срабатывать первым.
+- **effective outbound == `direct-out`** → index сразу после **начального блока reject**'ов. То есть `while (rules[i].effectiveOutbound == reject) i++; return i;`. Если первое правило — не reject, direct ложится в `0` даже если дальше по списку есть reject'ы — "начальный" блок здесь означает **префикс** из reject'ов, не все reject'ы скопом.
+- **любой другой outbound** (vpn-1, auto, custom) → append в хвост.
+
+Примеры (`R` = reject, `D` = direct, `V` = vpn):
+
+| Текущий порядок | Вставляем | Результат |
+|-----------------|-----------|-----------|
+| `[V, R, D]` | `R` | `[R, V, R, D]` — reject наверх независимо от контекста |
+| `[R, R, V, R]` | `D` | `[R, R, D, V, R]` — D пропустил prefix `[R, R]`, встал перед V |
+| `[V, R, R]` | `D` | `[D, V, R, R]` — первый не reject, D встал в `0` |
+| `[R, D]` | `V` | `[R, D, V]` — обычный append |
+
+**Effective outbound** считается через `_effectiveOutboundOf(rule)`: для inline/srs это `rule.outbound`, для preset делегируется в `_presetOut(rule, preset)` с универсальным fallback-chain (см. §033). Иначе говоря, Block Ads (preset с `rule.action: "reject"` в template) корректно определяется как reject и встаёт в начало, даже без vars'ы.
+
+**Drag не ограничен.** Автосортировка — только на первый insert. Юзер может перетащить правила в любом порядке, это сохранится до следующего add'а. Билдер `applyCustomRules` эмитит rule'ы в порядке списка как есть — user's responsibility держать осмысленный порядок после ручных drag'ов.
+
 ### CustomRuleEditScreen
 
 Tabs **Params** / **View**:

@@ -32,6 +32,15 @@ Map<String, Object?> serializeSubEntry(
     'last_update_status': e.lastUpdateStatus.name,
     'consecutive_fails': e.consecutiveFails,
     'update_interval_hours': e.updateIntervalHours,
+    // Full detour policy (task 006 — per-server detour toggles).
+    // `override_detour` оставлен top-level для backward-compat клиентов,
+    // дополнительно группируем в nested object для полного view'а.
     'override_detour': e.overrideDetour,
+    'detour_policy': {
+      'register_detour_servers': e.registerDetourServers,
+      'register_detour_in_auto': e.registerDetourInAuto,
+      'use_detour_servers': e.useDetourServers,
+      'override_detour': e.overrideDetour,
+    },
   };
 }

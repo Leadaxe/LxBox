@@ -94,22 +94,35 @@ Future<DebugResponse> _update(
   final rules = await SettingsStorage.getCustomRules();
   final idx = rules.indexWhere((r) => r.id == id);
   if (idx < 0) throw NotFound('rule: $id');
-  final updated = rules[idx].copyWith(
-    name: fieldString(body, 'name'),
-    enabled: fieldBool(body, 'enabled'),
-    kind: _fieldKind(body, 'kind'),
-    domains: fieldStringList(body, 'domains'),
-    domainSuffixes: fieldStringList(body, 'domain_suffixes'),
-    domainKeywords: fieldStringList(body, 'domain_keywords'),
-    ipCidrs: fieldStringList(body, 'ip_cidrs'),
-    ports: fieldStringList(body, 'ports'),
-    portRanges: fieldStringList(body, 'port_ranges'),
-    packages: fieldStringList(body, 'packages'),
-    protocols: fieldStringList(body, 'protocols'),
-    ipIsPrivate: fieldBool(body, 'ip_is_private'),
-    srsUrl: fieldString(body, 'srs_url'),
-    target: fieldString(body, 'target'),
-  );
+  // Патч через merge-в-JSON-then-fromJson: sealed-иерархия не позволяет
+  // переключать kind через `copyWith`, но JSON round-trip это делает
+  // естественно (spec §030, task 011).
+  final current = rules[idx].toJson();
+  final patched = <String, dynamic>{...current};
+  void setIfPresent(String key, dynamic v) {
+    if (v != null) patched[key] = v;
+  }
+
+  setIfPresent('name', fieldString(body, 'name'));
+  setIfPresent('enabled', fieldBool(body, 'enabled'));
+  final patchKind = _fieldKind(body, 'kind');
+  if (patchKind != null) patched['kind'] = patchKind.name;
+  setIfPresent('domains', fieldStringList(body, 'domains'));
+  setIfPresent('domainSuffixes', fieldStringList(body, 'domain_suffixes'));
+  setIfPresent('domainKeywords', fieldStringList(body, 'domain_keywords'));
+  setIfPresent('ipCidrs', fieldStringList(body, 'ip_cidrs'));
+  setIfPresent('ports', fieldStringList(body, 'ports'));
+  setIfPresent('portRanges', fieldStringList(body, 'port_ranges'));
+  setIfPresent('packages', fieldStringList(body, 'packages'));
+  setIfPresent('protocols', fieldStringList(body, 'protocols'));
+  setIfPresent('ipIsPrivate', fieldBool(body, 'ip_is_private'));
+  setIfPresent('srsUrl', fieldString(body, 'srs_url'));
+  setIfPresent('outbound', fieldString(body, 'outbound'));
+  // Preset-kind поля (task 011 / spec §033).
+  setIfPresent('presetId', fieldString(body, 'preset_id'));
+  setIfPresent('varsValues', fieldStringMap(body, 'vars_values'));
+
+  final updated = CustomRule.fromJson(patched);
   rules[idx] = updated;
   await SettingsStorage.saveCustomRules(rules);
   final extras = await maybeRebuild(req, ctx);
@@ -178,25 +191,52 @@ CustomRuleKind? _fieldKind(Map<String, dynamic> m, String key) {
 
 /// Строгий парсинг для POST — отклоняет пустое `name`, wrong-types.
 /// Отличается от `CustomRule.fromJson` который лояльно приводит значения.
+/// Возвращает конкретный подкласс по `kind` (sealed dispatch).
 CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
   final name = fieldString(j, 'name') ?? '';
   if (name.trim().isEmpty) throw const BadRequest('field "name" required');
   final kind = _fieldKind(j, 'kind') ?? CustomRuleKind.inline;
-  final target = fieldString(j, 'target') ?? 'direct-out';
-  return CustomRule(
-    name: name,
-    enabled: fieldBool(j, 'enabled') ?? true,
-    kind: kind,
-    domains: fieldStringList(j, 'domains') ?? const [],
-    domainSuffixes: fieldStringList(j, 'domain_suffixes') ?? const [],
-    domainKeywords: fieldStringList(j, 'domain_keywords') ?? const [],
-    ipCidrs: fieldStringList(j, 'ip_cidrs') ?? const [],
-    ports: fieldStringList(j, 'ports') ?? const [],
-    portRanges: fieldStringList(j, 'port_ranges') ?? const [],
-    packages: fieldStringList(j, 'packages') ?? const [],
-    protocols: fieldStringList(j, 'protocols') ?? const [],
-    ipIsPrivate: fieldBool(j, 'ip_is_private') ?? false,
-    srsUrl: fieldString(j, 'srs_url') ?? '',
-    target: target,
-  );
+  final enabled = fieldBool(j, 'enabled') ?? true;
+  final outbound = fieldString(j, 'outbound') ?? 'direct-out';
+
+  switch (kind) {
+    case CustomRuleKind.inline:
+      return CustomRuleInline(
+        name: name,
+        enabled: enabled,
+        domains: fieldStringList(j, 'domains') ?? const [],
+        domainSuffixes: fieldStringList(j, 'domain_suffixes') ?? const [],
+        domainKeywords: fieldStringList(j, 'domain_keywords') ?? const [],
+        ipCidrs: fieldStringList(j, 'ip_cidrs') ?? const [],
+        ports: fieldStringList(j, 'ports') ?? const [],
+        portRanges: fieldStringList(j, 'port_ranges') ?? const [],
+        packages: fieldStringList(j, 'packages') ?? const [],
+        protocols: fieldStringList(j, 'protocols') ?? const [],
+        ipIsPrivate: fieldBool(j, 'ip_is_private') ?? false,
+        outbound: outbound,
+      );
+    case CustomRuleKind.srs:
+      return CustomRuleSrs(
+        name: name,
+        enabled: enabled,
+        srsUrl: fieldString(j, 'srs_url') ?? '',
+        ports: fieldStringList(j, 'ports') ?? const [],
+        portRanges: fieldStringList(j, 'port_ranges') ?? const [],
+        packages: fieldStringList(j, 'packages') ?? const [],
+        protocols: fieldStringList(j, 'protocols') ?? const [],
+        ipIsPrivate: fieldBool(j, 'ip_is_private') ?? false,
+        outbound: outbound,
+      );
+    case CustomRuleKind.preset:
+      final presetId = fieldString(j, 'preset_id') ?? '';
+      if (presetId.isEmpty) {
+        throw const BadRequest('field "preset_id" required for preset rules');
+      }
+      return CustomRulePreset(
+        name: name,
+        enabled: enabled,
+        presetId: presetId,
+        varsValues: fieldStringMap(j, 'vars_values'),
+      );
+  }
 }

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>LxBox — W1 Routing Cross · Production Pack</title>
+<style>
+  :root { --bg:#0F172A; --card:#111827; --border:#1F2937; --text:#F1F5F9; --mute:#94A3B8; }
+  * { box-sizing: border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,Inter,Segoe UI,sans-serif; margin:0; padding:40px; }
+  h1 { font-weight:800; font-size:32px; margin:0 0 6px; letter-spacing:-0.02em; }
+  .sub { color:var(--mute); margin:0 0 40px; font-size:14px; }
+  h2 { font-size:14px; margin:40px 0 12px; color:#FDE68A; text-transform:uppercase; letter-spacing:2px; font-weight:700; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(320px,1fr)); gap:20px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:22px; }
+  .card h3 { font-size:15px; margin:0 0 4px; }
+  .card p  { color:var(--mute); font-size:12px; margin:0 0 16px; line-height:1.5; }
+  .sizes { display:flex; align-items:flex-end; gap:18px; background:#1E293B; padding:18px; border-radius:12px; }
+  .sizes.light { background:#F8FAFC; }
+  .sizes img { display:block; border-radius:8px; }
+  .sizes.light img { border-radius:8px; }
+  .label { font-size:10px; color:var(--mute); margin-top:6px; font-family:ui-monospace,Menlo,monospace; text-align:center; }
+  .sz { display:flex; flex-direction:column; align-items:center; }
+  .compare { display:flex; gap:32px; align-items:flex-end; background:#1E293B; padding:24px; border-radius:14px; }
+  .home { background:linear-gradient(135deg,#1e3a8a,#6d28d9,#831843); padding:36px; border-radius:18px; display:grid; grid-template-columns: repeat(5, 1fr); gap:24px; }
+  .home img { display:block; border-radius:22px; box-shadow:0 8px 24px rgba(0,0,0,.5); }
+  .tag { display:inline-block; font-size:10px; color:#0F172A; background:#FDE68A; padding:3px 10px; border-radius:999px; margin-bottom:12px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; }
+  .changelog { background:#0c1220; border-left:3px solid #F59E0B; padding:16px 20px; border-radius:6px; font-size:13px; color:var(--mute); }
+  .changelog b { color:var(--text); }
+  .changelog ul { margin:8px 0 0; padding-left:20px; }
+  .palette { display:flex; gap:10px; align-items:center; font-size:12px; color:var(--mute); margin-bottom:8px; }
+  .sw { width:22px; height:22px; border-radius:6px; border:1px solid #334155; }
+</style>
+</head>
+<body>
+
+<h1>W1 · Routing Cross</h1>
+<p class="sub">Production pack: master, adaptive (FG+BG для Android), monochrome, favicon.</p>
+
+<div class="palette">
+  <div class="sw" style="background:#0F172A"></div><code>#0F172A</code>
+  <div class="sw" style="background:#22D3EE"></div><code>#22D3EE</code>
+  <div class="sw" style="background:#F59E0B"></div><code>#F59E0B</code>
+  <div class="sw" style="background:#F8FAFC"></div><code>#F8FAFC</code>
+</div>
+
+<div class="changelog">
+  <b>v2 — изменения относительно W1 v1:</b>
+  <ul>
+    <li>Узел перецентрирован с (256,240) на (256,256) — фактическое пересечение стрелок.</li>
+    <li>Наконечники — одиночные треугольники по оси стрелки (вместо «двойных-уголков»).</li>
+    <li>Узел: ivory-диск r=54 + amber-core r=18 — сильный focal point.</li>
+    <li>Длина стрелок выровнена симметрично относительно центра.</li>
+  </ul>
+</div>
+
+<h2>Master · 512×512</h2>
+<div class="compare">
+  <div class="sz"><img src="W1_master.svg" width="256"><div class="label">256 px</div></div>
+  <div class="sz"><img src="W1_master.svg" width="128"><div class="label">128 px</div></div>
+  <div class="sz"><img src="W1_master.svg" width="72"><div class="label">72 px</div></div>
+  <div class="sz"><img src="W1_master.svg" width="48"><div class="label">48 px · launcher</div></div>
+  <div class="sz"><img src="W1_master.svg" width="32"><div class="label">32 px</div></div>
+  <div class="sz"><img src="W1_master.svg" width="24"><div class="label">24 px · tab</div></div>
+</div>
+
+<h2>Home-screen mockup</h2>
+<div class="home">
+  <img src="W1_master.svg" width="120" height="120">
+  <img src="W1_master.svg" width="120" height="120">
+  <img src="W1_master.svg" width="120" height="120">
+  <img src="W1_master.svg" width="120" height="120">
+  <img src="W1_master.svg" width="120" height="120">
+</div>
+
+<h2>Android Adaptive Icon · 108dp (432 canvas, 66dp safe)</h2>
+<div class="grid">
+  <div class="card">
+    <span class="tag">Foreground</span>
+    <h3>W1_adaptive_foreground.svg</h3>
+    <p>Только мотив, центрирован в 66dp safe-circle. Масштаб 0.58 — маска-круг не съест стрелки даже на Pixel Launcher.</p>
+    <div class="sizes"><img src="W1_adaptive_foreground.svg" width="216"></div>
+  </div>
+  <div class="card">
+    <span class="tag">Background</span>
+    <h3>W1_adaptive_background.svg</h3>
+    <p>Градиент базы. Android применит launcher-mask (круг/squircle/teardrop).</p>
+    <div class="sizes"><img src="W1_adaptive_background.svg" width="216"></div>
+  </div>
+  <div class="card">
+    <span class="tag">Composed preview</span>
+    <h3>FG + BG в круглой маске</h3>
+    <p>Как это выглядит в Pixel-launcher.</p>
+    <div class="sizes" style="justify-content:center">
+      <div style="position:relative;width:216px;height:216px">
+        <svg width="216" height="216" viewBox="0 0 216 216" style="position:absolute;inset:0">
+          <defs><clipPath id="mask"><circle cx="108" cy="108" r="108"/></clipPath></defs>
+          <g clip-path="url(#mask)">
+            <image href="W1_adaptive_background.svg" x="0" y="0" width="216" height="216"/>
+            <image href="W1_adaptive_foreground.svg" x="0" y="0" width="216" height="216"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Monochrome · iOS tinted / CI badge</h2>
+<div class="compare">
+  <div class="sz"><img src="W1_mono.svg" width="128"><div class="label">128</div></div>
+  <div class="sz"><img src="W1_mono.svg" width="72"><div class="label">72</div></div>
+  <div class="sz"><img src="W1_mono.svg" width="48"><div class="label">48</div></div>
+  <div class="sz"><img src="W1_mono.svg" width="24"><div class="label">24</div></div>
+</div>
+
+<h2>Favicon · упрощённая версия (× без деталей)</h2>
+<p class="sub">Для 32/16 px — наконечники и amber-core стёрлись бы в шум. Вместо них — толстый × из двух цветных штрихов и белый диск в центре.</p>
+<div class="compare">
+  <div class="sz"><img src="W1_favicon.svg" width="64"><div class="label">64</div></div>
+  <div class="sz"><img src="W1_favicon.svg" width="32"><div class="label">32 px</div></div>
+  <div class="sz"><img src="W1_favicon.svg" width="16"><div class="label">16 px · tab</div></div>
+</div>
+<div class="compare light" style="background:#F8FAFC;margin-top:12px">
+  <div class="sz"><img src="W1_favicon.svg" width="32"><div class="label" style="color:#334155">32 · light tab</div></div>
+  <div class="sz"><img src="W1_favicon.svg" width="16"><div class="label" style="color:#334155">16 · light tab</div></div>
+</div>
+
+</body>
+</html>

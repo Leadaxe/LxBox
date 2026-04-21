@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg8" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#020617"/>
+      <stop offset="1" stop-color="#1E1B4B"/>
+    </linearGradient>
+    <radialGradient id="halo8" cx="0.5" cy="0.5" r="0.6">
+      <stop offset="0" stop-color="#38BDF8" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#38BDF8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg8)"/>
+  <!-- chaos outside: thin stray lines -->
+  <g stroke="#F43F5E" stroke-width="3" opacity="0.55" stroke-linecap="round">
+    <line x1="40" y1="80" x2="150" y2="110"/>
+    <line x1="60" y1="160" x2="140" y2="150"/>
+    <line x1="30" y1="240" x2="130" y2="250"/>
+    <line x1="50" y1="340" x2="140" y2="350"/>
+    <line x1="40" y1="430" x2="150" y2="420"/>
+    <line x1="472" y1="80" x2="370" y2="110"/>
+    <line x1="470" y1="160" x2="378" y2="150"/>
+    <line x1="480" y1="240" x2="380" y2="250"/>
+    <line x1="470" y1="340" x2="378" y2="350"/>
+    <line x1="476" y1="430" x2="370" y2="420"/>
+  </g>
+  <!-- halo around chamber -->
+  <circle cx="256" cy="256" r="170" fill="url(#halo8)"/>
+  <!-- chamber (rounded square) -->
+  <rect x="136" y="136" width="240" height="240" rx="44" fill="#0B1220" stroke="#38BDF8" stroke-width="10"/>
+  <!-- inner L -->
+  <path d="M 200 188 L 200 328 L 320 328" stroke="#E0F2FE" stroke-width="36" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- × accent at corner -->
+  <g stroke="#FDE68A" stroke-width="14" stroke-linecap="round">
+    <line x1="288" y1="296" x2="328" y2="336"/>
+    <line x1="328" y1="296" x2="288" y2="336"/>
+  </g>
+</svg>
