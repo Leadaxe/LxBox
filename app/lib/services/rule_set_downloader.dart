@@ -55,24 +55,43 @@ class RuleSetDownloader {
   /// Скачать и сохранить. Атомарно: пишем во временный файл и `rename` на
   /// финальный, чтобы при сетевом обрыве не остаться с частично записанным
   /// кэшем.
-  /// Возвращает абсолютный путь при успехе, null при ошибке.
+  ///
+  /// 3 попытки с exp backoff (1s, 3s) — total worst case ~34s.
+  /// Retry только на transient (timeout/network/5xx); 4xx = permanent skip.
+  ///
+  /// Возвращает абсолютный путь при успехе, null при финальной ошибке.
   static Future<String?> download(String id, String url) async {
-    try {
-      final f = await _file(id);
-      final tmp = File('${f.path}.tmp');
+    const backoffs = [Duration(seconds: 1), Duration(seconds: 3)];
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final f = await _file(id);
+        final tmp = File('${f.path}.tmp');
 
-      final resp = await http
-          .get(Uri.parse(url), headers: {'User-Agent': 'LxBox'})
-          .timeout(_timeout);
+        final resp = await http
+            .get(Uri.parse(url), headers: {'User-Agent': 'LxBox'})
+            .timeout(_timeout);
 
-      if (resp.statusCode != 200 || resp.bodyBytes.isEmpty) return null;
-      await tmp.writeAsBytes(resp.bodyBytes, flush: true);
-      if (await f.exists()) await f.delete();
-      await tmp.rename(f.path);
-      return f.path;
-    } catch (_) {
-      return null;
+        if (resp.statusCode >= 400 && resp.statusCode < 500) return null;
+        if (resp.statusCode != 200 || resp.bodyBytes.isEmpty) {
+          if (attempt < backoffs.length) {
+            await Future<void>.delayed(backoffs[attempt]);
+            continue;
+          }
+          return null;
+        }
+        await tmp.writeAsBytes(resp.bodyBytes, flush: true);
+        if (await f.exists()) await f.delete();
+        await tmp.rename(f.path);
+        return f.path;
+      } catch (_) {
+        if (attempt < backoffs.length) {
+          await Future<void>.delayed(backoffs[attempt]);
+          continue;
+        }
+        return null;
+      }
     }
+    return null;
   }
 
   /// Удалить cached-файл (noop если нет). Вызывать при delete rule или

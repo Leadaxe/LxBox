@@ -25,8 +25,8 @@ final class UrlSource extends SubscriptionSource {
     // YAML, парсерам-агентам — base64 URI-list. v2 плотно ест URI-list,
     // YAML пока не парсит — оставляем v1-поведение.
     this.userAgent = 'LxBox Android subscription client',
-    // Короткий таймаут на попытку. Fetch делает 2 попытки с паузой 2с:
-    // 9s + 2s + 9s ≈ 20s worst case (см. `_fetch`).
+    // Короткий таймаут на попытку. Fetch делает 3 попытки с exp backoff
+    // (1s, 3s): 9+1+9+3+9 ≈ 31s worst case (см. `_fetch`).
     this.timeout = const Duration(seconds: 9),
   });
 }
@@ -130,24 +130,36 @@ Future<FetchResult> fetchRaw(SubscriptionSource source,
 Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async {
   switch (source) {
     case UrlSource(url: final u, userAgent: final ua, timeout: final t):
-      // 2 попытки с паузой 2с. Итого cap ≈ 9+2+9 = 20 сек.
-      // Ретрай нужен для transient'ов мобильной сети (DNS fail, RST сразу
-      // после TCP-open, DDoS-guard challenge на первый запрос).
+      // 3 попытки с exp backoff (1s, 3s) — worst case ~31s (9+1+9+3+9).
+      // Retry нужен для transient'ов мобильной сети (DNS fail, RST сразу
+      // после TCP-open, DDoS-guard challenge, 5xx). 4xx — permanent,
+      // не ретраим (auth fail, removed subscription).
       Object? lastErr;
-      for (var attempt = 0; attempt < 2; attempt++) {
+      const backoffs = [Duration(seconds: 1), Duration(seconds: 3)];
+      for (var attempt = 0; attempt < 3; attempt++) {
         try {
           final resp = await client
               .get(Uri.parse(u), headers: {'User-Agent': ua})
               .timeout(t);
-          if (resp.statusCode >= 400) {
+          if (resp.statusCode >= 400 && resp.statusCode < 500) {
+            throw HttpException('HTTP ${resp.statusCode} for $u');
+          }
+          if (resp.statusCode >= 500) {
             throw HttpException('HTTP ${resp.statusCode} for $u');
           }
           return FetchResult(resp.body, _metaFromHeaders(resp.headers),
               Map<String, String>.from(resp.headers));
+        } on HttpException catch (e) {
+          lastErr = e;
+          // 4xx permanent — не ретраим.
+          if (e.message.contains(RegExp(r'HTTP 4\d\d'))) rethrow;
+          if (attempt < backoffs.length) {
+            await Future<void>.delayed(backoffs[attempt]);
+          }
         } catch (e) {
           lastErr = e;
-          if (attempt == 0) {
-            await Future<void>.delayed(const Duration(seconds: 2));
+          if (attempt < backoffs.length) {
+            await Future<void>.delayed(backoffs[attempt]);
           }
         }
       }
