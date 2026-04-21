@@ -1,17 +1,8 @@
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/server_list.dart';
+import '../../url_mask.dart';
 
-/// Маскирует URL подписки — провайдер-credentials живут в path/token
-/// части URL (`https://provider/sub/<secret>`). При выдаче в `GET /state/*`
-/// по умолчанию светим только `scheme://host/***`. Если клиент явно
-/// передал `?reveal=true` — отдаём целиком.
-String maskSubscriptionUrl(String raw) {
-  if (raw.isEmpty) return '';
-  final u = Uri.tryParse(raw);
-  if (u == null) return '***';
-  if (u.host.isEmpty) return '***';
-  return '${u.scheme}://${u.host}/***';
-}
+export '../../url_mask.dart' show maskSubscriptionUrl;
 
 /// Одна запись подписки / пользовательского сервера для `/state/subs`.
 Map<String, Object?> serializeSubEntry(
