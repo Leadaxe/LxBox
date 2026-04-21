@@ -185,6 +185,115 @@ void main() {
       expect(f.warnings.any((w) => w.contains('missing rule_set')), isTrue);
     });
 
+    // Universal outbound override (spec §033 §5 / task 011) — `varsValues['outbound']`
+    // всегда побеждает template-решение. Ветки: empty → as-is, "reject" → action,
+    // иначе → outbound. Ниже три теста на эти ветки + кейс «template hardcoded
+    // action: reject, юзер override'нул в vpn-tag».
+
+    test('outbound override == "reject" → action:reject, outbound удаляется', () {
+      final preset = _ruDirect();
+      final rule = CustomRulePreset(
+        name: 'Block Russian',
+        presetId: 'ru-direct',
+        varsValues: {'outbound': 'reject', 'dns_server': 'yandex_doh'},
+      );
+
+      final f = expandPreset(rule, preset);
+      expect(f.routingRule, {'rule_set': 'ru-domains', 'action': 'reject'});
+      expect(f.routingRule!.containsKey('outbound'), isFalse);
+    });
+
+    test('outbound override == vpn-tag → outbound set, action удаляется '
+        '(даже если template был action:reject)', () {
+      // Block Ads-like preset: `rule: {rule_set, action: reject}` без `@outbound`.
+      final preset = SelectableRule(
+        label: 'Block ads',
+        presetId: 'block-ads',
+        vars: [],
+        ruleSets: [
+          {'tag': 'ads', 'type': 'inline', 'format': 'domain', 'rules': []},
+        ],
+        rule: const {'rule_set': 'ads', 'action': 'reject'},
+      );
+      final rule = CustomRulePreset(
+        name: 'Ads via vpn',
+        presetId: 'block-ads',
+        varsValues: {'outbound': 'vpn-1'}, // override — pipe ads через vpn
+      );
+
+      final f = expandPreset(rule, preset);
+      expect(f.routingRule, {'rule_set': 'ads', 'outbound': 'vpn-1'});
+      expect(f.routingRule!.containsKey('action'), isFalse);
+    });
+
+    test('outbound override пустой → template-решение остаётся', () {
+      // Block Ads без override — template'ный action:reject должен дойти.
+      final preset = SelectableRule(
+        label: 'Block ads',
+        presetId: 'block-ads',
+        vars: [],
+        ruleSets: [
+          {'tag': 'ads', 'type': 'inline', 'format': 'domain', 'rules': []},
+        ],
+        rule: const {'rule_set': 'ads', 'action': 'reject'},
+      );
+      final rule = CustomRulePreset(
+        name: 'Block ads',
+        presetId: 'block-ads',
+        varsValues: {}, // outbound не задан вообще
+      );
+
+      final f = expandPreset(rule, preset);
+      expect(f.routingRule, {'rule_set': 'ads', 'action': 'reject'});
+    });
+
+    test('unknown @name (не объявлен в vars) → остаётся как литерал', () {
+      // Legacy / typo: шаблон ссылается на @foo, в `vars` такого нет.
+      // _substitute должен вернуть строку как есть (не крашить).
+      final preset = SelectableRule(
+        label: 'Legacy',
+        presetId: 'legacy',
+        vars: [],
+        ruleSets: [
+          {'tag': 'x', 'type': 'inline', 'format': 'domain', 'rules': []},
+        ],
+        rule: const {'rule_set': 'x', 'outbound': '@foo'},
+      );
+      final rule = CustomRulePreset(
+        name: 'Legacy',
+        presetId: 'legacy',
+        varsValues: {},
+      );
+
+      final f = expandPreset(rule, preset);
+      // routingRule проходит валидацию (outbound is String), значение не
+      // разрезолвлено — это осознанный pass-through (см. _substitute docstring).
+      expect(f.routingRule, {'rule_set': 'x', 'outbound': '@foo'});
+    });
+
+    test('deep-copy isolation: source preset не мутируется после expansion', () {
+      final preset = _ruDirect();
+      final originalRuleSet = Map<String, dynamic>.from(preset.ruleSets.first);
+      final originalRule = Map<String, dynamic>.from(preset.rule);
+      final originalDnsServers = preset.dnsServers
+          .map((s) => Map<String, dynamic>.from(s))
+          .toList();
+
+      final rule = CustomRulePreset(
+        name: 'X',
+        presetId: 'ru-direct',
+        varsValues: {'outbound': 'vpn-1', 'dns_server': 'yandex_doh'},
+      );
+      expandPreset(rule, preset);
+
+      expect(preset.ruleSets.first, originalRuleSet,
+          reason: 'rule_set в шаблоне не должен мутироваться');
+      expect(preset.rule, originalRule,
+          reason: 'rule в шаблоне не должен мутироваться');
+      expect(preset.dnsServers, originalDnsServers,
+          reason: 'dns_servers в шаблоне не должны мутироваться');
+    });
+
     test('routing rule без outbound/action после substitute → dropped', () {
       final preset = SelectableRule(
         label: 'Weird',
