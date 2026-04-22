@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 
 import '../../../models/custom_rule.dart';
+import '../../app_log.dart';
+import '../../error_humanize.dart';
 import '../../rule_set_downloader.dart';
 import '../../settings_storage.dart';
 import '../../subscription/auto_updater.dart';
@@ -42,8 +45,89 @@ Future<DebugResponse> actionHandler(
     '/action/download-srs' => _downloadSrs(req, ctx),
     '/action/clear-srs' => _clearSrs(req, ctx),
     '/action/toast' => _toast(req, ctx),
+    '/action/emulate-error' => _emulateError(req, ctx),
     _ => throw NotFound('action: ${req.path}'),
   };
+}
+
+/// Эмулирует ошибку для демонстрации humanizeError'а.
+/// POST /action/emulate-error?kind=<socket|timeout|http-401|http-404|
+///   http-410|http-429|http-503|format|fs|plain|all>
+///   [&target=log|sub|both]   default: both
+///
+/// Запишет в AppLog строку вида
+/// `emulate-error [kind=...]: <humanized>`, и/или поставит
+/// `SubscriptionController.lastError` (видно red-инлайн на Subscriptions
+/// screen). `kind=all` прогоняет весь набор.
+Future<DebugResponse> _emulateError(
+  DebugRequest req,
+  DebugContext ctx,
+) async {
+  final kind = req.requiredQuery('kind');
+  final target = req.q('target') ?? 'both';
+  if (target != 'log' && target != 'sub' && target != 'both') {
+    throw BadRequest('target must be log|sub|both, got "$target"');
+  }
+
+  Exception buildException(String k) => switch (k) {
+        'socket' => const SocketException('emulated: host lookup failed'),
+        'timeout' => TimeoutException('emulated: request timeout'),
+        'http-401' =>
+          const HttpException('HTTP 401 for https://provider.example/sub/***'),
+        'http-404' =>
+          const HttpException('HTTP 404 for https://provider.example/sub/***'),
+        'http-410' =>
+          const HttpException('HTTP 410 for https://provider.example/sub/***'),
+        'http-429' =>
+          const HttpException('HTTP 429 for https://provider.example/sub/***'),
+        'http-503' =>
+          const HttpException('HTTP 503 for https://provider.example/sub/***'),
+        'format' => const FormatException('emulated: not valid JSON'),
+        'fs' => const FileSystemException('emulated: permission denied'),
+        'plain' => Exception('emulated plain exception text'),
+        _ => throw BadRequest(
+            'kind must be one of socket|timeout|http-401|http-404|'
+            'http-410|http-429|http-503|format|fs|plain|all, got "$k"'),
+      };
+
+  final kinds = kind == 'all'
+      ? [
+          'socket',
+          'timeout',
+          'http-401',
+          'http-404',
+          'http-410',
+          'http-429',
+          'http-503',
+          'format',
+          'fs',
+          'plain',
+        ]
+      : [kind];
+
+  final samples = <Map<String, String>>[];
+  String? lastHumanized;
+  for (final k in kinds) {
+    final e = buildException(k);
+    final humanized = humanizeError(e);
+    lastHumanized = humanized;
+    samples.add({'kind': k, 'humanized': humanized});
+    if (target == 'log' || target == 'both') {
+      AppLog.I.error('emulate-error [kind=$k]: $humanized');
+    }
+  }
+
+  if ((target == 'sub' || target == 'both') && lastHumanized != null) {
+    // Для inline red-банера на Subscriptions — ставим lastError на
+    // sub-controller (если он есть в контексте). kind=all оставит
+    // последний humanized как inline-текст.
+    final sub = ctx.sub;
+    if (sub != null) {
+      sub.setDebugLastError('demo: $lastHumanized');
+    }
+  }
+
+  return _ok('emulate-error', {'samples': samples});
 }
 
 /// Единый конструктор успешного ответа.
