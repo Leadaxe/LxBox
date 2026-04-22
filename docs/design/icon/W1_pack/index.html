@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>LxBox — W1 Routing Cross · Production Pack</title>
+<style>
+  :root { --bg:#0F172A; --card:#111827; --border:#1F2937; --text:#F1F5F9; --mute:#94A3B8; }
+  * { box-sizing: border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,Inter,Segoe UI,sans-serif; margin:0; padding:40px; }
+  h1 { font-weight:800; font-size:32px; margin:0 0 6px; letter-spacing:-0.02em; }
+  .sub { color:var(--mute); margin:0 0 40px; font-size:14px; }
+  h2 { font-size:13px; margin:40px 0 14px; color:#FDE68A; text-transform:uppercase; letter-spacing:2px; font-weight:700; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(320px,1fr)); gap:20px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:22px; }
+  .card h3 { font-size:15px; margin:0 0 4px; }
+  .card p  { color:var(--mute); font-size:12px; margin:0 0 16px; line-height:1.5; }
+  .row { display:flex; align-items:flex-end; gap:24px; background:#1E293B; padding:22px; border-radius:14px; flex-wrap:wrap; }
+  .row.light { background:#F8FAFC; }
+  .sz { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .label { font-size:10px; color:var(--mute); font-family:ui-monospace,Menlo,monospace; text-align:center; }
+  .row.light .label { color:#334155; }
+  .home { background:linear-gradient(135deg,#1e3a8a,#6d28d9,#831843); padding:36px; border-radius:18px; display:grid; grid-template-columns: repeat(5, 1fr); gap:24px; }
+  .home .slot { border-radius:22px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,.55); }
+  .tag { display:inline-block; font-size:10px; color:#0F172A; background:#FDE68A; padding:3px 10px; border-radius:999px; margin-bottom:12px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; }
+  .changelog { background:#0c1220; border-left:3px solid #F59E0B; padding:16px 20px; border-radius:6px; font-size:13px; color:var(--mute); margin-bottom:8px; }
+  .changelog b { color:var(--text); }
+  .changelog ul { margin:8px 0 0; padding-left:20px; }
+  .palette { display:flex; gap:10px; align-items:center; font-size:12px; color:var(--mute); margin:20px 0; flex-wrap:wrap; }
+  .sw { width:22px; height:22px; border-radius:6px; border:1px solid #334155; }
+  svg.icon { display:block; border-radius:22%; }
+  svg.icon.sq { border-radius:22%; }
+  svg.icon.round { border-radius:50%; }
+</style>
+</head>
+<body>
+
+<!-- ===== SVG sprite (symbols) ===== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+
+  <!-- Master -->
+  <symbol id="master" viewBox="0 0 512 512">
+    <defs>
+      <linearGradient id="bg-master" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#FB923C"/><stop offset="1" stop-color="#EA580C"/>
+      </linearGradient>
+    </defs>
+    <rect width="512" height="512" rx="112" fill="url(#bg-master)"/>
+    <line x1="108" y1="404" x2="373" y2="139" stroke="#0F172A" stroke-width="56" stroke-linecap="round"/>
+    <path d="M 424 88 L 402.7 168.5 L 343.5 109.3 Z" fill="#0F172A"/>
+    <line x1="404" y1="404" x2="139" y2="139" stroke="#F8FAFC" stroke-width="56" stroke-linecap="round"/>
+    <path d="M 88 88 L 168.7 109.3 L 109.3 168.7 Z" fill="#F8FAFC"/>
+    <circle cx="256" cy="256" r="54" fill="#0F172A"/>
+    <circle cx="256" cy="256" r="18" fill="#FDE68A"/>
+  </symbol>
+
+  <!-- Adaptive foreground (no background) -->
+  <symbol id="fg" viewBox="0 0 432 432">
+    <g transform="translate(216,216) scale(0.58) translate(-256,-256)">
+      <line x1="108" y1="404" x2="373" y2="139" stroke="#0F172A" stroke-width="56" stroke-linecap="round"/>
+      <path d="M 424 88 L 402.7 168.5 L 343.5 109.3 Z" fill="#0F172A"/>
+      <line x1="404" y1="404" x2="139" y2="139" stroke="#F8FAFC" stroke-width="56" stroke-linecap="round"/>
+      <path d="M 88 88 L 168.7 109.3 L 109.3 168.7 Z" fill="#F8FAFC"/>
+      <circle cx="256" cy="256" r="54" fill="#0F172A"/>
+      <circle cx="256" cy="256" r="18" fill="#FDE68A"/>
+    </g>
+  </symbol>
+
+  <!-- Adaptive background (orange solid gradient fill) -->
+  <symbol id="bg" viewBox="0 0 432 432">
+    <defs>
+      <linearGradient id="bg-grad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#FB923C"/><stop offset="1" stop-color="#EA580C"/>
+      </linearGradient>
+    </defs>
+    <rect width="432" height="432" fill="url(#bg-grad)"/>
+  </symbol>
+
+  <!-- Monochrome (navy bg, all marks ivory) -->
+  <symbol id="mono" viewBox="0 0 512 512">
+    <rect width="512" height="512" rx="112" fill="#0F172A"/>
+    <line x1="108" y1="404" x2="373" y2="139" stroke="#F8FAFC" stroke-width="56" stroke-linecap="round"/>
+    <path d="M 424 88 L 402.7 168.5 L 343.5 109.3 Z" fill="#F8FAFC"/>
+    <line x1="404" y1="404" x2="139" y2="139" stroke="#F8FAFC" stroke-width="56" stroke-linecap="round"/>
+    <path d="M 88 88 L 168.7 109.3 L 109.3 168.7 Z" fill="#F8FAFC"/>
+    <circle cx="256" cy="256" r="54" fill="#0F172A" stroke="#F8FAFC" stroke-width="10"/>
+    <circle cx="256" cy="256" r="16" fill="#F8FAFC"/>
+  </symbol>
+
+  <!-- Favicon (simplified × for 16/32 px) -->
+  <symbol id="favicon" viewBox="0 0 512 512">
+    <defs>
+      <linearGradient id="fav-bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#FB923C"/><stop offset="1" stop-color="#EA580C"/>
+      </linearGradient>
+    </defs>
+    <rect width="512" height="512" rx="96" fill="url(#fav-bg)"/>
+    <g stroke-width="72" stroke-linecap="round">
+      <line x1="128" y1="128" x2="384" y2="384" stroke="#0F172A"/>
+      <line x1="384" y1="128" x2="128" y2="384" stroke="#F8FAFC"/>
+    </g>
+    <circle cx="256" cy="256" r="38" fill="#0F172A"/>
+    <circle cx="256" cy="256" r="12" fill="#FDE68A"/>
+  </symbol>
+
+</svg>
+
+<!-- ===== Page ===== -->
+
+<h1>W1 · Routing Cross</h1>
+<p class="sub">Production pack: master, adaptive (FG+BG для Android), monochrome, favicon.</p>
+
+<div class="palette">
+  <div class="sw" style="background:#FB923C"></div><code>#FB923C</code>
+  <div class="sw" style="background:#EA580C"></div><code>#EA580C</code>
+  <div class="sw" style="background:#0F172A"></div><code>#0F172A</code>
+  <div class="sw" style="background:#F8FAFC"></div><code>#F8FAFC</code>
+  <div class="sw" style="background:#FDE68A"></div><code>#FDE68A</code>
+</div>
+
+<div class="changelog">
+  <b>v3 — изменения относительно v2:</b>
+  <ul>
+    <li><b>Фон</b>: slate-navy → тёплый оранжевый градиент <code>#FB923C → #EA580C</code>.</li>
+    <li><b>Стрелки</b>: cyan+amber → deep-navy + ivory — контрастная пара на warm-фоне.</li>
+    <li><b>Наконечники</b>: канонические 60° при вершине (halfwidth 42, длина 72 → tan 30°).</li>
+    <li><b>Узел</b>: navy-диск r=54 + amber-core r=18 — тёплый акцент через центр.</li>
+  </ul>
+</div>
+
+<h2>Master · 512×512</h2>
+<div class="row">
+  <div class="sz"><svg class="icon" width="256" height="256"><use href="#master"/></svg><div class="label">256 px</div></div>
+  <div class="sz"><svg class="icon" width="128" height="128"><use href="#master"/></svg><div class="label">128 px</div></div>
+  <div class="sz"><svg class="icon" width="72" height="72"><use href="#master"/></svg><div class="label">72 px</div></div>
+  <div class="sz"><svg class="icon" width="48" height="48"><use href="#master"/></svg><div class="label">48 · launcher</div></div>
+  <div class="sz"><svg class="icon" width="32" height="32"><use href="#master"/></svg><div class="label">32 px</div></div>
+  <div class="sz"><svg class="icon" width="24" height="24"><use href="#master"/></svg><div class="label">24 · tab</div></div>
+</div>
+
+<h2>Home-screen mockup</h2>
+<div class="home">
+  <div class="slot"><svg class="icon" width="120" height="120" style="border-radius:0"><use href="#master"/></svg></div>
+  <div class="slot"><svg class="icon" width="120" height="120" style="border-radius:0"><use href="#master"/></svg></div>
+  <div class="slot"><svg class="icon" width="120" height="120" style="border-radius:0"><use href="#master"/></svg></div>
+  <div class="slot"><svg class="icon" width="120" height="120" style="border-radius:0"><use href="#master"/></svg></div>
+  <div class="slot"><svg class="icon" width="120" height="120" style="border-radius:0"><use href="#master"/></svg></div>
+</div>
+
+<h2>Android Adaptive · 108dp (432 canvas · 66dp safe)</h2>
+<div class="grid">
+  <div class="card">
+    <span class="tag">Foreground</span>
+    <h3>только мотив</h3>
+    <p>Маска-круг не съест стрелки.</p>
+    <div class="row" style="justify-content:center">
+      <svg width="216" height="216" viewBox="0 0 432 432"><use href="#fg"/></svg>
+    </div>
+  </div>
+  <div class="card">
+    <span class="tag">Background</span>
+    <h3>градиент базы</h3>
+    <p>Android применит launcher-mask (круг / squircle / teardrop).</p>
+    <div class="row" style="justify-content:center">
+      <svg width="216" height="216" viewBox="0 0 432 432"><use href="#bg"/></svg>
+    </div>
+  </div>
+  <div class="card">
+    <span class="tag">Composed · circular</span>
+    <h3>FG + BG в круглой маске</h3>
+    <p>Как это выглядит в Pixel-launcher.</p>
+    <div class="row" style="justify-content:center">
+      <svg width="216" height="216" viewBox="0 0 432 432" style="border-radius:50%">
+        <use href="#bg"/><use href="#fg"/>
+      </svg>
+    </div>
+  </div>
+  <div class="card">
+    <span class="tag">Composed · squircle</span>
+    <h3>FG + BG в Samsung-маске</h3>
+    <p>Mask с radius ~28%.</p>
+    <div class="row" style="justify-content:center">
+      <svg width="216" height="216" viewBox="0 0 432 432" style="border-radius:28%">
+        <use href="#bg"/><use href="#fg"/>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<h2>Monochrome · iOS tinted / CI badge</h2>
+<div class="row">
+  <div class="sz"><svg class="icon" width="128" height="128"><use href="#mono"/></svg><div class="label">128</div></div>
+  <div class="sz"><svg class="icon" width="72" height="72"><use href="#mono"/></svg><div class="label">72</div></div>
+  <div class="sz"><svg class="icon" width="48" height="48"><use href="#mono"/></svg><div class="label">48</div></div>
+  <div class="sz"><svg class="icon" width="24" height="24"><use href="#mono"/></svg><div class="label">24</div></div>
+</div>
+
+<h2>Favicon · упрощённая версия</h2>
+<p class="sub">Для 32/16 px — наконечники и amber-core стёрлись бы в шум. Вместо них — толстый × и центральный диск.</p>
+<div class="row">
+  <div class="sz"><svg class="icon" width="64" height="64"><use href="#favicon"/></svg><div class="label">64</div></div>
+  <div class="sz"><svg class="icon" width="32" height="32"><use href="#favicon"/></svg><div class="label">32 px</div></div>
+  <div class="sz"><svg class="icon" width="16" height="16"><use href="#favicon"/></svg><div class="label">16 · tab</div></div>
+</div>
+<div class="row light" style="margin-top:10px">
+  <div class="sz"><svg class="icon" width="32" height="32"><use href="#favicon"/></svg><div class="label">32 · light</div></div>
+  <div class="sz"><svg class="icon" width="16" height="16"><use href="#favicon"/></svg><div class="label">16 · light</div></div>
+</div>
+
+</body>
+</html>

@@ -6,6 +6,18 @@
 
 ---
 
+## [1.4.2] — 2026-04-22
+
+### Design
+
+- **Новая иконка приложения** — W1 "routing cross" вместо generic Flutter-иконки. Android (adaptive foreground/background + themed mono для Android 13+), iOS, macOS, web favicon, Windows — все платформы единовременно. Концепт отражает метафору маршрутизации по правилам. Источники SVG в `docs/design/icon/W1_pack/` (см. [spec 034](docs/spec/features/034%20app%20icon/spec.md)).
+
+### Cleanup
+
+- Удалён `docs/design/icon-exploration/` — прочие отклонённые концепты (W2 Lx-monogram, W3 iso-cube, 10 черновиков). История в git, финальный winner перемещён в `docs/design/icon/W1_pack/`.
+
+---
+
 ## [1.4.1] — 2026-04-22
 
 ### Reliability

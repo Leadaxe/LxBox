@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>LxBox — W1 · showcase</title>
+<style>
+  :root { --bg:#0F172A; --card:#111827; --border:#1F2937; --text:#F1F5F9; --mute:#94A3B8; }
+  * { box-sizing: border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,Inter,Segoe UI,sans-serif; margin:0; padding:40px; }
+  h1 { font-weight:800; font-size:28px; margin:0 0 4px; letter-spacing:-0.02em; }
+  .sub { color:var(--mute); margin:0 0 28px; font-size:13px; }
+  h2 { font-size:12px; margin:36px 0 12px; color:#FDE68A; text-transform:uppercase; letter-spacing:2px; font-weight:700; }
+  .row { display:flex; align-items:flex-end; gap:22px; background:#1E293B; padding:22px; border-radius:14px; flex-wrap:wrap; }
+  .row.light { background:#F8FAFC; }
+  .row.grid { background:linear-gradient(135deg,#1e3a8a,#6d28d9,#831843); padding:32px; }
+  .sz { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .label { font-size:10px; color:var(--mute); font-family:ui-monospace,Menlo,monospace; }
+  .row.light .label { color:#334155; }
+  .row.grid .label { color:#F8FAFC; opacity:0.75; }
+  svg.icon { display:block; }
+  .huge { display:flex; justify-content:center; padding:40px 0; background:radial-gradient(ellipse at center, #1E293B, #0F172A); border-radius:18px; }
+  .huge svg { border-radius:22%; box-shadow:0 24px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.05); }
+  .note { font-size:11px; color:#FDE68A; margin-left:8px; font-family:ui-monospace,Menlo,monospace; opacity:.7; }
+  .sep { width:1px; background:#334155; height:80px; align-self:center; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- Hero (≥ 48 px) — full detail with dashes -->
+  <symbol id="hero" viewBox="0 0 512 512">
+    <defs>
+      <linearGradient id="f-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FB923C"/><stop offset="1" stop-color="#EA580C"/></linearGradient>
+      <clipPath id="f-clip"><rect width="512" height="512" rx="112"/></clipPath>
+    </defs>
+    <g clip-path="url(#f-clip)">
+      <rect width="512" height="512" fill="url(#f-bg)"/>
+      <g stroke="#F8FAFC" stroke-width="56" stroke-linecap="round" fill="none">
+        <line x1="67.8" y1="67.8" x2="67.8" y2="444.2"/>
+        <line x1="67.8" y1="444.2" x2="256" y2="444.2"/>
+        <line x1="67.8" y1="67.8" x2="413.1" y2="413.1"/>
+      </g>
+      <path d="M 464 464 L 464 362.2 L 362.2 464 Z" fill="#F8FAFC"/>
+      <line x1="67.8" y1="444.2" x2="413" y2="99" stroke="#0F172A" stroke-width="56" stroke-linecap="round"/>
+      <path d="M 464 48 L 464 149.8 L 362.2 48 Z" fill="#0F172A"/>
+      <g stroke="#0F172A" stroke-width="18" stroke-linecap="round" stroke-dasharray="28 45" fill="none">
+        <line x1="67.8" y1="67.8" x2="67.8" y2="444.2"/>
+      </g>
+      <circle cx="67.8" cy="67.8" r="54" fill="#0F172A"/><circle cx="67.8" cy="67.8" r="18" fill="#F8FAFC"/>
+      <circle cx="67.8" cy="444.2" r="54" fill="#0F172A"/><circle cx="67.8" cy="444.2" r="18" fill="#F8FAFC"/>
+      <circle cx="256" cy="256" r="54" fill="#0F172A"/><circle cx="256" cy="256" r="18" fill="#F8FAFC"/>
+    </g>
+  </symbol>
+
+  <!-- Clean (32/36 px): full L, no dashes, 3 nodes -->
+  <symbol id="clean" viewBox="0 0 512 512">
+    <defs>
+      <linearGradient id="c-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FB923C"/><stop offset="1" stop-color="#EA580C"/></linearGradient>
+      <clipPath id="c-clip"><rect width="512" height="512" rx="112"/></clipPath>
+    </defs>
+    <g clip-path="url(#c-clip)">
+      <rect width="512" height="512" fill="url(#c-bg)"/>
+      <g stroke="#F8FAFC" stroke-width="56" stroke-linecap="round" fill="none">
+        <line x1="67.8" y1="67.8" x2="67.8" y2="444.2"/>
+        <line x1="67.8" y1="444.2" x2="256" y2="444.2"/>
+        <line x1="67.8" y1="67.8" x2="413.1" y2="413.1"/>
+      </g>
+      <path d="M 464 464 L 464 362.2 L 362.2 464 Z" fill="#F8FAFC"/>
+      <line x1="67.8" y1="444.2" x2="413" y2="99" stroke="#0F172A" stroke-width="56" stroke-linecap="round"/>
+      <path d="M 464 48 L 464 149.8 L 362.2 48 Z" fill="#0F172A"/>
+      <circle cx="67.8" cy="67.8" r="54" fill="#0F172A"/><circle cx="67.8" cy="67.8" r="18" fill="#F8FAFC"/>
+      <circle cx="67.8" cy="444.2" r="54" fill="#0F172A"/><circle cx="67.8" cy="444.2" r="18" fill="#F8FAFC"/>
+      <circle cx="256" cy="256" r="54" fill="#0F172A"/><circle cx="256" cy="256" r="18" fill="#F8FAFC"/>
+    </g>
+  </symbol>
+
+  <!-- Mid (24 px): × + all 3 nodes, no L-frame -->
+  <symbol id="mid" viewBox="0 0 512 512">
+    <defs>
+      <linearGradient id="md-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FB923C"/><stop offset="1" stop-color="#EA580C"/></linearGradient>
+      <clipPath id="md-clip"><rect width="512" height="512" rx="112"/></clipPath>
+    </defs>
+    <g clip-path="url(#md-clip)">
+      <rect width="512" height="512" fill="url(#md-bg)"/>
+      <line x1="67.8" y1="67.8" x2="413.1" y2="413.1" stroke="#F8FAFC" stroke-width="56" stroke-linecap="round"/>
+      <path d="M 464 464 L 464 362.2 L 362.2 464 Z" fill="#F8FAFC"/>
+      <line x1="67.8" y1="444.2" x2="413" y2="99" stroke="#0F172A" stroke-width="56" stroke-linecap="round"/>
+      <path d="M 464 48 L 464 149.8 L 362.2 48 Z" fill="#0F172A"/>
+      <circle cx="67.8" cy="67.8" r="54" fill="#0F172A"/><circle cx="67.8" cy="67.8" r="18" fill="#F8FAFC"/>
+      <circle cx="67.8" cy="444.2" r="54" fill="#0F172A"/><circle cx="67.8" cy="444.2" r="18" fill="#F8FAFC"/>
+      <circle cx="256" cy="256" r="54" fill="#0F172A"/><circle cx="256" cy="256" r="18" fill="#F8FAFC"/>
+    </g>
+  </symbol>
+
+  <!-- Micro (16 px): only × arrows + central hub -->
+  <symbol id="micro" viewBox="0 0 512 512">
+    <defs>
+      <linearGradient id="m-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FB923C"/><stop offset="1" stop-color="#EA580C"/></linearGradient>
+      <clipPath id="m-clip"><rect width="512" height="512" rx="112"/></clipPath>
+    </defs>
+    <g clip-path="url(#m-clip)">
+      <rect width="512" height="512" fill="url(#m-bg)"/>
+      <line x1="67.8" y1="67.8" x2="413.1" y2="413.1" stroke="#F8FAFC" stroke-width="56" stroke-linecap="round"/>
+      <path d="M 464 464 L 464 362.2 L 362.2 464 Z" fill="#F8FAFC"/>
+      <line x1="67.8" y1="444.2" x2="413" y2="99" stroke="#0F172A" stroke-width="56" stroke-linecap="round"/>
+      <path d="M 464 48 L 464 149.8 L 362.2 48 Z" fill="#0F172A"/>
+      <circle cx="256" cy="256" r="54" fill="#0F172A"/><circle cx="256" cy="256" r="18" fill="#F8FAFC"/>
+    </g>
+  </symbol>
+</svg>
+
+<h1>W1 · showcase</h1>
+<p class="sub">Иконка в разных масштабах. <span class="note">≥ 48 px — с пунктиром (A), &lt; 48 px — без пунктира (B).</span></p>
+
+<h2>Hero · 400 px · variant A</h2>
+<div class="huge">
+  <svg class="icon" width="400" height="400"><use href="#hero"/></svg>
+</div>
+
+<h2>Size ladder</h2>
+<div class="row">
+  <div class="sz"><svg class="icon" width="256" height="256"><use href="#hero"/></svg><div class="label">256 · hero</div></div>
+  <div class="sz"><svg class="icon" width="192" height="192"><use href="#hero"/></svg><div class="label">192 · hero</div></div>
+  <div class="sz"><svg class="icon" width="128" height="128"><use href="#hero"/></svg><div class="label">128 · hero</div></div>
+  <div class="sz"><svg class="icon" width="96" height="96"><use href="#hero"/></svg><div class="label">96 · hero</div></div>
+  <div class="sz"><svg class="icon" width="72" height="72"><use href="#hero"/></svg><div class="label">72 · hero</div></div>
+  <div class="sz"><svg class="icon" width="48" height="48"><use href="#hero"/></svg><div class="label">48 · hero</div></div>
+  <div class="sep"></div>
+  <div class="sz"><svg class="icon" width="36" height="36"><use href="#clean"/></svg><div class="label">36 · clean</div></div>
+  <div class="sz"><svg class="icon" width="32" height="32"><use href="#clean"/></svg><div class="label">32 · clean</div></div>
+  <div class="sz"><svg class="icon" width="24" height="24"><use href="#mid"/></svg><div class="label">24 · mid</div></div>
+  <div class="sz"><svg class="icon" width="16" height="16"><use href="#micro"/></svg><div class="label">16 · micro</div></div>
+</div>
+
+<h2>Light backdrop</h2>
+<div class="row light">
+  <div class="sz"><svg class="icon" width="192" height="192"><use href="#hero"/></svg><div class="label">192 · hero</div></div>
+  <div class="sz"><svg class="icon" width="96" height="96"><use href="#hero"/></svg><div class="label">96 · hero</div></div>
+  <div class="sz"><svg class="icon" width="48" height="48"><use href="#hero"/></svg><div class="label">48 · hero</div></div>
+  <div class="sep" style="background:#CBD5E1"></div>
+  <div class="sz"><svg class="icon" width="32" height="32"><use href="#clean"/></svg><div class="label">32 · clean</div></div>
+  <div class="sz"><svg class="icon" width="24" height="24"><use href="#mid"/></svg><div class="label">24 · mid</div></div>
+  <div class="sz"><svg class="icon" width="16" height="16"><use href="#micro"/></svg><div class="label">16 · micro</div></div>
+</div>
+
+<h2>Home-screen grid · 120 px · hero</h2>
+<div class="row grid" style="gap:28px">
+  <div class="sz"><svg class="icon" width="120" height="120" style="border-radius:22%"><use href="#hero"/></svg></div>
+  <div class="sz"><svg class="icon" width="120" height="120" style="border-radius:22%"><use href="#hero"/></svg></div>
+  <div class="sz"><svg class="icon" width="120" height="120" style="border-radius:22%"><use href="#hero"/></svg></div>
+  <div class="sz"><svg class="icon" width="120" height="120" style="border-radius:22%"><use href="#hero"/></svg></div>
+  <div class="sz"><svg class="icon" width="120" height="120" style="border-radius:22%"><use href="#hero"/></svg></div>
+</div>
+
+<h2>Tab-strip · B</h2>
+<div class="row">
+  <span class="label">Chrome tab:</span>
+  <svg class="icon" width="24" height="24"><use href="#mid"/></svg>
+  <span class="label">24</span>
+  <svg class="icon" width="16" height="16"><use href="#mid"/></svg>
+  <span class="label">16 · favicon</span>
+</div>
+
+<h2>Mask preview · 128 px · hero</h2>
+<div class="row">
+  <div class="sz"><svg class="icon" width="128" height="128" style="border-radius:50%"><use href="#hero"/></svg><div class="label">circle</div></div>
+  <div class="sz"><svg class="icon" width="128" height="128" style="border-radius:36%"><use href="#hero"/></svg><div class="label">squircle</div></div>
+  <div class="sz"><svg class="icon" width="128" height="128" style="border-radius:22%"><use href="#hero"/></svg><div class="label">rounded</div></div>
+  <div class="sz"><svg class="icon" width="128" height="128" style="border-radius:0"><use href="#hero"/></svg><div class="label">native rx</div></div>
+</div>
+
+</body>
+</html>

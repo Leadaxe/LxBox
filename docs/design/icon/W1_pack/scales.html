@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>LxBox — W1 · scales</title>
+<style>
+  :root { --bg:#0F172A; --card:#111827; --border:#1F2937; --text:#F1F5F9; --mute:#94A3B8; }
+  * { box-sizing: border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,Inter,Segoe UI,sans-serif; margin:0; padding:40px; }
+  h1 { font-weight:800; font-size:28px; margin:0 0 4px; letter-spacing:-0.02em; }
+  .sub { color:var(--mute); margin:0 0 36px; font-size:13px; }
+  h2 { font-size:12px; margin:36px 0 14px; color:#FDE68A; text-transform:uppercase; letter-spacing:2px; font-weight:700; }
+  .row { display:flex; align-items:flex-end; gap:22px; background:#1E293B; padding:22px; border-radius:14px; flex-wrap:wrap; }
+  .row.light { background:#F8FAFC; }
+  .row.grid { background:linear-gradient(135deg,#1e3a8a,#6d28d9,#831843); padding:32px; }
+  .sz { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .label { font-size:10px; color:var(--mute); font-family:ui-monospace,Menlo,monospace; }
+  .row.light .label { color:#334155; }
+  .row.grid .label { color:#F8FAFC; opacity:0.75; }
+  svg.icon { display:block; }
+  .strip { display:flex; align-items:center; gap:16px; background:#1E293B; padding:18px; border-radius:14px; }
+  .strip .sz svg { border-radius:22%; box-shadow:0 4px 16px rgba(0,0,0,.35); }
+  .huge { display:flex; justify-content:center; padding:40px 0; background:radial-gradient(ellipse at center, #1E293B, #0F172A); border-radius:18px; }
+  .huge svg { border-radius:22%; box-shadow:0 24px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.05); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="ico" viewBox="0 0 512 512">
+    <defs>
+      <linearGradient id="ico-bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#FB923C"/><stop offset="1" stop-color="#EA580C"/>
+      </linearGradient>
+      <clipPath id="ico-box"><rect width="512" height="512" rx="112"/></clipPath>
+    </defs>
+    <g clip-path="url(#ico-box)">
+      <rect width="512" height="512" fill="url(#ico-bg)"/>
+      <g stroke="#F8FAFC" stroke-width="56" stroke-linecap="round" fill="none">
+        <line x1="67.8" y1="67.8" x2="67.8" y2="444.2"/>
+        <line x1="67.8" y1="444.2" x2="256" y2="444.2"/>
+        <line x1="67.8" y1="67.8" x2="413.1" y2="413.1"/>
+      </g>
+      <path d="M 464 464 L 464 362.2 L 362.2 464 Z" fill="#F8FAFC"/>
+      <line x1="67.8" y1="444.2" x2="413" y2="99" stroke="#0F172A" stroke-width="56" stroke-linecap="round"/>
+      <path d="M 464 48 L 464 149.8 L 362.2 48 Z" fill="#0F172A"/>
+      <g stroke="#0F172A" stroke-width="18" stroke-linecap="round" stroke-dasharray="28 45" fill="none">
+        <line x1="67.8" y1="67.8" x2="67.8" y2="444.2"/>
+        <line x1="67.8" y1="444.2" x2="256" y2="444.2"/>
+      </g>
+      <circle cx="67.8" cy="67.8" r="54" fill="#F8FAFC"/>
+      <circle cx="67.8" cy="67.8" r="18" fill="#0F172A"/>
+      <circle cx="67.8" cy="444.2" r="54" fill="#0F172A"/>
+      <circle cx="67.8" cy="444.2" r="18" fill="#FDE68A"/>
+      <circle cx="256" cy="256" r="54" fill="#0F172A"/>
+      <circle cx="256" cy="256" r="18" fill="#FDE68A"/>
+    </g>
+  </symbol>
+</svg>
+
+<h1>W1 · Routing Cross · scales</h1>
+<p class="sub">Иконка в разных масштабах.</p>
+
+<h2>Hero · 400 px</h2>
+<div class="huge">
+  <svg class="icon" width="400" height="400"><use href="#ico"/></svg>
+</div>
+
+<h2>Size ladder · 256 → 16 px</h2>
+<div class="row">
+  <div class="sz"><svg class="icon" width="256" height="256"><use href="#ico"/></svg><div class="label">256</div></div>
+  <div class="sz"><svg class="icon" width="192" height="192"><use href="#ico"/></svg><div class="label">192</div></div>
+  <div class="sz"><svg class="icon" width="128" height="128"><use href="#ico"/></svg><div class="label">128</div></div>
+  <div class="sz"><svg class="icon" width="96" height="96"><use href="#ico"/></svg><div class="label">96</div></div>
+  <div class="sz"><svg class="icon" width="72" height="72"><use href="#ico"/></svg><div class="label">72</div></div>
+  <div class="sz"><svg class="icon" width="64" height="64"><use href="#ico"/></svg><div class="label">64</div></div>
+  <div class="sz"><svg class="icon" width="48" height="48"><use href="#ico"/></svg><div class="label">48 · launcher</div></div>
+  <div class="sz"><svg class="icon" width="36" height="36"><use href="#ico"/></svg><div class="label">36</div></div>
+  <div class="sz"><svg class="icon" width="32" height="32"><use href="#ico"/></svg><div class="label">32</div></div>
+  <div class="sz"><svg class="icon" width="24" height="24"><use href="#ico"/></svg><div class="label">24</div></div>
+  <div class="sz"><svg class="icon" width="16" height="16"><use href="#ico"/></svg><div class="label">16 · favicon</div></div>
+</div>
+
+<h2>Light backdrop</h2>
+<div class="row light">
+  <div class="sz"><svg class="icon" width="192" height="192"><use href="#ico"/></svg><div class="label">192</div></div>
+  <div class="sz"><svg class="icon" width="96" height="96"><use href="#ico"/></svg><div class="label">96</div></div>
+  <div class="sz"><svg class="icon" width="48" height="48"><use href="#ico"/></svg><div class="label">48</div></div>
+  <div class="sz"><svg class="icon" width="32" height="32"><use href="#ico"/></svg><div class="label">32</div></div>
+  <div class="sz"><svg class="icon" width="16" height="16"><use href="#ico"/></svg><div class="label">16</div></div>
+</div>
+
+<h2>Home-screen grid · 120 px</h2>
+<div class="row grid" style="gap:28px">
+  <div class="sz"><svg class="icon" width="120" height="120" style="border-radius:22%"><use href="#ico"/></svg><div class="label">1</div></div>
+  <div class="sz"><svg class="icon" width="120" height="120" style="border-radius:22%"><use href="#ico"/></svg><div class="label">2</div></div>
+  <div class="sz"><svg class="icon" width="120" height="120" style="border-radius:22%"><use href="#ico"/></svg><div class="label">3</div></div>
+  <div class="sz"><svg class="icon" width="120" height="120" style="border-radius:22%"><use href="#ico"/></svg><div class="label">4</div></div>
+  <div class="sz"><svg class="icon" width="120" height="120" style="border-radius:22%"><use href="#ico"/></svg><div class="label">5</div></div>
+</div>
+
+<h2>Tab-strip · 24/16</h2>
+<div class="strip">
+  <span class="label">как tab-icon в Chrome:</span>
+  <svg class="icon" width="24" height="24"><use href="#ico"/></svg>
+  <span class="label">tab (24)</span>
+  <svg class="icon" width="16" height="16"><use href="#ico"/></svg>
+  <span class="label">favicon (16)</span>
+</div>
+
+<h2>Circular / squircle mask preview</h2>
+<div class="row">
+  <div class="sz"><svg class="icon" width="128" height="128" style="border-radius:50%"><use href="#ico"/></svg><div class="label">circle</div></div>
+  <div class="sz"><svg class="icon" width="128" height="128" style="border-radius:36%"><use href="#ico"/></svg><div class="label">squircle</div></div>
+  <div class="sz"><svg class="icon" width="128" height="128" style="border-radius:22%"><use href="#ico"/></svg><div class="label">rounded-rect</div></div>
+  <div class="sz"><svg class="icon" width="128" height="128" style="border-radius:0"><use href="#ico"/></svg><div class="label">native rx</div></div>
+</div>
+
+</body>
+</html>
