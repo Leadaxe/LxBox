@@ -113,6 +113,63 @@ void main() {
       expect(body['ok'], isTrue);
     });
 
+    test('q= substring match по message (case-insensitive)', () async {
+      final resp = await logsHandler(
+        DebugRequest.forTest(
+          method: 'GET',
+          path: '/logs',
+          query: {'q': 'SECOND'},
+        ),
+        _ctx(),
+      );
+      final list = (resp as JsonResponse).body as List;
+      expect(list.length, 1);
+      expect(list[0]['message'], 'second');
+    });
+
+    test('level=warning,error фильтрует набор уровней', () async {
+      final resp = await logsHandler(
+        DebugRequest.forTest(
+          method: 'GET',
+          path: '/logs',
+          query: {'level': 'warning,error'},
+        ),
+        _ctx(),
+      );
+      final list = (resp as JsonResponse).body as List;
+      expect(list.length, 2);
+      expect(list.map((e) => e['level']).toSet(), {'warning', 'error'});
+    });
+
+    test('level=bogus → BadRequest', () async {
+      expect(
+        () => logsHandler(
+          DebugRequest.forTest(
+            method: 'GET',
+            path: '/logs',
+            query: {'level': 'bogus'},
+          ),
+          _ctx(),
+        ),
+        throwsA(isA<BadRequest>()),
+      );
+    });
+
+    test('q + level + source комбинируются (AND)', () async {
+      // 'third' — level=error, source=app → все три фильтра проходит
+      final resp = await logsHandler(
+        DebugRequest.forTest(
+          method: 'GET',
+          path: '/logs',
+          query: {'q': 'th', 'level': 'error', 'source': 'app'},
+        ),
+        _ctx(),
+      );
+      final list = (resp as JsonResponse).body as List;
+      expect(list.length, 1);
+      expect(list[0]['message'], 'third');
+    });
+
     test('GET /logs/unknown → NotFound', () async {
       expect(
         () => logsHandler(
