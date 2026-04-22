@@ -9,6 +9,7 @@ import '../models/subscription_meta.dart';
 import '../services/app_log.dart';
 import '../services/error_humanize.dart';
 import '../services/parse_hints.dart';
+import '../services/relative_time.dart';
 import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
 import '../services/parser/body_decoder.dart';
@@ -133,13 +134,8 @@ class SubscriptionEntry extends ChangeNotifier {
     return parts.join(' · ');
   }
 
-  static String _formatAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
+  static String _formatAgo(DateTime dt) =>
+      relativeTime(DateTime.now(), dt);
 
   void _replaceList(ServerList next) {
     _list = next;

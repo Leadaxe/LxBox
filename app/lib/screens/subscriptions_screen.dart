@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../config/consts.dart';
 import '../controllers/home_controller.dart';
@@ -10,6 +11,7 @@ import '../controllers/subscription_controller.dart';
 import '../models/server_list.dart';
 import '../services/community_servers_loader.dart';
 import '../services/settings_storage.dart';
+import '../services/url_mask.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/url_launcher.dart';
@@ -468,6 +470,18 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                 Navigator.pop(ctx);
               },
             ),
+            // Share (night T6-2): for SubscriptionServers с URL даём masked-
+            // share по умолчанию. Юзер может включить "Share with token"
+            // через confirm-dialog (с предупреждением).
+            if (entry.url.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.ios_share),
+                title: const Text('Share URL…'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _shareSubscriptionUrl(entry);
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.refresh),
               title: const Text('Update'),
@@ -514,6 +528,51 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         SnackBar(content: Text('Copied: $url')),
       );
     }
+  }
+
+  /// Share URL подписки (night T6-2). По умолчанию предлагаем masked
+  /// вариант (`scheme://host/***`) — безопасно расшарить в чат / саппорт.
+  /// Full URL с токеном — отдельная кнопка с предупреждением.
+  Future<void> _shareSubscriptionUrl(SubscriptionEntry entry) async {
+    final full = entry.url;
+    if (full.isEmpty) return;
+    final masked = maskSubscriptionUrl(full);
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Share subscription URL'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Masked URL is safe to share — it has no token:'),
+            const SizedBox(height: 6),
+            SelectableText(masked,
+                style: const TextStyle(fontFamily: 'monospace')),
+            const SizedBox(height: 16),
+            const Text(
+                'Full URL contains your provider token — share only with people who have access to your subscription.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, null),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, 'masked'),
+            child: const Text('Share masked'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(dCtx, 'full'),
+            child: const Text('Share full'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null) return;
+    final text = choice == 'full' ? full : masked;
+    await Share.share(text, subject: 'LxBox subscription');
   }
 
   Future<void> _pickPublicTestServer() async {
