@@ -217,14 +217,6 @@ class SubscriptionController extends ChangeNotifier {
   String _lastError = '';
   String get lastError => _lastError;
 
-  /// Debug-only: выставить lastError извне (для Debug API
-  /// /action/emulate-error демо). Уведомляет listeners, чтобы UI
-  /// отрисовал inline red-текст.
-  void setDebugLastError(String msg) {
-    _lastError = msg;
-    notifyListeners();
-  }
-
   String _progressMessage = '';
   String get progressMessage => _progressMessage;
 

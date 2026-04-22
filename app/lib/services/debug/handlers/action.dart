@@ -53,21 +53,15 @@ Future<DebugResponse> actionHandler(
 /// Эмулирует ошибку для демонстрации humanizeError'а.
 /// POST /action/emulate-error?kind=<socket|timeout|http-401|http-404|
 ///   http-410|http-429|http-503|format|fs|plain|all>
-///   [&target=log|sub|both]   default: both
 ///
-/// Запишет в AppLog строку вида
-/// `emulate-error [kind=...]: <humanized>`, и/или поставит
-/// `SubscriptionController.lastError` (видно red-инлайн на Subscriptions
-/// screen). `kind=all` прогоняет весь набор.
+/// Writes humanized samples to AppLog (строка вида
+/// `emulate-error [kind=...]: <humanized>`). Просмотр — через `/logs`.
+/// `kind=all` прогоняет весь набор.
 Future<DebugResponse> _emulateError(
   DebugRequest req,
   DebugContext ctx,
 ) async {
   final kind = req.requiredQuery('kind');
-  final target = req.q('target') ?? 'both';
-  if (target != 'log' && target != 'sub' && target != 'both') {
-    throw BadRequest('target must be log|sub|both, got "$target"');
-  }
 
   Exception buildException(String k) => switch (k) {
         'socket' => const SocketException('emulated: host lookup failed'),
@@ -106,25 +100,11 @@ Future<DebugResponse> _emulateError(
       : [kind];
 
   final samples = <Map<String, String>>[];
-  String? lastHumanized;
   for (final k in kinds) {
     final e = buildException(k);
     final humanized = humanizeError(e);
-    lastHumanized = humanized;
     samples.add({'kind': k, 'humanized': humanized});
-    if (target == 'log' || target == 'both') {
-      AppLog.I.error('emulate-error [kind=$k]: $humanized');
-    }
-  }
-
-  if ((target == 'sub' || target == 'both') && lastHumanized != null) {
-    // Для inline red-банера на Subscriptions — ставим lastError на
-    // sub-controller (если он есть в контексте). kind=all оставит
-    // последний humanized как inline-текст.
-    final sub = ctx.sub;
-    if (sub != null) {
-      sub.setDebugLastError('demo: $lastHumanized');
-    }
+    AppLog.I.error('emulate-error [kind=$k]: $humanized');
   }
 
   return _ok('emulate-error', {'samples': samples});
