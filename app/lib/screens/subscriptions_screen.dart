@@ -63,7 +63,31 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   }
 
   Future<bool> _onWillPop() async {
-    return true;
+    // Unsaved-input guard (night T4-3): если юзер ввёл что-то в поле и
+    // уходит со screen без сабмита — подтверждаем, чтобы не терять URL
+    // / proxy-link, который он только что вставил.
+    final pending = _inputController.text.trim();
+    if (pending.isEmpty) return true;
+    if (!mounted) return true;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard input?'),
+        content: const Text(
+            'You have unsaved text in the input field. Leave and discard it?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Stay'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
   }
 
   Future<void> _add() async {

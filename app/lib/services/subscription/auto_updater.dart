@@ -153,15 +153,29 @@ class AutoUpdater {
   bool _shouldUpdate(SubscriptionEntry entry, {required bool force}) {
     final list = entry.list;
     if (list is! SubscriptionServers) return false;
+    return shouldUpdatePure(
+      list: list,
+      force: force,
+      fails: _failCounts[list.url] ?? 0,
+      now: DateTime.now(),
+    );
+  }
+
+  /// Pure-function вариант `_shouldUpdate` — testable без SubscriptionController
+  /// и системного времени (night T4-1). Та же логика §027: fail-cap,
+  /// min-retry, updateIntervalHours. Принимает `now` и `fails` явно.
+  static bool shouldUpdatePure({
+    required SubscriptionServers list,
+    required bool force,
+    required int fails,
+    required DateTime now,
+  }) {
     if (!list.enabled) return false;
 
     // Fail-cap: после 5 фейлов подписка замораживается до следующего app start.
-    final fails = _failCounts[list.url] ?? 0;
     if (!force && fails >= maxFailsPerSession) return false;
 
     if (force) return true;
-
-    final now = DateTime.now();
 
     // Min-retry: не пытаться чаще 15 мин, даже если `updateIntervalHours`
     // прошёл. Защищает от fail-шторма на каждом триггере.
