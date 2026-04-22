@@ -14,6 +14,37 @@ Iterative release on top of 1.4.0. Two major internal changes + reworked templat
 - **SRS cache prune** — `RuleSetDownloader.pruneOrphans()` при каждом `_refreshSrsCache` сметает `.srs`-файлы без живого референса. Orphan'ы после миграций схемы (pre-bundle → bundle) больше не копятся.
 - **`.онлайн` (`xn--80asehdb`) в Russian domains direct** — добавлен в inline rule_set `ru-domains` и в DNS-правило через `yandex_doh`.
 
+## 🛡 Reliability & Safety
+
+- **Retry + exponential backoff** для subscription fetch и rule_set download — 3 попытки (1s → 3s). `4xx` — permanent (без ретраев), `5xx` / timeout / `SocketException` — retry. Снимает львиную долю жалоб "подписка не обновляется" у юзеров с нестабильной сетью.
+- **Top-level error boundary** (`FlutterError.onError`) — uncaught Flutter-ошибки попадают в `AppLog` и видны на Debug → Logs. Красный экран заменён на компактный `ErrorBoundary` fallback-widget.
+- **Auto-updater coverage** — §027 spam-gate покрыт тестами (`consecutiveFails`, `minRetryInterval`, `maxFailsPerSession`, `inProgress` crash-safe reset на старте). Никаких скрытых background-refresh не добавлено.
+
+## 🔐 Security
+
+- **URL masking audit** — subscription URL больше не течёт в `AppLog` целиком. Везде используется `maskSubscriptionUrl` (`scheme://host/***`). Полный URL доступен только в Debug API с `reveal=true` параметром. Закрыты 4 leak-сайта (hydrate-fail, inProgress-skip, shortUrl truncation, `addFromInput`).
+
+## 🎨 UX
+
+- **Human-readable errors** (`humanizeError`) — все user-visible сообщения приведены к человеческому виду. Было: `Exception: HTTP 503 for https://…`. Стало: `Server error (503) — provider is down, try later`. Timeout сообщает длительность. Покрыто топ-5 сценариев: subscription fetch, rule-set download, parse, config build, VPN start.
+- **Parse hints** — когда подписка загружена, но распарсилась в 0 нод, показываем причину: HTML-страница провайдера, Clash YAML, full sing-box config, plain-text error. Юзер понимает "что именно не так", а не "unknown parse error".
+- **Pull-to-refresh** на Subscriptions screen — стандартный Android-gesture запускает `updateAll`.
+- **Getting Started card** — при пустом списке подписок показывается пояснительная карточка: как добавить URL / paste clipboard / file pick.
+- **Unsaved-input guard** — на Add Subscription, введённый в поле текст без сохранения → back → диалог "Discard input?".
+- **Relative time** — `2h ago / yesterday / 3d ago / 2w ago / 2mo ago / 2y ago` вместо абсолютных timestamp'ов в узких местах.
+- **Debug log search** — `/logs` поддерживает `q=` substring search и `level=` multi-filter (`level=error,warn`).
+- **Reset fail-count & retry** (long-press на подписке) — ручной reset `consecutiveFails` counter'а, размораживает подписку из session-cap и сразу пытается обновить.
+- **Share URL (masked / full)** — long-press → "Share URL…" → диалог с выбором: замаскированный или полный URL (для приватной передачи).
+
+## 🧪 Testing
+
+- **+97 tests** (262 → **359**). Новые модули покрыты полностью: `error_humanize`, `url_mask`, `parse_hints`, `relative_time`, `input_helpers`, `http_cache`, `rule_set_downloader`, `auto_updater`, `body_decoder`, validator edge cases, preset-expand.
+
+## 🧹 Cleanup
+
+- `flutter analyze`: 20 info/warning → **0**. `@override` аннотации на subclass fields, удалены избыточные `!`.
+- Dispose / dead-code audit — чисто, без правок.
+
 ---
 
 ## 🔖 Preset bundles (spec 033)
@@ -95,7 +126,7 @@ Release APK: `./scripts/build-local-apk.sh` (arm64-only, minimal). Signed with t
 
 ## 🧪 Tests
 
-`flutter test`: **262 passed**, zero warnings in `flutter analyze`.
+`flutter test`: **359 passed**, zero warnings in `flutter analyze`.
 
 ## 📝 Known limitations
 

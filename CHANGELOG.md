@@ -6,7 +6,38 @@
 
 ---
 
-## [1.4.1] — In progress
+## [1.4.1] — 2026-04-22
+
+### Reliability
+
+- **Retry + exponential backoff** для subscription fetch (`sources.dart`) и rule_set download (`rule_set_downloader.dart`): 3 попытки с задержками 1s → 3s. `4xx` — permanent (без ретраев), `5xx` / timeout / `SocketException` — retry. Снимает основную массу жалоб "подписка не обновляется" у юзеров с флапающей сетью.
+- **Top-level error boundary** — `FlutterError.onError` + `PlatformDispatcher.instance.onError` → `AppLog`. Uncaught-ошибки видны на Debug → Logs. Красный экран заменён на компактный `ErrorBoundary` fallback-widget.
+- **Auto-updater spam-gate tests** (§027) — покрыто тестами: `consecutiveFails`, `minRetryInterval`, `maxFailsPerSession`, `inProgress` crash-safe reset при старте app.
+
+### Security
+
+- **URL masking audit** — subscription URL больше не попадают в `AppLog` целиком. Везде `maskSubscriptionUrl` (`scheme://host/***`). Полный URL доступен только в Debug API с `reveal=true`. Закрыты 4 leak-сайта: hydrate-fail, `inProgress` skip warning, shortUrl truncation, `addFromInput`.
+
+### UX
+
+- **Human-readable errors** (`humanizeError`) — все user-visible сообщения приведены к человеческому виду. Было: `Exception: HTTP 503 for https://…`. Стало: `Server error (503) — provider is down, try later`. `TimeoutException` сообщает длительность. Покрыт топ-5: subscription fetch, rule-set download, parse, config build, VPN start.
+- **Parse hints** — если подписка загружена но распарсилась в 0 нод, показываем причину (HTML-страница, Clash YAML, full sing-box config, plain-text error).
+- **Pull-to-refresh** на Subscriptions screen (`RefreshIndicator` → `updateAll`).
+- **Getting Started card** — карточка для пустого списка подписок: варианты URL / paste clipboard / file.
+- **Unsaved-input guard** — Add Subscription: введённый текст + back → диалог "Discard input?".
+- **Relative time** — `2h ago / yesterday / 3d ago / 2w ago / 2mo ago / 2y ago` вместо абсолютных timestamp'ов.
+- **Reset fail-count & retry** — long-press на подписке → action размораживает `consecutiveFails` и сразу обновляет.
+- **Share URL (masked / full)** — long-press → диалог с выбором masked/full URL.
+- **Debug logs search** — `/logs` endpoint поддерживает `q=` substring search и `level=` multi-filter (`error,warn`). `/action/emulate-error` для demo `humanizeError`.
+
+### Testing
+
+- **262 → 359 тестов** (+97). Новые модули покрыты полностью: `error_humanize`, `url_mask`, `parse_hints`, `relative_time`, `input_helpers`, `http_cache`, `rule_set_downloader`, `auto_updater`, `body_decoder`, validator edge cases, preset-expand.
+
+### Cleanup
+
+- `flutter analyze`: 20 info/warning → **0**. `@override` аннотации на subclass fields, удалены избыточные `!`.
+- Dispose + dead-code audit — чисто (без правок). `setDebugLastError` leak устранён в `/action/emulate-error`.
 
 ### Changed — `CustomRule` sealed-split (spec 030 §v1.4.1, task 011)
 

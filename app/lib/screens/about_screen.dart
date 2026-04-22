@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  static const _version = '1.4.0';
+  static const _version = '1.4.1';
   static const _repoUrl = 'https://github.com/Leadaxe/LxBox';
 
   // Заполняются `scripts/build-local-apk.sh` через --dart-define.
