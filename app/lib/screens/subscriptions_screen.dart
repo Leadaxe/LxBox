@@ -490,6 +490,23 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                 unawaited(widget.subController.updateAt(index));
               },
             ),
+            // Reset fail-count (night T8-1). Если провайдер вернулся в строй
+            // после фриза (5 фейлов подряд → заморожено до app-restart),
+            // юзер может руками разморозить без перезапуска.
+            if (entry.url.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.restart_alt),
+                title: const Text('Reset fail count & retry'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  widget.autoUpdater.resetFailCount(entry.url);
+                  await widget.subController.updateAt(index);
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Fail count reset, retrying…')),
+                  );
+                },
+              ),
             ListTile(
               leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
               title: Text('Delete', style: TextStyle(color: Theme.of(context).colorScheme.error)),
