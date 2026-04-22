@@ -4,22 +4,28 @@ import 'dart:io';
 /// Превращает технический exception в user-facing сообщение (night T2-2).
 ///
 /// Поведение:
-/// - `SocketException` / network errors → "No connection to server"
-/// - `TimeoutException` → "Timed out after ... seconds"
+/// - `SocketException` / network errors → `No connection to <host>` если host
+///   удаётся извлечь, иначе generic "No connection"
+/// - `TimeoutException` → "Timed out after Ns" если `.duration` известен,
+///   иначе generic "Request timed out"
 /// - `HttpException` с `HTTP NNN` → короткое описание по коду
 /// - `FormatException` → "Can't parse response (invalid format)"
 /// - Всё остальное — оригинальное `.toString()` с префиксом отрезанным
 ///   (удаляем "Exception: " чтобы не показывать юзеру).
 ///
-/// Возвращает строку ≤120 chars, подходящую для Snackbar / inline-error.
+/// Возвращает строку ≤140 chars, подходящую для Snackbar / inline-error.
 String humanizeError(Object e) {
   if (e is SocketException) {
-    final host = e.address?.host ?? '';
+    final host = _extractSocketHost(e);
     return host.isNotEmpty
         ? 'No connection to $host — check network or URL'
         : 'No connection — check network or URL';
   }
   if (e is TimeoutException) {
+    final secs = e.duration?.inSeconds ?? 0;
+    if (secs > 0) {
+      return 'Timed out after ${secs}s — server slow or unreachable';
+    }
     return 'Request timed out — server slow or unreachable';
   }
   if (e is HttpException) {
@@ -41,6 +47,25 @@ String humanizeError(Object e) {
   // Trim leading "Exception: " / "TypeError: " / etc — keep message only.
   final trimmed = raw.replaceFirst(RegExp(r'^[A-Za-z_]*(Exception|Error): '), '');
   return trimmed.length > 140 ? '${trimmed.substring(0, 137)}...' : trimmed;
+}
+
+/// Пытается достать host из `SocketException`. `e.address` обычно `null` при
+/// DNS-lookup failure, поэтому сначала смотрим в `e.message` ("Failed host
+/// lookup: 'api.example.com'", "No address associated with hostname") и лишь
+/// затем — в `e.osError?.message`. Возвращает пустую строку, если host не
+/// удалось идентифицировать.
+String _extractSocketHost(SocketException e) {
+  final addrHost = e.address?.host ?? '';
+  if (addrHost.isNotEmpty) return addrHost;
+
+  // Формат "Failed host lookup: 'host.name'" на Android/Linux.
+  final m = RegExp(r"host lookup:\s*'([^']+)'", caseSensitive: false)
+      .firstMatch(e.message);
+  if (m != null) {
+    final host = m.group(1)?.trim() ?? '';
+    if (host.isNotEmpty) return host;
+  }
+  return '';
 }
 
 String _httpStatusReason(int code) {

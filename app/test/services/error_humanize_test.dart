@@ -13,9 +13,36 @@ void main() {
       expect(msg, contains('No connection'));
     });
 
+    test('SocketException with host in message → "No connection to <host>"',
+        () {
+      // regression: DNS lookup failure обычно не даёт `e.address`, но host
+      // есть в тексте "Failed host lookup: 'api.example.com'".
+      const e = SocketException(
+        "Failed host lookup: 'api.example.com'",
+      );
+      final msg = humanizeError(e);
+      expect(msg, contains('No connection to api.example.com'));
+    });
+
     test('TimeoutException → timeout phrasing', () {
       final msg = humanizeError(TimeoutException('x'));
       expect(msg.toLowerCase(), contains('time'));
+    });
+
+    test('TimeoutException with duration → includes seconds', () {
+      // regression: doc обещал "Timed out after N seconds" — раньше код
+      // всегда отдавал generic, теперь подставляет duration.
+      final msg = humanizeError(
+        TimeoutException('x', const Duration(seconds: 30)),
+      );
+      expect(msg, contains('30s'));
+      expect(msg.toLowerCase(), contains('timed out'));
+    });
+
+    test('TimeoutException without duration → generic timeout phrasing', () {
+      final msg = humanizeError(TimeoutException('x'));
+      expect(msg, isNot(contains('0s')));
+      expect(msg.toLowerCase(), contains('timed out'));
     });
 
     test('HttpException with 401 → access denied hint', () {
