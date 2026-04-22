@@ -126,9 +126,15 @@ ServerList (sealed)  —  SubscriptionServers | UserServer
   ▼
 buildConfig(lists, settings)
   │ template (assets/wizard_template.json)
-  │ post-steps: applyCustomRules (inline + local-SRS, см. spec 030),
-  │             applyTlsFragment, applyMixedCaseSni, applyCustomDns
-  │ validator → ValidationResult{ fatal[], warnings[] }
+  │ post-steps (в порядке выполнения):
+  │   1. server_list_build   → outbounds/endpoints из ServerList
+  │   2. applyPresetBundles  → expansion CustomRule(kind: preset),
+  │                            merge → registry + extra DNS (spec 033)
+  │   3. applyCustomRules    → inline + local-SRS правила (spec 030)
+  │   4. flush registry      → config.route.{rule_set, rules}
+  │   5. applyTlsFragment, applyMixedCaseSni  → TLS-обфускация (spec 028)
+  │   6. applyCustomDns      → dns.servers/rules из template + bundle-extras
+  │   7. validator → ValidationResult{ fatal[], warnings[] }
   ▼
 BuildResult{ config, configJson, validation, emitWarnings, generatedVars }
   │
@@ -141,6 +147,112 @@ HomeController.saveParsedConfig(configJson)  →  native VpnService
 - Polymorphic `emit(vars)` — WireGuard → Endpoint, others → Outbound.
 - `EmitContext.allocateTag(baseTag)` guarantees global uniqueness across all lists.
 - Warnings bubble up: parse-time → `NodeSpec.warnings`, emit-time → appended by emit (e.g. XHTTP fallback).
+
+---
+
+## Wizard template (`assets/wizard_template.json`)
+
+Asset-шаблон, который читается один раз через `TemplateLoader.load()` (синглтон, deep-copy на каждый билд). Определяет скелет sing-box конфига, глобальные переменные, preset-группы (VPN tiers) и selectable-правила (каталог routing-пресетов).
+
+### Секции шаблона
+
+| Секция | Роль | Пример / где используется |
+|---|---|---|
+| `parser_config` | sing-box `version` + reload interval | прямой emit в корень |
+| `dns_options.servers` | Baseline DNS-серверы (cloudflare/google/quad9/adguard) | `applyCustomDns` мерджит в `config.dns.servers` |
+| `dns_options.rules` | Дефолтные DNS-rules (обычно только fallback `{server: google_doh}`) | `applyCustomDns`: bundle-rules **перед** fallback-ом |
+| `ping_options`, `speed_test_options` | UI-фичи (HomeScreen, SpeedTest) | не попадают в sing-box конфиг |
+| `preset_groups` | Группы outbound'ов (`vpn-1`/`vpn-2`/`vpn-3`, `@auto`) | `_buildPresetGroups` в `build_config.dart` |
+| `config` | База sing-box конфига: log, inbounds, route-skeleton | deep-copy'ится в начале `buildConfig` |
+| `sections[].vars[]` | Глобальные переменные UI — chapter: `core` / `routing` / `dns` | `TemplateVarListView` рендерит в SettingsScreen/RoutingScreen; `@name` подставляется в config через `_substituteVars` |
+| `selectable_rules` | Каталог пресет-правил (legacy inline + bundle — spec 033) | вкладка Presets в `RoutingScreen` |
+
+### Selectable rules — два режима
+
+Пресет в `selectable_rules[]` работает в одном из двух режимов:
+
+**Legacy (до v1.4.x, без `preset_id`):**
+```json
+{
+  "label": "BitTorrent direct",
+  "default": true,
+  "rule": { "protocol": ["bittorrent"], "outbound": "direct-out" }
+}
+```
+Копируется юзером в `CustomRule(kind: inline | srs)` через `selectableRuleToCustom` — содержимое копируется **по значению**, дальнейшие правки шаблона не влияют на уже скопированное правило.
+
+**Bundle (v1.5+, `preset_id` задан) — spec 033:**
+```json
+{
+  "preset_id": "ru-direct",
+  "label": "Russian domains direct",
+  "default": true,
+
+  "vars": [
+    {"name": "out", "type": "outbound", "default_value": "direct-out", "title": "Outbound"},
+    {"name": "dns_server", "type": "dns_servers", "required": false, "default_value": "yandex_doh", "title": "Transport"},
+    {"name": "dns_ip", "type": "enum", "default_value": "77.88.8.88", "options": [
+      {"title": "77.88.8.88 · Safe", "value": "77.88.8.88"}, ...
+    ]}
+  ],
+  "rule_set":    [ { "tag": "ru-domains", "type": "inline", "format": "domain_suffix", "rules": [...] } ],
+  "dns_rule":    { "rule_set": "ru-domains", "server": "@dns_server" },
+  "rule":        { "rule_set": "ru-domains", "outbound": "@out" },
+  "dns_servers": [
+    {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "port": 443, "path": "/dns-query", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@out"},
+    ...
+    {"type": "udp",   "tag": "yandex_udp", "server": "@dns_ip", "server_port": 53, "detour": "@out"}
+  ]
+}
+```
+`CustomRule(kind: preset)` хранит **тонкую ссылку** — только `{presetId, varsValues}`. Expansion (`preset_expand.dart`) на каждый билд:
+1. Резолвит переменные из `varsValues` (или `default_value` если ключ отсутствует; для `required: false` + отсутствие ключа + пустой default → `null` → фрагменты с `@var` выкидываются).
+2. Рекурсивно подставляет `@var` в `rule_set`/`dns_rule`/`rule`/`dns_servers`.
+3. Фильтрует `dns_servers` до одного с `tag == vars['dns_server']`.
+4. Если `@out` резолвится в `"direct-out"` — удаляет `detour` из DNS-серверов (direct не требует forwarding).
+
+Merge фрагментов от разных `CustomRule(kind: preset)` — identical-skip по tag + first-wins с warning для реальных конфликтов, детерминированный порядок по индексу в UI.
+
+### Vars
+
+`WizardVar` едина для глобальных `sections[].vars[]` и preset-local `selectable_rules[i].vars[]`. Поддерживаемые типы (`type`):
+
+| `type` | UI | Substitution |
+|---|---|---|
+| `bool` | SwitchListTile | `"true"` / `"false"` → Dart bool |
+| `text` | TextField (+ combo-popup если есть `options`) | строка |
+| `enum` | Dropdown с `title → value` | строка (`value`) |
+| `secret` | TextField с eye-toggle + Generate | строка |
+| `outbound` (preset only) | OutboundPicker | строка (tag) |
+| `dns_servers` (preset only) | Dropdown по `preset.dns_servers[].tag` | строка (tag) |
+
+**`options`** принимает два формата (legacy-совместимо): строка-литерал (`"foo"` ≡ `{title: "foo", value: "foo"}`) или объект `{"title": "...", "value": "..."}`. UI показывает `title`, expansion/storage — `value`.
+
+**`required: bool`** (default `true`) — для optional var в UI появляется пункт "— (none)"; при выборе → `varsValues[name] = ""`. Expansion отличает `containsKey=false` (юзер не трогал → применяется `default_value`) от `value=""` (юзер явно выбрал none → `null`).
+
+### Как связаны слои
+
+```
+wizard_template.json
+  │  load (TemplateLoader)  →  WizardTemplate (в памяти, shared)
+  │
+  ├── config       ──► _substituteVars(@global vars)                          ──► base config
+  ├── selectable_rules (bundle)
+  │    └── + CustomRule(kind: preset).varsValues
+  │         │  expandPreset (pure)                                            ──► PresetFragments
+  │         │  mergeFragments (identical-skip / first-wins)                   ──► BundleMerge
+  │         └─ applyPresetBundles  → rule_set/routes → registry; DNS → extras
+  ├── selectable_rules (legacy)
+  │    └── + CustomRule(kind: inline|srs)
+  │         └─ applyCustomRules    → rule_set/routes → registry (auto-suffix)
+  ├── dns_options  ──► applyCustomDns(template + extras)                      ──► config.dns
+  └── preset_groups ──► _buildPresetGroups(vpn-1..3, @auto)                   ──► config.outbounds
+```
+
+**Почему DoH/DoT в bundle хардкодят `server: "77.88.8.88"` + `tls.server_name`:**
+В sing-box 1.12 DNS-сервер типа `https`/`tls` с hostname-сервером требует `domain_resolver` (тег другого DNS-сервера для bootstrap resolve), иначе chicken-and-egg. Указывая IP напрямую + `tls.server_name` для SNI/cert verify — избавляемся от bootstrap dependency (не нужно ходить в 8.8.8.8 для резолва `safe.dot.dns.yandex.net`) и получаем Safe-профиль Yandex с корректной TLS проверкой.
+
+`@dns_ip` применяется **только** к UDP-серверу — для DoH/DoT замена IP сломала бы TLS (cert mismatch с захардкоженным SNI). Для реально разных режимов Yandex (Safe/Base/Family) → отдельные пресеты, если понадобятся, чтобы не городить nested-lookup в substitution-движке.
 
 ---
 

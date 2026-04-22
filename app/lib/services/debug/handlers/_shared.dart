@@ -89,3 +89,18 @@ List<String>? fieldStringList(Map<String, dynamic> m, String key) {
   }
   throw BadRequest('field "$key" must be array, got ${v.runtimeType}');
 }
+
+/// Парсит JSON-object → `Map<String, String>`. Значения приводятся к string
+/// via `toString()` (`null` → `""`). Используется для `vars_values`
+/// в preset-rule'ах.
+Map<String, String>? fieldStringMap(Map<String, dynamic> m, String key) {
+  if (!m.containsKey(key)) return null;
+  final v = m[key];
+  if (v is Map) {
+    return {
+      for (final e in v.entries)
+        if (e.key is String) e.key as String: e.value?.toString() ?? '',
+    };
+  }
+  throw BadRequest('field "$key" must be object, got ${v.runtimeType}');
+}

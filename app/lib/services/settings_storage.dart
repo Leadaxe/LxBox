@@ -253,14 +253,14 @@ class SettingsStorage {
               .toList() ??
           const <String>[];
       if (packages.isEmpty) continue;
-      final migrated = CustomRule(
+      final migrated = CustomRuleInline(
         id: (e['id'] as String?)?.trim().isNotEmpty == true
             ? e['id'] as String
             : null,
         name: (e['name'] as String?) ?? 'App group',
         enabled: (e['enabled'] as bool?) ?? true,
         packages: packages,
-        target: (e['outbound'] as String?) ?? 'direct-out',
+        outbound: (e['outbound'] as String?) ?? 'direct-out',
       );
       existing.add(migrated.toJson());
     }

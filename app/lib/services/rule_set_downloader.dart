@@ -55,24 +55,49 @@ class RuleSetDownloader {
   /// Скачать и сохранить. Атомарно: пишем во временный файл и `rename` на
   /// финальный, чтобы при сетевом обрыве не остаться с частично записанным
   /// кэшем.
-  /// Возвращает абсолютный путь при успехе, null при ошибке.
-  static Future<String?> download(String id, String url) async {
-    try {
-      final f = await _file(id);
-      final tmp = File('${f.path}.tmp');
+  ///
+  /// 3 попытки с exp backoff (1s, 3s) — total worst case ~34s.
+  /// Retry только на transient (timeout/network/5xx); 4xx = permanent skip.
+  ///
+  /// `client` инжектится только в тестах (night T3-1); в проде `http.get`.
+  /// Возвращает абсолютный путь при успехе, null при финальной ошибке.
+  static Future<String?> download(
+    String id,
+    String url, {
+    http.Client? client,
+  }) async {
+    const backoffs = [Duration(seconds: 1), Duration(seconds: 3)];
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final f = await _file(id);
+        final tmp = File('${f.path}.tmp');
 
-      final resp = await http
-          .get(Uri.parse(url), headers: {'User-Agent': 'LxBox'})
-          .timeout(_timeout);
+        final resp = await (client != null
+                ? client.get(Uri.parse(url), headers: {'User-Agent': 'LxBox'})
+                : http.get(Uri.parse(url), headers: {'User-Agent': 'LxBox'}))
+            .timeout(_timeout);
 
-      if (resp.statusCode != 200 || resp.bodyBytes.isEmpty) return null;
-      await tmp.writeAsBytes(resp.bodyBytes, flush: true);
-      if (await f.exists()) await f.delete();
-      await tmp.rename(f.path);
-      return f.path;
-    } catch (_) {
-      return null;
+        if (resp.statusCode >= 400 && resp.statusCode < 500) return null;
+        if (resp.statusCode != 200 || resp.bodyBytes.isEmpty) {
+          if (attempt < backoffs.length) {
+            await Future<void>.delayed(backoffs[attempt]);
+            continue;
+          }
+          return null;
+        }
+        await tmp.writeAsBytes(resp.bodyBytes, flush: true);
+        if (await f.exists()) await f.delete();
+        await tmp.rename(f.path);
+        return f.path;
+      } catch (_) {
+        if (attempt < backoffs.length) {
+          await Future<void>.delayed(backoffs[attempt]);
+          continue;
+        }
+        return null;
+      }
     }
+    return null;
   }
 
   /// Удалить cached-файл (noop если нет). Вызывать при delete rule или
@@ -82,5 +107,71 @@ class RuleSetDownloader {
       final f = await _file(id);
       if (await f.exists()) await f.delete();
     } catch (_) {}
+  }
+
+  // ─── Preset bundles (spec §033 / task 011) ─────────────────────────────
+  //
+  // Для bundle-пресетов с remote `rule_set` в шаблоне мы кэшируем файл
+  // локально по составному ключу `preset__<presetId>__<tag>`. Тот же
+  // принцип spec 011: sing-box получает `type: local, path: <кэш>`,
+  // никаких auto-download в рантайме.
+  //
+  // Ключ namespace'ится префиксом `preset__` чтобы не столкнуться с
+  // UUID'ами `CustomRuleSrs.id`. Два двойных-подчёркивания в роли
+  // разделителя — UUID'ы не содержат их подряд.
+
+  static String presetCacheId(String presetId, String ruleSetTag) =>
+      'preset__${presetId}__$ruleSetTag';
+
+  static Future<String?> cachedPathForPreset(
+    String presetId,
+    String ruleSetTag,
+  ) =>
+      cachedPath(presetCacheId(presetId, ruleSetTag));
+
+  static Future<String?> downloadForPreset(
+    String presetId,
+    String ruleSetTag,
+    String url,
+  ) =>
+      download(presetCacheId(presetId, ruleSetTag), url);
+
+  static Future<void> deleteForPreset(String presetId, String ruleSetTag) =>
+      delete(presetCacheId(presetId, ruleSetTag));
+
+  /// Удаляет `.srs`-файлы, чей id не присутствует в [activeCacheIds].
+  ///
+  /// Мотивация: после миграций схемы (inline → preset bundle, smena
+  /// RuleSet'ов в шаблоне), удаления правил и т.п. в каталоге остаются
+  /// osiротевшие файлы, занимая место без пользы. UI чистит по конкретным
+  /// id (`delete`), но не видит «мусор» неизвестного происхождения.
+  ///
+  /// Принцип: список всех `.srs`-файлов, сравнить basename с
+  /// [activeCacheIds], удалить всё чего нет в наборе. Идемпотентно:
+  /// повторный вызов с тем же набором — noop.
+  ///
+  /// Не трогает файлы с расширением != `.srs` (на случай будущих
+  /// co-located метаданных вроде `<id>.etag`).
+  ///
+  /// Возвращает число удалённых файлов.
+  static Future<int> pruneOrphans(Set<String> activeCacheIds) async {
+    try {
+      final dir = await _dir();
+      var pruned = 0;
+      await for (final entity in dir.list()) {
+        if (entity is! File) continue;
+        final name = entity.uri.pathSegments.last;
+        if (!name.endsWith('.srs')) continue;
+        final id = name.substring(0, name.length - '.srs'.length);
+        if (activeCacheIds.contains(id)) continue;
+        try {
+          await entity.delete();
+          pruned++;
+        } catch (_) {}
+      }
+      return pruned;
+    } catch (_) {
+      return 0;
+    }
   }
 }

@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/custom_rule.dart';
+import '../models/parser_config.dart';
 import '../services/builder/post_steps.dart';
+import '../services/builder/preset_expand.dart';
 import '../services/builder/rule_set_registry.dart';
 import '../services/rule_set_downloader.dart';
 import '../widgets/outbound_picker.dart';
@@ -26,11 +28,18 @@ class CustomRuleEditScreen extends StatefulWidget {
     required this.initial,
     required this.outboundOptions,
     required this.existingNames,
+    this.preset,
   });
 
   final CustomRule initial;
   final List<OutboundOption> outboundOptions;
   final Set<String> existingNames;
+
+  /// Bundle-пресет (spec §033). Обязателен когда `initial.kind == preset` —
+  /// форма рендерит его `vars` для юзер-ввода. Null для preset-правила =
+  /// broken-preset (пресет удалён/переименован в шаблоне) — показываем
+  /// fallback-экран с Delete.
+  final SelectableRule? preset;
 
   @override
   State<CustomRuleEditScreen> createState() => _CustomRuleEditScreenState();
@@ -49,9 +58,18 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
   late bool _enabled;
   late bool _ipIsPrivate;
   late CustomRuleKind _kind;
-  late String _target;
+  late String _outbound;
   late Set<String> _protocols;
   late List<String> _packages;
+
+  /// Значения preset-vars (spec §033). Для kind != preset — пустая мапа,
+  /// игнорируется при save.
+  late Map<String, String> _varsValues;
+
+  /// Кэш-пути remote rule_set'ов пресета (tag → абсолютный путь), pre-
+  /// resolved в initState. Без этого View tab всегда бы ругался «no cached
+  /// file» даже для скачанного пресета (task 011).
+  Map<String, String> _presetSrsPaths = const {};
 
   /// Состояние cloud-индикатора рядом с URL. Определяется на open
   /// (isCached) + меняется по клику (_downloadSrs).
@@ -72,9 +90,10 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
     _enabled = r.enabled;
     _ipIsPrivate = r.ipIsPrivate;
     _kind = r.kind;
-    _target = r.target;
+    _outbound = r.outbound;
     _protocols = r.protocols.toSet();
     _packages = List.of(r.packages);
+    _varsValues = Map<String, String>.from(r.varsValues);
     if (_kind == CustomRuleKind.srs) {
       RuleSetDownloader.isCached(r.id).then((cached) {
         if (!mounted) return;
@@ -83,32 +102,84 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
             : _SrsDownloadState.none);
       });
     }
+    if (r is CustomRulePreset && widget.preset != null) {
+      _resolvePresetSrsPaths(r, widget.preset!);
+    }
+  }
+
+  /// Async-prefetch cached paths для remote rule_set'ов пресета.
+  /// Результат → `_presetSrsPaths` → передаётся в `expandPreset` при
+  /// рендере View tab. Без этого JSON preview показывал warnings «no
+  /// cached file» даже для скачанного пресета (task 011).
+  Future<void> _resolvePresetSrsPaths(
+      CustomRulePreset rule, SelectableRule preset) async {
+    final paths = <String, String>{};
+    for (final rs in preset.ruleSets) {
+      if (rs['type'] != 'remote') continue;
+      final tag = rs['tag'];
+      if (tag is! String || tag.isEmpty) continue;
+      final p = await RuleSetDownloader.cachedPathForPreset(rule.presetId, tag);
+      if (p != null) paths[tag] = p;
+    }
+    if (!mounted) return;
+    setState(() => _presetSrsPaths = paths);
   }
 
   /// Текущее состояние формы как `CustomRule` — используется для dirty-check
   /// при back без save. Не валидирует name-collision (это делает `_save`).
-  CustomRule _snapshot() => widget.initial.copyWith(
-        name: _nameCtrl.text.trim(),
-        enabled: _enabled,
-        kind: _kind,
-        domains: _kind == CustomRuleKind.inline
-            ? _normalizedDomains(_domainCtrl)
-            : const [],
-        domainSuffixes: _kind == CustomRuleKind.inline
-            ? _normalizedDomains(_domainSuffixCtrl, stripLeadingDot: true)
-            : const [],
-        domainKeywords:
-            _kind == CustomRuleKind.inline ? _normalizedKeywords() : const [],
-        ipCidrs:
-            _kind == CustomRuleKind.inline ? _normalizedCidrs() : const [],
-        ports: _normalizedPorts(),
-        portRanges: _normalizedPortRanges(),
-        protocols: _protocols.toList()..sort(),
-        packages: List.of(_packages),
-        ipIsPrivate: _ipIsPrivate,
-        srsUrl: _kind == CustomRuleKind.srs ? _srsUrlCtrl.text.trim() : '',
-        target: _target,
-      );
+  ///
+  /// Возвращает конкретный subclass в зависимости от `_kind` state:
+  /// - `preset` → обновляем `CustomRulePreset` ((re-use presetId из initial)
+  /// - `srs` → `CustomRuleSrs`
+  /// - `inline` → `CustomRuleInline`
+  ///
+  /// Переключение между inline↔srs в редакторе создаёт новый экземпляр
+  /// соответствующего типа с сохранённым `id` (чтобы кэш SRS не перепутался,
+  /// URL и cache сбрасываются при kindChanged в caller'е).
+  CustomRule _snapshot() {
+    final name = _nameCtrl.text.trim();
+    switch (_kind) {
+      case CustomRuleKind.preset:
+        final initial = widget.initial;
+        return CustomRulePreset(
+          id: initial.id,
+          name: name,
+          enabled: _enabled,
+          presetId: initial is CustomRulePreset ? initial.presetId : '',
+          varsValues: Map<String, String>.from(_varsValues),
+        );
+      case CustomRuleKind.srs:
+        return CustomRuleSrs(
+          id: widget.initial.id,
+          name: name,
+          enabled: _enabled,
+          srsUrl: _srsUrlCtrl.text.trim(),
+          ports: _normalizedPorts(),
+          portRanges: _normalizedPortRanges(),
+          packages: List.of(_packages),
+          protocols: _protocols.toList()..sort(),
+          ipIsPrivate: _ipIsPrivate,
+          outbound: _outbound,
+        );
+      case CustomRuleKind.inline:
+        return CustomRuleInline(
+          id: widget.initial.id,
+          name: name,
+          enabled: _enabled,
+          domains: _normalizedDomains(_domainCtrl),
+          domainSuffixes:
+              _normalizedDomains(_domainSuffixCtrl, stripLeadingDot: true),
+          domainKeywords: _normalizedKeywords(),
+          ipCidrs: _normalizedCidrs(),
+          ports: _normalizedPorts(),
+          portRanges: _normalizedPortRanges(),
+          packages: List.of(_packages),
+          protocols: _protocols.toList()..sort(),
+          ipIsPrivate: _ipIsPrivate,
+          outbound: _outbound,
+        );
+    }
+  }
 
   bool _isDirty() =>
       jsonEncode(_snapshot().toJson()) !=
@@ -303,28 +374,9 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
       );
     }
 
-    final saved = widget.initial.copyWith(
-      name: finalName,
-      enabled: _enabled,
-      kind: _kind,
-      domains: _kind == CustomRuleKind.inline
-          ? _normalizedDomains(_domainCtrl)
-          : const [],
-      domainSuffixes: _kind == CustomRuleKind.inline
-          ? _normalizedDomains(_domainSuffixCtrl, stripLeadingDot: true)
-          : const [],
-      domainKeywords:
-          _kind == CustomRuleKind.inline ? _normalizedKeywords() : const [],
-      ipCidrs:
-          _kind == CustomRuleKind.inline ? _normalizedCidrs() : const [],
-      ports: _normalizedPorts(),
-      portRanges: _normalizedPortRanges(),
-      protocols: _protocols.toList()..sort(),
-      packages: List.of(_packages),
-      ipIsPrivate: _ipIsPrivate,
-      srsUrl: _kind == CustomRuleKind.srs ? _srsUrlCtrl.text.trim() : '',
-      target: _target,
-    );
+    // _snapshot() строит подкласс по `_kind`, нам остаётся только
+    // применить финальный `name` (возможно с auto-suffix'ом).
+    final saved = _snapshot().withName(finalName);
     Navigator.pop(context, _CustomRuleEditResult.saved(saved));
   }
 
@@ -819,6 +871,11 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: 'Delete rule',
+            icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+            onPressed: _delete,
+          ),
+          IconButton(
             tooltip: 'Save',
             icon: Icon(Icons.save,
                 color: dirty ? theme.colorScheme.primary : null),
@@ -841,6 +898,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
   }
 
   Widget _buildParamsTab(ThemeData theme) {
+    if (_kind == CustomRuleKind.preset) return _buildPresetParams(theme);
     return ListView(
         padding: EdgeInsets.fromLTRB(
             16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
@@ -871,9 +929,9 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
           ),
           const SizedBox(height: 12),
           OutboundPicker(
-            value: _target,
+            value: _outbound,
             options: widget.outboundOptions,
-            onChanged: (v) => setState(() => _target = v),
+            onChanged: (v) => setState(() => _outbound = v),
             dense: false,
             label: 'Action',
           ),
@@ -927,36 +985,294 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
           const SizedBox(height: 24),
           const Divider(),
           const SizedBox(height: 12),
+          FilledButton.icon(
+            icon: const Icon(Icons.save, size: 18),
+            label: const Text('Save'),
+            onPressed: _save,
+          ),
+        ],
+      );
+  }
+
+  // ─── preset-kind branch (spec §033) ──────────────────────────────────
+
+  Widget _buildPresetParams(ThemeData theme) {
+    final cs = theme.colorScheme;
+    final preset = widget.preset;
+
+    if (preset == null) {
+      return ListView(
+        padding: EdgeInsets.fromLTRB(
+            16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cs.errorContainer.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Icon(Icons.warning_amber_outlined,
+                      color: cs.error, size: 18),
+                  const SizedBox(width: 6),
+                  Text('Preset not found',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600, color: cs.error)),
+                ]),
+                const SizedBox(height: 4),
+                Text(
+                  'Preset "${widget.initial.presetId}" no longer exists in '
+                  'this version of the app. The rule will be skipped when the '
+                  'config is generated. Delete it or update to a newer '
+                  'version that still has this preset.',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
           OutlinedButton.icon(
-            icon: Icon(Icons.delete_outline,
-                size: 18, color: theme.colorScheme.error),
-            label: Text('Delete rule',
-                style: TextStyle(color: theme.colorScheme.error)),
+            icon: Icon(Icons.delete_outline, size: 18, color: cs.error),
+            label: Text('Delete rule', style: TextStyle(color: cs.error)),
             onPressed: _delete,
           ),
         ],
       );
+    }
+
+    return ListView(
+      padding: EdgeInsets.fromLTRB(
+          16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: cs.primaryContainer.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Icon(Icons.push_pin_outlined, size: 16, color: cs.primary),
+                const SizedBox(width: 6),
+                Text('Based on preset',
+                    style: TextStyle(fontSize: 12, color: cs.primary)),
+              ]),
+              const SizedBox(height: 4),
+              Text(preset.label,
+                  style: theme.textTheme.bodyLarge
+                      ?.copyWith(fontWeight: FontWeight.w600)),
+              if (preset.description.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(preset.description,
+                    style:
+                        TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _nameCtrl,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Name',
+                  isDense: true,
+                  prefixIcon: Icon(Icons.label_outline, size: 18),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Switch(
+              value: _enabled,
+              onChanged: (v) => setState(() => _enabled = v),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Text('PARAMETERS',
+            style: theme.textTheme.titleSmall?.copyWith(
+                color: cs.primary, fontWeight: FontWeight.w600)),
+        const Divider(),
+        for (final v in preset.vars) _buildPresetVarWidget(theme, preset, v),
+        const SizedBox(height: 24),
+        const Divider(),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          icon: const Icon(Icons.save, size: 18),
+          label: const Text('Save'),
+          onPressed: _save,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPresetVarWidget(
+      ThemeData theme, SelectableRule preset, WizardVar v) {
+    final cs = theme.colorScheme;
+    final label = v.title.isNotEmpty ? v.title : v.name;
+    final subtitle = v.required
+        ? v.tooltip
+        : (v.tooltip.isEmpty ? '(optional)' : '${v.tooltip} · (optional)');
+
+    Widget control;
+    switch (v.type) {
+      case 'outbound':
+        final current = _varsValues[v.name] ?? v.defaultValue;
+        control = OutboundPicker(
+          value: current,
+          options: widget.outboundOptions,
+          onChanged: (val) => setState(() => _varsValues[v.name] = val),
+          dense: false,
+        );
+      case 'dns_servers':
+        // Семантика (spec §033): varsValues содержит ключ → explicit выбор
+        // (включая пустую строку = "— default DNS" для optional); ключ
+        // отсутствует → применяется `default_value` пресета.
+        final hasExplicit = _varsValues.containsKey(v.name);
+        final stored = _varsValues[v.name];
+        final currentKey = hasExplicit ? (stored ?? '') : v.defaultValue;
+        final items = <DropdownMenuItem<String>>[];
+        if (!v.required) {
+          items.add(const DropdownMenuItem<String>(
+            value: '',
+            child: Text('— (default DNS)',
+                style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic)),
+          ));
+        }
+        for (final s in preset.dnsServers) {
+          final tag = s['tag'] as String?;
+          if (tag == null || tag.isEmpty) continue;
+          final descr = (s['description'] as String?) ?? tag;
+          items.add(DropdownMenuItem<String>(
+            value: tag,
+            child:
+                Text(descr, style: const TextStyle(fontSize: 13)),
+          ));
+        }
+        final effectiveKey = items.any((i) => i.value == currentKey)
+            ? currentKey
+            : (items.isNotEmpty ? items.first.value! : '');
+        control = DropdownButton<String>(
+          isExpanded: true,
+          isDense: false,
+          value: effectiveKey,
+          items: items,
+          onChanged: (val) {
+            if (val == null) return;
+            setState(() => _varsValues[v.name] = val);
+          },
+        );
+      case 'enum':
+        final hasExplicit = _varsValues.containsKey(v.name);
+        final stored = _varsValues[v.name];
+        final currentKey = hasExplicit ? (stored ?? '') : v.defaultValue;
+        final items = <DropdownMenuItem<String>>[];
+        if (!v.required) {
+          items.add(const DropdownMenuItem<String>(
+            value: '',
+            child: Text('— (none)',
+                style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic)),
+          ));
+        }
+        for (final o in v.options) {
+          items.add(DropdownMenuItem<String>(
+            value: o.value,
+            child: Text(o.title, style: const TextStyle(fontSize: 13)),
+          ));
+        }
+        final effectiveKey = items.any((i) => i.value == currentKey)
+            ? currentKey
+            : (items.isNotEmpty ? items.first.value! : '');
+        control = DropdownButton<String>(
+          isExpanded: true,
+          isDense: false,
+          value: effectiveKey,
+          items: items,
+          onChanged: (val) {
+            if (val == null) return;
+            setState(() => _varsValues[v.name] = val);
+          },
+        );
+      default:
+        control = Text(
+          '(unsupported var type: ${v.type})',
+          style: TextStyle(fontSize: 12, color: cs.error),
+        );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(label, style: theme.textTheme.bodyLarge),
+          if (subtitle.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(subtitle,
+                  style: TextStyle(
+                      fontSize: 12, color: cs.onSurfaceVariant)),
+            ),
+          const SizedBox(height: 8),
+          control,
+        ],
+      ),
+    );
   }
 
   Widget _buildJsonTab(ThemeData theme) {
     String json;
     List<String> warnings = const [];
     try {
-      final reg = RuleSetRegistry();
-      // Всегда подставляем плейсхолдер — чтобы preview отображал структуру
-      // даже для не-скачанных srs-правил (юзер видит "что будет" после
-      // download'а). Реальный путь живёт в build_config'е runtime'а.
-      final srsPaths = <String, String>{};
-      if (_kind == CustomRuleKind.srs) {
-        srsPaths[widget.initial.id] = _srsState == _SrsDownloadState.cached
-            ? '<cached file path>'
-            : '<download first>';
+      if (_kind == CustomRuleKind.preset) {
+        final preset = widget.preset;
+        if (preset == null) {
+          json = '// broken preset: "${widget.initial.presetId}" — no definition in template';
+        } else {
+          final snap = _snapshot();
+          // _snapshot() в preset-ветке возвращает CustomRulePreset — cast безопасен.
+          final fragments = expandPreset(
+            snap as CustomRulePreset,
+            preset,
+            srsPaths: _presetSrsPaths,
+          );
+          warnings = fragments.warnings;
+          json = const JsonEncoder.withIndent('  ').convert({
+            'dns_options': {
+              'servers': fragments.dnsServers,
+              if (fragments.dnsRule != null) 'rules': [fragments.dnsRule],
+            },
+            'route': {
+              'rule_set': fragments.ruleSets,
+              if (fragments.routingRule != null) 'rules': [fragments.routingRule],
+            },
+          });
+        }
+      } else {
+        final reg = RuleSetRegistry();
+        // Всегда подставляем плейсхолдер — чтобы preview отображал структуру
+        // даже для не-скачанных srs-правил (юзер видит "что будет" после
+        // download'а). Реальный путь живёт в build_config'е runtime'а.
+        final srsPaths = <String, String>{};
+        if (_kind == CustomRuleKind.srs) {
+          srsPaths[widget.initial.id] = _srsState == _SrsDownloadState.cached
+              ? '<cached file path>'
+              : '<download first>';
+        }
+        warnings = applyCustomRules(reg, [_snapshot()], srsPaths: srsPaths);
+        json = const JsonEncoder.withIndent('  ').convert({
+          'rule_set': reg.getRuleSets(),
+          'rules': reg.getRules(),
+        });
       }
-      warnings = applyCustomRules(reg, [_snapshot()], srsPaths: srsPaths);
-      json = const JsonEncoder.withIndent('  ').convert({
-        'rule_set': reg.getRuleSets(),
-        'rules': reg.getRules(),
-      });
     } catch (e) {
       json = '// error: $e';
     }
@@ -1050,6 +1366,7 @@ Future<CustomRuleEditResult?> openCustomRuleEditor(
   required CustomRule initial,
   required List<OutboundOption> outboundOptions,
   required Set<String> existingNames,
+  SelectableRule? preset,
 }) async {
   final result = await Navigator.push<_CustomRuleEditResult>(
     context,
@@ -1058,6 +1375,7 @@ Future<CustomRuleEditResult?> openCustomRuleEditor(
         initial: initial,
         outboundOptions: outboundOptions,
         existingNames: existingNames,
+        preset: preset,
       ),
     ),
   );

@@ -19,6 +19,15 @@ class _DebugScreenState extends State<DebugScreen> {
   DebugFilter _sourceFilter = DebugFilter.all;
   final Set<DebugLevel> _levels = {...DebugLevel.values};
   bool _buildingDump = false;
+  // Text search — case-insensitive substring match по message (night T6-3).
+  String _searchQuery = '';
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   static String _entriesToText(List<DebugEntry> entries) {
     final buf = StringBuffer();
@@ -73,13 +82,17 @@ class _DebugScreenState extends State<DebugScreen> {
     return AnimatedBuilder(
       animation: AppLog.I,
       builder: (context, _) {
+        final q = _searchQuery.trim().toLowerCase();
         final filtered = AppLog.I.entries.where((e) {
           if (!_levels.contains(e.level)) return false;
-          return switch (_sourceFilter) {
+          final bySource = switch (_sourceFilter) {
             DebugFilter.all => true,
             DebugFilter.core => e.source == DebugSource.core,
             DebugFilter.app => e.source == DebugSource.app,
           };
+          if (!bySource) return false;
+          if (q.isEmpty) return true;
+          return e.message.toLowerCase().contains(q);
         }).toList();
 
         return Scaffold(
@@ -167,9 +180,34 @@ class _DebugScreenState extends State<DebugScreen> {
                   }).toList(),
                 ),
                 const SizedBox(height: 8),
+                // Search field (night T6-3). Case-insensitive substring
+                // match by message. Empty = no filter.
+                TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    hintText: 'Filter by text…',
+                    isDense: true,
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _searchQuery.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          ),
+                  ),
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                ),
+                const SizedBox(height: 8),
                 Expanded(
                   child: filtered.isEmpty
-                      ? const Center(child: Text('No events yet'))
+                      ? Center(
+                          child: Text(_searchQuery.isNotEmpty
+                              ? 'No matches for "$_searchQuery"'
+                              : 'No events yet'))
                       : ListView.separated(
                           itemCount: filtered.length,
                           separatorBuilder: (_, _) => const Divider(height: 1),

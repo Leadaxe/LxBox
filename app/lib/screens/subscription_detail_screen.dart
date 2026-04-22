@@ -7,6 +7,7 @@ import '../controllers/subscription_controller.dart';
 import '../models/node_spec.dart';
 import '../models/node_warning.dart';
 import '../models/server_list.dart';
+import '../services/error_humanize.dart';
 import '../services/subscription/sources.dart';
 import '../services/url_launcher.dart';
 
@@ -104,7 +105,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _sourceError = e.toString();
+        _sourceError = humanizeError(e);
         _sourceLoading = false;
       });
     }
@@ -134,7 +135,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       }
       if (mounted) setState(() { _nodes = expanded; _loading = false; });
     } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+      if (mounted) setState(() { _error = humanizeError(e); _loading = false; });
     }
   }
 

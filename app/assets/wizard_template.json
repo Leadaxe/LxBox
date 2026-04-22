@@ -12,21 +12,14 @@
       {"type": "udp", "tag": "direct_dns_resolver", "server": "8.8.8.8", "server_port": 53, "description": "Google DNS (direct)", "enabled": true},
       {"type": "udp", "tag": "cloudflare_udp", "server": "1.1.1.1", "server_port": 53, "description": "Cloudflare UDP", "enabled": true},
       {"type": "https", "tag": "google_doh", "server": "dns.google", "server_port": 443, "path": "/dns-query", "domain_resolver": "direct_dns_resolver", "description": "Google DoH", "enabled": true},
-      {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "domain_strategy": "prefer_ipv4", "description": "Yandex DoH", "enabled": true},
       {"type": "tls", "tag": "cloudflare_dot", "server": "1.1.1.1", "server_port": 853, "description": "Cloudflare DoT", "enabled": false},
       {"type": "tls", "tag": "google_dot", "server": "8.8.8.8", "server_port": 853, "description": "Google DoT", "enabled": false},
-      {"type": "udp", "tag": "yandex_udp", "server": "77.88.8.8", "server_port": 53, "description": "Yandex UDP", "enabled": false},
-      {"type": "udp", "tag": "yandex_safe", "server": "77.88.8.88", "server_port": 53, "description": "Yandex Safe (anti-phishing)", "enabled": false},
-      {"type": "udp", "tag": "yandex_family", "server": "77.88.8.7", "server_port": 53, "description": "Yandex Family (+ adult block)", "enabled": false},
-      {"type": "tls", "tag": "yandex_dot", "server": "common.dot.dns.yandex.net", "server_port": 853, "description": "Yandex DoT", "enabled": false},
       {"type": "tls", "tag": "quad9_dot", "server": "9.9.9.9", "server_port": 853, "description": "Quad9 (anti-malware)", "enabled": false},
       {"type": "tls", "tag": "adguard_dot", "server": "dns.adguard-dns.com", "server_port": 853, "description": "AdGuard (ad block)", "enabled": false},
       {"type": "tls", "tag": "adguard_family", "server": "family.adguard-dns.com", "server_port": 853, "description": "AdGuard Family (+ adult)", "enabled": false},
-      {"type": "https", "tag": "google_doh_vpn", "server": "dns.google", "server_port": 443, "path": "/dns-query", "domain_resolver": "direct_dns_resolver", "detour": "vpn-1", "description": "Google DoH via VPN", "enabled": false},
-      {"type": "udp", "tag": "yandex_vpn", "server": "77.88.8.2", "server_port": 53, "detour": "vpn-1", "domain_strategy": "prefer_ipv4", "description": "Yandex DNS via VPN", "enabled": false}
+      {"type": "https", "tag": "google_doh_vpn", "server": "dns.google", "server_port": 443, "path": "/dns-query", "domain_resolver": "direct_dns_resolver", "detour": "vpn-1", "description": "Google DoH via VPN", "enabled": false}
     ],
     "rules": [
-      {"domain_suffix": ["ru", "xn--p1ai", "su"], "server": "yandex_doh"},
       {"server": "google_doh"}
     ]
   },
@@ -130,7 +123,7 @@
           "default_value": "✨auto",
           "wizard_ui": "hidden",
           "title": "Auto proxy tag",
-          "tooltip": "Internal — tag of the URLTest group. Не редактируется."
+          "tooltip": "Internal — tag of the URLTest group. Read-only."
         }
       ]
     },
@@ -399,9 +392,6 @@
     "route": {
       "find_process": true,
       "default_domain_resolver": "@dns_default_domain_resolver",
-      "rule_set": [
-        { "tag": "ru-domains", "type": "inline", "format": "domain_suffix", "rules": [{ "domain_suffix": ["ru", "xn--p1ai", "su"] }] }
-      ],
       "rules": [
         { "action": "resolve", "inbound": "tun-in", "strategy": "@resolve_strategy" },
         { "action": "sniff", "inbound": "tun-in", "timeout": "1s" },
@@ -424,6 +414,7 @@
 
   "selectable_rules": [
     {
+      "preset_id": "block-ads",
       "label": "Block Ads",
       "description": "Reject ad-related connections. Downloads rule set (~1 MB).",
       "default": false,
@@ -433,12 +424,39 @@
       "rule": { "rule_set": "ads-all", "action": "reject" }
     },
     {
+      "preset_id": "ru-direct",
       "label": "Russian domains direct",
-      "description": "Route .ru / .su / .xn--p1ai directly.",
+      "description": "Route Russian & Cyrillic TLDs directly.",
       "default": true,
-      "rule": { "rule_set": "ru-domains", "outbound": "direct-out" }
+      "vars": [
+        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route traffic for Russian domains"},
+        {"name": "dns_server", "type": "dns_servers", "required": false, "default_value": "yandex_doh", "title": "Transport", "tooltip": "Which Yandex resolver to use. Leave empty to fall through to the default DNS."},
+        {"name": "dns_ip", "type": "enum", "default_value": "77.88.8.88", "title": "UDP server IP", "tooltip": "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.", "options": [
+          {"title": "77.88.8.88 · Safe",                 "value": "77.88.8.88"},
+          {"title": "77.88.8.2 · Safe alt",              "value": "77.88.8.2"},
+          {"title": "2a02:6b8::feed:bad · Safe v6",      "value": "2a02:6b8::feed:bad"},
+          {"title": "2a02:6b8:0:1::feed:bad · Safe v6 alt", "value": "2a02:6b8:0:1::feed:bad"},
+          {"title": "77.88.8.8 · Base",                  "value": "77.88.8.8"},
+          {"title": "77.88.8.1 · Base alt",              "value": "77.88.8.1"},
+          {"title": "2a02:6b8::feed:0ff · Base v6",      "value": "2a02:6b8::feed:0ff"},
+          {"title": "77.88.8.7 · Family",                "value": "77.88.8.7"},
+          {"title": "77.88.8.3 · Family alt",            "value": "77.88.8.3"},
+          {"title": "2a02:6b8::feed:a11 · Family v6",    "value": "2a02:6b8::feed:a11"}
+        ]}
+      ],
+      "rule_set": [
+        {"tag": "ru-domains", "type": "inline", "format": "domain_suffix", "rules": [{"domain_suffix": ["ru", "su", "xn--p1ai", "xn--p1acf", "xn--80adxhks", "moscow", "tatar", "xn--d1acj3b", "xn--80asehdb", "xn--80aswg", "xn--c1avg", "xn--j1aef"]}]}
+      ],
+      "dns_rule": {"rule_set": "ru-domains", "server": "@dns_server"},
+      "rule": {"rule_set": "ru-domains", "outbound": "@outbound"},
+      "dns_servers": [
+        {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@outbound", "description": "Yandex Safe DoH"},
+        {"type": "tls",   "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@outbound", "description": "Yandex Safe DoT"},
+        {"type": "udp",   "tag": "yandex_udp", "server": "@dns_ip",    "server_port": 53,  "detour": "@outbound", "description": "Yandex UDP (IP from above)"}
+      ]
     },
     {
+      "preset_id": "ru-inside",
       "label": "Russia-only services direct",
       "description": "Services available only inside Russia — direct.",
       "rule_set": [
@@ -447,12 +465,14 @@
       "rule": { "rule_set": "ru-inside", "outbound": "direct-out" }
     },
     {
+      "preset_id": "bittorrent-direct",
       "label": "BitTorrent direct",
       "description": "Route BitTorrent traffic directly.",
       "default": true,
       "rule": { "protocol": ["bittorrent"], "outbound": "direct-out" }
     },
     {
+      "preset_id": "private-ip-direct",
       "label": "Private IPs direct",
       "description": "Route private IP ranges (LAN) directly.",
       "rule": { "ip_is_private": true, "outbound": "direct-out" }

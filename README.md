@@ -106,7 +106,7 @@ Build multi-hop chains: your traffic goes through an intermediate server before 
 - Enable/disable servers with switches
 - DNS Strategy: prefer_ipv4 / prefer_ipv6 / ipv4_only / ipv6_only
 - DNS Rules editor, DNS Final, Default Domain Resolver
-- Inline `.ru/.su/.xn--p1ai` rule for Yandex DoH
+- Bundle preset "Russian domains direct" (spec 033) — self-contained `.ru/.su/.рф/.рус/.москва/.moscow/.tatar/.дети/.онлайн/.сайт/.орг/.ком` rule + own Yandex DNS servers + `@out`/`@dns_server` vars
 </details>
 
 <details>

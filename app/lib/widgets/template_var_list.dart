@@ -132,16 +132,19 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
         );
 
       case 'enum':
+        final current = _values[v.name] ?? v.defaultValue;
+        final hasCurrent = v.options.any((o) => o.value == current);
         return _LabelledField(
           label: v.title.isNotEmpty ? v.title : v.name,
           tooltip: v.tooltip,
           field: DropdownButton<String>(
             isExpanded: true,
-            value: v.options.contains(_values[v.name])
-                ? _values[v.name]
-                : v.defaultValue,
+            value: hasCurrent ? current : v.defaultValue,
             items: v.options
-                .map((o) => DropdownMenuItem(value: o, child: Text(o)))
+                .map((o) => DropdownMenuItem(
+                      value: o.value,
+                      child: Text(o.title),
+                    ))
                 .toList(),
             onChanged: (val) {
               if (val == null) return;
@@ -180,7 +183,7 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
           width: hasSuggestions ? 220 : 180,
           label: v.title.isNotEmpty ? v.title : v.name,
           tooltip: v.tooltip,
-          suggestions: v.options,
+          suggestions: v.options.map((o) => o.value).toList(),
           onChanged: (val) => _update(v.name, val),
         );
     }

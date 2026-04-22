@@ -7,6 +7,10 @@ import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/subscription_meta.dart';
 import '../services/app_log.dart';
+import '../services/error_humanize.dart';
+import '../services/parse_hints.dart';
+import '../services/relative_time.dart';
+import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
 import '../services/parser/body_decoder.dart';
 import '../services/parser/ini_parser.dart';
@@ -130,13 +134,8 @@ class SubscriptionEntry extends ChangeNotifier {
     return parts.join(' · ');
   }
 
-  static String _formatAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
+  static String _formatAgo(DateTime dt) =>
+      relativeTime(DateTime.now(), dt);
 
   void _replaceList(ServerList next) {
     _list = next;
@@ -268,9 +267,10 @@ class SubscriptionController extends ChangeNotifier {
             ? '${nodes.length} +$detours⚙ nodes (cached)'
             : '${nodes.length} nodes (cached)';
         AppLog.I.info(
-            'Re-hydrated ${nodes.length} nodes from cache: ${list.url.length > 60 ? "${list.url.substring(0, 60)}…" : list.url}');
+            'Re-hydrated ${nodes.length} nodes from cache: ${maskSubscriptionUrl(list.url)}');
       } catch (e) {
-        AppLog.I.warning('Re-hydrate failed for ${list.url}: $e');
+        AppLog.I.warning(
+            'Re-hydrate failed for ${maskSubscriptionUrl(list.url)}: ${humanizeError(e)}');
       }
     }
     notifyListeners();
@@ -283,7 +283,14 @@ class SubscriptionController extends ChangeNotifier {
     _busy = true;
     _lastError = '';
     notifyListeners();
-    AppLog.I.info('addFromInput: ${trimmed.length > 60 ? "${trimmed.substring(0, 60)}…" : trimmed}');
+    // Input может быть URL подписки (с токеном), direct-link (vless://user@host),
+    // JSON-outbound. Маскируем, если detect'им URL — иначе только kind.
+    final inputPreview = isSubscriptionUrl(trimmed)
+        ? maskSubscriptionUrl(trimmed)
+        : (trimmed.startsWith('{') || trimmed.startsWith('['))
+            ? '<JSON outbound>'
+            : '<proxy link>';
+    AppLog.I.info('addFromInput: $inputPreview');
 
     try {
       if (isSubscriptionUrl(trimmed)) {
@@ -346,7 +353,7 @@ class SubscriptionController extends ChangeNotifier {
         _lastError = 'Input is not a subscription URL, proxy link, or outbound JSON';
       }
     } catch (e) {
-      _lastError = e.toString();
+      _lastError = humanizeError(e);
     } finally {
       _busy = false;
       notifyListeners();
@@ -489,7 +496,7 @@ class SubscriptionController extends ChangeNotifier {
       await SettingsStorage.setLastGlobalUpdate(DateTime.now());
       return config;
     } catch (e) {
-      _lastError = e.toString();
+      _lastError = humanizeError(e);
       return null;
     } finally {
       _busy = false;
@@ -508,7 +515,7 @@ class SubscriptionController extends ChangeNotifier {
       configDirty = false;
       return config;
     } catch (e) {
-      _lastError = e.toString();
+      _lastError = humanizeError(e);
       return null;
     } finally {
       _busy = false;
@@ -577,11 +584,15 @@ class SubscriptionController extends ChangeNotifier {
     // вызове (status→ok|failed). Crash-safe: init() sweep чистит зависший
     // inProgress.
     if (list.lastUpdateStatus == UpdateStatus.inProgress) {
-      AppLog.I.debug('Fetch skipped — already inProgress: ${list.url}');
+      AppLog.I.debug(
+          'Fetch skipped — already inProgress: ${maskSubscriptionUrl(list.url)}');
       return;
     }
 
-    final shortUrl = list.url.length > 60 ? '${list.url.substring(0, 60)}…' : list.url;
+    // Масированный URL (T2-3): char-truncation раньше мог оставить токен
+    // в логе (провайдеры вроде `https://host/sub/<token>` укладываются в 60
+    // символов). `maskSubscriptionUrl` рубит на host.
+    final shortUrl = maskSubscriptionUrl(list.url);
     final triggerName = trigger?.name ?? 'manual';
     AppLog.I.info('Fetching subscription [$triggerName]: $shortUrl');
     final attemptAt = DateTime.now();
@@ -607,11 +618,23 @@ class SubscriptionController extends ChangeNotifier {
       if (warnNodes > 0) {
         AppLog.I.warning('$warnNodes nodes with warnings (XHTTP fallback etc.)');
       }
+      // Parse hint (night T3-3): 0 узлов при успешном HTTP → вероятно
+      // body не распознан. Диагностируем и логируем подсказку, чтобы юзер
+      // знал что делать (HTML / Clash YAML / error page / full config).
+      if (result.nodes.isEmpty) {
+        final hint = diagnoseEmptyParse(result.rawBody);
+        if (hint != null) AppLog.I.warning('Parse hint: $hint');
+      }
       entry.nodeCount = result.nodes.length;
       final detours = result.nodes.where((n) => n.chained != null).length;
-      entry.status = detours > 0
-          ? '${result.nodes.length} +$detours⚙ nodes'
-          : '${result.nodes.length} nodes';
+      if (result.nodes.isEmpty) {
+        final hint = diagnoseEmptyParse(result.rawBody);
+        entry.status = hint != null ? '0 nodes — $hint' : '0 nodes';
+      } else {
+        entry.status = detours > 0
+            ? '${result.nodes.length} +$detours⚙ nodes'
+            : '${result.nodes.length} nodes';
+      }
 
       final current = entry.list as SubscriptionServers;
       final nextName = current.name.isEmpty && result.meta?.profileTitle != null

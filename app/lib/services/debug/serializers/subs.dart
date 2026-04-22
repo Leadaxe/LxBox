@@ -1,17 +1,8 @@
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/server_list.dart';
+import '../../url_mask.dart';
 
-/// Маскирует URL подписки — провайдер-credentials живут в path/token
-/// части URL (`https://provider/sub/<secret>`). При выдаче в `GET /state/*`
-/// по умолчанию светим только `scheme://host/***`. Если клиент явно
-/// передал `?reveal=true` — отдаём целиком.
-String maskSubscriptionUrl(String raw) {
-  if (raw.isEmpty) return '';
-  final u = Uri.tryParse(raw);
-  if (u == null) return '***';
-  if (u.host.isEmpty) return '***';
-  return '${u.scheme}://${u.host}/***';
-}
+export '../../url_mask.dart' show maskSubscriptionUrl;
 
 /// Одна запись подписки / пользовательского сервера для `/state/subs`.
 Map<String, Object?> serializeSubEntry(
@@ -32,6 +23,15 @@ Map<String, Object?> serializeSubEntry(
     'last_update_status': e.lastUpdateStatus.name,
     'consecutive_fails': e.consecutiveFails,
     'update_interval_hours': e.updateIntervalHours,
+    // Full detour policy (task 006 — per-server detour toggles).
+    // `override_detour` оставлен top-level для backward-compat клиентов,
+    // дополнительно группируем в nested object для полного view'а.
     'override_detour': e.overrideDetour,
+    'detour_policy': {
+      'register_detour_servers': e.registerDetourServers,
+      'register_detour_in_auto': e.registerDetourInAuto,
+      'use_detour_servers': e.useDetourServers,
+      'override_detour': e.overrideDetour,
+    },
   };
 }

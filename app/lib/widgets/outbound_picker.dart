@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
-import '../models/custom_rule.dart' show kRejectTarget;
+import '../models/custom_rule.dart' show kOutboundReject;
 
 /// Опция в [OutboundPicker] — либо outbound tag, либо sentinel "reject".
 class OutboundOption {
   const OutboundOption({required this.value, required this.label});
-  final String value;  // tag (e.g. "vpn-1", "direct-out") или `kRejectTarget`
+  final String value;  // tag (e.g. "vpn-1", "direct-out") или `kOutboundReject`
   final String label;  // human-readable: "vpn-1", "direct-out", "Reject"
 
   static const reject =
-      OutboundOption(value: kRejectTarget, label: 'Reject');
+      OutboundOption(value: kOutboundReject, label: 'Reject');
 }
 
 /// Унифицированный dropdown для выбора **куда маршрутизировать** правило
@@ -62,7 +62,7 @@ class OutboundPicker extends StatelessWidget {
     }
     if (allowReject) {
       items.add(DropdownMenuItem(
-        value: kRejectTarget,
+        value: kOutboundReject,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -79,7 +79,7 @@ class OutboundPicker extends StatelessWidget {
     // показываем первый вариант чтобы dropdown не сломался.
     final effectiveValue = items.any((i) => i.value == value)
         ? value
-        : (options.isNotEmpty ? options.first.value : kRejectTarget);
+        : (options.isNotEmpty ? options.first.value : kOutboundReject);
 
     if (!dense) {
       return DropdownButtonFormField<String>(

@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:math';
 
 import '../../models/custom_rule.dart';
+import '../../models/parser_config.dart';
 import '../settings_storage.dart' show SettingsStorage;
+import 'preset_expand.dart';
 import 'rule_set_registry.dart';
 
 /// Post-step: рандомизация регистра букв в `server_name` first-hop outbound'ов
@@ -77,8 +79,22 @@ void applyTlsFragment(Map<String, dynamic> config, Map<String, String> vars) {
 /// — если секция dns пустая, sing-box падает на старте.
 ///
 /// Очищаем wizard-only поля (`enabled`, `description`) перед записью.
+///
+/// `extraServers` / `extraRules` приходят от bundle-пресетов (spec §033) —
+/// их инжектируем в финальный `config.dns`:
+///   - servers: template first, bundle after (bundle = "опциональные
+///     дополнения", template = baseline; resolver-ссылки в шаблоне всегда
+///     указывают на template-теги)
+///   - rules: bundle **перед** template (bundle rules должны матчить до
+///     fallback-правила `{server: google_doh}`). Игнорируются если юзер
+///     сделал полный user-override через `setDnsRules` — честная
+///     передача ответственности.
 Future<void> applyCustomDns(
-    Map<String, dynamic> config, Map<String, dynamic> templateDnsOptions) async {
+  Map<String, dynamic> config,
+  Map<String, dynamic> templateDnsOptions, {
+  List<Map<String, dynamic>> extraServers = const [],
+  List<Map<String, dynamic>> extraRules = const [],
+}) async {
   final userServers = await SettingsStorage.getDnsServers();
   final userRulesJson = await SettingsStorage.getDnsRules();
 
@@ -91,11 +107,22 @@ Future<void> applyCustomDns(
           .toList();
 
   final servers = <Map<String, dynamic>>[];
+  final seenTags = <String>{};
   for (final s in sourceServers) {
     if (s['enabled'] == false) continue;
     final clean = Map<String, dynamic>.from(s)
       ..remove('enabled')
       ..remove('description');
+    final tag = clean['tag'];
+    if (tag is String) seenTags.add(tag);
+    servers.add(clean);
+  }
+  for (final s in extraServers) {
+    final clean = Map<String, dynamic>.from(s)
+      ..remove('enabled')
+      ..remove('description');
+    final tag = clean['tag'];
+    if (tag is String && !seenTags.add(tag)) continue; // deduplicate
     servers.add(clean);
   }
   dns['servers'] = servers;
@@ -107,10 +134,101 @@ Future<void> applyCustomDns(
     } catch (_) {}
   } else {
     final tr = templateDnsOptions['rules'] as List<dynamic>?;
-    if (tr != null) dns['rules'] = tr;
+    final merged = <Map<String, dynamic>>[
+      ...extraRules,
+      if (tr != null)
+        ...tr.whereType<Map<String, dynamic>>(),
+    ];
+    if (merged.isNotEmpty) dns['rules'] = merged;
   }
 
   config['dns'] = dns;
+}
+
+/// Post-step: expansion + merge bundle-пресетов (spec §033).
+///
+/// Для каждого `CustomRule(kind: preset, enabled: true)` ищет
+/// соответствующий `SelectableRule` по `presetId`, разворачивает
+/// через [expandPreset], merge'ит через [mergeFragments]. Результирующие
+/// rule-sets и routing rules регистрирует в [registry] (rule-sets через
+/// [RuleSetRegistry.tryRegisterRuleSet] — identical-skip / first-wins).
+/// Extra DNS-данные возвращаются вверх — инжектируются [applyCustomDns].
+///
+/// Broken preset (`presetId` не найден в шаблоне) пропускается с warning;
+/// UI показывает broken-card для таких правил.
+PresetApplyResult applyPresetBundles(
+  RuleSetRegistry registry,
+  List<CustomRule> rules,
+  List<SelectableRule> presets, {
+  Map<String, String> presetSrsPaths = const {},
+}) {
+  final warnings = <String>[];
+  final fragmentsList = <PresetFragments>[];
+
+  for (final cr in rules) {
+    if (!cr.enabled) continue;
+    if (cr is! CustomRulePreset) continue;
+    if (cr.presetId.isEmpty) continue;
+
+    SelectableRule? match;
+    for (final p in presets) {
+      if (p.presetId == cr.presetId) {
+        match = p;
+        break;
+      }
+    }
+    if (match == null) {
+      warnings.add('preset "${cr.presetId}" not found in template (rule skipped)');
+      continue;
+    }
+
+    // Из плоской мапы `presetSrsPaths["<presetId>|<tag>"]` собираем subset
+    // для текущего пресета: tag → path.
+    final srsSubset = <String, String>{};
+    final prefix = '${cr.presetId}|';
+    for (final entry in presetSrsPaths.entries) {
+      if (entry.key.startsWith(prefix)) {
+        srsSubset[entry.key.substring(prefix.length)] = entry.value;
+      }
+    }
+
+    fragmentsList.add(expandPreset(cr, match, srsPaths: srsSubset));
+  }
+
+  final merged = mergeFragments(fragmentsList);
+  warnings.addAll(merged.warnings);
+
+  for (final rs in merged.ruleSets) {
+    final conflict = registry.tryRegisterRuleSet(rs);
+    if (conflict) {
+      final tag = rs['tag'];
+      warnings.add('rule_set "$tag" skipped: conflicts with earlier registered rule_set');
+    }
+  }
+  for (final r in merged.routingRules) {
+    registry.addRule(r);
+  }
+
+  return PresetApplyResult(
+    extraDnsServers: merged.dnsServers,
+    extraDnsRules: merged.dnsRules,
+    warnings: warnings,
+  );
+}
+
+/// Результат [applyPresetBundles] — rule-sets/routing rules уже записаны в
+/// registry; DNS-фрагменты нельзя записать напрямую (они живут в другой
+/// секции конфига), поэтому возвращаются вверх.
+class PresetApplyResult {
+  final List<Map<String, dynamic>> extraDnsServers;
+  final List<Map<String, dynamic>> extraDnsRules;
+  final List<String> warnings;
+
+  const PresetApplyResult({
+    this.extraDnsServers = const [],
+    this.extraDnsRules = const [],
+    this.warnings = const [],
+  });
 }
 
 /// Post-step: пользовательские routing-правила (spec §030).
@@ -136,86 +254,97 @@ List<String> applyCustomRules(
 }) {
   final warnings = <String>[];
   for (final cr in rules) {
-    if (!cr.enabled || cr.target.isEmpty) continue;
-    final requestedTag =
-        cr.name.trim().isEmpty ? 'unnamed' : cr.name.trim();
-
-    if (cr.kind == CustomRuleKind.srs) {
-      final path = srsPaths[cr.id];
-      if (path == null) {
-        warnings.add('SRS rule "${cr.name}" skipped: no cached file (Download first).');
+    if (!cr.enabled) continue;
+    switch (cr) {
+      case CustomRulePreset():
+        // Preset-правила обрабатывает applyPresetBundles (spec §033).
         continue;
-      }
-      final tag = registry.addRuleSet({
-        'type': 'local',
-        'tag': requestedTag,
-        'format': 'binary',
-        'path': path,
-      });
-      registry.addRule(_targetToRoute(
-        tag,
-        cr.target,
-        ports: cr.intPorts,
-        portRanges: cr.portRanges,
-        packages: cr.packages,
-        protocols: cr.protocols,
-        ipIsPrivate: cr.ipIsPrivate,
-      ));
-      continue;
+      case CustomRuleSrs():
+        if (cr.outbound.isEmpty) continue;
+        final requestedTag =
+            cr.name.trim().isEmpty ? 'unnamed' : cr.name.trim();
+        final path = srsPaths[cr.id];
+        if (path == null) {
+          warnings.add(
+              'SRS rule "${cr.name}" skipped: no cached file (Download first).');
+          continue;
+        }
+        final tag = registry.addRuleSet({
+          'type': 'local',
+          'tag': requestedTag,
+          'format': 'binary',
+          'path': path,
+        });
+        registry.addRule(_outboundToRoute(
+          tag,
+          cr.outbound,
+          ports: cr.intPorts,
+          portRanges: cr.portRanges,
+          packages: cr.packages,
+          protocols: cr.protocols,
+          ipIsPrivate: cr.ipIsPrivate,
+        ));
+      case CustomRuleInline():
+        if (cr.outbound.isEmpty) continue;
+        final requestedTag =
+            cr.name.trim().isEmpty ? 'unnamed' : cr.name.trim();
+        // Inline: all non-empty match fields в один headless rule.
+        final match = <String, dynamic>{};
+        if (cr.domains.isNotEmpty) match['domain'] = cr.domains;
+        if (cr.domainSuffixes.isNotEmpty) {
+          match['domain_suffix'] = cr.domainSuffixes;
+        }
+        if (cr.domainKeywords.isNotEmpty) {
+          match['domain_keyword'] = cr.domainKeywords;
+        }
+        if (cr.ipCidrs.isNotEmpty) match['ip_cidr'] = cr.ipCidrs;
+        final intPorts = cr.intPorts;
+        if (intPorts.isNotEmpty) match['port'] = intPorts;
+        if (cr.portRanges.isNotEmpty) match['port_range'] = cr.portRanges;
+        if (cr.packages.isNotEmpty) match['package_name'] = cr.packages;
+        // `ip_is_private` НЕ поддерживается в headless rule — sing-box
+        // отрежет конфиг на парсинге. Выносим на routing-rule level
+        // (там OR с rule_set per default-rule formula).
+
+        if (match.isEmpty) {
+          // Нет полей для inline headless rule. Если есть routing-level
+          // поля (protocol / ip_is_private) — эмитим routing rule без
+          // rule_set, иначе правило пустое, скипаем.
+          if (cr.protocols.isEmpty && !cr.ipIsPrivate) continue;
+          registry.addRule(_outboundToRoute(
+            '',
+            cr.outbound,
+            protocols: cr.protocols,
+            ipIsPrivate: cr.ipIsPrivate,
+          ));
+          continue;
+        }
+
+        final tag = registry.addRuleSet({
+          'type': 'inline',
+          'tag': requestedTag,
+          'rules': [match],
+        });
+        // Protocol + ip_is_private — на routing rule level (headless их не
+        // поддерживает). `ip_is_private` становится OR с rule_set (per
+        // sing-box default-rule formula) — это ровно то что юзер ожидает.
+        registry.addRule(_outboundToRoute(
+          tag,
+          cr.outbound,
+          protocols: cr.protocols,
+          ipIsPrivate: cr.ipIsPrivate,
+        ));
     }
-
-    // Inline: all non-empty match fields в один headless rule.
-    final match = <String, dynamic>{};
-    if (cr.domains.isNotEmpty) match['domain'] = cr.domains;
-    if (cr.domainSuffixes.isNotEmpty) match['domain_suffix'] = cr.domainSuffixes;
-    if (cr.domainKeywords.isNotEmpty) match['domain_keyword'] = cr.domainKeywords;
-    if (cr.ipCidrs.isNotEmpty) match['ip_cidr'] = cr.ipCidrs;
-    final intPorts = cr.intPorts;
-    if (intPorts.isNotEmpty) match['port'] = intPorts;
-    if (cr.portRanges.isNotEmpty) match['port_range'] = cr.portRanges;
-    if (cr.packages.isNotEmpty) match['package_name'] = cr.packages;
-    // `ip_is_private` НЕ поддерживается в headless rule — sing-box отрежет
-    // конфиг на парсинге. Выносим на routing-rule level (там OR с rule_set
-    // per default-rule formula).
-
-    if (match.isEmpty) {
-      // Нет полей для inline headless rule. Если есть routing-level
-      // поля (protocol / ip_is_private) — эмитим routing rule без
-      // rule_set, иначе правило пустое, скипаем.
-      if (cr.protocols.isEmpty && !cr.ipIsPrivate) continue;
-      registry.addRule(_targetToRoute(
-        '',
-        cr.target,
-        protocols: cr.protocols,
-        ipIsPrivate: cr.ipIsPrivate,
-      ));
-      continue;
-    }
-
-    final tag = registry.addRuleSet({
-      'type': 'inline',
-      'tag': requestedTag,
-      'rules': [match],
-    });
-    // Protocol + ip_is_private — на routing rule level (headless их не
-    // support'ит). `ip_is_private` становится OR с rule_set (per sing-box
-    // default-rule formula) — это ровно то что юзер ожидает.
-    registry.addRule(_targetToRoute(
-      tag,
-      cr.target,
-      protocols: cr.protocols,
-      ipIsPrivate: cr.ipIsPrivate,
-    ));
   }
   return warnings;
 }
 
-/// `target` (outbound tag или `kRejectTarget`) → routing rule. Опциональные
+/// `outbound` (tag или `kOutboundReject`) → routing rule. Опциональные
 /// AND-поля (port/port_range/packages/protocol) — для srs-режима, где эти
 /// фильтры нельзя зашить в remote rule_set.
-Map<String, dynamic> _targetToRoute(
+Map<String, dynamic> _outboundToRoute(
   String tag,
-  String target, {
+  String outbound, {
   List<int>? ports,
   List<String>? portRanges,
   List<String>? packages,
@@ -231,10 +360,10 @@ Map<String, dynamic> _targetToRoute(
   if (packages != null && packages.isNotEmpty) rule['package_name'] = packages;
   if (protocols != null && protocols.isNotEmpty) rule['protocol'] = protocols;
   if (ipIsPrivate) rule['ip_is_private'] = true;
-  if (target == kRejectTarget) {
+  if (outbound == kOutboundReject) {
     rule['action'] = 'reject';
   } else {
-    rule['outbound'] = target;
+    rule['outbound'] = outbound;
   }
   return rule;
 }

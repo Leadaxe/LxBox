@@ -6,6 +6,89 @@
 
 ---
 
+## [1.4.1] — 2026-04-22
+
+### Reliability
+
+- **Retry + exponential backoff** для subscription fetch (`sources.dart`) и rule_set download (`rule_set_downloader.dart`): 3 попытки с задержками 1s → 3s. `4xx` — permanent (без ретраев), `5xx` / timeout / `SocketException` — retry. Снимает основную массу жалоб "подписка не обновляется" у юзеров с флапающей сетью.
+- **Top-level error boundary** — `FlutterError.onError` + `PlatformDispatcher.instance.onError` → `AppLog`. Uncaught-ошибки видны на Debug → Logs. Красный экран заменён на компактный `ErrorBoundary` fallback-widget.
+- **Auto-updater spam-gate tests** (§027) — покрыто тестами: `consecutiveFails`, `minRetryInterval`, `maxFailsPerSession`, `inProgress` crash-safe reset при старте app.
+
+### Security
+
+- **URL masking audit** — subscription URL больше не попадают в `AppLog` целиком. Везде `maskSubscriptionUrl` (`scheme://host/***`). Полный URL доступен только в Debug API с `reveal=true`. Закрыты 4 leak-сайта: hydrate-fail, `inProgress` skip warning, shortUrl truncation, `addFromInput`.
+
+### UX
+
+- **Human-readable errors** (`humanizeError`) — все user-visible сообщения приведены к человеческому виду. Было: `Exception: HTTP 503 for https://…`. Стало: `Server error (503) — provider is down, try later`. `TimeoutException` сообщает длительность. Покрыт топ-5: subscription fetch, rule-set download, parse, config build, VPN start.
+- **Parse hints** — если подписка загружена но распарсилась в 0 нод, показываем причину (HTML-страница, Clash YAML, full sing-box config, plain-text error).
+- **Pull-to-refresh** на Subscriptions screen (`RefreshIndicator` → `updateAll`).
+- **Getting Started card** — карточка для пустого списка подписок: варианты URL / paste clipboard / file.
+- **Unsaved-input guard** — Add Subscription: введённый текст + back → диалог "Discard input?".
+- **Relative time** — `2h ago / yesterday / 3d ago / 2w ago / 2mo ago / 2y ago` вместо абсолютных timestamp'ов.
+- **Reset fail-count & retry** — long-press на подписке → action размораживает `consecutiveFails` и сразу обновляет.
+- **Share URL (masked / full)** — long-press → диалог с выбором masked/full URL.
+- **Debug logs search** — `/logs` endpoint поддерживает `q=` substring search и `level=` multi-filter (`error,warn`). `/action/emulate-error` для demo `humanizeError`.
+
+### Testing
+
+- **262 → 359 тестов** (+97). Новые модули покрыты полностью: `error_humanize`, `url_mask`, `parse_hints`, `relative_time`, `input_helpers`, `http_cache`, `rule_set_downloader`, `auto_updater`, `body_decoder`, validator edge cases, preset-expand.
+
+### Cleanup
+
+- `flutter analyze`: 20 info/warning → **0**. `@override` аннотации на subclass fields, удалены избыточные `!`.
+- Dispose + dead-code audit — чисто (без правок). `setDebugLastError` leak устранён в `/action/emulate-error`.
+
+### Changed — `CustomRule` sealed-split (spec 030 §v1.4.1, task 011)
+
+- **`CustomRule` разделён на sealed-иерархию** с тремя подклассами:
+  - `CustomRuleInline` — юзерские match-поля (domain/suffix/keyword/cidr/port/package/protocol/private-ip + outbound).
+  - `CustomRuleSrs` — локально закэшированный `.srs` бинарь по URL + доп-фильтры на routing-rule level (outbound).
+  - `CustomRulePreset` — тонкая ссылка `{presetId, varsValues}` на шаблонный пресет. Outbound живёт в `varsValues['outbound']` (поля `outbound` нет — подставляется через `@outbound`).
+
+  Компилятор теперь exhaustive-проверяет pattern-match `switch (cr)` в builder / UI. Общие методы — `withEnabled` / `withName` / `withOutbound` на base-class (type-preserving), плюс convenience-getters (`domains`/`srsUrl`/`presetId`/…) для read-only доступа из кода, не заботящегося о подтипе.
+- **`CustomRule.fromJson` dispatch** по `kind` → `CustomRuleInline.fromJson` / `CustomRuleSrs.fromJson` / `CustomRulePreset.fromJson`. Backward-compat: старое поле `target` читается как `outbound` (pre-1.4.1 переименование).
+- **Rename `target → outbound` + `kRejectTarget → kOutboundReject`** — везде (модель, builder, UI, Debug API, шаблон). Совпадает с sing-box JSON-schema и UI-лейблом.
+- **Preset var `out → outbound`** в шаблоне и `varsValues` — убирает недоразумение между тремя именами одного концепта.
+
+### Added — SRS cache для bundle-пресетов (spec 011 compliance)
+
+До 1.4.1 `CustomRulePreset` с remote rule_set'ом в шаблоне (Block Ads, Russia-only services) пропускал `type: "remote"` прямо в конфиг, и sing-box качал сам при старте — нарушение принципа spec 011 «local-only, ручной download через ☁».
+
+Теперь:
+- `RuleSetDownloader.{presetCacheId, cachedPathForPreset, downloadForPreset, deleteForPreset}` — новый namespace ключей `preset__<presetId>__<tag>` для кэша preset-owned .srs файлов.
+- `expandPreset` при обнаружении `type: "remote"` в `preset.ruleSets` проверяет cached path — есть → заменяет на `{type: "local", path: "<кэш>"}`, нет → rule_set skip + warning (правило всё равно попадает в конфиг с headless-routing, но match не работает до первого download'а).
+- `buildConfig` pre-resolve'ит cache-paths для preset-правил перед вызовом `applyPresetBundles` (ключ `<presetId>|<rule_set_tag>`).
+- **UI ☁-кнопка у preset-правил с remote rule_set'ами** — в списке Rules рядом с preset-правилом появляется та же cloud-иконка что у srs. Tap → скачивает все remote rule_set'ы пресета в cache. Long-press → menu Refresh / Clear. Switch auto-download — toggle-on при отсутствующем кэше триггерит скачивание, затем enable. "Cached" = все remote rule_set'ы пресета имеют локальный .srs (если хоть один отсутствует → ☁ иконка download, switch auto-download'ит).
+
+### Fixed — VPN startup / preset-rule corner cases (task 011)
+
+- **`Failed to start service: rule-set not found`** — когда preset имел `type: "remote"` rule_set без кэша, expansion дропал rule_set, но `routing_rule.rule_set: "<tag>"` оставался в `route.rules`, и sing-box падал при парсинге конфига. Добавлен **dangling-rule_set guard** в `expandPreset`: если `routing_rule.rule_set` ссылается на tag, которого нет среди expanded rule-sets (rule_set skip'нулся из-за missing cache) → routing_rule тоже drop'ается + warning.
+- **☁-кнопка preset-правила не срабатывала на tap** — в `_presetSrsStatusButton` GestureDetector с `HitTestBehavior.opaque` перехватывал tap ДО `IconButton.onPressed`. Заменён на `InkWell` с `onTap` + `onLongPress` — один виджет ловит оба жеста.
+- **Preset с remote rule_set'ами добавляется через «Add to Rules» disabled** — по аналогии с `CustomRuleSrs` (spec §011: без кэша правило не работает, не вводим юзера в заблуждение). Switch OFF + ☁-кнопка download; toggle-on auto-download'ит и включает.
+- **Auto-disable preset-правил без кэша на load** — `_refreshSrsCache` теперь при отсутствии локальных `.srs` выставляет `rule.withEnabled(false)` + persist. Ранее `_template` устанавливался **после** `_refreshSrsCache`, из-за чего `_presetFor` возвращал null и auto-disable не срабатывал — исправлено (template set before cache refresh).
+
+### Added — Preset bundles: self-contained parametrized rules (spec 033, task 010)
+
+- **Новый `CustomRuleKind.preset`** — тонкая ссылка `{presetId, varsValues}` на `SelectableRule` в `wizard_template.json`. В отличие от `inline/srs` (data-копия), preset-правило разворачивается из шаблона при каждом build'е → обновление шаблона автоматически меняет поведение всех preset-правил пользователя (никаких миграций данных).
+- **Bundle-формат пресета**: self-contained `rule_set` + `dns_rule` + `routing rule` + `dns_servers` с типизированными переменными (`@var`). Пресет несёт собственные DNS-серверы и DNS-правило, которые попадают в конфиг **только когда он активен** — отключил пресет → его `yandex_doh` уходит из `dns.servers`.
+- **Типизированные переменные** (в `SelectableRule.vars`): `outbound` (picker outbound-групп), `dns_servers` (picker из `preset.dns_servers[].tag`), плюс существующие `enum`/`text`/`bool`/`number`. Новый флаг `required: bool = true` — для optional переменных в UI появляется пункт "— (default/none)", фрагменты с unresolved `@var` выкидываются целиком при expansion'е.
+- **Merge-стратегия bundle-фрагментов** (`lib/services/builder/preset_expand.dart`): identical-skip по tag + first-wins с warning для реальных конфликтов. DNS-rules инжектируются **перед** fallback-правилом template'а, DNS-серверы добавляются после template-baseline. Порядок детерминирован по индексу CustomRule в UI-списке.
+- **UI редактора** (`custom_rule_edit_screen.dart`): для `kind: preset` показывается "Based on preset" бэйдж + форма vars + JSON-preview expanded bundle. Match-поля (domain/port/package/ip/protocol) скрыты — содержимое пресета правится только через шаблон. Broken preset (presetId не найден в шаблоне) → error-card с Delete.
+- **Russian domains direct** переведён на bundle-формат. Три типизированные переменные:
+  - `out` — OutboundPicker, дефолт `direct-out`.
+  - `dns_server` — dropdown `yandex_doh`/`yandex_dot`/`yandex_udp`, `required: false`, дефолт `yandex_doh`.
+  - `dns_ip` — enum из 10 IP (Safe/Base/Family, IPv4+IPv6 primary+alt) с human-readable `title`; применяется только к UDP.
+
+  Три DNS-сервера в bundle: `yandex_doh` и `yandex_dot` хардкодят `server: "77.88.8.88"` + `tls.server_name: "safe.dot.dns.yandex.net"` (Safe-режим Yandex, bootstrap не нужен — IP напрямую); `yandex_udp` берёт IP из `@dns_ip`. Список TLD: `.ru/.su/.рф/.рус/.москва/.moscow/.tatar/.дети/.онлайн/.сайт/.орг/.ком`.
+- **`WizardOption`** — `options` у `WizardVar` расширен с `List<String>` до `List<WizardOption>` с полями `{title, value}`. Legacy-совместимо: строка `"foo"` парсится как `{title: "foo", value: "foo"}`. UI показывает `title`, в `varsValues` / substitution идёт `value`. Нужно для human-readable меток в dropdown'ах пресетных правил (например, `"77.88.8.88 · Safe" → 77.88.8.88`).
+- **Broken preset recovery** — если в будущей версии `presetId` удалён/переименован, в UI появляется broken-card "Preset not found" с кнопкой Delete; при сборке правило пропускается + warning в `emitWarnings`.
+
+### Changed — Russian & Cyrillic TLDs expanded
+- Wizard template: DNS rule (Yandex DoH) и `ru-domains` rule-set расширены с 4 до 12 суффиксов — добавлены `xn--p1acf` (.рус), `xn--80adxhks` (.москва), `moscow`, `tatar`, `xn--d1acj3b` (.дети), `xn--80aswg` (.сайт), `xn--c1avg` (.орг), `xn--j1aef` (.ком). Пресет «Russian domains direct» теперь описан как "Route Russian & Cyrillic TLDs directly."
+
+---
+
 ## [1.4.0] — 2026-04-21
 
 Major release: unified routing rules, local-only SRS, Stats tabs + Top apps, Debug API, VPN reliability overhaul, per-server detour toggles, perf pass, Flutter correctness fixes. Полные заметки — `RELEASE_NOTES.md`, детальные отчёты задач — `docs/spec/tasks/001..009`.

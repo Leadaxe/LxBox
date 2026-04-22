@@ -236,7 +236,7 @@ L×Box прошёл путь от MVP (один экран: Read config → Star
 | Правило | По умолчанию | Источник |
 |---------|-------------|---------|
 | Block Ads | ✓ | geosite-category-ads-all.srs (remote) |
-| Russian domains direct | ✓ | ru-domains (inline: .ru, .xn--p1ai, .su) |
+| Russian domains direct | ✓ | **bundle** (spec 033): ru-domains inline + Yandex DNS servers + vars `@out`/`@dns_server`. TLDs: .ru, .su, .рф, .рус, .москва, .moscow, .tatar, .дети, .онлайн, .сайт, .орг, .ком |
 | BitTorrent direct | ✓ | protocol: bittorrent |
 | Games direct | ✓ | geosite-category-games.srs (remote) |
 | Private IPs direct | ○ | ip_is_private: true |

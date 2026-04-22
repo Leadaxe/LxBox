@@ -11,7 +11,7 @@ library;
 /// **Source of truth:** `auto_proxy_tag` variable in
 /// `assets/wizard_template.json` (hidden, non-editable). If you change
 /// either side, change the other AND add a one-shot migration in
-/// `SettingsStorage` for existing user data (`CustomRule.target` renamed).
+/// `SettingsStorage` for existing user data.
 const kAutoOutboundTag = '✨auto';
 
 /// Префикс в `tag`, помечающий ноду как detour-сервер (посредник-dialer,

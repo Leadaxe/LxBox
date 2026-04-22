@@ -64,5 +64,83 @@ void main() {
       });
       expect(r.isOk, true);
     });
+
+    // Edge cases (night T7-3)
+
+    test('rule с action:reject без outbound-string → не ошибка', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'type': 'direct', 'tag': 'direct-out'},
+        ],
+        'route': {
+          'rules': [
+            {'domain': ['ads.com'], 'action': 'reject'},
+          ],
+        },
+      });
+      expect(r.isOk, true);
+    });
+
+    test('selector без default — ok', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'type': 'direct', 'tag': 'direct-out'},
+          {
+            'type': 'selector',
+            'tag': 'group',
+            'outbounds': ['direct-out'],
+          },
+        ],
+      });
+      expect(r.isOk, true);
+    });
+
+    test('urltest с outbounds — ok', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'type': 'direct', 'tag': 'a'},
+          {
+            'type': 'urltest',
+            'tag': 'group',
+            'outbounds': ['a'],
+          },
+        ],
+      });
+      expect(r.isOk, true);
+    });
+
+    test('несколько issue накапливаются в одном result', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'type': 'direct', 'tag': 'direct-out'},
+          {
+            'type': 'urltest',
+            'tag': 'empty-group',
+            'outbounds': <String>[],
+          },
+          {
+            'type': 'selector',
+            'tag': 'bad-sel',
+            'outbounds': ['direct-out'],
+            'default': 'missing-tag',
+          },
+        ],
+        'route': {
+          'rules': [
+            {'domain': ['x'], 'outbound': 'ghost'},
+          ],
+        },
+      });
+      expect(r.isOk, false);
+      expect(r.issues.length, 3);
+      expect(r.issues.whereType<DanglingOutboundRef>().length, 1);
+      expect(r.issues.whereType<EmptyUrltestGroup>().length, 1);
+      expect(r.issues.whereType<InvalidDefault>().length, 1);
+    });
+
+    test('пустые outbounds + пустые rules → ok', () {
+      expect(validateConfig({'outbounds': [], 'route': {'rules': []}}).isOk,
+          true);
+    });
   });
 }

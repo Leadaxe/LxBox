@@ -134,10 +134,39 @@ class PresetGroup {
   }
 }
 
-/// A variable from a section's `vars[]` in the wizard template.
+/// Один вариант для `enum`/`text-with-suggestions` var'ов.
+///
+/// Парсится из строки (legacy: `"foo"` → `value=foo, title=foo`) или из
+/// объекта (`{"title": "Human-readable", "value": "machine_id"}`). UI
+/// показывает `title`, `value` подставляется в `@var`-плейсхолдерах и
+/// сохраняется в varsValues.
+class WizardOption {
+  final String value;
+  final String title;
+  const WizardOption({required this.value, required this.title});
+
+  /// Парсит любой JSON-элемент `options[]`. Строка → value==title. Map →
+  /// `title`/`value` (fallback-ы: title пустой берёт value, пустое оба
+  /// сваливается в пустую опцию, которую caller пусть отфильтрует).
+  factory WizardOption.fromAny(dynamic raw) {
+    if (raw is String) return WizardOption(value: raw, title: raw);
+    if (raw is Map) {
+      final v = raw['value']?.toString() ?? '';
+      final t = (raw['title']?.toString() ?? '').trim();
+      return WizardOption(value: v, title: t.isEmpty ? v : t);
+    }
+    return const WizardOption(value: '', title: '');
+  }
+}
+
+/// A variable from a section's `vars[]` in the wizard template, либо
+/// preset-local var из `selectable_rules[i].vars[]` (spec §033).
+///
 /// `chapter` определяет, какому экрану принадлежит переменная:
 /// `core` (VPN Settings — sing-box низкоуровневое), `routing` (Routing),
 /// `dns` (DNS Settings). Переменные без chapter при парсинге получают `core`.
+/// Для preset-local vars chapter не используется (форма рендерится в редакторе
+/// правила).
 class WizardVar {
   WizardVar({
     required this.name,
@@ -149,19 +178,30 @@ class WizardVar {
     this.tooltip = '',
     this.section = '',
     this.chapter = 'core',
+    this.required = true,
   });
 
   final String name;
-  final String type; // bool, text, enum, secret
+  final String type; // bool, text, enum, secret, outbound, dns_servers (spec §033)
   final String defaultValue;
   final String wizardUI; // edit, fix, hidden
-  final List<String> options; // for enum type
+  final List<WizardOption> options; // for enum / text-with-suggestions
   final String title;
   final String tooltip;
   final String section;
   final String chapter;
 
+  /// Optional-флаг (spec §033). `true` (default) — значение обязательно,
+  /// null запрещён. `false` — в UI появляется пункт "—", юзер может не
+  /// выбирать, фрагменты с unresolved `@name` выкидываются целиком.
+  final bool required;
+
   bool get isEditable => wizardUI == 'edit';
+
+  /// Legacy-aware accessor: только `value`-part каждой опции. Для кода,
+  /// которому нужен plain `List<String>` (валидация, sing-box emit).
+  List<String> get optionValues =>
+      options.map((o) => o.value).toList(growable: false);
 
   factory WizardVar.fromJson(
     Map<String, dynamic> json, {
@@ -181,11 +221,16 @@ class WizardVar {
       type: json['type'] as String? ?? 'text',
       defaultValue: defaultStr,
       wizardUI: json['wizard_ui'] as String? ?? 'edit',
-      options: (json['options'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      options: (json['options'] as List<dynamic>?)
+              ?.map(WizardOption.fromAny)
+              .where((o) => o.value.isNotEmpty)
+              .toList() ??
+          const [],
       title: json['title'] as String? ?? '',
       tooltip: json['tooltip'] as String? ?? '',
       section: section,
       chapter: chapter,
+      required: json['required'] as bool? ?? true,
     );
   }
 }
@@ -205,6 +250,17 @@ class VarSection {
 }
 
 /// A selectable routing rule from the wizard template.
+///
+/// Два режима существования (spec §033):
+///
+/// 1. **Legacy (1.4.x)** — `presetId` пустой, `vars`/`dnsRule`/`dnsServers`
+///    пустые. Правило конвертируется в `CustomRule(kind: inline/srs)` через
+///    `selectableRuleToCustom`, содержимое копируется в правило.
+///
+/// 2. **Bundle (1.5+)** — `presetId` задан. Пресет self-contained: несёт
+///    rule_set + dns_rule + routing rule + dns_servers + типизированные
+///    переменные. `CustomRule(kind: preset)` хранит только ссылку
+///    `{presetId, varsValues}`. Expansion + merge в `preset_expand.dart`.
 class SelectableRule {
   SelectableRule({
     required this.label,
@@ -212,6 +268,10 @@ class SelectableRule {
     this.defaultEnabled = false,
     this.ruleSets = const [],
     this.rule = const {},
+    this.presetId = '',
+    this.vars = const [],
+    this.dnsRule,
+    this.dnsServers = const [],
   });
 
   final String label;
@@ -219,6 +279,22 @@ class SelectableRule {
   final bool defaultEnabled;
   final List<Map<String, dynamic>> ruleSets;
   final Map<String, dynamic> rule;
+
+  /// Stable slug для bundle-пресетов (spec §033). Пустой → legacy-режим.
+  final String presetId;
+
+  /// Типизированные переменные пресета (spec §033). `@name` в
+  /// rule_set/dns_rule/rule/dns_servers подставляется при expansion'е.
+  final List<WizardVar> vars;
+
+  /// DNS-правило, которое пресет вносит в `dns.rules` (insert перед
+  /// fallback). Null → пресет не трогает DNS-rules.
+  final Map<String, dynamic>? dnsRule;
+
+  /// DNS-серверы, из которых `@dns_server` var выбирает один для
+  /// добавления в `dns.servers`. Пустой список → пресет не вносит
+  /// DNS-серверов.
+  final List<Map<String, dynamic>> dnsServers;
 
   factory SelectableRule.fromJson(Map<String, dynamic> json) {
     return SelectableRule(
@@ -230,6 +306,17 @@ class SelectableRule {
               .toList() ??
           [],
       rule: json['rule'] as Map<String, dynamic>? ?? {},
+      presetId: json['preset_id'] as String? ?? '',
+      vars: (json['vars'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map((v) => WizardVar.fromJson(v))
+              .toList() ??
+          const [],
+      dnsRule: json['dns_rule'] as Map<String, dynamic>?,
+      dnsServers: (json['dns_servers'] as List<dynamic>?)
+              ?.map((e) => Map<String, dynamic>.from(e as Map))
+              .toList() ??
+          const [],
     );
   }
 }

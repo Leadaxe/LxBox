@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../config/consts.dart';
 import '../controllers/home_controller.dart';
@@ -10,6 +11,7 @@ import '../controllers/subscription_controller.dart';
 import '../models/server_list.dart';
 import '../services/community_servers_loader.dart';
 import '../services/settings_storage.dart';
+import '../services/url_mask.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/url_launcher.dart';
@@ -63,7 +65,31 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   }
 
   Future<bool> _onWillPop() async {
-    return true;
+    // Unsaved-input guard (night T4-3): если юзер ввёл что-то в поле и
+    // уходит со screen без сабмита — подтверждаем, чтобы не терять URL
+    // / proxy-link, который он только что вставил.
+    final pending = _inputController.text.trim();
+    if (pending.isEmpty) return true;
+    if (!mounted) return true;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard input?'),
+        content: const Text(
+            'You have unsaved text in the input field. Leave and discard it?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Stay'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
   }
 
   Future<void> _add() async {
@@ -349,7 +375,18 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                       ],
                     ),
                   ),
-                Expanded(child: _buildList(ctrl)),
+                Expanded(
+                  child: RefreshIndicator(
+                    // Pull-to-refresh (night T3-2): стандартный Android UX-жест,
+                    // альтернативный кнопке refresh в AppBar. Эквивалент
+                    // `_updateAll()`; noop если уже busy.
+                    onRefresh: () async {
+                      if (ctrl.busy) return;
+                      await _updateAll();
+                    },
+                    child: _buildList(ctrl),
+                  ),
+                ),
                 if (ctrl.entries.isNotEmpty)
                   SafeArea(
                     child: Padding(
@@ -433,6 +470,18 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                 Navigator.pop(ctx);
               },
             ),
+            // Share (night T6-2): for SubscriptionServers с URL даём masked-
+            // share по умолчанию. Юзер может включить "Share with token"
+            // через confirm-dialog (с предупреждением).
+            if (entry.url.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.ios_share),
+                title: const Text('Share URL…'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _shareSubscriptionUrl(entry);
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.refresh),
               title: const Text('Update'),
@@ -441,6 +490,23 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                 unawaited(widget.subController.updateAt(index));
               },
             ),
+            // Reset fail-count (night T8-1). Если провайдер вернулся в строй
+            // после фриза (5 фейлов подряд → заморожено до app-restart),
+            // юзер может руками разморозить без перезапуска.
+            if (entry.url.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.restart_alt),
+                title: const Text('Reset fail count & retry'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  widget.autoUpdater.resetFailCount(entry.url);
+                  await widget.subController.updateAt(index);
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Fail count reset, retrying…')),
+                  );
+                },
+              ),
             ListTile(
               leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
               title: Text('Delete', style: TextStyle(color: Theme.of(context).colorScheme.error)),
@@ -479,6 +545,51 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         SnackBar(content: Text('Copied: $url')),
       );
     }
+  }
+
+  /// Share URL подписки (night T6-2). По умолчанию предлагаем masked
+  /// вариант (`scheme://host/***`) — безопасно расшарить в чат / саппорт.
+  /// Full URL с токеном — отдельная кнопка с предупреждением.
+  Future<void> _shareSubscriptionUrl(SubscriptionEntry entry) async {
+    final full = entry.url;
+    if (full.isEmpty) return;
+    final masked = maskSubscriptionUrl(full);
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Share subscription URL'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Masked URL is safe to share — it has no token:'),
+            const SizedBox(height: 6),
+            SelectableText(masked,
+                style: const TextStyle(fontFamily: 'monospace')),
+            const SizedBox(height: 16),
+            const Text(
+                'Full URL contains your provider token — share only with people who have access to your subscription.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, null),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, 'masked'),
+            child: const Text('Share masked'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(dCtx, 'full'),
+            child: const Text('Share full'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null) return;
+    final text = choice == 'full' ? full : masked;
+    await Share.share(text, subject: 'LxBox subscription');
   }
 
   Future<void> _pickPublicTestServer() async {
@@ -564,28 +675,72 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   Widget _buildList(SubscriptionController ctrl) {
     if (ctrl.entries.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'No subscriptions yet.\nPaste a URL above or pick a public test server:',
-                textAlign: TextAlign.center,
+      // Onboarding card (night T5-1): вместо голого "No subscriptions yet"
+      // показываем карточку с 3-step start — пользователь сразу видит что
+      // делать. ListView+AlwaysScrollable чтобы pull-to-refresh (T3-2)
+      // продолжал работать на пустом экране.
+      final cs = Theme.of(context).colorScheme;
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            elevation: 0,
+            color: cs.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.rocket_launch, color: cs.primary),
+                      const SizedBox(width: 10),
+                      Text('Getting started',
+                          style: Theme.of(context).textTheme.titleMedium),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('1. Get a subscription URL from your VPN provider, or a direct proxy link (vless://, trojan://, vmess://, ss://…).'),
+                  const SizedBox(height: 8),
+                  const Text('2. Paste it into the field above, or tap ⋮ → «Paste from clipboard», «Scan QR code».'),
+                  const SizedBox(height: 8),
+                  const Text('3. Hit «+». L×Box will fetch, parse and configure — and you can connect from the Home tab.'),
+                  const SizedBox(height: 18),
+                  Text(
+                    'No provider yet?',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('Try a public test server — free, limited, good for first-time check:'),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: ctrl.busy
+                        ? null
+                        : () => unawaited(_pickPublicTestServer()),
+                    icon: const Icon(Icons.flash_on),
+                    label: const Text('Get Public Test Servers'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                onPressed: ctrl.busy ? null : () => unawaited(_pickPublicTestServer()),
-                icon: const Icon(Icons.flash_on),
-                label: const Text('Get Public Test Servers'),
-              ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              'Tip: pull down to refresh, or tap ⟳ in the top bar after adding.',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
       );
     }
     return ListView.separated(
+      // AlwaysScrollable — чтобы pull-to-refresh работал и на коротких
+      // списках, не заполняющих экран (night T3-2).
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       itemCount: ctrl.entries.length,
       separatorBuilder: (_, _) => const Divider(height: 1),

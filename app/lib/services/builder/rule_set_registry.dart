@@ -40,6 +40,35 @@ class RuleSetRegistry {
     return tag;
   }
 
+  /// Register rule-set preserving the exact tag (no auto-suffix).
+  /// Intended for bundle presets (spec §033) where routing rule уже
+  /// ссылается на литерал `"rule_set": "<tag>"` и любой suffix сломал бы
+  /// ссылку.
+  ///
+  /// Identical-skip: если tag уже занят и содержимое deep-equal уже
+  /// зарегистрированному — тихо пропускает, возвращает `false`.
+  ///
+  /// Real conflict: tag занят, содержимое отличается — пропускает новый
+  /// entry, возвращает `true`. Caller должен залогировать warning.
+  bool tryRegisterRuleSet(Map<String, dynamic> entry) {
+    final copy = Map<String, dynamic>.from(entry);
+    final tag = (copy['tag'] as String?)?.trim() ?? '';
+    if (tag.isEmpty) {
+      _ruleSets.add(copy);
+      return false;
+    }
+    if (!_takenTags.contains(tag)) {
+      _ruleSets.add(copy);
+      _takenTags.add(tag);
+      return false;
+    }
+    final existing = _ruleSets.firstWhere(
+      (r) => r['tag'] == tag,
+      orElse: () => const <String, dynamic>{},
+    );
+    return !_deepEquals(existing, copy);
+  }
+
   /// Insert routing rule (any shape). Порядок в `rules[]` = порядок матчинга
   /// в sing-box, так что caller контролирует приоритет через порядок вызовов.
   void addRule(Map<String, dynamic> rule) {
@@ -75,4 +104,24 @@ class RuleSetRegistry {
     }
     return '$base ($i)';
   }
+}
+
+bool _deepEquals(dynamic a, dynamic b) {
+  if (identical(a, b)) return true;
+  if (a is Map && b is Map) {
+    if (a.length != b.length) return false;
+    for (final k in a.keys) {
+      if (!b.containsKey(k)) return false;
+      if (!_deepEquals(a[k], b[k])) return false;
+    }
+    return true;
+  }
+  if (a is List && b is List) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!_deepEquals(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  return a == b;
 }
