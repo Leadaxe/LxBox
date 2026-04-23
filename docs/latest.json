@@ -1,0 +1,10 @@
+{
+  "$schema": "https://github.com/Leadaxe/LxBox/blob/main/docs/latest.json",
+  "tag": "v1.5.0",
+  "name": "L×Box v1.5.0",
+  "published_at": "2026-04-23T14:00:00Z",
+  "html_url": "https://github.com/Leadaxe/LxBox/releases/tag/v1.5.0",
+  "apk_url": "https://github.com/Leadaxe/LxBox/releases/download/v1.5.0/LxBox-v1.5.0.apk",
+  "min_supported": "1.0.0",
+  "_comment": "Updated automatically by CI on every release tag push (see .github/workflows/ci.yml). Used by UpdateChecker as a fallback when api.github.com is rate-limited (e.g. shared VPN exit IPs)."
+}

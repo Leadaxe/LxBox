@@ -19,6 +19,12 @@ class UpdateChecker {
 
   static const _repoApi =
       'https://api.github.com/repos/Leadaxe/LxBox/releases/latest';
+  /// Fallback — own manifest, committed to repo on every release by CI.
+  /// Используется когда api.github.com даёт 403/429/5xx/timeout (типичный
+  /// сценарий — shared VPN exit IP исчерпал anonymous 60 req/h cap).
+  /// Schema контролируем сами; raw-endpoint cdn-cached, anti-abuse лояльнее.
+  static const _repoFallback =
+      'https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/latest.json';
   static const _userAgent = 'LxBox';
   static const _httpTimeout = Duration(seconds: 10);
   static const _minCheckInterval = Duration(hours: 24);
@@ -76,81 +82,126 @@ class UpdateChecker {
   }) async {
     _inFlight = true;
     try {
-      final resp = await http
-          .get(Uri.parse(_repoApi), headers: {
-            'User-Agent': '$_userAgent/$localVersion',
-            'Accept': 'application/vnd.github+json',
-          })
-          .timeout(_httpTimeout);
-      // Любая non-200 — silent skip + лог. Нет retry'ев.
-      if (resp.statusCode != 200) {
-        final code = resp.statusCode;
-        AppLog.I.warning(
-            'UpdateChecker[$source]: HTTP $code from GitHub');
-        // User-facing message — без HTTP-кода. Типичные сценарии:
-        //   403/429 — rate limit (анонимный 60/h на IP) или ISP/proxy фильтр
-        //   5xx — GitHub down
-        //   4xx — repo переименован / удалён
-        // Для юзера это всё «не достучались, попробуй позже».
-        final friendly = (code == 403 || code == 429)
-            ? "Couldn't reach GitHub (rate-limited or blocked) — try later"
-            : (code >= 500 && code < 600)
-                ? "GitHub is down right now — try later"
-                : "Couldn't fetch latest release";
-        return UpdateCheckResult.failed(friendly);
+      // 1. Primary — api.github.com (canonical, full meta).
+      var info = await _fetchPrimary(source);
+      // 2. Fallback — raw манифест (избегает 403 при shared VPN exit IP).
+      info ??= await _fetchFallback(source);
+      if (info == null) {
+        // Friendly message — оба источника недоступны. Конкретный HTTP/network
+        // error логирован в подметодах.
+        return UpdateCheckResult.failed(
+            "Couldn't reach GitHub — check network or try later");
       }
-      final json = jsonDecode(resp.body);
-      if (json is! Map<String, dynamic>) {
-        AppLog.I.warning('UpdateChecker[$source]: malformed JSON');
-        return UpdateCheckResult.failed('malformed response');
-      }
-      final tag = (json['tag_name'] as String?) ?? '';
-      final name = (json['name'] as String?) ?? tag;
-      final htmlUrl = (json['html_url'] as String?) ?? '';
-      final publishedRaw = json['published_at'] as String?;
-      final publishedAt = publishedRaw != null
-          ? DateTime.tryParse(publishedRaw)
-          : null;
 
-      // Persist last_check + last_known regardless of newer-or-not — иначе
-      // throttle никогда не активируется.
+      // Persist throttle / cache regardless of newer-or-not.
       await SettingsStorage.setLastUpdateCheck(DateTime.now().toUtc());
-      if (tag.isNotEmpty) {
-        await SettingsStorage.setLastKnownVersion(tag);
+      if (info.tag.isNotEmpty) {
+        await SettingsStorage.setLastKnownVersion(info.tag);
       }
 
       AppLog.I.info(
-          'UpdateChecker[$source]: latest=$tag local=$localVersion');
+          'UpdateChecker[$source]: latest=${info.tag} local=$localVersion');
 
-      if (!isNewer(tag, localVersion)) {
-        // На случай если был dismiss старого тега — чистим, иначе UI
-        // показывал бы "you're up to date" но dismissed-state мешал бы
-        // следующему уведомлению. Не критично, но чисто.
+      if (!isNewer(info.tag, localVersion)) {
         latest.value = null;
         return UpdateCheckResult.upToDate(localVersion);
       }
 
       final dismissed = await SettingsStorage.getDismissedUpdateVersion();
-      final info = UpdateInfo(
+      latest.value = info;
+      return UpdateCheckResult.newer(info, dismissed: dismissed == info.tag);
+    } finally {
+      _inFlight = false;
+    }
+  }
+
+  /// Primary source: api.github.com. Возвращает [UpdateInfo] на 200,
+  /// `null` на любую ошибку — caller тогда пробует fallback.
+  Future<UpdateInfo?> _fetchPrimary(String source) async {
+    try {
+      final resp = await http
+          .get(Uri.parse(_repoApi), headers: {
+            'User-Agent': '$_userAgent/${_userAgentSafeVersion()}',
+            'Accept': 'application/vnd.github+json',
+          })
+          .timeout(_httpTimeout);
+      if (resp.statusCode != 200) {
+        AppLog.I.warning(
+            'UpdateChecker[$source]: api.github.com HTTP ${resp.statusCode} — '
+            'will try fallback');
+        return null;
+      }
+      final json = jsonDecode(resp.body);
+      if (json is! Map<String, dynamic>) {
+        AppLog.I.warning('UpdateChecker[$source]: malformed primary JSON');
+        return null;
+      }
+      final tag = (json['tag_name'] as String?) ?? '';
+      if (tag.isEmpty) return null;
+      final name = (json['name'] as String?) ?? tag;
+      final htmlUrl = (json['html_url'] as String?) ??
+          'https://github.com/Leadaxe/LxBox/releases/tag/$tag';
+      final publishedRaw = json['published_at'] as String?;
+      final publishedAt =
+          publishedRaw != null ? DateTime.tryParse(publishedRaw) : null;
+      return UpdateInfo(
         tag: tag,
         name: name,
         htmlUrl: htmlUrl,
         publishedAt: publishedAt,
       );
-      // Заполняем notifier даже если dismissed — UI About-секция показывает
-      // "Latest available", независимо от banner'а. SnackBar-логика смотрит
-      // на dismissed отдельно.
-      latest.value = info;
-      return UpdateCheckResult.newer(info, dismissed: dismissed == tag);
     } catch (e) {
-      AppLog.I.warning('UpdateChecker[$source]: $e');
-      // Network errors (SocketException / TimeoutException) и malformed JSON
-      // — для юзера один смысл: «не работает сеть до github.com сейчас».
-      // Не вываливаем технический e.toString() в UI.
-      return UpdateCheckResult.failed("Couldn't reach GitHub — check network");
-    } finally {
-      _inFlight = false;
+      AppLog.I.warning('UpdateChecker[$source]: api.github.com $e');
+      return null;
     }
+  }
+
+  /// Fallback source: own manifest at raw.githubusercontent.com.
+  /// Schema мы контролируем (см. docs/latest.json в repo). Этот endpoint
+  /// CDN-кэширован GitHub'ом — anti-abuse намного лояльнее API.
+  Future<UpdateInfo?> _fetchFallback(String source) async {
+    try {
+      final resp = await http
+          .get(Uri.parse(_repoFallback), headers: {
+            'User-Agent': '$_userAgent/${_userAgentSafeVersion()}',
+          })
+          .timeout(_httpTimeout);
+      if (resp.statusCode != 200) {
+        AppLog.I.warning(
+            'UpdateChecker[$source]: fallback HTTP ${resp.statusCode}');
+        return null;
+      }
+      final json = jsonDecode(resp.body);
+      if (json is! Map<String, dynamic>) {
+        AppLog.I.warning('UpdateChecker[$source]: malformed fallback JSON');
+        return null;
+      }
+      final tag = (json['tag'] as String?) ?? '';
+      if (tag.isEmpty) return null;
+      final name = (json['name'] as String?) ?? tag;
+      final htmlUrl = (json['html_url'] as String?) ??
+          'https://github.com/Leadaxe/LxBox/releases/tag/$tag';
+      final publishedRaw = json['published_at'] as String?;
+      final publishedAt =
+          publishedRaw != null ? DateTime.tryParse(publishedRaw) : null;
+      AppLog.I.info('UpdateChecker[$source]: fallback hit tag=$tag');
+      return UpdateInfo(
+        tag: tag,
+        name: name,
+        htmlUrl: htmlUrl,
+        publishedAt: publishedAt,
+      );
+    } catch (e) {
+      AppLog.I.warning('UpdateChecker[$source]: fallback $e');
+      return null;
+    }
+  }
+
+  /// Strips weird chars from version for User-Agent header. Не должно быть
+  /// CR/LF/whitespace; localVersion теоретически "1.5.0" чистый, но на
+  /// всякий случай.
+  String _userAgentSafeVersion() {
+    return '1.x'; // stable UA, не утекаем точную версию (privacy chrome)
   }
 
   /// Юзер сказал "Not now" в snackbar для текущей версии. Persist + clear

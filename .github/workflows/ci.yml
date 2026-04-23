@@ -191,3 +191,52 @@ jobs:
           draft: false
           files: LxBox-${{ needs.meta.outputs.version }}.apk
           body_path: RELEASE_NOTES.md
+
+  publish-manifest:
+    name: Publish docs/latest.json
+    needs: [meta, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: needs.meta.outputs.is_release == 'true'
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update docs/latest.json
+        env:
+          TAG: ${{ needs.meta.outputs.tag }}
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          mkdir -p docs
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat > docs/latest.json <<EOF
+          {
+            "\$schema": "https://github.com/Leadaxe/LxBox/blob/main/docs/latest.json",
+            "tag": "${TAG}",
+            "name": "L×Box ${VERSION}",
+            "published_at": "${NOW}",
+            "html_url": "https://github.com/Leadaxe/LxBox/releases/tag/${TAG}",
+            "apk_url": "https://github.com/Leadaxe/LxBox/releases/download/${TAG}/LxBox-${VERSION}.apk",
+            "min_supported": "1.0.0",
+            "_comment": "Updated automatically by CI on every release tag push (see .github/workflows/ci.yml). Used by UpdateChecker as a fallback when api.github.com is rate-limited."
+          }
+          EOF
+          cat docs/latest.json
+
+      - name: Commit & push (main)
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet docs/latest.json; then
+            echo "No change in docs/latest.json — skipping commit."
+            exit 0
+          fi
+          git add docs/latest.json
+          # [skip ci] чтобы не триггерить новый CI run на собственный коммит
+          git commit -m "chore(release): update docs/latest.json → ${{ needs.meta.outputs.tag }} [skip ci]"
+          git push origin HEAD:main

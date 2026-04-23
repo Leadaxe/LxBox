@@ -66,23 +66,53 @@ App launch
 
 Network failure (offline / rate-limit / 500) — silently skip, лог в AppLog. Никаких retry-loop'ов. Следующий launch — следующая попытка.
 
-### GitHub API
+### Network — primary + fallback
 
-`GET https://api.github.com/repos/Leadaxe/LxBox/releases/latest`
+**Primary**: `GET https://api.github.com/repos/Leadaxe/LxBox/releases/latest`. Возвращает canonical JSON с `tag_name`, `name`, `html_url`, `published_at`, `body`.
 
 ```jsonc
-// minimal use
 {
-  "tag_name": "v1.4.3",
-  "name": "L×Box v1.4.3",
-  "html_url": "https://github.com/Leadaxe/LxBox/releases/tag/v1.4.3",
-  "body": "..."  // markdown release notes (для preview в диалоге)
+  "tag_name": "v1.5.0",
+  "name": "L×Box v1.5.0",
+  "html_url": "https://github.com/Leadaxe/LxBox/releases/tag/v1.5.0",
+  "published_at": "2026-04-23T14:00:00Z",
+  "body": "..."  // markdown release notes (опционально для preview)
 }
 ```
 
-**Без auth** — public repo, анонимный rate-limit GitHub API = 60 req/hour per IP. Для нас 1 req per 24h на пользователя — multi-orders-of-magnitude under cap.
+**Fallback**: `GET https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/latest.json`. Используется когда primary даёт 4xx/5xx/timeout/network error. CDN-кэширован GitHub'ом — anti-abuse намного лояльнее API.
 
-User-Agent: `LxBox/<version>` (GitHub rate-limit'ит запросы без UA).
+```jsonc
+// own schema, контролируем сами; обновляется CI'ем при каждом release tag push
+{
+  "tag": "v1.5.0",
+  "name": "L×Box v1.5.0",
+  "published_at": "2026-04-23T14:00:00Z",
+  "html_url": "https://github.com/Leadaxe/LxBox/releases/tag/v1.5.0",
+  "apk_url": "https://github.com/Leadaxe/LxBox/releases/download/v1.5.0/LxBox-v1.5.0.apk",
+  "min_supported": "1.0.0"
+}
+```
+
+**Зачем fallback**:
+- Анонимный rate-limit api.github.com — **60 req/h на IP**.
+- Юзер сидит на VPN; trafic выходит через **shared exit IP** провайдера (Финляндия, Нидерланды, и т.п.).
+- Этот IP делят сотни подписчиков, каждый из них может делать запросы к GitHub API (другие apps, скрипты, бэкап-тулзы).
+- 60 req/h на shared IP исчерпывается **за минуты** → 403 на легитимные запросы у всех на этом exit'е.
+- `raw.githubusercontent.com` сервит статические файлы из CDN — лимит на запросы у конкретного файла существенно лояльнее (фактически unlimited для small JSON').
+
+**Без auth** — оба endpoint'а public.
+**User-Agent**: `LxBox/1.x` (статичный — не утекаем точную версию).
+**Schema мы контролируем** в `docs/latest.json` — можем добавить `min_supported`, urgent flag, и т.п. без дёрганий GitHub schema.
+
+### CI integration
+
+`.github/workflows/ci.yml` job `publish-manifest` (запускается после `release` job, gated на `is_release == true`):
+1. Checkout `main` с write-доступом.
+2. Генерит свежий `docs/latest.json` с tag/version/timestamp/URL'ами.
+3. `git commit` с suffix'ом `[skip ci]` (чтобы не триггерить новый CI run на собственный коммит) → `git push origin HEAD:main`.
+
+В результате `https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/latest.json` обновляется автоматически в течение ~30 сек после того как release появился на GitHub.
 
 ### Comparison logic
 
