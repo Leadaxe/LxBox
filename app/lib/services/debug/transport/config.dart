@@ -6,7 +6,7 @@ class DebugServerConfig {
     required this.token,
     this.requestTimeout = const Duration(seconds: 30),
     this.maxBodyBytes = 1024 * 1024,
-    this.unauthenticatedPaths = const {'/ping'},
+    this.unauthenticatedPaths = const {'/ping', '/help'},
   });
 
   /// TCP-порт. Bind строго на `127.0.0.1`.

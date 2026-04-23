@@ -12,6 +12,7 @@ import '../handlers/config.dart';
 import '../handlers/device.dart';
 import '../handlers/files.dart';
 import '../handlers/logs.dart';
+import '../handlers/help.dart';
 import '../handlers/ping.dart';
 import '../handlers/rules.dart';
 import '../handlers/settings.dart';
@@ -158,6 +159,7 @@ class DebugServer {
   Router _buildRouter() {
     return Router()
       ..mount('/ping', pingHandler)
+      ..mount('/help', helpHandler)
       ..mount('/state', stateHandler)
       ..mount('/device', deviceHandler)
       ..mount('/config', configHandler)
