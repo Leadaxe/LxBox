@@ -119,6 +119,10 @@ POST /action/clear-srs?ruleId=<id>             Удалить cached SRS
 POST /action/toast?msg=<text>&duration=short|long  Android Toast (sanity-check "это моё устройство")
 POST /action/emulate-error?kind=<k>            Демо humanizeError в /logs. kind: socket|timeout|http-401|
                                                   http-404|http-410|http-429|http-503|format|fs|plain|all
+POST /action/check-updates                     Force update check (bypass 24h cap + auto_check_updates toggle).
+                                                  Returns {kind, tag, html_url, published_at, ...}. Mirrors UI
+                                                  "Check now" button. Uses primary api.github.com → fallback
+                                                  raw.githubusercontent.com/.../docs/latest.json.
 
 === Rules CRUD (custom routing rules, spec 030) ===
 
@@ -241,6 +245,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/action/clear-srs', 'params': {'ruleId': 'id'}, 'description': 'Clear cached SRS'},
     {'method': 'POST', 'path': '/action/toast', 'params': {'msg': 'text', 'duration': 'short|long'}, 'description': 'Android toast (sanity-check)'},
     {'method': 'POST', 'path': '/action/emulate-error', 'params': {'kind': 'socket|timeout|http-401|http-404|http-410|http-429|http-503|format|fs|plain|all'}, 'description': 'Demo humanizeError in /logs'},
+    {'method': 'POST', 'path': '/action/check-updates', 'description': 'Force update check (bypass cap + toggle); returns {kind,tag,html_url,...}'},
     // Rules
     {'method': 'GET', 'path': '/rules', 'description': 'Alias /state/rules'},
     {'method': 'GET', 'path': '/rules/{id}', 'description': 'Single rule'},

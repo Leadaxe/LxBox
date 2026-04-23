@@ -9,6 +9,8 @@ import '../../error_humanize.dart';
 import '../../rule_set_downloader.dart';
 import '../../settings_storage.dart';
 import '../../subscription/auto_updater.dart';
+import '../../update_checker.dart';
+import '../../../screens/about_screen.dart';
 import '../context.dart';
 import '../contract/errors.dart';
 import '../transport/request.dart';
@@ -46,8 +48,38 @@ Future<DebugResponse> actionHandler(
     '/action/clear-srs' => _clearSrs(req, ctx),
     '/action/toast' => _toast(req, ctx),
     '/action/emulate-error' => _emulateError(req, ctx),
+    '/action/check-updates' => _checkUpdates(req, ctx),
     _ => throw NotFound('action: ${req.path}'),
   };
+}
+
+/// Force update check (bypass 24h cap + auto_check_updates toggle).
+/// Mirrors UI "Check now" button. Returns the result so the caller can
+/// see what UpdateChecker found, без захода в /logs.
+///
+/// Body: none. Query: none.
+/// Response: {"ok": true, "action": "check-updates", "kind": "newer|upToDate|failed|skipped",
+///            "tag": "v1.5.0", "html_url": "...", "message": "...", "dismissed": false}
+Future<DebugResponse> _checkUpdates(DebugRequest req, DebugContext ctx) async {
+  final result = await UpdateChecker.I.forceCheck(
+    localVersion: AboutScreen.versionString,
+  );
+  final body = <String, Object?>{
+    'ok': true,
+    'action': 'check-updates',
+    'kind': result.kind.name,
+  };
+  final info = result.info;
+  if (info != null) {
+    body['tag'] = info.tag;
+    body['name'] = info.name;
+    body['html_url'] = info.htmlUrl;
+    body['published_at'] = info.publishedAt?.toUtc().toIso8601String();
+    body['dismissed'] = result.dismissed;
+  }
+  if (result.localVersion != null) body['local_version'] = result.localVersion;
+  if (result.message != null) body['message'] = result.message;
+  return JsonResponse(body);
 }
 
 /// Эмулирует ошибку для демонстрации humanizeError'а.
