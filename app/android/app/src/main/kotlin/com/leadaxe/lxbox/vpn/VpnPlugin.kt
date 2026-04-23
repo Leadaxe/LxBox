@@ -201,6 +201,24 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     primaryWithPackage = true,
                 ))
             }
+            "areNotificationsEnabled" -> {
+                result.success(androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled())
+            }
+            "getBackgroundMode" -> {
+                result.success(BootReceiver.getBackgroundMode(context))
+            }
+            "setBackgroundMode" -> {
+                val mode = call.argument<String>("mode") ?: BootReceiver.BG_MODE_NEVER
+                BootReceiver.setBackgroundMode(context, mode)
+                result.success(null)
+            }
+            "openNotificationSettings" -> {
+                // API 26+ имеет прямой action ACTION_APP_NOTIFICATION_SETTINGS,
+                // он передаёт пакет через extra, а не через data URI.
+                // Fallback — ACTION_APPLICATION_DETAILS_SETTINGS (pre-26 или
+                // если прямой action не найден OEM).
+                result.success(openNotificationSettings())
+            }
             "showToast" -> {
                 // §031 Debug API. Вызов со стороны Dart через
                 // /action/toast?msg=...&duration=short|long. Безопасно на
@@ -259,6 +277,29 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         if (fallbackAction != null &&
             tryLaunch(fallbackAction, needsPackage(fallbackAction))) return true
         return false
+    }
+
+    /// Открывает per-app notification settings. На API 26+ идёт прямой action,
+    /// пакет передаётся через `EXTRA_APP_PACKAGE` (не через data URI —
+    /// поэтому helper `openSystemSettings` не подходит). Если активити не
+    /// найдена (старый Android / OEM без экрана) — fallback на app details.
+    private fun openNotificationSettings(): Boolean {
+        val act = activity
+        val launchCtx: Context = act ?: context
+        val useNewTask = act == null
+        val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+            if (useNewTask) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return try {
+            launchCtx.startActivity(intent)
+            true
+        } catch (_: Exception) {
+            openSystemSettings(
+                primaryAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                primaryWithPackage = true,
+            )
+        }
     }
 
     /// PNG-base64 иконки одного приложения. Пустая строка если не удалось.

@@ -6,6 +6,28 @@
 
 ---
 
+## [Unreleased]
+
+### Breaking (pending release)
+
+- **Tunnel sleep mode default: `lazy` → `never`.** Раньше tunnel поведение было захардкожено: `pause()` на deep Doze + `wake()` при выходе (паттерн sing-box-for-android). При Doze ломались длинные TCP-сокеты и push-уведомления — юзеры жаловались «интернет отваливается пока не открою app». Новый дефолт `never` держит тоннель всегда активным, что увеличивает расход батареи (ориентировочно +1–3% за ночь) в обмен на стабильность push'ей и SIP/VoIP. Кто хочет старое поведение — Settings → Background → Tunnel sleep mode → **Lazy sleep**. Миграция silent: существующие установки получают новый дефолт без диалога, настройка доступна из UI.
+
+### Reliability
+
+- **Tunnel sleep mode (3-way setting)** — App Settings → Background → «Tunnel sleep mode». Три режима: `never` (default, tunnel всегда активен), `lazy` (pause только при deep Doze), `always` (pause при каждом screen-off, максимум экономии батареи). Хранение в `BootReceiver` SharedPreferences (`background_mode`), применяется при следующем подключении VPN. Реализация: [BoxVpnService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt), [BootReceiver.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BootReceiver.kt), [VpnPlugin.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt), [box_vpn_client.dart](app/lib/vpn/box_vpn_client.dart), [app_settings_screen.dart](app/lib/screens/app_settings_screen.dart).
+
+### UX
+
+- **Tabbed App Settings** — 3 таба: **General** (appearance, behavior, subscriptions, feedback), **Background** (keep-on-exit, battery opt, notifications, OEM, sleep mode), **Diagnostics** (permissions summary, Debug API). Keep-on-exit перенесён из Startup в Background.
+- **Battery-optimization попап на старте** — если `isIgnoringBatteryOptimizations == false`, HomeScreen показывает AlertDialog «Разрешите работу в фоне» с кнопкой перехода в системные настройки. Rate-limit: не чаще 1 раза в 24 часа (`battery_opt_last_prompt_ms` в SettingsStorage). Реализация: [home_screen.dart](app/lib/screens/home_screen.dart).
+- **Notifications-status индикатор** в App Settings → Background. Если нотификации запрещены — красная иконка + tap открывает per-app notification settings. Важно для Android 13+ где `POST_NOTIFICATIONS` runtime-permission: без неё foreground service работает, но notification не рендерится → OS охотнее throttle'ит FGS. Native API: `NotificationManagerCompat.areNotificationsEnabled()` + `Settings.ACTION_APP_NOTIFICATION_SETTINGS`.
+
+### Tests
+
+- `test/vpn/box_vpn_client_test.dart` — MethodChannel contract tests для новых обёрток (`setBackgroundMode`, `getBackgroundMode`, `areNotificationsEnabled`, `isIgnoringBatteryOptimizations`). 4 теста, покрывают корректность именования метода и arg-пакинга.
+
+---
+
 ## [1.4.2] — 2026-04-22
 
 ### Design

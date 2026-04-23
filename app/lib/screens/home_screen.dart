@@ -28,6 +28,7 @@ import '../services/haptic_service.dart';
 import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/auto_updater.dart';
+import '../vpn/box_vpn_client.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -41,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   late final SubscriptionController _subController;
   late final AutoUpdater _autoUpdater;
   late final AnimationController _connectingAnim;
+  final BoxVpnClient _vpn = BoxVpnClient();
   bool _showDetourNodes = true;
   bool _autoRebuild = true;
   /// Derived UI flag. True когда:
@@ -94,6 +96,59 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _prevTunnel = _controller.state.tunnel;
     _prevError = _controller.state.lastError;
     _controller.addListener(_onControllerChange);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_maybeShowBatteryOptimizationDialog());
+    });
+  }
+
+  /// Показывает диалог-попап при старте, если приложение не в battery
+  /// optimization whitelist'е. Без whitelist'а Android агрессивно throttle'ит
+  /// foreground service + tunnel засыпает в Doze → интернет «отваливается»
+  /// до следующего открытия приложения.
+  ///
+  /// Rate-limit: не чаще 1 раза в 24 часа. Timestamp последнего показа —
+  /// `battery_opt_last_prompt_ms` в SettingsStorage. Пишется ДО показа:
+  /// если юзер убьёт app пока modal открыт, следующий запуск не покажет
+  /// сразу заново. Reliability > persistence — лучше пропустить показ,
+  /// чем nag'ить дважды в минуту.
+  static const _batteryPromptKey = 'battery_opt_last_prompt_ms';
+  static const _batteryPromptCooldownMs = 24 * 60 * 60 * 1000; // 24h
+
+  Future<void> _maybeShowBatteryOptimizationDialog() async {
+    final ok = await _vpn.isIgnoringBatteryOptimizations();
+    if (ok) return;
+    final lastMs = int.tryParse(
+            await SettingsStorage.getVar(_batteryPromptKey, '0')) ??
+        0;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    if (nowMs - lastMs < _batteryPromptCooldownMs) return;
+    await SettingsStorage.setVar(_batteryPromptKey, nowMs.toString());
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Разрешите работу в фоне'),
+        content: const Text(
+          'Android ограничивает фоновую активность приложений для экономии батареи. '
+          'Без whitelist\'а VPN-туннель может засыпать вместе с экраном — '
+          'интернет «отваливается» до следующего открытия L×Box.\n\n'
+          'Откройте системные настройки и выберите «Без ограничений» / «Not optimized».',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Позже'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              await _vpn.openBatteryOptimizationSettings();
+            },
+            child: const Text('Разрешить'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _onControllerChange() {
