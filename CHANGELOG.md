@@ -6,9 +6,9 @@
 
 ---
 
-## [Unreleased]
+## [1.5.0] — 2026-04-23
 
-### Breaking (pending release)
+### Breaking
 
 - **Tunnel sleep mode default: `lazy` → `never`.** Раньше tunnel поведение было захардкожено: `pause()` на deep Doze + `wake()` при выходе (паттерн sing-box-for-android). При Doze ломались длинные TCP-сокеты и push-уведомления — юзеры жаловались «интернет отваливается пока не открою app». Новый дефолт `never` держит тоннель всегда активным, что увеличивает расход батареи (ориентировочно +1–3% за ночь) в обмен на стабильность push'ей и SIP/VoIP. Кто хочет старое поведение — Settings → Background → Tunnel sleep mode → **Lazy sleep**. Миграция silent: существующие установки получают новый дефолт без диалога, настройка доступна из UI.
 
@@ -22,9 +22,26 @@
 - **Battery-optimization попап на старте** — если `isIgnoringBatteryOptimizations == false`, HomeScreen показывает AlertDialog «Разрешите работу в фоне» с кнопкой перехода в системные настройки. Rate-limit: не чаще 1 раза в 24 часа (`battery_opt_last_prompt_ms` в SettingsStorage). Реализация: [home_screen.dart](app/lib/screens/home_screen.dart).
 - **Notifications-status индикатор** в App Settings → Background. Если нотификации запрещены — красная иконка + tap открывает per-app notification settings. Важно для Android 13+ где `POST_NOTIFICATIONS` runtime-permission: без неё foreground service работает, но notification не рендерится → OS охотнее throttle'ит FGS. Native API: `NotificationManagerCompat.areNotificationsEnabled()` + `Settings.ACTION_APP_NOTIFICATION_SETTINGS`.
 
+- **Update check on launch** ([§036](docs/spec/features/036%20update%20check/spec.md)) — `UpdateChecker` сервис: через 5s после старта app'а пингует `api.github.com/repos/Leadaxe/LxBox/releases/latest` (24h cap, default ON, single-line disclosure). Если новый релиз → `SnackBar` в HomeScreen с кнопками **View** (открывает release page в браузере) / **Not now** (dismiss per-tag). Sideload flow без in-app installer. About screen: блок «Latest available» с manual `[Check now]`. App Settings → General → Updates: toggle + last-check + manual button.
+
+### Debug API
+
+- **`GET /help[?format=text|json]`** — self-documenting capability map. Без auth (как `/ping`). Markdown-text для LLM-агентов, structured JSON для auto-tooling. Hand-maintained в `handlers/help.dart` — single source of truth для wrappers / шпаргалок.
+
+### Process
+
+- **Night-work autonomous process** (`docs/spec/processes/night-work/`) — canonical spec, startup-prompt, report-template, morning-review, scripts/session-start.sh. Anti-pattern'ы из 2026-04-22 retro зашиты в spec (no silent pivot, no megacommit WIP rescue, no hallucinated marketer stats).
+- **MCP server design** ([§035](docs/spec/features/035%20mcp%20server/spec.md), draft) — план обёртки Debug API в MCP server (stdio, TS+Node, tools/resources/prompts). Implementation отложена до момента когда Claude Desktop станет primary tooling surface.
+
 ### Tests
 
-- `test/vpn/box_vpn_client_test.dart` — MethodChannel contract tests для новых обёрток (`setBackgroundMode`, `getBackgroundMode`, `areNotificationsEnabled`, `isIgnoringBatteryOptimizations`). 4 теста, покрывают корректность именования метода и arg-пакинга.
+- `test/vpn/box_vpn_client_test.dart` — MethodChannel contract tests для новых обёрток (`setBackgroundMode`, `getBackgroundMode`, `areNotificationsEnabled`, `isIgnoringBatteryOptimizations`). 4 теста.
+- `test/services/update_checker_test.dart` — 10 unit-тестов на pure-function `isNewer` (semver compare, malformed input, suffix stripping).
+
+### Scripts
+
+- `scripts/install-apk.sh` — auto-detect устройство (wifi > USB), install + force-stop + launch + restore Debug API forward (port 9269).
+- `scripts/ensure-wifi-adb.sh` — check / bootstrap wifi-adb (tcpip + connect from USB device).
 
 ---
 

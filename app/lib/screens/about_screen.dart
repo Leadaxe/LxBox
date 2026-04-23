@@ -9,7 +9,7 @@ import '../services/url_launcher.dart' as ul;
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  static const _version = '1.4.2';
+  static const _version = '1.5.0';
   static const _repoUrl = 'https://github.com/Leadaxe/LxBox';
 
   /// Public alias for callers (e.g. UpdateChecker / SnackBar) — single
