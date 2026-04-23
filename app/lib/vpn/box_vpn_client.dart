@@ -125,6 +125,36 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// Whether notifications are allowed for this app. На Android 13+ требует
+  /// runtime-permission POST_NOTIFICATIONS; без неё foreground service
+  /// работает, но нотификация не рендерится — OS охотнее throttle'ит FGS,
+  /// юзер не видит статус.
+  Future<bool> areNotificationsEnabled() async {
+    final ok = await _methods.invokeMethod<bool>('areNotificationsEnabled');
+    return ok ?? false;
+  }
+
+  /// Open per-app notification settings (API 26+). Falls back to app details
+  /// на старых версиях / если прямого экрана нет.
+  Future<bool> openNotificationSettings() async {
+    final ok = await _methods.invokeMethod<bool>('openNotificationSettings');
+    return ok ?? false;
+  }
+
+  /// Background mode controls tunnel pause/wake behavior:
+  ///   "never"  — tunnel всегда активен (default)
+  ///   "lazy"   — pause при deep Doze (экономия в ночном режиме)
+  ///   "always" — pause при screen off (максимум экономии батареи)
+  /// Смена режима вступает в силу при следующем подключении VPN.
+  Future<String> getBackgroundMode() async {
+    final m = await _methods.invokeMethod<String>('getBackgroundMode');
+    return m ?? 'never';
+  }
+
+  Future<void> setBackgroundMode(String mode) async {
+    await _methods.invokeMethod<void>('setBackgroundMode', {'mode': mode});
+  }
+
   /// Stream of status events: {"status": "Started"|"Starting"|"Stopped"|"Stopping"}
   ///
   /// **Важно:** shared broadcast stream, один `receiveBroadcastStream()` на

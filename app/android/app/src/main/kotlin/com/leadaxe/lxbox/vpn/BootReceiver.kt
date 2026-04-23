@@ -11,6 +11,28 @@ class BootReceiver : BroadcastReceiver() {
         private const val PREF_NAME = "boxvpn_boot"
         private const val KEY_AUTO_START = "auto_start_vpn"
         private const val KEY_KEEP_ON_EXIT = "keep_vpn_on_exit"
+        private const val KEY_BACKGROUND_MODE = "background_mode"
+
+        /// Три режима фоновой работы tunnel'а. По умолчанию "never" — максимум
+        /// стабильности, минимум экономии батареи. VPN-пользователи обычно
+        /// выбирают надёжность (пуши, длинные TCP-сокеты), поэтому default
+        /// именно такой.
+        /// - "never": pause/wake не вызывается никогда, tunnel всегда активен
+        /// - "lazy": pause при deep Doze (текущее поведение sing-box-android)
+        /// - "always": pause при screen off (максимум экономии)
+        const val BG_MODE_NEVER = "never"
+        const val BG_MODE_LAZY = "lazy"
+        const val BG_MODE_ALWAYS = "always"
+
+        fun setBackgroundMode(context: Context, mode: String) {
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .edit().putString(KEY_BACKGROUND_MODE, mode).apply()
+        }
+
+        fun getBackgroundMode(context: Context): String {
+            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_BACKGROUND_MODE, BG_MODE_NEVER) ?: BG_MODE_NEVER
+        }
 
         fun setEnabled(context: Context, enabled: Boolean) {
             context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)

@@ -122,6 +122,14 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
                 PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) onIdleModeChanged()
                 }
+                Intent.ACTION_SCREEN_OFF -> {
+                    Log.d(TAG, "[vpn] SCREEN_OFF → pause")
+                    boxService?.pause()
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    Log.d(TAG, "[vpn] SCREEN_ON → wake")
+                    boxService?.wake()
+                }
             }
         }
     }
@@ -142,11 +150,24 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         setStatus(VpnStatus.Starting)
 
         if (!receiverRegistered) {
-            Log.d(TAG, "[vpn] registerReceiver from onStartCommand")
+            val mode = BootReceiver.getBackgroundMode(this)
+            Log.d(TAG, "[vpn] registerReceiver from onStartCommand mode=$mode")
             ContextCompat.registerReceiver(this, receiver, IntentFilter().apply {
                 addAction(ACTION_STOP)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    addAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
+                // Подписка на сигналы засыпания зависит от режима:
+                //   never  — только ACTION_STOP, pause/wake не зовём никогда
+                //   lazy   — deep Doze (текущее sing-box-android поведение)
+                //   always — screen off/on (самое агрессивное энергосбережение)
+                when (mode) {
+                    BootReceiver.BG_MODE_LAZY -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            addAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
+                        }
+                    }
+                    BootReceiver.BG_MODE_ALWAYS -> {
+                        addAction(Intent.ACTION_SCREEN_OFF)
+                        addAction(Intent.ACTION_SCREEN_ON)
+                    }
                 }
             }, ContextCompat.RECEIVER_NOT_EXPORTED)
             receiverRegistered = true
