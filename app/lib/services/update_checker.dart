@@ -84,9 +84,20 @@ class UpdateChecker {
           .timeout(_httpTimeout);
       // Любая non-200 — silent skip + лог. Нет retry'ев.
       if (resp.statusCode != 200) {
+        final code = resp.statusCode;
         AppLog.I.warning(
-            'UpdateChecker[$source]: HTTP ${resp.statusCode} from GitHub');
-        return UpdateCheckResult.failed('HTTP ${resp.statusCode}');
+            'UpdateChecker[$source]: HTTP $code from GitHub');
+        // User-facing message — без HTTP-кода. Типичные сценарии:
+        //   403/429 — rate limit (анонимный 60/h на IP) или ISP/proxy фильтр
+        //   5xx — GitHub down
+        //   4xx — repo переименован / удалён
+        // Для юзера это всё «не достучались, попробуй позже».
+        final friendly = (code == 403 || code == 429)
+            ? "Couldn't reach GitHub (rate-limited or blocked) — try later"
+            : (code >= 500 && code < 600)
+                ? "GitHub is down right now — try later"
+                : "Couldn't fetch latest release";
+        return UpdateCheckResult.failed(friendly);
       }
       final json = jsonDecode(resp.body);
       if (json is! Map<String, dynamic>) {
@@ -133,7 +144,10 @@ class UpdateChecker {
       return UpdateCheckResult.newer(info, dismissed: dismissed == tag);
     } catch (e) {
       AppLog.I.warning('UpdateChecker[$source]: $e');
-      return UpdateCheckResult.failed('$e');
+      // Network errors (SocketException / TimeoutException) и malformed JSON
+      // — для юзера один смысл: «не работает сеть до github.com сейчас».
+      // Не вываливаем технический e.toString() в UI.
+      return UpdateCheckResult.failed("Couldn't reach GitHub — check network");
     } finally {
       _inFlight = false;
     }

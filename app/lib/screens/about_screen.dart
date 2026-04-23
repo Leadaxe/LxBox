@@ -36,7 +36,14 @@ class AboutScreen extends StatelessWidget {
           Center(
             child: Column(
               children: [
-                Icon(Icons.shield, size: 56, color: cs.primary),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset(
+                    'assets/icons/app_icon.png',
+                    width: 72,
+                    height: 72,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Text(
                   'L×Box',
