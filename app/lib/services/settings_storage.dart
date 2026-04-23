@@ -368,6 +368,42 @@ class SettingsStorage {
       setVar('auto_update_subs', enabled ? 'true' : 'false');
 
   // ---------------------------------------------------------------------------
+  // App update check (§036) — GitHub Releases polling on launch with 24h cap.
+  // Sideload-flow: SnackBar → user opens release page in browser → downloads
+  // APK manually. No in-app installer.
+  // ---------------------------------------------------------------------------
+
+  static Future<bool> getAutoCheckUpdates() async =>
+      (await getVar('auto_check_updates', 'true')) != 'false';
+
+  static Future<void> setAutoCheckUpdates(bool enabled) =>
+      setVar('auto_check_updates', enabled ? 'true' : 'false');
+
+  static Future<DateTime?> getLastUpdateCheck() async {
+    final raw = await getVar('last_update_check_at', '');
+    return raw.isEmpty ? null : DateTime.tryParse(raw);
+  }
+
+  static Future<void> setLastUpdateCheck(DateTime dt) =>
+      setVar('last_update_check_at', dt.toUtc().toIso8601String());
+
+  /// Cached latest release tag — снэкбар при следующем запуске показываем
+  /// сразу, не ждём сетевого fetch'а.
+  static Future<String> getLastKnownVersion() async =>
+      getVar('last_known_version', '');
+
+  static Future<void> setLastKnownVersion(String tag) =>
+      setVar('last_known_version', tag);
+
+  /// Тег который юзер уже dismiss'нул — снэкбар для него не показываем.
+  /// При новом релизе тег меняется, dismissed становится stale → показываем.
+  static Future<String> getDismissedUpdateVersion() async =>
+      getVar('dismissed_update_version', '');
+
+  static Future<void> setDismissedUpdateVersion(String tag) =>
+      setVar('dismissed_update_version', tag);
+
+  // ---------------------------------------------------------------------------
   // Debug API (§031) — runtime toggle, bearer token, port.
   // ---------------------------------------------------------------------------
 

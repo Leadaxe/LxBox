@@ -28,6 +28,8 @@ import '../services/haptic_service.dart';
 import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/auto_updater.dart';
+import '../services/update_checker.dart';
+import '../services/url_launcher.dart' as ul;
 import '../vpn/box_vpn_client.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -99,6 +101,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_maybeShowBatteryOptimizationDialog());
     });
+    // Update check (§036): hydrate cached "last known version" сразу,
+    // network fetch — через 5 сек чтобы не мешать запуску VPN. Throttled
+    // 24h в самом UpdateChecker. Listener подхватывает результат и
+    // показывает SnackBar если есть newer + не dismissed.
+    UpdateChecker.I.latest.addListener(_onLatestUpdateChanged);
+    unawaited(UpdateChecker.I.hydrate(localVersion: AboutScreen.versionString));
+    Timer(const Duration(seconds: 5), () {
+      if (!mounted) return;
+      unawaited(
+        UpdateChecker.I.maybeCheck(localVersion: AboutScreen.versionString),
+      );
+    });
+  }
+
+  /// Reactive handler — UpdateChecker.latest изменился (hydrate / fetch).
+  /// Показываем SnackBar если есть newer + не dismissed для этой версии.
+  /// Вынесен в отдельный async-flow чтобы не блокировать notifier callback.
+  bool _updateSnackbarShown = false;
+  void _onLatestUpdateChanged() {
+    final info = UpdateChecker.I.latest.value;
+    if (info == null) {
+      _updateSnackbarShown = false;
+      return;
+    }
+    if (_updateSnackbarShown) return;
+    unawaited(_maybeShowUpdateSnackbar(info));
+  }
+
+  Future<void> _maybeShowUpdateSnackbar(UpdateInfo info) async {
+    final dismissed = await SettingsStorage.getDismissedUpdateVersion();
+    if (dismissed == info.tag) return;
+    if (!mounted) return;
+    _updateSnackbarShown = true;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 12),
+        content: Text(
+          'L×Box ${info.tag} available '
+          '(you have v${AboutScreen.versionString})',
+        ),
+        action: SnackBarAction(
+          label: 'View',
+          onPressed: () async {
+            await ul.UrlLauncher.open(info.htmlUrl);
+          },
+        ),
+      ),
+    );
   }
 
   /// Показывает диалог-попап при старте, если приложение не в battery
@@ -235,6 +287,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _errorTimer?.cancel();
     _errorTimer = null;
     _controller.removeListener(_onControllerChange);
+    UpdateChecker.I.latest.removeListener(_onLatestUpdateChanged);
     WidgetsBinding.instance.removeObserver(this);
     _autoUpdater.dispose();
     // Ownership contract: HomeScreen владеет controller'ами + анимацией.

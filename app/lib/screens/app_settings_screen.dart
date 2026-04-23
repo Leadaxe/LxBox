@@ -7,8 +7,11 @@ import '../main.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/transport/server.dart';
 import '../services/haptic_service.dart';
+import '../services/relative_time.dart';
 import '../services/settings_storage.dart';
+import '../services/update_checker.dart';
 import '../vpn/box_vpn_client.dart';
+import 'about_screen.dart';
 
 class AppSettingsScreen extends StatefulWidget {
   const AppSettingsScreen({super.key});
@@ -28,6 +31,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   String _backgroundMode = 'never';
   bool _autoPing = true;
   bool _autoUpdateSubs = true;
+  bool _autoCheckUpdates = true;
   bool _loaded = false;
 
   // §031 Debug API.
@@ -70,6 +74,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final notifications = await _vpn.areNotificationsEnabled();
     final bgMode = await _vpn.getBackgroundMode();
     final autoUpdateSubs = await SettingsStorage.getAutoUpdateSubs();
+    final autoCheckUpdates = await SettingsStorage.getAutoCheckUpdates();
     final debugEnabled = await SettingsStorage.getDebugEnabled();
     final debugToken = await SettingsStorage.getDebugToken();
     final debugPort = await SettingsStorage.getDebugPort();
@@ -84,6 +89,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _notificationsEnabled = notifications;
         _backgroundMode = bgMode;
         _autoUpdateSubs = autoUpdateSubs;
+        _autoCheckUpdates = autoCheckUpdates;
         _debugEnabled = debugEnabled;
         _debugToken = debugToken;
         _debugPort = debugPort;
@@ -300,6 +306,24 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
                 }
               : null,
         ),
+        const Divider(height: 32),
+        Text('Updates', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          title: const Text('Check for updates on launch'),
+          subtitle: const Text(
+              'Pings github.com once a day to check for new releases. '
+              '"View" opens the release page in browser; install is manual.'),
+          secondary: const Icon(Icons.system_update_alt),
+          value: _autoCheckUpdates,
+          onChanged: _loaded
+              ? (val) {
+                  setState(() => _autoCheckUpdates = val);
+                  unawaited(SettingsStorage.setAutoCheckUpdates(val));
+                }
+              : null,
+        ),
+        const _UpdateStatusRow(),
         const Divider(height: 32),
         Text('Feedback', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
@@ -566,6 +590,91 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         color: ok ? Colors.green : Theme.of(context).colorScheme.error,
       ),
       title: Text(ok ? okLabel : badLabel),
+    );
+  }
+}
+
+/// "Last check: …" + Check now-кнопка под Updates-toggle. Подписан на
+/// `UpdateChecker.latest` чтобы при успешном fetch'е результат сразу
+/// отрендерился.
+class _UpdateStatusRow extends StatefulWidget {
+  const _UpdateStatusRow();
+
+  @override
+  State<_UpdateStatusRow> createState() => _UpdateStatusRowState();
+}
+
+class _UpdateStatusRowState extends State<_UpdateStatusRow> {
+  DateTime? _lastCheck;
+  bool _checking = false;
+  String? _resultLine;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadLastCheck());
+  }
+
+  Future<void> _loadLastCheck() async {
+    final dt = await SettingsStorage.getLastUpdateCheck();
+    if (mounted) setState(() => _lastCheck = dt);
+  }
+
+  Future<void> _checkNow() async {
+    setState(() {
+      _checking = true;
+      _resultLine = null;
+    });
+    final result = await UpdateChecker.I.forceCheck(
+      localVersion: AboutScreen.versionString,
+    );
+    final dt = await SettingsStorage.getLastUpdateCheck();
+    if (!mounted) return;
+    setState(() {
+      _checking = false;
+      _lastCheck = dt;
+      switch (result.kind) {
+        case UpdateCheckKind.newer:
+          _resultLine = '${result.info!.tag} available';
+        case UpdateCheckKind.upToDate:
+          _resultLine = "You're up to date";
+        case UpdateCheckKind.failed:
+          _resultLine = 'Check failed: ${result.message ?? ''}';
+        case UpdateCheckKind.skipped:
+          _resultLine = null;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final lastCheckText = _lastCheck == null
+        ? 'Last check: never'
+        : 'Last check: ${relativeTime(DateTime.now(), _lastCheck!)}';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              _resultLine ?? lastCheckText,
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
+          ),
+          if (_checking)
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            TextButton(
+              onPressed: _checkNow,
+              child: const Text('Check now'),
+            ),
+        ],
+      ),
     );
   }
 }

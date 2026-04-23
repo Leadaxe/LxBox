@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/relative_time.dart';
+import '../services/update_checker.dart';
+import '../services/url_launcher.dart' as ul;
+
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   static const _version = '1.4.2';
   static const _repoUrl = 'https://github.com/Leadaxe/LxBox';
+
+  /// Public alias for callers (e.g. UpdateChecker / SnackBar) — single
+  /// source of truth for "current version".
+  static const String versionString = _version;
 
   // Заполняются `scripts/build-local-apk.sh` через --dart-define.
   // CI build (без define'ов) → пустые строки → метка "local" не показывается.
@@ -55,7 +63,9 @@ class AboutScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          const _UpdateBlock(),
+          const SizedBox(height: 8),
           Card(
             child: Column(
               children: [
@@ -276,6 +286,126 @@ class _LocalBuildBadge extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// "Latest available" block — pings GitHub Releases (24h cap), shows result
+/// inline + manual "Check now" button. Spec §036.
+class _UpdateBlock extends StatefulWidget {
+  const _UpdateBlock();
+
+  @override
+  State<_UpdateBlock> createState() => _UpdateBlockState();
+}
+
+class _UpdateBlockState extends State<_UpdateBlock> {
+  bool _checking = false;
+  String? _statusLine;
+
+  Future<void> _checkNow() async {
+    setState(() {
+      _checking = true;
+      _statusLine = null;
+    });
+    final result = await UpdateChecker.I.forceCheck(
+      localVersion: AboutScreen.versionString,
+    );
+    if (!mounted) return;
+    setState(() {
+      _checking = false;
+      switch (result.kind) {
+        case UpdateCheckKind.newer:
+          _statusLine = null; // banner-block ниже сам отрисует info
+        case UpdateCheckKind.upToDate:
+          _statusLine = "You're up to date";
+        case UpdateCheckKind.failed:
+          _statusLine = 'Check failed: ${result.message ?? 'unknown error'}';
+        case UpdateCheckKind.skipped:
+          _statusLine = 'Check skipped: ${result.message ?? ''}';
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      child: ValueListenableBuilder<UpdateInfo?>(
+        valueListenable: UpdateChecker.I.latest,
+        builder: (context, info, _) {
+          return Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      info != null ? Icons.system_update_alt : Icons.check_circle_outline,
+                      size: 18,
+                      color: info != null ? cs.primary : cs.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        info != null
+                            ? '${info.tag} available'
+                            : 'No updates pending',
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    if (_checking)
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      TextButton(
+                        onPressed: _checkNow,
+                        child: const Text('Check now'),
+                      ),
+                  ],
+                ),
+                if (info != null) ...[
+                  const SizedBox(height: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 26),
+                    child: Text(
+                      info.publishedAt != null
+                          ? 'Released ${relativeTime(DateTime.now(), info.publishedAt!)}'
+                          : '(cached info)',
+                      style: TextStyle(
+                          fontSize: 12, color: cs.onSurfaceVariant),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () => ul.UrlLauncher.open(info.htmlUrl),
+                      icon: const Icon(Icons.open_in_new, size: 16),
+                      label: const Text('View release'),
+                    ),
+                  ),
+                ],
+                if (_statusLine != null) ...[
+                  const SizedBox(height: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 26),
+                    child: Text(
+                      _statusLine!,
+                      style: TextStyle(
+                          fontSize: 12, color: cs.onSurfaceVariant),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
       ),
     );
   }
