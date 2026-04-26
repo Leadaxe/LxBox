@@ -75,7 +75,7 @@ void main() {
       expect(entry.map['peers'], isList);
     });
 
-    test('exhaustive switch compiles for all 9 variants', () {
+    test('exhaustive switch compiles for all 10 variants', () {
       final specs = <NodeSpec>[
         VlessSpec(
             id: '1', tag: 't', label: 'l', server: 's', port: 1, rawUri: 'u', uuid: 'u'),
@@ -98,6 +98,9 @@ void main() {
         WireguardSpec(
             id: '9', tag: 't', label: 'l', server: 's', port: 51820, rawUri: 'u',
             privateKey: 'pk', localAddresses: const [], peers: const []),
+        NaiveSpec(
+            id: '10', tag: 't', label: 'l', server: 's', port: 443, rawUri: 'u',
+            password: 'p'),
       ];
 
       for (final s in specs) {
@@ -111,6 +114,7 @@ void main() {
           SshSpec() => 'ssh',
           SocksSpec() => 'socks',
           WireguardSpec() => 'wireguard',
+          NaiveSpec() => 'naive',
         };
         expect(p, s.protocol);
       }

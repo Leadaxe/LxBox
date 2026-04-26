@@ -285,6 +285,32 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         obfsPassword: (entry['obfs'] as Map?)?['password']?.toString() ?? '',
         tls: _tlsFromSingbox(entry['tls'], server),
       );
+    case 'naive':
+      if (server.isEmpty || port == 0) return null;
+      final eh = entry['extra_headers'];
+      final extraHeaders = <String, String>{};
+      if (eh is Map) {
+        for (final k in eh.keys) {
+          final v = eh[k];
+          if (v is String) {
+            extraHeaders[k.toString()] = v;
+          } else if (v is List && v.isNotEmpty) {
+            extraHeaders[k.toString()] = v.first.toString();
+          }
+        }
+      }
+      return NaiveSpec(
+        id: newUuidV4(),
+        tag: tag.isEmpty ? 'naive-$server-$port' : tag,
+        label: label,
+        server: server,
+        port: port,
+        rawUri: '',
+        username: entry['username']?.toString() ?? '',
+        password: entry['password']?.toString() ?? '',
+        tls: _tlsFromSingbox(entry['tls'], server),
+        extraHeaders: extraHeaders,
+      );
     case 'tuic':
       if (server.isEmpty || port == 0) return null;
       return TuicSpec(

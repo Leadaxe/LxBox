@@ -274,6 +274,81 @@ String toUriHysteria2(Hysteria2Spec s) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// NaïveProxy
+// ════════════════════════════════════════════════════════════════════════════
+
+/// Charset для имени HTTP-заголовка из DuckSoft de-facto спеки naive URI:
+/// `! # $ % & ' * + - . 0-9 A-Z \ ^ _ ` a-z | ~`. Невалидные пары при
+/// сериализации/десериализации silently дропаются с лог-варном.
+final RegExp _naiveHeaderName =
+    RegExp(r"^[!#$%&'*+\-.0-9A-Z\\^_`a-z|~]+$");
+
+bool isValidNaiveHeaderName(String name) =>
+    name.isNotEmpty && _naiveHeaderName.hasMatch(name);
+
+Outbound emitNaive(NaiveSpec s, TemplateVars vars) {
+  final out = <String, dynamic>{
+    'type': 'naive',
+    'tag': s.tag,
+    'server': s.server,
+    'server_port': s.port,
+  };
+  if (s.username.isNotEmpty) out['username'] = s.username;
+  if (s.password.isNotEmpty) out['password'] = s.password;
+  if (s.extraHeaders.isNotEmpty) {
+    final keys = s.extraHeaders.keys.toList()..sort();
+    final sorted = <String, String>{};
+    for (final k in keys) {
+      sorted[k] = s.extraHeaders[k]!;
+    }
+    out['extra_headers'] = sorted;
+  }
+  out['tls'] = s.tls.toSingbox();
+  if (s.chained != null) out['detour'] = s.chained!.tag;
+  return Outbound(out);
+}
+
+String toUriNaive(NaiveSpec s) {
+  // userinfo: оба пусто → нет; только password → password@; оба → user:pass@.
+  final hasUser = s.username.isNotEmpty;
+  final hasPass = s.password.isNotEmpty;
+  final ui = !hasUser && !hasPass
+      ? ''
+      : (!hasUser
+          ? '${encodeParam(s.password)}@'
+          : (!hasPass
+              ? '${encodeParam(s.username)}@'
+              : '${encodeParam(s.username)}:${encodeParam(s.password)}@'));
+
+  final q = <String, String>{};
+  if (s.extraHeaders.isNotEmpty) {
+    q['extra-headers'] = serializeNaiveExtraHeaders(s.extraHeaders);
+  }
+
+  final host = _wrapIpv6(s.server);
+  // port=443 опускаем — соответствует канонической форме DuckSoft.
+  final portPart = s.port == 443 ? '' : ':${s.port}';
+  final qs = buildQuery(q);
+  final frag = encodeFragment(s.label);
+  return 'naive+https://$ui$host$portPart'
+      '${qs.isEmpty ? '' : '?$qs'}'
+      '${frag.isEmpty ? '' : '#$frag'}';
+}
+
+/// `Header1: Value1\r\nHeader2: Value2` (отсортировано по ключу). Невалидные
+/// имена дропаются с warning, чтобы encoder оставался robust.
+String serializeNaiveExtraHeaders(Map<String, String> headers) {
+  if (headers.isEmpty) return '';
+  final keys = headers.keys.toList()..sort();
+  final parts = <String>[];
+  for (final k in keys) {
+    if (!isValidNaiveHeaderName(k)) continue;
+    parts.add('$k: ${headers[k]!}');
+  }
+  return parts.join('\r\n');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // TUIC v5
 // ════════════════════════════════════════════════════════════════════════════
 

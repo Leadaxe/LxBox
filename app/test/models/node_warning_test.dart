@@ -34,6 +34,7 @@ void main() {
         MissingFieldWarning() => 'field',
         DeprecatedFlowWarning() => 'flow',
         InsecureTlsWarning() => 'tls',
+        NaiveBuildTagWarning() => 'naive_build',
       };
       expect(label, 'transport');
     });
