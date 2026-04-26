@@ -20,7 +20,8 @@ L×Box parses proxy URIs from subscriptions and converts them into [sing-box](ht
 4. [Trojan](#3-trojan)
 5. [Shadowsocks](#4-shadowsocks)
 6. [Hysteria2](#5-hysteria2)
-7. [SSH](#6-ssh)
+7. [NaïveProxy](#55-naïveproxy)
+8. [SSH](#6-ssh)
 8. [SOCKS](#7-socks)
 9. [WireGuard](#8-wireguard)
 10. [WireGuard INI Config](#9-wireguard-ini-config)
@@ -465,6 +466,71 @@ Both `hysteria2://` and `hy2://` schemes are supported (the latter is normalized
 ### Reference
 
 - sing-box outbound: https://sing-box.sagernet.org/configuration/outbound/hysteria2/
+
+---
+
+## 5.5 NaïveProxy
+
+### URI Format
+
+```
+naive+https://<user>:<pass>@<host>:<port>/?<params>#<label>
+```
+
+Following the [DuckSoft 2020 de-facto specification](https://gist.github.com/DuckSoft/ca03913b0a26fc77a1da4d01cc6ab2f1) (used by NekoBox, NaiveGUI, v2rayN, Hiddify).
+
+| Component | Purpose | Default |
+|-----------|---------|---------|
+| `host` | Server address (FQDN or IP, IPv6 in brackets) | required |
+| `port` | TCP port | `443` |
+| userinfo: `user:pass` | HTTP Basic credentials | optional |
+| userinfo: `pass` (no colon) | Treated as **password-only** auth | optional |
+| Query: `extra-headers=<urlencoded>` | `Header1: Value1\r\nHeader2: Value2` after URL-decoding (`\r\n` → `%0D%0A`, `:` → `%3A`) | empty |
+| Query: `padding=true\|false` | **Ignored with log warning** — no sing-box equivalent | n/a |
+| Fragment `#label` | Display name (UTF-8, URL-decoded) | derived from `host:port` |
+
+### Examples
+
+```
+naive+https://user:pass@server.example.com:443/?padding=false#JP-01
+naive+https://server.example.com:8443                                      # anonymous
+naive+https://onlypass@server.example.com                                  # password-only
+naive+https://u:p@host?extra-headers=X-User%3Aalice%0D%0AX-Token%3Axyz
+naive+https://u:p@host:443/?extra-headers=X-Forwarded-Proto%3Ahttps#%E2%9C%85%20DE
+```
+
+### Generated sing-box Outbound
+
+```json
+{
+  "type": "naive",
+  "tag": "<label or naive-host-port>",
+  "server": "<host>",
+  "server_port": <port>,
+  "username": "<user>",
+  "password": "<pass>",
+  "extra_headers": { "Header": "Value" },
+  "tls": { "enabled": true, "server_name": "<host>" }
+}
+```
+
+### Behaviour Notes
+
+- TLS is **always** enabled — `tls.enabled = true`, `tls.server_name = host`. NaïveProxy without TLS is meaningless.
+- The naive outbound in sing-box rejects `alpn`, `insecure`, `utls`, `reality`, `min_version`, `cipher_suites`, `fragment`. The parser deliberately leaves them unset; users wanting custom TLS edit the JSON directly via the config editor (spec 007).
+- `network`/`udp_over_tcp`/`quic` fields are **not** emitted in v1 — the URI standard does not carry them and naive QUIC mode is deferred (see spec 037 §10).
+- `extra_headers` keys are sorted lexicographically when emitted to JSON or back to URI form, for deterministic round-trip.
+- `padding` is silently dropped because sing-box has no corresponding option.
+
+### Build-tag Requirement
+
+NaïveProxy outbound is gated behind the sing-box build tag `with_naive_outbound`. The libbox AAR shipped via `com.github.singbox-android:libbox` (1.12.x / 1.13.x main variant, `androidApi=23+`) **includes** this tag — see [spec 037 §2](spec/features/037%20naive%20proxy/spec.md#2-build-tag-в-libbox--проверено) for verification details. If a future libbox upgrade ships the legacy variant without naive, `BoxVpnClient` surfaces a `NaiveBuildTagWarning` per node when sing-box returns the upstream error string `naive outbound is not included in this build, rebuild with -tags with_naive_outbound`.
+
+### Reference
+
+- sing-box outbound: https://sing-box.sagernet.org/configuration/outbound/naive/
+- DuckSoft URI spec: https://gist.github.com/DuckSoft/ca03913b0a26fc77a1da4d01cc6ab2f1
+- LxBox spec: [`docs/spec/features/037 naive proxy/spec.md`](spec/features/037%20naive%20proxy/spec.md)
 
 ---
 

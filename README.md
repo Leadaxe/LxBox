@@ -38,7 +38,7 @@ Android VPN client powered by [sing-box](https://sing-box.sagernet.org/). Multi-
 
 Add servers by subscription URL, direct proxy link, WireGuard URI/INI, or raw sing-box JSON outbound. Smart-paste dialog auto-detects format and previews the content. Enable/disable subscriptions without deleting. Offline rehydrate — nodes restored from body cache after app restart. Per-subscription settings for detour servers.
 
-- **9 protocols**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, SSH, SOCKS, WireGuard
+- **10 protocols**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard
 - Formats: Base64, Xray JSON Array (chained proxy), plain text, raw sing-box JSON
 - Per-subscription **Update interval** picker (1/3/6/12/24/48/72/168h), honors `profile-update-interval` header
 - Subscription row subtitle: `124 nodes · 🔄 24h · 🕐 3h ago · (2 fails)`
@@ -189,6 +189,7 @@ View and edit raw sing-box JSON config. Pretty-printed display with copy button.
 | Shadowsocks | `ss://` (SIP002 + legacy + SS2022) | TCP, UDP, SIP003 plugins |
 | Hysteria2 | `hy2://` / `hysteria2://` | QUIC, Salamander obfs |
 | **TUIC v5** | `tuic://` | QUIC, BBR/CUBIC/NewReno, zero-RTT |
+| **NaïveProxy** | `naive+https://` | Real Chrome TLS via cronet, `extra-headers` |
 | SSH | `ssh://` | TCP, host key / password / private key |
 | SOCKS | `socks://` / `socks5://` | TCP, auth |
 | WireGuard | `wireguard://`, INI config | UDP, multi-peer |

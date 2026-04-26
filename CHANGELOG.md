@@ -6,6 +6,14 @@
 
 ---
 
+## [1.6.0] — 2026-04-25
+
+### Added
+
+- **NaïveProxy** ([§037](docs/spec/features/037%20naive%20proxy/spec.md), [#2](https://github.com/Leadaxe/LxBox/issues/2)) — парсер `naive+https://` URIs (DuckSoft de-facto), генератор sing-box `type: "naive"` outbound'а, share-URI round-trip. Поддержка `user:pass`/password-only/anonymous auth, `extra-headers` (CRLF-encoded HTTP headers с lex-сортировкой), UTF-8 fragment labels, `padding=…` silent-drop с лог-варном. TLS-блок ограничен `enabled`+`server_name` (sing-box naive outbound отвергает `alpn`/`utls`/`insecure`/`reality`). 10-й типизированный протокол в Parser v2. Cronet/`with_naive_outbound` уже вшит в текущий `libbox.aar` — нет APK-size impact. Defensive `NaiveBuildTagWarning` ловит будущие libbox-регрессии. 36 новых тестов (parser 19 + emit/round-trip 17), общий suite 373 → 409 ✓.
+
+---
+
 ## [1.5.0] — 2026-04-23
 
 ### Breaking
