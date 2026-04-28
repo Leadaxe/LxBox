@@ -37,6 +37,19 @@
 
 Способ детектить: `VpnService.prepare(applicationContext) == null` означает разрешение есть.
 
+#### UX первого запуска (видно пользователю)
+
+Юзер ожидает, что tile/shortcut работают «без открытия app'а», но первый раз — это API-ограничение Android — open неизбежен ради consent-диалога. Чтобы это перестало быть сюрпризом:
+
+- Перед `startActivityAndCollapse` (tile) показать **системный toast** на самом TileService:
+  - `Toast.makeText(this, R.string.qc_first_open, Toast.LENGTH_SHORT).show()`
+  - Текст (`strings.xml`): `qc_first_open` = «Opening L×Box for VPN permission (one-time)»
+- Аналогично перед `startActivity` из shortcut-handler'а в `MainActivity.handleQuickAction` для пути `prepare() != null` — сразу показать toast `qc_first_open`, открыть consent.
+- После `RESULT_OK` activity завершается через `finish()` (если стартовали с `extras.action`), чтобы юзер вернулся обратно на хоум — именно того поведения он ожидал от tile/shortcut: «не открыть app, а подключить».
+- Если юзер нажал **Cancel** в системном consent-диалоге → toast `qc_consent_denied` = «VPN permission denied. Open L×Box to retry.», `finish()`. Не пытаемся повторно показывать диалог из tile/shortcut — это раздражает.
+
+Все последующие тапы (после успешного consent'а) идут напрямую через `BoxVpnService.start(context)` без UI.
+
 #### Status sync
 
 И tile, и shortcut должны знать реальный статус VPN. Используем `BoxVpnService.currentStatus` (volatile mirror, уже добавлен в спеке `031 debug api`-сессии). Tile обновляется реактивно: при `setStatus(newStatus)` дёргаем `TileService.requestListeningState(...)` чтобы система перепросила tile state.
