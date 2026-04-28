@@ -72,6 +72,17 @@ One-tap VPN start/stop with animated status chip. Choose proxy group, sort nodes
 </details>
 
 <details>
+<summary><strong>Quick Connect</strong> — toggle VPN without opening the app (v1.6.0)</summary>
+
+Two paths to flip the VPN on/off without launching the UI: a Quick Settings tile in the status-bar shade and a long-press shortcut on the home-screen icon.
+
+- **Quick Settings tile** — pull down the shade, edit tiles, drag **L×Box** in. Tap = on/off, live `Connected` / `Disconnected` / `Connecting…` / `Stopping…` subtitle. Add via App Settings → General → Quick connect → `Add` (system prompt on Android 13+, manual instructions on older).
+- **Home-screen shortcut** — long-press the icon → **Toggle VPN**.
+- First tap shows a one-shot toast and flashes `MainActivity` for the system VPN consent dialog (Android API requires Activity context); subsequent taps go directly to the service. After consent the activity finishes itself — no UI flash on regular use.
+- Tile state survives OOM-kill of the service: `currentStatus` is reset on `onDestroy` so the tile won't lie «Connected».
+</details>
+
+<details>
 <summary><strong>Routing</strong> — unified rule model (v1.4.0)</summary>
 
 Block ads, route Russian domains directly, send BitTorrent through specific proxy, route per-app, match private IPs. Every user rule goes through a single `CustomRule` model with all match fields in parallel (OR within category, AND across — per sing-box default rule formula).

@@ -159,6 +159,32 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     await _vpn.setBackgroundMode(mode);
   }
 
+  /// §032 Quick Connect — кнопка «Add tile» в General-табе.
+  /// На API 33+ система сама покажет prompt; на более старых — даём
+  /// текстовую инструкцию (drag через шторку).
+  Future<void> _addQuickSettingsTile() async {
+    final result = await _vpn.requestAddTile();
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final msg = switch (result) {
+      'added' => 'Tile added to Quick Settings.',
+      'already' => 'Tile is already in Quick Settings.',
+      'dismissed' => 'Add tile dismissed.',
+      'unsupported' =>
+        'Your Android version doesn\'t support an in-app prompt. '
+            'Pull down the status bar → edit tiles → drag L×Box to active tiles.',
+      'no_activity' => 'Cannot show prompt right now — try again.',
+      _ => 'Could not request tile add ($result). '
+            'Pull down the status bar → edit tiles → drag L×Box manually.',
+    };
+    final duration = (result == 'unsupported' ||
+            result.startsWith('error') ||
+            result == 'no_activity')
+        ? const Duration(seconds: 6)
+        : const Duration(seconds: 3);
+    messenger.showSnackBar(SnackBar(content: Text(msg), duration: duration));
+  }
+
   Future<void> _refreshBatteryStatus() async {
     final battery = await _vpn.isIgnoringBatteryOptimizations();
     final notifications = await _vpn.areNotificationsEnabled();
@@ -288,6 +314,26 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
             setState(() => _autoRebuild = val);
             unawaited(SettingsStorage.setVar('auto_rebuild', val.toString()));
           } : null,
+        ),
+        const Divider(height: 32),
+        Text('Quick connect', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        ListTile(
+          leading: const Icon(Icons.dashboard_customize_outlined),
+          title: const Text('Quick Settings tile'),
+          subtitle: const Text(
+              'Add to status-bar shade for one-tap toggle. '
+              'Android 13+ shows a system prompt; on older versions edit the shade manually.'),
+          trailing: TextButton(
+            onPressed: () => unawaited(_addQuickSettingsTile()),
+            child: const Text('Add'),
+          ),
+        ),
+        const ListTile(
+          leading: Icon(Icons.touch_app_outlined),
+          title: Text('Home-screen shortcut'),
+          subtitle: Text(
+              'Long-press the L×Box icon on your home screen → choose "Toggle VPN".'),
         ),
         const Divider(height: 32),
         Text('Subscriptions', style: Theme.of(context).textTheme.titleMedium),

@@ -1,6 +1,6 @@
 # L×Box v1.6.0
 
-Protocol expansion: NaïveProxy joins the supported list.
+Two user-facing wins: NaïveProxy joins the supported protocol list, and **Quick Connect** — a Quick Settings tile and a home-screen shortcut — lets you toggle the VPN without opening the app. Plus a critical fix for VLESS subscriptions that were crashing the libbox.so on connect.
 
 **Quick links:**
 [✨ Highlights](#-highlights) ·
@@ -27,6 +27,15 @@ Protocol expansion: NaïveProxy joins the supported list.
 - `naive+quic://` URIs and the `quic`/`quic_congestion_control` outbound fields are deferred to a future release — there is no stable URI standard for them yet (spec 037 §10).
 - Defensive `NaiveBuildTagWarning` is wired up: if a future libbox upgrade ever lands without the `with_naive_outbound` tag, sing-box will return `naive outbound is not included in this build, rebuild with -tags with_naive_outbound`, which we surface as a per-node UI warning rather than a silent failure.
 
+- **Quick Connect: Quick Settings tile + home-screen shortcut** ([§032](docs/spec/features/032%20quick%20connect/spec.md), [#1](https://github.com/Leadaxe/LxBox/issues/1), [task 014](docs/spec/tasks/014-quick-connect-tile-shortcut.md)) — two ways to toggle the VPN without opening the app:
+
+  - **Quick Settings tile**. Pull down the status bar → edit tiles → drag **L×Box** into the active set. Tap = toggle on/off; the tile shows live state (`Connected` / `Disconnected` / `Connecting…` / `Stopping…`) synced from `BoxVpnService.setStatus` via `TileService.requestListeningState`. App Settings → General → **Quick connect** has an `Add` button that on Android 13+ shows a system prompt (`StatusBarManager.requestAddTileService`); on older versions it falls back to a snackbar with manual instructions. OEM quirks (ColorOS / MIUI silently dropping the prompt) are surfaced as a snackbar with the same fallback.
+  - **Home-screen shortcut**. Long-press the L×Box icon on your launcher → tap **Toggle VPN**. Static `res/xml/shortcuts.xml` with `extra action=toggle`.
+
+  The first time a tile or shortcut tap is made, `MainActivity` flashes briefly to host the system VPN consent dialog (`VpnService.prepare(...)` is an Activity-only API). The user sees a one-shot toast «Opening L×Box for VPN permission (one-time)». After consent, activity calls `finish()` and you land back on the home screen. Every subsequent tap goes straight to `BoxVpnService.start/stop` with no UI flash. If the user cancels the consent dialog, a follow-up toast «VPN permission denied. Open L×Box to retry.» appears once and the activity exits — no re-prompting from the tile.
+
+  Edge cases: taps during transient `Starting`/`Stopping` are ignored (no race); on OOM-kill of the service `currentStatus` is reset to `Stopped` in `onDestroy` so the tile won't lie «Connected» on the next bind.
+
 ## 🧪 Tests
 
 - `test/parser/uri_naive_test.dart` — 19 cases: canonical / default-port / password-only / anonymous / extra-headers parsing / invalid header drop / padding ignored / unknown query keys / UTF-8 fragment / IPv6 host / dispatcher routing / bare `naive://` rejection.
@@ -44,7 +53,7 @@ Protocol expansion: NaïveProxy joins the supported list.
 
 ## 🇷🇺 L×Box v1.6.0 на русском
 
-Релиз про расширение списка протоколов: добавлен **NaïveProxy** ([§037](docs/spec/features/037%20naive%20proxy/spec.md), [#2](https://github.com/Leadaxe/LxBox/issues/2)).
+Релиз про две вещи: добавлен 10-й протокол **NaïveProxy** ([§037](docs/spec/features/037%20naive%20proxy/spec.md), [#2](https://github.com/Leadaxe/LxBox/issues/2)) и **Quick Connect** — плитка в шторке + ярлык на иконке для toggle VPN без открытия app'а ([§032](docs/spec/features/032%20quick%20connect/spec.md), [#1](https://github.com/Leadaxe/LxBox/issues/1)). Плюс критический фикс падения libbox.so на VLESS-подписках.
 
 ### Что работает
 
@@ -66,6 +75,19 @@ Protocol expansion: NaïveProxy joins the supported list.
 - Кастомизация TLS через URI не поддерживается (cronet всё равно использует Chrome-стек) — кому нужно, правит JSON в редакторе.
 - `naive+quic://` отложен — стандарта URI для QUIC-варианта пока нет, sing-box outbound в текущих сборках работает HTTPS+TCP через cronet.
 - libbox AAR который мы тянем (`singbox-android/libbox`, main `androidApi=23+` вариант) уже включает `with_naive_outbound` — APK не вырос. Будущие апгрейды защищены runtime-warning'ом, если когда-нибудь регрессирует.
+
+### Quick Connect (§032, [#1](https://github.com/Leadaxe/LxBox/issues/1))
+
+Долгожданный запрос: toggle VPN без открытия приложения. Теперь два способа:
+
+- **Плитка в шторке (Quick Settings).** Потяни статус-бар → редактирование плиток → перетащи **L×Box** в активные. Тап = toggle on/off, плитка показывает `Connected` / `Disconnected` / `Connecting…` / `Stopping…` синхронно с реальным сервисом. На Android 13+ App Settings → General → **Quick connect** → `Add` показывает системный prompt от `StatusBarManager.requestAddTileService` (на старых Android и проблемных OEM — текстовая инструкция в snackbar).
+- **Ярлык на хоум-скрине.** Long-press на иконку L×Box → выбери **Toggle VPN**.
+
+Первый раз tile или shortcut коротко открывает приложение — это API-ограничение Android: системный VPN consent-диалог можно показать только из Activity. Ты увидишь toast «Opening L×Box for VPN permission (one-time)», диалог, после OK — VPN запустится и activity сама закроется (вернёшься на хоум). Все следующие тапы идут напрямую в сервис без UI-вспышки. Если отказался от consent'а — toast «VPN permission denied. Open L×Box to retry.» и activity тоже закрывается (не пытаемся перепрашивать из шторки).
+
+Edge cases: тап во время `Starting`/`Stopping` молча игнорится; если сервис умер от OOM — `currentStatus` сбрасывается, плитка не врёт «Connected» при следующем bind'е.
+
+См. [task 014](docs/spec/tasks/014-quick-connect-tile-shortcut.md) с разбором реализации и smoke-теста.
 
 ### Тесты
 

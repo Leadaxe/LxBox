@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.VpnService
+import android.os.Build
 import android.util.Log
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -219,6 +220,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // если прямой action не найден OEM).
                 result.success(openNotificationSettings())
             }
+            "requestAddTile" -> {
+                // §032 Quick Connect. API 33+ позволяет приложению попросить
+                // систему показать prompt «Add L×Box to Quick Settings?».
+                // На API < 33 возвращаем "unsupported" — Dart-сторона покажет
+                // текстовую инструкцию вместо кнопки.
+                requestAddQuickSettingsTile(result)
+            }
             "showToast" -> {
                 // §031 Debug API. Вызов со стороны Dart через
                 // /action/toast?msg=...&duration=short|long. Безопасно на
@@ -299,6 +307,62 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 primaryAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 primaryWithPackage = true,
             )
+        }
+    }
+
+    /// API 33+ — попросить систему показать «Add tile to Quick Settings»
+    /// prompt. Async через Consumer-callback системы, success() в Dart
+    /// идёт ровно один раз. Возможные значения:
+    ///   "added"        — юзер согласился
+    ///   "already"      — tile уже в шторке
+    ///   "dismissed"    — юзер отказался
+    ///   "unsupported"  — API < 33
+    ///   "no_activity"  — нет attached activity
+    ///   "error: ..."   — exception от системы
+    private fun requestAddQuickSettingsTile(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            result.success("unsupported")
+            return
+        }
+        val act = activity
+        if (act == null) {
+            result.success("no_activity")
+            return
+        }
+        try {
+            val sbm = act.getSystemService(android.app.StatusBarManager::class.java)
+            if (sbm == null) {
+                result.success("error: status_bar_unavailable")
+                return
+            }
+            val component = android.content.ComponentName(
+                context, com.leadaxe.lxbox.vpn.LxBoxTileService::class.java
+            )
+            val icon = android.graphics.drawable.Icon.createWithResource(
+                context, android.R.drawable.ic_lock_lock
+            )
+            // Защита от двойного success() если система зовёт consumer
+            // несколько раз (наблюдалось на отдельных OEM).
+            val replied = java.util.concurrent.atomic.AtomicBoolean(false)
+            sbm.requestAddTileService(
+                component,
+                "L×Box",
+                icon,
+                { runnable -> mainHandler.post(runnable) },
+                { code ->
+                    if (!replied.compareAndSet(false, true)) return@requestAddTileService
+                    val mapped = when (code) {
+                        android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED -> "added"
+                        android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED -> "already"
+                        android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED -> "dismissed"
+                        else -> "error: result=$code"
+                    }
+                    mainHandler.post { result.success(mapped) }
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "requestAddTile failed", e)
+            result.success("error: ${e.message}")
         }
     }
 

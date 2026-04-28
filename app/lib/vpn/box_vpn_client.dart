@@ -155,6 +155,18 @@ class BoxVpnClient {
     await _methods.invokeMethod<void>('setBackgroundMode', {'mode': mode});
   }
 
+  /// §032 Quick Connect — попросить систему добавить QS tile в шторку (API 33+).
+  /// Возвращает короткий статус-стринг от native:
+  ///   - `added` / `already` / `dismissed` — нормальный исход prompt'а
+  ///   - `unsupported` — устройство ниже API 33, юзеру показываем текстовую
+  ///     инструкцию вместо кнопки
+  ///   - `no_activity` / `error: ...` — внутренние сбои, в UI равносильно
+  ///     «не получилось, попробуй вручную»
+  Future<String> requestAddTile() async {
+    final s = await _methods.invokeMethod<String>('requestAddTile');
+    return s ?? 'error: null';
+  }
+
   /// Stream of status events: {"status": "Started"|"Starting"|"Stopped"|"Stopping"}
   ///
   /// **Важно:** shared broadcast stream, один `receiveBroadcastStream()` на

@@ -663,6 +663,26 @@ HomeScreen
 
 ---
 
+## Known limitations
+
+### Config Editor — one-way pipeline (issue [#3](https://github.com/Leadaxe/LxBox/issues/3))
+
+Source of truth для всех экранов настроек (Subscriptions, Routing, DNS, VPN settings, App settings) — **structured app state** (`SubscriptionEntry[]`, `NodeSpec`, `CustomRule[]`, `SettingsStorage`). [`buildConfig`](../app/lib/services/builder/build_config.dart) собирает sing-box JSON из этого состояния, поток односторонний:
+
+```
+state ──buildConfig──▶ configRaw ──save──▶ libbox
+```
+
+Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`](../app/lib/controllers/home_controller.dart)) сохраняет введённый JSON в sing-box и в `state.configRaw`, но **не парсит его обратно в models**. Поэтому:
+
+- Ручные правки в JSON не видны в menu screens — state о них не знает.
+- Любое изменение в UI вызывает `buildConfig` поверх state и затирает manual edits.
+- Connection statistics видят правки, потому что sing-box рантаймится с тем JSON'ом, что в editor'е сохранён.
+
+Полноценный round-trip требует sing-box JSON → state parser'а покрывающего все формы outbound'ов / routing rules / DNS servers / inbound configs. Это эффективно вторая product surface, в near-term roadmap не входит. Mitigations для пользователей: выражать кастомизацию через **Routing → Custom rules** (state-bound, выживают пересборку); хранить «чистый» JSON-конфиг отдельно и переподавать его через editor после auto-update подписок.
+
+---
+
 ## Feature Specs
 
 Живут в [`docs/spec/features/`](./spec/features/). Каждая фича — папка `NNN name/spec.md`:

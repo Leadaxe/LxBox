@@ -197,6 +197,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             runCatching { unregisterReceiver(receiver) }
             receiverRegistered = false
         }
+        // Если сервис умер не через doStop (OOM, system kill в фоне),
+        // currentStatus может остаться Started — tile тогда соврёт.
+        // Сбрасываем здесь как страховка, и просим перерисовать tile.
+        if (currentStatus != VpnStatus.Stopped) {
+            currentStatus = VpnStatus.Stopped
+            LxBoxTileService.refreshTile(applicationContext)
+        }
         super.onDestroy()
     }
 
@@ -378,6 +385,9 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
                 if (error != null) putExtra("error", error)
             }
         )
+        // Просим систему пере-bind'ить QS tile если он добавлен в шторку.
+        // No-op если tile не в шторке / TileService ещё не bind'ился.
+        LxBoxTileService.refreshTile(applicationContext)
     }
 
     // -------------------------------------------------------------------------

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="toggle_vpn"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_toggle_short"
+        android:shortcutLongLabel="@string/shortcut_toggle_long">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:targetPackage="com.leadaxe.lxbox"
+            android:targetClass="com.leadaxe.lxbox.MainActivity">
+            <extra android:name="action" android:value="toggle" />
+        </intent>
+    </shortcut>
+</shortcuts>

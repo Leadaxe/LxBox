@@ -2,8 +2,8 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft |
-| Дата | 2026-04-20 |
+| Статус | Done (MVP) — реализовано в v1.6.0, см. [task 014](../../tasks/014-quick-connect-tile-shortcut.md) |
+| Дата | 2026-04-20 (Draft) → 2026-04-28 (реализация) |
 | Зависимости | `BoxVpnService` (native VPN lifecycle), `MainActivity`, AndroidManifest |
 
 ## Цель

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="qc_first_open">Opening L×Box for VPN permission (one-time)</string>
+    <string name="qc_consent_denied">VPN permission denied. Open L×Box to retry.</string>
+    <string name="shortcut_toggle_short">Toggle VPN</string>
+    <string name="shortcut_toggle_long">Toggle VPN</string>
+</resources>
