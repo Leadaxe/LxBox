@@ -12,6 +12,10 @@
 
 - **NaïveProxy** ([§037](docs/spec/features/037%20naive%20proxy/spec.md), [#2](https://github.com/Leadaxe/LxBox/issues/2)) — парсер `naive+https://` URIs (DuckSoft de-facto), генератор sing-box `type: "naive"` outbound'а, share-URI round-trip. Поддержка `user:pass`/password-only/anonymous auth, `extra-headers` (CRLF-encoded HTTP headers с lex-сортировкой), UTF-8 fragment labels, `padding=…` silent-drop с лог-варном. TLS-блок ограничен `enabled`+`server_name` (sing-box naive outbound отвергает `alpn`/`utls`/`insecure`/`reality`). 10-й типизированный протокол в Parser v2. Cronet/`with_naive_outbound` уже вшит в текущий `libbox.aar` — нет APK-size impact. Defensive `NaiveBuildTagWarning` ловит будущие libbox-регрессии. 36 новых тестов (parser 19 + emit/round-trip 17), общий suite 373 → 409 ✓.
 
+### Fixed
+
+- **VLESS `packetEncoding` allow-list** — xray-style подписки кладут в URI `packetEncoding=none`, что в outbound JSON уезжает как `"packet_encoding": "none"`. sing-box `vless.NewOutbound` принимает только `xudp`/`packetaddr`/omitted; для любого другого значения зовёт `E.New("unknown packet encoding: ", *string)`, и из-за апстрим-бага в `format.ToString` (свитч по типам не покрывает указатели → `panic("unknown value")`) libbox.so падает целиком — VPN не стартует, не «не подключилось». Видно у пользователей при подключении публичных подписок (например, `BLACK_VLESS_RUS_mobile.txt`). Парсер теперь нормализует на входе по allow-list: `xudp`/`XUDP`/`Xudp` → `xudp`, `PacketAddr` → `packetaddr`, `none` молча дропается, любое неизвестное значение → warning + дроп. Применяется к VLESS URI ([uri_parsers.dart](app/lib/services/parser/uri_parsers.dart)) и sing-box JSON entry ([json_parsers.dart](app/lib/services/parser/json_parsers.dart)); query-key lookup case-insensitive (`packetencoding`/`PacketEncoding` тоже ловится). 9 новых тестов в [vless_test.dart](app/test/parser/vless_test.dart). См. [PROTOCOLS.md → packet_encoding allow-list](docs/PROTOCOLS.md).
+
 ---
 
 ## [1.5.0] — 2026-04-23

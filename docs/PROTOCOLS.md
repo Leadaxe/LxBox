@@ -129,7 +129,7 @@ vless://UUID@host:port?query_params#label
 | Host | `host` | WebSocket Host header / HTTP host |
 | Service name | `serviceName` or `service_name` | gRPC service name |
 | Header type | `headerType` | When `http` with `type=tcp`/`raw`, creates HTTP transport |
-| Packet encoding | `packetEncoding` | Packet encoding mode (e.g. `xudp`) |
+| Packet encoding | `packetEncoding` (case-insensitive) | Allow-list: `xudp` / `packetaddr`. xray-style `none` и любой мусор молча дропаются — sing-box `NewOutbound` принимает только эти два значения, любое другое → panic в libbox. |
 | Insecure | `insecure`, `allowInsecure` | Skip certificate verification |
 
 ### sing-box Outbound Mapping
@@ -182,6 +182,19 @@ vless://UUID@host:port?query_params#label
 - If port is a known plaintext port (80, 8080, 8880, 2052, 2082, 2086, 2095) and no explicit security: no TLS.
 - Otherwise: TLS enabled with UTLS fingerprint (defaults to `random`).
 - Special flow `xtls-rprx-vision-udp443`: normalized to `xtls-rprx-vision` + `packet_encoding: xudp` + `server_port: 443`.
+
+### packet_encoding allow-list
+
+sing-box `vless.NewOutbound` принимает ровно три формы (см. [docs](https://sing-box.sagernet.org/configuration/outbound/vless/)):
+
+| Значение в URI | В outbound JSON | Семантика |
+|----------------|-----------------|-----------|
+| omitted, `""`, `none` | поле не emit'ится | sing-box default |
+| `xudp` / `XUDP` / `Xudp` | `"packet_encoding": "xudp"` | XUDP wrapper (xray) |
+| `packetaddr` / `PacketAddr` | `"packet_encoding": "packetaddr"` | packet-addr (v2ray 5+) |
+| любое другое | поле не emit'ится + warning в лог | защита от libbox panic |
+
+Xray-style подписки (xray-knife и др.) кладут `packetEncoding=none` имея в виду «без encoding». sing-box эту строку не понимает и панически падает в `format.ToString` при попытке отдать ошибку (`E.New` принимает указатель `*string` вместо разыменованной строки — апстрим-баг). L×Box фильтрует на входе по allow-list, чтобы наружу не уезжало невалидных значений.
 
 ### Reference
 

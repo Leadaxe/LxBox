@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
 
+import '../app_log.dart';
+
 /// Максимальная длина URI (защита от мусорных base64-бомб). Совпадает с v1.
 const int maxURILength = 65536;
 
@@ -92,6 +94,45 @@ bool isTlsInsecure(Map<String, String> q) {
     if (v == '1' || v == 'true' || v == 'yes') return true;
   }
   return false;
+}
+
+/// Allow-list нормализации VLESS/VMess `packetEncoding` к sing-box словарю.
+///
+/// Sing-box `vless.NewOutbound` (и VMess аналог) принимает ровно три формы
+/// (https://sing-box.sagernet.org/configuration/outbound/vless/):
+///   - `""` (omitted) — disabled, default
+///   - `"xudp"` — XUDP wrapper
+///   - `"packetaddr"` — packet-addr (v2ray 5+)
+///
+/// Любое другое значение → `E.New("unknown packet encoding: ", ...)` →
+/// panic в `format.ToString` (нативный краш `libbox.so` целиком, не
+/// «не подключилось»). Xray-style подписки кладут `packetEncoding=none`,
+/// имея в виду «без encoding» — для sing-box это семантический эквивалент
+/// omitted, дропаем молча. Регистр нормализуем (xudp/XUDP/Xudp валидны
+/// в URI; sing-box принимает только lowercase).
+///
+/// `tag` — опционально для warning'ов (диагностика проблемной подписки).
+String normalizePacketEncoding(String raw, {String? tag}) {
+  final v = raw.trim().toLowerCase();
+  if (v.isEmpty || v == 'none') return '';
+  if (v == 'xudp' || v == 'packetaddr') return v;
+  AppLog.I.warning(
+    "unknown packetEncoding='$raw'${tag != null ? ' in $tag' : ''} — dropping",
+  );
+  return '';
+}
+
+/// Case-insensitive lookup query-параметра. В подписках `packetEncoding`
+/// встречается в разных регистрах (`packetencoding`, `PacketEncoding`),
+/// `Uri.queryParameters` case-sensitive. Возвращает первое совпадение
+/// или `null`. Точечный helper — общий CI-lookup для всех ключей менять
+/// семантику остальных параметров.
+String? queryParamCI(Map<String, String> q, String key) {
+  final lk = key.toLowerCase();
+  for (final e in q.entries) {
+    if (e.key.toLowerCase() == lk) return e.value;
+  }
+  return null;
 }
 
 /// Reality short-id canonical form: hex-чар (0-9a-f), max 16.

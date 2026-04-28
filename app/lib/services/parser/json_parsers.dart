@@ -229,7 +229,10 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         flow: entry['flow']?.toString() ?? '',
         tls: tls,
         transport: _transportFromSingbox(entry['transport']),
-        packetEncoding: entry['packet_encoding']?.toString() ?? '',
+        packetEncoding: normalizePacketEncoding(
+          entry['packet_encoding']?.toString() ?? '',
+          tag: tag,
+        ),
       );
     case 'vmess':
       if (server.isEmpty || port == 0) return null;

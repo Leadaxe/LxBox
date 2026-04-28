@@ -78,8 +78,12 @@ VlessSpec? parseVless(String uri) {
   if (flow.isEmpty && (q['pbk'] ?? '').trim().isNotEmpty && transport == null) {
     flow = 'xtls-rprx-vision';
   }
-  if (q.containsKey('packetEncoding') && packetEncoding.isEmpty) {
-    packetEncoding = q['packetEncoding']!;
+  // packet_encoding: sing-box принимает только {"", xudp, packetaddr};
+  // xray-style `none` и любой мусор → panic в libbox. Allow-list нормализуем
+  // на входе, чтобы emit'ить безопасно. См. normalizePacketEncoding.
+  if (packetEncoding.isEmpty) {
+    final raw = queryParamCI(q, 'packetEncoding') ?? '';
+    packetEncoding = normalizePacketEncoding(raw, tag: tag);
   }
 
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
