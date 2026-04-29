@@ -138,6 +138,18 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     // Android lifecycle
     // -------------------------------------------------------------------------
 
+    override fun onCreate() {
+        super.onCreate()
+        // Сервис может стартануть в свежем процессе без UI (через QS-tile
+        // или launcher shortcut, после того как Android прибил предыдущий
+        // процесс из-за SIGABRT/OOM). В таком процессе VpnPlugin не
+        // подключается, и `BoxApplication.initialize` сам по себе не
+        // вызовется — а `application` lateinit, libbox setup отсутствует
+        // → onStartCommand упадёт с UninitializedPropertyAccessException.
+        // initialize() идемпотентен (if (initialized) return).
+        BoxApplication.initialize(applicationContext)
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "[vpn] onStartCommand action=${intent?.action} status=${status.name} startId=$startId receiverRegistered=$receiverRegistered")
         notification.show(ConfigManager.notificationTitle, "Starting...")
