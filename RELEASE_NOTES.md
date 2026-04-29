@@ -1,98 +1,97 @@
-# L×Box v1.6.0
+# L×Box v1.5.0
 
-Two user-facing wins: NaïveProxy joins the supported protocol list, and **Quick Connect** — a Quick Settings tile and a home-screen shortcut — lets you toggle the VPN without opening the app. Plus a critical fix for VLESS subscriptions that were crashing the libbox.so on connect.
+Reliability + UX + introspection iteration. Critical fix for Android 9-11 startup. Two new user-facing protocols / shortcuts. Full crash diagnostics.
 
 **Quick links:**
 [✨ Highlights](#-highlights) ·
-[🧪 Tests](#-tests) ·
-[📦 Install](#-install) ·
-[🇷🇺 На русском](#-l×box-v160-на-русском)
+[🐞 Fixes](#-fixes) ·
+[⚠ Breaking](#-breaking) ·
+[🇷🇺 На русском](#-l×box-v150-на-русском)
 
 ---
 
 ## ✨ Highlights
 
-- **NaïveProxy parser, emit, and share-URI round-trip** ([§037](docs/spec/features/037%20naive%20proxy/spec.md), [#2](https://github.com/Leadaxe/LxBox/issues/2)) — subscriptions containing `naive+https://user:pass@host:443/?...#Label` are now parsed into a typed `NaiveSpec`, generated as a sing-box `type: "naive"` outbound, and reversed back to the same URI on **Copy link**. The DuckSoft de-facto URI format is supported in full: anonymous and password-only userinfo, `extra-headers=…` (CRLF-encoded HTTP headers, deterministic lexicographic order), UTF-8 fragment labels, `padding=…` ignored with a log warning. The libbox AAR we ship (`com.github.singbox-android:libbox`, main `androidApi=23+` variant) already bundles the `with_naive_outbound` build tag, so no APK size impact and no native rebuild required.
+### Protocols & connectivity
 
-### Why NaïveProxy
+- **NaïveProxy** ([§037](https://github.com/Leadaxe/LxBox/blob/develop/docs/spec/features/037%20naive%20proxy/spec.md), [#2](https://github.com/Leadaxe/LxBox/issues/2)) — parser for `naive+https://` URIs (DuckSoft format), generator for sing-box `type: "naive"` outbound, share-URI round-trip. 10th typed protocol in Parser v2. Cronet (`with_naive_outbound`) is already bundled in our `libbox.aar`, no APK-size impact.
+- **Quick Connect: QS tile + home-screen shortcut** ([§032](https://github.com/Leadaxe/LxBox/blob/develop/docs/spec/features/032%20quick%20connect/spec.md), [#1](https://github.com/Leadaxe/LxBox/issues/1)) — toggle VPN without opening the app. Tile in the notification shade syncs with `BoxVpnService.currentStatus`; long-press on the launcher icon → **Toggle VPN**. First tap briefly opens the app for the system VPN consent dialog (Android API requirement); subsequent taps go straight to the service.
 
-- Real Chrome TLS fingerprint via cronet/Chromium net-stack — JA3/JA4 indistinguishable from a real browser, harder for fingerprint-based DPI than uTLS approximations.
-- Common in subscription providers oriented at strict-DPI markets — those entries used to be silently dropped by Parser v2, now they land in the node list.
-- Caddy + `forwardproxy` server side is trivial to deploy; users with self-hosted naive can now paste the URI and connect.
+### Diagnostics
 
-### Behavioural notes
+- **Crash diagnostics** ([§038](https://github.com/Leadaxe/LxBox/blob/develop/docs/spec/features/038%20crash%20diagnostics/spec.md)) — four independent post-mortem channels available through one `Share dump` button (⤴ in Debug AppBar) or `GET /diag/dump`:
+  - **A. stderr-redirect** — Go panic stacktrace from libbox/sing-box; written to `filesDir/stderr.log` before SIGABRT, survives the process. New conditional `stderr` tab in Debug screen.
+  - **B. ApplicationExitInfo** (Android 11+) — `getHistoricalProcessExitReasons` lazy-read in DumpBuilder. Reason + tombstone for NATIVE_CRASH or Java stacktrace for CRASH.
+  - **C. Persistent AppLog** — `warning` + `error` levels written to `filesDir/applog.txt` (ring-buffer, 200 entries / 64 KB cap). Loaded on `main()` with `fromPreviousSession=true`, visually marked in UI; survives process restart.
+  - **D. Logcat tail** — `Runtime.exec("logcat", "-d", "-t", 1000, "*:E")` via `ProcessBuilder` (no `READ_LOGS` permission needed; logd UID-filters automatically). Catches `AndroidRuntime FATAL EXCEPTION`, `libc`/`DEBUG`/`tombstoned`, `art`/`linker`. Especially useful when AEI didn't attach trace (Samsung One UI quirk on REASON_CRASH).
+- **Debug API `/diag/*` group** ([§031](https://github.com/Leadaxe/LxBox/blob/develop/docs/spec/features/031%20debug%20api/spec.md)): `/diag/dump`, `/diag/exit-info`, `/diag/logcat`, `/diag/stderr`, `/diag/applog`. Everything available via UI is also accessible over HTTP for adb-driven flows.
+- **Debug API `/backup/*` group** — `GET /backup/export` + `POST /backup/import` для бэкапа/восстановления `{config, vars, server_lists}`. Без диагностического шума и без кешей; совместим с форматом `/diag/dump`. Опции `?merge=` и `?rebuild=` для гибкости restore.
+- **`POST /action/preview-empty-state?on=true|false`** — UI-only override empty-state без потери данных, для скриншотов/regression-теста UX.
 
-- TLS is always enabled (`tls.enabled: true`, `tls.server_name = host`) — naive without TLS is meaningless.
-- The naive outbound in sing-box rejects `alpn`, `insecure`, `utls`, `reality`, `min_version`, `cipher_suites`, `fragment` — the parser deliberately leaves them unset; users who need custom TLS edit the JSON in the config editor.
-- `naive+quic://` URIs and the `quic`/`quic_congestion_control` outbound fields are deferred to a future release — there is no stable URI standard for them yet (spec 037 §10).
-- Defensive `NaiveBuildTagWarning` is wired up: if a future libbox upgrade ever lands without the `with_naive_outbound` tag, sing-box will return `naive outbound is not included in this build, rebuild with -tags with_naive_outbound`, which we surface as a per-node UI warning rather than a silent failure.
+### Home screen polish
 
-- **Quick Connect: Quick Settings tile + home-screen shortcut** ([§032](docs/spec/features/032%20quick%20connect/spec.md), [#1](https://github.com/Leadaxe/LxBox/issues/1), [task 014](docs/spec/tasks/014-quick-connect-tile-shortcut.md)) — two ways to toggle the VPN without opening the app:
+- **First-run empty-state guide** ([task 024](https://github.com/Leadaxe/LxBox/blob/develop/docs/spec/tasks/024-home-empty-state-cta.md)) — на первом запуске (нет конфига) главный экран показывает «Add a server» с крупной круглой `+`-кнопкой → `SubscriptionsScreen`. Никаких disabled-кнопок и догадок куда нажимать.
+- **Tap-to-connect zone** — когда серверы есть но VPN не запущен, центр экрана показывает крупную кликабельную зону «Tap to connect» (play-icon 64dp). Тап стартует VPN — равноценно нажатию Start в верхней панели.
 
-  - **Quick Settings tile**. Pull down the status bar → edit tiles → drag **L×Box** into the active set. Tap = toggle on/off; the tile shows live state (`Connected` / `Disconnected` / `Connecting…` / `Stopping…`) synced from `BoxVpnService.setStatus` via `TileService.requestListeningState`. App Settings → General → **Quick connect** has an `Add` button that on Android 13+ shows a system prompt (`StatusBarManager.requestAddTileService`); on older versions it falls back to a snackbar with manual instructions. OEM quirks (ColorOS / MIUI silently dropping the prompt) are surfaced as a snackbar with the same fallback.
-  - **Home-screen shortcut**. Long-press the L×Box icon on your launcher → tap **Toggle VPN**. Static `res/xml/shortcuts.xml` with `extra action=toggle`.
+### UX & reliability (carryover from earlier dev cycles)
 
-  The first time a tile or shortcut tap is made, `MainActivity` flashes briefly to host the system VPN consent dialog (`VpnService.prepare(...)` is an Activity-only API). The user sees a one-shot toast «Opening L×Box for VPN permission (one-time)». After consent, activity calls `finish()` and you land back on the home screen. Every subsequent tap goes straight to `BoxVpnService.start/stop` with no UI flash. If the user cancels the consent dialog, a follow-up toast «VPN permission denied. Open L×Box to retry.» appears once and the activity exits — no re-prompting from the tile.
+- **Tunnel sleep mode (3-way)** — Settings → Background → «Tunnel sleep mode»: `never` (default; pushes/SIP stay alive at the cost of ~1–3% battery overnight), `lazy` (pause on deep Doze only — old default), `always` (pause on every screen-off, max battery).
+- **Tabbed App Settings** — three tabs: **General** (appearance/behaviour/subscriptions/updates), **Background** (battery/notifications/OEM/sleep mode), **Diagnostics** (permissions summary, Debug API).
+- **Update check on launch** ([§036](https://github.com/Leadaxe/LxBox/blob/develop/docs/spec/features/036%20update%20check/spec.md)) — daily ping to GitHub Releases; SnackBar on a newer tag with **View** / **Not now**. Manual `Check now` from About / Settings bypasses the cap.
+- **Battery-optimization prompt** at startup if not whitelisted (rate-limited to once per 24h).
+- **Notifications status indicator** in Settings → Background (matters for `POST_NOTIFICATIONS` on Android 13+).
 
-  Edge cases: taps during transient `Starting`/`Stopping` are ignored (no race); on OOM-kill of the service `currentStatus` is reset to `Stopped` in `onDestroy` so the tile won't lie «Connected» on the next bind.
+---
 
-## 🧪 Tests
+## 🐞 Fixes
 
-- `test/parser/uri_naive_test.dart` — 19 cases: canonical / default-port / password-only / anonymous / extra-headers parsing / invalid header drop / padding ignored / unknown query keys / UTF-8 fragment / IPv6 host / dispatcher routing / bare `naive://` rejection.
-- `test/models/naive_emit_test.dart` — 17 cases: emit shape (`type`, `extra_headers` field name, no `network` field), TLS block (`enabled` + `server_name`, no `alpn`/`utls`/`insecure`), userinfo encoding, port elision, header sort order, header charset validation, three round-trip stability tests.
-- Sealed exhaustiveness updated in `node_spec_test.dart` and `node_warning_test.dart` (10 protocols, 6 warning types).
-- Suite total: **409** tests (was 373), all green.
+- **`CHANGE_NETWORK_STATE` permission for Android 9-11** ([task 023](https://github.com/Leadaxe/LxBox/blob/develop/docs/spec/tasks/023-change-network-state-permission.md)) — `DefaultNetworkListener` on API 28-30 calls `ConnectivityManager.requestNetwork(...)`, which requires `CHANGE_NETWORK_STATE`. Without it: `SecurityException` → `REASON_CRASH` immediately after VPN consent OK on A50/A10/Y9. On API 31+ a different code path is used (`registerBestMatchingNetworkCallback`) which is why the regression only appeared on Android 9-11 while Android 12+ kept working. Permission is `normal`-level, no runtime prompt, silent migration.
+- **VLESS `packetEncoding` allow-list** ([task 012](https://github.com/Leadaxe/LxBox/blob/develop/docs/spec/tasks/012-vless-packet-encoding-libbox-panic.md)) — xray-style subscriptions encode `packetEncoding=none` in their URIs, which produced `"packet_encoding": "none"` in outbound JSON; sing-box `vless.NewOutbound` only accepts `xudp`/`packetaddr`/omitted and called `E.New("unknown packet encoding: …")`, which crashed libbox via an upstream `format.ToString` bug. Parser now normalises on input: `xudp`/`XUDP` → `xudp`, `PacketAddr` → `packetaddr`, `none` silently dropped, anything else → warning + drop.
+- **Race: `Libbox.newService` before `Libbox.setup` finishes** ([task 027](https://github.com/Leadaxe/LxBox/blob/develop/docs/spec/tasks/027-libbox-init-race-fix.md)) — `BoxApplication.libboxReady: CompletableDeferred<Unit>` barrier; `BoxVpnService` `serviceScope.launch` waits for it before any libbox call. Bonus: libbox `workingDir` moved from external (`getExternalFilesDir(null)`) to internal (`context.filesDir`) — same place where `SettingsStorage` and subscriptions already live; eliminates Knox/SELinux edge cases on Samsung One UI 3.x and EMUI.
+- **Quick Connect class-verification on Android 9-11** ([task 015](https://github.com/Leadaxe/LxBox/blob/develop/docs/spec/tasks/015-android-9-11-quickconnect-regression.md)) — `Tile.subtitle` (API 29+) extracted into a `@RequiresApi(Q)` helper; `LxBoxTileService.refreshTile` and `QuickShortcuts.refresh` gated on API 30+ with outer `try { Throwable }`; all callsites in `setStatus`/`onDestroy`/`initialize` wrapped in `runCatching`. `FOREGROUND_SERVICE_SPECIAL_USE` permission gated to `minSdkVersion="34"`; typed `startForeground` on API 34+.
+
+### Reliability internals
+
+- **`Libbox.newService` / `svc.start` / `serviceScope.launch` catch `Throwable`** ([task 016](https://github.com/Leadaxe/LxBox/blob/develop/docs/spec/tasks/016-libbox-newservice-throwable-catch.md)) — not just `Exception`; `Error` subclasses (OOM, NoClassDefFoundError, VerifyError) now surface through `stopAndAlert(...)` instead of vanishing the process.
+- **`/files/local`** Debug API alias for `/files/external` (legacy). Internal app-scoped storage.
+
+---
+
+## ⚠ Breaking
+
+- **Tunnel sleep mode default flipped: `lazy` → `never`.** Old default paused the tunnel on deep Doze, which broke long-lived TCP sockets and push notifications. New default keeps the tunnel always active (+1–3% battery overnight). Want the old behaviour — Settings → Background → **Tunnel sleep mode → Lazy sleep**.
+
+---
 
 ## 📦 Install
 
 [Latest release on GitHub →](https://github.com/Leadaxe/LxBox/releases/latest)
 
-`apk` is signed with the upload keystore; install over previous L×Box versions in place.
+APK is signed with the upload keystore; install over previous L×Box versions in place.
 
 ---
 
-## 🇷🇺 L×Box v1.6.0 на русском
+## 🇷🇺 L×Box v1.5.0 на русском
 
-Релиз про две вещи: добавлен 10-й протокол **NaïveProxy** ([§037](docs/spec/features/037%20naive%20proxy/spec.md), [#2](https://github.com/Leadaxe/LxBox/issues/2)) и **Quick Connect** — плитка в шторке + ярлык на иконке для toggle VPN без открытия app'а ([§032](docs/spec/features/032%20quick%20connect/spec.md), [#1](https://github.com/Leadaxe/LxBox/issues/1)). Плюс критический фикс падения libbox.so на VLESS-подписках.
+Релиз с критическим фиксом запуска на Android 9-11, новым 10-м протоколом (NaïveProxy), Quick Connect (плитка в шторке + ярлык на иконке), и встроенной диагностикой крашей через 4 канала + HTTP API.
 
-### Что работает
+### Основные фиксы
 
-- В подписках строки `naive+https://user:pass@host:443/?...#Label` (формат DuckSoft, как у NekoBox / NaiveGUI / v2rayN / Hiddify) теперь парсятся в типизированный `NaiveSpec` и попадают в список узлов вместо silent-skip.
-- Генератор конфига выдаёт sing-box outbound `type: "naive"` с правильным TLS-блоком (`enabled: true`, `server_name = host`, без `alpn`/`utls`/`insecure` — naive их отвергает).
-- `Copy link` в context-menu возвращает эквивалентный URI (round-trip с детерминированным порядком extra-headers).
-- Поддерживается аутентификация: `user:pass`, password-only (`onlypass@host`), anonymous.
-- `extra-headers=Header%3AValue%0D%0A...` — парсинг + перепаковка с лекс-сортировкой ключей и валидацией charset'а имени заголовка по DuckSoft-спеке.
+- **Android 9-11 / VPN не запускался** (Samsung A50/A10, Huawei Y9 2018) — в манифесте не хватало `CHANGE_NETWORK_STATE`, который требует `ConnectivityManager.requestNetwork(...)` на API 28-30. На Android 12+ используется другой код-путь, поэтому регрессия проявлялась только на 9-11. Permission `normal`-уровня, без runtime-промпта, миграция silent.
+- **Crash при VLESS-подписке с `packetEncoding=none`** — парсер теперь нормализует на входе по allow-list: `none` тихо дропается, неизвестные значения → warning + дроп.
+- **Race в init libbox** — добавлен барьер `libboxReady: CompletableDeferred<Unit>`, VPN не стартует до готовности sing-box. Заодно libbox перенесён из external в internal storage — там же где подписки и настройки.
+- **Quick Connect class-verification на Android 9-11** — `Tile.subtitle` в `@RequiresApi`-helper, всё gated на API 30+; FGS_SPECIAL_USE permission гейтнут `minSdkVersion="34"`.
 
-### Зачем
+### Новые фичи
 
-- Cronet даёт **настоящий** Chrome TLS-fingerprint — не uTLS-имитация. Для каналов с DPI по JA3/JA4 это качественно стойче, чем vless+vision на проблемных сетях.
-- Подписки от провайдеров (особенно Иран/Китай-направленных) часто содержат naive-узлы вперемешку с vless — раньше LxBox их выкидывал, теперь подхватывает.
-- Сервер на Caddy + `forwardproxy` поднимается тривиально — кто себе уже поставил, может вставить URI и подключаться.
+- **NaïveProxy** ([§037](https://github.com/Leadaxe/LxBox/blob/develop/docs/spec/features/037%20naive%20proxy/spec.md)) — Cronet TLS fingerprint, `naive+https://`-URIs парсятся в подписках в типизированный outbound. Полезно когда DPI ловит uTLS-имитации.
+- **Quick Connect** ([§032](https://github.com/Leadaxe/LxBox/blob/develop/docs/spec/features/032%20quick%20connect/spec.md)) — плитка в шторке + ярлык на лаунчер-иконке. Toggle VPN без открытия app'а.
+- **Crash diagnostics** ([§038](https://github.com/Leadaxe/LxBox/blob/develop/docs/spec/features/038%20crash%20diagnostics/spec.md)) — четыре канала (stderr-redirect / ApplicationExitInfo / persistent AppLog / logcat tail) собираются одной кнопкой ⤴ Share в Debug-экране. Также через HTTP `/diag/*` endpoints.
+- **Update check on launch** ([§036](https://github.com/Leadaxe/LxBox/blob/develop/docs/spec/features/036%20update%20check/spec.md)) — раз в сутки чек GitHub Releases, SnackBar при новой версии.
 
-### Что важно знать
+### Что меняется в поведении
 
-- TLS обязателен — naive без TLS не работает в принципе.
-- Кастомизация TLS через URI не поддерживается (cronet всё равно использует Chrome-стек) — кому нужно, правит JSON в редакторе.
-- `naive+quic://` отложен — стандарта URI для QUIC-варианта пока нет, sing-box outbound в текущих сборках работает HTTPS+TCP через cronet.
-- libbox AAR который мы тянем (`singbox-android/libbox`, main `androidApi=23+` вариант) уже включает `with_naive_outbound` — APK не вырос. Будущие апгрейды защищены runtime-warning'ом, если когда-нибудь регрессирует.
-
-### Quick Connect (§032, [#1](https://github.com/Leadaxe/LxBox/issues/1))
-
-Долгожданный запрос: toggle VPN без открытия приложения. Теперь два способа:
-
-- **Плитка в шторке (Quick Settings).** Потяни статус-бар → редактирование плиток → перетащи **L×Box** в активные. Тап = toggle on/off, плитка показывает `Connected` / `Disconnected` / `Connecting…` / `Stopping…` синхронно с реальным сервисом. На Android 13+ App Settings → General → **Quick connect** → `Add` показывает системный prompt от `StatusBarManager.requestAddTileService` (на старых Android и проблемных OEM — текстовая инструкция в snackbar).
-- **Ярлык на хоум-скрине.** Long-press на иконку L×Box → выбери **Toggle VPN**.
-
-Первый раз tile или shortcut коротко открывает приложение — это API-ограничение Android: системный VPN consent-диалог можно показать только из Activity. Ты увидишь toast «Opening L×Box for VPN permission (one-time)», диалог, после OK — VPN запустится и activity сама закроется (вернёшься на хоум). Все следующие тапы идут напрямую в сервис без UI-вспышки. Если отказался от consent'а — toast «VPN permission denied. Open L×Box to retry.» и activity тоже закрывается (не пытаемся перепрашивать из шторки).
-
-Edge cases: тап во время `Starting`/`Stopping` молча игнорится; если сервис умер от OOM — `currentStatus` сбрасывается, плитка не врёт «Connected» при следующем bind'е.
-
-См. [task 014](docs/spec/tasks/014-quick-connect-tile-shortcut.md) с разбором реализации и smoke-теста.
-
-### Тесты
-
-- 36 новых юнит-тестов: 19 парсер + 17 emit / round-trip.
-- Полный suite: **409** тестов (было 373), всё зелёное.
+- **Tunnel sleep mode default**: `lazy` → `never`. Push'ы и долгоживущие TCP больше не падают при Doze. Старый режим возвращается через Settings → Background.
 
 ### Установка
 
