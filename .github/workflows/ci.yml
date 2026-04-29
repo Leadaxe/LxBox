@@ -1,18 +1,24 @@
 # LxBox — CI/CD
 #
-# 1) Tag push (v*):     checks → build → GitHub Release (draft)
-# 2) workflow_dispatch:  checks → build (optional)
-# 3) push to main / PR: checks only
+# Ветки:
+#   - develop — основная ветка разработки (все feature/fix PR'ы)
+#   - main    — только релизные коммиты (merge из develop + тег vX.Y.Z)
+# См. docs/RELEASE_PROCESS.md для полного протокола.
+#
+# 1) Tag push (v*):            checks → build → GitHub Release → publish-manifest
+# 2) push develop / main:      checks only
+# 3) PR → develop / main:      checks only
+# 4) workflow_dispatch:        checks | build | release (ручной)
 
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     tags:
       - "v*"
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
     inputs:
       run_mode:
