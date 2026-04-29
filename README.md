@@ -72,7 +72,7 @@ One-tap VPN start/stop with animated status chip. Choose proxy group, sort nodes
 </details>
 
 <details>
-<summary><strong>Quick Connect</strong> — toggle VPN without opening the app (v1.6.0)</summary>
+<summary><strong>Quick Connect</strong> — toggle VPN without opening the app (v1.5.0)</summary>
 
 Two paths to flip the VPN on/off without launching the UI: a Quick Settings tile in the status-bar shade and a long-press shortcut on the home-screen icon.
 
