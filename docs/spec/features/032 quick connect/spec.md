@@ -142,16 +142,32 @@ class LxBoxTileService : TileService() {
 
 #### Live update из BoxVpnService
 
-В `setStatus(newStatus)` после `sendBroadcast(...)` добавить:
+`BoxVpnService.setStatus(newStatus)` после `sendBroadcast(...)` зовёт `LxBoxTileService.refreshTile(applicationContext)`. Внутри — **двухступенчатая** перерисовка:
 
-```kotlin
-TileService.requestListeningState(
-  applicationContext,
-  ComponentName(applicationContext, LxBoxTileService::class.java)
-)
-```
+1. **Прямой вызов** `instanceRef.get()?.renderTile()` через main looper. `instanceRef` — `WeakReference<LxBoxTileService>` в companion'е, выставляется в `onStartListening`, чистится в `onStopListening`. Этот путь работает всегда, пока tile bound (шторка открыта или система решила его слушать). Большинство OEM сразу обновляют визуально.
+2. **Fallback** — `TileService.requestListeningState(...)`. Просит систему пере-bind tile, она вызовет `onStartListening` → `renderTile()`. Полезно если instance ещё не bound. На некоторых OEM (наблюдалось на ColorOS) `requestListeningState` молча no-op'ит когда уже считает что слушает — поэтому direct-call идёт первым.
 
-Это попросит систему пере-bind'ить tile (она вызовет `onStartListening` если плитка видна) и тот пересчитает state.
+#### Optimistic onClick
+
+`onClick` рисует плитку **сразу в финальное состояние** (как будто действие уже произошло), не дожидаясь broadcast'а от `BoxVpnService.setStatus`:
+
+| Был (`currentStatus`) | Тап → синхронно | Параллельно |
+|---|---|---|
+| `Stopped` (gray, «Disconnected») | `renderTile(VpnStatus.Started)` → ACTIVE + «Connected» | `BoxVpnService.start()` (async) |
+| `Started` (blue, «Connected») | `renderTile(VpnStatus.Stopped)` → INACTIVE + «Disconnected» | `BoxVpnService.stop()` (async) |
+| `Starting` / `Stopping` | игнор (rate-limit на race) | — |
+
+Реальные broadcast'ы `setStatus(Starting)` → `setStatus(Started)` всё равно прилетают и через `refreshTile` перерисовывают плитку с актуальным статусом. На быстрых путях (~200ms) intermediate-фаза мелькает почти незаметно; на длинных (libbox медленный teardown) tile корректно показывает `Connecting…` / `Stopping…`.
+
+#### Иконка плитки — monochrome vector
+
+В тайле — `R.drawable.ic_lxbox_tile` (`res/drawable/ic_lxbox_tile.xml`, Material `verified_user`/shield, white-on-transparent). QS-tile'ы тинтятся системой по `STATE_ACTIVE`/`STATE_INACTIVE` — белый glyph корректно меняет цвет (синий/серый по теме). Цветной mipmap (`R.mipmap.ic_launcher`) даёт пустой белый квадратик и **не** подходит — это проверено на ColorOS.
+
+В манифесте `<service android:icon="@mipmap/ic_launcher">` (для tile-editor превью) оставлен в цветном виде — там полноцветная иконка нормальна.
+
+#### Subtitle на API < 29
+
+`Tile.subtitle` появилось в API 29 (Android 10). На младших — у нас минимальный set'аем только `label = "L×Box"`. Доступ к `subtitle` вынесен в `@RequiresApi(Q)`-helper, чтобы ART class verifier на старых устройствах не отказывался грузить `LxBoxTileService` из-за ссылки на отсутствующий метод (тихий `NoSuchMethodError` при первом обращении).
 
 ---
 
@@ -237,15 +253,21 @@ override fun onActivityResult(req: Int, res: Int, data: Intent?) {
 }
 ```
 
-#### Dynamic shortcut (опция MVP+1)
+#### Dynamic shortcut — финальная реализация
 
-Через `ShortcutManager` обновляем shortcut'ы в зависимости от состояния:
-- Если `Started` → "Disconnect" с extra `action=disconnect`
-- Если `Stopped` → "Connect" с extra `action=connect`
+В v1.6.0 реализованы **только** динамические shortcut'ы (статический «Toggle VPN» из `res/xml/shortcuts.xml` снят, файл удалён, `<meta-data android:name="android.app.shortcuts">` из манифеста выпилен). Логика в [`QuickShortcuts.kt`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/QuickShortcuts.kt):
 
-Дёргается из `setStatus` (тот же hook что и QS tile). Long-press на иконку показывает контекстно-уместный label.
+| `BoxVpnService.currentStatus` | Пункт меню (long-press на иконке) |
+|---|---|
+| `Stopped` | один пункт — **«Connect»** (`extra action=connect`) |
+| `Started` | один пункт — **«Disconnect»** (`extra action=disconnect`) |
+| `Starting` / `Stopping` | оба: **«Connect»** + **«Disconnect»** (даём юзеру и cancel-старт, и форс-стоп) |
 
-Для MVP достаточно одного статичного "Toggle".
+Init-точка: `BoxApplication.initialize` (любой запуск процесса) + после каждого `BoxVpnService.setStatus(...)`. Гейт `Build.VERSION.SDK_INT >= R` (Android 11+) — Quick Connect это primary support tier; на 8-10 — no-op (избегаем API/OEM-сюрпризов с `ShortcutManager`).
+
+Все вызовы `ShortcutManager` обёрнуты в `runCatching` — `IllegalStateException` (rate-limit когда лаунчер сбрасывает счётчик) логируем и продолжаем; следующий `setStatus` всё равно повторит push.
+
+Иконка shortcut'а — `R.drawable.ic_lxbox_tile` (Material `verified_user`/shield, monochrome). Та же что и у QS tile, для визуальной консистентности.
 
 ---
 

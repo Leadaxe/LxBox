@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive icon для launcher long-press shortcut «Connect».
+  Background — зелёная заливка, foreground — белый ▶ glyph с inset
+  чтобы оставить место под маски формы launcher'ов (circle/squircle/
+  rounded-rect). Без `<monochrome>` — на Android 13+ themed-icons
+  не активируются, цвета сохраняются.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/qc_connect_bg" />
+    <foreground>
+        <inset
+            android:drawable="@drawable/ic_qc_play"
+            android:inset="20%" />
+    </foreground>
+</adaptive-icon>

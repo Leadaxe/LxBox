@@ -41,6 +41,14 @@
             android:exported="false"
             android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_VPN_SERVICE">
+            <!-- Android 14+ требует обоснование для foregroundServiceType="specialUse"
+                 через PROPERTY_SPECIAL_USE_FGS_SUBTYPE — читается Play Store reviewer'ами,
+                 в Android 15+ может показываться юзеру в системных FGS-настройках.
+                 Стандартные FGS-типы (dataSync / mediaPlayback / connectedDevice)
+                 не покрывают мультипротокольный VPN-стек с rule-based routing'ом. -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="vpn_tunnel: managed multi-protocol VPN (VLESS / VMess / Trojan / Hysteria2 / WireGuard / NaïveProxy / Shadowsocks / SOCKS / SSH / TUIC) with rule-based routing engine." />
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>

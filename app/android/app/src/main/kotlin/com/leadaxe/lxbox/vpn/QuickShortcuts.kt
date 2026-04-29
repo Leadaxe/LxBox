@@ -62,6 +62,16 @@ object QuickShortcuts {
     }
 
     private fun build(ctx: Context, id: String, label: String, action: String): ShortcutInfo {
+        // §032 polish: разные цветные adaptive-иконки на Connect / Disconnect
+        // (зелёный ▶ / красный ■). Launcher не тонирует bitmap-фронт adaptive-
+        // icon'а в свою тему — цвета остаются. Fallback drawable
+        // ic_lxbox_tile (monochrome shield) — на случай неизвестного action,
+        // не должно реально срабатывать.
+        val iconRes = when (action) {
+            MainActivity.ACTION_CONNECT -> R.mipmap.ic_qc_connect
+            MainActivity.ACTION_DISCONNECT -> R.mipmap.ic_qc_disconnect
+            else -> R.drawable.ic_lxbox_tile
+        }
         val intent = Intent(ctx, MainActivity::class.java).apply {
             this.action = Intent.ACTION_MAIN
             putExtra(MainActivity.EXTRA_ACTION, action)
@@ -72,7 +82,7 @@ object QuickShortcuts {
         return ShortcutInfo.Builder(ctx, id)
             .setShortLabel(label)
             .setLongLabel(label)
-            .setIcon(Icon.createWithResource(ctx, R.drawable.ic_lxbox_tile))
+            .setIcon(Icon.createWithResource(ctx, iconRes))
             .setIntent(intent)
             .build()
     }
