@@ -38,9 +38,22 @@ object BoxApplication {
         application = context.applicationContext
         Seq.setContext(application)
 
+        // Quick Connect-побочка: dynamic launcher shortcuts. Полностью
+        // опционально, любой сбой не должен валить старт приложения /
+        // сервиса — из VpnService.onCreate тоже сюда заходим.
+        runCatching { QuickShortcuts.refresh(application) }
+            .onFailure { android.util.Log.w("BoxApplication", "QuickShortcuts.refresh failed: ${it.message}") }
+
         @Suppress("OPT_IN_USAGE")
         GlobalScope.launch(Dispatchers.IO) {
-            initializeLibbox(application)
+            try {
+                initializeLibbox(application)
+            } catch (t: Throwable) {
+                // Defensive: если libbox setup упал — лучше залогировать и
+                // продолжить без него, чем убить весь процесс с unhandled
+                // в фоне. startSingbox всё равно увидит проблему отдельно.
+                android.util.Log.e("BoxApplication", "initializeLibbox failed", t)
+            }
         }
     }
 
@@ -61,6 +74,9 @@ object BoxApplication {
             this.fixAndroidStack = fixAndroidStack
         }
         Libbox.setup(opts)
-        Libbox.redirectStderr(File(workingDir, "stderr.log").path)
+        // redirectStderr может отсутствовать в старых сборках libbox или
+        // упасть на ограничениях SELinux отдельных OEM-устройств. Терпимо.
+        runCatching { Libbox.redirectStderr(File(workingDir, "stderr.log").path) }
+            .onFailure { android.util.Log.w("BoxApplication", "redirectStderr failed: ${it.message}") }
     }
 }

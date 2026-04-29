@@ -214,7 +214,8 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         // Сбрасываем здесь как страховка, и просим перерисовать tile.
         if (currentStatus != VpnStatus.Stopped) {
             currentStatus = VpnStatus.Stopped
-            LxBoxTileService.refreshTile(applicationContext)
+            runCatching { LxBoxTileService.refreshTile(applicationContext) }
+                .onFailure { Log.w(TAG, "refreshTile in onDestroy failed: ${it.message}") }
         }
         super.onDestroy()
     }
@@ -397,9 +398,15 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
                 if (error != null) putExtra("error", error)
             }
         )
-        // Просим систему пере-bind'ить QS tile если он добавлен в шторку.
-        // No-op если tile не в шторке / TileService ещё не bind'ился.
-        LxBoxTileService.refreshTile(applicationContext)
+        // Quick Connect-побочка строго опциональна — на старых Android
+        // (или при OEM-багах в TileService binding) этот вызов может
+        // выкинуть исключение, но это не должно валить старт VPN.
+        runCatching { LxBoxTileService.refreshTile(applicationContext) }
+            .onFailure { Log.w(TAG, "refreshTile failed: ${it.message}") }
+        // Перерисовываем launcher long-press shortcuts: «Connect» когда
+        // VPN off, «Disconnect» когда on, оба в transient состояниях.
+        runCatching { QuickShortcuts.refresh(applicationContext) }
+            .onFailure { Log.w(TAG, "QuickShortcuts.refresh failed: ${it.message}") }
     }
 
     // -------------------------------------------------------------------------
