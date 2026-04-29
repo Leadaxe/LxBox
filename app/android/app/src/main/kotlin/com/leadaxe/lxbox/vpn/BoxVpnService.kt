@@ -189,6 +189,12 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
 
         serviceScope.launch {
             try {
+                // Sync barrier: libbox setup должен завершиться ДО любого
+                // вызова libbox-классов (`CommandServer`, `Libbox.newService`).
+                // На S10 Lite (Android 13) этот await завершается мгновенно,
+                // на A50/A10/Y9 даёт фоновому `initializeLibbox` дотянуть
+                // до конца — иначе нативный crash без stderr-stacktrace.
+                BoxApplication.libboxReady.await()
                 startCommandServer()
                 startSingbox()
             } catch (t: Throwable) {
@@ -288,6 +294,17 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     }
 
     private suspend fun startSingbox() {
+        // Дожидаемся завершения `Libbox.setup` из BoxApplication.initialize.
+        // Без этого на медленных девайсах (A50/A10/Y9) `Libbox.newService`
+        // ниже мог запуститься до того как Go-сторона зарегистрировала
+        // окружение → нативный crash в JNI без записи в stderr.
+        try {
+            BoxApplication.libboxReady.await()
+        } catch (t: Throwable) {
+            stopAndAlert("Libbox init failed: ${t.message}")
+            return
+        }
+
         val config = ConfigManager.load()
         if (config.isBlank() || config == "{}") {
             stopAndAlert("Empty configuration")

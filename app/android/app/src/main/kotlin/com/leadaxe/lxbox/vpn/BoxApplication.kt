@@ -7,6 +7,7 @@ import android.os.PowerManager
 import go.Seq
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.SetupOptions
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -32,15 +33,20 @@ object BoxApplication {
 
     private var initialized = false
 
+    /// Сигналит готовность `Libbox.setup` + `Libbox.redirectStderr`.
+    /// `BoxVpnService.startSingbox` обязан `await` этого до любого
+    /// обращения к libbox-классам — иначе на медленных Android'ах
+    /// нативный crash в JNI без stderr-записи.
+    val libboxReady: CompletableDeferred<Unit> = CompletableDeferred()
+
     fun initialize(context: Context) {
         if (initialized) return
         initialized = true
         application = context.applicationContext
         Seq.setContext(application)
 
-        // Quick Connect-побочка: dynamic launcher shortcuts. Полностью
-        // опционально, любой сбой не должен валить старт приложения /
-        // сервиса — из VpnService.onCreate тоже сюда заходим.
+        // Quick Connect-побочка опциональна — из BoxVpnService.onCreate
+        // тоже сюда заходим, любой сбой здесь не должен валить сервис.
         runCatching { QuickShortcuts.refresh(application) }
             .onFailure { android.util.Log.w("BoxApplication", "QuickShortcuts.refresh failed: ${it.message}") }
 
@@ -48,19 +54,20 @@ object BoxApplication {
         GlobalScope.launch(Dispatchers.IO) {
             try {
                 initializeLibbox(application)
+                libboxReady.complete(Unit)
             } catch (t: Throwable) {
-                // Defensive: если libbox setup упал — лучше залогировать и
-                // продолжить без него, чем убить весь процесс с unhandled
-                // в фоне. startSingbox всё равно увидит проблему отдельно.
                 android.util.Log.e("BoxApplication", "initializeLibbox failed", t)
+                libboxReady.completeExceptionally(t)
             }
         }
     }
 
     private fun initializeLibbox(context: Context) {
+        // libbox пишет cache.db / stderr.log / transient state в internal
+        // `filesDir` — там же где SettingsStorage, ConfigManager и SRS-кэш.
+        // Не external (Scoped Storage / Knox-SELinux могут его блокировать).
         val baseDir = context.filesDir.also { it.mkdirs() }
-        val workingDir = context.getExternalFilesDir(null) ?: return
-        workingDir.mkdirs()
+        val workingDir = baseDir
         val tempDir = context.cacheDir.also { it.mkdirs() }
 
         val fixAndroidStack =
