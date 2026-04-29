@@ -329,7 +329,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     return AnimatedBuilder(
       animation: Listenable.merge([_controller, _subController]),
       builder: (context, _) {
-        final state = _controller.state;
+        // Debug API `POST /action/preview-empty-state?on=true` имитирует
+        // empty-state без потери данных: для UI configRaw/nodes выглядят
+        // пустыми, реальный _controller.state не трогается.
+        final realState = _controller.state;
+        final state = _controller.previewEmpty
+            ? realState.copyWith(configRaw: '', nodes: const [])
+            : realState;
         final startActive = !state.tunnelUp;
         final startEnabled = !state.busy && !state.tunnelUp && state.configRaw.isNotEmpty;
         final stopEnabled = !state.busy && state.tunnelUp;
@@ -339,13 +345,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildControls(context, state, startActive, startEnabled, stopEnabled),
-              if (state.tunnelUp) _buildTrafficBar(context, state),
-              if (_subController.busy && _subController.progressMessage.isNotEmpty)
-                _buildProgressBanner(context),
-              const SizedBox(height: 12),
-              _buildNodesHeader(context),
-              const SizedBox(height: 4),
+              // Empty state (no config) → guide + CTA берёт на себя весь
+              // экран; controls/header не рисуем, чтобы disabled-кнопка
+                // не путала первого пользователя.
+              if (state.configRaw.isNotEmpty) ...[
+                _buildControls(context, state, startActive, startEnabled, stopEnabled),
+                if (state.tunnelUp) _buildTrafficBar(context, state),
+                if (_subController.busy && _subController.progressMessage.isNotEmpty)
+                  _buildProgressBanner(context),
+                const SizedBox(height: 12),
+                _buildNodesHeader(context),
+                const SizedBox(height: 4),
+              ],
               _buildNodeList(context, state),
             ],
           ),
@@ -1282,38 +1293,130 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     }
   }
 
+  /// First-run empty-state. Big icon + headline + subtitle + circular `+`
+  /// button → SubscriptionsScreen. Замещает controls + node-list когда
+  /// `configRaw.isEmpty`, чтобы юзер не упирался в disabled Start.
+  Widget _buildAddServerCta(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.dns_outlined, size: 64, color: cs.onSurfaceVariant.withAlpha(140)),
+            const SizedBox(height: 20),
+            Text(
+              'Add a server',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Connect a subscription or add a node manually to get started.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 28),
+            Builder(
+              builder: (innerCtx) => FloatingActionButton(
+                heroTag: null,
+                // Прямой Navigator.push с context'ом из Builder'а — тот же
+                // путь что _buildTrafficBar → StatsScreen. Не через _pushRoute
+                // (там this.context state-level + .then'callback, который
+                // даёт другое поведение transition'а у этой FAB).
+                onPressed: () => Navigator.push(
+                  innerCtx,
+                  MaterialPageRoute(
+                    builder: (_) => SubscriptionsScreen(
+                      subController: _subController,
+                      homeController: _controller,
+                      autoUpdater: _autoUpdater,
+                    ),
+                  ),
+                ),
+                tooltip: 'Add a server',
+                child: const Icon(Icons.add, size: 32),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildNodeList(BuildContext context, HomeState state) {
     if (state.nodes.isEmpty) {
-      final cs = Theme.of(context).colorScheme;
-      final String message;
-      final IconData icon;
+      // Empty state: первый запуск (нет конфига) — гайд с CTA-кнопкой;
+      // остальные пустые состояния — пассивный текст-подсказка.
       if (state.configRaw.isEmpty) {
-        message = 'No config loaded.\nUse Quick Start or add a subscription.';
-        icon = Icons.playlist_add;
-      } else if (state.tunnelUp) {
-        message = 'No nodes in this group.\nTry another selector.';
-        icon = Icons.dns_outlined;
-      } else {
-        message = 'Tap Start to connect.';
-        icon = Icons.play_circle_outline;
+        return Expanded(child: _buildAddServerCta(context));
       }
+      final cs = Theme.of(context).colorScheme;
+      // tunnelUp — нет узлов в текущем selector'е; пассивный hint.
+      if (state.tunnelUp) {
+        return Expanded(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.dns_outlined,
+                      size: 48, color: cs.onSurfaceVariant.withAlpha(120)),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No nodes in this group.\nTry another selector.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+      // Конфиг есть, не подключены — большая кликабельная Start-зона.
+      // Тап = тот же путь что и FilledButton Start в _buildControls.
+      final canStart = !state.busy &&
+          state.tunnel != TunnelStatus.connecting &&
+          state.tunnel != TunnelStatus.stopping;
       return Expanded(
         child: Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 48, color: cs.onSurfaceVariant.withAlpha(120)),
-                const SizedBox(height: 12),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: canStart
+                  ? () {
+                      HapticService.I.onConnectTap();
+                      unawaited(_startWithAutoRefresh());
+                    }
+                  : null,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.play_circle_outline,
+                        size: 64, color: cs.primary),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Tap to connect',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: cs.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
