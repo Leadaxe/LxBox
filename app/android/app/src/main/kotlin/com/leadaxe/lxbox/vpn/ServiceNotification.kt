@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.core.app.NotificationCompat
 
@@ -57,7 +58,19 @@ class ServiceNotification(private val service: Service) {
             .setContentTitle(title)
             .setContentText(text)
             .build()
-        service.startForeground(NOTIFICATION_ID, notification)
+        // На Android 14+ (API 34) Google требует typed startForeground —
+        // иначе MissingForegroundServiceTypeException на строгих OEM
+        // (One UI 6, MIUI 14). На младших API typed-перегрузка отсутствует
+        // в SDK или ничего не даёт — используем legacy 2-arg API.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            service.startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+        } else {
+            service.startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     fun stop() {
