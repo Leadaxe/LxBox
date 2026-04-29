@@ -34,6 +34,19 @@ class HomeController extends ChangeNotifier {
   HomeState _state = HomeState();
   HomeState get state => _state;
 
+  /// UI-only override: при `true` `HomeScreen` рендерит empty-state как
+  /// при чистой инсталляции, **не трогая** реальные данные `_state`.
+  /// Управляется через Debug API `POST /action/preview-empty-state?on=...`.
+  /// Полезно для скриншотов / UX-демо / регресс-тестинга empty-state'ов
+  /// без `pm clear` и потери подписок.
+  bool _previewEmpty = false;
+  bool get previewEmpty => _previewEmpty;
+  void setPreviewEmpty(bool on) {
+    if (_previewEmpty == on) return;
+    _previewEmpty = on;
+    notifyListeners();
+  }
+
   /// Сторожок: heartbeat fail haptic стреляет один раз на серию,
   /// сбрасывается при успешном heartbeat (см. `_startHeartbeat`).
   /// Иначе — каждые 20 сек вибро-спам пока туннель лежит.

@@ -132,6 +132,8 @@ curl -s -H "$HDR" -X POST "$BASE/logs/clear"
 | `POST /action/download-srs` | `ruleId=<id>` | скачать .srs для custom rule |
 | `POST /action/clear-srs` | `ruleId=<id>` | удалить cached .srs |
 | `POST /action/toast` | `msg=<str>&duration=short\|long` | Toast на устройстве (до 200 chars) |
+| `POST /action/check-updates` | — | force update check |
+| `POST /action/preview-empty-state` | `on=true\|false` | UI-only override: HomeScreen рендерит empty-state как при чистой инсталляции, реальные данные не трогаются. Полезно для скриншотов / regression UX. |
 
 ```bash
 # Типичный flow диагностики
@@ -379,14 +381,62 @@ Read-only file access.
 |---|---|
 | `GET /files/srs` | `ruleId=<id>` → octet-stream .srs |
 | `GET /files/srs/list` | — |
-| `GET /files/external` | `name=<name>` (whitelist: cache.db head, stderr.log, stderr.log.old) |
+| `GET /files/local` | `name=<name>` (whitelist: `cache.db`, `stderr.log`) |
+| `GET /files/external` | legacy alias for `/files/local`, ради обратной совместимости |
 
 ```bash
 curl -s -H "$HDR" "$BASE/files/srs/list" | jq
 curl -s -H "$HDR" "$BASE/files/srs?ruleId=abc-123" > /tmp/rule.srs
 
-# Native stderr log (sing-box core)
-curl -s -H "$HDR" "$BASE/files/external?name=stderr.log" | tail -30
+# Native stderr log (sing-box core, internal app-scoped storage)
+curl -s -H "$HDR" "$BASE/files/local?name=stderr.log" | tail -30
+```
+
+---
+
+## Backup — `/backup/*`
+
+| Endpoint | Что отдаёт / принимает |
+|---|---|
+| `GET /backup/export?include=config,vars,subs` | Pure-data snapshot. `include` опц.; default — все три |
+| `POST /backup/import?merge=&rebuild=` | Восстановление. Body `{config?, vars?, server_lists?}`. Совместим с `/diag/dump` (diag-поля игнорятся). |
+
+```bash
+# Бэкап
+curl -s -H "$HDR" "$BASE/backup/export" > /tmp/lxbox-backup.json
+
+# Восстановление с автоматическим rebuild config
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  --data-binary @/tmp/lxbox-backup.json \
+  "$BASE/backup/import?rebuild=true"
+```
+
+`merge=false` (default) — replace; `merge=true` — append/upsert. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
+
+---
+
+## Diagnostics — `/diag/*` (§038)
+
+| Endpoint | Что отдаёт |
+|---|---|
+| `GET /diag/dump` | Полный JSON-pack от `DumpBuilder.build()` (то же что UI ⤴ Share) |
+| `GET /diag/exit-info` | `ApplicationExitInfo` (5 последних экзитов; API 30+, иначе `[]`) |
+| `GET /diag/logcat?count=N&level=L` | Logcat tail нашего процесса (N=50..5000, level=V/D/I/W/E/F) |
+| `GET /diag/stderr` | Содержимое `filesDir/stderr.log` (Go panic stacktrace) |
+| `GET /diag/applog?prev=true\|false\|all` | AppLog entries с фильтром по `fromPreviousSession` |
+
+```bash
+# Полный диагностический pack
+curl -s -H "$HDR" "$BASE/diag/dump" -o /tmp/lxbox-dump.json
+
+# Что система знает о последних крахах
+curl -s -H "$HDR" "$BASE/diag/exit-info" | jq '.[].reason'
+
+# Logcat нашего процесса (FATAL EXCEPTION + native backtrace)
+curl -s -H "$HDR" "$BASE/diag/logcat?count=2000&level=W" | grep -E 'FATAL|DEBUG|tombstoned'
+
+# Только pre-crash JVM-events предыдущей сессии
+curl -s -H "$HDR" "$BASE/diag/applog?prev=true" | jq
 ```
 
 ---

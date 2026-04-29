@@ -120,6 +120,7 @@ POST /action/toast?msg=<text>&duration=short|long  Android Toast (sanity-check "
 POST /action/emulate-error?kind=<k>            Демо humanizeError в /logs. kind: socket|timeout|http-401|
                                                   http-404|http-410|http-429|http-503|format|fs|plain|all
 POST /action/check-updates                     Force update check (bypass 24h cap + auto_check_updates toggle).
+POST /action/preview-empty-state?on=true|false UI-only override: рендерить empty-state без потери данных. Полезно для скриншотов/демо/regression UX.
                                                   Returns {kind, tag, html_url, published_at, ...}. Mirrors UI
                                                   "Check now" button. Uses primary api.github.com → fallback
                                                   raw.githubusercontent.com/.../docs/latest.json.
@@ -139,7 +140,21 @@ POST   /rules/reorder                          Body: {"order":[id1,id2,...]} —
 
 GET /files/srs/list                            Cached SRS files: [{rule_id, size, mtime}]
 GET /files/srs?ruleId=<id>                     Binary SRS dump (octet-stream)
-GET /files/external?name=<n>                   Whitelisted внешние файлы (cache.db, stderr.log, stderr.log.old)
+GET /files/local?name=<n>                      Whitelisted internal-storage файлы (cache.db, stderr.log). `/files/external` — legacy alias.
+
+=== Diagnostics (§038) ===
+
+GET /diag/dump                                 Полный JSON-pack от DumpBuilder.build (config + vars + subs + log + stderr + exit_info + logcat).
+GET /diag/exit-info                            ApplicationExitInfo (последние 5 экзитов от системы); пустой массив на API <30.
+GET /diag/logcat?count=N&level=L               Logcat tail нашего процесса (N=50..5000, default 1000; level=V|D|I|W|E|F, default E).
+GET /diag/stderr                               Содержимое filesDir/stderr.log (Go panic-stacktrace libbox).
+GET /diag/applog?prev=true|false|all           AppLog entries; `prev` фильтрует по fromPreviousSession (default `all`).
+
+=== Backup ===
+
+GET  /backup/export?include=config,vars,subs   Pure-data snapshot для restore (без diag-шума). `include` опц.; default — все три.
+POST /backup/import?merge=false&rebuild=false  Принимает то же что отдаёт export (плюс /diag/dump — diag-поля игнорятся).
+                                                 `merge=true` — append/upsert; `rebuild=true` — auto-rebuild config после restore.
 
 === Errors ===
 
@@ -256,7 +271,18 @@ const Map<String, dynamic> _capabilityJson = {
     // Files
     {'method': 'GET', 'path': '/files/srs/list', 'description': 'Cached SRS [{rule_id,size,mtime}]'},
     {'method': 'GET', 'path': '/files/srs', 'params': {'ruleId': 'id'}, 'description': 'Binary SRS dump'},
-    {'method': 'GET', 'path': '/files/external', 'params': {'name': 'cache.db|stderr.log|stderr.log.old'}, 'description': 'Whitelisted external files'},
+    {'method': 'GET', 'path': '/files/local', 'params': {'name': 'cache.db|stderr.log'}, 'description': 'Whitelisted internal-storage files (filesDir). `/files/external` — legacy alias.'},
+    // Diagnostics (§038)
+    {'method': 'GET', 'path': '/diag/dump', 'description': 'Full DumpBuilder JSON-pack'},
+    {'method': 'GET', 'path': '/diag/exit-info', 'description': 'ApplicationExitInfo entries (API 30+; empty on lower)'},
+    {'method': 'GET', 'path': '/diag/logcat', 'params': {'count': '50..5000', 'level': 'V|D|I|W|E|F'}, 'description': 'Logcat tail of our process'},
+    {'method': 'GET', 'path': '/diag/stderr', 'description': 'filesDir/stderr.log content (Go panic stacktrace)'},
+    {'method': 'GET', 'path': '/diag/applog', 'params': {'prev': 'true|false|all'}, 'description': 'AppLog entries (filter by fromPreviousSession)'},
+    // Backup
+    {'method': 'GET', 'path': '/backup/export', 'params': {'include': 'config,vars,subs (default all)'}, 'description': 'Pure-data snapshot (no diag noise)'},
+    {'method': 'POST', 'path': '/backup/import', 'params': {'merge': 'true|false', 'rebuild': 'true|false'}, 'body': '{config?, vars?, server_lists?}', 'description': 'Restore from export or /diag/dump'},
+    // Action additions
+    {'method': 'POST', 'path': '/action/preview-empty-state', 'params': {'on': 'true|false'}, 'description': 'Toggle empty-state preview in HomeScreen UI without losing data'},
   ],
   'errors': {
     'envelope': '{"error": {"code": "...", "message": "...", "details": {...}}}',

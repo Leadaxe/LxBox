@@ -49,8 +49,32 @@ Future<DebugResponse> actionHandler(
     '/action/toast' => _toast(req, ctx),
     '/action/emulate-error' => _emulateError(req, ctx),
     '/action/check-updates' => _checkUpdates(req, ctx),
+    '/action/preview-empty-state' => _previewEmptyState(req, ctx),
     _ => throw NotFound('action: ${req.path}'),
   };
+}
+
+/// POST /action/preview-empty-state?on=true|false
+///
+/// UI-only override: HomeScreen рендерит empty-state как при чистой
+/// инсталляции (`Add a server` CTA вместо узлов и Start), реальные
+/// данные не стираются. Полезно для скриншотов / regression-теста UX
+/// без `pm clear`.
+///
+/// Возвращает: `{"ok": true, "action": "preview-empty-state", "on": <bool>}`.
+Future<DebugResponse> _previewEmptyState(
+  DebugRequest req,
+  DebugContext ctx,
+) async {
+  final home = ctx.home;
+  if (home == null) throw const Conflict('home controller not ready');
+  final on = (req.query['on'] ?? 'true').toLowerCase() == 'true';
+  home.setPreviewEmpty(on);
+  return JsonResponse({
+    'ok': true,
+    'action': 'preview-empty-state',
+    'on': on,
+  });
 }
 
 /// Force update check (bypass 24h cap + auto_check_updates toggle).
