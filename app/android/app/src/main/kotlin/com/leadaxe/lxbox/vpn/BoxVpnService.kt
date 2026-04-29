@@ -191,9 +191,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             try {
                 startCommandServer()
                 startSingbox()
-            } catch (e: Exception) {
-                Log.e(TAG, "Start failed", e)
-                stopAndAlert(e.message ?: "Unknown error")
+            } catch (t: Throwable) {
+                // Throwable — ловит и Error (OOM, VerifyError при class
+                // load из libbox), не только Exception. Без этого
+                // unhandled Error в корутине отравил бы scope и юзер
+                // увидел бы «приложение закрылось» вместо error-toast'а.
+                Log.e(TAG, "Start failed", t)
+                stopAndAlert(t.message ?: "Unknown error")
             }
         }
         return START_NOT_STICKY
@@ -297,15 +301,25 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         DefaultNetworkMonitor.start(serviceScope)
         Libbox.setMemoryLimit(true)
 
+        // Throwable, не Exception — sing-box config init может бросить
+        // OutOfMemoryError (большие geosite/geoip rule-sets), а на старых
+        // Android class verifier libbox-классов может отдать VerifyError
+        // / NoClassDefFoundError. Ловим всё, чтобы юзер увидел «Failed
+        // to create service» вместо тихого исчезновения процесса.
+        //
+        // ВАЖНО: это НЕ защищает от Go panic без recover в нативном коде —
+        // такой краш улетает SIGABRT'ом мимо JVM. Защита от него —
+        // редирект stderr в BoxApplication.initializeLibbox + валидация
+        // конфига до передачи в libbox (см. §038).
         val svc = try {
             Libbox.newService(config, this as PlatformInterfaceWrapper)
-        } catch (e: Exception) {
-            stopAndAlert("Failed to create service: ${e.message}")
+        } catch (t: Throwable) {
+            stopAndAlert("Failed to create service: ${t.message}")
             return
         }
 
-        try { svc.start() } catch (e: Exception) {
-            stopAndAlert("Failed to start service: ${e.message}")
+        try { svc.start() } catch (t: Throwable) {
+            stopAndAlert("Failed to start service: ${t.message}")
             return
         }
 
