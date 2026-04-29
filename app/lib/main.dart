@@ -7,8 +7,11 @@ import 'screens/home_screen.dart';
 import 'services/app_log.dart';
 import 'services/debug/bootstrap.dart' as debug_bootstrap;
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // §038 — подгружаем persistent warning+error entries предыдущей сессии
+  // до runApp, чтобы Debug-экран сразу видел pre-crash JVM-events.
+  await AppLog.I.initPersistent();
   // Первый read `appStartedAt` фиксирует момент старта для /device и /ping.
   // ignore: unused_local_variable
   final _ = debug_bootstrap.appStartedAt;

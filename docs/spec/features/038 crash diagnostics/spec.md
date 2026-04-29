@@ -1,128 +1,131 @@
-# 038 — Crash diagnostics (Go panic visibility & Android exit info)
+# 038 — Crash diagnostics
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft (MVP1 — stderr viewer — в работе) |
+| Статус | Done (MVP1 + MVP2) |
 | Дата | 2026-04-29 |
-| Зависимости | [`023 debug and logging`](../023%20debug%20and%20logging/spec.md), [`031 debug api`](../031%20debug%20api/spec.md), [`032 quick connect`](../032%20quick%20connect/spec.md), [`012 native vpn service`](../012%20native%20vpn%20service/spec.md) |
+| Зависимости | [`023 debug and logging`](../023%20debug%20and%20logging/spec.md), [`031 debug api`](../031%20debug%20api/spec.md), [`012 native vpn service`](../012%20native%20vpn%20service/spec.md) |
 
 ## Цель
 
-Превратить «приложение вылетело» из чёрного ящика в воспроизводимый артефакт, который пользователь может одной кнопкой отдать разработчику. Главный кейс — нативный краш sing-box / libbox в момент старта VPN, когда процесс умирает целиком (SIGABRT) и in-memory `AppLog` теряется.
+Дать пользователю однокнопочный путь отдать stacktrace последней сессии VPN core разработчику, без `adb`. Главный кейс — нативный краш sing-box / libbox при старте VPN, когда процесс умирает SIGABRT'ом и in-memory `AppLog` теряется.
 
-После §038 при следующем запуске приложения юзер должен видеть в Debug-экране, **что именно убило процесс в прошлый раз**, и иметь возможность поделиться этим одним тапом.
-
-**Не в скопе целиком (для MVP1):**
-
-- ApplicationExitInfo / `getHistoricalProcessExitReasons` API (Android 11+) — будущая работа.
-- Per-session breadcrumb / persist last-config — будущая работа.
-- Авто-snackbar «Previous session crashed» — будущая работа.
-- Tombstone parsing / pretty-print — будущая работа.
-- Внешние сервисы (Crashlytics / Sentry / breakpad) — никогда. Локально, off-line, под контролем пользователя.
+**Не в скопе:**
+- Tombstone parsing / pretty-print — текстом разбирается на стороне разработчика.
+- Внешние сервисы (Crashlytics / Sentry / breakpad) — никогда; локально, off-line.
+- Retention / UI-список крашей / автоматический snackbar «Previous session crashed» — всё в `DumpBuilder` через ⤴ Share dump.
 
 ---
 
-## Архитектура
+## Архитектура — четыре канала
 
-### Три источника информации (полная картина — для будущих этапов)
+| Канал | Что ловит | Где переживает смерть процесса |
+|---|---|---|
+| **A. stderr-redirect** | Go panic stacktrace из libbox/sing-box — всё что Go runtime пишет в stderr перед SIGABRT'ом | `filesDir/stderr.log` |
+| **B. ApplicationExitInfo** (API 30+) | native SIGABRT/SIGSEGV, JVM Throwable, ANR, LMK; tombstone в `traceInputStream` для NATIVE_CRASH; Java stacktrace для CRASH (на некоторых OEM пуст) | в Android-системе, читается ленивым запросом из `DumpBuilder` |
+| **C. Persistent AppLog** | warning + error JVM-events до краха (что приложение делало в моменте) | `filesDir/applog.txt`, ring-buffer ~200 строк |
+| **D. Logcat tail** | system-level логи нашего процесса: `AndroidRuntime FATAL EXCEPTION` (Java throwable), `libc`/`DEBUG`/`tombstoned` (native signal+backtrace), `art`/`linker` (class-load failures) | kernel circular buffer, читается через `Runtime.exec("logcat -d")` |
 
-| Канал | Что ловит | Где переживает смерть процесса | Этап |
-|---|---|---|---|
-| **A. ApplicationExitInfo** (API 30+) | native SIGABRT/SIGSEGV, JVM Throwable, ANR, LMK, force-stop. С tombstone в `traceInputStream` для NATIVE_CRASH. | в Android-системе, читается при следующем `Application.onCreate()` | future |
-| **B. stderr-redirect** | Go panic stacktrace из libbox/sing-box (всё что Go runtime пишет в stderr перед SIGABRT'ом) | в `external/stderr.log` (последняя сессия — без накопления истории) | **MVP1** |
-| **C. Session breadcrumb** | факт «start был, штатного stop'а не было» + конфиг сессии | в `filesDir/crash_dumps/session_<sid>.json` + `last_config_<sid>.json` | future |
-
-`A` и `B` перекрываются на API 30+ (хорошо — взаимная сверка). `B` покрывает Android 8-10, где `A` нет. `C` даёт контекст «на каком конфиге упало», без которого stacktrace часто бесполезен.
-
-MVP1 покрывает только `B` — это самое маленькое, но и самое полезное в моменте: Go panic'и (как тот, что был с VLESS `packet_encoding: "none"` в task [012](../../tasks/012-vless-packet-encoding-libbox-panic.md)) — главная категория крашей при старте VPN, и для них stderr-stacktrace даёт точный ответ.
+`A` ловит Go panic, но только если процесс дожил до `Libbox.redirectStderr`. `B` ловит то что убило процесс уровнем системы. `C` ловит JVM-сторону — что мы делали. `D` — независимый источник от B (logd — kernel-buffer, AEI — ActivityManager); полезен на API <30 где B недоступен, и на OEM-устройствах где B не прикладывает trace для `REASON_CRASH` (Samsung One UI quirk). Вместе закрывают post-mortem без `adb`.
 
 ---
 
-## MVP1 — stderr viewer
+## MVP1 — stderr viewer (канал A)
 
 ### Контракт `Libbox.redirectStderr`
 
-Уже подключён в [`BoxApplication.initializeLibbox`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxApplication.kt). Поведение:
+Подключён в [`BoxApplication.initializeLibbox`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxApplication.kt):
 
 - При вызове `Libbox.redirectStderr(path)` Go runtime через `dup2(file_fd, STDERR_FILENO)` перенаправляет свой stderr в указанный файл.
-- При panic'е без `recover()` Go runtime пишет полный multi-goroutine stacktrace в stderr **до** того, как процесс получит SIGABRT.
-- Файл — `Context.getExternalFilesDir(null) / stderr.log` (= `/sdcard/Android/data/<pkg>/files/stderr.log`).
+- При panic'е без `recover()` Go runtime пишет полный multi-goroutine stacktrace в stderr **до** SIGABRT'а.
+- Файл — `Context.filesDir / stderr.log` (= `/data/data/<pkg>/files/stderr.log`), internal app-scoped storage. Там же где `SettingsStorage`, `ConfigManager`, `cache.db`. См. [task 027](../../tasks/027-libbox-init-race-fix.md) про переход с external на internal.
 
 ### История крашей не накапливается
 
-Намеренно: показываем **только последнюю сессию**. Никаких `.old`-копий, никакой ротации. Цель MVP1 — закрыть текущий инцидент быстро, не вести лог крашей. Если libbox при следующем cold-start'е перетрёт файл — это ок: пользователь либо успел открыть Debug-экран сразу после краша, либо нет; в обоих случаях бесполезно держать историю на устройстве.
-
-История появится позже — в MVP2 (ApplicationExitInfo) и MVP3 (per-session breadcrumb), там уже с retention'ом и UI-списком крашей.
+Намеренно: показываем только последнюю сессию. Никаких `.old`-копий, ротации, retention. Цель MVP1 — закрыть текущий инцидент. История появится в MVP2/MVP3 с retention'ом и UI-списком.
 
 ### Чтение из Dart
 
-Файл лежит в external app-scoped storage (`getExternalFilesDir(null)`), в Dart доступ через [`path_provider`](https://pub.dev/packages/path_provider) → `getExternalStorageDirectory()` (тот же путь). Никакого MethodChannel-метода для чтения **не нужно** — используем `dart:io` `File.readAsString`. Это симметрично тому, как `§031 Debug API` `_externalFile` handler читает тот же файл — оба используют path_provider, не дублируя нативный код.
-
-Сервис: `lib/services/stderr_reader.dart`
+`lib/services/stderr_reader.dart`:
 
 ```dart
 class StderrReader {
-  /// Содержимое stderr.log или null если отсутствует/пуст.
-  static Future<String?> read();
-
-  /// Путь к файлу — для Share (или null).
-  static Future<String?> path();
+  static Future<String?> read();   // null если файл отсутствует/пуст
+  static Future<String?> path();   // путь или null
 }
 ```
 
+Через `path_provider` `getApplicationDocumentsDirectory()`. Симметрично `§031 Debug API` `_localFile` handler'у.
+
 ### UI
 
-В **Debug-экране** добавляется условный `TabBar`:
+[`Debug-экран`](../../../app/lib/screens/debug_screen.dart) — на `initState` async читает stderr; если непустой → `DefaultTabController(length: 2)` с `TabBar`:
 
-- Если `StderrReader.read()` вернул не-null — экран показывает 2 таба:
-  - **Log** — текущий контент (events с фильтрами, search, share-dump).
-  - **stderr** — `SelectableText` (monospace, 11-12sp), весь текст файла, с кнопкой Refresh и кнопкой Share (открывает share-диалог с `stderr.log`).
-- Если файл пустой/отсутствует — экран остаётся как сейчас (без TabBar). Это правило: **stderr-таб не появляется на устройствах где никогда не было краша**.
+- **Log** — events с фильтрами/search/share-dump.
+- **stderr** — `SelectableText` (monospace) + Refresh + Share.
 
-Перезагрузка stderr содержимого:
-- На `initState` асинхронно.
-- По кнопке Refresh внутри stderr-таба.
-- Не на каждый event AppLog — это файл, не in-memory state, частые I/O не нужны.
+Если файл пустой — без TabBar, экран как раньше.
 
 ### Share
 
-`Share.shareXFiles([XFile(stderr.log)], subject: 'L×Box stderr — <iso-time>')` — переиспользуем уже подключённый `share_plus`.
+Два пути:
 
-В отличие от `_shareDump` (который собирает JSON-pack из config + vars + subs + log), share stderr-таба отдаёт **только** stderr-файл — компактнее, без раскрытия конфига юзера (важно: stderr тоже может содержать имена outbound'ов и хосты, но не пароли — Go не дампит входной JSON в stack).
-
----
+1. **Кнопка Share на вкладке stderr** — отдаёт `stderr.log` через `share_plus`.
+2. **Кнопка Share dump (⤴ AppBar)** — `DumpBuilder.build()` включает поле `stderr_log` в JSON-pack рядом с `config + vars + server_lists + debug_log`. Если stderr пустой → `null`.
 
 ## Безопасность
 
-- **Stderr Go panic** содержит имена outbound'ов и иногда хосты (если они попали в строку ошибки). **Пароли — нет** (Go panic пишет stack-frames с локальными переменными, а не оригинальный JSON-конфиг). Перед share — без маскирования; пользователь видит контент в `SelectableText` до share, может оценить.
-- `external/stderr.log` лежит в **app-scoped external storage** под uid пакета. На Android 11+ другие приложения этот путь не видят (Scoped Storage). На Android 9-10 видны через MANAGE_EXTERNAL_STORAGE / file pickers — стандартный sandbox Android.
-- **Не пишем в shared `Downloads/`** — только в app-private external dir.
+- Stderr содержит имена outbound'ов и иногда host'ы; **пароли — нет** (Go panic пишет stack-frames, не входной JSON).
+- `filesDir/stderr.log` — internal app-scoped storage, недоступно другим apps. Не в Downloads / external.
 
 ---
 
-## Совместимость / поведение по тирам
+## MVP2 — ApplicationExitInfo (B) + Persistent AppLog (C) + Logcat tail (D)
 
-| Android | Поведение |
-|---|---|
-| 14+ (API 34+) | Полностью работает. Будущий этап: ApplicationExitInfo даст ещё tombstone. |
-| 13 (API 33) | Работает stderr-only (ApplicationExitInfo есть, но в MVP1 не используется). |
-| 11–12 (API 30–32) | Работает stderr-only. Primary tier. |
-| 8–10 (API 26–29) | Работает stderr-only. Best-effort; ApplicationExitInfo недоступен по API. |
+### ApplicationExitInfo (lazy в DumpBuilder)
+
+Native MethodChannel-метод `getApplicationExitInfo` в [`VpnPlugin`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt):
+
+- На API <30 — возвращает пустой массив (никакого AEI на старых Android).
+- На API 30+ — `ActivityManager.getHistoricalProcessExitReasons(packageName, 0, 5)` → массив структур: `timestamp`, `reason` (mapped в человекочитаемое имя `CRASH | CRASH_NATIVE | ANR | LOW_MEMORY | …`), `description`, `importance`, `pss`, `rss`, `status`, `trace` (`traceInputStream` целиком в string — для NATIVE_CRASH это mini-tombstone).
+
+Зовётся **только из `DumpBuilder.build()`**. Ленивое: пользователь жмёт ⤴ Share dump → дамп включает поле `exit_info: [...]` с последними 5 экзитами. Не на старте app'а — чтобы не дёргать тяжёлый `traceInputStream` зря и не усложнять lifecycle'ом нашего кода.
+
+### Persistent AppLog (file-backed ring-buffer)
+
+В [`AppLog`](../../../app/lib/services/app_log.dart) добавляется persistence для **только warning + error** уровней. `debug`/`info` остаются in-memory (это шум, не нужен после рестарта).
+
+- **Файл**: `filesDir/applog.txt`, JSON-lines (одна запись на строку).
+- **Cap**: 200 entries или ~64KB — что меньше.
+- **Write**: async через `Future.microtask` с debounce-флагом (`isWriting`/`isDirty`); при каждом новом warning/error планируется rewrite файла. Spam'ы schedule'ятся в один write.
+- **Read**: на старте `main()` зовётся `AppLog.I.initPersistent()` → entries из файла кладутся в `_entries` с маркером `fromPreviousSession=true`. Live-events после старта попадают на верх как обычно.
+
+UI [`debug_screen.dart`](../../../app/lib/screens/debug_screen.dart) — entries с `fromPreviousSession=true` визуально отделены (subtitle-тег «← prev session», иконка `↑`). Не блокируют текущий лог.
+
+`DumpBuilder.debug_log` автоматически содержит и persistent, и live entries — отдельного поля не нужно.
+
+### Logcat tail (lazy в DumpBuilder)
+
+Native MethodChannel `getLogcatTail` в [`VpnPlugin`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt) — `Runtime.exec("logcat", "-d", "-t", count, "*:level")` через `ProcessBuilder` с timeout 2s. Возвращает text-snapshot kernel-буфера.
+
+`logd` UID-фильтрует автоматически — без `READ_LOGS` permission читатель получает только события собственного UID и связанные system messages (`libc`/`DEBUG`/`tombstoned` пишутся под нашим pid'ом перед смертью). Permission не запрашивается.
+
+[`LogcatReader.tail()`](../../../app/lib/services/logcat_reader.dart) Dart-сервис, зовётся из `DumpBuilder.build()` → поле `logcat_tail: String?`. Default — последние 1000 строк уровня Error+Fatal (`*:E`).
+
+### Безопасность
+
+- AEI tombstone — безопасно (memory addresses, регистры, имена SO; user-data нет).
+- `applog.txt` — warning/error что юзер и так видит в Debug-экране. Маскирование URL-секретов уже работает в существующих модулях.
+- Logcat — UID-фильтрован logd'ом, только наш процесс.
 
 ---
 
-## Этапы
+## Сводка реализации
 
-| Этап | Содержимое | Статус |
+| Канал | Status | Tasks |
 |---|---|---|
-| **MVP1 — stderr viewer** | StderrReader service + Debug tab + share (без накопления истории) | done ([task 018](../../tasks/018-stderr-viewer-debug-tab.md)) |
-| MVP2 — ApplicationExitInfo reader | reader на API 30+, dump traces в `crash_dumps/aei_<ts>.txt`, секция «Crashes» в Debug-экране | future |
-| MVP3 — Session breadcrumb + last-config persist | sessionId, `session_<sid>.json`, `last_config_<sid>.json`, линковка с aei по startedAt | future |
-| MVP4 — DumpBuilder integration + UX polish | crash_dumps/ в общий dump-zip, snackbar «Previous session crashed», retention 10/7d | future |
-
----
-
-## Открытые вопросы
-
-1. **Размер `stderr.log`** — нужно ли cap'ать? В норме файл пустой; при panic'е — 5-50KB. Если кто-то поставит `GODEBUG=schedtrace=1000` и активно используется — может расти. На MVP1 не cap'аем; в MVP4 (DumpBuilder) можно tail-only включать.
-2. **Authoritative format в Share** — текстовый file как сейчас; или JSON-обёртка с meta (app version + git sha + libbox version)? MVP1 — plain-text file. MVP3 (с breadcrumb) — будет meta-обёртка автоматически.
+| A (stderr viewer) | done | [018](../../tasks/018-stderr-viewer-debug-tab.md) |
+| B (ApplicationExitInfo) | done | [029](../../tasks/029-application-exit-info.md) |
+| C (Persistent AppLog) | done | [028](../../tasks/028-persistent-applog.md) |
+| D (Logcat tail) | done | [022](../../tasks/022-logcat-tail-in-dump.md) |
+| HTTP API `/diag/*` | done | см. [§031 Debug API](../031%20debug%20api/spec.md) |

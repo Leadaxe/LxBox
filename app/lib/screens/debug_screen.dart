@@ -24,10 +24,9 @@ class _DebugScreenState extends State<DebugScreen> {
   String _searchQuery = '';
   final _searchController = TextEditingController();
 
-  /// §038 MVP1 — содержимое `external/stderr.log[.old]`. Грузится async
-  /// в initState; null означает «оба файла отсутствуют/пусты» — в этом
-  /// случае TabBar не показываем (никакого следа от Go panic — нечего
-  /// смотреть).
+  /// §038 MVP1 — содержимое `filesDir/stderr.log`. Грузится async в
+  /// initState; null означает «файл отсутствует/пуст» — в этом случае
+  /// TabBar не показываем (никакого следа от Go panic — нечего смотреть).
   String? _stderrText;
   bool _stderrLoading = true;
 
@@ -56,8 +55,9 @@ class _DebugScreenState extends State<DebugScreen> {
     final buf = StringBuffer();
     for (final e in entries) {
       final src = e.source == DebugSource.core ? 'CORE' : 'APP ';
+      final prev = e.fromPreviousSession ? ' [PREV]' : '';
       buf.writeln(
-          '[${e.time.toIso8601String()}] ${e.level.name.toUpperCase().padRight(7)} $src  ${e.message}');
+          '[${e.time.toIso8601String()}] ${e.level.name.toUpperCase().padRight(7)} $src$prev  ${e.message}');
     }
     return buf.toString();
   }
@@ -125,33 +125,7 @@ class _DebugScreenState extends State<DebugScreen> {
   Widget build(BuildContext context) {
     final showStderrTab =
         !_stderrLoading && _stderrText != null && _stderrText!.isNotEmpty;
-    if (showStderrTab) {
-      return DefaultTabController(
-        length: 2,
-        child: AnimatedBuilder(
-          animation: AppLog.I,
-          builder: (context, _) => Scaffold(
-            appBar: AppBar(
-              title: const Text('Debug'),
-              actions: _buildAppBarActions(_filteredEntries()),
-              bottom: const TabBar(
-                tabs: [
-                  Tab(text: 'Log'),
-                  Tab(text: 'stderr'),
-                ],
-              ),
-            ),
-            body: TabBarView(
-              children: [
-                _buildLogTab(_filteredEntries()),
-                _buildStderrTab(),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-    return AnimatedBuilder(
+    final scaffold = AnimatedBuilder(
       animation: AppLog.I,
       builder: (context, _) {
         final filtered = _filteredEntries();
@@ -159,11 +133,19 @@ class _DebugScreenState extends State<DebugScreen> {
           appBar: AppBar(
             title: const Text('Debug'),
             actions: _buildAppBarActions(filtered),
+            bottom: showStderrTab
+                ? const TabBar(tabs: [Tab(text: 'Log'), Tab(text: 'stderr')])
+                : null,
           ),
-          body: _buildLogTab(filtered),
+          body: showStderrTab
+              ? TabBarView(children: [_buildLogTab(filtered), _buildStderrTab()])
+              : _buildLogTab(filtered),
         );
       },
     );
+    return showStderrTab
+        ? DefaultTabController(length: 2, child: scaffold)
+        : scaffold;
   }
 
   List<DebugEntry> _filteredEntries() {
@@ -302,6 +284,11 @@ class _DebugScreenState extends State<DebugScreen> {
                       final src = entry.source == DebugSource.core
                           ? 'core'
                           : 'app';
+                      // §038: prev-session entries (warning+error с диска)
+                      // отделяем тегом «↑ prev session» + курсивом.
+                      final prevTag = entry.fromPreviousSession
+                          ? ' · ↑ prev session'
+                          : '';
                       return ListTile(
                         dense: true,
                         leading: Container(
@@ -314,11 +301,16 @@ class _DebugScreenState extends State<DebugScreen> {
                         ),
                         title: Text(
                           entry.message,
-                          style: const TextStyle(
-                              fontSize: 12, fontFamily: 'monospace'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontFamily: 'monospace',
+                            fontStyle: entry.fromPreviousSession
+                                ? FontStyle.italic
+                                : FontStyle.normal,
+                          ),
                         ),
                         subtitle: Text(
-                          '${entry.time.toIso8601String()} · ${entry.level.name} · $src',
+                          '${entry.time.toIso8601String()} · ${entry.level.name} · $src$prevTag',
                           style: const TextStyle(fontSize: 11),
                         ),
                       );

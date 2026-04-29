@@ -7,6 +7,8 @@ import '../models/debug_entry.dart';
 import '../models/server_list.dart';
 import 'app_log.dart';
 import 'debug/debug_registry.dart';
+import 'exit_info_reader.dart';
+import 'logcat_reader.dart';
 import 'settings_storage.dart';
 import 'stderr_reader.dart';
 import '../vpn/box_vpn_client.dart';
@@ -42,9 +44,17 @@ class DumpBuilder {
     final List<ServerList> lists = liveSub != null
         ? liveSub.entries.map((e) => e.list).toList()
         : await SettingsStorage.getServerLists();
-    // §038 — содержимое external/stderr.log (Go panic-stacktrace последней
-    // сессии libbox, переживает SIGABRT). null если файл отсутствует/пуст.
+    // §038 — четыре канала диагностики:
+    // - канал A: stderr.log (Go panic-stacktrace из libbox перед SIGABRT'ом)
+    // - канал B: ApplicationExitInfo (системный rationale смерти + tombstone)
+    // - канал C: persistent AppLog (warning+error JVM-events до краха,
+    //   уже подгружены в AppLog.I с fromPreviousSession=true).
+    // - канал D: logcat tail (system-level логи нашего процесса —
+    //   AndroidRuntime FATAL EXCEPTION, libc/DEBUG/tombstoned для NATIVE,
+    //   art/linker для class-load failures). UID-фильтрован logd'ом.
     final stderr = await StderrReader.read();
+    final exitInfo = await ExitInfoReader.read();
+    final logcatTail = await LogcatReader.tail();
 
     final dump = <String, dynamic>{
       'generated_at': now.toIso8601String(),
@@ -54,6 +64,8 @@ class DumpBuilder {
       'config': config == null ? null : _tryDecode(config),
       'debug_log': AppLog.I.entries.map(_entryJson).toList(),
       'stderr_log': stderr,
+      'exit_info': exitInfo,
+      'logcat_tail': logcatTail,
     };
 
     final dir = await getTemporaryDirectory();
@@ -88,5 +100,6 @@ class DumpBuilder {
         'level': e.level.name,
         'source': e.source == DebugSource.core ? 'core' : 'app',
         'message': e.message,
+        if (e.fromPreviousSession) 'prev_session': true,
       };
 }

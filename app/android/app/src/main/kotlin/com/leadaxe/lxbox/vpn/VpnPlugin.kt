@@ -227,6 +227,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // текстовую инструкцию вместо кнопки.
                 requestAddQuickSettingsTile(result)
             }
+            "getApplicationExitInfo" -> result.success(readApplicationExitInfo())
+            "getLogcatTail" -> {
+                val count = (call.argument<Int>("count") ?: 1000).coerceIn(50, 5000)
+                val level = (call.argument<String>("level") ?: "E")
+                    .filter { it.isLetter() }
+                    .ifEmpty { "E" }
+                result.success(readLogcatTail(count, level))
+            }
             "showToast" -> {
                 // §031 Debug API. Вызов со стороны Dart через
                 // /action/toast?msg=...&duration=short|long. Безопасно на
@@ -244,6 +252,73 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
             else -> result.notImplemented()
         }
+    }
+
+    /// §038 — `getHistoricalProcessExitReasons` lazy reader. На API <30 →
+    /// пустой список (метод недоступен); на любую ошибку — тоже пустой
+    /// (никогда не валим caller'а из-за этого).
+    private fun readApplicationExitInfo(): List<Map<String, Any?>> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return emptyList()
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            ?: return emptyList()
+        val infos = runCatching {
+            am.getHistoricalProcessExitReasons(context.packageName, 0, 5)
+        }.getOrElse {
+            Log.w(TAG, "getHistoricalProcessExitReasons failed: ${it.message}")
+            return emptyList()
+        }
+        return infos.map { info ->
+            mapOf(
+                "timestamp" to info.timestamp,
+                "reason" to exitReasonName(info.reason),
+                "description" to info.description,
+                "importance" to info.importance,
+                "pss" to info.pss,
+                "rss" to info.rss,
+                "status" to info.status,
+                "trace" to runCatching {
+                    info.traceInputStream?.use { it.bufferedReader().readText() }
+                }.getOrNull(),
+            )
+        }
+    }
+
+    /// §038 — снимок последних N строк logcat'а нашего процесса. logd
+    /// UID-фильтрует автоматически (READ_LOGS не нужен). Timeout 2s
+    /// страхует от зависания на проблемных ROM.
+    private fun readLogcatTail(count: Int, level: String): String {
+        return runCatching {
+            val proc = ProcessBuilder("logcat", "-d", "-t", count.toString(), "*:$level")
+                .redirectErrorStream(true)
+                .start()
+            val out = proc.inputStream.bufferedReader().readText()
+            proc.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)
+            out
+        }.getOrElse {
+            Log.w(TAG, "logcat tail failed: ${it.message}")
+            ""
+        }
+    }
+
+    /// §038 — `ApplicationExitInfo.REASON_*` коды → читаемые имена.
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.R)
+    private fun exitReasonName(code: Int): String = when (code) {
+        android.app.ApplicationExitInfo.REASON_UNKNOWN -> "UNKNOWN"
+        android.app.ApplicationExitInfo.REASON_EXIT_SELF -> "EXIT_SELF"
+        android.app.ApplicationExitInfo.REASON_SIGNALED -> "SIGNALED"
+        android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "LOW_MEMORY"
+        android.app.ApplicationExitInfo.REASON_CRASH -> "CRASH"
+        android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "CRASH_NATIVE"
+        android.app.ApplicationExitInfo.REASON_ANR -> "ANR"
+        android.app.ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "INITIALIZATION_FAILURE"
+        android.app.ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "PERMISSION_CHANGE"
+        android.app.ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "EXCESSIVE_RESOURCE_USAGE"
+        android.app.ApplicationExitInfo.REASON_USER_REQUESTED -> "USER_REQUESTED"
+        android.app.ApplicationExitInfo.REASON_USER_STOPPED -> "USER_STOPPED"
+        android.app.ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "DEPENDENCY_DIED"
+        android.app.ApplicationExitInfo.REASON_OTHER -> "OTHER"
+        android.app.ApplicationExitInfo.REASON_PACKAGE_UPDATED -> "PACKAGE_UPDATED"
+        else -> "REASON_$code"
     }
 
     /// Запуск системного settings-activity. Сперва через activity-context
