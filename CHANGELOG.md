@@ -6,6 +6,27 @@
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Crash diagnostics MVP1: stderr viewer в Debug-экране** ([§038](docs/spec/features/038%20crash%20diagnostics/spec.md), [task 018](docs/spec/tasks/018-stderr-viewer-debug-tab.md)). `Libbox.redirectStderr` пишет Go panic-stacktrace в `external/stderr.log` до SIGABRT'а — файл переживает смерть процесса. Теперь в [Debug-экране](app/lib/screens/debug_screen.dart) появляется условная вкладка `stderr` (только если файл непустой — никаких лишних UI на устройствах без крашей). На вкладке: `SelectableText` monospace со всем содержимым, кнопки Refresh и Share. Share отдаёт файл напрямую через `share_plus` — компактно, без раскрытия user-конфига. Сервис чтения [`StderrReader`](app/lib/services/stderr_reader.dart) симметричен handler'у `_externalFile` из [§031 Debug API](docs/spec/features/031%20debug%20api/spec.md) — оба используют `path_provider`, без дублирующего MethodChannel. Намеренно показываем только последнюю сессию, без ротации/`.old`/накопления истории — цель MVP1 — закрыть текущий инцидент, не вести лог крашей.
+
+### Fixed
+
+- **Android 9-11 quick-connect регрессия** ([task 015](docs/spec/tasks/015-android-9-11-quickconnect-regression.md)). После v1.4.2 на Samsung A50/A10 (Android 11) и Huawei Y9 2018 (Android 9) приложение закрывалось сразу после OK на VPN-consent диалог; на Android 13 — работало. Корень — class verifier ART на старых API'ах + неконсистентный manifest-атрибут на разных OEM:
+  - `Tile.subtitle = ...` (API 29+) вынесен в `@RequiresApi(Q)` helper в [`LxBoxTileService`](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/LxBoxTileService.kt) — class verifier видит явный API-tag и не валит загрузку класса.
+  - `LxBoxTileService.refreshTile` и [`QuickShortcuts.refresh`](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/QuickShortcuts.kt) gated на API 30+ (Build.VERSION_CODES.R) с outer `try { Throwable }` — Quick Connect официально primary-tier фича; на best-effort устройствах 8-10 — честный no-op.
+  - Все Quick-Connect callsites в [`BoxVpnService.setStatus / onDestroy`](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt) и [`BoxApplication.initialize`](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxApplication.kt) обёрнуты в `runCatching` — побочные сбои tile/shortcut'ов не валят старт VPN.
+  - В [AndroidManifest.xml](app/android/app/src/main/AndroidManifest.xml) `FOREGROUND_SERVICE_SPECIAL_USE` permission получил `android:minSdkVersion="34"` — на API <34 не запрашивается, не валидируется, не отображается. Атрибут `android:foregroundServiceType="specialUse"` оставлен (нужен на 34+, на 30 парсится как unknown FGS-bit без runtime exception).
+  - В [`ServiceNotification.show`](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/ServiceNotification.kt) на API 34+ — typed `startForeground(id, notif, FOREGROUND_SERVICE_TYPE_SPECIAL_USE)`; на младших API — старый 2-арг API (как в v1.4.2, поведение не меняется).
+
+### Reliability
+
+- **`Libbox.newService` / `svc.start` ловят `Throwable`** ([task 016](docs/spec/tasks/016-libbox-newservice-throwable-catch.md)). Раньше catch ловил только `Exception` — `OutOfMemoryError` (большие geosite/geoip rule-sets) и `NoClassDefFoundError`/`VerifyError` (class load из libbox AAR на старых Android) пролетали в unhandled-Error внутри `serviceScope.launch`, и юзер видел «приложение закрылось» вместо понятного error-toast'а. `catch (t: Throwable)` теперь ведёт через `stopAndAlert("Failed to create service: …")`. **Не защищает** от Go panic без recover в нативе (это SIGABRT мимо JVM); защита от него — превентивная (валидация на стороне Dart-парсера) + постфактум (см. §038 stderr viewer выше).
+
+---
+
 ## [1.6.0] — 2026-04-25
 
 ### Added
