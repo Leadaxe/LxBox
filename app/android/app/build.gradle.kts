@@ -81,7 +81,7 @@ android {
 }
 
 dependencies {
-    implementation("com.github.singbox-android:libbox:1.12.12")
+    implementation("com.github.singbox-android:libbox:1.13.11")
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

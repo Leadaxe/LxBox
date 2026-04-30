@@ -445,7 +445,7 @@
         ]}
       ],
       "rule_set": [
-        {"tag": "ru-domains", "type": "inline", "format": "domain_suffix", "rules": [{"domain_suffix": ["ru", "su", "xn--p1ai", "xn--p1acf", "xn--80adxhks", "moscow", "tatar", "xn--d1acj3b", "xn--80asehdb", "xn--80aswg", "xn--c1avg", "xn--j1aef"]}]}
+        {"tag": "ru-domains", "type": "inline", "rules": [{"domain_suffix": ["ru", "su", "xn--p1ai", "xn--p1acf", "xn--80adxhks", "moscow", "tatar", "xn--d1acj3b", "xn--80asehdb", "xn--80aswg", "xn--c1avg", "xn--j1aef"]}]}
       ],
       "dns_rule": {"rule_set": "ru-domains", "server": "@dns_server"},
       "rule": {"rule_set": "ru-domains", "outbound": "@outbound"},

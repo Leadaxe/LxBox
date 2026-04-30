@@ -8,12 +8,38 @@
 
 ## [Unreleased]
 
+---
+
+## [1.6.0] — 2026-04-30
+
+Большой техдолг-cleanup релиз. Под капотом — миграция на актуальный sing-box 1.13.x с переработкой нативного VPN-сервиса. Снаружи — то же, плюс одна важная починка устойчивости.
+
+### Fixed
+
+- **Clash delay endpoint hang после ~27 минут аптайма** (root-cause [§039](docs/spec/features/039%20libbox%201.13%20migration/spec.md)). Симптом: все ноды в server-list show "err" в UI после 28-30 минут активной VPN-сессии, при том что трафик через выбранную ноду продолжает работать. Root cause — DNS cache dedup-lock goroutine leak в sing-box `dns/client.go:144-164`: per-question wait канал блокировался **без** `ctx.Done()`-awareness; первый раз когда upstream DNS-transport замёрз, все последующие waiter'ы парковались навсегда, включая горутины probe-механизма. Fix — upstream commit `aba8346b` ("Fix DNS cache lock goroutine leak"), вошёл в sing-box `v1.12.21+` и `v1.13.0+`.
+
+### Changed
+
+- **libbox: 1.12.12 → 1.13.11** (см. [§039](docs/spec/features/039%20libbox%201.13%20migration/spec.md)). Перешли на актуальный major-релиз sing-box. Ключевые архитектурные перемены подкапотом:
+  - **`BoxService` класс удалён в 1.13** — всё его API поглощено в `CommandServer`. Раньше у нас были два объекта (BoxService для runtime, CommandServer для Clash-сокета); теперь единый `CommandServer` владеет и runtime'ом через `startOrReloadService(config, opts)`. Same `pause()`/`wake()`, same `closeService()`, плюс two-phase shutdown (`closeService()` → `close()`).
+  - **`PlatformInterface` упрощён**: убраны `writeLog`, `packageNameByUid`, `uidByPackageName` — sing-box теперь сам ведёт UID→package mapping и отдаёт package names напрямую через richer `ConnectionOwner` struct (`userId`, `userName`, `processPath`, `androidPackageNames[]`). Один callback вместо трёх — меньше JNI roundtrip'ов.
+  - **`Seq.destroyRef` больше не вызываем** — Go runtime в 1.13 self-cleans refnum'ы; manual destroyRef = double-free. Подтверждено reference-имплементацией `SagerNet/sing-box-for-android`.
+  - **Two-phase shutdown на `Dispatchers.IO`** — `closeService()` сначала (остановить runtime; throwing → `setError` чтобы dashboard'ы увидели), потом `close()` (закрыть Unix-socket; non-throwing). Order matters: перепутать = Go callbacks могут зависнуть → ANR.
+- **Dart wrapper cleanup** (`box_vpn_client.dart`):
+  - `getVpnStatus()`/`onStatusChanged` возвращают типизированный `TunnelStatus`/`TunnelStatusEvent` вместо `String`/`Map<String,dynamic>`. Парсинг делается раз в клиенте, downstream работает с typed enum. Удалена дублирующая логика `TunnelStatus.fromNative()` + `_extractStopReason()` из `HomeController`.
+  - `BackgroundMode` enum (был `String 'never|lazy|always'`).
+  - `AppInfo` model (был `Map<String, dynamic>`) — теперь общий типизированный класс в `lib/models/app_info.dart`, используется в `BoxVpnClient.getInstalledApps`/`getAppInfo`, `app_info_cache.dart`, `app_picker_screen.dart`. Дублирующий `_AppInfo` в picker удалён.
+  - **MethodChannel timeouts** на критических вызовах — `getVpnStatus` (3s, init blocking risk), `startVPN` (30s), `stopVPN` (10s), `getInstalledApps` (15s), остальные 3-5s. На таймауте → `AppLog.error` + safe-default fallback. Без этого native deadlock мог заблокировать Flutter UI на init'е.
+  - `BoxVpnClient.I` singleton (как `AppLog.I`) + `BoxVpnClient.forTest({methods, events})` factory для юнит-тестов с mock channel'ами. Default `BoxVpnClient()` ctor сохранён для обратной совместимости (12+ callsite'ов).
+  - Method-name константы (`_Methods.saveConfig` etc.) — централизованный контракт с `VpnPlugin.kt`.
+- **`wizard_template.json`**: убрано невалидное поле `"format": "domain_suffix"` из inline rule_set'а `ru-domains`. Sing-box тихо обнулял его и в 1.12, и в 1.13, но в `option/rule_set.go` для inline-варианта это поле не определено — будущий sing-box 1.14+ может ужесточить и сделать hard reject.
+
 ### Build / CI
 
 - **APK размер: ~73 MB → ~56 MB.** CI теперь собирает **arm64-v8a single-arch** APK (`flutter build apk --release --target-platform android-arm64`) — то же что и локальная сборка через `scripts/build-local-apk.sh`. Раньше CI собирал fat-APK с тремя ABI (`armeabi-v7a + arm64-v8a + x86_64`); `libbox.so` (~17 MB) и `libapp.so` дублировались на каждую ABI, отсюда лишние ~17 MB.
   - Покрытие: arm64-v8a — 95%+ современных Android-устройств. Android 14+ Google запретил 32-bit-only платформы, поэтому новых armeabi-v7a-only устройств не появляется.
   - Не покрывает: `armeabi-v7a` only Android Go бюджет (Itel A48, Tecno Pop 5, Samsung A03 Core) — вне целевой аудитории VPN-клиента. Те юзеры просто увидят «device not compatible» при установке.
-  - **v1.5.0 (текущий)** — последний релиз с fat APK ~73 MB (CI был с старым флагом). v1.5.1+ — arm64-only ~56 MB.
+  - **v1.5.0 (предыдущий)** — последний релиз с fat APK ~73 MB. v1.6.0+ — arm64-only ~56 MB.
   - Если когда-то потребуется поддержка 32-bit ARM — отдельный `--split-per-abi` build с тремя assets в одном release.
 
 ---

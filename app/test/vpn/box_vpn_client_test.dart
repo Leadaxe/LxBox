@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/background_mode.dart';
 import 'package:lxbox/vpn/box_vpn_client.dart';
 
 /// Narrow contract tests для MethodChannel'а VpnPlugin.
@@ -39,15 +40,15 @@ void main() {
   });
 
   group('BoxVpnClient.setBackgroundMode', () {
-    test('passes mode argument verbatim to native', () async {
-      await BoxVpnClient().setBackgroundMode('lazy');
+    test('passes mode wireValue to native', () async {
+      await BoxVpnClient().setBackgroundMode(BackgroundMode.lazy);
       expect(calls.single.method, equals('setBackgroundMode'));
       expect(calls.single.arguments, equals({'mode': 'lazy'}));
     });
 
-    test('accepts all three documented values', () async {
+    test('serializes all three enum values via wireValue', () async {
       final client = BoxVpnClient();
-      for (final mode in ['never', 'lazy', 'always']) {
+      for (final mode in BackgroundMode.values) {
         await client.setBackgroundMode(mode);
       }
       expect(calls.map((c) => c.arguments['mode']).toList(),
@@ -56,9 +57,9 @@ void main() {
   });
 
   group('BoxVpnClient.getBackgroundMode', () {
-    test('returns native value', () async {
+    test('parses native string into enum', () async {
       final m = await BoxVpnClient().getBackgroundMode();
-      expect(m, equals('never'));
+      expect(m, equals(BackgroundMode.never));
       expect(calls.single.method, equals('getBackgroundMode'));
     });
   });
