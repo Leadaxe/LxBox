@@ -148,8 +148,12 @@ jobs:
             echo "storeFile=upload-keystore.jks"
           } > android/key.properties
 
-      - name: Build APK (release)
-        run: flutter build apk --release
+      - name: Build APK (release, arm64-only)
+        # arm64-v8a single-arch — экономит ~17 MB vs fat APK. Покрывает 95%+
+        # Android-устройств; armeabi-v7a-only (Android Go bargain phones типа
+        # Itel A48 / Tecno Pop 5) вне нашей целевой аудитории. Если когда-то
+        # потребуется — отдельный --split-per-abi build с тремя assets.
+        run: flutter build apk --release --target-platform android-arm64
 
       - name: Upload APK (release)
         uses: actions/upload-artifact@v4
