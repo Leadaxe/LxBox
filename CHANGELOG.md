@@ -6,6 +6,18 @@
 
 ---
 
+## [Unreleased]
+
+### Build / CI
+
+- **APK размер: ~73 MB → ~56 MB.** CI теперь собирает **arm64-v8a single-arch** APK (`flutter build apk --release --target-platform android-arm64`) — то же что и локальная сборка через `scripts/build-local-apk.sh`. Раньше CI собирал fat-APK с тремя ABI (`armeabi-v7a + arm64-v8a + x86_64`); `libbox.so` (~17 MB) и `libapp.so` дублировались на каждую ABI, отсюда лишние ~17 MB.
+  - Покрытие: arm64-v8a — 95%+ современных Android-устройств. Android 14+ Google запретил 32-bit-only платформы, поэтому новых armeabi-v7a-only устройств не появляется.
+  - Не покрывает: `armeabi-v7a` only Android Go бюджет (Itel A48, Tecno Pop 5, Samsung A03 Core) — вне целевой аудитории VPN-клиента. Те юзеры просто увидят «device not compatible» при установке.
+  - **v1.5.0 (текущий)** — последний релиз с fat APK ~73 MB (CI был с старым флагом). v1.5.1+ — arm64-only ~56 MB.
+  - Если когда-то потребуется поддержка 32-bit ARM — отдельный `--split-per-abi` build с тремя assets в одном release.
+
+---
+
 ## [1.5.0] — 2026-04-29
 
 ### Added
