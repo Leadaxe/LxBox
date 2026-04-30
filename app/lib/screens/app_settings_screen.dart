@@ -13,6 +13,7 @@ import '../services/settings_storage.dart';
 import '../services/update_checker.dart';
 import '../vpn/box_vpn_client.dart';
 import 'about_screen.dart';
+import 'backup_screen.dart';
 
 class AppSettingsScreen extends StatefulWidget {
   const AppSettingsScreen({super.key});
@@ -401,6 +402,20 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
               HapticService.I.onConnectTap();
             }
           } : null,
+        ),
+        const Divider(height: 32),
+        Text('Backup & restore', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        ListTile(
+          leading: const Icon(Icons.import_export),
+          title: const Text('Backup & restore'),
+          subtitle: const Text(
+              'Export subscriptions, routing setup and preferences as JSON.'),
+          trailing: const Icon(Icons.chevron_right),
+          contentPadding: EdgeInsets.zero,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const BackupScreen()),
+          ),
         ),
       ],
     );
