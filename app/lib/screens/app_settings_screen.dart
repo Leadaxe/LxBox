@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../main.dart';
+import '../models/background_mode.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/transport/server.dart';
 import '../services/haptic_service.dart';
@@ -28,7 +29,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _haptic = true;
   bool _batteryWhitelisted = false;
   bool _notificationsEnabled = true;
-  String _backgroundMode = 'never';
+  BackgroundMode _backgroundMode = BackgroundMode.never;
   bool _autoPing = true;
   bool _autoUpdateSubs = true;
   bool _autoCheckUpdates = true;
@@ -153,7 +154,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     await applyDebugApiSettings();
   }
 
-  Future<void> _applyBackgroundMode(String? mode) async {
+  Future<void> _applyBackgroundMode(BackgroundMode? mode) async {
     if (mode == null || mode == _backgroundMode) return;
     setState(() => _backgroundMode = mode);
     await _vpn.setBackgroundMode(mode);
@@ -484,30 +485,30 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
             style: TextStyle(fontSize: 12),
           ),
         ),
-        RadioGroup<String>(
+        RadioGroup<BackgroundMode>(
           groupValue: _backgroundMode,
-          onChanged: (String? m) {
+          onChanged: (BackgroundMode? m) {
             if (!_loaded) return;
             unawaited(_applyBackgroundMode(m));
           },
           child: const Column(
             children: [
-              RadioListTile<String>(
-                value: 'never',
+              RadioListTile<BackgroundMode>(
+                value: BackgroundMode.never,
                 title: Text('Never sleep (recommended)'),
                 subtitle: Text(
                     'Tunnel is always active. Best reliability — pushes '
                     'and long-lived sockets survive. Higher battery use.'),
               ),
-              RadioListTile<String>(
-                value: 'lazy',
+              RadioListTile<BackgroundMode>(
+                value: BackgroundMode.lazy,
                 title: Text('Lazy sleep'),
                 subtitle: Text(
                     'Pause only in deep Doze (screen off for a long '
                     'time + no motion). Balanced.'),
               ),
-              RadioListTile<String>(
-                value: 'always',
+              RadioListTile<BackgroundMode>(
+                value: BackgroundMode.always,
                 title: Text('Aggressive battery saving'),
                 subtitle: Text(
                     'Pause tunnel whenever screen turns off. Max '

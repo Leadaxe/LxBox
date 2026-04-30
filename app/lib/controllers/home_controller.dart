@@ -21,7 +21,7 @@ class HomeController extends ChangeNotifier {
 
   final BoxVpnClient _vpn = BoxVpnClient();
   final AutoUpdater? _autoUpdater;
-  StreamSubscription<Map<String, dynamic>>? _statusSub;
+  StreamSubscription<TunnelStatusEvent>? _statusSub;
   ClashApiClient? _clash;
   ClashApiClient? get clashClient => _clash;
   Timer? _heartbeat;
@@ -76,8 +76,8 @@ class HomeController extends ChangeNotifier {
     // что туннель уже Started — поле застревает в `disconnected`, а Start-
     // кнопка может оказаться неактивна. Pull'им текущий статус и пропускаем
     // через тот же handler — он сам решит что эмитить.
-    final raw = await _vpn.getVpnStatus();
-    _handleStatusEvent({'status': raw});
+    final pulled = await _vpn.getVpnStatus();
+    _handleStatusEvent(TunnelStatusEvent(status: pulled, raw: pulled.name));
   }
 
   @override
@@ -110,13 +110,13 @@ class HomeController extends ChangeNotifier {
   // Native VPN events
   // ---------------------------------------------------------------------------
 
-  void _handleStatusEvent(Map<String, dynamic> event) {
-    final raw = event['status']?.toString() ?? '';
-    final tunnel = TunnelStatus.fromNative(raw);
+  void _handleStatusEvent(TunnelStatusEvent event) {
+    final tunnel = event.status;
     final prevTunnel = _state.tunnel;
-    _addDebug(DebugSource.core, event.toString());
+    _addDebug(DebugSource.core,
+        'status=${event.raw}${event.errorReason != null ? " reason=${event.errorReason}" : ""}');
     _addDebug(DebugSource.app,
-        '[vpn] _handleStatusEvent raw="$raw" tunnel=${tunnel.name} prev=${prevTunnel.name} stale_before=${_state.configStaleSinceStart}');
+        '[vpn] _handleStatusEvent raw="${event.raw}" tunnel=${tunnel.name} prev=${prevTunnel.name} stale_before=${_state.configStaleSinceStart}');
 
     // Все мутации state складываем в **одно** copyWith в конце — было три
     // отдельных _emit (tunnel; then connectedSince+stale; then cleanup-
@@ -148,7 +148,7 @@ class HomeController extends ChangeNotifier {
       _clash = null;
       final reason = tunnel == TunnelStatus.revoked
           ? 'VPN revoked by another app'
-          : _extractStopReason(event);
+          : (event.errorReason != null ? 'Stopped: ${event.errorReason}' : '');
       _emit(
         _state.copyWith(
           tunnel: tunnel,
@@ -307,16 +307,9 @@ class HomeController extends ChangeNotifier {
     }
   }
 
-  String _extractStopReason(Map<String, dynamic> event) {
-    const keys = <String>['error', 'message', 'reason', 'details', 'description'];
-    for (final key in keys) {
-      final value = event[key];
-      if (value == null) continue;
-      final text = value.toString().trim();
-      if (text.isNotEmpty) return 'Stopped: $text';
-    }
-    return '';
-  }
+  // _extractStopReason removed — логика переехала в TunnelStatusEvent._extractReason
+  // (см. lib/models/tunnel_status.dart). HomeController теперь использует
+  // event.errorReason напрямую.
 
   // ---------------------------------------------------------------------------
   // Config persistence
@@ -853,12 +846,11 @@ class HomeController extends ChangeNotifier {
 
   Future<void> _resyncOnResume() async {
     try {
-      final raw = await _vpn.getVpnStatus();
-      final native = TunnelStatus.fromNative(raw);
+      final native = await _vpn.getVpnStatus();
       if (native != _state.tunnel) {
         _addDebug(DebugSource.app,
             '[vpn] onAppResumed: divergence native=${native.name} state=${_state.tunnel.name} — re-sync');
-        _handleStatusEvent({'status': raw});
+        _handleStatusEvent(TunnelStatusEvent(status: native, raw: native.name));
       }
     } catch (e) {
       _addDebug(DebugSource.app, '[vpn] onAppResumed pull error: $e');
