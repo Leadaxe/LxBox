@@ -321,6 +321,51 @@ class BoxVpnClient {
   }
 
   // ---------------------------------------------------------------------------
+  // Diagnostics / introspection
+  // ---------------------------------------------------------------------------
+
+  /// Версия sing-box core (libbox) — статический Go-side метод
+  /// `Libbox.version()`. Возвращает строку вида `"1.13.11"`. Используется в
+  /// About screen чтобы юзер видел какое именно core встроено.
+  /// Empty string на ошибку/timeout — caller рендерит fallback.
+  Future<String> getCoreVersion() async {
+    final v = await _invoke<String>(
+      _Methods.getCoreVersion,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: '',
+    );
+    return v ?? '';
+  }
+
+  /// Recovery action: in-place reload box runtime через
+  /// `CommandServer.startOrReloadService`. **Не убивает** Android Service —
+  /// быстрее чем full disconnect/connect, tunnel дропается на ~3 сек. См.
+  /// [§030](../docs/spec/tasks/030-vpn-reload-button.md).
+  Future<bool> reloadVPN() async {
+    final ok = await _invoke<bool>(
+      _Methods.reloadVPN,
+      timeout: _Timeouts.reload,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  /// Recovery action (experimental): `commandServer.resetNetwork()` →
+  /// `box.Router().ResetNetwork()` — переустанавливает network sub-state
+  /// (outbound bindings, DNS upstream tracking) **без recreate'а runtime**.
+  /// Должно быть truly gentle (in-flight TCP не дропаются), но семантика
+  /// требует экспериментальной верификации. См.
+  /// [§031](../docs/spec/tasks/031-reset-network-api.md).
+  Future<bool> resetNetwork() async {
+    final ok = await _invoke<bool>(
+      _Methods.resetNetwork,
+      timeout: _Timeouts.resetNet,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  // ---------------------------------------------------------------------------
   // Status stream
   // ---------------------------------------------------------------------------
 
@@ -422,6 +467,13 @@ class _Methods {
 
   // Quick Connect
   static const requestAddTile = 'requestAddTile';
+
+  // Diagnostics / introspection
+  static const getCoreVersion = 'getCoreVersion';
+
+  // Recovery actions (specs 030, 031)
+  static const reloadVPN = 'reloadVPN';
+  static const resetNetwork = 'resetNetwork';
 }
 
 // -----------------------------------------------------------------------------
@@ -463,4 +515,11 @@ class _Timeouts {
 
   /// `requestAddTile` — system dialog может задержать. 10s.
   static const requestTile = Duration(seconds: 10);
+
+  /// `reloadVPN` — sing-box recreates box runtime (~3s) внутри CommandServer.
+  /// Запас на slow devices.
+  static const reload = Duration(seconds: 10);
+
+  /// `resetNetwork` — лёгкий reset, должен быть мгновенным. Запас.
+  static const resetNet = Duration(seconds: 5);
 }

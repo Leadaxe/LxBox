@@ -36,6 +36,8 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         private const val TAG = "BoxVpnService"
         const val ACTION_START = "com.leadaxe.lxbox.ACTION_START"
         const val ACTION_STOP = "com.leadaxe.lxbox.ACTION_STOP"
+        const val ACTION_RELOAD = "com.leadaxe.lxbox.ACTION_RELOAD"
+        const val ACTION_RESET_NETWORK = "com.leadaxe.lxbox.ACTION_RESET_NETWORK"
         const val BROADCAST_STATUS = "com.leadaxe.lxbox.BROADCAST_STATUS"
         const val EXTRA_STATUS = "status"
 
@@ -63,6 +65,24 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             Log.d(TAG, "[vpn] companion.stop() → sendBroadcast(ACTION_STOP), current status=${currentStatus.name}")
             context.sendBroadcast(
                 Intent(ACTION_STOP).setPackage(context.packageName)
+            )
+        }
+
+        /// In-place reload sing-box runtime (через CommandServer.startOrReloadService).
+        /// Не убивает Android Service. Tunnel дропается на ~3s. См. spec 030.
+        fun reload(context: Context) {
+            Log.d(TAG, "[vpn] companion.reload() current status=${currentStatus.name}")
+            context.sendBroadcast(
+                Intent(ACTION_RELOAD).setPackage(context.packageName)
+            )
+        }
+
+        /// Reset network sub-state роутера (outbound dialer bindings, DNS upstream
+        /// tracking) без recreate'а box runtime. Experimental, см. spec 031.
+        fun resetNetwork(context: Context) {
+            Log.d(TAG, "[vpn] companion.resetNetwork() current status=${currentStatus.name}")
+            context.sendBroadcast(
+                Intent(ACTION_RESET_NETWORK).setPackage(context.packageName)
             )
         }
 
@@ -121,6 +141,16 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             Log.d(TAG, "[vpn] service.receiver.onReceive action=${intent.action} status=${status.name} registered=$receiverRegistered")
             when (intent.action) {
                 ACTION_STOP -> doStop()
+                ACTION_RELOAD -> {
+                    Log.d(TAG, "[vpn] receiver: ACTION_RELOAD → serviceReload()")
+                    runCatching { serviceReload() }
+                        .onFailure { Log.e(TAG, "ACTION_RELOAD failed", it) }
+                }
+                ACTION_RESET_NETWORK -> {
+                    Log.d(TAG, "[vpn] receiver: ACTION_RESET_NETWORK → cs.resetNetwork()")
+                    runCatching { commandServer?.resetNetwork() }
+                        .onFailure { Log.e(TAG, "ACTION_RESET_NETWORK failed", it) }
+                }
                 PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) onIdleModeChanged()
                 }
@@ -168,6 +198,8 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             Log.d(TAG, "[vpn] registerReceiver from onStartCommand mode=$mode")
             ContextCompat.registerReceiver(this, receiver, IntentFilter().apply {
                 addAction(ACTION_STOP)
+                addAction(ACTION_RELOAD)
+                addAction(ACTION_RESET_NETWORK)
                 // Подписка на сигналы засыпания зависит от режима:
                 //   never  — только ACTION_STOP, pause/wake не зовём никогда
                 //   lazy   — deep Doze (текущее sing-box-android поведение)

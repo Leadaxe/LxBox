@@ -52,6 +52,12 @@ class HomeController extends ChangeNotifier {
   /// Иначе — каждые 20 сек вибро-спам пока туннель лежит.
   bool _heartbeatFailNotified = false;
 
+  /// Cooldown timestamps для recovery actions (reloadVpn / resetNetwork) —
+  /// чтобы юзер не спамил кнопками при тревоге. См. spec 030 / 031.
+  DateTime? _lastReloadTap;
+  DateTime? _lastResetNetworkTap;
+  static const _recoveryCooldown = Duration(seconds: 3);
+
   /// One-shot timer for auto-ping-on-connect (5s after tunnel up). Отменяется
   /// при disconnect чтобы не стрельнул в уже отключённом состоянии.
   Timer? _autoPingTimer;
@@ -546,6 +552,43 @@ class HomeController extends ChangeNotifier {
     } finally {
       _emit(_state.copyWith(busy: false));
     }
+  }
+
+  /// Можно ли сейчас триггерить in-place reload (cooldown-aware). UI bind'ит
+  /// `IconButton.onPressed` к этому, чтобы кнопка disabled на 3s после tap'а
+  /// и недоступна когда туннель не up.
+  bool get canReload =>
+      _state.tunnel == TunnelStatus.connected &&
+      (_lastReloadTap == null ||
+          DateTime.now().difference(_lastReloadTap!) > _recoveryCooldown);
+
+  /// In-place reload sing-box runtime через `commandServer.startOrReloadService`.
+  /// Tunnel дропается на ~3s, Android Service не убивается. См. spec 030.
+  Future<void> reloadVpn() async {
+    if (!canReload) return;
+    _lastReloadTap = DateTime.now();
+    notifyListeners();
+    final ok = await _vpn.reloadVPN();
+    _addDebug(DebugSource.app, '[vpn] reload → ok=$ok');
+    // Cooldown timer перерендерит canReload через 3s — назначаем future
+    // notifyListeners (без heavy timer'а; achievable через delayed Future).
+    Future.delayed(_recoveryCooldown, () {
+      if (_lastReloadTap != null) notifyListeners();
+    });
+  }
+
+  /// Reset network sub-state (experimental, spec 031). Не дропает runtime.
+  /// UI пока не использует — только через Debug API для экспериментов.
+  Future<bool> resetNetwork() async {
+    if (_state.tunnel != TunnelStatus.connected) return false;
+    if (_lastResetNetworkTap != null &&
+        DateTime.now().difference(_lastResetNetworkTap!) < _recoveryCooldown) {
+      return false;
+    }
+    _lastResetNetworkTap = DateTime.now();
+    final ok = await _vpn.resetNetwork();
+    _addDebug(DebugSource.app, '[vpn] resetNetwork → ok=$ok');
+    return ok;
   }
 
   /// Reconnect = `_stopInternal` → `_startInternal`. Blocking на native

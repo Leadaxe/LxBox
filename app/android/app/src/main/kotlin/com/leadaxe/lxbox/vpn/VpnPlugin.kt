@@ -121,6 +121,29 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // новый плагин ничего не получит без явного запроса).
                 result.success(BoxVpnService.currentStatus.name)
             }
+            "getCoreVersion" -> {
+                // Libbox.version() — статический Go-side метод; возвращает
+                // строку вида "1.13.11". Используется в About screen.
+                // Не требует libbox.setup; safe to call в любой момент.
+                try {
+                    result.success(io.nekohasekai.libbox.Libbox.version())
+                } catch (t: Throwable) {
+                    Log.e(TAG, "getCoreVersion failed", t)
+                    result.success("")
+                }
+            }
+            "reloadVPN" -> {
+                // Spec 030: in-place reload sing-box runtime через
+                // CommandServer.startOrReloadService — без recreate'а Android Service.
+                BoxVpnService.reload(applicationContext)
+                result.success(true)
+            }
+            "resetNetwork" -> {
+                // Spec 031 (experimental): box.Router().ResetNetwork() — gentle
+                // reset network sub-state без drop'а runtime.
+                BoxVpnService.resetNetwork(applicationContext)
+                result.success(true)
+            }
             "setNotificationTitle" -> {
                 val title = call.argument<String>("title") ?: "L×Box"
                 ConfigManager.setNotificationTitle(title)

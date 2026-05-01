@@ -340,7 +340,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         final startEnabled = !state.busy && !state.tunnelUp && state.configRaw.isNotEmpty;
         final stopEnabled = !state.busy && state.tunnelUp;
         return Scaffold(
-          appBar: AppBar(title: const Text('L×Box')),
+          appBar: AppBar(
+            title: const Text('L×Box'),
+            actions: [
+              // Reload core (spec 030) — viden когда tunnel up. Cooldown 3s
+              // через _controller.canReload — кнопка disabled на этот период.
+              if (state.tunnel == TunnelStatus.connected)
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'Reload VPN core',
+                  onPressed: _controller.canReload
+                      ? () async {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Reloading core…'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                          await _controller.reloadVpn();
+                        }
+                      : null,
+                ),
+            ],
+          ),
           drawer: _buildDrawer(state),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
