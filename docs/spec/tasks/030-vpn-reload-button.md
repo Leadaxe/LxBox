@@ -142,21 +142,38 @@ Future<void> reloadVpn() async {
 
 ### 5. `home_screen.dart`
 
-В AppBar `IconButton` когда `tunnel == connected`:
+**Не добавляем** новую кнопку — заменяем поведение существующей `_buildReloadButton` (Icons.refresh с long-press menu, которая уже была на главном экране).
+
+Раньше **default tap** при `tunnelUp + не-dirty config` вызывал `_controller.reconnect()` (full stop+start). Меняем на `_controller.reloadVpn()` (in-place):
 
 ```dart
-if (state.tunnel == TunnelStatus.connected)
-  IconButton(
-    icon: const Icon(Icons.refresh),
-    tooltip: 'Reload VPN core',
-    onPressed: controller.canReload ? () async {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reloading core…'), duration: Duration(seconds: 2)),
-      );
-      await controller.reloadVpn();
-    } : null,
-  ),
+void _runDefaultReload(HomeState state) {
+  HapticService.I.onConnectTap();
+  if (!state.tunnelUp) {
+    unawaited(_rebuildAndStart());
+    return;
+  }
+  final dirty = _subController.configDirty || _needsRestart;
+  if (dirty) {
+    unawaited(_rebuildAndReconnect());  // tunnel down → не релевантно для in-place
+  } else {
+    unawaited(_controller.reloadVpn());  // ← БЫЛО reconnect(), стало reloadVpn()
+  }
+}
 ```
+
+Label кнопки меняется: `'Reconnect'` → `'Reload'`.
+
+Long-press menu **сохраняется** — содержит явный пункт "Reconnect" который зовёт `_controller.reconnect()` (heavy fallback) для случаев когда in-place reload не помог. То есть юзер имеет:
+
+| Действие | Поведение |
+|---|---|
+| **Tap** (default) | In-place reload (light, ~3s) |
+| **Long-press → Reconnect** | Full stop+start (heavy fallback) |
+| **Long-press → Rebuild config only** | Без restart'а |
+| **Long-press → Rebuild + reconnect** | Heavy + config rebuild |
+
+Cooldown на default tap — через `controller.canReload` getter (3 сек).
 
 ## Test plan
 

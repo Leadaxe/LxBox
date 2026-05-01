@@ -340,29 +340,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         final startEnabled = !state.busy && !state.tunnelUp && state.configRaw.isNotEmpty;
         final stopEnabled = !state.busy && state.tunnelUp;
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('L×Box'),
-            actions: [
-              // Reload core (spec 030) — viden когда tunnel up. Cooldown 3s
-              // через _controller.canReload — кнопка disabled на этот период.
-              if (state.tunnel == TunnelStatus.connected)
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  tooltip: 'Reload VPN core',
-                  onPressed: _controller.canReload
-                      ? () async {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Reloading core…'),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                          await _controller.reloadVpn();
-                        }
-                      : null,
-                ),
-            ],
-          ),
+          appBar: AppBar(title: const Text('L×Box')),
           drawer: _buildDrawer(state),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -695,7 +673,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
 
   String _defaultReloadLabel(HomeState state, bool dirty) {
     if (!state.tunnelUp) return 'Rebuild config + connect';
-    return dirty ? 'Rebuild config + reconnect' : 'Reconnect';
+    // §030: default tap теперь делает in-place reload (легче чем reconnect).
+    // Long-press menu всё ещё даёт явный 'Reconnect' для full restart.
+    return dirty ? 'Rebuild config + reconnect' : 'Reload';
   }
 
   void _runDefaultReload(HomeState state) {
@@ -708,7 +688,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (dirty) {
       unawaited(_rebuildAndReconnect());
     } else {
-      unawaited(_controller.reconnect());
+      // §030 — in-place reload через `commandServer.startOrReloadService`.
+      // Раньше тут был `reconnect()` (full stop+start с recreate Android Service);
+      // новый путь не убивает Service, tunnel дропается на ~3s вместо 5-10s.
+      // Long-press menu даёт fallback на full reconnect для случаев когда
+      // in-place reload не помог.
+      unawaited(_controller.reloadVpn());
     }
   }
 
