@@ -716,6 +716,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       context: context,
       position: rect,
       items: [
+        // Reload первый — самый light recovery (in-place через CommandServer.
+        // startOrReloadService). Tap по кнопке выполняет это же действие.
+        if (state.tunnelUp)
+          const PopupMenuItem(
+            value: 'reload',
+            child: Row(children: [
+              Icon(Icons.bolt, size: 18),
+              SizedBox(width: 12),
+              Text('Reload'),
+            ]),
+          ),
         PopupMenuItem(
           value: 'reconnect',
           child: Row(children: [
@@ -745,6 +756,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (!mounted || choice == null) return;
     HapticService.I.onConnectTap();
     switch (choice) {
+      case 'reload':
+        unawaited(_controller.reloadVpn());
       case 'reconnect':
         unawaited(_controller.reconnect());
       case 'rebuild':
