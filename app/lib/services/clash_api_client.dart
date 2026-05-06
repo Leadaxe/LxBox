@@ -6,12 +6,26 @@ import '../config/clash_endpoint.dart';
 
 class ClashApiClient {
   ClashApiClient(this.endpoint, {http.Client? httpClient})
-      : _http = httpClient ?? http.Client();
+      : _http = httpClient ?? http.Client(),
+        _delayHttp = http.Client();
 
   final ClashEndpoint endpoint;
   final http.Client _http;
+  // Отдельный клиент для delay/groupDelay (mass ping). При cancel вызываем
+  // [cancelDelays] — закрываем этот клиент, in-flight запросы рвутся с
+  // exception, worker'ы попадают в catch и завершаются. Основной _http
+  // не трогается — Clash dashboard / fetchProxies / selectInGroup и т.п.
+  // продолжают работать.
+  http.Client _delayHttp;
 
   static const _timeout = Duration(seconds: 10);
+
+  /// Buffer на response cleanup/сериализацию у sing-box после того как его
+  /// внутренний `timeoutMs` (для delay/groupDelay) срабатывает: cancel
+  /// in-flight TCP/TLS, JSON-encode, доставка через loopback. ~500-1000ms
+  /// реально хватает; 750 — комфортный середняк, не false-positive'ит,
+  /// не делает Dart wait сильно длиннее clash'евого.
+  static const _delayResponseBuffer = Duration(milliseconds: 750);
 
   Map<String, String> get _headers => {
         if (endpoint.secret.isNotEmpty) 'Authorization': 'Bearer ${endpoint.secret}',
@@ -84,7 +98,13 @@ class ClashApiClient {
     };
     final uri = _u('/proxies/${Uri.encodeComponent(proxyTag)}/delay')
         .replace(queryParameters: q);
-    final r = await _http.get(uri, headers: _headers).timeout(_timeout);
+    // Dart-side wrapper timeout согласован с clash API `timeout` query-param'ом
+    // + cleanup buffer ([_delayResponseBuffer]). Без согласования юзерский
+    // `timeoutMs > 10s` превращался бы в Dart TimeoutException вместо
+    // нормального clash response.
+    final r = await _delayHttp.get(uri, headers: _headers).timeout(
+          Duration(milliseconds: timeoutMs) + _delayResponseBuffer,
+        );
     if (r.statusCode != 200) throw ClashHttpException(r.statusCode, r.body);
     final j = jsonDecode(r.body);
     if (j is Map<String, dynamic> && j['delay'] is num) {
@@ -108,10 +128,10 @@ class ClashApiClient {
     };
     final uri = _u('/group/${Uri.encodeComponent(groupTag)}/delay')
         .replace(queryParameters: q);
-    final r = await _http.get(uri, headers: _headers).timeout(
-          // Timeout на клиенте чуть больше чем на сервере — sing-box сам
-          // подождёт все свои таймауты (timeoutMs ms) и только потом ответит.
-          Duration(milliseconds: timeoutMs + 5000),
+    final r = await _delayHttp.get(uri, headers: _headers).timeout(
+          // Timeout на клиенте = timeoutMs + cleanup buffer ([_delayResponseBuffer]).
+          // Sing-box сам подождёт свои timeoutMs и только потом сериализует ответ.
+          Duration(milliseconds: timeoutMs) + _delayResponseBuffer,
         );
     if (r.statusCode != 200) throw ClashHttpException(r.statusCode, r.body);
     final j = jsonDecode(r.body);
@@ -163,6 +183,17 @@ class ClashApiClient {
     final j = jsonDecode(r.body);
     if (j is! Map<String, dynamic>) throw const FormatException('connections: not an object');
     return TrafficSnapshot.fromConnectionsJson(j);
+  }
+
+  /// Cancel all in-flight `delay` / `groupDelay` requests by closing the
+  /// dedicated delay-client. In-flight HTTP-вызовы получают
+  /// `ClientException` (or socket exception), worker'ы попадают в catch и
+  /// завершаются. Сразу пересоздаём клиент, чтобы следующий ping снова
+  /// работал. Основной `_http` не трогается — Clash dashboard / fetchProxies
+  /// продолжают работать без перерыва.
+  void cancelDelays() {
+    _delayHttp.close();
+    _delayHttp = http.Client();
   }
 }
 

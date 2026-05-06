@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../services/backup_service.dart';
+import '../services/error_format.dart';
 
 /// Backup & restore UI — спека [§040](../../docs/spec/features/040 backup
 /// restore ui/spec.md). Тонкая обёртка над [BackupService] — orchestration
@@ -101,7 +102,7 @@ class _BackupScreenState extends State<BackupScreen> {
       );
       _snack('Backup exported (${json.length} bytes)');
     } catch (e) {
-      _snack('Export failed: $e');
+      _snack('Export failed: ${formatUserError(e)}');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -178,7 +179,7 @@ class _BackupScreenState extends State<BackupScreen> {
       }
       _snack(summary.toString());
     } catch (e) {
-      _snack('Import failed: $e');
+      _snack('Import failed: ${formatUserError(e)}');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

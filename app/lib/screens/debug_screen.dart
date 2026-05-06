@@ -5,7 +5,9 @@ import 'package:share_plus/share_plus.dart';
 import '../models/debug_entry.dart';
 import '../services/app_log.dart';
 import '../services/dump_builder.dart';
+import '../services/error_format.dart';
 import '../services/stderr_reader.dart';
+import 'app_settings_screen.dart';
 
 class DebugScreen extends StatefulWidget {
   const DebugScreen({super.key});
@@ -14,7 +16,7 @@ class DebugScreen extends StatefulWidget {
   State<DebugScreen> createState() => _DebugScreenState();
 }
 
-enum _DebugAction { clear, copy }
+enum _DebugAction { clear, copy, diagnosticsSettings }
 
 class _DebugScreenState extends State<DebugScreen> {
   DebugFilter _sourceFilter = DebugFilter.all;
@@ -87,7 +89,7 @@ class _DebugScreenState extends State<DebugScreen> {
         subject: name,
       );
     } catch (e) {
-      _snack('Share failed: $e');
+      _snack('Share failed: ${formatUserError(e)}');
     } finally {
       if (mounted) setState(() => _buildingDump = false);
     }
@@ -110,7 +112,7 @@ class _DebugScreenState extends State<DebugScreen> {
         subject: 'L×Box stderr — $ts',
       );
     } catch (e) {
-      _snack('Share failed: $e');
+      _snack('Share failed: ${formatUserError(e)}');
     }
   }
 
@@ -184,6 +186,8 @@ class _DebugScreenState extends State<DebugScreen> {
               AppLog.I.clear();
             case _DebugAction.copy:
               _copyAll(filtered);
+            case _DebugAction.diagnosticsSettings:
+              _openDiagnosticsSettings();
           }
         },
         itemBuilder: (_) => [
@@ -207,9 +211,31 @@ class _DebugScreenState extends State<DebugScreen> {
               contentPadding: EdgeInsets.zero,
             ),
           ),
+          // §043: shortcut в Diagnostics tab App Settings'ов — там toggle
+          // "Forward sing-box logs" + Debug API настройки.
+          const PopupMenuDivider(),
+          const PopupMenuItem(
+            value: _DebugAction.diagnosticsSettings,
+            child: ListTile(
+              leading: Icon(Icons.tune),
+              title: Text('Diagnostics settings'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
         ],
       ),
     ];
+  }
+
+  /// §043: открыть App Settings → Diagnostics. Юзер видит что Core пустой
+  /// → 3-точечное меню → Diagnostics settings → toggle "Forward sing-box logs".
+  void _openDiagnosticsSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const AppSettingsScreen(initialTab: 2),
+      ),
+    );
   }
 
   Widget _buildLogTab(List<DebugEntry> filtered) {

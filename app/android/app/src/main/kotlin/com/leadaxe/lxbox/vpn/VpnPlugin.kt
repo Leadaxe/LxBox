@@ -30,11 +30,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val TAG = "VpnPlugin"
         private const val METHOD_CHANNEL = "com.leadaxe.lxbox/methods"
         private const val STATUS_CHANNEL = "com.leadaxe.lxbox/status_events"
+        private const val CORE_LOG_CHANNEL = "lxbox/coreLog"   // §043
         private const val VPN_REQUEST_CODE = 24
     }
 
     private lateinit var methodChannel: MethodChannel
     private lateinit var statusEventChannel: EventChannel
+    private lateinit var coreLogEventChannel: EventChannel
     private lateinit var context: Context
     private var activity: Activity? = null
     private var statusSink: EventChannel.EventSink? = null
@@ -84,6 +86,21 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
         })
 
+        // §043: core log pump из sing-box. Sing-box логи приходят через
+        // PlatformInterface.writeDebugMessage в BoxVpnService → coreLogSink
+        // (Volatile companion field) → этот EventChannel → ClashLogPump в Dart.
+        coreLogEventChannel = EventChannel(binding.binaryMessenger, CORE_LOG_CHANNEL)
+        coreLogEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) {
+                Log.d(TAG, "[vpn] coreLogEventChannel.onListen — sink installed")
+                BoxVpnService.coreLogSink = sink
+            }
+            override fun onCancel(args: Any?) {
+                Log.d(TAG, "[vpn] coreLogEventChannel.onCancel — sink cleared")
+                BoxVpnService.coreLogSink = null
+            }
+        })
+
         Log.d(TAG, "[vpn] onAttachedToEngine: registerReceiver(statusReceiver)")
         context.registerReceiver(
             statusReceiver,
@@ -96,7 +113,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         Log.d(TAG, "[vpn] onDetachedFromEngine: unregisterReceiver(statusReceiver)")
         methodChannel.setMethodCallHandler(null)
         statusEventChannel.setStreamHandler(null)
+        coreLogEventChannel.setStreamHandler(null)
         statusSink = null
+        BoxVpnService.coreLogSink = null
         runCatching { context.unregisterReceiver(statusReceiver) }
         pluginScope.cancel()
     }
@@ -135,13 +154,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "reloadVPN" -> {
                 // Spec 030: in-place reload sing-box runtime через
                 // CommandServer.startOrReloadService — без recreate'а Android Service.
-                BoxVpnService.reload(applicationContext)
+                BoxVpnService.reload(context)
                 result.success(true)
             }
             "resetNetwork" -> {
                 // Spec 031 (experimental): box.Router().ResetNetwork() — gentle
                 // reset network sub-state без drop'а runtime.
-                BoxVpnService.resetNetwork(applicationContext)
+                BoxVpnService.resetNetwork(context)
                 result.success(true)
             }
             "setNotificationTitle" -> {
@@ -164,6 +183,38 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
             "getKeepOnExit" -> {
                 result.success(BootReceiver.isKeepOnExit(context))
+            }
+            "setCoreLogsEnabled" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                BootReceiver.setCoreLogsEnabled(context, enabled)
+                result.success(true)
+            }
+            "getCoreLogsEnabled" -> {
+                result.success(BootReceiver.isCoreLogsEnabled(context))
+            }
+            "quitApp" -> {
+                // §043 follow-up: завершить процесс целиком, чтобы при следующем
+                // запуске `BoxApplication.initialize` пересоздал libbox с новым
+                // флагом `debug` (см. SetupOptions в BoxApplication.kt — setup
+                // зовётся ровно один раз за жизнь процесса).
+                //
+                // 1. finishAffinity() закрывает все наши activities,
+                // 2. через 200ms killProcess + exitProcess убивают процесс
+                //    (некоторые OEM-launchers иначе оставляют zombie).
+                //
+                // VPN service ещё может быть активен — Android сам его
+                // остановит как только процесс умрёт (foreground service binding
+                // с процессом). KEEP_ON_EXIT не реактивируем здесь: если юзер
+                // явно запросил Quit, ему нужен полный рестарт, не fall-through
+                // в keep-alive путь.
+                result.success(true)
+                mainHandler.postDelayed({
+                    activity?.finishAffinity()
+                }, 50)
+                mainHandler.postDelayed({
+                    android.os.Process.killProcess(android.os.Process.myPid())
+                    kotlin.system.exitProcess(0)
+                }, 250)
             }
             "getInstalledApps" -> {
                 // Lightweight metadata only — иконки лениво подгружаются

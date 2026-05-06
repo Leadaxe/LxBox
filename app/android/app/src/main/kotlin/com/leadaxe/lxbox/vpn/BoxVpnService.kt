@@ -1,11 +1,15 @@
 package com.leadaxe.lxbox.vpn
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager.NameNotFoundException
 import android.net.ProxyInfo
+import android.net.Uri
 import android.net.VpnService
 import android.os.Build
 import android.os.IBinder
@@ -13,6 +17,7 @@ import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import io.nekohasekai.libbox.CommandServer
 import io.nekohasekai.libbox.CommandServerHandler
@@ -54,6 +59,14 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         /// потоков (caller plugin scope + service main/IO).
         @Volatile
         private var stopCompleter: CompletableDeferred<Unit>? = null
+
+        /// §043: Sink для core logs от sing-box → Flutter EventChannel
+        /// "lxbox/coreLog". Подписывается VpnPlugin при onListen.
+        /// `writeDebugMessage` зовётся sing-box'ом из любого потока — sink
+        /// должен быть Volatile для thread-safe чтения. Worst case:
+        /// одна потерянная log line при swap'е sink — acceptable.
+        @Volatile
+        var coreLogSink: io.flutter.plugin.common.EventChannel.EventSink? = null
 
         fun start(context: Context) {
             Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${currentStatus.name}")
@@ -614,9 +627,121 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     /// writeDebugMessage. Логически — то же: транзит строк лога в command-server
     /// для подписчиков. writeMessage теперь требует int level (sing-box slog
     /// levels: 0=Info, 4=Warn, 8=Error). Используем 0=Info — это общий debug.
-    override fun writeDebugMessage(message: String) { commandServer?.writeMessage(0, message) }
+    /// §043: sing-box log lines проходят сюда независимо от `log.level`
+    /// в конфиге (sing-box специально гарантирует platformWriter получает
+    /// все уровни — см. log/observable.go).
+    ///
+    /// Удалён старый `commandServer.writeMessage(0, message)` forward —
+    /// мёртвый, нет subscriber'ов которым это нужно (Clash API на 63130
+    /// у нас только для self-fetch, не WebSocket /logs subscribers).
+    ///
+    /// Фильтр уровня прямо здесь: TRACE/DEBUG отбрасываем (volume reduction
+    /// — на busy traffic десятки строк/сек). INFO+ пушим в Flutter через
+    /// EventChannel "lxbox/coreLog". Уровень определяется substring search'ем
+    /// по sing-box формату `+0300 2026-05-06 12:34:56 INFO  router: ...`.
+    ///
+    /// **ВАЖНО:** sing-box зовёт этот callback из Go-goroutine'ов на
+    /// background-thread'ах. `EventChannel.EventSink.success()` **требует
+    /// main thread** (Flutter platform thread) — вызов с background'а
+    /// бросает `@UiThread` exception, который sing-box интерпретирует как
+    /// failure при `openTun` ("configure tun interface: Methods marked with
+    /// @UiThread must be executed on the main thread"). Поэтому диспатчим
+    /// в main handler.
+    override fun writeDebugMessage(message: String) {
+        // Sing-box форматтер вставляет ANSI color escapes (`\x1b[36mINFO\x1b[0m`),
+        // strip'аем для plain-text storage и для корректного level-filter'а.
+        val plain = ansiEscapeRe.replace(message, "")
+        // Volume reduction: skip trace/debug. После strip'а уровень формата
+        // `... TRACE[0017]` или `... TRACE 0017]` — ищем boundary либо пробел,
+        // либо `[`. Используем word-boundary regex для надёжности.
+        if (traceDebugRe.containsMatchIn(plain)) return
+        val sink = coreLogSink ?: return
+        coreLogMainHandler.post {
+            runCatching { sink.success(plain) }
+        }
+    }
 
+        /// CSI ANSI escape sequence (sing-box terminal colors). Sing-box посылает
+    /// `[36mINFO[0m`. Regex захватывает ESC + `[` + params + letter.
+    private val ansiEscapeRe = Regex("\\[[0-9;]*[A-Za-z]")
+
+    /// Word-boundary поиск TRACE / DEBUG для volume-reduction filter'а
+    /// (после strip'а ANSI escape codes).
+    private val traceDebugRe = Regex("\\b(TRACE|DEBUG)\\b")
+
+    /// Handler на main looper для dispatch'а EventChannel.success() из
+    /// background-thread'ов sing-box'а. Lazy чтоб init только при первом
+    /// log call'е.
+    private val coreLogMainHandler by lazy {
+        android.os.Handler(android.os.Looper.getMainLooper())
+    }
+
+    /// `sendNotification` (spec §036) — показываем system notification с
+    /// clickable ссылкой на `openURL` (открывает default-браузер).
+    /// Sing-box зовёт это для protocol auth flow'ов — в 1.13.x только Tailscale
+    /// outbound (см. `protocol/tailscale/endpoint.go:438`). После успешной
+    /// auth юзера в браузере sing-box-side polling сам подхватывает state,
+    /// deep-link callback в app не нужен.
     override fun sendNotification(notification: io.nekohasekai.libbox.Notification) {
-        Log.d(TAG, "Notification: ${notification.title}")
+        val context = applicationContext
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val channelId = notification.identifier.ifBlank { "lxbox-core" }
+        val channelName = notification.typeName.ifBlank { "Core notifications" }
+
+        // Channel — idempotent (createNotificationChannel игнорирует дубликат).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                channelName,
+                NotificationManager.IMPORTANCE_HIGH,
+            )
+            nm.createNotificationChannel(channel)
+        }
+
+        // PendingIntent для tap → browser. ACTION_VIEW + http(s) URI ⇒
+        // Android запускает default-browser с этим URL.
+        val pendingIntent: PendingIntent? = if (notification.openURL.isNotBlank()) {
+            runCatching {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(notification.openURL)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                PendingIntent.getActivity(
+                    context,
+                    notification.typeID,
+                    intent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+            }.getOrNull()
+        } else null
+
+        // Build & show. typeID — id для notify() ⇒ повторный вызов с тем же id
+        // обновляет existing notification вместо stacking'а.
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(android.R.drawable.ic_lock_lock)  // та же что у FGS
+            .setContentTitle(notification.title)
+            .setContentText(notification.body)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+        if (notification.subtitle.isNotBlank()) {
+            builder.setSubText(notification.subtitle)
+        }
+        if (pendingIntent != null) {
+            builder.setContentIntent(pendingIntent)
+        }
+
+        runCatching {
+            nm.notify(notification.typeID, builder.build())
+        }.onFailure {
+            Log.e(TAG, "sendNotification.notify failed", it)
+        }
+
+        // Дубль в commandServer log — observability через /logs?source=core
+        // (если POST_NOTIFICATIONS denied на API 33+, юзер всё равно увидит URL).
+        Log.d(TAG, "Notification: ${notification.title} → ${notification.openURL}")
+        commandServer?.writeMessage(
+            0,
+            "platform notification: ${notification.title} (${notification.openURL})",
+        )
     }
 }

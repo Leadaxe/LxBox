@@ -506,6 +506,14 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   Future<String?> generateConfig() async {
+    // §037: Когда юзер pin'ит свой config через Debug API `PUT /config`,
+    // ставится lock var. Любые UI-driven rebuild'ы возвращают null
+    // silently — config.json остаётся как был. Все 24+ callsite'а уже
+    // делают `if (json != null)` skip-check, так что null не ломает ничего.
+    if (await SettingsStorage.getConfigLockedForDebug()) {
+      AppLog.I.info('generateConfig: skipped (config_locked_for_debug=true)');
+      return null;
+    }
     _busy = true;
     _lastError = '';
     notifyListeners();

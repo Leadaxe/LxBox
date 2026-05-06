@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../config/consts.dart';
 import '../controllers/subscription_controller.dart';
+import '../services/error_format.dart';
 import '../models/server_list.dart';
 import '../models/template_vars.dart';
 
@@ -111,7 +112,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Invalid JSON: $e')),
+          SnackBar(content: Text('Invalid JSON: ${formatUserError(e)}')),
         );
       }
     }

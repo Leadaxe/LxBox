@@ -8,14 +8,29 @@ import '../transport/response.dart';
 /// `/logs` — GET (list) + POST /logs/clear.
 ///
 /// Параметры GET:
-/// * `limit` — int, default 200, max 500 (реальный кэп AppLog'а)
+/// * `limit` — int, default 200, max 1000 (cap = sum всех per-source quotas
+///   §043: app=300 + core=500 = 800, оставляем headroom 200)
 /// * `source` — `app|core`, иначе все
 /// * `q` — substring match по message (case-insensitive); пусто = no filter
 /// * `level` — comma-separated список `debug|info|warning|error`
 ///   (`?level=warning,error`); пусто = all
+///
+/// Aliases (§043):
+/// * `GET /logs/app`  — то же что `/logs?source=app`. Все остальные query
+///   params (level, q, limit) поддерживаются.
+/// * `GET /logs/core` — то же что `/logs?source=core`.
+///
+/// `POST /logs/clear?source=app|core` — очищает только указанный source.
+/// Без `source` параметра — очищает всё (existing behavior).
 Future<DebugResponse> logsHandler(DebugRequest req, DebugContext ctx) async {
-  if (req.path == '/logs' && req.method == 'GET') {
-    return _list(req, ctx);
+  if (req.method == 'GET') {
+    if (req.path == '/logs') return _list(req, ctx, sourceOverride: null);
+    if (req.path == '/logs/app') {
+      return _list(req, ctx, sourceOverride: DebugSource.app);
+    }
+    if (req.path == '/logs/core') {
+      return _list(req, ctx, sourceOverride: DebugSource.core);
+    }
   }
   if (req.path == '/logs/clear' && req.method == 'POST') {
     return _clear(req, ctx);
@@ -23,17 +38,30 @@ Future<DebugResponse> logsHandler(DebugRequest req, DebugContext ctx) async {
   throw NotFound('logs path: ${req.method} ${req.path}');
 }
 
-Future<DebugResponse> _list(DebugRequest req, DebugContext ctx) async {
-  final limit = (req.qInt('limit') ?? 200).clamp(1, 500);
-  final source = req.q('source');
-  var entries = AppLog.I.entries;
-  if (source == 'app') {
-    entries = entries.where((e) => e.source == DebugSource.app).toList();
-  } else if (source == 'core') {
-    entries = entries.where((e) => e.source == DebugSource.core).toList();
-  } else if (source != null && source.isNotEmpty) {
-    throw BadRequest('source must be "app" or "core", got "$source"');
+Future<DebugResponse> _list(
+  DebugRequest req,
+  DebugContext ctx, {
+  required DebugSource? sourceOverride,
+}) async {
+  final limit = (req.qInt('limit') ?? 200).clamp(1, 1000);
+
+  // Source resolution: override (alias path) выигрывает; иначе query param.
+  DebugSource? source = sourceOverride;
+  if (source == null) {
+    final raw = req.q('source');
+    if (raw == 'app') {
+      source = DebugSource.app;
+    } else if (raw == 'core') {
+      source = DebugSource.core;
+    } else if (raw != null && raw.isNotEmpty) {
+      throw BadRequest('source must be "app" or "core", got "$raw"');
+    }
   }
+
+  // §043: direct lookup для filtered, merge только для unfiltered.
+  var entries = source != null
+      ? AppLog.I.entriesForSource(source)
+      : AppLog.I.entries;
 
   // Level filter — comma-separated. Неизвестный уровень → BadRequest,
   // чтобы typo не молча выдавала пустой результат.
@@ -76,6 +104,19 @@ Map<String, Object?> _entryToJson(DebugEntry e) => {
     };
 
 Future<DebugResponse> _clear(DebugRequest req, DebugContext ctx) async {
-  AppLog.I.clear();
-  return const JsonResponse({'ok': true, 'action': 'clear'});
+  // §043: optional ?source=app|core для очистки одного source'а.
+  final raw = req.q('source');
+  if (raw == null || raw.isEmpty) {
+    AppLog.I.clear();
+    return const JsonResponse({'ok': true, 'action': 'clear', 'source': 'all'});
+  }
+  if (raw == 'app') {
+    AppLog.I.clearSource(DebugSource.app);
+    return const JsonResponse({'ok': true, 'action': 'clear', 'source': 'app'});
+  }
+  if (raw == 'core') {
+    AppLog.I.clearSource(DebugSource.core);
+    return const JsonResponse({'ok': true, 'action': 'clear', 'source': 'core'});
+  }
+  throw BadRequest('source must be "app" or "core" (or omit), got "$raw"');
 }

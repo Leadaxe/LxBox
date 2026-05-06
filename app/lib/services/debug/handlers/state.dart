@@ -20,8 +20,17 @@ Future<DebugResponse> stateHandler(DebugRequest req, DebugContext ctx) async {
     '/state/rules' => _rules(req, ctx),
     '/state/storage' => _storage(req, ctx),
     '/state/vpn' => _vpn(req, ctx),
+    '/state/config_locked' => _configLocked(req, ctx),
     _ => throw NotFound('state path: ${req.path}'),
   };
+}
+
+/// §037: Текущее состояние lock'а auto-rebuild. Когда `locked: true` —
+/// `SubscriptionController.generateConfig()` возвращает null silently,
+/// pinned config через `PUT /config` не перетирается UI-действиями.
+Future<DebugResponse> _configLocked(DebugRequest req, DebugContext ctx) async {
+  final locked = await SettingsStorage.getConfigLockedForDebug();
+  return JsonResponse({'locked': locked});
 }
 
 Future<DebugResponse> _root(DebugRequest req, DebugContext ctx) async {

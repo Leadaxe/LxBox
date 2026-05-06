@@ -16,7 +16,11 @@ import 'about_screen.dart';
 import 'backup_screen.dart';
 
 class AppSettingsScreen extends StatefulWidget {
-  const AppSettingsScreen({super.key});
+  const AppSettingsScreen({super.key, this.initialTab = 0});
+
+  /// Tab index to open: 0 = General, 1 = Background, 2 = Diagnostics.
+  /// Used by deep-links (e.g. DebugScreen → "Diagnostics settings" в попапе).
+  final int initialTab;
 
   @override
   State<AppSettingsScreen> createState() => _AppSettingsScreenState();
@@ -42,6 +46,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   int _debugPort = SettingsStorage.debugPortDefault;
   late final TextEditingController _debugPortCtl;
   String _debugPortError = '';
+
+  // §043 sing-box core logs forwarding (требует restart Service'а)
+  bool _coreLogsEnabled = false;
 
   @override
   void initState() {
@@ -80,6 +87,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final debugEnabled = await SettingsStorage.getDebugEnabled();
     final debugToken = await SettingsStorage.getDebugToken();
     final debugPort = await SettingsStorage.getDebugPort();
+    final coreLogsEnabled = await _vpn.getCoreLogsEnabled();
     if (mounted) {
       setState(() {
         _autoStart = auto;
@@ -96,6 +104,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _debugToken = debugToken;
         _debugPort = debugPort;
         _debugPortCtl.text = debugPort.toString();
+        _coreLogsEnabled = coreLogsEnabled;
         _loaded = true;
       });
     }
@@ -159,6 +168,54 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     if (mode == null || mode == _backgroundMode) return;
     setState(() => _backgroundMode = mode);
     await _vpn.setBackgroundMode(mode);
+  }
+
+  /// §043: toggle forwarding sing-box логов в наш AppLog как `DebugSource.core`.
+  /// Изменение применяется ТОЛЬКО после полного рестарта процесса — `Libbox.setup`
+  /// с флагом `debug` вызывается один раз в `BoxApplication.initialize` (см.
+  /// гард `if (initialized) return`). Stop/start VPN не помогает (service-level,
+  /// не process-level), нужен force-stop + relaunch. Кнопка «Quit & reopen»
+  /// рядом с toggle делает это вызовом `quitApp()` (finishAffinity + killProcess
+  /// в Kotlin); юзер сам тапает иконку и получает свежий процесс.
+  Future<void> _toggleCoreLogs(bool enable) async {
+    setState(() => _coreLogsEnabled = enable);
+    await _vpn.setCoreLogsEnabled(enable);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Saved. Force-stop & reopen app to apply.'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// §043 follow-up: confirm-диалог + `BoxVpnClient.quitApp()`. Process умрёт
+  /// через ~250ms; Future от quitApp в норме не ресолвится — поэтому ничего
+  /// не делаем после await.
+  Future<void> _confirmQuitApp() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Quit & reopen app?'),
+        content: const Text(
+          'This will fully close the app process so the new "Forward sing-box logs" '
+          'value is picked up at next launch (Libbox.setup is one-shot per process). '
+          'VPN service will stop. Tap the app icon to reopen.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Quit'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await _vpn.quitApp();
   }
 
   /// §032 Quick Connect — кнопка «Add tile» в General-табе.
@@ -238,6 +295,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       builder: (context, _) {
         return DefaultTabController(
           length: 3,
+          initialIndex: widget.initialTab.clamp(0, 2),
           child: Scaffold(
             appBar: AppBar(
               title: const Text('App Settings'),
@@ -633,6 +691,49 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
               ],
             ),
           ),
+        // §043: forwarding sing-box internal logs into our AppLog (Debug
+        // screen → Core tab + /logs/core endpoint). Off by default — sing-box
+        // на busy traffic эмитит сотни строк/минуту; opt-in для диагностики.
+        // Subtitle короткий и timeless — без «after restart» (показывался бы
+        // и после самого рестарта, misleading); пояснялка про process-restart
+        // вынесена в полноширинный блок ниже.
+        SwitchListTile(
+          title: const Text('Forward sing-box logs'),
+          subtitle: Text(
+            _coreLogsEnabled
+                ? 'Visible in Debug → Core.'
+                : 'Off.',
+          ),
+          secondary: const Icon(Icons.terminal),
+          value: _coreLogsEnabled,
+          onChanged: _loaded
+              ? (val) => unawaited(_toggleCoreLogs(val))
+              : null,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Setting is saved immediately, but `Libbox.setup` reads the '
+                '`debug` flag once per process. Stop/start VPN does NOT '
+                're-apply — force-stop the app (or use the button below) '
+                'and reopen.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 6),
+              OutlinedButton.icon(
+                onPressed: _loaded ? () => unawaited(_confirmQuitApp()) : null,
+                icon: const Icon(Icons.logout, size: 18),
+                label: const Text('Quit & reopen app'),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

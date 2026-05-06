@@ -177,6 +177,42 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// §043: forward sing-box логов в наш AppLog как `DebugSource.core`.
+  /// Default false. Изменение применяется только после restart Service'а
+  /// (Libbox.setup читает значение один раз при инициализации).
+  Future<bool> setCoreLogsEnabled(bool enabled) async {
+    final ok = await _invoke<bool>(
+      _Methods.setCoreLogsEnabled,
+      args: {'enabled': enabled},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  Future<bool> getCoreLogsEnabled() async {
+    final ok = await _invoke<bool>(
+      _Methods.getCoreLogsEnabled,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  /// §043 follow-up: завершает Android-процесс целиком (`finishAffinity` +
+  /// `killProcess`). Используется кнопкой «Quit & reopen app» рядом с toggle
+  /// «Forward sing-box logs» — там флаг `debug` в `Libbox.setup` читается
+  /// ровно один раз за жизнь процесса, и единственный способ применить
+  /// изменение — рестарт процесса. Возврат сразу true (process die через
+  /// ~250ms), Future в общем случае не ресолвится — Android уже не отвечает.
+  Future<void> quitApp() async {
+    await _invoke<bool>(
+      _Methods.quitApp,
+      timeout: const Duration(milliseconds: 500),
+      onTimeoutValue: true,
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // App enumeration (для per-app routing)
   // ---------------------------------------------------------------------------
@@ -448,6 +484,11 @@ class _Methods {
   static const getAutoStart = 'getAutoStart';
   static const setKeepOnExit = 'setKeepOnExit';
   static const getKeepOnExit = 'getKeepOnExit';
+
+  // §043 core logs forwarding toggle
+  static const setCoreLogsEnabled = 'setCoreLogsEnabled';
+  static const getCoreLogsEnabled = 'getCoreLogsEnabled';
+  static const quitApp = 'quitApp';
 
   // App enumeration
   static const getInstalledApps = 'getInstalledApps';

@@ -79,6 +79,15 @@ object BoxApplication {
             workingPath = workingDir.path
             tempPath = tempDir.path
             this.fixAndroidStack = fixAndroidStack
+            // §043: forwarding sing-box логов в наш PlatformInterface
+            // callback writeDebugMessage. `daemon/started_service.go:1048-1050`
+            // gates `s.handler.WriteDebugMessage(message)` за `if s.debug` —
+            // без флага наш callback никогда не зовётся, AppLog не получает
+            // core логи. Default false (volume reduction). Юзер opt-in'ит
+            // через UI toggle (App Settings или DebugScreen) — изменение
+            // применяется только после restart Service'а (Libbox.setup
+            // вызывается один раз).
+            debug = BootReceiver.isCoreLogsEnabled(context)
         }
         Libbox.setup(opts)
         // redirectStderr может отсутствовать в старых сборках libbox или

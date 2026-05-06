@@ -15,6 +15,14 @@ class SettingsStorage {
   static Map<String, dynamic>? _cache;
   static Future<void>? _pendingSave;
 
+  /// Test-only: drop in-memory cache so the next read goes back to disk.
+  /// Used by unit tests that rotate `getApplicationDocumentsPath()` between
+  /// runs to keep storage isolated.
+  static void resetCacheForTesting() {
+    _cache = null;
+    _pendingSave = null;
+  }
+
   static Future<File> _file() async {
     final dir = await getApplicationDocumentsDirectory();
     return File('${dir.path}/$_fileName');
@@ -339,6 +347,93 @@ class SettingsStorage {
     await _save();
   }
 
+  // ---------------------------------------------------------------------------
+  // Ping/test options (§040)
+  //
+  // Storage shape mirrors template `ping_options.{url, timeout_ms, presets}`,
+  // плюс расширение `groups: Map<groupTag, {url?, timeout_ms?}>` — per-group
+  // override'ы для ping/mass-ping/URLTest. Resolve chain в HomeController:
+  // group override → global storage → template default.
+  // ---------------------------------------------------------------------------
+
+  /// Возвращает raw `ping_options` Map (= storage). Empty map если не set —
+  /// caller должен fallback'нуться на template default.
+  static Future<Map<String, dynamic>> getPingOptions() async {
+    final data = await _load();
+    final raw = data['ping_options'];
+    if (raw is Map<String, dynamic>) {
+      return Map<String, dynamic>.from(raw);
+    }
+    return <String, dynamic>{};
+  }
+
+  /// Сохраняет всю structure целиком (atomic). Caller передаёт final shape —
+  /// ничего не мерджится, только overwrite. Для частичных изменений см.
+  /// [setGlobalPingUrl] / [setGroupPing] / [clearGroupPing].
+  static Future<void> savePingOptions(Map<String, dynamic> options) async {
+    final data = await _load();
+    data['ping_options'] = options;
+    _cache = data;
+    await _save();
+  }
+
+  /// Sugared: установить global URL без затирания timeout / groups.
+  static Future<void> setGlobalPingUrl(String url) async {
+    final opts = await getPingOptions();
+    opts['url'] = url;
+    await savePingOptions(opts);
+  }
+
+  /// Sugared: установить global timeout (ms) без затирания url / groups.
+  static Future<void> setGlobalPingTimeout(int timeoutMs) async {
+    final opts = await getPingOptions();
+    opts['timeout_ms'] = timeoutMs;
+    await savePingOptions(opts);
+  }
+
+  /// Sugared: установить per-group override. Передаётся одно из / оба из
+  /// `url` / `timeoutMs`; nil-аргументы не трогают существующее. Создаёт
+  /// `groups[tag]` если не было.
+  static Future<void> setGroupPing(
+    String groupTag, {
+    String? url,
+    int? timeoutMs,
+  }) async {
+    if (groupTag.isEmpty) return;
+    final opts = await getPingOptions();
+    final groups = (opts['groups'] is Map<String, dynamic>)
+        ? Map<String, dynamic>.from(opts['groups'] as Map<String, dynamic>)
+        : <String, dynamic>{};
+    final existing = (groups[groupTag] is Map<String, dynamic>)
+        ? Map<String, dynamic>.from(groups[groupTag] as Map<String, dynamic>)
+        : <String, dynamic>{};
+    if (url != null) existing['url'] = url;
+    if (timeoutMs != null) existing['timeout_ms'] = timeoutMs;
+    groups[groupTag] = existing;
+    opts['groups'] = groups;
+    await savePingOptions(opts);
+  }
+
+  /// Sugared: убрать override этой группы целиком. No-op если не было.
+  static Future<void> clearGroupPing(String groupTag) async {
+    if (groupTag.isEmpty) return;
+    final opts = await getPingOptions();
+    final groups = opts['groups'];
+    if (groups is! Map<String, dynamic>) return;
+    if (!groups.containsKey(groupTag)) return;
+    groups.remove(groupTag);
+    if (groups.isEmpty) {
+      opts.remove('groups');
+    } else {
+      opts['groups'] = groups;
+    }
+    await savePingOptions(opts);
+  }
+
+  /// DEPRECATED (§041): legacy `dns_options.rules_json` — single JSON-string
+  /// override. Заменён на структурированный [getDnsRulesList]. Поле в storage
+  /// остаётся для downgrade-friendliness, но билдер и UI больше не читают.
+  @Deprecated('Use getDnsRulesList()/saveDnsRulesList() instead. See spec 041.')
   static Future<String> getDnsRules() async {
     final data = await _load();
     final dns = data['dns_options'] as Map<String, dynamic>?;
@@ -346,10 +441,38 @@ class SettingsStorage {
     return dns['rules_json'] as String? ?? '';
   }
 
+  /// DEPRECATED (§041): см. [getDnsRules].
+  @Deprecated('Use getDnsRulesList()/saveDnsRulesList() instead. See spec 041.')
   static Future<void> saveDnsRules(String rulesJson) async {
     final data = await _load();
     final dns = (data['dns_options'] as Map<String, dynamic>?) ?? {};
     dns['rules_json'] = rulesJson;
+    data['dns_options'] = dns;
+    _cache = data;
+    await _save();
+  }
+
+  /// Структурированный список DNS-правил (§041). Каждая запись:
+  /// `{enabled: bool, type: 'user'|'template'|'rule', title: String, rule?: Map}`.
+  /// Если ключ отсутствует — возвращает пустой список (auto-discovery в
+  /// builder/UI заполнит начальный набор).
+  static Future<List<Map<String, dynamic>>> getDnsRulesList() async {
+    final data = await _load();
+    final dns = data['dns_options'] as Map<String, dynamic>?;
+    if (dns == null) return [];
+    final rules = dns['rules'] as List<dynamic>?;
+    if (rules == null) return [];
+    return rules.whereType<Map<String, dynamic>>().toList();
+  }
+
+  /// Сохраняет структурированный список DNS-правил. Caller отвечает за
+  /// orphan-cleanup (§041) — выбрасывание `type: template/rule` чьи titles
+  /// не находятся в текущем шаблоне / активных пресетах. Этот метод просто
+  /// пишет, что дали.
+  static Future<void> saveDnsRulesList(List<Map<String, dynamic>> rules) async {
+    final data = await _load();
+    final dns = (data['dns_options'] as Map<String, dynamic>?) ?? {};
+    dns['rules'] = rules;
     data['dns_options'] = dns;
     _cache = data;
     await _save();
@@ -366,6 +489,20 @@ class SettingsStorage {
 
   static Future<void> setAutoUpdateSubs(bool enabled) =>
       setVar('auto_update_subs', enabled ? 'true' : 'false');
+
+  // ---------------------------------------------------------------------------
+  // §037: Config lock for Debug API. Когда true — `generateConfig()` возвращает
+  // null silently, любые UI-rebuild'ы skipped. Используется когда юзер pin'ит
+  // свой config через `PUT /config` для экспериментов с фичами которые
+  // parser/builder не понимают (Tailscale outbound, custom DNS shapes etc).
+  // Default false — обычный flow.
+  // ---------------------------------------------------------------------------
+
+  static Future<bool> getConfigLockedForDebug() async =>
+      (await getVar('config_locked_for_debug', 'false')) == 'true';
+
+  static Future<void> setConfigLockedForDebug(bool locked) =>
+      setVar('config_locked_for_debug', locked ? 'true' : 'false');
 
   // ---------------------------------------------------------------------------
   // App update check (§036) — GitHub Releases polling on launch with 24h cap.

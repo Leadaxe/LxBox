@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../config/config_parse.dart';
 import '../controllers/home_controller.dart';
+import '../services/error_format.dart';
 
 class ConfigScreen extends StatefulWidget {
   const ConfigScreen({super.key, required this.controller});
@@ -56,7 +57,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Share failed: $e')),
+        SnackBar(content: Text('Share failed: ${formatUserError(e)}')),
       );
     }
   }
@@ -102,7 +103,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('Error: ${formatUserError(e)}')),
         );
       }
     }

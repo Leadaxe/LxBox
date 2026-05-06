@@ -11,6 +11,7 @@ import '../../settings_storage.dart';
 import '../../subscription/auto_updater.dart';
 import '../../update_checker.dart';
 import '../../../screens/about_screen.dart';
+import '../../../vpn/box_vpn_client.dart';
 import '../context.dart';
 import '../contract/errors.dart';
 import '../transport/request.dart';
@@ -35,13 +36,12 @@ Future<DebugResponse> actionHandler(
     throw const BadRequest('actions require POST');
   }
   return switch (req.path) {
-    '/action/ping-all' => _pingAll(ctx),
-    '/action/ping-node' => _pingNode(req, ctx),
-    '/action/run-urltest' => _runUrltest(req, ctx),
+    '/action/urltest' => _urltest(req, ctx),
     '/action/switch-node' => _switchNode(req, ctx),
     '/action/set-group' => _setGroup(req, ctx),
     '/action/start-vpn' => _startVpn(ctx),
     '/action/stop-vpn' => _stopVpn(ctx),
+    '/action/reset-network' => _resetNetwork(ctx),
     '/action/rebuild-config' => _rebuildConfig(ctx),
     '/action/refresh-subs' => _refreshSubs(req, ctx),
     '/action/download-srs' => _downloadSrs(req, ctx),
@@ -175,27 +175,44 @@ JsonResponse _ok(String action, [Map<String, Object?> extras = const {}]) {
   });
 }
 
-Future<DebugResponse> _pingAll(DebugContext ctx) async {
+/// `/action/urltest` — единый endpoint для запуска URLTest. Scope
+/// определяется query-param'ом (ровно один из):
+///
+/// - `?tag=<node>`  — single-node URLTest через clash `/proxies/<tag>/delay`
+/// - `?group=<tag>` — group URLTest через clash `/group/<tag>/delay` (требует tunnel up)
+/// - `?all=true`    — mass URLTest всех нод активной группы (concurrency 10)
+Future<DebugResponse> _urltest(DebugRequest req, DebugContext ctx) async {
   final home = ctx.requireHome();
-  unawaited(home.pingAllNodes());
-  return _ok('ping-all');
-}
-
-Future<DebugResponse> _pingNode(DebugRequest req, DebugContext ctx) async {
-  final home = ctx.requireHome();
-  final tag = req.requiredQuery('tag');
-  unawaited(home.pingNode(tag));
-  return _ok('ping-node', {'tag': tag});
-}
-
-Future<DebugResponse> _runUrltest(DebugRequest req, DebugContext ctx) async {
-  final home = ctx.requireHome();
-  final group = req.requiredQuery('group');
-  if (!home.state.tunnelUp) {
-    throw const Conflict('tunnel not connected');
+  final tag = req.query['tag'];
+  final group = req.query['group'];
+  final all = req.query['all'];
+  final scopes = [
+    if (tag != null) 'tag',
+    if (group != null) 'group',
+    if (all != null) 'all',
+  ];
+  if (scopes.isEmpty) {
+    throw const BadRequest('one of "tag" / "group" / "all" required');
   }
-  unawaited(home.runGroupUrltest(group));
-  return _ok('run-urltest', {'group': group});
+  if (scopes.length > 1) {
+    throw BadRequest('exactly one of "tag" / "group" / "all" — got ${scopes.join("+")}');
+  }
+  if (tag != null) {
+    if (tag.isEmpty) throw const BadRequest('"tag" empty');
+    unawaited(home.runNodeUrltest(tag));
+    return _ok('urltest', {'scope': 'node', 'tag': tag});
+  }
+  if (group != null) {
+    if (group.isEmpty) throw const BadRequest('"group" empty');
+    if (!home.state.tunnelUp) {
+      throw const Conflict('tunnel not connected');
+    }
+    unawaited(home.runGroupUrltest(group));
+    return _ok('urltest', {'scope': 'group', 'group': group});
+  }
+  // all=true (or any value — presence-only flag)
+  unawaited(home.runMassUrltest());
+  return _ok('urltest', {'scope': 'mass'});
 }
 
 Future<DebugResponse> _switchNode(DebugRequest req, DebugContext ctx) async {
@@ -228,7 +245,37 @@ Future<DebugResponse> _stopVpn(DebugContext ctx) async {
   return _ok('stop-vpn');
 }
 
+/// `POST /action/reset-network` — light recovery без recreate'а box runtime.
+///
+/// Дёргает `commandServer.resetNetwork()` через MethodChannel. Внутри sing-box:
+///   - закрывает все active connections (`connectionManager.CloseAll()`)
+///   - flush'ит DNS cache + reset'ит DoH/DoT/UDP transports
+///   - передёргивает interface bindings у inbound/outbound/endpoint dialer'ов
+/// БЕЗ recreate'а box, БЕЗ recreate'а Service, БЕЗ touch'а TUN fd, БЕЗ
+/// перечитывания config'а. Tunnel остаётся `connected`. См. spec 031.
+///
+/// Требует tunnel up — без него resetNetwork no-op в libbox (нет instance).
+/// Возвращает `{"ok": true, "action": "reset-network"}` независимо — реальный
+/// эффект асинхронен и наблюдается через `/clash/connections` (counter
+/// связей упадёт до ~0 моментально, потом начнёт заполняться заново).
+Future<DebugResponse> _resetNetwork(DebugContext ctx) async {
+  final home = ctx.requireHome();
+  if (!home.state.tunnelUp) {
+    throw const Conflict('tunnel not up — resetNetwork is no-op');
+  }
+  final ok = await BoxVpnClient().resetNetwork();
+  return _ok('reset-network', {'native_ok': ok});
+}
+
 Future<DebugResponse> _rebuildConfig(DebugContext ctx) async {
+  // §037: явный 409 если lock включён — иначе UpstreamError с пустым
+  // sub.lastError (скрыт причину), и юзер не понимает почему не сработало.
+  if (await SettingsStorage.getConfigLockedForDebug()) {
+    throw const Conflict(
+      'config_locked_for_debug=true — rebuild blocked. '
+      'PUT /settings/config_locked {"locked":false} to unlock first.',
+    );
+  }
   final sub = ctx.requireSub();
   final home = ctx.requireHome();
   final json = await sub.generateConfig();

@@ -67,6 +67,7 @@ GET /state/subs[?reveal=true]       Подписки. URL masked default; reveal
 GET /state/rules                    CustomRule[] — sealed: inline | srs | preset (с per-kind полями)
 GET /state/storage                  Raw SettingsStorage._cache JSON (для отладки)
 GET /state/vpn                      { auto_start, keep_on_exit, is_ignoring_battery_optimizations }
+GET /state/config_locked            { "locked": bool } — состояние §037 lock'а auto-rebuild
 
 === Device ===
 
@@ -75,18 +76,28 @@ GET /device                         Android version / SDK / model / ABI / app ve
 === Config ===
 
 GET /config                         Saved sing-box JSON (raw bytes, no re-encode)
+PUT /config                         Перезаписать config.json + reload sing-box. Body: raw
+                                      sing-box JSON (Map). Sing-box валидирует на reload —
+                                      ошибки прилетают через status events / /logs?source=core.
+                                      ВАЖНО: этот override временный — следующий
+                                      rebuild-config (или любое UI-действие) сотрёт его.
+                                      Чтобы pin'нуть постоянно — PUT /settings/config_locked
+                                      {"locked": true} перед write. См. §037.
 GET /config/pretty                  То же с indent
 GET /config/path                    Абсолютный путь к файлу на устройстве
 
 === Logs ===
 
-GET /logs?limit=N&source=app|core&q=substr&level=error,warn,info,debug
-                                    AppLog entries. Все параметры опциональны.
-                                      limit  — default 200
+GET /logs?limit=N&source=app|core&q=substr&level=error,warning,info,debug
+                                    AppLog entries (§043 per-source quotas:
+                                      app=300, core=500 in-memory).
+                                      limit  — default 200, max 1000
                                       source — фильтр по источнику
                                       q      — substring search в message
                                       level  — multi-filter, comma-separated
-POST /logs/clear                    Очистить AppLog
+GET /logs/app                       Alias для /logs?source=app. Те же query params.
+GET /logs/core                      Alias для /logs?source=core. Те же query params.
+POST /logs/clear[?source=app|core]  Очистить AppLog. Без source — всё; иначе только указанный.
 
 === Clash API (transparent proxy with auto-auth) ===
 
@@ -107,9 +118,12 @@ GET    /clash/traffic                          Streaming traffic (curl полу�
 
 POST /action/start-vpn                         Запустить туннель → {"ok":true,"action":"start-vpn"}
 POST /action/stop-vpn                          Остановить
-POST /action/ping-all                          Mass-ping (все ноды активной группы)
-POST /action/ping-node?tag=<tag>               Ping одной ноды
-POST /action/run-urltest?group=<tag>           Force urltest на группе (см. .now caveat выше)
+POST /action/reset-network                     Light recovery: closeAllConnections + DNS flush + dialer
+                                                  rebind. БЕЗ recreate'а box/Service/TUN. Spec 031.
+                                                  Требует tunnel up. → {"ok":true,"action":"reset-network","native_ok":<bool>}
+POST /action/urltest?tag=<node>                Single-node URLTest (clash /proxies/<tag>/delay)
+POST /action/urltest?group=<group>             Group URLTest (clash /group/<group>/delay, требует tunnel)
+POST /action/urltest?all=true                  Mass URLTest всех нод активной группы (concurrency 10)
 POST /action/switch-node?tag=<tag>             HomeController.switchNode
 POST /action/set-group?group=<tag>             Сменить активную группу
 POST /action/rebuild-config                    SubscriptionController.generateConfig + saveParsedConfig
@@ -150,6 +164,28 @@ GET /diag/logcat?count=N&level=L               Logcat tail нашего проц
 GET /diag/stderr                               Содержимое filesDir/stderr.log (Go panic-stacktrace libbox).
 GET /diag/applog?prev=true|false|all           AppLog entries; `prev` фильтрует по fromPreviousSession (default `all`).
 
+=== Settings (scoped writes) ===
+
+PUT    /settings/route_final                   body {"outbound":"..."}
+PUT    /settings/excluded_nodes                body {"nodes":["tag",...]}
+PUT    /settings/vars/{key}                    body {"value":"..."}; blocklist: debug_token/debug_enabled/debug_port
+DELETE /settings/vars/{key}                    Удалить var
+PUT    /settings/dns_options/servers           body {"servers":[...]}
+PUT    /settings/dns_options/rules             body {"rules":"<json-string>"}
+PUT    /settings/config_locked                 §037 toggle auto-rebuild lock. body {"locked":true|false}.
+                                                 true → SubscriptionController.generateConfig возвращает null
+                                                 silently, custom config через PUT /config не перетирается
+                                                 UI-действиями. Default false (обычный flow).
+GET    /settings/core_logs_enabled              §043 текущее состояние forwarding sing-box logs в /logs/core.
+                                                 → {"enabled": bool}
+PUT    /settings/core_logs_enabled              body {"enabled":true|false}. Default false. Применяется
+                                                 ТОЛЬКО при рестарте процесса — Libbox.setup one-shot. Stop/
+                                                 start VPN НЕ помогает (service пересоздаётся, Application
+                                                 живёт). Force-stop приложения + relaunch, либо UI-кнопка
+                                                 «Quit & reopen app» в App Settings → Diagnostics или
+                                                 Debug screen → Log tab.
+POST   /settings/rebuild-config                Alias /action/rebuild-config
+
 === Backup ===
 
 GET  /backup/export?include=config,vars,subs   Pure-data snapshot для restore (без diag-шума). `include` опц.; default — все три.
@@ -179,7 +215,7 @@ curl -H "Authorization: Bearer \$TOKEN" -X POST http://127.0.0.1:9269/action/sta
 
 # URLTest на ✨auto (emoji URL-encode'ится)
 TAG=\$(python3 -c "import urllib.parse; print(urllib.parse.quote('✨auto'))")
-curl -H "Authorization: Bearer \$TOKEN" -X POST "http://127.0.0.1:9269/action/run-urltest?group=\$TAG"
+curl -H "Authorization: Bearer \$TOKEN" -X POST "http://127.0.0.1:9269/action/urltest?group=\$TAG"
 
 # Создать inline-правило + rebuild config
 curl -H "Authorization: Bearer \$TOKEN" -H "Content-Type: application/json" \\
@@ -226,10 +262,12 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/state/rules', 'description': 'CustomRule[] sealed (inline|srs|preset)'},
     {'method': 'GET', 'path': '/state/storage', 'description': 'Raw SettingsStorage._cache JSON'},
     {'method': 'GET', 'path': '/state/vpn', 'description': 'auto_start, keep_on_exit, battery_whitelisted'},
+    {'method': 'GET', 'path': '/state/config_locked', 'description': '{locked: bool} — §037 auto-rebuild lock state'},
     // Device
     {'method': 'GET', 'path': '/device', 'description': 'Android version, model, ABI, app version, network, uptime'},
     // Config
     {'method': 'GET', 'path': '/config', 'description': 'Saved sing-box JSON (raw)'},
+    {'method': 'PUT', 'path': '/config', 'body': 'raw sing-box JSON (Map)', 'description': 'Overwrite config.json + reload sing-box. Temporary unless /settings/config_locked=true (§037).'},
     {'method': 'GET', 'path': '/config/pretty', 'description': 'Indent-formatted'},
     {'method': 'GET', 'path': '/config/path', 'description': 'On-device file path'},
     // Logs
@@ -249,9 +287,8 @@ const Map<String, dynamic> _capabilityJson = {
     // Actions
     {'method': 'POST', 'path': '/action/start-vpn', 'description': 'Start tunnel'},
     {'method': 'POST', 'path': '/action/stop-vpn', 'description': 'Stop tunnel'},
-    {'method': 'POST', 'path': '/action/ping-all', 'description': 'Mass-ping active group nodes'},
-    {'method': 'POST', 'path': '/action/ping-node', 'params': {'tag': 'node tag'}, 'description': 'Ping one node'},
-    {'method': 'POST', 'path': '/action/run-urltest', 'params': {'group': 'group tag (URL-encode emoji)'}, 'description': 'Force urltest on group'},
+    {'method': 'POST', 'path': '/action/reset-network', 'description': 'Light recovery: closeAll + DNS flush + dialer rebind (spec 031). Requires tunnel up.'},
+    {'method': 'POST', 'path': '/action/urltest', 'params': {'tag': 'node tag (single)', 'group': 'group tag (group urltest, URL-encode emoji)', 'all': 'true (mass urltest)'}, 'description': 'URLTest dispatch by query: one of tag/group/all'},
     {'method': 'POST', 'path': '/action/switch-node', 'params': {'tag': 'node tag'}, 'description': 'Selector switch via HomeController'},
     {'method': 'POST', 'path': '/action/set-group', 'params': {'group': 'group tag'}, 'description': 'Change active group'},
     {'method': 'POST', 'path': '/action/rebuild-config', 'description': 'Regenerate sing-box config'},
@@ -278,6 +315,14 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/diag/logcat', 'params': {'count': '50..5000', 'level': 'V|D|I|W|E|F'}, 'description': 'Logcat tail of our process'},
     {'method': 'GET', 'path': '/diag/stderr', 'description': 'filesDir/stderr.log content (Go panic stacktrace)'},
     {'method': 'GET', 'path': '/diag/applog', 'params': {'prev': 'true|false|all'}, 'description': 'AppLog entries (filter by fromPreviousSession)'},
+    // Settings (scoped writes — §037 etc)
+    {'method': 'PUT', 'path': '/settings/route_final', 'body': '{"outbound":"..."}', 'description': 'Set route.final outbound'},
+    {'method': 'PUT', 'path': '/settings/excluded_nodes', 'body': '{"nodes":["tag",...]}', 'description': 'Set hidden-from-auto nodes'},
+    {'method': 'PUT', 'path': '/settings/vars/{key}', 'body': '{"value":"..."}', 'description': 'Set var (blocklist: debug_token/debug_enabled/debug_port)'},
+    {'method': 'DELETE', 'path': '/settings/vars/{key}', 'description': 'Delete var'},
+    {'method': 'PUT', 'path': '/settings/dns_options/servers', 'body': '{"servers":[...]}', 'description': 'Set DNS servers list'},
+    {'method': 'PUT', 'path': '/settings/dns_options/rules', 'body': '{"rules":"<json-string>"}', 'description': 'Set DNS rules (legacy json-string shape)'},
+    {'method': 'PUT', 'path': '/settings/config_locked', 'body': '{"locked":true|false}', 'description': '§037 toggle auto-rebuild lock — true pins config from UI rebuilds'},
     // Backup
     {'method': 'GET', 'path': '/backup/export', 'params': {'include': 'config,vars,subs (default all)'}, 'description': 'Pure-data snapshot (no diag noise)'},
     {'method': 'POST', 'path': '/backup/import', 'params': {'merge': 'true|false', 'rebuild': 'true|false'}, 'body': '{config?, vars?, server_lists?}', 'description': 'Restore from export or /diag/dump'},

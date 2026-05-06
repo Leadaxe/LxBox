@@ -1,4 +1,5 @@
 import '../../settings_storage.dart';
+import '../../../vpn/box_vpn_client.dart';
 import '../context.dart';
 import '../contract/errors.dart';
 import '../transport/request.dart';
@@ -47,6 +48,35 @@ Future<DebugResponse> settingsHandler(DebugRequest req, DebugContext ctx) async 
     case '/settings/rebuild-config':
       if (req.method != 'POST') throw _methodNotAllowed(req.method, path);
       return _rebuildConfig(ctx);
+
+    case '/settings/config_locked':
+      if (req.method != 'PUT') throw _methodNotAllowed(req.method, path);
+      return _putConfigLocked(req);
+
+    case '/settings/core_logs_enabled':
+      if (req.method == 'GET') return _getCoreLogsEnabled();
+      if (req.method == 'PUT') return _putCoreLogsEnabled(req);
+      throw _methodNotAllowed(req.method, path);
+
+    case '/settings/ping_options':
+      if (req.method == 'GET') return _getPingOptions();
+      if (req.method == 'PUT') return _putPingOptions(req, ctx);
+      throw _methodNotAllowed(req.method, path);
+  }
+
+  // /settings/ping_options/groups/{tag}
+  if (path.startsWith('/settings/ping_options/groups/')) {
+    final tag =
+        path.substring('/settings/ping_options/groups/'.length);
+    if (tag.isEmpty || tag.contains('/')) {
+      throw NotFound('settings path: $path');
+    }
+    return switch (req.method) {
+      'GET' => _getGroupPing(tag),
+      'PUT' => _putGroupPing(tag, req, ctx),
+      'DELETE' => _deleteGroupPing(tag, ctx),
+      _ => throw _methodNotAllowed(req.method, path),
+    };
   }
 
   // /settings/vars/{key}
@@ -201,10 +231,177 @@ Future<DebugResponse> _putDnsRules(DebugRequest req, DebugContext ctx) async {
 }
 
 // ---------------------------------------------------------------------------
+// config_locked (§037) — toggle auto-rebuild lock
+// ---------------------------------------------------------------------------
+
+/// `PUT /settings/config_locked` — body `{"locked": true|false}`. Когда
+/// `true`, `SubscriptionController.generateConfig()` возвращает null
+/// silently → UI-driven rebuild'ы не перетирают config записанный через
+/// `PUT /config`. Default — `false` (обычный flow).
+Future<DebugResponse> _putConfigLocked(DebugRequest req) async {
+  final body = req.jsonBodyAsMap();
+  final value = body['locked'];
+  if (value is! bool) {
+    throw const BadRequest('body must be {"locked": true|false}');
+  }
+  await SettingsStorage.setConfigLockedForDebug(value);
+  return JsonResponse({
+    'ok': true,
+    'action': 'settings-config-locked',
+    'locked': value,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// core_logs_enabled (§043) — toggle sing-box log forwarding в AppLog/core.
+// Storage хранится в SharedPreferences (`boxvpn_boot.core_logs_enabled`)
+// потому что `BoxApplication.initialize` читает его до старта Flutter engine
+// (через `BootReceiver.isCoreLogsEnabled`). Доступ через MethodChannel.
+//
+// Применяется ТОЛЬКО при полном рестарте процесса — `Libbox.setup` с флагом
+// `debug` вызывается один раз за жизнь процесса (см. `BoxApplication.kt`,
+// гард `if (initialized) return`). Stop/start VPN не помогает: service
+// пересоздаётся, но Application/libbox остаются. Caller должен убить процесс
+// (force-stop через системные настройки, либо UI-кнопка Quit, которая зовёт
+// MethodChannel `quitApp` → `Process.killProcess` + `exitProcess(0)`).
+// ---------------------------------------------------------------------------
+
+Future<DebugResponse> _getCoreLogsEnabled() async {
+  final enabled = await BoxVpnClient().getCoreLogsEnabled();
+  return JsonResponse({'enabled': enabled});
+}
+
+Future<DebugResponse> _putCoreLogsEnabled(DebugRequest req) async {
+  final body = req.jsonBodyAsMap();
+  final value = body['enabled'];
+  if (value is! bool) {
+    throw const BadRequest('body must be {"enabled": true|false}');
+  }
+  await BoxVpnClient().setCoreLogsEnabled(value);
+  return JsonResponse({
+    'ok': true,
+    'action': 'settings-core-logs-enabled',
+    'enabled': value,
+    'note':
+        'saved; force-stop & reopen the app to apply (Libbox.setup is '
+        'one-shot per process — stop/start VPN does NOT re-apply)',
+  });
+}
+
+// ---------------------------------------------------------------------------
+// ping_options (§040) — global + per-group test settings.
+// ---------------------------------------------------------------------------
+
+/// `GET /settings/ping_options` — full structure (`{url?, timeout_ms?, groups?}`).
+/// Empty map если не set'нуто (caller fall-through на template default).
+Future<DebugResponse> _getPingOptions() async {
+  final opts = await SettingsStorage.getPingOptions();
+  return JsonResponse(opts);
+}
+
+/// `PUT /settings/ping_options` — overwrite целиком. Body: `{url?, timeout_ms?,
+/// groups?}`. Caller передаёт final shape; ничего не мержится.
+Future<DebugResponse> _putPingOptions(
+    DebugRequest req, DebugContext ctx) async {
+  final body = req.jsonBodyAsMap();
+  // Минимальная валидация — структуры, не URL'ов (sing-box сам не валидирует
+  // а delay-call'ом упадёт если URL невалиден).
+  if (body.containsKey('url') && body['url'] is! String) {
+    throw const BadRequest('field "url" must be string if present');
+  }
+  if (body.containsKey('timeout_ms') && body['timeout_ms'] is! num) {
+    throw const BadRequest('field "timeout_ms" must be number if present');
+  }
+  if (body.containsKey('groups') && body['groups'] is! Map) {
+    throw const BadRequest('field "groups" must be object if present');
+  }
+  await SettingsStorage.savePingOptions(Map<String, dynamic>.from(body));
+  await _reloadHomePingOptions(ctx);
+  return JsonResponse({
+    'ok': true,
+    'action': 'settings-ping-options',
+    'url': body['url'],
+    'timeout_ms': body['timeout_ms'],
+    'groups_count': (body['groups'] is Map) ? (body['groups'] as Map).length : 0,
+  });
+}
+
+/// `GET /settings/ping_options/groups/{tag}` — override этой группы или 404.
+Future<DebugResponse> _getGroupPing(String tag) async {
+  final opts = await SettingsStorage.getPingOptions();
+  final groups = opts['groups'];
+  if (groups is! Map<String, dynamic> || !groups.containsKey(tag)) {
+    throw NotFound('group_ping: $tag');
+  }
+  return JsonResponse(groups[tag] as Map<String, dynamic>);
+}
+
+/// `PUT /settings/ping_options/groups/{tag}` — body `{url?, timeout_ms?}`.
+/// Минимум одно поле должно быть. Read-modify-write через `setGroupPing`.
+Future<DebugResponse> _putGroupPing(
+    String tag, DebugRequest req, DebugContext ctx) async {
+  final body = req.jsonBodyAsMap();
+  String? url;
+  int? timeoutMs;
+  if (body.containsKey('url')) {
+    final v = body['url'];
+    if (v is! String) throw const BadRequest('field "url" must be string');
+    url = v;
+  }
+  if (body.containsKey('timeout_ms')) {
+    final v = body['timeout_ms'];
+    if (v is! num) throw const BadRequest('field "timeout_ms" must be number');
+    timeoutMs = v.toInt();
+  }
+  if (url == null && timeoutMs == null) {
+    throw const BadRequest('at least one of "url" / "timeout_ms" required');
+  }
+  await SettingsStorage.setGroupPing(tag, url: url, timeoutMs: timeoutMs);
+  await _reloadHomePingOptions(ctx);
+  return JsonResponse({
+    'ok': true,
+    'action': 'settings-ping-options-group-put',
+    'group': tag,
+    'url': ?url,
+    'timeout_ms': ?timeoutMs,
+  });
+}
+
+/// `DELETE /settings/ping_options/groups/{tag}` — снять override этой группы.
+Future<DebugResponse> _deleteGroupPing(String tag, DebugContext ctx) async {
+  await SettingsStorage.clearGroupPing(tag);
+  await _reloadHomePingOptions(ctx);
+  return JsonResponse({
+    'ok': true,
+    'action': 'settings-ping-options-group-delete',
+    'group': tag,
+  });
+}
+
+/// HomeController должен перечитать ping_options после write через Debug API
+/// — иначе in-memory cache отстаёт. Если controller не registered (early
+/// startup) — silently skip; нечего refreshing.
+Future<void> _reloadHomePingOptions(DebugContext ctx) async {
+  try {
+    final home = ctx.registry.home;
+    if (home != null) await home.reloadPingOptions();
+  } catch (_) {
+    // не критично — следующий ping/urltest'оф dialog refresh'нёт
+  }
+}
+
+// ---------------------------------------------------------------------------
 // rebuild-config alias
 // ---------------------------------------------------------------------------
 
 Future<DebugResponse> _rebuildConfig(DebugContext ctx) async {
+  // §037: явный 409 если lock включён.
+  if (await SettingsStorage.getConfigLockedForDebug()) {
+    throw const Conflict(
+      'config_locked_for_debug=true — rebuild blocked. '
+      'PUT /settings/config_locked {"locked":false} to unlock first.',
+    );
+  }
   final sub = ctx.requireSub();
   final home = ctx.requireHome();
   final json = await sub.generateConfig();

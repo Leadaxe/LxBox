@@ -20,7 +20,7 @@ docs/
       001 mobile stack/spec.md      # Каждая фича — отдельная папка
       002 mvp scope/spec.md         # spec.md — основной документ
       ...                           # plan.md, tasks.md — опционально
-      038 subscription detail/spec.md
+      043 applog per-source quotas/spec.md
     tasks/
       README.md                     # Когда и как вести task-лог
       NNN-kebab-title.md            # Конкретный рабочий цикл (баг, pass, рефакторинг)
@@ -44,11 +44,13 @@ CHANGELOG.md                        # Список изменений по ве�
 
 **Фичи vs задачи:** в `docs/spec/features/` — описание возможности («что это и как устроено»). В [`docs/spec/tasks/`](./spec/tasks/README.md) — журнал отдельных рабочих циклов: баг с нетривиальным root cause, perf-pass, рефакторинг с последствиями; формат и критерии — в `README` папки.
 
-Актуальные спеки в `docs/spec/features/001 mobile stack/` … `029 haptic feedback/`. Крупные:
-- **026** — Parser v2 (sealed `NodeSpec`, 3-слойный pipeline) — landmark-рефакторинг v1.3.0.
+Актуальные спеки в `docs/spec/features/001 mobile stack/` … `043 applog per-source quotas/`. Полный список с краткими описаниями — в [`ARCHITECTURE.md → Feature Specs`](ARCHITECTURE.md#feature-specs). Крупные landmark'и:
+- **026** — Parser v2 (sealed `NodeSpec`, 3-слойный pipeline) — рефакторинг v1.3.0.
 - **027** — Subscription auto-update (4 триггера + hard gates против спама).
-- **028** — AntiDPI mixed-case SNI.
-- **029** — Haptic feedback.
+- **033** — Preset bundles (selectable rules с `preset_id`, expansion + merge).
+- **039** — libbox 1.13 migration (1.12.12 → 1.13.11, single-CommandServer architecture).
+- **041** — DNS rules refactor (named/toggleable/multi-source, kind: user/template/preset/srs).
+- **042** — Health watchdog (heartbeat metrics + auto-recovery, *Draft*).
 
 ---
 
@@ -105,11 +107,11 @@ buildConfig(lists, settings)  ─  spec 026
       ├─ allocateTag with tagPrefix
       └─ apply detour policy (register/use/override)
   3. Post-steps (ordered):
+      ├─ applyPresetBundles     — expand `CustomRule(kind: preset)` → rule_set/dns/route (spec 033)
+      ├─ applyCustomRules       — inline + local-SRS правила пользователя (spec 030)
       ├─ applyTlsFragment       — first-hop only, skip on detour
       ├─ applyMixedCaseSni      — randomise server_name case (spec 028)
-      ├─ applyCustomDns         — user DNS override or template defaults
-      ├─ applySelectableRules   — routing rule_sets + rules
-      └─ applyAppRules          — package_name routing
+      └─ applyCustomDns         — DNS-rules + servers (spec 041: `dns_options.rules` named/toggleable; multi-kind: user/template/preset/srs)
   4. Cache remote SRS (parallel)
   5. validator → ValidationResult{ fatal[], warnings[] }
   6. → BuildResult{ config, configJson, validation, emitWarnings }
@@ -178,13 +180,14 @@ cd app && flutter test
 ```
 **0 issues** в analyze и **все тесты зелёные** — обязательно.
 
-Сейчас 128 тестов:
-- `test/models/` — sealed hierarchies (NodeSpec, NodeWarning, ServerList JSON)
+Сейчас 436+ тестов (cnt варьируется по мере добавления; источник правды — `flutter test` summary):
+- `test/models/` — sealed hierarchies (NodeSpec, NodeWarning, ServerList JSON, CustomRule)
 - `test/parser/` — URI/JSON/INI парсеры + round-trip (parseUri → toUri → parseUri)
-- `test/builder/` — build_config, validator, mixed-case SNI
+- `test/builder/` — build_config, validator, mixed-case SNI, preset_expand, applyCustomDns, dns_rules_resolver
 - `test/subscription/` — sources (UrlSource/InlineSource/QrSource/File), content-disposition, inline headers
 - `test/migration/` — proxy_sources → server_lists one-shot
-- `test/services/` — haptic_service
+- `test/services/` — haptic_service, rule_set_downloader, и др.
+- `test/vpn/` — BoxVpnClient wrapper
 - `test/pipeline_e2e_test.dart` — full InlineSource → parseFromSource → buildConfig
 
 ---
@@ -321,7 +324,7 @@ Defaults: `registerDetourServers=false`, `useDetourServers=true`, остальн
 
 | Зависимость | Версия | Где | Риск обновления |
 |------------|--------|-----|----------------|
-| sing-box (libbox) | 1.12.12 | JitPack | API может измениться, тестировать native код |
+| sing-box (libbox) | 1.13.11 (`com.github.singbox-android:libbox`) | JitPack | API может измениться, тестировать native код. Миграция 1.12 → 1.13 — [spec 039](spec/features/039%20libbox%201.13%20migration/spec.md) |
 | Flutter | 3.41.6 | SDK | Обычно безопасно, проверять deprecated |
 | Gradle | 8.14 | wrapper | Совместимость с AGP |
 | AGP | 8.11.1 | build.gradle.kts | Совместимость с Gradle и Flutter |
