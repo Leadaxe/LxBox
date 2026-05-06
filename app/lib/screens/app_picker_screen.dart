@@ -4,11 +4,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/app_info.dart';
 import '../vpn/box_vpn_client.dart';
 
 /// Cached app metadata list — loaded once, reused across screen opens.
 /// Иконки **не** тут, они lazy-cache'атся в `_iconCache` при scroll'е tile'а.
-List<_AppInfo>? _cachedApps;
+List<AppInfo>? _cachedApps;
 bool _cacheLoading = false;
 
 /// Session-level icon cache: package → decoded PNG bytes (или null если
@@ -19,7 +20,7 @@ final Map<String, Uint8List?> _iconCache = {};
 /// Package'и, для которых уже запущен fetch (дедуп fire-and-forget).
 final Set<String> _iconInFlight = {};
 
-Future<List<_AppInfo>> _loadApps() async {
+Future<List<AppInfo>> _loadApps() async {
   if (_cachedApps != null) return _cachedApps!;
   if (_cacheLoading) {
     while (_cacheLoading) {
@@ -30,14 +31,9 @@ Future<List<_AppInfo>> _loadApps() async {
   _cacheLoading = true;
   try {
     final vpn = BoxVpnClient();
-    final apps = await vpn.getInstalledApps();
-    _cachedApps = apps
-        .map((m) => _AppInfo(
-              packageName: m['packageName'] as String? ?? '',
-              appName: m['appName'] as String? ?? '',
-              isSystem: m['isSystemApp'] as bool? ?? false,
-            ))
-        .toList()
+    // BoxVpnClient.getInstalledApps уже возвращает typed List<AppInfo>.
+    // Сортируем тут — caller хочет alphabet-by-display-name.
+    _cachedApps = (await vpn.getInstalledApps())
       ..sort((a, b) =>
           a.appName.toLowerCase().compareTo(b.appName.toLowerCase()));
     return _cachedApps!;
@@ -61,15 +57,8 @@ class AppPickerScreen extends StatefulWidget {
   State<AppPickerScreen> createState() => _AppPickerScreenState();
 }
 
-class _AppInfo {
-  _AppInfo({required this.packageName, required this.appName, required this.isSystem});
-  final String packageName;
-  final String appName;
-  final bool isSystem;
-}
-
 class _AppPickerScreenState extends State<AppPickerScreen> {
-  List<_AppInfo> _allApps = [];
+  List<AppInfo> _allApps = [];
   late final Set<String> _selected;
   bool _loading = true;
   bool _showSystem = false;
@@ -123,7 +112,7 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
 
   /// Рендер иконки для tile'а: если в cache — Image, если нет — letter-avatar
   /// плюс kick fire-and-forget fetch (ленивая подгрузка по мере scroll'а).
-  Widget _iconFor(_AppInfo app) {
+  Widget _iconFor(AppInfo app) {
     final pkg = app.packageName;
     if (!_iconCache.containsKey(pkg)) _ensureIcon(pkg);
     final bytes = _iconCache[pkg];
@@ -149,7 +138,7 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
     );
   }
 
-  List<_AppInfo> get _filtered {
+  List<AppInfo> get _filtered {
     var list = _allApps.where((a) => _showSystem || !a.isSystem).toList();
     if (_search.isNotEmpty) {
       final q = _search.toLowerCase();
@@ -208,7 +197,7 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final apps = _loading ? <_AppInfo>[] : _filtered;
+    final apps = _loading ? <AppInfo>[] : _filtered;
 
     return PopScope(
       onPopInvokedWithResult: (didPop, _) {},

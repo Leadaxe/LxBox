@@ -278,6 +278,48 @@ final class Hysteria2Spec extends NodeSpec {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// NaïveProxy
+// ════════════════════════════════════════════════════════════════════════════
+
+/// NaïveProxy outbound. Cronet (Chrome network stack) внутри libbox даёт
+/// настоящий Chrome TLS-fingerprint, поэтому в этом outbound'е sing-box
+/// **не** принимает кастомные `alpn`/`utls`/`fingerprint`/`reality` —
+/// только `enabled`, `server_name`, `certificate(_path)`, `ech`.
+///
+/// Build-tag в libbox — `with_naive_outbound`. Уже включён в основной
+/// `libbox.aar` от `singbox-android/libbox` (см. spec 037 §2).
+final class NaiveSpec extends NodeSpec {
+  final String username; // может быть пустым
+  final String password; // может быть пустым (anonymous)
+  final TlsSpec tls;
+  final Map<String, String> extraHeaders;
+
+  NaiveSpec({
+    required super.id,
+    required super.tag,
+    required super.label,
+    required super.server,
+    required super.port,
+    required super.rawUri,
+    this.username = '',
+    this.password = '',
+    this.tls = TlsSpec.disabled,
+    this.extraHeaders = const {},
+    super.chained,
+    super.warnings,
+  });
+
+  @override
+  String get protocol => 'naive';
+
+  @override
+  SingboxEntry emit(TemplateVars vars) => e.emitNaive(this, vars);
+
+  @override
+  String toUri() => e.toUriNaive(this);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // TUIC v5 (new in v2)
 // ════════════════════════════════════════════════════════════════════════════
 

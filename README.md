@@ -38,7 +38,7 @@ Android VPN client powered by [sing-box](https://sing-box.sagernet.org/). Multi-
 
 Add servers by subscription URL, direct proxy link, WireGuard URI/INI, or raw sing-box JSON outbound. Smart-paste dialog auto-detects format and previews the content. Enable/disable subscriptions without deleting. Offline rehydrate — nodes restored from body cache after app restart. Per-subscription settings for detour servers.
 
-- **9 protocols**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, SSH, SOCKS, WireGuard
+- **10 protocols**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard
 - Formats: Base64, Xray JSON Array (chained proxy), plain text, raw sing-box JSON
 - Per-subscription **Update interval** picker (1/3/6/12/24/48/72/168h), honors `profile-update-interval` header
 - Subscription row subtitle: `124 nodes · 🔄 24h · 🕐 3h ago · (2 fails)`
@@ -69,6 +69,17 @@ One-tap VPN start/stop with animated status chip. Choose proxy group, sort nodes
 - Detour servers (⚙) visibility toggle
 - Sticky restart warning under Stop — doesn't disappear when you cancel Stop dialog
 - Long-press: Ping · Use this node · View JSON · **Copy URI** (vless://, wireguard://, etc) · Copy server (JSON) · Copy detour · Copy server + detour
+</details>
+
+<details>
+<summary><strong>Quick Connect</strong> — toggle VPN without opening the app (v1.5.0)</summary>
+
+Two paths to flip the VPN on/off without launching the UI: a Quick Settings tile in the status-bar shade and a long-press shortcut on the home-screen icon.
+
+- **Quick Settings tile** — pull down the shade, edit tiles, drag **L×Box** in. Tap = on/off, live `Connected` / `Disconnected` / `Connecting…` / `Stopping…` subtitle. Add via App Settings → General → Quick connect → `Add` (system prompt on Android 13+, manual instructions on older).
+- **Home-screen shortcut** — long-press the icon → **Toggle VPN**.
+- First tap shows a one-shot toast and flashes `MainActivity` for the system VPN consent dialog (Android API requires Activity context); subsequent taps go directly to the service. After consent the activity finishes itself — no UI flash on regular use.
+- Tile state survives OOM-kill of the service: `currentStatus` is reset on `onDestroy` so the tile won't lie «Connected».
 </details>
 
 <details>
@@ -189,6 +200,7 @@ View and edit raw sing-box JSON config. Pretty-printed display with copy button.
 | Shadowsocks | `ss://` (SIP002 + legacy + SS2022) | TCP, UDP, SIP003 plugins |
 | Hysteria2 | `hy2://` / `hysteria2://` | QUIC, Salamander obfs |
 | **TUIC v5** | `tuic://` | QUIC, BBR/CUBIC/NewReno, zero-RTT |
+| **NaïveProxy** | `naive+https://` | Real Chrome TLS via cronet, `extra-headers` |
 | SSH | `ssh://` | TCP, host key / password / private key |
 | SOCKS | `socks://` / `socks5://` | TCP, auth |
 | WireGuard | `wireguard://`, INI config | UDP, multi-peer |

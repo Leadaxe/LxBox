@@ -4,12 +4,13 @@ import 'package:flutter/services.dart';
 import '../services/relative_time.dart';
 import '../services/update_checker.dart';
 import '../services/url_launcher.dart' as ul;
+import '../vpn/box_vpn_client.dart';
 
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  static const _version = '1.5.0';
+  static const _version = '1.6.0';
   static const _repoUrl = 'https://github.com/Leadaxe/LxBox';
 
   /// Public alias for callers (e.g. UpdateChecker / SnackBar) — single
@@ -83,14 +84,29 @@ class AboutScreen extends StatelessWidget {
                   onTap: () => _copyToClipboard(context, _repoUrl),
                 ),
                 const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.architecture),
-                  title: const Text('Powered by sing-box'),
-                  subtitle: const Text('VPN core via libbox'),
-                  onTap: () => _copyToClipboard(
-                    context,
-                    'https://github.com/SagerNet/sing-box',
-                  ),
+                // VPN core version — runtime через `Libbox.version()` (вызов
+                // из `BoxVpnClient.getCoreVersion`). Подгружается лениво:
+                // первый paint показывает "loading", FutureBuilder заменит на
+                // значение когда native ответит. Tap — копирует upstream-URL.
+                FutureBuilder<String>(
+                  future: BoxVpnClient.I.getCoreVersion(),
+                  builder: (ctx, snap) {
+                    final v = (snap.data ?? '').trim();
+                    final subtitle = switch (snap.connectionState) {
+                      ConnectionState.waiting => 'Loading…',
+                      _ when v.isEmpty => 'sing-box (version unknown)',
+                      _ => 'sing-box $v · via libbox',
+                    };
+                    return ListTile(
+                      leading: const Icon(Icons.architecture),
+                      title: const Text('VPN core'),
+                      subtitle: Text(subtitle),
+                      onTap: () => _copyToClipboard(
+                        context,
+                        'https://github.com/SagerNet/sing-box',
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

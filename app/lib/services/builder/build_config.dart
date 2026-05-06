@@ -10,6 +10,7 @@ import '../../models/template_vars.dart';
 import '../../config/consts.dart';
 import '../../models/validation.dart';
 import '../rule_set_downloader.dart';
+import '../settings_storage.dart';
 import '../template_loader.dart';
 import 'post_steps.dart';
 import 'rule_set_registry.dart';
@@ -202,11 +203,43 @@ Future<BuildResult> buildConfig({
     }
   }
 
+  // §033: Read DNS rules storage to determine independent DNS-aspect enable
+  // for each preset (custom_rules entry has its own .enabled, dns side has
+  // its own .enabled — independent flags).
+  final dnsRulesStorage = await SettingsStorage.getDnsRulesList();
+  final isPresetDnsEnabled = <String, bool>{
+    for (final e in dnsRulesStorage)
+      if (e['kind'] == 'preset' && e['presetId'] is String)
+        e['presetId'] as String: e['enabled'] == true,
+  };
+
+  // §033: presetIds with custom_rules.kind:preset entry AND dns_rule defined
+  // in template — для auto-discovery `kind:preset` записей в dns_options.rules.
+  final activePresetIdsWithDnsRule = <String>{
+    for (final cr in settings.customRules)
+      if (cr is CustomRulePreset && cr.presetId.isNotEmpty)
+        if (template.selectableRules
+            .any((p) => p.presetId == cr.presetId && p.dnsRule != null))
+          cr.presetId,
+  };
+
+  // §033: Resolve cached paths for kind:srs DNS-rules. Same RuleSetDownloader
+  // as routing srs but separate id namespace (prefix `ds_` vs route's `r_`).
+  final dnsSrsCachedPaths = <String, String>{};
+  for (final entry in dnsRulesStorage) {
+    if (entry['kind'] != 'srs') continue;
+    final id = entry['id'] as String?;
+    if (id == null || id.isEmpty) continue;
+    final p = await RuleSetDownloader.cachedPath(id);
+    if (p != null) dnsSrsCachedPaths[id] = p;
+  }
+
   final presetApply = applyPresetBundles(
     ruleSets,
     settings.customRules,
     template.selectableRules,
     presetSrsPaths: presetSrsPaths,
+    isPresetDnsEnabled: isPresetDnsEnabled,
   );
   emitWarnings.addAll(presetApply.warnings);
 
@@ -233,7 +266,9 @@ Future<BuildResult> buildConfig({
     config,
     template.dnsOptions,
     extraServers: presetApply.extraDnsServers,
-    extraRules: presetApply.extraDnsRules,
+    extraDnsRulesByPresetId: presetApply.dnsRulesByPresetId,
+    activePresetIdsWithDnsRule: activePresetIdsWithDnsRule,
+    dnsSrsCachedPaths: dnsSrsCachedPaths,
   );
 
   final validation = validateConfig(config);

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../controllers/home_controller.dart';
+import '../services/error_format.dart';
 import '../services/template_loader.dart';
 
 class SpeedTestScreen extends StatefulWidget {
@@ -143,7 +144,7 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
       );
       if (_history.length > 10) _history.removeLast();
     } catch (e) {
-      if (mounted) setState(() => _status = 'Error: $e');
+      if (mounted) setState(() => _status = 'Error: ${formatUserError(e)}');
     } finally {
       if (mounted) setState(() => _running = false);
     }

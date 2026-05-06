@@ -1,11 +1,11 @@
 package com.leadaxe.lxbox.vpn
 
-import android.content.pm.PackageManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Process
 import android.system.OsConstants
 import androidx.annotation.RequiresApi
+import io.nekohasekai.libbox.ConnectionOwner
 import io.nekohasekai.libbox.InterfaceUpdateListener
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.LocalDNSTransport
@@ -37,34 +37,21 @@ interface PlatformInterfaceWrapper : PlatformInterface {
         ipProtocol: Int,
         sourceAddress: String, sourcePort: Int,
         destinationAddress: String, destinationPort: Int
-    ): Int {
+    ): ConnectionOwner {
         val uid = BoxApplication.connectivity.getConnectionOwnerUid(
             ipProtocol,
             InetSocketAddress(sourceAddress, sourcePort),
             InetSocketAddress(destinationAddress, destinationPort)
         )
         if (uid == Process.INVALID_UID) error("android: connection owner not found")
-        return uid
-    }
-
-    override fun packageNameByUid(uid: Int): String {
-        val pkgs = BoxApplication.packageManager.getPackagesForUid(uid)
-        if (pkgs.isNullOrEmpty()) error("android: package not found")
-        return pkgs[0]
-    }
-
-    @Suppress("DEPRECATION")
-    override fun uidByPackageName(packageName: String): Int {
-        return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                BoxApplication.packageManager.getPackageUid(packageName, PackageManager.PackageInfoFlags.of(0))
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                BoxApplication.packageManager.getPackageUid(packageName, 0)
-            } else {
-                BoxApplication.packageManager.getApplicationInfo(packageName, 0).uid
-            }
-        } catch (_: PackageManager.NameNotFoundException) {
-            error("android: package not found")
+        // Sing-box 1.13 ушёл от двухступенчатого callback'а
+        // (`packageNameByUid`/`uidByPackageName`) к одной структуре `ConnectionOwner`,
+        // которую мы заполняем сразу: UID + список пакетов под ним. Process path и
+        // username на Android неприменимы (нет /proc-доступа без root) — оставляем пустыми.
+        val packages = BoxApplication.packageManager.getPackagesForUid(uid)?.toList() ?: emptyList()
+        return ConnectionOwner().apply {
+            userId = uid
+            setAndroidPackageNames(StringArray(packages.iterator()))
         }
     }
 

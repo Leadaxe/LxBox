@@ -6,17 +6,116 @@
 
 ---
 
-## [1.5.0] — 2026-04-23
+## [Unreleased]
 
-### Breaking
+---
 
-- **Tunnel sleep mode default: `lazy` → `never`.** Раньше tunnel поведение было захардкожено: `pause()` на deep Doze + `wake()` при выходе (паттерн sing-box-for-android). При Doze ломались длинные TCP-сокеты и push-уведомления — юзеры жаловались «интернет отваливается пока не открою app». Новый дефолт `never` держит тоннель всегда активным, что увеличивает расход батареи (ориентировочно +1–3% за ночь) в обмен на стабильность push'ей и SIP/VoIP. Кто хочет старое поведение — Settings → Background → Tunnel sleep mode → **Lazy sleep**. Миграция silent: существующие установки получают новый дефолт без диалога, настройка доступна из UI.
+## [1.6.0] — 2026-05-07
+
+«Диагностика + восстановление + DNS-cleanup» релиз. Под капотом — миграция на sing-box 1.13.x с переработкой нативного VPN-сервиса; видимое для юзера — light-recovery (Reload-кнопка / reset-network), per-group ping/test settings, понятные ошибки в banner'ах, починка DNS-маршрутов в РФ через ru-direct, backup/restore UI и всё, что ниже.
+
+### Added
+
+- **Backup & restore UI** ([§040 backup spec](docs/spec/features/040%20backup%20restore%20ui/spec.md), commit b332b21). Новый экран — экспорт/импорт пользовательских данных (server lists / routing rules / app settings / debug config) в JSON. 4 toggleable категории, dry-run preview перед применением, merge vs replace mode. Экспорт через `share_plus`, импорт через `file_picker`. Debug API: `GET /backup/export?include=...`, `POST /backup/import?merge=...`.
+- **Reload-кнопка в AppBar** (commits 3f4cac7 / d5c709e / 23ff55b). Default tap = light reload core (`commandServer.startOrReloadService`) вместо полного reconnect — TUN не закрывается, in-place restart sing-box runtime'а с тем же config'ом. В long-press menu — отдельный пункт Reload как первый, recovery-фокус. Cooldown 3s между нажатиями (`canReload` getter в HomeController).
+- **`/action/reset-network` Debug API** ([§031](docs/spec/tasks/031-reset-network-api.md)). Light recovery — `commandServer.resetNetwork()` без recreate'а box runtime / Service / TUN. Делает `connectionManager.CloseAll()` + DNS cache flush (`r.ClearCache()` + `transports.Reset()`) + interface refresh у inbound/outbound/endpoints. Spec обновлена с разбором по строкам исходника sing-box v1.13.11 (изначальная гипотеза «БЕЗ drop'а in-flight TCP» опровергнута — в реале all connections рвутся, но Service/TUN остаются стабильны).
+- **Per-group ping/test settings + persist** ([§040](docs/spec/tasks/040-per-group-ping-test-settings.md)). Каждая VPN-группа может иметь свои `url` + `timeout_ms` для ping / mass-URLTest / group URLTest. Storage shape `ping_options: {url?, timeout_ms?, groups: {<groupTag>: {url?, timeout_ms?}}}` симметричен template'у. Resolve chain: per-group override → global storage → template default. Global `pingUrl`/`pingTimeout` теперь тоже **persist'ятся** (раньше жили только в памяти controller'а — на restart сбрасывались). UI dialog «Ping settings» с SegmentedButton «All groups | <currentGroup>» + Reset-to-global. Debug API endpoints: `GET/PUT /settings/ping_options`, `GET/PUT/DELETE /settings/ping_options/groups/{tag}`. Use-case: VPN-1 (foreign-routed) — gstatic 204; VPN-2 (РФ-direct) — ya.ru.
+- **Sing-box internal logs в Debug API** ([§043](docs/spec/features/043%20applog%20per-source%20quotas/spec.md)). `GET /logs/core` показывает router/dns/inbound/outbound события sing-box'а — для диагностики bug-репортов («после wake direct/auto не работает» и т.п.). Source delivery: `PlatformInterface.writeDebugMessage` → `EventChannel("lxbox/coreLog")` → `ClashLogPump` (новый `lib/services/clash_log_pump.dart`) → `AppLog` как `DebugSource.core`. Уровень парсится regex'ом (`\bWARN\b`/`\bERROR\b` etc.) — TRACE/DEBUG отбрасываются на native (volume reduction). ANSI escape codes стрипаются. **Toggle:** `PUT /settings/core_logs_enabled {"enabled":true}` (default false; storage в SharedPreferences `boxvpn_boot.core_logs_enabled` потому что `Libbox.setup` читает значение до Flutter engine; изменение применяется только после force-stop приложения). UI-toggle единственный — App Settings → Diagnostics. Shortcut в DebugScreen: ⋮ menu → "Diagnostics settings".
+- **AppLog per-source quotas** ([§043](docs/spec/features/043%20applog%20per-source%20quotas/spec.md)). Раньше единый ring-buffer на 500 entries — sing-box (verbose, сотни строк/мин) вытеснял app-сообщения за минуты. Теперь `Map<DebugSource, List>`: `app=300`, `core=500`, независимые ring-buffer'ы. K-way merge на чтении (insert O(1) amortized), `entriesForSource(s)` direct lookup. Persistent split: `applog.txt` + `corelog.txt`, по 200 lines / 64KB каждый — `initPersistent()` грузит оба. Debug API: `GET /logs/app`, `GET /logs/core` aliases; `POST /logs/clear?source=app|core` per-source clear.
+- **Debug API: write `config.json` direct + lockable rebuild** ([§037](docs/spec/tasks/037-debug-api-write-config-and-lock-rebuild.md)). `PUT /config` с raw sing-box JSON — sing-box reload'ится. `PUT /settings/config_locked {"locked": true}` — pin'ит config от UI-rebuild'ов (`SubscriptionController.generateConfig()` возвращает null silently пока lock держится). Use-case: тестировать sing-box фичи которые наш parser/builder не понимает (Tailscale outbound и т.п.). Endpoints: `PUT /config`, `GET /state/config_locked`, `PUT /settings/config_locked`. Storage: `config_locked_for_debug`, default false.
+- **Core version в About** (commit 3f4cac7). About dialog показывает версию sing-box core (`commandServer.coreVersion()`) рядом с app version — сразу видно какой libbox прошит.
+- **Universal error format helper** ([§041](docs/spec/tasks/041-user-error-format-helper.md)). Новый `lib/services/error_format.dart` с `formatUserError(Object e)` — превращает Dart exception toString'ы в человекочитаемый текст. Поддерживает `TimeoutException` → `timeout Ns`, `SocketException`/`FileSystemException` → `osError.message`, `FormatException` → `e.message`, `ClashHttpException` → `HTTP <code>`, `PlatformException` → `e.message ?? "platform error: <code>"`, fallback strip+truncate. Применено в 7 user-visible callsite'ах HomeController (file pick, start/stop/reconnect VPN, Clash API refresh, switch node) + snackbar'ах 6 экранов. 12 unit-тестов. Примеры:
+  - `PlatformException(start_failed, "vpn_service.prepare returned false", null, null)` → `vpn_service.prepare returned false`
+  - `SocketException("Failed lookup", OSError("Connection refused", 61), ...)` → `Connection refused`
+  - `FileSystemException("Cannot open file", "/p", OSError("No such file or directory", 2))` → `No such file or directory`
+
+### Changed
+
+- **libbox: 1.12.12 → 1.13.11** ([§039 libbox migration](docs/spec/features/039%20libbox%201.13%20migration/spec.md), commit 913530b). Перешли на актуальный major-релиз sing-box. Ключевые архитектурные перемены подкапотом:
+  - **`BoxService` класс удалён в 1.13** — всё его API поглощено в `CommandServer`. Единый `CommandServer` владеет runtime'ом через `startOrReloadService(config, opts)`. Two-phase shutdown (`closeService()` → `close()`).
+  - **`PlatformInterface` упрощён**: убраны `writeLog`, `packageNameByUid`, `uidByPackageName` — sing-box сам ведёт UID→package mapping и отдаёт через richer `ConnectionOwner` struct (`userId`, `userName`, `processPath`, `androidPackageNames[]`).
+  - **`Seq.destroyRef` больше не вызываем** — Go runtime в 1.13 self-cleans refnum'ы; manual destroyRef = double-free.
+  - **Two-phase shutdown на `Dispatchers.IO`** — `closeService()` (остановить runtime; throwing → `setError`), потом `close()` (закрыть Unix-socket; non-throwing). Перепутать = Go callbacks могут зависнуть → ANR.
+- **Dart wrapper cleanup** (`box_vpn_client.dart`):
+  - `getVpnStatus()`/`onStatusChanged` возвращают типизированный `TunnelStatus`/`TunnelStatusEvent` вместо `String`/`Map<String,dynamic>`.
+  - `BackgroundMode` enum (был `String`).
+  - `AppInfo` model — типизированный класс в `lib/models/app_info.dart`.
+  - **MethodChannel timeouts** на критических вызовах — `getVpnStatus` (3s), `startVPN` (30s), `stopVPN` (10s), `getInstalledApps` (15s).
+  - `BoxVpnClient.I` singleton + `BoxVpnClient.forTest()` factory.
+  - Method-name константы (`_Methods.saveConfig` etc.).
+- **Empty template DNS catch-all** ([§039 task](docs/spec/tasks/039-empty-template-dns-rules.md)). Убрали template-level правило `{name: "Default → Google DoH", server: google_doh}` — всё что не матчится preset/inline DNS-правилами теперь идёт через `dns.final` (= `@dns_final`, default `local_dns_resolver` = system resolver через PlatformInterface; юзер может override'нуть в wizard'е). Причина: `google_doh` (HTTPS/443) на long-idle деградирует — DoH connection pool stale → re-dial фейлится → fall-through DNS умирает (наблюдалось 2× за неделю). System resolver state-less, не подвержен. Tooltip `dns_final` обновлён. Existing-юзеры с записью «Default → Google DoH» — orphan cleanup в `resolveDnsRulesList` сам уберёт. Также: tag `direct_dns_resolver` → `google_udp` (симметрия с `cloudflare_udp`).
+- **DNS settings dropdown'ы видят preset-серверы** ([§039 task](docs/spec/tasks/039-empty-template-dns-rules.md)). `_enabledServerTags` getter в `dns_settings_screen.dart` объединяет два источника: template/user-saved (`_servers`) + preset-expanded (`_presetServersWithLabel`, e.g. `yandex_udp` от ru-direct). До fix'а dropdown показывал только template+user; preset-добавленные теги не появлялись. Затронутые dropdown'ы: DNS Final / Default Domain Resolver / per-rule server selector.
+- **`ru-direct` preset: DNS defaults сменили на UDP/Base** ([§038](docs/spec/tasks/038-ru-direct-dns-defaults.md)). Был `yandex_doh` (HTTPS/443) с IP `77.88.8.88` (Safe-tier). Стал `yandex_udp` (UDP/53) с IP `77.88.8.8` (Base-tier). Причина: у части юзеров (особенно `outbound = direct-out` или WG-router в РФ) Yandex DoH endpoint на `:443` режется ISP/router-DPI: TLS handshake до `safe.dot.dns.yandex.net` зависает, ICMP/UDP при этом работают. Все `.ru` lookups через `ru-direct` failed → `ERR_CONNECTION_REFUSED` в браузере и mobile-apps на ya.ru / t-bank-app.ru. UDP/53 на 77.88.8.8 универсально пропускается. Tooltip `dns_server` укоротили; options в `dns_ip` и `dns_servers` упорядочили — Base/UDP идут первыми. **Существующие установки не затронуты**: явно сохранённые `vars_values` приоритетнее template-default'а.
+- **DNS rules: schema cleanup** ([§041 dns rules](docs/spec/features/041%20dns%20rules%20refactor/spec.md) + [§032](docs/spec/tasks/032-dns-rules-schema-symmetry.md) + [§033](docs/spec/tasks/033-unified-kind-vocabulary.md)). Унификация discriminator: `dns_options.rules[i].type` → `kind`. Унификация vocabulary: `inline | srs | preset | template` для DNS rules — общая лексика с `custom_rules`. Для `kind: preset` хранится `presetId` вместо mutable `title=preset.label`. Field rename `title` → `name` для kind=inline/template — симметрия с `custom_rules.name`. Auto-link при создании / mandatory link при удалении: добавление `custom_rules.kind:preset` автоматически создаёт соответствующую `dns_options.rules.kind:preset` запись. **Independent enable** route-aspect ↔ DNS-aspect. **No migration** — legacy ключи silently dropped, auto-discovery восстанавливает fresh state.
+- **Action endpoints: unified `/action/urltest`** ([§040](docs/spec/tasks/040-per-group-ping-test-settings.md)). Раньше три endpoint'а: `/action/ping-node?tag=`, `/action/ping-all`, `/action/run-urltest?group=`. Теперь один `/action/urltest` со scope-dispatch'ем через query: `?tag=` (single node), `?group=` (group urltest), `?all=true` (mass urltest). HomeController методы: `pingNode` → `runNodeUrltest`, `pingAllNodes` → `runMassUrltest`, `runGroupUrltest` без изменений. **Breaking** для adb-скриптов которые звали старые endpoints — alias'ы не оставлены.
+- **URLTest error format: human-readable** ([§040](docs/spec/tasks/040-per-group-ping-test-settings.md)). `runNodeUrltest` / `runGroupUrltest` форматируют ошибки через `_formatProbeError` (built on top of `formatUserError` из §041):
+  - Было: `Ping: TimeoutException after 0:00:10.000000: Future not completed`
+  - Стало: `direct-out → ya.ru — timeout 5.8s` / `direct-out → ya.ru — HTTP 503` / `direct-out → ya.ru — connection refused`
+- **Clash delay/groupDelay timeout sync** ([§040](docs/spec/tasks/040-per-group-ping-test-settings.md)). Раньше Dart-side wrapper использовал hardcoded `_timeout = 10s` независимо от `timeoutMs` query-param'а. Если юзер ставил `timeout_ms=5000` — dart-сторона всё равно ждала 10s, ловила TimeoutException вместо нормального clash response. Теперь `Duration(milliseconds: timeoutMs) + _delayResponseBuffer` где `_delayResponseBuffer = 750ms` (cleanup-buffer на стороне sing-box). Применено в `delay()` и `groupDelay()`.
+- **`wizard_template.json`**: убрано невалидное поле `"format": "domain_suffix"` из inline rule_set'а `ru-domains`. Sing-box тихо обнулял его и в 1.12, и в 1.13, но в `option/rule_set.go` для inline-варианта это поле не определено — будущий sing-box 1.14+ может ужесточить и сделать hard reject.
+
+### Fixed
+
+- **Clash delay endpoint hang после ~27 минут аптайма** (root-cause [§039 libbox migration](docs/spec/features/039%20libbox%201.13%20migration/spec.md)). Симптом: все ноды в server-list show "err" в UI после 28-30 минут активной VPN-сессии, при том что трафик через выбранную ноду продолжает работать. Root cause — DNS cache dedup-lock goroutine leak в sing-box `dns/client.go:144-164`: per-question wait канал блокировался **без** `ctx.Done()`-awareness; первый раз когда upstream DNS-transport замёрз, все последующие waiter'ы парковались навсегда. Fix — upstream commit `aba8346b`, вошёл в sing-box `v1.12.21+` и `v1.13.0+`.
+- **Mass ping cancel actually cancels** ([§034](docs/spec/tasks/034-mass-ping-cancel-actually-cancels.md)). Раньше Stop во время mass ping'а оставлял три side-effect'а: спиннеры висели до timeout'а у нод которые не успели ответить (worker break без cleanup pingBusy state'а); `_runAllUrltestGroups` после workers крутил `auto`-группу до конца независимо от cancel'а; in-flight HTTP delay/groupDelay запросы продолжали выполняться. Fix: `cancelMassPing` теперь (1) очищает `pingBusy` целиком; (2) `_runAllUrltestGroups(epoch)` проверяет epoch на каждой итерации; (3) `ClashApiClient` имеет отдельный `_delayHttp` клиент — `cancelDelays()` его close'ит, in-flight HTTP-сокеты рвутся.
+
+### Build / CI
+
+- **APK размер: ~73 MB → ~56 MB** (commit da709a3). CI собирает **arm64-v8a single-arch** APK (`flutter build apk --release --target-platform android-arm64`) — то же что и локальная сборка через `scripts/build-local-apk.sh`. Раньше CI собирал fat-APK с тремя ABI; `libbox.so` (~17 MB) дублировался на каждую ABI.
+  - Покрытие: arm64-v8a — 95%+ современных Android-устройств. Android 14+ Google запретил 32-bit-only платформы.
+  - Не покрывает: `armeabi-v7a` only Android Go бюджет — вне целевой аудитории VPN-клиента.
+  - **v1.5.0 (предыдущий)** — последний релиз с fat APK ~73 MB. v1.6.0+ — arm64-only ~56 MB.
+
+### Documentation
+
+- **Постоянная карта обновления документации** ([`docs/spec/README.md`](docs/spec/README.md)). Каждая спека (фича/задача) теперь должна явно перечислять раздел `## Docs to update` со списком конкретных entries: какие из стандартных файлов (`debug-api-reference.md`, `CHANGELOG.md`, `ARCHITECTURE.md`, `RELEASE_NOTES.md` + `releases/vX.Y.Z.md`, `pubspec.yaml`, `DEVELOPMENT_REPORT.md`) обновляются вместе с кодом. Backfill в spec'ах §035-§041, §043. Имплементационная фаза не считается завершённой пока соответствующие docs-обновления не сделаны.
+
+---
+
+## [1.5.0] — 2026-04-29
+
+### Added
+
+- **NaïveProxy** ([§037](docs/spec/features/037%20naive%20proxy/spec.md), [#2](https://github.com/Leadaxe/LxBox/issues/2)) — парсер `naive+https://` URIs (DuckSoft), генератор sing-box `type: "naive"` outbound'а, share-URI round-trip. 10-й протокол в Parser v2. Cronet/`with_naive_outbound` уже в `libbox.aar` — без APK-size impact. +36 тестов; suite 373 → 409 ✓.
+- **Quick Connect: QS tile + home-screen shortcut** ([§032](docs/spec/features/032%20quick%20connect/spec.md), [#1](https://github.com/Leadaxe/LxBox/issues/1)) — две точки toggle VPN без открытия app'а. Tile синхронизирован с `BoxVpnService.currentStatus`, shortcut на launcher-иконке. Первый раз app коротко открывается ради `VpnService.prepare(...)` consent — Android API ограничение. См. [task 014](docs/spec/tasks/014-quick-connect-tile-shortcut.md).
+- **Crash diagnostics** ([§038](docs/spec/features/038%20crash%20diagnostics/spec.md)) — четыре независимых канала post-mortem диагностики:
+  - **A. stderr-redirect** — `Libbox.redirectStderr` пишет Go panic-stacktrace в `filesDir/stderr.log` до SIGABRT'а. Условная вкладка `stderr` в Debug-экране (только если файл непустой), кнопка Share. [task 018](docs/spec/tasks/018-stderr-viewer-debug-tab.md).
+  - **B. ApplicationExitInfo** (API 30+) — `getHistoricalProcessExitReasons` lazy-читается в `DumpBuilder`. Reason + tombstone (для CRASH_NATIVE) или JVM stacktrace (для CRASH). [task 029](docs/spec/tasks/029-application-exit-info.md).
+  - **C. Persistent AppLog** — `warning` + `error` уровни пишутся в `filesDir/applog.txt` (ring-buffer 200 строк / 64KB). На старте `main()` подгружаются с `fromPreviousSession=true`. Pre-crash JVM-events переживают рестарт. [task 028](docs/spec/tasks/028-persistent-applog.md).
+  - **D. Logcat tail** — `Runtime.exec("logcat", "-d", "-t", 1000, "*:E")` через `ProcessBuilder` (без `READ_LOGS` permission, logd UID-фильтрует сам). Ловит `AndroidRuntime FATAL EXCEPTION`, `libc`/`DEBUG`/`tombstoned`, `art`/`linker` — особенно когда AEI не приложил trace (Samsung One UI quirk на REASON_CRASH). [task 022](docs/spec/tasks/022-logcat-tail-in-dump.md).
+  - `DumpBuilder` отдаёт все 4 канала одним JSON-pack'ом (поля `stderr_log`, `exit_info`, `logcat_tail`, plus `debug_log` с persistent-маркером).
+- **Debug API: `/diag/*` endpoints group** ([§031](docs/spec/features/031%20debug%20api/spec.md)) — `/diag/dump`, `/diag/exit-info`, `/diag/logcat`, `/diag/stderr`, `/diag/applog`. Всё что отдаётся в UI ⤴ Share, доступно через HTTP без UI.
+- **Debug API: `/backup/*` group** ([task 026](docs/spec/tasks/026-backup-export-import.md)) — `GET /backup/export?include=config,vars,subs` и симметричный `POST /backup/import?merge=&rebuild=`. Pure-data snapshot (без diag-шума), совместим с форматом `/diag/dump`. Кеши (cache.db, stderr.log, SRS, runtime nodes) не входят — restore их пересоздаст из подписок.
+- **Debug API: `POST /action/preview-empty-state?on=true|false`** ([task 025](docs/spec/tasks/025-preview-empty-state.md)) — UI-only override: `HomeScreen` рендерит empty-state как при чистой инсталляции, реальные данные не трогаются. Полезно для скриншотов / regression-теста UX без `pm clear`.
+
+### UX
+
+- **Home empty-state guide** ([task 024](docs/spec/tasks/024-home-empty-state-cta.md)). Два состояния:
+  - **Нет конфига** (`configRaw.isEmpty`): «Add a server» + крупная круглая `+`-кнопка → `SubscriptionsScreen`. `_buildControls` скрыт — стартовать нечего, disabled-кнопка только запутывала.
+  - **Конфиг есть, не подключены**: вместо пассивного «Tap Start to connect» — большая кликабельная зона с иконкой play (64dp, primary color) и текстом «Tap to connect». Тап стартует VPN тем же путём что и FilledButton в _buildControls.
+
+### Fixed
+
+- **`CHANGE_NETWORK_STATE` permission на Android 9-11** ([task 023](docs/spec/tasks/023-change-network-state-permission.md)). `DefaultNetworkListener` на API 28-30 зовёт `ConnectivityManager.requestNetwork(...)`, который требует `CHANGE_NETWORK_STATE`. Без него — `SecurityException` → `REASON_CRASH` сразу после VPN-consent OK на A50/A10/Y9. На API 31+ используется `registerBestMatchingNetworkCallback` (без этого требования) — поэтому регрессия проявлялась только на 9-11.
+- **VLESS `packetEncoding` allow-list** — xray-style подписки кладут в URI `packetEncoding=none`, что выдаёт `"packet_encoding": "none"` в outbound JSON; sing-box `vless.NewOutbound` принимает только `xudp`/`packetaddr`/omitted, для прочего зовёт `E.New("unknown packet encoding: …")` и крашит libbox через апстрим-баг в `format.ToString`. Парсер нормализует на входе: `xudp`/`XUDP` → `xudp`, `PacketAddr` → `packetaddr`, `none` дропается, прочее → warning + дроп. См. [task 012](docs/spec/tasks/012-vless-packet-encoding-libbox-panic.md), [PROTOCOLS.md](docs/PROTOCOLS.md).
+- **Race: `Libbox.newService` до завершения `Libbox.setup`** ([task 027](docs/spec/tasks/027-libbox-init-race-fix.md)) — `BoxApplication.libboxReady: CompletableDeferred<Unit>` барьер; `serviceScope.launch` в `BoxVpnService` ждёт его до любого libbox-вызова. Параллельно: `workingDir` libbox переехал из external (`getExternalFilesDir(null)`) в internal (`context.filesDir`) — там же где SettingsStorage и подписки; убирает Knox/SELinux edge-case'ы.
+- **Quick Connect class-verification на Android 9-11** ([task 015](docs/spec/tasks/015-android-9-11-quickconnect-regression.md)) — `Tile.subtitle` (API 29+) в `@RequiresApi(Q)` helper, `LxBoxTileService.refreshTile` / `QuickShortcuts.refresh` gated на API 30+ с outer `try { Throwable }`, все callsites в `setStatus`/`onDestroy`/`initialize` обёрнуты в `runCatching`. `FOREGROUND_SERVICE_SPECIAL_USE` permission гейтнут `minSdkVersion="34"`; typed `startForeground` на API 34+.
 
 ### Reliability
 
+- **`Libbox.newService` / `svc.start` / `serviceScope.launch` ловят `Throwable`** ([task 016](docs/spec/tasks/016-libbox-newservice-throwable-catch.md)) — не только `Exception`; `Error`-наследники (OOM, NoClassDefFoundError, VerifyError) теперь идут через понятный `stopAndAlert(...)` вместо тихого вылета.
+
+### Earlier in v1.5.0 cycle (2026-04-23 carryover)
+
+#### Breaking
+
+- **Tunnel sleep mode default: `lazy` → `never`.** Раньше tunnel поведение было захардкожено: `pause()` на deep Doze + `wake()` при выходе (паттерн sing-box-for-android). При Doze ломались длинные TCP-сокеты и push-уведомления — юзеры жаловались «интернет отваливается пока не открою app». Новый дефолт `never` держит тоннель всегда активным, что увеличивает расход батареи (ориентировочно +1–3% за ночь) в обмен на стабильность push'ей и SIP/VoIP. Кто хочет старое поведение — Settings → Background → Tunnel sleep mode → **Lazy sleep**. Миграция silent: существующие установки получают новый дефолт без диалога, настройка доступна из UI.
+
+#### Reliability
+
 - **Tunnel sleep mode (3-way setting)** — App Settings → Background → «Tunnel sleep mode». Три режима: `never` (default, tunnel всегда активен), `lazy` (pause только при deep Doze), `always` (pause при каждом screen-off, максимум экономии батареи). Хранение в `BootReceiver` SharedPreferences (`background_mode`), применяется при следующем подключении VPN. Реализация: [BoxVpnService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt), [BootReceiver.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BootReceiver.kt), [VpnPlugin.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt), [box_vpn_client.dart](app/lib/vpn/box_vpn_client.dart), [app_settings_screen.dart](app/lib/screens/app_settings_screen.dart).
 
-### UX
+#### UX
 
 - **Tabbed App Settings** — 3 таба: **General** (appearance, behavior, subscriptions, feedback), **Background** (keep-on-exit, battery opt, notifications, OEM, sleep mode), **Diagnostics** (permissions summary, Debug API). Keep-on-exit перенесён из Startup в Background.
 - **Battery-optimization попап на старте** — если `isIgnoringBatteryOptimizations == false`, HomeScreen показывает AlertDialog «Разрешите работу в фоне» с кнопкой перехода в системные настройки. Rate-limit: не чаще 1 раза в 24 часа (`battery_opt_last_prompt_ms` в SettingsStorage). Реализация: [home_screen.dart](app/lib/screens/home_screen.dart).
@@ -24,21 +123,21 @@
 
 - **Update check on launch** ([§036](docs/spec/features/036%20update%20check/spec.md)) — `UpdateChecker` сервис: через 5s после старта app'а пингует `api.github.com/repos/Leadaxe/LxBox/releases/latest` (24h cap, default ON, single-line disclosure). Если новый релиз → `SnackBar` в HomeScreen с кнопками **View** (открывает release page в браузере) / **Not now** (dismiss per-tag). Sideload flow без in-app installer. About screen: блок «Latest available» с manual `[Check now]`. App Settings → General → Updates: toggle + last-check + manual button.
 
-### Debug API
+#### Debug API
 
 - **`GET /help[?format=text|json]`** — self-documenting capability map. Без auth (как `/ping`). Markdown-text для LLM-агентов, structured JSON для auto-tooling. Hand-maintained в `handlers/help.dart` — single source of truth для wrappers / шпаргалок.
 
-### Process
+#### Process
 
 - **Night-work autonomous process** (`docs/spec/processes/night-work/`) — canonical spec, startup-prompt, report-template, morning-review, scripts/session-start.sh. Anti-pattern'ы из 2026-04-22 retro зашиты в spec (no silent pivot, no megacommit WIP rescue, no hallucinated marketer stats).
 - **MCP server design** ([§035](docs/spec/features/035%20mcp%20server/spec.md), draft) — план обёртки Debug API в MCP server (stdio, TS+Node, tools/resources/prompts). Implementation отложена до момента когда Claude Desktop станет primary tooling surface.
 
-### Tests
+#### Tests
 
 - `test/vpn/box_vpn_client_test.dart` — MethodChannel contract tests для новых обёрток (`setBackgroundMode`, `getBackgroundMode`, `areNotificationsEnabled`, `isIgnoringBatteryOptimizations`). 4 теста.
 - `test/services/update_checker_test.dart` — 10 unit-тестов на pure-function `isNewer` (semver compare, malformed input, suffix stripping).
 
-### Scripts
+#### Scripts
 
 - `scripts/install-apk.sh` — auto-detect устройство (wifi > USB), install + force-stop + launch + restore Debug API forward (port 9269).
 - `scripts/ensure-wifi-adb.sh` — check / bootstrap wifi-adb (tcpip + connect from USB device).

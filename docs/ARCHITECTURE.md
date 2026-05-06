@@ -77,7 +77,7 @@ L×Box — Android VPN-клиент на базе **sing-box** (через **lib
 │  dump_builder · url_launcher                                     │
 ├─────────────────────────────────────────────────────────────────┤
 │                         Models                                   │
-│  NodeSpec (sealed 9 вариантов) · node_spec_emit · emit_context   │
+│  NodeSpec (sealed 10 вариантов) · node_spec_emit · emit_context  │
 │  node_entries · node_warning · tls_spec · transport_spec         │
 │  ServerList (sealed: SubscriptionServers, UserServer)            │
 │  CustomRule (unified routing model — §030)                       │
@@ -270,7 +270,7 @@ app/lib/
 │   ├── home_controller.dart              # VPN lifecycle, Clash API, ping, heartbeat, haptic
 │   └── subscription_controller.dart      # entries, refreshEntry, persist, generateConfig
 ├── models/
-│   ├── node_spec.dart                    # sealed NodeSpec + 9 variants
+│   ├── node_spec.dart                    # sealed NodeSpec + 10 variants (vless/vmess/trojan/ss/hy2/naive/tuic/ssh/socks/wg)
 │   ├── node_spec_emit.dart               # emit() impls per variant
 │   ├── emit_context.dart                 # abstract interface for builder ctx
 │   ├── node_entries.dart                 # NodeEntries{ main, detours[] }
@@ -311,7 +311,8 @@ app/lib/
 │   ├── template_loader.dart              # wizard_template.json loader
 │   ├── get_free_loader.dart              # Built-in free VPN preset
 │   ├── rule_set_downloader.dart          # Download + cache remote .srs rule sets (parallel)
-│   ├── app_log.dart                      # AppLog singleton, 4 severities
+│   ├── app_log.dart                      # AppLog singleton, 4 severities + per-source quotas (§043)
+│   ├── clash_log_pump.dart                # §043: pump sing-box logs из EventChannel "lxbox/coreLog" → AppLog (DebugSource.core)
 │   ├── download_saver.dart               # Save config/log to /sdcard/Download
 │   ├── dump_builder.dart                 # Debug dump: config + vars + logs + server_lists
 │   └── url_launcher.dart                 # External link opening
@@ -463,10 +464,71 @@ rule_sets/<tag>.srs (documents dir)
 
 SharedPreferences:
   ├─ app_theme_mode: "system" | "light" | "dark"
-  └─ haptic_enabled: "true" | "false"
+  ├─ haptic_enabled: "true" | "false"
+  └─ boxvpn_boot.{auto_start_vpn, keep_vpn_on_exit, background_mode, core_logs_enabled}
+        # §043: core_logs_enabled читается в BoxApplication.initialize до Flutter
+        # engine'а, поэтому в SharedPreferences а не в lxbox_settings.json.
+
+applog.txt (documents dir)        # §038 + §043: app warn/error persist
+  └─ JSON-lines, 200 строк / 64KB cap, ring-buffer rotation
+
+corelog.txt (documents dir)       # §043: core (sing-box) warn/error persist
+  └─ JSON-lines, 200 строк / 64KB cap, ring-buffer rotation
 ```
 
 Migration from v1 (`proxy_sources`) runs once on first read in `SettingsStorage.getServerLists` via `migrateProxySources`.
+
+---
+
+### 6. AppLog (per-source ring buffers, §043)
+
+`AppLog` хранит in-memory кольцевые буферы **per source** — `app=300`, `core=500`. Sing-box (verbose, сотни строк/мин на busy traffic) не вытесняет наши собственные app-сообщения.
+
+```
+HomeController/UI                    Sing-box (Go goroutines)
+       │                                       │
+       │ AppLog.I.info(...)                    │ writeDebugMessage(line)
+       │   source: app                         │   ↓
+       │                              [PlatformInterface override]
+       │                              BoxVpnService.writeDebugMessage:
+       │                                ├─ strip ANSI escapes
+       │                                ├─ skip TRACE/DEBUG (volume reduction)
+       │                                └─ coreLogSink.success(msg)  ← main thread post
+       │                                       │
+       │                              EventChannel "lxbox/coreLog"
+       │                                       │
+       │                              ClashLogPump.attach() listener
+       │                                       │ parseLevel (regex \bWARN\b etc.)
+       │                                       │ AppLog.I.log(level, msg, source: core)
+       ▼                                       ▼
+┌─────────────────────────────────────────────────────┐
+│           AppLog (singleton)                          │
+│                                                       │
+│  Map<DebugSource, List<DebugEntry>> _entriesBySource  │
+│   ├─ app:  [...] cap 300                              │
+│   └─ core: [...] cap 500                              │
+│                                                       │
+│  log(level, msg, source) — O(1) amortized insert      │
+│    + per-source trim                                  │
+│  entries — O(n×k) k-way merge на чтении (k=2)         │
+│  entriesForSource(s) — O(1) direct lookup             │
+│                                                       │
+│  Persistent (warn/error only):                        │
+│    app  → applog.txt                                  │
+│    core → corelog.txt                                 │
+└─────────────────────────────────────────────────────┘
+       │                                       │
+       │ /logs?source=...&level=...&q=...      │ DebugScreen
+       │ /logs/app   /logs/core                │ (segmented "All/Core/App",
+       │ /logs/clear?source=...                │  level filter chips,
+       ▼                                       ▼ search field)
+   Debug API                            Flutter UI
+```
+
+**Key design rules:**
+- `coreLogSink` (Volatile companion field в `BoxVpnService`) принимает sing-box callbacks из любого Go thread'а.
+- `EventChannel.EventSink.success()` требует **main thread** — диспатчим через `coreLogMainHandler.post {...}`. Без этого openTun ловит `@UiThread` exception от Flutter, sing-box интерпретирует как "configure tun interface failed", VPN падает на старте.
+- Forwarding gate'нут флагом `Libbox.setup(SetupOptions{debug: ...})` (читается из `BootReceiver.isCoreLogsEnabled(context)` в `BoxApplication.initialize`). Default false, юзер opt-in'ит через UI или Debug API. Изменение применяется только после restart Service'а — `Libbox.setup` зовётся один раз.
 
 ---
 
@@ -579,7 +641,7 @@ Pull-sync работает независимо от значения keep-on-ex
 
 | Controller | Responsibility |
 |-----------|---------------|
-| `HomeController` | VPN lifecycle, Clash API, nodes, ping (20 concurrent), heartbeat, traffic, configStaleSinceStart, autoUpdater wiring, haptic on transitions |
+| `HomeController` | VPN lifecycle, Clash API, nodes, ping (10 concurrent — `_pingConcurrency`), heartbeat, traffic, configStaleSinceStart, autoUpdater wiring, haptic on transitions |
 | `SubscriptionController` | CRUD entries (server_lists), `refreshEntry`/persist, `generateConfig` (no HTTP), `bindAutoUpdater`, init sweep (inProgress→failed) |
 | `ThemeNotifier` | Theme mode, SharedPreferences persistence |
 | `HapticService` (singleton) | Event-based haptic with 100 ms throttle, respects system setting (spec 029) |
@@ -627,7 +689,7 @@ HomeScreen
 | File-based config storage | Large JSON configs don't belong in SharedPreferences |
 | serviceScope vs GlobalScope | Structured concurrency — coroutines die with service |
 | Clash API for management | sing-box provides HTTP API, no need for custom libbox bindings |
-| 20 concurrent mass ping | Sequential was too slow for 50+ nodes |
+| 10 concurrent mass ping (`_pingConcurrency`) | Sequential was too slow for 50+ nodes; cap балансирует latency vs sing-box load |
 | Random Clash API port | Prevent port scanning (49152-65535) |
 | Auto-generated secret | Never empty — security by default |
 | SRS rules off by default | Require download, may fail offline |
@@ -659,7 +721,27 @@ HomeScreen
 | `path_provider` | Documents directory for persistent storage |
 | `shared_preferences` | Theme mode, haptic toggle |
 | `share_plus` | Config/log export via system share sheet |
-| **libbox** (native) | sing-box core (JitPack: singbox-android:libbox:1.12.12) |
+| **libbox** (native) | sing-box core (JitPack: `com.github.singbox-android:libbox:1.13.11` — миграция из `io.github.sagernet:libbox` сделана в spec 039) |
+
+---
+
+## Known limitations
+
+### Config Editor — one-way pipeline (issue [#3](https://github.com/Leadaxe/LxBox/issues/3))
+
+Source of truth для всех экранов настроек (Subscriptions, Routing, DNS, VPN settings, App settings) — **structured app state** (`SubscriptionEntry[]`, `NodeSpec`, `CustomRule[]`, `SettingsStorage`). [`buildConfig`](../app/lib/services/builder/build_config.dart) собирает sing-box JSON из этого состояния, поток односторонний:
+
+```
+state ──buildConfig──▶ configRaw ──save──▶ libbox
+```
+
+Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`](../app/lib/controllers/home_controller.dart)) сохраняет введённый JSON в sing-box и в `state.configRaw`, но **не парсит его обратно в models**. Поэтому:
+
+- Ручные правки в JSON не видны в menu screens — state о них не знает.
+- Любое изменение в UI вызывает `buildConfig` поверх state и затирает manual edits.
+- Connection statistics видят правки, потому что sing-box рантаймится с тем JSON'ом, что в editor'е сохранён.
+
+Полноценный round-trip требует sing-box JSON → state parser'а покрывающего все формы outbound'ов / routing rules / DNS servers / inbound configs. Это эффективно вторая product surface, в near-term roadmap не входит. Mitigations для пользователей: выражать кастомизацию через **Routing → Custom rules** (state-bound, выживают пересборку); хранить «чистый» JSON-конфиг отдельно и переподавать его через editor после auto-update подписок.
 
 ---
 
@@ -698,3 +780,19 @@ HomeScreen
 | **027** | **Subscription auto-update** (4 triggers, spam gates) |
 | **028** | **AntiDPI: mixed-case SNI** |
 | **029** | **Haptic feedback** |
+| 030 | Custom routing rules (unified `CustomRule` model: inline + local-only SRS) |
+| 031 | Debug API (localhost HTTP server для dev introspection) |
+| 032 | Quick Connect (QS tile + home shortcut — спека, не имплементировано) |
+| 033 | Preset bundles (selectable rules с `preset_id`, expansion + merge) |
+| 034 | App icon |
+| 035 | MCP server |
+| 036 | Update check (GitHub Releases polling, sideload-flow) |
+| 037 | Naive proxy support |
+| 038 | Crash diagnostics (`getHistoricalProcessExitReasons`) |
+| **039** | **libbox 1.13 migration** (1.12.12 → 1.13.11, single-CommandServer architecture) |
+| 040 | Backup & restore UI (4 toggleable categories) |
+| 041 | DNS rules refactor (named/toggleable/multi-source) |
+| 042 | Health watchdog (heartbeat metrics + auto-recovery) — *Draft* |
+| 043 | AppLog per-source quotas (in-memory: app=300, core=500) |
+
+Дополнительно — летопись отдельных рабочих циклов (баги, рефакторинги): [`docs/spec/tasks/`](./spec/tasks/). Процессы (например, ночная работа): [`docs/spec/processes/`](./spec/processes/).

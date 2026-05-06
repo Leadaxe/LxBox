@@ -9,19 +9,17 @@
   "dns_options": {
     "servers": [
       {"type": "local", "tag": "local_dns_resolver", "description": "System DNS", "enabled": true},
-      {"type": "udp", "tag": "direct_dns_resolver", "server": "8.8.8.8", "server_port": 53, "description": "Google DNS (direct)", "enabled": true},
+      {"type": "udp", "tag": "google_udp", "server": "8.8.8.8", "server_port": 53, "description": "Google DNS (direct)", "enabled": true},
       {"type": "udp", "tag": "cloudflare_udp", "server": "1.1.1.1", "server_port": 53, "description": "Cloudflare UDP", "enabled": true},
-      {"type": "https", "tag": "google_doh", "server": "dns.google", "server_port": 443, "path": "/dns-query", "domain_resolver": "direct_dns_resolver", "description": "Google DoH", "enabled": true},
+      {"type": "https", "tag": "google_doh", "server": "dns.google", "server_port": 443, "path": "/dns-query", "domain_resolver": "google_udp", "description": "Google DoH", "enabled": true},
       {"type": "tls", "tag": "cloudflare_dot", "server": "1.1.1.1", "server_port": 853, "description": "Cloudflare DoT", "enabled": false},
       {"type": "tls", "tag": "google_dot", "server": "8.8.8.8", "server_port": 853, "description": "Google DoT", "enabled": false},
       {"type": "tls", "tag": "quad9_dot", "server": "9.9.9.9", "server_port": 853, "description": "Quad9 (anti-malware)", "enabled": false},
       {"type": "tls", "tag": "adguard_dot", "server": "dns.adguard-dns.com", "server_port": 853, "description": "AdGuard (ad block)", "enabled": false},
       {"type": "tls", "tag": "adguard_family", "server": "family.adguard-dns.com", "server_port": 853, "description": "AdGuard Family (+ adult)", "enabled": false},
-      {"type": "https", "tag": "google_doh_vpn", "server": "dns.google", "server_port": 443, "path": "/dns-query", "domain_resolver": "direct_dns_resolver", "detour": "vpn-1", "description": "Google DoH via VPN", "enabled": false}
+      {"type": "https", "tag": "google_doh_vpn", "server": "dns.google", "server_port": 443, "path": "/dns-query", "domain_resolver": "google_udp", "detour": "vpn-1", "description": "Google DoH via VPN", "enabled": false}
     ],
-    "rules": [
-      {"server": "google_doh"}
-    ]
+    "rules": []
   },
 
   "ping_options": {
@@ -258,10 +256,10 @@
         {
           "name": "dns_final",
           "type": "text",
-          "default_value": "direct_dns_resolver",
+          "default_value": "local_dns_resolver",
           "wizard_ui": "fix",
           "title": "DNS final",
-          "tooltip": "Fallback DNS server for unmatched queries"
+          "tooltip": "Catch-all DNS for queries not matched by rules. Default 'local_dns_resolver' = system resolver, stateless. Use 'google_doh', 'cloudflare_udp', etc. for encrypted."
         }
       ]
     },
@@ -430,29 +428,29 @@
       "default": true,
       "vars": [
         {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route traffic for Russian domains"},
-        {"name": "dns_server", "type": "dns_servers", "required": false, "default_value": "yandex_doh", "title": "Transport", "tooltip": "Which Yandex resolver to use. Leave empty to fall through to the default DNS."},
-        {"name": "dns_ip", "type": "enum", "default_value": "77.88.8.88", "title": "UDP server IP", "tooltip": "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.", "options": [
+        {"name": "dns_server", "type": "dns_servers", "required": false, "default_value": "yandex_udp", "title": "DNS server", "tooltip": "Recommended: Base/UDP — most stable. DoH/DoT may be filtered by ISPs."},
+        {"name": "dns_ip", "type": "enum", "default_value": "77.88.8.8", "title": "UDP server IP", "tooltip": "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.", "options": [
+          {"title": "77.88.8.8 · Base",                  "value": "77.88.8.8"},
+          {"title": "77.88.8.1 · Base alt",              "value": "77.88.8.1"},
+          {"title": "2a02:6b8::feed:0ff · Base v6",      "value": "2a02:6b8::feed:0ff"},
           {"title": "77.88.8.88 · Safe",                 "value": "77.88.8.88"},
           {"title": "77.88.8.2 · Safe alt",              "value": "77.88.8.2"},
           {"title": "2a02:6b8::feed:bad · Safe v6",      "value": "2a02:6b8::feed:bad"},
           {"title": "2a02:6b8:0:1::feed:bad · Safe v6 alt", "value": "2a02:6b8:0:1::feed:bad"},
-          {"title": "77.88.8.8 · Base",                  "value": "77.88.8.8"},
-          {"title": "77.88.8.1 · Base alt",              "value": "77.88.8.1"},
-          {"title": "2a02:6b8::feed:0ff · Base v6",      "value": "2a02:6b8::feed:0ff"},
           {"title": "77.88.8.7 · Family",                "value": "77.88.8.7"},
           {"title": "77.88.8.3 · Family alt",            "value": "77.88.8.3"},
           {"title": "2a02:6b8::feed:a11 · Family v6",    "value": "2a02:6b8::feed:a11"}
         ]}
       ],
       "rule_set": [
-        {"tag": "ru-domains", "type": "inline", "format": "domain_suffix", "rules": [{"domain_suffix": ["ru", "su", "xn--p1ai", "xn--p1acf", "xn--80adxhks", "moscow", "tatar", "xn--d1acj3b", "xn--80asehdb", "xn--80aswg", "xn--c1avg", "xn--j1aef"]}]}
+        {"tag": "ru-domains", "type": "inline", "rules": [{"domain_suffix": ["ru", "su", "xn--p1ai", "xn--p1acf", "xn--80adxhks", "moscow", "tatar", "xn--d1acj3b", "xn--80asehdb", "xn--80aswg", "xn--c1avg", "xn--j1aef"]}]}
       ],
       "dns_rule": {"rule_set": "ru-domains", "server": "@dns_server"},
       "rule": {"rule_set": "ru-domains", "outbound": "@outbound"},
       "dns_servers": [
+        {"type": "udp",   "tag": "yandex_udp", "server": "@dns_ip",    "server_port": 53,  "detour": "@outbound", "description": "Yandex UDP (IP from above)"},
         {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@outbound", "description": "Yandex Safe DoH"},
-        {"type": "tls",   "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@outbound", "description": "Yandex Safe DoT"},
-        {"type": "udp",   "tag": "yandex_udp", "server": "@dns_ip",    "server_port": 53,  "detour": "@outbound", "description": "Yandex UDP (IP from above)"}
+        {"type": "tls",   "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@outbound", "description": "Yandex Safe DoT"}
       ]
     },
     {

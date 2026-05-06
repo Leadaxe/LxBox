@@ -1,8 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- specialUse FGS-type появился в Android 14 (API 34). На младших
+         API permission не запрашивается — minSdkVersion="34" гейтит его
+         только для устройств где он реально что-то значит. -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"
+        android:minSdkVersion="34" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
@@ -36,8 +42,27 @@
             android:exported="false"
             android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_VPN_SERVICE">
+            <!-- Android 14+ требует обоснование для foregroundServiceType="specialUse"
+                 через PROPERTY_SPECIAL_USE_FGS_SUBTYPE — читается Play Store reviewer'ами,
+                 в Android 15+ может показываться юзеру в системных FGS-настройках.
+                 Стандартные FGS-типы (dataSync / mediaPlayback / connectedDevice)
+                 не покрывают мультипротокольный VPN-стек с rule-based routing'ом. -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="vpn_tunnel: managed multi-protocol VPN (VLESS / VMess / Trojan / Hysteria2 / WireGuard / NaïveProxy / Shadowsocks / SOCKS / SSH / TUIC) with rule-based routing engine." />
             <intent-filter>
                 <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".vpn.LxBoxTileService"
+            android:label="L×Box"
+            android:icon="@mipmap/ic_launcher"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
 

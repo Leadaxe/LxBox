@@ -329,7 +329,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     return AnimatedBuilder(
       animation: Listenable.merge([_controller, _subController]),
       builder: (context, _) {
-        final state = _controller.state;
+        // Debug API `POST /action/preview-empty-state?on=true` имитирует
+        // empty-state без потери данных: для UI configRaw/nodes выглядят
+        // пустыми, реальный _controller.state не трогается.
+        final realState = _controller.state;
+        final state = _controller.previewEmpty
+            ? realState.copyWith(configRaw: '', nodes: const [])
+            : realState;
         final startActive = !state.tunnelUp;
         final startEnabled = !state.busy && !state.tunnelUp && state.configRaw.isNotEmpty;
         final stopEnabled = !state.busy && state.tunnelUp;
@@ -339,13 +345,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildControls(context, state, startActive, startEnabled, stopEnabled),
-              if (state.tunnelUp) _buildTrafficBar(context, state),
-              if (_subController.busy && _subController.progressMessage.isNotEmpty)
-                _buildProgressBanner(context),
-              const SizedBox(height: 12),
-              _buildNodesHeader(context),
-              const SizedBox(height: 4),
+              // Empty state (no config) → guide + CTA берёт на себя весь
+              // экран; controls/header не рисуем, чтобы disabled-кнопка
+                // не путала первого пользователя.
+              if (state.configRaw.isNotEmpty) ...[
+                _buildControls(context, state, startActive, startEnabled, stopEnabled),
+                if (state.tunnelUp) _buildTrafficBar(context, state),
+                if (_subController.busy && _subController.progressMessage.isNotEmpty)
+                  _buildProgressBanner(context),
+                const SizedBox(height: 12),
+                _buildNodesHeader(context),
+                const SizedBox(height: 4),
+              ],
               _buildNodeList(context, state),
             ],
           ),
@@ -605,7 +616,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                         if (_controller.massPingRunning) {
                           _controller.cancelMassPing();
                         } else {
-                          unawaited(_controller.pingAllNodes());
+                          unawaited(_controller.runMassUrltest());
                         }
                       },
                 onLongPress: _showPingSettings,
@@ -662,7 +673,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
 
   String _defaultReloadLabel(HomeState state, bool dirty) {
     if (!state.tunnelUp) return 'Rebuild config + connect';
-    return dirty ? 'Rebuild config + reconnect' : 'Reconnect';
+    // §030: default tap теперь делает in-place reload (легче чем reconnect).
+    // Long-press menu всё ещё даёт явный 'Reconnect' для full restart.
+    return dirty ? 'Rebuild config + reconnect' : 'Reload';
   }
 
   void _runDefaultReload(HomeState state) {
@@ -675,7 +688,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (dirty) {
       unawaited(_rebuildAndReconnect());
     } else {
-      unawaited(_controller.reconnect());
+      // §030 — in-place reload через `commandServer.startOrReloadService`.
+      // Раньше тут был `reconnect()` (full stop+start с recreate Android Service);
+      // новый путь не убивает Service, tunnel дропается на ~3s вместо 5-10s.
+      // Long-press menu даёт fallback на full reconnect для случаев когда
+      // in-place reload не помог.
+      unawaited(_controller.reloadVpn());
     }
   }
 
@@ -698,6 +716,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       context: context,
       position: rect,
       items: [
+        // Reload первый — самый light recovery (in-place через CommandServer.
+        // startOrReloadService). Tap по кнопке выполняет это же действие.
+        if (state.tunnelUp)
+          const PopupMenuItem(
+            value: 'reload',
+            child: Row(children: [
+              Icon(Icons.bolt, size: 18),
+              SizedBox(width: 12),
+              Text('Reload'),
+            ]),
+          ),
         PopupMenuItem(
           value: 'reconnect',
           child: Row(children: [
@@ -727,6 +756,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (!mounted || choice == null) return;
     HapticService.I.onConnectTap();
     switch (choice) {
+      case 'reload':
+        unawaited(_controller.reloadVpn());
       case 'reconnect':
         unawaited(_controller.reconnect());
       case 'rebuild':
@@ -1061,74 +1092,150 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         .toList();
 
     if (!mounted) return;
-    final urlCtrl = TextEditingController(text: _controller.pingUrl.isEmpty
-        ? (pingOpts['url']?.toString() ?? '')
-        : _controller.pingUrl);
-    final timeoutCtrl = TextEditingController(text: '${_controller.pingTimeout > 0
-        ? _controller.pingTimeout
-        : (pingOpts['timeout_ms'] as num?)?.toInt() ?? 10000}');
+    // §040: dialog scope — global / per-group. Если у текущей group'ы есть
+    // override → стартуем в group-mode и подставляем her значения. Иначе
+    // global-mode с глобальным URL/timeout (resolved через storage > template).
+    final currentGroup = _controller.state.selectedGroup ?? '';
+    final allOpts = await SettingsStorage.getPingOptions();
+    final groupsRaw = allOpts['groups'];
+    final groupOverride =
+        (groupsRaw is Map<String, dynamic>) && currentGroup.isNotEmpty
+            ? (groupsRaw[currentGroup] as Map<String, dynamic>?)
+            : null;
+    final hasGroupOverride = groupOverride != null;
 
-    showModalBottomSheet<void>(
+    if (!mounted) return;
+    var applyToGroup = hasGroupOverride;
+    final initialUrl = hasGroupOverride
+        ? (groupOverride['url'] as String?) ?? _controller.pingUrl
+        : _controller.pingUrl;
+    final initialTimeout = hasGroupOverride
+        ? ((groupOverride['timeout_ms'] as num?)?.toInt() ?? _controller.pingTimeout)
+        : _controller.pingTimeout;
+
+    final urlCtrl = TextEditingController(text: initialUrl);
+    final timeoutCtrl = TextEditingController(text: '$initialTimeout');
+
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Ping Settings', style: Theme.of(ctx).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              if (presets.isNotEmpty) ...[
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: presets.map((p) {
-                    final name = p['name']?.toString() ?? '';
-                    final url = p['url']?.toString() ?? '';
-                    final selected = urlCtrl.text == url;
-                    return ChoiceChip(
-                      label: Text(name, style: const TextStyle(fontSize: 12)),
-                      selected: selected,
-                      onSelected: (_) => setSheetState(() => urlCtrl.text = url),
-                    );
-                  }).toList(),
+        builder: (ctx, setSheetState) {
+          // Refresh has-override каждый раз через рестарт sheet'а — но мы
+          // не закрывали sheet, так что просто храним в-памяти.
+          final canApplyToGroup = currentGroup.isNotEmpty;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+                16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Ping Settings', style: Theme.of(ctx).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                // Scope toggle.
+                if (canApplyToGroup) ...[
+                  SegmentedButton<bool>(
+                    segments: [
+                      const ButtonSegment(
+                          value: false, label: Text('All groups')),
+                      ButtonSegment(
+                          value: true,
+                          label: Text(currentGroup,
+                              overflow: TextOverflow.ellipsis)),
+                    ],
+                    selected: {applyToGroup},
+                    onSelectionChanged: (s) {
+                      setSheetState(() => applyToGroup = s.first);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (presets.isNotEmpty) ...[
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: presets.map((p) {
+                      final name = p['name']?.toString() ?? '';
+                      final url = p['url']?.toString() ?? '';
+                      final selected = urlCtrl.text == url;
+                      return ChoiceChip(
+                        label: Text(name, style: const TextStyle(fontSize: 12)),
+                        selected: selected,
+                        onSelected: (_) =>
+                            setSheetState(() => urlCtrl.text = url),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                TextField(
+                  controller: urlCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Test URL',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
                 ),
                 const SizedBox(height: 12),
+                TextField(
+                  controller: timeoutCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Timeout (ms)',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    if (applyToGroup && hasGroupOverride)
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.restart_alt, size: 18),
+                          label: const Text('Reset to global'),
+                          onPressed: () async {
+                            await SettingsStorage.clearGroupPing(currentGroup);
+                            await _controller.reloadPingOptions();
+                            if (ctx.mounted) Navigator.pop(ctx);
+                          },
+                        ),
+                      ),
+                    if (applyToGroup && hasGroupOverride)
+                      const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () async {
+                          final url = urlCtrl.text.trim();
+                          final timeout =
+                              int.tryParse(timeoutCtrl.text) ?? 5000;
+                          if (applyToGroup && currentGroup.isNotEmpty) {
+                            await SettingsStorage.setGroupPing(
+                              currentGroup,
+                              url: url,
+                              timeoutMs: timeout,
+                            );
+                          } else {
+                            await SettingsStorage.setGlobalPingUrl(url);
+                            await SettingsStorage.setGlobalPingTimeout(timeout);
+                          }
+                          await _controller.reloadPingOptions();
+                          if (ctx.mounted) Navigator.pop(ctx);
+                        },
+                        child: const Text('Save'),
+                      ),
+                    ),
+                  ],
+                ),
               ],
-              TextField(
-                controller: urlCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Test URL',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: timeoutCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Timeout (ms)',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () {
-                  _controller.pingUrl = urlCtrl.text.trim();
-                  _controller.pingTimeout = int.tryParse(timeoutCtrl.text) ?? 5000;
-                  Navigator.pop(ctx);
-                },
-                child: const Text('Save'),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
-    ).then((_) { urlCtrl.dispose(); timeoutCtrl.dispose(); });
+    );
+    urlCtrl.dispose();
+    timeoutCtrl.dispose();
   }
 
   void _viewOutboundJson(String tag, HomeState state) {
@@ -1282,38 +1389,130 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     }
   }
 
+  /// First-run empty-state. Big icon + headline + subtitle + circular `+`
+  /// button → SubscriptionsScreen. Замещает controls + node-list когда
+  /// `configRaw.isEmpty`, чтобы юзер не упирался в disabled Start.
+  Widget _buildAddServerCta(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.dns_outlined, size: 64, color: cs.onSurfaceVariant.withAlpha(140)),
+            const SizedBox(height: 20),
+            Text(
+              'Add a server',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Connect a subscription or add a node manually to get started.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 28),
+            Builder(
+              builder: (innerCtx) => FloatingActionButton(
+                heroTag: null,
+                // Прямой Navigator.push с context'ом из Builder'а — тот же
+                // путь что _buildTrafficBar → StatsScreen. Не через _pushRoute
+                // (там this.context state-level + .then'callback, который
+                // даёт другое поведение transition'а у этой FAB).
+                onPressed: () => Navigator.push(
+                  innerCtx,
+                  MaterialPageRoute(
+                    builder: (_) => SubscriptionsScreen(
+                      subController: _subController,
+                      homeController: _controller,
+                      autoUpdater: _autoUpdater,
+                    ),
+                  ),
+                ),
+                tooltip: 'Add a server',
+                child: const Icon(Icons.add, size: 32),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildNodeList(BuildContext context, HomeState state) {
     if (state.nodes.isEmpty) {
-      final cs = Theme.of(context).colorScheme;
-      final String message;
-      final IconData icon;
+      // Empty state: первый запуск (нет конфига) — гайд с CTA-кнопкой;
+      // остальные пустые состояния — пассивный текст-подсказка.
       if (state.configRaw.isEmpty) {
-        message = 'No config loaded.\nUse Quick Start or add a subscription.';
-        icon = Icons.playlist_add;
-      } else if (state.tunnelUp) {
-        message = 'No nodes in this group.\nTry another selector.';
-        icon = Icons.dns_outlined;
-      } else {
-        message = 'Tap Start to connect.';
-        icon = Icons.play_circle_outline;
+        return Expanded(child: _buildAddServerCta(context));
       }
+      final cs = Theme.of(context).colorScheme;
+      // tunnelUp — нет узлов в текущем selector'е; пассивный hint.
+      if (state.tunnelUp) {
+        return Expanded(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.dns_outlined,
+                      size: 48, color: cs.onSurfaceVariant.withAlpha(120)),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No nodes in this group.\nTry another selector.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+      // Конфиг есть, не подключены — большая кликабельная Start-зона.
+      // Тап = тот же путь что и FilledButton Start в _buildControls.
+      final canStart = !state.busy &&
+          state.tunnel != TunnelStatus.connecting &&
+          state.tunnel != TunnelStatus.stopping;
       return Expanded(
         child: Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 48, color: cs.onSurfaceVariant.withAlpha(120)),
-                const SizedBox(height: 12),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: canStart
+                  ? () {
+                      HapticService.I.onConnectTap();
+                      unawaited(_startWithAutoRefresh());
+                    }
+                  : null,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.play_circle_outline,
+                        size: 64, color: cs.primary),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Tap to connect',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: cs.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -1361,7 +1560,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               busy: state.busy,
               onHighlight: () => _controller.setHighlightedNode(tag),
               onActivate: () => unawaited(_controller.switchNode(tag)),
-              onPing: () => unawaited(_controller.pingNode(tag)),
+              onPing: () => unawaited(_controller.runNodeUrltest(tag)),
               onCopy: (mode) => _copyNodeJson(tag, state, mode),
               onCopyUri: () => _copyNodeUri(tag),
               onViewJson: () => _viewOutboundJson(tag, state),

@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.VpnService
+import android.os.Build
 import android.util.Log
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -29,11 +30,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val TAG = "VpnPlugin"
         private const val METHOD_CHANNEL = "com.leadaxe.lxbox/methods"
         private const val STATUS_CHANNEL = "com.leadaxe.lxbox/status_events"
+        private const val CORE_LOG_CHANNEL = "lxbox/coreLog"   // §043
         private const val VPN_REQUEST_CODE = 24
     }
 
     private lateinit var methodChannel: MethodChannel
     private lateinit var statusEventChannel: EventChannel
+    private lateinit var coreLogEventChannel: EventChannel
     private lateinit var context: Context
     private var activity: Activity? = null
     private var statusSink: EventChannel.EventSink? = null
@@ -83,6 +86,21 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
         })
 
+        // §043: core log pump из sing-box. Sing-box логи приходят через
+        // PlatformInterface.writeDebugMessage в BoxVpnService → coreLogSink
+        // (Volatile companion field) → этот EventChannel → ClashLogPump в Dart.
+        coreLogEventChannel = EventChannel(binding.binaryMessenger, CORE_LOG_CHANNEL)
+        coreLogEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) {
+                Log.d(TAG, "[vpn] coreLogEventChannel.onListen — sink installed")
+                BoxVpnService.coreLogSink = sink
+            }
+            override fun onCancel(args: Any?) {
+                Log.d(TAG, "[vpn] coreLogEventChannel.onCancel — sink cleared")
+                BoxVpnService.coreLogSink = null
+            }
+        })
+
         Log.d(TAG, "[vpn] onAttachedToEngine: registerReceiver(statusReceiver)")
         context.registerReceiver(
             statusReceiver,
@@ -95,7 +113,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         Log.d(TAG, "[vpn] onDetachedFromEngine: unregisterReceiver(statusReceiver)")
         methodChannel.setMethodCallHandler(null)
         statusEventChannel.setStreamHandler(null)
+        coreLogEventChannel.setStreamHandler(null)
         statusSink = null
+        BoxVpnService.coreLogSink = null
         runCatching { context.unregisterReceiver(statusReceiver) }
         pluginScope.cancel()
     }
@@ -120,6 +140,29 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // новый плагин ничего не получит без явного запроса).
                 result.success(BoxVpnService.currentStatus.name)
             }
+            "getCoreVersion" -> {
+                // Libbox.version() — статический Go-side метод; возвращает
+                // строку вида "1.13.11". Используется в About screen.
+                // Не требует libbox.setup; safe to call в любой момент.
+                try {
+                    result.success(io.nekohasekai.libbox.Libbox.version())
+                } catch (t: Throwable) {
+                    Log.e(TAG, "getCoreVersion failed", t)
+                    result.success("")
+                }
+            }
+            "reloadVPN" -> {
+                // Spec 030: in-place reload sing-box runtime через
+                // CommandServer.startOrReloadService — без recreate'а Android Service.
+                BoxVpnService.reload(context)
+                result.success(true)
+            }
+            "resetNetwork" -> {
+                // Spec 031 (experimental): box.Router().ResetNetwork() — gentle
+                // reset network sub-state без drop'а runtime.
+                BoxVpnService.resetNetwork(context)
+                result.success(true)
+            }
             "setNotificationTitle" -> {
                 val title = call.argument<String>("title") ?: "L×Box"
                 ConfigManager.setNotificationTitle(title)
@@ -140,6 +183,38 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
             "getKeepOnExit" -> {
                 result.success(BootReceiver.isKeepOnExit(context))
+            }
+            "setCoreLogsEnabled" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                BootReceiver.setCoreLogsEnabled(context, enabled)
+                result.success(true)
+            }
+            "getCoreLogsEnabled" -> {
+                result.success(BootReceiver.isCoreLogsEnabled(context))
+            }
+            "quitApp" -> {
+                // §043 follow-up: завершить процесс целиком, чтобы при следующем
+                // запуске `BoxApplication.initialize` пересоздал libbox с новым
+                // флагом `debug` (см. SetupOptions в BoxApplication.kt — setup
+                // зовётся ровно один раз за жизнь процесса).
+                //
+                // 1. finishAffinity() закрывает все наши activities,
+                // 2. через 200ms killProcess + exitProcess убивают процесс
+                //    (некоторые OEM-launchers иначе оставляют zombie).
+                //
+                // VPN service ещё может быть активен — Android сам его
+                // остановит как только процесс умрёт (foreground service binding
+                // с процессом). KEEP_ON_EXIT не реактивируем здесь: если юзер
+                // явно запросил Quit, ему нужен полный рестарт, не fall-through
+                // в keep-alive путь.
+                result.success(true)
+                mainHandler.postDelayed({
+                    activity?.finishAffinity()
+                }, 50)
+                mainHandler.postDelayed({
+                    android.os.Process.killProcess(android.os.Process.myPid())
+                    kotlin.system.exitProcess(0)
+                }, 250)
             }
             "getInstalledApps" -> {
                 // Lightweight metadata only — иконки лениво подгружаются
@@ -219,6 +294,21 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // если прямой action не найден OEM).
                 result.success(openNotificationSettings())
             }
+            "requestAddTile" -> {
+                // §032 Quick Connect. API 33+ позволяет приложению попросить
+                // систему показать prompt «Add L×Box to Quick Settings?».
+                // На API < 33 возвращаем "unsupported" — Dart-сторона покажет
+                // текстовую инструкцию вместо кнопки.
+                requestAddQuickSettingsTile(result)
+            }
+            "getApplicationExitInfo" -> result.success(readApplicationExitInfo())
+            "getLogcatTail" -> {
+                val count = (call.argument<Int>("count") ?: 1000).coerceIn(50, 5000)
+                val level = (call.argument<String>("level") ?: "E")
+                    .filter { it.isLetter() }
+                    .ifEmpty { "E" }
+                result.success(readLogcatTail(count, level))
+            }
             "showToast" -> {
                 // §031 Debug API. Вызов со стороны Dart через
                 // /action/toast?msg=...&duration=short|long. Безопасно на
@@ -236,6 +326,73 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
             else -> result.notImplemented()
         }
+    }
+
+    /// §038 — `getHistoricalProcessExitReasons` lazy reader. На API <30 →
+    /// пустой список (метод недоступен); на любую ошибку — тоже пустой
+    /// (никогда не валим caller'а из-за этого).
+    private fun readApplicationExitInfo(): List<Map<String, Any?>> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return emptyList()
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            ?: return emptyList()
+        val infos = runCatching {
+            am.getHistoricalProcessExitReasons(context.packageName, 0, 5)
+        }.getOrElse {
+            Log.w(TAG, "getHistoricalProcessExitReasons failed: ${it.message}")
+            return emptyList()
+        }
+        return infos.map { info ->
+            mapOf(
+                "timestamp" to info.timestamp,
+                "reason" to exitReasonName(info.reason),
+                "description" to info.description,
+                "importance" to info.importance,
+                "pss" to info.pss,
+                "rss" to info.rss,
+                "status" to info.status,
+                "trace" to runCatching {
+                    info.traceInputStream?.use { it.bufferedReader().readText() }
+                }.getOrNull(),
+            )
+        }
+    }
+
+    /// §038 — снимок последних N строк logcat'а нашего процесса. logd
+    /// UID-фильтрует автоматически (READ_LOGS не нужен). Timeout 2s
+    /// страхует от зависания на проблемных ROM.
+    private fun readLogcatTail(count: Int, level: String): String {
+        return runCatching {
+            val proc = ProcessBuilder("logcat", "-d", "-t", count.toString(), "*:$level")
+                .redirectErrorStream(true)
+                .start()
+            val out = proc.inputStream.bufferedReader().readText()
+            proc.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)
+            out
+        }.getOrElse {
+            Log.w(TAG, "logcat tail failed: ${it.message}")
+            ""
+        }
+    }
+
+    /// §038 — `ApplicationExitInfo.REASON_*` коды → читаемые имена.
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.R)
+    private fun exitReasonName(code: Int): String = when (code) {
+        android.app.ApplicationExitInfo.REASON_UNKNOWN -> "UNKNOWN"
+        android.app.ApplicationExitInfo.REASON_EXIT_SELF -> "EXIT_SELF"
+        android.app.ApplicationExitInfo.REASON_SIGNALED -> "SIGNALED"
+        android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "LOW_MEMORY"
+        android.app.ApplicationExitInfo.REASON_CRASH -> "CRASH"
+        android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "CRASH_NATIVE"
+        android.app.ApplicationExitInfo.REASON_ANR -> "ANR"
+        android.app.ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "INITIALIZATION_FAILURE"
+        android.app.ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "PERMISSION_CHANGE"
+        android.app.ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "EXCESSIVE_RESOURCE_USAGE"
+        android.app.ApplicationExitInfo.REASON_USER_REQUESTED -> "USER_REQUESTED"
+        android.app.ApplicationExitInfo.REASON_USER_STOPPED -> "USER_STOPPED"
+        android.app.ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "DEPENDENCY_DIED"
+        android.app.ApplicationExitInfo.REASON_OTHER -> "OTHER"
+        android.app.ApplicationExitInfo.REASON_PACKAGE_UPDATED -> "PACKAGE_UPDATED"
+        else -> "REASON_$code"
     }
 
     /// Запуск системного settings-activity. Сперва через activity-context
@@ -299,6 +456,62 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 primaryAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 primaryWithPackage = true,
             )
+        }
+    }
+
+    /// API 33+ — попросить систему показать «Add tile to Quick Settings»
+    /// prompt. Async через Consumer-callback системы, success() в Dart
+    /// идёт ровно один раз. Возможные значения:
+    ///   "added"        — юзер согласился
+    ///   "already"      — tile уже в шторке
+    ///   "dismissed"    — юзер отказался
+    ///   "unsupported"  — API < 33
+    ///   "no_activity"  — нет attached activity
+    ///   "error: ..."   — exception от системы
+    private fun requestAddQuickSettingsTile(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            result.success("unsupported")
+            return
+        }
+        val act = activity
+        if (act == null) {
+            result.success("no_activity")
+            return
+        }
+        try {
+            val sbm = act.getSystemService(android.app.StatusBarManager::class.java)
+            if (sbm == null) {
+                result.success("error: status_bar_unavailable")
+                return
+            }
+            val component = android.content.ComponentName(
+                context, com.leadaxe.lxbox.vpn.LxBoxTileService::class.java
+            )
+            val icon = android.graphics.drawable.Icon.createWithResource(
+                context, android.R.drawable.ic_lock_lock
+            )
+            // Защита от двойного success() если система зовёт consumer
+            // несколько раз (наблюдалось на отдельных OEM).
+            val replied = java.util.concurrent.atomic.AtomicBoolean(false)
+            sbm.requestAddTileService(
+                component,
+                "L×Box",
+                icon,
+                { runnable -> mainHandler.post(runnable) },
+                { code ->
+                    if (!replied.compareAndSet(false, true)) return@requestAddTileService
+                    val mapped = when (code) {
+                        android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED -> "added"
+                        android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED -> "already"
+                        android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_NOT_ADDED -> "dismissed"
+                        else -> "error: result=$code"
+                    }
+                    mainHandler.post { result.success(mapped) }
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "requestAddTile failed", e)
+            result.success("error: ${e.message}")
         }
     }
 

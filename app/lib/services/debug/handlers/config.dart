@@ -65,8 +65,10 @@ Future<DebugResponse> _put(DebugRequest req, DebugContext ctx) async {
     'action': 'config-put',
     'bytes': text.length,
     'tunnel_up_when_saved': home.state.tunnelUp,
-    'note': 'override is temporary — POST /action/rebuild-config '
-        'will overwrite it with generated config from current settings.',
+    'note': 'override is temporary — POST /action/rebuild-config (или любое '
+        'UI-действие триггерящее rebuild) сотрёт его, сгенерив конфиг заново '
+        'из settings. Чтобы pin постоянно — PUT /settings/config_locked '
+        '{"locked": true} (см. §037).',
   });
 }
 

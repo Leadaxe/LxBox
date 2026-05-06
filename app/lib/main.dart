@@ -5,10 +5,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/home_screen.dart';
 import 'services/app_log.dart';
+import 'services/clash_log_pump.dart';
 import 'services/debug/bootstrap.dart' as debug_bootstrap;
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // §038 — подгружаем persistent warning+error entries предыдущей сессии
+  // (из обоих файлов applog.txt + corelog.txt — §043) до runApp, чтобы
+  // Debug-экран сразу видел pre-crash JVM-events.
+  await AppLog.I.initPersistent();
+  // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в
+  // AppLog как DebugSource.core. Идемпотентно (повторный attach no-op).
+  ClashLogPump.I.attach();
   // Первый read `appStartedAt` фиксирует момент старта для /device и /ping.
   // ignore: unused_local_variable
   final _ = debug_bootstrap.appStartedAt;

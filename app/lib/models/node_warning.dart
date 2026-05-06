@@ -83,3 +83,18 @@ final class InsecureTlsWarning extends NodeWarning {
   @override
   WarningSeverity get severity => WarningSeverity.info;
 }
+
+/// libbox без `with_naive_outbound` — выставляется defensively после первой
+/// runtime-ошибки старта sing-box на naive-узле. Точная upstream-строка:
+/// `naive outbound is not included in this build, rebuild with -tags
+/// with_naive_outbound`.
+final class NaiveBuildTagWarning extends NodeWarning {
+  const NaiveBuildTagWarning();
+
+  @override
+  String get message =>
+      'NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).';
+
+  @override
+  WarningSeverity get severity => WarningSeverity.error;
+}

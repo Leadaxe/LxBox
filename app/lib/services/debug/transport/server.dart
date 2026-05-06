@@ -7,9 +7,11 @@ import '../../settings_storage.dart';
 import '../context.dart';
 import '../contract/errors.dart';
 import '../handlers/action.dart';
+import '../handlers/backup.dart';
 import '../handlers/clash.dart';
 import '../handlers/config.dart';
 import '../handlers/device.dart';
+import '../handlers/diag.dart';
 import '../handlers/files.dart';
 import '../handlers/logs.dart';
 import '../handlers/help.dart';
@@ -167,6 +169,8 @@ class DebugServer {
       ..mount('/clash', clashHandler)
       ..mount('/action', actionHandler)
       ..mount('/files', filesHandler)
+      ..mount('/diag', diagHandler)
+      ..mount('/backup', backupHandler)
       ..mount('/rules', rulesHandler)
       ..mount('/subs', subsHandler)
       ..mount('/settings', settingsHandler);

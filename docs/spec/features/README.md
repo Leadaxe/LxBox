@@ -33,3 +33,15 @@
 | 023 | [`023 debug and logging/`](023%20debug%20and%20logging/) | Debug screen, log level, sing-box log viewer | Частично |
 | 024 | [`024 load balance/`](024%20load%20balance/) | Load Balance через PuerNya fork | Спека |
 | 025 | [`025 warp integration/`](025%20warp%20integration/) | Cloudflare WARP регистрация и интеграция | Спека |
+| 026 | [`026 parser v2/`](026%20parser%20v2/) | Sealed `NodeSpec` + 3-слойный pipeline parser/builder | Реализовано |
+| 027 | [`027 subscription auto update/`](027%20subscription%20auto%20update/) | Auto-refresh подписок: 4 триггера + spam-gates | Реализовано |
+| 028 | [`028 antidpi sni obfuscation/`](028%20antidpi%20sni%20obfuscation/) | Mixed-case SNI как post-step | Реализовано |
+| 029 | [`029 haptic feedback/`](029%20haptic%20feedback/) | Тактильный отклик на ключевых действиях | Реализовано |
+| 030 | [`030 custom routing rules/`](030%20custom%20routing%20rules/) | Unified `CustomRule` + inline и SRS-rules | Реализовано |
+| 031 | [`031 debug api/`](031%20debug%20api/) | Localhost HTTP-сервер для интроспекции | Реализовано |
+| 032 | [`032 quick connect/`](032%20quick%20connect/) | QS-tile + home shortcut | Спека |
+| 033 | [`033 preset bundles/`](033%20preset%20bundles/) | Селектор preset-бандлов | Реализовано |
+| 034 | [`034 app icon/`](034%20app%20icon/) | Финальная иконка приложения | Реализовано |
+| 035 | [`035 mcp server/`](035%20mcp%20server/) | MCP-обёртка над Debug API | Спека |
+| 036 | [`036 update check/`](036%20update%20check/) | Проверка обновлений на launch + manual | Реализовано |
+| 037 | [`037 naive proxy/`](037%20naive%20proxy/) | NaïveProxy outbound: parser + emit + share-URI | Реализовано |

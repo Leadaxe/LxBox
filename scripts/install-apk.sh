@@ -10,8 +10,12 @@
 #   ./scripts/install-apk.sh --apk <path>       # конкретный APK
 #   ./scripts/install-apk.sh --device <id>      # конкретное устройство (если несколько)
 #   ./scripts/install-apk.sh --no-launch        # не запускать app после install
-#   ./scripts/install-apk.sh --no-forward       # не восстанавливать adb forward 9269
-#   ./scripts/install-apk.sh --debug-port 9269  # custom debug-api port для forward
+#   ./scripts/install-apk.sh --no-forward       # не восстанавливать adb forward
+#   ./scripts/install-apk.sh --debug-port 9269  # порт Debug API на устройстве
+#   ./scripts/install-apk.sh --host-port  9270  # порт на Mac для forward
+#                                                 (default 9270, чтобы не толкаться
+#                                                  c singbox-launcher на 9269;
+#                                                  если занят — авто-инкремент)
 #
 # Exit codes:
 #   0  — install OK
@@ -29,6 +33,7 @@ DEVICE=""
 LAUNCH=1
 FORWARD=1
 DEBUG_PORT=9269
+HOST_PORT=9270
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -39,6 +44,7 @@ while [[ $# -gt 0 ]]; do
     --no-launch)   LAUNCH=0; shift ;;
     --no-forward)  FORWARD=0; shift ;;
     --debug-port)  DEBUG_PORT="$2"; shift 2 ;;
+    --host-port)   HOST_PORT="$2"; shift 2 ;;
     -h|--help)
       head -n 18 "$0" | sed 's|^# ||;s|^#||'
       exit 0
@@ -136,8 +142,23 @@ fi
 # ─── Restore Debug API forward ────────────────────────────────────
 
 if [ "$FORWARD" -eq 1 ]; then
-  echo "→ adb forward tcp:$DEBUG_PORT tcp:$DEBUG_PORT"
-  adb -s "$DEVICE" forward tcp:"$DEBUG_PORT" tcp:"$DEBUG_PORT" >/dev/null 2>&1 || \
+  # Если HOST_PORT занят кем-то другим на Mac (например, singbox-launcher
+  # держит свой Debug API на 9269) — auto-увеличиваем до первого свободного.
+  while lsof -nP -iTCP:"$HOST_PORT" -sTCP:LISTEN >/dev/null 2>&1; do
+    # Не чужой процесс — может предыдущий adb-forward от нашего же скрипта.
+    # Если это adb — переиспользуем тот же порт без сноса.
+    if lsof -nP -iTCP:"$HOST_PORT" -sTCP:LISTEN -c adb >/dev/null 2>&1; then
+      break
+    fi
+    HOST_PORT=$((HOST_PORT + 1))
+  done
+
+  if [ "$HOST_PORT" = "$DEBUG_PORT" ]; then
+    echo "→ adb forward tcp:$HOST_PORT tcp:$DEBUG_PORT"
+  else
+    echo "→ adb forward tcp:$HOST_PORT tcp:$DEBUG_PORT  (host port shifted, see --host-port)"
+  fi
+  adb -s "$DEVICE" forward tcp:"$HOST_PORT" tcp:"$DEBUG_PORT" >/dev/null 2>&1 || \
     echo "  (forward failed — Debug API недоступен с хоста, но app работает)"
 fi
 

@@ -1,11 +1,15 @@
 package com.leadaxe.lxbox.vpn
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager.NameNotFoundException
 import android.net.ProxyInfo
+import android.net.Uri
 import android.net.VpnService
 import android.os.Build
 import android.os.IBinder
@@ -13,12 +17,12 @@ import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import go.Seq
-import io.nekohasekai.libbox.BoxService
 import io.nekohasekai.libbox.CommandServer
 import io.nekohasekai.libbox.CommandServerHandler
 import io.nekohasekai.libbox.Libbox
+import io.nekohasekai.libbox.OverrideOptions
 import io.nekohasekai.libbox.SystemProxyStatus
 import io.nekohasekai.libbox.TunOptions
 import kotlinx.coroutines.CompletableDeferred
@@ -29,7 +33,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandler {
@@ -38,6 +41,8 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         private const val TAG = "BoxVpnService"
         const val ACTION_START = "com.leadaxe.lxbox.ACTION_START"
         const val ACTION_STOP = "com.leadaxe.lxbox.ACTION_STOP"
+        const val ACTION_RELOAD = "com.leadaxe.lxbox.ACTION_RELOAD"
+        const val ACTION_RESET_NETWORK = "com.leadaxe.lxbox.ACTION_RESET_NETWORK"
         const val BROADCAST_STATUS = "com.leadaxe.lxbox.BROADCAST_STATUS"
         const val EXTRA_STATUS = "status"
 
@@ -55,6 +60,14 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         @Volatile
         private var stopCompleter: CompletableDeferred<Unit>? = null
 
+        /// §043: Sink для core logs от sing-box → Flutter EventChannel
+        /// "lxbox/coreLog". Подписывается VpnPlugin при onListen.
+        /// `writeDebugMessage` зовётся sing-box'ом из любого потока — sink
+        /// должен быть Volatile для thread-safe чтения. Worst case:
+        /// одна потерянная log line при swap'е sink — acceptable.
+        @Volatile
+        var coreLogSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+
         fun start(context: Context) {
             Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${currentStatus.name}")
             val intent = Intent(context, BoxVpnService::class.java).apply { action = ACTION_START }
@@ -65,6 +78,24 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             Log.d(TAG, "[vpn] companion.stop() → sendBroadcast(ACTION_STOP), current status=${currentStatus.name}")
             context.sendBroadcast(
                 Intent(ACTION_STOP).setPackage(context.packageName)
+            )
+        }
+
+        /// In-place reload sing-box runtime (через CommandServer.startOrReloadService).
+        /// Не убивает Android Service. Tunnel дропается на ~3s. См. spec 030.
+        fun reload(context: Context) {
+            Log.d(TAG, "[vpn] companion.reload() current status=${currentStatus.name}")
+            context.sendBroadcast(
+                Intent(ACTION_RELOAD).setPackage(context.packageName)
+            )
+        }
+
+        /// Reset network sub-state роутера (outbound dialer bindings, DNS upstream
+        /// tracking) без recreate'а box runtime. Experimental, см. spec 031.
+        fun resetNetwork(context: Context) {
+            Log.d(TAG, "[vpn] companion.resetNetwork() current status=${currentStatus.name}")
+            context.sendBroadcast(
+                Intent(ACTION_RESET_NETWORK).setPackage(context.packageName)
             )
         }
 
@@ -107,7 +138,11 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     }
 
     @Volatile private var fileDescriptor: ParcelFileDescriptor? = null
-    private var boxService: BoxService? = null
+
+    /// Sing-box 1.13: единый объект, владеющий и Unix-socket'ом для Clash
+    /// dashboard, и box-runtime'ом. Раньше были два класса (BoxService +
+    /// CommandServer); в 1.13 BoxService удалён, CommandServer теперь
+    /// `startOrReloadService(config, opts)` создаёт box внутри себя.
     private var commandServer: CommandServer? = null
     private var receiverRegistered = false
     private var status = VpnStatus.Stopped
@@ -119,16 +154,26 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             Log.d(TAG, "[vpn] service.receiver.onReceive action=${intent.action} status=${status.name} registered=$receiverRegistered")
             when (intent.action) {
                 ACTION_STOP -> doStop()
+                ACTION_RELOAD -> {
+                    Log.d(TAG, "[vpn] receiver: ACTION_RELOAD → serviceReload()")
+                    runCatching { serviceReload() }
+                        .onFailure { Log.e(TAG, "ACTION_RELOAD failed", it) }
+                }
+                ACTION_RESET_NETWORK -> {
+                    Log.d(TAG, "[vpn] receiver: ACTION_RESET_NETWORK → cs.resetNetwork()")
+                    runCatching { commandServer?.resetNetwork() }
+                        .onFailure { Log.e(TAG, "ACTION_RESET_NETWORK failed", it) }
+                }
                 PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) onIdleModeChanged()
                 }
                 Intent.ACTION_SCREEN_OFF -> {
                     Log.d(TAG, "[vpn] SCREEN_OFF → pause")
-                    boxService?.pause()
+                    commandServer?.pause()
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     Log.d(TAG, "[vpn] SCREEN_ON → wake")
-                    boxService?.wake()
+                    commandServer?.wake()
                 }
             }
         }
@@ -137,6 +182,18 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     // -------------------------------------------------------------------------
     // Android lifecycle
     // -------------------------------------------------------------------------
+
+    override fun onCreate() {
+        super.onCreate()
+        // Сервис может стартануть в свежем процессе без UI (через QS-tile
+        // или launcher shortcut, после того как Android прибил предыдущий
+        // процесс из-за SIGABRT/OOM). В таком процессе VpnPlugin не
+        // подключается, и `BoxApplication.initialize` сам по себе не
+        // вызовется — а `application` lateinit, libbox setup отсутствует
+        // → onStartCommand упадёт с UninitializedPropertyAccessException.
+        // initialize() идемпотентен (if (initialized) return).
+        BoxApplication.initialize(applicationContext)
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "[vpn] onStartCommand action=${intent?.action} status=${status.name} startId=$startId receiverRegistered=$receiverRegistered")
@@ -154,6 +211,8 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             Log.d(TAG, "[vpn] registerReceiver from onStartCommand mode=$mode")
             ContextCompat.registerReceiver(this, receiver, IntentFilter().apply {
                 addAction(ACTION_STOP)
+                addAction(ACTION_RELOAD)
+                addAction(ACTION_RESET_NETWORK)
                 // Подписка на сигналы засыпания зависит от режима:
                 //   never  — только ACTION_STOP, pause/wake не зовём никогда
                 //   lazy   — deep Doze (текущее sing-box-android поведение)
@@ -177,11 +236,26 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
 
         serviceScope.launch {
             try {
+                // Sync barrier: libbox setup должен завершиться ДО любого
+                // вызова libbox-классов (`CommandServer` ctor, startOrReloadService).
+                // На S10 Lite (Android 13) этот await завершается мгновенно,
+                // на A50/A10/Y9 даёт фоновому `initializeLibbox` дотянуть
+                // до конца — иначе нативный crash без stderr-stacktrace.
+                BoxApplication.libboxReady.await()
+                // Очищаем недозакрытые ресурсы из прошлой сессии (если она была)
+                // ДО создания нового CommandServer'а. Иначе свежий cs закрылся бы
+                // же в этом cleanupStaleResources вызове — was bug в первоначальной
+                // 1.13-миграции.
+                cleanupStaleResources()
                 startCommandServer()
                 startSingbox()
-            } catch (e: Exception) {
-                Log.e(TAG, "Start failed", e)
-                stopAndAlert(e.message ?: "Unknown error")
+            } catch (t: Throwable) {
+                // Throwable — ловит и Error (OOM, VerifyError при class
+                // load из libbox), не только Exception. Без этого
+                // unhandled Error в корутине отравил бы scope и юзер
+                // увидел бы «приложение закрылось» вместо error-toast'а.
+                Log.e(TAG, "Start failed", t)
+                stopAndAlert(t.message ?: "Unknown error")
             }
         }
         return START_NOT_STICKY
@@ -197,6 +271,14 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             runCatching { unregisterReceiver(receiver) }
             receiverRegistered = false
         }
+        // Если сервис умер не через doStop (OOM, system kill в фоне),
+        // currentStatus может остаться Started — tile тогда соврёт.
+        // Сбрасываем здесь как страховка, и просим перерисовать tile.
+        if (currentStatus != VpnStatus.Stopped) {
+            currentStatus = VpnStatus.Stopped
+            runCatching { LxBoxTileService.refreshTile(applicationContext) }
+                .onFailure { Log.w(TAG, "refreshTile in onDestroy failed: ${it.message}") }
+        }
         super.onDestroy()
     }
 
@@ -211,19 +293,19 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
 
     override fun onRevoke() {
         Log.d(TAG, "onRevoke — VPN taken by another app")
-        // Clean up libbox resources synchronously
+        // Cleanup libbox-ресурсов синхронно (revoke — экстренный путь). Two-phase
+        // shutdown: сначала `closeService()` (останавливает box-runtime), потом
+        // `close()` (закрывает Unix-socket). Если первый бросит — фиксируем
+        // ошибку через setError, чтобы dashboard'ы её увидели; close() даже
+        // на failure обязан отработать.
         fileDescriptor?.runCatching { close() }
         fileDescriptor = null
-        boxService?.apply {
-            runCatching { close() }
-            Seq.destroyRef(refnum)
-        }
         commandServer?.apply {
-            setService(null)
+            runCatching { closeService() }.onFailure {
+                runCatching { setError("android: revoke close service: ${it.message}") }
+            }
             runCatching { close() }
-            Seq.destroyRef(refnum)
         }
-        boxService = null
         commandServer = null
 
         if (receiverRegistered) {
@@ -241,19 +323,16 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     // Start / stop sing-box
     // -------------------------------------------------------------------------
 
-    /** Force-close any leftover libbox resources from a previous run (e.g. after onRevoke). */
+    /// Force-close любого недозакрытого CommandServer'а из прошлого запуска
+    /// (например после onRevoke в свежем процессе). Two-phase: closeService()
+    /// первым (остановить box-runtime), close() — закрыть Unix-socket. Без
+    /// `Seq.destroyRef` — Go runtime в 1.13 self-cleans refnum'ы; manual вызов
+    /// ведёт к double-free.
     private fun cleanupStaleResources() {
-        boxService?.let { svc ->
-            Log.w(TAG, "cleanupStaleResources: closing leftover boxService")
-            runCatching { svc.close() }
-            runCatching { Seq.destroyRef(svc.refnum) }
-            boxService = null
-        }
         commandServer?.let { cs ->
             Log.w(TAG, "cleanupStaleResources: closing leftover commandServer")
-            cs.setService(null)
+            runCatching { cs.closeService() }
             runCatching { cs.close() }
-            runCatching { Seq.destroyRef(cs.refnum) }
             commandServer = null
         }
         fileDescriptor?.let { fd ->
@@ -264,33 +343,59 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     }
 
     private suspend fun startSingbox() {
+        // Дожидаемся завершения `Libbox.setup` из BoxApplication.initialize.
+        // Без этого на медленных девайсах (A50/A10/Y9) box-runtime в
+        // `startOrReloadService` мог стартануть до того как Go-сторона
+        // зарегистрировала окружение → нативный crash в JNI без stderr.
+        try {
+            BoxApplication.libboxReady.await()
+        } catch (t: Throwable) {
+            stopAndAlert("Libbox init failed: ${t.message}")
+            return
+        }
+
         val config = ConfigManager.load()
         if (config.isBlank() || config == "{}") {
             stopAndAlert("Empty configuration")
             return
         }
 
-        cleanupStaleResources()
-        // Give OS time to release the port after closing stale resources
+        // Note: cleanupStaleResources() уже отработал в onStartCommand до
+        // startCommandServer() — здесь второй вызов закрыл бы свежий cs.
+        // Небольшая пауза чтобы OS успел релизнуть socket'ы старой сессии.
         delay(500)
 
         DefaultNetworkMonitor.start(serviceScope)
         Libbox.setMemoryLimit(true)
 
-        val svc = try {
-            Libbox.newService(config, this as PlatformInterfaceWrapper)
-        } catch (e: Exception) {
-            stopAndAlert("Failed to create service: ${e.message}")
+        val cs = commandServer ?: run {
+            stopAndAlert("CommandServer not initialized")
             return
         }
 
-        try { svc.start() } catch (e: Exception) {
-            stopAndAlert("Failed to start service: ${e.message}")
+        // Sing-box 1.13 unified entry: `startOrReloadService` стартует box-runtime
+        // внутри уже работающего CommandServer'а. Тот же метод используется и для
+        // hot-reload конфига — sing-box сам решает create vs reload.
+        //
+        // OverrideOptions — переопределяет include/exclude packages и auto-redirect
+        // (наша логика передаёт это через PlatformInterface.openTun/TunOptions,
+        // поэтому overrides пустые).
+        //
+        // Throwable, не Exception — config init может бросить OutOfMemoryError
+        // (большие geosite/geoip rule-sets), на старых Android class verifier
+        // libbox-классов может отдать VerifyError. Ловим всё, чтобы юзер увидел
+        // «Failed to start» вместо тихого исчезновения процесса.
+        //
+        // ВАЖНО: это НЕ защищает от Go panic без recover в нативном коде — такой
+        // краш улетает SIGABRT'ом мимо JVM. Защита от него — редирект stderr в
+        // BoxApplication.initializeLibbox + валидация конфига (см. §038).
+        try {
+            cs.startOrReloadService(config, OverrideOptions())
+        } catch (t: Throwable) {
+            stopAndAlert("Failed to start service: ${t.message}")
             return
         }
 
-        boxService = svc
-        commandServer?.setService(svc)
         setStatus(VpnStatus.Started)
 
         withContext(Dispatchers.Main) {
@@ -298,8 +403,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         }
     }
 
+    /// Создаёт и стартует CommandServer (Unix-socket для Clash dashboard'ов +
+    /// box-runtime owner). Sing-box 1.13: конструктор `(handler, platform)` —
+    /// мы передаём `this` дважды, потому что implement'им оба интерфейса.
+    /// Box-runtime сам не запускается — это делает `startSingbox()` через
+    /// `cs.startOrReloadService(config, opts)`.
     private fun startCommandServer() {
-        val cs = CommandServer(this, 300)
+        val cs = CommandServer(this, this)
         cs.start()
         commandServer = cs
     }
@@ -319,19 +429,29 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         }
         notification.stop()
 
+        // Two-phase shutdown на Dispatchers.IO. Порядок критичен:
+        //   1. fileDescriptor.close()       — освободить TUN fd, system route
+        //   2. closeService() throwing      — остановить box-runtime; на failure
+        //                                     отдать ошибку через setError()
+        //                                     чтобы dashboard'ы её увидели
+        //   3. close() non-throwing         — закрыть Unix-socket
+        //   4. Drop reference + stopSelf()  — release memory; Go owns refnum
+        //
+        // ⚠ НЕ Seq.destroyRef — Go runtime в 1.13 self-cleans; manual вызов
+        //   = double-free (см. SFA BoxService.kt:292 commented).
+        //
+        // ⚠ Dispatchers.IO обязательно — Go callbacks при closeService() могут
+        //   ждать host'a; main thread → ANR.
         serviceScope.launch {
             fileDescriptor?.close()
             fileDescriptor = null
-            boxService?.apply {
-                runCatching { close() }
-                Seq.destroyRef(refnum)
-            }
-            commandServer?.setService(null)
-            boxService = null
             DefaultNetworkMonitor.stop()
-            commandServer?.apply {
-                runCatching { close() }
-                Seq.destroyRef(refnum)
+            commandServer?.let { cs ->
+                runCatching { cs.closeService() }.onFailure {
+                    Log.e(TAG, "doStop: closeService failed", it)
+                    runCatching { cs.setError("android: close service: ${it.message}") }
+                }
+                runCatching { cs.close() }
             }
             commandServer = null
 
@@ -378,6 +498,15 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
                 if (error != null) putExtra("error", error)
             }
         )
+        // Quick Connect-побочка строго опциональна — на старых Android
+        // (или при OEM-багах в TileService binding) этот вызов может
+        // выкинуть исключение, но это не должно валить старт VPN.
+        runCatching { LxBoxTileService.refreshTile(applicationContext) }
+            .onFailure { Log.w(TAG, "refreshTile failed: ${it.message}") }
+        // Перерисовываем launcher long-press shortcuts: «Connect» когда
+        // VPN off, «Disconnect» когда on, оба в transient состояниях.
+        runCatching { QuickShortcuts.refresh(applicationContext) }
+            .onFailure { Log.w(TAG, "QuickShortcuts.refresh failed: ${it.message}") }
     }
 
     // -------------------------------------------------------------------------
@@ -452,17 +581,37 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     // CommandServerHandler
     // -------------------------------------------------------------------------
 
+    /// Sing-box 1.13: reload — это просто `startOrReloadService(newConfig, opts)`
+    /// на тот же CommandServer. Manual close/destroy не нужен — sing-box сам
+    /// тейкаунтит box-runtime. Зовётся когда внешний клиент (Clash dashboard)
+    /// просит перечитать конфиг.
     override fun serviceReload() {
         notification.stop()
         setStatus(VpnStatus.Starting)
-        fileDescriptor?.close(); fileDescriptor = null
-        boxService?.apply { runCatching { close() }; Seq.destroyRef(refnum) }
-        commandServer?.setService(null); commandServer?.resetLog()
-        boxService = null
-        runBlocking { startSingbox() }
+        val cs = commandServer ?: run {
+            Log.w(TAG, "serviceReload: commandServer == null, treating as fresh start")
+            serviceScope.launch { startSingbox() }
+            return
+        }
+        val config = ConfigManager.load()
+        if (config.isBlank() || config == "{}") {
+            Log.e(TAG, "serviceReload: empty config")
+            return
+        }
+        runCatching { cs.startOrReloadService(config, OverrideOptions()) }
+            .onFailure {
+                Log.e(TAG, "serviceReload failed", it)
+                runCatching { cs.setError("android: reload: ${it.message}") }
+            }
+            .onSuccess { setStatus(VpnStatus.Started) }
+        notification.show(ConfigManager.notificationTitle, "Connected")
     }
 
-    override fun postServiceClose() {}
+    // Sing-box 1.13: `postServiceClose()` удалён из CommandServerHandler.
+    // Добавлен `serviceStop()` — зовётся когда удалённый клиент (например, Clash
+    // dashboard) просит остановить сервис. Привязываем к нашей штатной shutdown-
+    // последовательности `doStop()`.
+    override fun serviceStop() { doStop() }
 
     override fun getSystemProxyStatus(): SystemProxyStatus = SystemProxyStatus()
 
@@ -470,12 +619,129 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
 
     @RequiresApi(Build.VERSION_CODES.M)
     private fun onIdleModeChanged() {
-        if (BoxApplication.powerManager.isDeviceIdleMode) boxService?.pause() else boxService?.wake()
+        // Sing-box 1.13: pause/wake переехали на CommandServer (BoxService удалён).
+        if (BoxApplication.powerManager.isDeviceIdleMode) commandServer?.pause() else commandServer?.wake()
     }
 
-    override fun writeLog(message: String) { commandServer?.writeMessage(message) }
+    /// Sing-box 1.13: WriteLog (был на PlatformInterface) переехал сюда как
+    /// writeDebugMessage. Логически — то же: транзит строк лога в command-server
+    /// для подписчиков. writeMessage теперь требует int level (sing-box slog
+    /// levels: 0=Info, 4=Warn, 8=Error). Используем 0=Info — это общий debug.
+    /// §043: sing-box log lines проходят сюда независимо от `log.level`
+    /// в конфиге (sing-box специально гарантирует platformWriter получает
+    /// все уровни — см. log/observable.go).
+    ///
+    /// Удалён старый `commandServer.writeMessage(0, message)` forward —
+    /// мёртвый, нет subscriber'ов которым это нужно (Clash API на 63130
+    /// у нас только для self-fetch, не WebSocket /logs subscribers).
+    ///
+    /// Фильтр уровня прямо здесь: TRACE/DEBUG отбрасываем (volume reduction
+    /// — на busy traffic десятки строк/сек). INFO+ пушим в Flutter через
+    /// EventChannel "lxbox/coreLog". Уровень определяется substring search'ем
+    /// по sing-box формату `+0300 2026-05-06 12:34:56 INFO  router: ...`.
+    ///
+    /// **ВАЖНО:** sing-box зовёт этот callback из Go-goroutine'ов на
+    /// background-thread'ах. `EventChannel.EventSink.success()` **требует
+    /// main thread** (Flutter platform thread) — вызов с background'а
+    /// бросает `@UiThread` exception, который sing-box интерпретирует как
+    /// failure при `openTun` ("configure tun interface: Methods marked with
+    /// @UiThread must be executed on the main thread"). Поэтому диспатчим
+    /// в main handler.
+    override fun writeDebugMessage(message: String) {
+        // Sing-box форматтер вставляет ANSI color escapes (`\x1b[36mINFO\x1b[0m`),
+        // strip'аем для plain-text storage и для корректного level-filter'а.
+        val plain = ansiEscapeRe.replace(message, "")
+        // Volume reduction: skip trace/debug. После strip'а уровень формата
+        // `... TRACE[0017]` или `... TRACE 0017]` — ищем boundary либо пробел,
+        // либо `[`. Используем word-boundary regex для надёжности.
+        if (traceDebugRe.containsMatchIn(plain)) return
+        val sink = coreLogSink ?: return
+        coreLogMainHandler.post {
+            runCatching { sink.success(plain) }
+        }
+    }
 
+        /// CSI ANSI escape sequence (sing-box terminal colors). Sing-box посылает
+    /// `[36mINFO[0m`. Regex захватывает ESC + `[` + params + letter.
+    private val ansiEscapeRe = Regex("\\[[0-9;]*[A-Za-z]")
+
+    /// Word-boundary поиск TRACE / DEBUG для volume-reduction filter'а
+    /// (после strip'а ANSI escape codes).
+    private val traceDebugRe = Regex("\\b(TRACE|DEBUG)\\b")
+
+    /// Handler на main looper для dispatch'а EventChannel.success() из
+    /// background-thread'ов sing-box'а. Lazy чтоб init только при первом
+    /// log call'е.
+    private val coreLogMainHandler by lazy {
+        android.os.Handler(android.os.Looper.getMainLooper())
+    }
+
+    /// `sendNotification` (spec §036) — показываем system notification с
+    /// clickable ссылкой на `openURL` (открывает default-браузер).
+    /// Sing-box зовёт это для protocol auth flow'ов — в 1.13.x только Tailscale
+    /// outbound (см. `protocol/tailscale/endpoint.go:438`). После успешной
+    /// auth юзера в браузере sing-box-side polling сам подхватывает state,
+    /// deep-link callback в app не нужен.
     override fun sendNotification(notification: io.nekohasekai.libbox.Notification) {
-        Log.d(TAG, "Notification: ${notification.title}")
+        val context = applicationContext
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val channelId = notification.identifier.ifBlank { "lxbox-core" }
+        val channelName = notification.typeName.ifBlank { "Core notifications" }
+
+        // Channel — idempotent (createNotificationChannel игнорирует дубликат).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                channelName,
+                NotificationManager.IMPORTANCE_HIGH,
+            )
+            nm.createNotificationChannel(channel)
+        }
+
+        // PendingIntent для tap → browser. ACTION_VIEW + http(s) URI ⇒
+        // Android запускает default-browser с этим URL.
+        val pendingIntent: PendingIntent? = if (notification.openURL.isNotBlank()) {
+            runCatching {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(notification.openURL)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                PendingIntent.getActivity(
+                    context,
+                    notification.typeID,
+                    intent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+            }.getOrNull()
+        } else null
+
+        // Build & show. typeID — id для notify() ⇒ повторный вызов с тем же id
+        // обновляет existing notification вместо stacking'а.
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(android.R.drawable.ic_lock_lock)  // та же что у FGS
+            .setContentTitle(notification.title)
+            .setContentText(notification.body)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+        if (notification.subtitle.isNotBlank()) {
+            builder.setSubText(notification.subtitle)
+        }
+        if (pendingIntent != null) {
+            builder.setContentIntent(pendingIntent)
+        }
+
+        runCatching {
+            nm.notify(notification.typeID, builder.build())
+        }.onFailure {
+            Log.e(TAG, "sendNotification.notify failed", it)
+        }
+
+        // Дубль в commandServer log — observability через /logs?source=core
+        // (если POST_NOTIFICATIONS denied на API 33+, юзер всё равно увидит URL).
+        Log.d(TAG, "Notification: ${notification.title} → ${notification.openURL}")
+        commandServer?.writeMessage(
+            0,
+            "platform notification: ${notification.title} (${notification.openURL})",
+        )
     }
 }

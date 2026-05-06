@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../models/app_info.dart';
 import '../vpn/box_vpn_client.dart';
 
 /// Session-level cache для app info (display name + icon) по package name.
@@ -39,43 +39,14 @@ class AppInfoCache {
 
   static Future<void> _fetch(String pkg) async {
     try {
-      final raw = await _vpn.getAppInfo(pkg);
-      _cache[pkg] = raw == null ? null : AppInfo.fromJson(raw);
+      // BoxVpnClient.getAppInfo уже возвращает typed AppInfo (или null если
+      // package не установлен).
+      _cache[pkg] = await _vpn.getAppInfo(pkg);
     } catch (_) {
       _cache[pkg] = null;
     } finally {
       _inFlight.remove(pkg);
       revision.value = revision.value + 1;
     }
-  }
-}
-
-class AppInfo {
-  const AppInfo({
-    required this.packageName,
-    required this.appName,
-    required this.isSystem,
-    this.icon,
-  });
-
-  final String packageName;
-  final String appName;
-  final bool isSystem;
-  final Uint8List? icon;
-
-  factory AppInfo.fromJson(Map<String, dynamic> j) {
-    final iconStr = j['icon'] as String? ?? '';
-    Uint8List? bytes;
-    if (iconStr.isNotEmpty) {
-      try {
-        bytes = base64Decode(iconStr);
-      } catch (_) {}
-    }
-    return AppInfo(
-      packageName: (j['packageName'] as String?) ?? '',
-      appName: (j['appName'] as String?) ?? (j['packageName'] as String? ?? ''),
-      isSystem: (j['isSystemApp'] as bool?) ?? false,
-      icon: bytes,
-    );
   }
 }

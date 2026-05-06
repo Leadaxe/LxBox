@@ -60,6 +60,7 @@ curl -s "$BASE/ping"
 | `GET /state/rules` | массив custom rules с `srs_cached/srs_mtime` |
 | `GET /state/storage` | весь `SettingsStorage._cache` со scrubber'ом (token/URL/nodes маскируются) |
 | `GET /state/vpn` | `{auto_start,keep_on_exit,is_ignoring_battery_optimizations}` |
+| `GET /state/config_locked` | `{locked: bool}` — §037 текущее состояние auto-rebuild lock'а |
 | `GET /device` | Android version, model, ABI, app version, VPN permission, network type, uptime |
 
 ```bash
@@ -96,20 +97,72 @@ curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
 **Quirks:**
 - Body до 1 MiB; валидация — только парсинг (`jsonDecode` must give object).
 - Если `tunnel_up` — TUN перезапустится под новый config автоматически (`saveParsedConfig` делает reload).
-- **Override временный.** Любой последующий `rebuild-config` (включая `?rebuild=true` на других CRUD) перегенерит из settings и сотрёт override.
+- **Override временный по умолчанию.** Любой последующий `rebuild-config` (включая `?rebuild=true` на других CRUD) перегенерит из settings и сотрёт override.
+- **Чтобы pin'нуть постоянно (§037)** — перед `PUT /config` поставить `PUT /settings/config_locked {"locked": true}`. После этого `SubscriptionController.generateConfig()` возвращает null silently на любой rebuild trigger, custom config удерживается. Снять lock через `{"locked": false}` + `POST /action/rebuild-config` чтобы вернуться к обычному flow.
+
+### Pin custom config flow (§037)
+
+Use-case: тест экспериментальных sing-box features (Tailscale outbound, custom DNS shapes, и т.п.) которые наш parser/builder не понимает.
+
+```bash
+# 1. Lock auto-rebuild
+curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"locked":true}' "$BASE/settings/config_locked"
+# → {"ok":true,"action":"settings-config-locked","locked":true}
+
+# 2. Get current config + edit
+curl -s -H "$HDR" "$BASE/config" > /tmp/cfg.json
+# ... добавить tailscale outbound в /tmp/cfg.json через jq/manual ...
+
+# 3. Push back
+curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
+  --data-binary "@/tmp/cfg.json" "$BASE/config"
+
+# 4. (Optional) Start VPN если был down
+curl -X POST -H "$HDR" "$BASE/action/start-vpn"
+
+# 5. Observe sing-box behavior через logs
+curl -s -H "$HDR" "$BASE/logs?source=core&q=tailscale" | jq
+
+# 6. Когда наигрался — unlock
+curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"locked":false}' "$BASE/settings/config_locked"
+
+# 7. Любое UI-действие или rebuild restore'ит обычный config
+curl -X POST -H "$HDR" "$BASE/action/rebuild-config"
+
+# Состояние lock'а в любой момент
+curl -s -H "$HDR" "$BASE/state/config_locked"
+# → {"locked":false}
+```
 
 ---
 
 ## Logs
 
+§043: per-source quotas в `AppLog` — `app=300`, `core=500` ring-buffer'ы независимы. K-way merge на read'е, direct lookup для filtered. Persistent split: `applog.txt` + `corelog.txt`, по 200 lines / 64KB на файл.
+
 | Endpoint | Метод | Query |
 |---|---|---|
-| `GET /logs` | GET | `limit=N` (default 200), `source=app\|core\|all` |
-| `POST /logs/clear` | POST | — |
+| `GET /logs` | GET | `limit=N` (default 200, max 1000), `source=app\|core` (без — merged), `q=<substr>`, `level=error,warning,info,debug` (comma-separated) |
+| `GET /logs/app` | GET | Alias для `/logs?source=app`. Те же query params (`level`/`q`/`limit`). |
+| `GET /logs/core` | GET | Alias для `/logs?source=core`. Sing-box internal logs (router/dns/inbound/outbound/dial/...). **Требует `core_logs_enabled=true`** — иначе только наши broadcast'ы (`status=...`). |
+| `POST /logs/clear` | POST | `source=app\|core` (опц., без — clear всё) |
+
+**Sing-box logs (`source=core`)** — поток приходит через `PlatformInterface.writeDebugMessage` → EventChannel `lxbox/coreLog` → `ClashLogPump` → AppLog. Filter в Kotlin отсеивает TRACE/DEBUG (volume reduction). `parseLevel` определяет уровень regex'ом по форматам `INFO[NNNN]` (default formatter после strip ANSI) или `WARN<spaces>` (terminal mode). Включается через [`/settings/core_logs_enabled`](#settings--coresettings) — изменение применяется только после restart Service'а (`Libbox.setup` читает значение один раз).
 
 ```bash
-curl -s -H "$HDR" "$BASE/logs?limit=20&source=app" | jq '.[-5:]'
-curl -s -H "$HDR" -X POST "$BASE/logs/clear"
+# Только core warn/error для post-mortem диагностики
+curl -s -H "$HDR" "$BASE/logs/core?level=warning,error&limit=100" | jq '.[]'
+
+# Поиск по substring — все dial errors
+curl -s -H "$HDR" "$BASE/logs/core?q=dial&level=warning,error" | jq '.[].message'
+
+# Только app, без core-spam
+curl -s -H "$HDR" "$BASE/logs/app?limit=20" | jq '.[-5:]'
+
+# Очистить только core (app-логи остаются)
+curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 ```
 
 ---
@@ -127,11 +180,14 @@ curl -s -H "$HDR" -X POST "$BASE/logs/clear"
 | `POST /action/set-group` | `group=<tag>` | смена активной группы |
 | `POST /action/start-vpn` | — | `home.start()` (с VpnService.prepare dance) |
 | `POST /action/stop-vpn` | — | `BoxVpnService.stop()` |
+| `POST /action/reset-network` | — | §031 light recovery: closeAllConnections + DNS cache flush + dialer rebind. БЕЗ recreate'а box/Service/TUN. Требует tunnel up (409 если down). → `{"ok":true,"action":"reset-network","native_ok":<bool>}` |
 | `POST /action/rebuild-config` | — | `SubscriptionController.generateConfig()` + save |
 | `POST /action/refresh-subs` | `force=true\|false` | триггер AutoUpdater |
 | `POST /action/download-srs` | `ruleId=<id>` | скачать .srs для custom rule |
 | `POST /action/clear-srs` | `ruleId=<id>` | удалить cached .srs |
 | `POST /action/toast` | `msg=<str>&duration=short\|long` | Toast на устройстве (до 200 chars) |
+| `POST /action/check-updates` | — | force update check |
+| `POST /action/preview-empty-state` | `on=true\|false` | UI-only override: HomeScreen рендерит empty-state как при чистой инсталляции, реальные данные не трогаются. Полезно для скриншотов / regression UX. |
 
 ```bash
 # Типичный flow диагностики
@@ -303,6 +359,9 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | `/settings/vars/{key}` | DELETE | — (удаляет ключ; не пишет пустую строку) |
 | `/settings/dns_options/servers` | PUT | `{"servers":[{sing-box dns server object}, ...]}` |
 | `/settings/dns_options/rules` | PUT | `{"rules":"<JSON string>"}` (legacy shape — stored как JSON-string) |
+| `/settings/config_locked` | PUT | `{"locked": true\|false}` — §037 toggle auto-rebuild lock. true → `generateConfig` возвращает null silently, custom config через `PUT /config` не перетирается UI. |
+| `/settings/core_logs_enabled` | GET | →`{"enabled": bool}` — §043 текущее состояние forwarding'а sing-box логов в `/logs/core`. |
+| `/settings/core_logs_enabled` | PUT | `{"enabled": true\|false}` — §043 включить/выключить forward. **Требует restart Service'а** (`stop-vpn` + `start-vpn`) чтобы применилось — `Libbox.setup` читает значение один раз. Default false. Storage в SharedPreferences (`boxvpn_boot.core_logs_enabled`), не в `lxbox_settings.json`. |
 | `/settings/rebuild-config` | POST | — (alias для `/action/rebuild-config`) |
 
 **Route final:**
@@ -369,6 +428,28 @@ jq -n --arg rules "$RULES" '{rules: $rules}' | \
     --data-binary @- "$BASE/settings/dns_options/rules?rebuild=true"
 ```
 
+**Core logs forwarding** (§043) — диагностика sing-box internals:
+```bash
+# Текущее состояние
+curl -s -H "$HDR" "$BASE/settings/core_logs_enabled" | jq
+# {"enabled": false}
+
+# Включить
+curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"enabled":true}' \
+  "$BASE/settings/core_logs_enabled"
+# → {"ok":true,"action":"settings-core-logs-enabled","enabled":true,
+#    "note":"restart VPN service for change to take effect"}
+
+# Применить — restart VPN service
+curl -X POST -H "$HDR" "$BASE/action/stop-vpn"
+sleep 2
+curl -X POST -H "$HDR" "$BASE/action/start-vpn"
+
+# Теперь sing-box logs наполняют /logs/core
+curl -s -H "$HDR" "$BASE/logs/core?level=warning,error&q=dial" | jq
+```
+
 ---
 
 ## Files
@@ -379,14 +460,62 @@ Read-only file access.
 |---|---|
 | `GET /files/srs` | `ruleId=<id>` → octet-stream .srs |
 | `GET /files/srs/list` | — |
-| `GET /files/external` | `name=<name>` (whitelist: cache.db head, stderr.log, stderr.log.old) |
+| `GET /files/local` | `name=<name>` (whitelist: `cache.db`, `stderr.log`) |
+| `GET /files/external` | legacy alias for `/files/local`, ради обратной совместимости |
 
 ```bash
 curl -s -H "$HDR" "$BASE/files/srs/list" | jq
 curl -s -H "$HDR" "$BASE/files/srs?ruleId=abc-123" > /tmp/rule.srs
 
-# Native stderr log (sing-box core)
-curl -s -H "$HDR" "$BASE/files/external?name=stderr.log" | tail -30
+# Native stderr log (sing-box core, internal app-scoped storage)
+curl -s -H "$HDR" "$BASE/files/local?name=stderr.log" | tail -30
+```
+
+---
+
+## Backup — `/backup/*`
+
+| Endpoint | Что отдаёт / принимает |
+|---|---|
+| `GET /backup/export?include=config,vars,subs` | Pure-data snapshot. `include` опц.; default — все три |
+| `POST /backup/import?merge=&rebuild=` | Восстановление. Body `{config?, vars?, server_lists?}`. Совместим с `/diag/dump` (diag-поля игнорятся). |
+
+```bash
+# Бэкап
+curl -s -H "$HDR" "$BASE/backup/export" > /tmp/lxbox-backup.json
+
+# Восстановление с автоматическим rebuild config
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  --data-binary @/tmp/lxbox-backup.json \
+  "$BASE/backup/import?rebuild=true"
+```
+
+`merge=false` (default) — replace; `merge=true` — append/upsert. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
+
+---
+
+## Diagnostics — `/diag/*` (§038)
+
+| Endpoint | Что отдаёт |
+|---|---|
+| `GET /diag/dump` | Полный JSON-pack от `DumpBuilder.build()` (то же что UI ⤴ Share) |
+| `GET /diag/exit-info` | `ApplicationExitInfo` (5 последних экзитов; API 30+, иначе `[]`) |
+| `GET /diag/logcat?count=N&level=L` | Logcat tail нашего процесса (N=50..5000, level=V/D/I/W/E/F) |
+| `GET /diag/stderr` | Содержимое `filesDir/stderr.log` (Go panic stacktrace) |
+| `GET /diag/applog?prev=true\|false\|all` | AppLog entries с фильтром по `fromPreviousSession` |
+
+```bash
+# Полный диагностический pack
+curl -s -H "$HDR" "$BASE/diag/dump" -o /tmp/lxbox-dump.json
+
+# Что система знает о последних крахах
+curl -s -H "$HDR" "$BASE/diag/exit-info" | jq '.[].reason'
+
+# Logcat нашего процесса (FATAL EXCEPTION + native backtrace)
+curl -s -H "$HDR" "$BASE/diag/logcat?count=2000&level=W" | grep -E 'FATAL|DEBUG|tombstoned'
+
+# Только pre-crash JVM-events предыдущей сессии
+curl -s -H "$HDR" "$BASE/diag/applog?prev=true" | jq
 ```
 
 ---

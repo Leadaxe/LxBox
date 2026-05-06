@@ -37,6 +37,8 @@ echo "────────────────────────�
 
 cd app
 
+export LXBOX_ABI_FILTER=arm64-v8a
+
 flutter build apk --release \
   --target-platform android-arm64 \
   --dart-define=BUILD_LOCAL=true \

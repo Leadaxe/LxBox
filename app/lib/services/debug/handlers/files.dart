@@ -9,12 +9,18 @@ import '../transport/request.dart';
 import '../transport/response.dart';
 
 /// `/files/*` — read-only доступ к кэшированным файлам и whitelist'нутым
-/// файлам из app-scoped external storage.
+/// файлам из internal app-scoped storage (`/data/data/<pkg>/files/`).
+///
+/// `/files/local` — современный путь.
+/// `/files/external` — исторический alias, оставлен ради обратной
+/// совместимости с adb-скриптами; раньше файлы лежали в external storage,
+/// после task 027 — в internal. Имя URL поменять без deprecation-цикла
+/// нельзя.
 Future<DebugResponse> filesHandler(DebugRequest req, DebugContext ctx) async {
   return switch (req.path) {
     '/files/srs/list' => _srsList(ctx),
     '/files/srs' => _srsFile(req, ctx),
-    '/files/external' => _externalFile(req, ctx),
+    '/files/local' || '/files/external' => _localFile(req, ctx),
     _ => throw NotFound('files path: ${req.path}'),
   };
 }
@@ -50,23 +56,23 @@ Future<DebugResponse> _srsFile(DebugRequest req, DebugContext ctx) async {
   return BytesResponse(bytes, filename: '$id.srs');
 }
 
-/// Allow-list файлов в app-scoped external storage
-/// (`/sdcard/Android/data/<pkg>/files/`). Выдаём только sing-box core
-/// stderr и HTTP cache — полезно для диагностики.
-const _externalWhitelist = {
+/// Allow-list файлов в internal app-scoped storage
+/// (`/data/data/<pkg>/files/`, `getApplicationDocumentsDirectory()`).
+/// Выдаём только sing-box core stderr и HTTP cache — полезно для
+/// диагностики. До task 027 файлы лежали в external storage; теперь
+/// internal по причине Knox/SELinux quirks на отдельных OEM.
+const _localWhitelist = {
   'stderr.log',
-  'stderr.log.old',
   'cache.db',
 };
 
-Future<DebugResponse> _externalFile(DebugRequest req, DebugContext ctx) async {
+Future<DebugResponse> _localFile(DebugRequest req, DebugContext ctx) async {
   final name = req.requiredQuery('name');
   _assertSafeName(name);
-  if (!_externalWhitelist.contains(name)) {
+  if (!_localWhitelist.contains(name)) {
     throw NotFound('not whitelisted: $name');
   }
-  final dir = await getExternalStorageDirectory();
-  if (dir == null) throw const Conflict('external storage unavailable');
+  final dir = await getApplicationDocumentsDirectory();
   final f = File('${dir.path}/$name');
   if (!await f.exists()) throw NotFound('file: $name');
   final bytes = await f.readAsBytes();

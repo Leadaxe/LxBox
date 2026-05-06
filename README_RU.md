@@ -27,7 +27,7 @@ Android-клиент с глубокими оптимизациями по пр�
 
 Добавляйте серверы по URL подписки, прямой ссылке, WireGuard URI/INI или raw sing-box JSON outbound. Умный диалог вставки определяет формат автоматически и показывает превью. Включение/отключение подписок без удаления. Офлайн-rehydrate — ноды восстанавливаются из кеша тела при старте app. Per-subscription настройки detour серверов.
 
-- **9 протоколов**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, SSH, SOCKS, WireGuard
+- **10 протоколов**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard
 - Форматы: Base64, Xray JSON Array (chained proxy), plain text, raw sing-box JSON
 - Per-subscription picker **Update interval** (1/3/6/12/24/48/72/168h), учитывает заголовок `profile-update-interval`
 - Subtitle в строке подписки: `124 nodes · 🔄 24h · 🕐 3h ago · (2 fails)`
@@ -54,6 +54,15 @@ Android-клиент с глубокими оптимизациями по пр�
 - Переключатель видимости detour серверов (⚙)
 - Sticky restart warning под Stop — не пропадает при отмене Stop-диалога
 - Long-press: Ping · Use this node · View JSON · **Copy URI** (vless://, wireguard://, …) · Copy server (JSON) · Copy detour · Copy server + detour
+
+**Quick Connect** — toggle VPN без открытия app'а (v1.5.0)
+
+Два пути включить/выключить VPN не открывая приложение:
+
+- **Плитка в шторке** — потяни статус-бар → редактирование → перетащи **L×Box**. Тап = on/off, плитка показывает live-статус (`Connected` / `Disconnected` / `Connecting…` / `Stopping…`). Добавить через App Settings → General → Quick connect → `Add` (на Android 13+ системный prompt, на старых — текстовая инструкция).
+- **Long-press на иконку app'а** на хоум-скрине → пункт **Toggle VPN**.
+- Первый раз tile/shortcut коротко открывает приложение ради системного VPN consent-диалога (`VpnService.prepare(...)` — Activity-only API). Toast объясняет почему. После consent activity закрывается сама — обычный flow без UI-вспышки.
+- Tile переживает OOM-kill сервиса: `currentStatus` сбрасывается в `onDestroy` чтобы не показывать «Connected» когда сервиса больше нет.
 
 **Маршрутизация** — единая модель правил (v1.4.0)
 
@@ -159,6 +168,7 @@ Multi-hop цепочки: трафик идёт через промежуточ�
 | Shadowsocks | `ss://` (SIP002 + legacy + SS2022) | TCP, UDP, SIP003-плагины                       |
 | Hysteria2   | `hy2://` / `hysteria2://`          | QUIC, Salamander obfs                          |
 | **TUIC v5** | `tuic://`                          | QUIC, BBR/CUBIC/NewReno, zero-RTT              |
+| **NaïveProxy** | `naive+https://`                | Настоящий Chrome TLS через cronet, `extra-headers` |
 | SSH         | `ssh://`                           | TCP, host key / password / private key         |
 | SOCKS       | `socks://` / `socks5://`           | TCP, auth                                      |
 | WireGuard   | `wireguard://`, INI config         | UDP, multi-peer                                |

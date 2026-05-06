@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../main.dart';
+import '../models/background_mode.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/transport/server.dart';
 import '../services/haptic_service.dart';
@@ -12,9 +13,14 @@ import '../services/settings_storage.dart';
 import '../services/update_checker.dart';
 import '../vpn/box_vpn_client.dart';
 import 'about_screen.dart';
+import 'backup_screen.dart';
 
 class AppSettingsScreen extends StatefulWidget {
-  const AppSettingsScreen({super.key});
+  const AppSettingsScreen({super.key, this.initialTab = 0});
+
+  /// Tab index to open: 0 = General, 1 = Background, 2 = Diagnostics.
+  /// Used by deep-links (e.g. DebugScreen → "Diagnostics settings" в попапе).
+  final int initialTab;
 
   @override
   State<AppSettingsScreen> createState() => _AppSettingsScreenState();
@@ -28,7 +34,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _haptic = true;
   bool _batteryWhitelisted = false;
   bool _notificationsEnabled = true;
-  String _backgroundMode = 'never';
+  BackgroundMode _backgroundMode = BackgroundMode.never;
   bool _autoPing = true;
   bool _autoUpdateSubs = true;
   bool _autoCheckUpdates = true;
@@ -40,6 +46,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   int _debugPort = SettingsStorage.debugPortDefault;
   late final TextEditingController _debugPortCtl;
   String _debugPortError = '';
+
+  // §043 sing-box core logs forwarding (требует restart Service'а)
+  bool _coreLogsEnabled = false;
 
   @override
   void initState() {
@@ -78,6 +87,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final debugEnabled = await SettingsStorage.getDebugEnabled();
     final debugToken = await SettingsStorage.getDebugToken();
     final debugPort = await SettingsStorage.getDebugPort();
+    final coreLogsEnabled = await _vpn.getCoreLogsEnabled();
     if (mounted) {
       setState(() {
         _autoStart = auto;
@@ -94,6 +104,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _debugToken = debugToken;
         _debugPort = debugPort;
         _debugPortCtl.text = debugPort.toString();
+        _coreLogsEnabled = coreLogsEnabled;
         _loaded = true;
       });
     }
@@ -153,10 +164,84 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     await applyDebugApiSettings();
   }
 
-  Future<void> _applyBackgroundMode(String? mode) async {
+  Future<void> _applyBackgroundMode(BackgroundMode? mode) async {
     if (mode == null || mode == _backgroundMode) return;
     setState(() => _backgroundMode = mode);
     await _vpn.setBackgroundMode(mode);
+  }
+
+  /// §043: toggle forwarding sing-box логов в наш AppLog как `DebugSource.core`.
+  /// Изменение применяется ТОЛЬКО после полного рестарта процесса — `Libbox.setup`
+  /// с флагом `debug` вызывается один раз в `BoxApplication.initialize` (см.
+  /// гард `if (initialized) return`). Stop/start VPN не помогает (service-level,
+  /// не process-level), нужен force-stop + relaunch. Кнопка «Quit & reopen»
+  /// рядом с toggle делает это вызовом `quitApp()` (finishAffinity + killProcess
+  /// в Kotlin); юзер сам тапает иконку и получает свежий процесс.
+  Future<void> _toggleCoreLogs(bool enable) async {
+    setState(() => _coreLogsEnabled = enable);
+    await _vpn.setCoreLogsEnabled(enable);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Saved. Force-stop & reopen app to apply.'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// §043 follow-up: confirm-диалог + `BoxVpnClient.quitApp()`. Process умрёт
+  /// через ~250ms; Future от quitApp в норме не ресолвится — поэтому ничего
+  /// не делаем после await.
+  Future<void> _confirmQuitApp() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Quit & reopen app?'),
+        content: const Text(
+          'This will fully close the app process so the new "Forward sing-box logs" '
+          'value is picked up at next launch (Libbox.setup is one-shot per process). '
+          'VPN service will stop. Tap the app icon to reopen.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Quit'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await _vpn.quitApp();
+  }
+
+  /// §032 Quick Connect — кнопка «Add tile» в General-табе.
+  /// На API 33+ система сама покажет prompt; на более старых — даём
+  /// текстовую инструкцию (drag через шторку).
+  Future<void> _addQuickSettingsTile() async {
+    final result = await _vpn.requestAddTile();
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final msg = switch (result) {
+      'added' => 'Tile added to Quick Settings.',
+      'already' => 'Tile is already in Quick Settings.',
+      'dismissed' => 'Add tile dismissed.',
+      'unsupported' =>
+        'Your Android version doesn\'t support an in-app prompt. '
+            'Pull down the status bar → edit tiles → drag L×Box to active tiles.',
+      'no_activity' => 'Cannot show prompt right now — try again.',
+      _ => 'Could not request tile add ($result). '
+            'Pull down the status bar → edit tiles → drag L×Box manually.',
+    };
+    final duration = (result == 'unsupported' ||
+            result.startsWith('error') ||
+            result == 'no_activity')
+        ? const Duration(seconds: 6)
+        : const Duration(seconds: 3);
+    messenger.showSnackBar(SnackBar(content: Text(msg), duration: duration));
   }
 
   Future<void> _refreshBatteryStatus() async {
@@ -210,6 +295,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       builder: (context, _) {
         return DefaultTabController(
           length: 3,
+          initialIndex: widget.initialTab.clamp(0, 2),
           child: Scaffold(
             appBar: AppBar(
               title: const Text('App Settings'),
@@ -290,6 +376,26 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
           } : null,
         ),
         const Divider(height: 32),
+        Text('Quick connect', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        ListTile(
+          leading: const Icon(Icons.dashboard_customize_outlined),
+          title: const Text('Quick Settings tile'),
+          subtitle: const Text(
+              'Add to status-bar shade for one-tap toggle. '
+              'Android 13+ shows a system prompt; on older versions edit the shade manually.'),
+          trailing: TextButton(
+            onPressed: () => unawaited(_addQuickSettingsTile()),
+            child: const Text('Add'),
+          ),
+        ),
+        const ListTile(
+          leading: Icon(Icons.touch_app_outlined),
+          title: Text('Home-screen shortcut'),
+          subtitle: Text(
+              'Long-press the L×Box icon on your home screen → choose "Toggle VPN".'),
+        ),
+        const Divider(height: 32),
         Text('Subscriptions', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         SwitchListTile(
@@ -354,6 +460,20 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
               HapticService.I.onConnectTap();
             }
           } : null,
+        ),
+        const Divider(height: 32),
+        Text('Backup & restore', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        ListTile(
+          leading: const Icon(Icons.import_export),
+          title: const Text('Backup & restore'),
+          subtitle: const Text(
+              'Export subscriptions, routing setup and preferences as JSON.'),
+          trailing: const Icon(Icons.chevron_right),
+          contentPadding: EdgeInsets.zero,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const BackupScreen()),
+          ),
         ),
       ],
     );
@@ -438,30 +558,30 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
             style: TextStyle(fontSize: 12),
           ),
         ),
-        RadioGroup<String>(
+        RadioGroup<BackgroundMode>(
           groupValue: _backgroundMode,
-          onChanged: (String? m) {
+          onChanged: (BackgroundMode? m) {
             if (!_loaded) return;
             unawaited(_applyBackgroundMode(m));
           },
           child: const Column(
             children: [
-              RadioListTile<String>(
-                value: 'never',
+              RadioListTile<BackgroundMode>(
+                value: BackgroundMode.never,
                 title: Text('Never sleep (recommended)'),
                 subtitle: Text(
                     'Tunnel is always active. Best reliability — pushes '
                     'and long-lived sockets survive. Higher battery use.'),
               ),
-              RadioListTile<String>(
-                value: 'lazy',
+              RadioListTile<BackgroundMode>(
+                value: BackgroundMode.lazy,
                 title: Text('Lazy sleep'),
                 subtitle: Text(
                     'Pause only in deep Doze (screen off for a long '
                     'time + no motion). Balanced.'),
               ),
-              RadioListTile<String>(
-                value: 'always',
+              RadioListTile<BackgroundMode>(
+                value: BackgroundMode.always,
                 title: Text('Aggressive battery saving'),
                 subtitle: Text(
                     'Pause tunnel whenever screen turns off. Max '
@@ -571,6 +691,49 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
               ],
             ),
           ),
+        // §043: forwarding sing-box internal logs into our AppLog (Debug
+        // screen → Core tab + /logs/core endpoint). Off by default — sing-box
+        // на busy traffic эмитит сотни строк/минуту; opt-in для диагностики.
+        // Subtitle короткий и timeless — без «after restart» (показывался бы
+        // и после самого рестарта, misleading); пояснялка про process-restart
+        // вынесена в полноширинный блок ниже.
+        SwitchListTile(
+          title: const Text('Forward sing-box logs'),
+          subtitle: Text(
+            _coreLogsEnabled
+                ? 'Visible in Debug → Core.'
+                : 'Off.',
+          ),
+          secondary: const Icon(Icons.terminal),
+          value: _coreLogsEnabled,
+          onChanged: _loaded
+              ? (val) => unawaited(_toggleCoreLogs(val))
+              : null,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Setting is saved immediately, but `Libbox.setup` reads the '
+                '`debug` flag once per process. Stop/start VPN does NOT '
+                're-apply — force-stop the app (or use the button below) '
+                'and reopen.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 6),
+              OutlinedButton.icon(
+                onPressed: _loaded ? () => unawaited(_confirmQuitApp()) : null,
+                icon: const Icon(Icons.logout, size: 18),
+                label: const Text('Quit & reopen app'),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

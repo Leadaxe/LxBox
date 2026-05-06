@@ -12,7 +12,9 @@ import '../config/config_parse.dart';
 import '../models/home_state.dart';
 import '../services/app_log.dart';
 import '../services/clash_api_client.dart';
+import '../services/error_format.dart';
 import '../services/settings_storage.dart';
+import '../services/template_loader.dart';
 import '../services/haptic_service.dart';
 import '../services/subscription/auto_updater.dart';
 
@@ -21,7 +23,7 @@ class HomeController extends ChangeNotifier {
 
   final BoxVpnClient _vpn = BoxVpnClient();
   final AutoUpdater? _autoUpdater;
-  StreamSubscription<Map<String, dynamic>>? _statusSub;
+  StreamSubscription<TunnelStatusEvent>? _statusSub;
   ClashApiClient? _clash;
   ClashApiClient? get clashClient => _clash;
   Timer? _heartbeat;
@@ -34,10 +36,29 @@ class HomeController extends ChangeNotifier {
   HomeState _state = HomeState();
   HomeState get state => _state;
 
+  /// UI-only override: при `true` `HomeScreen` рендерит empty-state как
+  /// при чистой инсталляции, **не трогая** реальные данные `_state`.
+  /// Управляется через Debug API `POST /action/preview-empty-state?on=...`.
+  /// Полезно для скриншотов / UX-демо / регресс-тестинга empty-state'ов
+  /// без `pm clear` и потери подписок.
+  bool _previewEmpty = false;
+  bool get previewEmpty => _previewEmpty;
+  void setPreviewEmpty(bool on) {
+    if (_previewEmpty == on) return;
+    _previewEmpty = on;
+    notifyListeners();
+  }
+
   /// Сторожок: heartbeat fail haptic стреляет один раз на серию,
   /// сбрасывается при успешном heartbeat (см. `_startHeartbeat`).
   /// Иначе — каждые 20 сек вибро-спам пока туннель лежит.
   bool _heartbeatFailNotified = false;
+
+  /// Cooldown timestamps для recovery actions (reloadVpn / resetNetwork) —
+  /// чтобы юзер не спамил кнопками при тревоге. См. spec 030 / 031.
+  DateTime? _lastReloadTap;
+  DateTime? _lastResetNetworkTap;
+  static const _recoveryCooldown = Duration(seconds: 3);
 
   /// One-shot timer for auto-ping-on-connect (5s after tunnel up). Отменяется
   /// при disconnect чтобы не стрельнул в уже отключённом состоянии.
@@ -57,14 +78,15 @@ class HomeController extends ChangeNotifier {
 
   Future<void> init() async {
     await _loadSavedConfig();
+    await reloadPingOptions();
     _statusSub = _vpn.onStatusChanged.listen(_handleStatusEvent);
     // Native шлёт broadcast только на переходы. Если Flutter-процесс умер,
     // а foreground-service выжил (keep-on-exit), при reattach мы не узнаём
     // что туннель уже Started — поле застревает в `disconnected`, а Start-
     // кнопка может оказаться неактивна. Pull'им текущий статус и пропускаем
     // через тот же handler — он сам решит что эмитить.
-    final raw = await _vpn.getVpnStatus();
-    _handleStatusEvent({'status': raw});
+    final pulled = await _vpn.getVpnStatus();
+    _handleStatusEvent(TunnelStatusEvent(status: pulled, raw: pulled.name));
   }
 
   @override
@@ -97,13 +119,13 @@ class HomeController extends ChangeNotifier {
   // Native VPN events
   // ---------------------------------------------------------------------------
 
-  void _handleStatusEvent(Map<String, dynamic> event) {
-    final raw = event['status']?.toString() ?? '';
-    final tunnel = TunnelStatus.fromNative(raw);
+  void _handleStatusEvent(TunnelStatusEvent event) {
+    final tunnel = event.status;
     final prevTunnel = _state.tunnel;
-    _addDebug(DebugSource.core, event.toString());
+    _addDebug(DebugSource.core,
+        'status=${event.raw}${event.errorReason != null ? " reason=${event.errorReason}" : ""}');
     _addDebug(DebugSource.app,
-        '[vpn] _handleStatusEvent raw="$raw" tunnel=${tunnel.name} prev=${prevTunnel.name} stale_before=${_state.configStaleSinceStart}');
+        '[vpn] _handleStatusEvent raw="${event.raw}" tunnel=${tunnel.name} prev=${prevTunnel.name} stale_before=${_state.configStaleSinceStart}');
 
     // Все мутации state складываем в **одно** copyWith в конце — было три
     // отдельных _emit (tunnel; then connectedSince+stale; then cleanup-
@@ -135,7 +157,7 @@ class HomeController extends ChangeNotifier {
       _clash = null;
       final reason = tunnel == TunnelStatus.revoked
           ? 'VPN revoked by another app'
-          : _extractStopReason(event);
+          : (event.errorReason != null ? 'Stopped: ${event.errorReason}' : '');
       _emit(
         _state.copyWith(
           tunnel: tunnel,
@@ -294,16 +316,9 @@ class HomeController extends ChangeNotifier {
     }
   }
 
-  String _extractStopReason(Map<String, dynamic> event) {
-    const keys = <String>['error', 'message', 'reason', 'details', 'description'];
-    for (final key in keys) {
-      final value = event[key];
-      if (value == null) continue;
-      final text = value.toString().trim();
-      if (text.isNotEmpty) return 'Stopped: $text';
-    }
-    return '';
-  }
+  // _extractStopReason removed — логика переехала в TunnelStatusEvent._extractReason
+  // (см. lib/models/tunnel_status.dart). HomeController теперь использует
+  // event.errorReason напрямую.
 
   // ---------------------------------------------------------------------------
   // Config persistence
@@ -424,7 +439,9 @@ class HomeController extends ChangeNotifier {
         try {
           text = await File(path).readAsString();
         } on FileSystemException catch (e) {
-          _emit(_state.copyWith(lastError: 'Failed to read file: $e', busy: false));
+          _emit(_state.copyWith(
+              lastError: 'Failed to read file: ${formatUserError(e)}',
+              busy: false));
           _addDebug(DebugSource.app, 'File read error: $e');
           return false;
         }
@@ -449,7 +466,8 @@ class HomeController extends ChangeNotifier {
       _addDebug(DebugSource.app, 'File parse error: ${e.message}');
       return false;
     } catch (e) {
-      _emit(_state.copyWith(lastError: 'File error: $e', busy: false));
+      _emit(_state.copyWith(
+          lastError: 'File error: ${formatUserError(e)}', busy: false));
       _addDebug(DebugSource.app, 'File read error: $e');
       return false;
     }
@@ -520,7 +538,7 @@ class HomeController extends ChangeNotifier {
         _emit(_state.copyWith(lastError: 'Failed to start VPN'));
       }
     } catch (e) {
-      _emit(_state.copyWith(lastError: '$e'));
+      _emit(_state.copyWith(lastError: formatUserError(e)));
       _addDebug(DebugSource.app, 'startVPN exception: $e');
     } finally {
       _emit(_state.copyWith(busy: false));
@@ -535,11 +553,48 @@ class HomeController extends ChangeNotifier {
         _emit(_state.copyWith(lastError: 'Stop timed out'));
       }
     } catch (e) {
-      _emit(_state.copyWith(lastError: '$e'));
+      _emit(_state.copyWith(lastError: formatUserError(e)));
       _addDebug(DebugSource.app, 'stopVPN exception: $e');
     } finally {
       _emit(_state.copyWith(busy: false));
     }
+  }
+
+  /// Можно ли сейчас триггерить in-place reload (cooldown-aware). UI bind'ит
+  /// `IconButton.onPressed` к этому, чтобы кнопка disabled на 3s после tap'а
+  /// и недоступна когда туннель не up.
+  bool get canReload =>
+      _state.tunnel == TunnelStatus.connected &&
+      (_lastReloadTap == null ||
+          DateTime.now().difference(_lastReloadTap!) > _recoveryCooldown);
+
+  /// In-place reload sing-box runtime через `commandServer.startOrReloadService`.
+  /// Tunnel дропается на ~3s, Android Service не убивается. См. spec 030.
+  Future<void> reloadVpn() async {
+    if (!canReload) return;
+    _lastReloadTap = DateTime.now();
+    notifyListeners();
+    final ok = await _vpn.reloadVPN();
+    _addDebug(DebugSource.app, '[vpn] reload → ok=$ok');
+    // Cooldown timer перерендерит canReload через 3s — назначаем future
+    // notifyListeners (без heavy timer'а; achievable через delayed Future).
+    Future.delayed(_recoveryCooldown, () {
+      if (_lastReloadTap != null) notifyListeners();
+    });
+  }
+
+  /// Reset network sub-state (experimental, spec 031). Не дропает runtime.
+  /// UI пока не использует — только через Debug API для экспериментов.
+  Future<bool> resetNetwork() async {
+    if (_state.tunnel != TunnelStatus.connected) return false;
+    if (_lastResetNetworkTap != null &&
+        DateTime.now().difference(_lastResetNetworkTap!) < _recoveryCooldown) {
+      return false;
+    }
+    _lastResetNetworkTap = DateTime.now();
+    final ok = await _vpn.resetNetwork();
+    _addDebug(DebugSource.app, '[vpn] resetNetwork → ok=$ok');
+    return ok;
   }
 
   /// Reconnect = `_stopInternal` → `_startInternal`. Blocking на native
@@ -568,7 +623,7 @@ class HomeController extends ChangeNotifier {
         _emit(_state.copyWith(lastError: 'Failed to start VPN'));
       }
     } catch (e) {
-      _emit(_state.copyWith(lastError: '$e'));
+      _emit(_state.copyWith(lastError: formatUserError(e)));
       _addDebug(DebugSource.app, 'reconnect exception: $e');
     } finally {
       _emit(_state.copyWith(busy: false));
@@ -613,7 +668,7 @@ class HomeController extends ChangeNotifier {
       );
       await applyGroup(initial);
     } catch (e) {
-      _emit(_state.copyWith(lastError: 'Clash API: $e'));
+      _emit(_state.copyWith(lastError: 'Clash API: ${formatUserError(e)}'));
       _addDebug(DebugSource.app, 'Clash API error: $e');
     }
   }
@@ -653,44 +708,143 @@ class HomeController extends ChangeNotifier {
       await reloadProxies();
       _addDebug(DebugSource.app, 'Node selected: $nodeTag');
     } catch (e) {
-      _emit(_state.copyWith(lastError: 'Switch failed: $e'));
+      _emit(_state.copyWith(
+          lastError: 'Switch failed: ${formatUserError(e)}'));
       _addDebug(DebugSource.app, 'Node switch error: $e');
     } finally {
       _emit(_state.copyWith(busy: false));
     }
   }
 
-  Future<void> pingNode(String nodeTag) async {
+  /// Single-node URLTest через clash `/proxies/<tag>/delay`. Симметричен
+  /// `runGroupUrltest(groupTag)` для group'ы. Использует per-group resolved
+  /// url/timeout (§040) — контекст ноды = `state.selectedGroup`.
+  Future<void> runNodeUrltest(String nodeTag) async {
     final clash = _clash;
     if (clash == null) return;
     final pingBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '…';
     _emit(_state.copyWith(pingBusy: pingBusy));
+    final group = _state.selectedGroup;
+    final url = pingUrlFor(group);
+    final timeoutMs = pingTimeoutFor(group);
     try {
-      final ms = await clash.delay(nodeTag, timeoutMs: pingTimeout, url: pingUrl);
+      final ms = await clash.delay(nodeTag, timeoutMs: timeoutMs, url: url);
       final nextDelay = Map<String, int>.from(_state.lastDelay)..[nodeTag] = ms;
       final nextBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '';
       _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
-      _addDebug(DebugSource.app, 'Ping $nodeTag: ${ms}ms');
+      _addDebug(DebugSource.app, 'URLTest $nodeTag → $url: ${ms}ms');
     } catch (e) {
       final nextDelay = Map<String, int>.from(_state.lastDelay)..[nodeTag] = -1;
       final nextBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '';
-      _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy, lastError: 'Ping: $e'));
-      _addDebug(DebugSource.app, 'Ping error for $nodeTag: $e');
+      final msg = _formatProbeError(nodeTag, url, e);
+      _emit(_state.copyWith(
+          lastDelay: nextDelay, pingBusy: nextBusy, lastError: msg));
+      _addDebug(DebugSource.app, msg);
     }
+  }
+
+  /// Человекочитаемое сообщение для UI banner / debug log на ошибку
+  /// ping/URLTest операции. Формат: `<target> → <host> — <reason>`.
+  /// Reason формируется через [formatUserError] — общий §041 helper.
+  ///
+  ///   "direct-out → ya.ru — timeout 5.8s"
+  ///   "vpn-2 → ya.ru — HTTP 503"
+  ///   "direct-out → ya.ru — connection refused"
+  static String _formatProbeError(String target, String url, Object e) {
+    return '${_routeLabel(target, url)} — ${formatUserError(e)}';
+  }
+
+  /// `direct-out → ya.ru` если URL валиден, иначе только `direct-out`.
+  static String _routeLabel(String target, String url) {
+    if (url.isEmpty) return target;
+    try {
+      final host = Uri.parse(url).host;
+      if (host.isNotEmpty) return '$target → $host';
+    } catch (_) {}
+    return target;
   }
 
   bool _massPingRunning = false;
   bool get massPingRunning => _massPingRunning;
   int _massPingEpoch = 0;
 
-  String pingUrl = '';
-  int pingTimeout = 10000;
+  // §040: ping/test settings now persisted в SettingsStorage `ping_options`.
+  // Resolve chain: per-group override → global storage → template default.
+  // _templatePing* кешируются на старте через [reloadPingOptions].
+  Map<String, dynamic> _pingOptions = const {};
+  String _templatePingUrl = '';
+  int _templatePingTimeoutMs = 10000;
+
+  /// Глобальный URL (storage > template fallback). Backward-compat getter —
+  /// не setter'ом, мутации только через [SettingsStorage.setGlobalPingUrl] +
+  /// [reloadPingOptions].
+  String get pingUrl {
+    final saved = _pingOptions['url'];
+    if (saved is String && saved.isNotEmpty) return saved;
+    return _templatePingUrl;
+  }
+
+  /// Глобальный timeout ms (storage > template fallback).
+  int get pingTimeout {
+    final saved = _pingOptions['timeout_ms'];
+    if (saved is num && saved > 0) return saved.toInt();
+    return _templatePingTimeoutMs;
+  }
+
+  /// Resolved URL для конкретной группы: override этой группы > global > template.
+  /// `groupTag` пустой/null → equivalent to global [pingUrl].
+  String pingUrlFor(String? groupTag) {
+    if (groupTag != null && groupTag.isNotEmpty) {
+      final groups = _pingOptions['groups'];
+      if (groups is Map<String, dynamic>) {
+        final override = groups[groupTag];
+        if (override is Map<String, dynamic>) {
+          final url = override['url'];
+          if (url is String && url.isNotEmpty) return url;
+        }
+      }
+    }
+    return pingUrl;
+  }
+
+  /// Resolved timeout (ms) для группы. См. [pingUrlFor].
+  int pingTimeoutFor(String? groupTag) {
+    if (groupTag != null && groupTag.isNotEmpty) {
+      final groups = _pingOptions['groups'];
+      if (groups is Map<String, dynamic>) {
+        final override = groups[groupTag];
+        if (override is Map<String, dynamic>) {
+          final t = override['timeout_ms'];
+          if (t is num && t > 0) return t.toInt();
+        }
+      }
+    }
+    return pingTimeout;
+  }
+
+  /// Перечитывает `ping_options` из SettingsStorage + template defaults.
+  /// Зовётся из [init] и из UI dialog'а после save (а также из Debug API
+  /// после CRUD). Не уведомляет listeners — values используются on-demand.
+  Future<void> reloadPingOptions() async {
+    try {
+      final tpl = await TemplateLoader.load();
+      final tplOpts = tpl.pingOptions;
+      final tplUrl = tplOpts['url'];
+      final tplTimeout = tplOpts['timeout_ms'];
+      _templatePingUrl = (tplUrl is String) ? tplUrl : '';
+      _templatePingTimeoutMs =
+          (tplTimeout is num && tplTimeout > 0) ? tplTimeout.toInt() : 10000;
+    } catch (e) {
+      _addDebug(DebugSource.app, 'Template load (ping options): $e');
+    }
+    _pingOptions = await SettingsStorage.getPingOptions();
+  }
 
   static const _pingConcurrency = 10;
 
   /// Запланировать автопинг через 5 сек после connect, если включено в
   /// App Settings (`auto_ping_on_start`, default true). Пингуем только
-  /// активную группу (`pingAllNodes` использует `_state.nodes` — ноды
+  /// активную группу (`runMassUrltest` использует `_state.nodes` — ноды
   /// выбранного selector'а). Отменяется при disconnect.
   static const _autoPingDelay = Duration(seconds: 5);
   Future<void> _scheduleAutoPing() async {
@@ -700,29 +854,34 @@ class HomeController extends ChangeNotifier {
     if (enabled != 'true') return;
     _autoPingTimer = Timer(_autoPingDelay, () {
       if (!_state.tunnelUp || _state.nodes.isEmpty) return;
-      unawaited(pingAllNodes());
+      unawaited(runMassUrltest());
     });
   }
 
-  /// Форсит sing-box URLTest на группе (`/group/<tag>/delay`) с текущими
-  /// `pingUrl`/`pingTimeout` — теми же что в массовом пинге. После теста
-  /// sing-box обновит `now` у URLTest-группы; мы пулим свежий proxies чтобы
-  /// UI увидел выбор.
+  /// Форсит sing-box URLTest на группе (`/group/<tag>/delay`) с per-group
+  /// resolved url/timeout (§040). После теста sing-box обновит `now` у
+  /// URLTest-группы; мы пулим свежий proxies чтобы UI увидел выбор.
   Future<void> runGroupUrltest(String groupTag) async {
     final clash = _clash;
     if (clash == null || !_state.tunnelUp) return;
+    final url = pingUrlFor(groupTag);
     try {
       await clash.groupDelay(groupTag,
-          timeoutMs: pingTimeout, url: pingUrl);
-      _addDebug(DebugSource.app, 'Group URLTest done: $groupTag');
+          timeoutMs: pingTimeoutFor(groupTag), url: url);
+      _addDebug(DebugSource.app, 'Group URLTest done: $groupTag → $url');
       await reloadProxies();
     } catch (e) {
-      _addDebug(DebugSource.app, 'Group URLTest failed: $groupTag → $e');
-      _emit(_state.copyWith(lastError: 'URLTest: $e'));
+      final msg = _formatProbeError(groupTag, url, e);
+      _addDebug(DebugSource.app, msg);
+      _emit(_state.copyWith(lastError: msg));
     }
   }
 
-  Future<void> pingAllNodes() async {
+  /// Mass URLTest на всех нодах активной группы — параллельные `clash.delay`
+  /// с concurrency cap (`_pingConcurrency`). Не путать с [runGroupUrltest]
+  /// (там единый clash `/group/<tag>/delay`). Использует per-group resolved
+  /// url/timeout (§040). Повторный вызов во время running — cancel.
+  Future<void> runMassUrltest() async {
     final clash = _clash;
     if (clash == null || _state.nodes.isEmpty) return;
 
@@ -743,6 +902,13 @@ class HomeController extends ChangeNotifier {
 
     // Parallel ping with limited concurrency
     var index = 0;
+    // §040: для всех нод текущей mass-ping сессии используем per-group
+    // resolved url/timeout — снимок на старте сессии, чтобы все ноды
+    // получили одинаковый test endpoint (юзер не сменит group в середине).
+    final massPingGroup = _state.selectedGroup;
+    final massPingUrl = pingUrlFor(massPingGroup);
+    final massPingTimeout = pingTimeoutFor(massPingGroup);
+
     Future<void> worker() async {
       while (true) {
         final i = index++;
@@ -750,7 +916,7 @@ class HomeController extends ChangeNotifier {
         if (!_massPingRunning || _massPingEpoch != epoch || !_state.tunnelUp) break;
         final tag = nodes[i];
         try {
-          final ms = await clash.delay(tag, timeoutMs: pingTimeout, url: pingUrl);
+          final ms = await clash.delay(tag, timeoutMs: massPingTimeout, url: massPingUrl);
           if (_massPingEpoch != epoch) break;
           final nextDelay = Map<String, int>.from(_state.lastDelay)..[tag] = ms;
           final nextBusy = Map<String, String>.from(_state.pingBusy)..[tag] = '';
@@ -778,14 +944,18 @@ class HomeController extends ChangeNotifier {
       // Форсим URLTest на всех urltest-группах (auto и т.п.) —
       // без этого sing-box держит `now` пустым до первого interval-тика
       // (дефолт 5m). Использует pingUrl/pingTimeout из mass-ping'а.
-      unawaited(_runAllUrltestGroups());
+      unawaited(_runAllUrltestGroups(epoch));
     }
   }
 
-  Future<void> _runAllUrltestGroups() async {
+  Future<void> _runAllUrltestGroups(int epoch) async {
     final pmap = _state.proxiesJson['proxies'];
     if (pmap is! Map<String, dynamic>) return;
     for (final entry in pmap.entries) {
+      // Bug 2 fix: проверяем epoch на каждой итерации — если юзер нажал
+      // cancel пока крутятся urltest-группы, прерываемся (auto-группа была
+      // основным источником "ping продолжается" после Stop).
+      if (_massPingEpoch != epoch) return;
       final v = entry.value;
       if (v is! Map<String, dynamic>) continue;
       final type = v['type']?.toString().toLowerCase() ?? '';
@@ -798,8 +968,17 @@ class HomeController extends ChangeNotifier {
     if (!_massPingRunning) return;
     _massPingRunning = false;
     _massPingEpoch++;
+    // Прерываем in-flight delay/groupDelay HTTP-запросы — клиент закрывается,
+    // workers получают exception и завершаются (и пути для direct/auto где
+    // sing-box reusing connection pool не оставляются висеть). Без этого
+    // mass ping продолжал реально пинговать пока все timeout'ы не истекут.
+    _clash?.cancelDelays();
+    // Очищаем все pingBusy — workers которые ждут in-flight clash.delay
+    // ответ break'нутся по epoch-mismatch БЕЗ финального cleanup'а своих
+    // тегов (см. runMassUrltest worker). Без этой очистки у нод которые не
+    // успели ответить остаётся "…" indicator до следующего ping'а.
+    _emit(_state.copyWith(pingBusy: const {}));
     _addDebug(DebugSource.app, 'Mass ping cancelled');
-    notifyListeners();
   }
 
   // ---------------------------------------------------------------------------
@@ -840,12 +1019,11 @@ class HomeController extends ChangeNotifier {
 
   Future<void> _resyncOnResume() async {
     try {
-      final raw = await _vpn.getVpnStatus();
-      final native = TunnelStatus.fromNative(raw);
+      final native = await _vpn.getVpnStatus();
       if (native != _state.tunnel) {
         _addDebug(DebugSource.app,
             '[vpn] onAppResumed: divergence native=${native.name} state=${_state.tunnel.name} — re-sync');
-        _handleStatusEvent({'status': raw});
+        _handleStatusEvent(TunnelStatusEvent(status: native, raw: native.name));
       }
     } catch (e) {
       _addDebug(DebugSource.app, '[vpn] onAppResumed pull error: $e');

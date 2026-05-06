@@ -8,7 +8,7 @@ import 'package:lxbox/services/builder/rule_set_registry.dart';
 void main() {
   group('applyPresetBundles (spec §033, sealed sig)', () {
     test('активный preset регистрирует rule_set + routing rule в registry, '
-        'возвращает extra DNS данные', () {
+        'возвращает extra DNS данные (route+dns enabled)', () {
       final preset = _ruDirect();
       final rule = CustomRulePreset(
         name: 'Russian domains direct',
@@ -17,7 +17,13 @@ void main() {
       );
       final reg = RuleSetRegistry();
 
-      final result = applyPresetBundles(reg, [rule], [preset]);
+      // §033: DNS-aspect независим. Включаем для этого теста.
+      final result = applyPresetBundles(
+        reg,
+        [rule],
+        [preset],
+        isPresetDnsEnabled: const {'ru-direct': true},
+      );
 
       expect(result.warnings, isEmpty);
       expect(reg.getRuleSets().length, 1);
@@ -30,6 +36,71 @@ void main() {
       expect(result.extraDnsRules.length, 1);
       expect(result.extraDnsRules.first,
           {'rule_set': 'ru-domains', 'server': 'yandex_doh'});
+
+      // §033: dnsRulesByPresetId — авторитативный источник для applyCustomDns
+      // (по immutable presetId). labelByPresetId — для UI рендера.
+      expect(result.dnsRulesByPresetId, hasLength(1));
+      expect(result.dnsRulesByPresetId['ru-direct'],
+          {'rule_set': 'ru-domains', 'server': 'yandex_doh'});
+      expect(result.labelByPresetId['ru-direct'], 'Russian domains direct');
+    });
+
+    test('§033 independent enable: route active, dns disabled → '
+        'route emit но без DNS fragments', () {
+      final preset = _ruDirect();
+      final rule = CustomRulePreset(
+        name: 'Russian domains direct',
+        presetId: 'ru-direct',
+        varsValues: {'outbound': 'direct-out', 'dns_server': 'yandex_doh'},
+      );
+      final reg = RuleSetRegistry();
+
+      final result = applyPresetBundles(
+        reg,
+        [rule],
+        [preset],
+        // dns не enabled (default false)
+      );
+
+      // Route side активен — rule_set и routing rule зарегистрированы
+      expect(reg.getRuleSets().length, 1);
+      expect(reg.getRules().length, 1);
+
+      // DNS side НЕ активен — dns_rule и dns_servers пропущены
+      expect(result.dnsRulesByPresetId, isEmpty);
+      expect(result.extraDnsServers, isEmpty);
+    });
+
+    test('§033 independent enable: dns active, route disabled → '
+        'DNS fragments но без routing rule', () {
+      final preset = _ruDirect();
+      final rule = CustomRulePreset(
+        name: 'X',
+        presetId: 'ru-direct',
+        enabled: false, // route side выключен
+        varsValues: {'outbound': 'direct-out', 'dns_server': 'yandex_doh'},
+      );
+      final reg = RuleSetRegistry();
+
+      final result = applyPresetBundles(
+        reg,
+        [rule],
+        [preset],
+        isPresetDnsEnabled: const {'ru-direct': true},
+      );
+
+      // Route side выключен — routing rule не эмитится
+      expect(reg.getRules(), isEmpty);
+      // Но rule_set всё равно регистрируется (на него ссылается DNS rule)
+      expect(reg.getRuleSets().length, 1);
+      expect(reg.getRuleSets().first['tag'], 'ru-domains');
+
+      // DNS side активен — dns_rule и dns_servers эмитятся
+      expect(result.dnsRulesByPresetId, hasLength(1));
+      expect(result.dnsRulesByPresetId['ru-direct'],
+          {'rule_set': 'ru-domains', 'server': 'yandex_doh'});
+      expect(result.extraDnsServers.length, 1);
+      expect(result.extraDnsServers.first['tag'], 'yandex_doh');
     });
 
     test('broken preset (presetId не найден) → warning + skip', () {
