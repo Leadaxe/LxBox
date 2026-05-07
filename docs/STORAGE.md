@@ -1,0 +1,382 @@
+# Persistent Storage
+
+Полная схема того, что L×Box хранит на диске между запусками. Документ — источник правды для shape'а файлов и migration history. `ARCHITECTURE.md` ссылается сюда.
+
+## Disk layout
+
+Все пути — относительно **Android internal documents directory** (`getApplicationDocumentsDirectory()`). На устройстве этот каталог недоступен без root или Debug API (`GET /state/storage`).
+
+```
+getApplicationDocumentsDirectory()/
+├── lxbox_settings.json
+├── singbox_config.json
+├── http_cache/
+│   ├── <sha1(url)>.body
+│   └── <sha1(url)>.headers
+├── rule_sets/
+│   └── <tag>.srs
+├── applog.txt
+└── corelog.txt
+
+Android SharedPreferences:
+├── Flutter prefs                # app_theme_mode, haptic_enabled, …
+└── boxvpn_boot.*                # pre-Flutter boot flags
+```
+
+| Файл / каталог | Кто пишет | Что внутри | Спека |
+|---|---|---|---|
+| `lxbox_settings.json` | `SettingsStorage` (Dart) | App settings, vars, server lists, custom rules, DNS, ping. **Главный файл этого документа.** | — |
+| `singbox_config.json` | `ConfigManager` (Kotlin) | Финальный sing-box JSON, скармливаемый libbox. Перегенерируется на каждый `buildConfig`. Не входит в backup. | — |
+| `http_cache/<sha1(url)>.body` + `.headers` | `HttpCache` (Dart) | Сырое тело + headers подписки для offline-rehydrate на старте. | [§027] |
+| `rule_sets/<tag>.srs` | `RuleSetDownloader` (Dart) | Кэш бинарных `.srs` rule-set файлов. | [§011] |
+| `applog.txt` | `AppLog` (Dart) | App-side warn/error лог, JSON-lines, ring-buffer 200 строк / 64 KB. | [§038], [§043][043-applog] |
+| `corelog.txt` | `AppLog` (Dart) | Sing-box warn/error лог. Сообщения приходят в Dart через `ClashLogPump` (HTTP stream от Clash API libbox'а), затем `AppLog.add(source: core)` пишет их сюда тем же ring-buffer-механизмом, что и `applog.txt`. 200 строк / 64 KB. | [§043][043-applog] |
+| Android `SharedPreferences` | Kotlin (`BoxApplication`) + Flutter (`shared_preferences`) | Pre-Flutter boot flags + UI prefs. См. раздел [«SharedPreferences»](#sharedpreferences-android) ниже. | — |
+
+---
+
+## `lxbox_settings.json` — top-level
+
+```jsonc
+{
+  "vars":               { … },     // Map<String,String>
+  "server_lists":       [ … ],     // subscription / user
+  "custom_rules":       [ … ],     // sealed: inline / srs / preset
+  "dns_options":        { … },     // rules + servers
+  "ping_options":       { … },
+  "route_final":        "<tag>",   // override route.final
+  "excluded_nodes":     [ … ],     // tags выкинутые юзером из mass-ping
+  "enabled_groups":     [ … ],     // включённые preset-группы (selector membership)
+  "last_global_update": "ISO-8601",// последняя auto-refresh подписок
+  "presets_migrated":   true,      // one-shot guard (legacy → custom_rules)
+
+  // Legacy — мигрируются и обнуляются на первом чтении.
+  "enabled_rules":      [],
+  "rule_outbounds":     {}
+}
+```
+
+Кэш в памяти: `SettingsStorage._cache` (lazy-loaded). Запись atomic'ом через `JsonEncoder.withIndent('  ')`. На каждом `_save()` удаляются легаси-ключи `node_overrides` и `show_detour_servers`.
+
+Per-key спеки и shape — в разделах ниже.
+
+---
+
+## `vars` — template-vars + app flags
+
+Плоский `Map<String, String>` (значения toString'ятся при чтении). Используется и для **template-substitution** (любое `@name` в `wizard_template.json` подставляется отсюда), и для **app feature-flags** (debug/auto-update/UI).
+
+### Известные ключи
+
+| Ключ | Default | Спека | Что делает |
+|---|---|---|---|
+| `auto_update_subs` | `'true'` | [§027] | Global gate auto-refresh подписок. Manual всегда работает. |
+| `auto_check_updates` | `'true'` | [§036] | GitHub Releases polling на старте. |
+| `last_update_check_at` | `''` | [§036] | UTC ISO-8601, last polling timestamp. |
+| `last_known_version` | `''` | [§036] | Закэшированный latest tag. |
+| `dismissed_update_version` | `''` | [§036] | Тег, который юзер закрыл — снэкбар не показываем пока не сменится. |
+| `config_locked_for_debug` | `'false'` | [§037] | `generateConfig()` возвращает null silently. Юзер пинит свой config через `PUT /config`. |
+| `debug_enabled` | `'false'` | [§031] | Debug API server runtime toggle. |
+| `debug_token` | `''` | [§031] | Bearer token для всех `/api/*`. |
+| `debug_port` | `'9269'` | [§031] | TCP-порт. Range 1024–49151. |
+| `dns_final` | template | [§043][043-dns] | Финальный DNS-резолвер (`cloudflare_udp` / `google_udp` / `local_dns_resolver` / `yandex_udp` / любой tag из `dns_options.servers`). |
+| `<custom>` | — | — | Любые юзерские template-vars, выставленные через UI / `PUT /settings/vars/<key>`. |
+
+`removeVar(k)` ≠ `setVar(k, '')` — пустая строка может быть legitimate value, отсутствие ключа возвращает default.
+
+---
+
+## `server_lists` — [§033] (v2)
+
+Список источников нод. Был `proxy_sources` (v1) — мигрирует one-shot через `migrateProxySources` при первом чтении.
+
+Sealed по полю `type`:
+
+### `type: "subscription"` — `SubscriptionServers`
+
+```jsonc
+{
+  "type":                  "subscription",
+  "id":                    "<uuid>",          // стабильный
+  "name":                  "<display>",
+  "enabled":               true,
+  "tag_prefix":            "<str>",           // префикс для node tags при сборке
+  "detour_policy":         { … },             // см. ниже
+  "url":                   "https://…",
+  "meta":                  { … }?,            // SubscriptionMeta — HTTP-headers
+  "last_updated":          "ISO-8601"?,       // успех
+  "last_update_attempt":   "ISO-8601"?,       // любая попытка
+  "last_update_status":    "never|ok|failed|inProgress",
+  "update_interval_hours": 24,
+  "last_node_count":       0,
+  "consecutive_fails":     0                  // для UI "(N fails)"; freezing — in-memory
+}
+```
+
+### `type: "user"` — `UserServer`
+
+```jsonc
+{
+  "type":          "user",
+  "id":            "<uuid>",
+  "name":          "<display>",
+  "enabled":       true,
+  "tag_prefix":    "<str>",
+  "detour_policy": { … },
+  "origin":        "paste|file|qr|manual",
+  "created_at":    "ISO-8601",
+  "raw_body":      "<original input>"         // для reparse при багах
+}
+```
+
+### `detour_policy` (общий)
+
+```jsonc
+{
+  "register_detour_servers":  false,
+  "register_detour_in_auto":  false,
+  "use_detour_servers":       true,
+  "override_detour":          ""               // '' = no override
+}
+```
+
+### `meta` (опционально)
+
+Из HTTP-headers подписки ([§027]):
+
+```jsonc
+{
+  "upload_bytes":          0,
+  "download_bytes":        0,
+  "total_bytes":           0,
+  "expire_timestamp":      <unix>?,
+  "support_url":           "…"?,
+  "web_page_url":          "…"?,
+  "profile_title":         "…"?,
+  "update_interval_hours": 24?
+}
+```
+
+`nodes` массив **не хранится** — реконструируется из `raw_body` (для `user`) или из `http_cache/` (для `subscription`) на старте.
+
+---
+
+## `custom_rules` — [§030] sealed (inline / srs / preset)
+
+Дискриминатор `kind`. Backward-compat: если в JSON нет `kind`, читается как `inline`.
+
+### `kind: "inline"` — `CustomRuleInline`
+
+```jsonc
+{
+  "kind":           "inline",
+  "id":             "<uuid>",
+  "name":           "<display>",
+  "enabled":        true,
+  "domains":        [ … ]?,        // OR-группа #1
+  "domainSuffixes": [ … ]?,
+  "domainKeywords": [ … ]?,
+  "ipCidrs":        [ … ]?,
+  "ports":          [ … ]?,        // OR-группа #2: "443"
+  "portRanges":     [ … ]?,        //              "8000:9000", ":3000", "4000:"
+  "packages":       [ … ]?,        // OR-группа #3
+  "protocols":      [ … ]?,        // routing-rule level (subset of kKnownProtocols)
+  "ipIsPrivate":    true?,         // routing-rule level
+  "outbound":       "<tag>"        // или "reject" (sentinel → action: reject)
+}
+```
+
+`name` — пользовательский, mutable.
+
+OR-семантика внутри category, AND между. `protocols` и `ipIsPrivate` не headless'ятся, выносятся в routing-rule level.
+
+### `kind: "srs"` — `CustomRuleSrs`
+
+```jsonc
+{
+  "kind":        "srs",
+  "id":          "<uuid>",
+  "name":        "<display>",
+  "enabled":     true,
+  "srsUrl":      "https://…/something.srs",
+  "ports":       [ … ]?,          // routing-rule-level доп-фильтры
+  "portRanges":  [ … ]?,
+  "packages":    [ … ]?,
+  "protocols":   [ … ]?,
+  "ipIsPrivate": true?,
+  "outbound":    "<tag>"
+}
+```
+
+Сам бинарь `.srs` лежит отдельно в `rule_sets/<tag>.srs` (см. [таблицу файлов](#disk-layout) выше).
+
+### `kind: "preset"` — `CustomRulePreset`
+
+```jsonc
+{
+  "kind":       "preset",
+  "id":         "<uuid>",
+  "name":       "<display, snapshot of preset.label>",
+  "enabled":    true,
+  "presetId":   "<id from template>",
+  "varsValues": { "<varName>": "<value>", "outbound": "<tag>" }?
+}
+```
+
+`name` — read-only в UI (🔒), периодически синхронизируется с `preset.label` из шаблона. Содержимое разворачивается на каждом `buildConfig` через `expandPreset` ([§033]). `outbound` хранится в `varsValues['outbound']` как universal override ([§033] Expansion §5).
+
+### Backward-compat
+
+- Поле `target` (до v1.4.1) → `outbound`. Читается обоими названиями.
+- `kind` отсутствует → `inline` (read-path).
+- Отдельный legacy-ключ `app_rules` (отдельная таба до v1.3.2) → one-shot absorb в `custom_rules` с `packages` через `_absorbLegacyAppRules`. Старый ключ удаляется.
+
+---
+
+## `dns_options` — [§041] (rules) + [§043][043-dns] + [§044] (servers)
+
+```jsonc
+{
+  "servers":     [ <ServerRef>, … ],
+  "rules":       [ <RuleRef>,   … ],
+  "rules_json":  "<deprecated>"
+}
+```
+
+### `dns_options.servers[i]` — kind-discriminated ref ([§044])
+
+```jsonc
+{
+  "kind":        "template" | "preset" | "inline",
+  "enabled":     <bool>,
+  "tag":         "<string>",        // SINGLE source of truth, не дублируется в body
+  "description": "<string>"?,        // optional override; для inline — primary
+  "body":        { … }?              // только inline; partial sing-box server БЕЗ tag/description/enabled
+}
+```
+
+**Семантика kind:**
+
+- `template` — ссылка на сервер из шаблона. Юзер может оверрайднуть `enabled` / `description`, body берётся из шаблона.
+- `preset` — то же, но из активного preset-bundle (`server_lists` тут не при чём, имеется в виду template preset).
+- `inline` — пользовательский сервер. `body` обязателен. Если tag совпадает с template/preset И shape матчится → builder может схлопнуть в `template`/`preset` ref (см. `_serverShapesMatch`).
+
+**Render order в UI:** `template` → `preset` → `inline` (сорт по `ServerKind.index`, stable внутри группы).
+
+**Builder** синтезирует `body.tag` обратно при сборке финального sing-box-конфига. В storage tag живёт **только** на ref-level.
+
+### `dns_options.rules[i]` — [§041]
+
+```jsonc
+{
+  "enabled": <bool>,
+  "type":    "user" | "template" | "rule",
+  "title":   "<display>",
+  "rule":    { … }?                  // sing-box rule body, для type=user
+}
+```
+
+`type` — origin-discriminator (предшественник [§044] `kind`, исторически другое слово).
+
+`type: template/rule` — orphan-cleanup: title не нашёлся в активном шаблоне/пресете → выбрасывается в `resolveDnsRulesList`.
+
+### Migration history
+
+- v1.5.x: `dns_options.rules_json` — single JSON-string (`@Deprecated`). Сейчас игнорится; поле остаётся на диске для downgrade-friendliness.
+- v1.6.0 ([§041]): `dns_options.rules[]` — структурированный список с `type`/`enabled`/`title`/`rule`.
+- v1.6.0 ([§043][043-dns]): `dns_options.servers[]` — kind-refs впервые. Tag/description/enabled тогда жили в `body`.
+- v1.6.1 ([§044]): `dns_options.servers[]` — clean schema. Tag/description/enabled подняты на ref-level. Underscore-аннотации (`_kind`, `_overrides`, `_origin`, `_preset_label`) удалены. Builder синтезирует tag в body. One-shot migration в `_migrateLegacyDnsServers`.
+
+---
+
+## `ping_options` — [§040]
+
+```jsonc
+{
+  "url":        "https://…",          // global default URL
+  "timeout_ms": <int>,                 // global default timeout
+  "presets":   [ … ],                  // pre-built URL-options (template-side)
+  "groups": {                          // per-group override (опционально)
+    "<groupTag>": {
+      "url":        "…"?,
+      "timeout_ms": <int>?
+    }
+  }
+}
+```
+
+Resolve chain в `HomeController`: `groups[tag]` → root → template default.
+
+CRUD-helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clearGroupPing`. Все — sugared над `getPingOptions`/`savePingOptions` (которые перетирают целиком).
+
+---
+
+## Прочие top-level ключи
+
+| Ключ | Тип | Назначение |
+|---|---|---|
+| `route_final` | `String` | Override `route.final` поверх template (выбранный default outbound). `''` = template-default. |
+| `excluded_nodes` | `List<String>` | Node tags выкинутые юзером — пропускаются в group resolve и mass-ping. |
+| `enabled_groups` | `List<String>` | Включённые preset-группы (selector membership). |
+| `last_global_update` | `String` (ISO-8601) | Timestamp последнего успешного auto-refresh всех подписок. |
+| `presets_migrated` | `bool` | One-shot guard для legacy-миграции `enabled_rules + rule_outbounds → custom_rules`. После одного прохода `RoutingScreen._load` ставит true. |
+
+---
+
+## Legacy / удалённые ключи
+
+| Ключ | Жил | Замена | Migration |
+|---|---|---|---|
+| `proxy_sources` | до v1.3.x | `server_lists` ([§033]) | `migrateProxySources` — one-shot, удаляется после конверсии. |
+| `app_rules` | до v1.3.2 | `custom_rules` (kind=inline, c `packages`) — [§030] | `_absorbLegacyAppRules` — one-shot, удаляется. |
+| `enabled_rules` | до [§030] | `custom_rules` | One-shot в `RoutingScreen._load`, обнуляется (`saveEnabledRules({})`). Гард: `presets_migrated`. |
+| `rule_outbounds` | до v1.3.2 | `custom_rules.outbound` (или `varsValues.outbound` для preset) | См. выше, обнуляется (`saveRuleOutbounds({})`). |
+| `dns_options.rules_json` | [§041] (intermediate) | `dns_options.rules[]` | Поле остаётся для downgrade-friendliness, builder/UI больше не читают. |
+| `node_overrides` | удалённое | — | Удаляется на каждом `_save()`. |
+| `show_detour_servers` | удалённое | — | Удаляется на каждом `_save()`. |
+
+---
+
+## SharedPreferences (Android)
+
+Не часть `lxbox_settings.json`. Используется для двух категорий: **pre-Flutter boot flags** (читаются в `BoxApplication.initialize()` до того, как Flutter engine стартует) и **UI prefs** через `shared_preferences`-плагин.
+
+| Ключ | Тип | Источник | Спека | Назначение |
+|---|---|---|---|---|
+| `app_theme_mode` | `"system"` / `"light"` / `"dark"` | Flutter | — | UI theme. |
+| `haptic_enabled` | `"true"` / `"false"` | Flutter | [§029] | Haptic feedback toggle. |
+| `boxvpn_boot.auto_start_vpn` | `Boolean` | Kotlin | — | Auto-start VPN на boot (если разрешено). |
+| `boxvpn_boot.keep_vpn_on_exit` | `Boolean` | Kotlin | — | Не глушить tun при swipe-kill app. |
+| `boxvpn_boot.background_mode` | `String` | Kotlin | — | Foreground-service режим. |
+| `boxvpn_boot.core_logs_enabled` | `Boolean` | Kotlin | [§043][043-applog] | Читается в `BoxApplication.initialize()` ДО Flutter, поэтому здесь, а не в `lxbox_settings.json`. |
+
+---
+
+## Debug API exposure
+
+`SettingsStorage.dumpCache()` возвращает deep-copy всего `_cache`. `GET /state/storage` ([§031]) использует через сериализатор `services/debug/serializers/storage.dart`, который **фильтрует по allow-list** — чтобы не утекли:
+
+- `vars.debug_token`
+- subscription URLs (`server_lists[].url`)
+- `meta.support_url` / `meta.web_page_url`
+
+См. конкретный allow-list в `serializers/storage.dart`. Любое новое sensitive-поле — добавлять в фильтр.
+
+`PUT /settings/dns_options/servers` принимает три исторических формата (legacy pre-[§043][043-dns], [§043][043-dns] и [§044]) — миграция происходит на следующий `resolveDnsServersList`. См. [`api/debug-api-reference.md`](./api/debug-api-reference.md).
+
+---
+
+[§011]: ./spec/features/011%20local%20ruleset%20cache/spec.md
+[§027]: ./spec/features/027%20subscription%20auto%20update/spec.md
+[§029]: ./spec/features/029%20haptic%20feedback/spec.md
+[§030]: ./spec/features/030%20custom%20routing%20rules/spec.md
+[§031]: ./spec/features/031%20debug%20api/spec.md
+[§033]: ./spec/features/033%20preset%20bundles/spec.md
+[§036]: ./spec/features/036%20update%20check/spec.md
+[§037]: ./spec/tasks/037-debug-api-write-config-and-lock-rebuild.md
+[§038]: ./spec/features/038%20crash%20diagnostics/spec.md
+[§040]: ./spec/tasks/040-per-group-ping-test-settings.md
+[§041]: ./spec/features/041%20dns%20rules%20refactor/spec.md
+[§044]: ./spec/tasks/044-dns-servers-clean-schema.md
+[043-applog]: ./spec/features/043%20applog%20per-source%20quotas/spec.md
+[043-dns]: ./spec/tasks/043-dns-servers-refs-by-kind.md

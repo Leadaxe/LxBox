@@ -34,15 +34,22 @@ class DnsSettingsScreen extends StatefulWidget {
 }
 
 class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
-  /// Storage-backed servers list (user-edited + first-time template defaults).
-  /// Каждый элемент имеет `tag` — мы используем его для определения source
-  /// при render'е (template-tag в `_templateServerTags` → 'from template',
-  /// иначе 'user').
+  /// §043: kind-discriminated refs (резолвер `resolveDnsServersList`):
+  /// - `{enabled, kind: 'inline',   tag, body}` — user-defined OR override
+  /// - `{enabled, kind: 'template', tag}`        — ref на template-server
+  /// - `{enabled, kind: 'preset',   tag}`        — ref на active preset's server
+  ///
+  /// Body для `template`/`preset` берётся из [_templateByTag] / [_presetServersByTag]
+  /// в [_displayedServers] / [_resolveBody].
   List<Map<String, dynamic>> _servers = [];
 
-  /// Tags серверов которые присутствуют в текущем шаблоне (`dns_options.servers`).
-  /// Server в `_servers` с tag из этого set'а помечается как 'from template'.
-  Set<String> _templateServerTags = {};
+  /// §043: Tag → template-server map. Lookup canonical body для
+  /// `kind: template` ref'ов и для override-detection.
+  Map<String, Map<String, dynamic>> _templateByTag = {};
+
+  /// §043: Tag → preset-server map. Lookup canonical body для `kind: preset`
+  /// ref'ов и для override-detection. preset > template на tag-collision.
+  Map<String, Map<String, dynamic>> _presetServersByTag = {};
 
   /// §041 + §032: structured rules list `{enabled, kind, title?, presetId?, rule?}`.
   List<Map<String, dynamic>> _rules = [];
@@ -60,9 +67,6 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
   /// Live lookup: storage хранит presetId, UI отображает текущий label.
   Map<String, String> _presetLabelByPresetId = {};
 
-  /// Preset-injected DNS-серверы. Stored as `[{tag, ..., _preset_label: '...'}]`
-  /// per server для отрисовки read-only плитки с подписью пресета.
-  List<Map<String, dynamic>> _presetServersWithLabel = [];
 
   bool _loading = true;
   Timer? _saveTimer;
@@ -85,7 +89,6 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
 
   Future<void> _load() async {
     final template = await TemplateLoader.load();
-    final userServers = await SettingsStorage.getDnsServers();
     final vars = await SettingsStorage.getAllVars();
 
     // Parse dns_options from template
@@ -98,8 +101,13 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
         .whereType<Map<String, dynamic>>()
         .toList();
 
-    // Merge: if user has saved servers, use those; otherwise use template defaults
-    final servers = userServers.isNotEmpty ? userServers : templateServersRaw;
+    // §043: storage хранит kind-discriminated refs (симметрия с DNS rules).
+    // Resolver делает auto-discovery + orphan cleanup + legacy migration.
+    final templateByTag = <String, Map<String, dynamic>>{
+      for (final s in templateServersRaw)
+        if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
+          s['tag'] as String: s,
+    };
 
     // §033: build template rules map by name
     final templateRulesByName = <String, Map<String, dynamic>>{
@@ -147,13 +155,6 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
       }
     }
 
-    // Tags серверов из текущего шаблона — для badge определения.
-    final templateServerTags = <String>{
-      for (final s in templateServersRaw)
-        if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
-          s['tag'] as String,
-    };
-
     // §033: resolve current rules list (auto-discover + orphan cleanup +
     // persist if changed). Single source of truth shared with builder.
     final resolvedRules = await resolveDnsRulesList(
@@ -161,11 +162,23 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
       activePresetIdsWithDnsRule: activePresetIdsWithDnsRule,
     );
 
+    // §043: resolve servers refs list (legacy migration → kind-refs;
+    // auto-discovery template+preset; orphan cleanup; persist if changed).
+    final presetServersByTag = <String, Map<String, dynamic>>{
+      for (final s in presetServersWithLabel)
+        if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
+          s['tag'] as String: s,
+    };
+    final resolvedServers = await resolveDnsServersList(
+      templateServers: templateServersRaw,
+      presetServersByTag: presetServersByTag,
+    );
+
     if (mounted) {
       setState(() {
-        _servers = servers;
-        _templateServerTags = templateServerTags;
-        _presetServersWithLabel = presetServersWithLabel;
+        _servers = resolvedServers;
+        _templateByTag = templateByTag;
+        _presetServersByTag = presetServersByTag;
         _rules = resolvedRules;
         _templateRulesByName = templateRulesByName;
         _presetRulesByPresetId = presetRulesByPresetId;
@@ -222,88 +235,287 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
     }
   }
 
+  /// §044: render list — typed `ResolvedServer` для каждой ref-записи.
+  ///
+  /// Single source of truth для полей:
+  /// - `tag` — из ref'а (синтезируется в body для display)
+  /// - `description` — из ref'а если переопределён, иначе из canonical
+  /// - `enabled` — из ref'а
+  /// - `body` — для inline это `ref.body` + injected tag; для template/preset —
+  ///   canonical lookup + strip meta + injected tag
+  ///
+  /// `kind` / `overrides` / `presetLabel` — typed accessors на `ResolvedServer`.
+  List<ResolvedServer> get _displayedServers {
+    final out = <ResolvedServer>[];
+    for (final ref in _servers) {
+      final kindStr = ref['kind']?.toString();
+      final tag = ref['tag']?.toString();
+      if (kindStr == null || tag == null || tag.isEmpty) continue;
+      final kind = ServerKind.tryParse(kindStr);
+      if (kind == null) continue;
+
+      Map<String, dynamic>? body;
+      ServerKind? overrides;
+      String? presetLabel;
+      String? canonicalDescription;
+
+      if (kind == ServerKind.inline) {
+        final b = ref['body'];
+        body = b is Map ? Map<String, dynamic>.from(b) : <String, dynamic>{};
+        // Override-detection (preset wins over template).
+        if (_presetServersByTag.containsKey(tag)) {
+          overrides = ServerKind.preset;
+          final p = _presetServersByTag[tag]!;
+          presetLabel = p['_preset_label']?.toString();
+          canonicalDescription = p['description']?.toString();
+        } else if (_templateByTag.containsKey(tag)) {
+          overrides = ServerKind.template;
+          canonicalDescription = _templateByTag[tag]?['description']?.toString();
+        }
+      } else if (kind == ServerKind.preset) {
+        final p = _presetServersByTag[tag];
+        if (p == null) continue; // orphan
+        body = Map<String, dynamic>.from(p)..remove('_preset_label');
+        presetLabel = p['_preset_label']?.toString();
+        canonicalDescription = p['description']?.toString();
+      } else if (kind == ServerKind.template) {
+        final t = _templateByTag[tag];
+        if (t == null) continue; // orphan
+        body = Map<String, dynamic>.from(t);
+        canonicalDescription = t['description']?.toString();
+      }
+
+      // Synthesize tag в body (single source of truth — ref.tag).
+      // Strip meta (description/enabled из canonical body не нужны).
+      body!
+        ..['tag'] = tag
+        ..remove('description')
+        ..remove('enabled');
+
+      // Resolved description: ref.description если есть; иначе canonical's.
+      final refDesc = ref['description']?.toString();
+      final description = (refDesc != null && refDesc.isNotEmpty)
+          ? refDesc
+          : (canonicalDescription ?? '');
+
+      out.add(ResolvedServer(
+        kind: kind,
+        tag: tag,
+        description: description,
+        enabled: ref['enabled'] != false,
+        body: body,
+        overrides: overrides,
+        presetLabel: presetLabel,
+      ));
+    }
+    // §044: render-order — template → preset → inline (см. ServerKind enum).
+    // Stable sort: внутри каждой группы insertion-order сохраняется.
+    out.sort((a, b) => a.kind.index.compareTo(b.kind.index));
+    return out;
+  }
+
+  /// Tags доступные в dropdown'ах (DNS Final / Default Resolver / per-rule).
+  /// Filter `enabled` на ref-level.
   List<String> get _enabledServerTags {
-    // §041 + §033: dropdown'ы (DNS Final / Default Domain Resolver / на rule'ах)
-    // должны видеть теги из ВСЕХ источников DNS-серверов:
-    //   1) user-saved или template-default servers (`_servers`),
-    //   2) preset-expanded servers активных custom_rules.kind:preset
-    //      (`_presetServersWithLabel`, e.g. yandex_udp от ru-direct).
-    // Дедуп через Set: tag-collisions разрешаются на build'е (first-wins),
-    // здесь просто показываем что доступно.
-    final tags = <String>{};
-    for (final s in _servers) {
-      if (s['enabled'] == false) continue;
-      final t = s['tag']?.toString();
-      if (t != null && t.isNotEmpty) tags.add(t);
+    final out = <String>[];
+    for (final s in _displayedServers) {
+      if (!s.enabled) continue;
+      if (s.tag.isEmpty) continue;
+      out.add(s.tag);
     }
-    for (final s in _presetServersWithLabel) {
-      if (s['enabled'] == false) continue;
-      final t = s['tag']?.toString();
-      if (t != null && t.isNotEmpty) tags.add(t);
-    }
-    return tags.toList();
+    return out;
   }
 
+  /// §043: Reset inline-override обратно к canonical (template/preset).
+  /// Меняет ref kind с `inline` на `template`/`preset`, body убирается.
+  /// Если у tag'а нет canonical — это pure user, не reset а delete (отдельная action).
+  void _resetServerToCanonical(String tag) {
+    final idx = _servers.indexWhere((s) => s['tag'] == tag);
+    if (idx < 0) return;
+    final ref = _servers[idx];
+    if (ref['kind'] != 'inline') return; // только inline можно reset'нуть
+    String? newKind;
+    if (_presetServersByTag.containsKey(tag)) {
+      newKind = 'preset';
+    } else if (_templateByTag.containsKey(tag)) {
+      newKind = 'template';
+    }
+    if (newKind == null) return; // нечего reset'ить — pure user
+    setState(() {
+      _servers[idx] = {
+        'enabled': ref['enabled'] != false,
+        'kind': newKind!,
+        'tag': tag,
+      };
+      _scheduleSave();
+    });
+  }
+
+  /// §044: Add new inline server. Открывает editor с 3 input'ами + body
+  /// без tag/description/enabled. На save создаёт kind:inline ref.
   void _addServer() {
-    _showServerJsonEditor(-1);
+    _showServerEditor(
+      title: 'Add DNS Server',
+      initialTag: 'dns_new',
+      lockedTag: false,
+      initialDescription: 'My DNS',
+      initialEnabled: true,
+      initialBody: <String, dynamic>{
+        'type': 'udp',
+        'server': '1.1.1.1',
+        'server_port': 53,
+      },
+      onSave: (savedTag, savedDescription, savedEnabled, savedBody) {
+        // Tag conflict: replace existing (юзер явно ввёл tag).
+        setState(() {
+          _servers.removeWhere((s) => s['tag'] == savedTag);
+          _servers.add({
+            'enabled': savedEnabled,
+            'kind': 'inline',
+            'tag': savedTag,
+            if (savedDescription.isNotEmpty) 'description': savedDescription,
+            'body': savedBody,
+          });
+          _scheduleSave();
+        });
+      },
+    );
   }
 
-  void _showServerJsonEditor(int index) {
-    final isNew = index < 0;
-    final json = isNew
-        ? '{\n  "type": "udp",\n  "tag": "dns_new",\n  "server": "1.1.1.1",\n  "server_port": 53,\n  "description": "My DNS",\n  "enabled": true\n}'
-        : const JsonEncoder.withIndent('  ').convert(_servers[index]);
-    final ctrl = TextEditingController(text: json);
+  /// §044: универсальный editor для DNS-server entry. Три явных input'а
+  /// (tag / description / enabled) + body JSON (sing-box body **без**
+  /// tag/description/enabled — они на ref-level).
+  ///
+  /// Validation на save:
+  /// - tag непустой
+  /// - если `lockedTag: true` — tag не редактируем (read-only input)
+  /// - body — валидный JSON object; auto-strip tag/description/enabled
+  ///   если случайно оставлены
+  void _showServerEditor({
+    required String title,
+    required String initialTag,
+    required bool lockedTag,
+    required String initialDescription,
+    required bool initialEnabled,
+    required Map<String, dynamic> initialBody,
+    required void Function(
+      String tag,
+      String description,
+      bool enabled,
+      Map<String, dynamic> body,
+    ) onSave,
+  }) {
+    final tagCtrl = TextEditingController(text: initialTag);
+    final descCtrl = TextEditingController(text: initialDescription);
+    final bodyCtrl = TextEditingController(
+      text: const JsonEncoder.withIndent('  ').convert(initialBody),
+    );
+    var enabled = initialEnabled;
 
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(isNew ? 'Add DNS Server' : 'Edit DNS Server', style: Theme.of(ctx).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 200,
-              child: TextField(
-                controller: ctrl,
-                maxLines: null,
-                expands: true,
-                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+              16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(title, style: Theme.of(ctx).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              TextField(
+                controller: tagCtrl,
+                readOnly: lockedTag,
+                decoration: InputDecoration(
+                  labelText: 'Tag',
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                  helperText: lockedTag ? 'Tag locked while editing' : null,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: () {
-                try {
-                  final obj = jsonDecode(ctrl.text) as Map<String, dynamic>;
-                  if ((obj['tag']?.toString() ?? '').isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tag is required')));
+              const SizedBox(height: 8),
+              TextField(
+                controller: descCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Enabled'),
+                value: enabled,
+                onChanged: (v) => setSheetState(() => enabled = v),
+              ),
+              const SizedBox(height: 8),
+              const Text('Body (sing-box JSON)',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 4),
+              SizedBox(
+                height: 180,
+                child: TextField(
+                  controller: bodyCtrl,
+                  maxLines: null,
+                  expands: true,
+                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () {
+                  final tag = tagCtrl.text.trim();
+                  if (tag.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Tag is required')));
                     return;
                   }
-                  Navigator.pop(ctx);
-                  setState(() {
-                    if (isNew) {
-                      _servers.add(obj);
-                    } else {
-                      _servers[index] = obj;
+                  Map<String, dynamic> body;
+                  try {
+                    final parsed = jsonDecode(bodyCtrl.text);
+                    if (parsed is! Map<String, dynamic>) {
+                      throw const FormatException(
+                          'Body must be a JSON object');
                     }
-                    _scheduleSave();
-                  });
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Invalid JSON: ${formatUserError(e)}')));
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
+                    body = parsed;
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content:
+                            Text('Invalid body JSON: ${formatUserError(e)}')));
+                    return;
+                  }
+                  // §044: tag/description/enabled — на ref-level. Если юзер
+                  // случайно оставил их в body — silently strip (warn'ить
+                  // не будем, тривиально).
+                  body
+                    ..remove('tag')
+                    ..remove('description')
+                    ..remove('enabled')
+                    ..remove('_origin')
+                    ..remove('_kind')
+                    ..remove('_overrides')
+                    ..remove('_preset_label');
+                  Navigator.pop(ctx);
+                  onSave(tag, descCtrl.text.trim(), enabled, body);
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
         ),
       ),
-    ).then((_) => ctrl.dispose());
+    ).then((_) {
+      tagCtrl.dispose();
+      descCtrl.dispose();
+      bodyCtrl.dispose();
+    });
   }
 
   void _addUserRule() => _showUserRuleEditor(-1);
@@ -439,8 +651,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
             ],
           ),
           const SizedBox(height: 4),
-          ...List.generate(_servers.length, _buildServerTile),
-          ..._presetServersWithLabel.map(_buildPresetServerTile),
+          // §042: единый render через 3-tier merged list. Builder сам
+          // определяет UI поведение по `_origin` annotation.
+          ..._displayedServers.map(_buildMergedServerTile),
 
           const Divider(height: 32),
 
@@ -540,121 +753,171 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
     );
   }
 
-  Widget _buildServerTile(int index) {
-    final server = _servers[index];
-    final tag = server['tag']?.toString() ?? '';
-    final type = server['type']?.toString() ?? '';
-    final addr = server['server']?.toString() ?? '';
-    final desc = server['description']?.toString() ?? '';
-    final enabled = server['enabled'] != false;
+  /// §044: единый builder через typed `ResolvedServer`. Никаких Map['_kind'] —
+  /// classification через typed accessors на ResolvedServer.
+  ///
+  /// - `kind: template` — badge `Template`, edit (copy-on-write) + switch
+  /// - `kind: preset`   — badge `Preset` (subtitle с preset-label), edit + switch
+  /// - `kind: inline` + `overrides != null` — badge `Overridden`, edit + reset (↺)
+  /// - `kind: inline` + `overrides == null` — badge `User`, edit + delete (🗑)
+  Widget _buildMergedServerTile(ResolvedServer entry) {
+    final type = entry.body['type']?.toString() ?? '';
+    final addr = entry.body['server']?.toString() ?? '';
     final theme = Theme.of(context);
 
-    // §041: badge — `from template` если tag совпадает с template-server tag,
-    // иначе `user`. Preset-injected серверы рисуются отдельной плиткой
-    // через `_buildPresetServerTile`.
-    final isFromTemplate = _templateServerTags.contains(tag);
-    final badgeText = isFromTemplate ? 'from template' : 'user';
-    final badgeColor =
-        isFromTemplate ? theme.colorScheme.tertiary : theme.colorScheme.secondary;
+    // Короткие labels (§044).
+    final (String badgeText, Color badgeColor) = switch (entry.kind) {
+      ServerKind.template => ('Template', theme.colorScheme.tertiary),
+      ServerKind.preset => ('Preset', theme.colorScheme.primary),
+      ServerKind.inline => entry.isOverridden
+          ? ('Overridden', theme.colorScheme.error.withValues(alpha: 0.9))
+          : ('User', theme.colorScheme.secondary),
+    };
 
     return Card(
       child: ListTile(
-        onTap: () => _showServerBodyDialog(server,
-            title: desc.isNotEmpty ? desc : tag, sourceLabel: badgeText),
+        onTap: () => _showServerBodyDialog(entry),
         leading: SizedBox(
           width: 40,
           child: Switch(
-            value: enabled,
-            onChanged: (v) {
-              setState(() {
-                _servers[index] = Map<String, dynamic>.from(server)..['enabled'] = v;
-                _scheduleSave();
-              });
-            },
+            value: entry.enabled,
+            onChanged: (v) => _toggleServerEnabled(entry.tag, v),
           ),
         ),
         title: Text(
-          desc.isNotEmpty ? desc : tag,
+          entry.description.isNotEmpty ? entry.description : entry.tag,
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: enabled ? null : theme.colorScheme.onSurfaceVariant,
+            color: entry.enabled ? null : theme.colorScheme.onSurfaceVariant,
           ),
         ),
         subtitle: Text(
-          '$tag · $type${addr.isNotEmpty ? ' · $addr' : ''}',
+          '${entry.tag} · $type${addr.isNotEmpty ? ' · $addr' : ''}'
+          '${entry.presetLabel != null && entry.presetLabel!.isNotEmpty ? ' · ${entry.presetLabel}' : ''}',
           style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
         ),
-        // Badge над action-кнопками. Template-серверы read-only —
-        // редактирование/удаление их теряет смысл (body proxy'ится из шаблона,
-        // edit создал бы скрытый divergent state, delete = orphan который
-        // не вернётся пока другие user-серверы есть в storage).
-        // Только switch (enable/disable) разрешён — это per-user override
-        // запоминаемое в storage.
         trailing: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             _badge(badgeText, badgeColor),
-            if (!isFromTemplate) ...[
-              const SizedBox(height: 2),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+            const SizedBox(height: 2),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  tooltip: 'Edit',
+                  onPressed: () => _editServerBody(entry.tag),
+                  visualDensity: VisualDensity.compact,
+                ),
+                if (entry.isOverridden)
                   IconButton(
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    onPressed: () => _showServerJsonEditor(index),
+                    icon: const Icon(Icons.restart_alt, size: 18),
+                    tooltip: 'Reset to default',
+                    onPressed: () => _resetServerToCanonical(entry.tag),
+                    visualDensity: VisualDensity.compact,
+                  )
+                else if (entry.isUserOnly)
+                  IconButton(
+                    icon: Icon(Icons.delete_outline,
+                        size: 18, color: theme.colorScheme.error),
+                    tooltip: 'Delete',
+                    onPressed: () => _deleteServer(entry.tag),
                     visualDensity: VisualDensity.compact,
                   ),
-                  IconButton(
-                    icon: Icon(Icons.delete_outline, size: 18, color: theme.colorScheme.error),
-                    onPressed: () {
-                      setState(() { _servers.removeAt(index); _scheduleSave(); });
-                    },
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  /// §041: read-only плитка для preset-injected DNS-сервера.
-  /// Не редактируется через DnsSettings (управляется через Routing/preset),
-  /// не имеет switch — preset-сервер живёт пока активен соответствующий
-  /// preset.
-  Widget _buildPresetServerTile(Map<String, dynamic> server) {
-    final tag = server['tag']?.toString() ?? '';
-    final type = server['type']?.toString() ?? '';
-    final addr = server['server']?.toString() ?? '';
-    final desc = server['description']?.toString() ?? '';
-    final presetLabel = server['_preset_label']?.toString() ?? '';
-    final theme = Theme.of(context);
-    return Card(
-      child: ListTile(
-        onTap: () => _showServerBodyDialog(server,
-            title: desc.isNotEmpty ? desc : tag,
-            sourceLabel: 'from preset · $presetLabel'),
-        leading: SizedBox(
-          width: 40,
-          child: Icon(Icons.push_pin_outlined,
-              size: 18, color: theme.colorScheme.primary),
-        ),
-        title: Text(
-          desc.isNotEmpty ? desc : tag,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-        ),
-        subtitle: Text(
-          '$tag · $type${addr.isNotEmpty ? ' · $addr' : ''}'
-          '${presetLabel.isNotEmpty ? ' · $presetLabel' : ''}',
-          style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
-        ),
-        // Preset-сервер read-only — нет edit/delete; badge просто справа.
-        trailing: _badge('from preset', theme.colorScheme.primary),
-      ),
+  /// §043: Toggle enabled — обновляет `enabled` в ref'е, kind не меняется.
+  void _toggleServerEnabled(String tag, bool value) {
+    final idx = _servers.indexWhere((s) => s['tag'] == tag);
+    if (idx < 0) return;
+    setState(() {
+      _servers[idx] = Map<String, dynamic>.from(_servers[idx])
+        ..['enabled'] = value;
+      _scheduleSave();
+    });
+  }
+
+  /// §043: Delete user-only inline server.
+  void _deleteServer(String tag) {
+    setState(() {
+      _servers.removeWhere((s) => s['tag'] == tag);
+      _scheduleSave();
+    });
+  }
+
+  /// §044: Edit existing entry — диалог с 3 явными input'ами (tag locked,
+  /// description, enabled) + body JSON editor (без tag/description/enabled).
+  /// На save если entry был template/preset — kind transition в inline.
+  void _editServerBody(String tag) {
+    final idx = _servers.indexWhere((s) => s['tag'] == tag);
+    if (idx < 0) return;
+    final ref = _servers[idx];
+    final kind = ref['kind'] as String?;
+
+    // Initial body — без tag/description/enabled (для inline это уже так в §044;
+    // для template/preset peel'им из canonical перед показом).
+    Map<String, dynamic> initialBody;
+    String initialDescription;
+    if (kind == 'inline' && ref['body'] is Map) {
+      initialBody = Map<String, dynamic>.from(ref['body'] as Map);
+      // На случай если в body всё ещё лежат tag/description/enabled (pre-§044
+      // данные ещё не мигрированные — defensive strip).
+      initialBody
+        ..remove('tag')
+        ..remove('description')
+        ..remove('enabled');
+      initialDescription = ref['description']?.toString() ?? '';
+    } else if (kind == 'preset' && _presetServersByTag.containsKey(tag)) {
+      final canonical = _presetServersByTag[tag]!;
+      initialBody = Map<String, dynamic>.from(canonical)
+        ..remove('tag')
+        ..remove('description')
+        ..remove('enabled')
+        ..remove('_preset_label');
+      initialDescription = ref['description']?.toString() ??
+          canonical['description']?.toString() ??
+          '';
+    } else if (kind == 'template' && _templateByTag.containsKey(tag)) {
+      final canonical = _templateByTag[tag]!;
+      initialBody = Map<String, dynamic>.from(canonical)
+        ..remove('tag')
+        ..remove('description')
+        ..remove('enabled');
+      initialDescription = ref['description']?.toString() ??
+          canonical['description']?.toString() ??
+          '';
+    } else {
+      return; // нечего редактировать
+    }
+
+    _showServerEditor(
+      title: 'Edit DNS Server',
+      initialTag: tag,
+      lockedTag: true, // tag нельзя менять при edit existing — иначе orphan'ит lookup
+      initialDescription: initialDescription,
+      initialEnabled: ref['enabled'] != false,
+      initialBody: initialBody,
+      onSave: (savedTag, savedDescription, savedEnabled, savedBody) {
+        setState(() {
+          _servers[idx] = {
+            'enabled': savedEnabled,
+            'kind': 'inline',
+            'tag': savedTag,
+            if (savedDescription.isNotEmpty) 'description': savedDescription,
+            'body': savedBody,
+          };
+          _scheduleSave();
+        });
+      },
     );
   }
 
@@ -673,10 +936,20 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
   }
 
   /// Read-only dialog с полным JSON DNS-сервера.
-  void _showServerBodyDialog(Map<String, dynamic> server,
-      {required String title, required String sourceLabel}) {
-    final clean = Map<String, dynamic>.from(server)..remove('_preset_label');
-    final pretty = const JsonEncoder.withIndent('  ').convert(clean);
+  /// §044: read-only dialog показывает body синтезированного sing-box shape'а
+  /// (без UI-аннотаций — их физически нет в `ResolvedServer.body`).
+  void _showServerBodyDialog(ResolvedServer server) {
+    final pretty = const JsonEncoder.withIndent('  ').convert(server.body);
+    final title = server.description.isNotEmpty ? server.description : server.tag;
+    final sourceLabel = switch (server.kind) {
+      ServerKind.template => 'Template',
+      ServerKind.preset =>
+        server.presetLabel != null && server.presetLabel!.isNotEmpty
+            ? 'Preset · ${server.presetLabel}'
+            : 'Preset',
+      ServerKind.inline =>
+        server.isOverridden ? 'Overridden' : 'User',
+    };
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -905,4 +1178,66 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
     }
     return parts.join(' · ');
   }
+}
+
+
+// ===========================================================================
+// §044: Typed render-layer for DNS servers (заменяет underscore-аннотации
+// в Map'ах из §043).
+// ===========================================================================
+
+/// Порядок enum-значений = порядок render'а в UI (§044): template первым
+/// (системные defaults), потом preset (от active preset'ов), потом inline
+/// (user-defined / overrides). `_displayedServers` сортирует по `kind.index`.
+enum ServerKind {
+  template,
+  preset,
+  inline;
+
+  static ServerKind? tryParse(String s) {
+    switch (s) {
+      case 'inline':
+        return ServerKind.inline;
+      case 'preset':
+        return ServerKind.preset;
+      case 'template':
+        return ServerKind.template;
+    }
+    return null;
+  }
+
+  String get name => toString().split('.').last;
+}
+
+/// §044: typed wrapper для render'а DNS-сервера в UI. Заменяет Map с
+/// underscore-полями (`_kind`/`_overrides`/`_preset_label`).
+///
+/// Источники полей:
+/// - `kind`/`tag`/`enabled` — `dns_options.servers[i]`
+/// - `description` — `dns_options.servers[i].description` если override; иначе
+///   из canonical (template/preset by tag)
+/// - `body` — для inline это `dns_options.servers[i].body`; для template/preset —
+///   canonical lookup. В обоих случаях с injected `tag` (single source of truth).
+/// - `overrides`/`presetLabel` — computed (kind canonical'а если ref overrides).
+class ResolvedServer {
+  const ResolvedServer({
+    required this.kind,
+    required this.tag,
+    required this.description,
+    required this.enabled,
+    required this.body,
+    this.overrides,
+    this.presetLabel,
+  });
+
+  final ServerKind kind;
+  final String tag;
+  final String description;
+  final bool enabled;
+  final Map<String, dynamic> body;
+  final ServerKind? overrides;
+  final String? presetLabel;
+
+  bool get isOverridden => kind == ServerKind.inline && overrides != null;
+  bool get isUserOnly => kind == ServerKind.inline && overrides == null;
 }

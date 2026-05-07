@@ -357,7 +357,7 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | `/settings/excluded_nodes` | PUT | `{"nodes":["tag1","tag2"]}` (replace set) |
 | `/settings/vars/{key}` | PUT | `{"value":"<str>"}` |
 | `/settings/vars/{key}` | DELETE | — (удаляет ключ; не пишет пустую строку) |
-| `/settings/dns_options/servers` | PUT | `{"servers":[{sing-box dns server object}, ...]}` |
+| `/settings/dns_options/servers` | PUT | §043 + §044: kind-refs `[{enabled, kind: 'inline'\|'preset'\|'template', tag, description?, body?}]`. Для `kind: inline` обязателен `body` (partial sing-box shape **без** `tag`/`description`/`enabled` — они на ref-level). Legacy full-body snapshot и §043 inline (с tag/description в body) тоже принимаются — auto-migrate на ближайший resolver. |
 | `/settings/dns_options/rules` | PUT | `{"rules":"<JSON string>"}` (legacy shape — stored как JSON-string) |
 | `/settings/config_locked` | PUT | `{"locked": true\|false}` — §037 toggle auto-rebuild lock. true → `generateConfig` возвращает null silently, custom config через `PUT /config` не перетирается UI. |
 | `/settings/core_logs_enabled` | GET | →`{"enabled": bool}` — §043 текущее состояние forwarding'а sing-box логов в `/logs/core`. |

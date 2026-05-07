@@ -159,8 +159,8 @@ Asset-шаблон, который читается один раз через `
 | Секция | Роль | Пример / где используется |
 |---|---|---|
 | `parser_config` | sing-box `version` + reload interval | прямой emit в корень |
-| `dns_options.servers` | Baseline DNS-серверы (cloudflare/google/quad9/adguard) | `applyCustomDns` мерджит в `config.dns.servers` |
-| `dns_options.rules` | Дефолтные DNS-rules (обычно только fallback `{server: google_doh}`) | `applyCustomDns`: bundle-rules **перед** fallback-ом |
+| `dns_options.servers` | Canonical DNS-серверы (system/google/cloudflare/quad9/adguard). Storage хранит kind-refs `{enabled, kind: inline\|preset\|template, tag, description?, body?}` (§043 + §044). Body для kind:inline — partial sing-box shape **без** tag/description/enabled (они на ref-level; tag синтезируется на build-time). Резолвится в bodies через `resolveDnsServersBodies`. | `applyCustomDns` через `resolveDnsServersList` |
+| `dns_options.rules` | Дефолтные DNS-rules. Storage — kind-refs (§041) (`inline\|srs\|preset\|template`). Catch-all удалён в §039 — fall-through идёт через `dns.final`. | `applyCustomDns`: bundle-rules через `resolveDnsRulesList` |
 | `ping_options`, `speed_test_options` | UI-фичи (HomeScreen, SpeedTest) | не попадают в sing-box конфиг |
 | `preset_groups` | Группы outbound'ов (`vpn-1`/`vpn-2`/`vpn-3`, `@auto`) | `_buildPresetGroups` в `build_config.dart` |
 | `config` | База sing-box конфига: log, inbounds, route-skeleton | deep-copy'ится в начале `buildConfig` |
@@ -437,46 +437,39 @@ Displayed in:
 
 ### 5. Persistent storage
 
+Полная схема, per-key семантика и migration history — отдельный документ: **[STORAGE.md](./STORAGE.md)**. Здесь — обзорное дерево.
+
 ```
-lxbox_settings.json (path_provider documents dir)
-  ├─ vars: { "log_level": "warn", "clash_api": "127.0.0.1:52341", ... }
-  ├─ server_lists: [                           # v2 (was proxy_sources in v1)
-  │     { type: "subscription", url, name, tag_prefix, detour_policy,
-  │       last_updated, last_update_attempt, last_update_status,
-  │       update_interval_hours, last_node_count, consecutive_fails, meta },
-  │     { type: "user", origin, created_at, raw_body, detour_policy }
-  │  ]
-  ├─ enabled_rules: [ "Russian domains direct", ... ]
-  ├─ enabled_groups: [ "vpn-1", "auto-proxy-out" ]
-  ├─ rule_outbounds: { "BitTorrent direct": "direct-out" }
-  ├─ route_final: "vpn-1"
-  ├─ app_rules: [ { name, packages, outbound } ]
-  └─ last_global_update: "2026-04-15T..."
+<getApplicationDocumentsDirectory>/
+├── lxbox_settings.json     # SettingsStorage (Dart) — главный файл состояния:
+│                           #   vars / server_lists / custom_rules /
+│                           #   dns_options / ping_options /
+│                           #   route_final / excluded_nodes / enabled_groups /
+│                           #   last_global_update / presets_migrated
+├── singbox_config.json     # ConfigManager (Kotlin) — финальный sing-box JSON
+├── http_cache/             # HttpCache — сырое тело + headers подписок
+│   └── <sha1(url)>.{body,headers}
+├── rule_sets/              # §011 — кэш бинарных .srs
+│   └── <tag>.srs
+├── applog.txt              # §038/§043 — JSON-lines, 200 строк / 64KB ring
+└── corelog.txt             # §043 — JSON-lines, 200 строк / 64KB ring
 
-singbox_config.json (files dir, native)
-  └─ Full sing-box JSON config (written by ConfigManager)
-
-http_cache/<sha1(url)>.{body,headers} (documents dir)
-  └─ Subscription raw body + headers (offline rehydrate on app start)
-
-rule_sets/<tag>.srs (documents dir)
-  └─ Cached binary rule set files (parallel download)
-
-SharedPreferences:
-  ├─ app_theme_mode: "system" | "light" | "dark"
-  ├─ haptic_enabled: "true" | "false"
-  └─ boxvpn_boot.{auto_start_vpn, keep_vpn_on_exit, background_mode, core_logs_enabled}
-        # §043: core_logs_enabled читается в BoxApplication.initialize до Flutter
-        # engine'а, поэтому в SharedPreferences а не в lxbox_settings.json.
-
-applog.txt (documents dir)        # §038 + §043: app warn/error persist
-  └─ JSON-lines, 200 строк / 64KB cap, ring-buffer rotation
-
-corelog.txt (documents dir)       # §043: core (sing-box) warn/error persist
-  └─ JSON-lines, 200 строк / 64KB cap, ring-buffer rotation
+SharedPreferences (Android):
+├── app_theme_mode, haptic_enabled       # Flutter UI prefs
+└── boxvpn_boot.{auto_start_vpn, keep_vpn_on_exit, background_mode,
+                 core_logs_enabled}      # §043: core_logs_enabled здесь
+                                         # потому что читается в
+                                         # BoxApplication.initialize() ДО
+                                         # Flutter engine'а
 ```
 
-Migration from v1 (`proxy_sources`) runs once on first read in `SettingsStorage.getServerLists` via `migrateProxySources`.
+One-shot миграции (`SettingsStorage`):
+- `proxy_sources` → `server_lists` (v1 → v2, §033) — `migrateProxySources` на первом чтении.
+- `app_rules` → `custom_rules` с `packages` (до v1.3.2 → §030) — `_absorbLegacyAppRules`.
+- `enabled_rules + rule_outbounds` → `custom_rules` (до §030) — в `RoutingScreen._load`, гард `presets_migrated`.
+- `dns_options.servers[]` shape: pre-§043 → §043 → §044 — `_migrateLegacyDnsServers` в builder post-steps.
+
+Sensitive-поля при `GET /state/storage` фильтруются allow-list'ом в `services/debug/serializers/storage.dart` (`debug_token`, subscription URLs, support/web URLs из `meta`). Подробности — STORAGE.md §"Debug API exposure".
 
 ---
 

@@ -188,6 +188,15 @@ Future<DebugResponse> _deleteVar(String key, DebugRequest req, DebugContext ctx)
 // dns_options
 // ---------------------------------------------------------------------------
 
+/// §043: принимает оба формата:
+/// - **New (kind-refs):** `[{"enabled":bool, "kind":"inline|preset|template", "tag":str, "body":{...}?}]`.
+///   Save as is; render-time resolver `resolveDnsServersList` подхватит.
+/// - **Legacy (full-body snapshot):** `[{type, tag, server, server_port, ...}]`.
+///   Save as is; на ближайший `resolveDnsServersList` migration auto-конвертирует
+///   в kind-refs и persist'нет.
+///
+/// Detection: presence of `kind` field на любом элементе → new format. Иначе
+/// legacy. Mixed формат не поддерживается.
 Future<DebugResponse> _putDnsServers(DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
   if (!body.containsKey('servers')) {
