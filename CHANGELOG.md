@@ -10,6 +10,51 @@
 
 ---
 
+## [1.6.1] — 2026-05-08
+
+DNS-серверы перевели на kind-discriminated refs (симметрия с DNS rules §041) с чистым разделением meta-полей и sing-box body — фиксит баги выявленные на v1.6.0 в эксплуатации.
+
+### Changed
+
+- **DNS servers: kind-discriminated refs + clean schema** ([§043](docs/spec/tasks/043-dns-servers-refs-by-kind.md) + [§044](docs/spec/tasks/044-dns-servers-clean-schema.md)). Storage `dns_options.servers[i]` хранит refs шейпа `{enabled, kind: inline|preset|template, tag, description?, body?}` — точно по образцу §041 DNS rules.
+  - **`tag` — single source of truth**: на ref-level. Для inline body **partial sing-box shape без** `tag`/`description`/`enabled` (они на ref-level, а sing-box эти meta-поля не использует). На build-time `body['tag'] = ref.tag` синтезируется в `config.dns.servers[i]` (запротоколированная магия в `resolveDnsServersBodies`).
+  - **`description` на ref-level**: для inline — primary, для template/preset — optional override (если отсутствует, fallback на canonical's description).
+  - **Body для template/preset берётся из canonical** by tag at render/build time. `kind: template` ref'ы автоматически подхватывают template-обновления (e.g. tag rename'ы от §039); orphan-cleanup на load удаляет ref'ы с несуществующими tag'ами.
+  - **Override = `kind: inline` для tag'а с canonical** — без shape-comparison через `jsonEncode` (раньше order-sensitive фрагильно). Тривиальная classification по kind.
+- **Короткие односложные badge'ы**: **Template** / **Preset** / **User** / **Overridden**. Раньше длинные «User (overrides template)» / «Preset · Russian domains direct» ломали title-wrap (живой баг на Yandex UDP — title разрывался на 4 строки).
+- **Edit dialog: 3 явных input'а** — `Tag` / `Description` / `Enabled (Switch)` сверху, body JSON внизу (только sing-box-relevant поля **без** `tag`/`description`/`enabled`). Раньше юзер видел «магические» поля среди sing-box-полей.
+- **Auto-discovery + orphan cleanup** в `resolveDnsServersList` — для каждого template/active-preset server'а tag которого нет в storage append'ится ref (с template's enabled default'ом / preset's default true); template/preset ref'ы с несуществующими tag'ами удаляются. Симметрично `resolveDnsRulesList` (§033/§041).
+- **UI: edit body на template/preset переводит entry в `kind: inline`** (copy-on-write). Reset (↺) убирает inline и возвращает kind на canonical; body+description удаляются. Add custom server создаёт `kind: inline` с user'овским body.
+- **Builder consequences**: `applyCustomDns` теперь использует `resolveDnsServersList` (refs) + `resolveDnsServersBodies` (refs → final bodies для sing-box config). Старая XOR-логика «userServers OR templateServers» удалена.
+- **Render layer typed**: новый `ResolvedServer` class в `dns_settings_screen.dart` — никаких underscore-полей в Map'ах (`_kind`/`_overrides`/`_preset_label`/`_origin` удалены полностью; компилятор гарантирует что они не протекут в JSON dump'ы).
+- **One-shot migration** для existing v1.6.0 юзеров (one-shot, lossless). Auto-detect по presence/absence of `kind` field на entries:
+  - **Pre-§043** (legacy full-body snapshot): classify by canonical match → kind-ref + peeled description на ref-level + partial body.
+  - **§043 inline** (с tag/description в body, intermediate state): peel `body.description` → `ref.description`; drop `body.tag`/`body.enabled`/UI-annotations.
+  - **§044 already-migrated**: no-op.
+- **Debug API `PUT /settings/dns_options/servers`** принимает любой из трёх форматов (pre-§043 / §043 / §044). Detection auto'тический; legacy форматы конвертируются в §044 на ближайший resolver tick.
+- **About screen — все 3 GitHub-tile теперь clickable** (Source Code → LxBox repo, VPN core → sing-box upstream, singbox-launcher Credits → upstream). Раньше копировали URL в clipboard — менее очевидно. Trailing `open_in_new` иконка для visual cue.
+
+### Fixed
+
+- **JSON viewer protokol leak** — `_showServerBodyDialog` показывал `_kind`/`_overrides` underscore-поля у одних tile'ов, не у других. Теперь `ResolvedServer.body` физически не содержит underscore-полей.
+- **DNS Settings — Yandex/long-name preset tile разорван на 4 строки** (live-баг v1.6.0). Длинный badge `Preset · Russian domains direct` ломал title-wrap. Теперь badge короткий `Preset`, имя preset'а в subtitle.
+- **Toggle enabled на template-сервере помечал его как Overridden** (live-баг). Storage хранил copy-on-write template-shape с изменённым `enabled`, override-detection через shape compare ошибочно классифицировала это как override. С refs-by-kind: toggle меняет только `enabled` ref'а, kind остаётся `template`, badge остаётся `Template`.
+- **После §039 tag rename `direct_dns_resolver` → `google_udp`** existing-юзеры не видели нового tag'а в DNS Final dropdown'е. Теперь auto-discovery подтягивает новый tag, orphan cleanup убирает старый.
+
+### Tests
+
+- `test/services/builder/dns_servers_resolver_test.dart` — `resolveDnsServersList` (orphan cleanup, auto-discovery, legacy migration); `resolveDnsServersBodies` (refs → bodies, enabled filter).
+
+### Docs
+
+- **`docs/STORAGE.md`** (новый) — единый источник правды по схеме `lxbox_settings.json`: top-level shape, per-key семантика, migration history (proxy_sources → server_lists, app_rules → custom_rules, dns_options.rules_json → rules[], pre-§043 → §043 → §044), SharedPreferences boot flags, Debug API exposure allow-list. `ARCHITECTURE.md` §5 свёрнут до tldr со ссылкой.
+
+### Release / CI
+
+- **Per-ABI + universal APKs** — релиз публикует 4 артефакта вместо одного fat-APK: `LxBox-vX.Y.Z-arm64-v8a.apk` (~32 MB, default для 95%+ устройств), `LxBox-vX.Y.Z-armeabi-v7a.apk` (старые / Android Go), `LxBox-vX.Y.Z-x86_64.apk` (эмуляторы / Chromebook), `LxBox-vX.Y.Z-universal.apk` (fat fallback ~95 MB). Уменьшает размер скачиваемого APK для большинства юзеров на ~3×. CI-инфраструктура запилена в `ci.yml` под этот релиз; v1.6.1 — первый релиз, который реально публикует все 4. Closes #4.
+
+---
+
 ## [1.6.0] — 2026-05-07
 
 «Диагностика + восстановление + DNS-cleanup» релиз. Под капотом — миграция на sing-box 1.13.x с переработкой нативного VPN-сервиса; видимое для юзера — light-recovery (Reload-кнопка / reset-network), per-group ping/test settings, понятные ошибки в banner'ах, починка DNS-маршрутов в РФ через ru-direct, backup/restore UI и всё, что ниже.

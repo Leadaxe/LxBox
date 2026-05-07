@@ -1,8 +1,10 @@
 # 042 — DNS servers list: 3-tier merge + stale-fields cleanup
 
+> ⚠ **Заменено [§043 DNS servers as kind-discriminated refs](./043-dns-servers-refs-by-kind.md).** Был промежуточный план: full-body snapshot + 3-tier merge с shape comparison. На имплементации стало ясно что архитектура не симметрична с §041 DNS rules и оставляет фрагильность (order-sensitive jsonEncode, stale fields на template-обновлениях, длинные badge'и). §043 переделал на refs-by-kind — точная симметрия с DNS rules, тривиальная override-detection через `kind == 'inline'`, auto-discovery + orphan cleanup как в `resolveDnsRulesList`.
+
 | Поле | Значение |
 |------|----------|
-| Статус | Spec only |
+| Статус | Superseded by §043 |
 | Дата | 2026-05-07 |
 | Связанные spec'ы | [`014 dns settings`](../features/014%20dns%20settings/spec.md), [`033 preset bundles`](../features/033%20preset%20bundles/spec.md), [`039 empty template DNS rules`](./039-empty-template-dns-rules.md) |
 | Затронутые файлы | `app/lib/screens/dns_settings_screen.dart`, `app/lib/services/builder/build_config.dart` (опционально, см. ниже), тесты |

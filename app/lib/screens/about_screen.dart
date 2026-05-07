@@ -10,8 +10,11 @@ import '../vpn/box_vpn_client.dart';
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  static const _version = '1.6.0';
+  static const _version = '1.6.1';
   static const _repoUrl = 'https://github.com/Leadaxe/LxBox';
+  static const _singboxUpstreamUrl = 'https://github.com/SagerNet/sing-box';
+  static const _singboxLauncherUrl =
+      'https://github.com/Leadaxe/singbox-launcher';
 
   /// Public alias for callers (e.g. UpdateChecker / SnackBar) — single
   /// source of truth for "current version".
@@ -81,13 +84,15 @@ class AboutScreen extends StatelessWidget {
                   leading: const Icon(Icons.code),
                   title: const Text('Source Code'),
                   subtitle: const Text(_repoUrl),
-                  onTap: () => _copyToClipboard(context, _repoUrl),
+                  trailing: const Icon(Icons.open_in_new, size: 18),
+                  onTap: () => ul.UrlLauncher.open(_repoUrl),
                 ),
                 const Divider(height: 1),
                 // VPN core version — runtime через `Libbox.version()` (вызов
                 // из `BoxVpnClient.getCoreVersion`). Подгружается лениво:
                 // первый paint показывает "loading", FutureBuilder заменит на
-                // значение когда native ответит. Tap — копирует upstream-URL.
+                // значение когда native ответит. Tap — открывает upstream
+                // GitHub репо.
                 FutureBuilder<String>(
                   future: BoxVpnClient.I.getCoreVersion(),
                   builder: (ctx, snap) {
@@ -101,10 +106,8 @@ class AboutScreen extends StatelessWidget {
                       leading: const Icon(Icons.architecture),
                       title: const Text('VPN core'),
                       subtitle: Text(subtitle),
-                      onTap: () => _copyToClipboard(
-                        context,
-                        'https://github.com/SagerNet/sing-box',
-                      ),
+                      trailing: const Icon(Icons.open_in_new, size: 18),
+                      onTap: () => ul.UrlLauncher.open(_singboxUpstreamUrl),
                     );
                   },
                 ),
@@ -122,10 +125,12 @@ class AboutScreen extends StatelessWidget {
           Card(
             child: Column(
               children: [
-                const ListTile(
-                  leading: Icon(Icons.person_outline),
-                  title: Text('singbox-launcher'),
-                  subtitle: Text('Config wizard and parser reference'),
+                ListTile(
+                  leading: const Icon(Icons.person_outline),
+                  title: const Text('singbox-launcher'),
+                  subtitle: const Text('Config wizard and parser reference'),
+                  trailing: const Icon(Icons.open_in_new, size: 18),
+                  onTap: () => ul.UrlLauncher.open(_singboxLauncherUrl),
                 ),
               ],
             ),
