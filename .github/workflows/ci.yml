@@ -148,18 +148,45 @@ jobs:
             echo "storeFile=upload-keystore.jks"
           } > android/key.properties
 
-      - name: Build APK (release, arm64-only)
-        # arm64-v8a single-arch — экономит ~17 MB vs fat APK. Покрывает 95%+
-        # Android-устройств; armeabi-v7a-only (Android Go bargain phones типа
-        # Itel A48 / Tecno Pop 5) вне нашей целевой аудитории. Если когда-то
-        # потребуется — отдельный --split-per-abi build с тремя assets.
-        run: flutter build apk --release --target-platform android-arm64
+      - name: Build universal APK (fat, all ABIs)
+        # Fat APK с native libs для всех 3 ABI — fallback для юзеров которые
+        # не знают свою архитектуру (или для устройств где per-ABI APK не
+        # подходит). Размер ~75 MB.
+        #
+        # Output: build/app/outputs/flutter-apk/app-release.apk
+        run: flutter build apk --release
 
-      - name: Upload APK (release)
+      - name: Rename universal APK
+        # Переименовываем pre-emptively чтобы split-per-abi build на следующем
+        # шаге не перетёр (split-per-abi не пишет в `app-release.apk`, но на
+        # всякий случай — defensive).
+        run: |
+          set -euo pipefail
+          mv app/build/app/outputs/flutter-apk/app-release.apk \
+             app/build/app/outputs/flutter-apk/app-universal-release.apk
+
+      - name: Build per-ABI APKs (split-per-abi)
+        # `--split-per-abi` собирает по APK на ABI — каждый содержит свои
+        # native libs (libbox.so etc.) только для своей архитектуры. Итог:
+        # 3 файла, каждый ~32-35 MB.
+        #
+        # ABIs:
+        #   - arm64-v8a:    95%+ современных Android-устройств (default).
+        #   - armeabi-v7a:  старые / Android Go бюджет (Itel A48, Tecno Pop 5).
+        #   - x86_64:       эмуляторы / Chromebooks с Android-runtime'ом.
+        #
+        # Output paths:
+        #   build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+        #   build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+        #   build/app/outputs/flutter-apk/app-x86_64-release.apk
+        run: flutter build apk --release --split-per-abi
+
+      - name: Upload APKs (release)
+        # Загружаем все 4: 3 per-ABI + 1 universal.
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk-release
-          path: app/build/app/outputs/flutter-apk/app-release.apk
+          name: android-apks-release
+          path: app/build/app/outputs/flutter-apk/app-*-release.apk
           if-no-files-found: error
           retention-days: ${{ startsWith(github.ref, 'refs/tags/') && 1 || 30 }}
 
@@ -177,21 +204,27 @@ jobs:
           sparse-checkout: RELEASE_NOTES.md
           sparse-checkout-cone-mode: false
 
-      - name: Download APK
+      - name: Download APKs
         uses: actions/download-artifact@v4
         with:
-          name: android-apk-release
+          name: android-apks-release
           path: release-artifacts
 
-      - name: Prepare APK
+      - name: Prepare APKs
+        # Renames per-ABI / universal files to LxBox-vX.Y.Z-<variant>.apk
+        # для консистентности с прошлыми релизами (UpdateChecker парсит имя).
         run: |
-          APK=$(find release-artifacts/ -name "*.apk" -type f | head -1)
-          if [ -z "$APK" ]; then
-            echo "ERROR: No APK found!"
-            exit 1
-          fi
-          cp "$APK" "LxBox-${{ needs.meta.outputs.version }}.apk"
-          ls -la "LxBox-${{ needs.meta.outputs.version }}.apk"
+          set -euo pipefail
+          VERSION="${{ needs.meta.outputs.version }}"
+          for VARIANT in arm64-v8a armeabi-v7a x86_64 universal; do
+            SRC=$(find release-artifacts/ -name "app-${VARIANT}-release.apk" -type f | head -1)
+            if [ -z "$SRC" ]; then
+              echo "ERROR: APK for variant=$VARIANT not found!"
+              exit 1
+            fi
+            cp "$SRC" "LxBox-${VERSION}-${VARIANT}.apk"
+          done
+          ls -la LxBox-*.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -199,7 +232,11 @@ jobs:
           tag_name: ${{ needs.meta.outputs.tag }}
           name: LxBox ${{ needs.meta.outputs.version }}
           draft: false
-          files: LxBox-${{ needs.meta.outputs.version }}.apk
+          files: |
+            LxBox-${{ needs.meta.outputs.version }}-arm64-v8a.apk
+            LxBox-${{ needs.meta.outputs.version }}-armeabi-v7a.apk
+            LxBox-${{ needs.meta.outputs.version }}-x86_64.apk
+            LxBox-${{ needs.meta.outputs.version }}-universal.apk
           body_path: RELEASE_NOTES.md
 
   publish-manifest:
@@ -224,6 +261,7 @@ jobs:
         run: |
           mkdir -p docs
           NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          BASE="https://github.com/Leadaxe/LxBox/releases/download/${TAG}"
           cat > docs/latest.json <<EOF
           {
             "\$schema": "https://github.com/Leadaxe/LxBox/blob/main/docs/latest.json",
@@ -231,9 +269,15 @@ jobs:
             "name": "L×Box ${VERSION}",
             "published_at": "${NOW}",
             "html_url": "https://github.com/Leadaxe/LxBox/releases/tag/${TAG}",
-            "apk_url": "https://github.com/Leadaxe/LxBox/releases/download/${TAG}/LxBox-${VERSION}.apk",
+            "apk_url": "${BASE}/LxBox-${VERSION}-universal.apk",
+            "apk_urls": {
+              "arm64-v8a":   "${BASE}/LxBox-${VERSION}-arm64-v8a.apk",
+              "armeabi-v7a": "${BASE}/LxBox-${VERSION}-armeabi-v7a.apk",
+              "x86_64":      "${BASE}/LxBox-${VERSION}-x86_64.apk",
+              "universal":   "${BASE}/LxBox-${VERSION}-universal.apk"
+            },
             "min_supported": "1.0.0",
-            "_comment": "Updated automatically by CI on every release tag push (see .github/workflows/ci.yml). Used by UpdateChecker as a fallback when api.github.com is rate-limited."
+            "_comment": "Updated automatically by CI on every release tag push (see .github/workflows/ci.yml). Used by UpdateChecker as a fallback when api.github.com is rate-limited. apk_url = universal fallback (works on any ABI). apk_urls.<abi> = per-architecture optimized variants."
           }
           EOF
           cat docs/latest.json

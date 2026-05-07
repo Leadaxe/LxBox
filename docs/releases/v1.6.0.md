@@ -144,17 +144,11 @@ Storage: `config_locked_for_debug`, default false.
 
 ---
 
-## 📥 Install
+## 📦 Install
 
-```bash
-# Latest APK from Releases page → install via adb or sideload
-adb install LxBox-v1.6.0.apk
+[Latest release on GitHub →](https://github.com/Leadaxe/LxBox/releases/latest) · скачайте `LxBox-v1.6.0.apk`, откройте на устройстве (разрешите «установка из неизвестных источников» если потребуется).
 
-# Or via the helper script (auto-detects connected device)
-./scripts/install-apk.sh
-```
-
-If updating from v1.5.0 or earlier — make sure your device is arm64-v8a (95%+ of modern phones). The release APK won't install on `armeabi-v7a-only` devices.
+APK подписан upload-keystore'ом; устанавливается поверх предыдущих L×Box-версий **только** на arm64-v8a-устройства (95%+ современных Android'ов; armeabi-v7a-only Android Go-будгет-устройства не поддерживаются — увидят «device not compatible»).
 
 ---
 
@@ -197,13 +191,9 @@ If updating from v1.5.0 or earlier — make sure your device is arm64-v8a (95%+ 
 - **Debug API: старые `/action/ping-*` удалены без alias'ов.** Adb-скрипты с `/action/ping-node?tag=` / `/action/ping-all` нужно обновить на `/action/urltest?tag=` / `/action/urltest?all=true`.
 - **Template больше не содержит default DNS catch-all.** Existing-юзеры — orphan cleanup сам уберёт; new-юзеры увидят `dns.rules` только с preset/inline-правилами.
 
-### 📥 Установка
+### 📦 Установка
 
-```bash
-adb install LxBox-v1.6.0.apk
-# либо
-./scripts/install-apk.sh
-```
+[Последний релиз на GitHub →](https://github.com/Leadaxe/LxBox/releases/latest) — скачайте `LxBox-v1.6.0.apk`, откройте файл на устройстве, разрешите установку. Поверх предыдущих L×Box-версий встаёт через одну подпись keystore.
 
 ---
 
