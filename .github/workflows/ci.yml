@@ -160,10 +160,13 @@ jobs:
         # Переименовываем pre-emptively чтобы split-per-abi build на следующем
         # шаге не перетёр (split-per-abi не пишет в `app-release.apk`, но на
         # всякий случай — defensive).
+        #
+        # Шаг бежит с `working-directory: app` (job-default), поэтому пути —
+        # относительные внутри `app/`, без `app/` префикса.
         run: |
           set -euo pipefail
-          mv app/build/app/outputs/flutter-apk/app-release.apk \
-             app/build/app/outputs/flutter-apk/app-universal-release.apk
+          mv build/app/outputs/flutter-apk/app-release.apk \
+             build/app/outputs/flutter-apk/app-universal-release.apk
 
       - name: Build per-ABI APKs (split-per-abi)
         # `--split-per-abi` собирает по APK на ABI — каждый содержит свои
