@@ -185,6 +185,161 @@ void main() {
       expect(f.warnings.any((w) => w.contains('missing rule_set')), isTrue);
     });
 
+    // ─── §045: GeoIP fallback layer ────────────────────────────────────
+    //
+    // `rule_set: ["a", "b"]` (массивная форма) + `enabled: "@var"` гейтинг
+    // на rule_set entry. 4 матрицы — geoip on/off × .srs cached/missing.
+    //
+    // Преsett-фабрика — `_ruDirectWithGeoip()` ниже, реплицирует
+    // расширенный `ru-direct` из template'а v1.6.2.
+
+    test('§045: geoip on + .srs cached → оба rule_set + array routing rule', () {
+      final preset = _ruDirectWithGeoip();
+      final rule = CustomRulePreset(
+        name: 'Russian',
+        presetId: 'ru-direct',
+        varsValues: {
+          'outbound': 'direct-out',
+          'dns_server': 'yandex_udp',
+          'geoip_enabled': 'true',
+        },
+      );
+
+      final f = expandPreset(rule, preset,
+          srsPaths: {'geoip-ru': '/cache/preset__ru-direct__geoip-ru.srs'});
+
+      expect(f.warnings, isEmpty);
+      expect(f.ruleSets.length, 2);
+      expect(f.ruleSets.map((rs) => rs['tag']).toSet(),
+          {'ru-domains', 'geoip-ru'});
+      // geoip-ru: type конвертирован в local (spec §011)
+      final geoip = f.ruleSets.firstWhere((rs) => rs['tag'] == 'geoip-ru');
+      expect(geoip['type'], 'local');
+      expect(geoip['path'], '/cache/preset__ru-direct__geoip-ru.srs');
+      expect(geoip.containsKey('enabled'), isFalse,
+          reason: 'enabled — наша мета-конвенция, sing-box не знает');
+      // routing rule: массив остался (оба tag'а expanded)
+      expect(f.routingRule!['rule_set'], ['ru-domains', 'geoip-ru']);
+      expect(f.routingRule!['outbound'], 'direct-out');
+    });
+
+    test('§045: geoip on + .srs НЕ cached → даунгрейд до single ru-domains '
+        '+ warning про missing geoip-ru', () {
+      final preset = _ruDirectWithGeoip();
+      final rule = CustomRulePreset(
+        name: 'Russian',
+        presetId: 'ru-direct',
+        varsValues: {
+          'outbound': 'direct-out',
+          'dns_server': 'yandex_udp',
+          'geoip_enabled': 'true',
+        },
+      );
+
+      final f = expandPreset(rule, preset); // srsPaths: {}
+
+      expect(f.ruleSets.length, 1, reason: 'только ru-domains expanded');
+      expect(f.ruleSets.first['tag'], 'ru-domains');
+      // routing rule даунгрейдился до single string
+      expect(f.routingRule!['rule_set'], 'ru-domains');
+      expect(f.routingRule!['outbound'], 'direct-out');
+      // warning про missing geoip-ru
+      expect(f.warnings.any((w) => w.contains('geoip-ru') && w.contains('no cached')),
+          isTrue);
+    });
+
+    test('§045: geoip off (var=false) + .srs cached → geoip-ru фрагмент '
+        'пропускается, routing rule даунгрейдится', () {
+      final preset = _ruDirectWithGeoip();
+      final rule = CustomRulePreset(
+        name: 'Russian',
+        presetId: 'ru-direct',
+        varsValues: {
+          'outbound': 'direct-out',
+          'dns_server': 'yandex_udp',
+          'geoip_enabled': 'false',
+        },
+      );
+
+      final f = expandPreset(rule, preset,
+          srsPaths: {'geoip-ru': '/cache/preset__ru-direct__geoip-ru.srs'});
+
+      expect(f.warnings, isEmpty,
+          reason: 'enabled=false — это намеренная конфигурация, не warning');
+      expect(f.ruleSets.length, 1, reason: 'geoip-ru gated за enabled var');
+      expect(f.ruleSets.first['tag'], 'ru-domains');
+      // routing rule даунгрейдился до single string (geoip-ru не в expandedTags)
+      expect(f.routingRule!['rule_set'], 'ru-domains');
+    });
+
+    test('§045: geoip off + .srs НЕ cached → geoip-ru пропускается без '
+        'warning (gated раньше чем cache check)', () {
+      final preset = _ruDirectWithGeoip();
+      final rule = CustomRulePreset(
+        name: 'Russian',
+        presetId: 'ru-direct',
+        varsValues: {
+          'outbound': 'direct-out',
+          'dns_server': 'yandex_udp',
+          'geoip_enabled': 'false',
+        },
+      );
+
+      final f = expandPreset(rule, preset); // srsPaths: {}
+
+      expect(f.warnings, isEmpty,
+          reason: 'gated rule_set не доходит до cache-check warning');
+      expect(f.ruleSets.length, 1);
+      expect(f.routingRule!['rule_set'], 'ru-domains');
+    });
+
+    test('§045: enabled bool literal true → фрагмент включается', () {
+      final preset = SelectableRule(
+        label: 'X',
+        presetId: 'x',
+        ruleSets: [
+          {'tag': 'a', 'type': 'inline', 'rules': [], 'enabled': true}
+        ],
+        rule: const {'rule_set': 'a', 'outbound': 'direct-out'},
+      );
+      final f = expandPreset(CustomRulePreset(name: 'X', presetId: 'x'), preset);
+      expect(f.ruleSets.length, 1);
+      expect(f.ruleSets.first.containsKey('enabled'), isFalse,
+          reason: 'мета-поле strip перед попаданием в config');
+    });
+
+    test('§045: enabled bool literal false → фрагмент пропускается', () {
+      final preset = SelectableRule(
+        label: 'X',
+        presetId: 'x',
+        ruleSets: [
+          {'tag': 'a', 'type': 'inline', 'rules': [], 'enabled': false}
+        ],
+        rule: const {'rule_set': 'a', 'outbound': 'direct-out'},
+      );
+      final f = expandPreset(CustomRulePreset(name: 'X', presetId: 'x'), preset);
+      expect(f.ruleSets, isEmpty);
+      expect(f.routingRule, isNull,
+          reason: 'rule_set не expanded → dangling guard дропнул rule');
+    });
+
+    test('§045: rule.rule_set массив, оба tag\'а missing → rule dropped + warning', () {
+      final preset = SelectableRule(
+        label: 'X',
+        presetId: 'x',
+        ruleSets: [
+          {'tag': 'a', 'type': 'remote', 'url': 'https://ex.com/a.srs'},
+          {'tag': 'b', 'type': 'remote', 'url': 'https://ex.com/b.srs'},
+        ],
+        rule: const {'rule_set': ['a', 'b'], 'outbound': 'direct-out'},
+      );
+      final f = expandPreset(CustomRulePreset(name: 'X', presetId: 'x'), preset);
+      expect(f.ruleSets, isEmpty);
+      expect(f.routingRule, isNull);
+      expect(f.warnings.any((w) => w.contains('none of') && w.contains('a') && w.contains('b')),
+          isTrue);
+    });
+
     // Universal outbound override (spec §033 §5 / task 011) — `varsValues['outbound']`
     // всегда побеждает template-решение. Ветки: empty → as-is, "reject" → action,
     // иначе → outbound. Ниже три теста на эти ветки + кейс «template hardcoded
@@ -456,6 +611,71 @@ SelectableRule _ruDirect() => SelectableRule(
           'server': '77.88.8.88',
           'detour': '@outbound',
           'description': 'Yandex Safe',
+        },
+      ],
+    );
+
+/// §045: фабрика — расширенный `ru-direct` с GeoIP fallback layer.
+/// Реплицирует template'ный shape v1.6.2: `geoip_enabled` bool var,
+/// второй rule_set entry с `enabled: "@geoip_enabled"`, и
+/// `rule.rule_set` как List.
+SelectableRule _ruDirectWithGeoip() => SelectableRule(
+      label: 'Russian domains & IPs direct',
+      description: 'Route Russian TLDs and Russian IP ranges directly.',
+      defaultEnabled: true,
+      presetId: 'ru-direct',
+      vars: [
+        WizardVar(
+          name: 'outbound',
+          type: 'outbound',
+          defaultValue: 'direct-out',
+          title: 'Outbound',
+        ),
+        WizardVar(
+          name: 'dns_server',
+          type: 'dns_servers',
+          defaultValue: 'yandex_udp',
+          required: false,
+          title: 'DNS server',
+        ),
+        WizardVar(
+          name: 'geoip_enabled',
+          type: 'bool',
+          defaultValue: 'true',
+          title: 'GeoIP IP-range fallback',
+        ),
+      ],
+      ruleSets: [
+        {
+          'tag': 'ru-domains',
+          'type': 'inline',
+          'rules': [
+            {
+              'domain_suffix': ['ru', 'su']
+            }
+          ],
+        },
+        {
+          'tag': 'geoip-ru',
+          'enabled': '@geoip_enabled',
+          'type': 'remote',
+          'format': 'binary',
+          'url': 'https://example.com/geoip-ru.srs',
+          'update_interval': '168h',
+        },
+      ],
+      dnsRule: const {'rule_set': 'ru-domains', 'server': '@dns_server'},
+      rule: const {
+        'rule_set': ['ru-domains', 'geoip-ru'],
+        'outbound': '@outbound'
+      },
+      dnsServers: [
+        {
+          'type': 'udp',
+          'tag': 'yandex_udp',
+          'server': '77.88.8.8',
+          'detour': '@outbound',
+          'description': 'Yandex UDP',
         },
       ],
     );

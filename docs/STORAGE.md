@@ -2,6 +2,116 @@
 
 Полная схема того, что L×Box хранит на диске между запусками. Документ — источник правды для shape'а файлов и migration history. `ARCHITECTURE.md` ссылается сюда.
 
+User-state живёт в `lxbox_settings.json`; catalog of presets/vars/sections — в template'е (см. [`TEMPLATE.md`](./TEMPLATE.md)).
+
+## `lxbox_settings.json` — full tree
+
+> **Нотация**:
+> - `object{N keys}` — объект с N ключами
+> - `list[N]` — массив с N элементами; `list` без числа — массив переменной длины
+> - `<TypeName>` — element-type для массива (показано отдельно ниже)
+> - `?` после типа — поле опциональное
+
+```
+lxbox_settings.json                          # SettingsStorage (Dart), главный файл state
+│
+├─ vars                          object          template-vars override + app feature flags
+│   └─ <key>: string                           ─ напр. log_level, dns_final, debug_token,
+│                                                auto_update_subs, last_known_version, ...
+│
+├─ server_lists[]                list          §033 — sealed (subscription / user)
+│   └─ <ServerList>              object          discriminator: type
+│       ├─ type                  "subscription"|"user"
+│       ├─ id                    uuid          стабильный
+│       ├─ name                  string        UI display
+│       ├─ enabled               bool
+│       ├─ tag_prefix            string        префикс для node tags
+│       ├─ detour_policy         object{4 keys}       {register_detour_servers, register_detour_in_auto,
+│       │                                       use_detour_servers, override_detour}
+│       │                        — subscription only —
+│       ├─ url                   string?       подписочный URL
+│       ├─ meta                  object?         SubscriptionMeta из HTTP-headers (§027):
+│       │   ├─ upload_bytes / download_bytes / total_bytes  int?
+│       │   ├─ expire_timestamp  int?          unix seconds
+│       │   ├─ support_url / web_page_url      string?
+│       │   ├─ profile_title     string?
+│       │   └─ update_interval_hours           int?
+│       ├─ last_updated          ISO-8601?     успех
+│       ├─ last_update_attempt   ISO-8601?     любая попытка
+│       ├─ last_update_status    "never"|"ok"|"failed"|"inProgress"
+│       ├─ update_interval_hours int           default 24
+│       ├─ last_node_count       int
+│       ├─ consecutive_fails     int           для UI "(N fails)"
+│       │                        — user only —
+│       ├─ origin                "paste"|"file"|"qr"|"manual"
+│       ├─ created_at            ISO-8601
+│       └─ raw_body              string        оригинал для reparse
+│
+├─ custom_rules[]                list          §030 — sealed (inline / srs / preset)
+│   └─ <CustomRule>              object          discriminator: kind
+│       ├─ kind                  "inline"|"srs"|"preset"
+│       ├─ id                    uuid
+│       ├─ name                  string        пользовательский (для preset — read-only snapshot)
+│       ├─ enabled               bool
+│       │                        — inline (CustomRuleInline) —
+│       ├─ domains[]             list?         OR-группа #1: domain (full match)
+│       ├─ domainSuffixes[]      list?         OR-группа #1: ".ru" etc.
+│       ├─ domainKeywords[]      list?         OR-группа #1: substring match
+│       ├─ ipCidrs[]             list?         OR-группа #1: "10.0.0.0/8"
+│       ├─ ports[]               list?         OR-группа #2: "443"
+│       ├─ portRanges[]          list?         OR-группа #2: "8000:9000"
+│       ├─ packages[]            list?         OR-группа #3: package_name
+│       ├─ protocols[]           list?         routing-rule level: bittorrent/tls/http/...
+│       ├─ ipIsPrivate           bool?         routing-rule level
+│       ├─ outbound              tag           "<outbound-tag>" или "reject" sentinel
+│       │                        — srs (CustomRuleSrs) —
+│       ├─ srsUrl                string        URL .srs-бинаря
+│       ├─ ports / portRanges / packages / protocols / ipIsPrivate / outbound
+│       │                        — preset (CustomRulePreset) —
+│       ├─ presetId              string        ссылка на selectable_rules[].preset_id
+│       └─ varsValues            object          юзерские vars override (включая 'outbound')
+│
+├─ dns_options                   object          §041 (rules) + §043+§044 (servers)
+│   ├─ servers[]                 list          §044 kind-discriminated refs:
+│   │   └─ <DnsServerRef>        object
+│   │       ├─ kind              "template"|"preset"|"inline"
+│   │       ├─ enabled           bool
+│   │       ├─ tag               string        single source of truth (НЕ дублируется в body)
+│   │       ├─ description       string?       optional override / для inline — primary
+│   │       └─ body              object?         только inline; partial sing-box server
+│   │                                          БЕЗ tag/description/enabled
+│   ├─ rules[]                   list          §041 origin-discriminated:
+│   │   └─ <DnsRuleRef>          object
+│   │       ├─ enabled           bool
+│   │       ├─ type              "user"|"template"|"rule"
+│   │       ├─ title             string        display
+│   │       └─ rule              object?         sing-box rule body (для type=user)
+│   └─ rules_json                string        DEPRECATED legacy single-string (§041)
+│
+├─ ping_options                  object          §040
+│   ├─ url                       string?       global default URL
+│   ├─ timeout_ms                int?          global default timeout
+│   ├─ presets[]                 list?         pre-built URL options (template-side)
+│   └─ groups                    object?         per-group override
+│       └─ <groupTag>            object          {url?, timeout_ms?}
+│
+├─ route_final                   string        override sing-box route.final
+├─ excluded_nodes[]              list          node tags выкинутые юзером из group resolve / mass-ping
+├─ enabled_groups[]              list          включённые preset-группы (selector membership)
+├─ last_global_update            ISO-8601      timestamp последнего auto-refresh
+├─ presets_migrated              bool          one-shot guard (legacy enabled_rules+rule_outbounds → custom_rules)
+│
+└─ (legacy)
+    ├─ enabled_rules[]                          мигрируется → обнуляется
+    ├─ rule_outbounds            object           мигрируется → обнуляется
+    ├─ proxy_sources[]                          (v1) → server_lists (v2), one-shot, удаляется
+    ├─ app_rules[]                              (до v1.3.2) → custom_rules.kind=inline, удаляется
+    ├─ node_overrides                           удаляется на каждом _save()
+    └─ show_detour_servers                      удаляется на каждом _save()
+```
+
+Каждый ключ описан подробно в разделах ниже.
+
 ## Disk layout
 
 Все пути — относительно **Android internal documents directory** (`getApplicationDocumentsDirectory()`). На устройстве этот каталог недоступен без root или Debug API (`GET /state/storage`).

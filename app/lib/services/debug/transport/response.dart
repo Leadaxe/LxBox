@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -101,6 +102,68 @@ class BytesResponse extends DebugResponse {
     _applyHeaders(out);
     out.add(bytes);
     await out.close();
+  }
+}
+
+/// §044: Server-Sent Events stream. Не закрывается до окончания
+/// stream'а / disconnect клиента. Каждый emit из [events] кодируется
+/// как SSE-frame `event: <name>\ndata: <json>\n\n`.
+///
+/// Fire-and-forget: `Last-Event-ID` мы не поддерживаем; на reconnect
+/// клиент подхватит с нового момента.
+class SseResponse extends DebugResponse {
+  SseResponse(this.events);
+
+  /// Each event must contain `event` (string) и `data` (JSON-encodable).
+  final Stream<Map<String, Object?>> events;
+
+  @override
+  int get status => 200;
+
+  @override
+  Map<String, String> get headers => const {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-cache',
+        'connection': 'keep-alive',
+        'x-accel-buffering': 'no',
+      };
+
+  @override
+  Future<void> writeTo(HttpResponse out) async {
+    _applyHeaders(out);
+    // Flush headers immediately.
+    await out.flush();
+    final completer = Completer<void>();
+    final sub = events.listen(
+      (e) {
+        try {
+          final ev = e['event']?.toString() ?? 'message';
+          final data = jsonEncode(e['data'] ?? {});
+          out.write('event: $ev\n');
+          out.write('data: $data\n\n');
+          out.flush();
+        } catch (_) {/* socket dead */}
+      },
+      onError: (_) {
+        if (!completer.isCompleted) completer.complete();
+      },
+      onDone: () {
+        if (!completer.isCompleted) completer.complete();
+      },
+      cancelOnError: false,
+    );
+    // detect client disconnect via response done future.
+    out.done.then((_) {
+      sub.cancel();
+      if (!completer.isCompleted) completer.complete();
+    }).catchError((_) {
+      sub.cancel();
+      if (!completer.isCompleted) completer.complete();
+    });
+    await completer.future;
+    try {
+      await out.close();
+    } catch (_) {}
   }
 }
 

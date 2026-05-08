@@ -10,6 +10,49 @@
 
 ---
 
+## [1.7.0] — 2026-05-08
+
+«Observability» release. Главное — **Per-app traffic profiler** (§044): inline-инструмент диагностики «куда конкретное приложение ходит и как роутится» прямо в Stats. Дополнено расширением `ru-direct` preset'а 4-слойной защитой (TLD + service-CDN suffix-list + GeoIP-ranges) — §045.
+
+### Added
+
+- **Per-app traffic profiler** ([§044 spec](docs/spec/features/044%20per-app%20traffic%20profiler/spec.md), [user guide](docs/features/per-app-trace.md)). Третий tab в Statistics: pick app → record → see DNS resolves (с CNAME chain'ом), connections (хост, IP, порт, outbound chain, bytes) и connection-issue markers ⚠ (DNS timeout, TCP RST early — locale-агностичные).
+  - 4 sub-tab'а: **Live** (newest-first stream), **Domains** (aggregated, expandable с CNAME/IPs/outbound/issues), **IPs** (per-IP stats, ↗ jump к Domains), **Connections** (timeline с inline-expand).
+  - In-memory only — никакого persist'а. 3h sliding window + 50k events count fallback. Ring-buffer 5 завершённых sessions.
+  - **Recording indicator** ⚡: chip в `_buildTrafficBar` на HomeScreen с short package name, плюс ⚡ возле «Per-app» tab title в StatsScreen. Tap всей строки на Home → `StatsScreen(initialTab: perApp)`.
+  - **Overflow menu** (⋮) Per-app tab'а: verbose toggle (debug-level core logs), copy/share session JSON, clear all, help.
+  - **Debug API** (`/profiler/start`, `/profiler/stop`, `/profiler/active`, `/profiler/sessions`, `/profiler/session/<id>`, `/profiler/stream` SSE) для CLI-driven trace-flow'ов и автоматизации.
+  - Connection-issue detection: 2 locale-агностичных типа — `dnsTimeout` (прямой engine-сигнал из `dns: exchange failed` лога) + `tcpReset` (heuristic «TCP закрылся <1с с 0 bytes»).
+  - Process inference fallback: если sing-box не нашёл `package_name` для conn'а (webview, system process), атрибутируем по prior DNS resolved IP (10s window), помечаем 〽.
+- **`docs/features/per-app-trace.md`** — полный user guide для Per-app traffic profiler: TL;DR, UI tour, 5 use cases (Tinkoff §045 / privacy audit / slow-app debug / preset catalog / dogfooding), Debug API curl-рецепты, edge cases, limits.
+- **`docs/DIAGNOSTICS.md`** + **`scripts/lxbox-diag.sh`** — playbook диагностики на устройстве и one-command snapshot всего runtime-state'а (Debug API + Clash API + adb-state) в `/tmp/lxbox-debug-<datetime>/` за 2-3 секунды. Для post-mortem'ов и pre-destructive-op baseline'ов.
+- **`docs/TEMPLATE.md`** — полная схема `wizard_template.json` (catalog of presets/vars/sections) + vars-substitution syntax.
+
+### Changed
+
+- **`ru-direct` preset extended** ([§045 spec](docs/spec/tasks/045-ru-direct-geoip-fallback.md)). Теперь четыре слоя матчинга вместо одного:
+  - **`ru-domains`** (TLD-based, было) — `.ru` / `.su` / IDN / `.moscow` / `.tatar`.
+  - **`ru-services`** (новый inline rule_set) — 18 service-CDN suffix'ов российских компаний на не-RU TLD: `userapi.com` (VK), `avito.st`, `yandex.{net,com}`, `yastatic.net`, `2gis.com`, `okko.tv`, `premier.one`, `lenta.com`, `vk.com`, `vk-portal.net`, `gismeteo.com`, `lmru.tech`, `mradx.net`, `wbstatic.net`, `wildberries.by`, `trbcdn.net` (общий CDN Тинькофф+Сбер), `sberbank.com`. Проанализированы по WHOIS/AS — все RU-родные.
+  - **`Ru Apps`** (package_name match, было) — для российских приложений у которых трафик может идти на любые TLD.
+  - **`geoip-ru`** (новый remote `.srs` от runetfreedom) — IP-range fallback для CDN/QUIC/ECH/short-lived TCP, где первые три слоя могут пропустить (sniff race / package detection race / TLS 1.3 ECH). Гейтится через `geoip_enabled` var (default `true`); auto-download `.srs` через `RuleSetDownloader` (~150 KB, обновление 168h). Spec compliance §011.
+  - `expandPreset` поддерживает `enabled: "@var"` гейтинг для rule_set entries (фрагмент пропускается при `false`) и `List<String>` форму `routing_rule.rule_set` (даунгрейд до single string при одном expanded tag'е, drop rule + warning при empty filtered list).
+  - Existing v1.6.1 юзеры с включённым `ru-direct` preset получают `geoip_enabled = true` по default'у на ребилде → новый layer автоматически активируется без миграции storage.
+- **README** + **README_RU**: feature card для Per-app traffic profiler в Features секции, screenshot `docs/screenshots/per_app_trace.jpg`.
+- **`AppInfoCache`**: новый `loadAllApps()` (lightweight installed-apps list, populate per-package cache без иконок) + smart `ensure(pkg)` (если AppInfo в cache без icon'а — догружает только icon, а не полный info). Унифицирует icon-cache между Custom Rules и Per-app picker'ами.
+- **`SseResponse`** в `debug/transport/response.dart` — primitive для Server-Sent Events через Debug API (используется `/profiler/stream`).
+
+### Tests
+
+- `app/test/services/traffic_profiler_test.dart` — session lifecycle (start/stop/auto-finalize), log-stream parsing (UID strip, CNAME chain, dns:cached + dns:exchanged), aggregation (DomainStats / IpStats), process inference (10s post-DNS window), connection-issue detection (2 types), session ring-buffer eviction.
+- `app/test/services/builder/preset_expand_test.dart` — расширен под §045: 4 case'а для `geoip_enabled` × `geoip-ru` cache state (on+downloaded / on+not-downloaded / off+downloaded / off+not-downloaded), List form для `rule_set`, dangling-rule_set guard.
+- `flutter analyze` чистый, **510 tests passed**.
+
+### Release / CI
+
+- Per-ABI APK split (продолжается с v1.6.1): `LxBox-v1.7.0-{arm64-v8a,armeabi-v7a,x86_64,universal}.apk`.
+
+---
+
 ## [1.6.1] — 2026-05-08
 
 DNS-серверы перевели на kind-discriminated refs (симметрия с DNS rules §041) с чистым разделением meta-полей и sing-box body — фиксит баги выявленные на v1.6.0 в эксплуатации.

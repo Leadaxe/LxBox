@@ -437,7 +437,29 @@ Displayed in:
 
 ### 5. Persistent storage
 
-Полная схема, per-key семантика и migration history — отдельный документ: **[STORAGE.md](./STORAGE.md)**. Здесь — обзорное дерево.
+Состояние L×Box живёт в двух местах с разной семантикой:
+
+- **`wizard_template.json`** — **catalog**: что вообще существует (preset'ы, vars, sections, default DNS-серверы). Bundled в APK, меняется в коммите. Полная схема — [TEMPLATE.md](./TEMPLATE.md).
+- **`lxbox_settings.json`** — **user-state**: что юзер выбрал/настроил (vars override, custom_rules, enabled_groups). Меняется в runtime через UI / Debug API. Полная схема — [STORAGE.md](./STORAGE.md).
+
+#### Catalog (template, bundled in APK)
+
+```
+app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.dart
+├── parser_config           # §026 — version + reload interval
+├── dns_options             # §043+§044 — default DNS servers + rules
+├── ping_options            # §040 — default URL + presets
+├── speed_test_options      # §015 — speed-test endpoints
+├── preset_groups[]         # selector/urltest группы (vpn-1, vpn-2, vpn-3, ✨auto)
+├── sections[]              # §022 — Wizard UI chapters (vars сгруппированы по темам)
+├── config                  # нативная sing-box-секция с @var-плейсхолдерами
+│   ├── log / dns / inbounds / endpoints / outbounds / experimental
+│   └── route               #   rules[] / rule_set[] / final / default_domain_resolver
+└── selectable_rules[]      # §033 — catalog preset'ов: block-ads, ru-direct,
+                            #   ru-inside, bittorrent-direct, private-ip-direct
+```
+
+#### User-state (на устройстве)
 
 ```
 <getApplicationDocumentsDirectory>/
@@ -463,6 +485,10 @@ SharedPreferences (Android):
                                          # Flutter engine'а
 ```
 
+#### Builder (template + user-state → final config)
+
+`build_config.dart` мерджит template `config`-секцию + `selectable_rules[*]` (через `expandPreset`) + `dns_options.{servers,rules}` (через resolvers §041/§044) + `preset_groups` (с активными node-tag'ами из `server_lists`) + `vars`-substitution → пишет финальный `singbox_config.json` для libbox.
+
 One-shot миграции (`SettingsStorage`):
 - `proxy_sources` → `server_lists` (v1 → v2, §033) — `migrateProxySources` на первом чтении.
 - `app_rules` → `custom_rules` с `packages` (до v1.3.2 → §030) — `_absorbLegacyAppRules`.
@@ -470,6 +496,60 @@ One-shot миграции (`SettingsStorage`):
 - `dns_options.servers[]` shape: pre-§043 → §043 → §044 — `_migrateLegacyDnsServers` в builder post-steps.
 
 Sensitive-поля при `GET /state/storage` фильтруются allow-list'ом в `services/debug/serializers/storage.dart` (`debug_token`, subscription URLs, support/web URLs из `meta`). Подробности — STORAGE.md §"Debug API exposure".
+
+---
+
+### 6.5. Per-app traffic profiler (§044)
+
+`TrafficProfiler` — singleton ChangeNotifier, который держит **одну** active recording session + ring-buffer (cap=5) последних завершённых. Всё in-memory; persist принципиально не делается. Spec: [`docs/spec/features/044 per-app traffic profiler/spec.md`](./spec/features/044%20per-app%20traffic%20profiler/spec.md). User guide: [`docs/features/per-app-trace.md`](./features/per-app-trace.md).
+
+```
+              ┌────────────────────────────────────────┐
+              │  TrafficProfiler (singleton)            │
+              │   _active: Session? + _completed: Q[5]  │
+              └────────────────────────────────────────┘
+                     ▲                    ▲
+                     │ events             │ events
+                     │                    │
+        ┌────────────┴────────┐  ┌────────┴──────────────────┐
+        │ Source A: log stream│  │ Source B: /connections poll│
+        │  AppLog (core src)  │  │  Clash API every 2s        │
+        │  ts-diff drain      │  │  diff vs prev snapshot     │
+        └─────────────────────┘  └────────────────────────────┘
+                     │                    │
+                     ▼                    ▼
+        DNS resolves + CNAME       TCP/UDP open/close events
+        attribution by conn-id     attribution by metadata.process
+                                   (UID-stripped) или process inference
+
+              ┌────────────────────────────────────────┐
+              │ Session.events  (append-only)           │
+              │  +  byDomain / byIp aggregates          │
+              │     (computed on-demand)                │
+              └────────────────────────────────────────┘
+                     │
+        ┌────────────┴───────────────────────────────────────────┐
+        ▼                              ▼                         ▼
+  PerAppTraceTab UI         Debug API /profiler/*          SSE /profiler/stream
+  (Live/Domains/IPs/        (start, stop, active,          (live-push для
+   Connections)              session/<id>, sessions,        external clients)
+                             stream)
+```
+
+**Spawning rules:**
+- Source A live-listen на `AppLog.I` (core source). Drain timestamp-diff'ом — не length, чтобы не залипать на ring-buffer cap=500. Regex'ы ловят `router: found package name`, `dns: exchanged|cached`, `dns: exchange failed`. Per-conn-id accumulator (`_DnsAccumulator`) держит первый-запрошенный domain + CNAME chain.
+- Source B `Timer.periodic(2s)` пока есть active session. Connections фильтруются по `metadata.process` (с UID-strip) или `processPath` или process-inference (10s post-DNS window — IP должен быть в resolved-IPs prior session events).
+- Connection-issue classifier per-event: 2 locale-агностичных типа — `dnsTimeout` (прямой engine-сигнал из `dns: exchange failed` лога) + `tcpReset` (heuristic: TCP закрылся <1с с 0 bytes, вероятный RST/firewall).
+
+**Memory bounds:**
+- `Session.events`: cap = 50000 events ИЛИ 3h sliding window (что раньше). `eventsDropped` в meta.
+- `_completed`: ListQueue cap = 5 sessions, FIFO-evict.
+- `_connIdToMeta` / `_dnsByConnId`: GC по 30s TTL, trigger когда map > 256 entries.
+
+**UI plumbing:**
+- HomeScreen `_buildTrafficBar` показывает ⚡-chip с short package name (`ru.tinkoff` для `ru.tinkoff.investing`) когда session active. Tap всей строки → `StatsScreen(initialTab: StatsTab.perApp)`.
+- `StatsScreen` 3-й tab `Per-app` с ⚡ возле title.
+- `PerAppTraceTab` 4 sub-tab'а: Live / Domains / IPs / Connections. Search-by-IP в Domains, inline expand на Connections, ↗ IP-jump иконки везде где рендерится IP — все три view связаны двусторонней навигацией.
 
 ---
 
@@ -787,5 +867,6 @@ Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`]
 | 041 | DNS rules refactor (named/toggleable/multi-source) |
 | 042 | Health watchdog (heartbeat metrics + auto-recovery) — *Draft* |
 | 043 | AppLog per-source quotas (in-memory: app=300, core=500) |
+| **044** | **Per-app traffic profiler** (recording per-app DNS/connections/routing chain — Live/Domains/IPs/Connections sub-tabs, connection-issue detection, Debug API + SSE) |
 
 Дополнительно — летопись отдельных рабочих циклов (баги, рефакторинги): [`docs/spec/tasks/`](./spec/tasks/). Процессы (например, ночная работа): [`docs/spec/processes/`](./spec/processes/).

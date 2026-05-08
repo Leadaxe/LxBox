@@ -75,6 +75,11 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
   /// (isCached) + меняется по клику (_downloadSrs).
   _SrsDownloadState _srsState = _SrsDownloadState.none;
 
+  /// §045: bool var'ы у которых сейчас идёт on-toggle download связанных
+  /// rule_set'ов. Нужно чтобы Switch был disabled (показывал spinner)
+  /// пока качается, иначе юзер может несколько раз тыкнуть.
+  final Set<String> _boolVarDownloading = <String>{};
+
   @override
   void initState() {
     super.initState();
@@ -185,32 +190,58 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
       jsonEncode(_snapshot().toJson()) !=
       jsonEncode(widget.initial.toJson());
 
-  /// Обработчик back (system + AppBar leading). Если unsaved — confirm.
+  /// Обработчик back (system + AppBar leading). Если unsaved — confirm
+  /// с тремя опциями: Save (сохраняет + закрывает), Keep editing (dismiss),
+  /// Discard (закрывает без сохранения).
   Future<void> _handleBack() async {
     if (!_isDirty()) {
       Navigator.pop(context);
       return;
     }
-    final discard = await showDialog<bool>(
+    final action = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Discard changes?'),
-        content: const Text('You have unsaved changes. Leave without saving?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep editing'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(
-                foregroundColor: Theme.of(ctx).colorScheme.error),
-            child: const Text('Discard'),
-          ),
-        ],
-      ),
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return AlertDialog(
+          title: const Text('Unsaved changes'),
+          content:
+              const Text('You have unsaved changes. Save before leaving?'),
+          // §045-followup: все TextButton'ы + короткие надписи →
+          // вмещаются в строку. FilledButton + длинная "Keep editing"
+          // forced wrap в столбец на типичных phone widths.
+          // §045: все TextButton'ы + короткие надписи → влезают в строку
+          // на phone width. FilledButton + "Keep editing" forced wrap.
+          actionsPadding:
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'discard'),
+              style: TextButton.styleFrom(foregroundColor: cs.error),
+              child: const Text('Discard'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'keep'),
+              child: const Text('Keep'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'save'),
+              style: TextButton.styleFrom(
+                foregroundColor: cs.primary,
+                textStyle: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
     );
-    if (discard == true && mounted) Navigator.pop(context);
+    if (!mounted) return;
+    if (action == 'save') {
+      _save(); // сам сделает Navigator.pop при успехе
+    } else if (action == 'discard') {
+      Navigator.pop(context);
+    }
+    // 'keep' / null — остаёмся на экране
   }
 
   Future<void> _downloadSrs() async {
@@ -1096,12 +1127,18 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 20),
-        Text('PARAMETERS',
-            style: theme.textTheme.titleSmall?.copyWith(
-                color: cs.primary, fontWeight: FontWeight.w600)),
-        const Divider(),
-        for (final v in preset.vars) _buildPresetVarWidget(theme, preset, v),
+        // PARAMETERS секция показывается только если у preset'а есть vars.
+        // Для preset'ов без vars (e.g. Block Ads, BitTorrent direct) — пусто;
+        // показывать заголовок без контента — шум.
+        if (preset.vars.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Text('PARAMETERS',
+              style: theme.textTheme.titleSmall?.copyWith(
+                  color: cs.primary, fontWeight: FontWeight.w600)),
+          const Divider(),
+          for (final v in preset.vars)
+            _buildPresetVarWidget(theme, preset, v),
+        ],
         const SizedBox(height: 24),
         const Divider(),
         const SizedBox(height: 12),
@@ -1112,6 +1149,90 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
         ),
       ],
     );
+  }
+
+  /// §045: handler для bool-var Switch'а. Если var управляет remote
+  /// rule_set'ом (через `enabled: "@<v.name>"` convention), на toggle-on
+  /// auto-downloads .srs; при fail toggle откатывается + snackbar.
+  /// Toggle-off — без downloads.
+  Future<void> _onBoolVarToggle(
+    SelectableRule preset,
+    WizardVar v,
+    bool val,
+  ) async {
+    if (!val) {
+      setState(() => _varsValues[v.name] = 'false');
+      return;
+    }
+    // val == true: ищем rule_set'ы управляемые этим var'ом
+    final controlled = preset.ruleSets.where((rs) {
+      final raw = rs['enabled'];
+      return raw is String && raw == '@${v.name}';
+    }).toList();
+
+    // Если var ничего не gate'ит — просто меняем state
+    if (controlled.isEmpty) {
+      setState(() => _varsValues[v.name] = 'true');
+      return;
+    }
+
+    // Проверяем какие из них remote и не cached
+    final initial = widget.initial;
+    final presetId =
+        initial is CustomRulePreset ? initial.presetId : preset.presetId;
+    final missing = <_PendingDownload>[];
+    for (final rs in controlled) {
+      if (rs['type'] != 'remote') continue;
+      final tag = rs['tag'];
+      final url = rs['url'];
+      if (tag is! String || tag.isEmpty) continue;
+      if (url is! String || url.isEmpty) continue;
+      final cached =
+          await RuleSetDownloader.cachedPathForPreset(presetId, tag) != null;
+      if (!cached) missing.add(_PendingDownload(tag: tag, url: url));
+    }
+    if (!mounted) return;
+
+    if (missing.isEmpty) {
+      setState(() {
+        _varsValues[v.name] = 'true';
+        _presetSrsPaths = {..._presetSrsPaths};
+      });
+      return;
+    }
+
+    // Качаем все недостающие
+    setState(() => _boolVarDownloading.add(v.name));
+    final newPaths = <String, String>{};
+    var anyFailed = false;
+    for (final m in missing) {
+      final path =
+          await RuleSetDownloader.downloadForPreset(presetId, m.tag, m.url);
+      if (path == null) {
+        anyFailed = true;
+      } else {
+        newPaths[m.tag] = path;
+      }
+    }
+    if (!mounted) return;
+
+    setState(() {
+      _boolVarDownloading.remove(v.name);
+      if (anyFailed) {
+        // toggle остаётся off, var не меняется
+      } else {
+        _varsValues[v.name] = 'true';
+        _presetSrsPaths = {..._presetSrsPaths, ...newPaths};
+      }
+    });
+
+    if (anyFailed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Failed to download SRS for "${v.title.isEmpty ? v.name : v.title}". '
+                'Check internet and try again.')),
+      );
+    }
   }
 
   Widget _buildPresetVarWidget(
@@ -1200,6 +1321,54 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
             if (val == null) return;
             setState(() => _varsValues[v.name] = val);
           },
+        );
+      case 'bool':
+        // §045: bool var → Switch; storage хранит "true"/"false" string'ом.
+        // Если var управляет remote rule_set'ом (`enabled: "@<v.name>"`):
+        // toggle-on auto-downloads .srs; на fail откатываем (mirror
+        // RoutingScreen `_enableAfterDownload`).
+        final hasExplicit = _varsValues.containsKey(v.name);
+        final stored = _varsValues[v.name];
+        final raw = hasExplicit ? (stored ?? '') : v.defaultValue;
+        final current = raw.toLowerCase() == 'true';
+        final downloading = _boolVarDownloading.contains(v.name);
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: theme.textTheme.bodyLarge),
+                    if (subtitle.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(subtitle,
+                            style: TextStyle(
+                                fontSize: 12, color: cs.onSurfaceVariant)),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              if (downloading)
+                const SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: Padding(
+                    padding: EdgeInsets.all(8),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              else
+                Switch(
+                  value: current,
+                  onChanged: (val) => _onBoolVarToggle(preset, v, val),
+                ),
+            ],
+          ),
         );
       default:
         control = Text(
@@ -1339,6 +1508,13 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
 }
 
 enum _SrsDownloadState { none, loading, cached, error }
+
+/// §045: tag+url пара для batch download'а в `_onBoolVarToggle`.
+class _PendingDownload {
+  const _PendingDownload({required this.tag, required this.url});
+  final String tag;
+  final String url;
+}
 
 /// Результат редактора — либо сохранение, либо удаление.
 class _CustomRuleEditResult {

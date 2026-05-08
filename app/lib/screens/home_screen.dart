@@ -27,6 +27,7 @@ import '../services/debug/debug_registry.dart';
 import '../services/haptic_service.dart';
 import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
+import '../services/traffic_profiler.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/update_checker.dart';
 import '../services/url_launcher.dart' as ul;
@@ -86,6 +87,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     DebugRegistry.I.home = _controller;
     DebugRegistry.I.sub = _subController;
     DebugRegistry.I.autoUpdater = _autoUpdater;
+    // §044: profiler нужен runtime data-source `/connections`. Биндим один
+    // раз тут (singleton-controller singleton-fetcher), чтобы и Debug API
+    // /profiler/start (без открытого UI), и StatsScreen.PerAppTraceTab
+    // оба видели актуальный fetcher. Closure читает свежий clashClient
+    // на каждом poll'е — переподключение Clash API не требует rebind.
+    TrafficProfiler.I.bindRuntime(connections: () async {
+      final c = _controller.clashClient;
+      if (c == null) return const <String, dynamic>{'connections': []};
+      return c.fetchConnections();
+    });
     unawaited(applyDebugApiSettings());
     unawaited(_controller.init());
     unawaited(_initSubsAndAutoUpdate());
@@ -882,34 +893,69 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       onTap: () {
         final clash = _controller.clashClient;
         if (clash != null) {
+          // §044: если идёт recording — открываем StatsScreen сразу на
+          // Per-app tab'е, иначе на Overview.
+          final initial = TrafficProfiler.I.isRecording
+              ? StatsTab.perApp
+              : StatsTab.overview;
           Navigator.push(context, MaterialPageRoute(
-            builder: (_) => StatsScreen(clash: clash, configRaw: _controller.state.configRaw),
+            builder: (_) => StatsScreen(
+              clash: clash,
+              configRaw: _controller.state.configRaw,
+              initialTab: initial,
+            ),
           ));
         }
       },
       child: Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Row(
-        children: [
-          _trafficChip(context, Icons.arrow_upward, state.traffic.uploadFormatted, cs.primary),
-          const SizedBox(width: 8),
-          _trafficChip(context, Icons.arrow_downward, state.traffic.downloadFormatted, cs.tertiary),
-          if (state.traffic.activeConnections > 0) ...[
-            const SizedBox(width: 8),
-            _trafficChip(context, Icons.link, '${state.traffic.activeConnections}', cs.secondary),
-          ],
-          const Spacer(),
-          if (uptime.isNotEmpty)
-            Text(
-              uptime,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
-            ),
-        ],
+      child: AnimatedBuilder(
+        animation: TrafficProfiler.I,
+        builder: (_, _) {
+          final profiler = TrafficProfiler.I;
+          return Row(
+            children: [
+              _trafficChip(context, Icons.arrow_upward,
+                  state.traffic.uploadFormatted, cs.primary),
+              const SizedBox(width: 8),
+              _trafficChip(context, Icons.arrow_downward,
+                  state.traffic.downloadFormatted, cs.tertiary),
+              if (state.traffic.activeConnections > 0) ...[
+                const SizedBox(width: 8),
+                _trafficChip(context, Icons.link,
+                    '${state.traffic.activeConnections}', cs.secondary),
+              ],
+              if (profiler.isRecording) ...[
+                const SizedBox(width: 8),
+                _trafficChip(
+                  context,
+                  Icons.bolt,
+                  _shortPkg(profiler.active!.targetPackage),
+                  cs.error,
+                ),
+              ],
+              const Spacer(),
+              if (uptime.isNotEmpty)
+                Text(
+                  uptime,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                ),
+            ],
+          );
+        },
       ),
     ),
     );
+  }
+
+  /// `_shortPkg("ru.tinkoff.investing")` → `"ru.tinkoff"` (первые два
+  /// сегмента package name'а), для chip'а в `_buildTrafficBar`.
+  static String _shortPkg(String pkg) {
+    final parts = pkg.split('.');
+    if (parts.length <= 2) return pkg;
+    return '${parts[0]}.${parts[1]}';
   }
 
   Widget _trafficChip(BuildContext context, IconData icon, String label, Color color) {

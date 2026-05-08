@@ -16,6 +16,7 @@ import '../handlers/files.dart';
 import '../handlers/logs.dart';
 import '../handlers/help.dart';
 import '../handlers/ping.dart';
+import '../handlers/profiler.dart';
 import '../handlers/rules.dart';
 import '../handlers/settings.dart';
 import '../handlers/state.dart';
@@ -173,7 +174,8 @@ class DebugServer {
       ..mount('/backup', backupHandler)
       ..mount('/rules', rulesHandler)
       ..mount('/subs', subsHandler)
-      ..mount('/settings', settingsHandler);
+      ..mount('/settings', settingsHandler)
+      ..mount('/profiler', profilerHandler);
   }
 
   List<Middleware> _buildPipeline(DebugServerConfig config) {

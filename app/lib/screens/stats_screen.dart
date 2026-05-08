@@ -5,13 +5,25 @@ import 'package:flutter/material.dart';
 
 import '../services/app_info_cache.dart';
 import '../services/clash_api_client.dart';
+import '../services/traffic_profiler.dart';
 import 'connections_screen.dart';
+import 'per_app_trace_tab.dart';
+
+/// §044: enum для start-tab выбора в StatsScreen. Передаётся при
+/// `Navigator.push(StatsScreen(initialTab: StatsTab.perApp))`.
+enum StatsTab { overview, connections, perApp }
 
 class StatsScreen extends StatefulWidget {
-  const StatsScreen({super.key, required this.clash, this.configRaw = ''});
+  const StatsScreen({
+    super.key,
+    required this.clash,
+    this.configRaw = '',
+    this.initialTab = StatsTab.overview,
+  });
 
   final ClashApiClient clash;
   final String configRaw;
+  final StatsTab initialTab;
 
   @override
   State<StatsScreen> createState() => _StatsScreenState();
@@ -180,14 +192,36 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
+      initialIndex: widget.initialTab.index,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Statistics'),
-          bottom: const TabBar(
+          bottom: TabBar(
             tabs: [
-              Tab(icon: Icon(Icons.dashboard_outlined), text: 'Overview'),
-              Tab(icon: Icon(Icons.link), text: 'Connections'),
+              const Tab(icon: Icon(Icons.dashboard_outlined), text: 'Overview'),
+              const Tab(icon: Icon(Icons.link), text: 'Connections'),
+              Tab(
+                icon: const Icon(Icons.travel_explore),
+                child: AnimatedBuilder(
+                  animation: TrafficProfiler.I,
+                  builder: (_, _) => Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('Per-app'),
+                      if (TrafficProfiler.I.isRecording) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.bolt,
+                          size: 14,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -195,6 +229,7 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
           children: [
             _buildOverview(context),
             ConnectionsView(clash: widget.clash),
+            PerAppTraceTab(clash: widget.clash),
           ],
         ),
       ),

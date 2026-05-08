@@ -467,17 +467,16 @@ class CustomRulePreset extends CustomRule {
 
   @override
   String get summary {
+    // Preset-факт уже виден в UI — read-only `name` (snapshot template-label'а)
+    // плюс 🔒 иконка. Дублировать «preset: <id>» в subtitle не нужно.
+    // Показываем только user-выставленные vars (если есть и непусты).
     if (presetId.isEmpty) return '';
-    final parts = <String>['preset: $presetId'];
-    if (varsValues.isNotEmpty) {
-      final shown = varsValues.entries
-          .where((e) => e.value.isNotEmpty)
-          .map((e) => '${e.key}=${e.value}')
-          .take(2)
-          .join(', ');
-      if (shown.isNotEmpty) parts.add(shown);
-    }
-    return parts.join(' · ');
+    if (varsValues.isEmpty) return '';
+    return varsValues.entries
+        .where((e) => e.value.isNotEmpty)
+        .map((e) => '${e.key}=${e.value}')
+        .take(2)
+        .join(', ');
   }
 
   @override
