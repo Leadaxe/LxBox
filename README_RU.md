@@ -270,4 +270,4 @@ Spec-driven development — 30 спецификаций фич в [docs/spec/fea
 
 L×Box распространяется на условиях [GNU General Public License v3.0](LICENSE).
 
-Коммерческая лицензия у Leadaxe — для сценариев, несовместимых с GPLv3. **Условия коммерческой лицензии согласовываются отдельно и не публикуются** в этом репозитории. Связь: [ledaxe@gmail.com](mailto:ledaxe@gmail.com). Подробнее: [LICENSING.md](LICENSING.md).
+Коммерческая лицензия от Leadaxe возможна **только на собственный код Leadaxe в L×Box**. L×Box линкуется с [`libbox`](https://github.com/SagerNet/sing-box) (sing-box, GPLv3), поэтому собранный L×Box в любом случае остаётся под GPLv3 — коммерческая лицензия только от Leadaxe не делает L×Box пригодным для проприетарного продукта. Область применения и ограничения: [LICENSING.md](LICENSING.md). Запросы: [ledaxe@gmail.com](mailto:ledaxe@gmail.com).

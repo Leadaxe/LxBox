@@ -296,4 +296,4 @@ The script wraps `flutter build apk --release` with `--dart-define`s that embed 
 
 L×Box is licensed under the [GNU General Public License v3.0](LICENSE).
 
-Commercial licensing from Leadaxe is available for uses that are not compatible with GPLv3. **Commercial terms are negotiated privately and are not published** in this repository. Contact: [ledaxe@gmail.com](mailto:ledaxe@gmail.com). See [LICENSING.md](LICENSING.md).
+Commercial licensing from Leadaxe may be available for **Leadaxe's own code in L×Box**. Note that L×Box links against [`libbox`](https://github.com/SagerNet/sing-box) (sing-box, GPLv3), so any compiled L×Box build remains under GPLv3 regardless — a Leadaxe-only commercial license cannot authorize embedding L×Box into a proprietary product. Scope and limits: [LICENSING.md](LICENSING.md). Inquiries: [ledaxe@gmail.com](mailto:ledaxe@gmail.com).
