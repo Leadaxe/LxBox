@@ -168,6 +168,10 @@ Real-time traffic by outbound with expandable cards. Each connection shows host,
 <details>
 <summary><strong>Per-app traffic profiler</strong> — trace any app's network in real time (v1.7.0)</summary>
 
+<p align="center">
+<img src="docs/screenshots/per_app_trace_wide.jpg" alt="Per-app traffic profiler — Live / Domains / Connections sub-tabs"/>
+</p>
+
 Pick an app, hit ▶ Record, and see every domain, IP, and routing decision — including which CDN your bank uses, where it gets routed, and whether part of the traffic leaks through a different outbound. Built-in connection-issue detection flags failed DNS and likely-blocked TCP connections.
 
 - **Stats → Per-app tab**: select package via app picker, [▶ START] / [⏹ STOP], status row shows `Recording 02:34 · 47 doms · 53 ips · 287 ev`
