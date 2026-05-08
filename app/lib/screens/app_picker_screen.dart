@@ -1,46 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/app_info.dart';
-import '../vpn/box_vpn_client.dart';
-
-/// Cached app metadata list — loaded once, reused across screen opens.
-/// Иконки **не** тут, они lazy-cache'атся в `_iconCache` при scroll'е tile'а.
-List<AppInfo>? _cachedApps;
-bool _cacheLoading = false;
-
-/// Session-level icon cache: package → decoded PNG bytes (или null если
-/// native вернул пусто). Персистит между открытиями picker'а — на повторном
-/// открытии иконки мгновенные. Сброс только при перезапуске app'а.
-final Map<String, Uint8List?> _iconCache = {};
-
-/// Package'и, для которых уже запущен fetch (дедуп fire-and-forget).
-final Set<String> _iconInFlight = {};
-
-Future<List<AppInfo>> _loadApps() async {
-  if (_cachedApps != null) return _cachedApps!;
-  if (_cacheLoading) {
-    while (_cacheLoading) {
-      await Future.delayed(const Duration(milliseconds: 100));
-    }
-    return _cachedApps ?? [];
-  }
-  _cacheLoading = true;
-  try {
-    final vpn = BoxVpnClient();
-    // BoxVpnClient.getInstalledApps уже возвращает typed List<AppInfo>.
-    // Сортируем тут — caller хочет alphabet-by-display-name.
-    _cachedApps = (await vpn.getInstalledApps())
-      ..sort((a, b) =>
-          a.appName.toLowerCase().compareTo(b.appName.toLowerCase()));
-    return _cachedApps!;
-  } finally {
-    _cacheLoading = false;
-  }
-}
+import '../services/app_info_cache.dart';
 
 /// Screen for selecting apps. Returns updated list of package names on pop.
 class AppPickerResult {
@@ -74,30 +38,11 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
   }
 
   Future<void> _load() async {
-    final apps = await _loadApps();
+    final apps = await AppInfoCache.loadAllApps();
     if (!mounted) return;
     setState(() {
       _allApps = apps;
       _loading = false;
-    });
-  }
-
-  /// Lazy-fetch иконки для одного пакета. Fire-and-forget: вызывается из
-  /// itemBuilder'а tile'а, дедупится через `_iconInFlight`. Когда ответ
-  /// пришёл — setState чтобы tile перерисовался.
-  void _ensureIcon(String pkg) {
-    if (_iconCache.containsKey(pkg) || _iconInFlight.contains(pkg)) return;
-    _iconInFlight.add(pkg);
-    BoxVpnClient().getAppIcon(pkg).then((b64) {
-      _iconInFlight.remove(pkg);
-      Uint8List? bytes;
-      if (b64.isNotEmpty) {
-        try {
-          bytes = base64Decode(b64);
-        } catch (_) {}
-      }
-      _iconCache[pkg] = bytes;
-      if (mounted) setState(() {});
     });
   }
 
@@ -110,14 +55,15 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
     );
   }
 
-  /// Рендер иконки для tile'а: если в cache — Image, если нет — letter-avatar
-  /// плюс kick fire-and-forget fetch (ленивая подгрузка по мере scroll'а).
+  /// Рендер иконки для tile'а через общий [AppInfoCache]. На первом проходе
+  /// AppInfo обычно уже есть (loadAllApps populate'ит cache), но если pkg
+  /// ещё не подъехал — kick fire-and-forget fetch и letter-placeholder.
   Widget _iconFor(AppInfo app) {
     final pkg = app.packageName;
-    if (!_iconCache.containsKey(pkg)) _ensureIcon(pkg);
-    final bytes = _iconCache[pkg];
-    if (bytes != null) {
-      return Image.memory(bytes,
+    AppInfoCache.ensure(pkg);
+    final info = AppInfoCache.of(pkg) ?? app;
+    if (info.icon != null) {
+      return Image.memory(info.icon!,
           width: 36, height: 36, gaplessPlayback: true);
     }
     // Placeholder: первая буква имени в circle avatar.
@@ -296,7 +242,10 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
                               }
                             });
                           },
-                          secondary: _iconFor(app),
+                          secondary: AnimatedBuilder(
+                            animation: AppInfoCache.revision,
+                            builder: (_, _) => _iconFor(app),
+                          ),
                           title: Text(
                             app.appName,
                             maxLines: 1,

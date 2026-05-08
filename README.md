@@ -28,6 +28,9 @@ Android VPN client powered by [sing-box](https://sing-box.sagernet.org/). Multi-
 <img src="docs/screenshots/app_picker.jpg" width="240" alt="App Picker"/>
 <img src="docs/screenshots/app_settings.jpg" width="240" alt="App Settings"/>
 </p>
+<p align="center">
+<img src="docs/screenshots/per_app_trace.jpg" width="240" alt="Per-app Traffic Profiler"/>
+</p>
 
 ---
 
@@ -160,6 +163,28 @@ Built-in speed test with 10 servers worldwide. Per-server ping measures latency 
 <summary><strong>Statistics & Connections</strong> — see what's happening</summary>
 
 Real-time traffic by outbound with expandable cards. Each connection shows host, protocol, routing rule, traffic, duration, proxy chain, and app/process name. Close individual connections.
+</details>
+
+<details>
+<summary><strong>Per-app traffic profiler</strong> — trace any app's network in real time (v1.7.0)</summary>
+
+Pick an app, hit ▶ Record, and see every domain, IP, and routing decision — including which CDN your bank uses, where it gets routed, and whether part of the traffic leaks through a different outbound. Built-in connection-issue detection flags failed DNS and likely-blocked TCP connections.
+
+- **Stats → Per-app tab**: select package via app picker, [▶ START] / [⏹ STOP], status row shows `Recording 02:34 · 47 doms · 53 ips · 287 ev`
+- **4 sub-tabs**:
+  - **Live** — newest events first (DNS resolves with CNAME chain · TCP/UDP open/close), monospace IP `↗` chip jumps to Domains
+  - **Domains** — aggregated unique domains, sortable; expanded view = CNAME targets, all resolved IPs, outbounds, issues. Search field matches by `domain` || `ip` || `cname target` (cross-domain CDN audit)
+  - **IPs** — aggregated by destination IP (ports, conn count, bytes, outbound). Each row has `↗` to jump back to Domains filtered by that IP
+  - **Connections** — per-connection timeline. Tap header to inline-expand: CNAME chain, all IPs, rule, issues, button `[View in Domains →]` that focuses the corresponding aggregate row
+- **Connection-issue detection (2 locale-agnostic types)**: `dnsTimeout` (sing-box `dns: exchange failed` log — direct engine signal, not heuristic), `tcpReset` (TCP closed within 1s with 0 bytes — likely firewall RST / unreachable). ⚠ icon on Live row + Domain expanded view shows full description
+- **Process inference** — when sing-box's `find_process` misses (rare with WebView/system processes), profiler attributes connection by recently resolved IP within a 10s post-DNS window; rows marked `〽 inferred from prior DNS`
+- **Recording indicators**:
+  - HomeScreen `_buildTrafficBar` chip `⚡ <pkg>` next to traffic stats; tap whole row → `StatsScreen(initialTab: perApp)`
+  - Stats `Per-app` tab title gets red `⚡` while recording
+- **Overflow menu (⋮)** in Per-app tab: Verbose core logs (debug-level, applies on next session), Copy session JSON, Share, Clear all sessions, Help
+- **In-memory only** — last 5 finished sessions kept, plus 1 active. 3h sliding window per session + 50k events fallback cap. `force-stop` / app kill wipes everything (no persist by design — diagnostic-only)
+- **Debug API** (Bearer-auth, port 9269): `POST /profiler/start {package, verbose?}` · `POST /profiler/stop` · `GET /profiler/active` · `GET /profiler/sessions` · `GET /profiler/session/<id>?include=events,domains,ips` · `DELETE /profiler/session/<id>` · `DELETE /profiler/sessions` · `GET /profiler/stream` (Server-Sent Events, fire-and-forget)
+- **Docs**: [user guide with use cases & curl recipes](docs/features/per-app-trace.md) · [§044 spec](docs/spec/features/044%20per-app%20traffic%20profiler/spec.md)
 </details>
 
 <details>

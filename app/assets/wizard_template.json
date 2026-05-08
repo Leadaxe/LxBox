@@ -423,11 +423,11 @@
     },
     {
       "preset_id": "ru-direct",
-      "label": "Russian domains direct",
-      "description": "Route Russian & Cyrillic TLDs directly.",
+      "label": "Russian domains & IPs",
+      "description": "Route Russian TLDs (.ru/.su/IDN), service CDNs (Yandex/VK/Avito/2GIS/banks/etc) and Russian IP ranges directly.",
       "default": true,
       "vars": [
-        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route traffic for Russian domains"},
+        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route traffic for Russian domains and IPs"},
         {"name": "dns_server", "type": "dns_servers", "required": false, "default_value": "yandex_udp", "title": "DNS server", "tooltip": "Recommended: Base/UDP — most stable. DoH/DoT may be filtered by ISPs."},
         {"name": "dns_ip", "type": "enum", "default_value": "77.88.8.8", "title": "UDP server IP", "tooltip": "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.", "options": [
           {"title": "77.88.8.8 · Base",                  "value": "77.88.8.8"},
@@ -440,13 +440,22 @@
           {"title": "77.88.8.7 · Family",                "value": "77.88.8.7"},
           {"title": "77.88.8.3 · Family alt",            "value": "77.88.8.3"},
           {"title": "2a02:6b8::feed:a11 · Family v6",    "value": "2a02:6b8::feed:a11"}
-        ]}
+        ]},
+        {"name": "geoip_enabled", "type": "bool", "default_value": "true", "title": "GeoIP IP-range fallback", "tooltip": "Match Russian-AS IPs as well as domains — catches CDN/QUIC/ECH cases where domain detection fails. Auto-downloads geoip-ru.srs (~150 KB) on first use."}
       ],
       "rule_set": [
-        {"tag": "ru-domains", "type": "inline", "rules": [{"domain_suffix": ["ru", "su", "xn--p1ai", "xn--p1acf", "xn--80adxhks", "moscow", "tatar", "xn--d1acj3b", "xn--80asehdb", "xn--80aswg", "xn--c1avg", "xn--j1aef"]}]}
+        {"tag": "ru-domains", "type": "inline", "rules": [{"domain_suffix": ["ru", "su", "xn--p1ai", "xn--p1acf", "xn--80adxhks", "moscow", "tatar", "xn--d1acj3b", "xn--80asehdb", "xn--80aswg", "xn--c1avg", "xn--j1aef"]}]},
+        {"tag": "ru-services", "type": "inline", "rules": [{"domain_suffix": [
+          "userapi.com", "avito.st", "yandex.net", "yandex.com", "yastatic.net",
+          "2gis.com", "okko.tv", "premier.one", "lenta.com", "vk.com",
+          "vk-portal.net", "gismeteo.com", "lmru.tech", "mradx.net",
+          "wbstatic.net", "wildberries.by",
+          "trbcdn.net", "sberbank.com"
+        ]}]},
+        {"tag": "geoip-ru", "enabled": "@geoip_enabled", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru.srs", "update_interval": "168h"}
       ],
-      "dns_rule": {"rule_set": "ru-domains", "server": "@dns_server"},
-      "rule": {"rule_set": "ru-domains", "outbound": "@outbound"},
+      "dns_rule": {"rule_set": ["ru-domains", "ru-services"], "server": "@dns_server"},
+      "rule": {"rule_set": ["ru-domains", "ru-services", "geoip-ru"], "outbound": "@outbound"},
       "dns_servers": [
         {"type": "udp",   "tag": "yandex_udp", "server": "@dns_ip",    "server_port": 53,  "detour": "@outbound", "description": "Yandex UDP (IP from above)"},
         {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@outbound", "description": "Yandex Safe DoH"},

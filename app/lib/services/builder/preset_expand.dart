@@ -120,11 +120,26 @@ PresetFragments expandPreset(
 
   final expandedRuleSets = <Map<String, dynamic>>[];
   for (final rs in preset.ruleSets) {
+    // §045: `enabled: "@var"` convention — фрагмент пропускается если
+    // var резолвится не в "true". Отсутствие поля = always-on.
+    final enabledRaw = rs['enabled'];
+    if (enabledRaw is String) {
+      final substituted = _substitute(enabledRaw, varsMap);
+      if (substituted is! String || substituted.toLowerCase() != 'true') {
+        continue;
+      }
+    } else if (enabledRaw is bool && !enabledRaw) {
+      continue;
+    }
+
     final copy = _deepCopy(rs);
     final result = _substitute(copy, varsMap);
     if (result is! Map<String, dynamic>) continue;
     if (result['tag'] is! String) continue;
     if (result['type'] is! String) continue;
+    // sing-box не знает поля `enabled` на rule_set entry — strip перед
+    // включением в финальный config (наша мета-конвенция, не sing-box).
+    result.remove('enabled');
 
     // Remote rule_set — заменяем на local через кэш (spec §011 compliance,
     // task 011). Без path → skip + warning: правило будет частично рабочим
@@ -196,22 +211,39 @@ PresetFragments expandPreset(
         }
       }
 
-      // Dangling-rule_set guard: если `routing_rule.rule_set` ссылается на
-      // tag, которого нет среди expanded rule-sets (например, remote
-      // rule_set был skipped из-за отсутствующего cache) — drop routing
-      // rule целиком. Иначе sing-box отказывается стартовать:
-      // `initialize rule[N]: rule-set not found: <tag>` (task 011).
+      // Dangling-rule_set guard (§011 + §045): если ссылка на tag, которого
+      // нет в expandedRuleSets — drop правила целиком (или выкинуть его из
+      // массива). Иначе sing-box упадёт: `rule-set not found: <tag>`.
+      //
+      // Поддерживаются обе формы: String (один tag) и List<String> (массив,
+      // OR-семантика sing-box'а). Из массива выживший один tag даунгрейдим
+      // до String — идиоматичнее.
       final refTag = result['rule_set'];
+      final expandedTags = {
+        for (final rs in expandedRuleSets) rs['tag'] as String,
+      };
       if (refTag is String && refTag.isNotEmpty) {
-        final expandedTags = {
-          for (final rs in expandedRuleSets) rs['tag'] as String,
-        };
         if (!expandedTags.contains(refTag)) {
           warnings.add(
             'preset "${preset.presetId}": routing rule skipped — references '
             'missing rule_set "$refTag" (download SRS first)',
           );
         } else {
+          routingRule = result;
+        }
+      } else if (refTag is List) {
+        final present = refTag
+            .whereType<String>()
+            .where(expandedTags.contains)
+            .toList();
+        if (present.isEmpty) {
+          warnings.add(
+            'preset "${preset.presetId}": routing rule skipped — none of '
+            '[${refTag.join(", ")}] available in expanded rule_sets',
+          );
+        } else {
+          // Один остался → даунгрейд до string. >1 → оставляем массив.
+          result['rule_set'] = present.length == 1 ? present.first : present;
           routingRule = result;
         }
       } else {

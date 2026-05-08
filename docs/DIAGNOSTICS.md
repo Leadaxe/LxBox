@@ -1,0 +1,262 @@
+# Diagnostics Playbook
+
+Документ — справочник всех средств диагностики L×Box на тестовом устройстве + порядок работы при «X не работает» жалобе.
+
+> **Дисциплина перед всем остальным:** прежде чем триггерить любую destructive op (`POST /action/reset-network`, reload, VPN restart, `PUT /config`, изменения storage) — **сохрани snapshot**. После reset state RAM-only потерян, и понять что именно деградировало уже нельзя. См. [`scripts/lxbox-diag.sh`](../scripts/lxbox-diag.sh) — one-command сборщик. Триггерить destructive только после **явного подтверждения** юзера.
+
+---
+
+## Quick start
+
+```bash
+# 1. Поднять wifi-adb (или USB)
+./scripts/ensure-wifi-adb.sh
+
+# 2. Снять полный snapshot — параллельно через все API + adb
+./scripts/lxbox-diag.sh
+
+# Сохраняет в /tmp/lxbox-debug-<datetime>/:
+#   state.json / storage.json / config.json
+#   core_logs.json / app_logs.json
+#   clash_connections.json / clash_proxies.json / clash_rules.json
+#   device_ss_tcp.txt / device_ss_udp.txt
+#   device_routes_main.txt / device_routes_all.txt / device_ip_rule.txt
+#   device_addrs.txt / device_props.txt
+#   device_logcat.txt
+```
+
+Читать в порядке:
+1. `state.json` — что юзер видит (selected_group / active_in_group / last_error)
+2. `clash_connections.json` — **где идёт трафик прямо сейчас** (chains + rule per connection)
+3. `core_logs.json` (отфильтровать `level: error|warning`) — что фейлит
+4. `device_ss_tcp.txt` (state counts) — здоровье TCP-стека
+5. `config.json` (route.rules + route.final + dns.rules) — как должно роутиться
+
+---
+
+## Endpoints — где что брать
+
+### LxBox Debug API (`http://<phone>:9269` → forward на `localhost:9270`)
+
+Auth: `Authorization: Bearer $TOKEN` (token в `vars.debug_token`, dev-token см. `project_dev_endpoints.md` memory).
+
+| Endpoint | Когда использовать |
+|---|---|
+| `GET /ping` | sanity-check без auth |
+| `GET /state` | Снимок HomeState: tunnel/group/active_node/traffic/last_delay/last_error |
+| `GET /state/storage` | Полный `lxbox_settings.json` (sensitive scrubbed) — vars / server_lists / custom_rules / dns_options / ping_options |
+| `GET /state/clash` | clash_api endpoint + secret + reachable? |
+| `GET /state/subs` | Подписки (с `?reveal=true` — clear URLs) |
+| `GET /state/rules` | Custom rules + `srs_cached`/`srs_mtime` flags |
+| `GET /state/vpn` | auto_start / keep_on_exit / battery-opt status |
+| `GET /state/config_locked` | §037 — заперт ли auto-rebuild |
+| `GET /device` | Android version / model / ABI / app version / VPN perm / uptime |
+| `GET /config` | Финальный sing-box JSON (что ядро реально крутит) |
+| `GET /config/pretty` | То же с indent:2 |
+| `GET /logs?source=core&limit=500` | Sing-box internal logs (требует `core_logs_enabled=true`) |
+| `GET /logs?source=app&limit=300` | App-side warn/error |
+| `GET /logs?source=core&q=tinkoff&level=error,warning` | Фильтрация по substring + level |
+| `GET /diag/*` | §038 диагностика runtime'а (см. api/debug-api-reference.md) |
+
+**Read-only safe.** Все остальные endpoints (`POST /action/*`, `PUT /config`, `PUT /settings/*`) — destructive, см. ниже.
+
+### Clash API (`http://<phone>:63130/...` → forward на `localhost:9091`)
+
+> **Самое важное место для понимания «куда идёт TCP-трафик сейчас».** Каждое connection имеет `chains` (список outbound'ов через которые идёт) и `rule` (какое правило роутинга сработало). Здесь видно то, чего нет в info-level sing-box логах (которые не печатают `outbound/direct-out` для прямых соединений).
+
+| Endpoint | Что внутри |
+|---|---|
+| `GET /connections` | Активные TCP/UDP соединения. Поля: `metadata.host`, `metadata.destinationIP`, `metadata.processPath`, `chains: [outbound1, group1, ...]`, `rule`, `rulePayload`, `download/upload` |
+| `GET /proxies` | Selectors / urltest группы + `now` (активная нода в каждой) + `history` (per-node delays) |
+| `GET /proxies/<tag>/delay?url=<test>&timeout=<ms>` | Принудительный ping-test |
+| `GET /rules` | Все routing rules (rule_set/domain/process/...) с outbound'ом. То же что `config.route.rules`, но live-resolved |
+| `GET /traffic` | SSE stream up/down per second |
+| `GET /logs?level=info` | Live core logs SSE stream (альтернатива нашему `/logs?source=core`) |
+
+Auth Clash API: `Authorization: Bearer $CLASH_SECRET` (secret в `state.clash_api`; обычно тот же `$TOKEN` или пустой если нет secret'а).
+
+### ADB device-side
+
+```bash
+adb shell ss -tnp                    # TCP sockets с PID/UID
+adb shell ss -unp                    # UDP sockets
+adb shell ip route                   # main routing table
+adb shell ip route show table all    # ВСЕ таблицы (sing-box auto_route ставит default в свою таблицу)
+adb shell ip rule                    # policy-based routing rules
+adb shell ip -4 addr                 # interfaces (wlan0/ccmni*/tun*)
+adb shell getprop | grep dns         # Android system DNS settings
+adb logcat -d -t 500                 # last 500 logcat lines (system-wide)
+adb shell pm list packages           # installed packages (для package_name match validation)
+adb shell dumpsys connectivity       # Network stack overall
+adb shell dumpsys netstats --uid-detail   # Per-UID byte counters
+adb shell dumpsys package <pkg> | grep -E "userId|uid"  # UID owner процесса (для package match debug)
+```
+
+### sing-box conn_id correlation
+
+Sing-box логи имеют префикс `[<conn_id> <elapsed_ms>]`. Каждый сокет — свой `conn_id`. **DNS-запрос и TCP-соединение к тому же IP — РАЗНЫЕ conn_id** (DNS — один, TCP — другой).
+
+Чтобы проследить жизненный цикл одного сокета:
+
+```python
+import json
+es = json.load(open('core_logs.json'))
+es = es if isinstance(es, list) else es.get('entries', [])
+target = '<conn_id from interesting log line>'
+for e in sorted(es, key=lambda x: x['ts']):
+    if f'[{target} ' in e['message']:
+        print(e['ts'][11:23], e['level'], e['message'])
+```
+
+Что внутри типичного TCP-сокета:
+1. `inbound/tun[tun-in]: inbound packet connection from <client>` — пакет в tun
+2. `inbound/tun[tun-in]: inbound packet connection to <dst>` — destination
+3. `router: found package name: <pkg>` — успешный package detection (Android)
+4. `router: route ... → <outbound>` — routing decision (если debug-level включён)
+5. `outbound/<type>[<tag>]: outbound connection to <dst>` — outbound dial (только для НЕ direct-out)
+6. `dns: exchanged ...` — DNS-результат (если это DNS-сокет)
+
+⚠️ **`outbound/direct-out` info-уровень НЕ ПЕЧАТАЕТ** — direct connections невидимы. Чтобы увидеть direct-out routing — смотри Clash API `/connections` → `chains: ["direct-out"]`.
+
+---
+
+## Анализ — что значит что
+
+### TCP socket states (`ss -tnp`)
+
+| State | Что означает | Что подсказывает |
+|---|---|---|
+| `ESTABLISHED` | Активный обмен | Здоровое соединение |
+| `SYN-SENT` (висит) | Отправили SYN, нет SYN-ACK | Remote unreachable / DPI блок / firewall drop |
+| `SYN-RECV` | Получили SYN, ждём ACK | Норма, transient |
+| `FIN-WAIT-1` (много) | Мы отправили FIN, ждём ACK | Если **массово >100** — connections не закрываются нормально, peer не отвечает |
+| `FIN-WAIT-2` | Получили ACK на наш FIN, ждём FIN от peer | Норма |
+| `CLOSE-WAIT` | Peer закрыл, мы ещё не | Может быть application leak |
+| `LAST-ACK` | Мы закрыли в ответ, ждём ACK на наш FIN+payload | Если **send-q > 0** — наш payload не подтверждён, **peer закрыл соединение до того как ack'нул payload** (typical TLS reject by remote) |
+| `TIME-WAIT` | После закрытия, 2*MSL pause | Норма |
+
+**Health-check counts:** `awk '{print $1}' device_ss_tcp.txt | sort | uniq -c`. Норма: ESTAB > 30, FIN-WAIT < 30, SYN-SENT < 5. Если ESTAB ≈ 3 + FIN-WAIT > 100 + SYN-SENT > 10 — серьёзная сетевая деградация (DPI / RST flood / VPN-нода умерла).
+
+### DNS errors в core logs
+
+| Симптом | Причина |
+|---|---|
+| `dns: exchange failed for X. context deadline exceeded` (10-20s) | DNS-сервер не ответил. Server unreachable, blocked, или маршрут к серверу мёртвый. Смотри какой server (по rule_set match) и куда detour |
+| `dns: exchange failed for X. No address associated with hostname` | Negative DNS response от server'а; домен реально не существует или сервер цензурит |
+| `dns: exchanged ... in 16-50ms` | Здоровый резолв |
+| `dns: exchanged ... in >500ms` | Server overloaded / далеко по сети / частичные drops |
+
+### App-logs warnings (`/logs?source=app`)
+
+| Pattern | Источник | Что говорит |
+|---|---|---|
+| `errno=113 No route to host` | Dart httpClient / UpdateChecker | Outbound маршрут к remote сломан. Если на public-internet IP — VPN-выход не работает |
+| `errno=111 Connection refused` | То же | TCP RST от peer, или promediator (DPI) |
+| `delay <proxy>?url=... → 503` | Clash API ping | Outbound не отвечает на ping URL — кандидат «эта нода умерла» |
+| `[debug-api] ... → 4xx/5xx` | Internal Debug API call | API ошибка приложения; смотреть на endpoint |
+
+### Sing-box routing decision (если debug-логи)
+
+Если `core_logs_enabled=true` и в template `log.level: debug` (или DebugScreen toggle) — sing-box печатает каждое routing decision: `router: route ... matched ... → <outbound>`. Без debug — только `info`-уровень: `found package name`, `dns: exchanged`, `outbound: ...` (для НЕ-direct).
+
+Чтобы временно включить — App Settings → Diagnostics → `Forward sing-box logs` (требует force-stop приложения).
+
+### Routing rule precedence
+
+Sing-box matches **первым попавшимся правилом** (top-down):
+
+```
+[0] resolve  (action — DNS resolve config для tun)
+[1] sniff    (action — извлечение SNI/HTTP host)
+[2] hijack-dns (DNS пакеты в DNS pipeline)
+[3..N] custom rules (по rule_set / domain / process / package / port / ip_is_private / protocol)
+[final] default outbound для unmatched
+```
+
+⚠️ **Sniff race:** правила с `domain_suffix`/`domain_keyword` зависят от sniffed SNI/HTTP host. `sniff timeout: 1s`. Если соединение установилось но ClientHello не пришёл за 1s → sniffed_domain пустой → правило промахивается → fall through.
+
+⚠️ **Package detection race (Android):** правила с `package_name` требуют owner-UID detection через `NetworkStatsManager.queryDetailsForUidTagState()` или `/proc/net/tcp6`. На Android 12+ есть restrictions. Для коротких/transient TCP-сокетов lookup может опаздывать → правило silently skip → fall through.
+
+⚠️ **Lesson learned (2026-05-08):** ru.tinkoff.investing trafic к `*.t-bank-app.ru` мог попадать в `final` (vpn-1 = Польша) если **оба** sniff и package detection провалились. `Ru Apps` rule с package_name не гарантирован для всех TCP-сокетов. **Mitigation:** лучше всегда добавлять явные `domain_suffix` в `ru-direct` preset для критичных доменов.
+
+---
+
+## Common diagnostic flows
+
+### «X сайт/приложение не открывается»
+
+1. `/state` — что тоннель up? Active node живой (`last_delay[<active_in_group>] != -1`)?
+2. `/clash/connections` — есть ли active connection для домена X? Через какой chain?
+3. Если **нет соединения** к ожидаемому IP → значит до TCP не дошло:
+   - DNS fail? `core_logs?q=<domain>` → есть ли `dns: exchange failed` или ok-resolve?
+   - Если DNS ok → значит app не делает TCP — возможно сидит в очередях, ждёт другой backend
+4. Если **есть, но `chains: [...]` неожиданный** (например через bypass-VPN вместо direct-out) → routing match не тот:
+   - `config.route.rules` — какое правило должно матчить?
+   - Sniff race / package race / domain не в rule_set → fall to final
+5. Если соединение **в LAST-ACK / FIN-WAIT с send-q > 0** → backend rejected (TLS/GeoIP/firewall) — fix routing
+6. Если массово SYN-SENT застряли → outbound нода мертва или DPI блокирует — переключить selector
+
+### «Долгий idle → DNS не работает / соединения висят»
+
+1. Снять snapshot **сразу**, до любых reset/reload (см. [`feedback_no_destructive_diagnostics.md`](../.claude/...) — лучше всё сохранить)
+2. `core_logs?level=error,warning` — какие домены фейлят?
+3. `config.dns.servers` — какой server обслуживает эти домены (по `dns.rules`)?
+4. Этот server — UDP или DoH/DoT?
+   - **DoH/DoT** — есть persistent TLS-pool, может «слипнуться» после long idle. `POST /action/reset-network` его лечит (предложить юзеру).
+   - **UDP** — stateless, pool ломаться нечему. Симптом другой:
+     - **DNS-cache stuck** (negative cache) — reset тоже лечит
+     - **In-flight deadline lock** — sing-box state issue, reset помогает
+     - **Real network block** — reset не поможет, надо менять server / detour
+
+### «Какой-то selector переключился сам / not matching expected»
+
+1. `/clash/proxies` — какой `now` в каждом selector'е?
+2. `/clash/proxies/<group>/delay?url=...` — реально работает?
+3. `state.last_delay` history — был ли auto-test?
+4. `/state/storage` `vars.dns_final` / `route_final` — что в storage'е выбрано?
+5. Если group-default `✨auto` (URLTest) — он сам выбирает по ping; смотри historical delays per-node
+
+### Workflow при незнакомом баге
+
+1. `./scripts/lxbox-diag.sh` (или вручную параллельно)
+2. Юзеру: «снимок сделан, можешь продолжать пользоваться. Что именно не работает — название домена / приложения / времени когда сломалось?»
+3. Анализ snapshot'а (без trigger'ов на устройстве)
+4. Если 1 цикла мало — попросить юзера ещё раз воспроизвести, снять второй snapshot, **diff'ить**
+
+---
+
+## Что **НЕ делать** в диагностике
+
+> Все эти операции уничтожают runtime evidence. После выполнения root cause часто становится непостижим.
+
+| Op | Что портит | Когда можно |
+|---|---|---|
+| `POST /action/reset-network` | DNS cache, active connections, transport state | После snapshot'а + явного «делай» от юзера |
+| `POST /action/rebuild-config` | active connections (close), routing decisions | По требованию юзера |
+| Reload via UI button | Same as reset-network | По требованию юзера |
+| `POST /action/stop-vpn` / start-vpn | tun teardown, RAM state | По требованию юзера |
+| `PUT /config` | Live config заменяется, не gracefully | Только в эксперименте, заранее `config_locked=true` |
+| `PUT /settings/*` | Меняет storage в рантайме → может triger rebuild | Если меняем для теста — заранее `config_locked` |
+| `adb shell am force-stop com.leadaxe.lxbox` | Полный wipe RAM | После snapshot'а |
+
+**Auto-rebuild safety:** если хочешь экспериментировать с config через `PUT /config` — сначала `PUT /settings/config_locked {"locked": true}`. Тогда любые UI-trigger'ы rebuild'а silently no-op'нутся (§037), и твой custom config не будет перетёрт.
+
+---
+
+## Расширения (when you need more)
+
+- **tcpdump / packet capture** — если нужно видеть TLS ClientHello, RST'ы, MTU issues. Требует root (или редкие debug-builds Android'а).
+- **Sing-box debug-level** — `vars.log_level = debug` + force-stop. Печатает каждое routing decision и dial event. Сильно увеличивает log volume.
+- **Per-app routing testing** — `adb shell am start -n <activity>` запустить целевое приложение по щелчку, в момент запуска снимать ss/clash-conns.
+- **`adb shell ping`** — обычно blocked без рута. Используй sing-box `/clash/proxies/<tag>/delay` вместо.
+
+---
+
+## Reference
+
+- [Debug API reference](api/debug-api-reference.md) — полный список endpoints (вкл. destructive)
+- [STORAGE.md](STORAGE.md) — что внутри `state/storage` snapshot'а
+- [TEMPLATE.md](TEMPLATE.md) — как читать `wizard_template.json` для понимания где какие vars / preset / DNS-server'а определены
+- [scripts/lxbox-diag.sh](../scripts/lxbox-diag.sh) — автоматический сборщик snapshot'а
+- [scripts/ensure-wifi-adb.sh](../scripts/ensure-wifi-adb.sh) — поднять wifi-adb (USB → tcpip 5555)
+- [scripts/install-apk.sh](../scripts/install-apk.sh) — install + auto-forward Debug API

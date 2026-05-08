@@ -10,7 +10,7 @@ import '../vpn/box_vpn_client.dart';
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  static const _version = '1.6.1';
+  static const _version = '1.7.0';
   static const _repoUrl = 'https://github.com/Leadaxe/LxBox';
   static const _singboxUpstreamUrl = 'https://github.com/SagerNet/sing-box';
   static const _singboxLauncherUrl =

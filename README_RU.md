@@ -131,6 +131,28 @@ Multi-hop цепочки: трафик идёт через промежуточ�
 
 
 
+**Per-app traffic profiler** — трассировка сети любого приложения в реальном времени (v1.7.0)
+
+Выбираете app, тапаете ▶ Record — видите все домены, IP и решения роутинга: какой CDN использует ваш банк, через какую ноду уходит, не утекает ли трафик через «не тот» VPN. Встроенный anomaly-detection помечает подозрительные geo-mismatch'ы.
+
+- **Stats → Per-app tab**: app picker, [▶ START] / [⏹ STOP], строка статуса `Recording 02:34 · 47 doms · 53 ips · 287 ev`
+- **4 sub-tab'а**:
+  - **Live** — newest events first (DNS resolves с CNAME chain'ом · TCP/UDP open/close), monospace IP `↗` chip переходит на Domains
+  - **Domains** — aggregated unique domains, sortable; expanded view = CNAME targets, all resolved IPs, outbounds, anomalies. Search-поле матчит по `domain` || `ip` || `cname target` (cross-domain CDN-аудит)
+  - **IPs** — aggregated по destination IP (порты, conn count, bytes, outbound). Каждая строка с `↗` для перехода в Domains с фильтром по этому IP
+  - **Connections** — per-connection timeline. Тап по header → inline-expand: CNAME chain, all IPs, rule, anomalies, кнопка `[View in Domains →]` фокусит соответствующую aggregated row
+- **Connection-issue detection (2 locale-агностичных типа)**: `dnsTimeout` (sing-box `dns: exchange failed` log — прямой engine-сигнал, не heuristic), `tcpReset` (TCP closed в течение 1s с 0 bytes — firewall RST / unreachable). ⚠ icon на Live row + Domain expanded view с описанием
+- **Process inference** — когда sing-box `find_process` мисс'нул (rare, для WebView/system processes), profiler attribut'ит conn по resolved IP в окне 10s post-DNS; rows помечены `〽 inferred from prior DNS`
+- **Recording indicators**:
+  - HomeScreen `_buildTrafficBar` chip `⚡ <pkg>` рядом с traffic stats; тап по строке → `StatsScreen(initialTab: perApp)`
+  - В StatsScreen у `Per-app` tab title красная иконка `⚡` пока идёт запись
+- **Overflow menu (⋮)** в Per-app tab'е: Verbose core logs (debug-level, применяется на следующей session), Copy session JSON, Share, Clear all sessions, Help
+- **In-memory only** — последние 5 finished sessions + 1 active. 3h sliding window на session + 50k events fallback cap. `force-stop` / kill app'а стирает всё (persist'а нет by design — diagnostic-only)
+- **Debug API** (Bearer-auth, порт 9269): `POST /profiler/start {package, verbose?}` · `POST /profiler/stop` · `GET /profiler/active` · `GET /profiler/sessions` · `GET /profiler/session/<id>?include=events,domains,ips` · `DELETE /profiler/session/<id>` · `DELETE /profiler/sessions` · `GET /profiler/stream` (SSE, fire-and-forget)
+- **Документация**: [user guide с use cases и curl-рецептами](docs/features/per-app-trace.md) · [§044 spec](docs/spec/features/044%20per-app%20traffic%20profiler/spec.md)
+
+
+
 **Настройки ядра** — конфигурация маршрутизации
 
 Организованы по секциям: General, Clash API, Network, Include Auto, DNS, TUN, Connection Resilience. URLTest параметры для авто-подбора прокси. Все изменения автосохраняются.
