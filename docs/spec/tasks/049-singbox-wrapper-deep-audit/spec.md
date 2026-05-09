@@ -1432,3 +1432,69 @@ GC-pin через static field strong reference не помог — issue not in
 1. **F12.3 root cause** — почему `WIFIState(ssid, bssid)` крашит на нашем устройстве? Нужен build libbox с debug symbols + reproducible test case. Возможно — Android 15 GC behavior, или OnePlus OEM-specific что-то.
 2. **F1 split** — теоретически архитектурно правильный, но на текущем libbox 1.13.11 проявился bug. Если апгрейдим libbox в будущем — попробовать снова.
 3. **F22 coalescing** — критичный для high-traffic debug mode, но не блокирующий. Применить в следующем cycle.
+
+---
+
+## Phase E — final attempts at F12.3 / F22 / F1 (2026-05-09 evening, v1.7.1 squashed)
+
+После v1.7.2 user попросил доделать отложенные фиксы (F22, F1) и попытаться доделать F12.3 properly. Серия экспериментов:
+
+### F12.3 attempts
+
+| Attempt | Path | Result |
+|---|---|---|
+| v1 (original §049) | `WIFIState(ssid, bssid)` constructor | ❌ Deterministic crash refnum 42 (build 10005) |
+| v2 (GC-pin) | constructor + static strong-ref field | ❌ Deterministic crash (build 10013) |
+| v3 (factory) | `Libbox.newWIFIState(ssid, bssid)` static | ⚠️ Non-deterministic: 2/3 trials work, 3rd crashes (build 10101 vs 10200/trial-3 ⇒ refnum 42) |
+| v4 (final, applied) | `null` (pre-§049 behavior) | ✅ Stable (build 10201) |
+
+**Conclusion:** оба Java-side `WIFIState` создания триггерят race-condition. GC-pin не помог. **F12.3 не решаемо без libbox.so debug symbols** — оставлено `null`, tracking issue.
+
+### F22 attempts
+
+| Attempt | Approach | Result |
+|---|---|---|
+| v1 (round 2) | bounded queue + `coreLogMainHandler.post(::drainCoreLogs)` (method ref) | ❌ Crash refnum 42 (build 10102) |
+| v2 (inline lambda) | inline `post { ... }` lambda only | ⚠️ Non-deterministic: build 10104 worked; 10106/10107 same code crashed |
+| v3 (final, applied) | revert — per-line `post { sink.success(plain) }` (pre-§049) | ✅ Stable |
+
+**Conclusion:** introducing queue + drainer triggers Kotlin Lambda capture interaction with gomobile/seq tracker that is timing-dependent. Per-line dispatch preserved. F22 — minor optimization, not critical.
+
+### F1 attempts
+
+| Attempt | Approach | Result |
+|---|---|---|
+| v1 (round 2) | `BoxLifecycle : CommandServerHandler` separate class, `CommandServer(this, platformInterface)` two distinct Java objects | ❌ Crash refnum 42 (multiple builds) |
+| v2 (Variant B) | `BoxVpnService` implements CSH (delegating to lifecycle), `CommandServer(service, service)` same Java object | ❌ Crash refnum 42 (build 10006) |
+| v3 (with F22 inline) | F1 split + F22 inline | ❌ Crash refnum 42 (build 10105) |
+| v4 (final, applied) | revert F1 — monolithic `BoxVpnService` implements both PI + CSH | ✅ Stable |
+
+**Conclusion:** F1 split на нашем environment'е fundamentally incompatible с gomobile/seq refnum management. Любой Java object split вызывает refnum 42 race. State (`AtomicReference`) остаётся в monolithic class — atomic CAS race fix (главный §047 fix) сохранён.
+
+### Final v1.7.1 ship state
+
+| Fix | Status |
+|---|---|
+| F2 atomic CAS fileDescriptor | ✅ |
+| F3 removed cleanupStaleResources | ✅ |
+| F4 serviceReload no flap | ✅ |
+| F5 onRevoke atomic | ✅ |
+| F9 Libbox.setLocale | ✅ |
+| F12.1 userName | ✅ |
+| F12.3 readWIFIState | ❌ deferred (race) |
+| F15 allowBypass toggle | ✅ |
+| F17 getSystemProxyStatus | ✅ |
+| F22 coalesced log | ❌ deferred (race) |
+| F26 LocalResolver | ✅ |
+| F1 split monolith | ❌ deferred (incompatible) |
+
+**Net:** 9 of 12 fixes applied. 3 deferred с tracked open questions. Главный §047 race condition fix (atomic CAS на `fileDescriptor`/`commandServer`) — landed. **`BoxLifecycle.kt` файл deleted** — чистый monolithic state.
+
+### Diagnostic infrastructure
+
+В процессе работы реализовали:
+- Counter в `writeDebugMessage` для bisect (показал 96 успешных calls перед crash на specific call) — впоследствии удалён
+- Disabled `Libbox.redirectStderr` для попытки получить Go panic в logcat (не дало больше info, restored)
+- Decompile `libbox-1.13.11.aar` через `unzip` + `javap` — получили класс layouts (`WIFIState implements go.Seq$Proxy` etc), без debug symbols ограничение
+
+Всё `git`'нуто в чистый final state на v1.7.1 release.
