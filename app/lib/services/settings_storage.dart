@@ -576,4 +576,85 @@ class SettingsStorage {
     final data = await _load();
     return jsonDecode(jsonEncode(data)) as Map<String, dynamic>;
   }
+
+  // ---------------------------------------------------------------------------
+  // Tunnel apps — OS-level split-tunneling (§046)
+  //
+  // Storage shape: `{mode: "off"|"allow"|"deny", packages: [pkg, ...]}`.
+  // Builder transforms into `inbound[tun].include_package` (mode=allow) или
+  // `exclude_package` (mode=deny); mode=off → ничего не пишем (sing-box default
+  // = всё через tun).
+  //
+  // Native слой (BoxVpnService.kt:557-560) уже умеет — просто читает
+  // `options.includePackage`/`excludePackage` от libbox и зовёт
+  // `VpnService.Builder.addAllowedApplication`/`addDisallowedApplication`.
+  // applies на `builder.establish()` — на изменение нужен FULL VPN restart.
+  // ---------------------------------------------------------------------------
+
+  static const _tunAppsModeOff = 'off';
+  static const _tunAppsModeAllow = 'allow';
+  static const _tunAppsModeDeny = 'deny';
+
+  /// Возвращает текущий tun-apps config. Default: `{mode: 'off', packages: []}`
+  /// — backward-compat для existing юзеров.
+  static Future<TunAppsConfig> getTunApps() async {
+    final data = await _load();
+    final raw = data['tun_apps'];
+    if (raw is Map<String, dynamic>) {
+      final mode = raw['mode'];
+      final packages = (raw['packages'] as List<dynamic>?)
+              ?.whereType<String>()
+              .toList() ??
+          const <String>[];
+      if (mode == _tunAppsModeAllow ||
+          mode == _tunAppsModeDeny ||
+          mode == _tunAppsModeOff) {
+        return TunAppsConfig(mode: mode as String, packages: packages);
+      }
+    }
+    return const TunAppsConfig(mode: _tunAppsModeOff, packages: <String>[]);
+  }
+
+  /// Persist `tun_apps`. Caller передаёт финальный shape, мы только проверяем
+  /// валидность. Дубликаты в `packages` schлопываются (idempotent).
+  static Future<void> setTunApps(TunAppsConfig cfg) async {
+    if (![_tunAppsModeOff, _tunAppsModeAllow, _tunAppsModeDeny]
+        .contains(cfg.mode)) {
+      throw ArgumentError('tun_apps.mode must be off|allow|deny: ${cfg.mode}');
+    }
+    final dedup = <String>{};
+    for (final p in cfg.packages) {
+      final t = p.trim();
+      if (t.isEmpty) continue;
+      dedup.add(t);
+    }
+    final data = await _load();
+    data['tun_apps'] = {
+      'mode': cfg.mode,
+      'packages': dedup.toList()..sort(),
+    };
+    _cache = data;
+    await _save();
+  }
+}
+
+/// Typed wrapper over `tun_apps` storage shape (§046).
+class TunAppsConfig {
+  const TunAppsConfig({required this.mode, required this.packages});
+
+  /// `"off"` | `"allow"` | `"deny"`.
+  final String mode;
+  final List<String> packages;
+
+  bool get isOff => mode == 'off';
+  bool get isAllow => mode == 'allow';
+  bool get isDeny => mode == 'deny';
+
+  TunAppsConfig copyWith({String? mode, List<String>? packages}) =>
+      TunAppsConfig(
+        mode: mode ?? this.mode,
+        packages: packages ?? this.packages,
+      );
+
+  Map<String, Object?> toJson() => {'mode': mode, 'packages': packages};
 }

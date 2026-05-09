@@ -62,6 +62,11 @@ Future<DebugResponse> settingsHandler(DebugRequest req, DebugContext ctx) async 
       if (req.method == 'GET') return _getPingOptions();
       if (req.method == 'PUT') return _putPingOptions(req, ctx);
       throw _methodNotAllowed(req.method, path);
+
+    case '/settings/tun_apps':
+      if (req.method == 'GET') return _getTunApps();
+      if (req.method == 'PUT') return _putTunApps(req, ctx);
+      throw _methodNotAllowed(req.method, path);
   }
 
   // /settings/ping_options/groups/{tag}
@@ -425,5 +430,62 @@ Future<DebugResponse> _rebuildConfig(DebugContext ctx) async {
     'ok': true,
     'action': 'settings-rebuild-config',
     'config_bytes': json.length,
+  });
+}
+
+// ─── §046: tun_apps ─────────────────────────────────────────────────────────
+
+Future<DebugResponse> _getTunApps() async {
+  final cfg = await SettingsStorage.getTunApps();
+  return JsonResponse(cfg.toJson());
+}
+
+/// `PUT /settings/tun_apps` — overwrite shape целиком.
+/// Body: `{"mode":"off|allow|deny", "packages":["pkg1","pkg2",...]}`.
+/// Дубликаты в `packages` schлопываются (idempotent). Невалидные fields → 400.
+///
+/// Изменения требуют **full VPN restart** для apply (Android tun creates только
+/// при `establish()`). Response включает `rebuild_needed: true` как hint клиенту
+/// что нужно вызвать `POST /action/rebuild-config` + restart VPN.
+Future<DebugResponse> _putTunApps(DebugRequest req, DebugContext ctx) async {
+  final body = req.jsonBodyAsMap();
+
+  final mode = body['mode'];
+  if (mode is! String || !['off', 'allow', 'deny'].contains(mode)) {
+    throw const BadRequest('field "mode" must be one of: off|allow|deny');
+  }
+
+  final pkgsRaw = body['packages'];
+  if (pkgsRaw is! List) {
+    throw const BadRequest('field "packages" must be array of strings');
+  }
+  final pkgs = <String>[];
+  // Sing-box внутри Android передаёт package в getPackageInfo — там
+  // допускается широкий range символов. Отбрасываем явно невалидное:
+  // пустые строки + что-то совсем не похожее на package (`/`, whitespace).
+  final pkgRe = RegExp(r'^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z0-9_]+)*$');
+  for (final p in pkgsRaw) {
+    if (p is! String) {
+      throw BadRequest('packages[] must be strings; got ${p.runtimeType}');
+    }
+    final t = p.trim();
+    if (t.isEmpty) continue;
+    if (!pkgRe.hasMatch(t)) {
+      throw BadRequest('invalid package name: $t');
+    }
+    pkgs.add(t);
+  }
+
+  final cfg = TunAppsConfig(mode: mode, packages: pkgs);
+  await SettingsStorage.setTunApps(cfg);
+
+  final extras = await maybeRebuild(req, ctx);
+  return JsonResponse({
+    'ok': true,
+    'action': 'settings-tun-apps',
+    'mode': mode,
+    'count': pkgs.length,
+    'rebuild_needed': true,
+    ...extras,
   });
 }

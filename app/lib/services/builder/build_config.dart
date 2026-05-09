@@ -43,12 +43,17 @@ class BuildSettings {
   final List<CustomRule> customRules;
   final String routeFinal;
 
+  /// §046: OS-level split-tunneling apps list. `null` = pipeline возьмёт
+  /// дефолт (mode=off — все apps через tun, sing-box обычное поведение).
+  final TunAppsConfig? tunApps;
+
   const BuildSettings({
     this.userVars = const {},
     this.enabledGroups = const {},
     this.excludedNodes = const {},
     this.customRules = const [],
     this.routeFinal = '',
+    this.tunApps,
   });
 }
 
@@ -270,6 +275,12 @@ Future<BuildResult> buildConfig({
     activePresetIdsWithDnsRule: activePresetIdsWithDnsRule,
     dnsSrsCachedPaths: dnsSrsCachedPaths,
   );
+
+  // §046: OS-level split-tunneling. Должен быть **последним** post-step'ом —
+  // финальный transform tun-inbound, после всего остального.
+  if (settings.tunApps != null) {
+    applyTunPackages(config, settings.tunApps!);
+  }
 
   final validation = validateConfig(config);
   return BuildResult(
