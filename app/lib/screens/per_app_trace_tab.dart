@@ -26,6 +26,7 @@ import '../models/app_info.dart';
 import '../services/app_info_cache.dart';
 import '../services/clash_api_client.dart';
 import '../services/traffic_profiler.dart';
+import 'app_picker_screen.dart';
 
 class PerAppTraceTab extends StatefulWidget {
   const PerAppTraceTab({super.key, required this.clash});
@@ -41,6 +42,9 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
   String? _pendingTarget; // выбран но ещё не started
   bool _verbose = false;
   bool _verboseActiveInSession = false;
+  // §048 Принцип 3 — secondary packages (WebView etc) для будущей session'и.
+  // На время active session — Live setter через TrafficProfiler.updateSecondaryPackages.
+  final Set<String> _pendingSecondaryPackages = <String>{};
   Timer? _ticker; // для refresh «Recording 02:34» каждую секунду
 
   late TabController _subTabs;
@@ -113,10 +117,41 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
     } else {
       final target = _pendingTarget;
       if (target == null) return;
-      await profiler.start(target, verbose: _verbose);
+      await profiler.start(
+        target,
+        verbose: _verbose,
+        secondaryPackages: _pendingSecondaryPackages.isEmpty
+            ? null
+            : Set<String>.of(_pendingSecondaryPackages),
+      );
     }
     if (!mounted) return;
     setState(() {});
+  }
+
+  /// §048 Принцип 3 — multi-select picker для secondary packages
+  /// (WebView/system-process subprocess'ы). Открывает существующий
+  /// AppPickerScreen с pre-checked текущим выбором, target package
+  /// исключается из selectable списка (нельзя добавить его в secondary).
+  Future<void> _pickSecondaryPackages() async {
+    final result = await Navigator.of(context).push<AppPickerResult>(
+      MaterialPageRoute(
+        builder: (_) => AppPickerScreen(
+          selected: Set<String>.of(_pendingSecondaryPackages),
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    final newSet = result.packages.toSet()..remove(_pendingTarget);
+    setState(() {
+      _pendingSecondaryPackages
+        ..clear()
+        ..addAll(newSet);
+    });
+    // Если идёт recording — применяем live.
+    if (TrafficProfiler.I.isRecording) {
+      TrafficProfiler.I.updateSecondaryPackages(newSet);
+    }
   }
 
   Future<void> _toggleVerbose(bool value) async {
@@ -177,8 +212,11 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
       children: [
         if (_verboseActiveInSession && session != null)
           _verboseBanner(context),
+        if (session != null && profiler.unattributedBannerActive)
+          _unattributedBanner(context),
         _header(context, session),
         if (session != null) _statsRow(context, session),
+        if (session != null) _secondaryPackagesRow(context, session),
         const SizedBox(height: 4),
         TabBar(
           controller: _subTabs,
@@ -372,6 +410,78 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
     );
   }
 
+  /// §048 Принцип 1 — banner с count'ом unattributed events за last 30s.
+  /// Показывается когда recentUnattributedCount > 5: это сигнал что
+  /// sing-box не детектит owner package для значимой части traffic'а
+  /// (DNS fail без `router: found package` etc).
+  Widget _unattributedBanner(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      color: cs.errorContainer,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber, size: 16, color: cs.onErrorContainer),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${TrafficProfiler.I.recentUnattributedCount} unattributed events / 30s — '
+              'attribution gaps detected. See "System-wide" section in Live tab.',
+              style: TextStyle(fontSize: 12, color: cs.onErrorContainer),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// §048 Принцип 3 — chip-row для secondary packages (WebView etc).
+  /// Tap → multi-select picker. Показывается под header'ом session'и.
+  Widget _secondaryPackagesRow(BuildContext context, Session s) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+      child: Row(
+        children: [
+          Icon(Icons.link, size: 14, color: cs.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Wrap(
+              spacing: 4,
+              runSpacing: 2,
+              children: [
+                if (s.secondaryPackages.isEmpty)
+                  Text('No secondary packages',
+                      style: TextStyle(
+                          fontSize: 11, color: cs.onSurfaceVariant)),
+                for (final pkg in s.secondaryPackages)
+                  Chip(
+                    label: Text(pkg, style: const TextStyle(fontSize: 11)),
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+              ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: _pickSecondaryPackages,
+            icon: const Icon(Icons.add, size: 14),
+            label: const Text('Edit secondary',
+                style: TextStyle(fontSize: 11)),
+            style: TextButton.styleFrom(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _verboseBanner(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
@@ -449,7 +559,8 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
           child: Text(
             'Pick an app and tap START to record its DNS resolves, '
             'connections, and routing chain.\n\n'
-            '• Live — newest events first (DNS + TCP/UDP)\n'
+            '• Live — newest events first (DNS + TCP/UDP) + System-wide '
+            'section (events without owner detection — e.g. DNS fails).\n'
             '• Domains — aggregated unique domains, with CNAME chain & IPs. '
             'Search by domain or IP.\n'
             '• IPs — aggregated unique destination IPs (ports, conns, bytes, '
@@ -457,6 +568,16 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
             '• Connections — per-connection timeline. Tap a row to inline-expand '
             '(CNAME, all IPs, issues); button [View in Domains →] jumps to '
             'aggregated breakdown.\n\n'
+            'Confidence badges (§048):\n'
+            '  • (default) — verified: router log явно указал target\n'
+            '  • 🔗 sec — secondary: match через secondary packages (WebView etc)\n'
+            '  • 〽 — inferred: recent DNS resolved IP принадлежит target\n'
+            '  • ? — unattributed: owner package не детектится, событие '
+            'показано как "nearby"\n\n'
+            'Edit secondary — добавить packages которые считать частью '
+            'трафика этого app (WebView, sandboxed renderer и т.п.).\n\n'
+            'Live system-wide tab (4-я в Statistics) — discovery без выбора '
+            'target: видно весь трафик всех apps в real-time.\n\n'
             'Verbose mode (debug-level core logs) gives more detail '
             'but increases CPU/battery use until you disable it. '
             'Toggling verbose takes effect on the next session.\n\n'
@@ -502,21 +623,84 @@ class _LiveView extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = session;
     if (s == null) return const _Empty(text: 'Start recording to see events.');
-    if (s.events.isEmpty) {
-      return const _Empty(text: 'Waiting for events…');
-    }
+    // §048 Принцип 1 — показываем events session'и (включая unattributed
+    // nearby events с маркерами) + отдельную секцию «System-wide events»
+    // (DNS fail без owner и т.п. из global ring buffer'а).
+    final cs = Theme.of(context).colorScheme;
     final reversed = s.events.reversed.toList();
-    return ListView.builder(
-      itemCount: reversed.length,
-      itemBuilder: (_, i) => _eventTile(context, reversed[i]),
+    final unattributed = TrafficProfiler.I.globalUnattributedEvents.reversed
+        .where((e) {
+      // Показываем только events начавшиеся ПОСЛЕ session'и (inclusive
+      // observer focuses on what happened during the session window).
+      return !e.ts.isBefore(s.startedAt);
+    }).toList();
+
+    return AnimatedBuilder(
+      animation: TrafficProfiler.I,
+      builder: (_, _) {
+        return CustomScrollView(
+          slivers: [
+            if (reversed.isEmpty && unattributed.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: _Empty(text: 'Waiting for events…'),
+              )
+            else
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (_, i) => _eventTile(context, reversed[i]),
+                  childCount: reversed.length,
+                ),
+              ),
+            if (unattributed.isNotEmpty) ...[
+              SliverToBoxAdapter(
+                child: Container(
+                  width: double.infinity,
+                  color: cs.surfaceContainerHigh,
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.help_outline,
+                          size: 14, color: cs.onSurfaceVariant),
+                      const SizedBox(width: 6),
+                      Text(
+                        'System-wide events (no owner detected) — ${unattributed.length}',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (_, i) =>
+                      _eventTile(context, unattributed[i], dimmed: true),
+                  childCount: unattributed.length,
+                ),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 
-  Widget _eventTile(BuildContext context, TrafficEvent e) {
+  Widget _eventTile(BuildContext context, TrafficEvent e,
+      {bool dimmed = false}) {
     final cs = Theme.of(context).colorScheme;
     final ts = '${e.ts.hour.toString().padLeft(2, '0')}:'
         '${e.ts.minute.toString().padLeft(2, '0')}:'
         '${e.ts.second.toString().padLeft(2, '0')}';
+    final tile = _eventTileInner(context, cs, ts, e);
+    if (!dimmed) return tile;
+    return Opacity(opacity: 0.62, child: tile);
+  }
+
+  Widget _eventTileInner(
+      BuildContext context, ColorScheme cs, String ts, TrafficEvent e) {
     Color kindColor;
     String kindLabel;
     switch (e.kind) {
@@ -562,7 +746,9 @@ class _LiveView extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                         color: kindColor)),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
+              _confidenceBadge(context, e),
+              const SizedBox(width: 4),
               Expanded(child: _eventSummaryWidget(context, e)),
               if (e.issues.isNotEmpty)
                 Tooltip(
@@ -573,6 +759,29 @@ class _LiveView extends StatelessWidget {
                 ),
             ],
           ),
+          if (e.backfilled)
+            Padding(
+              padding: const EdgeInsets.only(left: 60, top: 1),
+              child: Text(
+                '〽 backfilled from pre-recording',
+                style: TextStyle(
+                    fontSize: 10,
+                    fontStyle: FontStyle.italic,
+                    color: cs.onSurfaceVariant),
+              ),
+            ),
+          if (e.dnsRecordType != null && e.dnsRecordType != 'A' &&
+              e.dnsRecordType != 'AAAA' && e.dnsRecordType != 'CNAME')
+            Padding(
+              padding: const EdgeInsets.only(left: 60, top: 1),
+              child: Text(
+                'DNS record: ${e.dnsRecordType}',
+                style: TextStyle(
+                    fontSize: 10,
+                    fontFamily: 'monospace',
+                    color: cs.onSurfaceVariant),
+              ),
+            ),
           if (e.cnameChain.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(left: 60, top: 1),
@@ -680,6 +889,46 @@ class _LiveView extends StatelessWidget {
           _ipChip(context, ip!, onViewInDomains),
         ],
       ],
+    );
+  }
+
+  /// §048 — confidence badge (verified default — no marker, secondary —
+  /// 🔗 sec, inferred — 〽, unattributed — ?). Tooltip показывает matched_via
+  /// и shown_because для не-verified.
+  Widget _confidenceBadge(BuildContext context, TrafficEvent e) {
+    final cs = Theme.of(context).colorScheme;
+    Color color;
+    String label;
+    switch (e.confidence) {
+      case ConfidenceLevel.verified:
+        return const SizedBox.shrink();
+      case ConfidenceLevel.secondary:
+        color = cs.tertiary;
+        label = '🔗 sec';
+      case ConfidenceLevel.inferred:
+        color = cs.secondary;
+        label = '〽';
+      case ConfidenceLevel.unattributed:
+        color = cs.error;
+        label = '?';
+    }
+    final msg = StringBuffer('confidence: ${e.confidence.name}');
+    if (e.matchedVia != null) msg.write('\nmatched via: ${e.matchedVia}');
+    if (e.shownBecause != null) {
+      msg.write('\nshown because: ${e.shownBecause}');
+    }
+    return Tooltip(
+      message: msg.toString(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 10, fontFamily: 'monospace', color: color)),
+      ),
     );
   }
 

@@ -7,11 +7,12 @@ import '../services/app_info_cache.dart';
 import '../services/clash_api_client.dart';
 import '../services/traffic_profiler.dart';
 import 'connections_screen.dart';
+import 'live_events_tab.dart';
 import 'per_app_trace_tab.dart';
 
-/// §044: enum для start-tab выбора в StatsScreen. Передаётся при
+/// §044/§048: enum для start-tab выбора в StatsScreen. Передаётся при
 /// `Navigator.push(StatsScreen(initialTab: StatsTab.perApp))`.
-enum StatsTab { overview, connections, perApp }
+enum StatsTab { overview, connections, perApp, live }
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({
@@ -24,6 +25,21 @@ class StatsScreen extends StatefulWidget {
   final ClashApiClient clash;
   final String configRaw;
   final StatsTab initialTab;
+
+  /// §048 — фолбэк, когда Live tab не имеет прямого доступа к
+  /// DefaultTabController родителя (e.g. вызван из standalone-context'а).
+  /// Стартует session через TrafficProfiler.I и показывает SnackBar.
+  static Future<void> requestPerAppSession(
+      BuildContext context, String pkg) async {
+    if (TrafficProfiler.I.isRecording) {
+      await TrafficProfiler.I.stop();
+    }
+    await TrafficProfiler.I.start(pkg);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Per-app session started for $pkg')),
+    );
+  }
 
   @override
   State<StatsScreen> createState() => _StatsScreenState();
@@ -192,48 +208,86 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       initialIndex: widget.initialTab.index,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Statistics'),
-          bottom: TabBar(
-            tabs: [
-              const Tab(icon: Icon(Icons.dashboard_outlined), text: 'Overview'),
-              const Tab(icon: Icon(Icons.link), text: 'Connections'),
-              Tab(
-                icon: const Icon(Icons.travel_explore),
-                child: AnimatedBuilder(
-                  animation: TrafficProfiler.I,
-                  builder: (_, _) => Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text('Per-app'),
-                      if (TrafficProfiler.I.isRecording) ...[
-                        const SizedBox(width: 4),
-                        Icon(
-                          Icons.bolt,
-                          size: 14,
-                          color: Theme.of(context).colorScheme.error,
-                        ),
+      child: Builder(
+        builder: (innerCtx) => Scaffold(
+          appBar: AppBar(
+            title: const Text('Statistics'),
+            bottom: TabBar(
+              isScrollable: true,
+              tabs: [
+                const Tab(icon: Icon(Icons.dashboard_outlined), text: 'Overview'),
+                const Tab(icon: Icon(Icons.link), text: 'Connections'),
+                Tab(
+                  icon: const Icon(Icons.travel_explore),
+                  child: AnimatedBuilder(
+                    animation: TrafficProfiler.I,
+                    builder: (_, _) => Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('Per-app'),
+                        if (TrafficProfiler.I.isRecording) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.bolt,
+                            size: 14,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
+                Tab(
+                  icon: const Icon(Icons.podcasts),
+                  child: AnimatedBuilder(
+                    animation: TrafficProfiler.I,
+                    builder: (_, _) => Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('Live'),
+                        if (TrafficProfiler.I.unattributedBannerActive) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.warning_amber,
+                            size: 14,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            children: [
+              _buildOverview(context),
+              ConnectionsView(clash: widget.clash),
+              PerAppTraceTab(clash: widget.clash),
+              LiveEventsTab(
+                onJumpToPerApp: (pkg) =>
+                    _handleJumpFromLiveTab(innerCtx, pkg),
               ),
             ],
           ),
         ),
-        body: TabBarView(
-          children: [
-            _buildOverview(context),
-            ConnectionsView(clash: widget.clash),
-            PerAppTraceTab(clash: widget.clash),
-          ],
-        ),
       ),
     );
+  }
+
+  Future<void> _handleJumpFromLiveTab(BuildContext ctx, String pkg) async {
+    // Старт Per-app session с этим package и переключение на 3-ий tab.
+    if (TrafficProfiler.I.isRecording) {
+      await TrafficProfiler.I.stop();
+    }
+    await TrafficProfiler.I.start(pkg);
+    if (!ctx.mounted) return;
+    DefaultTabController.of(ctx).animateTo(StatsTab.perApp.index);
   }
 
   Widget _buildOverview(BuildContext context) {

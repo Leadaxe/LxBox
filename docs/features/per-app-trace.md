@@ -2,11 +2,13 @@
 
 Инструмент диагностики «куда конкретное приложение ходит и как роутится». Решает задачи вида: «X не открывается через VPN», «куда стучит этот фитнес-трекер», «через какой outbound реально идёт трафик банка». Без packet capture, без root, без ручного matching'а conn_id'ов между логами.
 
+С v1.8.0 (§048) — **inclusive observer with confidence**: profiler не drop'ает события, каждое попадает в UI с одним из 4 уровней уверенности (`verified` / `secondary` / `inferred` / `unattributed`). Юзер видит **всё что произошло**, и видит **что точно его app, а что возможно**.
+
 | | |
 |---|---|
-| Где живёт | `Statistics → Per-app` (третий tab) |
-| Spec | [`docs/spec/features/044 per-app traffic profiler/spec.md`](../spec/features/044%20per-app%20traffic%20profiler/spec.md) |
-| Реализация в | v1.7.0 |
+| Где живёт | `Statistics → Per-app` (3-й tab) и `Statistics → Live` (4-й tab, system-wide) |
+| Spec | [`docs/spec/features/044 per-app traffic profiler/spec.md`](../spec/features/044%20per-app%20traffic%20profiler/spec.md) + [`docs/spec/tasks/048-perapp-trace-attribution-gaps.md`](../spec/tasks/048-perapp-trace-attribution-gaps.md) |
+| Реализация в | v1.7.0 (базовая фича); v1.8.0 (§048 inclusive observer + Live tab) |
 | State | In-memory only (на kill app'а / force-stop sessions стираются) |
 | Battery cost | Низкий в normal mode; средний при включённом verbose toggle |
 
@@ -124,6 +126,33 @@ Per-connection timeline (TCP/UDP open/close events). Tap на row — inline exp
 - **[View in Domains]** — переключает на Domains tab + autofill search этим domain'ом + auto-expand row
 - **Hostless conn** (нет SNI) — отображается как `[<ip>]:port`. Кнопка View in Domains скрыта (нет domain'а для перехода).
 
+### Confidence levels (§048)
+
+С v1.8.0 каждое event имеет confidence — насколько точно мы уверены что это traffic нашего target app'а:
+
+| Уровень | UI marker | Когда |
+|---|---|---|
+| `verified` | (no marker, default) | `router: found package name: <target>` явный match |
+| `secondary` | 🔗 sec | match через `secondary packages` (WebView etc) |
+| `inferred` | 〽 | match через recent DNS resolved IP (10s window) |
+| `unattributed` | ? (red) | никакая strategy не сработала, событие показано как nearby |
+
+Tooltip над badge'ом показывает `matched_via` (как сработала atribution) и `shown_because` (для unattributed — почему всё-таки показано).
+
+### Secondary packages
+
+Под header'ом session'и есть chip-row «🔗 No secondary packages» + кнопка `[Edit secondary]`. Это ответ на Tinkoff / WebView сценарий: банковское app может рендерить web-части в `com.google.android.webview` (отдельный UID), и его traffic не попадает в session под target = `ru.tinkoff.investing`. Решение — добавить `com.google.android.webview` в secondary через multi-select picker. Live mutation: можно менять во время recording'а.
+
+### System-wide events section
+
+В Live sub-tab внизу появляется секция «System-wide events (no owner detected) — N» когда в `_globalRollingBuffer` есть unattributed events (e.g. DNS fail без `router: found package`). Они dimmed (62% opacity), помечены `?`-badge'ом, видны в JSON session'и с `confidence: unattributed` + `shown_because`.
+
+Если detected >5 unattributed за 30s — вверху появляется красный banner «N unattributed events / 30s — attribution gaps detected». Сигнал что sing-box не детектит owner для значимой части traffic'а.
+
+### Pre-session backfill
+
+`TrafficProfiler` всегда держит rolling buffer 60s × ~3000 events (все apps). На `▶ START` — события за last 60s, которые match target / secondary, попадают в session.events с marker `〽 backfilled from pre-recording`. Решает «юзер ставит recording после того как заметил проблему — теряет первые 60s».
+
 ### Connection issues (⚠ маркеры)
 
 Не статистические аномалии, а конкретные diagnostic-сигналы — два locale-агностичных типа:
@@ -145,6 +174,38 @@ Per-connection timeline (TCP/UDP open/close events). Tap на row — inline exp
 - Иконка delete — удалить session
 
 После 5 sessions старые автоматически evict'ятся (FIFO). Force-stop приложения = все sessions стираются (in-memory only).
+
+## Live system-wide tab (§048)
+
+Параллельная вкладка `Statistics → Live` (4-я). Discovery-mode без выбора target заранее: видно все apps' DNS / TCP / UDP события системы в real-time.
+
+```
+┌─ Live ──────────────────────────────── ⏸ Pause ─┐
+│ [Search]                                         │
+│ [DNS] [DNS×] [TCP] [TCP·] [UDP]  [Unattributed]  │
+│ [Filter by app: 12 app(s)]                        │
+│ ─────────────────────────────────────────────── │
+│ 12:34:01 DNS  cdn.example.com → 1.2.3.4          │
+│           com.android.chrome                      │
+│ 12:34:01 DNS× ?  example.invalid                  │
+│           ?                  record: HTTPS        │
+│ 12:34:00 TCP  api.tinkoff.ru:443                  │
+│           ru.tinkoff.investing                    │
+│ ...                                               │
+└──────────────────────────────────────────────────┘
+```
+
+**Filter chips:**
+- Kind toggles — DNS / DNS× (failed) / TCP / TCP· (closed) / UDP (multi-select).
+- `Unattributed only` — показать только события без detected owner (e.g. DNS fails Chrome's HTTPS queries).
+- `Filter by app` — bottom sheet с checkbox'ом для каждого замеченного process'а.
+- Search — substring match по domain / IP / process name.
+
+**Pause / resume** — статичный snapshot для вдумчивого чтения. Buffer продолжает заполняться в background, на resume — fresh state.
+
+**Long-press на event row** → bottom sheet с действием «Open in Per-app session for <pkg>». Auto-stop active session + start с этим package как target. Quick-discovery flow.
+
+**Banner** наверху Live tab'а появляется когда `recentUnattributedCount > 5` — то же что в Per-app sub-tab.
 
 ## Recording indicators
 
@@ -219,15 +280,21 @@ Recording **продолжается независимо от UI**: можно 
 TOKEN=357f5aacdf154419d2787ec61e3ad9f2
 H="Authorization: Bearer $TOKEN"
 
-# Start session
+# Start session (с secondary packages — §048)
 curl -s -H "$H" -H "Content-Type: application/json" \
-  -d '{"package":"ru.tinkoff.investing","verbose":false}' \
+  -d '{"package":"ru.tinkoff.investing","verbose":false,
+       "secondary_packages":["com.google.android.webview"]}' \
   http://127.0.0.1:9270/profiler/start
 
-# Active session meta (counts, duration)
+# Mutate secondary packages live (§048)
+curl -s -X PATCH -H "$H" -H "Content-Type: application/json" \
+  -d '{"secondary_packages":["com.google.android.webview","com.android.webview"]}' \
+  http://127.0.0.1:9270/profiler/secondary-packages
+
+# Active session meta (counts, duration, unattributed_count)
 curl -s -H "$H" http://127.0.0.1:9270/profiler/active
 
-# Full session с domains+ips+events
+# Full session с domains+ips+events (events содержат confidence + matched_via)
 curl -s -H "$H" "http://127.0.0.1:9270/profiler/session/<id>?include=domains,ips,events"
 
 # List finished sessions
@@ -236,9 +303,19 @@ curl -s -H "$H" http://127.0.0.1:9270/profiler/sessions
 # Stop
 curl -s -X POST -H "$H" http://127.0.0.1:9270/profiler/stop
 
-# Live SSE stream (для скриптов / external dashboards)
+# Per-session SSE stream
 curl -s -N -H "$H" -H "Accept: text/event-stream" \
   http://127.0.0.1:9270/profiler/stream
+
+# §048 — Global system-wide snapshot (last N seconds)
+curl -s -H "$H" "http://127.0.0.1:9270/profiler/live?seconds=60"
+
+# §048 — Global SSE stream без session filter'а
+curl -s -N -H "$H" -H "Accept: text/event-stream" \
+  http://127.0.0.1:9270/profiler/live/stream
+
+# §048 — Recent unattributed events + banner state
+curl -s -H "$H" http://127.0.0.1:9270/profiler/live/unattributed
 ```
 
 SSE формат: `event: traffic_event\ndata: {...}\n\n`. Fire-and-forget — без `Last-Event-ID` reconnect mechanism (overkill для in-app single-user use case'а).

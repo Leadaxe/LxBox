@@ -421,6 +421,35 @@ CRUD-helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clear
 
 ---
 
+## `tun_apps` — [§046]
+
+OS-level split-tunneling: какие приложения идут через VPN-tun, а какие — direct через cellular/wifi (минуя sing-box полностью).
+
+```jsonc
+{
+  "mode": "off" | "allow" | "deny",
+  "packages": ["com.example.app", "ru.tinkoff.investing", ...]
+}
+```
+
+| `mode` | Что попадает в `inbound[type=tun]` финального config | Эффект |
+|---|---|---|
+| `"off"` | (ничего не пишем) | Все apps через tun (Android-default) |
+| `"allow"` | `"include_package": [...packages]` | Только перечисленные через tun. Остальные direct |
+| `"deny"`  | `"exclude_package": [...packages]` | Все КРОМЕ перечисленных через tun |
+
+**Native слой** (`BoxVpnService.kt:557-560`) читает `options.includePackage` / `excludePackage` от libbox и зовёт `VpnService.Builder.addAllowedApplication` / `addDisallowedApplication`. Применяется на `builder.establish()` — на изменение нужен **full VPN restart**, light reload (`startOrReloadService`) не пересоздаёт tun.
+
+**Default для existing юзеров:** `{mode: "off", packages: []}` — backward-compat. Migration unconditional на первом `_load()` после upgrade, без guard'а.
+
+**В `/state/storage` exposed без scrubber'а** — package-names не sensitive.
+
+CRUD: `getTunApps()` / `setTunApps()` (replace целиком). API: `GET/PUT /settings/tun_apps` ([Debug API reference](api/debug-api-reference.md)).
+
+**Конфликт с `package_name` rules в custom_rules:** apps в `Allow-list` (или вне `Deny-list`) идут через tun → routing rules (rule_set / package_name match / etc) применяются нормально. Apps вне `Allow-list` (или внутри `Deny-list`) **не попадают в tun вообще** — sing-box их не видит, custom rules с `package_name` для них не сматчатся.
+
+---
+
 ## Прочие top-level ключи
 
 | Ключ | Тип | Назначение |
@@ -488,5 +517,6 @@ CRUD-helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clear
 [§040]: ./spec/tasks/040-per-group-ping-test-settings.md
 [§041]: ./spec/features/041%20dns%20rules%20refactor/spec.md
 [§044]: ./spec/tasks/044-dns-servers-clean-schema.md
+[§046]: ./spec/features/046%20tunnel%20apps%20split-tunneling/spec.md
 [043-applog]: ./spec/features/043%20applog%20per-source%20quotas/spec.md
 [043-dns]: ./spec/tasks/043-dns-servers-refs-by-kind.md
