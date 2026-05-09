@@ -109,30 +109,24 @@ interface PlatformInterfaceWrapper : PlatformInterface {
     override fun includeAllNetworks(): Boolean = false
     override fun clearDNSCache() {}
 
-    /// §049 F12.3 v2: попытка через `Libbox.newWIFIState(...)` static factory
-    /// вместо `WIFIState(...)` constructor.
+    /// §049 F12.3: возвращаем null (pre-§049 поведение).
     ///
-    /// History:
-    /// - v1: `WIFIState(ssid, bssid)` constructor → SIGABRT 'Unknown reference: 42'
-    ///   (см. §049 spec.md Phase D bisect log).
-    /// - v2 (тут): `Libbox.newWIFIState(ssid, bssid)` static native method.
-    ///   Возможно различная Go-side семантика refcount'а — `__NewWIFIState`
-    ///   constructor path vs `Libbox.newWIFIState` factory path.
+    /// Bisect показал: реальный `readWIFIState()` (любой path —
+    /// constructor `WIFIState(ssid, bssid)` ИЛИ factory `Libbox.newWIFIState`)
+    /// на нашем environment'е (Android 15 OnePlus + libbox 1.13.11)
+    /// **NON-DETERMINISTICALLY** крашит процесс с
+    /// `'Unknown reference: 42'` SIGABRT в
+    /// `cproxylibbox_CommandServerHandler_WriteDebugMessage` →
+    /// `go_seq_from_refnum`. 2 из 3 запусков работают, 3-й крашит — race.
     ///
-    /// Reference (1.13.11 `BoxService.kt:142-154`) использует constructor.
-    /// Если v2 крашится тоже — fallback на null остаётся.
-    @Suppress("DEPRECATION")
-    override fun readWIFIState(): WIFIState? {
-        val wifiInfo = BoxApplication.wifiManager.connectionInfo ?: return null
-        var ssid = wifiInfo.ssid
-        if (ssid == "<unknown ssid>") {
-            return Libbox.newWIFIState("", "")
-        }
-        if (ssid.startsWith("\"") && ssid.endsWith("\"")) {
-            ssid = ssid.substring(1, ssid.length - 1)
-        }
-        return Libbox.newWIFIState(ssid, wifiInfo.bssid ?: "")
-    }
+    /// GC-pin через static field не помог. Reference impl
+    /// (`BoxService.kt:142-154` 1.13.11) работает у них; у нас нет.
+    /// Без debug symbols в libbox.so точную причину не разглядели.
+    ///
+    /// Pragmatic: оставляем `null`. Sing-box `wifi_ssid`/`wifi_bssid`
+    /// route rules — minor feature, у нас в template не используются.
+    /// Tracking issue для будущей работы (apgrade libbox / native debug).
+    override fun readWIFIState(): WIFIState? = null
 
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
     override fun systemCertificates(): StringIterator {
