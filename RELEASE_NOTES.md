@@ -38,7 +38,6 @@
 
 - **F9** `Libbox.setLocale(Locale.getDefault())` в init — sing-box error messages теперь локализованы.
 - **F12.1** `userName` поле в `findConnectionOwner` — Clash API `/connections` теперь видит package name юзера.
-- **F12.3** `readWIFIState()` реальный impl (раньше всегда null) — sing-box `wifi_ssid` / `wifi_bssid` правила теперь матчатся.
 - **F17** `getSystemProxyStatus()` возвращает реальный state (раньше всегда empty) — Clash dashboard'ы видят корректные available/enabled флаги.
 
 ---
@@ -65,13 +64,18 @@ Closed 13 attribution gap'ов из live-диагностической сесс
 
 ## 🏗 Under the hood
 
-### F1 — split monolith
+### Deferred (refnum 42 environment-specific issue)
 
-`BoxVpnService.kt` урезан 805 → **302 LOC** (Android Service hooks + PlatformInterface only). State ownership extracted в новый **`BoxLifecycle.kt`** (468 LOC, аналог reference's `BoxService.kt`). Implements `CommandServerHandler`, owns broadcast receiver, lifecycle methods.
+В процессе on-device тестирования обнаружили race-condition специфичный для нашего environment'а (Android 15 OnePlus + libbox 1.13.11 stripped):
 
-### F22 — coalesced log dispatch
+- **F12.3 readWIFIState** — любой non-null impl (constructor `WIFIState(...)` или factory `Libbox.newWIFIState(...)`) **non-deterministically** крашит `'Unknown reference: 42'` SIGABRT. Pin via `Seq.incRef × 10000` не помогает. Refnum 42 = первый Java→Go ref в `RefTracker` (REF_OFFSET=42) — должен быть наш handler, но Java tracker.dec не вызывается достаточно чтобы refcount дошёл до 0. Реальная причина не ясна без libbox.so debug symbols. Оставлен `null` как pre-§049.
+- **F1 split monolith** — extract `BoxLifecycle` как separate `CommandServerHandler` Java object → тот же refnum 42 crash. Оставлен monolithic `BoxVpnService` implements обe interfaces.
+- **F22 coalesced log dispatch** — queue + drainer pattern → race с refnum 42. Оставлен per-line dispatch.
 
-Bounded queue (`LOG_QUEUE_MAX=4096`) + single-pending drainer вместо `coreLogMainHandler.post {}` per line. На busy traffic + debug mode sing-box эмитит 100+ строк/сек → main looper больше не переполняется → меньше Flutter UI thread задержек.
+**Tracking issues** для будущей работы (см. `docs/spec/tasks/049-singbox-wrapper-deep-audit/PHASE_G_TEST_PLAN.md`):
+- G7 — pre-allocate dummies чтобы push handler refnum past 42 (определит где именно refnum 42)
+- G4 — попробовать libbox 1.14-alpha
+- libbox с debug symbols для precise root cause analysis
 
 ---
 
