@@ -420,13 +420,24 @@ class TrafficProfiler extends ChangeNotifier {
   final List<StreamController<Map<String, Object?>>> _globalStreamSinks =
       <StreamController<Map<String, Object?>>>[];
 
-  // §048 Принцип 4/7 — глобальный rolling buffer всех events системы,
-  // always-running. Используется для:
-  //   a) Pre-session backfill — на start() backfill события за last 60s
-  //      которые match'ат target.
+  // §048 Принцип 4/7 — глобальный rolling buffer всех events системы.
+  // Включается **explicit** через `startGlobalRecording()` (юзер тапнул
+  // ▶ START в Live tab); останавливается через `stopGlobalRecording()` или
+  // app kill. Без active recording listener detached, buffer не растёт —
+  // никаких теневых потребителей.
+  //
+  // Используется для:
+  //   a) Pre-session backfill — на start session backfill события за last
+  //      60s которые match'ат target. Работает только если global
+  //      recording был включён.
   //   b) Live system-wide tab — discovery без выбора target заранее.
   final ListQueue<TrafficEvent> _globalRollingBuffer =
       ListQueue<TrafficEvent>();
+
+  // §048 — explicit recording state. Independent of UI subscription:
+  // recording продолжается когда юзер ушёл с Live tab'а / свернул app.
+  bool _globalRecordingActive = false;
+  DateTime? _globalRecordingStartedAt;
 
   // §048 Принцип 1 — отдельный ring-buffer unattributed events (DNS fail
   // без owner / HTTPS / SOA / SVCB) для UI «System-wide events» секции
@@ -469,6 +480,44 @@ class TrafficProfiler extends ChangeNotifier {
   /// §048 — публичный getter глобального rolling buffer'а (для Live tab UI).
   List<TrafficEvent> get globalRollingBuffer =>
       List.unmodifiable(_globalRollingBuffer);
+
+  /// §048 — recording state для Live tab. Independent of UI subscriptions.
+  bool get isGlobalRecording => _globalRecordingActive;
+  DateTime? get globalRecordingStartedAt => _globalRecordingStartedAt;
+
+  /// §048 — explicit START для Live tab. Стартует listener attach + GC.
+  /// Recording продолжается когда юзер ушёл с tab'а / свернул app — пока
+  /// не вызван `stopGlobalRecording()` или app не убит.
+  ///
+  /// Идемпотентен: повторный вызов = no-op (recording уже running).
+  void startGlobalRecording() {
+    if (_globalRecordingActive) return;
+    _globalRecordingActive = true;
+    _globalRecordingStartedAt = DateTime.now();
+    // Чистый старт — buffer чистится чтобы юзер видел только то что было
+    // записано в этой recording-сессии. Если хочешь preserve — убери clear.
+    _globalRollingBuffer.clear();
+    _globalUnattributedEvents.clear();
+    _ensureLogListenerAttached();
+    _ensureGcTimerStarted();
+    AppLog.I.info('TrafficProfiler: global recording started');
+    notifyListeners();
+  }
+
+  /// §048 — explicit STOP для Live tab. Detaches listener + GC. Buffer
+  /// «freezes» (остаётся как был на момент stop), юзер может видеть
+  /// последнее состояние пока не нажмёт START снова.
+  ///
+  /// Идемпотентен: повторный вызов = no-op.
+  void stopGlobalRecording() {
+    if (!_globalRecordingActive) return;
+    _globalRecordingActive = false;
+    _globalRecordingStartedAt = null;
+    _maybeDetachLogListener();
+    _maybeStopGcTimer();
+    AppLog.I.info('TrafficProfiler: global recording stopped');
+    notifyListeners();
+  }
 
   /// §048 — публичный getter unattributed ring buffer'а (для Per-app Live
   /// «System-wide events» section).
@@ -649,21 +698,18 @@ class TrafficProfiler extends ChangeNotifier {
   /// (без session filter'а). Используется Live tab'ом UI и
   /// `/profiler/live/stream` SSE endpoint'ом.
   ///
-  /// Side-effect: первая подписка стартует log listener + GC timer,
-  /// последняя отписка (без active session) их останавливает.
+  /// **НЕ** включает recording автоматически. Если `startGlobalRecording()`
+  /// не был вызван — events не идут (listener detached). Подписка
+  /// безопасна но «пустая» пока recording off.
   Stream<Map<String, Object?>> globalLiveStream() {
     late StreamController<Map<String, Object?>> ctrl;
     ctrl = StreamController<Map<String, Object?>>(
       onCancel: () {
         _globalStreamSinks.remove(ctrl);
         if (!ctrl.isClosed) ctrl.close();
-        _maybeDetachLogListener();
-        _maybeStopGcTimer();
       },
     );
     _globalStreamSinks.add(ctrl);
-    _ensureLogListenerAttached();
-    _ensureGcTimerStarted();
     return ctrl.stream;
   }
 
@@ -707,10 +753,12 @@ class TrafficProfiler extends ChangeNotifier {
   }
 
   /// Отключиться от AppLog **только если** нет active session'и
-  /// и нет global subscribers'ов. Иначе оставляем running.
+  /// и global recording выключен. Иначе оставляем running.
+  /// (UI-subscriptions через `globalLiveStream()` НЕ учитываются — они
+  /// passive, не запускают сами по себе recording.)
   void _maybeDetachLogListener() {
     if (_active != null) return;
-    if (_globalStreamSinks.isNotEmpty) return;
+    if (_globalRecordingActive) return;
     if (_appLogListener == null) return;
     AppLog.I.removeListener(_appLogListener!);
     _appLogListener = null;
@@ -723,7 +771,7 @@ class TrafficProfiler extends ChangeNotifier {
 
   void _maybeStopGcTimer() {
     if (_active != null) return;
-    if (_globalStreamSinks.isNotEmpty) return;
+    if (_globalRecordingActive) return;
     _gcTimer?.cancel();
     _gcTimer = null;
   }
@@ -1433,6 +1481,8 @@ class TrafficProfiler extends ChangeNotifier {
     _connSnapshots.clear();
     _globalRollingBuffer.clear();
     _globalUnattributedEvents.clear();
+    _globalRecordingActive = false;
+    _globalRecordingStartedAt = null;
     _connTimer?.cancel();
     _connTimer = null;
     _gcTimer?.cancel();

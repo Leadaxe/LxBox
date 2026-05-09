@@ -19,6 +19,13 @@ class BootReceiver : BroadcastReceiver() {
         /// (Libbox.setup вызывается один раз).
         private const val KEY_CORE_LOGS = "core_logs_enabled"
 
+        /// §049 F15 fix: разрешать app'ам обходить tun (Android `Builder.allowBypass()`).
+        /// Default false — без bypass'а весь трафик уходит в tun (наша цель —
+        /// strict tunnel). С bypass = true — app может явно через
+        /// `ConnectivityManager.bindProcessToNetwork(network)` обойти VPN.
+        /// Для большинства юзеров не нужно; opt-in для разработчиков.
+        private const val KEY_ALLOW_BYPASS = "allow_bypass"
+
         /// Три режима фоновой работы tunnel'а. По умолчанию "never" — максимум
         /// стабильности, минимум экономии батареи. VPN-пользователи обычно
         /// выбирают надёжность (пуши, длинные TCP-сокеты), поэтому default
@@ -71,6 +78,18 @@ class BootReceiver : BroadcastReceiver() {
         fun isCoreLogsEnabled(context: Context): Boolean {
             return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
                 .getBoolean(KEY_CORE_LOGS, false)
+        }
+
+        /// §049 F15 fix: opt-in toggle для VPN bypass. Reference (`Settings.allowBypass`).
+        /// Default false — strict tunnel.
+        fun setAllowBypass(context: Context, enabled: Boolean) {
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_ALLOW_BYPASS, enabled).apply()
+        }
+
+        fun isAllowBypass(context: Context): Boolean {
+            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_ALLOW_BYPASS, false)
         }
     }
 

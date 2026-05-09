@@ -215,10 +215,11 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
           appBar: AppBar(
             title: const Text('Statistics'),
             bottom: TabBar(
-              isScrollable: true,
+              // §048: 4 tab'а делят width поровну. «Connections» → «Conns»
+              // чтобы влезли без horizontal scroll'а на 360dp экранах.
               tabs: [
-                const Tab(icon: Icon(Icons.dashboard_outlined), text: 'Overview'),
-                const Tab(icon: Icon(Icons.link), text: 'Connections'),
+                const Tab(icon: Icon(Icons.dashboard_outlined), text: 'Stats'),
+                const Tab(icon: Icon(Icons.link), text: 'Conns'),
                 Tab(
                   icon: const Icon(Icons.travel_explore),
                   child: AnimatedBuilder(
@@ -227,7 +228,7 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text('Per-app'),
+                        const Text('App'),
                         if (TrafficProfiler.I.isRecording) ...[
                           const SizedBox(width: 4),
                           Icon(

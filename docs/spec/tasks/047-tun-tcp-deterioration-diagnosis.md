@@ -456,6 +456,35 @@ git checkout 3b3883e   # libbox 1.13.11 reference
 - Split monolith `BoxVpnService.kt` 805 LOC → отдельный Lifecycle class (~700 LOC refactor, риск регресса; AtomicReference уже решает race, см. `§049 F1`)
 - Increase `stopAwait` timeout 5s → 15s (`VpnPlugin.stopVpn`)
 
+### Дополнение к §047 — UX-fix в DnsSettings (smoking gun обнаружен 2026-05-09)
+
+Поверх §049 F26 (исправление LocalResolver) добавлен defensive UX в DNS Settings: при анализе live-конфига с тестового устройства обнаружено что `route.default_domain_resolver = "local_dns_resolver"` (вместо template default `cloudflare_udp`) — значение сохранилось в storage от старой версии template'а без миграции. На скриншоте устройства видно что юзер реально попадает на этот path для outbound endpoint hostname'ов (`de-dp-01.com`, `tralalero.site`, etc.). 157 `dns: exchange failed` в core_logs за окно snapshot'а — большинство для outbound endpoint domains.
+
+**Применено в `app/lib/screens/dns_settings_screen.dart`:**
+
+- Универсальный helper `_resolverPicker({title, subtitle, value, tooltip, warnIfLocal})` для обоих полей (DNS Final + Default Domain Resolver).
+- **DNS Final** — info-icon ℹ с tooltip объясняющим что это catch-all для **app's queries**, `local_dns_resolver` тут **безопасен**, путь app → TUN hijack → rules → final.
+- **Default Domain Resolver** — info-icon переключается на жёлтый ⚠ когда выбран `local_dns_resolver`. Tooltip объясняет что это для **routing engine** (outbound endpoint hostname'ы, domain matching в rules), **не** для app's queries; warning'ит про recursion через TUN → §047 deterioration; рекомендует `cloudflare_udp` / `google_udp` / `google_doh`.
+- **Inline warning banner** появляется под полем когда выбран `local_dns_resolver` для Default Domain Resolver, с quick-fix button `[Switch to cloudflare_udp]` (если такой server есть в catalog'е).
+- Subtitle полей переписан чтобы сразу разделять scope: «**For apps** · catch-all when no DNS rule matches the query» vs «**For routing** · resolves hostnames inside sing-box (outbound endpoints, routing rules)».
+
+**Применено в `app/assets/wizard_template.json`:**
+
+- Tooltip для `dns_default_domain_resolver` расширен до полного объяснения semantics + AVOID warning'а про `local_dns_resolver` + рекомендации.
+- Tooltip для `dns_final` уточнён про path резолюции для apps + safe-vs-encrypted options.
+
+**Что делает этот fix без §049 F26:**
+
+Юзер видит ⚠ + warning banner → понимает risk → переключает на `cloudflare_udp` через quick-fix button → проблема обходится на config-уровне **независимо** от того исправлен ли LocalResolver в коде.
+
+**Что делает этот fix вместе с §049 F26:**
+
+Even с правильным LocalResolver через `DnsResolver.query(defaultNetwork, ...)` — `local_dns_resolver` остаётся **bootstrap-DNS через системный провайдер, мимо VPN**. Юзеры которые хотят максимальную приватность увидят tooltip и поймут что для routing-engine лучше использовать `cloudflare_udp` через VPN, а не system DNS провайдера. Это **defensive education**, не только race-condition mitigation.
+
+**Что не сделано (отложено):**
+
+- One-time migration banner на старте app'а для существующих юзеров с устаревшим `local_dns_resolver` в `dns_default_domain_resolver` — требует storage migration entry, отложено до отдельного task'а если retest §047 покажет что это критично.
+
 ### Detailed logging — already in code
 
 `BoxVpnService.kt` уже логирует `[vpn] doStop ENTER status=...`, `[vpn] receiver: ACTION_RELOAD`, etc. — есть signal для post-retest forensics если deterioration вернётся.

@@ -3,6 +3,7 @@ package com.leadaxe.lxbox.vpn
 import android.app.NotificationManager
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.wifi.WifiManager
 import android.os.PowerManager
 import go.Seq
 import io.nekohasekai.libbox.Libbox
@@ -12,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.Locale
 
 object BoxApplication {
     lateinit var application: Context
@@ -31,6 +33,15 @@ object BoxApplication {
         application.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     }
 
+    /// §049 F12.3 fix: WifiManager для readWIFIState. Использует Application
+    /// context (а не Activity) — иначе на API >= R может выкидывать
+    /// `IllegalStateException` при getSystemService с non-Activity context'ом
+    /// (см. https://developer.android.com/reference/android/net/wifi/WifiManager).
+    /// applicationContext безопасен.
+    val wifiManager: WifiManager by lazy {
+        application.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    }
+
     private var initialized = false
 
     /// Сигналит готовность `Libbox.setup` + `Libbox.redirectStderr`.
@@ -44,6 +55,14 @@ object BoxApplication {
         initialized = true
         application = context.applicationContext
         Seq.setContext(application)
+
+        // §049 F9 fix: Libbox.setLocale обязательно ПЕРЕД setup'ом — иначе
+        // sing-box error messages не локализованы. Reference
+        // (`Application.kt:42`) делает то же. Формат `xx_YY` (с подчёркиванием),
+        // а не BCP-47 `xx-YY`.
+        runCatching {
+            Libbox.setLocale(Locale.getDefault().toLanguageTag().replace("-", "_"))
+        }.onFailure { android.util.Log.w("BoxApplication", "Libbox.setLocale failed: ${it.message}") }
 
         // Quick Connect-побочка опциональна — из BoxVpnService.onCreate
         // тоже сюда заходим, любой сбой здесь не должен валить сервис.

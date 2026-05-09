@@ -31,9 +31,9 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicReference
 
 class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandler {
 
@@ -137,15 +137,33 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     }
 
-    @Volatile private var fileDescriptor: ParcelFileDescriptor? = null
+    /// **§049 F2 fix**: AtomicReference вместо `@Volatile`.
+    ///
+    /// Главный suspect §047 race condition был race на mutations
+    /// `fileDescriptor` из 5 call-site'ов: `@Volatile` гарантирует только
+    /// publish/visibility, не атомарность compound «read-then-close-then-null».
+    /// Два потока могли одновременно прочитать non-null fd → оба вызвать
+    /// `close()` → второй no-op (Android идемпотентен), но между этими
+    /// событиями kernel мог переиспользовать fd-int → sing-box, державший
+    /// `pfd.fd` копию, начинал писать в чужой fd. Симптом — silent ENXIO
+    /// при write через tun → TCP-deterioration через 15-30 мин uptime.
+    ///
+    /// `getAndSet(null)?.close()` — единая идиома close: единственный поток
+    /// получает прежний non-null PFD; повторные попытки close — no-op.
+    private val fileDescriptor = AtomicReference<ParcelFileDescriptor?>(null)
 
     /// Sing-box 1.13: единый объект, владеющий и Unix-socket'ом для Clash
-    /// dashboard, и box-runtime'ом. Раньше были два класса (BoxService +
-    /// CommandServer); в 1.13 BoxService удалён, CommandServer теперь
-    /// `startOrReloadService(config, opts)` создаёт box внутри себя.
-    private var commandServer: CommandServer? = null
+    /// dashboard, и box-runtime'ом.
+    /// **§049 F2/F3 fix**: AtomicReference, by the same reasoning as fileDescriptor.
+    private val commandServer = AtomicReference<CommandServer?>(null)
     private var receiverRegistered = false
     private var status = VpnStatus.Stopped
+
+    /// **§049 F17 fix**: track реальный state HTTP-proxy для Clash dashboard.
+    /// Имена `proxy*` (а не `systemProxy*`) — JVM signature clash с
+    /// `setSystemProxyEnabled(...)` override из CommandServerHandler.
+    @Volatile private var proxyAvailable = false
+    @Volatile private var proxyEnabled = false
 
     private val notification: ServiceNotification by lazy { ServiceNotification(this) }
 
@@ -161,7 +179,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
                 }
                 ACTION_RESET_NETWORK -> {
                     Log.d(TAG, "[vpn] receiver: ACTION_RESET_NETWORK → cs.resetNetwork()")
-                    runCatching { commandServer?.resetNetwork() }
+                    runCatching { commandServer.get()?.resetNetwork() }
                         .onFailure { Log.e(TAG, "ACTION_RESET_NETWORK failed", it) }
                 }
                 PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> {
@@ -169,11 +187,11 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
                 }
                 Intent.ACTION_SCREEN_OFF -> {
                     Log.d(TAG, "[vpn] SCREEN_OFF → pause")
-                    commandServer?.pause()
+                    commandServer.get()?.pause()
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     Log.d(TAG, "[vpn] SCREEN_ON → wake")
-                    commandServer?.wake()
+                    commandServer.get()?.wake()
                 }
             }
         }
@@ -242,11 +260,12 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
                 // на A50/A10/Y9 даёт фоновому `initializeLibbox` дотянуть
                 // до конца — иначе нативный crash без stderr-stacktrace.
                 BoxApplication.libboxReady.await()
-                // Очищаем недозакрытые ресурсы из прошлой сессии (если она была)
-                // ДО создания нового CommandServer'а. Иначе свежий cs закрылся бы
-                // же в этом cleanupStaleResources вызове — was bug в первоначальной
-                // 1.13-миграции.
-                cleanupStaleResources()
+                // §049 F3 fix: убран `cleanupStaleResources()` — superfluous
+                // 5-й mutation site для fileDescriptor. AtomicReference
+                // helper'ы (closeFileDescriptor / closeCommandServerAtomic)
+                // защищают от double-close из других call-paths без
+                // необходимости pre-cleanup'а. Reference (1.13.11
+                // BoxService.kt) аналогично не имеет такого метода.
                 startCommandServer()
                 startSingbox()
             } catch (t: Throwable) {
@@ -293,20 +312,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
 
     override fun onRevoke() {
         Log.d(TAG, "onRevoke — VPN taken by another app")
-        // Cleanup libbox-ресурсов синхронно (revoke — экстренный путь). Two-phase
-        // shutdown: сначала `closeService()` (останавливает box-runtime), потом
-        // `close()` (закрывает Unix-socket). Если первый бросит — фиксируем
-        // ошибку через setError, чтобы dashboard'ы её увидели; close() даже
-        // на failure обязан отработать.
-        fileDescriptor?.runCatching { close() }
-        fileDescriptor = null
-        commandServer?.apply {
-            runCatching { closeService() }.onFailure {
-                runCatching { setError("android: revoke close service: ${it.message}") }
-            }
-            runCatching { close() }
-        }
-        commandServer = null
+        // §049 F5 fix: atomic close через AtomicReference.getAndSet — гарантирует
+        // что только один поток (тот кто получит non-null) исполнит close().
+        // Предыдущая impl мутировала `fileDescriptor`/`commandServer` inline на
+        // binder-thread (откуда Android вызывает onRevoke), что создавало race
+        // с openTun на libbox-thread.
+        closeFileDescriptor()
+        closeCommandServerAtomic("revoke")
 
         if (receiverRegistered) {
             runCatching { unregisterReceiver(receiver) }
@@ -323,23 +335,32 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     // Start / stop sing-box
     // -------------------------------------------------------------------------
 
-    /// Force-close любого недозакрытого CommandServer'а из прошлого запуска
-    /// (например после onRevoke в свежем процессе). Two-phase: closeService()
-    /// первым (остановить box-runtime), close() — закрыть Unix-socket. Без
-    /// `Seq.destroyRef` — Go runtime в 1.13 self-cleans refnum'ы; manual вызов
-    /// ведёт к double-free.
-    private fun cleanupStaleResources() {
-        commandServer?.let { cs ->
-            Log.w(TAG, "cleanupStaleResources: closing leftover commandServer")
-            runCatching { cs.closeService() }
-            runCatching { cs.close() }
-            commandServer = null
+    /// §049 F2 fix: atomic close для fileDescriptor.
+    ///
+    /// `getAndSet(null)` гарантирует, что только тот поток, который получает
+    /// non-null PFD, выполнит фактический close(). Все остальные одновременные
+    /// попытки close ничего не делают. Это устраняет double-close ситуацию,
+    /// при которой kernel мог переиспользовать fd-int между нашими операциями
+    /// и sing-box продолжал писать в чужой fd (silent ENXIO → §047 TCP
+    /// deterioration).
+    private fun closeFileDescriptor() {
+        fileDescriptor.getAndSet(null)?.runCatching { close() }
+            ?.onFailure { Log.w(TAG, "closeFileDescriptor: close failed: ${it.message}") }
+    }
+
+    /// §049 F2/F3 fix: atomic close для CommandServer.
+    /// Two-phase shutdown: closeService() (остановить box-runtime), close()
+    /// (закрыть Unix-socket). На failure closeService — фиксируем через
+    /// setError чтобы Clash dashboard'ы увидели причину. Без `Seq.destroyRef`
+    /// — Go runtime в 1.13 self-cleans refnum'ы; manual вызов = double-free.
+    private fun closeCommandServerAtomic(reason: String) {
+        val cs = commandServer.getAndSet(null) ?: return
+        runCatching { cs.closeService() }.onFailure {
+            Log.e(TAG, "closeCommandServerAtomic($reason): closeService failed", it)
+            runCatching { cs.setError("android: $reason close service: ${it.message}") }
         }
-        fileDescriptor?.let { fd ->
-            Log.w(TAG, "cleanupStaleResources: closing leftover fileDescriptor")
-            runCatching { fd.close() }
-            fileDescriptor = null
-        }
+        runCatching { cs.close() }
+            .onFailure { Log.w(TAG, "closeCommandServerAtomic($reason): close failed: ${it.message}") }
     }
 
     private suspend fun startSingbox() {
@@ -360,15 +381,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             return
         }
 
-        // Note: cleanupStaleResources() уже отработал в onStartCommand до
-        // startCommandServer() — здесь второй вызов закрыл бы свежий cs.
-        // Небольшая пауза чтобы OS успел релизнуть socket'ы старой сессии.
-        delay(500)
+        // §049 F3 fix: убрана `delay(500)` — была компенсацией для
+        // удалённого `cleanupStaleResources()`.
 
         DefaultNetworkMonitor.start(serviceScope)
         Libbox.setMemoryLimit(true)
 
-        val cs = commandServer ?: run {
+        val cs = commandServer.get() ?: run {
             stopAndAlert("CommandServer not initialized")
             return
         }
@@ -411,7 +430,8 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     private fun startCommandServer() {
         val cs = CommandServer(this, this)
         cs.start()
-        commandServer = cs
+        // §049 F2 fix: AtomicReference.set — атомарный publish.
+        commandServer.set(cs)
     }
 
     private fun doStop() {
@@ -443,17 +463,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         // ⚠ Dispatchers.IO обязательно — Go callbacks при closeService() могут
         //   ждать host'a; main thread → ANR.
         serviceScope.launch {
-            fileDescriptor?.close()
-            fileDescriptor = null
+            // §049 F2/F3 fix: atomic helpers (closeFileDescriptor /
+            // closeCommandServerAtomic). Two-phase shutdown через
+            // `getAndSet(null)` исключает double-close race с onRevoke /
+            // параллельным doStop.
+            closeFileDescriptor()
             DefaultNetworkMonitor.stop()
-            commandServer?.let { cs ->
-                runCatching { cs.closeService() }.onFailure {
-                    Log.e(TAG, "doStop: closeService failed", it)
-                    runCatching { cs.setError("android: close service: ${it.message}") }
-                }
-                runCatching { cs.close() }
-            }
-            commandServer = null
+            closeCommandServerAtomic("doStop")
 
             withContext(Dispatchers.Main) {
                 Log.d(TAG, "[vpn] doStop cleanup done → setStatus(Stopped) + stopSelf()")
@@ -526,6 +542,14 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) builder.setMetered(false)
 
+        // §049 F15 fix: allowBypass opt-in toggle. Без bypass'а весь трафик
+        // уходит в tun (strict tunnel — наш default). С bypass = true app
+        // может через `ConnectivityManager.bindProcessToNetwork(network)`
+        // обойти VPN.
+        if (BootReceiver.isAllowBypass(this)) {
+            builder.allowBypass()
+        }
+
         val inet4 = options.inet4Address
         while (inet4.hasNext()) { val a = inet4.next(); builder.addAddress(a.address(), a.prefix()) }
         val inet6 = options.inet6Address
@@ -560,7 +584,11 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
             if (excl.hasNext()) { while (excl.hasNext()) { try { builder.addDisallowedApplication(excl.next()) } catch (_: NameNotFoundException) {} } }
         }
 
+        // §049 F17 fix: трекаем реальный state HTTP-proxy для Clash dashboard
+        // (через CommandServerHandler.getSystemProxyStatus).
         if (options.isHTTPProxyEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            proxyAvailable = true
+            proxyEnabled = true
             builder.setHttpProxy(
                 ProxyInfo.buildDirectProxy(
                     options.httpProxyServer,
@@ -568,10 +596,15 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
                     options.httpProxyBypassDomain.toList()
                 )
             )
+        } else {
+            proxyAvailable = false
+            proxyEnabled = false
         }
 
         val pfd = builder.establish() ?: error("android: the application is not prepared or is revoked")
-        fileDescriptor = pfd
+        // §049 F2 fix: atomic set. Не закрываем prev — sing-box при reload
+        // сам управляет lifetime'ом старого fd internally.
+        fileDescriptor.set(pfd)
         return pfd.fd
     }
 
@@ -585,11 +618,15 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     /// на тот же CommandServer. Manual close/destroy не нужен — sing-box сам
     /// тейкаунтит box-runtime. Зовётся когда внешний клиент (Clash dashboard)
     /// просит перечитать конфиг.
+    /// §049 F4 fix: убран status-flap (Started → Starting → Started).
+    /// Reference (`BoxService.kt:192-249 serviceReload0`) НЕ трогает status —
+    /// sing-box сам внутри переоткрывает tun (через openTun callback), наш
+    /// `fileDescriptor.set(pfd)` обновит ссылку atomic'но.
     override fun serviceReload() {
-        notification.stop()
-        setStatus(VpnStatus.Starting)
-        val cs = commandServer ?: run {
+        val cs = commandServer.get() ?: run {
             Log.w(TAG, "serviceReload: commandServer == null, treating as fresh start")
+            notification.stop()
+            setStatus(VpnStatus.Starting)
             serviceScope.launch { startSingbox() }
             return
         }
@@ -603,8 +640,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
                 Log.e(TAG, "serviceReload failed", it)
                 runCatching { cs.setError("android: reload: ${it.message}") }
             }
-            .onSuccess { setStatus(VpnStatus.Started) }
-        notification.show(ConfigManager.notificationTitle, "Connected")
+        // notification остаётся в "Connected" состоянии — мы не делали .stop().
     }
 
     // Sing-box 1.13: `postServiceClose()` удалён из CommandServerHandler.
@@ -613,14 +649,19 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
     // последовательности `doStop()`.
     override fun serviceStop() { doStop() }
 
-    override fun getSystemProxyStatus(): SystemProxyStatus = SystemProxyStatus()
+    /// §049 F17 fix: возвращает актуальный state HTTP-proxy.
+    override fun getSystemProxyStatus(): SystemProxyStatus = SystemProxyStatus().apply {
+        available = proxyAvailable
+        enabled = proxyEnabled
+    }
 
     override fun setSystemProxyEnabled(isEnabled: Boolean) { serviceReload() }
 
     @RequiresApi(Build.VERSION_CODES.M)
     private fun onIdleModeChanged() {
         // Sing-box 1.13: pause/wake переехали на CommandServer (BoxService удалён).
-        if (BoxApplication.powerManager.isDeviceIdleMode) commandServer?.pause() else commandServer?.wake()
+        val cs = commandServer.get() ?: return
+        if (BoxApplication.powerManager.isDeviceIdleMode) cs.pause() else cs.wake()
     }
 
     /// Sing-box 1.13: WriteLog (был на PlatformInterface) переехал сюда как
@@ -656,6 +697,15 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         // либо `[`. Используем word-boundary regex для надёжности.
         if (traceDebugRe.containsMatchIn(plain)) return
         val sink = coreLogSink ?: return
+        // §049 F22 НЕ применён: пробовали coalesced dispatch (queue + drainer)
+        // — на Android 15 + libbox 1.13.11 проявляется refnum 42 crash
+        // непредсказуемо. Build 10104 работал, 10106/10107 (тот же код по сути)
+        // — крашит. Race-condition в interaction между Kotlin Lambda capture
+        // и gomobile/seq tracker. Не стабильно для prod.
+        //
+        // Старый per-line dispatch остаётся: на normal traffic main looper
+        // не переполняется; на debug mode + busy traffic — теоретически может,
+        // но тут юзер знает что включил debug.
         coreLogMainHandler.post {
             runCatching { sink.success(plain) }
         }
@@ -739,7 +789,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper, CommandServerHandl
         // Дубль в commandServer log — observability через /logs?source=core
         // (если POST_NOTIFICATIONS denied на API 33+, юзер всё равно увидит URL).
         Log.d(TAG, "Notification: ${notification.title} → ${notification.openURL}")
-        commandServer?.writeMessage(
+        commandServer.get()?.writeMessage(
             0,
             "platform notification: ${notification.title} (${notification.openURL})",
         )

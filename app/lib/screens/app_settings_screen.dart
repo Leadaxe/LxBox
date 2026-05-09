@@ -50,6 +50,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   // §043 sing-box core logs forwarding (требует restart Service'а)
   bool _coreLogsEnabled = false;
 
+  // §049 F15 — allowBypass opt-in (применяется при следующем openTun)
+  bool _allowBypass = false;
+
   @override
   void initState() {
     super.initState();
@@ -88,6 +91,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final debugToken = await SettingsStorage.getDebugToken();
     final debugPort = await SettingsStorage.getDebugPort();
     final coreLogsEnabled = await _vpn.getCoreLogsEnabled();
+    final allowBypass = await _vpn.getAllowBypass();
     if (mounted) {
       setState(() {
         _autoStart = auto;
@@ -105,6 +109,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _debugPort = debugPort;
         _debugPortCtl.text = debugPort.toString();
         _coreLogsEnabled = coreLogsEnabled;
+        _allowBypass = allowBypass;
         _loaded = true;
       });
     }
@@ -184,6 +189,20 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Saved. Force-stop & reopen app to apply.'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// §049 F15: toggle allowBypass. Применяется при следующем openTun (start
+  /// или reload VPN).
+  Future<void> _toggleAllowBypass(bool enable) async {
+    setState(() => _allowBypass = enable);
+    await _vpn.setAllowBypass(enable);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Saved. Reload VPN to apply.'),
         duration: Duration(seconds: 3),
       ),
     );
@@ -733,6 +752,20 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
               ),
             ],
           ),
+        ),
+        // §049 F15: VPN bypass opt-in.
+        SwitchListTile(
+          title: const Text('Allow VPN bypass'),
+          subtitle: Text(
+            _allowBypass
+                ? 'Apps may use ConnectivityManager to bypass tun.'
+                : 'Strict tunnel — all traffic goes through tun.',
+          ),
+          secondary: const Icon(Icons.alt_route),
+          value: _allowBypass,
+          onChanged: _loaded
+              ? (val) => unawaited(_toggleAllowBypass(val))
+              : null,
         ),
       ],
     );

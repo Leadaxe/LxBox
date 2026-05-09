@@ -41,6 +41,7 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
   // потом обновляется через SSE feed. Live-снимок == _events newest-last.
   final List<TrafficEvent> _events = [];
   bool _paused = false;
+  Timer? _ticker; // для refresh «Recording 02:34» каждую секунду
 
   // Filter state.
   final TextEditingController _searchCtrl = TextEditingController();
@@ -55,14 +56,42 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
   @override
   void initState() {
     super.initState();
-    // Initial snapshot (последние 60s).
+    // §048 — recording state управляется explicit через [TrafficProfiler.I.startGlobalRecording]
+    // (юзер тапает ▶ START в Live tab). Tab subscribes к stream, но это
+    // не запускает recording — listener attached только если recording active.
     final snapshot = TrafficProfiler.I.globalSnapshot(seconds: 60);
     _events.addAll(snapshot);
     for (final e in snapshot) {
       _trackApp(e);
     }
-    // Subscribe to live feed.
     _sub = TrafficProfiler.I.globalLiveStream().listen(_onEvent);
+    TrafficProfiler.I.addListener(_onProfilerChanged);
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && TrafficProfiler.I.isGlobalRecording) setState(() {});
+    });
+  }
+
+  void _onProfilerChanged() {
+    if (!mounted) return;
+    setState(() {
+      // На STOP recording'а — фиксируем последний snapshot из buffer'а
+      // (он уже не растёт), на START — clear (TrafficProfiler уже это
+      // сделал в startGlobalRecording).
+      if (!TrafficProfiler.I.isGlobalRecording) {
+        // Buffer заморожен. _events остаётся как есть.
+        return;
+      }
+      _events.clear();
+      _seenApps.clear();
+    });
+  }
+
+  void _toggleRecording() {
+    if (TrafficProfiler.I.isGlobalRecording) {
+      TrafficProfiler.I.stopGlobalRecording();
+    } else {
+      TrafficProfiler.I.startGlobalRecording();
+    }
   }
 
   void _trackApp(TrafficEvent e) {
@@ -92,6 +121,8 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
   @override
   void dispose() {
     _sub?.cancel();
+    TrafficProfiler.I.removeListener(_onProfilerChanged);
+    _ticker?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -133,6 +164,7 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
     final filtered = _filtered;
     return Column(
       children: [
+        _recordingHeader(context),
         _filterBar(context),
         const Divider(height: 1),
         if (TrafficProfiler.I.unattributedBannerActive)
@@ -164,9 +196,13 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
                     padding: const EdgeInsets.all(24),
                     child: Text(
                       _events.isEmpty
-                          ? 'Waiting for system-wide events…'
+                          ? (TrafficProfiler.I.isGlobalRecording
+                              ? 'Waiting for events… '
+                                  '(events appear when traffic flows)'
+                              : 'Tap ▶ START above to begin capture.')
                           : 'No matches.',
                       style: TextStyle(color: cs.onSurfaceVariant),
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 )
@@ -178,6 +214,70 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
         ),
       ],
     );
+  }
+
+  /// §048 — header с recording control. ▶ START / ⏹ STOP + duration badge.
+  /// Аналогичен Per-app trace header'у, но без target picker'а — Live это
+  /// system-wide recording, фокусируется через filter chips.
+  Widget _recordingHeader(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isRec = TrafficProfiler.I.isGlobalRecording;
+    final startedAt = TrafficProfiler.I.globalRecordingStartedAt;
+    final duration = startedAt == null
+        ? Duration.zero
+        : DateTime.now().difference(startedAt);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      child: Row(
+        children: [
+          Icon(
+            isRec ? Icons.fiber_manual_record : Icons.podcasts,
+            size: 16,
+            color: isRec ? cs.error : cs.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isRec ? 'Recording system-wide events' : 'Not recording',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: isRec ? cs.error : cs.onSurface),
+                ),
+                Text(
+                  isRec
+                      ? '${_fmtDur(duration)} · ${_events.length} events'
+                      : 'Tap START to begin capture. Recording continues '
+                          'when you leave this tab.',
+                  style: TextStyle(
+                      fontSize: 11, color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.icon(
+            onPressed: _toggleRecording,
+            icon: Icon(isRec ? Icons.stop : Icons.fiber_manual_record,
+                size: 18),
+            label: Text(isRec ? 'STOP' : 'START'),
+            style: FilledButton.styleFrom(
+              backgroundColor: isRec ? cs.error : cs.primary,
+              foregroundColor: isRec ? cs.onError : cs.onPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _fmtDur(Duration d) {
+    if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes % 60}m';
+    if (d.inMinutes > 0) return '${d.inMinutes}m ${d.inSeconds % 60}s';
+    return '${d.inSeconds}s';
   }
 
   Widget _filterBar(BuildContext context) {

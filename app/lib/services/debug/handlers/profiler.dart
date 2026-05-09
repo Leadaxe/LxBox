@@ -49,6 +49,9 @@ Future<DebugResponse> profilerHandler(
     '/profiler/live' => _live(req),
     '/profiler/live/stream' => _liveStream(req),
     '/profiler/live/unattributed' => _liveUnattributed(req),
+    '/profiler/live/start' => _liveStart(req),
+    '/profiler/live/stop' => _liveStop(req),
+    '/profiler/live/state' => _liveState(req),
     '/profiler/secondary-packages' => _patchSecondaryPackages(req),
     _ => throw NotFound('profiler path: $path'),
   };
@@ -185,6 +188,41 @@ Future<DebugResponse> _liveStream(DebugRequest req) async {
     throw BadRequest('method ${req.method} not allowed (GET required)');
   }
   return SseResponse(TrafficProfiler.I.globalLiveStream());
+}
+
+Future<DebugResponse> _liveStart(DebugRequest req) async {
+  if (req.method != 'POST') {
+    throw BadRequest('method ${req.method} not allowed (POST required)');
+  }
+  TrafficProfiler.I.startGlobalRecording();
+  return JsonResponse({
+    'ok': true,
+    'recording': true,
+    'started_at':
+        TrafficProfiler.I.globalRecordingStartedAt?.toUtc().toIso8601String(),
+  });
+}
+
+Future<DebugResponse> _liveStop(DebugRequest req) async {
+  if (req.method != 'POST') {
+    throw BadRequest('method ${req.method} not allowed (POST required)');
+  }
+  TrafficProfiler.I.stopGlobalRecording();
+  return JsonResponse({'ok': true, 'recording': false});
+}
+
+Future<DebugResponse> _liveState(DebugRequest req) async {
+  if (req.method != 'GET') {
+    throw BadRequest('method ${req.method} not allowed (GET required)');
+  }
+  return JsonResponse({
+    'recording': TrafficProfiler.I.isGlobalRecording,
+    'started_at':
+        TrafficProfiler.I.globalRecordingStartedAt?.toUtc().toIso8601String(),
+    'buffer_count': TrafficProfiler.I.globalRollingBuffer.length,
+    'unattributed_count': TrafficProfiler.I.recentUnattributedCount,
+    'banner_active': TrafficProfiler.I.unattributedBannerActive,
+  });
 }
 
 Future<DebugResponse> _liveUnattributed(DebugRequest req) async {

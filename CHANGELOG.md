@@ -10,6 +10,61 @@
 
 ---
 
+## [1.7.1] — 2026-05-09
+
+«Stabilization» release. Главное — **§049 sing-box wrapper deep audit + atomic CAS lifecycle fix**: устранена main suspect race condition по `fileDescriptor`, обнаруженная при диагностике §047 (TCP-deterioration после ~8 часов uptime). Параллельно — **§048 inclusive observer** для Per-app trace и **§046 tunnel apps split-tunneling**.
+
+### Fixed
+
+- **§049 sing-box wrapper deep audit + atomic CAS lifecycle fix** ([§049 spec](docs/spec/tasks/049-singbox-wrapper-deep-audit/spec.md), диагностика [§047](docs/spec/tasks/047-tun-tcp-deterioration-diagnosis.md)). Многочасовой side-by-side diff нашего Kotlin wrapper'а vs reference SagerNet/sing-box-for-android (correct commit `3b3883e` для libbox 1.13.11) → 25 findings, 9 применены как fix'ы. Главный — race condition в lifecycle `fileDescriptor`: `@Volatile` гарантирует publish, но не атомарность compound «read-then-close-then-null», и mutations из 5 call-site'ов (`openTun` / `cleanupStaleResources` / `onRevoke` / `doStop` / scope.cancel) могли привести к double-close → kernel переиспользует fd-int → sing-box пишет в чужой fd → silent ENXIO → TCP-traffic via tun перестаёт работать через 15-30 минут после старта.
+  - **F2** Replaced `@Volatile var fileDescriptor` → `AtomicReference<ParcelFileDescriptor?>`. Helper `closeFileDescriptor()` использует `getAndSet(null)?.close()` — единственный поток получает non-null PFD, остальные no-op. Same для `commandServer`.
+  - **F3** Удалён `cleanupStaleResources()` — superfluous 5-й mutation site, аналога в reference нет. AtomicReference helper'ы защищают от double-close без pre-cleanup'а. Также убрана `delay(500)` (была компенсацией для удалённого cleanup'а).
+  - **F5** `onRevoke` cleanup переведён на atomic helpers (раньше мутировал поля inline на binder thread, race с `openTun` на libbox thread).
+  - **F4** `serviceReload` без status-flap (Started→Starting→Started → без промежуточного broadcast'а), reference так и делает.
+  - **F26** LocalResolver полностью переписан на `DnsResolver.getInstance().query(defaultNetwork, ...)` (port 1:1 из reference). Старый `InetAddress.getAllByName()` шёл через system resolver, который при `tun.auto_route=true` мог рекурсивно пройти ЧЕРЕЗ tun. Now bound к underlying network, мимо tun.
+  - **F9** `Libbox.setLocale(Locale.getDefault())` в init — sing-box error messages теперь локализованы.
+  - **F12.1** `userName` поле в `findConnectionOwner` — Clash API `/connections` теперь видит package name юзера.
+  - **F12.3** `readWIFIState()` реальный impl через **`Libbox.newWIFIState(ssid, bssid)` static factory** (не constructor `WIFIState(...)` который use'ит reference — на нашем environment'е Android 15 + libbox 1.13.11 constructor path детерминированно крашит с `'Unknown reference: 42'` SIGABRT, factory работает стабильно). Sing-box `wifi_ssid` / `wifi_bssid` правила теперь матчатся.
+  - **F17** `getSystemProxyStatus()` возвращает реальный state (раньше всегда empty `SystemProxyStatus()`) — Clash dashboard'ы видят корректные available/enabled флаги.
+
+#### Deferred / not applied
+
+- **F1 split monolith** — попытка extract `BoxLifecycle` как separate `CommandServerHandler` Java object провоцирует тот же `'Unknown reference: 42'` crash независимо от F12.3 path. Все варианты split (lifecycle as CSH, BoxVpnService as CSH с делегацией, eager init, lazy init) на нашем environment'е крашатся. Reference's split работает у них; у нас нет. **Оставлен monolithic** (`BoxVpnService implements PlatformInterfaceWrapper + CommandServerHandler` как в OLD коде). State (`fileDescriptor`/`commandServer` AtomicReference) живёт в нём — atomic CAS race fix сохранён.
+- **F22 coalesced log dispatch** — пробовали bounded queue + single-pending drainer вместо per-line `coreLogMainHandler.post`. Build 10104 (Lambda inline) работал; build 10106/10107 (тот же код по сути) — крашит refnum 42. Race-condition в interaction между Kotlin Lambda capture и gomobile/seq tracker. Не стабильно для prod — оставлен per-line dispatch.
+
+### Added
+
+- **§049 F15 — Allow VPN bypass toggle** (App Settings → «Allow VPN bypass»). Default off (strict tunnel — наш default behavior). Включает `Builder.allowBypass()` для VPN — apps могут explicit'но через `ConnectivityManager.bindProcessToNetwork(network)` обойти tun. Применяется при следующем `openTun()` (старт VPN или reload). Reference (`Settings.allowBypass`) имеет identical toggle.
+- **Per-app trace — inclusive observer with confidence** ([§048 spec](docs/spec/tasks/048-perapp-trace-attribution-gaps.md)). Закрывает 13 attribution gap'ов в Per-app traffic profiler, выявленных в live-диагностической сессии 2026-05-09. Концепт: `TrafficProfiler` теперь не drop'ает события — каждое попадает в session с одним из 4 уровней `ConfidenceLevel` (`verified` / `secondary` / `inferred` / `unattributed`). Юзер видит **всё что произошло**, и видит **что точно его app, а что возможно**.
+  - **Defensive DNS regex** — `_dnsRe` / `_dnsFailRe` принимают любой record type (HTTPS / SVCB / SOA / MX / TXT / unknown), любой формат timing'а (5ms / 10.0s), с/без trailing dot. Раньше `HTTPS` queries Chrome'а (HTTP/3 alt-svc discovery) silently дропались.
+  - **Secondary packages** — `Session.secondaryPackages: Set<String>` configurable per session. Решает Tinkoff-WebView сценарий: target=`ru.tinkoff.investing` + secondary={`com.google.android.webview`} → WebView traffic попадает в session с `confidence=secondary`. UI: `Edit secondary` button под header'ом, multi-select picker.
+  - **Multiple matching strategies** — direct package match → secondary packages → UID-stripped variants → recent DNS IP inference (10s window). Multi-package UID `com.google.android.gms, com.google.android.gsf` теперь split-and-contains, не equals.
+  - **Pre-session backfill** — `_globalRollingBuffer` 60s × 3000 events always-running. На `start()` события за last 60s резолвятся через session matching и backfill'ятся в `session.events` с marker `〽 backfilled from pre-recording`. Решает «юзер ставит recording после того как заметил проблему — теряет первые 60s».
+  - **Live system-wide tab** — 4-й tab в Statistics («Overview · Connections · Per-app · Live»). Discovery без выбора target: видно всё что происходит на устройстве в real-time. Filter chips (kind / unattributed-only / app multi-select / search by domain/IP/process), pause/resume, long-press → «Open in Per-app session for <pkg>» quick-discovery flow.
+  - **Per-app Live sub-tab** — additional «System-wide events (no owner detected)» section внизу + красный banner «N unattributed events / 30s» когда detected attribution gaps (>5 за 30s).
+  - **Time-based correlation cleanup** — `_connIdToMeta` / `_dnsByConnId` GC через `Timer.periodic(5s)` с TTL=30s, не count-based threshold (256). Закрывает conn-id reuse race window.
+  - **Streaming primary, polling supplement** — polling interval 2s → 5s. Каждый `inbound packet connection` log line == event сразу; polling только enrich'ит open conn'ы (bytes / state) и эмитит close events.
+  - **Debug API расширен**: `GET /profiler/live?seconds=60` (snapshot global rolling buffer), `GET /profiler/live/stream` (SSE без session filter'а), `GET /profiler/live/unattributed` (recent unattributed + banner state), `PATCH /profiler/secondary-packages` (live mutation), `POST /profiler/start { secondary_packages }` (initial set).
+  - **API contract**: TrafficEvent JSON теперь включает `confidence`, `matched_via`, `shown_because`, `dns_record_type`, `backfilled` поля.
+- **Tunnel apps — OS-level split-tunneling** ([§046 spec](docs/spec/features/046%20tunnel%20apps%20split-tunneling/spec.md)). Четвёртая вкладка в `Routing` для управления стандартным Android-механизмом split-tunneling: какие apps идут через VPN-tun, а какие — direct по cellular/wifi (минуя sing-box полностью).
+  - **3 mode'а через SegmentedButton**: `Off` (все apps через tun, default) / `Allow-list` (только перечисленные через tun) / `Deny-list` (все КРОМЕ перечисленных). Mutually exclusive, как требует Android `VpnService.Builder` API.
+  - **Storage** `tun_apps: {mode, packages}` в `lxbox_settings.json`. Default для existing юзеров: `{mode: "off", packages: []}` — backward-compat. Migration unconditional one-shot на первом load.
+  - **Builder** `applyTunPackages()` в `post_steps.dart` (последний step pipeline'а): `mode: allow` → `inbound[tun].include_package`, `mode: deny` → `exclude_package`, `mode: off` → ничего не пишем.
+  - **Native слой не трогали** — `BoxVpnService.kt:557-560` уже умеет читать `options.includePackage`/`excludePackage` от libbox и звать `VpnService.Builder.addAllowedApplication`/`addDisallowedApplication`. applies на `builder.establish()`.
+  - **Restart banner** показывается при modified state + tunnel up (`addAllowedApplication` applies только при создании tun fd; light reload не помогает — нужен full VPN stop+start). Кнопка `[Restart now]` делает stop+start.
+  - **Конфликт-tooltip ⓘ** на header'е tab'а: apps в Allow-list идут через tun → routing rules применяются нормально; apps вне Allow-list (или внутри Deny-list) bypass'ят VPN entirely → sing-box их не видит, custom rules с `package_name` не сматчатся.
+  - **AppPicker reuse** — тот же multi-select picker что в §030/§044. Show-system-apps по default OFF.
+  - **Uninstalled apps** помечаются greyed-icon + label `(uninstalled — auto-skipped)` (native ловит `NameNotFoundException`).
+  - **Debug API** `GET /settings/tun_apps` / `PUT /settings/tun_apps` ({mode, packages}, replace целиком, package-name validation regex, dedup idempotent). Response `rebuild_needed: true` как hint клиенту.
+
+### Tests
+
+- `app/test/builder/tun_packages_test.dart` — 9 случаев `applyTunPackages` (off / off+pkgs / allow+empty / allow+pkgs / deny+pkgs / no tun / no inbounds / multiple tuns / TunAppsConfig predicates).
+- `app/test/services/traffic_profiler_test.dart` — 16 новых тестов §048: defensive DNS regex (HTTPS / SVCB / SOA / `10.0s` time format / fail без owner), multi-package UID matching, WebView secondary, UID-suffix matching, non-target drop, secondary mutation, pre-session backfill, confidence in JSON, global snapshot, banner threshold, time-based GC.
+- §049 — local APK build success, `flutter analyze` clean, **535 / 535 flutter tests pass**. On-device retest §047 race — pending (требует ~30+ min прогона на устройстве).
+
+---
+
 ## [1.7.0] — 2026-05-08
 
 «Observability» release. Главное — **Per-app traffic profiler** (§044): inline-инструмент диагностики «куда конкретное приложение ходит и как роутится» прямо в Stats. Дополнено расширением `ru-direct` preset'а 4-слойной защитой (TLD + service-CDN suffix-list + GeoIP-ranges) — §045.

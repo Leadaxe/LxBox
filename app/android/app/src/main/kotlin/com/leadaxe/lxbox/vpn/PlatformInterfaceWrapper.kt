@@ -51,6 +51,10 @@ interface PlatformInterfaceWrapper : PlatformInterface {
         val packages = BoxApplication.packageManager.getPackagesForUid(uid)?.toList() ?: emptyList()
         return ConnectionOwner().apply {
             userId = uid
+            // §049 F12.1: userName заполняется первым package'ом (как в reference
+            // `PlatformInterfaceWrapper.kt:60` 1.13.11). Видно в Clash API
+            // `/connections` endpoint.
+            userName = packages.firstOrNull() ?: ""
             setAndroidPackageNames(StringArray(packages.iterator()))
         }
     }
@@ -104,7 +108,31 @@ interface PlatformInterfaceWrapper : PlatformInterface {
     override fun underNetworkExtension(): Boolean = false
     override fun includeAllNetworks(): Boolean = false
     override fun clearDNSCache() {}
-    override fun readWIFIState(): WIFIState? = null
+
+    /// §049 F12.3 v2: попытка через `Libbox.newWIFIState(...)` static factory
+    /// вместо `WIFIState(...)` constructor.
+    ///
+    /// History:
+    /// - v1: `WIFIState(ssid, bssid)` constructor → SIGABRT 'Unknown reference: 42'
+    ///   (см. §049 spec.md Phase D bisect log).
+    /// - v2 (тут): `Libbox.newWIFIState(ssid, bssid)` static native method.
+    ///   Возможно различная Go-side семантика refcount'а — `__NewWIFIState`
+    ///   constructor path vs `Libbox.newWIFIState` factory path.
+    ///
+    /// Reference (1.13.11 `BoxService.kt:142-154`) использует constructor.
+    /// Если v2 крашится тоже — fallback на null остаётся.
+    @Suppress("DEPRECATION")
+    override fun readWIFIState(): WIFIState? {
+        val wifiInfo = BoxApplication.wifiManager.connectionInfo ?: return null
+        var ssid = wifiInfo.ssid
+        if (ssid == "<unknown ssid>") {
+            return Libbox.newWIFIState("", "")
+        }
+        if (ssid.startsWith("\"") && ssid.endsWith("\"")) {
+            ssid = ssid.substring(1, ssid.length - 1)
+        }
+        return Libbox.newWIFIState(ssid, wifiInfo.bssid ?: "")
+    }
 
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
     override fun systemCertificates(): StringIterator {
@@ -135,3 +163,4 @@ private fun InterfaceAddress.toPrefix(): String {
         "${address.hostAddress}/$networkPrefixLength"
     }
 }
+

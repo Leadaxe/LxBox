@@ -192,6 +192,16 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "getCoreLogsEnabled" -> {
                 result.success(BootReceiver.isCoreLogsEnabled(context))
             }
+            // §049 F15 fix: allowBypass opt-in toggle (применяется при следующем
+            // openTun → требует reload VPN после изменения).
+            "setAllowBypass" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                BootReceiver.setAllowBypass(context, enabled)
+                result.success(true)
+            }
+            "getAllowBypass" -> {
+                result.success(BootReceiver.isAllowBypass(context))
+            }
             "quitApp" -> {
                 // §043 follow-up: завершить процесс целиком, чтобы при следующем
                 // запуске `BoxApplication.initialize` пересоздал libbox с новым
