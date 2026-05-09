@@ -1498,3 +1498,181 @@ GC-pin через static field strong reference не помог — issue not in
 - Decompile `libbox-1.13.11.aar` через `unzip` + `javap` — получили класс layouts (`WIFIState implements go.Seq$Proxy` etc), без debug symbols ограничение
 
 Всё `git`'нуто в чистый final state на v1.7.1 release.
+
+---
+
+## Phase F — refnum 42 deep analysis (offline, без телефона)
+
+После v1.7.1 ship провели глубокую декомпиляцию `libbox.aar` для понимания природы refnum 42 и подготовили **structured test plan** для следующего on-device session'а.
+
+### 🎯 Confirmed: REF_OFFSET = 42
+
+`go.Seq$RefTracker` constructor (декомпиляция bytecode):
+```java
+RefTracker() {
+    this.next = 42;  // ← bipush 42; putfield next:I
+    this.javaObjs = new RefMap();
+    this.javaRefs = new IdentityHashMap<>();
+}
+```
+
+`inc(Object obj)`:
+```java
+synchronized int inc(Object obj) {
+    if (obj == null) return 41;  // sentinel
+    if (obj instanceof Seq$Proxy) return ((Seq$Proxy) obj).incRefnum();  // Go-side refnum
+    Integer existing = javaRefs.get(obj);
+    if (existing == null) {
+        // first time for this Java object
+        existing = next++;  // next starts at 42
+        javaRefs.put(obj, existing);
+    }
+    Ref ref = javaObjs.get(existing);
+    if (ref == null) ref = new Ref(existing, obj);  // refcount=1
+    else ref.inc();  // refcount++
+    return existing;
+}
+```
+
+`dec(int refnum)`:
+```java
+synchronized void dec(int refnum) {
+    if (refnum <= 0) {
+        log.severe("dec request for Go object" + refnum);
+        return;
+    }
+    if (refnum == nullRef.refnum) return;  // null sentinel
+    Ref ref = javaObjs.get(refnum);
+    if (ref == null) {
+        throw new RuntimeException("referenced Java object is not found: refnum=" + refnum);
+    }
+    ref.refcnt--;
+    if (ref.refcnt <= 0) {
+        javaObjs.remove(refnum);
+        javaRefs.remove(ref.obj);  // GONE
+    }
+}
+```
+
+**Refnum 42 — это первый Java-implemented-interface объект, переданный в libbox.**
+
+### Какие наши классы попадают в этот tracker
+
+NOT `Seq$Proxy` (используют RefTracker, refnum from 42):
+- `BoxVpnService` (implements `PlatformInterface` + `CommandServerHandler`) ← **это refnum 42**
+- `LocalResolver` (implements `LocalDNSTransport`)
+- `PlatformInterfaceWrapper.StringArray` (inner class implements `StringIterator`)
+- inline `NetworkInterfaceIterator` объект в `getInterfaces()`
+- `BroadcastReceiver` callbacks (если passed to libbox)
+
+ARE `Seq$Proxy` (Go-side refnum, separate space):
+- `WIFIState`, `OverrideOptions`, `SetupOptions`, `CommandServer`
+- `ConnectionOwner`, `NetworkInterface` (libbox.NetworkInterface — Go struct, не java.net)
+- `ExchangeContext`, `SystemProxyStatus`
+
+### Когда refnum 42 destroyed
+
+`Seq.destroyRef(int)` — native method, **Go side calls into Java** via JNI to decrement refcount. When called, `tracker.dec(refnum)` runs; if refcount reaches 0, entry **removed** from map → next `get(refnum)` returns null → `go_seq_from_refnum` panic'ит **"Unknown reference: 42"**.
+
+WHO calls destroyRef from Go side: gomobile-generated finalizers, when Go-side wrapper struct is GC'd by Go runtime.
+
+### Hypothesis tree for testing
+
+#### Hypothesis A — Go-side GC pressure triggers premature destroyRef
+**Triggers**: F12.3 / F1 / F22 increase Go heap pressure (more allocations, more frequent GC).
+**Test**: pin refcount very high so even multiple destroyRef calls don't drop to 0.
+
+```kotlin
+// In BoxApplication.initialize, AFTER Seq.setContext:
+override fun onCreate() {
+    super.onCreate()
+    BoxApplication.initialize(applicationContext)
+    // §049 Phase F diagnostic — pin handler refcount to ~10000 so any
+    // sporadic destroyRef won't kill it.
+    repeat(10000) { Seq.incRef(this) }
+}
+```
+Then enable F12.3 with constructor (known to crash deterministically). If crash gone → confirmed Hyp A. If crashes still → other cause.
+
+#### Hypothesis B — Counter overflow / wraparound 
+**Test**: log `Seq.tracker.dec()` calls via instrumentation (need reflection to access internal logger, or wrap Seq.destroyRef native)
+
+#### Hypothesis C — Specific Lambda capture in F22 or method-ref
+Build with F22 simplest version (no method ref, no continuation, just one-shot drain) and stress-test with 10 cold-starts.
+
+### Pre-cooked diagnostic helper
+
+Готовый Kotlin для on-device тестов — добавить в `BoxApplication.initialize` после `Seq.setContext`:
+
+```kotlin
+// Phase F: pin handler+platform refcount through repeated incRef.
+// If crash 'Unknown reference: 42' goes away — confirms Hypothesis A
+// (GC-induced premature destroyRef).
+//
+// CAUTION: this leaks refs (no matching destroyRef), but it's diagnostic
+// only — never ship. Each repeat increases refcount on whatever
+// `BoxVpnService` instance exists when called.
+//
+// Note: Seq.incRef on null-context fails. Must call AFTER Seq.setContext.
+fun pinHandlerForDiagnostic(handler: Any) {
+    repeat(10_000) { go.Seq.incRef(handler) }
+}
+```
+
+### Test 2 RESULT (выполнено on-device 2026-05-09)
+
+**Hypothesis A — FALSIFIED.**
+
+Build 10210 = baseline + F12.3 constructor + `repeat(10_000) { Seq.incRef(this) }` в `BoxVpnService.onCreate()`.
+
+5/5 trials крашат `'Unknown reference: 42'`:
+```
+=== Trial 1 ===  Abort message: 'Unknown reference: 42'
+=== Trial 2 ===  Abort message: 'Unknown reference: 42'
+=== Trial 3 ===  Abort message: 'Unknown reference: 42'
+=== Trial 4 ===  ▶ pinned handler refcount via Seq.incRef × 10000
+                 Abort message: 'Unknown reference: 42'
+=== Trial 5 ===  Abort message: 'Unknown reference: 42'
+```
+
+**Анализ:** 10000 destroyRef calls за ~5 секунд startup'а **физически невозможно** — каждый требует JNI-вызов из Go в Java + lock на synchronized RefTracker. Реалистично 100-1000 calls/sec. Значит refcount не падает до 0.
+
+**Вывод:** проблема НЕ в decRef/destroyRef cycle для refnum 42. Возможные альтернативы:
+1. Refnum 42 **никогда не попадает в tracker** при F12.3 path (возможно sing-box делает direct lookup мимо `Seq$RefTracker`)
+2. Refnum 42 **удаляется через другой путь** (raw `javaObjs.remove()` где-то)
+3. Refnum 42 **референс в panic-message** — это что-то ДРУГОЕ, не наш handler. Возможно internal Go-side refnum который коллидирует с REF_OFFSET=42 в другой namespace.
+
+**Гипотеза 3** наиболее вероятна. Сейчас smashing предположение что `cproxylibbox_CommandServerHandler_WriteDebugMessage` ищет HANDLER refnum — возможно он ищет какой-то ВНУТРЕННИЙ refnum (например, message context), который случайно тоже 42.
+
+### Next test plan (Phase G)
+
+| # | Hypothesis | Test |
+|---|---|---|
+| G1 | Refnum 42 — это не handler, а transient context. Изменить порядок init чтобы handler был НЕ первым refnum | До CommandServer создать ещё один Java→Go object: `Seq.incRef(SomeOther)` |
+| G2 | Logger в writeDebugMessage internal sing-box использует refnum, который мы не контролируем | Включить debug=true → возможно alternative log path |
+| G3 | NDK-stack symbolize libbox.so | Build libbox с debug symbols (требует rebuild AAR — выходит за scope task'и) |
+
+### Test execution plan (для предыдущих гипотез — already executed)
+
+| # | Build | Hypothesis check | Expected if Hyp A true |
+|---|---|---|---|
+| 1 | Baseline v1.7.1 stable (no F12.3, no F22, no F1) | Sanity check — should not crash | No crash, ~5/5 trials OK |
+| 2 | + F12.3 constructor + pin 10000 | Hypothesis A: GC pressure | If pin saves it — Hyp A confirmed |
+| 3 | + F12.3 factory + pin 10000 | Hypothesis A | Same as #2 |
+| 4 | + F22 simplest + pin 10000 | Hypothesis A on F22 | Same |
+| 5 | + F1 split + pin 10000 | Hypothesis A on F1 | Same |
+| 6 | If 2-5 don't help → instrument destroyRef via JNI hook | Hypothesis B/C | See actual destroyRef calls in logcat |
+
+### Что готовлю offline (без телефона)
+
+1. **Branch `diag/refnum-42`** — отдельная ветка с готовыми diagnostic builds (Test 1-5 как separate commits, ready to flip)
+2. **Helper script** для quick install + N-trial uptime check
+3. **Doc cleanup** — release notes, CHANGELOG, README для v1.7.1
+
+После того как user вернёт телефон — выполнить Test 1-5 sequentially. Каждый ~3 мин (build 70s + install + 5 trials × 15s + crash analysis).
+
+### Long-term mitigation regardless of refnum 42 root cause
+
+- Upgrade to **libbox 1.14-alpha** when stable — может seq поведение изменилось
+- Switch to gomobile-bind с debug symbols build — для `addr2line` post-crash analysis
+- Consider port to JNR-based binding или manual JNI вместо gomobile

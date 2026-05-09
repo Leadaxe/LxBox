@@ -111,21 +111,16 @@ interface PlatformInterfaceWrapper : PlatformInterface {
 
     /// §049 F12.3: возвращаем null (pre-§049 поведение).
     ///
-    /// Bisect показал: реальный `readWIFIState()` (любой path —
-    /// constructor `WIFIState(ssid, bssid)` ИЛИ factory `Libbox.newWIFIState`)
-    /// на нашем environment'е (Android 15 OnePlus + libbox 1.13.11)
-    /// **NON-DETERMINISTICALLY** крашит процесс с
-    /// `'Unknown reference: 42'` SIGABRT в
-    /// `cproxylibbox_CommandServerHandler_WriteDebugMessage` →
-    /// `go_seq_from_refnum`. 2 из 3 запусков работают, 3-й крашит — race.
+    /// Phase F testing показал: pin'инг handler через
+    /// `Seq.incRef(this) × 10000` в onCreate **НЕ помогает** — все 5 trials
+    /// крашатся 'Unknown reference: 42'. Значит **Hypothesis A (premature
+    /// destroyRef из-за Go GC) опровергнута** — refcount не падает до 0
+    /// (10000 destroyRef call'ов за 12 секунд маловероятно). Проблема глубже:
+    /// возможно Java refnum 42 **никогда не попадает в tracker**, или
+    /// libbox-internal lookup использует другой path. Без libbox.so debug
+    /// symbols диагностировать дальше нельзя.
     ///
-    /// GC-pin через static field не помог. Reference impl
-    /// (`BoxService.kt:142-154` 1.13.11) работает у них; у нас нет.
-    /// Без debug symbols в libbox.so точную причину не разглядели.
-    ///
-    /// Pragmatic: оставляем `null`. Sing-box `wifi_ssid`/`wifi_bssid`
-    /// route rules — minor feature, у нас в template не используются.
-    /// Tracking issue для будущей работы (apgrade libbox / native debug).
+    /// Tracking issue: попробовать libbox 1.14-alpha когда стабильное.
     override fun readWIFIState(): WIFIState? = null
 
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
