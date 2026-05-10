@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Phase 1 + 2 done; Phase 3 draft |
+| Статус | All phases done (1, 2, 3) — released v14010 |
 | Дата | 2026-05-10 |
 | Связанные | [`030 custom routing`](../features/030%20custom%20routing/spec.md) — расширяет sealed model; [`050 libbox-debug-build`](./050-libbox-debug-build/findings.md) — F12.3 readWIFIState fix (prerequisite); [`052 vpn settings system/service tabs`](./052-vpn-settings-system-service-tabs.md) — permission rows перенесены в Diagnostics |
 | Затронутые файлы | `app/lib/models/custom_rule.dart`, `app/lib/services/builder/post_steps.dart`, `app/lib/services/debug/handlers/rules.dart`, `app/lib/services/debug/serializers/rules.dart`, `app/lib/screens/custom_rule_edit_screen.dart`, `app/lib/services/url_launcher.dart`, `app/lib/services/settings_storage.dart`, `app/lib/widgets/wifi_permission_dialog.dart`, `app/android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt`, `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/PlatformInterfaceWrapper.kt`, `test/builder/`, `test/parser/` |
@@ -11,9 +11,10 @@
 
 | # | Scope | Status |
 |---|---|---|
-| **1** | Модель + builder + Debug API + tests + spec | ✅ Done (commit before §052) |
-| **2** | Editor UI — chips + Add current / Pick saved / Manual + permission rows + shared dialog + history | ✅ Done (commit `5dd3c37` + earlier) |
-| **3** | Native cache + NetworkCallback events — оптимизация горячего пути `readWIFIState` + auto-record history | 🔵 Draft |
+| **1** | Модель + builder + Debug API (`/rules` wifi fields) + tests + spec | ✅ Done |
+| **2** | Editor UI — chips + Add current / Pick saved / Manual + permission rows + shared dialog + history storage | ✅ Done (commit `5dd3c37` + earlier) |
+| **3** | NetworkCallback + auto-record (opt-in, 5-min stickiness) + Debug API `/wifi_history` CRUD | ✅ Done (commit `04ba3ce` + v14010) |
+| **4** | `WifiStateCache` для hot path `readWIFIState` | 🔵 Deferred — только если measure покажет необходимость, см. Out of scope |
 
 ## Цель
 
@@ -425,18 +426,45 @@ _channel.setMethodCallHandler((call) async {
 
 ## Acceptance
 
-- [ ] Storage var `auto_record_wifi_history` (default false) + getter/setter
-- [ ] Toggle в `Settings → Diagnostics`, с описанием что делает
-- [ ] При toggle ON → `WifiNetworkObserver.start()`; OFF → `stop()` + cancel pending
-- [ ] `WifiNetworkObserver` registered в `BoxApplication.onCreate` если flag ON на старте
-- [ ] `STICKINESS_THRESHOLD_MS = 60_000` константа
-- [ ] Pending state per process (не персистится — by design)
-- [ ] `WifiHistoryBridge` MethodChannel + Dart handler
-- [ ] `wifi_history` растёт ровно когда юзер реально пробыл на сети ≥ 60 сек И toggle ON
-- [ ] Permission revoke → skip без crash
-- [ ] First-time hint в Pick saved bottom sheet — explainer + Open Settings button
-- [ ] Existing history НЕ удаляется при toggle OFF
-- [ ] Без regression: 548 tests pass, smoke на устройстве
+- [x] Storage var `auto_record_wifi_history` (default false) + getter/setter
+- [x] Toggle в `Settings → Diagnostics`, с описанием что делает
+- [x] При toggle ON → `WifiNetworkObserver.start()`; OFF → `stop()` + cancel pending
+- [x] `WifiNetworkObserver` registered в `BoxApplication.onCreate` (singleton, lifecycle = process); `WifiHistoryListener.I.init()` в `main.dart` синкает state с storage flag
+- [x] `STICKINESS_THRESHOLD_MS = 300_000` константа (5 минут — отсекает drive-by сети агрессивнее чем 60 сек)
+- [x] Pending state per process (не персистится — by design)
+- [x] `WifiHistoryBridge` MethodChannel `com.leadaxe.lxbox/wifi_history` event `onWifiSeen` + Dart handler `WifiHistoryListener`
+- [x] `wifi_history` растёт ровно когда юзер реально пробыл на сети ≥ 5 мин И toggle ON
+- [x] Permission revoke → skip без crash (defensive try/catch SecurityException)
+- [x] Persistent info-banner в Pick saved bottom sheet когда toggle OFF — explainer + Open Settings button (visible сверху всегда, не только при empty history)
+- [x] Existing history НЕ удаляется при toggle OFF
+- [x] Без regression: 548 tests pass, smoke на устройстве
+
+## Phase 3 — Debug API (`/wifi_history/*`)
+
+Параллельно с UI flow — exposed CRUD над `wifi_history` через Debug API для тестирования / migration / external tooling.
+
+### Endpoints
+
+```
+GET    /wifi_history          → [{ssid, bssid, last_seen}, ...]
+POST   /wifi_history          body {"ssid": "...", "bssid": "..."}  → upsert (BSSID lower-cased)
+DELETE /wifi_history          body {"ssid": "...", "bssid": "..."}  → remove specific
+DELETE /wifi_history/all      → clear all
+```
+
+### Semantics
+
+- **Idempotency**: POST с уже существующей `(ssid, bssid)` парой обновляет `last_seen`. DELETE на отсутствующую — no-op (без 404), потому что storage path `removeFromWifiHistory` уже idempotent.
+- **BSSID normalization**: всегда lower-cased на write (Android device giving uppercase, Apple devices lowercase — единая канонизация).
+- **Cap 50, LRU evict by `last_seen`**: общий с UI flow. POST который попадает на overflow → выкидывает самую старую запись.
+- **Same write-path что и UI**: `SettingsStorage.addToWifiHistory / removeFromWifiHistory / clearWifiHistory`. Атомарность read-modify-write на уровне storage.
+
+### Use cases
+
+- Smoke-test API без реального ожидания 5 минут на сети.
+- Восстановление history после `clearWifiHistory` (backup/restore).
+- External tool написал «список моих сетей» (e.g., из system network configs) и инжектит batch.
+- Manual cleanup: `DELETE /wifi_history/all` для приватности reset.
 
 ## Out of scope (Phase 4 — only if measured needed)
 

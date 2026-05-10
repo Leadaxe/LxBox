@@ -28,6 +28,26 @@
   - `GET|PUT /settings/vpn/keep_on_exit` — keep VPN running когда app закрывается. Live-effect не нужен.
   - `GET|PUT /settings/vpn/background_mode` — foreground-service tunnel sleep mode. Apply at next VPN connect.
   - `GET /state/vpn` расширен — теперь включает `allow_bypass` + `background_mode` (одним запросом snapshot всех VPN-system флагов).
+- **§051 Phase 2 — Wi-Fi rule editor UI** ([§051 spec](docs/spec/tasks/051-custom-rule-wifi-conditions.md), [custom_rule_edit_screen.dart](app/lib/screens/custom_rule_edit_screen.dart)). Editor `CustomRule` теперь содержит секцию **WI-FI NETWORK** между Protocol и Save:
+  - Chip list `_wifiNetworks: List<_WifiEntry>` — каждая chip = одна сеть `(ssid, bssid?)`. Дедуп при add (composite key).
+  - **Add current** — читает текущий SSID/BSSID через `MainActivity.getCurrentWifiInfo` MethodChannel (defensive try/catch SecurityException + RuntimeException; placeholder BSSID `02:00:00:00:00:00` ловится как `unknown_ssid`). Permission missing → shared `WifiPermissionDialog`. `no_wifi` / `unknown_ssid` → snackbar.
+  - **Pick saved** — bottom sheet с двумя секциями:
+    - **USED IN YOUR RULES** — networks из других custom_rules с указанием rule names.
+    - **HISTORY (last seen)** — `wifi_history` storage entries с relative time. Per-row 🗙 button (right-aligned, explicit hit-area) удаляет одну запись.
+  - **Manual** — dialog с SSID + BSSID inputs (BSSID regex `xx:xx:xx:xx:xx:xx` inline-validated).
+  - **Save flow** — preflight permission check если есть wifi conditions (`BACKGROUND_LOCATION + NEARBY_WIFI_DEVICES`). При missing → shared `WifiPermissionDialog`, save проходит в любом случае (юзер мог нажать «Allow Wi-Fi info» runtime prompt).
+  - **Zip/unzip semantics**: `_zipWifiEntries(chips) → (ssids, bssids)` для модели. Sing-box AND-ит списки независимо (cross-product). `_unzipWifiEntries` обратно при load (best-effort pairing by index).
+- **§051 Phase 3 — Auto-record visited Wi-Fi networks** ([§051 spec Phase 3](docs/spec/tasks/051-custom-rule-wifi-conditions.md), [WifiNetworkObserver.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/WifiNetworkObserver.kt), [wifi_history_listener.dart](app/lib/services/wifi_history_listener.dart)). Opt-in toggle в `Settings → Diagnostics` (default OFF — silent network logging это privacy след). При ON `WifiNetworkObserver` регистрирует `ConnectivityManager.NetworkCallback(TRANSPORT_WIFI)`. Pending tracker записывает в `wifi_history` сети **на которых юзер пробыл ≥ 5 минут** (`STICKINESS_THRESHOLD_MS=300_000`) — отсекает drive-by кафе/магазины. Native → Dart bridge через `MethodChannel "com.leadaxe.lxbox/wifi_history"` event `onWifiSeen`. Pick saved bottom sheet показывает persistent info-banner «Auto-record is off — Open Settings» когда toggle OFF (visible сверху всегда). Existing history НЕ удаляется при OFF (user data). Cap 50, LRU evict по `last_seen`. Phase 4 (`WifiStateCache` для hot-path `readWIFIState`) — deferred до bench `dumpsys binder_calls_stats`, не оптимизируем вслепую.
+- **Debug API — `/wifi_history/*` endpoints** ([wifi_history.dart](app/lib/services/debug/handlers/wifi_history.dart)) для CRUD над `wifi_history` без UI flow:
+  - `GET /wifi_history` → list `[{ssid, bssid, last_seen}]`.
+  - `POST /wifi_history` body `{"ssid":"...","bssid":"..."}` → upsert (BSSID auto lower-cased).
+  - `DELETE /wifi_history` body `{"ssid":"...","bssid":"..."}` → remove specific entry (composite key match; idempotent).
+  - `DELETE /wifi_history/all` → clear all.
+  Same write-path что и UI (`SettingsStorage.addToWifiHistory` / `removeFromWifiHistory` / `clearWifiHistory`).
+
+### Fixed
+
+- **§051 Phase 2 — `wifi_history` not refreshing in Pick saved after row delete** ([settings_storage.dart](app/lib/services/settings_storage.dart)). `getWifiHistory` возвращал `toList(growable: false)`; `removeWhere` в setState callback'е молча кидал `UnsupportedError` на fixed-length list → UI rebuild не триггерился. Storage write проходил (entry удалена), но visible row оставалась до reopen sheet. Fix: `toList()` (growable).
 
 ---
 
