@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft (inventory done; classification + execution pending) |
+| Статус | **Done** (2026-05-10) — реорг выполнен: 7 demotions feature→task, все cross-refs обновлены, grep чист, `flutter analyze` без новых issues |
 | Дата | 2026-05-10 |
 | Связанные | [`spec/README.md`](../README.md) — определение features vs tasks |
 | Затронутые файлы | `docs/spec/features/**`, `docs/spec/tasks/**`, ссылки в `docs/ARCHITECTURE.md`, `CHANGELOG.md`, `docs/api/*`, `docs/spec/features/*/spec.md` (cross-refs), Dart-комментарии с явными `§NNN` упоминаниями |
@@ -65,9 +65,30 @@
 
 ## Acceptance
 
-- [ ] Inventory зафиксирован (заголовки + классификация — done в этой спеке).
-- [ ] Plan-таблица презентована user'у.
-- [ ] User approved (или итерировали до approval).
-- [ ] All moves executed; refs updated; grep clean.
-- [ ] `flutter analyze` 0 issues по моим файлам.
-- [ ] Commit (один merge-commit для всего реорга — atomic).
+- [x] Inventory зафиксирован (заголовки + классификация — done в этой спеке).
+- [x] Plan-таблица презентована user'у (вместе с full-autonomy grant).
+- [x] User approved (или итерировали до approval).
+- [x] All moves executed; refs updated; grep clean (0 hits на retired numbers `features/001|002|004x|005x|013|039|041`).
+- [x] `flutter analyze` 0 errors (только pre-existing infos в чужих файлах).
+- [x] Commit atomic (попало в `977f8fa` вместе с §053 Stage 2 — параллельный агент закоммитил оба чейнджсета вместе).
+
+## Outcome
+
+**Demoted features → tasks (7):**
+
+| Был | Стал | Reason |
+|-----|------|--------|
+| `features/001 mobile stack` | `tasks/055-mobile-stack-decision/` | Historical architectural decision |
+| `features/002 mvp scope` | `tasks/056-mvp-scope-historical/` | Historical milestone |
+| `features/004x subscription parser` | `tasks/057-subscription-parser-v1-superseded/` | Superseded by §026 parser v2 |
+| `features/005x config generator` | `tasks/058-config-generator-wizard-v1-superseded/` | Superseded by §026 parser v2 |
+| `features/013 routing` | `tasks/059-routing-v1-superseded/` | Superseded by §030 custom routing rules |
+| `features/039 libbox 1.13 migration` | `tasks/060-libbox-1-13-migration/` | One-shot migration (Done) |
+| `features/041 dns rules refactor` | `tasks/061-dns-rules-refactor/` | Refactor; live spec — §014 |
+
+**Promotions task → feature:** none.
+**Deletions:** none (всё ценное перенесено в `tasks/`).
+
+**Retired feature numbers:** 001, 002, 004, 005, 013, 039, 041 — больше не используются.
+
+**Files touched:** ~40 (cross-refs в `docs/**/*.md`, `CHANGELOG.md`, `app/lib/**/*.dart`, `app/test/**/*.dart`).

@@ -486,7 +486,7 @@ CommandServer(handler, platform)                     ← единый объек
 ```
 feat(vpn): migrate to libbox 1.13.11 + Dart wrapper cleanup
 
-См. полный план в docs/spec/features/039 libbox 1.13 migration/spec.md.
+См. полный план в этой спеке (бывший docs/spec/features/039 libbox 1.13 migration/spec.md).
 
 Phase A — Dart wrapper cleanup (BoxVpnClient):
   - VpnStatus enum (was String)
