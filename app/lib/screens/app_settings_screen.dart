@@ -18,10 +18,19 @@ import 'about_screen.dart';
 import 'backup_screen.dart';
 
 class AppSettingsScreen extends StatefulWidget {
-  const AppSettingsScreen({super.key, this.initialTab = 0});
+  const AppSettingsScreen({
+    super.key,
+    this.initialTab = 0,
+    this.highlightCoreLogs = false,
+  });
 
   /// 0 = General, 1 = Diagnostics. Used by deep-links.
   final int initialTab;
+
+  /// Если true — после первого render'а скроллим к «Forward sing-box logs»
+  /// SwitchListTile и пульсируем подсветку 2.5s. Используется banner'ом
+  /// в Live tab чтобы юзер сразу увидел нужный toggle.
+  final bool highlightCoreLogs;
 
   @override
   State<AppSettingsScreen> createState() => _AppSettingsScreenState();
@@ -49,6 +58,12 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
 
   bool _coreLogsEnabled = false;
   bool _configLocked = false;
+
+  // Для deep-link «highlightCoreLogs» из Live tab banner'а — скроллим
+  // к этому tile'у после первого render'а и пульсируем background 2.5s.
+  final GlobalKey _coreLogsTileKey = GlobalKey();
+  bool _coreLogsHighlighted = false;
+  Timer? _coreLogsHighlightTimer;
   // §051 Phase 3 — auto-record visited Wi-Fi networks (default off).
   bool _autoRecordWifi = false;
 
@@ -58,12 +73,37 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     WidgetsBinding.instance.addObserver(this);
     _debugPortCtl = TextEditingController();
     unawaited(_loadAutoStart());
+    if (widget.highlightCoreLogs) {
+      // Tile живёт в Diagnostics tab (initialTab=1). Tab сам строит
+      // children когда juзер на нём — postFrame этого build'а гарантирует
+      // что _coreLogsTileKey.currentContext доступен.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToAndHighlightCoreLogs();
+      });
+    }
+  }
+
+  void _scrollToAndHighlightCoreLogs() {
+    final ctx = _coreLogsTileKey.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+      alignment: 0.3, // tile в верхней трети viewport'а — так юзер сразу видит
+    );
+    setState(() => _coreLogsHighlighted = true);
+    _coreLogsHighlightTimer?.cancel();
+    _coreLogsHighlightTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _coreLogsHighlighted = false);
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _debugPortCtl.dispose();
+    _coreLogsHighlightTimer?.cancel();
     super.dispose();
   }
 
@@ -759,18 +799,26 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         // Subtitle короткий и timeless — без «after restart» (показывался бы
         // и после самого рестарта, misleading); пояснялка про process-restart
         // вынесена в полноширинный блок ниже.
-        SwitchListTile(
-          title: const Text('Forward sing-box logs'),
-          subtitle: Text(
-            _coreLogsEnabled
-                ? 'Visible in Debug → Core.'
-                : 'Off.',
+        AnimatedContainer(
+          key: _coreLogsTileKey,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOut,
+          color: _coreLogsHighlighted
+              ? Theme.of(context).colorScheme.tertiaryContainer
+              : Colors.transparent,
+          child: SwitchListTile(
+            title: const Text('Forward sing-box logs'),
+            subtitle: Text(
+              _coreLogsEnabled
+                  ? 'Visible in Debug → Core.'
+                  : 'Off.',
+            ),
+            secondary: const Icon(Icons.terminal),
+            value: _coreLogsEnabled,
+            onChanged: _loaded
+                ? (val) => unawaited(_toggleCoreLogs(val))
+                : null,
           ),
-          secondary: const Icon(Icons.terminal),
-          value: _coreLogsEnabled,
-          onChanged: _loaded
-              ? (val) => unawaited(_toggleCoreLogs(val))
-              : null,
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -796,16 +844,16 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
             ],
           ),
         ),
-        // §051 Phase 3 — opt-in auto-record visited Wi-Fi networks.
-        // Default OFF: silent network logging это privacy след даже
-        // local-only. Toggle здесь даёт choice + явный explainer что
-        // это делает.
+        // §051 Phase 3 — auto-record visited Wi-Fi networks. Default ON:
+        // без auto-record «Pick saved» picker почти всегда пустой,
+        // фича теряет смысл. 5-минутный stickiness отсекает drive-by
+        // сети (магазин/проход). Toggle для тех кто не хочет logging.
         const Divider(height: 8),
         SwitchListTile(
           title: const Text('Auto-record visited Wi-Fi networks'),
           subtitle: Text(
             _autoRecordWifi
-                ? 'Networks where you stay ≥ 60s appear in routing rule editor → Pick saved.'
+                ? 'Networks where you stay ≥ 5 minutes appear in routing rule editor → Pick saved.'
                 : 'Off. Pick saved is populated only by Add current / Manual.',
           ),
           secondary: const Icon(Icons.history),
@@ -841,7 +889,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       SnackBar(
         duration: const Duration(seconds: 2),
         content: Text(enabled
-            ? 'Auto-record on. Networks added after 60s of stay.'
+            ? 'Auto-record on. Networks added after 5 min of stay.'
             : 'Auto-record off. Existing history kept.'),
       ),
     );

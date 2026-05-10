@@ -243,43 +243,57 @@ class _LiveEventsTabState extends State<LiveEventsTab>
   }
 
   /// Banner когда «Forward sing-box logs» (Diagnostics → §043) выключен.
-  /// Без него Live tab теряет DNS resolves и process attribution из router
-  /// log'а — TCP/UDP open/close из Clash poll'а ещё работают, но картинка
-  /// не полная. Tap → deep-link в Diagnostics tab где есть toggle.
+  /// Hit-zones split:
+  ///  • Tap по `i` icon → tooltip с подробным объяснением.
+  ///  • Tap по тексту / chevron → deep-link в Diagnostics tab,
+  ///    auto-scroll к toggle'у с подсветкой 2.5s.
   Widget _coreLogsHintBanner(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Tooltip(
-      message: 'sing-box internal logs (router decisions, DNS resolves)\n'
-          'не форвардятся в Live. Включи «Forward sing-box logs»\n'
-          'в Diagnostics — после этого в Live появятся DNS события и\n'
-          'точная app-attribution.',
-      triggerMode: TooltipTriggerMode.tap,
-      showDuration: const Duration(seconds: 6),
-      child: InkWell(
-        onTap: _openDiagnosticsSettings,
-        child: Container(
-          width: double.infinity,
-          color: cs.surfaceContainerHighest,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, size: 14, color: cs.onSurfaceVariant),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'DNS / router events off — turn on «Forward sing-box logs»',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: cs.onSurfaceVariant,
-                  ),
+    return Container(
+      width: double.infinity,
+      color: cs.surfaceContainerHighest,
+      child: Row(
+        children: [
+          Tooltip(
+            message:
+                'sing-box internal logs (router decisions, DNS resolves)\n'
+                'не форвардятся в Live. Включи «Forward sing-box logs»\n'
+                'в Diagnostics — после этого в Live появятся DNS события\n'
+                'и точная app-attribution.',
+            triggerMode: TooltipTriggerMode.tap,
+            showDuration: const Duration(seconds: 6),
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Icon(Icons.info_outline,
+                  size: 14, color: cs.onSurfaceVariant),
+            ),
+          ),
+          Expanded(
+            child: InkWell(
+              onTap: _openDiagnosticsSettings,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'DNS / router events off — turn on «Forward sing-box logs»',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    Icon(Icons.chevron_right,
+                        size: 16, color: cs.onSurfaceVariant),
+                    const SizedBox(width: 12),
+                  ],
                 ),
               ),
-              Icon(Icons.chevron_right,
-                  size: 16, color: cs.onSurfaceVariant),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -345,7 +359,10 @@ class _LiveEventsTabState extends State<LiveEventsTab>
   void _openDiagnosticsSettings() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => const AppSettingsScreen(initialTab: 1),
+        builder: (_) => const AppSettingsScreen(
+          initialTab: 1,
+          highlightCoreLogs: true,
+        ),
       ),
     );
   }
