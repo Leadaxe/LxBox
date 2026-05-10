@@ -180,13 +180,14 @@ class _TunAppsTabState extends State<TunAppsTab> {
     );
   }
 
-  void _openVpnSettingsCore() {
+  void _openVpnSettingsSystem() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => SettingsScreen(
           subController: widget.subController,
           homeController: widget.homeController,
-          initialTab: 1,
+          initialTab: 0, // 0 = System (VpnService toggles); per-app split
+                          // — это System-level фича, не Core sing-box.
         ),
       ),
     );
@@ -270,8 +271,8 @@ class _TunAppsTabState extends State<TunAppsTab> {
               icon: const Icon(Icons.more_vert),
               onSelected: (v) {
                 switch (v) {
-                  case 'vpn_core':
-                    _openVpnSettingsCore();
+                  case 'vpn_system':
+                    _openVpnSettingsSystem();
                   case 'clear':
                     _clearAll();
                   case 'help':
@@ -280,10 +281,10 @@ class _TunAppsTabState extends State<TunAppsTab> {
               },
               itemBuilder: (_) => [
                 const PopupMenuItem(
-                  value: 'vpn_core',
+                  value: 'vpn_system',
                   child: ListTile(
                     leading: Icon(Icons.tune),
-                    title: Text('VPN settings (Core)'),
+                    title: Text('VPN settings (System)'),
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                   ),
