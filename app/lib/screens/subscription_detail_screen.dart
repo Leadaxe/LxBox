@@ -284,60 +284,83 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
         ),
         const SizedBox(height: 24),
         if (hasDetour) ...[
-          Text('Display', style: theme.textTheme.titleSmall?.copyWith(
+          Text('Detour servers', style: theme.textTheme.titleSmall?.copyWith(
             color: theme.colorScheme.primary,
             fontWeight: FontWeight.bold,
           )),
           const Divider(),
-          SwitchListTile(
-            title: const Text('Register detour servers'),
-            subtitle: const Text('Add ⚙ servers to proxy groups (visible in node list)'),
-            value: widget.entry.registerDetourServers,
-            onChanged: (val) {
-              setState(() => widget.entry.registerDetourServers = val);
-              unawaited(widget.controller.persistSources());
-            },
+          // Тернарный mode (radio): три mutually-exclusive варианта над парой
+          // полей entry.{useDetourServers, overrideDetour}. Mapping:
+          //   use      → useDetour=true,  override=''
+          //   override → useDetour=true,  override='<tag>'
+          //   none     → useDetour=false, override=''
+          // register'ы (sub-options для mode=use) хранятся независимо, не
+          // обнуляются при переключении mode'а — юзер вернётся в use, флаги
+          // на месте.
+          RadioListTile<_DetourMode>(
+            value: _DetourMode.use,
+            groupValue: _detourMode,
+            title: const Text('Use subscription detour servers'),
+            subtitle: const Text('Nodes connect through detour servers'),
+            onChanged: (m) => _setDetourMode(m!),
           ),
-          SwitchListTile(
-            title: const Text('Register detour in auto group'),
-            subtitle: const Text('Include ⚙ servers in auto-proxy-out urltest'),
-            value: widget.entry.registerDetourInAuto,
-            onChanged: (val) {
-              setState(() => widget.entry.registerDetourInAuto = val);
-              unawaited(widget.controller.persistSources());
-            },
+          // Sub-options только под Use — visibility-flags про ⚙-серверы
+          if (_detourMode == _DetourMode.use) ...[
+            Padding(
+              padding: const EdgeInsets.only(left: 24),
+              child: Column(children: [
+                SwitchListTile(
+                  title: const Text('Register detour servers'),
+                  subtitle: const Text('Add ⚙ servers to proxy groups (visible in node list)'),
+                  value: widget.entry.registerDetourServers,
+                  onChanged: (val) {
+                    setState(() => widget.entry.registerDetourServers = val);
+                    unawaited(widget.controller.persistSources());
+                  },
+                ),
+                SwitchListTile(
+                  title: const Text('Register detour in auto group'),
+                  subtitle: const Text('Include ⚙ servers in auto-proxy-out urltest'),
+                  value: widget.entry.registerDetourInAuto,
+                  onChanged: (val) {
+                    setState(() => widget.entry.registerDetourInAuto = val);
+                    unawaited(widget.controller.persistSources());
+                  },
+                ),
+              ]),
+            ),
+          ],
+          RadioListTile<_DetourMode>(
+            value: _DetourMode.override,
+            groupValue: _detourMode,
+            title: const Text('Override'),
+            subtitle: Text(widget.entry.overrideDetour.isEmpty
+                ? 'Replace chain target with a specific outbound'
+                : 'Override → ${widget.entry.overrideDetour}'),
+            onChanged: (m) => _setDetourMode(m!),
           ),
-          SwitchListTile(
-            title: const Text('Use detour servers'),
-            subtitle: Text(widget.entry.useDetourServers
-                ? 'Nodes connect through detour servers'
-                : 'Nodes connect directly (detour skipped)'),
-            value: widget.entry.useDetourServers,
-            onChanged: (val) {
-              setState(() => widget.entry.useDetourServers = val);
-              unawaited(widget.controller.persistSources());
-            },
+          // Sub-tile для смены target'а под Override mode
+          if (_detourMode == _DetourMode.override) ...[
+            Padding(
+              padding: const EdgeInsets.only(left: 24),
+              child: ListTile(
+                title: const Text('Outbound'),
+                subtitle: Text(widget.entry.overrideDetour.isEmpty
+                    ? '(tap to choose)'
+                    : widget.entry.overrideDetour),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _showOverrideDetourPicker(),
+              ),
+            ),
+          ],
+          RadioListTile<_DetourMode>(
+            value: _DetourMode.none,
+            groupValue: _detourMode,
+            title: const Text("Don't use detour servers"),
+            subtitle: const Text('Nodes connect directly, detour skipped'),
+            onChanged: (m) => _setDetourMode(m!),
           ),
-          const Divider(),
         ],
-        Text('Override', style: theme.textTheme.titleSmall?.copyWith(
-          color: theme.colorScheme.primary,
-          fontWeight: FontWeight.bold,
-        )),
-        const SizedBox(height: 4),
-        Text(
-          'Replace all detour servers with a different one',
-          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 8),
-        ListTile(
-          title: const Text('Override detour'),
-          subtitle: Text(widget.entry.overrideDetour.isEmpty
-              ? 'None (use original)'
-              : widget.entry.overrideDetour),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => _showOverrideDetourPicker(),
-        ),
         if (widget.entry.list is SubscriptionServers) ...[
           const SizedBox(height: 24),
           Text('Subscription', style: theme.textTheme.titleSmall?.copyWith(
@@ -955,7 +978,39 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     };
     return Icon(icon, size: 20);
   }
+
+  // ─── Detour mode (тернарный radio over {useDetourServers, overrideDetour})
+  // Mapping см. в comment у RadioListTile блока в _buildSettingsTab.
+
+  _DetourMode get _detourMode {
+    if (!widget.entry.useDetourServers) return _DetourMode.none;
+    if (widget.entry.overrideDetour.isNotEmpty) return _DetourMode.override;
+    return _DetourMode.use;
+  }
+
+  void _setDetourMode(_DetourMode mode) {
+    setState(() {
+      switch (mode) {
+        case _DetourMode.use:
+          widget.entry.useDetourServers = true;
+          widget.entry.overrideDetour = '';
+        case _DetourMode.override:
+          widget.entry.useDetourServers = true;
+          // overrideDetour сохраняем — может уже выбран ранее. Если пусто —
+          // открываем picker сразу (юзер хочет Override, надо его сконфигурить).
+          if (widget.entry.overrideDetour.isEmpty) {
+            unawaited(_showOverrideDetourPicker());
+          }
+        case _DetourMode.none:
+          widget.entry.useDetourServers = false;
+          widget.entry.overrideDetour = '';
+      }
+    });
+    unawaited(widget.controller.persistSources());
+  }
 }
+
+enum _DetourMode { use, override, none }
 
 /// Inline warning-line под нодой. Сортируем по severity (error → warning →
 /// info), показываем первый. Цвет: error=красный, warning=оранжевый,
