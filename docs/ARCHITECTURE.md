@@ -320,19 +320,24 @@ app/lib/
     └── node_row.dart                     # Node row: ACTIVE pill, proto label, ping right-aligned
 
 app/android/app/src/main/kotlin/com/leadaxe/lxbox/
-├── MainActivity.kt                       # FlutterActivity + VpnPlugin registration
+├── MainActivity.kt                       # FlutterActivity + VpnPlugin registration + tile/intent entry
 └── vpn/
-    ├── VpnPlugin.kt                      # Flutter ↔ Android bridge
-    ├── BoxVpnService.kt                  # VpnService + libbox + serviceScope
-    ├── ConfigManager.kt                  # File-based config storage
-    ├── BoxApplication.kt                 # Context holder + libbox init
-    ├── ServiceNotification.kt            # Foreground notification
-    ├── VpnStatus.kt                      # Enum: Stopped/Starting/Started/Stopping
-    ├── PlatformInterfaceWrapper.kt       # libbox PlatformInterface impl
-    ├── DefaultNetworkMonitor.kt          # Network change monitor
-    ├── DefaultNetworkListener.kt         # ConnectivityManager callback actor
-    ├── LocalResolver.kt                  # Local DNS transport for libbox
-    └── Extensions.kt                     # Kotlin extensions
+    ├── VpnPlugin.kt                      # Flutter ↔ Android bridge — MethodChannel, EventChannel(status), EventChannel(coreLog)
+    ├── BoxVpnService.kt                  # Android `VpnService` + `PlatformInterfaceWrapper`. Тонкий — forwards lifecycle в `BoxService`. (§049 F1 split)
+    ├── BoxService.kt                     # Owns libbox runtime: `CommandServerHandler` impl + `fileDescriptor` (AtomicReference) + `commandServer` + serviceScope. (§049 F1 split, port из reference SagerNet)
+    ├── BoxApplication.kt                 # Application class (registered в Manifest). `Libbox.setup` async в onCreate, `libboxReady` deferred. Owns singleton `WifiNetworkObserver`.
+    ├── PlatformInterfaceWrapper.kt       # libbox `PlatformInterface` impl — defaultNetwork, processInfo, readWIFIState (defensive try/catch)
+    ├── ConfigManager.kt                  # File-based config storage (filesDir/config.json)
+    ├── ServiceNotification.kt            # Foreground service notification
+    ├── VpnStatus.kt                      # Enum: Stopped / Starting / Started / Stopping
+    ├── DefaultNetworkMonitor.kt          # Network change monitor (`ConnectivityManager.NetworkCallback`)
+    ├── DefaultNetworkListener.kt         # Actor wrapping callbacks → coroutine-friendly events
+    ├── LocalResolver.kt                  # Local DNS transport (порт reference: `DnsResolver.getInstance().query()` mimo tun)
+    ├── Extensions.kt                     # Kotlin extensions
+    ├── BootReceiver.kt                   # `RECEIVE_BOOT_COMPLETED` → auto-start VPN (если `auto_start_vpn=true`); SharedPreferences `boxvpn_boot.*` (auto_start, keep_on_exit, background_mode, core_logs_enabled)
+    ├── LxBoxTileService.kt               # QS tile (Quick Settings) — toggle VPN из шторки
+    ├── QuickShortcuts.kt                 # `setDynamicShortcuts` — Connect/Disconnect quick actions для launcher long-press
+    └── WifiNetworkObserver.kt            # §051 Phase 3 — `NetworkCallback` listener; promotes seen SSID/BSSID в Dart `wifi_history` через MethodChannel
 ```
 
 ---
@@ -553,6 +558,11 @@ Sensitive-поля при `GET /state/storage` фильтруются allow-list
 - `StatsScreen` 3-й tab `Per-app` с ⚡ возле title.
 - `PerAppTraceTab` 4 sub-tab'а: Live / Domains / IPs / Connections. Search-by-IP в Domains, inline expand на Connections, ↗ IP-jump иконки везде где рендерится IP — все три view связаны двусторонней навигацией.
 
+**Coupling (важно для extraction):**
+- **Sing-box log format** — Source A парсит конкретные log lines `router: found package name`, `dns: exchanged|cached`, `dns: exchange failed` regex'ами в `_dnsRe` / `_dnsFailRe` / `_routerRe`. Если sing-box изменит формат логов — TrafficProfiler сломается silent. Сейчас формат стабилен (libbox 1.13.11), но при upgrade libbox это первое что надо verify.
+- **`AppLog` instance + `DebugSource.core` filter** — TrafficProfiler subscribe'ит на `AppLog.I.notifyListeners` и фильтрует по source. Зависимость двунаправленная: `core_logs_enabled=false` → core source пуст → TrafficProfiler видит только Source B (Clash poll), теряет DNS resolves и process attribution. UI показывает `CoreLogsHintBanner` чтобы юзер включил forwarding.
+- **`ClashApiClient` instance** — Source B использует наш Clash API client. Поэтому профайлер не работает пока Clash endpoint не resolved (см. раздел Clash API client → wiring).
+
 ---
 
 ### 6. AppLog (per-source ring buffers, §043)
@@ -607,54 +617,163 @@ HomeController/UI                    Sing-box (Go goroutines)
 
 ---
 
+## Dart `BoxVpnClient` API surface
+
+Тонкий клиент над тремя channel'ами (`com.leadaxe.lxbox/methods` + два EventChannel'а). Файл — [`app/lib/vpn/box_vpn_client.dart`](../app/lib/vpn/box_vpn_client.dart). Это **единственная** точка где Dart-side touches MethodChannel — все остальные вызовы идут через типизированный API клиента.
+
+**Singleton + DI:**
+- Production — `BoxVpnClient.I` (или `BoxVpnClient()` — alias на singleton, оставлен для обратной совместимости).
+- Tests — `BoxVpnClient.forTest(methods: mock, events: mock)`. `@visibleForTesting`.
+
+**Группы методов** (порядок повторяет `_Methods` constants):
+
+| Группа | Методы | Notes |
+|---|---|---|
+| Config | `saveConfig` / `getConfig` | `getConfig` fallback `'{}'` чтобы builder мог parse без null-checks |
+| VPN lifecycle | `startVPN` / `stopVPN` / `reloadVPN` / `resetNetwork` / `getVpnStatus` / `getCoreVersion` / `quitApp` | `stopVPN` блокирующий native до `setStatus(Stopped)` — позволяет `await stop; await start` без race |
+| Settings (boot prefs / native toggles) | auto_start, keep_on_exit, core_logs_enabled, allow_bypass, background_mode | Storage native в `SharedPreferences boxvpn_boot.*`, не в `lxbox_settings.json` |
+| Per-app routing | `getInstalledApps` / `getAppIcon` / `getAppInfo` | Icons lazy — `getInstalledApps` без icons (тяжело), `getAppIcon` per-package по запросу |
+| System helpers | `isIgnoringBatteryOptimizations` / `open*Settings` / `*NotificationPermission` / `*NearbyWifiPermission` / `showToast` | Permission `request*` — async, UI делает re-check через паренный `check*` |
+| Quick Settings | `requestAddTile` | API 33+ |
+
+**Status stream design:**
+
+```dart
+late final Stream<TunnelStatusEvent> onStatusChanged = _events
+    .receiveBroadcastStream()
+    .map(...)
+    .asBroadcastStream();
+```
+
+`late final` критично: до v1.4.0 каждый getter создавал новый stream, native `EventChannel.onListen` дёргался повторно, native перезаписывал `statusSink` — основной listener после первого reconnect ломался ([tasks/001](spec/tasks/001-reconnect-sink-leak.md)). Сейчас singleton broadcast stream — один native listener, любое количество Dart-подписчиков.
+
+**Timeout policy:**
+
+Каждый MethodChannel-вызов обёрнут в `.timeout()` с per-метода настроенным значением (см. `_Timeouts` constants):
+
+| Категория | Timeout | Почему |
+|---|---|---|
+| status / settings | 3s | Lightweight read/write of preferences |
+| config | 5s | File I/O |
+| app metadata (per-package) | 5s | One PackageManager query |
+| installed apps list | 15s | `PackageManager.getInstalledApplications` дорогой |
+| startVPN | 30s | System dialog timing + libbox setup |
+| stopVPN | 10s | Blocking до `setStatus(Stopped)` |
+| reloadVPN / resetNetwork | 5-10s | Wait for `serviceReload` / `closeAll + DNS flush + dialer rebind` |
+| requestAddTile | 10s | System dialog confirmation |
+
+**На таймауте** — лог в `AppLog` + safe-default fallback (например `tunnel: disconnected` для `getVpnStatus`). Без таймаутов мы видели реальные deadlock'и где native не отвечал на запрос — Flutter UI блокировался без recovery path.
+
+---
+
 ## Native Architecture (Kotlin)
+
+### Class layout (§049 F1 split)
+
+В §049 audit'е мы port'нули pattern из reference SagerNet (`bg/BoxService.kt` commit 3b3883e, libbox 1.13.11) — разделили **Android Service лейер** от **libbox runtime лейера**:
+
+```
+┌─────────────────────────────────────────┐  ┌────────────────────────────────────┐
+│ BoxApplication : Application            │  │ VpnPlugin : MethodCallHandler      │
+│  • onCreate (registered in Manifest)    │  │  • setMethodCallHandler            │
+│  • Libbox.setup(SetupOptions) async     │  │  • EventChannel sinks (status/log) │
+│  • libboxReady : CompletableDeferred    │  │  • static currentStatus mirror     │
+│  • Singleton WifiNetworkObserver        │  │     (sync read by HomeController)  │
+└─────────────────────────────────────────┘  └────────────────────────────────────┘
+                                                           │ start/stop intent
+                                                           ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ BoxVpnService : VpnService, PlatformInterfaceWrapper                            │
+│  • Android lifecycle (onCreate/onStartCommand/onRevoke/onDestroy)               │
+│  • PlatformInterface impl: defaultNetwork / processInfo / readWIFIState         │
+│  • openTun()  ← libbox calls back через PlatformInterface                       │
+│  • field: private val service = BoxService(this, this)  ← THIS line is the F1   │
+│  • forwards lifecycle: onStartCommand → service.startSingbox(intent), etc.      │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                          │ owns
+                                          ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ BoxService : CommandServerHandler   (plain class, NOT a Service)                │
+│  • libbox state: AtomicReference<ParcelFileDescriptor> fileDescriptor           │
+│                  AtomicReference<CommandServer>          commandServer          │
+│  • serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)              │
+│  • startSingbox(intent) / doStop() / serviceReload() / receiver{stop,reload,..} │
+│  • CommandServer(this, platformInterface)  ← 2 different Java instances:        │
+│       CSH=BoxService  PI=BoxVpnService  (mirrors reference; reduces refnum-42   │
+│       JNI race surface compared with prior `CommandServer(this, this)`)         │
+│  • status broadcasts via BROADCAST_STATUS → VpnPlugin.statusReceiver → sink     │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Зачем split:** до §049 `BoxVpnService` имплементировал и `PlatformInterface`, и `CommandServerHandler` (один `this` передавался обоим libbox-сторонам). На стороне libbox это означало refcnt=2 на один `Seq.Ref` → расширенное окно gomobile refcount race (часть симптомов «refnum 42» в §050). После split два разных Java instance → libbox tracker'ы видят разные refnum'ы.
 
 ### Structured Concurrency
 
 ```
-BoxVpnService
+BoxService (per-instance, recreated с каждым new BoxVpnService)
   └─ serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-       ├─ resetScope() on each onStartCommand (cancel is terminal)
+       ├─ resetScope() in startSingbox (cancel is terminal)
        ├─ All coroutines tied to service lifecycle
        ├─ DefaultNetworkMonitor receives serviceScope
        │    └─ checkUpdate() uses scope.launch — dies with service
-       └─ onDestroy() calls serviceScope.cancel() as safety net
+       └─ doStop() calls serviceScope.cancel() as safety net
 ```
+
+**`AtomicReference` для fileDescriptor / commandServer** (§049 F2/F3): `getAndSet(null)?.close()` гарантирует что только один поток выполнит close. Главный fix для §047 race condition на mutations `fileDescriptor` (5 call-site'ов могли double-close → kernel переиспользует fd-int → sing-box пишет в чужой fd → silent ENXIO → TCP перестаёт работать через 15-30 минут).
 
 ### Channel Contract
 
-**MethodChannel** `com.leadaxe.lxbox/methods`:
+Three Flutter-Android channels live в `VpnPlugin.kt`:
 
-| Method | Input | Output |
-|--------|-------|--------|
-| saveConfig | config: String | bool |
-| getConfig | — | String |
-| startVPN | — | bool |
-| stopVPN | — | bool |
-| getVpnStatus | — | "Started" \| "Starting" \| "Stopped" \| "Stopping" |
-| setNotificationTitle | title: String | bool |
-| getInstalledApps | — | List<Map> (package/appName/isSystemApp) |
-| getAppIcon | packageName: String | String (base64 PNG) |
-| getAppInfo | packageName: String | Map (name+icon+isSystem) \| null |
-| getAutoStart/setAutoStart | bool | bool |
-| getKeepOnExit/setKeepOnExit | bool | bool |
-| isIgnoringBatteryOptimizations | — | bool |
-| openBatteryOptimizationSettings | — | bool — primary action one-tap REQUEST_IGNORE_BATTERY_OPTIMIZATIONS prompt; fallback на список apps для OEM где direct prompt молча отбрасывается (ColorOS / MIUI / HyperOS) |
-| openAppDetailsSettings | — | bool |
-| openAppSettings | — | bool — открывает App Permissions screen (MANAGE_APP_PERMISSIONS → MANAGE_PERMISSION_APPS → ACTION_APPLICATION_DETAILS_SETTINGS, три-уровневый OEM fallback). Для permissions которые нельзя выдать через runtime prompt (например, ACCESS_BACKGROUND_LOCATION на API 30+) |
-| areNotificationsEnabled | — | bool |
-| openNotificationSettings | — | bool |
-| checkNotificationPermission | — | bool — POST_NOTIFICATIONS на API 33+, true на pre-33 (implicit grant) |
-| requestNotificationPermission | — | null — async; UI должен re-check через checkNotificationPermission |
-| checkNearbyWifiPermission | — | bool — NEARBY_WIFI_DEVICES на API 33+, true на pre-33 (covered ACCESS_FINE/BACKGROUND_LOCATION) |
-| requestNearbyWifiPermission | — | null — async; UI должен re-check |
-| showToast | msg: String, duration: "short"\|"long" | bool |
+| Channel | Type | Direction |
+|---|---|---|
+| `com.leadaxe.lxbox/methods` | MethodChannel | bidirectional (Dart → Native; Dart ← Native для `wifi_history`-promotion от `WifiNetworkObserver`) |
+| `com.leadaxe.lxbox/status_events` | EventChannel | Native → Dart (TunnelStatus broadcasts) |
+| `lxbox/coreLog` | EventChannel | Native → Dart (sing-box log lines) |
 
-**EventChannel** `com.leadaxe.lxbox/status_events`:
+**MethodChannel methods** (groups follow `_Methods` constants в `box_vpn_client.dart`):
 
+| Group | Method | Input | Output |
+|---|---|---|---|
+| **Config** | saveConfig | `config: String` | bool |
+| | getConfig | — | String |
+| **VPN lifecycle** | startVPN | — | bool (may trigger system VpnService dialog) |
+| | stopVPN | — | bool — **блокирующий** native до `setStatus(Stopped)`, чтобы caller мог делать `await stopVPN(); await startVPN()` без race |
+| | reloadVPN | — | bool — `box.serviceReload()` без status flap |
+| | resetNetwork | — | bool — light recovery: `closeAllConnections + DNS flush + dialer rebind`. Tunnel must be up. |
+| | getVpnStatus | — | "Started" \| "Starting" \| "Stopped" \| "Stopping" \| "Unknown" |
+| | getCoreVersion | — | String — sing-box version + tags |
+| | quitApp | — | bool (returns immediately, process dies ~250ms) — `finishAffinity + Process.killProcess` для применения `Libbox.setup(debug=…)` |
+| **Settings (boot prefs / native toggles)** | getAutoStart / setAutoStart | bool | bool — auto-start VPN on boot (`BootReceiver`) |
+| | getKeepOnExit / setKeepOnExit | bool | bool — keep VPN running когда Flutter-процесс убит |
+| | getCoreLogsEnabled / setCoreLogsEnabled | bool | bool — §043 forward sing-box logs to Dart `AppLog`; требует full process restart |
+| | getAllowBypass / setAllowBypass | bool | bool — §049 F15 `VpnService.Builder.allowBypass()`; apply на следующем `establish()` |
+| | getBackgroundMode / setBackgroundMode | "never" \| "lazy" \| "always" | bool — §052 foreground-service tunnel sleep mode |
+| **Notifications** | setNotificationTitle | `title: String` | bool — кастомный foreground notification title |
+| **Per-app routing helpers** | getInstalledApps | — | List<Map> (`package` / `appName` / `isSystemApp`) — без icons (тяжело) |
+| | getAppIcon | `packageName: String` | String (base64 PNG) |
+| | getAppInfo | `packageName: String` | Map (name+icon+isSystem) \| null |
+| **System helpers** | isIgnoringBatteryOptimizations | — | bool |
+| | openBatteryOptimizationSettings | — | bool — primary `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` prompt; fallback на список apps для OEM где direct prompt молча отбрасывается (ColorOS / MIUI / HyperOS) |
+| | openAppDetailsSettings | — | bool |
+| | openAppSettings | — | bool — App Permissions screen (3-уровневый OEM fallback: `MANAGE_APP_PERMISSIONS` → `MANAGE_PERMISSION_APPS` → `ACTION_APPLICATION_DETAILS_SETTINGS`). Для permissions без runtime prompt (`ACCESS_BACKGROUND_LOCATION` API 30+) |
+| | areNotificationsEnabled | — | bool |
+| | openNotificationSettings | — | bool |
+| | checkNotificationPermission | — | bool — `POST_NOTIFICATIONS` на API 33+, true на pre-33 |
+| | requestNotificationPermission | — | null — async; UI должен re-check через `checkNotificationPermission` |
+| | checkNearbyWifiPermission | — | bool — `NEARBY_WIFI_DEVICES` на API 33+, true на pre-33 |
+| | requestNearbyWifiPermission | — | null — async; re-check |
+| | showToast | `msg: String, duration: "short"\|"long"` | bool |
+| **Quick Settings tile** | requestAddTile | — | bool — `StatusBarManager.requestAddTileService` (API 33+) |
+| **Diagnostics** | getApplicationExitInfo | — | List<Map> (API 30+) |
+| | getLogcatTail | `count?, level?` | String |
+
+**EventChannel `status_events`** — `TunnelStatusEvent`:
 ```json
 { "status": "Started" | "Starting" | "Stopped" | "Stopping", "error": "..." }
 ```
+
+**EventChannel `coreLog`** — sing-box log lines, по одной строке на event. Filter (skip TRACE/DEBUG) + ANSI-strip применяются в `BoxVpnService.writeDebugMessage` до отправки. Включается через `core_logs_enabled` toggle (`Libbox.setup(SetupOptions{debug: ...})`, читается в `BoxApplication.onCreate` один раз — изменение применяется только после restart процесса).
 
 ---
 
@@ -786,6 +905,63 @@ Tab'ы которые depend на глобальном toggle в settings (core_
 - **Statistics → Live + Per-app → contextual `CoreLogsHintBanner`** ([core_logs_hint_banner.dart](../app/lib/widgets/core_logs_hint_banner.dart)). Inline banner widget показывается **только когда `core_logs_enabled=false`**; self-hides при включении (auto-refresh на `AppLifecycleState.resumed`). Split hit-zone: левая зона (i + «DNS / router events off») → tooltip с объяснением что без core logs DNS resolves пропадают и process attribution ухудшается до Clash poll'а; правая («turn on Forward sing-box logs» + chevron) → deep-link в `AppSettingsScreen(initialTab: 1)` с auto-scroll и highlight нужного toggle'а. Это лучше чем PopupMenu overflow: явно виден когда нужен, исчезает когда не нужен.
 - **Routing → Tunnel apps → ⋮ → "VPN settings (Core)"** → `SettingsScreen(initialTab: 1)`. State-independent jump (всегда полезно ходить из Tunnel apps к Core vars), overflow PopupMenu уместен. Открывает Core а не System — юзер настраивает Tunnel apps mode и хочет рядом mtu / log_level / dns_final.
 - **Drawer → Debug → ⋮ → "Diagnostics settings"** → `AppSettingsScreen(initialTab: 1)` — fast-path на Quit&reopen после toggle Forward sing-box logs.
+
+---
+
+## Clash API client
+
+Sing-box экспонирует **Clash-совместимый HTTP API** (`experimental.clash_api`) — мы используем его для всего management'а помимо start/stop/reload (они идут через `BoxVpnClient`). Файл — [`app/lib/services/clash_api_client.dart`](../app/lib/services/clash_api_client.dart).
+
+### Endpoint discovery
+
+`ClashEndpoint.fromConfigJson(configRaw)` парсит JSON5 (поддержка `//`-комментариев) и достаёт:
+
+```json5
+"experimental": {
+  "clash_api": {
+    "external_controller": "127.0.0.1:63130",   // host:port или http://...
+    "secret": "<auto-generated>"                  // используется как Bearer token
+  }
+}
+```
+
+Default port если поле отсутствует — `127.0.0.1:9090` (Clash conventional). У нас sing-box генерирует random ephemeral port (49152-65535) при template build — защита от port-scan'а через DNS rebinding. Secret — auto-generated, никогда не пустой (security by default).
+
+`ClashApiClient(endpoint)` принимает endpoint и держит **два HTTP-клиента**:
+- `_http` — основной (`fetchProxies`, `selectInGroup`, `fetchConnections`, `fetchTraffic`, ...)
+- `_delayHttp` — изолированный для `delay` / `groupDelay`. `cancelDelays()` закрывает только этот клиент → in-flight ping requests рвутся, но dashboard / selector switches не страдают.
+
+### Используемые endpoints
+
+| Endpoint | Метод client'а | Назначение |
+|---|---|---|
+| `GET /version` | `pingVersion` | Health-check (для `/state/clash` Debug API) |
+| `GET /proxies` | `fetchProxies` | Список proxy + selector groups + chains. Фильтрация selectorGroupTags / urltestNow — static helpers. |
+| `PUT /proxies/{tag}` | `selectInGroup(group, outbound)` | Selector switch. Body `{"name":"<child-tag>"}` |
+| `GET /proxies/{tag}/delay` | `delay(proxyTag, timeoutMs, url)` | Single delay test (ms) |
+| `GET /group/{tag}/delay` | `groupDelay(group, timeoutMs, url, onProgress)` | Force URLTest на группе |
+| `GET /connections` | `fetchConnections` | List active TCP/UDP + bytes + metadata.process |
+| `DELETE /connections` | `closeAllConnections` | Close all (используется в `resetNetwork`) |
+| `DELETE /connections/{id}` | `closeConnection(id)` | Close one |
+| `GET /traffic` (SSE) | `fetchTraffic` | Streaming traffic stats — мы читаем **только первый frame** (snapshot) |
+
+### Gotchas
+
+- **Emoji в URL path** (`✨auto`, `🇮🇹⚡Италия`) — обязательно URL-encode. `selectInGroup` / `delay` это делают автоматически (`Uri.parse`); внешние curl-вызовы — через `python3 urllib`.
+- **Group `.now` quirk** — sing-box обновляет `now` только на первом `urltest_interval` tick, не от `/group/.../delay` ручного вызова. Мы это знаем и не пытаемся читать `.now` сразу после force-urltest'а.
+- **Timeout buffer** — после `groupDelay(timeoutMs)` ждём ещё `_delayResponseBuffer = 750ms` для cleanup/JSON-encode на стороне sing-box. Без этого buffer'а Dart timing rare-falsely cancel'ил bona-fide responses.
+- **No dashboards** — мы не даём подключаться сторонним клиентам (yacd / clash-meta-dashboard). Clash API только для self-fetch — порт ephemeral, secret не прокидывается наружу.
+
+### Wiring
+
+`HomeController._rebuildClashEndpoint()` вызывается на каждом `connected` event:
+1. Парсит `state.configRaw` через `ClashEndpoint.fromConfigJson`.
+2. Если endpoint валиден → создаёт новый `ClashApiClient(endpoint)`.
+3. Старый client cancel'ит in-flight delays.
+
+Endpoint становится невалидным когда tunnel down — secret и port были у убитого sing-box, port может быть переиспользован системой. Поэтому `_clash = null` на disconnect, recreate на next connect.
+
+Debug API `/clash/*` — transparent proxy в наш `ClashApiClient.endpoint` с auto-injection `Authorization: Bearer <secret>` (caller не должен знать secret). См. [docs/api/clash-api-reference.md](api/clash-api-reference.md).
 
 ---
 
@@ -955,3 +1131,78 @@ Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`]
 | **044** | **Per-app traffic profiler** (recording per-app DNS/connections/routing chain — Live/Domains/IPs/Connections sub-tabs, connection-issue detection, Debug API + SSE) |
 
 Дополнительно — летопись отдельных рабочих циклов (баги, рефакторинги): [`docs/spec/tasks/`](./spec/tasks/). Процессы (например, ночная работа): [`docs/spec/processes/`](./spec/processes/).
+
+---
+
+## Reusable layers (extraction targets)
+
+LxBox monolith — но архитектурно есть несколько self-contained слоёв, которые **в принципе** можно вынести в отдельные packages (Flutter pub.dev) или хотя бы в `packages/` подпапку monorepo. Этот раздел — чек-лист для будущей extraction'а: что reusable, что coupled с LxBox, что надо параметризовать перед публикацией.
+
+### Layer 1 — Sing-box VPN engine (Kotlin + Dart channel)
+
+**Что:** Native обёртка над libbox + Dart MethodChannel client. Без UI, без opinion'ов о config-формате.
+
+| Файлы | Lines |
+|---|---|
+| `app/android/.../vpn/{BoxApplication, BoxVpnService, BoxService, PlatformInterfaceWrapper, VpnPlugin, ConfigManager, ServiceNotification, VpnStatus, DefaultNetworkMonitor, DefaultNetworkListener, LocalResolver, BootReceiver, Extensions}.kt` | ~3000 |
+| `app/lib/vpn/box_vpn_client.dart` | ~600 |
+| `app/lib/models/{tunnel_status, background_mode, app_info}.dart` | ~150 |
+
+**Public API surface:** `BoxVpnClient.I` (см. раздел [Dart `BoxVpnClient` API surface](#dart-boxvpnclient-api-surface)) + EventChannel'ы status/coreLog.
+
+**Coupling с LxBox (надо разорвать перед extraction):**
+- **Channel names hardcoded** — `com.leadaxe.lxbox/methods`, `com.leadaxe.lxbox/status_events`, `lxbox/coreLog`. Параметризовать через plugin config.
+- **SharedPreferences keys hardcoded** — `boxvpn_boot.{auto_start_vpn, keep_vpn_on_exit, background_mode, core_logs_enabled}`. Префикс должен быть configurable или общий fallback.
+- **Notification icon / channel name** — `ServiceNotification.kt` ссылается на `R.drawable.ic_notification` + строки. Должно браться из host app.
+- **Manifest declarations** — package должен **документировать** требуемые permissions (location, NEARBY_WIFI_DEVICES, FGS, etc.) и intent-filters (BootReceiver, TileService) для host app.
+- **`WifiNetworkObserver` зависит от Dart-side `wifi_history` MethodChannel** — это §051 фича LxBox, не general-purpose. Извлекать **отдельно** или сделать optional.
+
+**Quality gates пройдены:** §049 audit (atomic CAS, F1 split, F2-F26 fixes), §050 closeout (refnum 42 root cause = `SecurityException` через JNI). Wrapper зрелый.
+
+**iOS:** отсутствует. Для cross-platform package — отдельная задача (Network Extension + Packet Tunnel Provider + Swift bridges).
+
+### Layer 2 — Clash API client
+
+**Что:** Pure-Dart HTTP client для Clash API (sing-box-compatible).
+
+| Файлы | Lines |
+|---|---|
+| `app/lib/services/clash_api_client.dart` | ~320 |
+| `app/lib/config/clash_endpoint.dart` | ~50 |
+
+**Coupling с LxBox:** **минимальный**. Зависит только от `package:http` и `package:json5` (для `// comments` в config). Никакого `lxbox`-specific кода.
+
+**API surface:** см. раздел [Clash API client](#clash-api-client). Уже generic — fetchProxies / selectInGroup / delay / groupDelay / fetchConnections / fetchTraffic.
+
+**Готовность к extraction:** **высокая**. Можно опубликовать почти как есть. Нужно только тесты добавить (сейчас integration через `HomeController`).
+
+### Layer 3 — Sing-box subscription parser / builder
+
+**Что:** Sealed `NodeSpec` (10 protocol variants) + URI/JSON/INI parsers + builder NodeSpec → sing-box config JSON.
+
+| Файлы | Lines |
+|---|---|
+| `app/lib/models/{node_spec, node_spec_emit, tls_spec, transport_spec, ...}.dart` | ~2000 |
+| `app/lib/services/parser/*.dart` | ~1500 |
+| `app/lib/services/builder/*.dart` | ~2000 |
+
+**Coupling с LxBox:** **высокий**. Builder зависит от `wizard_template.json` shape (наш формат preset'ов / vars / sections), `SettingsStorage` (server_lists, vars, custom_rules), и от наших sealed моделей (`ServerList`, `CustomRule`).
+
+**Готовность к extraction:** **низкая**. Нужен серьёзный refactor — отделить `NodeSpec` parser/emit (reusable) от builder pipeline (LxBox-specific). Имеет смысл только если есть конкретный re-use case.
+
+### Layer 4 — TrafficProfiler
+
+**Что:** Per-app + system-wide observer DNS/TCP/UDP events.
+
+**Coupling:** **высокий** — см. coupling notes в [секции 6.5](#65-per-app-traffic-profiler-044). Зависит от `AppLog` instance, sing-box log format, `ClashApiClient` instance. Расцеплять для extraction нужно через 3 интерфейса (log source, log format adapter, connection poller).
+
+**Готовность:** низкая. Имеет смысл только если LxBox VPN engine уже extracted и кто-то строит на нём свой profiler.
+
+### Дорожная карта extraction (если решим идти)
+
+1. **Phase 1** — Clash API client как самостоятельный package (`clash_api_dart`). Самый низкий риск, ~2 дня work. Верифицирует extraction процесс.
+2. **Phase 2** — Sing-box VPN engine в `packages/flutter_singbox/` (path dependency monorepo). Refactor channel names + SharedPreferences keys + notification config. ~1 неделя work. Не публикуем на pub.dev пока — верифицируем что LxBox работает.
+3. **Phase 3** — Решение про публикацию: GPLv3 viral от libbox = main blocker. Если ОК с GPLv3-only userbase — публикуем.
+4. **Phase 4** — iOS support (если нужен).
+
+**Текущий статус:** ничего не extracted. Есть смысл начать с Layer 2 (Clash API client) как trial extraction.
