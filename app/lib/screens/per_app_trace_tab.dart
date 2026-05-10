@@ -26,6 +26,7 @@ import '../models/app_info.dart';
 import '../services/app_info_cache.dart';
 import '../services/clash_api_client.dart';
 import '../services/traffic_profiler.dart';
+import '../widgets/core_logs_hint_banner.dart';
 import 'app_picker_screen.dart';
 
 class PerAppTraceTab extends StatefulWidget {
@@ -210,6 +211,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
     final session = profiler.active;
     return Column(
       children: [
+        const CoreLogsHintBanner(),
         if (_verboseActiveInSession && session != null)
           _verboseBanner(context),
         if (session != null && profiler.unattributedBannerActive)
