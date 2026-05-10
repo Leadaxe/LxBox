@@ -199,14 +199,54 @@ POST /rules?rebuild=true
 
 ---
 
-# Phase 3 — Auto-record `wifi_history` with stickiness debounce
+# Phase 3 — Auto-record `wifi_history` with stickiness debounce (opt-in)
 
 ## Цель
 
-История wifi-сетей сейчас наполняется только при явных user actions (Add current / Manual). Если юзер не использует editor через Add current, «Pick saved» остаётся пустым. Phase 3 — listener который пишет в history ровно те сети **на которых юзер реально сидел дольше N секунд**, чтобы:
+История wifi-сетей сейчас наполняется только при явных user actions (Add current / Manual). Если юзер не использует editor через Add current, «Pick saved» остаётся пустым. Phase 3 — opt-in listener который пишет в history ровно те сети **на которых юзер реально сидел дольше N секунд**, чтобы:
 
-1. История росла без ручных действий.
+1. История росла без ручных действий **когда юзер этого хочет** (toggle).
 2. Не засорять её случайными drive-by сетями (магазин, в который зашёл на 30 сек, кафе с 5-минутной чашкой кофе и забытым выходом).
+3. Не делать ничего silently — фича явно объявлена в Settings → Diagnostics, юзер может выключить и почистить историю.
+
+## Opt-in toggle
+
+**Default: OFF.** Silent logging посещённых сетей даже local-only — privacy след. Юзеры заслуживают choice.
+
+Toggle живёт в **Settings → Diagnostics** рядом с другими debug/observability фичами:
+
+```
+☐ Auto-record visited Wi-Fi networks
+   Adds networks you stay on for ≥ 60s to the saved list.
+   Used by routing rule editor's "Pick saved" picker.
+   Stored locally only.
+```
+
+Storage var: `auto_record_wifi_history` (bool, default false). При toggle:
+- ON → `WifiNetworkObserver.start()` (registerNetworkCallback)
+- OFF → `WifiNetworkObserver.stop()` (unregister + cancel pending)
+
+При выключении existing entries в `wifi_history` **остаются** — это явные данные юзера (он мог их пересмотреть и захотеть оставить). Чистка — отдельный action: `Pick saved` bottom sheet → swipe-or-button «Clear history» (existing remove-by-tap уже работает; добавим «Clear all»).
+
+## First-time hint
+
+Когда юзер открывает «Pick saved» с **пустой** историей и **отсутствием other-rule networks**, bottom sheet показывает не просто «Nothing saved yet» а:
+
+```
+┌─ Saved networks ─────────────────────────────┐
+│                                              │
+│  Nothing saved yet.                          │
+│                                              │
+│  • Use "Add current" or "Manual" below       │
+│  • Or enable Auto-record in Settings →       │
+│    Diagnostics to grow this list as you      │
+│    move between Wi-Fi networks               │
+│                                              │
+│         [ Open Settings ]   [ Cancel ]       │
+└──────────────────────────────────────────────┘
+```
+
+«Open Settings» → `AppSettingsScreen(initialTab: 1)` → Diagnostics с прокруткой к toggle (можно подсветить через scroll-to-key, optional).
 
 ## Stickiness debounce — ключевая часть
 
@@ -227,6 +267,9 @@ LRU-eviction по `last_seen` (cap 50, уже есть) — second line of defen
 
 ```
 ┌─ BoxApplication.onCreate ───────────────────────────────────┐
+│                                                             │
+│  if (auto_record_wifi_history == true):                     │
+│      WifiNetworkObserver.start()  ← gated by storage flag   │
 │                                                             │
 │  WifiNetworkObserver.start()                                │
 │  ├─ NetworkRequest(TRANSPORT_WIFI)                          │
@@ -382,12 +425,17 @@ _channel.setMethodCallHandler((call) async {
 
 ## Acceptance
 
-- [ ] `WifiNetworkObserver` registered в `BoxApplication.onCreate`
+- [ ] Storage var `auto_record_wifi_history` (default false) + getter/setter
+- [ ] Toggle в `Settings → Diagnostics`, с описанием что делает
+- [ ] При toggle ON → `WifiNetworkObserver.start()`; OFF → `stop()` + cancel pending
+- [ ] `WifiNetworkObserver` registered в `BoxApplication.onCreate` если flag ON на старте
 - [ ] `STICKINESS_THRESHOLD_MS = 60_000` константа
 - [ ] Pending state per process (не персистится — by design)
 - [ ] `WifiHistoryBridge` MethodChannel + Dart handler
-- [ ] `wifi_history` растёт ровно когда юзер реально пробыл на сети ≥ 60 сек
+- [ ] `wifi_history` растёт ровно когда юзер реально пробыл на сети ≥ 60 сек И toggle ON
 - [ ] Permission revoke → skip без crash
+- [ ] First-time hint в Pick saved bottom sheet — explainer + Open Settings button
+- [ ] Existing history НЕ удаляется при toggle OFF
 - [ ] Без regression: 548 tests pass, smoke на устройстве
 
 ## Out of scope (Phase 4 — only if measured needed)
