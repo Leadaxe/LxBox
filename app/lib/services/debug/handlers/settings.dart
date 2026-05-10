@@ -1,3 +1,4 @@
+import '../../../models/background_mode.dart';
 import '../../settings_storage.dart';
 import '../../../vpn/box_vpn_client.dart';
 import '../context.dart';
@@ -22,6 +23,9 @@ import '_shared.dart';
 /// - `DELETE /settings/vars/{key}`              — удалить var
 /// - `PUT    /settings/dns_options/servers`     body `{"servers":[...]}`
 /// - `PUT    /settings/dns_options/rules`       body `{"rules":"<json-string>"}`
+/// - `GET|PUT /settings/vpn/allow_bypass`        body `{"enabled":bool}`
+/// - `GET|PUT /settings/vpn/keep_on_exit`        body `{"enabled":bool}`
+/// - `GET|PUT /settings/vpn/background_mode`     body `{"mode":"never|lazy|always"}`
 /// - `POST   /settings/rebuild-config`          alias `/action/rebuild-config`
 ///
 /// Все `PUT`/`POST` принимают `?rebuild=true`.
@@ -66,6 +70,21 @@ Future<DebugResponse> settingsHandler(DebugRequest req, DebugContext ctx) async 
     case '/settings/tun_apps':
       if (req.method == 'GET') return _getTunApps();
       if (req.method == 'PUT') return _putTunApps(req, ctx);
+      throw _methodNotAllowed(req.method, path);
+
+    case '/settings/vpn/allow_bypass':
+      if (req.method == 'GET') return _getAllowBypass();
+      if (req.method == 'PUT') return _putAllowBypass(req);
+      throw _methodNotAllowed(req.method, path);
+
+    case '/settings/vpn/keep_on_exit':
+      if (req.method == 'GET') return _getKeepOnExit();
+      if (req.method == 'PUT') return _putKeepOnExit(req);
+      throw _methodNotAllowed(req.method, path);
+
+    case '/settings/vpn/background_mode':
+      if (req.method == 'GET') return _getBackgroundMode();
+      if (req.method == 'PUT') return _putBackgroundMode(req);
       throw _methodNotAllowed(req.method, path);
   }
 
@@ -487,5 +506,73 @@ Future<DebugResponse> _putTunApps(DebugRequest req, DebugContext ctx) async {
     'count': pkgs.length,
     'rebuild_needed': true,
     ...extras,
+  });
+}
+
+// ─── §052: VPN Settings → System tab toggles ────────────────────────────────
+// Storage / apply семантика — native (SharedPreferences), не lxbox_settings.json.
+// Apply timing: allow_bypass / background_mode → next openTun (start/reload);
+// keep_on_exit → effect at app exit (нет live reload).
+
+Future<DebugResponse> _getAllowBypass() async {
+  final v = await BoxVpnClient().getAllowBypass();
+  return JsonResponse({'enabled': v});
+}
+
+Future<DebugResponse> _putAllowBypass(DebugRequest req) async {
+  final body = req.jsonBodyAsMap();
+  final value = body['enabled'];
+  if (value is! bool) {
+    throw const BadRequest('body must be {"enabled": true|false}');
+  }
+  await BoxVpnClient().setAllowBypass(value);
+  return JsonResponse({
+    'ok': true,
+    'action': 'settings-vpn-allow-bypass',
+    'enabled': value,
+    'note': 'reload VPN to apply (allowBypass set at next establish())',
+  });
+}
+
+Future<DebugResponse> _getKeepOnExit() async {
+  final v = await BoxVpnClient().getKeepOnExit();
+  return JsonResponse({'enabled': v});
+}
+
+Future<DebugResponse> _putKeepOnExit(DebugRequest req) async {
+  final body = req.jsonBodyAsMap();
+  final value = body['enabled'];
+  if (value is! bool) {
+    throw const BadRequest('body must be {"enabled": true|false}');
+  }
+  await BoxVpnClient().setKeepOnExit(value);
+  return JsonResponse({
+    'ok': true,
+    'action': 'settings-vpn-keep-on-exit',
+    'enabled': value,
+  });
+}
+
+Future<DebugResponse> _getBackgroundMode() async {
+  final m = await BoxVpnClient().getBackgroundMode();
+  return JsonResponse({'mode': m.wireValue});
+}
+
+Future<DebugResponse> _putBackgroundMode(DebugRequest req) async {
+  final body = req.jsonBodyAsMap();
+  final raw = body['mode'];
+  if (raw is! String) {
+    throw const BadRequest('body must be {"mode": "never"|"lazy"|"always"}');
+  }
+  if (!const {'never', 'lazy', 'always'}.contains(raw)) {
+    throw BadRequest('mode must be one of: never|lazy|always (got "$raw")');
+  }
+  final mode = BackgroundMode.fromNative(raw);
+  await BoxVpnClient().setBackgroundMode(mode);
+  return JsonResponse({
+    'ok': true,
+    'action': 'settings-vpn-background-mode',
+    'mode': mode.wireValue,
+    'note': 'applied on next VPN connect',
   });
 }

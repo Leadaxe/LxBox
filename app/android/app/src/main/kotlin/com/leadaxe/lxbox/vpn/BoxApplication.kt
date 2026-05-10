@@ -43,6 +43,11 @@ class BoxApplication : Application() {
         runCatching { QuickShortcuts.refresh(this) }
             .onFailure { android.util.Log.w(TAG, "QuickShortcuts.refresh failed: ${it.message}") }
 
+        // §051 Phase 3 — singleton observer. start()/stop() driven by
+        // `auto_record_wifi_history` storage flag. Dart запускает на
+        // app init если flag true; toggle в Diagnostics дёргает на лету.
+        wifiObserver = WifiNetworkObserver(this)
+
         // libbox setup async в IO. К моменту start VPN setup завершён.
         // `libboxReady` — sync-барьер для VPN auto-start / QS-tile сразу
         // после boot (там race возможна).
@@ -96,6 +101,12 @@ class BoxApplication : Application() {
 
         /** Готовность `Libbox.setup` + `Libbox.redirectStderr`. */
         val libboxReady: CompletableDeferred<Unit> = CompletableDeferred()
+
+        /** §051 Phase 3 — singleton WifiNetworkObserver. Toggled через
+         *  Dart side (`MainActivity` MethodChannel `setAutoRecordWifi`).
+         *  Init в onCreate (lifecycle = process). */
+        @Volatile
+        internal lateinit var wifiObserver: WifiNetworkObserver
 
         // -------------------------------------------------------------------
         // Backward-compat API — callsite'ы `BoxApplication.X` работают через

@@ -66,7 +66,7 @@ GET /state/clash                    Clash endpoint info (secret замаскир
 GET /state/subs[?reveal=true]       Подписки. URL masked default; reveal=true — full URL
 GET /state/rules                    CustomRule[] — sealed: inline | srs | preset (с per-kind полями)
 GET /state/storage                  Raw SettingsStorage._cache JSON (для отладки)
-GET /state/vpn                      { auto_start, keep_on_exit, is_ignoring_battery_optimizations }
+GET /state/vpn                      { auto_start, keep_on_exit, allow_bypass, background_mode, is_ignoring_battery_optimizations }
 GET /state/config_locked            { "locked": bool } — состояние §037 lock'а auto-rebuild
 
 === Device ===
@@ -215,6 +215,13 @@ PUT    /settings/core_logs_enabled              body {"enabled":true|false}. Def
                                                  живёт). Force-stop приложения + relaunch, либо UI-кнопка
                                                  «Quit & reopen app» в App Settings → Diagnostics или
                                                  Debug screen → Log tab.
+GET|PUT /settings/vpn/allow_bypass              §052 VpnService.Builder.allowBypass(). body {"enabled":bool}.
+                                                 Effect at next establish() — reload VPN.
+GET|PUT /settings/vpn/keep_on_exit              §052 keep VPN running when app closed. body {"enabled":bool}.
+GET|PUT /settings/vpn/background_mode           §052 foreground-service tunnel sleep mode.
+                                                 body {"mode":"never|lazy|always"}.
+                                                 never (default) — always-on; lazy — pause in deep Doze;
+                                                 always — pause on screen-off. Effect at next VPN connect.
 POST   /settings/rebuild-config                Alias /action/rebuild-config
 
 === Backup ===
@@ -292,7 +299,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/state/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Subscriptions list'},
     {'method': 'GET', 'path': '/state/rules', 'description': 'CustomRule[] sealed (inline|srs|preset)'},
     {'method': 'GET', 'path': '/state/storage', 'description': 'Raw SettingsStorage._cache JSON'},
-    {'method': 'GET', 'path': '/state/vpn', 'description': 'auto_start, keep_on_exit, battery_whitelisted'},
+    {'method': 'GET', 'path': '/state/vpn', 'description': 'auto_start, keep_on_exit, allow_bypass, background_mode, battery_whitelisted'},
     {'method': 'GET', 'path': '/state/config_locked', 'description': '{locked: bool} — §037 auto-rebuild lock state'},
     // Device
     {'method': 'GET', 'path': '/device', 'description': 'Android version, model, ABI, app version, network, uptime'},
@@ -370,6 +377,12 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'PUT', 'path': '/settings/dns_options/servers', 'body': '{"servers":[...]}', 'description': 'Set DNS servers list'},
     {'method': 'PUT', 'path': '/settings/dns_options/rules', 'body': '{"rules":"<json-string>"}', 'description': 'Set DNS rules (legacy json-string shape)'},
     {'method': 'PUT', 'path': '/settings/config_locked', 'body': '{"locked":true|false}', 'description': '§037 toggle auto-rebuild lock — true pins config from UI rebuilds'},
+    {'method': 'GET', 'path': '/settings/vpn/allow_bypass', 'description': '§052 VpnService.Builder.allowBypass() state'},
+    {'method': 'PUT', 'path': '/settings/vpn/allow_bypass', 'body': '{"enabled":true|false}', 'description': '§052 toggle allowBypass — apply on next establish()'},
+    {'method': 'GET', 'path': '/settings/vpn/keep_on_exit', 'description': '§052 keep-VPN-on-app-exit state'},
+    {'method': 'PUT', 'path': '/settings/vpn/keep_on_exit', 'body': '{"enabled":true|false}', 'description': '§052 toggle keep-on-exit'},
+    {'method': 'GET', 'path': '/settings/vpn/background_mode', 'description': '§052 tunnel sleep mode (never|lazy|always)'},
+    {'method': 'PUT', 'path': '/settings/vpn/background_mode', 'body': '{"mode":"never|lazy|always"}', 'description': '§052 set tunnel sleep mode — apply on next VPN connect'},
     // Backup
     {'method': 'GET', 'path': '/backup/export', 'params': {'include': 'config,vars,subs (default all)'}, 'description': 'Pure-data snapshot (no diag noise)'},
     {'method': 'POST', 'path': '/backup/import', 'params': {'merge': 'true|false', 'rebuild': 'true|false'}, 'body': '{config?, vars?, server_lists?}', 'description': 'Restore from export or /diag/dump'},

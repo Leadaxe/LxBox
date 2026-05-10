@@ -53,10 +53,6 @@ class _TunAppsTabState extends State<TunAppsTab> {
   bool _loading = true;
   Timer? _saveTimer;
 
-  // §049 F15 `Allow VPN bypass` toggle живёт в VPN Settings → System tab
-  // (settings_screen.dart, §052) — Android `VpnService.Builder.allowBypass()`,
-  // отдельно от per-app routing.
-
   @override
   void initState() {
     super.initState();
@@ -184,12 +180,6 @@ class _TunAppsTabState extends State<TunAppsTab> {
     );
   }
 
-  /// Deep-link → VPN Settings → Core tab (sing-box engine vars). Юзер
-  /// настраивает Tunnel apps и хочет рядом mtu/log_level/dns_final/etc —
-  /// открываем сразу Core, не System (System содержит allow-bypass /
-  /// keep-on-exit / sleep-mode, юзер только что выбрал mode здесь).
-  ///
-  /// initialTab=1 — Core (System=0 / Core=1).
   void _openVpnSettingsCore() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(

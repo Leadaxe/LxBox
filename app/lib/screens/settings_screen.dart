@@ -11,17 +11,8 @@ import '../services/template_loader.dart';
 import '../vpn/box_vpn_client.dart';
 import '../widgets/template_var_list.dart';
 
-/// VPN Settings — два tab'а (§052):
-///
-/// - **System** — Android-side controls через `VpnService.Builder` API.
-///   Сейчас: Allow VPN bypass (§049 F15). Room для будущих Builder-toggle'ов
-///   (`setMetered`, `setUnderlyingNetworks`, `setHttpProxy` для VPN — если
-///   когда-нибудь будем экспонировать).
-/// - **Core** — sing-box core engine vars (template `chapter: core`,
-///   фильтрация в `build`). Имя tab'а matches existing project concept:
-///   `chapter: 'core'`, `corelog.txt`, `DebugSource.core`. Routing- и
-///   DNS-специфичные vars (chapter: routing/dns) живут на своих экранах
-///   (Routing, DNS Settings).
+/// VPN Settings — System (`VpnService.Builder` toggles) + Core (sing-box
+/// engine vars, `chapter: 'core'`). Routing/DNS vars живут на своих экранах.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
@@ -33,8 +24,7 @@ class SettingsScreen extends StatefulWidget {
   final SubscriptionController subController;
   final HomeController homeController;
 
-  /// Tab index to open: 0 = System, 1 = Core. Used by deep-links (e.g.
-  /// Routing → Tunnel apps → ⋮ → "VPN settings (Core)").
+  /// 0 = System, 1 = Core. Used by deep-links.
   final int initialTab;
 
   @override
@@ -47,15 +37,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _loading = true;
   Timer? _saveTimer;
 
-  // §049 F15: native-side VPN toggle. Не template-var (storage native через
-  // BoxVpnClient), но семантически принадлежит "VPN engine settings" — живёт
-  // здесь рядом с template-vars для core chapter'а.
   final _vpn = BoxVpnClient();
   bool _allowBypass = false;
-  // §052 Phase 2: переехали из App Settings → Background.
   bool _keepOnExit = false;
   BackgroundMode _backgroundMode = BackgroundMode.never;
-  bool _vpnLoaded = false; // gate для onChanged в System tab
+  bool _vpnLoaded = false;
 
   @override
   void initState() {
@@ -88,7 +74,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  /// §049 F15: toggle allowBypass. Применяется при следующем openTun.
   Future<void> _toggleAllowBypass(bool enable) async {
     setState(() => _allowBypass = enable);
     await _vpn.setAllowBypass(enable);
@@ -101,13 +86,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  /// §052 Phase 2: keep VPN on exit (переехало из App Settings → Background).
   void _toggleKeepOnExit(bool val) {
     setState(() => _keepOnExit = val);
     unawaited(_vpn.setKeepOnExit(val));
   }
 
-  /// §052 Phase 2: tunnel sleep mode (= `BackgroundMode` enum).
   Future<void> _applyBackgroundMode(BackgroundMode? mode) async {
     if (mode == null || mode == _backgroundMode) return;
     setState(() => _backgroundMode = mode);
@@ -182,9 +165,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListView(
       padding: EdgeInsets.fromLTRB(12, 12, 12, bottomPad),
       children: [
-        // §049 F15 — VPN bypass opt-in. Native-side toggle (not template var):
-        // controls `VpnService.Builder.allowBypass()`. Apply'ится при
-        // следующем openTun (start или reload VPN).
         SwitchListTile(
           title: const Text('Allow VPN bypass'),
           subtitle: Text(
@@ -196,7 +176,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           value: _allowBypass,
           onChanged: (val) => unawaited(_toggleAllowBypass(val)),
         ),
-        // §052 Phase 2 — переехало из App Settings → Background.
         SwitchListTile(
           title: const Text('Keep VPN on exit'),
           subtitle: const Text('VPN stays active when app is closed'),
@@ -205,8 +184,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onChanged: _vpnLoaded ? _toggleKeepOnExit : null,
         ),
         const Divider(height: 32),
-        // §052 Phase 2 — Tunnel sleep mode (BackgroundMode enum), переехало
-        // из App Settings → Background.
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
           child: Row(

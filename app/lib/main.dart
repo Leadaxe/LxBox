@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +9,7 @@ import 'screens/home_screen.dart';
 import 'services/app_log.dart';
 import 'services/clash_log_pump.dart';
 import 'services/debug/bootstrap.dart' as debug_bootstrap;
+import 'services/wifi_history_listener.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,6 +20,10 @@ void main() async {
   // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в
   // AppLog как DebugSource.core. Идемпотентно (повторный attach no-op).
   ClashLogPump.I.attach();
+  // §051 Phase 3 — register handler для native `onWifiSeen` events.
+  // Если `auto_record_wifi_history` ON в storage — sync'нёт state с
+  // native observer'ом (start callback). Default OFF, no-op до toggle.
+  unawaited(WifiHistoryListener.I.init());
   // Первый read `appStartedAt` фиксирует момент старта для /device и /ping.
   // ignore: unused_local_variable
   final _ = debug_bootstrap.appStartedAt;

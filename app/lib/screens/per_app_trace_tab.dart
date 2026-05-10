@@ -183,11 +183,6 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
     );
   }
 
-  /// Deep-link → App Settings → Diagnostics. Per-app trace require'ит
-  /// `core_logs_enabled=true` (toggle "Forward sing-box logs") чтобы видеть
-  /// DNS/connection events; юзер может включить отсюда без длинной навигации.
-  ///
-  /// initialTab=1 — Diagnostics после §052 Phase 2 (TabBar 3→2).
   void _openDiagnosticsSettings() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(

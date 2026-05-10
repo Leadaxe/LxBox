@@ -563,6 +563,16 @@ class SettingsStorage {
 
   static Future<void> clearWifiHistory() => setVar('wifi_history', '[]');
 
+  /// §051 Phase 3 — opt-in flag для auto-record visited Wi-Fi networks
+  /// в `wifi_history`. Default false (silent logging = privacy след).
+  /// При ON → `WifiNetworkObserver` registered в native side, networks
+  /// where stayed ≥ 60s записываются автоматически.
+  static Future<bool> getAutoRecordWifi() async =>
+      (await getVar('auto_record_wifi_history', 'false')) == 'true';
+
+  static Future<void> setAutoRecordWifi(bool enabled) =>
+      setVar('auto_record_wifi_history', enabled ? 'true' : 'false');
+
   // ---------------------------------------------------------------------------
   // App update check (§036) — GitHub Releases polling on launch with 24h cap.
   // Sideload-flow: SnackBar → user opens release page in browser → downloads

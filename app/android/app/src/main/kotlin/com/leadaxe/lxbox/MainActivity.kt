@@ -11,6 +11,7 @@ import com.leadaxe.lxbox.vpn.BoxApplication
 import com.leadaxe.lxbox.vpn.BoxVpnService
 import com.leadaxe.lxbox.vpn.VpnPlugin
 import com.leadaxe.lxbox.vpn.VpnStatus
+import com.leadaxe.lxbox.vpn.WifiHistoryBridge
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -39,6 +40,17 @@ class MainActivity : FlutterActivity() {
         Log.d(TAG, "configureFlutterEngine — registering VpnPlugin")
         super.configureFlutterEngine(flutterEngine)
         flutterEngine.plugins.add(VpnPlugin())
+
+        // §051 Phase 3 — channel для auto-record wifi history. Native side
+        // вызывает invokeMethod("onWifiSeen", ...) когда юзер пробыл на
+        // сети ≥ 60 сек. Dart-side handler пишет в SettingsStorage.
+        // Attach сразу в configureFlutterEngine — поскольку Dart будет
+        // регистрировать handler через тот же channel name.
+        val wifiHistoryChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.leadaxe.lxbox/wifi_history",
+        )
+        WifiHistoryBridge.attach(wifiHistoryChannel)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.leadaxe.lxbox/utils")
             .setMethodCallHandler { call, result ->
@@ -121,6 +133,19 @@ class MainActivity : FlutterActivity() {
                         // Returns Map: {ssid?, bssid?, error?}.
                         // Errors: "permission_missing", "no_wifi", "unknown_ssid".
                         result.success(getCurrentWifiInfoMap())
+                    }
+                    "setAutoRecordWifi" -> {
+                        // §051 Phase 3 — start/stop WifiNetworkObserver
+                        // (auto-record history). Toggle гейтится storage
+                        // var `auto_record_wifi_history`; Dart-side читает
+                        // его на init и при tap toggle, синкает сюда.
+                        val enable = call.argument<Boolean>("enable") ?: false
+                        if (enable) {
+                            BoxApplication.wifiObserver.start()
+                        } else {
+                            BoxApplication.wifiObserver.stop()
+                        }
+                        result.success(null)
                     }
                     else -> result.notImplemented()
                 }

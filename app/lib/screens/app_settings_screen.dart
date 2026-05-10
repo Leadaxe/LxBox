@@ -11,6 +11,7 @@ import '../services/relative_time.dart';
 import '../services/settings_storage.dart';
 import '../services/update_checker.dart';
 import '../services/url_launcher.dart' as ul;
+import '../services/wifi_history_listener.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import '../vpn/box_vpn_client.dart';
 import 'about_screen.dart';
@@ -19,8 +20,7 @@ import 'backup_screen.dart';
 class AppSettingsScreen extends StatefulWidget {
   const AppSettingsScreen({super.key, this.initialTab = 0});
 
-  /// Tab index to open: 0 = General, 1 = Background, 2 = Diagnostics.
-  /// Used by deep-links (e.g. DebugScreen → "Diagnostics settings" в попапе).
+  /// 0 = General, 1 = Diagnostics. Used by deep-links.
   final int initialTab;
 
   @override
@@ -34,32 +34,23 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _haptic = true;
   bool _batteryWhitelisted = false;
   bool _notificationsEnabled = true;
-  // §051 — wifi-rules permissions live status (refresh on resume).
   bool _backgroundLocationGranted = false;
   bool _nearbyWifiGranted = false;
-  // §052 Phase 2: `_keepOnExit` и `_backgroundMode` переехали в SettingsScreen
-  // (VPN Settings → System tab) вместе с UI controls. Здесь больше не нужны.
   bool _autoPing = true;
   bool _autoUpdateSubs = true;
   bool _autoCheckUpdates = true;
   bool _loaded = false;
 
-  // §031 Debug API.
   bool _debugEnabled = false;
   String _debugToken = '';
   int _debugPort = SettingsStorage.debugPortDefault;
   late final TextEditingController _debugPortCtl;
   String _debugPortError = '';
 
-  // §043 sing-box core logs forwarding (требует restart Service'а)
   bool _coreLogsEnabled = false;
-  // §049 F15 `Allow VPN bypass` — toggle живёт в VPN Settings screen
-  // (settings_screen.dart) рядом с template-vars sing-box core engine'а.
-  // Deep-link из Routing → Tunnel apps overflow.
-  // §037 config_locked_for_debug — pin'ит config.json от перезаписи UI-rebuild'ом.
   bool _configLocked = false;
-  // §049 F15 `Allow VPN bypass` toggle перенесён в Routing → Tunnel apps tab
-  // (см. tun_apps_tab.dart) — это VPN-behavior, а не диагностика.
+  // §051 Phase 3 — auto-record visited Wi-Fi networks (default off).
+  bool _autoRecordWifi = false;
 
   @override
   void initState() {
@@ -100,6 +91,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final debugPort = await SettingsStorage.getDebugPort();
     final coreLogsEnabled = await _vpn.getCoreLogsEnabled();
     final configLocked = await SettingsStorage.getConfigLockedForDebug();
+    final autoRecordWifi = await SettingsStorage.getAutoRecordWifi();
     if (mounted) {
       setState(() {
         _autoStart = auto;
@@ -118,6 +110,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _debugPortCtl.text = debugPort.toString();
         _coreLogsEnabled = coreLogsEnabled;
         _configLocked = configLocked;
+        _autoRecordWifi = autoRecordWifi;
         _loaded = true;
       });
     }
@@ -399,10 +392,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     return AnimatedBuilder(
       animation: themeNotifier,
       builder: (context, _) {
-        // §052 Phase 2 — Background tab удалён:
-        // - Keep VPN on exit + Tunnel sleep mode переехали в VPN Settings → System
-        // - Permissions block (Battery / Notifications / Location / Wi-Fi / App info)
-        //   переехал в Diagnostics tab
         return DefaultTabController(
           length: 2,
           initialIndex: widget.initialTab.clamp(0, 1),
@@ -591,9 +580,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     return ListView(
       padding: _tabPadding(context),
       children: [
-        // §052 Phase 2 — Permissions block перенесён сюда из Background tab
-        // целиком, в том виде как был. Interactive ListTile с onTap-handlers
-        // — юзер может grant'ить permissions прямо отсюда.
         Text('System setup', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         ListTile(
@@ -810,16 +796,56 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
             ],
           ),
         ),
+        // §051 Phase 3 — opt-in auto-record visited Wi-Fi networks.
+        // Default OFF: silent network logging это privacy след даже
+        // local-only. Toggle здесь даёт choice + явный explainer что
+        // это делает.
+        const Divider(height: 8),
+        SwitchListTile(
+          title: const Text('Auto-record visited Wi-Fi networks'),
+          subtitle: Text(
+            _autoRecordWifi
+                ? 'Networks where you stay ≥ 60s appear in routing rule editor → Pick saved.'
+                : 'Off. Pick saved is populated only by Add current / Manual.',
+          ),
+          secondary: const Icon(Icons.history),
+          value: _autoRecordWifi,
+          onChanged: _loaded
+              ? (val) => unawaited(_toggleAutoRecordWifi(val))
+              : null,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
+          child: Text(
+            'Stored locally only. Existing entries persist when you turn this off — '
+            'remove individually in Pick saved (long-press chip → Remove).',
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  /// Compact read-only row for diagnostics — icon + status text, not tappable.
-  /// Actions (fix/grant) живут в Background tab — здесь только статус.
-  // §052 Phase 2: `_permissionRow` (read-only status row) удалён вместе с
-  // переносом permissions block из `_buildBackgroundTab` → `_buildDiagnosticsTab`.
-  // Permissions block теперь использует interactive ListTile с onTap-handlers
-  // (как было в Background) — read-only summary не нужен, всё в одном месте.
+  /// §051 Phase 3 — toggle для auto-record. Сразу sync'ит state в native
+  /// observer (start/stop NetworkCallback). Существующая история не
+  /// чистится при OFF — это user data, явный поход в Pick saved.
+  Future<void> _toggleAutoRecordWifi(bool enabled) async {
+    setState(() => _autoRecordWifi = enabled);
+    await SettingsStorage.setAutoRecordWifi(enabled);
+    await WifiHistoryListener.I.setEnabled(enabled);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 2),
+        content: Text(enabled
+            ? 'Auto-record on. Networks added after 60s of stay.'
+            : 'Auto-record off. Existing history kept.'),
+      ),
+    );
+  }
 }
 
 /// "Last check: …" + Check now-кнопка под Updates-toggle. Подписан на

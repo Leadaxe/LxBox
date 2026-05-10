@@ -941,15 +941,48 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
             }
           }
           if (entries.isEmpty) {
+            // §051 Phase 3 — first-time hint: discover Auto-record toggle.
             entries.add(Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                'Nothing saved yet. Use "Add current" or "Manual" first.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                ),
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Nothing saved yet.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(ctx).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '• Use "Add current" or "Manual" below\n'
+                    '• Or enable Auto-record in Settings → Diagnostics '
+                    'to grow this list as you move between Wi-Fi networks',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.settings, size: 16),
+                    label: const Text('Open Settings'),
+                    onPressed: () {
+                      Navigator.of(ctx).pop<List<_WifiEntry>>(null);
+                      Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) =>
+                            const AppSettingsScreen(initialTab: 1),
+                      ));
+                    },
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
               ),
             ));
           }
