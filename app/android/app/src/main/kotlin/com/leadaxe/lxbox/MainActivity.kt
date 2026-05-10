@@ -19,6 +19,8 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val TAG = "MainActivity"
         private const val VPN_REQUEST_CODE_QUICK = 7032
+        private const val NOTIFICATION_PERMISSION_REQUEST = 7033
+        private const val NEARBY_WIFI_PERMISSION_REQUEST = 7034
 
         const val EXTRA_ACTION = "action"
 
@@ -39,16 +41,63 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.leadaxe.lxbox/utils")
             .setMethodCallHandler { call, result ->
-                if (call.method == "openUrl") {
-                    val url = call.argument<String>("url")
-                    if (url != null) {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                        result.success(null)
-                    } else {
-                        result.error("INVALID_URL", "URL is null", null)
+                when (call.method) {
+                    "openUrl" -> {
+                        val url = call.argument<String>("url")
+                        if (url != null) {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            result.success(null)
+                        } else {
+                            result.error("INVALID_URL", "URL is null", null)
+                        }
                     }
-                } else {
-                    result.notImplemented()
+                    "openAppSettings" -> {
+                        // §050 — open Android Settings directly to App permissions.
+                        val opened = openAppPermissions()
+                        result.success(opened)
+                    }
+                    "checkNotificationPermission" -> {
+                        // Returns true if POST_NOTIFICATIONS granted (or API < 33 — implicit grant).
+                        val granted = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            checkSelfPermission("android.permission.POST_NOTIFICATIONS") ==
+                                android.content.pm.PackageManager.PERMISSION_GRANTED
+                        } else true
+                        result.success(granted)
+                    }
+                    "requestNotificationPermission" -> {
+                        // Trigger system permission dialog for POST_NOTIFICATIONS on API 33+.
+                        // result.success(null) immediately — the user will see the dialog
+                        // asynchronously. Re-check permission status afterward.
+                        if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            requestPermissions(
+                                arrayOf("android.permission.POST_NOTIFICATIONS"),
+                                NOTIFICATION_PERMISSION_REQUEST,
+                            )
+                        }
+                        result.success(null)
+                    }
+                    "checkNearbyWifiPermission" -> {
+                        // API 33+: NEARBY_WIFI_DEVICES is the canonical permission
+                        // for `WifiInfo.ssid`. Pre-33 → implicit grant (covered by
+                        // ACCESS_FINE_LOCATION / ACCESS_BACKGROUND_LOCATION).
+                        val granted = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            checkSelfPermission("android.permission.NEARBY_WIFI_DEVICES") ==
+                                android.content.pm.PackageManager.PERMISSION_GRANTED
+                        } else true
+                        result.success(granted)
+                    }
+                    "requestNearbyWifiPermission" -> {
+                        // Trigger system runtime prompt for NEARBY_WIFI_DEVICES.
+                        // Async — Flutter must re-check via `checkNearbyWifiPermission`.
+                        if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            requestPermissions(
+                                arrayOf("android.permission.NEARBY_WIFI_DEVICES"),
+                                NEARBY_WIFI_PERMISSION_REQUEST,
+                            )
+                        }
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
                 }
             }
     }
@@ -115,6 +164,37 @@ class MainActivity : FlutterActivity() {
             Log.e(TAG, "VPN consent prepare failed: ${e.message}", e)
             if (finishAfterConsent) finish()
         }
+    }
+
+    /// §050 — open Settings directly на App permissions screen.
+    /// Try `MANAGE_APP_PERMISSIONS` first — this is the action used by
+    /// PermissionController to show the permissions UI for a specific app.
+    /// If that fails (very old OEMs without PermissionController), fall back
+    /// to the generic App info page.
+    private fun openAppPermissions(): Boolean {
+        // Strategy 1: direct permissions UI
+        val direct = Intent("android.intent.action.MANAGE_APP_PERMISSIONS")
+            .putExtra("android.intent.extra.PACKAGE_NAME", packageName)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (direct.resolveActivity(packageManager) != null) {
+            runCatching { startActivity(direct); return true }
+                .onFailure { Log.w(TAG, "MANAGE_APP_PERMISSIONS failed: ${it.message}") }
+        }
+        // Strategy 2: APP_PERMISSION (singular) — alternate action на некоторых OEM
+        val singular = Intent("android.intent.action.MANAGE_PERMISSION_APPS")
+            .putExtra("android.intent.extra.PACKAGE_NAME", packageName)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (singular.resolveActivity(packageManager) != null) {
+            runCatching { startActivity(singular); return true }
+                .onFailure { Log.w(TAG, "MANAGE_PERMISSION_APPS failed: ${it.message}") }
+        }
+        // Strategy 3: generic App info (юзеру нужно tap на Permissions)
+        val fallback = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            .setData(Uri.fromParts("package", packageName, null))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { startActivity(fallback); return true }
+            .onFailure { Log.e(TAG, "openAppSettings (all strategies) failed: ${it.message}") }
+        return false
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

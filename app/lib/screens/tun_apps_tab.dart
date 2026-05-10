@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import '../controllers/home_controller.dart';
 import '../services/app_info_cache.dart';
 import '../services/settings_storage.dart' show SettingsStorage, TunAppsConfig;
+import '../vpn/box_vpn_client.dart';
 import 'app_picker_screen.dart';
 
 class TunAppsTab extends StatefulWidget {
@@ -36,6 +37,15 @@ class _TunAppsTabState extends State<TunAppsTab> {
   bool _loading = true;
   Timer? _saveTimer;
 
+  // §049 F15: allowBypass — opt-in toggle для apps использующих
+  // ConnectivityManager.bindProcessToNetwork() для bypass'а tun.
+  // Storage native-side (через BoxVpnClient), применяется на следующем openTun.
+  // Перенесён сюда из App Settings → Diagnostics — это VPN-behavior, а не
+  // диагностика; естественно ложится рядом с tun_apps mode-controls (оба
+  // регулируют tun-routing).
+  bool _allowBypass = false;
+  final _vpn = BoxVpnClient();
+
   @override
   void initState() {
     super.initState();
@@ -50,16 +60,32 @@ class _TunAppsTabState extends State<TunAppsTab> {
 
   Future<void> _load() async {
     final cfg = await SettingsStorage.getTunApps();
+    final allowBypass = await _vpn.getAllowBypass();
     if (!mounted) return;
     setState(() {
       _cfg = cfg;
       _savedCfg = cfg;
+      _allowBypass = allowBypass;
       _loading = false;
     });
     for (final pkg in cfg.packages) {
       _ensured.add(pkg);
       AppInfoCache.ensure(pkg);
     }
+  }
+
+  /// §049 F15: toggle allowBypass. Применяется при следующем openTun (start
+  /// или reload VPN).
+  Future<void> _toggleAllowBypass(bool enable) async {
+    setState(() => _allowBypass = enable);
+    await _vpn.setAllowBypass(enable);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Saved. Reload VPN to apply.'),
+        duration: Duration(seconds: 3),
+      ),
+    );
   }
 
   void _scheduleSave() {
@@ -267,6 +293,24 @@ class _TunAppsTabState extends State<TunAppsTab> {
         Text(
           _modeDescription(_cfg.mode),
           style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+        ),
+
+        // §049 F15 — VPN bypass opt-in. Семантически близок к §046 mode'ам:
+        // mode = кто попадает в tun; allowBypass = могут ли apps в tun из него
+        // уйти через ConnectivityManager.bindProcessToNetwork().
+        const SizedBox(height: 8),
+        const Divider(height: 24),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Allow VPN bypass'),
+          subtitle: Text(
+            _allowBypass
+                ? 'Apps may use ConnectivityManager to bypass tun.'
+                : 'Strict tunnel — all traffic goes through tun.',
+          ),
+          secondary: const Icon(Icons.alt_route),
+          value: _allowBypass,
+          onChanged: (val) => unawaited(_toggleAllowBypass(val)),
         ),
 
         if (showRestartBanner) ...[

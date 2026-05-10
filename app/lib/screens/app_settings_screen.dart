@@ -11,6 +11,7 @@ import '../services/haptic_service.dart';
 import '../services/relative_time.dart';
 import '../services/settings_storage.dart';
 import '../services/update_checker.dart';
+import '../services/url_launcher.dart' as ul;
 import '../vpn/box_vpn_client.dart';
 import 'about_screen.dart';
 import 'backup_screen.dart';
@@ -49,9 +50,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
 
   // §043 sing-box core logs forwarding (требует restart Service'а)
   bool _coreLogsEnabled = false;
-
-  // §049 F15 — allowBypass opt-in (применяется при следующем openTun)
-  bool _allowBypass = false;
+  // §037 config_locked_for_debug — pin'ит config.json от перезаписи UI-rebuild'ом.
+  bool _configLocked = false;
+  // §049 F15 `Allow VPN bypass` toggle перенесён в Routing → Tunnel apps tab
+  // (см. tun_apps_tab.dart) — это VPN-behavior, а не диагностика.
 
   @override
   void initState() {
@@ -91,7 +93,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final debugToken = await SettingsStorage.getDebugToken();
     final debugPort = await SettingsStorage.getDebugPort();
     final coreLogsEnabled = await _vpn.getCoreLogsEnabled();
-    final allowBypass = await _vpn.getAllowBypass();
+    final configLocked = await SettingsStorage.getConfigLockedForDebug();
     if (mounted) {
       setState(() {
         _autoStart = auto;
@@ -109,10 +111,28 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _debugPort = debugPort;
         _debugPortCtl.text = debugPort.toString();
         _coreLogsEnabled = coreLogsEnabled;
-        _allowBypass = allowBypass;
+        _configLocked = configLocked;
         _loaded = true;
       });
     }
+  }
+
+  /// §037 — toggle config_locked_for_debug.
+  /// Когда true — `SubscriptionController.generateConfig()` тихо skip'ает
+  /// rebuild при UI-действиях, и pinned config.json (например, отправленный
+  /// через Debug API `PUT /config`) остаётся в живых.
+  Future<void> _toggleConfigLocked(bool locked) async {
+    setState(() => _configLocked = locked);
+    await SettingsStorage.setConfigLockedForDebug(locked);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(locked
+            ? 'Config locked. UI actions will not rebuild config.'
+            : 'Config unlocked. Next UI action will rebuild from settings.'),
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -129,6 +149,14 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       final token = DebugServer.generateToken();
       await SettingsStorage.setDebugToken(token);
       if (mounted) setState(() => _debugToken = token);
+    }
+    // §037 — config lock is a debug-only feature. Disabling Debug API
+    // implicitly unlocks: иначе юзер останется с pinned config'ом без
+    // UI-способа его разблокировать (lock toggle живёт под Debug API
+    // блоком и спрятан, когда API выключен).
+    if (!enable && _configLocked) {
+      await SettingsStorage.setConfigLockedForDebug(false);
+      if (mounted) setState(() => _configLocked = false);
     }
     await applyDebugApiSettings();
   }
@@ -194,20 +222,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     );
   }
 
-  /// §049 F15: toggle allowBypass. Применяется при следующем openTun (start
-  /// или reload VPN).
-  Future<void> _toggleAllowBypass(bool enable) async {
-    setState(() => _allowBypass = enable);
-    await _vpn.setAllowBypass(enable);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Saved. Reload VPN to apply.'),
-        duration: Duration(seconds: 3),
-      ),
-    );
-  }
-
   /// §043 follow-up: confirm-диалог + `BoxVpnClient.quitApp()`. Process умрёт
   /// через ~250ms; Future от quitApp в норме не ресолвится — поэтому ничего
   /// не делаем после await.
@@ -261,6 +275,32 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         ? const Duration(seconds: 6)
         : const Duration(seconds: 3);
     messenger.showSnackBar(SnackBar(content: Text(msg), duration: duration));
+  }
+
+  /// Tap on the Notifications row in Background → System setup.
+  ///
+  /// — granted   → open per-app notification settings (toggle categories etc.)
+  /// — denied    → try the runtime POST_NOTIFICATIONS prompt; if that returns
+  ///               with permission still denied (user picked "Don't allow", or
+  ///               had previously selected "Don't ask again"), fall back to
+  ///               the App Permissions screen.
+  Future<void> _onNotificationsTap() async {
+    final granted = await ul.UrlLauncher.checkNotificationPermission();
+    if (granted) {
+      await _vpn.openNotificationSettings();
+      return;
+    }
+    await ul.UrlLauncher.requestNotificationPermission();
+    // Re-check; system dialog is async, but on API 33+ it resolves before the
+    // call returns. If "Don't ask again" was previously chosen, the prompt
+    // is silently skipped — push the user to Settings instead.
+    final after = await ul.UrlLauncher.checkNotificationPermission();
+    if (mounted) {
+      setState(() => _notificationsEnabled = after);
+    }
+    if (!after) {
+      await ul.UrlLauncher.openAppSettings();
+    }
   }
 
   Future<void> _refreshBatteryStatus() async {
@@ -545,9 +585,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
               ? 'Allowed — foreground service shows VPN status'
               : 'Blocked — Android may throttle the VPN service. Tap to allow.'),
           trailing: const Icon(Icons.chevron_right, size: 18),
-          onTap: () async {
-            await _vpn.openNotificationSettings();
-          },
+          onTap: _onNotificationsTap,
         ),
         ListTile(
           leading: const Icon(Icons.settings_applications_outlined),
@@ -710,6 +748,24 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
               ],
             ),
           ),
+        // §037 — config_locked_for_debug. Видим только когда Debug API ON,
+        // чтобы lock не висел сиротой без UI-возврата к разблокировке (его
+        // снимают через Debug API `PUT /settings/config_locked` или этим
+        // toggle'ом). При выключении Debug API toggle выше — lock auto-снимется.
+        if (_debugEnabled)
+          SwitchListTile(
+            title: const Text('Lock config (debug)'),
+            subtitle: Text(
+              _configLocked
+                  ? 'Pinned. UI actions skip config rebuild — useful when testing PUT /config overrides.'
+                  : 'Off — UI actions rebuild config from settings as usual.',
+            ),
+            secondary: const Icon(Icons.lock_outline),
+            value: _configLocked,
+            onChanged: _loaded
+                ? (val) => unawaited(_toggleConfigLocked(val))
+                : null,
+          ),
         // §043: forwarding sing-box internal logs into our AppLog (Debug
         // screen → Core tab + /logs/core endpoint). Off by default — sing-box
         // на busy traffic эмитит сотни строк/минуту; opt-in для диагностики.
@@ -752,20 +808,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
               ),
             ],
           ),
-        ),
-        // §049 F15: VPN bypass opt-in.
-        SwitchListTile(
-          title: const Text('Allow VPN bypass'),
-          subtitle: Text(
-            _allowBypass
-                ? 'Apps may use ConnectivityManager to bypass tun.'
-                : 'Strict tunnel — all traffic goes through tun.',
-          ),
-          secondary: const Icon(Icons.alt_route),
-          value: _allowBypass,
-          onChanged: _loaded
-              ? (val) => unawaited(_toggleAllowBypass(val))
-              : null,
         ),
       ],
     );

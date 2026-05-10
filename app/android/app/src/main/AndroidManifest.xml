@@ -14,6 +14,24 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- §050 / F12.3 readWIFIState: sing-box DNS/routing rules с условиями
+         `wifi_ssid:` / `wifi_bssid:` требуют чтения текущего WiFi SSID/BSSID
+         через `WifiManager.getConnectionInfo()`. На API 29+ этот call требует
+         ACCESS_BACKGROUND_LOCATION runtime grant; на API 28- — ACCESS_FINE_LOCATION.
+         Без grant `getConnectionInfo()` бросает SecurityException → propagates
+         через JNI в Go runtime → process abort. Permissions decl'арены как
+         optional — юзер должен grant'нуть через Settings если использует
+         wifi_ssid rules в config. См. spec/050 findings. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- Android 13+ (API 33+): без NEARBY_WIFI_DEVICES `WifiInfo.ssid`
+         возвращает "<unknown ssid>" даже если ACCESS_FINE_LOCATION granted.
+         Для wifi_ssid/wifi_bssid правил sing-box нужно реальное имя. -->
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation" />
+
     <application
         android:label="L×Box"
         android:name=".vpn.BoxApplication"
