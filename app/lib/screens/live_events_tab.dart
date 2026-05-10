@@ -337,23 +337,6 @@ class _LiveEventsTabState extends State<LiveEventsTab>
               foregroundColor: isRec ? cs.onError : cs.onPrimary,
             ),
           ),
-          PopupMenuButton<String>(
-            tooltip: 'More',
-            icon: const Icon(Icons.more_vert),
-            onSelected: (v) {
-              if (v == 'diagnostics') _openDiagnosticsSettings();
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: 'diagnostics',
-                child: ListTile(
-                  leading: Icon(Icons.tune),
-                  title: Text('Diagnostics settings'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
