@@ -211,7 +211,6 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
     final session = profiler.active;
     return Column(
       children: [
-        const CoreLogsHintBanner(),
         if (_verboseActiveInSession && session != null)
           _verboseBanner(context),
         if (session != null && profiler.unattributedBannerActive)
@@ -230,6 +229,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
             Tab(text: 'Connections'),
           ],
         ),
+        const CoreLogsHintBanner(),
         Expanded(
           child: TabBarView(
             controller: _subTabs,
