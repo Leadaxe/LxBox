@@ -7,6 +7,7 @@ import android.net.VpnService
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
+import com.leadaxe.lxbox.vpn.BoxApplication
 import com.leadaxe.lxbox.vpn.BoxVpnService
 import com.leadaxe.lxbox.vpn.VpnPlugin
 import com.leadaxe.lxbox.vpn.VpnStatus
@@ -113,6 +114,14 @@ class MainActivity : FlutterActivity() {
                         }
                         result.success(null)
                     }
+                    "getCurrentWifiInfo" -> {
+                        // §051 Phase 2 — return current Wi-Fi SSID/BSSID для UI
+                        // editor'а. Reuses `WifiManager.connectionInfo` (та же
+                        // path что sing-box использует для match'а).
+                        // Returns Map: {ssid?, bssid?, error?}.
+                        // Errors: "permission_missing", "no_wifi", "unknown_ssid".
+                        result.success(getCurrentWifiInfoMap())
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -211,6 +220,56 @@ class MainActivity : FlutterActivity() {
         runCatching { startActivity(fallback); return true }
             .onFailure { Log.e(TAG, "openAppSettings (all strategies) failed: ${it.message}") }
         return false
+    }
+
+    /// §051 Phase 2 — read current Wi-Fi connection info через тот же путь
+    /// что sing-box (`WifiManager.connectionInfo`). Symmetric с
+    /// `PlatformInterfaceWrapper.readWIFIState`: defensive try/catch на случай
+    /// SecurityException / `<unknown ssid>`.
+    ///
+    /// Returns Map с ключами `ssid`, `bssid` (lower-case) на success, либо
+    /// `error` с одним из значений: `permission_missing`, `no_wifi`,
+    /// `unknown_ssid`, `runtime_error`.
+    @Suppress("DEPRECATION")
+    private fun getCurrentWifiInfoMap(): Map<String, String> {
+        // Permission preflight — на API 33+ нужен NEARBY_WIFI_DEVICES,
+        // на 29-32 ACCESS_BACKGROUND_LOCATION (или fine на 28-).
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission("android.permission.NEARBY_WIFI_DEVICES") !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                return mapOf("error" to "permission_missing")
+            }
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            if (checkSelfPermission(
+                    "android.permission.ACCESS_BACKGROUND_LOCATION",
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                return mapOf("error" to "permission_missing")
+            }
+        }
+        val info = try {
+            BoxApplication.wifiManager.connectionInfo
+        } catch (e: SecurityException) {
+            return mapOf("error" to "permission_missing")
+        } catch (e: RuntimeException) {
+            return mapOf("error" to "runtime_error")
+        } ?: return mapOf("error" to "no_wifi")
+
+        var ssid = info.ssid
+        if (ssid == null || ssid == "<unknown ssid>") {
+            return mapOf("error" to "unknown_ssid")
+        }
+        if (ssid.startsWith("\"") && ssid.endsWith("\"")) {
+            ssid = ssid.substring(1, ssid.length - 1)
+        }
+        val bssid = info.bssid?.lowercase() ?: ""
+        // Bssid `02:00:00:00:00:00` Android отдаёт когда нет реального доступа
+        // к connection info (e.g., other-app's network) — трактуем как
+        // `unknown_ssid` чтобы UI не предлагал к add'у мусорную пару.
+        if (bssid == "02:00:00:00:00:00") {
+            return mapOf("error" to "unknown_ssid")
+        }
+        return mapOf("ssid" to ssid, "bssid" to bssid)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

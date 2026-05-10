@@ -505,6 +505,65 @@ class SettingsStorage {
       setVar('config_locked_for_debug', locked ? 'true' : 'false');
 
   // ---------------------------------------------------------------------------
+  // §051 Phase 2 — Wi-Fi network history (для CustomRuleEditScreen «Pick saved»).
+  //
+  // Локальная история сетей которые юзер когда-либо прокинул через Add current
+  // / Manual в каком-либо custom rule. Stays in app private storage, никуда не
+  // уходит. Cap 50 entries, evict oldest by `lastSeen`.
+  //
+  // Schema: list of `{ssid, bssid, last_seen}` (last_seen — ISO8601 UTC).
+  // ---------------------------------------------------------------------------
+
+  static const int _wifiHistoryCap = 50;
+
+  static Future<List<Map<String, String>>> getWifiHistory() async {
+    final raw = await getVar('wifi_history', '[]');
+    final decoded = (jsonDecode(raw) as List?) ?? const [];
+    return decoded
+        .whereType<Map>()
+        .map<Map<String, String>>((e) => {
+              'ssid': (e['ssid'] as String?) ?? '',
+              'bssid': (e['bssid'] as String?) ?? '',
+              'last_seen': (e['last_seen'] as String?) ?? '',
+            })
+        .where((e) => (e['ssid'] ?? '').isNotEmpty)
+        .toList(growable: false);
+  }
+
+  /// Upsert по composite key `(ssid, bssid)`. Если уже есть — обновляет
+  /// `last_seen`. Иначе добавляет в начало списка. Cap 50 (evict oldest).
+  static Future<void> addToWifiHistory(String ssid, String bssid) async {
+    if (ssid.isEmpty) return;
+    final normalized = bssid.trim().toLowerCase();
+    final history = (await getWifiHistory()).toList();
+    final now = DateTime.now().toUtc().toIso8601String();
+    history.removeWhere((e) =>
+        (e['ssid'] ?? '') == ssid && (e['bssid'] ?? '') == normalized);
+    history.insert(0, {
+      'ssid': ssid,
+      'bssid': normalized,
+      'last_seen': now,
+    });
+    if (history.length > _wifiHistoryCap) {
+      history.removeRange(_wifiHistoryCap, history.length);
+    }
+    await setVar('wifi_history', jsonEncode(history));
+  }
+
+  static Future<void> removeFromWifiHistory(String ssid, String bssid) async {
+    final normalized = bssid.trim().toLowerCase();
+    final history = (await getWifiHistory()).toList();
+    final initial = history.length;
+    history.removeWhere((e) =>
+        (e['ssid'] ?? '') == ssid && (e['bssid'] ?? '') == normalized);
+    if (history.length != initial) {
+      await setVar('wifi_history', jsonEncode(history));
+    }
+  }
+
+  static Future<void> clearWifiHistory() => setVar('wifi_history', '[]');
+
+  // ---------------------------------------------------------------------------
   // App update check (§036) — GitHub Releases polling on launch with 24h cap.
   // Sideload-flow: SnackBar → user opens release page in browser → downloads
   // APK manually. No in-app installer.

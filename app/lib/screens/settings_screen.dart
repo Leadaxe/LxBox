@@ -27,10 +27,15 @@ class SettingsScreen extends StatefulWidget {
     super.key,
     required this.subController,
     required this.homeController,
+    this.initialTab = 0,
   });
 
   final SubscriptionController subController;
   final HomeController homeController;
+
+  /// Tab index to open: 0 = System, 1 = Core. Used by deep-links (e.g.
+  /// Routing → Tunnel apps → ⋮ → "VPN settings (Core)").
+  final int initialTab;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -151,6 +156,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return DefaultTabController(
       length: 2,
+      initialIndex: widget.initialTab.clamp(0, 1),
       child: Scaffold(
         appBar: AppBar(
           title: const Text('VPN Settings'),

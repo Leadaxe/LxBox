@@ -88,4 +88,56 @@ class UrlLauncher {
       return true;
     }
   }
+
+  /// §051 Phase 2 — read current Wi-Fi SSID/BSSID для editor'а.
+  /// Возвращает один из:
+  /// - `WifiInfoSuccess(ssid, bssid)` — Wi-Fi подключён, permissions есть.
+  /// - `WifiInfoError(reason)` — `permission_missing` / `no_wifi` /
+  ///   `unknown_ssid` / `runtime_error`.
+  /// `bssid` lower-case `xx:xx:xx:xx:xx:xx`.
+  static Future<WifiInfoResult> getCurrentWifiInfo() async {
+    try {
+      final raw = await _channel
+          .invokeMapMethod<String, dynamic>('getCurrentWifiInfo');
+      if (raw == null) {
+        return const WifiInfoResult.error('runtime_error');
+      }
+      final error = raw['error'] as String?;
+      if (error != null) {
+        return WifiInfoResult.error(error);
+      }
+      final ssid = raw['ssid'] as String?;
+      final bssid = raw['bssid'] as String?;
+      if (ssid == null || ssid.isEmpty) {
+        return const WifiInfoResult.error('unknown_ssid');
+      }
+      return WifiInfoResult.success(ssid: ssid, bssid: bssid ?? '');
+    } catch (_) {
+      return const WifiInfoResult.error('runtime_error');
+    }
+  }
+}
+
+/// §051 Phase 2 — результат чтения текущей Wi-Fi сети.
+sealed class WifiInfoResult {
+  const WifiInfoResult();
+
+  const factory WifiInfoResult.success({
+    required String ssid,
+    required String bssid,
+  }) = WifiInfoSuccess;
+
+  const factory WifiInfoResult.error(String reason) = WifiInfoError;
+}
+
+class WifiInfoSuccess extends WifiInfoResult {
+  const WifiInfoSuccess({required this.ssid, required this.bssid});
+  final String ssid;
+  final String bssid;
+}
+
+class WifiInfoError extends WifiInfoResult {
+  const WifiInfoError(this.reason);
+  /// One of: `permission_missing`, `no_wifi`, `unknown_ssid`, `runtime_error`.
+  final String reason;
 }

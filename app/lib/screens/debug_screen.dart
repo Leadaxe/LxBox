@@ -230,10 +230,13 @@ class _DebugScreenState extends State<DebugScreen> {
 
   /// §043: открыть App Settings → Diagnostics. Юзер видит что Core пустой
   /// → 3-точечное меню → Diagnostics settings → toggle "Forward sing-box logs".
+  ///
+  /// initialTab=1 — Diagnostics после §052 Phase 2 (Background tab удалён,
+  /// TabBar 3→2: General [0] + Diagnostics [1]).
   void _openDiagnosticsSettings() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => const AppSettingsScreen(initialTab: 2),
+        builder: (_) => const AppSettingsScreen(initialTab: 1),
       ),
     );
   }

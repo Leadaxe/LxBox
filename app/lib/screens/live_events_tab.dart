@@ -21,6 +21,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/traffic_profiler.dart';
+import 'app_settings_screen.dart';
 import 'stats_screen.dart';
 
 class LiveEventsTab extends StatefulWidget {
@@ -269,7 +270,38 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
               foregroundColor: isRec ? cs.onError : cs.onPrimary,
             ),
           ),
+          PopupMenuButton<String>(
+            tooltip: 'More',
+            icon: const Icon(Icons.more_vert),
+            onSelected: (v) {
+              if (v == 'diagnostics') _openDiagnosticsSettings();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'diagnostics',
+                child: ListTile(
+                  leading: Icon(Icons.tune),
+                  title: Text('Diagnostics settings'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+
+  /// Deep-link → App Settings → Diagnostics. Live recording require'ит
+  /// `core_logs_enabled=true` (toggle "Forward sing-box logs") чтобы DNS
+  /// и connection events приходили из core. Юзер видит «0 events» и
+  /// открывает diagnostics для toggle'а.
+  ///
+  /// initialTab=1 — Diagnostics после §052 Phase 2 (TabBar 3→2).
+  void _openDiagnosticsSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const AppSettingsScreen(initialTab: 1),
       ),
     );
   }

@@ -9,9 +9,14 @@ import '../models/parser_config.dart';
 import '../services/builder/post_steps.dart';
 import '../services/builder/preset_expand.dart';
 import '../services/builder/rule_set_registry.dart';
+import '../services/relative_time.dart';
 import '../services/rule_set_downloader.dart';
+import '../services/settings_storage.dart';
+import '../services/url_launcher.dart' as ul;
 import '../widgets/outbound_picker.dart';
+import '../widgets/wifi_permission_dialog.dart';
 import 'app_picker_screen.dart';
+import 'app_settings_screen.dart';
 
 /// Редактор `CustomRule` (spec §030).
 ///
@@ -61,6 +66,11 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
   late String _outbound;
   late Set<String> _protocols;
   late List<String> _packages;
+  // §051 Phase 2 — list of (ssid, bssid?) entries shown as chips. Каждая
+  // chip = одна Wi-Fi сеть. На save распадается на `wifiSsids`/`wifiBssids`
+  // через _zipWifiEntries(). На load — pair by index если counts равны,
+  // иначе ssid-only chips + остаток bssid'ов как chips без ssid (rare edge).
+  late List<_WifiEntry> _wifiNetworks;
 
   /// Значения preset-vars (spec §033). Для kind != preset — пустая мапа,
   /// игнорируется при save.
@@ -98,6 +108,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
     _outbound = r.outbound;
     _protocols = r.protocols.toSet();
     _packages = List.of(r.packages);
+    _wifiNetworks = _unzipWifiEntries(r.wifiSsids, r.wifiBssids);
     _varsValues = Map<String, String>.from(r.varsValues);
     if (_kind == CustomRuleKind.srs) {
       RuleSetDownloader.isCached(r.id).then((cached) {
@@ -154,6 +165,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
           varsValues: Map<String, String>.from(_varsValues),
         );
       case CustomRuleKind.srs:
+        final wifi = _zipWifiEntries(_wifiNetworks);
         return CustomRuleSrs(
           id: widget.initial.id,
           name: name,
@@ -164,9 +176,12 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
           packages: List.of(_packages),
           protocols: _protocols.toList()..sort(),
           ipIsPrivate: _ipIsPrivate,
+          wifiSsids: wifi.ssids,
+          wifiBssids: wifi.bssids,
           outbound: _outbound,
         );
       case CustomRuleKind.inline:
+        final wifi = _zipWifiEntries(_wifiNetworks);
         return CustomRuleInline(
           id: widget.initial.id,
           name: name,
@@ -181,6 +196,8 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
           packages: List.of(_packages),
           protocols: _protocols.toList()..sort(),
           ipIsPrivate: _ipIsPrivate,
+          wifiSsids: wifi.ssids,
+          wifiBssids: wifi.bssids,
           outbound: _outbound,
         );
     }
@@ -357,6 +374,13 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
         u.host.isNotEmpty;
   }
 
+  /// §051 Phase 2 — BSSID `xx:xx:xx:xx:xx:xx` (case-insensitive). Empty
+  /// допустимо (chip может быть только с SSID).
+  static final RegExp _bssidPattern =
+      RegExp(r'^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$');
+  bool _isValidBssid(String v) =>
+      v.isEmpty || _bssidPattern.hasMatch(v.trim());
+
   int _invalidCount(TextEditingController ctrl, bool Function(String) isValid,
       {String Function(String)? normalize}) {
     var n = 0;
@@ -385,7 +409,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
     setState(() {});
   }
 
-  void _save() {
+  Future<void> _save() async {
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -405,6 +429,27 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
       );
     }
 
+    // §051 Phase 2 — preflight permission check если у правила есть wifi
+    // условия. Без NEARBY_WIFI_DEVICES + ACCESS_BACKGROUND_LOCATION sing-box
+    // не сможет прочитать SSID и rule не сматчится. Лучше предупредить
+    // СЕЙЧАС чем юзер удивится «правило сохранил а не работает».
+    if (_wifiNetworks.isNotEmpty) {
+      final missing = <String>[];
+      if (!await ul.UrlLauncher.checkBackgroundLocationPermission()) {
+        missing.add('android.permission.ACCESS_BACKGROUND_LOCATION');
+      }
+      if (!await ul.UrlLauncher.checkNearbyWifiPermission()) {
+        missing.add('android.permission.NEARBY_WIFI_DEVICES');
+      }
+      if (missing.isNotEmpty && mounted) {
+        await WifiPermissionDialog.show(context, missing: missing);
+        // Не блокируем save — юзер мог нажать «Allow Wi-Fi info» и нам
+        // надо сохранить правило в любом случае. Permission'ы прорастут
+        // при следующем connect (или сразу если runtime grant прошёл).
+      }
+    }
+
+    if (!mounted) return;
     // _snapshot() строит подкласс по `_kind`, нам остаётся только
     // применить финальный `name` (возможно с auto-suffix'ом).
     final saved = _snapshot().withName(finalName);
@@ -646,6 +691,436 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
     );
     if (result == null || !mounted) return;
     setState(() => _packages = result.packages);
+  }
+
+  /// §051 Phase 2 — chip-based WI-FI NETWORK section.
+  ///
+  /// Chip = одна сеть `(ssid, bssid?)`. Source-of-truth — `_wifiNetworks`.
+  /// Save zip'ит в `wifiSsids`/`wifiBssids` через _zipWifiEntries (см.
+  /// CustomRule §051: lists независимы в sing-box, AND-семантика).
+  Widget _wifiSection(ThemeData t) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(
+          t,
+          'WI-FI NETWORK',
+          'AND with match. Active only on listed Wi-Fi networks.',
+        ),
+        if (_wifiNetworks.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(
+              'No Wi-Fi conditions — rule is active on every network.',
+              style: TextStyle(
+                fontSize: 12,
+                color: t.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        else
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              for (var i = 0; i < _wifiNetworks.length; i++)
+                InputChip(
+                  avatar: const Icon(Icons.wifi, size: 16),
+                  label: Text(
+                    _wifiNetworks[i].bssid.isEmpty
+                        ? _wifiNetworks[i].ssid
+                        : '${_wifiNetworks[i].ssid}  ·  ${_wifiNetworks[i].bssid}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  onDeleted: () =>
+                      setState(() => _wifiNetworks.removeAt(i)),
+                ),
+            ],
+          ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            OutlinedButton.icon(
+              icon: const Icon(Icons.my_location, size: 16),
+              label: const Text('Add current'),
+              onPressed: _addCurrentWifi,
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                textStyle: const TextStyle(fontSize: 12),
+              ),
+            ),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.history, size: 16),
+              label: const Text('Pick saved'),
+              onPressed: _pickSavedWifi,
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                textStyle: const TextStyle(fontSize: 12),
+              ),
+            ),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.edit, size: 16),
+              label: const Text('Manual'),
+              onPressed: _manualAddWifi,
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                textStyle: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        InkWell(
+          onTap: _openWifiPermissionsScreen,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline,
+                    size: 14, color: t.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    'Needs Location + Nearby Wi-Fi permissions. Tap to manage.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: t.colorScheme.onSurfaceVariant,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// «Add current»: читает текущий SSID/BSSID, дописывает в chips,
+  /// upsert'ит в wifi_history. Permission missing → shared dialog.
+  Future<void> _addCurrentWifi() async {
+    final result = await ul.UrlLauncher.getCurrentWifiInfo();
+    if (!mounted) return;
+    switch (result) {
+      case ul.WifiInfoSuccess(:final ssid, :final bssid):
+        // Дедуп: если уже есть chip с тем же ssid+bssid — skip.
+        final exists = _wifiNetworks
+            .any((e) => e.ssid == ssid && e.bssid == bssid);
+        if (!exists) {
+          setState(() => _wifiNetworks.add(_WifiEntry(ssid, bssid)));
+        }
+        await SettingsStorage.addToWifiHistory(ssid, bssid);
+      case ul.WifiInfoError(:final reason):
+        if (reason == 'permission_missing') {
+          await WifiPermissionDialog.show(
+            context,
+            missing: const [
+              'android.permission.ACCESS_BACKGROUND_LOCATION',
+              'android.permission.NEARBY_WIFI_DEVICES',
+            ],
+          );
+          return;
+        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 3),
+            content: Text(switch (reason) {
+              'no_wifi' => 'Not connected to Wi-Fi.',
+              'unknown_ssid' =>
+                'Cannot read Wi-Fi info — try toggling Wi-Fi off/on.',
+              _ => 'Could not read current Wi-Fi ($reason).',
+            }),
+          ),
+        );
+    }
+  }
+
+  /// «Pick saved»: bottom sheet — networks из других rules + history.
+  Future<void> _pickSavedWifi() async {
+    // Собираем «used in your rules»: scan через все custom_rules,
+    // exclude текущее правило (его сети уже видны в chips).
+    final allRules = await SettingsStorage.getCustomRules();
+    final fromRules = <_WifiEntry, List<String>>{};
+    for (final r in allRules) {
+      if (r.id == widget.initial.id) continue;
+      final ssids = r.wifiSsids;
+      final bssids = r.wifiBssids;
+      // Pair by index where possible (same as our zip semantics).
+      final n = ssids.length > bssids.length ? ssids.length : bssids.length;
+      for (var i = 0; i < n; i++) {
+        final ssid = i < ssids.length ? ssids[i] : '';
+        final bssid = i < bssids.length ? bssids[i] : '';
+        if (ssid.isEmpty) continue;
+        final entry = _WifiEntry(ssid, bssid);
+        fromRules.putIfAbsent(entry, () => []).add(r.name);
+      }
+    }
+    final history = await SettingsStorage.getWifiHistory();
+    if (!mounted) return;
+
+    final selected = <_WifiEntry>{};
+    final result = await showModalBottomSheet<List<_WifiEntry>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          bool isSelected(_WifiEntry e) => selected.contains(e);
+          void toggle(_WifiEntry e, bool? v) {
+            setSheetState(() {
+              if (v == true) {
+                selected.add(e);
+              } else {
+                selected.remove(e);
+              }
+            });
+          }
+
+          final entries = <Widget>[];
+          if (fromRules.isNotEmpty) {
+            entries.add(_pickerSectionHeader(ctx, 'USED IN YOUR RULES'));
+            for (final mapEntry in fromRules.entries) {
+              final e = mapEntry.key;
+              final ruleNames = mapEntry.value.join(', ');
+              entries.add(CheckboxListTile(
+                dense: true,
+                value: isSelected(e),
+                onChanged: (v) => toggle(e, v),
+                title: Text(
+                  e.bssid.isEmpty ? e.ssid : '${e.ssid} · ${e.bssid}',
+                  style: const TextStyle(fontSize: 13),
+                ),
+                subtitle: Text(
+                  '→ in: $ruleNames',
+                  style: const TextStyle(fontSize: 11),
+                ),
+              ));
+            }
+          }
+          if (history.isNotEmpty) {
+            entries.add(_pickerSectionHeader(ctx, 'HISTORY (last seen)'));
+            for (final h in history) {
+              final ssid = h['ssid'] ?? '';
+              final bssid = h['bssid'] ?? '';
+              if (ssid.isEmpty) continue;
+              final e = _WifiEntry(ssid, bssid);
+              entries.add(CheckboxListTile(
+                dense: true,
+                value: isSelected(e),
+                onChanged: (v) => toggle(e, v),
+                title: Text(
+                  bssid.isEmpty ? ssid : '$ssid · $bssid',
+                  style: const TextStyle(fontSize: 13),
+                ),
+                subtitle: Text(
+                  _humanLastSeen(h['last_seen'] ?? ''),
+                  style: const TextStyle(fontSize: 11),
+                ),
+                secondary: IconButton(
+                  tooltip: 'Remove from history',
+                  icon: const Icon(Icons.close, size: 16),
+                  onPressed: () async {
+                    await SettingsStorage.removeFromWifiHistory(
+                        ssid, bssid);
+                    if (!ctx.mounted) return;
+                    setSheetState(() {
+                      history.removeWhere((x) =>
+                          (x['ssid'] ?? '') == ssid &&
+                          (x['bssid'] ?? '') == bssid);
+                      selected.remove(e);
+                    });
+                  },
+                ),
+              ));
+            }
+          }
+          if (entries.isEmpty) {
+            entries.add(Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Nothing saved yet. Use "Add current" or "Manual" first.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ));
+          }
+
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Saved networks',
+                            style: Theme.of(ctx).textTheme.titleMedium,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () =>
+                              Navigator.of(ctx).pop<List<_WifiEntry>>(null),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 0),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: entries,
+                    ),
+                  ),
+                  const Divider(height: 0),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                    child: Row(
+                      children: [
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () =>
+                              Navigator.of(ctx).pop<List<_WifiEntry>>(null),
+                          child: const Text('Cancel'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: selected.isEmpty
+                              ? null
+                              : () => Navigator.of(ctx).pop(selected.toList()),
+                          child: Text('Add ${selected.length}'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    if (result == null || result.isEmpty || !mounted) return;
+    setState(() {
+      for (final e in result) {
+        if (!_wifiNetworks
+            .any((x) => x.ssid == e.ssid && x.bssid == e.bssid)) {
+          _wifiNetworks.add(e);
+        }
+      }
+    });
+  }
+
+  Widget _pickerSectionHeader(BuildContext ctx, String text) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.5,
+          color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  /// «Manual»: dialog с двумя полями (SSID + BSSID optional).
+  Future<void> _manualAddWifi() async {
+    final ssidCtrl = TextEditingController();
+    final bssidCtrl = TextEditingController();
+    String? errorText;
+    final result = await showDialog<_WifiEntry>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          title: const Text('Add Wi-Fi network'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: ssidCtrl,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'SSID',
+                  hintText: 'lexRouter',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: bssidCtrl,
+                decoration: InputDecoration(
+                  labelText: 'BSSID (optional)',
+                  hintText: '38:2c:4a:cf:6d:5c',
+                  helperText: 'xx:xx:xx:xx:xx:xx',
+                  errorText: errorText,
+                  isDense: true,
+                  border: const OutlineInputBorder(),
+                ),
+                style: const TextStyle(fontFamily: 'monospace'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final ssid = ssidCtrl.text.trim();
+                final bssid = bssidCtrl.text.trim().toLowerCase();
+                if (ssid.isEmpty) {
+                  setDlgState(() => errorText = null);
+                  return;
+                }
+                if (bssid.isNotEmpty && !_isValidBssid(bssid)) {
+                  setDlgState(() => errorText =
+                      'Expected xx:xx:xx:xx:xx:xx');
+                  return;
+                }
+                Navigator.of(ctx).pop(_WifiEntry(ssid, bssid));
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    if (_wifiNetworks
+        .any((e) => e.ssid == result.ssid && e.bssid == result.bssid)) {
+      return; // дедуп
+    }
+    setState(() => _wifiNetworks.add(result));
+    await SettingsStorage.addToWifiHistory(result.ssid, result.bssid);
+  }
+
+  /// Tap на info-notice: переход в `Settings → Background` где можно
+  /// grant'нуть Location + Nearby Wi-Fi permissions через row'ы.
+  Future<void> _openWifiPermissionsScreen() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => const AppSettingsScreen(initialTab: 1),
+    ));
   }
 
   Widget _appsSection(ThemeData t) {
@@ -1013,6 +1488,9 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
           if (_kind == CustomRuleKind.srs) _srsSection(theme),
           _portSection(theme),
           _protocolSection(theme),
+          if (_kind == CustomRuleKind.inline ||
+              _kind == CustomRuleKind.srs)
+            _wifiSection(theme),
           const SizedBox(height: 24),
           const Divider(),
           const SizedBox(height: 12),
@@ -1603,4 +2081,63 @@ Future<CustomRuleEditResult?> openCustomRuleEditor(
   );
   if (result == null) return null;
   return CustomRuleEditResult._internal(result);
+}
+
+/// §051 Phase 2 — chip representation одной Wi-Fi сети в editor'е.
+/// `bssid` пустой если юзер не указал — в этом случае sing-box матчит
+/// только по SSID (любой BSSID с этим именем).
+class _WifiEntry {
+  const _WifiEntry(this.ssid, this.bssid);
+  final String ssid;
+  final String bssid;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _WifiEntry && other.ssid == ssid && other.bssid == bssid;
+
+  @override
+  int get hashCode => Object.hash(ssid, bssid);
+}
+
+/// §051 Phase 2 — chip list → (wifiSsids, wifiBssids) для модели.
+///
+/// Sing-box treats lists independently and AND-ит их (cross-product).
+/// Для chips с pure-ssid ничего в bssids не добавляем (sing-box матчит
+/// только SSID). Для chips с обоими полями — пишем оба (с тем же индексом
+/// если возможно для round-trip pairing).
+({List<String> ssids, List<String> bssids}) _zipWifiEntries(
+    List<_WifiEntry> entries) {
+  final ssids = <String>[];
+  final bssids = <String>[];
+  for (final e in entries) {
+    if (e.ssid.isNotEmpty && !ssids.contains(e.ssid)) ssids.add(e.ssid);
+    if (e.bssid.isNotEmpty && !bssids.contains(e.bssid)) bssids.add(e.bssid);
+  }
+  return (ssids: ssids, bssids: bssids);
+}
+
+/// §051 Phase 2 — (wifiSsids, wifiBssids) → chip list для loading.
+///
+/// Best-effort pairing: если списки одинаковой длины — pair by index.
+/// Иначе создаём ssid-only chips для всех ssids и (rare) bssid-only chips
+/// для остатка (с empty ssid — отображаем как warning hint).
+List<_WifiEntry> _unzipWifiEntries(
+    List<String> ssids, List<String> bssids) {
+  if (ssids.isEmpty && bssids.isEmpty) return [];
+  if (ssids.length == bssids.length) {
+    return [
+      for (var i = 0; i < ssids.length; i++) _WifiEntry(ssids[i], bssids[i]),
+    ];
+  }
+  // Mismatch (загрузка legacy data или manual edit JSON-storage). Делаем
+  // ssid-only chips. BSSID без ssid — теряются в UI, но остаются в JSON.
+  return [for (final s in ssids) _WifiEntry(s, '')];
+}
+
+/// «5 минут назад» / «Yesterday» / «Mar 15» для wifi_history `last_seen`.
+String _humanLastSeen(String iso) {
+  if (iso.isEmpty) return '';
+  final dt = DateTime.tryParse(iso);
+  if (dt == null) return '';
+  return relativeTime(DateTime.now(), dt);
 }

@@ -27,6 +27,7 @@ import '../services/app_info_cache.dart';
 import '../services/clash_api_client.dart';
 import '../services/traffic_profiler.dart';
 import 'app_picker_screen.dart';
+import 'app_settings_screen.dart';
 
 class PerAppTraceTab extends StatefulWidget {
   const PerAppTraceTab({super.key, required this.clash});
@@ -182,6 +183,19 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
     );
   }
 
+  /// Deep-link → App Settings → Diagnostics. Per-app trace require'ит
+  /// `core_logs_enabled=true` (toggle "Forward sing-box logs") чтобы видеть
+  /// DNS/connection events; юзер может включить отсюда без длинной навигации.
+  ///
+  /// initialTab=1 — Diagnostics после §052 Phase 2 (TabBar 3→2).
+  void _openDiagnosticsSettings() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const AppSettingsScreen(initialTab: 1),
+      ),
+    );
+  }
+
   void _wipeAll() {
     showDialog<void>(
       context: context,
@@ -321,6 +335,8 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
                   await _toggleVerbose(true);
                 case 'verbose-off':
                   await _toggleVerbose(false);
+                case 'diagnostics':
+                  _openDiagnosticsSettings();
                 case 'share':
                   if (active != null) await _shareSession(active);
                 case 'copy':
@@ -336,6 +352,14 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
                 value: _verbose ? 'verbose-off' : 'verbose-on',
                 checked: _verbose,
                 child: const Text('Verbose core logs (debug)'),
+              ),
+              const PopupMenuItem(
+                value: 'diagnostics',
+                child: ListTile(
+                  leading: Icon(Icons.tune),
+                  title: Text('Diagnostics settings'),
+                  contentPadding: EdgeInsets.zero,
+                ),
               ),
               const PopupMenuDivider(),
               PopupMenuItem(

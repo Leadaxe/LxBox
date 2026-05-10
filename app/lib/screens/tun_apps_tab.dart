@@ -12,17 +12,21 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../controllers/home_controller.dart';
+import '../controllers/subscription_controller.dart';
 import '../services/app_info_cache.dart';
 import '../services/settings_storage.dart' show SettingsStorage, TunAppsConfig;
 import 'app_picker_screen.dart';
+import 'settings_screen.dart';
 
 class TunAppsTab extends StatefulWidget {
   const TunAppsTab({
     super.key,
     required this.homeController,
+    required this.subController,
   });
 
   final HomeController homeController;
+  final SubscriptionController subController;
 
   @override
   State<TunAppsTab> createState() => _TunAppsTabState();
@@ -180,6 +184,24 @@ class _TunAppsTabState extends State<TunAppsTab> {
     );
   }
 
+  /// Deep-link → VPN Settings → Core tab (sing-box engine vars). Юзер
+  /// настраивает Tunnel apps и хочет рядом mtu/log_level/dns_final/etc —
+  /// открываем сразу Core, не System (System содержит allow-bypass /
+  /// keep-on-exit / sleep-mode, юзер только что выбрал mode здесь).
+  ///
+  /// initialTab=1 — Core (System=0 / Core=1).
+  void _openVpnSettingsCore() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SettingsScreen(
+          subController: widget.subController,
+          homeController: widget.homeController,
+          initialTab: 1,
+        ),
+      ),
+    );
+  }
+
   void _showHelp() {
     showDialog<void>(
       context: context,
@@ -258,6 +280,8 @@ class _TunAppsTabState extends State<TunAppsTab> {
               icon: const Icon(Icons.more_vert),
               onSelected: (v) {
                 switch (v) {
+                  case 'vpn_core':
+                    _openVpnSettingsCore();
                   case 'clear':
                     _clearAll();
                   case 'help':
@@ -265,6 +289,16 @@ class _TunAppsTabState extends State<TunAppsTab> {
                 }
               },
               itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'vpn_core',
+                  child: ListTile(
+                    leading: Icon(Icons.tune),
+                    title: Text('VPN settings (Core)'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                const PopupMenuDivider(),
                 PopupMenuItem(
                   value: 'clear',
                   enabled: _cfg.packages.isNotEmpty,

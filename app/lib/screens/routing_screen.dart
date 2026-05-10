@@ -536,7 +536,10 @@ class _RoutingScreenState extends State<RoutingScreen> {
             ),
 
             // ─── Tunnel apps: §046 OS-level split-tunneling ───
-            TunAppsTab(homeController: widget.homeController),
+            TunAppsTab(
+              homeController: widget.homeController,
+              subController: widget.subController,
+            ),
           ],
         ),
       ),
