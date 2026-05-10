@@ -190,6 +190,8 @@ Per-key спеки и shape — в разделах ниже.
 | `debug_token` | `''` | [§031] | Bearer token для всех `/api/*`. |
 | `debug_port` | `'9269'` | [§031] | TCP-порт. Range 1024–49151. |
 | `dns_final` | template | [§043][043-dns] | Финальный DNS-резолвер (`cloudflare_udp` / `google_udp` / `local_dns_resolver` / `yandex_udp` / любой tag из `dns_options.servers`). |
+| `auto_record_wifi_history` | `'false'` | [§051] Phase 3 | Native `WifiNetworkObserver` пушит current SSID/BSSID в `wifi_history` если provel >5 минут на сети. Default off — privacy default. Toggle в App Settings → Diagnostics. |
+| `wifi_history` | `'[]'` | [§051] Phase 3 | JSON-encoded `[{ssid, bssid, last_seen}]` (см. отдельный раздел ниже). |
 | `<custom>` | — | — | Любые юзерские template-vars, выставленные через UI / `PUT /settings/vars/<key>`. |
 
 `removeVar(k)` ≠ `setVar(k, '')` — пустая строка может быть legitimate value, отсутствие ключа возвращает default.
@@ -447,6 +449,39 @@ OS-level split-tunneling: какие приложения идут через VP
 CRUD: `getTunApps()` / `setTunApps()` (replace целиком). API: `GET/PUT /settings/tun_apps` ([Debug API reference](api/debug-api-reference.md)).
 
 **Конфликт с `package_name` rules в custom_rules:** apps в `Allow-list` (или вне `Deny-list`) идут через tun → routing rules (rule_set / package_name match / etc) применяются нормально. Apps вне `Allow-list` (или внутри `Deny-list`) **не попадают в tun вообще** — sing-box их не видит, custom rules с `package_name` для них не сматчатся.
+
+---
+
+## `wifi_history` — [§051] Phase 3
+
+JSON-encoded array записей сетей которые юзер реально посетил — для editor'а custom rules (`Pick saved` picker когда пишешь правило с условием `wifi_ssid` / `wifi_bssid`). Хранится как **JSON-string** в `vars.wifi_history` (не отдельный top-level ключ — чтобы не плодить shape'ы), декодируется при чтении.
+
+```jsonc
+[
+  {"ssid": "HomeWiFi", "bssid": "aa:bb:cc:dd:ee:ff", "last_seen": "2026-05-10T12:34:56.789Z"},
+  {"ssid": "OfficeWiFi", "bssid": "11:22:33:44:55:66", "last_seen": "2026-05-09T08:15:32.000Z"},
+  ...
+]
+```
+
+| Поле | Тип | Notes |
+|---|---|---|
+| `ssid` | String | Required. Не нормализуется (case-sensitive — провайдеры могут так и эдак). |
+| `bssid` | String | Может быть пустым. При upsert нормализуется к **lower-case** + trim. Composite-key `(ssid, bssid)` — `Home/aa:bb:..` и `Home/AA:BB:..` это одна запись (после normalize), `Home/aa:bb` и `Home/cc:dd` — разные. |
+| `last_seen` | String (ISO-8601 UTC) | Время последнего observe. `addToWifiHistory` обновляет на upsert. |
+
+**Cap 50 записей** (`_wifiHistoryCap` constant). LRU evict — newest-first (insert at index 0), oldest падает с tail при overflow.
+
+**Источники наполнения:**
+1. **Auto-record** (`auto_record_wifi_history=true`) — native `WifiNetworkObserver` через `NetworkCallback` listener. Stickiness debounce: записывается только если юзер сидит на сети ≥5 минут (фильтр от random transitions home/office/coffeeshop).
+2. **Manual** — editor UI: `Add current` button (читает sing-box `readWIFIState` напрямую), `Pick saved` (выбирает из существующих записей).
+3. **Debug API** — `POST /wifi_history` (для test fixtures, restore, etc) — см. [Debug API reference](api/debug-api-reference.md#wi-fi-history--wifi_history).
+
+CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHistory(ssid, bssid)` / `clearWifiHistory()` в `SettingsStorage`.
+
+**Privacy default** — `auto_record_wifi_history=false`. Юзер opt-in'ит в App Settings → Diagnostics. Silent network logging это privacy-след даже local-only.
+
+**В `/state/storage` exposed без scrubber'а** — SSID/BSSID не sensitive в контексте настроек (если уже видны в `WifiInfo` системного уровня).
 
 ---
 

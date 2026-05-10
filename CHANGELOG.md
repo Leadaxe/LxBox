@@ -55,6 +55,17 @@
 
 - **§051 Phase 2 — `wifi_history` not refreshing in Pick saved after row delete** ([settings_storage.dart](app/lib/services/settings_storage.dart)). `getWifiHistory` возвращал `toList(growable: false)`; `removeWhere` в setState callback'е молча кидал `UnsupportedError` на fixed-length list → UI rebuild не триггерился. Storage write проходил (entry удалена), но visible row оставалась до reopen sheet. Fix: `toList()` (growable).
 
+### Refactor
+
+- **§053 Stage 1 — extract pure functions + dialogs из `custom_rule_edit_screen.dart`** ([§053 spec](docs/spec/tasks/053-custom-rule-editor-split.md)). Editor разбух до 2060 LOC после §051. Stage 1 — низкорисковая extract'ция без architecture change:
+  - **Pure functions**: `lib/screens/custom_rule_edit/validators.dart` (isValidDomain / isValidKeyword / isValidCidr / isValidPort / isValidPortRange / isValidUrl / isValidBssid) + `lib/screens/custom_rule_edit/normalizers.dart` (splitRaw / normalizedDomains / normalizedKeywords / normalizedCidrs / normalizedPorts / normalizedPortRanges). Были private методы на State — не тестируемы.
+  - **Public `WifiEntry` model** ([wifi_entry.dart](app/lib/widgets/wifi_entry.dart)) — был private `_WifiEntry`.
+  - **`showWifiSavedPickerSheet`** ([wifi_saved_picker_sheet.dart](app/lib/widgets/wifi_saved_picker_sheet.dart)) — self-contained: грузит other-rules + history + auto-record flag, показывает modal, возвращает `Future<List<WifiEntry>?>`. ~300 LOC inline `showModalBottomSheet` build'а уехали из editor.
+  - **`showWifiManualAddDialog`** ([wifi_manual_add_dialog.dart](app/lib/widgets/wifi_manual_add_dialog.dart)) — same idea для Manual dialog.
+  - **Editor**: 2060 → 1795 LOC (−265). Stage 2 (section widgets) + Stage 3 (state controller + tab split) — отдельные итерации.
+  - **Tests**: +53 unit tests (validators + normalizers); 548 → 601 pass.
+- **§051 closeout — consolidate wifi-read + permission-check** (`commit 20a4a51`). Three call-sites одной и той же defensive read logic (`PlatformInterfaceWrapper.readWIFIState` + `MainActivity.getCurrentWifiInfoMap` + `WifiNetworkObserver.readWifi`) consolidated в `WifiInfoReader` singleton с sealed `Result` type. Four copies permission-check (`if (SDK_INT >= X) checkSelfPermission(...) == GRANTED`) → `PermissionUtils.has(ctx, name, minSdk)` one-liner. Bonus: `_humanLastSeen` proper fallbacks, `WifiHistoryListener` `dispose()` lifecycle, `SettingsStorage` header convention note про growable lists.
+
 ### Performance
 
 - **F22 part 2 — sing-box log forwarding pipeline production-grade** ([BoxService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt), [app_log.dart](app/lib/services/app_log.dart), [clash_log_pump.dart](app/lib/services/clash_log_pump.dart)). К drainer-pattern из v1.7.1 добавили back-pressure / yield / batching / O(1) deque / 60Hz throttle. На heavy traffic (100+ строк/сек) toggle «Forward sing-box logs» теперь почти free.

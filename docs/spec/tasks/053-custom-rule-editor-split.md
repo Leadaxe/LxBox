@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft |
+| Статус | Stage 1 done (v14080); Stage 2+3 in progress |
 | Дата | 2026-05-10 |
 | Связанные | [`030 custom routing`](../features/030%20custom%20routing/spec.md) — sealed `CustomRule`; [`051 custom rule wifi conditions`](./051-custom-rule-wifi-conditions.md) — последний big-add (+539 LOC wifi секции в editor) |
 | Затронутые файлы | `app/lib/screens/custom_rule_edit_screen.dart` (split source) → `app/lib/screens/custom_rule_edit/` (новая папка с секциями); `app/lib/widgets/wifi_saved_picker_sheet.dart` (extract); tests / smoke |
@@ -120,9 +120,31 @@ Total: ~ 5 дней с тестами + smoke.
 - [ ] `custom_rule_edit_screen.dart` ≤ 250 LOC (только scaffold)
 - [ ] Section widgets accept `initial` + emit `onChanged` (или работают через controller)
 - [ ] Save flow unchanged: same `_CustomRuleEditResult.saved(rule)` + same JSON shape
-- [ ] Existing tests pass (`flutter test` 548+)
-- [ ] New unit tests для validators + controller (≥ 10)
+- [x] Existing tests pass (`flutter test` 548+) — Stage 1: 601 pass
+- [x] New unit tests для validators + controller (≥ 10) — Stage 1: 53 new (validators + normalizers)
 - [ ] Smoke: создать inline + srs + preset правила через UI без regression
+
+## Stage 1 — Done (v14080)
+
+Extract'нуто из 2060-LOC editor State:
+
+- `lib/screens/custom_rule_edit/validators.dart` — pure functions
+  (isValidDomain / isValidKeyword / isValidCidr / isValidPort /
+  isValidPortRange / isValidUrl / isValidBssid)
+- `lib/screens/custom_rule_edit/normalizers.dart` — pure functions
+  (splitRaw / normalizedDomains / normalizedKeywords / normalizedCidrs /
+  normalizedPorts / normalizedPortRanges)
+- `lib/widgets/wifi_entry.dart` — public `WifiEntry` model (был
+  private `_WifiEntry`)
+- `lib/widgets/wifi_saved_picker_sheet.dart` — extracted Pick saved
+  bottom sheet (self-contained, грузит data + показывает modal)
+- `lib/widgets/wifi_manual_add_dialog.dart` — extracted Manual dialog
+
+Editor `custom_rule_edit_screen.dart`: **2060 → 1795 LOC** (-265 LOC).
+Editor теперь делегирует к extracted modules через imports.
+
+Tests: 53 new unit tests pass (validators + normalizers).
+Full suite: 548 → 601 pass.
 
 ## Out of scope
 

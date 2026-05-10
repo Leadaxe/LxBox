@@ -456,7 +456,7 @@ L×Box прошёл путь от MVP (один экран: Read config → Star
 
 ---
 
-## Текущая статистика (v1.3.1)
+## Текущая статистика (v1.3.1 snapshot)
 
 - **Тесты:** 128/128 зелёные
 - **Спецификации:** 001–029 (29 feature-специфик)
@@ -464,15 +464,41 @@ L×Box прошёл путь от MVP (один экран: Read config → Star
 - **LOC:** `lib/` ≈ 14k, удалено v1 ≈ 2.7k при parser v2 landmark
 - **Release APK:** 71.3 MB
 
-## Что дальше (рекомендации)
+---
 
-| Приоритет | Фича | Статус |
-|-----------|-------|--------|
-| Высокий | **Custom Nodes UI extensions** | Базовое готово (spec 017); добавить rename в списке нод, bulk operations |
-| Высокий | **QR Code scan/generate** | Заготовка `_scanQrCode` — "QR scanner coming soon" snackbar. Нужна интеграция mobile_scanner |
-| Средний | **Load Balance** | spec 024 — ready, не реализовано (PuerNya fork или кастомный post-step) |
-| Средний | **Export/Import settings** | Backup всей конфигурации (server_lists, vars, rules, app_rules) |
-| Средний | **Profile Management** | Несколько конфигов + быстрое переключение |
-| Средний | **WARP integration** | spec 025 — ready, не реализовано |
-| Низкий | **Background subscription update** | Сейчас только foreground (AutoUpdater работает пока app открыт). Android WorkManager + permissions |
-| Низкий | **Quick Settings Tile** | Android QS tile для Start/Stop |
+## После v1.3.1 — краткая хроника (без подробного нарратива)
+
+Подробные изменения смотри в [`CHANGELOG.md`](../CHANGELOG.md) и [`docs/spec/tasks/`](spec/tasks/) / [`docs/spec/features/`](spec/features/). Здесь — указатель.
+
+| Релиз | Дата | Headline |
+|---|---|---|
+| **v1.4.0** | апрель 2026 | Reconnect lifecycle stabilization (atomic teardown, Completer-based stopVPN, sticky `configStaleSinceStart`); ConfigCache; sealed `NodeSpec` (parser v2); shared `asBroadcastStream` для status events; intent-based sticky reset |
+| **v1.4.1 / v1.4.2** | апрель 2026 | UX patches |
+| **v1.5.0** | апрель 2026 | Quick Connect tile (§014) — Android QS tile для Start/Stop |
+| **v1.6.0** | апрель–май 2026 | DNS revamp ([§042](spec/tasks/042-dns-servers-merge-and-cleanup.md) + [§044](spec/tasks/044-dns-servers-clean-schema.md)); ru-direct geoip fallback ([§045](spec/tasks/045-ru-direct-geoip-fallback.md)); per-group ping settings ([§040](spec/tasks/040-per-group-ping-test-settings.md)); humanizeError; Debug API ([§031](spec/features/031%20debug%20api/spec.md)) |
+| **v1.6.1** | май 2026 | Patch — UX polish + bug fixes |
+| **v1.7.0** | 8 мая 2026 | Per-app traffic profiler ([§044](spec/features/044%20per-app%20traffic%20profiler/spec.md)); commercial license clarification |
+| **v1.7.1** | 9 мая 2026 | sing-box wrapper deep audit ([§049](spec/tasks/049-singbox-wrapper-deep-audit/spec.md)) — atomic CAS lifecycle race fix (closing §047 TCP deterioration); F1 split (BoxVpnService → BoxService); inclusive observer ([§048](spec/tasks/048-perapp-trace-attribution-gaps.md)) — 4 confidence levels + Live tab; tunnel apps split-tunneling ([§046](spec/features/046%20tunnel%20apps%20split-tunneling/spec.md)) |
+| **v1.7.2** | 10 мая 2026 | wifi_state closeout ([§050](spec/tasks/050-libbox-debug-build/spec.md)) — real root cause `Unknown reference: 42` (unhandled `SecurityException` через JNI) + `NEARBY_WIFI_DEVICES` для Android 13+; `config_locked` UI toggle (§037); Live tab system-wide events fix; tri-mode detour servers UI |
+| **v1.7.3** | май 2026 | Wi-Fi-aware routing ([§051](spec/tasks/051-custom-rule-wifi-conditions.md) Phase 1+2+3) — `wifi_ssid` / `wifi_bssid` в `CustomRule` + auto-record opt-in + `/wifi_history` Debug API; VPN Settings reorg ([§052](spec/tasks/052-vpn-settings-system-service-tabs.md)) — System / Core tabs; `CoreLogsHintBanner` UX rework; F22 part 2 perf (back-pressure, batching, deque, throttle) |
+
+Текущее состояние (v1.7.3):
+- **Тесты:** 535+ зелёных (debug handler + parser + builder + pipeline + service-level)
+- **Спецификации:** 001–052 (50+ feature и task specs)
+- **Релизы:** 15+ stable tags
+- **LOC:** `app/lib/` ≈ 35k, native Kotlin ≈ 4k
+
+## Что дальше
+
+Большая часть «Высокий» и «Средний» приоритетов из v1.3.1 roadmap — закрыты:
+
+- ✅ Custom Nodes UI (rename, bulk ops) — done в v1.3+
+- ✅ QR scan/generate — done в v1.4+
+- ✅ Export/Import settings — `/backup/*` Debug API + Backup screen в v1.6
+- ✅ Quick Settings Tile — done в v1.5.0
+- ✅ Background subscription update — AutoUpdater (4-trigger model) в v1.6
+- 🔵 **Load Balance** ([§024](spec/features/024%20loadbalance/spec.md)) — ready spec, не реализовано (PuerNya fork или кастомный post-step)
+- 🔵 **Profile Management** — несколько конфигов + быстрое переключение, не реализовано
+- 🔵 **WARP integration** ([§025](spec/features/025%20warp/spec.md)) — ready spec, не реализовано
+
+Открытые направления ведутся в [`docs/spec/tasks/README.md`](spec/tasks/README.md) и [`docs/spec/features/`](spec/features/) — фильтр по статусу `Draft` / `In progress` / `Deferred`.

@@ -43,6 +43,7 @@ curl -s "$BASE/ping"
 - [Rules CRUD — `/rules/*`](#rules-crud--rules)
 - [Subscriptions CRUD — `/subs/*`](#subscriptions-crud--subs)
 - [Settings writes — `/settings/*`](#settings-writes--settings)
+- [Wi-Fi history — `/wifi_history`](#wi-fi-history--wifi_history)
 - [Files](#files)
 - [Profiler — `/profiler/*`](#profiler--profiler)
 - [Clash API proxy — `/clash/*`](#clash-api-proxy--clash)
@@ -479,6 +480,45 @@ curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
 curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
   -d '{"mode":"lazy"}' "$BASE/settings/vpn/background_mode"
 ```
+
+---
+
+## Wi-Fi history — `/wifi_history`
+
+§051 Phase 3 — список «известных» сетей `[{ssid, bssid, last_seen}]` для editor'а custom rules (`Pick saved` picker когда пишешь правило с условием `wifi_ssid` / `wifi_bssid`). Naturally заполняется через native `WifiNetworkObserver` (`NetworkCallback` listener, 5-min stickiness debounce) когда `auto_record_wifi_history` toggle ON в App Settings → Diagnostics. Через API можно injectить / удалять записи без UI flow — например для тестов или восстановления после wipe'а.
+
+Storage: var `wifi_history` в `lxbox_settings.json` (JSON-encoded array). Cap **50 записей**, LRU evict by `last_seen`. BSSID нормализуется к lower-case при upsert. Composite key `(ssid, bssid)` — две сети с одинаковым ssid и разными bssid считаются разными.
+
+| Endpoint | Метод | Body / response |
+|---|---|---|
+| `/wifi_history` | GET | →`[{ssid, bssid, last_seen}]` (newest first) |
+| `/wifi_history` | POST | body `{"ssid":"...","bssid":"..."}` (`bssid` опц.). Upsert — если `(ssid, bssid)` уже есть, обновляет `last_seen`; иначе вставляет первым. → `{ok, action, ssid, bssid}`, status 201 |
+| `/wifi_history` | DELETE | body `{"ssid":"...","bssid":"..."}` (`bssid` опц.). Remove конкретной записи. → `{ok, action, ssid, bssid}` |
+| `/wifi_history/all` | DELETE | — clear all. → `{ok, action}` |
+
+```bash
+# Список
+curl -s -H "$HDR" "$BASE/wifi_history" | jq
+# [{"ssid":"HomeWiFi","bssid":"aa:bb:cc:dd:ee:ff","last_seen":"2026-05-10T12:34:56.789Z"}, ...]
+
+# Inject запись (например для test fixture перед запуском smoke-теста)
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"ssid":"OfficeWiFi","bssid":"11:22:33:44:55:66"}' \
+  "$BASE/wifi_history"
+
+# Удалить конкретную запись
+curl -X DELETE -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"ssid":"OfficeWiFi","bssid":"11:22:33:44:55:66"}' \
+  "$BASE/wifi_history"
+
+# Wipe всё (например при сбросе настроек)
+curl -X DELETE -H "$HDR" "$BASE/wifi_history/all"
+```
+
+**Quirks:**
+- `POST` с пустым `ssid` → 400 BadRequest.
+- `DELETE /wifi_history` с пустым `ssid` → 400 (используй `/wifi_history/all` для full wipe).
+- Cap не строгий: если придёт `POST` когда уже 50 записей, новая вставляется в head, последняя выпадает. Не атомарно с UI — гонка возможна, но не критична (обе ветки сходятся к корректному состоянию).
 
 ---
 
