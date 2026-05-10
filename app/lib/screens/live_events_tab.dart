@@ -19,9 +19,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../services/traffic_profiler.dart';
+import '../vpn/box_vpn_client.dart';
 import 'app_settings_screen.dart';
+
 class LiveEventsTab extends StatefulWidget {
   const LiveEventsTab({super.key});
 
@@ -29,7 +32,8 @@ class LiveEventsTab extends StatefulWidget {
   State<LiveEventsTab> createState() => _LiveEventsTabState();
 }
 
-class _LiveEventsTabState extends State<LiveEventsTab> {
+class _LiveEventsTabState extends State<LiveEventsTab>
+    with WidgetsBindingObserver {
   StreamSubscription<Map<String, Object?>>? _sub;
   // Локальный snapshot — приходит из global rolling buffer'а на init,
   // потом обновляется через SSE feed. Live-снимок == _events newest-last.
@@ -47,6 +51,13 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
   // Cache of seen apps для chip selection.
   final Set<String> _seenApps = {};
 
+  // §043 «Forward sing-box logs» состояние. Когда false — Live tab теряет
+  // DNS resolves, router decisions и process attribution через router log;
+  // TCP/UDP open/close из Clash poll'а ещё работают, но картинка не полная.
+  // Показываем banner с deep-link в Diagnostics.
+  bool? _coreLogsForwarding; // null до первого load'а
+  final BoxVpnClient _vpn = BoxVpnClient();
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +74,25 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && TrafficProfiler.I.isGlobalRecording) setState(() {});
     });
+    WidgetsBinding.instance.addObserver(this);
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      unawaited(_refreshCoreLogsState());
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Юзер мог потоглить «Forward sing-box logs» в Diagnostics и вернуться.
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshCoreLogsState());
+    }
+  }
+
+  Future<void> _refreshCoreLogsState() async {
+    final on = await _vpn.getCoreLogsEnabled();
+    if (mounted && on != _coreLogsForwarding) {
+      setState(() => _coreLogsForwarding = on);
+    }
   }
 
   void _onProfilerChanged() {
@@ -118,6 +148,7 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
     TrafficProfiler.I.removeListener(_onProfilerChanged);
     _ticker?.cancel();
     _searchCtrl.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
@@ -161,6 +192,7 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
         _recordingHeader(context),
         _filterBar(context),
         const Divider(height: 1),
+        if (_coreLogsForwarding == false) _coreLogsHintBanner(context),
         if (TrafficProfiler.I.unattributedBannerActive)
           Container(
             width: double.infinity,
@@ -207,6 +239,48 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
                 ),
         ),
       ],
+    );
+  }
+
+  /// Banner когда «Forward sing-box logs» (Diagnostics → §043) выключен.
+  /// Без него Live tab теряет DNS resolves и process attribution из router
+  /// log'а — TCP/UDP open/close из Clash poll'а ещё работают, но картинка
+  /// не полная. Tap → deep-link в Diagnostics tab где есть toggle.
+  Widget _coreLogsHintBanner(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: 'sing-box internal logs (router decisions, DNS resolves)\n'
+          'не форвардятся в Live. Включи «Forward sing-box logs»\n'
+          'в Diagnostics — после этого в Live появятся DNS события и\n'
+          'точная app-attribution.',
+      triggerMode: TooltipTriggerMode.tap,
+      showDuration: const Duration(seconds: 6),
+      child: InkWell(
+        onTap: _openDiagnosticsSettings,
+        child: Container(
+          width: double.infinity,
+          color: cs.surfaceContainerHighest,
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: 14, color: cs.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'DNS / router events off — turn on «Forward sing-box logs»',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              Icon(Icons.chevron_right,
+                  size: 16, color: cs.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
