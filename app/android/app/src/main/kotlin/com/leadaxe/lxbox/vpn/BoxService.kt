@@ -376,17 +376,55 @@ class BoxService(
 
     /// §043: sing-box log lines проходят сюда независимо от `log.level`
     /// в конфиге. INFO+ пушим в Flutter через EventChannel "lxbox/coreLog".
+    ///
+    /// **§050 fix attempt (drainer + @Synchronized)**:
+    /// - `@Synchronized` на entry point: serialize sing-box goroutines один-за-одним.
+    ///   Reference SagerNet's `Log.d` natural-blocking на logd socket даёт
+    ///   аналогичный throttle — у нас sync mutex.
+    /// - Drainer pattern: ОДИН Runnable instance в `coreLogDrainer` field
+    ///   (не lambda, не method ref) reused on every `Handler.post()`.
+    ///   Storage в `LinkedBlockingQueue` lock-free для producers.
+    /// - Запланированный drainer flag через AtomicBoolean — `compareAndSet`
+    ///   гарантирует только один scheduled drainer at a time.
+    ///
+    /// **Hot path allocations** (per writeDebugMessage call):
+    /// - 1 String для `plain` (regex.replace создаёт)
+    /// - 1 LinkedBlockingQueue Node при offer
+    /// - НЕТ Lambda/Runnable/Message creation
+    @Synchronized
     override fun writeDebugMessage(message: String) {
         val plain = ansiEscapeRe.replace(message, "")
         if (traceDebugRe.containsMatchIn(plain)) return
-        val sink = BoxVpnService.coreLogSink ?: return
-        coreLogMainHandler.post {
-            runCatching { sink.success(plain) }
+        if (BoxVpnService.coreLogSink == null) return
+        coreLogQueue.offer(plain)
+        if (drainerScheduled.compareAndSet(false, true)) {
+            coreLogMainHandler.post(coreLogDrainer)
         }
     }
 
     private val ansiEscapeRe = Regex("\\[[0-9;]*[A-Za-z]")
     private val traceDebugRe = Regex("\\b(TRACE|DEBUG)\\b")
+
+    private val coreLogQueue: java.util.concurrent.LinkedBlockingQueue<String> by lazy {
+        java.util.concurrent.LinkedBlockingQueue()
+    }
+    private val drainerScheduled = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /// **§050 single Runnable** — создаётся ОДИН раз при first access (lazy),
+    /// reused на каждый `Handler.post(coreLogDrainer)`. Никаких per-call
+    /// Lambda/anonymous class allocations. Hold strong ref в field.
+    private val coreLogDrainer: Runnable by lazy {
+        Runnable {
+            drainerScheduled.set(false)
+            val sink = BoxVpnService.coreLogSink ?: run { coreLogQueue.clear(); return@Runnable }
+            // Drain все что accumulated. Yield безопасен — main looper его сам
+            // пере-планирует если drain длинный.
+            while (true) {
+                val line = coreLogQueue.poll() ?: break
+                runCatching { sink.success(line) }
+            }
+        }
+    }
 
     private val coreLogMainHandler by lazy {
         android.os.Handler(android.os.Looper.getMainLooper())

@@ -116,6 +116,10 @@ interface PlatformInterfaceWrapper : PlatformInterface {
     /// Reference SagerNet (1.13.11) имеет identical Java code и stable.
     /// Practical impact: `wifi_ssid:` / `wifi_bssid:` rules не работают —
     /// у нас в wizard их и нет. См. spec/tasks/049-singbox-wrapper-deep-audit/.
+    /// §050 final: F12.3 deferred — crash в gomobile cproxy `go_seq_from_refnum`
+    /// race (C-side abort до того как Java writeDebugMessage invoked).
+    /// `@Synchronized` на Java side не помогает потому что race ДО инвокации.
+    /// Fix требует gomobile patch или libbox 1.14-alpha. См. spec/050 findings.
     override fun readWIFIState(): WIFIState? = null
 
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
