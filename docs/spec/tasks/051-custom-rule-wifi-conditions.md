@@ -190,8 +190,246 @@ POST /rules?rebuild=true
 
 ## Acceptance
 
-- [ ] Round-trip JSON tests passing для inline + srs
-- [ ] Builder тесты подтверждают эмиссию `wifi_ssid` / `wifi_bssid` только при non-empty
-- [ ] `POST /rules` с wifi-полями → правило в storage → rebuild → правило в active config
-- [ ] Smoke на устройстве: создать rule через API, reconnect VPN, проверить что трафик при матче ssid идёт через объявленный outbound
-- [ ] Без regressions для существующих non-wifi rules (миграционный test проходит на pre-§051 fixture'ах)
+- [x] Round-trip JSON tests passing для inline + srs (Phase 1)
+- [x] Builder тесты подтверждают эмиссию `wifi_ssid` / `wifi_bssid` только при non-empty (Phase 1)
+- [x] `POST /rules` с wifi-полями → правило в storage → rebuild → правило в active config (Phase 1)
+- [x] Smoke на устройстве: создать rule через API, reconnect VPN, трафик direct'ом — `outbound/direct[direct-out]` для api.ipify.org (Phase 1, v13905)
+- [x] UI editor — chip-based section с Add current / Pick saved / Manual (Phase 2, v13912)
+- [x] Без regressions для существующих non-wifi rules (548 tests pass, ни одна fixture не сломалась)
+
+---
+
+# Phase 3 — Native cache + NetworkCallback (perf optimization)
+
+## Цель
+
+`PlatformInterfaceWrapper.readWIFIState()` сейчас на каждый sing-box rule-evaluation делает binder IPC к `system_server` через `WifiManager.connectionInfo`. Sing-box при busy traffic дёргает callback десятки раз в секунду (один call на каждый TCP setup, DNS query). Каждый call — JNI crossing + IPC + parcel marshal/unmarshal.
+
+Cache + event-driven invalidation убирает binder из горячего пути: чтение становится O(1) read of volatile field. Bonus — auto-record `wifi_history` при изменении сети (не нужен manual «Add current» в editor, история наполняется естественно).
+
+## Архитектура
+
+```
+┌─ BoxApplication ─────────────────────────────────┐
+│                                                  │
+│  WifiStateCache (singleton)                      │
+│  ├─ @Volatile var current: WIFIState?            │
+│  ├─ @Volatile var lastFetchedAt: Long            │
+│  ├─ fun read(): WIFIState?      ← hot path       │
+│  ├─ fun refresh()               ← event-triggered│
+│  └─ fun clear()                                  │
+│                                                  │
+│         ▲ subscribes                             │
+│         │                                        │
+│  ConnectivityManager.NetworkCallback             │
+│  ├─ NetworkRequest TRANSPORT_WIFI                │
+│  ├─ onAvailable     → cache.refresh()            │
+│  ├─ onCapabilitiesChanged → cache.refresh()      │
+│  └─ onLost          → cache.clear()              │
+│                                                  │
+└──────────────────────────────────────────────────┘
+            ▲
+            │ readWIFIState()
+            │
+┌─ PlatformInterfaceWrapper ───────────────────────┐
+│  override fun readWIFIState(): WIFIState? =      │
+│      WifiStateCache.read()                       │
+└──────────────────────────────────────────────────┘
+```
+
+## Cache
+
+```kotlin
+object WifiStateCache {
+    @Volatile private var _current: WIFIState? = null
+    @Volatile private var _lastFetchedAt: Long = 0L
+
+    /// TTL fallback на случай missed callbacks (paranoid).
+    private const val MAX_STALE_MS = 30_000L
+
+    fun read(): WIFIState? {
+        val now = System.currentTimeMillis()
+        val cur = _current
+        if (cur != null && now - _lastFetchedAt < MAX_STALE_MS) {
+            return cur
+        }
+        // Stale or empty → blocking refresh on caller thread (rare path).
+        // Sing-box callback может приехать ДО первого NetworkCallback fire
+        // — тогда первый readWIFIState() пройдёт IPC, последующие cached.
+        return refresh()
+    }
+
+    @Synchronized
+    fun refresh(): WIFIState? {
+        val info = try {
+            BoxApplication.wifiManager.connectionInfo
+        } catch (_: SecurityException) {
+            _current = null
+            _lastFetchedAt = System.currentTimeMillis()
+            return null
+        } catch (_: RuntimeException) {
+            _current = null
+            _lastFetchedAt = System.currentTimeMillis()
+            return null
+        } ?: run {
+            _current = null
+            _lastFetchedAt = System.currentTimeMillis()
+            return null
+        }
+
+        var ssid = info.ssid
+        if (ssid == "<unknown ssid>") {
+            _current = WIFIState("", "")
+            _lastFetchedAt = System.currentTimeMillis()
+            return _current
+        }
+        if (ssid.startsWith("\"") && ssid.endsWith("\""))
+            ssid = ssid.substring(1, ssid.length - 1)
+        val bssid = info.bssid?.lowercase() ?: ""
+        val newState = WIFIState(ssid, bssid)
+        val changed = (_current?.ssid != ssid) || (_current?.bssid != bssid)
+        _current = newState
+        _lastFetchedAt = System.currentTimeMillis()
+        if (changed) onChanged(ssid, bssid)
+        return newState
+    }
+
+    @Synchronized
+    fun clear() {
+        _current = null
+        _lastFetchedAt = System.currentTimeMillis()
+    }
+
+    /// Triggered ровно когда network actually changed. Auto-history hook.
+    private fun onChanged(ssid: String, bssid: String) {
+        if (ssid.isEmpty()) return
+        // Post to main looper, dispatch via MethodChannel в Dart →
+        // SettingsStorage.addToWifiHistory(ssid, bssid).
+        WifiHistoryBridge.notify(ssid, bssid)
+    }
+}
+```
+
+## NetworkCallback registration
+
+```kotlin
+class WifiNetworkObserver(private val ctx: Context) {
+    private val cm = ctx.getSystemService(ConnectivityManager::class.java)
+    private val callback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            WifiStateCache.refresh()
+        }
+        override fun onCapabilitiesChanged(
+            network: Network,
+            caps: NetworkCapabilities,
+        ) {
+            // Capabilities update fires при roaming, SSID change, etc.
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                WifiStateCache.refresh()
+            }
+        }
+        override fun onLost(network: Network) {
+            WifiStateCache.clear()
+        }
+    }
+
+    fun start() {
+        val req = NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            .build()
+        cm.registerNetworkCallback(req, callback)
+    }
+
+    fun stop() = cm.unregisterNetworkCallback(callback)
+}
+```
+
+Регистрируется в `BoxApplication.onCreate` (process scope). Lifecycle = process lifecycle, не VPN service. Это правильно — wifi state нужно знать ДО старта sing-box (config может содержать wifi rules).
+
+## Auto-history hook
+
+```kotlin
+object WifiHistoryBridge {
+    private var channel: MethodChannel? = null
+
+    fun attach(ch: MethodChannel) { channel = ch }
+
+    fun notify(ssid: String, bssid: String) {
+        // Run on main thread (MethodChannel requirement).
+        Handler(Looper.getMainLooper()).post {
+            channel?.invokeMethod("onWifiSeen", mapOf(
+                "ssid" to ssid,
+                "bssid" to bssid,
+            ))
+        }
+    }
+}
+```
+
+Dart-side в `BoxVpnClient` или новый сервис (`WifiHistoryListener`):
+
+```dart
+_channel.setMethodCallHandler((call) async {
+  if (call.method == 'onWifiSeen') {
+    final m = (call.arguments as Map).cast<String, String>();
+    await SettingsStorage.addToWifiHistory(
+      m['ssid'] ?? '',
+      m['bssid'] ?? '',
+    );
+  }
+});
+```
+
+`addToWifiHistory` уже идемпотентен — upsert по `(ssid, bssid)` обновляет `last_seen` без дубликата. Cap 50, evict oldest.
+
+## Resource budget
+
+| Что | Стоимость |
+|---|---|
+| **Cache read** (hot path) | volatile read + nullness check + age check. Микросекунды. |
+| **Cache miss / stale** | один binder IPC, ~ms. Только при первом читателе после ChangeEvent или после 30s idle. |
+| **NetworkCallback** | event-driven, no polling. Стоимость = wakelock на момент event'а (микросекунды). |
+| **MethodChannel notify** | при actual network change (роуминг, переподключение). Реально 1-5 раз в день у обычного юзера. Бесплатно. |
+| **Storage write** | `addToWifiHistory` — JSON serialize 50 entries × ~100 bytes = 5KB write. На каждое actual change. |
+
+Бюджет: одна операция write на смену сети. Read из cache бесплатен.
+
+## Edge cases
+
+| Кейс | Поведение |
+|---|---|
+| Permissions revoked mid-session | `refresh()` ловит `SecurityException` → cache cleared → sing-box получает null. Existing F12.3 fix. |
+| App startup ДО первого NetworkCallback fire | Первый `readWIFIState()` идёт через `refresh()` (cache empty + stale TTL=0) → один IPC, потом cached. |
+| Wi-Fi off / cellular only | NetworkCallback `onLost` → cache cleared → readWIFIState returns null. |
+| Roaming между BSSID одного SSID | `onCapabilitiesChanged` triggers refresh → новый bssid в кеше. История получает новую entry с тем же ssid но другим bssid. |
+| Hidden SSID (`<unknown ssid>`) | refresh пишет `WIFIState("", "")` → onChanged не вызывается (ssid пустой). Не засирает историю. |
+| Permission revoked: sing-box busy при revoke | Race: пока sing-box hot-path читает cache, NetworkCallback может ещё не fire'нуть. Read возвращает stale value. После TTL 30s → stale-refresh → SecurityException → null. Acceptable (короткое окно мисматча). |
+
+## Tests
+
+- Unit-test для `WifiStateCache.refresh()` с mock'ed `WifiManager`:
+  - Returns valid info → cache set + `onChanged` fires
+  - Same info повторно → `onChanged` НЕ fires
+  - SecurityException → cache cleared, no `onChanged`
+  - `<unknown ssid>` → cache set to empty, no `onChanged`
+- Integration на устройстве:
+  - Включить wifi rule в config + connect VPN
+  - Ходить sing-box logs (Forward sing-box logs ON) — наблюдать что binder IPC count к WifiManager не растёт пропорционально connection rate (нужен `dumpsys binder_calls_stats`)
+  - Toggle wifi off/on — наблюдать что cache clear → set цикл работает + history grows naturally
+
+## Acceptance
+
+- [ ] `WifiStateCache` singleton + unit tests
+- [ ] `WifiNetworkObserver` registered в `BoxApplication.onCreate`, unregister при `onTerminate`
+- [ ] `PlatformInterfaceWrapper.readWIFIState()` теперь cache.read() — не binder IPC на каждый call
+- [ ] `WifiHistoryBridge` MethodChannel + Dart handler в `BoxVpnClient` (или свой сервис)
+- [ ] `wifi_history` растёт автоматически при смене сети (без вызова Add current)
+- [ ] Permission revoke → cache cleared → null gracefully (не crash)
+- [ ] Manual «Add current» в editor продолжает работать (тот же `getCurrentWifiInfo` channel — может стать `cache.read()` под капотом, или остаться форс-IPC для freshness)
+- [ ] Без regression: 548 tests + smoke на устройстве
+
+## Out of scope (Phase 4+)
+
+- **Per-app wifi history** — отдельная entry на каждое приложение которое матчилось на эту сеть. Нет use-case.
+- **Geo correlation** — «эта SSID = домашняя сеть» через bssid → фиксированный outbound preset. Слишком complex для wifi rules.
+- **Multi-network simultaneous** (Wi-Fi + Cellular одновременно) — sing-box один SSID отдаёт через `connectionInfo`, не multi. Если понадобится — отдельный API.
