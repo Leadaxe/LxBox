@@ -128,13 +128,15 @@ buildConfig(lists, settings)
   │ template (assets/wizard_template.json)
   │ post-steps (в порядке выполнения):
   │   1. server_list_build   → outbounds/endpoints из ServerList
-  │   2. applyPresetBundles  → expansion CustomRule(kind: preset),
-  │                            merge → registry + extra DNS (spec 033)
-  │   3. applyCustomRules    → inline + local-SRS правила (spec 030)
-  │   4. flush registry      → config.route.{rule_set, rules}
-  │   5. applyTlsFragment, applyMixedCaseSni  → TLS-обфускация (spec 028)
-  │   6. applyCustomDns      → dns.servers/rules из template + bundle-extras
-  │   7. validator → ValidationResult{ fatal[], warnings[] }
+  │   2. applyAllCustomRules → единый проход по customRules в storage order
+  │                            (dispatch по kind → preset/inline/srs handler);
+  │                            registry получает rule_sets и routing rules
+  │                            в порядке storage; DNS-аспекты — в UnifiedApplyResult
+  │                            (spec 030 + 033 + 062)
+  │   3. flush registry      → config.route.{rule_set, rules}
+  │   4. applyTlsFragment, applyMixedCaseSni  → TLS-обфускация (spec 028)
+  │   5. applyCustomDns      → dns.servers/rules из template + bundle-extras
+  │   6. validator → ValidationResult{ fatal[], warnings[] }
   ▼
 BuildResult{ config, configJson, validation, emitWarnings, generatedVars }
   │
@@ -237,14 +239,21 @@ wizard_template.json
   │  load (TemplateLoader)  →  WizardTemplate (в памяти, shared)
   │
   ├── config       ──► _substituteVars(@global vars)                          ──► base config
-  ├── selectable_rules (bundle)
-  │    └── + CustomRule(kind: preset).varsValues
-  │         │  expandPreset (pure)                                            ──► PresetFragments
-  │         │  mergeFragments (identical-skip / first-wins)                   ──► BundleMerge
-  │         └─ applyPresetBundles  → rule_set/routes → registry; DNS → extras
-  ├── selectable_rules (legacy)
-  │    └── + CustomRule(kind: inline|srs)
-  │         └─ applyCustomRules    → rule_set/routes → registry (auto-suffix)
+  ├── customRules (один список, mixed kind — preset/inline/srs)
+  │    │  applyAllCustomRules — единый проход в storage order
+  │    │  с dispatch по kind. Cross-preset rule_set dedup через
+  │    │  RuleSetRegistry.tryRegisterRuleSet (identical-skip / first-wins).
+  │    │  (spec 062 — раньше preset/inline шли двумя проходами и cross-kind
+  │    │  ordering между ними был потерян)
+  │    ├── kind: preset
+  │    │    └─ expandPreset (pure) ──► PresetFragments
+  │    │       └─ register rule_sets in registry; routing rule (if route enabled);
+  │    │           DNS aspect (if dns enabled) → UnifiedApplyResult.{dnsRules, dnsServers}
+  │    ├── kind: inline
+  │    │    └─ headless rule_set с непустыми match-полями + routing rule
+  │    │       (auto-suffix tag через registry.addRuleSet) (spec 030)
+  │    └── kind: srs
+  │         └─ local rule_set по cached path + routing rule (spec 030)
   ├── dns_options  ──► applyCustomDns(template + extras)                      ──► config.dns
   └── preset_groups ──► _buildPresetGroups(vpn-1..3, @auto)                   ──► config.outbounds
 ```

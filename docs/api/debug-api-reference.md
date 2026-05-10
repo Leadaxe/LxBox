@@ -250,6 +250,13 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   -d "$ORDER_JSON" "$BASE/rules/reorder"
 ```
 
+Storage order = sing-box `route.rules[]` order (за вычетом 3 system rules
+`resolve` / `sniff` / `dns hijack` которые builder всегда вставляет первыми).
+Rules матчатся **first-wins** сверху вниз, так что reorder напрямую влияет
+на приоритет. Order соблюдается **между kind'ами** (`preset` / `inline` /
+`srs`) — раньше builder делал 2 прохода и cross-kind ordering терялся, в
+[§062](../spec/tasks/062-custom-rules-unified-order.md) починено.
+
 **Shape CustomRule body** (все optional кроме `name`):
 ```json
 {
@@ -545,22 +552,54 @@ curl -s -H "$HDR" "$BASE/files/local?name=stderr.log" | tail -30
 
 ## Backup — `/backup/*`
 
+Symmetric с UI `BackupScreen` (см. [§040 spec](../spec/features/040%20backup%20restore%20ui/spec.md)). Wire-format — single, без `version` поля; legacy `{vars, server_lists}` на корне больше не поддерживается.
+
 | Endpoint | Что отдаёт / принимает |
 |---|---|
-| `GET /backup/export?include=config,vars,subs` | Pure-data snapshot. `include` опц.; default — все три |
-| `POST /backup/import?merge=&rebuild=` | Восстановление. Body `{config?, vars?, server_lists?}`. Совместим с `/diag/dump` (diag-поля игнорятся). |
+| `GET /backup/export?include=storage,vpn_settings` | Snapshot. `include` опц., default — обе части |
+| `POST /backup/import?merge=&rebuild=` | Восстановление. Body `{storage?, vpn_settings?}` |
+
+**Format**:
+```json
+{
+  "app": "lxbox",
+  "kind": "backup",
+  "created_at": "2026-05-10T...",
+  "source_app_version": "1.7.3+32",
+  "storage": { ...lxbox_settings.json целиком: vars, server_lists,
+               custom_rules, tun_apps, enabled_groups, route_final, ... },
+  "vpn_settings": {
+    "auto_start": false,
+    "keep_on_exit": false,
+    "background_mode": "never",
+    "core_logs_enabled": false,
+    "allow_bypass": false
+  }
+}
+```
+
+- **`storage`** — глубокая копия `lxbox_settings.json` (все top-level keys плюс nested `vars` map). Включает custom_rules, tun_apps, dns_options, wifi_history и любые будущие top-level keys без правок API.
+- **`vpn_settings`** — native-side `boxvpn_boot` SharedPreferences (BootReceiver читает at boot-time из Kotlin, не вынесено в Flutter storage).
 
 ```bash
-# Бэкап
+# Бэкап (всё)
 curl -s -H "$HDR" "$BASE/backup/export" > /tmp/lxbox-backup.json
 
-# Восстановление с автоматическим rebuild config
+# Только Flutter storage без VPN system toggles
+curl -s -H "$HDR" "$BASE/backup/export?include=storage" > /tmp/lxbox-storage.json
+
+# Восстановление + rebuild config (replace)
 curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   --data-binary @/tmp/lxbox-backup.json \
   "$BASE/backup/import?rebuild=true"
+
+# Merge mode — top-level upsert (vars upsert, остальные ключи overwrite, отсутствующие в файле — keep)
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  --data-binary @/tmp/lxbox-backup.json \
+  "$BASE/backup/import?merge=true"
 ```
 
-`merge=false` (default) — replace; `merge=true` — append/upsert. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
+`merge=false` (default) — replace; `merge=true` — top-level upsert. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
 
 ---
 

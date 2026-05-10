@@ -8,6 +8,18 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **§062 — custom_rules order был broken между kind-ами (preset/inline/srs)** ([§062 spec](docs/spec/tasks/062-custom-rules-unified-order.md)). `SettingsStorage.custom_rules` это **один список** с mixed `kind`, и UI/Debug API (`POST /rules/reorder`) предполагали что storage order = order matching в sing-box `route.rules[]`. Builder ломал это: вызывал `applyPresetBundles` (только preset) → `applyCustomRules` (только inline/srs) последовательно, поэтому в финальном config все preset правила оказывались **перед** всеми inline/srs независимо от storage order. Юзер ставил `RU apps inline` между `Private IPs preset` и `Russian domains preset`, но в sing-box config inline всегда уезжал в самый конец. Reorder API «провёртывался вхолостую».
+  - **Фикс** — новый `applyAllCustomRules` обходит rules в одном цикле с dispatch по kind. Per-rule logic вынесена в private `_applyPresetSingle` / `_applyInlineSingle` / `_applySrsSingle`. Старые public `applyPresetBundles` / `applyCustomRules` остались как **shim** через те же private — backward-compat для тестов.
+  - **Cross-preset rule_set dedup** переехал с `mergeFragments` на `RuleSetRegistry.tryRegisterRuleSet` (identical-skip / first-wins warning) — работает естественно при per-rule обходе.
+  - **Verified on device**: storage `[Block Ads, Private IPs, RU apps inline, Russian domains preset, ...]` теперь даёт config `[ads-all, ip_is_private, RU apps, ru-domains, ...]` — порядок 1-к-1 (за вычетом 3 system rules `resolve`/`sniff`/`dns hijack` в голове).
+  - Tests: 614 → 620, +6 в `test/services/builder/apply_all_custom_rules_test.dart` покрывают cross-kind order, mixed kinds, identical-skip + cross-kind, DNS aspect.
+
+### Added
+
+- **Info tooltip на `Allow VPN bypass` toggle** ([settings_screen.dart](app/lib/screens/settings_screen.dart)). Tap-trigger `Tooltip` с `info_outline` icon рядом с заголовком — объясняет: что делает (`ConnectivityManager.bindProcessToNetwork()` bypass), когда полезно (банкинг, captive portal, системные сервисы), что значит off (strict tunnel), что применяется на next VPN connect. Тот же паттерн что в DNS settings (`triggerMode: tap`, 12-сек показ).
+
 ### Refactor
 
 - **§053 Stage 2 + Stage 3 — sections + tabs + state controller выделены из `custom_rule_edit_screen.dart`** ([§053 spec](docs/spec/tasks/053-custom-rule-editor-split.md)).
