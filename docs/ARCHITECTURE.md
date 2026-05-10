@@ -1129,6 +1129,9 @@ Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`]
 | 042 | Health watchdog (heartbeat metrics + auto-recovery) — *Draft* |
 | 043 | AppLog per-source quotas (in-memory: app=300, core=500) |
 | **044** | **Per-app traffic profiler** (recording per-app DNS/connections/routing chain — Live/Domains/IPs/Connections sub-tabs, connection-issue detection, Debug API + SSE) |
+| 045 | TLS ECH (Encrypted Client Hello) — anti-DPI extension прячущий SNI целиком — *Draft* |
+| 046 | Tunnel apps split-tunneling (per-app include/exclude через VpnService.Builder) |
+| 047 | Public Intent API (Tasker / Macrodroid automation через Android broadcast intents) — *Draft* |
 
 Дополнительно — летопись отдельных рабочих циклов (баги, рефакторинги): [`docs/spec/tasks/`](./spec/tasks/). Процессы (например, ночная работа): [`docs/spec/processes/`](./spec/processes/).
 
