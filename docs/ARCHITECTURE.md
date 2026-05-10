@@ -779,14 +779,13 @@ Pull-sync работает независимо от значения keep-on-ex
 
 #### Deep-links между tab'ами и settings (§052)
 
-Tab'ы которые depend на глобальном toggle в settings содержат в overflow (⋮) deep-link на соответствующий screen — юзер видит «0 events» / «mode off» и за 1 тап попадает туда где toggle включается:
+Tab'ы которые depend на глобальном toggle в settings (core_logs_enabled / VPN settings vars) умеют open соответствующий screen с правильно открытым tab'ом. Реализация: `initialTab` parameter на `AppSettingsScreen` / `SettingsScreen`, `DefaultTabController.initialIndex: widget.initialTab.clamp(0, length-1)`.
 
-- **Statistics → Live → ⋮ → "Diagnostics settings"** → `AppSettingsScreen(initialTab: 1)` — Live recording показывает 0 events если `core_logs_enabled=false`.
-- **Statistics → Per-app → ⋮ → "Diagnostics settings"** → `AppSettingsScreen(initialTab: 1)` — DNS resolves в profile приходят только когда core forwarding ON.
-- **Routing → Tunnel apps → ⋮ → "VPN settings (Core)"** → `SettingsScreen(initialTab: 1)` — открывает Core (не System): юзер настраивает Tunnel apps mode и хочет рядом mtu / log_level / dns_final.
+Два паттерна — **contextual banner** (state-зависимый hint) и **overflow item** (state-independent jump):
+
+- **Statistics → Live + Per-app → contextual `CoreLogsHintBanner`** ([core_logs_hint_banner.dart](../app/lib/widgets/core_logs_hint_banner.dart)). Inline banner widget показывается **только когда `core_logs_enabled=false`**; self-hides при включении (auto-refresh на `AppLifecycleState.resumed`). Split hit-zone: левая зона (i + «DNS / router events off») → tooltip с объяснением что без core logs DNS resolves пропадают и process attribution ухудшается до Clash poll'а; правая («turn on Forward sing-box logs» + chevron) → deep-link в `AppSettingsScreen(initialTab: 1)` с auto-scroll и highlight нужного toggle'а. Это лучше чем PopupMenu overflow: явно виден когда нужен, исчезает когда не нужен.
+- **Routing → Tunnel apps → ⋮ → "VPN settings (Core)"** → `SettingsScreen(initialTab: 1)`. State-independent jump (всегда полезно ходить из Tunnel apps к Core vars), overflow PopupMenu уместен. Открывает Core а не System — юзер настраивает Tunnel apps mode и хочет рядом mtu / log_level / dns_final.
 - **Drawer → Debug → ⋮ → "Diagnostics settings"** → `AppSettingsScreen(initialTab: 1)` — fast-path на Quit&reopen после toggle Forward sing-box logs.
-
-Реализация: `initialTab` parameter на `AppSettingsScreen` / `SettingsScreen`, `DefaultTabController.initialIndex: widget.initialTab.clamp(0, length-1)`.
 
 ---
 
