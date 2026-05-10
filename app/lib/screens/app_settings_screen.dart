@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../main.dart';
-import '../models/background_mode.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/transport/server.dart';
 import '../services/haptic_service.dart';
@@ -12,6 +11,7 @@ import '../services/relative_time.dart';
 import '../services/settings_storage.dart';
 import '../services/update_checker.dart';
 import '../services/url_launcher.dart' as ul;
+import '../widgets/wifi_permission_dialog.dart';
 import '../vpn/box_vpn_client.dart';
 import 'about_screen.dart';
 import 'backup_screen.dart';
@@ -30,12 +30,15 @@ class AppSettingsScreen extends StatefulWidget {
 class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindingObserver {
   final _vpn = BoxVpnClient();
   bool _autoStart = false;
-  bool _keepOnExit = false;
   bool _autoRebuild = false;
   bool _haptic = true;
   bool _batteryWhitelisted = false;
   bool _notificationsEnabled = true;
-  BackgroundMode _backgroundMode = BackgroundMode.never;
+  // §051 — wifi-rules permissions live status (refresh on resume).
+  bool _backgroundLocationGranted = false;
+  bool _nearbyWifiGranted = false;
+  // §052 Phase 2: `_keepOnExit` и `_backgroundMode` переехали в SettingsScreen
+  // (VPN Settings → System tab) вместе с UI controls. Здесь больше не нужны.
   bool _autoPing = true;
   bool _autoUpdateSubs = true;
   bool _autoCheckUpdates = true;
@@ -50,6 +53,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
 
   // §043 sing-box core logs forwarding (требует restart Service'а)
   bool _coreLogsEnabled = false;
+  // §049 F15 `Allow VPN bypass` — toggle живёт в VPN Settings screen
+  // (settings_screen.dart) рядом с template-vars sing-box core engine'а.
+  // Deep-link из Routing → Tunnel apps overflow.
   // §037 config_locked_for_debug — pin'ит config.json от перезаписи UI-rebuild'ом.
   bool _configLocked = false;
   // §049 F15 `Allow VPN bypass` toggle перенесён в Routing → Tunnel apps tab
@@ -80,13 +86,13 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
 
   Future<void> _loadAutoStart() async {
     final auto = await _vpn.getAutoStart();
-    final keep = await _vpn.getKeepOnExit();
     final rebuild = await SettingsStorage.getVar('auto_rebuild', 'true');
     final haptic = await SettingsStorage.getVar(HapticService.prefsKey, 'true');
     final autoPing = await SettingsStorage.getVar('auto_ping_on_start', 'true');
     final battery = await _vpn.isIgnoringBatteryOptimizations();
     final notifications = await _vpn.areNotificationsEnabled();
-    final bgMode = await _vpn.getBackgroundMode();
+    final bgLocation = await ul.UrlLauncher.checkBackgroundLocationPermission();
+    final nearbyWifi = await ul.UrlLauncher.checkNearbyWifiPermission();
     final autoUpdateSubs = await SettingsStorage.getAutoUpdateSubs();
     final autoCheckUpdates = await SettingsStorage.getAutoCheckUpdates();
     final debugEnabled = await SettingsStorage.getDebugEnabled();
@@ -97,13 +103,13 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     if (mounted) {
       setState(() {
         _autoStart = auto;
-        _keepOnExit = keep;
         _autoRebuild = rebuild == 'true';
         _haptic = haptic != 'false';
         _autoPing = autoPing != 'false';
         _batteryWhitelisted = battery;
         _notificationsEnabled = notifications;
-        _backgroundMode = bgMode;
+        _backgroundLocationGranted = bgLocation;
+        _nearbyWifiGranted = nearbyWifi;
         _autoUpdateSubs = autoUpdateSubs;
         _autoCheckUpdates = autoCheckUpdates;
         _debugEnabled = debugEnabled;
@@ -195,12 +201,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     });
     await SettingsStorage.setDebugPort(port);
     await applyDebugApiSettings();
-  }
-
-  Future<void> _applyBackgroundMode(BackgroundMode? mode) async {
-    if (mode == null || mode == _backgroundMode) return;
-    setState(() => _backgroundMode = mode);
-    await _vpn.setBackgroundMode(mode);
   }
 
   /// §043: toggle forwarding sing-box логов в наш AppLog как `DebugSource.core`.
@@ -306,12 +306,59 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   Future<void> _refreshBatteryStatus() async {
     final battery = await _vpn.isIgnoringBatteryOptimizations();
     final notifications = await _vpn.areNotificationsEnabled();
+    final bgLocation = await ul.UrlLauncher.checkBackgroundLocationPermission();
+    final nearbyWifi = await ul.UrlLauncher.checkNearbyWifiPermission();
     if (mounted) {
       setState(() {
         _batteryWhitelisted = battery;
         _notificationsEnabled = notifications;
+        _backgroundLocationGranted = bgLocation;
+        _nearbyWifiGranted = nearbyWifi;
       });
     }
+  }
+
+  /// §051 — tap на «Nearby Wi-Fi» row. Симметрично Notifications row:
+  /// - granted → App Permissions screen (юзер видит/может revoke)
+  /// - denied  → shared `WifiPermissionDialog` (объяснение + runtime prompt
+  ///             + Settings fallback)
+  /// State после возврата из Settings рефрешится через
+  /// `didChangeAppLifecycleState` → `_refreshBatteryStatus`.
+  Future<void> _onNearbyWifiTap() async {
+    final granted = await ul.UrlLauncher.checkNearbyWifiPermission();
+    if (granted) {
+      await ul.UrlLauncher.openAppSettings();
+      return;
+    }
+    if (!mounted) return;
+    await WifiPermissionDialog.show(
+      context,
+      missing: const ['android.permission.NEARBY_WIFI_DEVICES'],
+    );
+    final after = await ul.UrlLauncher.checkNearbyWifiPermission();
+    if (mounted) setState(() => _nearbyWifiGranted = after);
+  }
+
+  /// §051 — tap на «Location (background)» row.
+  /// - granted → App Permissions screen
+  /// - denied  → shared `WifiPermissionDialog` (для BACKGROUND_LOCATION
+  ///             runtime prompt бесполезен на API 30+, dialog покажет
+  ///             только «Open Settings»).
+  Future<void> _onBackgroundLocationTap() async {
+    final granted =
+        await ul.UrlLauncher.checkBackgroundLocationPermission();
+    if (granted) {
+      await ul.UrlLauncher.openAppSettings();
+      return;
+    }
+    if (!mounted) return;
+    await WifiPermissionDialog.show(
+      context,
+      missing: const ['android.permission.ACCESS_BACKGROUND_LOCATION'],
+    );
+    final after =
+        await ul.UrlLauncher.checkBackgroundLocationPermission();
+    if (mounted) setState(() => _backgroundLocationGranted = after);
   }
 
   /// Preset-инструкции перед переходом в system App info — OEM'ы прячут
@@ -352,16 +399,19 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     return AnimatedBuilder(
       animation: themeNotifier,
       builder: (context, _) {
+        // §052 Phase 2 — Background tab удалён:
+        // - Keep VPN on exit + Tunnel sleep mode переехали в VPN Settings → System
+        // - Permissions block (Battery / Notifications / Location / Wi-Fi / App info)
+        //   переехал в Diagnostics tab
         return DefaultTabController(
-          length: 3,
-          initialIndex: widget.initialTab.clamp(0, 2),
+          length: 2,
+          initialIndex: widget.initialTab.clamp(0, 1),
           child: Scaffold(
             appBar: AppBar(
               title: const Text('App Settings'),
               bottom: const TabBar(
                 tabs: [
                   Tab(text: 'General'),
-                  Tab(text: 'Background'),
                   Tab(text: 'Diagnostics'),
                 ],
               ),
@@ -369,7 +419,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
             body: TabBarView(
               children: [
                 _buildGeneralTab(context),
-                _buildBackgroundTab(context),
                 _buildDiagnosticsTab(context),
               ],
             ),
@@ -538,21 +587,13 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     );
   }
 
-  Widget _buildBackgroundTab(BuildContext context) {
+  Widget _buildDiagnosticsTab(BuildContext context) {
     return ListView(
       padding: _tabPadding(context),
       children: [
-        SwitchListTile(
-          title: const Text('Keep VPN on exit'),
-          subtitle: const Text('VPN stays active when app is closed'),
-          secondary: const Icon(Icons.exit_to_app),
-          value: _keepOnExit,
-          onChanged: _loaded ? (val) {
-            setState(() => _keepOnExit = val);
-            unawaited(_vpn.setKeepOnExit(val));
-          } : null,
-        ),
-        const Divider(height: 32),
+        // §052 Phase 2 — Permissions block перенесён сюда из Background tab
+        // целиком, в том виде как был. Interactive ListTile с onTap-handlers
+        // — юзер может grant'ить permissions прямо отсюда.
         Text('System setup', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         ListTile(
@@ -587,6 +628,42 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: _onNotificationsTap,
         ),
+        // §051 — Wi-Fi rules permissions: BACKGROUND_LOCATION (API 29+) и
+        // NEARBY_WIFI_DEVICES (API 33+). Без них sing-box `wifi_ssid` /
+        // `wifi_bssid` правила не сматчатся (`WifiInfo.ssid` возвращает
+        // `<unknown ssid>`). См. spec/050 findings + spec/051.
+        ListTile(
+          leading: Icon(
+            _backgroundLocationGranted
+                ? Icons.location_on_outlined
+                : Icons.location_off_outlined,
+            color: _backgroundLocationGranted
+                ? Colors.green
+                : Theme.of(context).colorScheme.error,
+          ),
+          title: const Text('Location (background)'),
+          subtitle: Text(_backgroundLocationGranted
+              ? 'Granted — sing-box can read Wi-Fi state for routing rules'
+              : 'Required for Wi-Fi-based routing rules. Tap to grant.'),
+          trailing: const Icon(Icons.chevron_right, size: 18),
+          onTap: _onBackgroundLocationTap,
+        ),
+        ListTile(
+          leading: Icon(
+            _nearbyWifiGranted
+                ? Icons.wifi_outlined
+                : Icons.wifi_off_outlined,
+            color: _nearbyWifiGranted
+                ? Colors.green
+                : Theme.of(context).colorScheme.error,
+          ),
+          title: const Text('Nearby Wi-Fi devices'),
+          subtitle: Text(_nearbyWifiGranted
+              ? 'Granted — real SSID/BSSID accessible'
+              : 'Android 13+ requires this for SSID. Tap to grant.'),
+          trailing: const Icon(Icons.chevron_right, size: 18),
+          onTap: _onNearbyWifiTap,
+        ),
         ListTile(
           leading: const Icon(Icons.settings_applications_outlined),
           title: const Text('App info (OEM power settings)'),
@@ -594,82 +671,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
               'OEM-specific toggles to keep VPN alive in background.'),
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: _openAppInfoWithHint,
-        ),
-        const Divider(height: 32),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-          child: Row(
-            children: [
-              const Icon(Icons.bedtime_outlined, size: 20),
-              const SizedBox(width: 12),
-              Text('Tunnel sleep mode',
-                  style: Theme.of(context).textTheme.titleSmall),
-            ],
-          ),
-        ),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(48, 0, 16, 4),
-          child: Text(
-            'When to pause the tunnel to save battery. Takes effect on '
-            'next VPN connect.',
-            style: TextStyle(fontSize: 12),
-          ),
-        ),
-        RadioGroup<BackgroundMode>(
-          groupValue: _backgroundMode,
-          onChanged: (BackgroundMode? m) {
-            if (!_loaded) return;
-            unawaited(_applyBackgroundMode(m));
-          },
-          child: const Column(
-            children: [
-              RadioListTile<BackgroundMode>(
-                value: BackgroundMode.never,
-                title: Text('Never sleep (recommended)'),
-                subtitle: Text(
-                    'Tunnel is always active. Best reliability — pushes '
-                    'and long-lived sockets survive. Higher battery use.'),
-              ),
-              RadioListTile<BackgroundMode>(
-                value: BackgroundMode.lazy,
-                title: Text('Lazy sleep'),
-                subtitle: Text(
-                    'Pause only in deep Doze (screen off for a long '
-                    'time + no motion). Balanced.'),
-              ),
-              RadioListTile<BackgroundMode>(
-                value: BackgroundMode.always,
-                title: Text('Aggressive battery saving'),
-                subtitle: Text(
-                    'Pause tunnel whenever screen turns off. Max '
-                    'battery savings, but pushes, incoming calls and '
-                    'background sync stop until unlock.'),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDiagnosticsTab(BuildContext context) {
-    return ListView(
-      padding: _tabPadding(context),
-      children: [
-        Text('Granted permissions',
-            style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        _permissionRow(
-          context,
-          ok: _batteryWhitelisted,
-          okLabel: 'Battery optimization: Unrestricted',
-          badLabel: 'Battery optimization: Restricted',
-        ),
-        _permissionRow(
-          context,
-          ok: _notificationsEnabled,
-          okLabel: 'Notifications: Allowed',
-          badLabel: 'Notifications: Blocked',
         ),
         const Divider(height: 32),
         Text('Developer', style: Theme.of(context).textTheme.titleMedium),
@@ -815,21 +816,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
 
   /// Compact read-only row for diagnostics — icon + status text, not tappable.
   /// Actions (fix/grant) живут в Background tab — здесь только статус.
-  Widget _permissionRow(
-    BuildContext context, {
-    required bool ok,
-    required String okLabel,
-    required String badLabel,
-  }) {
-    return ListTile(
-      dense: true,
-      leading: Icon(
-        ok ? Icons.check_circle : Icons.cancel,
-        color: ok ? Colors.green : Theme.of(context).colorScheme.error,
-      ),
-      title: Text(ok ? okLabel : badLabel),
-    );
-  }
+  // §052 Phase 2: `_permissionRow` (read-only status row) удалён вместе с
+  // переносом permissions block из `_buildBackgroundTab` → `_buildDiagnosticsTab`.
+  // Permissions block теперь использует interactive ListTile с onTap-handlers
+  // (как было в Background) — read-only summary не нужен, всё в одном месте.
 }
 
 /// "Last check: …" + Check now-кнопка под Updates-toggle. Подписан на

@@ -86,6 +86,22 @@ class MainActivity : FlutterActivity() {
                         } else true
                         result.success(granted)
                     }
+                    "checkBackgroundLocationPermission" -> {
+                        // API 29+: ACCESS_BACKGROUND_LOCATION required для
+                        // `WifiManager.connectionInfo` из background. Pre-Q —
+                        // covered by ACCESS_FINE_LOCATION (implicit). На API 30+
+                        // permission можно выдать ТОЛЬКО через Settings, не runtime.
+                        val granted = if (android.os.Build.VERSION.SDK_INT >= 29) {
+                            checkSelfPermission(
+                                "android.permission.ACCESS_BACKGROUND_LOCATION",
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        } else {
+                            checkSelfPermission(
+                                "android.permission.ACCESS_FINE_LOCATION",
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        }
+                        result.success(granted)
+                    }
                     "requestNearbyWifiPermission" -> {
                         // Trigger system runtime prompt for NEARBY_WIFI_DEVICES.
                         // Async — Flutter must re-check via `checkNearbyWifiPermission`.

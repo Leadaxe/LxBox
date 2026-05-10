@@ -33,6 +33,10 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         if (r.packages.isNotEmpty) 'packages': r.packages,
         if (r.protocols.isNotEmpty) 'protocols': r.protocols,
         if (r.ipIsPrivate) 'ip_is_private': true,
+        // §051 — wifi-условия. Empty списки скрываем для consistency
+        // с другими conditional полями (domains, packages, etc.).
+        if (r.wifiSsids.isNotEmpty) 'wifi_ssids': r.wifiSsids,
+        if (r.wifiBssids.isNotEmpty) 'wifi_bssids': r.wifiBssids,
         'outbound': r.outbound,
       };
     case CustomRuleSrs():
@@ -46,6 +50,8 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         if (r.packages.isNotEmpty) 'packages': r.packages,
         if (r.protocols.isNotEmpty) 'protocols': r.protocols,
         if (r.ipIsPrivate) 'ip_is_private': true,
+        if (r.wifiSsids.isNotEmpty) 'wifi_ssids': r.wifiSsids,
+        if (r.wifiBssids.isNotEmpty) 'wifi_bssids': r.wifiBssids,
         'outbound': r.outbound,
         'srs': {
           'cached': cachedPath != null,

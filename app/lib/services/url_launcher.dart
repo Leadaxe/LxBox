@@ -74,4 +74,18 @@ class UrlLauncher {
       // ignore
     }
   }
+
+  /// True when ACCESS_BACKGROUND_LOCATION (API 29+) is granted, или
+  /// ACCESS_FINE_LOCATION (API 28-) на старых Android. Required для чтения
+  /// `WifiInfo` из foreground service — sing-box `wifi_ssid`/`wifi_bssid`
+  /// rules не сматчатся без этого permission.
+  static Future<bool> checkBackgroundLocationPermission() async {
+    try {
+      final granted = await _channel
+          .invokeMethod<bool>('checkBackgroundLocationPermission');
+      return granted ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
 }

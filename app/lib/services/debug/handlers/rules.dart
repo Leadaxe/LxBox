@@ -116,6 +116,13 @@ Future<DebugResponse> _update(
   setIfPresent('packages', fieldStringList(body, 'packages'));
   setIfPresent('protocols', fieldStringList(body, 'protocols'));
   setIfPresent('ipIsPrivate', fieldBool(body, 'ip_is_private'));
+  // §051 — wifi-условия. `wifi_ssids` остаётся as-is, `wifi_bssids`
+  // нормализуем lower-case на write-side для consistency.
+  setIfPresent('wifiSsids', fieldStringList(body, 'wifi_ssids'));
+  final patchBssids = fieldStringList(body, 'wifi_bssids');
+  if (patchBssids != null) {
+    patched['wifiBssids'] = _validateBssids(patchBssids);
+  }
   setIfPresent('srsUrl', fieldString(body, 'srs_url'));
   setIfPresent('outbound', fieldString(body, 'outbound'));
   // Preset-kind поля (task 011 / spec §033).
@@ -199,6 +206,12 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
   final enabled = fieldBool(j, 'enabled') ?? true;
   final outbound = fieldString(j, 'outbound') ?? 'direct-out';
 
+  // §051 — общие wifi-условия. Валидируем BSSID format строго (на read-side
+  // в model — tolerant lower-case). Empty list / null → no condition.
+  final wifiSsids = fieldStringList(j, 'wifi_ssids') ?? const [];
+  final wifiBssidsRaw = fieldStringList(j, 'wifi_bssids') ?? const [];
+  final wifiBssids = _validateBssids(wifiBssidsRaw);
+
   switch (kind) {
     case CustomRuleKind.inline:
       return CustomRuleInline(
@@ -213,6 +226,8 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         packages: fieldStringList(j, 'packages') ?? const [],
         protocols: fieldStringList(j, 'protocols') ?? const [],
         ipIsPrivate: fieldBool(j, 'ip_is_private') ?? false,
+        wifiSsids: wifiSsids,
+        wifiBssids: wifiBssids,
         outbound: outbound,
       );
     case CustomRuleKind.srs:
@@ -225,6 +240,8 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         packages: fieldStringList(j, 'packages') ?? const [],
         protocols: fieldStringList(j, 'protocols') ?? const [],
         ipIsPrivate: fieldBool(j, 'ip_is_private') ?? false,
+        wifiSsids: wifiSsids,
+        wifiBssids: wifiBssids,
         outbound: outbound,
       );
     case CustomRuleKind.preset:
@@ -239,4 +256,24 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         varsValues: fieldStringMap(j, 'vars_values'),
       );
   }
+}
+
+/// §051 — strict BSSID validation для Debug API (write-side).
+/// Принимает `xx:xx:xx:xx:xx:xx` (case-insensitive), нормализует к lower-case.
+/// На любую невалидную строку — `BadRequest` с конкретным offending value.
+final RegExp _bssidPattern =
+    RegExp(r'^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$');
+
+List<String> _validateBssids(List<String> raw) {
+  final out = <String>[];
+  for (final b in raw) {
+    final trimmed = b.trim();
+    if (!_bssidPattern.hasMatch(trimmed)) {
+      throw BadRequest(
+        'invalid wifi_bssid "$b" (expected xx:xx:xx:xx:xx:xx)',
+      );
+    }
+    out.add(trimmed.toLowerCase());
+  }
+  return out;
 }

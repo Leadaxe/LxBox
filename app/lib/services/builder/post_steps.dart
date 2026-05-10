@@ -595,6 +595,8 @@ List<String> applyCustomRules(
           packages: cr.packages,
           protocols: cr.protocols,
           ipIsPrivate: cr.ipIsPrivate,
+          wifiSsids: cr.wifiSsids,
+          wifiBssids: cr.wifiBssids,
         ));
       case CustomRuleInline():
         if (cr.outbound.isEmpty) continue;
@@ -614,20 +616,27 @@ List<String> applyCustomRules(
         if (intPorts.isNotEmpty) match['port'] = intPorts;
         if (cr.portRanges.isNotEmpty) match['port_range'] = cr.portRanges;
         if (cr.packages.isNotEmpty) match['package_name'] = cr.packages;
-        // `ip_is_private` НЕ поддерживается в headless rule — sing-box
-        // отрежет конфиг на парсинге. Выносим на routing-rule level
-        // (там OR с rule_set per default-rule formula).
+        // `ip_is_private`, `wifi_ssid`, `wifi_bssid` НЕ поддерживаются в
+        // headless rule — sing-box отрежет конфиг на парсинге. Выносим на
+        // routing-rule level (там OR с rule_set per default-rule formula).
 
         if (match.isEmpty) {
           // Нет полей для inline headless rule. Если есть routing-level
-          // поля (protocol / ip_is_private) — эмитим routing rule без
-          // rule_set, иначе правило пустое, скипаем.
-          if (cr.protocols.isEmpty && !cr.ipIsPrivate) continue;
+          // поля (protocol / ip_is_private / wifi_*) — эмитим routing rule
+          // без rule_set, иначе правило пустое, скипаем.
+          if (cr.protocols.isEmpty &&
+              !cr.ipIsPrivate &&
+              cr.wifiSsids.isEmpty &&
+              cr.wifiBssids.isEmpty) {
+            continue;
+          }
           registry.addRule(_outboundToRoute(
             '',
             cr.outbound,
             protocols: cr.protocols,
             ipIsPrivate: cr.ipIsPrivate,
+            wifiSsids: cr.wifiSsids,
+            wifiBssids: cr.wifiBssids,
           ));
           continue;
         }
@@ -637,14 +646,17 @@ List<String> applyCustomRules(
           'tag': requestedTag,
           'rules': [match],
         });
-        // Protocol + ip_is_private — на routing rule level (headless их не
-        // поддерживает). `ip_is_private` становится OR с rule_set (per
+        // Protocol + ip_is_private + wifi_* — на routing rule level (headless
+        // их не поддерживает). `ip_is_private` становится OR с rule_set (per
         // sing-box default-rule formula) — это ровно то что юзер ожидает.
+        // Wifi-условия AND-ятся: фильтруют match на конкретный wifi network.
         registry.addRule(_outboundToRoute(
           tag,
           cr.outbound,
           protocols: cr.protocols,
           ipIsPrivate: cr.ipIsPrivate,
+          wifiSsids: cr.wifiSsids,
+          wifiBssids: cr.wifiBssids,
         ));
     }
   }
@@ -662,6 +674,8 @@ Map<String, dynamic> _outboundToRoute(
   List<String>? packages,
   List<String>? protocols,
   bool ipIsPrivate = false,
+  List<String>? wifiSsids,
+  List<String>? wifiBssids,
 }) {
   final rule = <String, dynamic>{};
   if (tag.isNotEmpty) rule['rule_set'] = tag;
@@ -672,6 +686,13 @@ Map<String, dynamic> _outboundToRoute(
   if (packages != null && packages.isNotEmpty) rule['package_name'] = packages;
   if (protocols != null && protocols.isNotEmpty) rule['protocol'] = protocols;
   if (ipIsPrivate) rule['ip_is_private'] = true;
+  // §051 — wifi_ssid / wifi_bssid эмитятся только non-empty. sing-box
+  // AND-ит со всеми остальными полями rule'а; без них — fallback на любую
+  // сеть (поведение pre-§051).
+  if (wifiSsids != null && wifiSsids.isNotEmpty) rule['wifi_ssid'] = wifiSsids;
+  if (wifiBssids != null && wifiBssids.isNotEmpty) {
+    rule['wifi_bssid'] = wifiBssids;
+  }
   if (outbound == kOutboundReject) {
     rule['action'] = 'reject';
   } else {

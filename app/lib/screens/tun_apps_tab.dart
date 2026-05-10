@@ -14,11 +14,13 @@ import 'package:flutter/material.dart';
 import '../controllers/home_controller.dart';
 import '../services/app_info_cache.dart';
 import '../services/settings_storage.dart' show SettingsStorage, TunAppsConfig;
-import '../vpn/box_vpn_client.dart';
 import 'app_picker_screen.dart';
 
 class TunAppsTab extends StatefulWidget {
-  const TunAppsTab({super.key, required this.homeController});
+  const TunAppsTab({
+    super.key,
+    required this.homeController,
+  });
 
   final HomeController homeController;
 
@@ -28,7 +30,17 @@ class TunAppsTab extends StatefulWidget {
 
 class _TunAppsTabState extends State<TunAppsTab> {
   TunAppsConfig _cfg = const TunAppsConfig(mode: 'off', packages: <String>[]);
-  TunAppsConfig _savedCfg =
+  // `_appliedCfg` — snapshot того что **уже применено к active tun fd**
+  // (на момент последнего `establish()`). Banner «Restart needed»
+  // сравнивает _cfg с _appliedCfg, не с _savedCfg (last storage write):
+  //   - storage save идёт через debounce (400ms), временный mismatch не
+  //     должен flicker'ить banner
+  //   - изменения реально apply'ятся только на VPN restart, не на storage
+  //     save — поэтому baseline = last applied, не last saved
+  // На app load принимаем что VPN running с той же cfg что в storage
+  // (best approximation — storage мог быть mutated через Debug API после
+  // start, но это редкий edge case).
+  TunAppsConfig _appliedCfg =
       const TunAppsConfig(mode: 'off', packages: <String>[]);
   // packages для которых мы вызвали `AppInfoCache.ensure(pkg)`.
   // Используем для детекта uninstalled: если `_ensured.contains(pkg)` +
@@ -37,14 +49,9 @@ class _TunAppsTabState extends State<TunAppsTab> {
   bool _loading = true;
   Timer? _saveTimer;
 
-  // §049 F15: allowBypass — opt-in toggle для apps использующих
-  // ConnectivityManager.bindProcessToNetwork() для bypass'а tun.
-  // Storage native-side (через BoxVpnClient), применяется на следующем openTun.
-  // Перенесён сюда из App Settings → Diagnostics — это VPN-behavior, а не
-  // диагностика; естественно ложится рядом с tun_apps mode-controls (оба
-  // регулируют tun-routing).
-  bool _allowBypass = false;
-  final _vpn = BoxVpnClient();
+  // §049 F15 `Allow VPN bypass` toggle живёт в VPN Settings → System tab
+  // (settings_screen.dart, §052) — Android `VpnService.Builder.allowBypass()`,
+  // отдельно от per-app routing.
 
   @override
   void initState() {
@@ -60,32 +67,16 @@ class _TunAppsTabState extends State<TunAppsTab> {
 
   Future<void> _load() async {
     final cfg = await SettingsStorage.getTunApps();
-    final allowBypass = await _vpn.getAllowBypass();
     if (!mounted) return;
     setState(() {
       _cfg = cfg;
-      _savedCfg = cfg;
-      _allowBypass = allowBypass;
+      _appliedCfg = cfg; // assume VPN running with current storage cfg
       _loading = false;
     });
     for (final pkg in cfg.packages) {
       _ensured.add(pkg);
       AppInfoCache.ensure(pkg);
     }
-  }
-
-  /// §049 F15: toggle allowBypass. Применяется при следующем openTun (start
-  /// или reload VPN).
-  Future<void> _toggleAllowBypass(bool enable) async {
-    setState(() => _allowBypass = enable);
-    await _vpn.setAllowBypass(enable);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Saved. Reload VPN to apply.'),
-        duration: Duration(seconds: 3),
-      ),
-    );
   }
 
   void _scheduleSave() {
@@ -95,13 +86,13 @@ class _TunAppsTabState extends State<TunAppsTab> {
 
   Future<void> _persist() async {
     await SettingsStorage.setTunApps(_cfg);
-    if (!mounted) return;
-    setState(() => _savedCfg = _cfg);
+    // _appliedCfg НЕ трогаем — реально apply'ится только на restart.
+    // Banner показывается пока _cfg отличается от _appliedCfg.
   }
 
   bool get _isModified =>
-      _cfg.mode != _savedCfg.mode ||
-      !_listEq(_cfg.packages, _savedCfg.packages);
+      _cfg.mode != _appliedCfg.mode ||
+      !_listEq(_cfg.packages, _appliedCfg.packages);
 
   bool _listEq(List<String> a, List<String> b) {
     if (a.length != b.length) return false;
@@ -117,9 +108,14 @@ class _TunAppsTabState extends State<TunAppsTab> {
     messenger.showSnackBar(
       const SnackBar(content: Text('Restarting VPN...')),
     );
+    // Snapshot pending → applied: при следующем `establish()` tun получит
+    // именно этот state. Если start() сразу зафейлится — _appliedCfg
+    // остаётся consistent с тем что юзер видит.
+    final pending = _cfg;
     await home.stop();
     await Future<void>.delayed(const Duration(milliseconds: 600));
     await home.start();
+    if (mounted) setState(() => _appliedCfg = pending);
   }
 
   void _setMode(String mode) {
@@ -238,7 +234,7 @@ class _TunAppsTabState extends State<TunAppsTab> {
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPad),
       children: [
-        // ─── Header row + info icon + overflow ───
+        // ─── Header: Mode + tooltip + overflow ───
         Row(
           children: [
             Text('Mode', style: tt.titleMedium),
@@ -293,24 +289,6 @@ class _TunAppsTabState extends State<TunAppsTab> {
         Text(
           _modeDescription(_cfg.mode),
           style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-        ),
-
-        // §049 F15 — VPN bypass opt-in. Семантически близок к §046 mode'ам:
-        // mode = кто попадает в tun; allowBypass = могут ли apps в tun из него
-        // уйти через ConnectivityManager.bindProcessToNetwork().
-        const SizedBox(height: 8),
-        const Divider(height: 24),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Allow VPN bypass'),
-          subtitle: Text(
-            _allowBypass
-                ? 'Apps may use ConnectivityManager to bypass tun.'
-                : 'Strict tunnel — all traffic goes through tun.',
-          ),
-          secondary: const Icon(Icons.alt_route),
-          value: _allowBypass,
-          onChanged: (val) => unawaited(_toggleAllowBypass(val)),
         ),
 
         if (showRestartBanner) ...[

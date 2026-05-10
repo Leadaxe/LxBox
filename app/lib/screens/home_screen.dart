@@ -11,6 +11,7 @@ import '../models/home_state.dart';
 import '../models/node_spec.dart';
 import '../services/clash_api_client.dart';
 import '../widgets/node_row.dart';
+import '../widgets/wifi_permission_dialog.dart';
 import 'outbound_view_screen.dart';
 import 'about_screen.dart';
 import 'config_screen.dart';
@@ -321,63 +322,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
 
   Future<void> _showLocationPermissionDialog(String permName) async {
     if (!mounted) return;
-    // permName may be a comma-separated list, e.g.
+    // permName из BoxService alert prefix — может быть comma-separated:
     // "android.permission.ACCESS_BACKGROUND_LOCATION,android.permission.NEARBY_WIFI_DEVICES".
     final missing = permName.split(',').map((p) => p.trim()).toList();
-    final shortNames = missing
-        .map((p) => p.replaceFirst('android.permission.', ''))
-        .toList();
-    final needsNearby = missing.any((p) => p.endsWith('NEARBY_WIFI_DEVICES'));
-    final needsBackgroundLocation =
-        missing.any((p) => p.endsWith('ACCESS_BACKGROUND_LOCATION'));
-
-    final body = StringBuffer()
-      ..writeln(
-          'Your sing-box config uses Wi-Fi-based rules (wifi_ssid / wifi_bssid). '
-          'Reading the current Wi-Fi SSID requires:')
-      ..writeln();
-    for (final p in shortNames) {
-      body.writeln(' • $p');
-    }
-    body.writeln();
-    if (needsNearby && !needsBackgroundLocation) {
-      body.writeln(
-          'Tap "Allow Wi-Fi info" to grant via system prompt, then restart the VPN.');
-    } else {
-      body.writeln(
-          'Background Location can only be granted in Settings → Permissions → '
-          'Location → "Allow all the time". After granting, restart the VPN.');
-    }
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog.adaptive(
-        title: const Text('Wi-Fi rules need permissions'),
-        content: SingleChildScrollView(child: Text(body.toString())),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          if (needsNearby)
-            TextButton(
-              onPressed: () async {
-                Navigator.of(ctx).pop();
-                await ul.UrlLauncher.requestNearbyWifiPermission();
-              },
-              child: const Text('Allow Wi-Fi info'),
-            ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              await ul.UrlLauncher.openAppSettings();
-            },
-            child: const Text('Open Settings'),
-          ),
-        ],
-      ),
-    );
+    await WifiPermissionDialog.show(context, missing: missing);
     _permissionDialogShowing = false;
   }
 

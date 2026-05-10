@@ -1445,12 +1445,58 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
     } catch (e) {
       json = '// error: $e';
     }
+    // Storage shape — raw JSON как лежит в lxbox_settings.json для этого
+    // правила (поля initial, не _snapshot()). Полезно когда юзер хочет видеть
+    // что реально сохранено — все поля включая wifi_ssids/wifi_bssids которые
+    // могут быть только partially exposed в Params tab UI.
+    final storageJson = const JsonEncoder.withIndent('  ')
+        .convert(widget.initial.toJson());
+
     return Padding(
       padding: EdgeInsets.fromLTRB(
           12, 12, 12, MediaQuery.of(context).padding.bottom + 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // ─── Storage shape ───
+          Row(
+            children: [
+              Expanded(
+                child: Text('storage shape (lxbox_settings.json)',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant)),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.content_copy, size: 14),
+                label: const Text('Copy', style: TextStyle(fontSize: 12)),
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: storageJson));
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Copied')),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            constraints: const BoxConstraints(maxHeight: 180),
+            child: SingleChildScrollView(
+              child: SelectableText(
+                storageJson,
+                style: const TextStyle(
+                    fontFamily: 'monospace', fontSize: 12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // ─── Sing-box config preview ───
           Row(
             children: [
               Expanded(
