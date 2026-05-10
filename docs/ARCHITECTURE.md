@@ -538,8 +538,10 @@ Sensitive-поля при `GET /state/storage` фильтруются allow-list
 
 **Spawning rules:**
 - Source A live-listen на `AppLog.I` (core source). Drain timestamp-diff'ом — не length, чтобы не залипать на ring-buffer cap=500. Regex'ы ловят `router: found package name`, `dns: exchanged|cached`, `dns: exchange failed`. Per-conn-id accumulator (`_DnsAccumulator`) держит первый-запрошенный domain + CNAME chain.
-- Source B `Timer.periodic(2s)` пока есть active session. Connections фильтруются по `metadata.process` (с UID-strip) или `processPath` или process-inference (10s post-DNS window — IP должен быть в resolved-IPs prior session events).
+- Source B `Timer.periodic(2s)` пока есть active session **или** global recording on (§048). Connections фильтруются по `metadata.process` (с UID-strip) или `processPath` или process-inference (10s post-DNS window — IP должен быть в resolved-IPs prior session events).
 - Connection-issue classifier per-event: 2 locale-агностичных типа — `dnsTimeout` (прямой engine-сигнал из `dns: exchange failed` лога) + `tcpReset` (heuristic: TCP закрылся <1с с 0 bytes, вероятный RST/firewall).
+
+**Global / system-wide recording (§048).** Live tab в Statistics — **четвёртый mode** профайлера (рядом с per-app session): `startGlobalRecording()` подключает Source A + Source B без active session. События идут в `_globalRollingBuffer` (60s window) и `globalLiveStream()` SSE. `_pollConnections()` сделан session-agnostic: session-only блоки (`_resolveForSession`, `_appendEvent(s, ev)`) gated на `if (s != null)`, snapshot tracking `_connSnapshots[id]` unconditional (нужен для closed-detection в global-only режиме). `_maybeStopConnectionPoll()` останавливает таймер только когда **оба** off (session and global) — симметрично `_maybeDetachLogListener` и `_maybeStopGcTimer`. Idle profiler по-прежнему ничего не делает (нет timers, нет AppLog listener).
 
 **Memory bounds:**
 - `Session.events`: cap = 50000 events ИЛИ 3h sliding window (что раньше). `eventsDropped` в meta.
@@ -637,8 +639,15 @@ BoxVpnService
 | getAutoStart/setAutoStart | bool | bool |
 | getKeepOnExit/setKeepOnExit | bool | bool |
 | isIgnoringBatteryOptimizations | — | bool |
-| openBatteryOptimizationSettings | — | bool |
+| openBatteryOptimizationSettings | — | bool — primary action one-tap REQUEST_IGNORE_BATTERY_OPTIMIZATIONS prompt; fallback на список apps для OEM где direct prompt молча отбрасывается (ColorOS / MIUI / HyperOS) |
 | openAppDetailsSettings | — | bool |
+| openAppSettings | — | bool — открывает App Permissions screen (MANAGE_APP_PERMISSIONS → MANAGE_PERMISSION_APPS → ACTION_APPLICATION_DETAILS_SETTINGS, три-уровневый OEM fallback). Для permissions которые нельзя выдать через runtime prompt (например, ACCESS_BACKGROUND_LOCATION на API 30+) |
+| areNotificationsEnabled | — | bool |
+| openNotificationSettings | — | bool |
+| checkNotificationPermission | — | bool — POST_NOTIFICATIONS на API 33+, true на pre-33 (implicit grant) |
+| requestNotificationPermission | — | null — async; UI должен re-check через checkNotificationPermission |
+| checkNearbyWifiPermission | — | bool — NEARBY_WIFI_DEVICES на API 33+, true на pre-33 (covered ACCESS_FINE/BACKGROUND_LOCATION) |
+| requestNearbyWifiPermission | — | null — async; UI должен re-check |
 | showToast | msg: String, duration: "short"\|"long" | bool |
 
 **EventChannel** `com.leadaxe.lxbox/status_events`:
@@ -646,6 +655,66 @@ BoxVpnService
 ```json
 { "status": "Started" | "Starting" | "Stopped" | "Stopping", "error": "..." }
 ```
+
+---
+
+### Permissions (Manifest + runtime)
+
+**Manifest declarations** ([AndroidManifest.xml](../app/android/app/src/main/AndroidManifest.xml)):
+
+| Permission | Зачем | Runtime grant? |
+|---|---|---|
+| `INTERNET` | sing-box egress | install-time |
+| `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_SYSTEM_EXEMPTED` | VPN service визибл foreground (FGS политика API 34+) | install-time |
+| `RECEIVE_BOOT_COMPLETED` | auto-start on boot | install-time |
+| `POST_NOTIFICATIONS` | foreground service notification (API 33+) | runtime, default off |
+| `QUERY_ALL_PACKAGES` | per-app split-tunneling list, app-picker | install-time |
+| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | one-tap battery whitelist prompt (API 23+) | install-time + system one-tap dialog |
+| `ACCESS_WIFI_STATE` | sing-box wifi rules / WifiInfo helpers | install-time |
+| `ACCESS_COARSE_LOCATION` / `ACCESS_FINE_LOCATION` | pre-API-29 fallback для WifiInfo SSID | runtime, default off |
+| `ACCESS_BACKGROUND_LOCATION` | API 29+ требование для `WifiManager.connectionInfo` из background (foreground service это и есть «background») | runtime, granted **только через Settings** на API 30+ |
+| `NEARBY_WIFI_DEVICES` (`neverForLocation`) | API 33+ обязательный для real SSID/BSSID; без него `WifiInfo.ssid` = `"<unknown ssid>"` | runtime, default off |
+
+**`neverForLocation` flag** на `NEARBY_WIFI_DEVICES` декларирует Google Play, что permission используется **не для location tracking** — это снимает дополнительный compliance review. У нас он действительно нужен только для SSID/BSSID (sing-box wifi rules).
+
+**Permission gating в `BoxService.startSingbox`** ([BoxService.kt:267](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt:267)):
+
+После `startOrReloadService` (это парсит config) sing-box exposes `commandServer.needWIFIState()` — `true` если в активном config'е есть `wifi_ssid:`/`wifi_bssid:` правила. Если нужен и хоть один permission missing — `stopAndAlert("alert:permission_location:<comma-list>")`. Иначе sing-box падает с misleading `Unknown reference: 42` (real cause — unhandled `SecurityException` через JNI; см. §050).
+
+Permission matrix:
+
+| API | Что нужно для `WifiInfo.ssid` |
+|---|---|
+| API 28- | `ACCESS_FINE_LOCATION` |
+| API 29-32 | `ACCESS_BACKGROUND_LOCATION` |
+| API 33+ | `ACCESS_BACKGROUND_LOCATION` + `NEARBY_WIFI_DEVICES` (без NEARBY → `<unknown ssid>`) |
+
+**Defensive try/catch в `PlatformInterfaceWrapper.readWIFIState`** ([PlatformInterfaceWrapper.kt:139](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/PlatformInterfaceWrapper.kt:139)) — backup для случая когда permission grants drift'ует (например, Android revoke after long idle). `SecurityException` / `RuntimeException` → `return null`. Sing-box graceful'но получает null, не валит процесс через JNI.
+
+**Runtime grant flow** (Flutter side):
+
+```
+[Connect tap]
+   ↓
+BoxService.startSingbox detects needWIFIState() && missing permissions
+   ↓
+stopAndAlert("alert:permission_location:<perms>")
+   ↓
+HomeController.lastError = "Stopped: alert:permission_location:..."
+   ↓
+home_screen._handleStatusEvent ловит prefix → AlertDialog
+   ↓
+[Allow Wi-Fi info]               [Open Settings]
+runtime prompt (NEARBY)          MANAGE_APP_PERMISSIONS intent
+                                 → 3 fallback стратегии:
+                                   1. MANAGE_APP_PERMISSIONS
+                                   2. MANAGE_PERMISSION_APPS
+                                   3. ACTION_APPLICATION_DETAILS_SETTINGS
+   ↓                                    ↓
+re-check via checkNearbyWifiPermission → user re-Connect
+```
+
+`POST_NOTIFICATIONS` идёт через **explainer flow** в `home_screen._maybeShowNotificationPermissionDialog` (вызывается из `init`): один раз на cold start показывается AlertDialog (пояснение "VPN runs as foreground service, system requires notification"), потом system runtime prompt. Persisted флаг `notif_perm_prompted_v1` — explainer не повторяется.
 
 ---
 
