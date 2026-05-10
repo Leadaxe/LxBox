@@ -500,6 +500,10 @@ class TrafficProfiler extends ChangeNotifier {
     _globalUnattributedEvents.clear();
     _ensureLogListenerAttached();
     _ensureGcTimerStarted();
+    // System-wide recording тоже опрашивает Clash /connections — без этого
+    // в Live видны только DNS lines из core logs, а TCP/UDP open/close
+    // приходят только через connection poll.
+    _startConnectionPoll();
     AppLog.I.info('TrafficProfiler: global recording started');
     notifyListeners();
   }
@@ -515,6 +519,7 @@ class TrafficProfiler extends ChangeNotifier {
     _globalRecordingStartedAt = null;
     _maybeDetachLogListener();
     _maybeStopGcTimer();
+    _maybeStopConnectionPoll();
     AppLog.I.info('TrafficProfiler: global recording stopped');
     notifyListeners();
   }
@@ -597,9 +602,9 @@ class TrafficProfiler extends ChangeNotifier {
     if (s == null) return null;
     s.finishedAt = DateTime.now();
 
-    // Stop session-specific data sources. Log listener + GC timer остаются
-    // running если есть global subscribers — иначе detach'аются.
-    _stopConnectionPoll();
+    // Stop session-specific data sources. Log listener / connection poll /
+    // GC timer остаются running если есть global recording — иначе detach.
+    _maybeStopConnectionPoll();
     _maybeDetachLogListener();
     _maybeStopGcTimer();
 
@@ -1209,9 +1214,19 @@ class TrafficProfiler extends ChangeNotifier {
     _connTimer = null;
   }
 
+  /// Останавливает poll только если ни active session, ни global recording
+  /// — иначе оставляем running. Симметрично `_maybeDetachLogListener`.
+  void _maybeStopConnectionPoll() {
+    if (_active != null) return;
+    if (_globalRecordingActive) return;
+    _stopConnectionPoll();
+  }
+
   Future<void> _pollConnections() async {
     final s = _active;
-    if (s == null) return;
+    // Poll работает если есть session ИЛИ global recording. Без обоих
+    // не зачем дёргать Clash API.
+    if (s == null && !_globalRecordingActive) return;
     final fetcher = _connectionsFetcher;
     if (fetcher == null) return;
     Map<String, dynamic> data;
@@ -1304,11 +1319,34 @@ class TrafficProfiler extends ChangeNotifier {
         _emitGlobalStream(
             {'event': 'traffic_event', 'data': globalEv.toJson()});
 
-        // Session resolution.
-        final resolved = _resolveForSession(raw, s);
-        if (resolved == null) continue;
+        // Snapshot для closed-detection. Нужен и для session, и для
+        // global-only режима (чтобы emit'ить tcpClose когда Clash убрал
+        // connection из ответа).
+        var snapProcess = '';
+        var snapConfidence = ConfidenceLevel.unattributed;
+        String? snapMatchedVia;
 
-        _appendEvent(s, resolved);
+        if (s != null) {
+          // Session resolution.
+          final resolved = _resolveForSession(raw, s);
+          if (resolved != null) {
+            _appendEvent(s, resolved);
+            snapProcess = resolved.process ?? '';
+            snapConfidence = resolved.confidence;
+            snapMatchedVia = resolved.matchedVia;
+          } else {
+            // не related к target — в session не пишем, но snapshot
+            // нужен для global-only closed detection.
+            snapProcess = rawProcess;
+            snapConfidence = globalEv.confidence;
+            snapMatchedVia = globalEv.matchedVia;
+          }
+        } else {
+          snapProcess = rawProcess;
+          snapConfidence = globalEv.confidence;
+          snapMatchedVia = globalEv.matchedVia;
+        }
+
         _connSnapshots[id] = _ConnSnapshot(
           id: id,
           host: host,
@@ -1319,9 +1357,9 @@ class TrafficProfiler extends ChangeNotifier {
           upBytes: up,
           downBytes: down,
           startedAt: now,
-          process: resolved.process ?? '',
-          confidence: resolved.confidence,
-          matchedVia: resolved.matchedVia,
+          process: snapProcess,
+          confidence: snapConfidence,
+          matchedVia: snapMatchedVia,
           rule: rule,
           rulePayload: rulePayload,
         );
@@ -1339,28 +1377,35 @@ class TrafficProfiler extends ChangeNotifier {
     for (final id in closed) {
       final snap = _connSnapshots.remove(id);
       if (snap == null) continue;
-      _appendEvent(
-        s,
-        TrafficEvent(
-          ts: now,
-          kind: TrafficEventKind.tcpClose,
-          domain: snap.host.isNotEmpty ? snap.host : null,
-          ip: snap.ip.isNotEmpty ? snap.ip : null,
-          port: snap.port > 0 ? snap.port : null,
-          outboundChain: snap.chains,
-          upBytes: snap.upBytes,
-          downBytes: snap.downBytes,
-          duration: now.difference(snap.startedAt),
-          process: snap.process.isEmpty ? null : snap.process,
-          processInferred: snap.confidence == ConfidenceLevel.inferred,
-          network: snap.network,
-          rule: snap.rule.isEmpty ? null : snap.rule,
-          rulePayload: snap.rulePayload.isEmpty ? null : snap.rulePayload,
-          confidence: snap.confidence,
-          matchedVia: snap.matchedVia,
-          issues: _classifyConnectionClose(snap, now),
-        ),
+      final closeEv = TrafficEvent(
+        ts: now,
+        kind: TrafficEventKind.tcpClose,
+        domain: snap.host.isNotEmpty ? snap.host : null,
+        ip: snap.ip.isNotEmpty ? snap.ip : null,
+        port: snap.port > 0 ? snap.port : null,
+        outboundChain: snap.chains,
+        upBytes: snap.upBytes,
+        downBytes: snap.downBytes,
+        duration: now.difference(snap.startedAt),
+        process: snap.process.isEmpty ? null : snap.process,
+        processInferred: snap.confidence == ConfidenceLevel.inferred,
+        network: snap.network,
+        rule: snap.rule.isEmpty ? null : snap.rule,
+        rulePayload: snap.rulePayload.isEmpty ? null : snap.rulePayload,
+        confidence: snap.confidence,
+        matchedVia: snap.matchedVia,
+        issues: _classifyConnectionClose(snap, now),
       );
+      // Global stream/buffer — всегда (для Live system-wide tab).
+      if (_globalRecordingActive) {
+        _appendToGlobalRollingBuffer(closeEv);
+        _emitGlobalStream(
+            {'event': 'traffic_event', 'data': closeEv.toJson()});
+      }
+      // Session — только если active.
+      if (s != null) {
+        _appendEvent(s, closeEv);
+      }
     }
   }
 
