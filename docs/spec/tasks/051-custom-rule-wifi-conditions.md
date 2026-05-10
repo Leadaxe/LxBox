@@ -1,11 +1,19 @@
-# 051 — CustomRule: wifi_ssid / wifi_bssid conditions (Phase 1: API only)
+# 051 — CustomRule: wifi_ssid / wifi_bssid conditions
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft |
+| Статус | Phase 1 + 2 done; Phase 3 draft |
 | Дата | 2026-05-10 |
-| Связанные | [`030 custom routing`](../features/030%20custom%20routing/spec.md) — расширяет sealed model; [`050 libbox-debug-build`](./050-libbox-debug-build/findings.md) — F12.3 readWIFIState fix (prerequisite) |
-| Затронутые файлы | `app/lib/models/custom_rule.dart`, `app/lib/services/builder/...` (rule emission), `app/lib/services/debug/handlers/rules.dart`, `app/lib/services/debug/serializers/rules.dart`, `test/models/`, `test/builder/`, `test/parser/` |
+| Связанные | [`030 custom routing`](../features/030%20custom%20routing/spec.md) — расширяет sealed model; [`050 libbox-debug-build`](./050-libbox-debug-build/findings.md) — F12.3 readWIFIState fix (prerequisite); [`052 vpn settings system/service tabs`](./052-vpn-settings-system-service-tabs.md) — permission rows перенесены в Diagnostics |
+| Затронутые файлы | `app/lib/models/custom_rule.dart`, `app/lib/services/builder/post_steps.dart`, `app/lib/services/debug/handlers/rules.dart`, `app/lib/services/debug/serializers/rules.dart`, `app/lib/screens/custom_rule_edit_screen.dart`, `app/lib/services/url_launcher.dart`, `app/lib/services/settings_storage.dart`, `app/lib/widgets/wifi_permission_dialog.dart`, `app/android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt`, `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/PlatformInterfaceWrapper.kt`, `test/builder/`, `test/parser/` |
+
+## Phases
+
+| # | Scope | Status |
+|---|---|---|
+| **1** | Модель + builder + Debug API + tests + spec | ✅ Done (commit before §052) |
+| **2** | Editor UI — chips + Add current / Pick saved / Manual + permission rows + shared dialog + history | ✅ Done (commit `5dd3c37` + earlier) |
+| **3** | Native cache + NetworkCallback events — оптимизация горячего пути `readWIFIState` + auto-record history | 🔵 Draft |
 
 ## Цель
 
