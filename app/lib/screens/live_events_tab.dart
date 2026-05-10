@@ -243,12 +243,14 @@ class _LiveEventsTabState extends State<LiveEventsTab>
   }
 
   /// Banner когда «Forward sing-box logs» (Diagnostics → §043) выключен.
-  /// Hit-zones split:
-  ///  • Tap по `i` icon → tooltip с подробным объяснением.
-  ///  • Tap по тексту / chevron → deep-link в Diagnostics tab,
-  ///    auto-scroll к toggle'у с подсветкой 2.5s.
+  /// Две half'ы с разными hit-zones:
+  ///  • Левая (i + «DNS / router events off») → tap = tooltip с
+  ///    объяснением что именно теряется без core logs.
+  ///  • Правая («turn on Forward sing-box logs» + chevron) → tap =
+  ///    deep-link в Diagnostics с auto-scroll и 3s подсветкой toggle'а.
   Widget _coreLogsHintBanner(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final textStyle = TextStyle(fontSize: 11, color: cs.onSurfaceVariant);
     return Container(
       width: double.infinity,
       color: cs.surfaceContainerHighest,
@@ -265,29 +267,34 @@ class _LiveEventsTabState extends State<LiveEventsTab>
             child: Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              child: Icon(Icons.info_outline,
-                  size: 14, color: cs.onSurfaceVariant),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.info_outline,
+                      size: 14, color: cs.onSurfaceVariant),
+                  const SizedBox(width: 8),
+                  Text('DNS / router events off', style: textStyle),
+                ],
+              ),
             ),
           ),
           Expanded(
             child: InkWell(
               onTap: _openDiagnosticsSettings,
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
+                padding:
+                    const EdgeInsets.fromLTRB(8, 6, 12, 6),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
-                        'DNS / router events off — turn on «Forward sing-box logs»',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: cs.onSurfaceVariant,
-                        ),
+                        '— turn on «Forward sing-box logs»',
+                        style: textStyle,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     Icon(Icons.chevron_right,
                         size: 16, color: cs.onSurfaceVariant),
-                    const SizedBox(width: 12),
                   ],
                 ),
               ),
