@@ -603,10 +603,18 @@ class PresetApplyResult {
 ///   ничего не качает, всё managed'ится юзером через download button.
 ///
 /// Collision handling — auto-suffix через `RuleSetRegistry`.
+///
+/// [skipDisabled] — по умолчанию `true`: disabled-правила пропускаются как в
+/// production pipeline. **Set `false` для preview-режима**, когда caller хочет
+/// видеть «что родит правило при включении» независимо от Switch (e.g.
+/// `ViewTab` в editor'е — юзер открыл редактор именно для inspect'а формы,
+/// `enabled` тут отдельная история). Production pipeline всегда оставляет
+/// default `true`.
 List<String> applyCustomRules(
   RuleSetRegistry registry,
   List<CustomRule> rules, {
   Map<String, String> srsPaths = const {},
+  bool skipDisabled = true,
 }) {
   // §062: shim вокруг `_applyInlineSingle` / `_applySrsSingle`. Обходит
   // ТОЛЬКО inline/srs (фильтруя preset). Сохраняет старый publi API +
@@ -614,7 +622,7 @@ List<String> applyCustomRules(
   // которое обходит все kinds в одном цикле сохраняя cross-kind order.
   final warnings = <String>[];
   for (final cr in rules) {
-    if (!cr.enabled) continue;
+    if (skipDisabled && !cr.enabled) continue;
     switch (cr) {
       case CustomRulePreset():
         // Preset-правила обрабатывает applyPresetBundles (spec §033).

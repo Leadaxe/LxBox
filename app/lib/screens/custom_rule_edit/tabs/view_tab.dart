@@ -63,7 +63,11 @@ class ViewTab extends StatelessWidget {
               ? '<cached file path>'
               : '<download first>';
         }
-        warnings = applyCustomRules(reg, [c.snapshot()], srsPaths: srsPaths);
+        // skipDisabled: false — preview показывает «что родит правило при
+        // включении», не отфильтровывая по `enabled`. Юзер открыл editor
+        // именно для inspect'а формы; Switch — отдельная UX-плоскость.
+        warnings = applyCustomRules(reg, [c.snapshot()],
+            srsPaths: srsPaths, skipDisabled: false);
         json = const JsonEncoder.withIndent('  ').convert({
           'rule_set': reg.getRuleSets(),
           'rules': reg.getRules(),
