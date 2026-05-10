@@ -466,6 +466,29 @@ DELETE /wifi_history/all      → clear all
 - External tool написал «список моих сетей» (e.g., из system network configs) и инжектит batch.
 - Manual cleanup: `DELETE /wifi_history/all` для приватности reset.
 
+## Known risks (documented, not fixed)
+
+### Cross-product semantic при multi-chip wifi conditions
+
+Sing-box обрабатывает `wifi_ssid` и `wifi_bssid` как **независимые OR-списки** AND-ясь на rule level. Юзер в editor видит N chips каждый = `(ssid, bssid)` pair и интуитивно ожидает что rule matches **пары** `(A↔X) OR (B↔Y)`. Реально builder через `_zipWifiEntries` собирает `wifi_ssid:[A,B] AND wifi_bssid:[X,Y]` — cross-product **4 комбинации**:
+
+| SSID | BSSID | Match? |
+|---|---|---|
+| A | X | ✓ задумано |
+| B | Y | ✓ задумано |
+| **A** | **Y** | ⚠ срабатывает, не задумано |
+| **B** | **X** | ⚠ срабатывает, не задумано |
+
+**Когда проявляется на практике**: почти никогда. BSSID = globally unique MAC; чтобы phantom match сработал, нужна сеть с «правильным» SSID но BSSID который реально пренадлежит другой точке из списка — реалистично только при targeted SSID spoofing в радиусе обеих точек одновременно.
+
+**Когда стоит фикс**: если кто-то будет использовать wifi rules для **security-критичных** правил (banking → direct only at home, банк-сессии не должны проходить direct через незнакомую сеть), и rule имеет ≥2 chips с BSSID precision. Тогда нужен exact-pair semantic.
+
+**Fix (deferred)**: builder эмитит **N отдельных `route.rules`** (по одному chip'у), каждое с одной парой `(ssid, bssid)` + одинаковый outbound. Sing-box обрабатывает rules как OR — match один из них = trigger outbound. Семантика «один chip = одна точная пара» становится honest. Cost: `_outboundToRoute` принимает один pair вместо arrays; `applyCustomRules` для inline/srs делает inner loop по chips; tests переписываются (asserts на множественные rules с одним outbound); collision-handling через RuleSetRegistry для уникальных tag'ов rule_set'ов.
+
+Документировано в коде:
+- `app/lib/services/builder/post_steps.dart` — `_outboundToRoute` wifi-emit block
+- `app/lib/screens/custom_rule_edit_screen.dart` — `_zipWifiEntries` docstring
+
 ## Out of scope (Phase 4 — only if measured needed)
 
 **`WifiStateCache` для readWIFIState hot path** — premature optimization без бенчмарка. Перед добавлением:

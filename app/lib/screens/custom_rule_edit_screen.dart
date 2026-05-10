@@ -2204,8 +2204,15 @@ class _WifiEntry {
 ///
 /// Sing-box treats lists independently and AND-ит их (cross-product).
 /// Для chips с pure-ssid ничего в bssids не добавляем (sing-box матчит
-/// только SSID). Для chips с обоими полями — пишем оба (с тем же индексом
-/// если возможно для round-trip pairing).
+/// только SSID). Для chips с обоими полями — пишем оба.
+///
+/// ⚠ **Cross-product trap (low-impact, documented risk)**: при 2+ chips
+/// с разными `(ssid, bssid)` парами, sing-box rule `wifi_ssid:[A,B] AND
+/// wifi_bssid:[X,Y]` теоретически matches «A на BSSID Y» (не задумано).
+/// На практике риск мал — BSSID = globally unique MAC, коллизии
+/// "правильный SSID + чужой BSSID" нереалистичны. Для exact pair semantic
+/// builder должен бы эмитить N отдельных rules — deferred до реального
+/// use-case. См. §051 spec «Known risks».
 ({List<String> ssids, List<String> bssids}) _zipWifiEntries(
     List<_WifiEntry> entries) {
   final ssids = <String>[];

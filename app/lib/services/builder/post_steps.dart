@@ -689,6 +689,15 @@ Map<String, dynamic> _outboundToRoute(
   // §051 — wifi_ssid / wifi_bssid эмитятся только non-empty. sing-box
   // AND-ит со всеми остальными полями rule'а; без них — fallback на любую
   // сеть (поведение pre-§051).
+  //
+  // ⚠ Cross-product semantic risk (low impact): sing-box обрабатывает
+  // wifi_ssid и wifi_bssid как **независимые** OR-списки, AND-ясь на уровне
+  // правила. Несколько chip'ов с разными BSSID-парами в editor становятся
+  // `wifi_ssid:[A,B] AND wifi_bssid:[X,Y]` — теоретически matches «A на BSSID Y»
+  // (не задумано юзером). На практике риск мал — BSSID = глобально уникальный
+  // MAC, коллизии "правильный SSID + чужой BSSID" нереалистичны. Для exact
+  // pair semantic нужно эмитить N отдельных rules (по одному chip'у),
+  // решение deferred до реального use-case.
   if (wifiSsids != null && wifiSsids.isNotEmpty) rule['wifi_ssid'] = wifiSsids;
   if (wifiBssids != null && wifiBssids.isNotEmpty) {
     rule['wifi_bssid'] = wifiBssids;
