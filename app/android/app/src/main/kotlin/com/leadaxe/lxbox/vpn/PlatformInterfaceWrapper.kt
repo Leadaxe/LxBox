@@ -109,18 +109,13 @@ interface PlatformInterfaceWrapper : PlatformInterface {
     override fun includeAllNetworks(): Boolean = false
     override fun clearDNSCache() {}
 
-    /// §049 F12.3: возвращаем null (pre-§049 поведение).
-    ///
-    /// Phase F testing показал: pin'инг handler через
-    /// `Seq.incRef(this) × 10000` в onCreate **НЕ помогает** — все 5 trials
-    /// крашатся 'Unknown reference: 42'. Значит **Hypothesis A (premature
-    /// destroyRef из-за Go GC) опровергнута** — refcount не падает до 0
-    /// (10000 destroyRef call'ов за 12 секунд маловероятно). Проблема глубже:
-    /// возможно Java refnum 42 **никогда не попадает в tracker**, или
-    /// libbox-internal lookup использует другой path. Без libbox.so debug
-    /// symbols диагностировать дальше нельзя.
-    ///
-    /// Tracking issue: попробовать libbox 1.14-alpha когда стабильное.
+    /// §049 F12.3 — deferred (blocked on libbox debug build §050).
+    /// 9 attempts на Android 15 OnePlus + libbox 1.13.11 (stripped) все
+    /// падают `Unknown reference: 42` cold-start. Java side OK (instrumented
+    /// `Seq$RefTracker` показал refcnt > 0), crash в native cproxy hashmap.
+    /// Reference SagerNet (1.13.11) имеет identical Java code и stable.
+    /// Practical impact: `wifi_ssid:` / `wifi_bssid:` rules не работают —
+    /// у нас в wizard их и нет. См. spec/tasks/049-singbox-wrapper-deep-audit/.
     override fun readWIFIState(): WIFIState? = null
 
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
