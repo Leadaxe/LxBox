@@ -109,25 +109,53 @@ interface PlatformInterfaceWrapper : PlatformInterface {
     override fun includeAllNetworks(): Boolean = false
     override fun clearDNSCache() {}
 
-    /// §049 F12.3: возвращаем null (deferred — окончательно).
+    /// §049 F12.3: возвращаем null — deferred окончательно, blocked on
+    /// libbox debug symbols / upgrade.
     ///
-    /// **Полный лог attempt'ов на нашем env (Android 15 OnePlus + libbox 1.13.11):**
+    /// **Полный лог attempt'ов на нашем env (Android 15 OnePlus + libbox 1.13.11)**:
+    ///
+    /// Pre-Phase H (старый BoxApplication object, был активный `Seq.setContext`):
     /// 1. Pre-split + `WIFIState(s,b)` constructor → crash refnum 42
-    /// 2. F1 split + `WIFIState(s,b)` constructor → crash 8s
+    /// 2. F1 split + ctor → crash 8s
     /// 3. F1 split + ctor + Java strong-ref pin → crash 10s
     /// 4. F1 split + `Libbox.newWIFIState(s,b)` factory + pin → crash 8s
-    /// 5. F1 split + `WIFIState(s,b)` ctor + drop `Seq.setContext` → crash 12s
+    /// 5. F1 split + ctor + drop `Seq.setContext` (на object) → crash 12s
     ///
-    /// Crash signature всегда: `cproxylibbox_CommandServerHandler_WriteDebugMessage+68
-    /// → go_seq_from_refnum+228 → 'Unknown reference: 42'`. Refnum 42 = CSH
-    /// handler, pin'ится Java strong-ref'ами — Java side OK. Corruption внутри
-    /// **Go runtime libbox.so** при вызове `__NewWIFIState`/`newWIFIState`.
+    /// Phase H baseline (registered Application class + закомментированный
+    /// `Seq.setContext` + `logMaxLines=3000` + `Libbox.setMemoryLimit(true)`
+    /// removed):
+    /// 6. v11400 (Phase H + F12.3 ctor) → cold-start crash refnum 42 за 1-3s,
+    ///    auto-restart picks up stable. Stop-vpn + start-vpn cycle = снова
+    ///    cold-start crash. Process-Runtime tombstones consistently <3s на
+    ///    cold launch. Auto-restart прозрачен для UX но system-side это 2-3
+    ///    SIGABRT каждый VPN start.
+    /// 7. v11500 (Phase H + drop `Libbox.setMemoryLimit(true)` + F12.3 ctor)
+    ///    → тот же cold-start crash refnum 42 за 1s. Setting setMemoryLimit
+    ///    (которое reference НЕ зовёт) НЕ был root cause.
     ///
-    /// Reference SagerNet имеет такой же код но возможно никогда не triggernuted
-    /// в production (никто не использует `wifi_ssid:`/`wifi_bssid:` DNS rules).
+    /// Crash signature: `cproxylibbox_CommandServerHandler_WriteDebugMessage+68
+    /// → go_seq_from_refnum+228 → 'Unknown reference: N'` (где N = handler
+    /// refnum после cold start, обычно 42 на baseline). Corruption происходит
+    /// внутри Go runtime libbox.so при cold-start sequence — Java-side
+    /// `Seq.Ref` wrapper держится strongly, Go-side не находит ref.
     ///
-    /// Без debug symbols в libbox.so диагностировать дальше нельзя.
-    /// Tracking: docs/spec/tasks/049-singbox-wrapper-deep-audit/spec.md
+    /// Reference SagerNet (1.13.11 commit 3b3883e) имеет **identical Java code**
+    /// для readWIFIState (port 1:1 verified). Reference на 1.13.x **не падает**
+    /// в production — у людей работает stably. Что-то в нашем environment'е
+    /// (Android 15 OnePlus + наш Flutter wrapper + наша build chain) отличается
+    /// на native level, но без libbox.so debug symbols мы не можем resolve
+    /// PC → Go file:line чтобы найти где destroyRef triggered.
+    ///
+    /// **Tracking**: `docs/spec/tasks/050-libbox-debug-build/spec.md` —
+    /// собрать `libbox.aar` с debug symbols через `gomobile bind` из
+    /// `SagerNet/sing-box` v1.13.11 source, repro crash, `addr2line` resolve
+    /// каждый PC frame в backtrace. Estimate: 2-5 часов отдельной session.
+    /// Альтернатива — upgrade libbox 1.14-alpha (reference's current).
+    ///
+    /// **Practical impact**: F12.3 deferred = sing-box rules с условиями
+    /// `wifi_ssid:` / `wifi_bssid:` не работают. У нас в wizard config
+    /// generation таких rules нет, юзеры тоже не используют — feature
+    /// без реального usage сейчас.
     override fun readWIFIState(): WIFIState? = null
 
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)

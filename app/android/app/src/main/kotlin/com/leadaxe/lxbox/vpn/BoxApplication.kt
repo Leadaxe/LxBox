@@ -6,6 +6,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.wifi.WifiManager
 import android.os.PowerManager
+import go.Seq
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.SetupOptions
 import kotlinx.coroutines.CompletableDeferred
@@ -49,11 +50,14 @@ class BoxApplication : Application() {
         super.onCreate()
         instance = this
 
-        // §049 Phase H — НЕ зовём `Seq.setContext(this)` намеренно.
-        // Reference (`SagerNet/sing-box-for-android` 1.13.11
-        // `Application.kt:41`) тоже закомментировал этот вызов. Native
-        // libbox init сам устанавливает context при загрузке `.so`.
-        // Двойной set ломал `Seq$RefTracker` → причина refnum 42 race.
+        // §049 Phase H — закомментировано 1:1 как reference
+        // (`SagerNet/sing-box-for-android/Application.kt:41` для libbox 1.13.11).
+        // Native libbox init сам устанавливает context при загрузке `.so`.
+        // Наш дополнительный явный вызов делал двойной-set который ломал
+        // `Seq$RefTracker` state → главный suspect для refnum 42 race.
+        // Эмпирически verified: v11270 (split only с этим вызовом активным)
+        // — crash 2s; v11300 (split + закомментированный setContext) — stable.
+//        Seq.setContext(this)
 
         // §049 F9 — Libbox.setLocale обязательно ПЕРЕД setup'ом.
         // Reference вызывает синхронно без runCatching — fail loud.
