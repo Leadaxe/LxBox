@@ -166,7 +166,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
       padding: EdgeInsets.fromLTRB(12, 12, 12, bottomPad),
       children: [
         SwitchListTile(
-          title: const Text('Allow VPN bypass'),
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Flexible(child: Text('Allow VPN bypass')),
+              const SizedBox(width: 6),
+              Tooltip(
+                message:
+                    'Allows apps to bypass the VPN tunnel via '
+                    'ConnectivityManager.bindProcessToNetwork(). '
+                    'Useful for banking apps, captive portal detection, '
+                    'or system services that refuse VPN connections.\n\n'
+                    'Off = strict tunnel (all traffic forced through VPN).\n'
+                    'Takes effect on next VPN connect.',
+                preferBelow: false,
+                triggerMode: TooltipTriggerMode.tap,
+                showDuration: const Duration(seconds: 12),
+                waitDuration: const Duration(milliseconds: 100),
+                child: Icon(
+                  Icons.info_outline,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
           subtitle: Text(
             _allowBypass
                 ? 'Apps may use ConnectivityManager to bypass tun.'
