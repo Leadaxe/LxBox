@@ -2,24 +2,49 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **Closed — F12.3 readWIFIState остаётся deferred** (Phase H baseline production-stable без неё) |
+| Статус | **✅ CLOSED — F12.3 readWIFIState FIXED** (commit `99005ed`) |
 | Дата | 2026-05-10 |
-| Branch | `diag/libbox-debug-build` (диагностический artifact, не для merge) |
-| Production | `develop` HEAD = `842df5c` Phase H + Application class registered + reference deltas |
-| Phone state | v30 (1.7.1+30) — Phase H stable, F12.3=null |
+| Branch | `diag/libbox-debug-build` ready for merge на develop |
+| Phone state | v13300 — F12.3 ENABLED, stable, tunnel connected, **0 crashes** |
 
 ---
 
-## TL;DR
+## TL;DR (FINAL — real fix found)
 
-После 6+ часов deep investigation найдено **что именно ломается** (Java→Go cgo race в gomobile/seq runtime), но **починить не удалось** — race в Go-side cgo lifecycle, который мы не контролируем.
+**Root cause crash refnum 42 = unhandled `SecurityException` через JNI boundary.**
 
-**Главный insight (раскрыт в самом конце)**: SFA (reference) APK собран с **Go 1.25.9**, наш JitPack libbox — **Go 1.25.6**, наш self-build — **1.25.5**. Patch-level Go runtime difference between us vs reference. **Не verified** что upgrade Go fix'ит — investigation остановлена осознанно.
+Цепочка событий:
+1. Sing-box (Go) → cgo → `cproxy_PlatformInterface_ReadWIFIState`
+2. Java callback `readWIFIState()` invokes `WifiManager.getConnectionInfo()`
+3. `Parcel.readException()` throws **`SecurityException`** — на API 29+ требуется `ACCESS_BACKGROUND_LOCATION`, у нас в AndroidManifest нет
+4. Exception propagates через cproxy code (gomobile-generated stub без try/catch)
+5. `Seq$RefTracker.incRefnum` пытается JNI cleanup → `ClassLinker::FindClass` FAILS из-за corrupted env
+6. → `art::Runtime::Abort`
+7. abort message **"Unknown reference: 42"** — **misleading follow-up effect** broken JNI state. Не реальная refnum lookup issue!
 
-**Practical state**:
-- F12.3 `readWIFIState()` = `null` (deferred final). У нас нет config rules с `wifi_ssid:`/`wifi_bssid:` → нулевая потеря.
-- F22 drainer pattern для `writeDebugMessage` — **applied** (commit `6e2dbf9`). Allocation reduction в hot path. Не fix race но cleaner code.
-- Phase H baseline (F1 split + registered Application + reference deltas) production-stable — главный §049 fix landed.
+**Fix** (commit `99005ed`):
+- `PlatformInterfaceWrapper.readWIFIState()` обёрнут в `try/catch SecurityException + RuntimeException` → return null. Sing-box получает null gracefully.
+- `BoxService.startSingbox` post-`startOrReloadService` permission check через `cs.needWIFIState() && !checkSelfPermission(BACKGROUND_LOCATION)` (warning log, port из reference SagerNet).
+
+**Verification**: v13300 cold start с F12.3 enabled — pid alive 1m+ continuous, tunnel connected wg-parnas, **ZERO crashes на v13300** в dropbox. Prior 9 attempts crashed в 1-12s.
+
+**Почему 9 prior attempts ничего не дали**: мы fix'или **wrong layer**. F1 split, @Synchronized, gomobile/seq patches, drainer pattern — все про refnum lifecycle. Real cause = **uncaught Java exception** в одной строке wrapper'а.
+
+**Чему это научило**: 
+- crash backtrace может быть **misleading** (abort на refnum 42 происходил из-за broken JNI env, не actual refnum issue)
+- decompiled trace юзера (`Parcel.readException → ClassLinker::FindClass FAILS`) был ключом которое мы пропустили в начальной investigation
+- defensive try/catch на JNI boundaries — **обязательно** для всех cgo callbacks которые могут throw
+
+---
+
+## Practical changes applied
+
+| File | Change | Status |
+|---|---|---|
+| `PlatformInterfaceWrapper.kt` | F12.3 enabled с try/catch SecurityException | ✅ commit `99005ed` |
+| `BoxService.kt` | Permission check post-startOrReloadService (warning log) | ✅ commit `99005ed` |
+| `BoxService.kt` | F22 drainer pattern для writeDebugMessage | ✅ commit `6e2dbf9` (cosmetic, separate) |
+| `BoxApplication.kt`, `BoxVpnService.kt`, `BoxService.kt`, AndroidManifest | Phase H baseline (F1 split + Application class registered + reference deltas) | ✅ commit `842df5c` (already в develop) |
 
 ---
 
