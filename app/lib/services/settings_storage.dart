@@ -8,6 +8,13 @@ import '../models/server_list.dart';
 import 'migration/proxy_source_migration.dart';
 
 /// Persistent storage for user settings: vars, proxy sources, enabled rules.
+///
+/// **Convention для list getters**: возвращаем **growable** list (`toList()`)
+/// чтобы caller'ы могли делать `removeWhere`/`add` для optimistic UI update
+/// (особенно в setState callbacks — иначе silent `UnsupportedError`).
+/// Если нужна read-only гарантия — caller оборачивает в `UnmodifiableListView`.
+/// `toList(growable: false)` приводил к Phase 3 bug в `wifi_history` Pick
+/// saved sheet (см. commit `04ba3ce` follow-up).
 class SettingsStorage {
   SettingsStorage._();
 

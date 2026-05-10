@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
+import '../services/app_log.dart';
 import '../services/builder/post_steps.dart';
 import '../services/builder/preset_expand.dart';
 import '../services/builder/rule_set_registry.dart';
@@ -2243,9 +2244,18 @@ List<_WifiEntry> _unzipWifiEntries(
 }
 
 /// «5 минут назад» / «Yesterday» / «Mar 15» для wifi_history `last_seen`.
+///
+/// Невалидный ISO → читаемый fallback вместо silent empty string. AppLog
+/// в debug-mode помогает поймать malformed entries (storage migration
+/// drift или ручное редактирование `lxbox_settings.json`).
 String _humanLastSeen(String iso) {
-  if (iso.isEmpty) return '';
+  if (iso.isEmpty) return 'never';
   final dt = DateTime.tryParse(iso);
-  if (dt == null) return '';
+  if (dt == null) {
+    AppLog.I.warning(
+      '[wifi_history] _humanLastSeen: malformed ISO timestamp "$iso"',
+    );
+    return 'unknown';
+  }
   return relativeTime(DateTime.now(), dt);
 }

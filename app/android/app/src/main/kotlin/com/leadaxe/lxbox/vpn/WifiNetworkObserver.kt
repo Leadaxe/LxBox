@@ -1,12 +1,10 @@
 package com.leadaxe.lxbox.vpn
 
 import android.content.Context
-import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -93,45 +91,16 @@ class WifiNetworkObserver(private val ctx: Context) {
         Log.d(TAG, "stopped")
     }
 
-    /// Mirror `PlatformInterfaceWrapper.readWIFIState` (defensive try/catch).
-    /// Возвращает `(ssid, bssid)` где bssid — lower-case или empty.
-    /// Empty ssid → unknown / no permission / no wifi.
-    @Suppress("DEPRECATION")
+    /// Delegate to `WifiInfoReader` — same defensive read как у sing-box
+    /// callback. Returns `(ssid, bssid)` или null при ошибке. Empty ssid
+    /// в результате трактуется как "unknown" — calling code (handlePending)
+    /// сам skip'нёт.
     private fun readWifi(): Pair<String, String>? {
-        // Permission preflight — на API 33+ NEARBY_WIFI_DEVICES обязателен,
-        // на 29+ BACKGROUND_LOCATION для connection_info из background.
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ctx.checkSelfPermission(
-                "android.permission.NEARBY_WIFI_DEVICES",
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return null
+        return when (val r = WifiInfoReader.read(ctx)) {
+            is WifiInfoReader.Result.Success -> r.ssid to r.bssid
+            is WifiInfoReader.Result.UnknownSsid -> "" to ""
+            else -> null
         }
-        if (Build.VERSION.SDK_INT >= 29 &&
-            ctx.checkSelfPermission(
-                "android.permission.ACCESS_BACKGROUND_LOCATION",
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return null
-        }
-        val info = try {
-            BoxApplication.wifiManager.connectionInfo
-        } catch (_: SecurityException) {
-            return null
-        } catch (_: RuntimeException) {
-            return null
-        } ?: return null
-
-        var ssid = info.ssid
-        if (ssid == null || ssid == "<unknown ssid>") return "" to ""
-        if (ssid.startsWith("\"") && ssid.endsWith("\"")) {
-            ssid = ssid.substring(1, ssid.length - 1)
-        }
-        val bssid = info.bssid?.lowercase() ?: ""
-        // Android placeholder для no-real-access — не пара которую стоит
-        // записывать в history.
-        if (bssid == "02:00:00:00:00:00") return "" to ""
-        return ssid to bssid
     }
 
     /// Если та же сеть что pending — оставляем таймер. Иначе cancel + new.

@@ -135,32 +135,22 @@ interface PlatformInterfaceWrapper : PlatformInterface {
     /// Combined с permission check в `BoxService.startSingbox` (post-`startOrReloadService`
     /// `needWIFIState() && !hasPermission()` warning log) — F12.3 теперь
     /// fully functional когда permission granted, fails gracefully когда нет.
-    @Suppress("DEPRECATION")
+    /// Delegate to `WifiInfoReader` — single source of truth для defensive
+    /// чтения wifi state. См. `WifiInfoReader.kt` docstring для детального
+    /// контекста (3 call-sites consolidation, drift risk история).
     override fun readWIFIState(): WIFIState? {
-        val wifiInfo = try {
-            BoxApplication.wifiManager.connectionInfo
-        } catch (e: SecurityException) {
-            // ACCESS_BACKGROUND_LOCATION (API 29+) или ACCESS_FINE_LOCATION
-            // (API 28-) not granted. Без catch'а SecurityException бы propagated
-            // через JNI и corrupted env → process abort с misleading
-            // "Unknown reference: 42" message.
-            android.util.Log.w("PIW", "readWIFIState: SecurityException — Location permission denied, returning null")
-            return null
-        } catch (e: RuntimeException) {
-            android.util.Log.w("PIW", "readWIFIState: ${e.javaClass.simpleName} — ${e.message}, returning null")
-            return null
-        } ?: return null
-
-        var ssid = wifiInfo.ssid
-        val bssid = wifiInfo.bssid ?: ""
-        if (ssid == "<unknown ssid>") {
-            android.util.Log.w("PIW", "readWIFIState: <unknown ssid> — likely missing NEARBY_WIFI_DEVICES (API 33+) or location services off")
-            return WIFIState("", "")
+        val state = WifiInfoReader.readAsState(BoxApplication.application)
+        if (state == null) {
+            android.util.Log.w("PIW",
+                "readWIFIState: null (permission missing / no wifi / runtime error)")
+        } else if (state.ssid.isEmpty()) {
+            android.util.Log.w("PIW",
+                "readWIFIState: <unknown ssid> — likely missing NEARBY_WIFI_DEVICES")
+        } else {
+            android.util.Log.d("PIW",
+                "readWIFIState: ssid='${state.ssid}' bssid='${state.bssid}'")
         }
-        if (ssid.startsWith("\"") && ssid.endsWith("\""))
-            ssid = ssid.substring(1, ssid.length - 1)
-        android.util.Log.d("PIW", "readWIFIState: ssid='$ssid' bssid='$bssid'")
-        return WIFIState(ssid, bssid)
+        return state
     }
 
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)

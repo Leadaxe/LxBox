@@ -9,9 +9,11 @@ import android.util.Log
 import android.widget.Toast
 import com.leadaxe.lxbox.vpn.BoxApplication
 import com.leadaxe.lxbox.vpn.BoxVpnService
+import com.leadaxe.lxbox.vpn.PermissionUtils
 import com.leadaxe.lxbox.vpn.VpnPlugin
 import com.leadaxe.lxbox.vpn.VpnStatus
 import com.leadaxe.lxbox.vpn.WifiHistoryBridge
+import com.leadaxe.lxbox.vpn.WifiInfoReader
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -70,12 +72,12 @@ class MainActivity : FlutterActivity() {
                         result.success(opened)
                     }
                     "checkNotificationPermission" -> {
-                        // Returns true if POST_NOTIFICATIONS granted (or API < 33 — implicit grant).
-                        val granted = if (android.os.Build.VERSION.SDK_INT >= 33) {
-                            checkSelfPermission("android.permission.POST_NOTIFICATIONS") ==
-                                android.content.pm.PackageManager.PERMISSION_GRANTED
-                        } else true
-                        result.success(granted)
+                        // POST_NOTIFICATIONS — runtime permission на API 33+.
+                        // На pre-33 концепта не было → implicit grant.
+                        result.success(PermissionUtils.has(
+                            this, "android.permission.POST_NOTIFICATIONS",
+                            minSdk = 33,
+                        ))
                     }
                     "requestNotificationPermission" -> {
                         // Trigger system permission dialog for POST_NOTIFICATIONS on API 33+.
@@ -90,30 +92,23 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "checkNearbyWifiPermission" -> {
-                        // API 33+: NEARBY_WIFI_DEVICES is the canonical permission
-                        // for `WifiInfo.ssid`. Pre-33 → implicit grant (covered by
-                        // ACCESS_FINE_LOCATION / ACCESS_BACKGROUND_LOCATION).
-                        val granted = if (android.os.Build.VERSION.SDK_INT >= 33) {
-                            checkSelfPermission("android.permission.NEARBY_WIFI_DEVICES") ==
-                                android.content.pm.PackageManager.PERMISSION_GRANTED
-                        } else true
-                        result.success(granted)
+                        // API 33+ canonical permission для `WifiInfo.ssid`.
+                        // Pre-33 → implicit grant (covered by location-perms).
+                        result.success(PermissionUtils.has(
+                            this, "android.permission.NEARBY_WIFI_DEVICES",
+                            minSdk = 33,
+                        ))
                     }
                     "checkBackgroundLocationPermission" -> {
-                        // API 29+: ACCESS_BACKGROUND_LOCATION required для
-                        // `WifiManager.connectionInfo` из background. Pre-Q —
-                        // covered by ACCESS_FINE_LOCATION (implicit). На API 30+
-                        // permission можно выдать ТОЛЬКО через Settings, не runtime.
-                        val granted = if (android.os.Build.VERSION.SDK_INT >= 29) {
-                            checkSelfPermission(
-                                "android.permission.ACCESS_BACKGROUND_LOCATION",
-                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        // API 29+ требуется BACKGROUND_LOCATION для wifi info
+                        // из background. Pre-Q → fallback на FINE_LOCATION
+                        // (implicit чтение из foreground).
+                        val name = if (android.os.Build.VERSION.SDK_INT >= 29) {
+                            "android.permission.ACCESS_BACKGROUND_LOCATION"
                         } else {
-                            checkSelfPermission(
-                                "android.permission.ACCESS_FINE_LOCATION",
-                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            "android.permission.ACCESS_FINE_LOCATION"
                         }
-                        result.success(granted)
+                        result.success(PermissionUtils.has(this, name))
                     }
                     "requestNearbyWifiPermission" -> {
                         // Trigger system runtime prompt for NEARBY_WIFI_DEVICES.
@@ -247,54 +242,22 @@ class MainActivity : FlutterActivity() {
         return false
     }
 
-    /// §051 Phase 2 — read current Wi-Fi connection info через тот же путь
-    /// что sing-box (`WifiManager.connectionInfo`). Symmetric с
-    /// `PlatformInterfaceWrapper.readWIFIState`: defensive try/catch на случай
-    /// SecurityException / `<unknown ssid>`.
-    ///
-    /// Returns Map с ключами `ssid`, `bssid` (lower-case) на success, либо
-    /// `error` с одним из значений: `permission_missing`, `no_wifi`,
-    /// `unknown_ssid`, `runtime_error`.
-    @Suppress("DEPRECATION")
+    /// §051 Phase 2 — return current Wi-Fi info как Map для Flutter
+    /// MethodChannel. Тонкая обёртка над `WifiInfoReader.read()` — same
+    /// defensive логика что у sing-box callback и auto-record observer.
     private fun getCurrentWifiInfoMap(): Map<String, String> {
-        // Permission preflight — на API 33+ нужен NEARBY_WIFI_DEVICES,
-        // на 29-32 ACCESS_BACKGROUND_LOCATION (или fine на 28-).
-        if (android.os.Build.VERSION.SDK_INT >= 33) {
-            if (checkSelfPermission("android.permission.NEARBY_WIFI_DEVICES") !=
-                android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                return mapOf("error" to "permission_missing")
-            }
+        return when (val r = WifiInfoReader.read(this)) {
+            is WifiInfoReader.Result.Success ->
+                mapOf("ssid" to r.ssid, "bssid" to r.bssid)
+            is WifiInfoReader.Result.PermissionMissing ->
+                mapOf("error" to "permission_missing")
+            is WifiInfoReader.Result.NoWifi ->
+                mapOf("error" to "no_wifi")
+            is WifiInfoReader.Result.UnknownSsid ->
+                mapOf("error" to "unknown_ssid")
+            is WifiInfoReader.Result.RuntimeError ->
+                mapOf("error" to "runtime_error")
         }
-        if (android.os.Build.VERSION.SDK_INT >= 29) {
-            if (checkSelfPermission(
-                    "android.permission.ACCESS_BACKGROUND_LOCATION",
-                ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                return mapOf("error" to "permission_missing")
-            }
-        }
-        val info = try {
-            BoxApplication.wifiManager.connectionInfo
-        } catch (e: SecurityException) {
-            return mapOf("error" to "permission_missing")
-        } catch (e: RuntimeException) {
-            return mapOf("error" to "runtime_error")
-        } ?: return mapOf("error" to "no_wifi")
-
-        var ssid = info.ssid
-        if (ssid == null || ssid == "<unknown ssid>") {
-            return mapOf("error" to "unknown_ssid")
-        }
-        if (ssid.startsWith("\"") && ssid.endsWith("\"")) {
-            ssid = ssid.substring(1, ssid.length - 1)
-        }
-        val bssid = info.bssid?.lowercase() ?: ""
-        // Bssid `02:00:00:00:00:00` Android отдаёт когда нет реального доступа
-        // к connection info (e.g., other-app's network) — трактуем как
-        // `unknown_ssid` чтобы UI не предлагал к add'у мусорную пару.
-        if (bssid == "02:00:00:00:00:00") {
-            return mapOf("error" to "unknown_ssid")
-        }
-        return mapOf("ssid" to ssid, "bssid" to bssid)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
