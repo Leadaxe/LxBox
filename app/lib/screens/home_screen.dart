@@ -275,9 +275,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// init подписок + затем `start()` AutoUpdater'а (триггер #1 appStart
   /// и заведение periodic-таймера на 1 час). Порядок важен — AutoUpdater
   /// итерирует `entries`, они должны быть загружены с диска.
+  ///
+  /// Bootstrap-config после init: если в storage есть subs но native ещё
+  /// не имеет загруженного config'а (`state.configRaw.isEmpty`) — авто-
+  /// генерируем и сохраняем. Закрывает класс «UI пустой после backup-
+  /// import + restart» / «storage был мутирован через Debug API, нужно
+  /// руками идти в Subscriptions чтобы UI ожил».
   Future<void> _initSubsAndAutoUpdate() async {
     await _subController.init();
     _autoUpdater.start();
+
+    // Wait one frame: HomeController.init() is also unawaited above; даём
+    // ему успеть прочитать существующий config (если был). После этого
+    // решаем: bootstrap нужен только если config реально пустой.
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    if (!mounted) return;
+    if (_subController.entries.isNotEmpty &&
+        _controller.state.configRaw.isEmpty) {
+      final config = await _subController.generateConfig();
+      if (config != null && mounted) {
+        await _controller.saveParsedConfig(config);
+      }
+    }
   }
 
   Future<void> _loadHapticPref() async {

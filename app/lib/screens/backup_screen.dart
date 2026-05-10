@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../services/backup_service.dart';
 import '../services/error_format.dart';
+import '../vpn/box_vpn_client.dart';
 
 /// Backup & restore UI — спека [§040](../../docs/spec/features/040 backup
 /// restore ui/spec.md). Тонкая обёртка над [BackupService] — orchestration
@@ -177,7 +178,27 @@ class _BackupScreenState extends State<BackupScreen> {
       if (apply.hasErrors) {
         summary.write(' (${apply.errors.length} errors)');
       }
-      _snack(summary.toString());
+      // applyImport пишет в SettingsStorage, но controllers (Subscription /
+      // Home / Routing screen state) держат in-memory snapshot — UI остаётся
+      // stale. Restart-кнопка вызывает `quitApp()` (finishAffinity +
+      // killProcess); юзер сам тапает иконку, app поднимается с fresh
+      // storage. _initSubsAndAutoUpdate в HomeScreen на старте видит «есть
+      // entries но нет config» и авто-trigger'ит generateConfig+save.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(summary.toString()),
+            duration: const Duration(seconds: 6),
+            action: parts.isEmpty
+                ? null
+                : SnackBarAction(
+                    label: 'Restart now',
+                    onPressed: () =>
+                        unawaited(BoxVpnClient().quitApp()),
+                  ),
+          ),
+        );
+      }
     } catch (e) {
       _snack('Import failed: ${formatUserError(e)}');
     } finally {
