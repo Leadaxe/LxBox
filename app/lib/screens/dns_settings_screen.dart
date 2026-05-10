@@ -13,9 +13,9 @@ import '../services/builder/preset_expand.dart';
 import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
 
-/// DNS Settings (§014, §041).
+/// DNS Settings (§014, §061 dns-rules-refactor, бывший feature §041).
 ///
-/// §041 — DNS rules refactored to first-class named/toggleable model:
+/// §061 — DNS rules refactored to first-class named/toggleable model:
 /// `dns_options.rules: List<{enabled, type, title, rule?}>` где
 /// `type ∈ {user, template, rule}`. Linear order (free reorder через
 /// drag-handle), individual enable/disable, user-rules editable.
@@ -51,7 +51,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
   /// ref'ов и для override-detection. preset > template на tag-collision.
   Map<String, Map<String, dynamic>> _presetServersByTag = {};
 
-  /// §041 + §032: structured rules list `{enabled, kind, title?, presetId?, rule?}`.
+  /// §061 + §032: structured rules list `{enabled, kind, title?, presetId?, rule?}`.
   List<Map<String, dynamic>> _rules = [];
 
   /// Name-keyed map: template defaults from wizard_template.json
@@ -676,7 +676,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
 
           const Divider(height: 32),
 
-          // --- DNS Rules (§041) ---
+          // --- DNS Rules (§061 dns-rules-refactor) ---
           Row(
             children: [
               Text('DNS Rules', style: theme.textTheme.titleMedium),

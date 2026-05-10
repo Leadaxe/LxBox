@@ -32,7 +32,7 @@
 | `fatal` | Только фатальные |
 | `panic` | Только паники |
 
-Настраивается на экране VPN Settings (см. 005x config generator → vars).
+Настраивается на экране VPN Settings (см. [026 parser v2 → vars](../026%20parser%20v2/spec.md); legacy reference v1 — [`../../tasks/058-config-generator-wizard-v1-superseded/`](../../tasks/058-config-generator-wizard-v1-superseded/)).
 
 ## Sing-box Log Viewer
 

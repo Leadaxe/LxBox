@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Implemented (targeting v1.7.1) |
 | Дата | 2026-05-08 |
-| Связанные spec'ы | [`030 custom routing rules`](../030%20custom%20routing%20rules/spec.md) — co-existing layer (routing-уровень внутри sing-box vs OS-уровень здесь); [`013 routing`](../013%20routing/spec.md) — куда добавляется UI; [`031 debug api`](../031%20debug%20api/spec.md) — экспонирует CRUD endpoints |
+| Связанные spec'ы | [`030 custom routing rules`](../030%20custom%20routing%20rules/spec.md) — co-existing layer (routing-уровень внутри sing-box vs OS-уровень здесь); [`tasks/059-routing-v1-superseded`](../../tasks/059-routing-v1-superseded/spec.md) — исторический UI на Routing-экране; [`031 debug api`](../031%20debug%20api/spec.md) — экспонирует CRUD endpoints |
 | Затронутые файлы | `app/lib/services/settings_storage.dart`, `app/lib/services/builder/post_steps.dart`, `app/lib/services/builder/build_config.dart`, `app/lib/screens/routing_screen.dart`, `app/lib/screens/tun_apps_tab.dart` (новый), `app/lib/services/debug/handlers/settings.dart`, `docs/STORAGE.md`, тесты |
 
 ## Цель

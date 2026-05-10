@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | **Реализовано и в продакшене** (2026-04-18) |
 | Дата | 2026-04-18 |
-| Зависимости | [`004`](../004x%20subscription%20parser/spec.md) (заменено 026), [`026`](../026%20parser%20v2/spec.md) |
+| Зависимости | [`026 parser v2`](../026%20parser%20v2/spec.md) (заменил v1 — см. [`../../tasks/057-subscription-parser-v1-superseded/`](../../tasks/057-subscription-parser-v1-superseded/)) |
 
 ## Прогресс
 

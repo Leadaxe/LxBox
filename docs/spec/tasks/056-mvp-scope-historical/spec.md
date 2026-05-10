@@ -1,11 +1,11 @@
-# 002 — MVP: scope продукта
+# 056 — MVP: scope продукта (historical)
 
 | Поле | Значение |
 |------|----------|
-| Статус | Реализовано |
-| Задачи | [`tasks.md`](tasks.md) |
-| Технический стек | [`../001%20mobile%20stack/spec.md`](../001%20mobile%20stack/spec.md) |
-| UI узлов / Clash API | [`../003%20home%20screen/spec.md`](../003%20home%20screen/spec.md) |
+| Статус | Historical — MVP scope зафиксирован и давно реализован |
+| История | Был `features/002 mvp scope`, демотирован через §054 (исторический milestone, не живая capability) |
+| Технический стек | [`055-mobile-stack-decision/spec.md`](../055-mobile-stack-decision/spec.md) |
+| UI узлов / Clash API | [`features/003 home screen/spec.md`](../../features/003%20home%20screen/spec.md) |
 
 ## Платформа первой версии
 

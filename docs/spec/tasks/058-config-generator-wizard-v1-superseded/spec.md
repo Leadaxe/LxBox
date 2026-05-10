@@ -1,8 +1,8 @@
-# 005 — Генератор конфига (Wizard Template)
+# 058 — Генератор конфига (Wizard Template, v1, superseded)
 
 > # 🚫 SUPERSEDED
 >
-> **Build-логика полностью заменена спекой [`026 parser v2`](../026%20parser%20v2/spec.md)** (2026-04-18, v1.3.0).
+> **Build-логика полностью заменена спекой [`features/026 parser v2`](../../features/026%20parser%20v2/spec.md)** (2026-04-18, v1.3.0).
 > `config_builder.dart` (~550 LOC) **удалён** в Фазе 4 спеки 026. Вся сборка теперь идёт через `lib/services/builder/build_config.dart` с post-steps (`applyTlsFragment`, `applyMixedCaseSni`, `applyCustomDns`, `applySelectableRules`, `applyAppRules`) и sealed `ServerList.build(ctx)` extension.
 >
 > **Что осталось актуальным:** сам шаблон `app/assets/wizard_template.json` (секции `dns_options`, `vars`, `selectable_rules`, `config`, `preset_groups`) и concept "wizard vars через `@var_name` substitution". Структура шаблона описана в этом документе и не менялась в 026.
@@ -12,7 +12,8 @@
 | Поле | Значение |
 |------|----------|
 | Статус | 🚫 Superseded в части build-логики (шаблон — остаётся) |
-| Зависимости | [`026 parser v2`](../026%20parser%20v2/spec.md) |
+| История | Был `features/005x config generator`, демотирован в task через §054 |
+| Зависимости | [`features/026 parser v2`](../../features/026%20parser%20v2/spec.md) |
 | Референс | singbox-launcher `bin/wizard_template.json`, `core/config/outbound_generator.go` |
 
 ## 1. Цель

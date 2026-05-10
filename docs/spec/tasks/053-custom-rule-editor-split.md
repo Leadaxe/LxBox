@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Stage 1 done (v14080); Stage 2+3 in progress |
+| Статус | Stage 1 + Stage 2 done (v14090); Stage 3 deferred |
 | Дата | 2026-05-10 |
 | Связанные | [`030 custom routing`](../features/030%20custom%20routing/spec.md) — sealed `CustomRule`; [`051 custom rule wifi conditions`](./051-custom-rule-wifi-conditions.md) — последний big-add (+539 LOC wifi секции в editor) |
 | Затронутые файлы | `app/lib/screens/custom_rule_edit_screen.dart` (split source) → `app/lib/screens/custom_rule_edit/` (новая папка с секциями); `app/lib/widgets/wifi_saved_picker_sheet.dart` (extract); tests / smoke |
@@ -123,6 +123,57 @@ Total: ~ 5 дней с тестами + smoke.
 - [x] Existing tests pass (`flutter test` 548+) — Stage 1: 601 pass
 - [x] New unit tests для validators + controller (≥ 10) — Stage 1: 53 new (validators + normalizers)
 - [ ] Smoke: создать inline + srs + preset правила через UI без regression
+
+## Stage 2 — Done (v14090)
+
+7 секций + 2 shared widgets extracted в `custom_rule_edit/sections/` +
+`custom_rule_edit/widgets/`:
+
+- `widgets/section_header.dart` — title + hint StatelessWidget
+- `widgets/items_field.dart` — multiline TextField + count badge +
+  Paste/Clear; **StatefulWidget**, подписывается на controller через
+  `addListener` для self-rebuild на change
+- `sections/match_section.dart` — Domain/Suffix/Keyword/CIDR fields +
+  ipIsPrivate toggle
+- `sections/port_section.dart` — Port + PortRange
+- `sections/protocol_section.dart` — chips Wrap
+- `sections/apps_section.dart` — AppPicker entry tile
+- `sections/srs_section.dart` — URL + ☁ button (download state + menu),
+  **public `SrsDownloadState` enum** (был private `_SrsDownloadState`)
+- `sections/wifi_section.dart` — chip-list + 3 action buttons +
+  permission hint
+
+Editor: **1795 → 1330 LOC** (-465 LOC, cumulative Stage 1+2: -730 LOC).
+Sections — dumb StatelessWidget с props (controllers + callbacks).
+State + lifecycle остаются на `_CustomRuleEditScreenState` (controllers
+нужны для `_snapshot()`/`_isDirty()`).
+
+Удалены private методы: `_sectionHeader`, `_itemsField`, `_pasteInto`
+(теперь embedded в `ItemsField`), `_invalidCount` (now in `ItemsField`),
+6× section builders.
+
+## Stage 3 — Deferred (нужен controller pattern)
+
+Изначально планировалось вынести tabs (Params/View) + state controller.
+Но при практическом подходе обнаружилось: extraction tab'ов БЕЗ
+controller pattern = просто конструктор с 15+ props = window dressing,
+не реальный decoupling. А full controller pattern (`CustomRuleEditController
+extends ChangeNotifier` + Provider/InheritedWidget + sections subscribe
+to selective slices) — это substantial state migration, заслуживает
+отдельной итерации.
+
+Preset rendering (`_buildPresetParams`, `_onBoolVarToggle`,
+`_buildPresetVarWidget`) — ~370 LOC очень preset-specific логики;
+extract'нуть можно но без controller'а это просто перемещение в
+другой файл с теми же coupling issues.
+
+Acceptance для Stage 3 (когда дойдут руки):
+- `CustomRuleEditController` ChangeNotifier с всем state
+- Sections принимают controller через `Provider` / `InheritedWidget`
+  с `select` subscriptions (не rebuild всё на любое изменение)
+- `params_tab.dart` / `view_tab.dart` — отдельные widgets
+- Preset rendering в свой `preset_params_tab.dart` или подпакет
+- Editor scaffold ≤ 200 LOC
 
 ## Stage 1 — Done (v14080)
 

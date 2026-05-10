@@ -20,7 +20,12 @@ import '../widgets/wifi_saved_picker_sheet.dart';
 import 'app_picker_screen.dart';
 import 'app_settings_screen.dart';
 import 'custom_rule_edit/normalizers.dart' as norm;
-import 'custom_rule_edit/validators.dart' as v;
+import 'custom_rule_edit/sections/apps_section.dart';
+import 'custom_rule_edit/sections/match_section.dart';
+import 'custom_rule_edit/sections/port_section.dart';
+import 'custom_rule_edit/sections/protocol_section.dart';
+import 'custom_rule_edit/sections/srs_section.dart';
+import 'custom_rule_edit/sections/wifi_section.dart';
 
 /// Редактор `CustomRule` (spec §030).
 ///
@@ -87,7 +92,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
 
   /// Состояние cloud-индикатора рядом с URL. Определяется на open
   /// (isCached) + меняется по клику (_downloadSrs).
-  _SrsDownloadState _srsState = _SrsDownloadState.none;
+  SrsDownloadState _srsState = SrsDownloadState.none;
 
   /// §045: bool var'ы у которых сейчас идёт on-toggle download связанных
   /// rule_set'ов. Нужно чтобы Switch был disabled (показывал spinner)
@@ -118,8 +123,8 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
       RuleSetDownloader.isCached(r.id).then((cached) {
         if (!mounted) return;
         setState(() => _srsState = cached
-            ? _SrsDownloadState.cached
-            : _SrsDownloadState.none);
+            ? SrsDownloadState.cached
+            : SrsDownloadState.none);
       });
     }
     if (r is CustomRulePreset && widget.preset != null) {
@@ -268,11 +273,11 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
   Future<void> _downloadSrs() async {
     final url = _srsUrlCtrl.text.trim();
     if (url.isEmpty) return;
-    setState(() => _srsState = _SrsDownloadState.loading);
+    setState(() => _srsState = SrsDownloadState.loading);
     final path = await RuleSetDownloader.download(widget.initial.id, url);
     if (!mounted) return;
     setState(() => _srsState =
-        path != null ? _SrsDownloadState.cached : _SrsDownloadState.error);
+        path != null ? SrsDownloadState.cached : SrsDownloadState.error);
   }
 
   @override
@@ -288,34 +293,6 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
     super.dispose();
   }
 
-
-  int _invalidCount(TextEditingController ctrl, bool Function(String) isValid,
-      {String Function(String)? normalize}) {
-    var n = 0;
-    for (final raw in norm.splitRaw(ctrl.text)) {
-      final v = normalize != null ? normalize(raw) : raw;
-      if (!isValid(v)) n++;
-    }
-    return n;
-  }
-
-  // ─── Actions ──────────────────────────────────────────────────────────
-
-  Future<void> _pasteInto(TextEditingController ctrl) async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final text = data?.text ?? '';
-    if (text.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Clipboard is empty')),
-        );
-      }
-      return;
-    }
-    final existing = ctrl.text.trim();
-    ctrl.text = existing.isEmpty ? text : '$existing\n$text';
-    setState(() {});
-  }
 
   Future<void> _save() async {
     final name = _nameCtrl.text.trim();
@@ -411,7 +388,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
         await RuleSetDownloader.delete(widget.initial.id);
         if (!mounted) return;
         setState(() {
-          _srsState = _SrsDownloadState.none;
+          _srsState = SrsDownloadState.none;
           _enabled = false;
         });
     }
@@ -444,152 +421,6 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
 
   // ─── Widgets ──────────────────────────────────────────────────────────
 
-  Widget _sectionHeader(ThemeData t, String title, String hint) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 12, bottom: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title,
-              style: t.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: t.colorScheme.primary,
-              )),
-          Text(hint,
-              style: TextStyle(
-                fontSize: 12,
-                color: t.colorScheme.onSurfaceVariant,
-              )),
-        ],
-      ),
-    );
-  }
-
-  Widget _itemsField(
-    ThemeData t, {
-    required String label,
-    required TextEditingController controller,
-    required int invalid,
-    int minLines = 2,
-    int maxLines = 5,
-    String? hint,
-  }) {
-    final count = norm.splitRaw(controller.text).length;
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(label,
-                    style: t.textTheme.bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w500)),
-              ),
-              Text(
-                invalid == 0
-                    ? (count == 0 ? '' : '$count')
-                    : '$count · $invalid invalid',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: invalid > 0
-                      ? t.colorScheme.error
-                      : t.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          TextField(
-            controller: controller,
-            onChanged: (_) => setState(() {}),
-            minLines: minLines,
-            maxLines: maxLines,
-            style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
-            decoration: InputDecoration(
-              border: const OutlineInputBorder(),
-              isDense: true,
-              hintText: hint,
-              hintStyle: const TextStyle(
-                fontSize: 12,
-                fontFamily: 'monospace',
-              ),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Row(
-            children: [
-              TextButton.icon(
-                icon: const Icon(Icons.content_paste, size: 14),
-                label: const Text('Paste', style: TextStyle(fontSize: 12)),
-                onPressed: () => _pasteInto(controller),
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(0, 28),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                ),
-              ),
-              TextButton.icon(
-                icon: const Icon(Icons.clear, size: 14),
-                label: const Text('Clear', style: TextStyle(fontSize: 12)),
-                onPressed: () {
-                  controller.clear();
-                  setState(() {});
-                },
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(0, 28),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _protocolSection(ThemeData t) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader(t, 'PROTOCOL', 'AND with match. L7 sniff.'),
-        Wrap(
-          spacing: 4,
-          runSpacing: -8,
-          children: kKnownProtocols.map((p) {
-            final checked = _protocols.contains(p);
-            return SizedBox(
-              width: 160,
-              child: CheckboxListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                visualDensity: VisualDensity.compact,
-                title: Text(p,
-                    style: const TextStyle(
-                        fontSize: 13, fontFamily: 'monospace')),
-                value: checked,
-                onChanged: (v) {
-                  setState(() {
-                    if (v == true) {
-                      _protocols.add(p);
-                    } else {
-                      _protocols.remove(p);
-                    }
-                  });
-                },
-              ),
-            );
-          }).toList(),
-        ),
-        if (_protocols.isNotEmpty)
-          Text('${_protocols.length} selected',
-              style: TextStyle(
-                  fontSize: 12, color: t.colorScheme.onSurfaceVariant)),
-      ],
-    );
-  }
-
   Future<void> _openAppPicker() async {
     final result = await Navigator.push<AppPickerResult>(
       context,
@@ -606,112 +437,6 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
   /// Chip = одна сеть `(ssid, bssid?)`. Source-of-truth — `_wifiNetworks`.
   /// Save zip'ит в `wifiSsids`/`wifiBssids` через _zipWifiEntries (см.
   /// CustomRule §051: lists независимы в sing-box, AND-семантика).
-  Widget _wifiSection(ThemeData t) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader(
-          t,
-          'WI-FI NETWORK',
-          'AND with match. Active only on listed Wi-Fi networks.',
-        ),
-        if (_wifiNetworks.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(
-              'No Wi-Fi conditions — rule is active on every network.',
-              style: TextStyle(
-                fontSize: 12,
-                color: t.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          )
-        else
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [
-              for (var i = 0; i < _wifiNetworks.length; i++)
-                InputChip(
-                  avatar: const Icon(Icons.wifi, size: 16),
-                  label: Text(
-                    _wifiNetworks[i].bssid.isEmpty
-                        ? _wifiNetworks[i].ssid
-                        : '${_wifiNetworks[i].ssid}  ·  ${_wifiNetworks[i].bssid}',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  onDeleted: () =>
-                      setState(() => _wifiNetworks.removeAt(i)),
-                ),
-            ],
-          ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 4,
-          children: [
-            OutlinedButton.icon(
-              icon: const Icon(Icons.my_location, size: 16),
-              label: const Text('Add current'),
-              onPressed: _addCurrentWifi,
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 32),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                textStyle: const TextStyle(fontSize: 12),
-              ),
-            ),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.history, size: 16),
-              label: const Text('Pick saved'),
-              onPressed: _pickSavedWifi,
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 32),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                textStyle: const TextStyle(fontSize: 12),
-              ),
-            ),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.edit, size: 16),
-              label: const Text('Manual'),
-              onPressed: _manualAddWifi,
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 32),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                textStyle: const TextStyle(fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        InkWell(
-          onTap: _openWifiPermissionsScreen,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline,
-                    size: 14, color: t.colorScheme.onSurfaceVariant),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    'Needs Location + Nearby Wi-Fi permissions. Tap to manage.',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: t.colorScheme.onSurfaceVariant,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// «Add current»: читает текущий SSID/BSSID, дописывает в chips,
-  /// upsert'ит в wifi_history. Permission missing → shared dialog.
   Future<void> _addCurrentWifi() async {
     final result = await ul.UrlLauncher.getCurrentWifiInfo();
     if (!mounted) return;
@@ -792,239 +517,6 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
     ));
   }
 
-  Widget _appsSection(ThemeData t) {
-    final label = _packages.isEmpty
-        ? 'Select apps…'
-        : '${_packages.length} ${_packages.length == 1 ? 'app' : 'apps'} selected — tap to edit';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader(t, 'APPS', 'AND with match. Route selected packages only.'),
-        InkWell(
-          onTap: _openAppPicker,
-          borderRadius: BorderRadius.circular(4),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            child: Row(
-              children: [
-                Icon(Icons.apps, size: 18, color: t.colorScheme.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(label,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: _packages.isEmpty
-                            ? t.colorScheme.onSurfaceVariant
-                            : t.colorScheme.primary,
-                      )),
-                ),
-                if (_packages.isNotEmpty)
-                  IconButton(
-                    icon: const Icon(Icons.clear, size: 18),
-                    tooltip: 'Clear',
-                    onPressed: () => setState(() => _packages = []),
-                  ),
-                const Icon(Icons.chevron_right, size: 18),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _portSection(ThemeData t) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader(t, 'PORT', 'AND with match. Port OR port_range.'),
-        _itemsField(
-          t,
-          label: 'Port (exact)',
-          controller: _portCtrl,
-          invalid: _invalidCount(_portCtrl, v.isValidPort),
-          hint: '443\n80',
-        ),
-        _itemsField(
-          t,
-          label: 'Port range',
-          controller: _portRangeCtrl,
-          invalid: _invalidCount(_portRangeCtrl, v.isValidPortRange),
-          hint: '8000:9000\n:3000',
-        ),
-      ],
-    );
-  }
-
-  Widget _matchSection(ThemeData t) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader(
-          t,
-          'MATCH',
-          'Fields work in parallel (OR — any match wins).',
-        ),
-        _itemsField(
-          t,
-          label: 'Domain (exact)',
-          controller: _domainCtrl,
-          invalid: _invalidCount(_domainCtrl, v.isValidDomain,
-              normalize: (s) => s.toLowerCase()),
-          hint: 'example.com',
-        ),
-        _itemsField(
-          t,
-          label: 'Domain suffix',
-          controller: _domainSuffixCtrl,
-          invalid: _invalidCount(_domainSuffixCtrl, v.isValidDomain,
-              normalize: (s) {
-            var v = s.toLowerCase();
-            if (v.startsWith('.')) v = v.substring(1);
-            return v;
-          }),
-          hint: 'google.com\n.ru',
-        ),
-        _itemsField(
-          t,
-          label: 'Domain keyword',
-          controller: _domainKeywordCtrl,
-          invalid: _invalidCount(_domainKeywordCtrl, v.isValidKeyword),
-          hint: 'tracker\nanalytics',
-        ),
-        _itemsField(
-          t,
-          label: 'IP CIDR',
-          controller: _ipCidrCtrl,
-          invalid: _invalidCount(_ipCidrCtrl, v.isValidCidr,
-              normalize: (s) {
-            if (!s.contains('/')) return s.contains(':') ? '$s/128' : '$s/32';
-            return s;
-          }),
-          hint: '10.0.0.0/8\n2001:db8::/32',
-        ),
-        CheckboxListTile(
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          controlAffinity: ListTileControlAffinity.leading,
-          value: _ipIsPrivate,
-          onChanged: (v) => setState(() => _ipIsPrivate = v ?? false),
-          title: const Text('Private IP',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-          subtitle: const Text(
-              'Match RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + link-local',
-              style: TextStyle(fontSize: 11)),
-        ),
-      ],
-    );
-  }
-
-  Widget _srsSection(ThemeData t) {
-    final url = _srsUrlCtrl.text.trim();
-    final urlValid = url.isNotEmpty && v.isValidUrl(url);
-
-    Widget cloud;
-    if (_srsState == _SrsDownloadState.loading) {
-      cloud = const SizedBox(
-        width: 48,
-        height: 48,
-        child: Center(
-          child: SizedBox(
-            width: 14,
-            height: 14,
-            child: CircularProgressIndicator(strokeWidth: 1.5),
-          ),
-        ),
-      );
-    } else {
-      final (IconData icon, Color color) = switch (_srsState) {
-        _SrsDownloadState.cached => (Icons.cloud_done_outlined, Colors.green),
-        _SrsDownloadState.error =>
-          (Icons.cloud_off_outlined, t.colorScheme.error),
-        _SrsDownloadState.none || _SrsDownloadState.loading =>
-          (Icons.cloud_download_outlined, t.colorScheme.onSurfaceVariant),
-      };
-      // GestureDetector (не IconButton) — чтобы long-press не перехватывался
-      // IconButton'ом. Long-press → popup menu Refresh / Delete rule.
-      cloud = GestureDetector(
-        onTap: urlValid ? _downloadSrs : null,
-        onLongPressStart: (d) => _showCloudMenu(d.globalPosition),
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: 48,
-          height: 48,
-          alignment: Alignment.center,
-          child: Icon(icon, color: color, size: 20),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionHeader(
-          t,
-          'RULE-SET URL',
-          'Manual download only. Tap ☁ to fetch the .srs file locally.',
-        ),
-        TextField(
-          controller: _srsUrlCtrl,
-          onChanged: (_) {
-            // Пользователь меняет URL — старый cached-файл для этого URL
-            // становится условно stale, но ui-state сбрасываем только если
-            // был 'error' (чтобы юзер мог опять попробовать после правки).
-            setState(() {
-              if (_srsState == _SrsDownloadState.error) {
-                _srsState = _SrsDownloadState.none;
-              }
-            });
-          },
-          style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
-          decoration: InputDecoration(
-            border: const OutlineInputBorder(),
-            isDense: true,
-            hintText: 'https://example.com/rules.srs',
-            prefixIcon: IconButton(
-              icon: const Icon(Icons.link, size: 18),
-              tooltip: 'Copy URL',
-              onPressed: () async {
-                final text = _srsUrlCtrl.text.trim();
-                if (text.isEmpty) return;
-                await Clipboard.setData(ClipboardData(text: text));
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('URL copied')),
-                );
-              },
-            ),
-            suffixIcon: Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: cloud,
-            ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        TextButton.icon(
-          icon: const Icon(Icons.content_paste, size: 14),
-          label: const Text('Paste', style: TextStyle(fontSize: 12)),
-          onPressed: () async {
-            final data = await Clipboard.getData(Clipboard.kTextPlain);
-            final text = (data?.text ?? '').trim();
-            if (text.isEmpty) return;
-            _srsUrlCtrl.text = text;
-            setState(() {});
-          },
-          style: TextButton.styleFrom(
-            minimumSize: const Size(0, 28),
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ─── Build ────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1096,7 +588,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
                 value: _enabled,
                 // srs без кэша — нельзя включить, сначала Download.
                 onChanged: (_kind == CustomRuleKind.srs &&
-                        _srsState != _SrsDownloadState.cached)
+                        _srsState != SrsDownloadState.cached)
                     ? null
                     : (v) => setState(() => _enabled = v),
               ),
@@ -1112,7 +604,11 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
           ),
           const SizedBox(height: 16),
           const Divider(),
-          _appsSection(theme),
+          AppsSection(
+            packages: _packages,
+            onTap: _openAppPicker,
+            onClear: () => setState(() => _packages = []),
+          ),
           const SizedBox(height: 8),
           const Divider(),
           Text('Source', style: theme.textTheme.titleSmall),
@@ -1126,7 +622,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
                 // Переключение на srs без кэша → правило нельзя держать
                 // включённым, сбрасываем _enabled.
                 if (_kind == CustomRuleKind.srs &&
-                    _srsState != _SrsDownloadState.cached) {
+                    _srsState != SrsDownloadState.cached) {
                   _enabled = false;
                 }
               });
@@ -1153,13 +649,53 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
             ),
           ),
           const Divider(),
-          if (_kind == CustomRuleKind.inline) _matchSection(theme),
-          if (_kind == CustomRuleKind.srs) _srsSection(theme),
-          _portSection(theme),
-          _protocolSection(theme),
+          if (_kind == CustomRuleKind.inline)
+            MatchSection(
+              domainCtrl: _domainCtrl,
+              domainSuffixCtrl: _domainSuffixCtrl,
+              domainKeywordCtrl: _domainKeywordCtrl,
+              ipCidrCtrl: _ipCidrCtrl,
+              ipIsPrivate: _ipIsPrivate,
+              onIpIsPrivateChanged: (v) =>
+                  setState(() => _ipIsPrivate = v),
+            ),
+          if (_kind == CustomRuleKind.srs)
+            SrsSection(
+              urlCtrl: _srsUrlCtrl,
+              state: _srsState,
+              onDownload: _downloadSrs,
+              onShowCloudMenu: _showCloudMenu,
+              onUrlChanged: () {
+                if (_srsState == SrsDownloadState.error) {
+                  setState(() => _srsState = SrsDownloadState.none);
+                }
+              },
+            ),
+          PortSection(
+            portCtrl: _portCtrl,
+            portRangeCtrl: _portRangeCtrl,
+          ),
+          ProtocolSection(
+            selected: _protocols,
+            onToggle: (p, checked) => setState(() {
+              if (checked) {
+                _protocols.add(p);
+              } else {
+                _protocols.remove(p);
+              }
+            }),
+          ),
           if (_kind == CustomRuleKind.inline ||
               _kind == CustomRuleKind.srs)
-            _wifiSection(theme),
+            WifiSection(
+              networks: _wifiNetworks,
+              onRemoveAt: (i) =>
+                  setState(() => _wifiNetworks.removeAt(i)),
+              onAddCurrent: _addCurrentWifi,
+              onPickSaved: _pickSavedWifi,
+              onManual: _manualAddWifi,
+              onTapPermissionsHint: _openWifiPermissionsScreen,
+            ),
           const SizedBox(height: 24),
           const Divider(),
           const SizedBox(height: 12),
@@ -1579,7 +1115,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
         // download'а). Реальный путь живёт в build_config'е runtime'а.
         final srsPaths = <String, String>{};
         if (_kind == CustomRuleKind.srs) {
-          srsPaths[widget.initial.id] = _srsState == _SrsDownloadState.cached
+          srsPaths[widget.initial.id] = _srsState == SrsDownloadState.cached
               ? '<cached file path>'
               : '<download first>';
         }
@@ -1700,7 +1236,6 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
   }
 }
 
-enum _SrsDownloadState { none, loading, cached, error }
 
 /// §045: tag+url пара для batch download'а в `_onBoolVarToggle`.
 class _PendingDownload {

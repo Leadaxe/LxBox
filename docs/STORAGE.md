@@ -71,7 +71,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ presetId              string        ссылка на selectable_rules[].preset_id
 │       └─ varsValues            object          юзерские vars override (включая 'outbound')
 │
-├─ dns_options                   object          §041 (rules) + §043+§044 (servers)
+├─ dns_options                   object          §061 (rules) + §043+§044 (servers)
 │   ├─ servers[]                 list          §044 kind-discriminated refs:
 │   │   └─ <DnsServerRef>        object
 │   │       ├─ kind              "template"|"preset"|"inline"
@@ -80,13 +80,13 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │   │       ├─ description       string?       optional override / для inline — primary
 │   │       └─ body              object?         только inline; partial sing-box server
 │   │                                          БЕЗ tag/description/enabled
-│   ├─ rules[]                   list          §041 origin-discriminated:
+│   ├─ rules[]                   list          §061 origin-discriminated:
 │   │   └─ <DnsRuleRef>          object
 │   │       ├─ enabled           bool
 │   │       ├─ type              "user"|"template"|"rule"
 │   │       ├─ title             string        display
 │   │       └─ rule              object?         sing-box rule body (для type=user)
-│   └─ rules_json                string        DEPRECATED legacy single-string (§041)
+│   └─ rules_json                string        DEPRECATED legacy single-string (§061)
 │
 ├─ ping_options                  object          §040
 │   ├─ url                       string?       global default URL
@@ -345,7 +345,7 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 
 ---
 
-## `dns_options` — [§041] (rules) + [§043][043-dns] + [§044] (servers)
+## `dns_options` — [§061] (rules) + [§043][043-dns] + [§044] (servers)
 
 ```jsonc
 {
@@ -377,7 +377,7 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 
 **Builder** синтезирует `body.tag` обратно при сборке финального sing-box-конфига. В storage tag живёт **только** на ref-level.
 
-### `dns_options.rules[i]` — [§041]
+### `dns_options.rules[i]` — [§061]
 
 ```jsonc
 {
@@ -395,7 +395,7 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 ### Migration history
 
 - v1.5.x: `dns_options.rules_json` — single JSON-string (`@Deprecated`). Сейчас игнорится; поле остаётся на диске для downgrade-friendliness.
-- v1.6.0 ([§041]): `dns_options.rules[]` — структурированный список с `type`/`enabled`/`title`/`rule`.
+- v1.6.0 ([§061]): `dns_options.rules[]` — структурированный список с `type`/`enabled`/`title`/`rule`.
 - v1.6.0 ([§043][043-dns]): `dns_options.servers[]` — kind-refs впервые. Tag/description/enabled тогда жили в `body`.
 - v1.6.1 ([§044]): `dns_options.servers[]` — clean schema. Tag/description/enabled подняты на ref-level. Underscore-аннотации (`_kind`, `_overrides`, `_origin`, `_preset_label`) удалены. Builder синтезирует tag в body. One-shot migration в `_migrateLegacyDnsServers`.
 
@@ -505,7 +505,7 @@ CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHist
 | `app_rules` | до v1.3.2 | `custom_rules` (kind=inline, c `packages`) — [§030] | `_absorbLegacyAppRules` — one-shot, удаляется. |
 | `enabled_rules` | до [§030] | `custom_rules` | One-shot в `RoutingScreen._load`, обнуляется (`saveEnabledRules({})`). Гард: `presets_migrated`. |
 | `rule_outbounds` | до v1.3.2 | `custom_rules.outbound` (или `varsValues.outbound` для preset) | См. выше, обнуляется (`saveRuleOutbounds({})`). |
-| `dns_options.rules_json` | [§041] (intermediate) | `dns_options.rules[]` | Поле остаётся для downgrade-friendliness, builder/UI больше не читают. |
+| `dns_options.rules_json` | [§061] (intermediate) | `dns_options.rules[]` | Поле остаётся для downgrade-friendliness, builder/UI больше не читают. |
 | `node_overrides` | удалённое | — | Удаляется на каждом `_save()`. |
 | `show_detour_servers` | удалённое | — | Удаляется на каждом `_save()`. |
 
@@ -550,7 +550,7 @@ CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHist
 [§037]: ./spec/tasks/037-debug-api-write-config-and-lock-rebuild.md
 [§038]: ./spec/features/038%20crash%20diagnostics/spec.md
 [§040]: ./spec/tasks/040-per-group-ping-test-settings.md
-[§041]: ./spec/features/041%20dns%20rules%20refactor/spec.md
+[§061]: ./spec/tasks/061-dns-rules-refactor/spec.md
 [§044]: ./spec/tasks/044-dns-servers-clean-schema.md
 [§046]: ./spec/features/046%20tunnel%20apps%20split-tunneling/spec.md
 [043-applog]: ./spec/features/043%20applog%20per-source%20quotas/spec.md

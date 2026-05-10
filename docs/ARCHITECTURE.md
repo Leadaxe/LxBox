@@ -160,7 +160,7 @@ Asset-шаблон, который читается один раз через `
 |---|---|---|
 | `parser_config` | sing-box `version` + reload interval | прямой emit в корень |
 | `dns_options.servers` | Canonical DNS-серверы (system/google/cloudflare/quad9/adguard). Storage хранит kind-refs `{enabled, kind: inline\|preset\|template, tag, description?, body?}` (§043 + §044). Body для kind:inline — partial sing-box shape **без** tag/description/enabled (они на ref-level; tag синтезируется на build-time). Резолвится в bodies через `resolveDnsServersBodies`. | `applyCustomDns` через `resolveDnsServersList` |
-| `dns_options.rules` | Дефолтные DNS-rules. Storage — kind-refs (§041) (`inline\|srs\|preset\|template`). Catch-all удалён в §039 — fall-through идёт через `dns.final`. | `applyCustomDns`: bundle-rules через `resolveDnsRulesList` |
+| `dns_options.rules` | Дефолтные DNS-rules. Storage — kind-refs (§061 dns-rules-refactor, бывший feature §041) (`inline\|srs\|preset\|template`). Catch-all удалён в task §039 (empty-template-dns-rules) — fall-through идёт через `dns.final`. | `applyCustomDns`: bundle-rules через `resolveDnsRulesList` |
 | `ping_options`, `speed_test_options` | UI-фичи (HomeScreen, SpeedTest) | не попадают в sing-box конфиг |
 | `preset_groups` | Группы outbound'ов (`vpn-1`/`vpn-2`/`vpn-3`, `@auto`) | `_buildPresetGroups` в `build_config.dart` |
 | `config` | База sing-box конфига: log, inbounds, route-skeleton | deep-copy'ится в начале `buildConfig` |
@@ -492,7 +492,7 @@ SharedPreferences (Android):
 
 #### Builder (template + user-state → final config)
 
-`build_config.dart` мерджит template `config`-секцию + `selectable_rules[*]` (через `expandPreset`) + `dns_options.{servers,rules}` (через resolvers §041/§044) + `preset_groups` (с активными node-tag'ами из `server_lists`) + `vars`-substitution → пишет финальный `singbox_config.json` для libbox.
+`build_config.dart` мерджит template `config`-секцию + `selectable_rules[*]` (через `expandPreset`) + `dns_options.{servers,rules}` (через resolvers §061/§044) + `preset_groups` (с активными node-tag'ами из `server_lists`) + `vars`-substitution → пишет финальный `singbox_config.json` для libbox.
 
 One-shot миграции (`SettingsStorage`):
 - `proxy_sources` → `server_lists` (v1 → v2, §033) — `migrateProxySources` на первом чтении.

@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Статус | Реализовано |
-| Зависимости | [`004`](../004x%20subscription%20parser/spec.md), [`005`](../005x%20config%20generator/spec.md) |
+| Зависимости | [`026 parser v2`](../026%20parser%20v2/spec.md) (заменил v1 parser + config generator — см. [`../../tasks/057-subscription-parser-v1-superseded/`](../../tasks/057-subscription-parser-v1-superseded/), [`../../tasks/058-config-generator-wizard-v1-superseded/`](../../tasks/058-config-generator-wizard-v1-superseded/)) |
 
 ## 1. Цель
 

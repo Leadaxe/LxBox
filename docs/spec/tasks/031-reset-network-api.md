@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Draft |
 | Дата | 2026-05-01 |
-| Связанные | [`030 vpn reload button`](030-vpn-reload-button.md), [`039 libbox 1.13 migration`](../features/039%20libbox%201.13%20migration/spec.md) |
+| Связанные | [`030 vpn reload button`](030-vpn-reload-button.md), [`tasks/060-libbox-1-13-migration`](060-libbox-1-13-migration/spec.md) |
 
 ## Цель
 

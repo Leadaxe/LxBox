@@ -109,5 +109,5 @@ PresharedKey = base64...
 
 ## See also
 
-- [004x subscription parser](../004x%20subscription%20parser/spec.md) — parser supports wireguard:// scheme
+- [026 parser v2](../026%20parser%20v2/spec.md) — parser supports `wireguard://` scheme (заменил v1 — см. [`../../tasks/057-subscription-parser-v1-superseded/`](../../tasks/057-subscription-parser-v1-superseded/))
 - [018 detour server management](../018%20detour%20server%20management/spec.md) — WireGuard as detour for other nodes

@@ -437,10 +437,11 @@ class SettingsStorage {
     await savePingOptions(opts);
   }
 
-  /// DEPRECATED (§041): legacy `dns_options.rules_json` — single JSON-string
-  /// override. Заменён на структурированный [getDnsRulesList]. Поле в storage
-  /// остаётся для downgrade-friendliness, но билдер и UI больше не читают.
-  @Deprecated('Use getDnsRulesList()/saveDnsRulesList() instead. See spec 041.')
+  /// DEPRECATED (§061 dns-rules-refactor, бывший feature §041): legacy
+  /// `dns_options.rules_json` — single JSON-string override. Заменён на
+  /// структурированный [getDnsRulesList]. Поле в storage остаётся для
+  /// downgrade-friendliness, но билдер и UI больше не читают.
+  @Deprecated('Use getDnsRulesList()/saveDnsRulesList() instead. See task 061.')
   static Future<String> getDnsRules() async {
     final data = await _load();
     final dns = data['dns_options'] as Map<String, dynamic>?;
@@ -448,8 +449,8 @@ class SettingsStorage {
     return dns['rules_json'] as String? ?? '';
   }
 
-  /// DEPRECATED (§041): см. [getDnsRules].
-  @Deprecated('Use getDnsRulesList()/saveDnsRulesList() instead. See spec 041.')
+  /// DEPRECATED (§061 dns-rules-refactor, бывший feature §041): см. [getDnsRules].
+  @Deprecated('Use getDnsRulesList()/saveDnsRulesList() instead. See task 061.')
   static Future<void> saveDnsRules(String rulesJson) async {
     final data = await _load();
     final dns = (data['dns_options'] as Map<String, dynamic>?) ?? {};
@@ -459,7 +460,7 @@ class SettingsStorage {
     await _save();
   }
 
-  /// Структурированный список DNS-правил (§041). Каждая запись:
+  /// Структурированный список DNS-правил (§061 dns-rules-refactor, бывший feature §041). Каждая запись:
   /// `{enabled: bool, type: 'user'|'template'|'rule', title: String, rule?: Map}`.
   /// Если ключ отсутствует — возвращает пустой список (auto-discovery в
   /// builder/UI заполнит начальный набор).
@@ -473,7 +474,7 @@ class SettingsStorage {
   }
 
   /// Сохраняет структурированный список DNS-правил. Caller отвечает за
-  /// orphan-cleanup (§041) — выбрасывание `type: template/rule` чьи titles
+  /// orphan-cleanup (§061) — выбрасывание `type: template/rule` чьи titles
   /// не находятся в текущем шаблоне / активных пресетах. Этот метод просто
   /// пишет, что дали.
   static Future<void> saveDnsRulesList(List<Map<String, dynamic>> rules) async {

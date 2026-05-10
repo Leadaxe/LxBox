@@ -1,10 +1,11 @@
-# 013 — Routing
+# 059 — Routing (v1, superseded)
 
 | Поле | Значение |
 |------|----------|
-| Статус | Исторический (superseded by [030](../030%20custom%20routing%20rules/spec.md) в v1.4.0) |
+| Статус | Исторический (superseded by [`features/030 custom routing rules`](../../features/030%20custom%20routing%20rules/spec.md) в v1.4.0) |
+| История | Был `features/013 routing`, демотирован через §054 (заменён §030) |
 
-> **v1.4.0:** модель роутинга полностью пересобрана, см. [`030 custom routing rules`](../030%20custom%20routing%20rules/spec.md). `AppRule`, `SelectableRule` toggle-механизм и отдельные типы `CustomRule` объединены в единый `CustomRule` с параллельными match-полями. Ниже — исторический snapshot до v1.4.0.
+> **v1.4.0:** модель роутинга полностью пересобрана, см. [`features/030 custom routing rules`](../../features/030%20custom%20routing%20rules/spec.md). `AppRule`, `SelectableRule` toggle-механизм и отдельные типы `CustomRule` объединены в единый `CustomRule` с параллельными match-полями. Ниже — исторический snapshot до v1.4.0.
 
 ## Контекст
 

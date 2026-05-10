@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | **Active** (v1.4.0) |
 | Дата | 2026-04-20 |
-| Зависимости | [`013 routing`](../013%20routing/spec.md), [`011 local ruleset cache`](../011%20local%20ruleset%20cache/spec.md), [`026 parser v2`](../026%20parser%20v2/spec.md), [`027 subscription auto update`](../027%20subscription%20auto%20update/spec.md) |
+| Зависимости | [`tasks/059-routing-v1-superseded`](../../tasks/059-routing-v1-superseded/spec.md) (заменил этой спекой), [`011 local ruleset cache`](../011%20local%20ruleset%20cache/spec.md), [`026 parser v2`](../026%20parser%20v2/spec.md), [`027 subscription auto update`](../027%20subscription%20auto%20update/spec.md) |
 | Убито/поглощено | **App Rules (AppRule)** — влиты в CustomRule.packages. **Selectable Rules toggle-механизм** — теперь каталог с "Copy to Rules". |
 
 ---

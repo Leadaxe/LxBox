@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Draft |
 | Дата | 2026-05-02 |
-| Связанные spec'ы | [`041 dns rules refactor`](../features/041%20dns%20rules%20refactor/spec.md), [`033 preset bundles`](../features/033%20preset%20bundles/spec.md), [`030 custom routing rules`](../features/030%20custom%20routing%20rules/spec.md) |
+| Связанные spec'ы | [`tasks/061-dns-rules-refactor`](061-dns-rules-refactor/spec.md), [`033 preset bundles`](../features/033%20preset%20bundles/spec.md), [`030 custom routing rules`](../features/030%20custom%20routing%20rules/spec.md) |
 
 ## Цель
 
@@ -145,10 +145,10 @@ if (migrated) {
 
 1. **Storage migration** в `resolveDnsRulesList` — psuedo-code выше.
 2. **Builder + UI** — поиск-замена по `'type'` / `'title'` в DNS-rules-related местах + переименование map'ов.
-3. **Spec 041** обновить (docs/spec/features/041 dns rules refactor/spec.md) — новые shape примеры в Storage section, новые тесты в Test plan.
+3. **Task §061** обновить (`docs/spec/tasks/061-dns-rules-refactor/spec.md`, бывший feature §041) — новые shape примеры в Storage section, новые тесты в Test plan.
 4. **Тесты** — переписать unit-тесты + добавить migration-тесты.
 5. `flutter analyze` + `flutter test` (целый suite).
-6. **Build APK + install via wifi-adb** — проверить что storage на тестовом телефоне (где уже §041) мигрировался корректно (открыть DnsSettings → видим preset-rule под старым label, но в storage под presetId).
+6. **Build APK + install via wifi-adb** — проверить что storage на тестовом телефоне (где уже §061 — бывший §041) мигрировался корректно (открыть DnsSettings → видим preset-rule под старым label, но в storage под presetId).
 
 ## Verification
 

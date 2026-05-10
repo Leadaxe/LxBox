@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | **Реализовано и в продакшене** (2026-04-18) |
 | Дата | 2026-04-18 |
-| Зависимости | [`docs/PROTOCOLS.md`](../../../PROTOCOLS.md), [`004`](../004x%20subscription%20parser/spec.md) (заменено), [`005`](../005x%20config%20generator/spec.md) (заменено), [`018`](../018%20detour%20server%20management/spec.md), [`020`](../020%20security%20and%20dpi%20bypass/spec.md) |
+| Зависимости | [`docs/PROTOCOLS.md`](../../../PROTOCOLS.md), [`tasks/057-subscription-parser-v1-superseded`](../../tasks/057-subscription-parser-v1-superseded/spec.md) (заменено этим), [`tasks/058-config-generator-wizard-v1-superseded`](../../tasks/058-config-generator-wizard-v1-superseded/spec.md) (заменено этим), [`018`](../018%20detour%20server%20management/spec.md), [`020`](../020%20security%20and%20dpi%20bypass/spec.md) |
 
 ## Прогресс
 
@@ -544,8 +544,8 @@ Warning-тексты — plain en-string (i18n-инфры в проекте не
 
 ## See also
 
-- [`004x subscription parser`](../004x%20subscription%20parser/spec.md) — v1 legacy, заменено этим.
-- [`005x config generator`](../005x%20config%20generator/spec.md) — v1 сборщик заменён §3.4.
+- [`tasks/057-subscription-parser-v1-superseded`](../../tasks/057-subscription-parser-v1-superseded/spec.md) — v1 legacy, заменено этим.
+- [`tasks/058-config-generator-wizard-v1-superseded`](../../tasks/058-config-generator-wizard-v1-superseded/spec.md) — v1 сборщик заменён §3.4.
 - [`018 detour server management`](../018%20detour%20server%20management/spec.md) — `DetourPolicy` на `ServerList`, применение в `ServerList.build(ctx)`.
 - [`020 security and dpi bypass`](../020%20security%20and%20dpi%20bypass/spec.md) — TLS fragment first-hop invariant (§3.4.1 этой спеки).
 - [`docs/PROTOCOLS.md`](../../../PROTOCOLS.md) — URI-формат каждого протокола + TUIC v5 + XHTTP fallback note.

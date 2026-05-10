@@ -119,7 +119,7 @@ void applyTunPackages(Map<String, dynamic> config, TunAppsConfig tunApps) {
 /// **Servers (без изменений):** `extraServers` от bundle-пресетов
 /// дедуплицируются с template/user серверами по `tag`.
 ///
-/// **Rules (§041 + §032 + §033):** структурированный список
+/// **Rules (§061 + §032 + §033):** структурированный список
 /// `dns_options.rules` в storage — `{enabled, kind, name?, presetId?,
 /// srsUrl?, id?, server?, rule?}`. Унифицированный kind set с `custom_rules`:
 ///
@@ -156,7 +156,7 @@ Future<void> applyCustomDns(
   final dns = (config['dns'] as Map<String, dynamic>?) ?? <String, dynamic>{};
 
   // §043: resolve dns servers через kind-discriminated refs (симметрия с
-  // §041 DNS rules). Builder получает только final bodies через resolver;
+  // §061 DNS rules, бывший feature §041). Builder получает только final bodies через resolver;
   // storage хранит refs `{enabled, kind, tag, body?}`.
   final templateServers =
       (templateDnsOptions['servers'] as List<dynamic>? ?? const [])
@@ -285,7 +285,7 @@ Future<void> applyCustomDns(
   config['dns'] = dns;
 }
 
-/// §041 + §033: разрешает текущий список DNS-правил из storage.
+/// §061 + §033: разрешает текущий список DNS-правил из storage.
 ///
 /// Делает три вещи в одном проходе:
 /// 1. **Orphan cleanup:** записи `kind: template/preset` чьи identifiers больше
@@ -357,7 +357,7 @@ Future<List<Map<String, dynamic>>> resolveDnsRulesList({
     // Все остальные kind'ы (legacy 'user', 'rule', неизвестные) — silently dropped
   }
 
-  // §041 default order: inline (user) → preset → template.
+  // §061 default order: inline (user) → preset → template.
   // Auto-discovery вставляет новые preset DNS rules ПЕРЕД первой
   // template-записью (чтобы preset имел приоритет в матчинге); новые
   // template-defaults — append в конец (lowest priority).
@@ -711,7 +711,7 @@ Map<String, dynamic> _outboundToRoute(
 }
 
 // ===========================================================================
-// §043: DNS servers — refs by kind (симметрия с §041 DNS rules)
+// §043: DNS servers — refs by kind (симметрия с §061 DNS rules)
 // ===========================================================================
 
 /// §043: Auto-discovery + orphan cleanup + legacy migration для

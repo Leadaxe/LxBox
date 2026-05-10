@@ -13,7 +13,7 @@
 
 ## Flutter-приложение
 
-Каталог **`app/`** — проект L×Box. Зависимости подтягиваются через `flutter pub get`. Нативный VPN — `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/` (свой `BoxVpnService`, не Flutter plugin). libbox на Android — [JitPack](https://jitpack.io), пакет `com.github.singbox-android:libbox:1.13.11`, репозиторий указан в `android/build.gradle.kts`. Миграция с `io.github.sagernet:libbox:1.12.12` сделана в [spec 039](spec/features/039%20libbox%201.13%20migration/spec.md).
+Каталог **`app/`** — проект L×Box. Зависимости подтягиваются через `flutter pub get`. Нативный VPN — `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/` (свой `BoxVpnService`, не Flutter plugin). libbox на Android — [JitPack](https://jitpack.io), пакет `com.github.singbox-android:libbox:1.13.11`, репозиторий указан в `android/build.gradle.kts`. Миграция с `io.github.sagernet:libbox:1.12.12` сделана в [task §060 libbox-1-13-migration](spec/tasks/060-libbox-1-13-migration/spec.md) (бывший feature §039).
 
 Импорт конфига по кнопке **Read**: **JSON** или **JSON5/JSONC** (комментарии `//`, `/* */` — парсер `json5`), затем в ядро уходит канонический JSON; источник — буфер или системный диалог выбора файла.
 
