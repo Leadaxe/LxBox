@@ -152,10 +152,15 @@ interface PlatformInterfaceWrapper : PlatformInterface {
         } ?: return null
 
         var ssid = wifiInfo.ssid
-        if (ssid == "<unknown ssid>") return WIFIState("", "")
+        val bssid = wifiInfo.bssid ?: ""
+        if (ssid == "<unknown ssid>") {
+            android.util.Log.w("PIW", "readWIFIState: <unknown ssid> — likely missing NEARBY_WIFI_DEVICES (API 33+) or location services off")
+            return WIFIState("", "")
+        }
         if (ssid.startsWith("\"") && ssid.endsWith("\""))
             ssid = ssid.substring(1, ssid.length - 1)
-        return WIFIState(ssid, wifiInfo.bssid ?: "")
+        android.util.Log.d("PIW", "readWIFIState: ssid='$ssid' bssid='$bssid'")
+        return WIFIState(ssid, bssid)
     }
 
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)

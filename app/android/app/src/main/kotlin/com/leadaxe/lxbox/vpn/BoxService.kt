@@ -250,41 +250,48 @@ class BoxService(
             return
         }
 
-        // Permission check — port из reference SagerNet/sing-box-for-android
-        // BoxService.kt 1.13.11 (`needWIFIState` block после startOrReloadService).
+        // §050 — port from reference SagerNet BoxService.kt 1.13.11
+        // (`needWIFIState` block after startOrReloadService).
         //
-        // Sing-box config может содержать DNS rules с условиями
-        // `wifi_ssid:` / `wifi_bssid:`. После config parse sing-box знает
-        // нужны ли wifi state — exposes через `needWIFIState()`. Если да И
-        // у app нет Location permission (`ACCESS_BACKGROUND_LOCATION` на API 29+,
-        // `ACCESS_FINE_LOCATION` на API 28-) → `WifiManager.connectionInfo`
-        // возвращает dummy WifiInfo с SSID="<unknown ssid>" и BSSID=null.
+        // Sing-box config may contain DNS/route rules with `wifi_ssid:`
+        // or `wifi_bssid:` conditions. After config parse, sing-box exposes
+        // whether wifi state is needed via `needWIFIState()`. If yes AND
+        // Location permission is not granted (`ACCESS_BACKGROUND_LOCATION`
+        // on API 29+, `ACCESS_FINE_LOCATION` on API 28-), then
+        // `WifiManager.getConnectionInfo()` throws SecurityException which
+        // propagates through JNI → process abort.
         //
-        // Без проверки sing-box получает invalid wifi state, может попадать
-        // в internal code paths которые пробуют resolve null/empty SSID
-        // → potential edge cases / sing-box internal bugs.
-        //
-        // Reference behavior: stopAndAlert юзеру с просьбой grant'нуть permission.
-        // У нас — log warning и продолжить (LxBox wizard rules не используют
-        // wifi conditions, и F12.3 readWIFIState возвращает null deferred,
-        // так что practical impact zero). Но если кто-то подсунет custom
-        // config с wifi rules — лог покажет в чём дело.
+        // Stop service with a structured alert prefix (`alert:permission:...`).
+        // Flutter side detects prefix and shows native AlertDialog with
+        // "Open Settings" button (see HomeController._handleStatusEvent).
         if (runCatching { cs.needWIFIState() }.getOrDefault(false)) {
-            val wifiPermission = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                android.Manifest.permission.ACCESS_FINE_LOCATION
+            // Permission matrix for `WifiManager.connectionInfo`:
+            //  - API 28-:  ACCESS_FINE_LOCATION
+            //  - API 29-32: ACCESS_BACKGROUND_LOCATION (background access required)
+            //  - API 33+:  ACCESS_BACKGROUND_LOCATION + NEARBY_WIFI_DEVICES
+            //              (без NEARBY ssid возвращается как "<unknown ssid>"
+            //               когда targetSdk >= 33).
+            val needed = mutableListOf<String>()
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                needed += android.Manifest.permission.ACCESS_FINE_LOCATION
             } else {
-                android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
+                needed += android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
             }
-            val granted = service.checkSelfPermission(wifiPermission) ==
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (!granted) {
-                Log.w(TAG, "[vpn] sing-box config requests WIFI state (wifi_ssid/bssid rules) " +
-                    "but $wifiPermission not granted. wifi rules will see empty SSID. " +
-                    "Note: F12.3 readWIFIState is currently deferred (returns null) — " +
-                    "see docs/spec/tasks/049-singbox-wrapper-deep-audit/ + 050.")
-            } else {
-                Log.d(TAG, "[vpn] sing-box config uses WIFI state, $wifiPermission granted ✓")
+            if (Build.VERSION.SDK_INT >= 33) {
+                needed += "android.permission.NEARBY_WIFI_DEVICES"
             }
+            val missing = needed.filter {
+                service.checkSelfPermission(it) !=
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+            }
+            if (missing.isNotEmpty()) {
+                Log.e(TAG, "[vpn] config requires WIFI state but missing: $missing")
+                // Structured alert: `alert:<type>:<details>` — Flutter parses
+                // type and shows AlertDialog with "Open Settings" button.
+                stopAndAlert("alert:permission_location:${missing.joinToString(",")}")
+                return
+            }
+            Log.d(TAG, "[vpn] sing-box uses WIFI state, all permissions granted: $needed")
         }
 
         setStatus(VpnStatus.Started)
@@ -332,6 +339,18 @@ class BoxService(
 
     private suspend fun stopAndAlert(message: String) {
         Log.e(TAG, "stopAndAlert: $message")
+        // CRITICAL: full sing-box teardown ДО stopSelf'а. Раньше пропускали
+        // closeFileDescriptor / closeCommandServerAtomic / DefaultNetworkMonitor.stop —
+        // CommandServer держал binding на Clash API port (63130) даже после
+        // service stop, и retry start VPN failed с
+        // `external controller listen error: bind: address already in use`.
+        // Same teardown sequence что и `doStop`, но в Main thread без
+        // serviceScope.launch (мы уже в suspend) и с error message в
+        // `setStatus(Stopped)` вместо silent stop.
+        closeFileDescriptor()
+        DefaultNetworkMonitor.stop()
+        closeCommandServerAtomic("stopAndAlert: $message")
+
         withContext(Dispatchers.Main) {
             notification.show("Error", message)
             if (receiverRegistered) {

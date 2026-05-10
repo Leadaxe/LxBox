@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Pending — отдельная task для self-contained session |
+| Статус | **Done (2026-05-10)** — root cause найден без debug build (см. findings.md). Real cause: unhandled `SecurityException` в `WifiManager.connectionInfo` propagates через JNI → ClassLinker abort с misleading `Unknown reference: 42`. Defensive `try/catch SecurityException` + permission gate в `BoxService.startSingbox` (location + `NEARBY_WIFI_DEVICES` на API 33+) + permission UX в Flutter (runtime prompt + Settings fallback). |
 | Дата | 2026-05-10 |
 | Связанные spec'ы | [`049 sing-box wrapper deep audit`](../049-singbox-wrapper-deep-audit/spec.md) — все Phase G/H findings, F12.3 attempts log |
 | Branch | `diag/libbox-debug-build` (создать новую от `diag/refnum-42-clean-split`) |
