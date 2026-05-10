@@ -258,10 +258,10 @@ class _LiveEventsTabState extends State<LiveEventsTab>
         children: [
           Tooltip(
             message:
-                'Sing-box internal logs (router decisions, DNS resolves)\n'
-                "are not forwarded to Live. Enable 'Forward sing-box logs'\n"
-                'in Diagnostics — after that DNS events and precise\n'
-                'app attribution will appear here.',
+                "Sing-box internal logs (router decisions, DNS resolves) are "
+                "not forwarded to Live. Enable 'Forward sing-box logs' in "
+                "Diagnostics — after that DNS events and precise app "
+                "attribution will appear here.",
             triggerMode: TooltipTriggerMode.tap,
             showDuration: const Duration(seconds: 6),
             child: Padding(
