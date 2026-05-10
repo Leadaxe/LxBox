@@ -8,6 +8,12 @@
 
 ## [Unreleased]
 
+---
+
+## [1.7.3] — 2026-05-10
+
+«UX rework + perf» release. Главное — **§052 VPN Settings reorganisation** (System/Core tabs), **§051 Phase 2-3 wifi rules editor + auto-record history**, **F22 part 2 logging pipeline production-grade**, **CoreLogsHintBanner** общий widget с deep-link на Diagnostics, и Live tab tap-to-filter через row identifiers.
+
 ### Changed
 
 - **§052 — VPN Settings reorganisation: System / Core tabs + reshuffle** ([§052 spec](docs/spec/tasks/052-vpn-settings-system-service-tabs.md)). Drawer → VPN Settings теперь 2 tab'а с чёткой семантикой:
@@ -48,6 +54,29 @@
 ### Fixed
 
 - **§051 Phase 2 — `wifi_history` not refreshing in Pick saved after row delete** ([settings_storage.dart](app/lib/services/settings_storage.dart)). `getWifiHistory` возвращал `toList(growable: false)`; `removeWhere` в setState callback'е молча кидал `UnsupportedError` на fixed-length list → UI rebuild не триггерился. Storage write проходил (entry удалена), но visible row оставалась до reopen sheet. Fix: `toList()` (growable).
+
+### Performance
+
+- **F22 part 2 — sing-box log forwarding pipeline production-grade** ([BoxService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt), [app_log.dart](app/lib/services/app_log.dart), [clash_log_pump.dart](app/lib/services/clash_log_pump.dart)). К drainer-pattern из v1.7.1 добавили back-pressure / yield / batching / O(1) deque / 60Hz throttle. На heavy traffic (100+ строк/сек) toggle «Forward sing-box logs» теперь почти free.
+  - `@Synchronized` снят с `writeDebugMessage` — `LinkedBlockingQueue.offer` thread-safe, mutex только сериализовал producer-thread'ы Go runtime'а.
+  - **Back-pressure cap** `LOG_QUEUE_MAX = 4096`: при slow Dart consumer'е drop newest вместо unbounded growth (counter `coreLogDrops`).
+  - **Drainer yield** — до `DRAIN_BATCH_MAX = 200` строк за один main-looper run, потом re-post если queue не пуст. Длинный burst не блочит main looper > frame'а.
+  - **EventChannel batching** — один `sink.success(List<String>)` за drain вместо per-line JNI marshal. На 200 строк/burst — 1 marshall вместо 200.
+  - **AppLog ring buffer** — `List.insert(0)` (O(n)) → `ListQueue.addFirst` (O(1)). `logBatch()` — N entries за один проход + один `_scheduleNotify`.
+  - **Notify throttle** 16ms (60Hz max) leading-edge — UI не ребилдится с frequency write'ов на busy traffic.
+
+### UX (Statistics — Live tab tap-to-filter)
+
+- **Tap по event row → in-place filter** ([live_events_tab.dart](app/lib/screens/live_events_tab.dart)). Раньше long-press открывал bottom sheet «Open in Per-app session» — юзер не хотел переключения на отдельный tab. Теперь:
+  - Каждое поле строки кликабельное независимо: domain, IP:port, process. Tap → существующий search field заполняется выбранным значением, в-place фильтр.
+  - Comma-list процессов разбит на индивидуальные tappable элементы (для multi-process events).
+  - Повторный tap по тому же ключу — clear (escape hatch без отдельной кнопки).
+- **Removed dead code**: `_handleJumpFromLiveTab` + `StatsScreen.requestPerAppSession` static helper удалены после снятия bottom sheet.
+
+### UX (overflow menus cleanup)
+
+- **Live tab + Per-app trace — 3-dot `Diagnostics settings` overflow удалена**. `CoreLogsHintBanner` (см. Changed выше) покрывает use-case с лучшей discoverability — visible когда нужен, без скрытия за overflow.
+- **Tunnel apps — overflow link исправлен на System tab** ([tun_apps_tab.dart](app/lib/screens/tun_apps_tab.dart)). Раньше `VPN settings (Core)` вёл на `SettingsScreen(initialTab: 1)`. Per-app split-tunneling — это System-level фича (`VpnService.Builder` toggles), не Core (sing-box engine vars). Renamed to `VPN settings (System)`, ведёт на `initialTab: 0`.
 
 ---
 
