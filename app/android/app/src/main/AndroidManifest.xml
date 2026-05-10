@@ -16,7 +16,7 @@
 
     <application
         android:label="L×Box"
-        android:name="${applicationName}"
+        android:name=".vpn.BoxApplication"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

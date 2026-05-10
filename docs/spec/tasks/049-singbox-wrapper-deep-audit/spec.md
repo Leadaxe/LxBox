@@ -1676,3 +1676,208 @@ Build 10210 = baseline + F12.3 constructor + `repeat(10_000) { Seq.incRef(this) 
 - Upgrade to **libbox 1.14-alpha** when stable — может seq поведение изменилось
 - Switch to gomobile-bind с debug symbols build — для `addr2line` post-crash analysis
 - Consider port to JNR-based binding или manual JNI вместо gomobile
+
+---
+
+## Phase G — refnum 42 confirmed = CommandServerHandler interface (2026-05-09 evening)
+
+После возврата телефона из дневной сессии — извлёк tombstones за день из `dumpsys dropbox`. Реальная картина:
+
+| Time | Build | Process uptime | Backtrace top |
+|---|---|---|---|
+| 14:13:51 | v9999 (diag) | 27s | `cproxylibbox_CommandServerHandler_WriteDebugMessage+68` → `go_seq_from_refnum+228` |
+| 14:14:58 | v9999 (diag) | <1m | same |
+| ... 18 crashes 14:00-17:04 ... | v10005 / v10221 (diag) | 4-30s | same — `WriteDebugMessage` |
+| 17:04:35 | v10221 (diag) | 4s | **`cproxylibbox_CommandServerHandler_WriteDebugMessage+68`** — `Unknown reference: 42` |
+| **17:07 → 22:30+** | **v10222 (clean)** | **5+ hours, no crash** | — |
+
+### Critical insight — Phase F был неверен в одном ключевом моменте
+
+**Все 18 tombstones показывают `cproxylibbox_CommandServerHandler_WriteDebugMessage` как entry point, не `readWIFIState`.**
+
+В Phase F я предположил что refnum 42 = `BoxVpnService.this as PlatformInterface` (т.к. это был обнаруженный path при F12.3). Но реально:
+
+```kotlin
+val cs = CommandServer(this, this)  // ctor signature: (handler: CSH, platform: PI)
+//                    ^^^^  ^^^^
+//                    CSH   PI
+//                  refnum 42  refnum 43+ (subsequent)
+```
+
+`CommandServer` Java→Go ctor генерирует **TWO separate Seq.Ref'а**:
+- `this as CommandServerHandler` → **first Java→Go ref → refnum 42**
+- `this as PlatformInterface` → second Java→Go ref → refnum 43+
+
+`Seq.incRef(this)` × 10000 в Phase F пинил `BoxVpnService` instance (хорошо), НО `Seq.RefTracker` оперирует **`Seq.Ref` wrappers**, не raw Java objects. Каждое из двух interface-cast'ов имеет **свой Seq.Ref wrapper**, и пинить через `incRef` нужно именно его, не the underlying object.
+
+`writeDebugMessage` вызывается sing-box'ом постоянно (любой log line), `readWIFIState` — раз при init. Поэтому:
+- F12.3 (readWIFIState constructor) — возвращал в crash redirected (Phase F был "WIFIState path")
+- F22 / любой stress на logging path — крашится в `WriteDebugMessage` (текущая сессия)
+
+**Both crash paths share the same root cause: refnum 42 = CSH Seq.Ref destroyed prematurely**.
+
+### Why v10222 stable when v10221 crashed (4-second uptime)
+
+Между builds 10221 и 10222 я убрал **diagnostic `repeat(10_000) { Seq.incRef(this) }`** из `onCreate()`. Гипотеза:
+
+- 10000 incRef calls создают 10000 Java-side `Seq.Ref` wrapper objects (или incRef counter spikes — нужно копать в Seq source)
+- High GC pressure → ART agressively reclaims short-lived refs
+- ART finalizer queue picks up некоторые `Seq.Ref` wrappers ← включая refnum 42
+- `Seq.Ref.finalize()` вызывает `destroyRef(42)` → refnum 42 invalid
+- Next `WriteDebugMessage` callback → `go_seq_from_refnum(42)` → SIGABRT
+
+Removal удалил GC pressure source → 10222 stable.
+
+### Real fix candidates (long-term)
+
+1. **Hold strong reference to `Seq.Ref` wrappers** through reflection (requires private API access)
+2. **Keep `CommandServer` instance reference alive in static field** — currently held in `AtomicReference<CommandServer?>` field, which is referenced by service which is referenced by Android system → должно work. Но если Java-side `Seq.Ref` separate → можно потерять
+3. **Reduce log volume**: `log.level = warn` в config → `WriteDebugMessage` зовётся редко → меньше шанс на race
+4. **libbox 1.14-alpha** — гипотетически мог пересмотреть seq lifecycle (untested)
+
+### Current status
+
+- **v10222 production stable** — 5+ часов uptime под реальной нагрузкой (YouTube + Google services через France node)
+- Race остаётся теоретически возможным под high GC pressure
+- Documented как known issue + mitigation strategy
+- §049 main fix (atomic CAS lifecycle для §047 TCP-deterioration) сохранён
+
+---
+
+## Phase G7 — pre-allocation EXPERIMENT result (2026-05-09 20:55)
+
+Запустил `scripts/diag/run-phase-g7.sh` с manual trial loop. Build 11000 = baseline + F12.3 enabled (provoke crash) + 50 dummy `Object()` pre-allocated через `go.Seq.incRef()` ДО CommandServer ctor. Strong-hold dummies в `BoxApplication.pinnedDummies: MutableList<Any>` чтобы JVM GC не реклеймил их раньше handler'а.
+
+### Trial results
+
+```
+═══ Trial 1 ═══
+[G7 marker]: (race lost — log line not flushed before crash)
+[Abort msg]: Abort message: 'Unknown reference: 92'
+═══ Trial 2 ═══
+[Abort msg]: Abort message: 'Unknown reference: 92'
+═══ Trial 3 ═══
+[Abort msg]: Abort message: 'Unknown reference: 92'
+═══ Trial 4 ═══
+[Abort msg]: signal 6 (SIGABRT), 'Unknown reference: 92'
+═══ Trial 5 ═══
+[G7 marker]: [G7] reserved refnums 42..91 with 50 dummies, pinned=50
+[Abort msg]: 'Unknown reference: 92'
+```
+
+**5/5 trials crashed на refnum 92** (deterministic, fully reproducible).
+
+### Phase G7 conclusion — REFNUM 42 = НАШ HANDLER (НЕ libbox-internal)
+
+50 dummies заняли refnums 42..91 → real CSH handler получил refnum 92 → crash переехал на 92. **Это однозначное подтверждение** что:
+
+1. Refnum 42 (а в G7 — 92) — **наш `BoxVpnService as CommandServerHandler`** registered первым в `Seq.RefMap`
+2. Pre-allocation (даже с strong-hold pin'ом dummy objects) **НЕ помогает** — потому что pinned только dummies, не наш handler
+3. Crash происходит когда `Seq.Ref` wrapper для нашего handler finalize'ится Java-side (что происходит при memory pressure / GC cycle)
+4. **Hypothesis A была верна** — Java-side `Seq.Ref` wrapper indeed destroyed prematurely. Phase F's "5/5 trials with `Seq.incRef × 10000` still crash" интерпретация была ошибкой: `Seq.incRef(this)` создаёт **NEW** `Seq.Ref` wrapper, не pin'ит существующий
+
+### Real fix direction (now actionable)
+
+Нужно **strong-hold существующий `Seq.Ref` wrapper для нашего CSH refnum** в Java-side static field. Подходы:
+
+**Approach A — Reflection в `go.Seq$RefMap`:**
+```kotlin
+// В BoxVpnService.startCommandServer(), после CommandServer(this, this) ctor:
+val seqClass = Class.forName("go.Seq")
+val refsField = seqClass.getDeclaredField("inRefs")  // или "javaObjs" в зависимости от версии
+refsField.isAccessible = true
+val refMap = refsField.get(null)  // Seq$RefMap singleton
+val getMethod = refMap.javaClass.getDeclaredMethod("get", Int::class.java)
+getMethod.isAccessible = true
+val ourSeqRef = getMethod.invoke(refMap, 42)  // Seq$Ref wrapper
+BoxApplication.pinnedSeqRef = ourSeqRef  // strong-hold в static field
+```
+
+Risks: private API, fragile across libbox/gomobile updates, exact field name (`inRefs` / `javaObjs` / `proxies`) надо confirm'ить через декомпиляцию libbox.aar.
+
+**Approach B — hold strong reference на каждый Java→Go ref-passing call:**
+В исходниках gomobile/seq generated code есть `Seq.RefMap.lookup(refnum)` который при necessary создаёт `Seq.Ref` wrapper. Можно перехватить этот path и hold'ить wrapper через ListenableFuture или static map. Требует patching gomobile cproxy code → не practical.
+
+**Approach C — workaround: reduce log volume:**
+`log.level=warn` или `error` в config → `WriteDebugMessage` зовётся редко → race window сужается. Не fix, но mitigation.
+
+### Updated next steps
+
+1. **Decompile libbox.aar чтобы найти exact field name для `Seq$RefMap`** — `go/Seq.java` точное имя поля + signature `lookup`/`get` метода
+2. **Implement Approach A** на отдельной ветке `fix/refnum42-seqref-pin`
+3. Test cycle: rebuild → 5 trials с F12.3 enabled → если crash исчезает → PR
+
+### G7 artefacts
+
+- Скрипт: `scripts/diag/run-phase-g7.sh` (был запущен но `set -euo pipefail` поймал спорадический non-zero adb exit, trap отработал)
+- Manual trial loop результаты (trials 1-5 above)
+- Backup files: `/tmp/G7-piw-backup.kt`, `/tmp/G7-app-backup.kt` (already cleaned)
+
+---
+
+## Phase H — F1 split + Application class registered (2026-05-09 → 05-10)
+
+После G7 = root cause confirmed (refnum 42 = наш CSH handler, Java-side `Seq.Ref` wrapper destroyed prematurely), мы пошли по архитектурному пути — mirror reference SagerNet 1.13.11 (commit 3b3883e) точно.
+
+### Changes applied
+
+**1. F1 split** (parallel agent на ветке `diag/refnum-42-clean-split`):
+
+| File | Before | After |
+|---|---|---|
+| `BoxVpnService.kt` | 909 lines, monolithic: `VpnService + PI + CSH` | 237 lines, only PI: `VpnService + PlatformInterfaceWrapper` |
+| `BoxService.kt` | (не существовал) | 465 lines, plain class implements CSH only |
+| `CommandServer(this, this)` ctor | same Java instance дважды → `inc(o)` находит existing → один refnum, refcnt=2 | `CommandServer(this/*BoxService*/, platformInterface/*BoxVpnService*/)` → 2 разных Java instance → 2 разных refnum'а |
+
+State (`fileDescriptor`, `commandServer` AtomicReference, `serviceScope`, `status`, etc.) переехал в `BoxService`. Android lifecycle callbacks (`onCreate`, `onStartCommand`, `onDestroy`, `onRevoke`, `onTaskRemoved`) форвардятся: `BoxVpnService.onX() → service.onX()`.
+
+**2. Application class registered** (наш patch, после параллельного):
+
+| File | Before | After |
+|---|---|---|
+| `BoxApplication.kt` | `object` Kotlin singleton, lazy init из `BoxVpnService.onCreate()` | `class BoxApplication : Application()` зарегистрирован в AndroidManifest как `android:name=".vpn.BoxApplication"` |
+| init timing | На запросе пользователя через Service.onCreate | Android runtime создаёт ДО любого Service / Activity |
+| `Seq.setContext(application)` | АКТИВНО вызывался | **УДАЛЁН** (match reference Application.kt:41 `// Seq.setContext(this)`) |
+| `SetupOptions.logMaxLines` | не задан → unbounded | `= 3000` (match reference) |
+| `Libbox.setLocale(...)` | в `runCatching` | синхронно без runCatching (fail loud) |
+| `BoxApplication.initialize(context)` | реальный init | no-op (backward compat для callsite'ов в BoxService.onCreate, MainActivity, BootReceiver) |
+
+Companion object сохраняет публичный API через `instance` proxy → все `BoxApplication.X` callsite'ы продолжают работать (powerManager, connectivity, packageManager, notificationManager, wifiManager, libboxReady).
+
+### F12.3 readWIFIState — окончательно deferred
+
+Параллельный agent сделал **5 attempts** на split branch (`diag/refnum-42-clean-split`):
+
+| # | Конфигурация | Результат |
+|---|---|---|
+| 1 | Pre-split + `WIFIState(s,b)` constructor | crash refnum 42 |
+| 2 | F1 split + `WIFIState(s,b)` constructor | crash 8s |
+| 3 | F1 split + ctor + Java strong-ref pin | crash 10s |
+| 4 | F1 split + `Libbox.newWIFIState(s,b)` factory + pin | crash 8s |
+| 5 | F1 split + `WIFIState(s,b)` ctor + drop `Seq.setContext` | crash 12s |
+
+**Всегда** crash signature `cproxylibbox_CommandServerHandler_WriteDebugMessage+68 → go_seq_from_refnum+228 → 'Unknown reference: 42'`. Refnum 42 = CSH handler (после split = `BoxService`), pin'ится Java strong-ref'ами — Java side держит. Corruption происходит **внутри Go runtime** при `__NewWIFIState`/`newWIFIState` Java→Go upcall.
+
+Reference SagerNet имеет такой же код но возможно никогда не triggered в production — никто не использует `wifi_ssid:` / `wifi_bssid:` DNS rules (нужно ли это feature вообще — открытый вопрос).
+
+**Решение**: F12.3 остаётся `null`. Tracking issue для libbox 1.14-alpha upgrade когда выйдет stable.
+
+### Verification
+
+- **v11270/11280** (parallel agent's split build) — installed, app launches stable
+- **v11300** (наш patch +Application class +drop Seq.setContext +logMaxLines) — installed, app launches stable, Application.onCreate отрабатывает без crash
+- VPN start через UI verified рабочий (юзер confirmed)
+
+### Что закрыто
+
+- ✅ §049 main fix — atomic CAS lifecycle (F2/F3/F4/F5) для §047 TCP-deterioration
+- ✅ F1 split — точно по reference, refnum'ы CSH и PI разделены
+- ✅ Application class registered → predictable init timing
+- ✅ `Seq.setContext` удалён → match reference behavior
+- ✅ `logMaxLines = 3000` → нет unbounded log accumulation
+- ✅ F9 setLocale, F12.1 userName, F15 allowBypass, F17 systemProxyStatus, F26 LocalResolver
+
+### Что остаётся deferred (blocked on libbox upgrade)
+
+- ❌ F12.3 readWIFIState — Go-side corruption, не воспроизвели в reference, ждём libbox 1.14-alpha
+- ⏸ F22 coalesced log dispatch — НЕ применён (per-line `Handler.post` остался). Можно вернуться когда base split + Application stable verified длительным uptime'ом

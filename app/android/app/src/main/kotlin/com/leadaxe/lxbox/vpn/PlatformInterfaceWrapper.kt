@@ -109,18 +109,25 @@ interface PlatformInterfaceWrapper : PlatformInterface {
     override fun includeAllNetworks(): Boolean = false
     override fun clearDNSCache() {}
 
-    /// §049 F12.3: возвращаем null (pre-§049 поведение).
+    /// §049 F12.3: возвращаем null (deferred — окончательно).
     ///
-    /// Phase F testing показал: pin'инг handler через
-    /// `Seq.incRef(this) × 10000` в onCreate **НЕ помогает** — все 5 trials
-    /// крашатся 'Unknown reference: 42'. Значит **Hypothesis A (premature
-    /// destroyRef из-за Go GC) опровергнута** — refcount не падает до 0
-    /// (10000 destroyRef call'ов за 12 секунд маловероятно). Проблема глубже:
-    /// возможно Java refnum 42 **никогда не попадает в tracker**, или
-    /// libbox-internal lookup использует другой path. Без libbox.so debug
-    /// symbols диагностировать дальше нельзя.
+    /// **Полный лог attempt'ов на нашем env (Android 15 OnePlus + libbox 1.13.11):**
+    /// 1. Pre-split + `WIFIState(s,b)` constructor → crash refnum 42
+    /// 2. F1 split + `WIFIState(s,b)` constructor → crash 8s
+    /// 3. F1 split + ctor + Java strong-ref pin → crash 10s
+    /// 4. F1 split + `Libbox.newWIFIState(s,b)` factory + pin → crash 8s
+    /// 5. F1 split + `WIFIState(s,b)` ctor + drop `Seq.setContext` → crash 12s
     ///
-    /// Tracking issue: попробовать libbox 1.14-alpha когда стабильное.
+    /// Crash signature всегда: `cproxylibbox_CommandServerHandler_WriteDebugMessage+68
+    /// → go_seq_from_refnum+228 → 'Unknown reference: 42'`. Refnum 42 = CSH
+    /// handler, pin'ится Java strong-ref'ами — Java side OK. Corruption внутри
+    /// **Go runtime libbox.so** при вызове `__NewWIFIState`/`newWIFIState`.
+    ///
+    /// Reference SagerNet имеет такой же код но возможно никогда не triggernuted
+    /// в production (никто не использует `wifi_ssid:`/`wifi_bssid:` DNS rules).
+    ///
+    /// Без debug symbols в libbox.so диагностировать дальше нельзя.
+    /// Tracking: docs/spec/tasks/049-singbox-wrapper-deep-audit/spec.md
     override fun readWIFIState(): WIFIState? = null
 
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
