@@ -8,6 +8,27 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **§052 — VPN Settings reorganisation: System / Core tabs + reshuffle** ([§052 spec](docs/spec/tasks/052-vpn-settings-system-service-tabs.md)). Drawer → VPN Settings теперь 2 tab'а с чёткой семантикой:
+  - **System** — Android-side VPN controls через `VpnService.Builder` API. Сейчас: `Allow VPN bypass` (§049 F15), `Keep VPN on exit`, `Tunnel sleep mode` (`BackgroundMode.never|lazy|always`).
+  - **Core** — sing-box engine vars (`chapter: 'core'` в template — `mtu` / `log_level` / `dns_final` / …). Routing- и DNS-специфичные vars (chapter: routing/dns) живут на своих экранах.
+  - **App Settings → Background tab удалён** (TabBar 3→2: General + Diagnostics). `Keep on exit` + `Tunnel sleep mode` переехали в VPN Settings → System; permissions block (Battery / Notifications / Location / NearbyWifi / App info) — в App Settings → Diagnostics в interactive виде (как был в Background, целиком копируется блок).
+  - **Tunnel apps mode + packages — остаётся в Routing → Tunnel apps** (4-я вкладка). Не переезжает: юзеру привычно искать «куда роутится app» в Routing.
+  - Bonus fix: `DebugScreen → ⋮ → Diagnostics settings` использовал `AppSettingsScreen(initialTab: 2)`. После удаления Background tab indices сместились (Diagnostics: 2→1), `clamp(0, 1)` молча клипало 2 → 1, но семантика была сломана. Поправлен `2 → 1`.
+- **Deep-links between dependent tabs and settings** ([live_events_tab.dart](app/lib/screens/live_events_tab.dart), [per_app_trace_tab.dart](app/lib/screens/per_app_trace_tab.dart), [tun_apps_tab.dart](app/lib/screens/tun_apps_tab.dart)). Tab'ы которые depend на глобальном toggle (core_logs_enabled / VPN settings) теперь содержат overflow (⋮) → нужный screen с открытым нужным tab'ом. Реализован общий `initialTab: int` parameter pattern на `AppSettingsScreen` / `SettingsScreen` (`DefaultTabController.initialIndex` + clamp). Три новых deep-link'а:
+  - **Statistics → Live → ⋮ → "Diagnostics settings"** → `AppSettingsScreen(initialTab: 1)`. Live recording show'ит 0 events если `core_logs_enabled=false` — за 1 тап на toggle.
+  - **Statistics → Per-app → ⋮ → "Diagnostics settings"** → `AppSettingsScreen(initialTab: 1)`. Аналогично — DNS resolves приходят только при core forwarding ON.
+  - **Routing → Tunnel apps → ⋮ → "VPN settings (Core)"** → `SettingsScreen(initialTab: 1)`. Юзер настраивает Tunnel apps mode и хочет рядом mtu / log_level / dns_final.
+
+### Added
+
+- **Debug API — `/settings/vpn/*` endpoints** для §052 System toggles ([settings.dart](app/lib/services/debug/handlers/settings.dart), [debug-api-reference.md](docs/api/debug-api-reference.md)). Закрывают gap «UI есть, API нет». Все три — GET / PUT, `body {"enabled": bool}` или `{"mode": "never|lazy|always"}`:
+  - `GET|PUT /settings/vpn/allow_bypass` — `VpnService.Builder.allowBypass()`. Apply at next `establish()` (start или reload VPN).
+  - `GET|PUT /settings/vpn/keep_on_exit` — keep VPN running когда app закрывается. Live-effect не нужен.
+  - `GET|PUT /settings/vpn/background_mode` — foreground-service tunnel sleep mode. Apply at next VPN connect.
+  - `GET /state/vpn` расширен — теперь включает `allow_bypass` + `background_mode` (одним запросом snapshot всех VPN-system флагов).
+
 ---
 
 ## [1.7.2] — 2026-05-10

@@ -60,7 +60,7 @@ curl -s "$BASE/ping"
 | `GET /state/subs` | массив подписок, `?reveal=true` показывает clear URLs |
 | `GET /state/rules` | массив custom rules с `srs_cached/srs_mtime` |
 | `GET /state/storage` | весь `SettingsStorage._cache` со scrubber'ом (token/URL/nodes маскируются) |
-| `GET /state/vpn` | `{auto_start,keep_on_exit,is_ignoring_battery_optimizations}` |
+| `GET /state/vpn` | `{auto_start,keep_on_exit,allow_bypass,background_mode,is_ignoring_battery_optimizations}` |
 | `GET /state/config_locked` | `{locked: bool}` — §037 текущее состояние auto-rebuild lock'а |
 | `GET /device` | Android version, model, ABI, app version, VPN permission, network type, uptime |
 
@@ -365,6 +365,12 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | `/settings/core_logs_enabled` | PUT | `{"enabled": true\|false}` — §043 включить/выключить forward. **Требует restart Service'а** (`stop-vpn` + `start-vpn`) чтобы применилось — `Libbox.setup` читает значение один раз. Default false. Storage в SharedPreferences (`boxvpn_boot.core_logs_enabled`), не в `lxbox_settings.json`. |
 | `/settings/tun_apps` | GET | →`{"mode":"off\|allow\|deny", "packages":[...]}` — §046 OS-level split-tunneling. |
 | `/settings/tun_apps` | PUT | `{"mode":"off\|allow\|deny", "packages":["pkg1","pkg2",...]}` — §046. Replace целиком. Дубликаты в `packages` schлопываются (idempotent). Пустые строки skip'аются. Невалидный package-name → 400. Response: `{ok, action, mode, count, rebuild_needed: true, ...rebuild-extras}`. **Требует full VPN restart** для apply (Android tun creates только на `establish()`). |
+| `/settings/vpn/allow_bypass` | GET | →`{"enabled": bool}` — §052/§049 F15. |
+| `/settings/vpn/allow_bypass` | PUT | `{"enabled": true\|false}` — §052/§049 F15. Native (`VpnService.Builder.allowBypass()`). Применяется при следующем `establish()` (start или reload VPN). Default false (strict tunnel). |
+| `/settings/vpn/keep_on_exit` | GET | →`{"enabled": bool}` — §052. VPN остаётся активным когда app закрывается. |
+| `/settings/vpn/keep_on_exit` | PUT | `{"enabled": true\|false}` — §052. Effect at app exit; live-reload не нужен. |
+| `/settings/vpn/background_mode` | GET | →`{"mode": "never"\|"lazy"\|"always"}` — §052. Foreground-service режим. |
+| `/settings/vpn/background_mode` | PUT | `{"mode": "never"\|"lazy"\|"always"}` — §052. `never` — туннель всегда активен (default); `lazy` — pause только в deep Doze; `always` — pause при выключении экрана. Применяется при следующем VPN connect. |
 | `/settings/rebuild-config` | POST | — (alias для `/action/rebuild-config`) |
 
 **Route final:**
@@ -451,6 +457,27 @@ curl -X POST -H "$HDR" "$BASE/action/start-vpn"
 
 # Теперь sing-box logs наполняют /logs/core
 curl -s -H "$HDR" "$BASE/logs/core?level=warning,error&q=dial" | jq
+```
+
+**VPN System toggles** (§052) — то же что VPN Settings → System в UI:
+```bash
+# Snapshot всех VPN-system флагов одним запросом
+curl -s -H "$HDR" "$BASE/state/vpn" | jq
+# {"auto_start":false,"keep_on_exit":false,"allow_bypass":false,
+#  "background_mode":"never","is_ignoring_battery_optimizations":true}
+
+# Allow VPN bypass — apps могут использовать ConnectivityManager в обход tun
+curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"enabled":true}' "$BASE/settings/vpn/allow_bypass"
+# Эффект на следующем establish() — нужен reload VPN.
+
+# Keep VPN on exit — туннель не падает при закрытии app
+curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"enabled":true}' "$BASE/settings/vpn/keep_on_exit"
+
+# Tunnel sleep mode — never|lazy|always
+curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"mode":"lazy"}' "$BASE/settings/vpn/background_mode"
 ```
 
 ---

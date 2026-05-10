@@ -771,11 +771,22 @@ HomeController.init()
 
 #### Keep-on-exit настройка
 
-Toggle в App Settings. Персистится в `SettingsStorage.keep_on_exit`, передаётся в native через `setKeepOnExit(bool)` (`BootReceiver.setKeepOnExit` — имя исторически от BootReceiver, но флаг используется и для keep-on-exit).
+Toggle в **VPN Settings → System** (§052; до §052 жил в App Settings → Background). Персистится в native SharedPreferences (`boxvpn_boot.keep_vpn_on_exit`), передаётся через `setKeepOnExit(bool)` — имя исторически от BootReceiver, но флаг используется и для keep-on-exit. Также экспонирован в Debug API: `GET|PUT /settings/vpn/keep_on_exit`.
 
 При значении `true` и killе Flutter-процесса система не обязана останавливать foreground-service, а на `onTaskRemoved` service сам стоп не делает. Значение `false` → service слушает task-removed и вызывает `doStop()`.
 
 Pull-sync работает независимо от значения keep-on-exit: если сервис как-то пережил процесс, UI всё равно синхронизируется.
+
+#### Deep-links между tab'ами и settings (§052)
+
+Tab'ы которые depend на глобальном toggle в settings содержат в overflow (⋮) deep-link на соответствующий screen — юзер видит «0 events» / «mode off» и за 1 тап попадает туда где toggle включается:
+
+- **Statistics → Live → ⋮ → "Diagnostics settings"** → `AppSettingsScreen(initialTab: 1)` — Live recording показывает 0 events если `core_logs_enabled=false`.
+- **Statistics → Per-app → ⋮ → "Diagnostics settings"** → `AppSettingsScreen(initialTab: 1)` — DNS resolves в profile приходят только когда core forwarding ON.
+- **Routing → Tunnel apps → ⋮ → "VPN settings (Core)"** → `SettingsScreen(initialTab: 1)` — открывает Core (не System): юзер настраивает Tunnel apps mode и хочет рядом mtu / log_level / dns_final.
+- **Drawer → Debug → ⋮ → "Diagnostics settings"** → `AppSettingsScreen(initialTab: 1)` — fast-path на Quit&reopen после toggle Forward sing-box logs.
+
+Реализация: `initialTab` parameter на `AppSettingsScreen` / `SettingsScreen`, `DefaultTabController.initialIndex: widget.initialTab.clamp(0, length-1)`.
 
 ---
 
@@ -806,8 +817,14 @@ HomeScreen
   │   │                     (Nodes / Settings / Source tabs)
   │   ├─ Routing → RoutingScreen
   │   ├─ DNS Settings → DnsSettingsScreen
-  │   ├─ VPN Settings → SettingsScreen (wizard_template vars)
-  │   ├─ App Settings → AppSettingsScreen (theme, autostart, haptic)
+  │   ├─ VPN Settings → SettingsScreen — 2 tabs (§052):
+  │   │       • System — Allow VPN bypass · Keep VPN on exit · Tunnel sleep mode (`BackgroundMode`)
+  │   │       • Core   — sing-box engine vars (`chapter: core`, mtu / log_level / dns_final / …)
+  │   ├─ App Settings → AppSettingsScreen — 2 tabs (§052 Phase 2):
+  │   │       • General      — theme, autostart, haptic
+  │   │       • Diagnostics  — system permissions block + verbose / share / wipe + Quit&reopen
+  │   │       (Background tab удалён; `keep_on_exit` + `background_mode` переехали в VPN Settings → System,
+  │   │        permissions block — в Diagnostics)
   │   ├─ Speed Test → SpeedTestScreen
   │   ├─ Statistics → StatsScreen (via traffic bar tap)
   │   ├─ Config: Editor / File / Clipboard
