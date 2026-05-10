@@ -239,20 +239,18 @@ Future<BuildResult> buildConfig({
     if (p != null) dnsSrsCachedPaths[id] = p;
   }
 
-  final presetApply = applyPresetBundles(
+  // §062: единый entry-point — обходит все custom rules (preset/inline/srs)
+  // в storage order, dispatch по kind. Сохраняет user-managed order между
+  // kind'ами (старый pipeline разделял на 2 прохода что ломало порядок).
+  final unifiedApply = applyAllCustomRules(
     ruleSets,
     settings.customRules,
     template.selectableRules,
+    srsPaths: srsPaths,
     presetSrsPaths: presetSrsPaths,
     isPresetDnsEnabled: isPresetDnsEnabled,
   );
-  emitWarnings.addAll(presetApply.warnings);
-
-  emitWarnings.addAll(applyCustomRules(
-    ruleSets,
-    settings.customRules,
-    srsPaths: srsPaths,
-  ));
+  emitWarnings.addAll(unifiedApply.warnings);
 
   // Flush реестра в config.route. Один раз в конце — следующие post-steps
   // (tls_fragment, mixed_case_sni) не трогают rule_set/rules.
@@ -270,8 +268,8 @@ Future<BuildResult> buildConfig({
   await applyCustomDns(
     config,
     template.dnsOptions,
-    extraServers: presetApply.extraDnsServers,
-    extraDnsRulesByPresetId: presetApply.dnsRulesByPresetId,
+    extraServers: unifiedApply.extraDnsServers,
+    extraDnsRulesByPresetId: unifiedApply.dnsRulesByPresetId,
     activePresetIdsWithDnsRule: activePresetIdsWithDnsRule,
     dnsSrsCachedPaths: dnsSrsCachedPaths,
   );
