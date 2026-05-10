@@ -8,6 +8,16 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Backup format переписан под полный snapshot — single-format, no legacy support** ([§040 spec](docs/spec/features/040%20backup%20restore%20ui/spec.md), [backup_service.dart](app/lib/services/backup_service.dart), [debug/handlers/backup.dart](app/lib/services/debug/handlers/backup.dart), [settings_storage.dart](app/lib/services/settings_storage.dart)). Старый формат `{vars, server_lists}` на корне **не сохранял большую часть пользовательских данных** — `custom_rules`, `tun_apps`, `enabled_groups`, `enabled_rules`, `route_final`, `rule_outbounds`, `dns_options` живут как top-level ключи `lxbox_settings.json`, а export'ил только `data['vars']`. Inline rule_set'ы вида «Ru Apps» (57 пакетов через `CustomRule.inline`) **исчезали при restore**.
+  - Новый wire-format: `{app, kind, created_at, source_app_version, storage: <lxbox_settings.json целиком>, vpn_settings: {auto_start, keep_on_exit, background_mode, core_logs_enabled, allow_bypass}}`. `version` поле убрано — single-format, файлы старого образца reject'ятся с message «Unsupported backup format. Re-export from a recent app version.»
+  - **`storage` блок** = deep-clone всего `lxbox_settings.json` через новый `SettingsStorage.exportRaw()`. Restore — через `SettingsStorage.replaceRaw(map, merge: bool)`: при `merge=false` overwrite целиком, при `merge=true` top-level merge с recursive vars upsert.
+  - **`vpn_settings` блок** — отдельный native-side state из `boxvpn_boot` SharedPreferences (BootReceiver читает at boot-time когда Flutter ещё не запущен; не перенесён в `lxbox_settings.json` ради simplicity). 5 toggles read через `BoxVpnClient` getters / write через сеттеры.
+  - **Категории UI — 5** (было 4): Server lists, Routing, App settings, **VPN system toggles** (новая), Debug API. Filter работает на уровне keys в `storage` map (а не split на vars-сегменты). Добавление новой top-level настройки в storage → автоматически в backup, без правок allowlist'ов.
+  - Debug API `/backup/export|import` синхронизирован с UI — symmetric round-trip.
+  - **Тест round-trip** ([backup_service_test.dart](app/test/services/backup_service_test.dart), 13 cases): export (все категории) → wipe → import → diff(restored, original) == 0; selective categories, merge vs replace, legacy reject.
+
 ---
 
 ## [1.7.3] — 2026-05-10
@@ -665,22 +675,6 @@ Major release: unified routing rules, local-only SRS, Stats tabs + Top apps, Deb
 
 ---
 
-## [1.2.0] — 2026-04-18
-
-### Changed — Outbound groups overhaul
-- Переименование: **proxy-out → vpn-1**, добавлен **vpn-3** (VPN ①/②/③).
-- **VPN ①** всегда генерируется, галочка заблокирована.
-- **auto-proxy-out** теперь управляется галочкой **Include Auto**: при включении генерируется как urltest и добавляется в `vpn-*`; при выключении секция не создаётся вовсе.
-
-### Changed — Node list UX
-- **direct-out** и **auto-proxy-out** всегда вверху списка (в любом режиме сортировки, сначала direct, потом auto), с лёгкой подсветкой.
-- Контекстное меню (long-press):
-  - Copy-действия скрыты для `direct-out` / `auto-proxy-out`.
-  - *Copy detour* и *Copy server + detour* скрыты, если у ноды нет detour.
-
-### Changed — Defaults
-- `urltest_tolerance` по умолчанию 30 ms (было 100).
-
 ---
 
 ## [1.3.1] — 2026-04-19
@@ -819,6 +813,22 @@ Major release: unified routing rules, local-only SRS, Stats tabs + Top apps, Deb
 - **Settings with sections**: настройки разбиты на секции.
 - **Compact + button**: компактная кнопка добавления, smart paste dialog.
 - **Ping timeout**: увеличен до 10 секунд.
+
+## [1.2.0] — 2026-04-18
+
+### Changed — Outbound groups overhaul
+- Переименование: **proxy-out → vpn-1**, добавлен **vpn-3** (VPN ①/②/③).
+- **VPN ①** всегда генерируется, галочка заблокирована.
+- **auto-proxy-out** теперь управляется галочкой **Include Auto**: при включении генерируется как urltest и добавляется в `vpn-*`; при выключении секция не создаётся вовсе.
+
+### Changed — Node list UX
+- **direct-out** и **auto-proxy-out** всегда вверху списка (в любом режиме сортировки, сначала direct, потом auto), с лёгкой подсветкой.
+- Контекстное меню (long-press):
+  - Copy-действия скрыты для `direct-out` / `auto-proxy-out`.
+  - *Copy detour* и *Copy server + detour* скрыты, если у ноды нет detour.
+
+### Changed — Defaults
+- `urltest_tolerance` по умолчанию 30 ms (было 100).
 
 ---
 

@@ -1081,15 +1081,11 @@ Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`]
 
 ## Feature Specs
 
-Живут в [`docs/spec/features/`](./spec/features/). Каждая фича — папка `NNN name/spec.md`:
+Живут в [`docs/spec/features/`](./spec/features/). Каждая фича — папка `NNN name/spec.md`. Только **живые** продуктовые / архитектурные концепции; исторические / superseded / one-shot миграции — в [`docs/spec/tasks/`](./spec/tasks/) (см. [§054 spec reorg](./spec/tasks/054-spec-reorg-features-vs-tasks.md)).
 
 | # | Feature |
 |---|---------|
-| 001 | Mobile stack |
-| 002 | MVP scope |
 | 003 | Home screen |
-| 004 | Subscription parser (superseded by 026) |
-| 005 | Config generator (superseded by 026) |
 | 006 | Servers UI |
 | 007 | Config editor |
 | 008 | Ping and node management |
@@ -1097,7 +1093,6 @@ Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`]
 | 010 | Quick start and offline |
 | 011 | Local ruleset cache |
 | 012 | Native VPN service |
-| 013 | Routing |
 | 014 | DNS settings |
 | 015 | Speed test |
 | 016 | Statistics and connections |
@@ -1108,30 +1103,42 @@ Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`]
 | 021 | CI/CD pipeline |
 | 022 | App settings |
 | 023 | Debug and logging |
-| 024 | Load balance |
-| 025 | WARP integration |
+| 024 | Load balance — *Draft* |
+| 025 | WARP integration — *Draft* |
 | **026** | **Parser v2** (sealed NodeSpec, 3-layer pipeline) |
 | **027** | **Subscription auto-update** (4 triggers, spam gates) |
 | **028** | **AntiDPI: mixed-case SNI** |
 | **029** | **Haptic feedback** |
 | 030 | Custom routing rules (unified `CustomRule` model: inline + local-only SRS) |
 | 031 | Debug API (localhost HTTP server для dev introspection) |
-| 032 | Quick Connect (QS tile + home shortcut — спека, не имплементировано) |
+| 032 | Quick Connect (QS tile + home shortcut) |
 | 033 | Preset bundles (selectable rules с `preset_id`, expansion + merge) |
 | 034 | App icon |
-| 035 | MCP server |
+| 035 | MCP server — *Draft* |
 | 036 | Update check (GitHub Releases polling, sideload-flow) |
 | 037 | Naive proxy support |
 | 038 | Crash diagnostics (`getHistoricalProcessExitReasons`) |
-| **039** | **libbox 1.13 migration** (1.12.12 → 1.13.11, single-CommandServer architecture) |
 | 040 | Backup & restore UI (4 toggleable categories) |
-| 041 | DNS rules refactor (named/toggleable/multi-source) |
-| 042 | Health watchdog (heartbeat metrics + auto-recovery) — *Draft* |
-| 043 | AppLog per-source quotas (in-memory: app=300, core=500) |
+| 042 | Health watchdog (heartbeat metrics + auto-recovery) |
+| 043 | AppLog per-source quotas + diagnostics platform (Debug API + AppLog + Crash diagnostics) |
 | **044** | **Per-app traffic profiler** (recording per-app DNS/connections/routing chain — Live/Domains/IPs/Connections sub-tabs, connection-issue detection, Debug API + SSE) |
 | 045 | TLS ECH (Encrypted Client Hello) — anti-DPI extension прячущий SNI целиком — *Draft* |
 | 046 | Tunnel apps split-tunneling (per-app include/exclude через VpnService.Builder) |
 | 047 | Public Intent API (Tasker / Macrodroid automation через Android broadcast intents) — *Draft* |
+
+**Демотированные (через §054) — теперь в `tasks/`:**
+
+| Был | Теперь |
+|-----|--------|
+| ~~001~~ Mobile stack | [`tasks/055-mobile-stack-decision/`](./spec/tasks/055-mobile-stack-decision/spec.md) — historical architectural decision |
+| ~~002~~ MVP scope | [`tasks/056-mvp-scope-historical/`](./spec/tasks/056-mvp-scope-historical/spec.md) — historical milestone |
+| ~~004x~~ Subscription parser | [`tasks/057-subscription-parser-v1-superseded/`](./spec/tasks/057-subscription-parser-v1-superseded/spec.md) — superseded by §026 |
+| ~~005x~~ Config generator | [`tasks/058-config-generator-wizard-v1-superseded/`](./spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) — superseded by §026 |
+| ~~013~~ Routing | [`tasks/059-routing-v1-superseded/`](./spec/tasks/059-routing-v1-superseded/spec.md) — superseded by §030 |
+| ~~039~~ libbox 1.13 migration | [`tasks/060-libbox-1-13-migration/`](./spec/tasks/060-libbox-1-13-migration/spec.md) — one-shot migration (Done) |
+| ~~041~~ DNS rules refactor | [`tasks/061-dns-rules-refactor/`](./spec/tasks/061-dns-rules-refactor/spec.md) — refactor, live spec — §014 |
+
+Освобождённые номера (001, 002, 004, 005, 013, 039, 041) **не переиспользуются** — archive-ссылки сохраняются.
 
 Дополнительно — летопись отдельных рабочих циклов (баги, рефакторинги): [`docs/spec/tasks/`](./spec/tasks/). Процессы (например, ночная работа): [`docs/spec/processes/`](./spec/processes/).
 
