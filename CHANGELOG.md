@@ -10,6 +10,36 @@
 
 ---
 
+## [1.7.2] — 2026-05-10
+
+«§050 wifi-state closeout + Live tab fix» release. Главное — **закрыта §050**: F12.3 `readWIFIState` теперь полноценно работает, найден и исправлен real root cause `Unknown reference: 42` crash'а (unhandled `SecurityException` через JNI), плюс добавлены недостающие permissions для Android 13+ и runtime UX. Параллельно — фикс Live tab system-wide stats (раньше показывал 0 events) и UI toggle для §037 config lock.
+
+### Fixed
+
+- **§050 — F12.3 `readWIFIState` real root cause + final fix** ([§050 spec](docs/spec/tasks/050-libbox-debug-build/spec.md), [findings.md](docs/spec/tasks/050-libbox-debug-build/findings.md)). После 9 неудачных attempt'ов в §049 (различные констукторы / pinning / R8-keep-rules — все `Unknown reference: 42` cold-start) истинная причина оказалась проще, чем `Seq` ref-tracker race: **unhandled `SecurityException` propagating через JNI**.
+  - Sing-box (Go) → cgo → `cproxy_PlatformInterface_ReadWIFIState` → Java callback `readWIFIState()` → `WifiManager.connectionInfo` → **`SecurityException`** при отсутствии location permission на API 29+ → exception проходит через JNI границу без handler в cproxy code → `Seq$RefTracker.incRefnum` пытается cleanup → **JNI env corrupted** → `ClassLinker::FindClass` fails → `Runtime::Abort` с misleading `"Unknown reference: 42"` (refnum 42 = follow-up effect, не cause).
+  - **Defensive try/catch** `SecurityException + RuntimeException → return null` в `PlatformInterfaceWrapper.readWIFIState`. Sing-box graceful'но получает null (как было раньше когда метод всегда возвращал null) — как минимум не падает.
+  - **Permission gate** в `BoxService.startSingbox` после `startOrReloadService` (port из reference SagerNet): `cs.needWIFIState() && !permission` → `stopAndAlert("alert:permission_location:...")`. Sing-box не запускается без permission'а если config реально использует `wifi_ssid`/`wifi_bssid` правила — Flutter показывает actionable alert вместо silent crash'а.
+- **§050 — `<unknown ssid>` на Android 13+ (targetSdk≥33)**. Даже после grant'а `ACCESS_FINE_LOCATION` / `ACCESS_BACKGROUND_LOCATION`, `WifiInfo.ssid` возвращал `"<unknown ssid>"` → wifi rules не матчились. Google в API 33 отделил Wi-Fi info от location: для apps с `targetSdk≥33` нужен **отдельный `NEARBY_WIFI_DEVICES`** permission ([Android docs](https://developer.android.com/develop/connectivity/wifi/wifi-permissions)).
+  - Manifest: `<uses-permission NEARBY_WIFI_DEVICES neverForLocation>` (declared as not-for-location → Google Play политика).
+  - `BoxService.startSingbox`: на API 33+ проверяются обе permission (`ACCESS_BACKGROUND_LOCATION` + `NEARBY_WIFI_DEVICES`); alert содержит comma-list missing permissions для UI.
+  - Verified on OnePlus / Android 15 / API 36: после grant'а wifi rule с `wifi_ssid:["lexRouter"], outbound: direct-out` корректно матчится — chrome → api.ipify.org идёт через direct, минуя VPN.
+
+### Added
+
+- **§050 — permission UX flows** ([home_screen.dart](app/lib/screens/home_screen.dart), [url_launcher.dart](app/lib/services/url_launcher.dart), [MainActivity.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt)).
+  - **Notification permission explainer** при cold start: показывает explainer dialog ДО system POST_NOTIFICATIONS prompt'а — юзер понимает зачем VPN'у нужны notifications (foreground service / status indicator).
+  - **Wi-Fi permissions dialog** при запуске VPN с wifi rules: parsит comma-list missing permissions, показывает кнопку `Allow Wi-Fi info` (runtime prompt для NEARBY_WIFI_DEVICES — one tap) и `Open Settings` (для BACKGROUND_LOCATION который нельзя выдать через runtime prompt; идёт через `MANAGE_APP_PERMISSIONS` intent с тремя fallback стратегиями для разных OEM).
+  - **Battery optimization — one-tap prompt**: primary action поменян с `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` (список всех apps) на `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` (системный диалог конкретно про L×Box). Список apps остаётся как fallback для OEM (ColorOS / MIUI / HyperOS) где direct-prompt молча отбрасывается.
+- **§048 — Live tab system-wide events fix**. Раньше при тапе START в Live tab без per-app session показывалось 0 events — `_pollConnections()` имел early-return `if (_active == null) return`, и system-wide recording получал только DNS строки из core logs (TCP/UDP open/close — никогда). Теперь global recording тоже запускает `_startConnectionPoll()`, события через `_emitGlobalStream`. Closed connections тоже эмитятся в global buffer когда recording on. Idle profiler по-прежнему ничего не делает.
+- **§037 — config_locked toggle в Diagnostics tab** ([app_settings_screen.dart](app/lib/screens/app_settings_screen.dart)). UI-эквивалент `PUT /settings/config_locked` Debug API endpoint'а: юзер может pin'нуть текущий sing-box config (например, после debug-API edit'а с экспериментальной фичей) от перезаписи UI-rebuild'ом, и снять lock сам. Auto-unlocks при отключении Debug API (иначе lock остаётся unactionable — toggle спрятан под Debug API блоком).
+
+### Deferred
+
+- **F22 part 2** — back-pressure cap (`LOG_QUEUE_MAX = 4096`) + drainer yield каждые 200 iterations + EventChannel batching (один `sink.success(list)` на batch вместо per-line) + AppLog ring buffer на deque вместо `List.insert(0)` + notifyListeners throttle до 60Hz. Текущий drainer pattern достаточен для production load, но на heavy debug-mode traffic возможно OOM risk при slow Dart consumer'е. Не release-blocker.
+
+---
+
 ## [1.7.1] — 2026-05-09
 
 «Stabilization» release. Главное — **§049 sing-box wrapper deep audit + atomic CAS lifecycle fix**: устранена main suspect race condition по `fileDescriptor`, обнаруженная при диагностике §047 (TCP-deterioration после ~8 часов uptime). Параллельно — **§048 inclusive observer** для Per-app trace и **§046 tunnel apps split-tunneling**.
