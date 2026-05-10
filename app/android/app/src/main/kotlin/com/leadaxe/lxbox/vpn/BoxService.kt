@@ -433,25 +433,29 @@ class BoxService(
     /// §043: sing-box log lines проходят сюда независимо от `log.level`
     /// в конфиге. INFO+ пушим в Flutter через EventChannel "lxbox/coreLog".
     ///
-    /// **§050 fix attempt (drainer + @Synchronized)**:
-    /// - `@Synchronized` на entry point: serialize sing-box goroutines один-за-одним.
-    ///   Reference SagerNet's `Log.d` natural-blocking на logd socket даёт
-    ///   аналогичный throttle — у нас sync mutex.
-    /// - Drainer pattern: ОДИН Runnable instance в `coreLogDrainer` field
-    ///   (не lambda, не method ref) reused on every `Handler.post()`.
-    ///   Storage в `LinkedBlockingQueue` lock-free для producers.
-    /// - Запланированный drainer flag через AtomicBoolean — `compareAndSet`
-    ///   гарантирует только один scheduled drainer at a time.
-    ///
-    /// **Hot path allocations** (per writeDebugMessage call):
-    /// - 1 String для `plain` (regex.replace создаёт)
-    /// - 1 LinkedBlockingQueue Node при offer
-    /// - НЕТ Lambda/Runnable/Message creation
-    @Synchronized
+    /// **F22 part 2 — производственный pipeline:**
+    /// - Никакого `@Synchronized`: `LinkedBlockingQueue.offer` thread-safe сам,
+    ///   а `@Synchronized` сериализовал бы sing-box goroutines на mutex и
+    ///   не давал ничего полезного.
+    /// - **Back-pressure cap** `LOG_QUEUE_MAX = 4096`: при slow Dart consumer'е
+    ///   очередь не растёт без предела. Drop newest когда полно — потеря
+    ///   visibility одного-двух batch'ей лучше OOM.
+    /// - Single lazy `coreLogDrainer` Runnable. Никаких per-call lambda /
+    ///   anonymous class allocations.
+    /// - **Batching**: drainer отдаёт `List<String>` в `sink.success(list)` —
+    ///   один JNI marshal на N строк вместо N marshall'ов. Dart side
+    ///   принимает `List<dynamic>` (см. `clash_log_pump.dart`).
+    /// - **Yield** каждые `DRAIN_BATCH_MAX = 200` строк: re-post Runnable если
+    ///   queue ещё не пуст. Длинный burst не блочит main looper > одного frame.
     override fun writeDebugMessage(message: String) {
         val plain = ansiEscapeRe.replace(message, "")
         if (traceDebugRe.containsMatchIn(plain)) return
         if (BoxVpnService.coreLogSink == null) return
+        // Back-pressure: drop newest, не блокируем sing-box producer thread.
+        if (coreLogQueue.size >= LOG_QUEUE_MAX) {
+            coreLogDrops.incrementAndGet()
+            return
+        }
         coreLogQueue.offer(plain)
         if (drainerScheduled.compareAndSet(false, true)) {
             coreLogMainHandler.post(coreLogDrainer)
@@ -461,23 +465,44 @@ class BoxService(
     private val ansiEscapeRe = Regex("\\[[0-9;]*[A-Za-z]")
     private val traceDebugRe = Regex("\\b(TRACE|DEBUG)\\b")
 
+    /// Cap размера очереди — `4096 * ~80 chars ≈ 320KB` worst case в queue.
+    /// Drop newest при переполнении (sing-box producer thread не блокируется).
+    private val LOG_QUEUE_MAX = 4096
+
+    /// Сколько строк drainer отдаёт за один main-looper run перед yield'ом.
+    /// 200 строк ≈ 1 frame (~16ms) при типичной marshal-цене.
+    private val DRAIN_BATCH_MAX = 200
+
     private val coreLogQueue: java.util.concurrent.LinkedBlockingQueue<String> by lazy {
         java.util.concurrent.LinkedBlockingQueue()
     }
     private val drainerScheduled = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val coreLogDrops = java.util.concurrent.atomic.AtomicLong(0)
 
-    /// **§050 single Runnable** — создаётся ОДИН раз при first access (lazy),
+    /// **F22 single Runnable** — создаётся ОДИН раз при first access (lazy),
     /// reused на каждый `Handler.post(coreLogDrainer)`. Никаких per-call
     /// Lambda/anonymous class allocations. Hold strong ref в field.
+    ///
+    /// Drains до `DRAIN_BATCH_MAX` строк, эмитит как `List<String>` одним
+    /// JNI вызовом, потом если queue не пустой — re-post (yield для frame).
     private val coreLogDrainer: Runnable by lazy {
         Runnable {
             drainerScheduled.set(false)
             val sink = BoxVpnService.coreLogSink ?: run { coreLogQueue.clear(); return@Runnable }
-            // Drain все что accumulated. Yield безопасен — main looper его сам
-            // пере-планирует если drain длинный.
-            while (true) {
+            val batch = ArrayList<String>(DRAIN_BATCH_MAX.coerceAtMost(64))
+            var taken = 0
+            while (taken < DRAIN_BATCH_MAX) {
                 val line = coreLogQueue.poll() ?: break
-                runCatching { sink.success(line) }
+                batch.add(line)
+                taken++
+            }
+            if (batch.isNotEmpty()) {
+                runCatching { sink.success(batch) }
+            }
+            // Если queue ещё что-то держит — re-schedule, не блочим main looper.
+            if (coreLogQueue.isNotEmpty() &&
+                drainerScheduled.compareAndSet(false, true)) {
+                coreLogMainHandler.post(coreLogDrainer)
             }
         }
     }

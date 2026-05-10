@@ -32,15 +32,14 @@ class ClashLogPump {
   StreamSubscription? _sub;
 
   /// Подписывается на EventChannel. Идемпотентно: повторный вызов no-op.
+  ///
+  /// **F22 part 2 batching:** native side отдаёт `List<String>` за один
+  /// JNI marshal (см. `BoxService.coreLogDrainer`). Backward-compat: на
+  /// случай старого APK / плагина принимаем и одиночный `String`.
   void attach() {
     if (_sub != null) return;
     _sub = _channel.receiveBroadcastStream().listen(
-      (event) {
-        if (event is! String) return;
-        if (event.isEmpty) return;
-        final level = parseLevel(event);
-        AppLog.I.log(level, event, source: DebugSource.core);
-      },
+      _onEvent,
       onError: (_) {
         // Channel error — не критично, sing-box логи continue working
         // когда channel восстановится. Не нужно крутить retry — Flutter
@@ -48,6 +47,24 @@ class ClashLogPump {
       },
       cancelOnError: false,
     );
+  }
+
+  void _onEvent(dynamic event) {
+    if (event is String) {
+      if (event.isEmpty) return;
+      AppLog.I.log(parseLevel(event), event, source: DebugSource.core);
+      return;
+    }
+    if (event is List) {
+      // Batch mode (F22 part 2): native шлёт List<String> от 1 до 200 строк.
+      // Один notifyListeners на весь batch вместо N (см. AppLog.logBatch).
+      final lines = <String>[];
+      for (final item in event) {
+        if (item is String && item.isNotEmpty) lines.add(item);
+      }
+      if (lines.isEmpty) return;
+      AppLog.I.logBatch(lines, parseLevel, source: DebugSource.core);
+    }
   }
 
   /// Отписаться. Опционально на shutdown.
