@@ -657,6 +657,43 @@ class SettingsStorage {
     return jsonDecode(jsonEncode(data)) as Map<String, dynamic>;
   }
 
+  /// Backup: глубокая копия всего `lxbox_settings.json` для export'а через
+  /// [BackupService]. Возвращает то же что [dumpCache] — alias для ясности
+  /// семантики на call-site.
+  static Future<Map<String, dynamic>> exportRaw() => dumpCache();
+
+  /// Backup: применить snapshot целиком. `merge=false` (default) — replace
+  /// (overwrite cache + flush на disk), `merge=true` — top-level merge:
+  /// присутствующие в [snapshot] ключи overwrite, отсутствующие — keep.
+  /// `vars` мерджится recursively (subkey-level upsert) при `merge=true`.
+  static Future<void> replaceRaw(
+    Map<String, dynamic> snapshot, {
+    bool merge = false,
+  }) async {
+    final clean = jsonDecode(jsonEncode(snapshot)) as Map<String, dynamic>;
+    if (!merge) {
+      _cache = clean;
+      await _save();
+      return;
+    }
+    final current = await _load();
+    for (final entry in clean.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      if (key == 'vars' && value is Map<String, dynamic>) {
+        final existing = (current['vars'] as Map<String, dynamic>?) ?? {};
+        for (final v in value.entries) {
+          existing[v.key] = v.value;
+        }
+        current['vars'] = existing;
+      } else {
+        current[key] = value;
+      }
+    }
+    _cache = current;
+    await _save();
+  }
+
   // ---------------------------------------------------------------------------
   // Tunnel apps — OS-level split-tunneling (§046)
   //

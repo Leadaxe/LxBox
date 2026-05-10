@@ -12,8 +12,7 @@ import '../services/error_format.dart';
 import '../vpn/box_vpn_client.dart';
 
 /// Backup & restore UI — спека [§040](../../docs/spec/features/040 backup
-/// restore ui/spec.md). Тонкая обёртка над [BackupService] — orchestration
-/// логика там; здесь только UI flow.
+/// restore ui/spec.md).
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
 
@@ -22,12 +21,13 @@ class BackupScreen extends StatefulWidget {
 }
 
 class _BackupScreenState extends State<BackupScreen> {
-  final _service = BackupService();
+  final _service = const BackupService();
 
-  // Export-side toggles. Default ON для всех кроме debug.
+  // Export-side toggles. Default ON для всего кроме debug.
   bool _expServerLists = true;
   bool _expRouting = true;
   bool _expAppSettings = true;
+  bool _expVpnSettings = true;
   bool _expDebugConfig = false;
 
   bool _busy = false;
@@ -43,6 +43,7 @@ class _BackupScreenState extends State<BackupScreen> {
             serverLists: _expServerLists,
             routing: _expRouting,
             appSettings: _expAppSettings,
+            vpnSettings: _expVpnSettings,
             debugConfig: _expDebugConfig,
             busy: _busy,
             onChange: (cat, on) => setState(() {
@@ -53,6 +54,8 @@ class _BackupScreenState extends State<BackupScreen> {
                   _expRouting = on;
                 case BackupCategory.appSettings:
                   _expAppSettings = on;
+                case BackupCategory.vpnSettings:
+                  _expVpnSettings = on;
                 case BackupCategory.debugConfig:
                   _expDebugConfig = on;
               }
@@ -74,6 +77,7 @@ class _BackupScreenState extends State<BackupScreen> {
       if (_expServerLists) BackupCategory.serverLists,
       if (_expRouting) BackupCategory.routing,
       if (_expAppSettings) BackupCategory.appSettings,
+      if (_expVpnSettings) BackupCategory.vpnSettings,
       if (_expDebugConfig) BackupCategory.debugConfig,
     };
   }
@@ -89,14 +93,10 @@ class _BackupScreenState extends State<BackupScreen> {
       final json = await _service.buildExport(include: include);
       final filename = await BackupService.suggestedFilename();
 
-      // share_plus в Android требует файл, не bytes напрямую — пишем во
-      // временный cache, шарим, потом OS подчистит.
       final tmpDir = await getTemporaryDirectory();
       final path = '${tmpDir.path}/$filename';
       await File(path).writeAsString(json);
 
-      // Note: SharePlus requires Object<XFile> wrapped in ShareParams; для
-      // простоты используем Share.shareXFiles из старого API (sup в обоих).
       await Share.shareXFiles(
         [XFile(path, mimeType: 'application/json', name: filename)],
         subject: 'LxBox backup',
@@ -136,10 +136,6 @@ class _BackupScreenState extends State<BackupScreen> {
       final BackupContents contents;
       try {
         contents = await _service.parseImport(raw);
-      } on BackupVersionException catch (e) {
-        if (!mounted) return;
-        _showError('Cannot import', e.userMessage);
-        return;
       } on FormatException catch (e) {
         if (!mounted) return;
         _showError('Invalid backup', e.message);
@@ -161,14 +157,17 @@ class _BackupScreenState extends State<BackupScreen> {
       if (apply.serverListsApplied > 0) {
         parts.add('${apply.serverListsApplied} server lists');
       }
-      if (apply.routingVarsApplied > 0) {
-        parts.add('routing (${contents.countFor(BackupCategory.routing)} rules)');
+      if (apply.routingApplied > 0) {
+        parts.add('routing (${apply.routingApplied} rules)');
       }
-      if (apply.appVarsApplied > 0) {
-        parts.add('${apply.appVarsApplied} app settings');
+      if (apply.appSettingsApplied > 0) {
+        parts.add('${apply.appSettingsApplied} app settings');
       }
-      if (apply.debugVarsApplied > 0) {
+      if (apply.debugConfigApplied > 0) {
         parts.add('debug config');
+      }
+      if (apply.vpnSettingsApplied > 0) {
+        parts.add('${apply.vpnSettingsApplied} VPN settings');
       }
       if (parts.isEmpty) {
         summary.write(' nothing (all categories deselected)');
@@ -180,10 +179,8 @@ class _BackupScreenState extends State<BackupScreen> {
       }
       // applyImport пишет в SettingsStorage, но controllers (Subscription /
       // Home / Routing screen state) держат in-memory snapshot — UI остаётся
-      // stale. Restart-кнопка вызывает `quitApp()` (finishAffinity +
-      // killProcess); юзер сам тапает иконку, app поднимается с fresh
-      // storage. _initSubsAndAutoUpdate в HomeScreen на старте видит «есть
-      // entries но нет config» и авто-trigger'ит generateConfig+save.
+      // stale. Restart-кнопка вызывает quitApp(); юзер сам тапает иконку,
+      // app поднимается с fresh storage.
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -209,7 +206,7 @@ class _BackupScreenState extends State<BackupScreen> {
   Future<_ImportDialogResult?> _showImportPreview(BackupContents c) async {
     final available = c.availableCategories();
     var include = Set<BackupCategory>.from(available);
-    var merge = true; // default
+    var merge = true;
     return await showDialog<_ImportDialogResult>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -262,7 +259,7 @@ class _BackupScreenState extends State<BackupScreen> {
                       ctx,
                       label: 'Routing — '
                           '${c.countFor(BackupCategory.routing)} rules'
-                          '${c.routingFinalOutbound != null ? ', final: ${c.routingFinalOutbound}' : ''}',
+                          '${c.routingFinalOutbound != null && c.routingFinalOutbound!.isNotEmpty ? ', final: ${c.routingFinalOutbound}' : ''}',
                       checked: include.contains(BackupCategory.routing),
                       onChanged: (v) => set(() {
                         if (v == true) {
@@ -283,6 +280,20 @@ class _BackupScreenState extends State<BackupScreen> {
                           include.add(BackupCategory.appSettings);
                         } else {
                           include.remove(BackupCategory.appSettings);
+                        }
+                      }),
+                    ),
+                  if (available.contains(BackupCategory.vpnSettings))
+                    _previewCheckbox(
+                      ctx,
+                      label:
+                          '${c.countFor(BackupCategory.vpnSettings)} VPN system toggles',
+                      checked: include.contains(BackupCategory.vpnSettings),
+                      onChanged: (v) => set(() {
+                        if (v == true) {
+                          include.add(BackupCategory.vpnSettings);
+                        } else {
+                          include.remove(BackupCategory.vpnSettings);
                         }
                       }),
                     ),
@@ -346,7 +357,6 @@ class _BackupScreenState extends State<BackupScreen> {
                     ? null
                     : () async {
                         if (!merge) {
-                          // Confirm destructive replace.
                           final ok = await showDialog<bool>(
                             context: ctx,
                             builder: (cctx) => AlertDialog(
@@ -443,6 +453,7 @@ class _ExportCard extends StatelessWidget {
     required this.serverLists,
     required this.routing,
     required this.appSettings,
+    required this.vpnSettings,
     required this.debugConfig,
     required this.busy,
     required this.onChange,
@@ -452,6 +463,7 @@ class _ExportCard extends StatelessWidget {
   final bool serverLists;
   final bool routing;
   final bool appSettings;
+  final bool vpnSettings;
   final bool debugConfig;
   final bool busy;
   final void Function(BackupCategory cat, bool on) onChange;
@@ -499,7 +511,7 @@ class _ExportCard extends StatelessWidget {
               controlAffinity: ListTileControlAffinity.leading,
               title: const Text('Routing'),
               subtitle: const Text(
-                'Custom rules + final outbound (groups derive from server lists)',
+                'Custom rules, tun apps, DNS options, final outbound',
                 style: TextStyle(fontSize: 11),
               ),
               value: routing,
@@ -511,12 +523,25 @@ class _ExportCard extends StatelessWidget {
               controlAffinity: ListTileControlAffinity.leading,
               title: const Text('App settings'),
               subtitle: const Text(
-                'Theme, autostart, modes and other preferences',
+                'Preferences, ping options, auto-update, wifi history',
                 style: TextStyle(fontSize: 11),
               ),
               value: appSettings,
               onChanged: (v) =>
                   onChange(BackupCategory.appSettings, v ?? false),
+            ),
+            CheckboxListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('VPN system toggles'),
+              subtitle: const Text(
+                'auto-start, keep on exit, background mode, allow bypass',
+                style: TextStyle(fontSize: 11),
+              ),
+              value: vpnSettings,
+              onChanged: (v) =>
+                  onChange(BackupCategory.vpnSettings, v ?? false),
             ),
             CheckboxListTile(
               dense: true,

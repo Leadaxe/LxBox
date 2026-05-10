@@ -2,10 +2,32 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft |
-| Дата | 2026-05-01 |
+| Статус | Implemented (UI шипнут v1.6.0; format переписан в v1.7.3+ — см. **«Update v1.7.3 — single-format snapshot»** ниже) |
+| Дата | 2026-05-01, обновление 2026-05-10 |
 | Зависимости | [`031 debug api`](../031%20debug%20api/spec.md) (использует существующую модель `/backup/*` API) |
 | Триггер | Пользователь хочет переносить настройки/подписки между устройствами без manual JSON-copy через Debug API. UI-flow с галочками — что включать в export/import. |
+
+> **⚠ Update v1.7.3 — single-format snapshot**
+>
+> Изначальный wire-format (`vars` + `server_lists` на корне, `version: 1`) **не сохранял большую часть user data**: `custom_rules`, `tun_apps`, `enabled_groups`, `enabled_rules`, `route_final`, `rule_outbounds`, `dns_options` живут как **top-level ключи** `lxbox_settings.json`, а старый `BackupService.buildExport` вызывал `SettingsStorage.getAllVars()` который возвращал только `data['vars']`. Restore из таких backup'ов терял routing.
+>
+> Текущий формат (single, без `version`):
+> ```json
+> {
+>   "app": "lxbox", "kind": "backup",
+>   "created_at": "...", "source_app_version": "...",
+>   "storage": { ...lxbox_settings.json целиком... },
+>   "vpn_settings": { auto_start, keep_on_exit, background_mode,
+>                     core_logs_enabled, allow_bypass }
+> }
+> ```
+>
+> - **`storage`** — deep-clone всего `lxbox_settings.json` через `SettingsStorage.exportRaw()`. Restore — `replaceRaw(map, merge: bool)`. Любой будущий top-level ключ попадает в backup автоматически — без правок allowlist'ов.
+> - **`vpn_settings`** — отдельный native-side state (`boxvpn_boot` SharedPreferences, читается BootReceiver'ом at boot-time когда Flutter ещё не запущен, не перенесён в Flutter storage). 5 toggles через `BoxVpnClient` getters/setters.
+> - **`version` поле убрано** — single format, файлы старого образца reject'ятся с `Unsupported backup format. Re-export from a recent app version.`
+> - **5 категорий UI** (было 4): Server lists, Routing, App settings, **VPN system toggles** (новая), Debug API. Filter работает на уровне keys в `storage` map.
+>
+> Секции ниже описывают **изначальный** дизайн (UX flow, категории, рассуждения). Wire-format-секция (`Filter map`, `BackupContents` фрагмент) **устарели** — см. реализацию в [`backup_service.dart`](../../../app/lib/services/backup_service.dart).
 
 ## Цель
 
