@@ -30,29 +30,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicReference
 
-/// **§049 F1 split** (final attempt — clean reference structure):
+/// §049 F1 split — port из reference SagerNet
+/// (`bg/BoxService.kt` commit 3b3883e, libbox 1.13.11).
 ///
-/// `BoxService` — отдельный класс, implements **только** `CommandServerHandler`.
-/// Владеет state'ом (`fileDescriptor`, `commandServer`, `status`, и т.д.) и
-/// lifecycle'ом libbox-runtime'а.
+/// `BoxService` — plain class, implements **только** `CommandServerHandler`.
+/// Владеет state'ом (`fileDescriptor`, `commandServer`, `serviceScope`, etc.)
+/// и lifecycle'ом libbox-runtime'а.
 ///
-/// `BoxVpnService` (Android Service + `PlatformInterfaceWrapper`) хранит
-/// `private val service = BoxService(this, this)` в **field initializer** —
-/// мгновенно после создания Service. Все Android-callbacks (`onStartCommand`,
-/// `onDestroy`, `onRevoke`, `onTaskRemoved`) форвардятся в `service.X()`.
+/// `BoxVpnService` (Android Service + `PlatformInterfaceWrapper`) держит
+/// `private val service = BoxService(this, this)` в **field initializer** и
+/// форвардит все Android lifecycle callbacks в `service.X()`.
 ///
-/// `CommandServer(this, platformInterface)` создаётся с **2 разных Java-объектов**:
-/// - `this` = BoxService (CSH)
-/// - `platformInterface` = BoxVpnService (PI)
-///
-/// Это структура из reference (`SagerNet/sing-box-for-android/bg/BoxService.kt`
-/// commit 3b3883e для libbox 1.13.11). Reference тестируется в production,
-/// у нас раньше split-attempts крашились с `Unknown reference: 42` — но это
-/// были импровизированные варианты с `BoxLifecycle` или Kotlin delegation.
-/// Тут — точный port reference.
-///
-/// Если этот вариант тоже crash'ит → env-specific issue (Android 15 OnePlus +
-/// libbox 1.13.11 ARM64), не наш код.
+/// `CommandServer(this, platformInterface)` создаётся с 2 разных Java
+/// instance: `this` = CSH=BoxService, `platformInterface` = PI=BoxVpnService.
 class BoxService(
     private val service: Service,
     private val platformInterface: PlatformInterface,
@@ -71,14 +61,13 @@ class BoxService(
         serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     }
 
-    /// **§049 F2 fix**: AtomicReference вместо `@Volatile`.
-    /// Главный suspect §047 race condition — race на mutations
-    /// `fileDescriptor` из множественных call-site'ов. `getAndSet(null)?.close()`
+    /// §049 F2 — `AtomicReference` вместо `@Volatile`. `getAndSet(null)?.close()`
     /// гарантирует что только один поток выполнит close(); остальные — no-op.
-    /// Public — чтобы BoxVpnService.openTun() мог делать `service.fileDescriptor.set(pfd)`.
+    /// Главный fix для §047 race condition на mutations `fileDescriptor`.
+    /// Public для `BoxVpnService.openTun()` которому нужен `set(pfd)`.
     val fileDescriptor = AtomicReference<ParcelFileDescriptor?>(null)
 
-    /// **§049 F2/F3 fix**: AtomicReference, by the same reasoning as fileDescriptor.
+    /// §049 F2/F3 — same atomic CAS pattern для commandServer.
     private val commandServer = AtomicReference<CommandServer?>(null)
     private var receiverRegistered = false
     private var status = VpnStatus.Stopped
@@ -199,9 +188,7 @@ class BoxService(
 
     fun onRevoke() {
         Log.d(TAG, "onRevoke — VPN taken by another app")
-        // §049 F5 fix: atomic close. Reference (BoxService.kt onRevoke) делает
-        // через runOnDefaultDispatcher, но у нас atomic helpers безопасны
-        // на любом thread'е.
+        // §049 F5 — atomic close, безопасно на любом thread'е.
         closeFileDescriptor()
         closeCommandServerAtomic("revoke")
 
@@ -270,8 +257,8 @@ class BoxService(
         }
     }
 
-    /// §049 F1 split — точно по reference (BoxService.kt:96-100):
-    /// `CommandServer(this, platformInterface)` с **2 разных Java-объектов**.
+    /// §049 F1 — `CommandServer(handler=this, platform=platformInterface)`
+    /// с двумя разными Java instances (port из reference 1.13.11).
     private fun startCommandServer() {
         val cs = CommandServer(this, platformInterface)
         cs.start()
@@ -351,8 +338,8 @@ class BoxService(
     // CommandServerHandler overrides
     // -------------------------------------------------------------------------
 
-    /// §049 F4 fix: убран status-flap (Started → Starting → Started) при reload.
-    /// Reference (`BoxService.kt:192-249 serviceReload0`) НЕ трогает status.
+    /// §049 F4 — без status-flap (Started → Starting → Started) при reload.
+    /// Match reference (`BoxService.kt:192-249 serviceReload0`).
     override fun serviceReload() {
         val cs = commandServer.get() ?: run {
             Log.w(TAG, "serviceReload: commandServer == null, treating as fresh start")
@@ -375,8 +362,9 @@ class BoxService(
 
     override fun serviceStop() { doStop() }
 
-    /// §049 F17 fix: возвращает актуальный state HTTP-proxy.
-    /// Reference (BoxService.kt:251-258): cast'им service в VPNService и читаем флаги.
+    /// §049 F17 — реальный state HTTP-proxy для Clash dashboard.
+    /// Match reference: cast service → VPNService и читаем флаги (у нас
+    /// `BoxVpnService` хранит их как `@JvmField`-properties).
     override fun getSystemProxyStatus(): SystemProxyStatus = SystemProxyStatus().apply {
         if (service is BoxVpnService) {
             available = service.systemProxyAvailable

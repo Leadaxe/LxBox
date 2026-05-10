@@ -13,22 +13,13 @@ import io.nekohasekai.libbox.TunOptions
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 
-/// **§049 F1 split** (final attempt — clean reference structure):
+/// §049 F1 split (mirror reference SagerNet 1.13.11).
 ///
-/// `BoxVpnService` — Android `VpnService` + `PlatformInterfaceWrapper` (PI).
-/// Implements **только PI** — не CommandServerHandler.
-///
-/// Owns одну поле — `service: BoxService`, создаваемый в **field initializer**
-/// (мгновенно после Android создаёт VpnService). Все Android-callbacks
-/// форвардятся в `service.X()`. Все state'и live в `BoxService`.
-///
-/// Это структура из reference `SagerNet/sing-box-for-android` (commit 3b3883e
-/// для libbox 1.13.11):
-///   - `VPNService.kt` — VpnService + PlatformInterfaceWrapper
-///   - `BoxService.kt` — отдельный класс с CommandServerHandler + state
-///
-/// `CommandServer(handler, platform)` создаётся в `BoxService.startCommandServer()`
-/// с **2 разных Java-объектов** — как у reference.
+/// `BoxVpnService` — Android `VpnService` + `PlatformInterfaceWrapper` (PI only).
+/// Хранит `service: BoxService` в field initializer и форвардит Android
+/// lifecycle callbacks в `service.X()`. Весь state и CSH-implementation
+/// живут в `BoxService` — это даёт `CommandServer(this, platformInterface)`
+/// с двумя разными Java instance, как у reference.
 class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
 
     companion object {
@@ -109,14 +100,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         }
     }
 
-    /// **§049 F1**: BoxService создаётся в **field initializer** — мгновенно
-    /// при создании Android Service'а, до onCreate(). Это критично:
-    /// reference (`VPNService.kt:26`) делает идентично, и это **держит
-    /// strong-ref на platformInterface (= this)** через `private val` поле
-    /// в BoxService — что предотвращает преждевременный GC обёртки на Go-стороне.
+    /// §049 F1 — field initializer (как `VPNService.kt:26` reference): инстанс
+    /// создаётся при создании Android Service, до onCreate(). Это держит
+    /// strong-ref на `platformInterface (= this)` через `private val` в
+    /// BoxService — препятствует преждевременному GC Go-side wrapper'а.
     private val service = BoxService(this, this)
 
-    /// **§049 F17**: track реальный state HTTP-proxy (читается из BoxService.getSystemProxyStatus).
+    /// §049 F17 — state HTTP-proxy для `BoxService.getSystemProxyStatus()`.
     @JvmField var systemProxyAvailable = false
     @JvmField var systemProxyEnabled = false
 
