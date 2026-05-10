@@ -863,6 +863,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
       }
     }
     final history = await SettingsStorage.getWifiHistory();
+    final autoRecordOn = await SettingsStorage.getAutoRecordWifi();
     if (!mounted) return;
 
     final selected = <_WifiEntry>{};
@@ -883,6 +884,76 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
           }
 
           final entries = <Widget>[];
+          // §051 Phase 3 — indicator когда auto-record выключен. Показываем
+          // **всегда** наверху списка (не только при пустой истории), чтобы
+          // юзер видел почему «Pick saved» не растёт сам.
+          if (!autoRecordOn) {
+            entries.add(Container(
+              margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(ctx)
+                    .colorScheme
+                    .surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline,
+                      size: 16,
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Auto-record is off',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color:
+                                Theme.of(ctx).colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Enable it in Settings → Diagnostics to grow '
+                          'this list as you stay on Wi-Fi networks.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(ctx)
+                                .colorScheme
+                                .onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.settings, size: 14),
+                          label: const Text('Open Settings'),
+                          onPressed: () {
+                            Navigator.of(ctx).pop<List<_WifiEntry>>(null);
+                            Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                              builder: (_) => const AppSettingsScreen(
+                                  initialTab: 1),
+                            ));
+                          },
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 28),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10),
+                            textStyle: const TextStyle(fontSize: 11),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ));
+          }
           if (fromRules.isNotEmpty) {
             entries.add(_pickerSectionHeader(ctx, 'USED IN YOUR RULES'));
             for (final mapEntry in fromRules.entries) {
@@ -910,79 +981,76 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
               final bssid = h['bssid'] ?? '';
               if (ssid.isEmpty) continue;
               final e = _WifiEntry(ssid, bssid);
-              entries.add(CheckboxListTile(
-                dense: true,
-                value: isSelected(e),
-                onChanged: (v) => toggle(e, v),
-                title: Text(
-                  bssid.isEmpty ? ssid : '$ssid · $bssid',
-                  style: const TextStyle(fontSize: 13),
-                ),
-                subtitle: Text(
-                  _humanLastSeen(h['last_seen'] ?? ''),
-                  style: const TextStyle(fontSize: 11),
-                ),
-                secondary: IconButton(
-                  tooltip: 'Remove from history',
-                  icon: const Icon(Icons.close, size: 16),
-                  onPressed: () async {
-                    await SettingsStorage.removeFromWifiHistory(
-                        ssid, bssid);
-                    if (!ctx.mounted) return;
-                    setSheetState(() {
-                      history.removeWhere((x) =>
-                          (x['ssid'] ?? '') == ssid &&
-                          (x['bssid'] ?? '') == bssid);
-                      selected.remove(e);
-                    });
-                  },
+              // Explicit row: Checkbox + текст + IconButton. CheckboxListTile
+              // с `secondary: IconButton` имел hit-testing issues — IconButton
+              // ловил тап но event пробулькивал к ListTile parent. Phase 3:
+              // ручная разметка с clear bounds на каждый control.
+              entries.add(InkWell(
+                onTap: () => toggle(e, !isSelected(e)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: isSelected(e),
+                        onChanged: (v) => toggle(e, v),
+                        materialTapTargetSize:
+                            MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              bssid.isEmpty ? ssid : '$ssid · $bssid',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _humanLastSeen(h['last_seen'] ?? ''),
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Remove from history',
+                        icon: const Icon(Icons.close, size: 18),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () async {
+                          await SettingsStorage.removeFromWifiHistory(
+                              ssid, bssid);
+                          if (!ctx.mounted) return;
+                          setSheetState(() {
+                            history.removeWhere((x) =>
+                                (x['ssid'] ?? '') == ssid &&
+                                (x['bssid'] ?? '') == bssid);
+                            selected.remove(e);
+                          });
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ));
             }
           }
-          if (entries.isEmpty) {
-            // §051 Phase 3 — first-time hint: discover Auto-record toggle.
+          // Empty list (нет ни rules, ни history) и auto-record ON →
+          // короткий waiting message. Когда auto-record OFF, banner
+          // выше уже объясняет ситуацию + кнопкой Settings.
+          if (fromRules.isEmpty && history.isEmpty && autoRecordOn) {
             entries.add(Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Nothing saved yet.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(ctx).colorScheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '• Use "Add current" or "Manual" below\n'
-                    '• Or enable Auto-record in Settings → Diagnostics '
-                    'to grow this list as you move between Wi-Fi networks',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.settings, size: 16),
-                    label: const Text('Open Settings'),
-                    onPressed: () {
-                      Navigator.of(ctx).pop<List<_WifiEntry>>(null);
-                      Navigator.of(context).push(MaterialPageRoute<void>(
-                        builder: (_) =>
-                            const AppSettingsScreen(initialTab: 1),
-                      ));
-                    },
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 32),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      textStyle: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                ],
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Nothing saved yet. Use "Add current" / "Manual" or stay on a Wi-Fi network for 5 minutes.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
               ),
             ));
           }

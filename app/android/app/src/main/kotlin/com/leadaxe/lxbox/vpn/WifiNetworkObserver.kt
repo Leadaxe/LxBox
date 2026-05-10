@@ -165,10 +165,11 @@ class WifiNetworkObserver(private val ctx: Context) {
     companion object {
         private const val TAG = "WifiNetObserver"
 
-        /// 60 сек — middle ground. Дом / офис / постоянное кафе легко
-        /// больше минуты. Drive-by сети — меньше. Не вытаскиваем константу
-        /// в settings — overengineering, default work for everyone.
-        const val STICKINESS_THRESHOLD_MS = 60_000L
+        /// 5 минут — отсекает drive-by сети (магазин, проходящий wifi
+        /// на 1-2 мин). Дом / офис / постоянное кафе с сидением за
+        /// работой — легко больше 5 минут. Не вытаскиваем константу
+        /// в settings — overengineering, default works for everyone.
+        const val STICKINESS_THRESHOLD_MS = 300_000L
     }
 }
 

@@ -519,6 +519,9 @@ class SettingsStorage {
   static Future<List<Map<String, String>>> getWifiHistory() async {
     final raw = await getVar('wifi_history', '[]');
     final decoded = (jsonDecode(raw) as List?) ?? const [];
+    // Growable — caller'ы (Pick saved bottom sheet) делают `removeWhere`
+    // для optimistic UI update. `growable: false` ломал это с silent
+    // UnsupportedError в setState callback.
     return decoded
         .whereType<Map>()
         .map<Map<String, String>>((e) => {
@@ -527,7 +530,7 @@ class SettingsStorage {
               'last_seen': (e['last_seen'] as String?) ?? '',
             })
         .where((e) => (e['ssid'] ?? '').isNotEmpty)
-        .toList(growable: false);
+        .toList();
   }
 
   /// Upsert по composite key `(ssid, bssid)`. Если уже есть — обновляет
@@ -563,10 +566,10 @@ class SettingsStorage {
 
   static Future<void> clearWifiHistory() => setVar('wifi_history', '[]');
 
-  /// §051 Phase 3 — opt-in flag для auto-record visited Wi-Fi networks
-  /// в `wifi_history`. Default false (silent logging = privacy след).
-  /// При ON → `WifiNetworkObserver` registered в native side, networks
-  /// where stayed ≥ 60s записываются автоматически.
+  /// §051 Phase 3 — flag для auto-record visited Wi-Fi networks в
+  /// `wifi_history`. Default false — silent network logging это privacy
+  /// след даже local-only. Юзер включает в Settings → Diagnostics когда
+  /// захочет. Stickiness threshold 5 минут (см. `WifiNetworkObserver`).
   static Future<bool> getAutoRecordWifi() async =>
       (await getVar('auto_record_wifi_history', 'false')) == 'true';
 

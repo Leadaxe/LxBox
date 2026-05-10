@@ -150,6 +150,15 @@ POST   /rules/reorder                          Body: {"order":[id1,id2,...]} —
 
 `?rebuild=true` на любом write-методе → автоматически вызывает rebuild-config.
 
+=== Wi-Fi history (§051 Phase 3 — saved networks for routing rule editor) ===
+
+GET    /wifi_history                           list [{ssid, bssid, last_seen}]
+POST   /wifi_history                           upsert. body {"ssid": "...", "bssid": "..."}
+DELETE /wifi_history                           remove specific. body {"ssid": "...", "bssid": "..."}
+DELETE /wifi_history/all                       clear all
+
+Cap 50 entries (LRU evict by last_seen). BSSID нормализуется к lower-case.
+
 === Files (read-only) ===
 
 GET /files/srs/list                            Cached SRS files: [{rule_id, size, mtime}]
@@ -343,6 +352,11 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'PATCH', 'path': '/rules/{id}', 'params': {'rebuild': 'true|false'}, 'body': 'Partial CustomRule', 'description': 'Update'},
     {'method': 'DELETE', 'path': '/rules/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Delete'},
     {'method': 'POST', 'path': '/rules/reorder', 'body': '{"order":[id,...]}', 'description': 'Reorder (all ids required)'},
+    // Wi-Fi history (§051 Phase 3)
+    {'method': 'GET', 'path': '/wifi_history', 'description': 'List [{ssid, bssid, last_seen}], cap 50'},
+    {'method': 'POST', 'path': '/wifi_history', 'body': '{"ssid":"...","bssid":"..."}', 'description': 'Upsert entry; bssid lower-cased'},
+    {'method': 'DELETE', 'path': '/wifi_history', 'body': '{"ssid":"...","bssid":"..."}', 'description': 'Remove specific entry'},
+    {'method': 'DELETE', 'path': '/wifi_history/all', 'description': 'Clear all entries'},
     // Files
     {'method': 'GET', 'path': '/files/srs/list', 'description': 'Cached SRS [{rule_id,size,mtime}]'},
     {'method': 'GET', 'path': '/files/srs', 'params': {'ruleId': 'id'}, 'description': 'Binary SRS dump'},
