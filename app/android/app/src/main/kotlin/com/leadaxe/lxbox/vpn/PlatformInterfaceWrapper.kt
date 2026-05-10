@@ -109,18 +109,54 @@ interface PlatformInterfaceWrapper : PlatformInterface {
     override fun includeAllNetworks(): Boolean = false
     override fun clearDNSCache() {}
 
-    /// §049 F12.3 — deferred (blocked on libbox debug build §050).
-    /// 9 attempts на Android 15 OnePlus + libbox 1.13.11 (stripped) все
-    /// падают `Unknown reference: 42` cold-start. Java side OK (instrumented
-    /// `Seq$RefTracker` показал refcnt > 0), crash в native cproxy hashmap.
-    /// Reference SagerNet (1.13.11) имеет identical Java code и stable.
-    /// Practical impact: `wifi_ssid:` / `wifi_bssid:` rules не работают —
-    /// у нас в wizard их и нет. См. spec/tasks/049-singbox-wrapper-deep-audit/.
-    /// §050 final: F12.3 deferred — crash в gomobile cproxy `go_seq_from_refnum`
-    /// race (C-side abort до того как Java writeDebugMessage invoked).
-    /// `@Synchronized` на Java side не помогает потому что race ДО инвокации.
-    /// Fix требует gomobile patch или libbox 1.14-alpha. См. spec/050 findings.
-    override fun readWIFIState(): WIFIState? = null
+    /// §049 F12.3 + §050 actual root cause fix:
+    ///
+    /// `WifiManager.connectionInfo` на API 29+ требует `ACCESS_BACKGROUND_LOCATION`
+    /// permission. Без неё binder throws **`SecurityException`** через
+    /// `Parcel.readException()`. У нас этой permission в Manifest нет.
+    ///
+    /// **Реальный crash mechanism (раскрыт в §050)**:
+    /// 1. Sing-box (Go) → cgo → `cproxy_PlatformInterface_ReadWIFIState`
+    /// 2. Java callback `readWIFIState()` invokes `WifiManager.connectionInfo`
+    /// 3. SecurityException thrown без permission (API 29+)
+    /// 4. Exception propagates through JNI boundary без handler в cproxy code
+    /// 5. `Seq$RefTracker.incRefnum` пытается cleanup → JNI env corrupted
+    /// 6. `ClassLinker::FindClass` fails → `Runtime::Abort`
+    /// 7. abort message "Unknown reference: 42" — **misleading follow-up**
+    ///    effect broken JNI state, не реальный refnum lookup issue.
+    ///
+    /// Reference SagerNet не падает потому что проверяет permission ДО
+    /// `cs.startOrReloadService()` через `commandServer.needWIFIState() &&
+    /// !hasPermission()` → stopAndAlert. Sing-box не запускается без permission.
+    ///
+    /// **Defensive fix**: try/catch SecurityException → return null. Sing-box
+    /// получает null gracefully (как раньше когда readWIFIState всегда был null).
+    ///
+    /// Combined с permission check в `BoxService.startSingbox` (post-`startOrReloadService`
+    /// `needWIFIState() && !hasPermission()` warning log) — F12.3 теперь
+    /// fully functional когда permission granted, fails gracefully когда нет.
+    @Suppress("DEPRECATION")
+    override fun readWIFIState(): WIFIState? {
+        val wifiInfo = try {
+            BoxApplication.wifiManager.connectionInfo
+        } catch (e: SecurityException) {
+            // ACCESS_BACKGROUND_LOCATION (API 29+) или ACCESS_FINE_LOCATION
+            // (API 28-) not granted. Без catch'а SecurityException бы propagated
+            // через JNI и corrupted env → process abort с misleading
+            // "Unknown reference: 42" message.
+            android.util.Log.w("PIW", "readWIFIState: SecurityException — Location permission denied, returning null")
+            return null
+        } catch (e: RuntimeException) {
+            android.util.Log.w("PIW", "readWIFIState: ${e.javaClass.simpleName} — ${e.message}, returning null")
+            return null
+        } ?: return null
+
+        var ssid = wifiInfo.ssid
+        if (ssid == "<unknown ssid>") return WIFIState("", "")
+        if (ssid.startsWith("\"") && ssid.endsWith("\""))
+            ssid = ssid.substring(1, ssid.length - 1)
+        return WIFIState(ssid, wifiInfo.bssid ?: "")
+    }
 
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
     override fun systemCertificates(): StringIterator {

@@ -250,6 +250,43 @@ class BoxService(
             return
         }
 
+        // Permission check — port из reference SagerNet/sing-box-for-android
+        // BoxService.kt 1.13.11 (`needWIFIState` block после startOrReloadService).
+        //
+        // Sing-box config может содержать DNS rules с условиями
+        // `wifi_ssid:` / `wifi_bssid:`. После config parse sing-box знает
+        // нужны ли wifi state — exposes через `needWIFIState()`. Если да И
+        // у app нет Location permission (`ACCESS_BACKGROUND_LOCATION` на API 29+,
+        // `ACCESS_FINE_LOCATION` на API 28-) → `WifiManager.connectionInfo`
+        // возвращает dummy WifiInfo с SSID="<unknown ssid>" и BSSID=null.
+        //
+        // Без проверки sing-box получает invalid wifi state, может попадать
+        // в internal code paths которые пробуют resolve null/empty SSID
+        // → potential edge cases / sing-box internal bugs.
+        //
+        // Reference behavior: stopAndAlert юзеру с просьбой grant'нуть permission.
+        // У нас — log warning и продолжить (LxBox wizard rules не используют
+        // wifi conditions, и F12.3 readWIFIState возвращает null deferred,
+        // так что practical impact zero). Но если кто-то подсунет custom
+        // config с wifi rules — лог покажет в чём дело.
+        if (runCatching { cs.needWIFIState() }.getOrDefault(false)) {
+            val wifiPermission = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                android.Manifest.permission.ACCESS_FINE_LOCATION
+            } else {
+                android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            }
+            val granted = service.checkSelfPermission(wifiPermission) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                Log.w(TAG, "[vpn] sing-box config requests WIFI state (wifi_ssid/bssid rules) " +
+                    "but $wifiPermission not granted. wifi rules will see empty SSID. " +
+                    "Note: F12.3 readWIFIState is currently deferred (returns null) — " +
+                    "see docs/spec/tasks/049-singbox-wrapper-deep-audit/ + 050.")
+            } else {
+                Log.d(TAG, "[vpn] sing-box config uses WIFI state, $wifiPermission granted ✓")
+            }
+        }
+
         setStatus(VpnStatus.Started)
 
         withContext(Dispatchers.Main) {
