@@ -44,6 +44,7 @@ curl -s "$BASE/ping"
 - [Subscriptions CRUD — `/subs/*`](#subscriptions-crud--subs)
 - [Settings writes — `/settings/*`](#settings-writes--settings)
 - [Files](#files)
+- [Profiler — `/profiler/*`](#profiler--profiler)
 - [Clash API proxy — `/clash/*`](#clash-api-proxy--clash)
 - [Common errors](#common-errors)
 
@@ -522,6 +523,83 @@ curl -s -H "$HDR" "$BASE/diag/applog?prev=true" | jq
 
 ---
 
+## Profiler — `/profiler/*`
+
+Traffic profiler — **per-app** session (§044, один active в любой момент) или **system-wide** rolling buffer (§048, Live tab в Statistics). Оба источника событий: parser sing-box core logs + 5s polling Clash `/connections`.
+
+### Per-app session
+
+| Endpoint | Метод | Body |
+|---|---|---|
+| `/profiler/start` | POST | `{"package":"<pkg>", "verbose":false, "secondary_packages":[...]}` |
+| `/profiler/stop` | POST | — |
+| `/profiler/active` | GET | — — `404` если ничего не active |
+| `/profiler/sessions` | GET | — — last 5 completed (FIFO ring) |
+| `/profiler/sessions` | DELETE | — — wipe completed |
+| `/profiler/session/{id}` | GET | — — `?include=events,domains,ips` |
+| `/profiler/session/{id}` | DELETE | — |
+| `/profiler/stream` | GET | — — SSE per-session (требует active) |
+| `/profiler/secondary-packages` | PATCH/POST | `{"secondary_packages":[...]}` |
+
+```bash
+# Начать сессию для com.example.app, пометить webview-host'ы как secondary
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"package":"com.example.app","verbose":false,"secondary_packages":["com.google.android.webview"]}' \
+  "$BASE/profiler/start"
+# → {id, target_package, started_at, ...} ИЛИ 409 {error:"already_active",active_session_id}
+
+# Текущая сессия (или 404)
+curl -s -H "$HDR" "$BASE/profiler/active" | jq
+
+# Stream live events (Ctrl-C завершает)
+curl -N -H "$HDR" "$BASE/profiler/stream"
+
+# Detail с full events
+curl -s -H "$HDR" "$BASE/profiler/session/<id>?include=events,domains" | jq
+
+# Stop
+curl -X POST -H "$HDR" "$BASE/profiler/stop"
+```
+
+**Confidence levels** в каждом event: `verified` (router-package matched target) / `secondary` (matched secondary_packages) / `inferred` (post-DNS process inference, 10s window) / `unattributed` (нет owner). UI показывает легенду; для post-mortem analysis фильтровать по `confidence`.
+
+### System-wide (§048 Live tab)
+
+Idempotent toggle для recording, подключающего тот же `_pollConnections` без active session. **Idle profiler ничего не делает** — recording on только при явном start.
+
+| Endpoint | Метод | Что |
+|---|---|---|
+| `/profiler/live/start` | POST | `startGlobalRecording` — attach AppLog listener + start 5s connection poll |
+| `/profiler/live/stop` | POST | `stopGlobalRecording` — detach (если нет per-app session) |
+| `/profiler/live/state` | GET | `{recording, started_at, buffer_count, unattributed_count, banner_active}` |
+| `/profiler/live` | GET | `{window_seconds, count, events}` — global rolling buffer snapshot, `?seconds=60` (default) |
+| `/profiler/live/stream` | GET | SSE — все system-wide TrafficEvent'ы live |
+| `/profiler/live/unattributed` | GET | `{count, recent_count_30s, banner_active, events}` — unattributed ring (DNS-fail без owner / TCP без process attribution) |
+
+```bash
+# Включить system-wide recording
+curl -X POST -H "$HDR" "$BASE/profiler/live/start"
+# → {ok, recording:true, started_at}
+
+# Снять окно последних 30s (TCP/UDP open/close + DNS)
+curl -s -H "$HDR" "$BASE/profiler/live?seconds=30" | jq '.count, .events[0]'
+
+# Live stream (для observing в реальном времени)
+curl -N -H "$HDR" "$BASE/profiler/live/stream"
+
+# Что система не смогла attribute'нуть к app'у (banner triggers)
+curl -s -H "$HDR" "$BASE/profiler/live/unattributed" | jq '.recent_count_30s, .banner_active'
+
+# Выключить
+curl -X POST -H "$HDR" "$BASE/profiler/live/stop"
+```
+
+**Когда что использовать:**
+- Per-app session — root cause «почему именно app X не открывает Y»: get domain chain, IP, chain'ы, port-test history.
+- System-wide live — discovery «что вообще происходит на устройстве сейчас»: DNS sniff, leakage detection (трафик мимо ожидаемых rules), unattributed events banner.
+
+---
+
 ## Clash API proxy — `/clash/*`
 
 Полный reference — в [`clash-api-reference.md`](clash-api-reference.md). Кратко:
@@ -564,6 +642,26 @@ curl -s -H "$HDR" "$BASE/clash/connections" | \
 Shape ошибки:
 ```json
 {"error": {"code": "bad_request", "message": "missing query param: tag"}}
+```
+
+### Structured tunnel alerts — `state.last_error`
+
+Не error envelope endpoint'а, а semantic-сигнал из VPN-сервиса. После `start-vpn` если sing-box остановился из-за чего-то actionable — `state.last_error` начинается с `Stopped: alert:<type>:<details>`. Текущие типы:
+
+| Prefix | Когда | Detail |
+|---|---|---|
+| `alert:permission_location:<comma-list>` | §050 — config содержит `wifi_ssid`/`wifi_bssid` правила, но не выданы required permissions | Comma-separated Android permission names. На API 30+: `ACCESS_BACKGROUND_LOCATION` (только Settings). На API 33+ в дополнение: `NEARBY_WIFI_DEVICES` (можно runtime prompt'ом). Без NEARBY на targetSdk≥33 `WifiInfo.ssid` = `"<unknown ssid>"`, rules silently не матчатся. |
+
+```bash
+curl -s -H "$HDR" "$BASE/state" | jq '.last_error'
+# → "Stopped: alert:permission_location:android.permission.ACCESS_BACKGROUND_LOCATION,android.permission.NEARBY_WIFI_DEVICES"
+
+# Quick test grant permissions через adb (вместо UI)
+adb shell pm grant com.leadaxe.lxbox android.permission.NEARBY_WIFI_DEVICES
+adb shell pm grant com.leadaxe.lxbox android.permission.ACCESS_BACKGROUND_LOCATION
+
+# Re-start
+curl -X POST -H "$HDR" "$BASE/action/start-vpn"
 ```
 
 ---

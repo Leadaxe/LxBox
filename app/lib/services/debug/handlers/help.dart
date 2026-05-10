@@ -156,6 +156,37 @@ GET /files/srs/list                            Cached SRS files: [{rule_id, size
 GET /files/srs?ruleId=<id>                     Binary SRS dump (octet-stream)
 GET /files/local?name=<n>                      Whitelisted internal-storage файлы (cache.db, stderr.log). `/files/external` — legacy alias.
 
+=== Traffic Profiler (§044 per-app + §048 system-wide) ===
+
+Per-app session (в один момент только одна active):
+POST   /profiler/start                         Body: {"package":"<pkg>", "verbose":false, "secondary_packages":["<pkg>",...]}.
+                                                 verbose=true → log_level toggle на debug; secondary_packages →
+                                                 события related apps идут с confidence=secondary.
+                                                 409 если уже active (с current id).
+POST   /profiler/stop                          Stop active session. 404 если nothing active.
+GET    /profiler/active                        Current session metadata. 404 если nothing.
+GET    /profiler/sessions                      Last 5 completed sessions (FIFO ring).
+DELETE /profiler/sessions                      Clear all completed.
+GET    /profiler/session/{id}?include=events,domains,ips
+                                                 events — full event log; domains — by-domain agg;
+                                                 ips — by-IP agg. Без include — только meta.
+DELETE /profiler/session/{id}                  Удалить одну session.
+GET    /profiler/stream                        SSE per-session live stream (требует active session).
+PATCH  /profiler/secondary-packages            Body: {"secondary_packages":[...]}; обновляет live на active.
+                                                 Возвращает 404 если нет active.
+
+System-wide (§048 inclusive observer — Live tab в Statistics):
+POST   /profiler/live/start                    startGlobalRecording — подписывает на core logs +
+                                                 запускает _pollConnections (5s). Idempotent.
+POST   /profiler/live/stop                     stopGlobalRecording. Idempotent.
+GET    /profiler/live/state                    {recording, started_at, buffer_count, unattributed_count, banner_active}.
+GET    /profiler/live?seconds=60               Snapshot global rolling buffer за окно (default 60s).
+                                                 Returns {window_seconds, count, events:[...]}.
+GET    /profiler/live/stream                   SSE — все system-wide events live (DNS resolves +
+                                                 TCP/UDP open/close по всем packages).
+GET    /profiler/live/unattributed             Recent unattributed ring (DNS-fail без owner / TCP без
+                                                 process attribution). Используется для banner detection.
+
 === Diagnostics (§038) ===
 
 GET /diag/dump                                 Полный JSON-pack от DumpBuilder.build (config + vars + subs + log + stderr + exit_info + logcat).
@@ -309,6 +340,22 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/files/srs/list', 'description': 'Cached SRS [{rule_id,size,mtime}]'},
     {'method': 'GET', 'path': '/files/srs', 'params': {'ruleId': 'id'}, 'description': 'Binary SRS dump'},
     {'method': 'GET', 'path': '/files/local', 'params': {'name': 'cache.db|stderr.log'}, 'description': 'Whitelisted internal-storage files (filesDir). `/files/external` — legacy alias.'},
+    // Profiler (§044 per-app + §048 system-wide)
+    {'method': 'POST', 'path': '/profiler/start', 'body': '{"package":"<pkg>","verbose":false,"secondary_packages":[...]}', 'description': '§044 Start per-app session. 409 if already active.'},
+    {'method': 'POST', 'path': '/profiler/stop', 'description': 'Stop active session. 404 if none.'},
+    {'method': 'GET', 'path': '/profiler/active', 'description': 'Active session metadata or 404.'},
+    {'method': 'GET', 'path': '/profiler/sessions', 'description': 'Last 5 completed sessions (FIFO ring).'},
+    {'method': 'DELETE', 'path': '/profiler/sessions', 'description': 'Clear all completed.'},
+    {'method': 'GET', 'path': '/profiler/session/{id}', 'params': {'include': 'events,domains,ips (any subset)'}, 'description': 'Session details. include=events for full log.'},
+    {'method': 'DELETE', 'path': '/profiler/session/{id}', 'description': 'Delete one session.'},
+    {'method': 'GET', 'path': '/profiler/stream', 'description': 'SSE per-session live events (requires active).'},
+    {'method': 'PATCH', 'path': '/profiler/secondary-packages', 'body': '{"secondary_packages":[...]}', 'description': 'Update secondary packages on active session. POST also accepted.'},
+    {'method': 'POST', 'path': '/profiler/live/start', 'description': '§048 startGlobalRecording (system-wide). Idempotent.'},
+    {'method': 'POST', 'path': '/profiler/live/stop', 'description': '§048 stopGlobalRecording. Idempotent.'},
+    {'method': 'GET', 'path': '/profiler/live/state', 'description': '{recording,started_at,buffer_count,unattributed_count,banner_active}'},
+    {'method': 'GET', 'path': '/profiler/live', 'params': {'seconds': 'window (default 60)'}, 'description': '§048 global rolling buffer snapshot — TCP/UDP open/close + DNS resolves of all packages.'},
+    {'method': 'GET', 'path': '/profiler/live/stream', 'description': '§048 SSE — system-wide events live.'},
+    {'method': 'GET', 'path': '/profiler/live/unattributed', 'description': '§048 recent unattributed ring (DNS-fail / TCP без attribution).'},
     // Diagnostics (§038)
     {'method': 'GET', 'path': '/diag/dump', 'description': 'Full DumpBuilder JSON-pack'},
     {'method': 'GET', 'path': '/diag/exit-info', 'description': 'ApplicationExitInfo entries (API 30+; empty on lower)'},
