@@ -26,21 +26,6 @@ class StatsScreen extends StatefulWidget {
   final String configRaw;
   final StatsTab initialTab;
 
-  /// §048 — фолбэк, когда Live tab не имеет прямого доступа к
-  /// DefaultTabController родителя (e.g. вызван из standalone-context'а).
-  /// Стартует session через TrafficProfiler.I и показывает SnackBar.
-  static Future<void> requestPerAppSession(
-      BuildContext context, String pkg) async {
-    if (TrafficProfiler.I.isRecording) {
-      await TrafficProfiler.I.stop();
-    }
-    await TrafficProfiler.I.start(pkg);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Per-app session started for $pkg')),
-    );
-  }
-
   @override
   State<StatsScreen> createState() => _StatsScreenState();
 }
@@ -270,25 +255,12 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
               _buildOverview(context),
               ConnectionsView(clash: widget.clash),
               PerAppTraceTab(clash: widget.clash),
-              LiveEventsTab(
-                onJumpToPerApp: (pkg) =>
-                    _handleJumpFromLiveTab(innerCtx, pkg),
-              ),
+              const LiveEventsTab(),
             ],
           ),
         ),
       ),
     );
-  }
-
-  Future<void> _handleJumpFromLiveTab(BuildContext ctx, String pkg) async {
-    // Старт Per-app session с этим package и переключение на 3-ий tab.
-    if (TrafficProfiler.I.isRecording) {
-      await TrafficProfiler.I.stop();
-    }
-    await TrafficProfiler.I.start(pkg);
-    if (!ctx.mounted) return;
-    DefaultTabController.of(ctx).animateTo(StatsTab.perApp.index);
   }
 
   Widget _buildOverview(BuildContext context) {

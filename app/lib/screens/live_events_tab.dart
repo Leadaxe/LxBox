@@ -22,15 +22,8 @@ import 'package:flutter/material.dart';
 
 import '../services/traffic_profiler.dart';
 import 'app_settings_screen.dart';
-import 'stats_screen.dart';
-
 class LiveEventsTab extends StatefulWidget {
-  const LiveEventsTab({super.key, this.onJumpToPerApp});
-
-  /// Optional callback — когда юзер делает «Open in Per-app session»,
-  /// родитель решает как переключить tab (DefaultTabController.animateTo
-  /// + start session).
-  final ValueChanged<String>? onJumpToPerApp;
+  const LiveEventsTab({super.key});
 
   @override
   State<LiveEventsTab> createState() => _LiveEventsTabState();
@@ -292,12 +285,6 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
     );
   }
 
-  /// Deep-link → App Settings → Diagnostics. Live recording require'ит
-  /// `core_logs_enabled=true` (toggle "Forward sing-box logs") чтобы DNS
-  /// и connection events приходили из core. Юзер видит «0 events» и
-  /// открывает diagnostics для toggle'а.
-  ///
-  /// initialTab=1 — Diagnostics после §052 Phase 2 (TabBar 3→2).
   void _openDiagnosticsSettings() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -489,68 +476,144 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
         kindLabel = 'UDP';
     }
 
-    final summary = _eventSummary(e);
-    final process = e.process ?? '?';
-
-    return InkWell(
-      onLongPress: () => _showEventActions(e),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(ts,
+    // У одного event'а часто есть domain, IP и process одновременно — каждое
+    // поле кликабельное независимо. Tap по конкретному значению → search
+    // заполняется именно им (см. _applySearchKey).
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(ts,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                      color: cs.onSurfaceVariant)),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: kindColor.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: Text(kindLabel,
                     style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 10,
                         fontFamily: 'monospace',
-                        color: cs.onSurfaceVariant)),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: kindColor.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: Text(kindLabel,
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontFamily: 'monospace',
-                          fontWeight: FontWeight.bold,
-                          color: kindColor)),
-                ),
-                const SizedBox(width: 6),
-                _confidenceBadge(context, e),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(summary,
-                      style: const TextStyle(fontSize: 12),
-                      overflow: TextOverflow.ellipsis),
-                ),
-              ],
-            ),
+                        fontWeight: FontWeight.bold,
+                        color: kindColor)),
+              ),
+              const SizedBox(width: 6),
+              _confidenceBadge(context, e),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _eventSummaryRow(context, e),
+              ),
+            ],
+          ),
+          if ((e.process ?? '').isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(left: 60, top: 1),
-              child: Text(process,
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontFamily: 'monospace',
-                      color: e.confidence == ConfidenceLevel.unattributed
-                          ? cs.error
-                          : cs.primary),
-                  overflow: TextOverflow.ellipsis),
+              child: _processChips(context, e),
             ),
-            if (e.dnsRecordType != null)
-              Padding(
-                padding: const EdgeInsets.only(left: 60, top: 1),
-                child: Text('record: ${e.dnsRecordType}',
-                    style: TextStyle(
-                        fontSize: 10, color: cs.onSurfaceVariant)),
-              ),
-          ],
+          if (e.dnsRecordType != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 60, top: 1),
+              child: Text('record: ${e.dnsRecordType}',
+                  style: TextStyle(
+                      fontSize: 10, color: cs.onSurfaceVariant)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Inline summary с независимыми tap-зонами: domain · arrow · ip:port.
+  Widget _eventSummaryRow(BuildContext context, TrafficEvent e) {
+    final cs = Theme.of(context).colorScheme;
+    final domain = (e.domain ?? '').trim();
+    final ip = (e.ip ?? '').trim();
+    final port = e.port;
+    final children = <Widget>[];
+    if (domain.isNotEmpty) {
+      children.add(_tappableText(
+        domain,
+        () => _applySearchKey(domain),
+        style: const TextStyle(fontSize: 12),
+      ));
+    }
+    if (ip.isNotEmpty) {
+      if (children.isNotEmpty) {
+        children.add(Text(' → ',
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)));
+      }
+      final ipPort = port != null ? '$ip:$port' : ip;
+      children.add(_tappableText(
+        ipPort,
+        () => _applySearchKey(ip),
+        style: const TextStyle(fontSize: 12),
+      ));
+    }
+    if (children.isEmpty) {
+      // dnsFail без resolve / closed event без host — fallback на summary текст.
+      return Text(_eventSummary(e),
+          style: const TextStyle(fontSize: 12),
+          overflow: TextOverflow.ellipsis);
+    }
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: children,
+    );
+  }
+
+  /// Process line — может быть comma-list ("pkgA, pkgB (uid)"); каждый pkg
+  /// — отдельный tap-зон, заполняет search его именем.
+  Widget _processChips(BuildContext context, TrafficEvent e) {
+    final cs = Theme.of(context).colorScheme;
+    final raw = (e.process ?? '').trim();
+    if (raw.isEmpty) return const SizedBox.shrink();
+    final items = raw
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .map((s) => s.replaceAll(RegExp(r'\s*\(\d+\)\s*$'), ''))
+        .toList();
+    final color = e.confidence == ConfidenceLevel.unattributed
+        ? cs.error
+        : cs.primary;
+    final widgets = <Widget>[];
+    for (var i = 0; i < items.length; i++) {
+      if (i > 0) {
+        widgets.add(Text(', ',
+            style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)));
+      }
+      widgets.add(_tappableText(
+        items[i],
+        () => _applySearchKey(items[i]),
+        style: TextStyle(
+          fontSize: 10,
+          fontFamily: 'monospace',
+          color: color,
         ),
+      ));
+    }
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: widgets,
+    );
+  }
+
+  /// Inline tap-zone — InkWell с маленькой hitbox'ой, без splash-overflow.
+  Widget _tappableText(String text, VoidCallback onTap, {TextStyle? style}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(2),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+        child: Text(text, style: style, overflow: TextOverflow.ellipsis),
       ),
     );
   }
@@ -609,49 +672,21 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
     }
   }
 
-  void _showEventActions(TrafficEvent e) {
-    final pkgs = e.process
-            ?.split(',')
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty)
-            .toList() ??
-        const <String>[];
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: Text(_eventSummary(e)),
-              subtitle: Text(
-                  'confidence: ${e.confidence.name}${e.matchedVia != null ? "  ·  ${e.matchedVia}" : ""}'),
-            ),
-            const Divider(height: 1),
-            for (final pkg in pkgs)
-              ListTile(
-                leading: const Icon(Icons.android),
-                title: Text(pkg),
-                subtitle: const Text('Open in Per-app session'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  if (widget.onJumpToPerApp != null) {
-                    widget.onJumpToPerApp!(pkg);
-                  } else {
-                    StatsScreen.requestPerAppSession(context, pkg);
-                  }
-                },
-              ),
-            if (pkgs.isEmpty)
-              const ListTile(
-                leading: Icon(Icons.help_outline),
-                title: Text(
-                    'No process detected — cannot start Per-app session.'),
-              ),
-          ],
-        ),
-      ),
-    );
+  /// Кладём `key` в существующий search field, фильтруя список по нему.
+  /// Повторный tap на том же значении (уже выставленном) — clear (escape
+  /// hatch без отдельной кнопки).
+  void _applySearchKey(String key) {
+    final clean = key.trim();
+    if (clean.isEmpty) return;
+    if (_search == clean) {
+      _searchCtrl.clear();
+      setState(() => _search = '');
+      return;
+    }
+    _searchCtrl.text = clean;
+    _searchCtrl.selection =
+        TextSelection.collapsed(offset: clean.length);
+    setState(() => _search = clean);
   }
 }
 

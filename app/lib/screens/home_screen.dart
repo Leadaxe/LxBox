@@ -61,6 +61,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   }
   Timer? _errorTimer;
 
+  /// «Forward sing-box logs» runtime toggle (Diagnostics tab → §043).
+  /// Когда true — отрисовываем chip в traffic bar чтобы юзер видел что
+  /// debug-mode forwarding включён (≠ free на busy traffic — см. F22).
+  /// Обновляется в init + при `AppLifecycleState.resumed` (юзер мог
+  /// потоглить в Settings и вернуться на home).
+  bool _coreLogsForwarding = false;
+
   /// Для side-effect'ов на transition tunnel (SnackBar при → revoked,
   /// управление `_connectingAnim`, авто-dismiss timer для lastError).
   /// Обновляются в `_onControllerChange` после каждого notifyListeners.
@@ -103,6 +110,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     unawaited(_initSubsAndAutoUpdate());
     unawaited(_loadAutoRebuild());
     unawaited(_loadHapticPref());
+    unawaited(_refreshCoreLogsState());
     // Track tunnel transitions для side-effect'ов (SnackBar при revoke,
     // animation для connecting, auto-dismiss timer для lastError).
     // AnimatedBuilder уже rebuildит UI на notifyListeners; listener здесь
@@ -383,6 +391,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _autoRebuild = val == 'true';
   }
 
+  Future<void> _refreshCoreLogsState() async {
+    final on = await _vpn.getCoreLogsEnabled();
+    if (mounted && on != _coreLogsForwarding) {
+      setState(() => _coreLogsForwarding = on);
+    }
+  }
+
   @override
   void dispose() {
     // Порядок: сначала отменяем side-effects (timer, listener),
@@ -410,6 +425,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _controller.onAppResumed();
+      // Юзер мог поменять «Forward sing-box logs» в Diagnostics — проверим
+      // и обновим chip в traffic bar.
+      unawaited(_refreshCoreLogsState());
     }
   }
 
@@ -1025,6 +1043,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   context,
                   Icons.bolt,
                   _shortPkg(profiler.active!.targetPackage),
+                  cs.error,
+                ),
+              ],
+              if (profiler.isGlobalRecording) ...[
+                const SizedBox(width: 8),
+                _trafficChip(
+                  context,
+                  Icons.podcasts,
+                  'Live',
+                  cs.error,
+                ),
+              ],
+              if (_coreLogsForwarding) ...[
+                const SizedBox(width: 8),
+                _trafficChip(
+                  context,
+                  Icons.terminal,
+                  'core logs',
                   cs.error,
                 ),
               ],
