@@ -39,6 +39,14 @@
   - Debug API `/backup/export|import` синхронизирован с UI — symmetric round-trip.
   - **Тест round-trip** ([backup_service_test.dart](app/test/services/backup_service_test.dart), 13 cases): export (все категории) → wipe → import → diff(restored, original) == 0; selective categories, merge vs replace, legacy reject.
 
+### Docs
+
+- **§054 — spec reorg: features vs tasks classification audit** ([§054 spec](docs/spec/tasks/054-spec-reorg-features-vs-tasks.md)). `docs/spec/features/` теперь содержит **только живые** продуктовые / архитектурные концепции. Семь демотированных в `docs/spec/tasks/`: ~~001~~ mobile stack → [`055`](docs/spec/tasks/055-mobile-stack-decision/spec.md) (historical architectural decision), ~~002~~ MVP scope → [`056`](docs/spec/tasks/056-mvp-scope-historical/spec.md) (historical milestone), ~~004x~~ subscription parser → [`057`](docs/spec/tasks/057-subscription-parser-v1-superseded/spec.md) (superseded by §026), ~~005x~~ config generator → [`058`](docs/spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) (superseded by §026), ~~013~~ routing → [`059`](docs/spec/tasks/059-routing-v1-superseded/spec.md) (superseded by §030), ~~039~~ libbox 1.13 migration → [`060`](docs/spec/tasks/060-libbox-1-13-migration/spec.md) (one-shot, Done), ~~041~~ DNS rules refactor → [`061`](docs/spec/tasks/061-dns-rules-refactor/spec.md) (live spec — §014). Освобождённые номера (001/002/004/005/013/039/041) **не переиспользуются**. Все cross-refs обновлены в `docs/**/*.md`, `CHANGELOG.md`, `app/lib/**/*.dart`, `app/test/**/*.dart`; grep на retired numbers — 0 hits; `flutter analyze` — 0 errors.
+
+- **`docs/ARCHITECTURE.md` Feature Specs map синхронизирован с реоргом** + **`CHANGELOG.md` chronological order** ([commit `24558a5`](https://github.com/Leadaxe/LxBox/commit/24558a5)). В ARCHITECTURE убраны 7 демотированных из live-таблицы, добавлена явная "Демотированные через §054" секция с маппингом старый→новый. В CHANGELOG: блок `[1.2.0]` ошибочно стоял между `[1.4.0]` и `[1.3.1]` — переставлен в правильный newest-first порядок.
+
+- **§047 — Public Intent API spec расширен** ([§047 spec](docs/spec/features/047%20public%20intent%20api/spec.md)). Outgoing events (broadcast intents от LxBox в эфир: `VPN_STATE_CHANGED`, `CONFIG_RELOAD`, `RULE_FIRED` опционально) + 2 incoming actions (`SET_RULE_ENABLED`, `SWITCH_PRESET_GROUP`) + symmetric input/output pattern. Status остаётся **Draft** — не имплементировано.
+
 ---
 
 ## [1.7.3] — 2026-05-10
