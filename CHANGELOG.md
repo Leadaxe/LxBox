@@ -8,6 +8,14 @@
 
 ## [Unreleased]
 
+---
+
+## [1.8.0] — 2026-05-11
+
+«Backup overhaul + routing order fix» release. Главное — **§063/§040 backup format переписан** под полный snapshot (старый формат терял `custom_rules`, `tun_apps`, `enabled_groups` и т.д.); **§062 — fix custom_rules cross-kind order** (storage order теперь end-to-end управляемый между preset/inline/srs); **§053 — `custom_rule_edit_screen.dart` split** Stage 1+2+3 (2060 → 456 LOC, −77%); plus tooltip on Allow VPN bypass и View tab preview fix для disabled-правил.
+
+**Breaking:** backup-файлы старого формата (`{vars, server_lists}` на корне, `version: 1`) reject'ятся при import. Пере-export после обновления.
+
 ### Fixed
 
 - **Custom rule editor — View tab показывал пустой preview для disabled правил** ([view_tab.dart](app/lib/screens/custom_rule_edit/tabs/view_tab.dart), [post_steps.dart](app/lib/services/builder/post_steps.dart)). Юзер открывал editor disabled-правила, переходил на View → видел `{rule_set: [], rules: []}` потому что `applyCustomRules` фильтровал по `cr.enabled`. Семантика «что родит в реальном конфиге» уместна для production pipeline, **но не для editor preview** — юзер открыл editor именно для inspect'а формы. Фикс: добавлен parameter `skipDisabled` на `applyCustomRules` (default `true` для backward-compat; production pipeline `applyAllCustomRules` поведение не меняется). `ViewTab` зовёт с `skipDisabled: false` — preview показывает «что родит при включении» независимо от Switch.

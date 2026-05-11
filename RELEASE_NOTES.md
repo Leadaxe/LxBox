@@ -1,144 +1,279 @@
-# L×Box v1.7.3
+# L×Box v1.8.0
 
-«UX rework + perf» release. Главное — **§052 VPN Settings reorganisation** (System/Core tabs), **§051 Phase 2-3 wifi rules editor + auto-record history**, **F22 part 2 logging pipeline production-grade**, общий **CoreLogsHintBanner** widget с deep-link на Diagnostics, и Live tab tap-to-filter через row identifiers.
+«Backup overhaul + routing order fix» release. Главное:
+
+- **§063 / §040 — backup format переписан** под полный snapshot
+  `lxbox_settings.json` + native VPN toggles. Старый формат **silently терял**
+  большинство user data (`custom_rules`, `tun_apps`, `enabled_groups`,
+  `route_final`, `rule_outbounds`, `dns_options`). **Breaking:** старые
+  backup-файлы reject'ятся при import — пере-export после обновления.
+- **§062 — custom_rules cross-kind order fix**: storage order теперь end-to-end
+  управляемый между preset/inline/srs (раньше builder ломал cross-kind
+  ordering двумя независимыми проходами).
+- **§053 — editor split** Stage 1+2+3: `custom_rule_edit_screen.dart`
+  2060 → 456 LOC (−77%) через секции / tabs / `CustomRuleEditController`
+  (`ChangeNotifier`).
 
 **Quick links:**
+[🐞 Fixes](#-fixes) ·
 [✨ New](#-new) ·
 [🔧 Changed](#-changed) ·
-[⚡ Perf](#-performance) ·
-[🐞 Fixes](#-fixes) ·
-[📦 Install](#-install) ·
-[🇷🇺 На русском](#-lxbox-v173-на-русском)
-
----
-
-## ✨ New
-
-### §051 Phase 2 — Wi-Fi rule editor UI
-
-`Routing → Custom rule edit` теперь содержит секцию **WI-FI NETWORK** между Protocol и Save:
-
-- Chip list — каждая chip = одна сеть `(ssid, bssid?)`. Дедуп при add (composite key).
-- **Add current** — читает текущий SSID/BSSID через `MainActivity.getCurrentWifiInfo` MethodChannel; placeholder BSSID `02:00:00:00:00:00` ловится как `unknown_ssid`. Permission missing → shared `WifiPermissionDialog`. `no_wifi` / `unknown_ssid` → snackbar.
-- **Pick saved** — bottom sheet с двумя секциями: **USED IN YOUR RULES** (networks из других custom_rules) + **HISTORY (last seen)** (`wifi_history` storage entries с relative time). Per-row 🗙 button для удаления одной записи.
-- **Manual** — dialog с SSID + BSSID inputs (BSSID regex `xx:xx:xx:xx:xx:xx` inline-validated).
-- **Save flow** — preflight permission check; missing → shared `WifiPermissionDialog`, save проходит в любом случае (юзер мог нажать «Allow Wi-Fi info» runtime prompt).
-- **Zip/unzip semantics**: `_zipWifiEntries(chips) → (ssids, bssids)` для модели. Sing-box AND-ит списки независимо (cross-product).
-
-### §051 Phase 3 — Auto-record visited Wi-Fi networks
-
-Opt-in toggle в `Settings → Diagnostics` (default OFF — silent network logging это privacy след).
-
-- При ON `WifiNetworkObserver` регистрирует `ConnectivityManager.NetworkCallback(TRANSPORT_WIFI)`.
-- Pending tracker записывает в `wifi_history` сети **на которых юзер пробыл ≥ 5 минут** (`STICKINESS_THRESHOLD_MS=300_000`) — отсекает drive-by кафе/магазины.
-- Native → Dart bridge через `MethodChannel "com.leadaxe.lxbox/wifi_history"` event `onWifiSeen`.
-- Pick saved bottom sheet показывает persistent info-banner «Auto-record is off — Open Settings» когда toggle OFF.
-- Existing history НЕ удаляется при OFF (user data). Cap 50, LRU evict по `last_seen`.
-- Phase 4 (`WifiStateCache` для hot-path `readWIFIState`) — deferred до bench `dumpsys binder_calls_stats`, не оптимизируем вслепую.
-
-### CoreLogsHintBanner — общий widget с deep-link
-
-Inline banner widget показывается **только когда `core_logs_enabled=false`**; self-hides при включении (auto-refresh на `AppLifecycleState.resumed`).
-
-- **Hit-zone split**: левая (i + «DNS / router events off») → tooltip с объяснением что без core logs DNS resolves пропадают и process attribution ухудшается; правая («turn on Forward sing-box logs» + chevron) → deep-link в App Settings → Diagnostics с **auto-scroll** и **3-секундной подсветкой** нужного toggle'а (`tertiaryContainer`).
-- Используется в **Statistics → Live** и **Statistics → App** (Per-app trace).
-- Замена для PopupMenu (⋮) overflow item: явно виден когда нужен, не скрыт за тремя точками.
-
-### Debug API — `/settings/vpn/*` и `/wifi_history/*` endpoints
-
-`/settings/vpn/*` — UI-equivalent §052 toggles:
-- `GET|PUT /settings/vpn/allow_bypass` — `VpnService.Builder.allowBypass()`. Apply at next `establish()`.
-- `GET|PUT /settings/vpn/keep_on_exit` — keep VPN running когда app закрывается.
-- `GET|PUT /settings/vpn/background_mode` — foreground-service tunnel sleep mode.
-- `GET /state/vpn` расширен — теперь включает `allow_bypass` + `background_mode` (snapshot всех VPN-system флагов).
-
-`/wifi_history/*` — CRUD над persistent списком сетей без UI flow:
-- `GET /wifi_history` → list `[{ssid, bssid, last_seen}]`.
-- `POST /wifi_history` body `{"ssid":"...","bssid":"..."}` → upsert.
-- `DELETE /wifi_history` body `{"ssid":"...","bssid":"..."}` → remove specific entry.
-- `DELETE /wifi_history/all` → clear all.
-
----
-
-## 🔧 Changed
-
-### §052 — VPN Settings reorganisation: System / Core tabs
-
-Drawer → VPN Settings теперь 2 tab'а с чёткой семантикой:
-
-- **System** — Android-side VPN controls через `VpnService.Builder` API. Сейчас: `Allow VPN bypass` (§049 F15), `Keep VPN on exit`, `Tunnel sleep mode` (`BackgroundMode.never|lazy|always`).
-- **Core** — sing-box engine vars (`chapter: 'core'` в template — `mtu` / `log_level` / `dns_final` / …). Routing- и DNS-специфичные vars (chapter: routing/dns) живут на своих экранах.
-
-**App Settings → Background tab удалён** (TabBar 3→2: General + Diagnostics). `Keep on exit` + `Tunnel sleep mode` переехали в VPN Settings → System; permissions block (Battery / Notifications / Location / NearbyWifi / App info) — в App Settings → Diagnostics в interactive виде.
-
-**Tunnel apps mode + packages — остаётся в Routing → Tunnel apps** (4-я вкладка). Не переезжает: юзеру привычно искать «куда роутится app» в Routing.
-
-### Statistics — Live tab tap-to-filter
-
-Раньше long-press на event row открывал bottom sheet «Open in Per-app session» — юзер не хотел переключения на отдельный tab. Теперь:
-
-- Каждое поле строки кликабельное независимо: **domain**, **IP:port**, **process**. Tap по любой части → существующий search field заполняется этим значением, в-place фильтр.
-- Comma-list процессов разбит на индивидуальные tappable элементы (для multi-process events).
-- Повторный tap по тому же ключу — clear (escape hatch без отдельной кнопки).
-
-### Overflow menu cleanup
-
-- **Live + Per-app — `Diagnostics settings` overflow удалён**. `CoreLogsHintBanner` покрывает тот же use-case с лучшей discoverability.
-- **Tunnel apps — link исправлен на System tab**. Раньше вёл на `SettingsScreen(initialTab: 1)` (Core). Per-app split-tunneling — это System-level фича, не Core. Renamed to `VPN settings (System)`, `initialTab: 0`.
-
-### Deep-links between dependent tabs
-
-Tab'ы которые depend на глобальном toggle (core_logs_enabled / VPN settings) теперь умеют open соответствующий screen с правильно открытым tab'ом. Общий `initialTab: int` parameter pattern на `AppSettingsScreen` / `SettingsScreen` (`DefaultTabController.initialIndex` + clamp).
-
----
-
-## ⚡ Performance
-
-### F22 part 2 — sing-box log forwarding pipeline production-grade
-
-К drainer-pattern из v1.7.1 добавили back-pressure / yield / batching / O(1) deque / 60Hz throttle. На heavy traffic (100+ строк/сек) toggle «Forward sing-box logs» теперь почти free.
-
-| # | Что | Эффект на busy-traffic burst 100 строк/сек |
-|---|---|---|
-| 1 | `@Synchronized` снят с `writeDebugMessage` | Producer-thread'ы Go runtime'а больше не сериализуются на mutex |
-| 2 | Back-pressure cap `LOG_QUEUE_MAX = 4096` | OOM risk закрыт; counter `coreLogDrops` для observability |
-| 3 | Drainer yield `DRAIN_BATCH_MAX = 200` строк | Длинный burst не блочит main looper > frame'а (~5ms vs ~50ms+) |
-| 4 | EventChannel batching `sink.success(List<String>)` | 1-2 JNI marshall/сек вместо ~100 |
-| 5 | AppLog `List.insert(0)` → `ListQueue.addFirst` | O(1) вместо O(n=500) на каждой записи |
-| 6 | `notifyListeners` throttle 16ms (60Hz max) | UI rebuild ≤ frame rate, не write rate |
+[🏗 Refactor](#-refactor) ·
+[📚 Docs](#-docs) ·
+[🇷🇺 На русском](#-lxbox-v180-на-русском)
 
 ---
 
 ## 🐞 Fixes
 
-- **§051 Phase 2 — `wifi_history` not refreshing in Pick saved after row delete**. `getWifiHistory` возвращал `toList(growable: false)`; `removeWhere` в setState callback'е молча кидал `UnsupportedError` на fixed-length list → UI rebuild не триггерился. Storage write проходил, но visible row оставалась до reopen sheet. Fix: `toList()` (growable).
-- **DebugScreen → ⋮ → Diagnostics settings deep-link** — после удаления Background tab (§052) indices сместились (Diagnostics: 2→1), `clamp(0, 1)` молча клипало 2 → 1, но семантика была сломана. Поправлен `2 → 1`.
+### §062 — custom_rules order broken между kind-ами (preset/inline/srs)
+
+`SettingsStorage.custom_rules` это **один список** с mixed `kind`, и
+UI/Debug API (`POST /rules/reorder`) предполагают что order этого списка =
+order matching в sing-box `route.rules[]` (first-wins сверху вниз).
+
+**Bug:** builder делал 2 прохода — `applyPresetBundles` (только `kind:preset`)
+→ `applyCustomRules` (только `kind:inline|srs`) — поэтому в финальном
+sing-box config все preset правила оказывались **перед** всеми inline/srs
+**независимо** от storage order. Юзер ставил «RU apps inline» между
+«Private IPs preset» и «Russian domains preset» в Routing → Rules, но
+inline всегда уезжал в самый конец `route.rules[]`. Reorder API «провёртывался
+вхолостую» в плане эффекта на routing.
+
+**Fix:** новый `applyAllCustomRules` обходит rules в **одном цикле** с
+dispatch по kind. Per-rule logic вынесена в private `_applyPresetSingle` /
+`_applyInlineSingle` / `_applySrsSingle`. Старые public
+`applyPresetBundles` / `applyCustomRules` остались как **shim** через те же
+private — backward-compat для тестов.
+
+Cross-preset rule_set dedup переехал с `mergeFragments` на
+`RuleSetRegistry.tryRegisterRuleSet` (identical-skip / first-wins warning) —
+работает естественно при per-rule обходе.
+
+**Verified on device:** storage `[Block Ads, Private IPs, RU apps inline,
+Russian domains, Russia-only, BitTorrent]` теперь даёт config
+`[ads-all, ip_is_private, RU apps, ru-domains, ru-inside, bittorrent]` —
+порядок 1-к-1 (за вычетом 3 system rules `resolve` / `sniff` / `dns hijack`
+которые builder вставляет в голову).
+
+Spec: [§062](../spec/tasks/062-custom-rules-unified-order.md).
+Tests: 614 → 620, +6 в `test/services/builder/apply_all_custom_rules_test.dart`
+покрывают cross-kind order, mixed kinds, identical-skip + cross-kind, DNS aspect.
+
+### §064 — Custom rule editor View tab показывал пустой preview для disabled rules
+
+Юзер открывал editor disabled-правила, переходил на View → видел
+`{rule_set: [], rules: []}` потому что `applyCustomRules` фильтровал по
+`cr.enabled`. Семантика «что родит в реальном конфиге» уместна для production
+pipeline, но **не для editor preview** — юзер открыл editor именно для inspect'а
+формы.
+
+**Fix:** parameter `skipDisabled` на `applyCustomRules` (default `true` для
+backward-compat; production pipeline `applyAllCustomRules` поведение не меняется).
+`ViewTab` зовёт с `skipDisabled: false` — preview показывает «что родит при
+включении» независимо от Switch.
+
+Spec: [§064](../spec/tasks/064-view-tab-preview-independent-of-enabled.md).
+
+---
+
+## ✨ New
+
+### Info tooltip на `Allow VPN bypass` toggle
+
+VPN Settings → System → `Allow VPN bypass` теперь имеет `info_outline` icon
+рядом с заголовком. Tap → tooltip на 12 секунд объясняет:
+
+- **что делает** — `ConnectivityManager.bindProcessToNetwork()` bypass
+- **когда полезно** — банкинг, captive portal detection, системные сервисы
+  которые отказываются работать через VPN
+- **что значит off** — strict tunnel (весь трафик через VPN)
+- **когда применяется** — на следующий VPN connect
+
+Тот же паттерн что в DNS settings (`Tooltip` с `triggerMode: tap`).
+
+---
+
+## 🔧 Changed
+
+### Backup format переписан — full storage snapshot
+
+Старый формат `{vars, server_lists}` на корне **не сохранял большую часть
+пользовательских данных** — `custom_rules`, `tun_apps`, `enabled_groups`,
+`enabled_rules`, `route_final`, `rule_outbounds`, `dns_options` живут как
+top-level ключи `lxbox_settings.json`, а export'ил только `data['vars']`.
+Inline rule_set'ы вида «Ru Apps» (57 пакетов через `CustomRule.inline`)
+**исчезали при restore** silently.
+
+**Новый wire-format:**
+```jsonc
+{
+  "app": "lxbox",
+  "kind": "snapshot",
+  "created_at": "...",
+  "source_app_version": "...",
+  "storage": { /* lxbox_settings.json целиком */ },
+  "vpn_settings": {
+    "auto_start": ..., "keep_on_exit": ..., "background_mode": ...,
+    "core_logs_enabled": ..., "allow_bypass": ...
+  }
+}
+```
+
+- `version` поле убрано — single-format. Файлы старого образца reject'ятся
+  с message «Unsupported backup format. Re-export from a recent app version.»
+- **`storage` блок** = deep-clone всего `lxbox_settings.json` через
+  `SettingsStorage.exportRaw()`. Restore — через `replaceRaw(map, merge:)`:
+  при `merge=false` overwrite целиком, при `merge=true` top-level merge
+  с recursive vars upsert.
+- **`vpn_settings` блок** — отдельный native-side state из `boxvpn_boot`
+  SharedPreferences (BootReceiver читает at boot-time когда Flutter ещё
+  не запущен; не перенесён в Flutter storage ради simplicity).
+- **Категории UI — 5** (было 4): Server lists, Routing, App settings,
+  **VPN system toggles** (новая), Debug API. Filter работает на уровне
+  keys в `storage` map — будущие top-level настройки попадают в backup
+  автоматически без правок allowlist'ов.
+- Debug API `/backup/export|import` синхронизирован с UI — symmetric
+  round-trip.
+
+Spec: [§040 backup](../spec/features/040%20backup%20restore%20ui/spec.md).
+Tests: 13 cases в [`backup_service_test.dart`](../../app/test/services/backup_service_test.dart)
+— round-trip, selective categories, merge vs replace, legacy reject,
+deep-clone semantics.
+
+---
+
+## 🏗 Refactor
+
+### §053 — `custom_rule_edit_screen.dart` split
+
+Stage 1 / 2 / 3 поэтапно вынесли editor's 2060 LOC monolith в композицию:
+
+- **Stage 1 (v14080)** — 3 wifi widgets extracted: `widgets/wifi_entry.dart`,
+  `wifi_saved_picker_sheet.dart`, `wifi_manual_add_dialog.dart` +
+  validators + normalizers с unit-тестами.
+- **Stage 2 (v14090)** — 7 секций + 2 shared widgets в
+  `screens/custom_rule_edit/sections/` и `widgets/`. Sections — dumb
+  `StatelessWidget` с props (controllers + callbacks); `ItemsField` —
+  единственный `StatefulWidget` (подписан на controller через
+  `addListener` для self-rebuild). Editor: 1795 → 1330 LOC.
+- **Stage 3 (v14100)** — выделен **`CustomRuleEditController extends
+  ChangeNotifier`** ([edit_controller.dart](../../app/lib/screens/custom_rule_edit/edit_controller.dart)):
+  владеет всеми 8 `TextEditingController`-ами, флагами, коллекциями,
+  async state + mutator'ами + `snapshot()` / `isDirty()` + pure async
+  методами. Раздаётся вниз через `CustomRuleEditScope` (plain
+  `InheritedNotifier`). Tabs выделены в `tabs/params_tab.dart`,
+  `tabs/preset_params_tab.dart`, `tabs/view_tab.dart`. Editor scaffold:
+  1330 → 456 LOC (−65%; от исходных 2060 — −77%). Save-icon обёрнут
+  в `AnimatedBuilder` чтобы dirty-rebuild не дёргал весь AppBar.
+
+На screen State остались только UI-actions требующие `BuildContext`:
+save/back/delete dialog'и, cloud-menu, picker-вызовы, snackbar'ы.
+Save flow unchanged.
+
+Spec: [§053](../spec/tasks/053-custom-rule-editor-split.md).
+Tests: 620 pass; analyzer clean.
+
+---
+
+## 📚 Docs
+
+### §054 — Spec reorg: features vs tasks classification audit
+
+`docs/spec/features/` теперь содержит **только живые** продуктовые /
+архитектурные концепции. Семь демотированных в `docs/spec/tasks/`:
+
+| Был | Стал | Reason |
+|-----|------|--------|
+| ~~001~~ mobile stack | [`055`](../spec/tasks/055-mobile-stack-decision/spec.md) | Historical architectural decision |
+| ~~002~~ MVP scope | [`056`](../spec/tasks/056-mvp-scope-historical/spec.md) | Historical milestone |
+| ~~004x~~ subscription parser | [`057`](../spec/tasks/057-subscription-parser-v1-superseded/spec.md) | Superseded by §026 |
+| ~~005x~~ config generator | [`058`](../spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) | Superseded by §026 |
+| ~~013~~ routing | [`059`](../spec/tasks/059-routing-v1-superseded/spec.md) | Superseded by §030 |
+| ~~039~~ libbox 1.13 migration | [`060`](../spec/tasks/060-libbox-1-13-migration/spec.md) | One-shot migration (Done) |
+| ~~041~~ DNS rules refactor | [`061`](../spec/tasks/061-dns-rules-refactor/spec.md) | Refactor; live spec — §014 |
+
+Освобождённые номера (001 / 002 / 004 / 005 / 013 / 039 / 041) **не
+переиспользуются** — archive-ссылки сохраняются. Все cross-refs обновлены
+в `docs/**/*.md`, `CHANGELOG.md`, `app/lib/**/*.dart`, `app/test/**/*.dart`;
+grep на retired numbers — 0 hits.
+
+Spec: [§054](../spec/tasks/054-spec-reorg-features-vs-tasks.md).
+
+### ARCHITECTURE Feature Specs map + CHANGELOG order audit
+
+Пост-реорг audit нашёл два расхождения:
+
+1. **`docs/ARCHITECTURE.md` → Feature Specs** всё ещё перечисляла 7
+   демотированных как live features → синхронизирована с
+   `docs/spec/features/README.md` (демотированные в отдельной секции).
+2. **CHANGELOG.md** — блок `[1.2.0] — 2026-04-18` стоял между
+   `[1.4.0]` и `[1.3.1]` (chronologically wrong) → переставлен в
+   правильный newest-first порядок.
+
+### §047 — Public Intent API spec расширен
+
+Добавлены outgoing events (broadcast intents от LxBox: `VPN_STATE_CHANGED`,
+`CONFIG_RELOAD`, опционально `RULE_FIRED`) + 2 incoming actions
+(`SET_RULE_ENABLED`, `SWITCH_PRESET_GROUP`) + symmetric input/output
+pattern. Статус остаётся **Draft** — не имплементировано.
+
+Spec: [§047](../spec/features/047%20public%20intent%20api/spec.md).
 
 ---
 
 ## 📦 Install
 
-Стандартный путь: GitHub Release Assets (CI-built APK). На устройстве:
+CI APK: `LxBox-v1.8.0-arm64-v8a.apk` (после tag'а).
 
-1. Скачать `app-arm64-v8a-release.apk` из release assets
-2. Установить APK поверх предыдущей версии — **данные сохраняются** (subscriptions, profile, config lock state, wifi history если был enabled)
-
-**На обновление с v1.7.2 — миграции не требуется.** После обновления:
-
-- VPN Settings (Drawer) — теперь 2 tab'а вместо одного экрана: System (toggles) + Core (engine vars)
-- App Settings — Background tab удалён, контент переехал в System tab + Diagnostics
-- Routing → Custom rule edit — новая секция WI-FI NETWORK
-- Settings → Diagnostics — новый toggle «Auto-record visited Wi-Fi» (default OFF)
-- Statistics → Live и → App — banner внизу filter bar / inner TabBar когда core logs forwarding выключен
+`adb install -r LxBox-v1.8.0-arm64-v8a.apk` поверх 1.7.3 — настройки
+сохраняются (`lxbox_settings.json` в внутренней storage app'а).
 
 ---
 
-## 🇷🇺 LxBox v1.7.3 на русском
+## 🇷🇺 L×Box v1.8.0 на русском
 
-**Главное:** UX-cycle release. §052 распилили VPN Settings на System / Core (теперь чётко: Android-side toggles vs sing-box engine vars). §051 закончили Phase 2 (Wi-Fi rule editor с Add current / Pick saved / Manual / runtime permission flow) + Phase 3 (auto-record visited networks ≥ 5 min на сети, opt-in default OFF).
+Minor-релиз с переписанным форматом backup'а и исправлением порядка правил.
 
-**Performance:** F22 part 2 довёл logging pipeline до production-grade — toggle «Forward sing-box logs» теперь почти free даже на 100+ строк/сек traffic'е (back-pressure cap + drainer yield + EventChannel batching + AppLog deque + 60Hz notify throttle).
+**§062 — порядок правил роутинга наконец работает end-to-end.** Если ты
+переставлял правила в Routing → Rules через drag-and-drop или Debug API
+`/rules/reorder`, ты замечал что inline-правила (`kind:inline`) всегда
+оказывались **в конце** независимо от того куда ты их перемещал. Это была
+архитектурная особенность билдера — он шёл двумя проходами (сначала все
+preset, потом все inline/srs), и storage order между kind-ами терялся.
+Теперь builder идёт одним проходом — порядок в storage = порядок в
+sing-box config.
 
-**UX:** общий `CoreLogsHintBanner` widget на Live и App tab — visible когда core logs выключены, tap по правой половине → Diagnostics с auto-scroll и подсветкой нужного toggle'а. В Live tab tap по event row теперь in-place фильтрует по domain / IP / process (раньше long-press открывал bottom sheet с переходом на per-app session — этого не хотели). Overflow menus у Live / Per-app / Tunnel apps очистили — banner ⟶ deep-link заменил три точки.
+**§064 — preview правила в editor теперь работает для disabled.**
+Открываешь рулу с выключенным Switch → View → видишь как будет выглядеть
+конфиг при включении. Раньше показывалось пусто.
 
-**Что НЕ сделано:** §051 Phase 4 (`WifiStateCache` для hot-path `readWIFIState` с memoize'ом и `STICKINESS_THRESHOLD_MS` debounce'ом) — отложен до measurement'а через `dumpsys binder_calls_stats`. Текущий Phase 3 устройству хватает; не оптимизируем вслепую.
+**Backup format переписан.** Старый экспортил только `vars` — теряли
+`custom_rules` / `tun_apps` / `enabled_groups` итд при restore. Теперь
+backup это полный snapshot `lxbox_settings.json` + native VPN toggles.
+**Backward incompatible** — backup'ы старого формата не импортируются.
+
+**Allow VPN bypass теперь с подсказкой.** Если ты не помнил что это —
+тапни на ⓘ рядом с переключателем, на 12 сек появится объяснение.
+
+**Editor правил роутинга разобран на компоненты** ([§053](../spec/tasks/053-custom-rule-editor-split.md)).
+Внутренний рефакторинг — поведение без изменений, но монолитный
+`custom_rule_edit_screen.dart` (2060 LOC) разбит на секции / tabs /
+state controller. Editor scaffold: 2060 → 456 LOC. На баги по форме
+правил это не должно влиять; если что — сообщайте.
+
+**Документация почищена** ([§054](../spec/tasks/054-spec-reorg-features-vs-tasks.md)).
+`docs/spec/features/` теперь только живые спеки; исторические /
+superseded переехали в `docs/spec/tasks/`. Это внутреннее — юзер
+изменений не увидит.
+
+---
+
+## 🔗 Refs
+
+- Spec: [§062 — custom_rules unified order](../spec/tasks/062-custom-rules-unified-order.md)
+- Spec: [§053 — editor split](../spec/tasks/053-custom-rule-editor-split.md)
+- Spec: [§063 / §040 — backup format](../spec/features/040%20backup%20restore%20ui/spec.md)
+- Spec: [§054 — spec reorg](../spec/tasks/054-spec-reorg-features-vs-tasks.md)
+- ARCHITECTURE: [build pipeline diagram](../ARCHITECTURE.md)
+- CHANGELOG: [Unreleased section](../../CHANGELOG.md)

@@ -481,11 +481,12 @@ L×Box прошёл путь от MVP (один экран: Read config → Star
 | **v1.7.1** | 9 мая 2026 | sing-box wrapper deep audit ([§049](spec/tasks/049-singbox-wrapper-deep-audit/spec.md)) — atomic CAS lifecycle race fix (closing §047 TCP deterioration); F1 split (BoxVpnService → BoxService); inclusive observer ([§048](spec/tasks/048-perapp-trace-attribution-gaps.md)) — 4 confidence levels + Live tab; tunnel apps split-tunneling ([§046](spec/features/046%20tunnel%20apps%20split-tunneling/spec.md)) |
 | **v1.7.2** | 10 мая 2026 | wifi_state closeout ([§050](spec/tasks/050-libbox-debug-build/spec.md)) — real root cause `Unknown reference: 42` (unhandled `SecurityException` через JNI) + `NEARBY_WIFI_DEVICES` для Android 13+; `config_locked` UI toggle (§037); Live tab system-wide events fix; tri-mode detour servers UI |
 | **v1.7.3** | май 2026 | Wi-Fi-aware routing ([§051](spec/tasks/051-custom-rule-wifi-conditions.md) Phase 1+2+3) — `wifi_ssid` / `wifi_bssid` в `CustomRule` + auto-record opt-in + `/wifi_history` Debug API; VPN Settings reorg ([§052](spec/tasks/052-vpn-settings-system-service-tabs.md)) — System / Core tabs; `CoreLogsHintBanner` UX rework; F22 part 2 perf (back-pressure, batching, deque, throttle) |
+| **v1.8.0** | 11 мая 2026 | Backup format переписан под полный snapshot `lxbox_settings.json` + `vpn_settings` блок ([§063](spec/tasks/063-backup-format-snapshot-rewrite.md) / [§040](spec/features/040%20backup%20restore%20ui/spec.md)) — старый формат silently терял custom_rules/tun_apps/enabled_groups, **breaking** change для legacy backup'ов; custom_rules cross-kind order fix ([§062](spec/tasks/062-custom-rules-unified-order.md)) — storage order теперь end-to-end управляемый между preset/inline/srs; editor split Stage 1+2+3 ([§053](spec/tasks/053-custom-rule-editor-split.md)) — `custom_rule_edit_screen.dart` 2060 → 456 LOC через секции/tabs/`ChangeNotifier`; spec reorg ([§054](spec/tasks/054-spec-reorg-features-vs-tasks.md)) — 7 stale features → tasks; ViewTab preview fix для disabled-правил ([§064](spec/tasks/064-view-tab-preview-independent-of-enabled.md)); Allow VPN bypass tooltip |
 
-Текущее состояние (v1.7.3):
-- **Тесты:** 535+ зелёных (debug handler + parser + builder + pipeline + service-level)
-- **Спецификации:** 001–052 (50+ feature и task specs)
-- **Релизы:** 15+ stable tags
+Текущее состояние (v1.8.0):
+- **Тесты:** 620+ зелёных (debug handler + parser + builder + pipeline + service-level + backup round-trip)
+- **Спецификации:** 001–064 (60+ feature и task specs)
+- **Релизы:** 16+ stable tags
 - **LOC:** `app/lib/` ≈ 35k, native Kotlin ≈ 4k
 
 ## Что дальше
