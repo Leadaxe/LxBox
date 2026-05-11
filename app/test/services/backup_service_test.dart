@@ -1,0 +1,318 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:lxbox/services/backup_service.dart';
+import 'package:lxbox/services/settings_storage.dart';
+
+/// §040 backup-restore — round-trip и edge cases для нового single-format
+/// (`storage` + `vpn_settings` блоки).
+void main() {
+  late Directory tmp;
+  const channel = MethodChannel('plugins.flutter.io/path_provider');
+
+  setUp(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    tmp = await Directory.systemTemp.createTemp('lxbox_backup_test_');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getApplicationDocumentsDirectory' ||
+          call.method == 'getApplicationDocumentsPath') {
+        return tmp.path;
+      }
+      return null;
+    });
+    SettingsStorage.resetCacheForTesting();
+  });
+
+  tearDown(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
+    if (tmp.existsSync()) await tmp.delete(recursive: true);
+  });
+
+  /// Полный snapshot который имитирует «реальное» состояние юзера: vars +
+  /// custom_rules + tun_apps + server_lists + dns_options.
+  Map<String, dynamic> sampleSnapshot() => {
+        'vars': {
+          'log_level': 'info',
+          'auto_update_subs': 'true',
+          'auto_record_wifi_history': 'true',
+          'wifi_history':
+              '[{"ssid":"Home","bssid":"aa:bb:cc:dd:ee:ff","last_seen":"2026-05-10T12:00:00Z"}]',
+          'debug_enabled': 'true',
+          'debug_token': 'secret-token-xyz',
+          'debug_port': '9269',
+        },
+        'custom_rules': [
+          {
+            'id': 'rule-1',
+            'name': 'Ru Apps',
+            'enabled': true,
+            'kind': 'inline',
+            'packages': ['ru.tinkoff.investing', 'com.vkontakte.android'],
+            'outbound': 'vpn-2',
+          },
+        ],
+        'tun_apps': {
+          'mode': 'allow',
+          'packages': ['com.example.app'],
+        },
+        'server_lists': [
+          {
+            'id': 'src-1',
+            'type': 'subscription',
+            'name': 'My subs',
+            'url': 'https://example.com/sub',
+          },
+        ],
+        'route_final': 'vpn-1',
+        'enabled_groups': ['group-a'],
+        'dns_options': {
+          'servers': [
+            {'tag': 'cloudflare', 'type': 'udp', 'server': '1.1.1.1'}
+          ],
+        },
+      };
+
+  Future<void> seedStorage(Map<String, dynamic> snapshot) async {
+    await SettingsStorage.replaceRaw(snapshot);
+  }
+
+  test('exportRaw returns deep copy of full storage', () async {
+    final snap = sampleSnapshot();
+    await seedStorage(snap);
+    final raw = await SettingsStorage.exportRaw();
+    expect(raw['vars'], isA<Map<String, dynamic>>());
+    expect((raw['custom_rules'] as List).length, 1);
+    // Mutating returned map должно не аффектить storage (deep clone).
+    raw['vars']['log_level'] = 'debug';
+    final fresh = await SettingsStorage.exportRaw();
+    expect(fresh['vars']['log_level'], 'info');
+  });
+
+  test('replaceRaw with merge=false overwrites everything', () async {
+    await seedStorage(sampleSnapshot());
+    await SettingsStorage.replaceRaw({
+      'vars': {'log_level': 'warn'},
+    });
+    expect(await SettingsStorage.getVar('log_level', ''), 'warn');
+    final cr = await SettingsStorage.getCustomRules();
+    expect(cr, isEmpty);
+  });
+
+  test('replaceRaw with merge=true preserves untouched keys', () async {
+    await seedStorage(sampleSnapshot());
+    await SettingsStorage.replaceRaw(
+      {
+        'vars': {'log_level': 'warn'},
+      },
+      merge: true,
+    );
+    expect(await SettingsStorage.getVar('log_level', ''), 'warn');
+    expect(await SettingsStorage.getVar('auto_update_subs', ''), 'true');
+    final cr = await SettingsStorage.getCustomRules();
+    expect(cr.length, 1, reason: 'custom_rules must be preserved on merge');
+  });
+
+  group('BackupService.buildExport', () {
+    test('full export contains storage + metadata, no vpn_settings without toggle',
+        () async {
+      await seedStorage(sampleSnapshot());
+      final svc = const BackupService();
+      final json = await svc.buildExport(include: {
+        BackupCategory.serverLists,
+        BackupCategory.routing,
+        BackupCategory.appSettings,
+        BackupCategory.debugConfig,
+      });
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      expect(parsed['app'], 'lxbox');
+      expect(parsed['kind'], 'backup');
+      expect(parsed['created_at'], isA<String>());
+      expect(parsed.containsKey('version'), isFalse,
+          reason: 'new format does not use schema version');
+      expect(parsed['storage'], isA<Map>());
+      expect(parsed.containsKey('vpn_settings'), isFalse);
+      final st = parsed['storage'] as Map<String, dynamic>;
+      expect(st['custom_rules'], isA<List>());
+      expect(st['tun_apps'], isA<Map>());
+      expect(st['vars']['debug_token'], 'secret-token-xyz');
+    });
+
+    test('without debugConfig — debug-keys are stripped from vars', () async {
+      await seedStorage(sampleSnapshot());
+      final svc = const BackupService();
+      final json = await svc.buildExport(include: {
+        BackupCategory.serverLists,
+        BackupCategory.routing,
+        BackupCategory.appSettings,
+      });
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      final vars = (parsed['storage'] as Map<String, dynamic>)['vars']
+          as Map<String, dynamic>;
+      expect(vars.containsKey('debug_token'), isFalse);
+      expect(vars.containsKey('debug_port'), isFalse);
+      expect(vars.containsKey('debug_enabled'), isFalse);
+      expect(vars['log_level'], 'info');
+    });
+
+    test('only debugConfig — keeps only debug-keys', () async {
+      await seedStorage(sampleSnapshot());
+      final svc = const BackupService();
+      final json =
+          await svc.buildExport(include: {BackupCategory.debugConfig});
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      final vars = (parsed['storage'] as Map<String, dynamic>)['vars']
+          as Map<String, dynamic>;
+      expect(vars.keys.toSet(),
+          {'debug_enabled', 'debug_token', 'debug_port'});
+      expect((parsed['storage'] as Map).containsKey('custom_rules'), isFalse);
+      expect((parsed['storage'] as Map).containsKey('server_lists'), isFalse);
+    });
+
+    test('only routing — top-level routing keys + no vars', () async {
+      await seedStorage(sampleSnapshot());
+      final svc = const BackupService();
+      final json =
+          await svc.buildExport(include: {BackupCategory.routing});
+      final parsed = jsonDecode(json) as Map<String, dynamic>;
+      final st = parsed['storage'] as Map<String, dynamic>;
+      expect(st.containsKey('custom_rules'), isTrue);
+      expect(st.containsKey('tun_apps'), isTrue);
+      expect(st.containsKey('route_final'), isTrue);
+      expect(st.containsKey('enabled_groups'), isTrue);
+      expect(st.containsKey('dns_options'), isTrue);
+      expect(st.containsKey('server_lists'), isFalse);
+      expect(st.containsKey('vars'), isFalse);
+    });
+  });
+
+  group('BackupService.parseImport', () {
+    test('rejects non-JSON', () async {
+      final svc = const BackupService();
+      expect(() => svc.parseImport('not json'),
+          throwsA(isA<FormatException>()));
+    });
+
+    test('rejects file without app/kind markers', () async {
+      final svc = const BackupService();
+      expect(
+          () => svc.parseImport(jsonEncode({'storage': {}})),
+          throwsA(isA<FormatException>()));
+    });
+
+    test('rejects legacy format (no storage key)', () async {
+      final svc = const BackupService();
+      final legacy = {
+        'app': 'lxbox',
+        'kind': 'backup',
+        'version': 1,
+        'vars': {'log_level': 'info'},
+      };
+      expect(
+          () => svc.parseImport(jsonEncode(legacy)),
+          throwsA(isA<FormatException>().having(
+              (e) => e.message, 'message', contains('Unsupported'))));
+    });
+
+    test('parses minimal valid backup', () async {
+      final svc = const BackupService();
+      final raw = jsonEncode({
+        'app': 'lxbox',
+        'kind': 'backup',
+        'created_at': '2026-05-10T12:00:00Z',
+        'storage': {
+          'vars': {'log_level': 'debug'},
+        },
+      });
+      final c = await svc.parseImport(raw);
+      expect(c.storage, isNotNull);
+      expect(c.vpnSettings, isNull);
+      expect(c.createdAt?.year, 2026);
+    });
+  });
+
+  test('round-trip: export → reset → import → bytewise equal', () async {
+    final original = sampleSnapshot();
+    await seedStorage(original);
+    final svc = const BackupService();
+    final exported = await svc.buildExport(include: {
+      BackupCategory.serverLists,
+      BackupCategory.routing,
+      BackupCategory.appSettings,
+      BackupCategory.debugConfig,
+    });
+
+    // Wipe storage by replacing with empty.
+    await SettingsStorage.replaceRaw({});
+    expect(await SettingsStorage.getCustomRules(), isEmpty);
+
+    // Restore.
+    final contents = await svc.parseImport(exported);
+    final apply = await svc.applyImport(
+      contents,
+      merge: false,
+      include: {
+        BackupCategory.serverLists,
+        BackupCategory.routing,
+        BackupCategory.appSettings,
+        BackupCategory.debugConfig,
+      },
+    );
+    expect(apply.errors, isEmpty);
+    expect(apply.serverListsApplied, 1);
+
+    // Compare key fields.
+    final restored = await SettingsStorage.exportRaw();
+    expect(restored['custom_rules'], original['custom_rules']);
+    expect(restored['tun_apps'], original['tun_apps']);
+    expect(restored['route_final'], original['route_final']);
+    expect(restored['enabled_groups'], original['enabled_groups']);
+    expect(restored['dns_options'], original['dns_options']);
+    expect((restored['vars'] as Map)['log_level'], 'info');
+    expect((restored['vars'] as Map)['debug_token'], 'secret-token-xyz');
+    expect((restored['vars'] as Map)['wifi_history'],
+        original['vars']['wifi_history']);
+    expect((restored['server_lists'] as List).length, 1);
+  });
+
+  test(
+      'partial restore: routing-only keeps existing app vars + adds custom_rules',
+      () async {
+    // Seed pre-existing state.
+    await seedStorage({
+      'vars': {'log_level': 'warn'},
+    });
+
+    final backup = jsonEncode({
+      'app': 'lxbox',
+      'kind': 'backup',
+      'storage': {
+        'custom_rules': [
+          {
+            'id': 'rule-x',
+            'name': 'X',
+            'enabled': true,
+            'kind': 'preset',
+            'presetId': 'ru-direct',
+          },
+        ],
+      },
+    });
+    final svc = const BackupService();
+    final c = await svc.parseImport(backup);
+    final apply = await svc.applyImport(c,
+        merge: true, include: {BackupCategory.routing});
+    expect(apply.errors, isEmpty);
+
+    // Existing vars preserved.
+    expect(await SettingsStorage.getVar('log_level', ''), 'warn');
+    // New custom_rules added.
+    final cr = await SettingsStorage.getCustomRules();
+    expect(cr.length, 1);
+    expect(cr.first.name, 'X');
+  });
+}

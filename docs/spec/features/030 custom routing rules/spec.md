@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | **Active** (v1.4.0) |
 | Дата | 2026-04-20 |
-| Зависимости | [`013 routing`](../013%20routing/spec.md), [`011 local ruleset cache`](../011%20local%20ruleset%20cache/spec.md), [`026 parser v2`](../026%20parser%20v2/spec.md), [`027 subscription auto update`](../027%20subscription%20auto%20update/spec.md) |
+| Зависимости | [`tasks/059-routing-v1-superseded`](../../tasks/059-routing-v1-superseded/spec.md) (заменил этой спекой), [`011 local ruleset cache`](../011%20local%20ruleset%20cache/spec.md), [`026 parser v2`](../026%20parser%20v2/spec.md), [`027 subscription auto update`](../027%20subscription%20auto%20update/spec.md) |
 | Убито/поглощено | **App Rules (AppRule)** — влиты в CustomRule.packages. **Selectable Rules toggle-механизм** — теперь каталог с "Copy to Rules". |
 
 ---
@@ -94,6 +94,10 @@ class CustomRule {
 ## Emit: `applyCustomRules`
 
 `lib/services/builder/post_steps.dart`.
+
+**Сигнатура:** `applyCustomRules(registry, rules, {srsPaths, skipDisabled = true})`.
+
+`skipDisabled` (default `true`) фильтрует disabled-правила — production pipeline (через `applyAllCustomRules` в §062) их пропускает. Editor `ViewTab` зовёт с `skipDisabled: false` чтобы показать «что родит правило при включении» независимо от Switch (см. [§064](../../tasks/064-view-tab-preview-independent-of-enabled.md)). Существующие callers + builder/ тесты не меняются — default сохраняет старое поведение.
 
 ### Inline (`kind == inline`)
 
@@ -248,7 +252,7 @@ Tabs **Params** / **View**:
 
 URL prefix-иконка (🔗) — tap копирует URL в clipboard.
 
-**View:** показывает sing-box config preview — JSON с `rule_set` + `rules`, собранный через тот же `applyCustomRules` со snapshot текущей формы. Поддерживает `Copy` button. Warnings (e.g. "no cached file") отображаются над preview'ом.
+**View:** показывает sing-box config preview — JSON с `rule_set` + `rules`, собранный через `applyCustomRules(skipDisabled: false)` со snapshot текущей формы. **`skipDisabled: false`** = preview независим от `Switch` (enabled): юзер открыл editor именно для inspect'а формы, фильтрация по `enabled` тут лишняя — production pipeline `applyAllCustomRules` (§062) её делает отдельно. См. [task §064](../../tasks/064-view-tab-preview-independent-of-enabled.md). Поддерживает `Copy` button. Warnings (e.g. "no cached file") отображаются над preview'ом.
 
 ### Dirty check
 

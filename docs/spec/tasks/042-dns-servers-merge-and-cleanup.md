@@ -1,6 +1,6 @@
 # 042 — DNS servers list: 3-tier merge + stale-fields cleanup
 
-> ⚠ **Заменено [§043 DNS servers as kind-discriminated refs](./043-dns-servers-refs-by-kind.md).** Был промежуточный план: full-body snapshot + 3-tier merge с shape comparison. На имплементации стало ясно что архитектура не симметрична с §041 DNS rules и оставляет фрагильность (order-sensitive jsonEncode, stale fields на template-обновлениях, длинные badge'и). §043 переделал на refs-by-kind — точная симметрия с DNS rules, тривиальная override-detection через `kind == 'inline'`, auto-discovery + orphan cleanup как в `resolveDnsRulesList`.
+> ⚠ **Заменено [§043 DNS servers as kind-discriminated refs](./043-dns-servers-refs-by-kind.md).** Был промежуточный план: full-body snapshot + 3-tier merge с shape comparison. На имплементации стало ясно что архитектура не симметрична с §061 DNS rules (бывший feature §041) и оставляет фрагильность (order-sensitive jsonEncode, stale fields на template-обновлениях, длинные badge'и). §043 переделал на refs-by-kind — точная симметрия с DNS rules, тривиальная override-detection через `kind == 'inline'`, auto-discovery + orphan cleanup как в `resolveDnsRulesList`.
 
 | Поле | Значение |
 |------|----------|

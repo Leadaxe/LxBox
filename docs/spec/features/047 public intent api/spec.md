@@ -1,0 +1,758 @@
+# 047 — Public Intent API (Tasker / automation integration)
+
+| Поле | Значение |
+|------|----------|
+| Статус | **Draft** — spec only, не реализовано |
+| Дата | 2026-05-10 |
+| Зависимости | [`031 debug api`](../031%20debug%20api/spec.md) (action handlers переиспользуются) |
+| Связано | [`032 quick connect`](../032%20quick%20connect/spec.md) (та же семантика toggle/switch, разные источники) |
+| Реализация | Native (Kotlin BroadcastReceiver), без Flutter UI кроме docs/help страницы |
+
+---
+
+## Цель и рамки
+
+Дать external automation tools (**Tasker**, **Macrodroid**, **Llama**, **Automate**, IFTTT-like apps, shell-скрипты через `am broadcast`) возможность управлять L×Box через Android **broadcast intents**. Закрытие фидбека "хочу автоматически включать VPN на не-домашнем Wi-Fi", "switch на Russia-узел при запуске банковского app'а", "выключать ночью / по расписанию".
+
+Сейчас управлять VPN снаружи можно только двумя путями:
+1. **Quick Settings tile / shortcut** ([§032](../032%20quick%20connect/spec.md)) — но требует ручной тап юзера, не automation.
+2. **Debug API** (`POST /action/*`) — мощно, но требует enabled токен + adb forward или WiFi reachable, не предназначен для automation tools на устройстве.
+
+Tasker и аналогичные приложения умеют отправлять Android intents но **не умеют HTTP с Bearer auth** (есть, но громоздко). Native broadcast intents — стандартный для Android automation способ интеграции.
+
+**В скопе:**
+- **Incoming actions** — exported `BroadcastReceiver` принимающий 9 действий: `START_VPN`, `STOP_VPN`, `TOGGLE_VPN`, `SWITCH_NODE` (extra: `tag`), `SET_GROUP` (extra: `group`), `REBUILD_CONFIG`, `REFRESH_SUBS` (extra: `force`), `RESET_NETWORK`, `URLTEST_GROUP` (extra: `group`).
+- **Outgoing events** — broadcasts от L×Box во внешний мир: `VPN_CONNECTED`, `VPN_DISCONNECTED` (extra: `reason`), `VPN_ERROR` (extras: `code`, `message`), `VPN_REVOKED`, `ACTIVE_NODE_CHANGED` (extras: `old_tag`, `new_tag`, `reason`), `ACTIVE_GROUP_CHANGED`, `SUB_REFRESH_FAILED` (extras: `sub_id`, `error`), плюс health-events когда §042 watchdog будет готов.
+- **Symmetric request-response pattern** — Tasker может wait'ать на исходящий event как ответ на свой request (например `SWITCH_NODE` → `ACTIVE_NODE_CHANGED` или `VPN_ERROR`).
+- Реализация переиспользует существующие action handlers из [`debug/handlers/action.dart`](../../../app/lib/services/debug/handlers/action.dart) (тот же business logic, разные транспорты).
+- Documentation страница в App Settings → Diagnostics → "Automation API" с примерами Tasker setup.
+- **Granular opt-in toggles** — receiver и emitter управляются отдельно, по категориям событий. Default — все OFF. Юзер выбирает что разрешить.
+
+**Не в скопе:**
+- Kotlin/Java SDK для third-party app developers — over-engineering для нашего scale'а.
+- Per-action permission scopes / signature verification — accept все intents если categorical toggle ON, иначе отказываем.
+- Tasker plugin (separate APK с UI dropdown'ами для action/extras) — оставлено в "Будущие расширения".
+- iOS — отсутствует (Android-only feature, как §032).
+
+---
+
+## Контекст
+
+### Что такое Tasker (для тех кто не в курсе)
+
+Android automation app. Юзер задаёт правила:
+
+```
+Profile: "Office Wi-Fi"
+  Trigger: Wi-Fi connected = "MyOfficeNetwork"
+  Action: Run task "Disable VPN"
+
+Task: "Disable VPN"
+  → Send Intent
+      Action: com.leadaxe.lxbox.STOP_VPN
+      Target: Broadcast Receiver
+```
+
+Tasker умеет тригериться от десятков event'ов: Wi-Fi, location (geofence), время, app launch, battery, headphone plug, notification arrival, Bluetooth pair, и т.д. **Power user'ы строят сложные сценарии** — типа "если Wi-Fi=Home AND time>22:00 AND app=Telegram → switch VPN на спец узел чтобы пустить через детский firewall". Без public intent API это всё делается через ADB+root scripts — недоступно массовому юзеру.
+
+### Зачем broadcast, а не SDK / API
+
+| Подход | Pros | Cons |
+|---|---|---|
+| **Public intents (этот spec)** | Стандарт Android, Tasker/etc понимают из коробки. Декларативно через Manifest. | Action names — public API surface, breaking change болезненный. |
+| Kotlin SDK (jar/aar) | Type-safe для разработчиков | Tasker/Macrodroid не понимают — нужна обёртка. Maintenance heavy. |
+| HTTP API (Debug API уже есть) | Универсально | Tasker через HTTP-плагины громоздко. Token management, auth, ports. |
+| Accessibility API | Не требует от нас ничего | Юзеру нужно дать accessibility permission всему automation tool'у — privacy hell |
+
+Победа — **public intents**.
+
+### Безопасность — почему default OFF
+
+Любая установленная app может отправить `Intent("com.leadaxe.lxbox.STOP_VPN")` через `sendBroadcast`. Если receiver `exported=true` всегда listening — потенциально malicious app может выключать VPN без юзера. Mitigation:
+
+1. **Toggle в App Settings → Diagnostics → "Automation API"** (default OFF). Receiver регистрируется только когда toggle ON.
+2. **Юзер видит при включении** explainer dialog с warning "Любая app сможет управлять VPN. Включайте только если используете Tasker/Macrodroid".
+3. Optionally — **package whitelist** в advanced settings (UI: "Allow only these apps to control VPN: [+]"). Для v2.
+
+### Существующая инфраструктура которую переиспользуем
+
+**Incoming** — все 9 actions **уже реализованы** как Debug API endpoints в [`debug/handlers/action.dart`](../../../app/lib/services/debug/handlers/action.dart):
+
+| Intent action | Существующий handler | Notes |
+|---|---|---|
+| `START_VPN` | `_startVpn(ctx)` | Идемпотентен: noop если уже started |
+| `STOP_VPN` | `_stopVpn(ctx)` | Блокирующий до Stopped |
+| `TOGGLE_VPN` | `MainActivity.ACTION_TOGGLE` уже handle'ится | Already exists |
+| `SWITCH_NODE` (extra: `tag`) | `_switchNode(req, ctx)` | Через `HomeController.switchNode` |
+| `SET_GROUP` (extra: `group`) | `_setGroup(req, ctx)` | Active group selector |
+| `REBUILD_CONFIG` | `_rebuildConfig(ctx)` | Config regen, respects §037 lock |
+| `REFRESH_SUBS` (extra: `force`) | `_refreshSubs(req, ctx)` | Manual sub-refresh |
+| `RESET_NETWORK` | `_resetNetwork(ctx)` | Light recovery: closeAll + DNS flush + dialer rebind. Tunnel must be up. |
+| `URLTEST_GROUP` (extra: `group`) | `_urltest(req, ctx)` (`group=`-mode) | Force URLTest на группе. Полезно для periodic re-test'а через Tasker scheduler. |
+
+**Outgoing** — events emit'ятся из существующих points в `HomeController` / `SubscriptionController` где уже есть `notifyListeners()`:
+
+| Outgoing event | Источник | Trigger |
+|---|---|---|
+| `VPN_CONNECTED` | `HomeController._handleStatusEvent(connected)` | TunnelStatus.connected |
+| `VPN_DISCONNECTED` | `HomeController._handleStatusEvent(disconnected)` | TunnelStatus.disconnected (extra `reason`: user/error/revoked/idle) |
+| `VPN_ERROR` | `HomeController._handleStatusEvent` (где `event.errorReason != null`) | Любой error path |
+| `VPN_REVOKED` | `HomeController._handleStatusEvent(revoked)` | TunnelStatus.revoked |
+| `ACTIVE_NODE_CHANGED` | `HomeController.switchNode` + Clash API selector callback | Любое изменение активной ноды |
+| `ACTIVE_GROUP_CHANGED` | `HomeController.setActiveGroup` | Изменение активной группы |
+| `SUB_REFRESH_FAILED` | `SubscriptionController.refreshEntry` (failure path) | После 5 неудач или auth fail |
+
+То есть **business-логику не пишем** — emitter хучнётся в существующие state-mutations.
+
+---
+
+## Архитектурное решение
+
+### Manifest declaration
+
+```xml
+<application ...>
+  ...
+  <receiver
+    android:name=".vpn.LxBoxIntentReceiver"
+    android:exported="true"
+    android:enabled="false"           <!-- runtime-toggled -->
+    android:permission="com.leadaxe.lxbox.permission.AUTOMATION">
+    <intent-filter>
+      <!-- Incoming control actions -->
+      <action android:name="com.leadaxe.lxbox.START_VPN" />
+      <action android:name="com.leadaxe.lxbox.STOP_VPN" />
+      <action android:name="com.leadaxe.lxbox.TOGGLE_VPN" />
+      <action android:name="com.leadaxe.lxbox.SWITCH_NODE" />
+      <action android:name="com.leadaxe.lxbox.SET_GROUP" />
+      <action android:name="com.leadaxe.lxbox.REBUILD_CONFIG" />
+      <action android:name="com.leadaxe.lxbox.REFRESH_SUBS" />
+      <action android:name="com.leadaxe.lxbox.RESET_NETWORK" />
+      <action android:name="com.leadaxe.lxbox.URLTEST_GROUP" />
+    </intent-filter>
+  </receiver>
+
+  <!-- Custom permission, **opt-in для caller'а**: Tasker должен явно
+       declare'ить <uses-permission> чтобы intent дошёл. Применяется
+       и к receiver (incoming), и к outgoing broadcasts (через
+       `sendBroadcast(intent, RECEIVE_PERMISSION)`). -->
+  <permission
+    android:name="com.leadaxe.lxbox.permission.AUTOMATION"
+    android:protectionLevel="normal" />
+
+  <!-- Outgoing events не нуждаются в `<receiver>` declaration —
+       мы отправляем `sendBroadcast(intent, "<permission>")`,
+       потребитель просто регистрирует свой receiver на наши actions. -->
+</application>
+```
+
+**Notes:**
+- `android:enabled="false"` — receiver выключен в манифесте по умолчанию. Включается через `PackageManager.setComponentEnabledSetting(...)` runtime когда юзер toggle'ит "Allow incoming control commands".
+- `android:permission="com.leadaxe.lxbox.permission.AUTOMATION"` — кастомная Android-permission. Для Tasker это означает ровно одну строку в его манифесте (он умеет declare'ить arbitrary permissions через UI). Для случайной malicious app — небольшой барьер (нужно знать имя permission и declare'ить).
+- **Та же permission защищает outgoing** — `sendBroadcast(intent, AUTOMATION)` означает что только apps с granted permission получат event. Симметрично incoming.
+
+### LxBoxIntentReceiver.kt
+
+```kotlin
+class LxBoxIntentReceiver : BroadcastReceiver() {
+    companion object {
+        private const val TAG = "LxBoxIntent"
+
+        const val ACTION_START_VPN = "com.leadaxe.lxbox.START_VPN"
+        const val ACTION_STOP_VPN = "com.leadaxe.lxbox.STOP_VPN"
+        const val ACTION_TOGGLE_VPN = "com.leadaxe.lxbox.TOGGLE_VPN"
+        const val ACTION_SWITCH_NODE = "com.leadaxe.lxbox.SWITCH_NODE"
+        const val ACTION_SET_GROUP = "com.leadaxe.lxbox.SET_GROUP"
+        const val ACTION_REBUILD_CONFIG = "com.leadaxe.lxbox.REBUILD_CONFIG"
+        const val ACTION_REFRESH_SUBS = "com.leadaxe.lxbox.REFRESH_SUBS"
+        const val ACTION_RESET_NETWORK = "com.leadaxe.lxbox.RESET_NETWORK"
+        const val ACTION_URLTEST_GROUP = "com.leadaxe.lxbox.URLTEST_GROUP"
+
+        const val EXTRA_TAG = "tag"
+        const val EXTRA_GROUP = "group"
+        const val EXTRA_FORCE = "force"
+
+        fun setEnabled(ctx: Context, enabled: Boolean) {
+            val pm = ctx.packageManager
+            val component = ComponentName(ctx, LxBoxIntentReceiver::class.java)
+            pm.setComponentEnabledSetting(
+                component,
+                if (enabled) PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                PackageManager.DONT_KILL_APP,
+            )
+            Log.d(TAG, "automation API ${if (enabled) "enabled" else "disabled"}")
+        }
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        val callerPkg = sentFromPackage(intent)  // best-effort attribution
+        Log.d(TAG, "received ${intent.action} from $callerPkg")
+
+        when (intent.action) {
+            ACTION_START_VPN -> BoxVpnService.start(context)
+            ACTION_STOP_VPN -> BoxVpnService.stop(context)
+            ACTION_TOGGLE_VPN -> {
+                if (BoxVpnService.currentStatus == VpnStatus.Started) {
+                    BoxVpnService.stop(context)
+                } else {
+                    // VpnService.prepare requires Activity, so we open
+                    // MainActivity for first-time consent. Subsequent
+                    // toggles work directly.
+                    if (VpnService.prepare(context.applicationContext) == null) {
+                        BoxVpnService.start(context)
+                    } else {
+                        val launch = Intent(context, MainActivity::class.java).apply {
+                            putExtra("action", "toggle")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(launch)
+                    }
+                }
+            }
+            ACTION_SWITCH_NODE -> {
+                val tag = intent.getStringExtra(EXTRA_TAG)
+                if (tag.isNullOrEmpty()) {
+                    Log.w(TAG, "SWITCH_NODE missing extra '$EXTRA_TAG'")
+                    return
+                }
+                // Defer to Flutter side via MethodChannel or Debug API call.
+                // Simplest: invoke same code path as POST /action/switch-node
+                forwardToActionHandler(context, "switch-node", mapOf("tag" to tag))
+            }
+            ACTION_SET_GROUP -> {
+                val group = intent.getStringExtra(EXTRA_GROUP)
+                if (group.isNullOrEmpty()) {
+                    Log.w(TAG, "SET_GROUP missing extra '$EXTRA_GROUP'")
+                    return
+                }
+                forwardToActionHandler(context, "set-group", mapOf("group" to group))
+            }
+            ACTION_REBUILD_CONFIG -> {
+                forwardToActionHandler(context, "rebuild-config", emptyMap())
+            }
+            ACTION_REFRESH_SUBS -> {
+                val force = intent.getBooleanExtra(EXTRA_FORCE, false)
+                forwardToActionHandler(context, "refresh-subs", mapOf("force" to force))
+            }
+            ACTION_RESET_NETWORK -> {
+                forwardToActionHandler(context, "reset-network", emptyMap())
+            }
+            ACTION_URLTEST_GROUP -> {
+                val group = intent.getStringExtra(EXTRA_GROUP)
+                if (group.isNullOrEmpty()) {
+                    Log.w(TAG, "URLTEST_GROUP missing extra '$EXTRA_GROUP'")
+                    return
+                }
+                forwardToActionHandler(context, "urltest-group", mapOf("group" to group))
+            }
+            else -> Log.w(TAG, "unknown action ${intent.action}")
+        }
+    }
+
+    /// Bridge native → Dart via plugin. `VpnPlugin` exposes `handleAction(name, args)`
+    /// который вызывает соответствующий action handler из Debug API.
+    private fun forwardToActionHandler(ctx: Context, name: String, args: Map<String, Any?>) {
+        VpnPlugin.companion.handleAutomationAction(name, args)
+    }
+
+    private fun sentFromPackage(intent: Intent): String? = intent.`package` ?: "<unknown>"
+}
+```
+
+### Bridge → Dart
+
+В `VpnPlugin.kt` добавить companion-метод `handleAutomationAction(name, args)` который через cached `MethodChannel` дёргает Dart-side:
+
+```kotlin
+// VpnPlugin.kt
+companion object {
+    private var methodChannelRef: WeakReference<MethodChannel>? = null
+
+    fun handleAutomationAction(name: String, args: Map<String, Any?>) {
+        val channel = methodChannelRef?.get() ?: return  // Flutter не активна — silently skip
+        Handler(Looper.getMainLooper()).post {
+            channel.invokeMethod("automationAction", mapOf("name" to name, "args" to args))
+        }
+    }
+}
+```
+
+Dart side — handler в `BoxVpnClient` slушает `automationAction` и роутит на существующие action handlers:
+
+```dart
+// box_vpn_client.dart, в init Bridge:
+_methods.setMethodCallHandler((call) async {
+  if (call.method == 'automationAction') {
+    final name = call.arguments['name'] as String;
+    final args = Map<String, dynamic>.from(call.arguments['args']);
+    await _handleAutomationAction(name, args);
+  }
+  // ... другие existing handlers
+});
+
+Future<void> _handleAutomationAction(String name, Map<String, dynamic> args) async {
+  // Reuse existing action handlers from debug/handlers/action.dart
+  // (нужен publicly accessible alias — extract logic в shared module)
+  final ctx = AutomationContext.fromGlobals();
+  switch (name) {
+    case 'switch-node':
+      await actionSwitchNode(args['tag'], ctx);
+    case 'set-group':
+      await actionSetGroup(args['group'], ctx);
+    case 'rebuild-config':
+      await actionRebuildConfig(ctx);
+    case 'refresh-subs':
+      await actionRefreshSubs(args['force'] ?? false, ctx);
+    case 'reset-network':
+      await actionResetNetwork(ctx);
+    case 'urltest-group':
+      await actionUrltestGroup(args['group'], ctx);
+  }
+}
+```
+
+**Refactor нужен** — текущие action handlers в `debug/handlers/action.dart` принимают `DebugRequest` / `DebugContext`. Извлечь pure-business функции (`actionSwitchNode(tag, ctx)`, и т.д.) в shared module, обёртку `Debug API → handler` оставить там, **новую обёртку `Automation → handler`** добавить.
+
+---
+
+## Outgoing events
+
+Симметрично incoming actions — L×Box **отправляет** broadcasts о собственных state changes. Tasker может подписаться через `Profile → Event → Intent Received` с фильтром на наш action.
+
+### Полный список событий
+
+| Event action | Extras | Когда emit'ится | Use case |
+|---|---|---|---|
+| `com.leadaxe.lxbox.event.VPN_CONNECTED` | — | `HomeController._handleStatusEvent(connected)` | "Vibe телефона", "пометить notification зелёным", запуск cron task проверки IP |
+| `com.leadaxe.lxbox.event.VPN_DISCONNECTED` | `reason: "user"\|"error"\|"revoked"\|"idle"` | TunnelStatus.disconnected | Notification на часы если непланово |
+| `com.leadaxe.lxbox.event.VPN_ERROR` | `code: String`, `message: String` | Любой error path в `_handleStatusEvent` или `_startInternal/_stopInternal` | **Главное** — Tasker ждёт ERROR после своего START_VPN и реагирует (notification, retry, switch profile, SMS) |
+| `com.leadaxe.lxbox.event.VPN_REVOKED` | — | TunnelStatus.revoked | Notification "другая VPN-app перехватила" |
+| `com.leadaxe.lxbox.event.ACTIVE_NODE_CHANGED` | `old_tag: String?`, `new_tag: String`, `group: String`, `reason: "user"\|"urltest"\|"automation"` | `HomeController.switchNode` + Clash callback | "Лог в Google Sheet когда меняется нода"; "уведомить если автомат переключился на нежелательный регион" |
+| `com.leadaxe.lxbox.event.ACTIVE_GROUP_CHANGED` | `old_group: String?`, `new_group: String`, `reason: String` | `HomeController.setActiveGroup` | Аналогично |
+| `com.leadaxe.lxbox.event.SUB_REFRESHED` | `sub_id: String`, `nodes_count: Int`, `delta_count: Int` | `SubscriptionController.refreshEntry` (success path) | Notification если в подписке появились новые сервера |
+| `com.leadaxe.lxbox.event.SUB_REFRESH_FAILED` | `sub_id: String`, `error: String` | `SubscriptionController.refreshEntry` (failure path, после 5 fails) | Подписки fail тихо, через 5 неудач юзер узнаёт только из лога — этим event'ом можно поднять системную нотификацию |
+| `com.leadaxe.lxbox.event.UPDATE_AVAILABLE` | `version: String`, `url: String` | После `UpdateChecker` обнаружения новой версии | "Сообщить через Tasker канал в Telegram" |
+| `com.leadaxe.lxbox.event.PERMISSION_NEEDED` | `permission: String` | После §050 wifi-rules → требуется `NEARBY_WIFI_DEVICES` | Vibe + notification |
+
+### Future events (когда §042 health watchdog)
+
+Не в первоначальной поставке, но место зарезервировано в namespace:
+
+| Event action | Когда |
+|---|---|
+| `com.leadaxe.lxbox.event.HEARTBEAT_FAILED` | После N consecutive heartbeat fails |
+| `com.leadaxe.lxbox.event.LATENCY_DEGRADED` | Когда активная нода стала >500ms baseline-relative |
+| `com.leadaxe.lxbox.event.UNATTRIBUTED_BURST` | §044 banner active (DPI режет attribution) |
+
+### Эмиттер — где и как
+
+В `HomeController` / `SubscriptionController` / `AppLog` — точки где уже есть `notifyListeners()` или `setState`. Добавляем тонкий emitter:
+
+```dart
+// app/lib/services/automation/event_emitter.dart
+class AutomationEventEmitter {
+  static final I = AutomationEventEmitter._();
+  AutomationEventEmitter._();
+
+  // Granular gating — каждый toggle проверяется отдельно. Если категория OFF —
+  // emit silently no-op'ит. Это по спеке security default.
+  bool _lifecycleEnabled = false;
+  bool _stateEnabled = false;
+  bool _subsEnabled = false;
+  bool _healthEnabled = false;
+
+  Future<void> reload() async {
+    _lifecycleEnabled = await SettingsStorage.getAutomationEmitLifecycle();
+    _stateEnabled = await SettingsStorage.getAutomationEmitState();
+    _subsEnabled = await SettingsStorage.getAutomationEmitSubs();
+    _healthEnabled = await SettingsStorage.getAutomationEmitHealth();
+  }
+
+  void emitVpnConnected() => _emit('VPN_CONNECTED', {}, _lifecycleEnabled);
+  void emitVpnDisconnected(String reason) =>
+      _emit('VPN_DISCONNECTED', {'reason': reason}, _lifecycleEnabled);
+  void emitVpnError(String code, String message) =>
+      _emit('VPN_ERROR', {'code': code, 'message': message}, _lifecycleEnabled);
+  void emitVpnRevoked() => _emit('VPN_REVOKED', {}, _lifecycleEnabled);
+
+  void emitNodeChanged(String? old, String now, String group, String reason) =>
+      _emit('ACTIVE_NODE_CHANGED',
+          {'old_tag': old, 'new_tag': now, 'group': group, 'reason': reason},
+          _stateEnabled);
+  void emitGroupChanged(String? old, String now, String reason) =>
+      _emit('ACTIVE_GROUP_CHANGED',
+          {'old_group': old, 'new_group': now, 'reason': reason},
+          _stateEnabled);
+
+  void emitSubRefreshed(String id, int count, int delta) =>
+      _emit('SUB_REFRESHED', {'sub_id': id, 'nodes_count': count, 'delta_count': delta},
+          _subsEnabled);
+  void emitSubRefreshFailed(String id, String error) =>
+      _emit('SUB_REFRESH_FAILED', {'sub_id': id, 'error': error}, _subsEnabled);
+
+  void emitUpdateAvailable(String version, String url) =>
+      _emit('UPDATE_AVAILABLE', {'version': version, 'url': url}, _lifecycleEnabled);
+  void emitPermissionNeeded(String permission) =>
+      _emit('PERMISSION_NEEDED', {'permission': permission}, _lifecycleEnabled);
+
+  void _emit(String name, Map<String, Object?> extras, bool gateEnabled) {
+    if (!gateEnabled) return;
+    BoxVpnClient.I.sendAutomationBroadcast(name, extras);
+  }
+}
+```
+
+И на native стороне `BoxVpnClient` форвардит в `VpnPlugin.sendAutomationBroadcast(action, extras)`:
+
+```kotlin
+// VpnPlugin.kt — handler "sendAutomationBroadcast"
+fun sendAutomationBroadcast(ctx: Context, action: String, extras: Bundle) {
+    val intent = Intent("com.leadaxe.lxbox.event.$action").apply {
+        putExtras(extras)
+        // setPackage намеренно не выставляем — broadcast открыт всем
+        // подписчикам с granted permission. Если юзер задал whitelist
+        // (future v2) — фильтрация на уровне sendBroadcast'а.
+    }
+    ctx.sendBroadcast(intent, "com.leadaxe.lxbox.permission.AUTOMATION")
+    Log.d(TAG, "emit $action with ${extras.size()} extras")
+}
+```
+
+### Symmetric request-response pattern
+
+Главная сила outgoing events — Tasker может **wait'ать** на исходящий event как ответ на свой incoming request:
+
+```
+Tasker recipe — "Switch to Russia node with confirmation":
+  1. Send broadcast: SWITCH_NODE extra(tag="🇷🇺Россия")
+  2. Wait Event: ACTIVE_NODE_CHANGED extra-condition(new_tag matches "🇷🇺.*")
+                 OR
+                 VPN_ERROR
+                 (timeout: 10s)
+  3. Branch:
+     If ACTIVE_NODE_CHANGED → Vibrate(50ms) + Notify("✅ Russia active")
+     If VPN_ERROR → Notify("❌ %code: %message")
+     If timeout → Notify("⚠️ VPN не отвечает")
+```
+
+Это намного reliable чем "fire-and-forget" — recipe знает что произошло, может реагировать.
+
+### Throttling / spam prevention
+
+| Event | Throttle policy |
+|---|---|
+| Lifecycle (`VPN_CONNECTED` etc) | Без throttle — natural rate низкий (один раз на toggle) |
+| `ACTIVE_NODE_CHANGED` | Без throttle — natural rate низкий |
+| `SUB_REFRESH_FAILED` | Cap 1/min на sub_id (предотвращает spam при network outage) |
+| `LATENCY_DEGRADED` (future) | Cap 1/5min на tag |
+| `UNATTRIBUTED_BURST` (future) | Cap 1/30s |
+
+Throttle implementation — простой `Map<String, DateTime> _lastEmitAt` per event-type в `AutomationEventEmitter`.
+
+### Logging для outgoing
+
+Каждый emit логируется в AppLog с префиксом `[automation]` симметрично incoming:
+```
+[automation] emit VPN_CONNECTED → ok
+[automation] emit ACTIVE_NODE_CHANGED new=🇷🇺Россия old=✨auto reason=user → ok
+[automation] emit SUB_REFRESH_FAILED id=sub-1 error="HTTP 401" → throttled (last 30s ago)
+```
+
+Dev может фильтровать `q=automation` и видеть полную картину "Tasker послал → реакция наша → emit обратно".
+
+### UI — App Settings → Diagnostics → Automation API
+
+Granular toggles — каждая категория управляется отдельно. Default — **все OFF**:
+
+```
+┌─────────────────────────────────────────────┐
+│  Automation API                             │
+│                                             │
+│  Integrate L×Box with Tasker / Macrodroid / │
+│  Llama and other automation apps via Android│
+│  broadcast intents.                         │
+│                                             │
+│  Caller must declare custom permission      │
+│  com.leadaxe.lxbox.permission.AUTOMATION    │
+│  in its manifest.                           │
+│                                             │
+│  ── Receive ────────────────────────────    │
+│  [○] Allow incoming control commands        │
+│      (Start/Stop/Switch/Refresh/Reset/...)  │
+│                                             │
+│  ── Emit ───────────────────────────────    │
+│  [○] Lifecycle events                       │
+│      VPN_CONNECTED · DISCONNECTED ·         │
+│      ERROR · REVOKED · UPDATE_AVAILABLE ·   │
+│      PERMISSION_NEEDED                      │
+│                                             │
+│  [○] State events                           │
+│      ACTIVE_NODE_CHANGED ·                  │
+│      ACTIVE_GROUP_CHANGED                   │
+│                                             │
+│  [○] Subscription events                    │
+│      SUB_REFRESHED · SUB_REFRESH_FAILED     │
+│                                             │
+│  [○] Health events (when §042 ready)        │
+│      HEARTBEAT_FAILED · LATENCY_DEGRADED ·  │
+│      UNATTRIBUTED_BURST                     │
+│                                             │
+│  ──────────────────────────────────────     │
+│  [📖 Show documentation & Tasker recipes]   │
+└─────────────────────────────────────────────┘
+```
+
+**Explainer dialog при включении любой категории** (показывается один раз на категорию, помечается флагом `automation_explainer_shown_v1`):
+
+> ⚠️ Включение этой категории позволит другим приложениям с granted permission получать события L×Box. Включайте только если вы используете Tasker / Macrodroid и понимаете последствия.
+>
+> События НЕ содержат секретных данных подписок / config'а — только лейблы (tags / group names / status).
+>
+> [Continue] [Cancel]
+
+Кнопка `Show documentation & Tasker recipes` — линк на `docs/AUTOMATION.md` (через external browser).
+
+### Documentation
+
+Новая страница `docs/AUTOMATION.md` со следующей структурой:
+
+```markdown
+# L×Box Automation API
+
+## Quick reference
+- Incoming actions table (9 actions, extras, examples)
+- Outgoing events table (10 events MVP + 3 future, extras, throttle policy)
+- Permission setup для caller'а
+
+## Setup (Tasker example)
+1. Tasker → Properties → Permissions → Add → declare
+   `com.leadaxe.lxbox.permission.AUTOMATION`
+2. L×Box → App Settings → Diagnostics → Automation API → enable
+   нужные категории (incoming + emit)
+3. Restart Tasker (некоторые версии cache permissions)
+4. Verify: send test broadcast через Tasker → check L×Box debug log
+
+## Common recipes (с готовыми Tasker XML import'ами)
+
+### Recipe 1: Auto-disable VPN на домашнем Wi-Fi
+Profile: Wi-Fi connected = "MyHomeWiFi"
+Task: Send Intent (com.leadaxe.lxbox.STOP_VPN)
+
+### Recipe 2: Auto-enable на любом другом Wi-Fi
+Profile: Wi-Fi connected = NOT "MyHomeWiFi" AND NOT mobile
+Task: Send Intent (com.leadaxe.lxbox.START_VPN)
+
+### Recipe 3: Switch на Russia-node при запуске банка (с подтверждением)
+Profile: App launched = "ru.banki.app"
+Task:
+  1. Send Intent (com.leadaxe.lxbox.SWITCH_NODE, extra tag="🇷🇺Россия")
+  2. Wait Event: ACTIVE_NODE_CHANGED matches new_tag="🇷🇺.*" OR VPN_ERROR
+     timeout 10s
+  3. If matched → Vibrate(50ms), else → Notify error
+
+### Recipe 4: Уведомление при падении подписки
+Profile: Event Received com.leadaxe.lxbox.event.SUB_REFRESH_FAILED
+Task: Notify("📡 Sub %sub_id failed: %error")
+
+### Recipe 5: Periodic mass-ping каждые 30 минут
+Profile: Time = every 30 minutes
+Task: Send Intent (com.leadaxe.lxbox.URLTEST_GROUP, extra group="vpn-1")
+
+### Recipe 6: Auto-resetNetwork если ping узла > 1s
+Profile: Variable %CURR_PING > 1000  (set externally, e.g. by /clash polling)
+Task: Send Intent (com.leadaxe.lxbox.RESET_NETWORK)
+
+### Recipe 7: Notification на часы при VPN падении
+Profile: Event Received com.leadaxe.lxbox.event.VPN_ERROR
+Task: Notify Wear "❌ VPN: %code — %message"
+
+## Troubleshooting
+- Send Intent не доходит → check permission declared, automation API toggle ON
+- Event не emit'ится → проверить категорию в settings, throttle policy
+```
+
+Полный гайд с XML import'ами и screenshots vivendi отдельно после реализации.
+
+---
+
+## Алгоритм
+
+### Setup flow (юзер)
+
+```
+1. App Settings → Diagnostics → Automation API
+2. Toggle ON → explainer dialog warning о security
+3. Юзер confirms → setEnabled(ctx, true) активирует receiver
+4. Открывает Tasker → Configure permission + Add intent action
+5. Тестирует Tasker action → broadcast прилетает → action отрабатывает
+```
+
+### Runtime flow (broadcast)
+
+```
+[Tasker / external app]
+  sendBroadcast(Intent("com.leadaxe.lxbox.SWITCH_NODE")
+                .setPackage("com.leadaxe.lxbox")        ← обязательно для security
+                .putExtra("tag", "🇷🇺Россия"))
+  ↓
+[Android system]
+  Если automation permission granted у caller'а →
+  doStartActivity / send to receiver
+  ↓
+[LxBoxIntentReceiver.onReceive]
+  Validate action + extras
+  ↓ (для START/STOP — direct call)
+[BoxVpnService.start/stop]
+  ↓ (для switch-node/set-group/etc)
+[VpnPlugin.handleAutomationAction → MethodChannel → BoxVpnClient]
+  ↓
+[Dart action handler — reused from debug/handlers/action.dart]
+  HomeController.switchNode(tag) → emit new state → UI updates
+```
+
+### Failure modes
+
+| Симптом | Причина | Что делать |
+|---|---|---|
+| Tasker action sent но ничего не происходит | Automation API toggle OFF | Включить в App Settings |
+| Тоже но toggle ON | Tasker не declare'ил permission | Add `com.leadaxe.lxbox.permission.AUTOMATION` в Tasker permissions |
+| `SWITCH_NODE` отрабатывает, но другая нода не выбирается | Tag не существует или typo | Check log в App Settings → Diagnostics → log filter "automation" |
+| `START_VPN` не работает первый раз | VPN consent ещё не давали | Юзер должен один раз запустить из app, дальше automation работает |
+
+### Logging
+
+Каждый received intent + emitted event логируется в AppLog с префиксом `[automation]`:
+```
+[automation] received SWITCH_NODE from net.dinglisch.android.taskerm tag=🇷🇺Россия → ok
+[automation] received START_VPN from <unknown> → already started, noop
+[automation] received SWITCH_NODE from com.example.app tag=missing → ERROR tag not found
+[automation] emit ACTIVE_NODE_CHANGED new=🇷🇺Россия old=✨auto reason=automation → ok
+[automation] emit VPN_CONNECTED → ok
+[automation] emit SUB_REFRESH_FAILED id=sub-1 → throttled (last 30s ago)
+```
+
+Юзер может фильтровать `q=automation` в Debug screen — видеть полный двусторонний обмен "Tasker → нас → emit назад".
+
+---
+
+## Тесты
+
+- **Unit (Dart) — incoming**: refactored action handlers (`actionSwitchNode`, `actionSetGroup`, `actionRebuildConfig`, `actionRefreshSubs`, `actionResetNetwork`, `actionUrltestGroup`) работают с in-memory test fixtures, отдельно от Debug API request/response wrapping.
+- **Unit (Dart) — outgoing**: `AutomationEventEmitter` — gate-toggles работают (lifecycle/state/subs/health), throttle policy не пропускает события чаще лимита, log entries формируются.
+- **Unit (Dart) — symmetric**: `actionSwitchNode` → triggers `emitNodeChanged` → AutomationEventEmitter mock получает correct extras.
+- **Integration (Kotlin) — incoming**: `LxBoxIntentReceiver` тест через `Robolectric`/instrumentation: подаём `Intent`, проверяем что `BoxVpnService.start` вызвался / `VpnPlugin.handleAutomationAction` cached call.
+- **Integration (Kotlin) — outgoing**: `VpnPlugin.sendAutomationBroadcast` — проверяем что `Context.sendBroadcast(intent, permission)` вызывается с правильным action + extras.
+- **Manual (on-device)** — все 7 Tasker recipes из `docs/AUTOMATION.md`:
+  - Recipe 1-2: Wi-Fi auto-toggle (incoming)
+  - Recipe 3: Symmetric SWITCH_NODE + wait ACTIVE_NODE_CHANGED
+  - Recipe 4: SUB_REFRESH_FAILED notification (outgoing-only)
+  - Recipe 5: Time-based URLTEST_GROUP (incoming)
+  - Recipe 6: RESET_NETWORK на ping spike (incoming)
+  - Recipe 7: VPN_ERROR notification на часы (outgoing-only)
+
+  Проверить что каждый сценарий работает stable неделю.
+
+---
+
+## Ограничения и риски
+
+| # | Риск | Mitigation |
+|---|---|---|
+| 1 | Malicious app угадает permission name + declare'ит → сможет управлять VPN | (a) Default OFF toggle; (b) explainer dialog при включении; (c) future v2: package whitelist |
+| 2 | Receiver `exported=true` уязвимость поверхностная — broadcast не auth-ed | Custom permission снижает поверхность. Юзеры читают warning перед enable. Acceptable для opt-in feature. |
+| 3 | `SWITCH_NODE` с несуществующим tag → silent ignore | Логируется в AppLog с `[automation]` префиксом. Юзер может проверить. Не throw'аем — иначе Tasker может зависнуть на retry'ах. |
+| 4 | Action names — public API; rename ломает чужие automation rules | Document'ом фиксируем как stable. **Никогда не переименовывать**, deprecate'ить + alias на год минимум. |
+| 5 | Tasker (free) ограничен в количестве permissions — может не declare наш permission | Workaround: уменьшить protectionLevel до "normal" (так и сделано). Tasker умеет normal-level permissions. |
+| 6 | На некоторых OEM (MIUI / ColorOS) auto-start restrictions блокируют receivers даже в `exported=true` | Документируем — юзеру нужно дать L×Box в "Auto-start" список в системных settings того OEM. То же что для §032. |
+| 7 | `START_VPN` без consent dialog → fail. Tasker не сможет first-time enable | Документируем. Юзер должен один раз нажать Connect в app, дальше automation работает без UI. |
+
+---
+
+## Файлы (план реализации)
+
+| Файл | Что |
+|------|-----|
+| `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/LxBoxIntentReceiver.kt` | **Новый** — receiver класс с onReceive switch (9 incoming actions) + setEnabled helper |
+| `app/android/app/src/main/AndroidManifest.xml` | `<receiver>` declaration с 9 actions + custom `<permission>` |
+| `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt` | `handleAutomationAction` companion-метод (incoming bridge) + `sendAutomationBroadcast` (outgoing emitter, MethodChannel handler `sendAutomationBroadcast`) + cached MethodChannel ref |
+| `app/lib/vpn/box_vpn_client.dart` | MethodChannel handler `automationAction` (incoming) + `sendAutomationBroadcast(action, extras)` API (outgoing) |
+| `app/lib/services/automation/handlers.dart` | **Новый** — extracted pure-business handlers: `actionSwitchNode`, `actionSetGroup`, `actionRebuildConfig`, `actionRefreshSubs`, `actionResetNetwork`, `actionUrltestGroup` |
+| `app/lib/services/automation/event_emitter.dart` | **Новый** — `AutomationEventEmitter` singleton с granular gates + throttle policy + log entries |
+| `app/lib/services/debug/handlers/action.dart` | Refactor — Debug API endpoints стали thin wrappers вокруг `automation/handlers.dart` |
+| `app/lib/controllers/home_controller.dart` | Hook'и в `_handleStatusEvent` / `switchNode` / `setActiveGroup` → `AutomationEventEmitter.I.emit*` |
+| `app/lib/controllers/subscription_controller.dart` | Hook'и в `refreshEntry` (success/failure) → emit |
+| `app/lib/services/update_checker.dart` | Hook на новую версию → emit `UPDATE_AVAILABLE` |
+| `app/lib/screens/app_settings_screen.dart` | UI блок "Automation API" с granular toggles (Receive + 4 Emit categories) + explainer dialog + docs link |
+| `app/lib/services/settings_storage.dart` | New keys: `automation_receive_enabled`, `automation_emit_lifecycle`, `automation_emit_state`, `automation_emit_subs`, `automation_emit_health` (все default false) + getters/setters + `automation_explainer_shown_v1` flag |
+| `docs/AUTOMATION.md` | **Новый** — user-facing docs: incoming actions table + outgoing events table + setup guide + 7 recipes с XML import'ами |
+| `app/lib/CLAUDE.md` / `docs/ARCHITECTURE.md` | Linkов на AUTOMATION.md |
+| `test/services/automation/handlers_test.dart` | Unit для extracted incoming handlers |
+| `test/services/automation/event_emitter_test.dart` | Unit для outgoing emitter (gates / throttle / log) |
+
+Estimated work: **~3 дня** (manifest + receiver + bridge + emitter + 5 controller hooks + UI toggles + docs + refactor action handlers + tests).
+
+---
+
+## Критерии приёмки
+
+### Incoming (9 actions)
+
+- [ ] App Settings → Diagnostics → "Automation API" блок: toggle "Allow incoming control commands" (default OFF) + explainer.
+- [ ] Включение toggle активирует receiver через `PackageManager.setComponentEnabledSetting`. Выключение — обратно.
+- [ ] Tasker (или `am broadcast` через ADB) с правильным action → VPN реагирует:
+  - [ ] `START_VPN` → VPN connect (если не already up)
+  - [ ] `STOP_VPN` → VPN disconnect
+  - [ ] `TOGGLE_VPN` → toggle relative current state
+  - [ ] `SWITCH_NODE` extra `tag` → активная нода меняется
+  - [ ] `SET_GROUP` extra `group` → активная группа меняется
+  - [ ] `REBUILD_CONFIG` → config регенерируется (respects §037 lock)
+  - [ ] `REFRESH_SUBS` extra `force` → subs обновляются
+  - [ ] `RESET_NETWORK` → closeAll + DNS flush + dialer rebind
+  - [ ] `URLTEST_GROUP` extra `group` → urltest группы запускается
+- [ ] Полученные intents логируются в AppLog с префиксом `[automation] received` + caller package.
+- [ ] При выключенной toggle automation intents игнорируются (`receiver disabled`).
+- [ ] Caller без `com.leadaxe.lxbox.permission.AUTOMATION` получает SecurityException на `sendBroadcast` (Android system enforce'ит).
+
+### Outgoing (10 events MVP)
+
+- [ ] App Settings → Diagnostics → "Automation API" блок: 4 toggle категории (Lifecycle / State / Subscription / Health) — default все OFF.
+- [ ] Включение каждой категории первый раз → explainer dialog с warning о data leak (потом запоминается через `automation_explainer_shown_v1`).
+- [ ] Lifecycle ON → emit'ятся `VPN_CONNECTED`, `VPN_DISCONNECTED` (с reason), `VPN_ERROR` (с code/message), `VPN_REVOKED`, `UPDATE_AVAILABLE`, `PERMISSION_NEEDED`.
+- [ ] State ON → emit'ятся `ACTIVE_NODE_CHANGED` (с old/new/reason), `ACTIVE_GROUP_CHANGED`.
+- [ ] Subscription ON → emit'ятся `SUB_REFRESHED` (с counts), `SUB_REFRESH_FAILED` (с throttle 1/min на sub_id).
+- [ ] Outgoing broadcasts защищены `com.leadaxe.lxbox.permission.AUTOMATION` — caller без permission не получает.
+- [ ] Emit'ed events логируются в AppLog с префиксом `[automation] emit` + extras.
+- [ ] Throttle policy работает — лог показывает `→ throttled` когда event пришёл быстрее лимита.
+
+### Symmetric (request → response)
+
+- [ ] Tasker recipe "Switch Russia + wait response" работает: `SWITCH_NODE tag=🇷🇺Россия` → emit `ACTIVE_NODE_CHANGED new_tag=🇷🇺Россия` arrives к Tasker waiter.
+- [ ] Failure path: `SWITCH_NODE tag=invalid` → emit `VPN_ERROR code=node_not_found` arrives.
+
+### Documentation
+
+- [ ] `docs/AUTOMATION.md` существует со всеми 9 incoming actions + 10 outgoing events + 7 recipes.
+- [ ] Tasker user может настроить любой recipe из docs за 5-10 минут.
+
+---
+
+## Будущие расширения (вне §047)
+
+- **Package whitelist** — UI list "Allow only these apps to control VPN: [+]" вместо "open to all who claim permission". Granular control. Реализуемо через `intent.package` check в receiver и `setPackage` на outgoing broadcasts.
+- **Health events implementation** — `HEARTBEAT_FAILED` / `LATENCY_DEGRADED` / `UNATTRIBUTED_BURST` — после §042 health watchdog (там этот namespace уже зарезервирован, нужны source points).
+- **Action: SET_VAR** — изменить произвольный template var через intent (`extra: name`, `extra: value`). Связан с Debug API `PUT /settings/vars/{key}`.
+- **Action: EXCLUDE_NODE / INCLUDE_NODE** — toggle exclusion из auto-pool без UI, по tag.
+- **Action: OPEN_PROFILER** — запустить per-app trace (§044) для package extra. "Когда падает банк-app → start profiler для post-mortem".
+- **Action: APPLY_PROFILE** — если когда-нибудь будут multi-profile (см. ARCHITECTURE → Reusable layers → potential idea), automation сможет переключать профили.
+- **Tasker plugin** — отдельный official Tasker plugin app, который declare'ит permission + предоставляет UI dropdown'ы для action/extras + Tasker-native event subscriber UI. Полировка UX, но maintenance overhead.
+
+---
+
+## Ссылки
+
+- [Android BroadcastReceiver guide](https://developer.android.com/develop/background-work/background-tasks/broadcasts)
+- [Custom permissions documentation](https://developer.android.com/guide/topics/permissions/defining)
+- [Tasker — Send Intent action](https://tasker.joaoapps.com/userguide/en/help/ah_send_intent.html)
+- [§031 — Debug API](../031%20debug%20api/spec.md) — action handlers переиспользуются
+- [§032 — Quick Connect](../032%20quick%20connect/spec.md) — same actions, разные транспорты (tile/shortcut vs broadcast)

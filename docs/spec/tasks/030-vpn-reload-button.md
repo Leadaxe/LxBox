@@ -4,7 +4,7 @@
 |------|----------|
 | Статус | Draft |
 | Дата | 2026-05-01 |
-| Связанные spec'ы | [`039 libbox 1.13 migration`](../features/039%20libbox%201.13%20migration/spec.md), [`031 debug api`](../features/031%20debug%20api/spec.md) |
+| Связанные spec'ы | [`tasks/060-libbox-1-13-migration`](060-libbox-1-13-migration/spec.md), [`031 debug api`](../features/031%20debug%20api/spec.md) |
 
 ## Цель
 
@@ -20,7 +20,7 @@
 
 ### Что это делает архитектурно
 
-В sing-box 1.13 `startOrReloadService` — единый entry point для start и reload (см. [§039](../features/039%20libbox%201.13%20migration/spec.md)). Reload:
+В sing-box 1.13 `startOrReloadService` — единый entry point для start и reload (см. [§060 libbox 1.13 migration](060-libbox-1-13-migration/spec.md)). Reload:
 - **Не убивает** Android Service / VpnService
 - **Не убивает** CommandServer (Unix-socket остаётся живой; Clash dashboard не теряет connection)
 - **Recyclит** только sing-box runtime внутри: closes outbound dialers, drops in-flight TCP, rebuilds DNS resolver, re-evaluates routes

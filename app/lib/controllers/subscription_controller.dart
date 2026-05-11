@@ -543,6 +543,7 @@ class SubscriptionController extends ChangeNotifier {
       excludedNodes: await SettingsStorage.getExcludedNodes(),
       customRules: await SettingsStorage.getCustomRules(),
       routeFinal: await SettingsStorage.getRouteFinal(),
+      tunApps: await SettingsStorage.getTunApps(),
     );
 
     final lists = _entries.map((e) => e.list).toList();

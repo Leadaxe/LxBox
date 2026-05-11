@@ -43,7 +43,9 @@ curl -s "$BASE/ping"
 - [Rules CRUD — `/rules/*`](#rules-crud--rules)
 - [Subscriptions CRUD — `/subs/*`](#subscriptions-crud--subs)
 - [Settings writes — `/settings/*`](#settings-writes--settings)
+- [Wi-Fi history — `/wifi_history`](#wi-fi-history--wifi_history)
 - [Files](#files)
+- [Profiler — `/profiler/*`](#profiler--profiler)
 - [Clash API proxy — `/clash/*`](#clash-api-proxy--clash)
 - [Common errors](#common-errors)
 
@@ -59,7 +61,7 @@ curl -s "$BASE/ping"
 | `GET /state/subs` | массив подписок, `?reveal=true` показывает clear URLs |
 | `GET /state/rules` | массив custom rules с `srs_cached/srs_mtime` |
 | `GET /state/storage` | весь `SettingsStorage._cache` со scrubber'ом (token/URL/nodes маскируются) |
-| `GET /state/vpn` | `{auto_start,keep_on_exit,is_ignoring_battery_optimizations}` |
+| `GET /state/vpn` | `{auto_start,keep_on_exit,allow_bypass,background_mode,is_ignoring_battery_optimizations}` |
 | `GET /state/config_locked` | `{locked: bool}` — §037 текущее состояние auto-rebuild lock'а |
 | `GET /device` | Android version, model, ABI, app version, VPN permission, network type, uptime |
 
@@ -248,6 +250,13 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   -d "$ORDER_JSON" "$BASE/rules/reorder"
 ```
 
+Storage order = sing-box `route.rules[]` order (за вычетом 3 system rules
+`resolve` / `sniff` / `dns hijack` которые builder всегда вставляет первыми).
+Rules матчатся **first-wins** сверху вниз, так что reorder напрямую влияет
+на приоритет. Order соблюдается **между kind'ами** (`preset` / `inline` /
+`srs`) — раньше builder делал 2 прохода и cross-kind ordering терялся, в
+[§062](../spec/tasks/062-custom-rules-unified-order.md) починено.
+
 **Shape CustomRule body** (все optional кроме `name`):
 ```json
 {
@@ -362,6 +371,14 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | `/settings/config_locked` | PUT | `{"locked": true\|false}` — §037 toggle auto-rebuild lock. true → `generateConfig` возвращает null silently, custom config через `PUT /config` не перетирается UI. |
 | `/settings/core_logs_enabled` | GET | →`{"enabled": bool}` — §043 текущее состояние forwarding'а sing-box логов в `/logs/core`. |
 | `/settings/core_logs_enabled` | PUT | `{"enabled": true\|false}` — §043 включить/выключить forward. **Требует restart Service'а** (`stop-vpn` + `start-vpn`) чтобы применилось — `Libbox.setup` читает значение один раз. Default false. Storage в SharedPreferences (`boxvpn_boot.core_logs_enabled`), не в `lxbox_settings.json`. |
+| `/settings/tun_apps` | GET | →`{"mode":"off\|allow\|deny", "packages":[...]}` — §046 OS-level split-tunneling. |
+| `/settings/tun_apps` | PUT | `{"mode":"off\|allow\|deny", "packages":["pkg1","pkg2",...]}` — §046. Replace целиком. Дубликаты в `packages` schлопываются (idempotent). Пустые строки skip'аются. Невалидный package-name → 400. Response: `{ok, action, mode, count, rebuild_needed: true, ...rebuild-extras}`. **Требует full VPN restart** для apply (Android tun creates только на `establish()`). |
+| `/settings/vpn/allow_bypass` | GET | →`{"enabled": bool}` — §052/§049 F15. |
+| `/settings/vpn/allow_bypass` | PUT | `{"enabled": true\|false}` — §052/§049 F15. Native (`VpnService.Builder.allowBypass()`). Применяется при следующем `establish()` (start или reload VPN). Default false (strict tunnel). |
+| `/settings/vpn/keep_on_exit` | GET | →`{"enabled": bool}` — §052. VPN остаётся активным когда app закрывается. |
+| `/settings/vpn/keep_on_exit` | PUT | `{"enabled": true\|false}` — §052. Effect at app exit; live-reload не нужен. |
+| `/settings/vpn/background_mode` | GET | →`{"mode": "never"\|"lazy"\|"always"}` — §052. Foreground-service режим. |
+| `/settings/vpn/background_mode` | PUT | `{"mode": "never"\|"lazy"\|"always"}` — §052. `never` — туннель всегда активен (default); `lazy` — pause только в deep Doze; `always` — pause при выключении экрана. Применяется при следующем VPN connect. |
 | `/settings/rebuild-config` | POST | — (alias для `/action/rebuild-config`) |
 
 **Route final:**
@@ -450,6 +467,66 @@ curl -X POST -H "$HDR" "$BASE/action/start-vpn"
 curl -s -H "$HDR" "$BASE/logs/core?level=warning,error&q=dial" | jq
 ```
 
+**VPN System toggles** (§052) — то же что VPN Settings → System в UI:
+```bash
+# Snapshot всех VPN-system флагов одним запросом
+curl -s -H "$HDR" "$BASE/state/vpn" | jq
+# {"auto_start":false,"keep_on_exit":false,"allow_bypass":false,
+#  "background_mode":"never","is_ignoring_battery_optimizations":true}
+
+# Allow VPN bypass — apps могут использовать ConnectivityManager в обход tun
+curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"enabled":true}' "$BASE/settings/vpn/allow_bypass"
+# Эффект на следующем establish() — нужен reload VPN.
+
+# Keep VPN on exit — туннель не падает при закрытии app
+curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"enabled":true}' "$BASE/settings/vpn/keep_on_exit"
+
+# Tunnel sleep mode — never|lazy|always
+curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"mode":"lazy"}' "$BASE/settings/vpn/background_mode"
+```
+
+---
+
+## Wi-Fi history — `/wifi_history`
+
+§051 Phase 3 — список «известных» сетей `[{ssid, bssid, last_seen}]` для editor'а custom rules (`Pick saved` picker когда пишешь правило с условием `wifi_ssid` / `wifi_bssid`). Naturally заполняется через native `WifiNetworkObserver` (`NetworkCallback` listener, 5-min stickiness debounce) когда `auto_record_wifi_history` toggle ON в App Settings → Diagnostics. Через API можно injectить / удалять записи без UI flow — например для тестов или восстановления после wipe'а.
+
+Storage: var `wifi_history` в `lxbox_settings.json` (JSON-encoded array). Cap **50 записей**, LRU evict by `last_seen`. BSSID нормализуется к lower-case при upsert. Composite key `(ssid, bssid)` — две сети с одинаковым ssid и разными bssid считаются разными.
+
+| Endpoint | Метод | Body / response |
+|---|---|---|
+| `/wifi_history` | GET | →`[{ssid, bssid, last_seen}]` (newest first) |
+| `/wifi_history` | POST | body `{"ssid":"...","bssid":"..."}` (`bssid` опц.). Upsert — если `(ssid, bssid)` уже есть, обновляет `last_seen`; иначе вставляет первым. → `{ok, action, ssid, bssid}`, status 201 |
+| `/wifi_history` | DELETE | body `{"ssid":"...","bssid":"..."}` (`bssid` опц.). Remove конкретной записи. → `{ok, action, ssid, bssid}` |
+| `/wifi_history/all` | DELETE | — clear all. → `{ok, action}` |
+
+```bash
+# Список
+curl -s -H "$HDR" "$BASE/wifi_history" | jq
+# [{"ssid":"HomeWiFi","bssid":"aa:bb:cc:dd:ee:ff","last_seen":"2026-05-10T12:34:56.789Z"}, ...]
+
+# Inject запись (например для test fixture перед запуском smoke-теста)
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"ssid":"OfficeWiFi","bssid":"11:22:33:44:55:66"}' \
+  "$BASE/wifi_history"
+
+# Удалить конкретную запись
+curl -X DELETE -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"ssid":"OfficeWiFi","bssid":"11:22:33:44:55:66"}' \
+  "$BASE/wifi_history"
+
+# Wipe всё (например при сбросе настроек)
+curl -X DELETE -H "$HDR" "$BASE/wifi_history/all"
+```
+
+**Quirks:**
+- `POST` с пустым `ssid` → 400 BadRequest.
+- `DELETE /wifi_history` с пустым `ssid` → 400 (используй `/wifi_history/all` для full wipe).
+- Cap не строгий: если придёт `POST` когда уже 50 записей, новая вставляется в head, последняя выпадает. Не атомарно с UI — гонка возможна, но не критична (обе ветки сходятся к корректному состоянию).
+
 ---
 
 ## Files
@@ -475,22 +552,54 @@ curl -s -H "$HDR" "$BASE/files/local?name=stderr.log" | tail -30
 
 ## Backup — `/backup/*`
 
+Symmetric с UI `BackupScreen` (см. [§040 spec](../spec/features/040%20backup%20restore%20ui/spec.md)). Wire-format — single, без `version` поля; legacy `{vars, server_lists}` на корне больше не поддерживается.
+
 | Endpoint | Что отдаёт / принимает |
 |---|---|
-| `GET /backup/export?include=config,vars,subs` | Pure-data snapshot. `include` опц.; default — все три |
-| `POST /backup/import?merge=&rebuild=` | Восстановление. Body `{config?, vars?, server_lists?}`. Совместим с `/diag/dump` (diag-поля игнорятся). |
+| `GET /backup/export?include=storage,vpn_settings` | Snapshot. `include` опц., default — обе части |
+| `POST /backup/import?merge=&rebuild=` | Восстановление. Body `{storage?, vpn_settings?}` |
+
+**Format**:
+```json
+{
+  "app": "lxbox",
+  "kind": "backup",
+  "created_at": "2026-05-10T...",
+  "source_app_version": "1.7.3+32",
+  "storage": { ...lxbox_settings.json целиком: vars, server_lists,
+               custom_rules, tun_apps, enabled_groups, route_final, ... },
+  "vpn_settings": {
+    "auto_start": false,
+    "keep_on_exit": false,
+    "background_mode": "never",
+    "core_logs_enabled": false,
+    "allow_bypass": false
+  }
+}
+```
+
+- **`storage`** — глубокая копия `lxbox_settings.json` (все top-level keys плюс nested `vars` map). Включает custom_rules, tun_apps, dns_options, wifi_history и любые будущие top-level keys без правок API.
+- **`vpn_settings`** — native-side `boxvpn_boot` SharedPreferences (BootReceiver читает at boot-time из Kotlin, не вынесено в Flutter storage).
 
 ```bash
-# Бэкап
+# Бэкап (всё)
 curl -s -H "$HDR" "$BASE/backup/export" > /tmp/lxbox-backup.json
 
-# Восстановление с автоматическим rebuild config
+# Только Flutter storage без VPN system toggles
+curl -s -H "$HDR" "$BASE/backup/export?include=storage" > /tmp/lxbox-storage.json
+
+# Восстановление + rebuild config (replace)
 curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   --data-binary @/tmp/lxbox-backup.json \
   "$BASE/backup/import?rebuild=true"
+
+# Merge mode — top-level upsert (vars upsert, остальные ключи overwrite, отсутствующие в файле — keep)
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  --data-binary @/tmp/lxbox-backup.json \
+  "$BASE/backup/import?merge=true"
 ```
 
-`merge=false` (default) — replace; `merge=true` — append/upsert. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
+`merge=false` (default) — replace; `merge=true` — top-level upsert. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
 
 ---
 
@@ -517,6 +626,83 @@ curl -s -H "$HDR" "$BASE/diag/logcat?count=2000&level=W" | grep -E 'FATAL|DEBUG|
 # Только pre-crash JVM-events предыдущей сессии
 curl -s -H "$HDR" "$BASE/diag/applog?prev=true" | jq
 ```
+
+---
+
+## Profiler — `/profiler/*`
+
+Traffic profiler — **per-app** session (§044, один active в любой момент) или **system-wide** rolling buffer (§048, Live tab в Statistics). Оба источника событий: parser sing-box core logs + 5s polling Clash `/connections`.
+
+### Per-app session
+
+| Endpoint | Метод | Body |
+|---|---|---|
+| `/profiler/start` | POST | `{"package":"<pkg>", "verbose":false, "secondary_packages":[...]}` |
+| `/profiler/stop` | POST | — |
+| `/profiler/active` | GET | — — `404` если ничего не active |
+| `/profiler/sessions` | GET | — — last 5 completed (FIFO ring) |
+| `/profiler/sessions` | DELETE | — — wipe completed |
+| `/profiler/session/{id}` | GET | — — `?include=events,domains,ips` |
+| `/profiler/session/{id}` | DELETE | — |
+| `/profiler/stream` | GET | — — SSE per-session (требует active) |
+| `/profiler/secondary-packages` | PATCH/POST | `{"secondary_packages":[...]}` |
+
+```bash
+# Начать сессию для com.example.app, пометить webview-host'ы как secondary
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"package":"com.example.app","verbose":false,"secondary_packages":["com.google.android.webview"]}' \
+  "$BASE/profiler/start"
+# → {id, target_package, started_at, ...} ИЛИ 409 {error:"already_active",active_session_id}
+
+# Текущая сессия (или 404)
+curl -s -H "$HDR" "$BASE/profiler/active" | jq
+
+# Stream live events (Ctrl-C завершает)
+curl -N -H "$HDR" "$BASE/profiler/stream"
+
+# Detail с full events
+curl -s -H "$HDR" "$BASE/profiler/session/<id>?include=events,domains" | jq
+
+# Stop
+curl -X POST -H "$HDR" "$BASE/profiler/stop"
+```
+
+**Confidence levels** в каждом event: `verified` (router-package matched target) / `secondary` (matched secondary_packages) / `inferred` (post-DNS process inference, 10s window) / `unattributed` (нет owner). UI показывает легенду; для post-mortem analysis фильтровать по `confidence`.
+
+### System-wide (§048 Live tab)
+
+Idempotent toggle для recording, подключающего тот же `_pollConnections` без active session. **Idle profiler ничего не делает** — recording on только при явном start.
+
+| Endpoint | Метод | Что |
+|---|---|---|
+| `/profiler/live/start` | POST | `startGlobalRecording` — attach AppLog listener + start 5s connection poll |
+| `/profiler/live/stop` | POST | `stopGlobalRecording` — detach (если нет per-app session) |
+| `/profiler/live/state` | GET | `{recording, started_at, buffer_count, unattributed_count, banner_active}` |
+| `/profiler/live` | GET | `{window_seconds, count, events}` — global rolling buffer snapshot, `?seconds=60` (default) |
+| `/profiler/live/stream` | GET | SSE — все system-wide TrafficEvent'ы live |
+| `/profiler/live/unattributed` | GET | `{count, recent_count_30s, banner_active, events}` — unattributed ring (DNS-fail без owner / TCP без process attribution) |
+
+```bash
+# Включить system-wide recording
+curl -X POST -H "$HDR" "$BASE/profiler/live/start"
+# → {ok, recording:true, started_at}
+
+# Снять окно последних 30s (TCP/UDP open/close + DNS)
+curl -s -H "$HDR" "$BASE/profiler/live?seconds=30" | jq '.count, .events[0]'
+
+# Live stream (для observing в реальном времени)
+curl -N -H "$HDR" "$BASE/profiler/live/stream"
+
+# Что система не смогла attribute'нуть к app'у (banner triggers)
+curl -s -H "$HDR" "$BASE/profiler/live/unattributed" | jq '.recent_count_30s, .banner_active'
+
+# Выключить
+curl -X POST -H "$HDR" "$BASE/profiler/live/stop"
+```
+
+**Когда что использовать:**
+- Per-app session — root cause «почему именно app X не открывает Y»: get domain chain, IP, chain'ы, port-test history.
+- System-wide live — discovery «что вообще происходит на устройстве сейчас»: DNS sniff, leakage detection (трафик мимо ожидаемых rules), unattributed events banner.
 
 ---
 
@@ -562,6 +748,26 @@ curl -s -H "$HDR" "$BASE/clash/connections" | \
 Shape ошибки:
 ```json
 {"error": {"code": "bad_request", "message": "missing query param: tag"}}
+```
+
+### Structured tunnel alerts — `state.last_error`
+
+Не error envelope endpoint'а, а semantic-сигнал из VPN-сервиса. После `start-vpn` если sing-box остановился из-за чего-то actionable — `state.last_error` начинается с `Stopped: alert:<type>:<details>`. Текущие типы:
+
+| Prefix | Когда | Detail |
+|---|---|---|
+| `alert:permission_location:<comma-list>` | §050 — config содержит `wifi_ssid`/`wifi_bssid` правила, но не выданы required permissions | Comma-separated Android permission names. На API 30+: `ACCESS_BACKGROUND_LOCATION` (только Settings). На API 33+ в дополнение: `NEARBY_WIFI_DEVICES` (можно runtime prompt'ом). Без NEARBY на targetSdk≥33 `WifiInfo.ssid` = `"<unknown ssid>"`, rules silently не матчатся. |
+
+```bash
+curl -s -H "$HDR" "$BASE/state" | jq '.last_error'
+# → "Stopped: alert:permission_location:android.permission.ACCESS_BACKGROUND_LOCATION,android.permission.NEARBY_WIFI_DEVICES"
+
+# Quick test grant permissions через adb (вместо UI)
+adb shell pm grant com.leadaxe.lxbox android.permission.NEARBY_WIFI_DEVICES
+adb shell pm grant com.leadaxe.lxbox android.permission.ACCESS_BACKGROUND_LOCATION
+
+# Re-start
+curl -X POST -H "$HDR" "$BASE/action/start-vpn"
 ```
 
 ---

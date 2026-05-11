@@ -57,6 +57,10 @@ Auth: `Authorization: Bearer $TOKEN` (token в `vars.debug_token`, dev-token с�
 | `GET /logs?source=app&limit=300` | App-side warn/error |
 | `GET /logs?source=core&q=tinkoff&level=error,warning` | Фильтрация по substring + level |
 | `GET /diag/*` | §038 диагностика runtime'а (см. api/debug-api-reference.md) |
+| `GET /profiler/active` | §044/§048 — текущая per-app session (или null) |
+| `GET /profiler/live` | §048 — system-wide events за окно (TCP/UDP open/close + DNS resolves всех packages). Требует predшествующий `POST /profiler/live/start` (или тап START в Live tab) для активного poll'а |
+| `GET /profiler/live/stream` | SSE stream system-wide events (live push) |
+| `GET /profiler/live/state` | `{recording: bool, started_at: ts}` |
 
 **Read-only safe.** Все остальные endpoints (`POST /action/*`, `PUT /config`, `PUT /settings/*`) — destructive, см. ниже.
 
@@ -215,6 +219,27 @@ Sing-box matches **первым попавшимся правилом** (top-dow
 3. `state.last_delay` history — был ли auto-test?
 4. `/state/storage` `vars.dns_final` / `route_final` — что в storage'е выбрано?
 5. Если group-default `✨auto` (URLTest) — он сам выбирает по ping; смотри historical delays per-node
+
+### «VPN не запускается, status сразу Stopped с alert»
+
+§050 — sing-box не стартует когда config содержит `wifi_ssid:`/`wifi_bssid:` правила, но Android permissions не выданы.
+
+1. `/state` → `last_error` начинается с `Stopped: alert:permission_location:` — это structured alert от `BoxService.startSingbox` (port из reference SagerNet).
+2. После двоеточия — comma-list missing permissions, типичный набор:
+   - `android.permission.ACCESS_BACKGROUND_LOCATION` — runtime grant **только через Settings** на API 30+ (не runtime prompt)
+   - `android.permission.NEARBY_WIFI_DEVICES` — API 33+; **обязательный** для real SSID когда `targetSdk≥33`. Без него `WifiInfo.ssid` = `"<unknown ssid>"` → wifi rules не матчатся silently
+3. Проверка current state:
+   ```bash
+   adb shell dumpsys package com.leadaxe.lxbox | grep -E "granted=" | grep -iE "location|nearby"
+   ```
+4. Lечение: либо grant через Flutter dialog (есть кнопка `Allow Wi-Fi info` для NEARBY one-tap + `Open Settings` для BACKGROUND_LOCATION), либо `adb shell pm grant com.leadaxe.lxbox android.permission.NEARBY_WIFI_DEVICES` для quick test
+5. Альтернативно — убрать wifi rules из config'а. Если `cs.needWIFIState() == false`, permission-check skip.
+
+**Диагностический флаг**: в logcat при successful startup увидишь `BoxService: [vpn] sing-box uses WIFI state, all permissions granted: [...]`. При failure — `BoxService: [vpn] config requires WIFI state but missing: [...]`.
+
+### «`<unknown ssid>` в wifi rules»
+
+Если в logcat видишь `PIW: readWIFIState: <unknown ssid>` (debug log из [PlatformInterfaceWrapper](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/PlatformInterfaceWrapper.kt:139)) — значит permission grants есть (нет SecurityException), но `WifiInfo.ssid` вернул `"<unknown ssid>"`. На Android 13+ это означает **отсутствие `NEARBY_WIFI_DEVICES`** даже если ACCESS_FINE_LOCATION granted (Google разделил wi-fi info и location в API 33). Действие: добавить `NEARBY_WIFI_DEVICES` в Manifest + grant через runtime prompt.
 
 ### Workflow при незнакомом баге
 

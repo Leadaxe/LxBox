@@ -17,13 +17,15 @@ L×Box разрабатывается по методологии **spec-driven 
 docs/
   spec/
     features/
-      001 mobile stack/spec.md      # Каждая фича — отдельная папка
-      002 mvp scope/spec.md         # spec.md — основной документ
+      003 home screen/spec.md       # Каждая live фича — отдельная папка
+      006 servers ui/spec.md        # spec.md — основной документ
       ...                           # plan.md, tasks.md — опционально
-      043 applog per-source quotas/spec.md
+      047 public intent api/spec.md
     tasks/
       README.md                     # Когда и как вести task-лог
       NNN-kebab-title.md            # Конкретный рабочий цикл (баг, pass, рефакторинг)
+      055-mobile-stack-decision/    # Демотированные/исторические/superseded спеки тоже здесь
+      060-libbox-1-13-migration/    # (см. §054 spec reorg)
   ARCHITECTURE.md                   # Архитектура проекта
   BUILD.md                          # Инструкции по сборке
   DEVELOPMENT_REPORT.md             # История разработки по этапам
@@ -44,7 +46,7 @@ CHANGELOG.md                        # Список изменений по ве�
 
 **Фичи vs задачи:** в `docs/spec/features/` — описание возможности («что это и как устроено»). В [`docs/spec/tasks/`](./spec/tasks/README.md) — журнал отдельных рабочих циклов: баг с нетривиальным root cause, perf-pass, рефакторинг с последствиями; формат и критерии — в `README` папки.
 
-Актуальные спеки в `docs/spec/features/001 mobile stack/` … `043 applog per-source quotas/`. Полный список с краткими описаниями — в [`ARCHITECTURE.md → Feature Specs`](ARCHITECTURE.md#feature-specs). Крупные landmark'и:
+Актуальные спеки — `docs/spec/features/003 home screen/` … `047 public intent api/` (см. полный индекс в [`docs/spec/features/README.md`](spec/features/README.md)). Демотированные/superseded спеки уехали в `docs/spec/tasks/055..061` через [§054 spec reorg](spec/tasks/054-spec-reorg-features-vs-tasks.md). Полный список с описаниями — в [`ARCHITECTURE.md → Feature Specs`](ARCHITECTURE.md#feature-specs). Крупные landmark'и:
 - **026** — Parser v2 (sealed `NodeSpec`, 3-слойный pipeline) — рефакторинг v1.3.0.
 - **027** — Subscription auto-update (4 триггера + hard gates против спама).
 - **033** — Preset bundles (selectable rules с `preset_id`, expansion + merge).
@@ -324,7 +326,7 @@ Defaults: `registerDetourServers=false`, `useDetourServers=true`, остальн
 
 | Зависимость | Версия | Где | Риск обновления |
 |------------|--------|-----|----------------|
-| sing-box (libbox) | 1.13.11 (`com.github.singbox-android:libbox`) | JitPack | API может измениться, тестировать native код. Миграция 1.12 → 1.13 — [spec 039](spec/features/039%20libbox%201.13%20migration/spec.md) |
+| sing-box (libbox) | 1.13.11 (`com.github.singbox-android:libbox`) | JitPack | API может измениться, тестировать native код. Миграция 1.12 → 1.13 — [task §060 libbox-1-13-migration](spec/tasks/060-libbox-1-13-migration/spec.md) (был feature §039) |
 | Flutter | 3.41.6 | SDK | Обычно безопасно, проверять deprecated |
 | Gradle | 8.14 | wrapper | Совместимость с AGP |
 | AGP | 8.11.1 | build.gradle.kts | Совместимость с Gradle и Flutter |

@@ -192,6 +192,16 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "getCoreLogsEnabled" -> {
                 result.success(BootReceiver.isCoreLogsEnabled(context))
             }
+            // §049 F15 fix: allowBypass opt-in toggle (применяется при следующем
+            // openTun → требует reload VPN после изменения).
+            "setAllowBypass" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                BootReceiver.setAllowBypass(context, enabled)
+                result.success(true)
+            }
+            "getAllowBypass" -> {
+                result.success(BootReceiver.isAllowBypass(context))
+            }
             "quitApp" -> {
                 // §043 follow-up: завершить процесс целиком, чтобы при следующем
                 // запуске `BoxApplication.initialize` пересоздал libbox с новым
@@ -260,14 +270,18 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(pm.isIgnoringBatteryOptimizations(context.packageName))
             }
             "openBatteryOptimizationSettings" -> {
-                // Primary — общая страница battery-optimization с списком всех
-                // apps (надёжно открывается на всех OEM, включая ColorOS/MIUI,
-                // где direct-prompt молча игнорируется).
-                // Fallback — direct-prompt (удобнее, но не на всех устройствах).
+                // Primary — system one-tap prompt («Allow L×Box to ignore
+                // battery optimizations?»). It targets exactly our package via
+                // `package:` URI, requires REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                // permission (declared in manifest), and is the path used by
+                // SFA / NekoBox.
+                // Fallback — общая страница battery-optimization с списком
+                // всех apps (юзеру нужно ткнуть в L×Box). Срабатывает на OEM
+                // (ColorOS/MIUI/HyperOS), где direct-prompt молча отбрасывается.
                 result.success(openSystemSettings(
-                    primaryAction = android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS,
-                    primaryWithPackage = false,
-                    fallbackAction = android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    primaryAction = android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    primaryWithPackage = true,
+                    fallbackAction = android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS,
                 ))
             }
             "openAppDetailsSettings" -> {

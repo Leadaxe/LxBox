@@ -2,7 +2,7 @@ name: lxbox
 description: L×Box — Android MVP (sing-box + Clash API).
 publish_to: 'none'
 
-version: 1.7.0+28
+version: 1.8.0+33
 
 environment:
   sdk: ^3.11.4

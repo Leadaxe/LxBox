@@ -51,6 +51,10 @@ interface PlatformInterfaceWrapper : PlatformInterface {
         val packages = BoxApplication.packageManager.getPackagesForUid(uid)?.toList() ?: emptyList()
         return ConnectionOwner().apply {
             userId = uid
+            // §049 F12.1: userName заполняется первым package'ом (как в reference
+            // `PlatformInterfaceWrapper.kt:60` 1.13.11). Видно в Clash API
+            // `/connections` endpoint.
+            userName = packages.firstOrNull() ?: ""
             setAndroidPackageNames(StringArray(packages.iterator()))
         }
     }
@@ -104,7 +108,50 @@ interface PlatformInterfaceWrapper : PlatformInterface {
     override fun underNetworkExtension(): Boolean = false
     override fun includeAllNetworks(): Boolean = false
     override fun clearDNSCache() {}
-    override fun readWIFIState(): WIFIState? = null
+
+    /// §049 F12.3 + §050 actual root cause fix:
+    ///
+    /// `WifiManager.connectionInfo` на API 29+ требует `ACCESS_BACKGROUND_LOCATION`
+    /// permission. Без неё binder throws **`SecurityException`** через
+    /// `Parcel.readException()`. У нас этой permission в Manifest нет.
+    ///
+    /// **Реальный crash mechanism (раскрыт в §050)**:
+    /// 1. Sing-box (Go) → cgo → `cproxy_PlatformInterface_ReadWIFIState`
+    /// 2. Java callback `readWIFIState()` invokes `WifiManager.connectionInfo`
+    /// 3. SecurityException thrown без permission (API 29+)
+    /// 4. Exception propagates through JNI boundary без handler в cproxy code
+    /// 5. `Seq$RefTracker.incRefnum` пытается cleanup → JNI env corrupted
+    /// 6. `ClassLinker::FindClass` fails → `Runtime::Abort`
+    /// 7. abort message "Unknown reference: 42" — **misleading follow-up**
+    ///    effect broken JNI state, не реальный refnum lookup issue.
+    ///
+    /// Reference SagerNet не падает потому что проверяет permission ДО
+    /// `cs.startOrReloadService()` через `commandServer.needWIFIState() &&
+    /// !hasPermission()` → stopAndAlert. Sing-box не запускается без permission.
+    ///
+    /// **Defensive fix**: try/catch SecurityException → return null. Sing-box
+    /// получает null gracefully (как раньше когда readWIFIState всегда был null).
+    ///
+    /// Combined с permission check в `BoxService.startSingbox` (post-`startOrReloadService`
+    /// `needWIFIState() && !hasPermission()` warning log) — F12.3 теперь
+    /// fully functional когда permission granted, fails gracefully когда нет.
+    /// Delegate to `WifiInfoReader` — single source of truth для defensive
+    /// чтения wifi state. См. `WifiInfoReader.kt` docstring для детального
+    /// контекста (3 call-sites consolidation, drift risk история).
+    override fun readWIFIState(): WIFIState? {
+        val state = WifiInfoReader.readAsState(BoxApplication.application)
+        if (state == null) {
+            android.util.Log.w("PIW",
+                "readWIFIState: null (permission missing / no wifi / runtime error)")
+        } else if (state.ssid.isEmpty()) {
+            android.util.Log.w("PIW",
+                "readWIFIState: <unknown ssid> — likely missing NEARBY_WIFI_DEVICES")
+        } else {
+            android.util.Log.d("PIW",
+                "readWIFIState: ssid='${state.ssid}' bssid='${state.bssid}'")
+        }
+        return state
+    }
 
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
     override fun systemCertificates(): StringIterator {
@@ -135,3 +182,4 @@ private fun InterfaceAddress.toPrefix(): String {
         "${address.hostAddress}/$networkPrefixLength"
     }
 }
+

@@ -4,22 +4,22 @@
 |------|----------|
 | Статус | Released (v1.6.1) |
 | Дата | 2026-05-07 |
-| Связанные spec'ы | [`014 dns settings`](../features/014%20dns%20settings/spec.md), [`033 preset bundles`](../features/033%20preset%20bundles/spec.md), [`041 dns rules refactor`](../features/041%20dns%20rules%20refactor/spec.md), [`042 dns servers merge`](./042-dns-servers-merge-and-cleanup.md) — заменяется этой задачей |
+| Связанные spec'ы | [`014 dns settings`](../features/014%20dns%20settings/spec.md), [`033 preset bundles`](../features/033%20preset%20bundles/spec.md), [`tasks/061-dns-rules-refactor`](061-dns-rules-refactor/spec.md) (был §041), [`042 dns servers merge`](./042-dns-servers-merge-and-cleanup.md) — заменяется этой задачей |
 | Затронутые файлы | `app/lib/services/settings_storage.dart`, `app/lib/services/builder/post_steps.dart`, `app/lib/services/builder/build_config.dart`, `app/lib/screens/dns_settings_screen.dart`, `app/lib/services/debug/handlers/settings.dart`, тесты |
 
 ## Цель
 
-Привести `dns_options.servers` storage schema к **точно той же** kind-discriminated архитектуре что и `dns_options.rules` (§041). Это убирает три класса багов разом (см. live-наблюдения в [§042](./042-dns-servers-merge-and-cleanup.md)):
+Привести `dns_options.servers` storage schema к **точно той же** kind-discriminated архитектуре что и `dns_options.rules` (§061 dns-rules-refactor, бывший feature §041). Это убирает три класса багов разом (см. live-наблюдения в [§042](./042-dns-servers-merge-and-cleanup.md)):
 
 1. **Stale fields** — storage хранил полный snapshot template-сервера; при template-обновлении (rename, body change) shape становился неактуальным, а в config попадал устаревший body. Видно после §039 (`direct_dns_resolver` → `google_udp`): old user-saved snapshot ссылался на удалённый tag.
 2. **Override-detection через shape comparison** — order-sensitive `jsonEncode`, требует strip mutable, проблемы с nested maps. Ненадёжно.
 3. **Длинные badge'и** — «User (overrides template)» / «Preset · Russian domains direct» ломали title-wrap в UI.
 
-§042 пытался полу-решить через 3-tier merge с shape-comparison-based override detection. Это работало частично, но архитектурно не симметрично с §041 DNS rules. Заменяем на refs-by-kind.
+§042 пытался полу-решить через 3-tier merge с shape-comparison-based override detection. Это работало частично, но архитектурно не симметрично с §061 DNS rules (бывший feature §041). Заменяем на refs-by-kind.
 
 ## Schema (storage)
 
-Симметрично `dns_options.rules` (§041):
+Симметрично `dns_options.rules` (§061, бывший feature §041):
 
 ```json
 "dns_options": {
@@ -48,7 +48,7 @@
 
 ### Render (UI / dropdown'ы)
 
-Resolver `resolveDnsServersList` (по образцу `resolveDnsRulesList` из §041):
+Resolver `resolveDnsServersList` (по образцу `resolveDnsRulesList` из §061, бывший feature §041):
 
 ```
 walk storage:

@@ -199,6 +199,28 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// §049 F15: разрешать app'ам обходить tun (`Builder.allowBypass()`).
+  /// Default false (strict tunnel). Применяется при следующем старте VPN —
+  /// после toggle нужен reload.
+  Future<bool> setAllowBypass(bool enabled) async {
+    final ok = await _invoke<bool>(
+      _Methods.setAllowBypass,
+      args: {'enabled': enabled},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  Future<bool> getAllowBypass() async {
+    final ok = await _invoke<bool>(
+      _Methods.getAllowBypass,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
   /// §043 follow-up: завершает Android-процесс целиком (`finishAffinity` +
   /// `killProcess`). Используется кнопкой «Quit & reopen app» рядом с toggle
   /// «Forward sing-box logs» — там флаг `debug` в `Libbox.setup` читается
@@ -489,6 +511,10 @@ class _Methods {
   static const setCoreLogsEnabled = 'setCoreLogsEnabled';
   static const getCoreLogsEnabled = 'getCoreLogsEnabled';
   static const quitApp = 'quitApp';
+
+  // §049 F15 — VPN bypass opt-in
+  static const setAllowBypass = 'setAllowBypass';
+  static const getAllowBypass = 'getAllowBypass';
 
   // App enumeration
   static const getInstalledApps = 'getInstalledApps';

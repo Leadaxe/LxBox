@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../models/background_mode.dart';
 import '../models/server_list.dart';
+import '../vpn/box_vpn_client.dart';
 import 'settings_storage.dart';
 
 /// Backup categories — параллельно с UI-toggle'ами в [BackupScreen].
@@ -13,102 +15,153 @@ enum BackupCategory {
   routing,
   appSettings,
   debugConfig,
+  vpnSettings,
 }
 
-/// Wire-format `version` для текущей schema.
-/// Изменяется при breaking changes в формате — старые backup'ы reject'ятся.
-const int kBackupSchemaVersion = 1;
+/// Top-level storage keys относящиеся к Routing категории.
+const _topLevelRoutingKeys = {
+  'custom_rules',
+  'route_final',
+  'rule_outbounds',
+  'enabled_rules',
+  'enabled_groups',
+  'tun_apps',
+  'excluded_nodes',
+  'dns_options',
+};
 
-/// Sentinel-keys которые относятся к [BackupCategory.routing].
-/// Всё что в `vars` под этими ключами — экспортится только при routing=true.
-const _routingKeys = {'custom_rules', 'route_final'};
+/// Top-level storage keys относящиеся к App settings (служебные timestamps,
+/// миграционные флаги, ping options).
+const _topLevelAppKeys = {
+  'ping_options',
+  'last_global_update',
+  'presets_migrated',
+};
 
-/// Sentinel-keys которые относятся к [BackupCategory.debugConfig].
+/// Sub-keys внутри `vars` относящиеся к Debug API category.
 /// Sensitive: token даёт полный доступ к app'у через HTTP API.
-const _debugKeys = {'debug_enabled', 'debug_token', 'debug_port'};
+const _varDebugKeys = {'debug_enabled', 'debug_token', 'debug_port'};
 
-/// Контейнер распарсенного backup-файла. Поля — по категориям; null означает
-/// «эта категория отсутствует в файле» (юзер при экспорте снял галочку).
+/// Container распарсенного backup-файла. `storage` — содержимое
+/// `lxbox_settings.json` целиком; `vpnSettings` — native-side VPN toggles.
 class BackupContents {
   const BackupContents({
-    required this.schemaVersion,
     this.createdAt,
     this.sourceAppVersion,
-    this.serverLists,
-    this.routingVars,
-    this.appVars,
-    this.debugVars,
+    this.storage,
+    this.vpnSettings,
   });
 
-  final int schemaVersion;
   final DateTime? createdAt;
   final String? sourceAppVersion;
 
-  /// `category: serverLists`. null если в файле нет server_lists.
-  final List<ServerList>? serverLists;
+  /// Содержимое `lxbox_settings.json` (top-level keys: vars, server_lists,
+  /// custom_rules, tun_apps, и т.д.). null если в файле нет блока `storage`.
+  final Map<String, dynamic>? storage;
 
-  /// `category: routing`. Map с ключами из [_routingKeys].
-  final Map<String, dynamic>? routingVars;
+  /// Native-side VPN system toggles. null если в файле нет блока
+  /// `vpn_settings`.
+  final Map<String, dynamic>? vpnSettings;
 
-  /// `category: appSettings`. Map с остальными vars (не routing, не debug).
-  final Map<String, dynamic>? appVars;
-
-  /// `category: debugConfig`. Map с ключами из [_debugKeys].
-  final Map<String, dynamic>? debugVars;
-
-  /// Какие категории присутствуют в файле — для UI checkbox state'а
-  /// (показываем только то, что есть).
+  /// Какие категории присутствуют в файле — для UI checkbox state'а.
   Set<BackupCategory> availableCategories() {
+    final s = storage;
     return {
-      if (serverLists != null && serverLists!.isNotEmpty)
+      if (s != null && s['server_lists'] is List &&
+          (s['server_lists'] as List).isNotEmpty)
         BackupCategory.serverLists,
-      if (routingVars != null && routingVars!.isNotEmpty)
-        BackupCategory.routing,
-      if (appVars != null && appVars!.isNotEmpty) BackupCategory.appSettings,
-      if (debugVars != null && debugVars!.isNotEmpty) BackupCategory.debugConfig,
+      if (s != null && _hasAnyRouting(s)) BackupCategory.routing,
+      if (s != null && _hasAnyApp(s)) BackupCategory.appSettings,
+      if (s != null && _hasAnyDebug(s)) BackupCategory.debugConfig,
+      if (vpnSettings != null && vpnSettings!.isNotEmpty)
+        BackupCategory.vpnSettings,
     };
   }
 
-  /// Counts для UI preview: сколько server_lists, routing-rules и т.д.
+  /// Counts для UI preview.
   int countFor(BackupCategory cat) {
+    final s = storage ?? const <String, dynamic>{};
     return switch (cat) {
-      BackupCategory.serverLists => serverLists?.length ?? 0,
-      BackupCategory.routing => () {
-          final rules = routingVars?['custom_rules'];
-          if (rules is List) return rules.length;
-          if (rules is String) {
-            try {
-              return (jsonDecode(rules) as List).length;
-            } catch (_) {
-              return 0;
-            }
-          }
-          return 0;
+      BackupCategory.serverLists => () {
+          final v = s['server_lists'];
+          return v is List ? v.length : 0;
         }(),
-      BackupCategory.appSettings => appVars?.length ?? 0,
-      BackupCategory.debugConfig => debugVars?.length ?? 0,
+      BackupCategory.routing => () {
+          final rules = s['custom_rules'];
+          return rules is List ? rules.length : 0;
+        }(),
+      BackupCategory.appSettings => () {
+          final vars = s['vars'];
+          if (vars is! Map) return 0;
+          return vars.keys
+              .where((k) => !_varDebugKeys.contains(k.toString()))
+              .length;
+        }(),
+      BackupCategory.debugConfig => () {
+          final vars = s['vars'];
+          if (vars is! Map) return 0;
+          return vars.keys
+              .where((k) => _varDebugKeys.contains(k.toString()))
+              .length;
+        }(),
+      BackupCategory.vpnSettings => vpnSettings?.length ?? 0,
     };
   }
 
-  /// Опциональные «полезные при preview» детали — например, текущий final
-  /// outbound, чтобы юзер видел «Routing → final: vpn-1».
-  String? get routingFinalOutbound => routingVars?['route_final'] as String?;
+  /// Опциональные «полезные при preview» детали — текущий final outbound.
+  String? get routingFinalOutbound => storage?['route_final'] as String?;
 
-  /// Из serverLists — сколько типа SubscriptionServers и сколько UserServer
-  /// (для UI-надписи «3 subs, 1 custom»). ServerList sealed: `type` поле
-  /// дискриминатор — `'subscription'` vs `'user'`.
+  /// Из server_lists — сколько subscriptions vs custom (для UI-надписи).
   ({int subs, int custom}) splitServerLists() {
-    final list = serverLists ?? const [];
+    final raw = storage?['server_lists'];
+    if (raw is! List) return (subs: 0, custom: 0);
     var subs = 0;
     var custom = 0;
-    for (final l in list) {
-      if (l is SubscriptionServers) {
-        subs++;
-      } else {
+    for (final m in raw.whereType<Map<String, dynamic>>()) {
+      try {
+        final list = ServerList.fromJson(m);
+        if (list is SubscriptionServers) {
+          subs++;
+        } else {
+          custom++;
+        }
+      } catch (_) {
         custom++;
       }
     }
     return (subs: subs, custom: custom);
+  }
+
+  static bool _hasAnyRouting(Map<String, dynamic> s) {
+    for (final k in _topLevelRoutingKeys) {
+      final v = s[k];
+      if (v is List && v.isNotEmpty) return true;
+      if (v is Map && v.isNotEmpty) return true;
+      if (v is String && v.isNotEmpty) return true;
+    }
+    return false;
+  }
+
+  static bool _hasAnyApp(Map<String, dynamic> s) {
+    final vars = s['vars'];
+    if (vars is Map) {
+      for (final k in vars.keys) {
+        if (!_varDebugKeys.contains(k.toString())) return true;
+      }
+    }
+    for (final k in _topLevelAppKeys) {
+      if (s[k] != null) return true;
+    }
+    return false;
+  }
+
+  static bool _hasAnyDebug(Map<String, dynamic> s) {
+    final vars = s['vars'];
+    if (vars is! Map) return false;
+    for (final k in vars.keys) {
+      if (_varDebugKeys.contains(k.toString())) return true;
+    }
+    return false;
   }
 }
 
@@ -116,16 +169,18 @@ class BackupContents {
 class BackupApplyResult {
   const BackupApplyResult({
     this.serverListsApplied = 0,
-    this.routingVarsApplied = 0,
-    this.appVarsApplied = 0,
-    this.debugVarsApplied = 0,
+    this.routingApplied = 0,
+    this.appSettingsApplied = 0,
+    this.debugConfigApplied = 0,
+    this.vpnSettingsApplied = 0,
     this.errors = const [],
   });
 
   final int serverListsApplied;
-  final int routingVarsApplied;
-  final int appVarsApplied;
-  final int debugVarsApplied;
+  final int routingApplied;
+  final int appSettingsApplied;
+  final int debugConfigApplied;
+  final int vpnSettingsApplied;
   final List<String> errors;
 
   bool get hasErrors => errors.isNotEmpty;
@@ -134,24 +189,36 @@ class BackupApplyResult {
 /// Service-слой над export/import-логикой. UI ([BackupScreen]) использует
 /// только это API; SettingsStorage и BoxVpnClient напрямую не дёргает.
 ///
-/// Wire-format **симметричен** существующему HTTP `/backup/*` (см.
-/// `lib/services/debug/handlers/backup.dart`): файл из UI можно скормить
-/// в `POST /backup/import` через curl, и наоборот.
+/// Wire-format:
+/// ```json
+/// {
+///   "app": "lxbox",
+///   "kind": "backup",
+///   "created_at": "...",
+///   "source_app_version": "...",
+///   "storage": { ...lxbox_settings.json целиком... },
+///   "vpn_settings": { auto_start, keep_on_exit, background_mode,
+///                     core_logs_enabled, allow_bypass }
+/// }
+/// ```
+///
+/// Симметрично с HTTP `/backup/*` (см.
+/// `lib/services/debug/handlers/backup.dart`).
 class BackupService {
-  const BackupService();
+  const BackupService({BoxVpnClient? vpn}) : _vpn = vpn;
+
+  final BoxVpnClient? _vpn;
+
+  BoxVpnClient get _client => _vpn ?? BoxVpnClient();
 
   /// Build JSON-string для export'а согласно [include]'у.
-  /// Возвращает pretty-printed JSON (для читаемости — backup'ы редко large).
   Future<String> buildExport({required Set<BackupCategory> include}) async {
     final out = <String, dynamic>{
       'app': 'lxbox',
       'kind': 'backup',
-      'version': kBackupSchemaVersion,
       'created_at': DateTime.now().toUtc().toIso8601String(),
     };
 
-    // App version — для debugging при mismatch (может помочь юзеру понять
-    // что backup со старой/новой версии).
     try {
       final info = await PackageInfo.fromPlatform();
       out['source_app_version'] = '${info.version}+${info.buildNumber}';
@@ -159,25 +226,20 @@ class BackupService {
       // PackageInfo может упасть в test environment — graceful skip.
     }
 
-    if (include.contains(BackupCategory.serverLists)) {
-      final lists = await SettingsStorage.getServerLists();
-      out['server_lists'] = lists.map((l) => l.toJson()).toList();
+    final raw = await SettingsStorage.exportRaw();
+    final filtered = filterStorageForExport(raw, include: include);
+    if (filtered.isNotEmpty) {
+      out['storage'] = filtered;
     }
 
-    final allVars = await SettingsStorage.getAllVars();
-    final filteredVars = _filterVars(
-      allVars,
-      include: include,
-    );
-    if (filteredVars.isNotEmpty) {
-      out['vars'] = filteredVars;
+    if (include.contains(BackupCategory.vpnSettings)) {
+      out['vpn_settings'] = await _readVpnSettings();
     }
 
     return const JsonEncoder.withIndent('  ').convert(out);
   }
 
-  /// Parse + validate import JSON. Throws [FormatException] на invalid format,
-  /// [BackupVersionException] на schema-mismatch.
+  /// Parse + validate import JSON. Throws [FormatException] на invalid format.
   Future<BackupContents> parseImport(String raw) async {
     final dynamic decoded;
     try {
@@ -198,13 +260,10 @@ class BackupService {
           'Not a LxBox backup file (missing or invalid app/kind markers).');
     }
 
-    final ver = decoded['version'];
-    final schemaVersion = ver is int ? ver : (ver is num ? ver.toInt() : -1);
-    if (schemaVersion != kBackupSchemaVersion) {
-      throw BackupVersionException(
-        fileVersion: schemaVersion,
-        appVersion: kBackupSchemaVersion,
-      );
+    final storage = decoded['storage'];
+    if (storage is! Map<String, dynamic>) {
+      throw const FormatException(
+          'Unsupported backup format. Re-export from a recent app version.');
     }
 
     DateTime? createdAt;
@@ -213,150 +272,145 @@ class BackupService {
       createdAt = DateTime.tryParse(createdRaw);
     }
 
-    // Server lists
-    List<ServerList>? serverLists;
-    final rawLists = decoded['server_lists'];
-    if (rawLists is List) {
-      serverLists = rawLists
-          .whereType<Map<String, dynamic>>()
-          .map(ServerList.fromJson)
-          .toList();
-    }
-
-    // Vars — расщепляем на 3 категории.
-    Map<String, dynamic>? routingVars;
-    Map<String, dynamic>? appVars;
-    Map<String, dynamic>? debugVars;
-    final rawVars = decoded['vars'];
-    if (rawVars is Map) {
-      final routing = <String, dynamic>{};
-      final appS = <String, dynamic>{};
-      final debug = <String, dynamic>{};
-      for (final entry in rawVars.entries) {
-        final key = entry.key.toString();
-        final v = entry.value;
-        if (_routingKeys.contains(key)) {
-          routing[key] = v;
-        } else if (_debugKeys.contains(key)) {
-          debug[key] = v;
-        } else {
-          appS[key] = v;
-        }
-      }
-      if (routing.isNotEmpty) routingVars = routing;
-      if (appS.isNotEmpty) appVars = appS;
-      if (debug.isNotEmpty) debugVars = debug;
+    Map<String, dynamic>? vpn;
+    final rawVpn = decoded['vpn_settings'];
+    if (rawVpn is Map<String, dynamic>) {
+      vpn = Map<String, dynamic>.from(rawVpn);
     }
 
     return BackupContents(
-      schemaVersion: schemaVersion,
       createdAt: createdAt,
       sourceAppVersion: decoded['source_app_version']?.toString(),
-      serverLists: serverLists,
-      routingVars: routingVars,
-      appVars: appVars,
-      debugVars: debugVars,
+      storage: storage,
+      vpnSettings: vpn,
     );
   }
 
   /// Apply import согласно [include] (юзер мог снять галочки в preview-dialog'е).
-  /// `merge=true` — добавить к существующим (vars upsert, server_lists append-by-id);
-  /// `merge=false` — replace existing полностью в указанных категориях.
+  /// `merge=true` — top-level merge (vars upsert, server_lists append-by-id);
+  /// `merge=false` — replace (overwrite целиком в указанных категориях).
   Future<BackupApplyResult> applyImport(
     BackupContents contents, {
     required bool merge,
     required Set<BackupCategory> include,
   }) async {
     final errors = <String>[];
-    var serverListsApplied = 0;
-    var routingApplied = 0;
-    var appApplied = 0;
-    var debugApplied = 0;
+    var serverLists = 0;
+    var routing = 0;
+    var appS = 0;
+    var debug = 0;
+    var vpn = 0;
 
-    // Server lists
-    if (include.contains(BackupCategory.serverLists) &&
-        contents.serverLists != null) {
-      try {
-        if (merge) {
-          final existing = await SettingsStorage.getServerLists();
-          final existingIds = existing.map((e) => e.id).toSet();
-          for (final p in contents.serverLists!) {
-            if (!existingIds.contains(p.id)) {
-              existing.add(p);
-              serverListsApplied++;
+    final raw = contents.storage;
+    if (raw != null) {
+      final filtered = _filterStorageForImport(raw, include: include);
+
+      // server_lists merge mode handled in-Map (append-by-id).
+      if (merge && include.contains(BackupCategory.serverLists)) {
+        final incoming = filtered['server_lists'];
+        if (incoming is List) {
+          try {
+            final existing = await SettingsStorage.getServerLists();
+            final ids = existing.map((e) => e.id).toSet();
+            for (final m in incoming.whereType<Map<String, dynamic>>()) {
+              try {
+                final p = ServerList.fromJson(m);
+                if (!ids.contains(p.id)) {
+                  existing.add(p);
+                  serverLists++;
+                }
+              } catch (e) {
+                errors.add('Server list parse: $e');
+              }
             }
+            await SettingsStorage.saveServerLists(existing);
+          } catch (e) {
+            errors.add('Server lists: $e');
           }
-          await SettingsStorage.saveServerLists(existing);
-        } else {
-          await SettingsStorage.saveServerLists(contents.serverLists!);
-          serverListsApplied = contents.serverLists!.length;
+          filtered.remove('server_lists');
         }
-      } catch (e) {
-        errors.add('Server lists: $e');
-      }
-    }
-
-    // Vars — поочерёдно по категориям. Каждая категория checked independently.
-    final varsToApply = <String, dynamic>{};
-    final varsToWipe = <String>{};
-
-    if (include.contains(BackupCategory.routing) && contents.routingVars != null) {
-      varsToApply.addAll(contents.routingVars!);
-      if (!merge) varsToWipe.addAll(_routingKeys);
-      routingApplied = contents.routingVars!.length;
-    }
-    if (include.contains(BackupCategory.appSettings) && contents.appVars != null) {
-      varsToApply.addAll(contents.appVars!);
-      if (!merge) {
-        // Replace mode для App settings: стираем все vars, не относящиеся к
-        // routing/debug (т.е. категория "rest"). Делается через get-all + filter.
-        final all = await SettingsStorage.getAllVars();
-        for (final k in all.keys) {
-          if (!_routingKeys.contains(k) && !_debugKeys.contains(k)) {
-            varsToWipe.add(k);
-          }
+      } else if (include.contains(BackupCategory.serverLists)) {
+        final incoming = filtered['server_lists'];
+        if (incoming is List) {
+          serverLists = incoming.length;
         }
       }
-      appApplied = contents.appVars!.length;
-    }
-    if (include.contains(BackupCategory.debugConfig) &&
-        contents.debugVars != null) {
-      varsToApply.addAll(contents.debugVars!);
-      if (!merge) varsToWipe.addAll(_debugKeys);
-      debugApplied = contents.debugVars!.length;
+
+      try {
+        await SettingsStorage.replaceRaw(filtered, merge: merge);
+      } catch (e) {
+        errors.add('Storage: $e');
+      }
+
+      routing = contents.countFor(BackupCategory.routing);
+      appS = contents.countFor(BackupCategory.appSettings);
+      debug = contents.countFor(BackupCategory.debugConfig);
+      if (!include.contains(BackupCategory.routing)) routing = 0;
+      if (!include.contains(BackupCategory.appSettings)) appS = 0;
+      if (!include.contains(BackupCategory.debugConfig)) debug = 0;
     }
 
-    // Wipe (для replace mode) перед применением новых.
-    for (final key in varsToWipe) {
-      try {
-        await SettingsStorage.removeVar(key);
-      } catch (e) {
-        errors.add('Wipe $key: $e');
-      }
-    }
-
-    // Применяем.
-    for (final entry in varsToApply.entries) {
-      final v = entry.value;
-      if (v == null) continue;
-      try {
-        await SettingsStorage.setVar(entry.key, v.toString());
-      } catch (e) {
-        errors.add('${entry.key}: $e');
-      }
+    if (include.contains(BackupCategory.vpnSettings) &&
+        contents.vpnSettings != null) {
+      vpn = await _applyVpnSettings(contents.vpnSettings!, errors);
     }
 
     return BackupApplyResult(
-      serverListsApplied: serverListsApplied,
-      routingVarsApplied: routingApplied,
-      appVarsApplied: appApplied,
-      debugVarsApplied: debugApplied,
+      serverListsApplied: serverLists,
+      routingApplied: routing,
+      appSettingsApplied: appS,
+      debugConfigApplied: debug,
+      vpnSettingsApplied: vpn,
       errors: errors,
     );
   }
 
+  Future<Map<String, dynamic>> _readVpnSettings() async {
+    final c = _client;
+    final mode = await c.getBackgroundMode();
+    return {
+      'auto_start': await c.getAutoStart(),
+      'keep_on_exit': await c.getKeepOnExit(),
+      'background_mode': mode.wireValue,
+      'core_logs_enabled': await c.getCoreLogsEnabled(),
+      'allow_bypass': await c.getAllowBypass(),
+    };
+  }
+
+  Future<int> _applyVpnSettings(
+      Map<String, dynamic> data, List<String> errors) async {
+    final c = _client;
+    var n = 0;
+    Future<void> tryApply(String key, Future<void> Function() fn) async {
+      if (!data.containsKey(key)) return;
+      try {
+        await fn();
+        n++;
+      } catch (e) {
+        errors.add('vpn_settings.$key: $e');
+      }
+    }
+
+    await tryApply('auto_start', () async {
+      await c.setAutoStart(data['auto_start'] == true);
+    });
+    await tryApply('keep_on_exit', () async {
+      await c.setKeepOnExit(data['keep_on_exit'] == true);
+    });
+    await tryApply('background_mode', () async {
+      final raw = data['background_mode']?.toString();
+      await c.setBackgroundMode(BackgroundMode.fromNative(raw));
+    });
+    await tryApply('core_logs_enabled', () async {
+      await c.setCoreLogsEnabled(data['core_logs_enabled'] == true);
+    });
+    await tryApply('allow_bypass', () async {
+      await c.setAllowBypass(data['allow_bypass'] == true);
+    });
+    return n;
+  }
+
   /// Suggested filename для export'а: `lxbox-backup-v{appver}-{YYYYMMDD-HHMM}.json`.
-  /// Используется UI при сохранении через share_plus.
   static Future<String> suggestedFilename() async {
     String appVersion = '0';
     try {
@@ -370,61 +424,61 @@ class BackupService {
     return 'lxbox-backup-v$appVersion-$date.json';
   }
 
-  /// Filter all vars по category-toggles. Visible for tests.
+  /// Filter storage map по category-toggles. Visible for tests.
   @visibleForTesting
-  static Map<String, dynamic> filterVarsForExport(
-    Map<String, dynamic> all, {
+  static Map<String, dynamic> filterStorageForExport(
+    Map<String, dynamic> raw, {
     required Set<BackupCategory> include,
   }) {
-    return _filterVars(all, include: include);
+    return _filterStorageForImport(raw, include: include);
   }
 
-  static Map<String, dynamic> _filterVars(
-    Map<String, dynamic> all, {
+  /// Раздельный filter для top-level + vars subkeys по category-toggles.
+  /// Used both at export-time (filter what to write) and at import-time
+  /// (filter what to apply if user deselected categories in preview).
+  static Map<String, dynamic> _filterStorageForImport(
+    Map<String, dynamic> raw, {
     required Set<BackupCategory> include,
   }) {
-    final routing = include.contains(BackupCategory.routing);
-    final app = include.contains(BackupCategory.appSettings);
-    final debug = include.contains(BackupCategory.debugConfig);
+    final wantServers = include.contains(BackupCategory.serverLists);
+    final wantRouting = include.contains(BackupCategory.routing);
+    final wantApp = include.contains(BackupCategory.appSettings);
+    final wantDebug = include.contains(BackupCategory.debugConfig);
+
     final out = <String, dynamic>{};
-    for (final entry in all.entries) {
+    for (final entry in raw.entries) {
       final key = entry.key;
-      final inRouting = _routingKeys.contains(key);
-      final inDebug = _debugKeys.contains(key);
-      if (inRouting && routing) {
-        out[key] = entry.value;
-      } else if (inDebug && debug) {
-        out[key] = entry.value;
-      } else if (!inRouting && !inDebug && app) {
-        out[key] = entry.value;
+      final value = entry.value;
+      if (key == 'server_lists') {
+        if (wantServers) out[key] = _deepClone(value);
+      } else if (key == 'vars') {
+        if (value is Map) {
+          final filteredVars = <String, dynamic>{};
+          for (final v in value.entries) {
+            final vk = v.key.toString();
+            final isDebug = _varDebugKeys.contains(vk);
+            if (isDebug && wantDebug) {
+              filteredVars[vk] = _deepClone(v.value);
+            } else if (!isDebug && wantApp) {
+              filteredVars[vk] = _deepClone(v.value);
+            }
+          }
+          if (filteredVars.isNotEmpty) out[key] = filteredVars;
+        }
+      } else if (_topLevelRoutingKeys.contains(key)) {
+        if (wantRouting) out[key] = _deepClone(value);
+      } else if (_topLevelAppKeys.contains(key)) {
+        if (wantApp) out[key] = _deepClone(value);
+      } else {
+        // Unknown / future key — graceful default: bundle into App settings.
+        if (wantApp) out[key] = _deepClone(value);
       }
     }
     return out;
   }
-}
 
-/// Schema-mismatch exception при import'е. UI показывает user-facing message.
-class BackupVersionException implements Exception {
-  const BackupVersionException({
-    required this.fileVersion,
-    required this.appVersion,
-  });
-
-  final int fileVersion;
-  final int appVersion;
-
-  String get userMessage {
-    if (fileVersion < 0) {
-      return 'Backup file is missing version field.';
-    }
-    if (fileVersion > appVersion) {
-      return 'Backup is from a newer LxBox version (file: v$fileVersion, '
-          'this app: v$appVersion). Please update LxBox.';
-    }
-    return 'Backup is from an older LxBox version (file: v$fileVersion, '
-        'this app: v$appVersion). Migration not yet supported.';
+  static Object? _deepClone(Object? v) {
+    if (v == null) return null;
+    return jsonDecode(jsonEncode(v));
   }
-
-  @override
-  String toString() => userMessage;
 }

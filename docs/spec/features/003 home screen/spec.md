@@ -3,8 +3,8 @@
 | Поле | Значение |
 |------|----------|
 | Статус | Реализовано |
-| MVP | [`../002%20mvp%20scope/spec.md`](../002%20mvp%20scope/spec.md) |
-| Стек / bridge | [`../001%20mobile%20stack/spec.md`](../001%20mobile%20stack/spec.md) |
+| MVP | [`../../tasks/056-mvp-scope-historical/spec.md`](../../tasks/056-mvp-scope-historical/spec.md) |
+| Стек / bridge | [`../../tasks/055-mobile-stack-decision/spec.md`](../../tasks/055-mobile-stack-decision/spec.md) |
 
 ## 1. Допущения
 
@@ -353,7 +353,7 @@ Event-driven страховка от platform-level потерь broadcast'ов.
 ## 9. Ошибки и состояния
 
 - Ядро не запущено / API не отвечает — короткие тексты, блокировка операций, требующих API.
-- Ошибки ping/switch — нормализовать (см. [`001`](../001%20mobile%20stack/spec.md)).
+- Ошибки ping/switch — нормализовать (см. [`tasks/055 mobile stack decision`](../../tasks/055-mobile-stack-decision/spec.md)).
 
 ## 10. Границы слоёв
 

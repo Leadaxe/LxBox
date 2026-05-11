@@ -10,6 +10,221 @@
 
 ---
 
+## [1.8.0] — 2026-05-11
+
+«Backup overhaul + routing order fix» release. Главное — **§063/§040 backup format переписан** под полный snapshot (старый формат терял `custom_rules`, `tun_apps`, `enabled_groups` и т.д.); **§062 — fix custom_rules cross-kind order** (storage order теперь end-to-end управляемый между preset/inline/srs); **§053 — `custom_rule_edit_screen.dart` split** Stage 1+2+3 (2060 → 456 LOC, −77%); plus tooltip on Allow VPN bypass и View tab preview fix для disabled-правил.
+
+**Breaking:** backup-файлы старого формата (`{vars, server_lists}` на корне, `version: 1`) reject'ятся при import. Пере-export после обновления.
+
+### Fixed
+
+- **Custom rule editor — View tab показывал пустой preview для disabled правил** ([view_tab.dart](app/lib/screens/custom_rule_edit/tabs/view_tab.dart), [post_steps.dart](app/lib/services/builder/post_steps.dart)). Юзер открывал editor disabled-правила, переходил на View → видел `{rule_set: [], rules: []}` потому что `applyCustomRules` фильтровал по `cr.enabled`. Семантика «что родит в реальном конфиге» уместна для production pipeline, **но не для editor preview** — юзер открыл editor именно для inspect'а формы. Фикс: добавлен parameter `skipDisabled` на `applyCustomRules` (default `true` для backward-compat; production pipeline `applyAllCustomRules` поведение не меняется). `ViewTab` зовёт с `skipDisabled: false` — preview показывает «что родит при включении» независимо от Switch.
+
+- **§062 — custom_rules order был broken между kind-ами (preset/inline/srs)** ([§062 spec](docs/spec/tasks/062-custom-rules-unified-order.md)). `SettingsStorage.custom_rules` это **один список** с mixed `kind`, и UI/Debug API (`POST /rules/reorder`) предполагали что storage order = order matching в sing-box `route.rules[]`. Builder ломал это: вызывал `applyPresetBundles` (только preset) → `applyCustomRules` (только inline/srs) последовательно, поэтому в финальном config все preset правила оказывались **перед** всеми inline/srs независимо от storage order. Юзер ставил `RU apps inline` между `Private IPs preset` и `Russian domains preset`, но в sing-box config inline всегда уезжал в самый конец. Reorder API «провёртывался вхолостую».
+  - **Фикс** — новый `applyAllCustomRules` обходит rules в одном цикле с dispatch по kind. Per-rule logic вынесена в private `_applyPresetSingle` / `_applyInlineSingle` / `_applySrsSingle`. Старые public `applyPresetBundles` / `applyCustomRules` остались как **shim** через те же private — backward-compat для тестов.
+  - **Cross-preset rule_set dedup** переехал с `mergeFragments` на `RuleSetRegistry.tryRegisterRuleSet` (identical-skip / first-wins warning) — работает естественно при per-rule обходе.
+  - **Verified on device**: storage `[Block Ads, Private IPs, RU apps inline, Russian domains preset, ...]` теперь даёт config `[ads-all, ip_is_private, RU apps, ru-domains, ...]` — порядок 1-к-1 (за вычетом 3 system rules `resolve`/`sniff`/`dns hijack` в голове).
+  - Tests: 614 → 620, +6 в `test/services/builder/apply_all_custom_rules_test.dart` покрывают cross-kind order, mixed kinds, identical-skip + cross-kind, DNS aspect.
+
+### Added
+
+- **Info tooltip на `Allow VPN bypass` toggle** ([settings_screen.dart](app/lib/screens/settings_screen.dart)). Tap-trigger `Tooltip` с `info_outline` icon рядом с заголовком — объясняет: что делает (`ConnectivityManager.bindProcessToNetwork()` bypass), когда полезно (банкинг, captive portal, системные сервисы), что значит off (strict tunnel), что применяется на next VPN connect. Тот же паттерн что в DNS settings (`triggerMode: tap`, 12-сек показ).
+
+### Refactor
+
+- **§053 Stage 2 + Stage 3 — sections + tabs + state controller выделены из `custom_rule_edit_screen.dart`** ([§053 spec](docs/spec/tasks/053-custom-rule-editor-split.md)).
+  - **Stage 2 (v14090)** — 7 секций + 2 shared widgets вынесены в `screens/custom_rule_edit/sections/` и `widgets/`. Sections — dumb `StatelessWidget` с props (controllers + callbacks); `ItemsField` — единственный `StatefulWidget` (подписан на controller через `addListener` для self-rebuild). Editor: 1795 → 1330 LOC.
+  - **Stage 3 (v14100)** — выделен **`CustomRuleEditController extends ChangeNotifier`** ([edit_controller.dart](app/lib/screens/custom_rule_edit/edit_controller.dart)): владеет всеми 8 `TextEditingController`-ами, флагами (`enabled`, `kind`, `outbound`, `ipIsPrivate`), коллекциями (`protocols`, `packages`, `wifiNetworks`, `varsValues`), async state (`srsState`, `boolVarDownloading`, `presetSrsPaths`) + mutator'ами + `snapshot()` / `isDirty()` + pure async (`downloadSrs` / `clearSrsCache` / `onBoolVarToggle`). Раздаётся вниз через `CustomRuleEditScope` (plain `InheritedNotifier` — без новых deps). Tabs — отдельные widgets: `tabs/params_tab.dart` (inline/srs ветка), `tabs/preset_params_tab.dart` (preset §033 + bool-toggle §045 download), `tabs/view_tab.dart` (storage shape + sing-box preview, наследует `presetSrsPaths` из controller). Editor scaffold: 1330 → 456 LOC (−65%; от исходных 2060 — −77%). Save-icon выделен в `_SaveIconButton` через `AnimatedBuilder` чтобы dirty-rebuild не дёргал весь AppBar.
+  - `widgets/wifi_entry.dart`, `widgets/wifi_saved_picker_sheet.dart`, `widgets/wifi_manual_add_dialog.dart` — extracted в Stage 1 (v14080); `screens/custom_rule_edit/wifi_zip.dart` — Stage 3 (top-level zip/unzip helpers вместо file-private). На screen State остались только UI-actions требующие BuildContext: save/back/delete dialog'и, cloud-menu, picker-вызовы, snackbar'ы. Save flow unchanged — `snapshot().withName(finalName)` тот же. **Тесты: 620 pass; analyzer clean.**
+
+### Changed
+
+- **Backup format переписан под полный snapshot — single-format, no legacy support** ([§040 spec](docs/spec/features/040%20backup%20restore%20ui/spec.md), [backup_service.dart](app/lib/services/backup_service.dart), [debug/handlers/backup.dart](app/lib/services/debug/handlers/backup.dart), [settings_storage.dart](app/lib/services/settings_storage.dart)). Старый формат `{vars, server_lists}` на корне **не сохранял большую часть пользовательских данных** — `custom_rules`, `tun_apps`, `enabled_groups`, `enabled_rules`, `route_final`, `rule_outbounds`, `dns_options` живут как top-level ключи `lxbox_settings.json`, а export'ил только `data['vars']`. Inline rule_set'ы вида «Ru Apps» (57 пакетов через `CustomRule.inline`) **исчезали при restore**.
+  - Новый wire-format: `{app, kind, created_at, source_app_version, storage: <lxbox_settings.json целиком>, vpn_settings: {auto_start, keep_on_exit, background_mode, core_logs_enabled, allow_bypass}}`. `version` поле убрано — single-format, файлы старого образца reject'ятся с message «Unsupported backup format. Re-export from a recent app version.»
+  - **`storage` блок** = deep-clone всего `lxbox_settings.json` через новый `SettingsStorage.exportRaw()`. Restore — через `SettingsStorage.replaceRaw(map, merge: bool)`: при `merge=false` overwrite целиком, при `merge=true` top-level merge с recursive vars upsert.
+  - **`vpn_settings` блок** — отдельный native-side state из `boxvpn_boot` SharedPreferences (BootReceiver читает at boot-time когда Flutter ещё не запущен; не перенесён в `lxbox_settings.json` ради simplicity). 5 toggles read через `BoxVpnClient` getters / write через сеттеры.
+  - **Категории UI — 5** (было 4): Server lists, Routing, App settings, **VPN system toggles** (новая), Debug API. Filter работает на уровне keys в `storage` map (а не split на vars-сегменты). Добавление новой top-level настройки в storage → автоматически в backup, без правок allowlist'ов.
+  - Debug API `/backup/export|import` синхронизирован с UI — symmetric round-trip.
+  - **Тест round-trip** ([backup_service_test.dart](app/test/services/backup_service_test.dart), 13 cases): export (все категории) → wipe → import → diff(restored, original) == 0; selective categories, merge vs replace, legacy reject.
+
+### Docs
+
+- **§054 — spec reorg: features vs tasks classification audit** ([§054 spec](docs/spec/tasks/054-spec-reorg-features-vs-tasks.md)). `docs/spec/features/` теперь содержит **только живые** продуктовые / архитектурные концепции. Семь демотированных в `docs/spec/tasks/`: ~~001~~ mobile stack → [`055`](docs/spec/tasks/055-mobile-stack-decision/spec.md) (historical architectural decision), ~~002~~ MVP scope → [`056`](docs/spec/tasks/056-mvp-scope-historical/spec.md) (historical milestone), ~~004x~~ subscription parser → [`057`](docs/spec/tasks/057-subscription-parser-v1-superseded/spec.md) (superseded by §026), ~~005x~~ config generator → [`058`](docs/spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) (superseded by §026), ~~013~~ routing → [`059`](docs/spec/tasks/059-routing-v1-superseded/spec.md) (superseded by §030), ~~039~~ libbox 1.13 migration → [`060`](docs/spec/tasks/060-libbox-1-13-migration/spec.md) (one-shot, Done), ~~041~~ DNS rules refactor → [`061`](docs/spec/tasks/061-dns-rules-refactor/spec.md) (live spec — §014). Освобождённые номера (001/002/004/005/013/039/041) **не переиспользуются**. Все cross-refs обновлены в `docs/**/*.md`, `CHANGELOG.md`, `app/lib/**/*.dart`, `app/test/**/*.dart`; grep на retired numbers — 0 hits; `flutter analyze` — 0 errors.
+
+- **`docs/ARCHITECTURE.md` Feature Specs map синхронизирован с реоргом** + **`CHANGELOG.md` chronological order** ([commit `24558a5`](https://github.com/Leadaxe/LxBox/commit/24558a5)). В ARCHITECTURE убраны 7 демотированных из live-таблицы, добавлена явная "Демотированные через §054" секция с маппингом старый→новый. В CHANGELOG: блок `[1.2.0]` ошибочно стоял между `[1.4.0]` и `[1.3.1]` — переставлен в правильный newest-first порядок.
+
+- **§047 — Public Intent API spec расширен** ([§047 spec](docs/spec/features/047%20public%20intent%20api/spec.md)). Outgoing events (broadcast intents от LxBox в эфир: `VPN_STATE_CHANGED`, `CONFIG_RELOAD`, `RULE_FIRED` опционально) + 2 incoming actions (`SET_RULE_ENABLED`, `SWITCH_PRESET_GROUP`) + symmetric input/output pattern. Status остаётся **Draft** — не имплементировано.
+
+---
+
+## [1.7.3] — 2026-05-10
+
+«UX rework + perf» release. Главное — **§052 VPN Settings reorganisation** (System/Core tabs), **§051 Phase 2-3 wifi rules editor + auto-record history**, **F22 part 2 logging pipeline production-grade**, **CoreLogsHintBanner** общий widget с deep-link на Diagnostics, и Live tab tap-to-filter через row identifiers.
+
+### Changed
+
+- **§052 — VPN Settings reorganisation: System / Core tabs + reshuffle** ([§052 spec](docs/spec/tasks/052-vpn-settings-system-service-tabs.md)). Drawer → VPN Settings теперь 2 tab'а с чёткой семантикой:
+  - **System** — Android-side VPN controls через `VpnService.Builder` API. Сейчас: `Allow VPN bypass` (§049 F15), `Keep VPN on exit`, `Tunnel sleep mode` (`BackgroundMode.never|lazy|always`).
+  - **Core** — sing-box engine vars (`chapter: 'core'` в template — `mtu` / `log_level` / `dns_final` / …). Routing- и DNS-специфичные vars (chapter: routing/dns) живут на своих экранах.
+  - **App Settings → Background tab удалён** (TabBar 3→2: General + Diagnostics). `Keep on exit` + `Tunnel sleep mode` переехали в VPN Settings → System; permissions block (Battery / Notifications / Location / NearbyWifi / App info) — в App Settings → Diagnostics в interactive виде (как был в Background, целиком копируется блок).
+  - **Tunnel apps mode + packages — остаётся в Routing → Tunnel apps** (4-я вкладка). Не переезжает: юзеру привычно искать «куда роутится app» в Routing.
+  - Bonus fix: `DebugScreen → ⋮ → Diagnostics settings` использовал `AppSettingsScreen(initialTab: 2)`. После удаления Background tab indices сместились (Diagnostics: 2→1), `clamp(0, 1)` молча клипало 2 → 1, но семантика была сломана. Поправлен `2 → 1`.
+- **Deep-links between dependent tabs and settings**. Tab'ы которые depend на глобальном toggle (core_logs_enabled / VPN settings) теперь умеют open соответствующий screen с правильно открытым tab'ом. Общий `initialTab: int` parameter pattern на `AppSettingsScreen` / `SettingsScreen` (`DefaultTabController.initialIndex` + clamp). Реализация:
+  - **Statistics → Live + Per-app → contextual `CoreLogsHintBanner`** ([core_logs_hint_banner.dart](app/lib/widgets/core_logs_hint_banner.dart), [live_events_tab.dart](app/lib/screens/live_events_tab.dart), [per_app_trace_tab.dart](app/lib/screens/per_app_trace_tab.dart)). Inline banner widget показывается **только когда `core_logs_enabled=false`**; self-hides при включении (auto-refresh на `AppLifecycleState.resumed`). Split hit-zone: левая (i + «DNS / router events off») → tooltip с объяснением что без core logs DNS resolves пропадают и process attribution ухудшается; правая («turn on Forward sing-box logs» + chevron) → deep-link в App Settings → Diagnostics с auto-scroll и подсветкой нужного toggle'а. Это лучше чем PopupMenu (⋮) overflow item: явно виден когда нужен и pulls user's attention.
+  - **Routing → Tunnel apps → ⋮ → "VPN settings (Core)"** ([tun_apps_tab.dart](app/lib/screens/tun_apps_tab.dart)) → `SettingsScreen(initialTab: 1)`. Юзер настраивает Tunnel apps mode и хочет рядом mtu / log_level / dns_final — overflow deep-link уместен (state-independent, не «toggle off-warning»).
+  - **Drawer → Debug → ⋮ → "Diagnostics settings"** ([debug_screen.dart](app/lib/screens/debug_screen.dart)) → `AppSettingsScreen(initialTab: 1)` — fast-path на «Forward sing-box logs» toggle + Quit&reopen.
+
+### Added
+
+- **Debug API — `/settings/vpn/*` endpoints** для §052 System toggles ([settings.dart](app/lib/services/debug/handlers/settings.dart), [debug-api-reference.md](docs/api/debug-api-reference.md)). Закрывают gap «UI есть, API нет». Все три — GET / PUT, `body {"enabled": bool}` или `{"mode": "never|lazy|always"}`:
+  - `GET|PUT /settings/vpn/allow_bypass` — `VpnService.Builder.allowBypass()`. Apply at next `establish()` (start или reload VPN).
+  - `GET|PUT /settings/vpn/keep_on_exit` — keep VPN running когда app закрывается. Live-effect не нужен.
+  - `GET|PUT /settings/vpn/background_mode` — foreground-service tunnel sleep mode. Apply at next VPN connect.
+  - `GET /state/vpn` расширен — теперь включает `allow_bypass` + `background_mode` (одним запросом snapshot всех VPN-system флагов).
+- **§051 Phase 2 — Wi-Fi rule editor UI** ([§051 spec](docs/spec/tasks/051-custom-rule-wifi-conditions.md), [custom_rule_edit_screen.dart](app/lib/screens/custom_rule_edit_screen.dart)). Editor `CustomRule` теперь содержит секцию **WI-FI NETWORK** между Protocol и Save:
+  - Chip list `_wifiNetworks: List<_WifiEntry>` — каждая chip = одна сеть `(ssid, bssid?)`. Дедуп при add (composite key).
+  - **Add current** — читает текущий SSID/BSSID через `MainActivity.getCurrentWifiInfo` MethodChannel (defensive try/catch SecurityException + RuntimeException; placeholder BSSID `02:00:00:00:00:00` ловится как `unknown_ssid`). Permission missing → shared `WifiPermissionDialog`. `no_wifi` / `unknown_ssid` → snackbar.
+  - **Pick saved** — bottom sheet с двумя секциями:
+    - **USED IN YOUR RULES** — networks из других custom_rules с указанием rule names.
+    - **HISTORY (last seen)** — `wifi_history` storage entries с relative time. Per-row 🗙 button (right-aligned, explicit hit-area) удаляет одну запись.
+  - **Manual** — dialog с SSID + BSSID inputs (BSSID regex `xx:xx:xx:xx:xx:xx` inline-validated).
+  - **Save flow** — preflight permission check если есть wifi conditions (`BACKGROUND_LOCATION + NEARBY_WIFI_DEVICES`). При missing → shared `WifiPermissionDialog`, save проходит в любом случае (юзер мог нажать «Allow Wi-Fi info» runtime prompt).
+  - **Zip/unzip semantics**: `_zipWifiEntries(chips) → (ssids, bssids)` для модели. Sing-box AND-ит списки независимо (cross-product). `_unzipWifiEntries` обратно при load (best-effort pairing by index).
+- **§051 Phase 3 — Auto-record visited Wi-Fi networks** ([§051 spec Phase 3](docs/spec/tasks/051-custom-rule-wifi-conditions.md), [WifiNetworkObserver.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/WifiNetworkObserver.kt), [wifi_history_listener.dart](app/lib/services/wifi_history_listener.dart)). Opt-in toggle в `Settings → Diagnostics` (default OFF — silent network logging это privacy след). При ON `WifiNetworkObserver` регистрирует `ConnectivityManager.NetworkCallback(TRANSPORT_WIFI)`. Pending tracker записывает в `wifi_history` сети **на которых юзер пробыл ≥ 5 минут** (`STICKINESS_THRESHOLD_MS=300_000`) — отсекает drive-by кафе/магазины. Native → Dart bridge через `MethodChannel "com.leadaxe.lxbox/wifi_history"` event `onWifiSeen`. Pick saved bottom sheet показывает persistent info-banner «Auto-record is off — Open Settings» когда toggle OFF (visible сверху всегда). Existing history НЕ удаляется при OFF (user data). Cap 50, LRU evict по `last_seen`. Phase 4 (`WifiStateCache` для hot-path `readWIFIState`) — deferred до bench `dumpsys binder_calls_stats`, не оптимизируем вслепую.
+- **Debug API — `/wifi_history/*` endpoints** ([wifi_history.dart](app/lib/services/debug/handlers/wifi_history.dart)) для CRUD над `wifi_history` без UI flow:
+  - `GET /wifi_history` → list `[{ssid, bssid, last_seen}]`.
+  - `POST /wifi_history` body `{"ssid":"...","bssid":"..."}` → upsert (BSSID auto lower-cased).
+  - `DELETE /wifi_history` body `{"ssid":"...","bssid":"..."}` → remove specific entry (composite key match; idempotent).
+  - `DELETE /wifi_history/all` → clear all.
+  Same write-path что и UI (`SettingsStorage.addToWifiHistory` / `removeFromWifiHistory` / `clearWifiHistory`).
+
+### Fixed
+
+- **§051 Phase 2 — `wifi_history` not refreshing in Pick saved after row delete** ([settings_storage.dart](app/lib/services/settings_storage.dart)). `getWifiHistory` возвращал `toList(growable: false)`; `removeWhere` в setState callback'е молча кидал `UnsupportedError` на fixed-length list → UI rebuild не триггерился. Storage write проходил (entry удалена), но visible row оставалась до reopen sheet. Fix: `toList()` (growable).
+
+### Refactor
+
+- **§053 Stage 1 — extract pure functions + dialogs из `custom_rule_edit_screen.dart`** ([§053 spec](docs/spec/tasks/053-custom-rule-editor-split.md)). Editor разбух до 2060 LOC после §051. Stage 1 — низкорисковая extract'ция без architecture change:
+  - **Pure functions**: `lib/screens/custom_rule_edit/validators.dart` (isValidDomain / isValidKeyword / isValidCidr / isValidPort / isValidPortRange / isValidUrl / isValidBssid) + `lib/screens/custom_rule_edit/normalizers.dart` (splitRaw / normalizedDomains / normalizedKeywords / normalizedCidrs / normalizedPorts / normalizedPortRanges). Были private методы на State — не тестируемы.
+  - **Public `WifiEntry` model** ([wifi_entry.dart](app/lib/widgets/wifi_entry.dart)) — был private `_WifiEntry`.
+  - **`showWifiSavedPickerSheet`** ([wifi_saved_picker_sheet.dart](app/lib/widgets/wifi_saved_picker_sheet.dart)) — self-contained: грузит other-rules + history + auto-record flag, показывает modal, возвращает `Future<List<WifiEntry>?>`. ~300 LOC inline `showModalBottomSheet` build'а уехали из editor.
+  - **`showWifiManualAddDialog`** ([wifi_manual_add_dialog.dart](app/lib/widgets/wifi_manual_add_dialog.dart)) — same idea для Manual dialog.
+  - **Editor**: 2060 → 1795 LOC (−265). Stage 2 (section widgets) + Stage 3 (state controller + tab split) — отдельные итерации.
+  - **Tests**: +53 unit tests (validators + normalizers); 548 → 601 pass.
+- **§051 closeout — consolidate wifi-read + permission-check** (`commit 20a4a51`). Three call-sites одной и той же defensive read logic (`PlatformInterfaceWrapper.readWIFIState` + `MainActivity.getCurrentWifiInfoMap` + `WifiNetworkObserver.readWifi`) consolidated в `WifiInfoReader` singleton с sealed `Result` type. Four copies permission-check (`if (SDK_INT >= X) checkSelfPermission(...) == GRANTED`) → `PermissionUtils.has(ctx, name, minSdk)` one-liner. Bonus: `_humanLastSeen` proper fallbacks, `WifiHistoryListener` `dispose()` lifecycle, `SettingsStorage` header convention note про growable lists.
+
+### Performance
+
+- **F22 part 2 — sing-box log forwarding pipeline production-grade** ([BoxService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt), [app_log.dart](app/lib/services/app_log.dart), [clash_log_pump.dart](app/lib/services/clash_log_pump.dart)). К drainer-pattern из v1.7.1 добавили back-pressure / yield / batching / O(1) deque / 60Hz throttle. На heavy traffic (100+ строк/сек) toggle «Forward sing-box logs» теперь почти free.
+  - `@Synchronized` снят с `writeDebugMessage` — `LinkedBlockingQueue.offer` thread-safe, mutex только сериализовал producer-thread'ы Go runtime'а.
+  - **Back-pressure cap** `LOG_QUEUE_MAX = 4096`: при slow Dart consumer'е drop newest вместо unbounded growth (counter `coreLogDrops`).
+  - **Drainer yield** — до `DRAIN_BATCH_MAX = 200` строк за один main-looper run, потом re-post если queue не пуст. Длинный burst не блочит main looper > frame'а.
+  - **EventChannel batching** — один `sink.success(List<String>)` за drain вместо per-line JNI marshal. На 200 строк/burst — 1 marshall вместо 200.
+  - **AppLog ring buffer** — `List.insert(0)` (O(n)) → `ListQueue.addFirst` (O(1)). `logBatch()` — N entries за один проход + один `_scheduleNotify`.
+  - **Notify throttle** 16ms (60Hz max) leading-edge — UI не ребилдится с frequency write'ов на busy traffic.
+
+### UX (Statistics — Live tab tap-to-filter)
+
+- **Tap по event row → in-place filter** ([live_events_tab.dart](app/lib/screens/live_events_tab.dart)). Раньше long-press открывал bottom sheet «Open in Per-app session» — юзер не хотел переключения на отдельный tab. Теперь:
+  - Каждое поле строки кликабельное независимо: domain, IP:port, process. Tap → существующий search field заполняется выбранным значением, в-place фильтр.
+  - Comma-list процессов разбит на индивидуальные tappable элементы (для multi-process events).
+  - Повторный tap по тому же ключу — clear (escape hatch без отдельной кнопки).
+- **Removed dead code**: `_handleJumpFromLiveTab` + `StatsScreen.requestPerAppSession` static helper удалены после снятия bottom sheet.
+
+### UX (overflow menus cleanup)
+
+- **Live tab + Per-app trace — 3-dot `Diagnostics settings` overflow удалена**. `CoreLogsHintBanner` (см. Changed выше) покрывает use-case с лучшей discoverability — visible когда нужен, без скрытия за overflow.
+- **Tunnel apps — overflow link исправлен на System tab** ([tun_apps_tab.dart](app/lib/screens/tun_apps_tab.dart)). Раньше `VPN settings (Core)` вёл на `SettingsScreen(initialTab: 1)`. Per-app split-tunneling — это System-level фича (`VpnService.Builder` toggles), не Core (sing-box engine vars). Renamed to `VPN settings (System)`, ведёт на `initialTab: 0`.
+
+---
+
+## [1.7.2] — 2026-05-10
+
+«§050 wifi-state closeout + Live tab fix» release. Главное — **закрыта §050**: F12.3 `readWIFIState` теперь полноценно работает, найден и исправлен real root cause `Unknown reference: 42` crash'а (unhandled `SecurityException` через JNI), плюс добавлены недостающие permissions для Android 13+ и runtime UX. Параллельно — фикс Live tab system-wide stats (раньше показывал 0 events) и UI toggle для §037 config lock.
+
+### Fixed
+
+- **§050 — F12.3 `readWIFIState` real root cause + final fix** ([§050 spec](docs/spec/tasks/050-libbox-debug-build/spec.md), [findings.md](docs/spec/tasks/050-libbox-debug-build/findings.md)). После 9 неудачных attempt'ов в §049 (различные констукторы / pinning / R8-keep-rules — все `Unknown reference: 42` cold-start) истинная причина оказалась проще, чем `Seq` ref-tracker race: **unhandled `SecurityException` propagating через JNI**.
+  - Sing-box (Go) → cgo → `cproxy_PlatformInterface_ReadWIFIState` → Java callback `readWIFIState()` → `WifiManager.connectionInfo` → **`SecurityException`** при отсутствии location permission на API 29+ → exception проходит через JNI границу без handler в cproxy code → `Seq$RefTracker.incRefnum` пытается cleanup → **JNI env corrupted** → `ClassLinker::FindClass` fails → `Runtime::Abort` с misleading `"Unknown reference: 42"` (refnum 42 = follow-up effect, не cause).
+  - **Defensive try/catch** `SecurityException + RuntimeException → return null` в `PlatformInterfaceWrapper.readWIFIState`. Sing-box graceful'но получает null (как было раньше когда метод всегда возвращал null) — как минимум не падает.
+  - **Permission gate** в `BoxService.startSingbox` после `startOrReloadService` (port из reference SagerNet): `cs.needWIFIState() && !permission` → `stopAndAlert("alert:permission_location:...")`. Sing-box не запускается без permission'а если config реально использует `wifi_ssid`/`wifi_bssid` правила — Flutter показывает actionable alert вместо silent crash'а.
+- **§050 — `<unknown ssid>` на Android 13+ (targetSdk≥33)**. Даже после grant'а `ACCESS_FINE_LOCATION` / `ACCESS_BACKGROUND_LOCATION`, `WifiInfo.ssid` возвращал `"<unknown ssid>"` → wifi rules не матчились. Google в API 33 отделил Wi-Fi info от location: для apps с `targetSdk≥33` нужен **отдельный `NEARBY_WIFI_DEVICES`** permission ([Android docs](https://developer.android.com/develop/connectivity/wifi/wifi-permissions)).
+  - Manifest: `<uses-permission NEARBY_WIFI_DEVICES neverForLocation>` (declared as not-for-location → Google Play политика).
+  - `BoxService.startSingbox`: на API 33+ проверяются обе permission (`ACCESS_BACKGROUND_LOCATION` + `NEARBY_WIFI_DEVICES`); alert содержит comma-list missing permissions для UI.
+  - Verified on OnePlus / Android 15 / API 36: после grant'а wifi rule с `wifi_ssid:["lexRouter"], outbound: direct-out` корректно матчится — chrome → api.ipify.org идёт через direct, минуя VPN.
+
+### Added
+
+- **§050 — permission UX flows** ([home_screen.dart](app/lib/screens/home_screen.dart), [url_launcher.dart](app/lib/services/url_launcher.dart), [MainActivity.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt)).
+  - **Notification permission explainer** при cold start: показывает explainer dialog ДО system POST_NOTIFICATIONS prompt'а — юзер понимает зачем VPN'у нужны notifications (foreground service / status indicator).
+  - **Wi-Fi permissions dialog** при запуске VPN с wifi rules: parsит comma-list missing permissions, показывает кнопку `Allow Wi-Fi info` (runtime prompt для NEARBY_WIFI_DEVICES — one tap) и `Open Settings` (для BACKGROUND_LOCATION который нельзя выдать через runtime prompt; идёт через `MANAGE_APP_PERMISSIONS` intent с тремя fallback стратегиями для разных OEM).
+  - **Battery optimization — one-tap prompt**: primary action поменян с `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` (список всех apps) на `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` (системный диалог конкретно про L×Box). Список apps остаётся как fallback для OEM (ColorOS / MIUI / HyperOS) где direct-prompt молча отбрасывается.
+- **§048 — Live tab system-wide events fix**. Раньше при тапе START в Live tab без per-app session показывалось 0 events — `_pollConnections()` имел early-return `if (_active == null) return`, и system-wide recording получал только DNS строки из core logs (TCP/UDP open/close — никогда). Теперь global recording тоже запускает `_startConnectionPoll()`, события через `_emitGlobalStream`. Closed connections тоже эмитятся в global buffer когда recording on. Idle profiler по-прежнему ничего не делает.
+- **§037 — config_locked toggle в Diagnostics tab** ([app_settings_screen.dart](app/lib/screens/app_settings_screen.dart)). UI-эквивалент `PUT /settings/config_locked` Debug API endpoint'а: юзер может pin'нуть текущий sing-box config (например, после debug-API edit'а с экспериментальной фичей) от перезаписи UI-rebuild'ом, и снять lock сам. Auto-unlocks при отключении Debug API (иначе lock остаётся unactionable — toggle спрятан под Debug API блоком).
+
+### Deferred
+
+- **F22 part 2** — back-pressure cap (`LOG_QUEUE_MAX = 4096`) + drainer yield каждые 200 iterations + EventChannel batching (один `sink.success(list)` на batch вместо per-line) + AppLog ring buffer на deque вместо `List.insert(0)` + notifyListeners throttle до 60Hz. Текущий drainer pattern достаточен для production load, но на heavy debug-mode traffic возможно OOM risk при slow Dart consumer'е. Не release-blocker.
+
+---
+
+## [1.7.1] — 2026-05-09
+
+«Stabilization» release. Главное — **§049 sing-box wrapper deep audit + atomic CAS lifecycle fix**: устранена main suspect race condition по `fileDescriptor`, обнаруженная при диагностике §047 (TCP-deterioration после ~8 часов uptime). Параллельно — **§048 inclusive observer** для Per-app trace и **§046 tunnel apps split-tunneling**.
+
+### Fixed
+
+- **§049 sing-box wrapper deep audit + atomic CAS lifecycle fix** ([§049 spec](docs/spec/tasks/049-singbox-wrapper-deep-audit/spec.md), диагностика [§047](docs/spec/tasks/047-tun-tcp-deterioration-diagnosis.md)). Многочасовой side-by-side diff нашего Kotlin wrapper'а vs reference SagerNet/sing-box-for-android (correct commit `3b3883e` для libbox 1.13.11) → 25 findings, 9 применены как fix'ы. Главный — race condition в lifecycle `fileDescriptor`: `@Volatile` гарантирует publish, но не атомарность compound «read-then-close-then-null», и mutations из 5 call-site'ов (`openTun` / `cleanupStaleResources` / `onRevoke` / `doStop` / scope.cancel) могли привести к double-close → kernel переиспользует fd-int → sing-box пишет в чужой fd → silent ENXIO → TCP-traffic via tun перестаёт работать через 15-30 минут после старта.
+  - **F2** Replaced `@Volatile var fileDescriptor` → `AtomicReference<ParcelFileDescriptor?>`. Helper `closeFileDescriptor()` использует `getAndSet(null)?.close()` — единственный поток получает non-null PFD, остальные no-op. Same для `commandServer`.
+  - **F3** Удалён `cleanupStaleResources()` — superfluous 5-й mutation site, аналога в reference нет. AtomicReference helper'ы защищают от double-close без pre-cleanup'а. Также убрана `delay(500)` (была компенсацией для удалённого cleanup'а).
+  - **F5** `onRevoke` cleanup переведён на atomic helpers (раньше мутировал поля inline на binder thread, race с `openTun` на libbox thread).
+  - **F4** `serviceReload` без status-flap (Started→Starting→Started → без промежуточного broadcast'а), reference так и делает.
+  - **F26** LocalResolver полностью переписан на `DnsResolver.getInstance().query(defaultNetwork, ...)` (port 1:1 из reference). Старый `InetAddress.getAllByName()` шёл через system resolver, который при `tun.auto_route=true` мог рекурсивно пройти ЧЕРЕЗ tun. Now bound к underlying network, мимо tun.
+  - **F9** `Libbox.setLocale(Locale.getDefault())` в init — sing-box error messages теперь локализованы.
+  - **F12.1** `userName` поле в `findConnectionOwner` — Clash API `/connections` теперь видит package name юзера.
+  - **F17** `getSystemProxyStatus()` возвращает реальный state (раньше всегда empty `SystemProxyStatus()`) — Clash dashboard'ы видят корректные available/enabled флаги.
+  - **F1 split** — `BoxVpnService` оставлен только как Android `VpnService + PlatformInterfaceWrapper` (PI), весь state и `CommandServerHandler` impl переехал в новый класс `BoxService` (plain Kotlin). `CommandServer(this, platformInterface)` создаётся теперь с **двумя разными Java instance** (port 1:1 из reference). Раньше `CommandServer(this, this)` шёл с одним объектом (CSH+PI шарили refnum=42 с refcnt=2), что увеличивало вероятность gomobile refcount race.
+  - **Phase H — `BoxApplication` как зарегистрированный Android Application class** (`android:name=".vpn.BoxApplication"` в манифесте). Был `object BoxApplication` инициализирующийся лениво — теперь Android создаёт Application **до** Service/Activity, гарантируя что `Libbox.setup` отрабатывает до первого `CommandServer` ctor. Backward-compat callsite'ы `BoxApplication.X` работают через companion proxy на `instance`.
+  - **Phase H — match reference deltas в init**: `Seq.setContext(this)` закомментирован (как в reference `Application.kt:41` — native libbox init сам устанавливает контекст; явный вызов делал двойной-set ломая `Seq$RefTracker`); `SetupOptions.logMaxLines = 3000` (без лимита sing-box копит логи unbounded).
+
+#### Deferred / not applied
+
+- **F12.3** `readWIFIState()` остаётся `null` (deferred). 9 attempts на нашем environment'е (Android 15 OnePlus + libbox 1.13.11 stripped) — constructor `WIFIState(s,b)`, factory `Libbox.newWIFIState`, cached singleton, Java strong-ref pin, drop `Seq.setContext`, drop `setMemoryLimit`, R8 keep rules, Phase H baseline — **все** падают `'Unknown reference: 42'` cold-start через 1-12 секунд. Java instrumentation patched `Seq$RefTracker` показал: refcnt не падает до 0 — Java side OK. Crash в native `libbox.so` cproxy который имеет собственный jobject hashmap отдельно от Java RefMap. Reference SagerNet с identical Java code на той же libbox 1.13.11 stable у людей. Без debug symbols (требует rebuild через `gomobile bind -ldflags="-w=false -s=false"` из sing-box source) диагностировать дальше нельзя — задача §050 на отдельную session. Practical impact: `wifi_ssid:` / `wifi_bssid:` правила в sing-box не работают (у нас в wizard их нет, юзеры не используют).
+- **F22 coalesced log dispatch** — пробовали bounded queue + single-pending drainer вместо per-line `coreLogMainHandler.post`. Build 10104 (Lambda inline) работал; build 10106/10107 (тот же код по сути) — крашит refnum 42. Race-condition в interaction между Kotlin Lambda capture и gomobile/seq tracker. Не стабильно для prod — оставлен per-line dispatch.
+
+### Added
+
+- **§049 F15 — Allow VPN bypass toggle** (App Settings → «Allow VPN bypass»). Default off (strict tunnel — наш default behavior). Включает `Builder.allowBypass()` для VPN — apps могут explicit'но через `ConnectivityManager.bindProcessToNetwork(network)` обойти tun. Применяется при следующем `openTun()` (старт VPN или reload). Reference (`Settings.allowBypass`) имеет identical toggle.
+- **Per-app trace — inclusive observer with confidence** ([§048 spec](docs/spec/tasks/048-perapp-trace-attribution-gaps.md)). Закрывает 13 attribution gap'ов в Per-app traffic profiler, выявленных в live-диагностической сессии 2026-05-09. Концепт: `TrafficProfiler` теперь не drop'ает события — каждое попадает в session с одним из 4 уровней `ConfidenceLevel` (`verified` / `secondary` / `inferred` / `unattributed`). Юзер видит **всё что произошло**, и видит **что точно его app, а что возможно**.
+  - **Defensive DNS regex** — `_dnsRe` / `_dnsFailRe` принимают любой record type (HTTPS / SVCB / SOA / MX / TXT / unknown), любой формат timing'а (5ms / 10.0s), с/без trailing dot. Раньше `HTTPS` queries Chrome'а (HTTP/3 alt-svc discovery) silently дропались.
+  - **Secondary packages** — `Session.secondaryPackages: Set<String>` configurable per session. Решает Tinkoff-WebView сценарий: target=`ru.tinkoff.investing` + secondary={`com.google.android.webview`} → WebView traffic попадает в session с `confidence=secondary`. UI: `Edit secondary` button под header'ом, multi-select picker.
+  - **Multiple matching strategies** — direct package match → secondary packages → UID-stripped variants → recent DNS IP inference (10s window). Multi-package UID `com.google.android.gms, com.google.android.gsf` теперь split-and-contains, не equals.
+  - **Pre-session backfill** — `_globalRollingBuffer` 60s × 3000 events always-running. На `start()` события за last 60s резолвятся через session matching и backfill'ятся в `session.events` с marker `〽 backfilled from pre-recording`. Решает «юзер ставит recording после того как заметил проблему — теряет первые 60s».
+  - **Live system-wide tab** — 4-й tab в Statistics («Overview · Connections · Per-app · Live»). Discovery без выбора target: видно всё что происходит на устройстве в real-time. Filter chips (kind / unattributed-only / app multi-select / search by domain/IP/process), pause/resume, long-press → «Open in Per-app session for <pkg>» quick-discovery flow.
+  - **Per-app Live sub-tab** — additional «System-wide events (no owner detected)» section внизу + красный banner «N unattributed events / 30s» когда detected attribution gaps (>5 за 30s).
+  - **Time-based correlation cleanup** — `_connIdToMeta` / `_dnsByConnId` GC через `Timer.periodic(5s)` с TTL=30s, не count-based threshold (256). Закрывает conn-id reuse race window.
+  - **Streaming primary, polling supplement** — polling interval 2s → 5s. Каждый `inbound packet connection` log line == event сразу; polling только enrich'ит open conn'ы (bytes / state) и эмитит close events.
+  - **Debug API расширен**: `GET /profiler/live?seconds=60` (snapshot global rolling buffer), `GET /profiler/live/stream` (SSE без session filter'а), `GET /profiler/live/unattributed` (recent unattributed + banner state), `PATCH /profiler/secondary-packages` (live mutation), `POST /profiler/start { secondary_packages }` (initial set).
+  - **API contract**: TrafficEvent JSON теперь включает `confidence`, `matched_via`, `shown_because`, `dns_record_type`, `backfilled` поля.
+- **Tunnel apps — OS-level split-tunneling** ([§046 spec](docs/spec/features/046%20tunnel%20apps%20split-tunneling/spec.md)). Четвёртая вкладка в `Routing` для управления стандартным Android-механизмом split-tunneling: какие apps идут через VPN-tun, а какие — direct по cellular/wifi (минуя sing-box полностью).
+  - **3 mode'а через SegmentedButton**: `Off` (все apps через tun, default) / `Allow-list` (только перечисленные через tun) / `Deny-list` (все КРОМЕ перечисленных). Mutually exclusive, как требует Android `VpnService.Builder` API.
+  - **Storage** `tun_apps: {mode, packages}` в `lxbox_settings.json`. Default для existing юзеров: `{mode: "off", packages: []}` — backward-compat. Migration unconditional one-shot на первом load.
+  - **Builder** `applyTunPackages()` в `post_steps.dart` (последний step pipeline'а): `mode: allow` → `inbound[tun].include_package`, `mode: deny` → `exclude_package`, `mode: off` → ничего не пишем.
+  - **Native слой не трогали** — `BoxVpnService.kt:557-560` уже умеет читать `options.includePackage`/`excludePackage` от libbox и звать `VpnService.Builder.addAllowedApplication`/`addDisallowedApplication`. applies на `builder.establish()`.
+  - **Restart banner** показывается при modified state + tunnel up (`addAllowedApplication` applies только при создании tun fd; light reload не помогает — нужен full VPN stop+start). Кнопка `[Restart now]` делает stop+start.
+  - **Конфликт-tooltip ⓘ** на header'е tab'а: apps в Allow-list идут через tun → routing rules применяются нормально; apps вне Allow-list (или внутри Deny-list) bypass'ят VPN entirely → sing-box их не видит, custom rules с `package_name` не сматчатся.
+  - **AppPicker reuse** — тот же multi-select picker что в §030/§044. Show-system-apps по default OFF.
+  - **Uninstalled apps** помечаются greyed-icon + label `(uninstalled — auto-skipped)` (native ловит `NameNotFoundException`).
+  - **Debug API** `GET /settings/tun_apps` / `PUT /settings/tun_apps` ({mode, packages}, replace целиком, package-name validation regex, dedup idempotent). Response `rebuild_needed: true` как hint клиенту.
+
+### Tests
+
+- `app/test/builder/tun_packages_test.dart` — 9 случаев `applyTunPackages` (off / off+pkgs / allow+empty / allow+pkgs / deny+pkgs / no tun / no inbounds / multiple tuns / TunAppsConfig predicates).
+- `app/test/services/traffic_profiler_test.dart` — 16 новых тестов §048: defensive DNS regex (HTTPS / SVCB / SOA / `10.0s` time format / fail без owner), multi-package UID matching, WebView secondary, UID-suffix matching, non-target drop, secondary mutation, pre-session backfill, confidence in JSON, global snapshot, banner threshold, time-based GC.
+- §049 — local APK build success, `flutter analyze` clean, **535 / 535 flutter tests pass**. On-device retest §047 race — pending (требует ~30+ min прогона на устройстве).
+
+---
+
 ## [1.7.0] — 2026-05-08
 
 «Observability» release. Главное — **Per-app traffic profiler** (§044): inline-инструмент диагностики «куда конкретное приложение ходит и как роутится» прямо в Stats. Дополнено расширением `ru-direct` preset'а 4-слойной защитой (TLD + service-CDN suffix-list + GeoIP-ranges) — §045.
@@ -55,18 +270,18 @@
 
 ## [1.6.1] — 2026-05-08
 
-DNS-серверы перевели на kind-discriminated refs (симметрия с DNS rules §041) с чистым разделением meta-полей и sing-box body — фиксит баги выявленные на v1.6.0 в эксплуатации.
+DNS-серверы перевели на kind-discriminated refs (симметрия с DNS rules §061 dns-rules-refactor, бывший feature §041) с чистым разделением meta-полей и sing-box body — фиксит баги выявленные на v1.6.0 в эксплуатации.
 
 ### Changed
 
-- **DNS servers: kind-discriminated refs + clean schema** ([§043](docs/spec/tasks/043-dns-servers-refs-by-kind.md) + [§044](docs/spec/tasks/044-dns-servers-clean-schema.md)). Storage `dns_options.servers[i]` хранит refs шейпа `{enabled, kind: inline|preset|template, tag, description?, body?}` — точно по образцу §041 DNS rules.
+- **DNS servers: kind-discriminated refs + clean schema** ([§043](docs/spec/tasks/043-dns-servers-refs-by-kind.md) + [§044](docs/spec/tasks/044-dns-servers-clean-schema.md)). Storage `dns_options.servers[i]` хранит refs шейпа `{enabled, kind: inline|preset|template, tag, description?, body?}` — точно по образцу §061 DNS rules refactor (бывший feature §041).
   - **`tag` — single source of truth**: на ref-level. Для inline body **partial sing-box shape без** `tag`/`description`/`enabled` (они на ref-level, а sing-box эти meta-поля не использует). На build-time `body['tag'] = ref.tag` синтезируется в `config.dns.servers[i]` (запротоколированная магия в `resolveDnsServersBodies`).
   - **`description` на ref-level**: для inline — primary, для template/preset — optional override (если отсутствует, fallback на canonical's description).
-  - **Body для template/preset берётся из canonical** by tag at render/build time. `kind: template` ref'ы автоматически подхватывают template-обновления (e.g. tag rename'ы от §039); orphan-cleanup на load удаляет ref'ы с несуществующими tag'ами.
+  - **Body для template/preset берётся из canonical** by tag at render/build time. `kind: template` ref'ы автоматически подхватывают template-обновления (e.g. tag rename'ы от §060 libbox migration, бывший feature §039); orphan-cleanup на load удаляет ref'ы с несуществующими tag'ами.
   - **Override = `kind: inline` для tag'а с canonical** — без shape-comparison через `jsonEncode` (раньше order-sensitive фрагильно). Тривиальная classification по kind.
 - **Короткие односложные badge'ы**: **Template** / **Preset** / **User** / **Overridden**. Раньше длинные «User (overrides template)» / «Preset · Russian domains direct» ломали title-wrap (живой баг на Yandex UDP — title разрывался на 4 строки).
 - **Edit dialog: 3 явных input'а** — `Tag` / `Description` / `Enabled (Switch)` сверху, body JSON внизу (только sing-box-relevant поля **без** `tag`/`description`/`enabled`). Раньше юзер видел «магические» поля среди sing-box-полей.
-- **Auto-discovery + orphan cleanup** в `resolveDnsServersList` — для каждого template/active-preset server'а tag которого нет в storage append'ится ref (с template's enabled default'ом / preset's default true); template/preset ref'ы с несуществующими tag'ами удаляются. Симметрично `resolveDnsRulesList` (§033/§041).
+- **Auto-discovery + orphan cleanup** в `resolveDnsServersList` — для каждого template/active-preset server'а tag которого нет в storage append'ится ref (с template's enabled default'ом / preset's default true); template/preset ref'ы с несуществующими tag'ами удаляются. Симметрично `resolveDnsRulesList` (§033 / §061 dns-rules-refactor, бывший feature §041).
 - **UI: edit body на template/preset переводит entry в `kind: inline`** (copy-on-write). Reset (↺) убирает inline и возвращает kind на canonical; body+description удаляются. Add custom server создаёт `kind: inline` с user'овским body.
 - **Builder consequences**: `applyCustomDns` теперь использует `resolveDnsServersList` (refs) + `resolveDnsServersBodies` (refs → final bodies для sing-box config). Старая XOR-логика «userServers OR templateServers» удалена.
 - **Render layer typed**: новый `ResolvedServer` class в `dns_settings_screen.dart` — никаких underscore-полей в Map'ах (`_kind`/`_overrides`/`_preset_label`/`_origin` удалены полностью; компилятор гарантирует что они не протекут в JSON dump'ы).
@@ -82,7 +297,7 @@ DNS-серверы перевели на kind-discriminated refs (симметр
 - **JSON viewer protokol leak** — `_showServerBodyDialog` показывал `_kind`/`_overrides` underscore-поля у одних tile'ов, не у других. Теперь `ResolvedServer.body` физически не содержит underscore-полей.
 - **DNS Settings — Yandex/long-name preset tile разорван на 4 строки** (live-баг v1.6.0). Длинный badge `Preset · Russian domains direct` ломал title-wrap. Теперь badge короткий `Preset`, имя preset'а в subtitle.
 - **Toggle enabled на template-сервере помечал его как Overridden** (live-баг). Storage хранил copy-on-write template-shape с изменённым `enabled`, override-detection через shape compare ошибочно классифицировала это как override. С refs-by-kind: toggle меняет только `enabled` ref'а, kind остаётся `template`, badge остаётся `Template`.
-- **После §039 tag rename `direct_dns_resolver` → `google_udp`** existing-юзеры не видели нового tag'а в DNS Final dropdown'е. Теперь auto-discovery подтягивает новый tag, orphan cleanup убирает старый.
+- **После §060 (libbox migration, бывший feature §039) tag rename `direct_dns_resolver` → `google_udp`** existing-юзеры не видели нового tag'а в DNS Final dropdown'е. Теперь auto-discovery подтягивает новый tag, orphan cleanup убирает старый.
 
 ### Tests
 
@@ -119,7 +334,7 @@ DNS-серверы перевели на kind-discriminated refs (симметр
 
 ### Changed
 
-- **libbox: 1.12.12 → 1.13.11** ([§039 libbox migration](docs/spec/features/039%20libbox%201.13%20migration/spec.md), commit 913530b). Перешли на актуальный major-релиз sing-box. Ключевые архитектурные перемены подкапотом:
+- **libbox: 1.12.12 → 1.13.11** ([§060 libbox migration](docs/spec/tasks/060-libbox-1-13-migration/spec.md), commit 913530b). Перешли на актуальный major-релиз sing-box. Ключевые архитектурные перемены подкапотом:
   - **`BoxService` класс удалён в 1.13** — всё его API поглощено в `CommandServer`. Единый `CommandServer` владеет runtime'ом через `startOrReloadService(config, opts)`. Two-phase shutdown (`closeService()` → `close()`).
   - **`PlatformInterface` упрощён**: убраны `writeLog`, `packageNameByUid`, `uidByPackageName` — sing-box сам ведёт UID→package mapping и отдаёт через richer `ConnectionOwner` struct (`userId`, `userName`, `processPath`, `androidPackageNames[]`).
   - **`Seq.destroyRef` больше не вызываем** — Go runtime в 1.13 self-cleans refnum'ы; manual destroyRef = double-free.
@@ -134,7 +349,7 @@ DNS-серверы перевели на kind-discriminated refs (симметр
 - **Empty template DNS catch-all** ([§039 task](docs/spec/tasks/039-empty-template-dns-rules.md)). Убрали template-level правило `{name: "Default → Google DoH", server: google_doh}` — всё что не матчится preset/inline DNS-правилами теперь идёт через `dns.final` (= `@dns_final`, default `local_dns_resolver` = system resolver через PlatformInterface; юзер может override'нуть в wizard'е). Причина: `google_doh` (HTTPS/443) на long-idle деградирует — DoH connection pool stale → re-dial фейлится → fall-through DNS умирает (наблюдалось 2× за неделю). System resolver state-less, не подвержен. Tooltip `dns_final` обновлён. Existing-юзеры с записью «Default → Google DoH» — orphan cleanup в `resolveDnsRulesList` сам уберёт. Также: tag `direct_dns_resolver` → `google_udp` (симметрия с `cloudflare_udp`).
 - **DNS settings dropdown'ы видят preset-серверы** ([§039 task](docs/spec/tasks/039-empty-template-dns-rules.md)). `_enabledServerTags` getter в `dns_settings_screen.dart` объединяет два источника: template/user-saved (`_servers`) + preset-expanded (`_presetServersWithLabel`, e.g. `yandex_udp` от ru-direct). До fix'а dropdown показывал только template+user; preset-добавленные теги не появлялись. Затронутые dropdown'ы: DNS Final / Default Domain Resolver / per-rule server selector.
 - **`ru-direct` preset: DNS defaults сменили на UDP/Base** ([§038](docs/spec/tasks/038-ru-direct-dns-defaults.md)). Был `yandex_doh` (HTTPS/443) с IP `77.88.8.88` (Safe-tier). Стал `yandex_udp` (UDP/53) с IP `77.88.8.8` (Base-tier). Причина: у части юзеров (особенно `outbound = direct-out` или WG-router в РФ) Yandex DoH endpoint на `:443` режется ISP/router-DPI: TLS handshake до `safe.dot.dns.yandex.net` зависает, ICMP/UDP при этом работают. Все `.ru` lookups через `ru-direct` failed → `ERR_CONNECTION_REFUSED` в браузере и mobile-apps на ya.ru / t-bank-app.ru. UDP/53 на 77.88.8.8 универсально пропускается. Tooltip `dns_server` укоротили; options в `dns_ip` и `dns_servers` упорядочили — Base/UDP идут первыми. **Существующие установки не затронуты**: явно сохранённые `vars_values` приоритетнее template-default'а.
-- **DNS rules: schema cleanup** ([§041 dns rules](docs/spec/features/041%20dns%20rules%20refactor/spec.md) + [§032](docs/spec/tasks/032-dns-rules-schema-symmetry.md) + [§033](docs/spec/tasks/033-unified-kind-vocabulary.md)). Унификация discriminator: `dns_options.rules[i].type` → `kind`. Унификация vocabulary: `inline | srs | preset | template` для DNS rules — общая лексика с `custom_rules`. Для `kind: preset` хранится `presetId` вместо mutable `title=preset.label`. Field rename `title` → `name` для kind=inline/template — симметрия с `custom_rules.name`. Auto-link при создании / mandatory link при удалении: добавление `custom_rules.kind:preset` автоматически создаёт соответствующую `dns_options.rules.kind:preset` запись. **Independent enable** route-aspect ↔ DNS-aspect. **No migration** — legacy ключи silently dropped, auto-discovery восстанавливает fresh state.
+- **DNS rules: schema cleanup** ([§061 dns rules refactor](docs/spec/tasks/061-dns-rules-refactor/spec.md) + [§032](docs/spec/tasks/032-dns-rules-schema-symmetry.md) + [§033](docs/spec/tasks/033-unified-kind-vocabulary.md)). Унификация discriminator: `dns_options.rules[i].type` → `kind`. Унификация vocabulary: `inline | srs | preset | template` для DNS rules — общая лексика с `custom_rules`. Для `kind: preset` хранится `presetId` вместо mutable `title=preset.label`. Field rename `title` → `name` для kind=inline/template — симметрия с `custom_rules.name`. Auto-link при создании / mandatory link при удалении: добавление `custom_rules.kind:preset` автоматически создаёт соответствующую `dns_options.rules.kind:preset` запись. **Independent enable** route-aspect ↔ DNS-aspect. **No migration** — legacy ключи silently dropped, auto-discovery восстанавливает fresh state.
 - **Action endpoints: unified `/action/urltest`** ([§040](docs/spec/tasks/040-per-group-ping-test-settings.md)). Раньше три endpoint'а: `/action/ping-node?tag=`, `/action/ping-all`, `/action/run-urltest?group=`. Теперь один `/action/urltest` со scope-dispatch'ем через query: `?tag=` (single node), `?group=` (group urltest), `?all=true` (mass urltest). HomeController методы: `pingNode` → `runNodeUrltest`, `pingAllNodes` → `runMassUrltest`, `runGroupUrltest` без изменений. **Breaking** для adb-скриптов которые звали старые endpoints — alias'ы не оставлены.
 - **URLTest error format: human-readable** ([§040](docs/spec/tasks/040-per-group-ping-test-settings.md)). `runNodeUrltest` / `runGroupUrltest` форматируют ошибки через `_formatProbeError` (built on top of `formatUserError` из §041):
   - Было: `Ping: TimeoutException after 0:00:10.000000: Future not completed`
@@ -144,7 +359,7 @@ DNS-серверы перевели на kind-discriminated refs (симметр
 
 ### Fixed
 
-- **Clash delay endpoint hang после ~27 минут аптайма** (root-cause [§039 libbox migration](docs/spec/features/039%20libbox%201.13%20migration/spec.md)). Симптом: все ноды в server-list show "err" в UI после 28-30 минут активной VPN-сессии, при том что трафик через выбранную ноду продолжает работать. Root cause — DNS cache dedup-lock goroutine leak в sing-box `dns/client.go:144-164`: per-question wait канал блокировался **без** `ctx.Done()`-awareness; первый раз когда upstream DNS-transport замёрз, все последующие waiter'ы парковались навсегда. Fix — upstream commit `aba8346b`, вошёл в sing-box `v1.12.21+` и `v1.13.0+`.
+- **Clash delay endpoint hang после ~27 минут аптайма** (root-cause [§060 libbox migration](docs/spec/tasks/060-libbox-1-13-migration/spec.md)). Симптом: все ноды в server-list show "err" в UI после 28-30 минут активной VPN-сессии, при том что трафик через выбранную ноду продолжает работать. Root cause — DNS cache dedup-lock goroutine leak в sing-box `dns/client.go:144-164`: per-question wait канал блокировался **без** `ctx.Done()`-awareness; первый раз когда upstream DNS-transport замёрз, все последующие waiter'ы парковались навсегда. Fix — upstream commit `aba8346b`, вошёл в sing-box `v1.12.21+` и `v1.13.0+`.
 - **Mass ping cancel actually cancels** ([§034](docs/spec/tasks/034-mass-ping-cancel-actually-cancels.md)). Раньше Stop во время mass ping'а оставлял три side-effect'а: спиннеры висели до timeout'а у нод которые не успели ответить (worker break без cleanup pingBusy state'а); `_runAllUrltestGroups` после workers крутил `auto`-группу до конца независимо от cancel'а; in-flight HTTP delay/groupDelay запросы продолжали выполняться. Fix: `cancelMassPing` теперь (1) очищает `pingBusy` целиком; (2) `_runAllUrltestGroups(epoch)` проверяет epoch на каждой итерации; (3) `ClashApiClient` имеет отдельный `_delayHttp` клиент — `cancelDelays()` его close'ит, in-flight HTTP-сокеты рвутся.
 
 ### Build / CI
@@ -497,22 +712,6 @@ Major release: unified routing rules, local-only SRS, Stats tabs + Top apps, Deb
 
 ---
 
-## [1.2.0] — 2026-04-18
-
-### Changed — Outbound groups overhaul
-- Переименование: **proxy-out → vpn-1**, добавлен **vpn-3** (VPN ①/②/③).
-- **VPN ①** всегда генерируется, галочка заблокирована.
-- **auto-proxy-out** теперь управляется галочкой **Include Auto**: при включении генерируется как urltest и добавляется в `vpn-*`; при выключении секция не создаётся вовсе.
-
-### Changed — Node list UX
-- **direct-out** и **auto-proxy-out** всегда вверху списка (в любом режиме сортировки, сначала direct, потом auto), с лёгкой подсветкой.
-- Контекстное меню (long-press):
-  - Copy-действия скрыты для `direct-out` / `auto-proxy-out`.
-  - *Copy detour* и *Copy server + detour* скрыты, если у ноды нет detour.
-
-### Changed — Defaults
-- `urltest_tolerance` по умолчанию 30 ms (было 100).
-
 ---
 
 ## [1.3.1] — 2026-04-19
@@ -651,6 +850,22 @@ Major release: unified routing rules, local-only SRS, Stats tabs + Top apps, Deb
 - **Settings with sections**: настройки разбиты на секции.
 - **Compact + button**: компактная кнопка добавления, smart paste dialog.
 - **Ping timeout**: увеличен до 10 секунд.
+
+## [1.2.0] — 2026-04-18
+
+### Changed — Outbound groups overhaul
+- Переименование: **proxy-out → vpn-1**, добавлен **vpn-3** (VPN ①/②/③).
+- **VPN ①** всегда генерируется, галочка заблокирована.
+- **auto-proxy-out** теперь управляется галочкой **Include Auto**: при включении генерируется как urltest и добавляется в `vpn-*`; при выключении секция не создаётся вовсе.
+
+### Changed — Node list UX
+- **direct-out** и **auto-proxy-out** всегда вверху списка (в любом режиме сортировки, сначала direct, потом auto), с лёгкой подсветкой.
+- Контекстное меню (long-press):
+  - Copy-действия скрыты для `direct-out` / `auto-proxy-out`.
+  - *Copy detour* и *Copy server + detour* скрыты, если у ноды нет detour.
+
+### Changed — Defaults
+- `urltest_tolerance` по умолчанию 30 ms (было 100).
 
 ---
 

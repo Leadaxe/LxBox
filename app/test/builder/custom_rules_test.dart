@@ -352,4 +352,200 @@ void main() {
       expect(s, 'SRS: rules.example.com');
     });
   });
+
+  // §051 — wifi_ssid / wifi_bssid в CustomRuleInline + Srs.
+  group('§051 wifi conditions', () {
+    test('inline wifi-only → routing rule с wifi_ssid, без rule_set', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'Home wifi → direct',
+          wifiSsids: ['lexRouter'],
+          outbound: 'direct-out',
+        ),
+      ]);
+      // Никакого rule_set'а не нужно — wifi-only фильтрует на routing-уровне.
+      expect(reg.getRuleSets(), isEmpty);
+      expect(reg.getRules(), [
+        {
+          'wifi_ssid': ['lexRouter'],
+          'outbound': 'direct-out',
+        },
+      ]);
+    });
+
+    test('inline wifi_ssid + wifi_bssid эмитятся вместе', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'Home',
+          wifiSsids: ['lexRouter'],
+          wifiBssids: ['38:2c:4a:cf:6d:5c'],
+          outbound: 'direct-out',
+        ),
+      ]);
+      expect(reg.getRules(), [
+        {
+          'wifi_ssid': ['lexRouter'],
+          'wifi_bssid': ['38:2c:4a:cf:6d:5c'],
+          'outbound': 'direct-out',
+        },
+      ]);
+    });
+
+    test('inline domain + wifi: оба в правиле, AND-семантика', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'Banking on home wifi',
+          domains: ['bank.com'],
+          wifiSsids: ['lexRouter'],
+          outbound: 'direct-out',
+        ),
+      ]);
+      // Domain заходит в headless rule_set, wifi — на routing-rule level.
+      expect(reg.getRuleSets(), hasLength(1));
+      expect(reg.getRuleSets().first['rules'], [
+        {'domain': ['bank.com']},
+      ]);
+      expect(reg.getRules(), [
+        {
+          'rule_set': 'Banking on home wifi',
+          'wifi_ssid': ['lexRouter'],
+          'outbound': 'direct-out',
+        },
+      ]);
+    });
+
+    test('srs + wifi: rule_set + wifi_ssid в одном правиле', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleSrs(
+          name: 'GeoSite RU on home',
+          srsUrl: 'https://example.com/geo.srs',
+          wifiSsids: ['lexRouter'],
+          outbound: 'direct-out',
+        ),
+      ], srsPaths: {
+        // CustomRuleSrs needs cached path, иначе skipped с warning.
+        // Pass id-key = generated id; используем factory-call id для этого
+        // не получится (UUID каждый запуск разный). Создадим с id явно:
+      });
+    });
+
+    test('srs + wifi с явным id и path', () {
+      final reg = RuleSetRegistry();
+      final srs = CustomRuleSrs(
+        id: 'srs-1',
+        name: 'GeoSite RU on home',
+        srsUrl: 'https://example.com/geo.srs',
+        wifiSsids: ['lexRouter'],
+        outbound: 'direct-out',
+      );
+      applyCustomRules(reg, [srs], srsPaths: {'srs-1': '/cache/geo.srs'});
+      expect(reg.getRuleSets(), hasLength(1));
+      expect(reg.getRules(), [
+        {
+          'rule_set': 'GeoSite RU on home',
+          'wifi_ssid': ['lexRouter'],
+          'outbound': 'direct-out',
+        },
+      ]);
+    });
+
+    test('disabled rule не эмитит wifi-условия', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'Off',
+          enabled: false,
+          wifiSsids: ['lexRouter'],
+          outbound: 'direct-out',
+        ),
+      ]);
+      expect(reg.getRules(), isEmpty);
+    });
+
+    test('empty wifi-списки не появляются в JSON', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'No wifi',
+          domains: ['ya.ru'],
+          outbound: 'direct-out',
+        ),
+      ]);
+      final rule = reg.getRules().first;
+      expect(rule.containsKey('wifi_ssid'), isFalse);
+      expect(rule.containsKey('wifi_bssid'), isFalse);
+    });
+  });
+
+  // §051 — JSON round-trip для wifi-полей.
+  group('§051 wifi JSON round-trip', () {
+    test('inline: toJson skip empty, fromJson restores', () {
+      final r = CustomRuleInline(
+        id: 'id-1',
+        name: 'Home',
+        wifiSsids: ['lexRouter'],
+        wifiBssids: ['38:2c:4a:cf:6d:5c'],
+      );
+      final json = r.toJson();
+      expect(json['wifiSsids'], ['lexRouter']);
+      expect(json['wifiBssids'], ['38:2c:4a:cf:6d:5c']);
+
+      final restored =
+          CustomRule.fromJson(json) as CustomRuleInline;
+      expect(restored.wifiSsids, ['lexRouter']);
+      expect(restored.wifiBssids, ['38:2c:4a:cf:6d:5c']);
+    });
+
+    test('inline: empty wifi-поля не пишутся в JSON', () {
+      final r = CustomRuleInline(name: 'No wifi', domains: ['ya.ru']);
+      final json = r.toJson();
+      expect(json.containsKey('wifiSsids'), isFalse);
+      expect(json.containsKey('wifiBssids'), isFalse);
+    });
+
+    test('inline: BSSID lower-case на read-side (model tolerant)', () {
+      final r = CustomRule.fromJson({
+        'kind': 'inline',
+        'name': 'X',
+        'wifiBssids': ['38:2C:4A:CF:6D:5C', 'AA:BB:CC:DD:EE:FF'],
+      }) as CustomRuleInline;
+      expect(r.wifiBssids, ['38:2c:4a:cf:6d:5c', 'aa:bb:cc:dd:ee:ff']);
+    });
+
+    test('inline: backward-compat — старый JSON без wifi-полей', () {
+      final r = CustomRule.fromJson({
+        'kind': 'inline',
+        'name': 'Legacy',
+        'domains': ['ya.ru'],
+        'outbound': 'direct-out',
+      }) as CustomRuleInline;
+      expect(r.wifiSsids, isEmpty);
+      expect(r.wifiBssids, isEmpty);
+    });
+
+    test('srs: round-trip сохраняет wifi-поля', () {
+      final r = CustomRuleSrs(
+        id: 'srs-1',
+        name: 'GeoSite',
+        srsUrl: 'https://example.com/geo.srs',
+        wifiSsids: ['Office'],
+        wifiBssids: ['11:22:33:44:55:66'],
+      );
+      final restored =
+          CustomRule.fromJson(r.toJson()) as CustomRuleSrs;
+      expect(restored.wifiSsids, ['Office']);
+      expect(restored.wifiBssids, ['11:22:33:44:55:66']);
+    });
+
+    test('inline: copyWith с wifi-полями', () {
+      final r = CustomRuleInline(name: 'X');
+      final updated = r.copyWith(wifiSsids: ['Home']);
+      expect(updated.wifiSsids, ['Home']);
+      expect(updated.wifiBssids, isEmpty);
+    });
+  });
 }

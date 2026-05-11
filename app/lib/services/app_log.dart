@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
@@ -56,11 +57,15 @@ class AppLog extends ChangeNotifier {
 
   // ─── State ────────────────────────────────────────────────────
 
-  /// Ring buffer per source. Each list newest-first.
-  /// Constructed via DebugSource.values так что любые новые enum-варианты
-  /// автоматически получают пустой list.
-  final Map<DebugSource, List<DebugEntry>> _entriesBySource = {
-    for (final s in DebugSource.values) s: <DebugEntry>[],
+  /// Ring buffer per source. Newest-first. F22 part 2: переехали с
+  /// `List<DebugEntry>` на `ListQueue<DebugEntry>` — `addFirst` / `removeLast`
+  /// обе O(1); раньше `List.insert(0, ...)` был O(n) shift всего буфера на
+  /// каждом write'е (заметно на busy core-log traffic, cap=500).
+  /// Read path (`entriesForSource`, `entries`) materialize'ит queue в
+  /// immutable List — single O(n) копия, та же стоимость что была у
+  /// `List.unmodifiable(list)` раньше.
+  final Map<DebugSource, ListQueue<DebugEntry>> _entriesBySource = {
+    for (final s in DebugSource.values) s: ListQueue<DebugEntry>(),
   };
 
   bool _persistInitialized = false;
@@ -74,7 +79,14 @@ class AppLog extends ChangeNotifier {
   /// Все entries отсортированные по времени (newest first), merge всех
   /// source'ов. **Compute on read** — k-way merge небольших списков
   /// (k = число sources, n ≤ sum of caps). Пренебрежимо в нашем масштабе.
-  List<DebugEntry> get entries => _mergeByTime(_entriesBySource.values);
+  List<DebugEntry> get entries {
+    // ListQueue → fixed-size List один раз для k-way merge с index access.
+    final lists = _entriesBySource.values
+        .map((q) => q.toList(growable: false))
+        .where((l) => l.isNotEmpty)
+        .toList(growable: false);
+    return _mergeByTime(lists);
+  }
 
   /// Только entries указанного source'а — без merge'а, direct lookup.
   /// Используется в `/logs?source=...` фильтре.
@@ -121,11 +133,11 @@ class AppLog extends ChangeNotifier {
       } catch (_) {/* skip malformed line */}
     }
     // File chronologically (oldest first), in-memory newest-first.
-    final list = _entriesBySource[source]!;
-    list.addAll(loaded.reversed);
+    final queue = _entriesBySource[source]!;
+    queue.addAll(loaded.reversed);
     final cap = _maxEntriesPerSource[source]!;
-    if (list.length > cap) {
-      list.removeRange(cap, list.length);
+    while (queue.length > cap) {
+      queue.removeLast();
     }
   }
 
@@ -138,17 +150,50 @@ class AppLog extends ChangeNotifier {
   }) {
     final line = message.trim();
     if (line.isEmpty) return;
-    final list = _entriesBySource[source];
-    if (list == null) return; // unknown source — silently ignore
-    list.insert(0, DebugEntry(
+    final queue = _entriesBySource[source];
+    if (queue == null) return; // unknown source — silently ignore
+    _appendOne(queue, source, level, line);
+    _scheduleNotify();
+  }
+
+  /// F22 part 2 — batch ingest для core logs из native EventChannel.
+  /// Один проход: добавили N записей, persist mark, notify ОДИН раз.
+  ///
+  /// `levelOf` парсит уровень из строки (re-use `ClashLogPump.parseLevel`),
+  /// чтобы не переоткрывать regex'ы в caller'е.
+  void logBatch(
+    List<String> messages,
+    DebugLevel Function(String) levelOf, {
+    DebugSource source = DebugSource.app,
+  }) {
+    if (messages.isEmpty) return;
+    final queue = _entriesBySource[source];
+    if (queue == null) return;
+    for (final raw in messages) {
+      final line = raw.trim();
+      if (line.isEmpty) continue;
+      _appendOne(queue, source, levelOf(line), line);
+    }
+    _scheduleNotify();
+  }
+
+  /// Append + cap enforcement. ListQueue addFirst/removeLast обе O(1).
+  /// Не вызывает notifyListeners — caller сам решает (single vs batch).
+  void _appendOne(
+    ListQueue<DebugEntry> queue,
+    DebugSource source,
+    DebugLevel level,
+    String line,
+  ) {
+    queue.addFirst(DebugEntry(
       time: DateTime.now(),
       source: source,
       level: level,
       message: line,
     ));
     final cap = _maxEntriesPerSource[source]!;
-    if (list.length > cap) {
-      list.removeRange(cap, list.length);
+    while (queue.length > cap) {
+      queue.removeLast();
     }
     if (kDebugMode) {
       // ignore: avoid_print
@@ -158,7 +203,33 @@ class AppLog extends ChangeNotifier {
       _persistDirty.add(source);
       _schedulePersistWrite();
     }
+  }
+
+  // ─── Notify throttle (F22 part 2 — ≤60Hz) ─────────────────────
+
+  /// 16ms = ~60Hz. UI всё равно ребилдится не чаще одного frame'а.
+  static const _notifyWindow = Duration(milliseconds: 16);
+
+  Timer? _notifyThrottleTimer;
+  bool _notifyPending = false;
+
+  /// Leading-edge throttle: первый вызов сразу `notifyListeners()`,
+  /// последующие в окне 16ms объединяются и emit'ятся одним notify в
+  /// конце окна. На устойчивом core-log потоке (100+ строк/сек) UI
+  /// rebuild ≤ 60Hz вместо `freq(write)`.
+  void _scheduleNotify() {
+    if (_notifyThrottleTimer != null) {
+      _notifyPending = true;
+      return;
+    }
     notifyListeners();
+    _notifyThrottleTimer = Timer(_notifyWindow, () {
+      _notifyThrottleTimer = null;
+      if (_notifyPending) {
+        _notifyPending = false;
+        _scheduleNotify();
+      }
+    });
   }
 
   void debug(String message, {DebugSource source = DebugSource.app}) =>

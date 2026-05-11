@@ -1,3 +1,4 @@
+import '../../../models/background_mode.dart';
 import '../../settings_storage.dart';
 import '../../../vpn/box_vpn_client.dart';
 import '../context.dart';
@@ -22,6 +23,9 @@ import '_shared.dart';
 /// - `DELETE /settings/vars/{key}`              — удалить var
 /// - `PUT    /settings/dns_options/servers`     body `{"servers":[...]}`
 /// - `PUT    /settings/dns_options/rules`       body `{"rules":"<json-string>"}`
+/// - `GET|PUT /settings/vpn/allow_bypass`        body `{"enabled":bool}`
+/// - `GET|PUT /settings/vpn/keep_on_exit`        body `{"enabled":bool}`
+/// - `GET|PUT /settings/vpn/background_mode`     body `{"mode":"never|lazy|always"}`
 /// - `POST   /settings/rebuild-config`          alias `/action/rebuild-config`
 ///
 /// Все `PUT`/`POST` принимают `?rebuild=true`.
@@ -61,6 +65,26 @@ Future<DebugResponse> settingsHandler(DebugRequest req, DebugContext ctx) async 
     case '/settings/ping_options':
       if (req.method == 'GET') return _getPingOptions();
       if (req.method == 'PUT') return _putPingOptions(req, ctx);
+      throw _methodNotAllowed(req.method, path);
+
+    case '/settings/tun_apps':
+      if (req.method == 'GET') return _getTunApps();
+      if (req.method == 'PUT') return _putTunApps(req, ctx);
+      throw _methodNotAllowed(req.method, path);
+
+    case '/settings/vpn/allow_bypass':
+      if (req.method == 'GET') return _getAllowBypass();
+      if (req.method == 'PUT') return _putAllowBypass(req);
+      throw _methodNotAllowed(req.method, path);
+
+    case '/settings/vpn/keep_on_exit':
+      if (req.method == 'GET') return _getKeepOnExit();
+      if (req.method == 'PUT') return _putKeepOnExit(req);
+      throw _methodNotAllowed(req.method, path);
+
+    case '/settings/vpn/background_mode':
+      if (req.method == 'GET') return _getBackgroundMode();
+      if (req.method == 'PUT') return _putBackgroundMode(req);
       throw _methodNotAllowed(req.method, path);
   }
 
@@ -425,5 +449,130 @@ Future<DebugResponse> _rebuildConfig(DebugContext ctx) async {
     'ok': true,
     'action': 'settings-rebuild-config',
     'config_bytes': json.length,
+  });
+}
+
+// ─── §046: tun_apps ─────────────────────────────────────────────────────────
+
+Future<DebugResponse> _getTunApps() async {
+  final cfg = await SettingsStorage.getTunApps();
+  return JsonResponse(cfg.toJson());
+}
+
+/// `PUT /settings/tun_apps` — overwrite shape целиком.
+/// Body: `{"mode":"off|allow|deny", "packages":["pkg1","pkg2",...]}`.
+/// Дубликаты в `packages` schлопываются (idempotent). Невалидные fields → 400.
+///
+/// Изменения требуют **full VPN restart** для apply (Android tun creates только
+/// при `establish()`). Response включает `rebuild_needed: true` как hint клиенту
+/// что нужно вызвать `POST /action/rebuild-config` + restart VPN.
+Future<DebugResponse> _putTunApps(DebugRequest req, DebugContext ctx) async {
+  final body = req.jsonBodyAsMap();
+
+  final mode = body['mode'];
+  if (mode is! String || !['off', 'allow', 'deny'].contains(mode)) {
+    throw const BadRequest('field "mode" must be one of: off|allow|deny');
+  }
+
+  final pkgsRaw = body['packages'];
+  if (pkgsRaw is! List) {
+    throw const BadRequest('field "packages" must be array of strings');
+  }
+  final pkgs = <String>[];
+  // Sing-box внутри Android передаёт package в getPackageInfo — там
+  // допускается широкий range символов. Отбрасываем явно невалидное:
+  // пустые строки + что-то совсем не похожее на package (`/`, whitespace).
+  final pkgRe = RegExp(r'^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z0-9_]+)*$');
+  for (final p in pkgsRaw) {
+    if (p is! String) {
+      throw BadRequest('packages[] must be strings; got ${p.runtimeType}');
+    }
+    final t = p.trim();
+    if (t.isEmpty) continue;
+    if (!pkgRe.hasMatch(t)) {
+      throw BadRequest('invalid package name: $t');
+    }
+    pkgs.add(t);
+  }
+
+  final cfg = TunAppsConfig(mode: mode, packages: pkgs);
+  await SettingsStorage.setTunApps(cfg);
+
+  final extras = await maybeRebuild(req, ctx);
+  return JsonResponse({
+    'ok': true,
+    'action': 'settings-tun-apps',
+    'mode': mode,
+    'count': pkgs.length,
+    'rebuild_needed': true,
+    ...extras,
+  });
+}
+
+// ─── §052: VPN Settings → System tab toggles ────────────────────────────────
+// Storage / apply семантика — native (SharedPreferences), не lxbox_settings.json.
+// Apply timing: allow_bypass / background_mode → next openTun (start/reload);
+// keep_on_exit → effect at app exit (нет live reload).
+
+Future<DebugResponse> _getAllowBypass() async {
+  final v = await BoxVpnClient().getAllowBypass();
+  return JsonResponse({'enabled': v});
+}
+
+Future<DebugResponse> _putAllowBypass(DebugRequest req) async {
+  final body = req.jsonBodyAsMap();
+  final value = body['enabled'];
+  if (value is! bool) {
+    throw const BadRequest('body must be {"enabled": true|false}');
+  }
+  await BoxVpnClient().setAllowBypass(value);
+  return JsonResponse({
+    'ok': true,
+    'action': 'settings-vpn-allow-bypass',
+    'enabled': value,
+    'note': 'reload VPN to apply (allowBypass set at next establish())',
+  });
+}
+
+Future<DebugResponse> _getKeepOnExit() async {
+  final v = await BoxVpnClient().getKeepOnExit();
+  return JsonResponse({'enabled': v});
+}
+
+Future<DebugResponse> _putKeepOnExit(DebugRequest req) async {
+  final body = req.jsonBodyAsMap();
+  final value = body['enabled'];
+  if (value is! bool) {
+    throw const BadRequest('body must be {"enabled": true|false}');
+  }
+  await BoxVpnClient().setKeepOnExit(value);
+  return JsonResponse({
+    'ok': true,
+    'action': 'settings-vpn-keep-on-exit',
+    'enabled': value,
+  });
+}
+
+Future<DebugResponse> _getBackgroundMode() async {
+  final m = await BoxVpnClient().getBackgroundMode();
+  return JsonResponse({'mode': m.wireValue});
+}
+
+Future<DebugResponse> _putBackgroundMode(DebugRequest req) async {
+  final body = req.jsonBodyAsMap();
+  final raw = body['mode'];
+  if (raw is! String) {
+    throw const BadRequest('body must be {"mode": "never"|"lazy"|"always"}');
+  }
+  if (!const {'never', 'lazy', 'always'}.contains(raw)) {
+    throw BadRequest('mode must be one of: never|lazy|always (got "$raw")');
+  }
+  final mode = BackgroundMode.fromNative(raw);
+  await BoxVpnClient().setBackgroundMode(mode);
+  return JsonResponse({
+    'ok': true,
+    'action': 'settings-vpn-background-mode',
+    'mode': mode.wireValue,
+    'note': 'applied on next VPN connect',
   });
 }

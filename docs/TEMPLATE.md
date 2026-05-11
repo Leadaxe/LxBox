@@ -47,7 +47,7 @@ wizard_template.json
 │   │       ├─ tls                 object?         {enabled, server_name}
 │   │       ├─ detour              tag?          через какой outbound резолвить
 │   │       └─ domain_resolver     tag?          какой DNS используется для host'а сервера
-│   └─ rules[]                     list          template-level DNS rules (§041), сейчас пусто
+│   └─ rules[]                     list          template-level DNS rules (§061, бывший feature §041), сейчас пусто
 │
 ├─ ping_options                    object{3 keys}       (§040)
 │   ├─ url                         string        global default (e.g. gstatic.com/generate_204)
@@ -163,7 +163,7 @@ wizard_template.json
 ```jsonc
 {
   "parser_config":       { … },     // §026 parser version + reload interval
-  "dns_options":         { … },     // §043+§044 (servers) + §041 (rules) — defaults
+  "dns_options":         { … },     // §043+§044 (servers) + §061 (rules) — defaults
   "ping_options":        { … },     // §040 — ping/test URL + presets
   "speed_test_options":  { … },     // §015 — speed-test endpoints
   "preset_groups":       [ … ],     // selector/urltest группы (vpn-1, vpn-2, ✨auto)
@@ -191,7 +191,7 @@ wizard_template.json
 
 ---
 
-## `dns_options` — §043+§044 (servers) + §041 (rules)
+## `dns_options` — §043+§044 (servers) + §061 (rules)
 
 Default DNS-конфигурация для новой установки. Stockpiled в storage `dns_options` при первом запуске; auto-discovery в [`resolveDnsServersList`] заполняет storage из template'а на каждый rebuild.
 
@@ -240,7 +240,7 @@ Default DNS-конфигурация для новой установки. Stock
 
 Currently empty. После [§039](./spec/tasks/039-empty-template-dns-rules.md) — намеренно пусто, юзер строит DNS-rules через preset'ы (`selectable_rules[*].dns_rule`). Если template хочет пушнуть default DNS-rule, она пойдёт сюда.
 
-См. полный shape ref-уровня — [`STORAGE.md` § dns_options](./STORAGE.md#dns_options--§041-rules--§043043-dns--§044-servers).
+См. полный shape ref-уровня — [`STORAGE.md` § dns_options](./STORAGE.md#dns_options--§061-rules--§043043-dns--§044-servers).
 
 ---
 
@@ -444,7 +444,7 @@ Storage override: `enabled_groups` в `lxbox_settings.json` контролиру
 Что builder добавляет в эту базу:
 - `config.outbounds[+]` ← node-outbounds из enabled `server_lists[]`, плюс selectors/urltest из `preset_groups`
 - `config.dns.servers[+]` ← `dns_options.servers[*]` (resolved через [§044]) + `selectable_rules[*].dns_servers[*]`
-- `config.dns.rules[+]` ← `dns_options.rules[*]` ([§041]) + `selectable_rules[*].dns_rule`
+- `config.dns.rules[+]` ← `dns_options.rules[*]` ([§061]) + `selectable_rules[*].dns_rule`
 - `config.route.rules[+]` ← `selectable_rules[*].rule` (после `selectable_rules[*]` enabled-проверки) + `custom_rules[*]` user routing rules
 - `config.route.rule_set[+]` ← `selectable_rules[*].rule_set[*]` (см. § ниже)
 
@@ -574,11 +574,11 @@ Update var.type таблицу в этом файле + добавить рен�
 ## Связанные документы
 
 - [`STORAGE.md`](./STORAGE.md) — user-state в `lxbox_settings.json` (то что меняется юзером, в т.ч. override template-vars и `custom_rules[].presetId` ссылки на этот catalog)
-- [§005x config generator](./spec/features/005x%20config%20generator/spec.md) — substitution и expansion
+- [§058 config generator v1 (superseded)](./spec/tasks/058-config-generator-wizard-v1-superseded/spec.md) — substitution и expansion (бывший feature §005x, заменён §026)
 - [§026 parser v2](./spec/features/026%20parser%20v2/spec.md) — `parser_config.version`
 - [§033 preset bundles](./spec/features/033%20preset%20bundles/spec.md) — `selectable_rules[]` и expansion
 - [§030 custom routing rules](./spec/features/030%20custom%20routing%20rules/spec.md) — `selectable_rules[*].rule` shape, order matters
-- [§041 dns rules refactor](./spec/features/041%20dns%20rules%20refactor/spec.md) — `dns_options.rules[]`
+- [§061 dns rules refactor](./spec/tasks/061-dns-rules-refactor/spec.md) — `dns_options.rules[]` (бывший feature §041)
 - [§043 dns servers refs by kind](./spec/tasks/043-dns-servers-refs-by-kind.md) + [§044 clean schema](./spec/tasks/044-dns-servers-clean-schema.md) — `dns_options.servers[]` и template-vs-storage отношения
 - [§040 per-group ping settings](./spec/tasks/040-per-group-ping-test-settings.md) — `ping_options`
 - [§015 speed test](./spec/features/015%20speed%20test/spec.md) — `speed_test_options`

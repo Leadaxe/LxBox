@@ -90,14 +90,29 @@ Two paths to flip the VPN on/off without launching the UI: a Quick Settings tile
 
 Block ads, route Russian domains directly, send BitTorrent through specific proxy, route per-app, match private IPs. Every user rule goes through a single `CustomRule` model with all match fields in parallel (OR within category, AND across — per sing-box default rule formula).
 
-- **3 tabs**: Channels (proxy groups) · Presets (read-only catalog → Copy to Rules) · Rules (your registry)
-- **Match fields**: domain, domain_suffix, domain_keyword, ip_cidr, port, port_range, packages (per-app), protocols (tls/quic/bittorrent/…), ip_is_private, remote .srs rule-set
+- **4 tabs**: Channels (proxy groups) · Presets (read-only catalog → Copy to Rules) · Rules (your registry) · Tunnel apps (OS-level split-tunneling — see below)
+- **Match fields**: domain, domain_suffix, domain_keyword, ip_cidr, port, port_range, packages (per-app), protocols (tls/quic/bittorrent/…), ip_is_private, **wifi_ssid / wifi_bssid** (v1.7.3), remote .srs rule-set
 - **SRS local-only** — no auto-update, manual download via ☁ icon, rule disabled until cached
 - **Drag-reorder** + **long-press → Delete with confirm**
 - **Params / View tabs** in rule editor — View shows live sing-box config preview
 - **Dirty-aware save** — unsaved back → "Discard changes?" dialog
 - Default traffic fallback (`route.final`)
-- See [spec 030](docs/spec/features/030%20custom%20routing%20rules/spec.md), [spec 011](docs/spec/features/011%20local%20ruleset%20cache/spec.md)
+- See [spec 030](docs/spec/features/030%20custom%20routing%20rules/spec.md), [spec 011](docs/spec/features/011%20local%20ruleset%20cache/spec.md), [spec 051](docs/spec/tasks/051-custom-rule-wifi-conditions.md)
+</details>
+
+<details>
+<summary><strong>Wi-Fi-aware routing</strong> — different rules on different networks (v1.7.3)</summary>
+
+Declare rules like *"on this Wi-Fi → direct"* persistently — no temporary `PUT /config` hacks. Rules with `wifi_ssid` / `wifi_bssid` AND-combine with all other match fields:
+- `wifi_ssid: [HomeWiFi] → direct` — bypass VPN at home
+- `wifi_ssid: [OfficeWiFi] AND domain: [*.bank.com] → direct` — banking only on office network
+- `rule_set: [geosite-ru] AND wifi_ssid: [HomeWiFi] → ru-direct` — country-specific routing per Wi-Fi
+
+Editor UI in the rule editor: chips with **Add current** (read live SSID), **Pick saved** (history of visited networks), **Manual** (type SSID or paste BSSID). Permission gates wired in (Android 13+ requires `NEARBY_WIFI_DEVICES`; sing-box also needs `ACCESS_BACKGROUND_LOCATION` to read SSID from a foreground-service VPN).
+
+- **Auto-record opt-in** (App Settings → Diagnostics): `WifiNetworkObserver` listens to `ConnectivityManager.NetworkCallback` and writes a network into `wifi_history` only if you've stayed on it ≥5 minutes. Privacy default — off; turn on to populate the **Pick saved** picker without manual input.
+- **History capped at 50 entries** (LRU evict). Manageable via `GET/POST/DELETE /wifi_history` Debug API for tests / restore.
+- See [spec 051](docs/spec/tasks/051-custom-rule-wifi-conditions.md), [feature highlight](docs/features/wifi-aware-routing.md)
 </details>
 
 <details>
@@ -163,10 +178,17 @@ Built-in speed test with 10 servers worldwide. Per-server ping measures latency 
 <summary><strong>Statistics & Connections</strong> — see what's happening</summary>
 
 Real-time traffic by outbound with expandable cards. Each connection shows host, protocol, routing rule, traffic, duration, proxy chain, and app/process name. Close individual connections.
+
+- **4 tabs**: Overview · Connections · Per-app · **Live** (system-wide, v1.7.2)
+- **Live tab** — discovery without picking a target: see every TCP/UDP open and DNS resolve happening on the device in real time. Filter chips (kind / unattributed-only / app multi-select / domain-IP-process search), pause/resume, long-press → "Open in Per-app session for &lt;pkg&gt;" quick-discovery flow. 60s rolling buffer × 3000 events. Inline `CoreLogsHintBanner` appears when `Forward sing-box logs` is off (without it DNS resolves and process attribution don't reach the buffer)
 </details>
 
 <details>
 <summary><strong>Per-app traffic profiler</strong> — trace any app's network in real time (v1.7.0)</summary>
+
+<p align="center">
+<img src="docs/screenshots/per_app_trace_wide.jpg" alt="Per-app traffic profiler — Live / Domains / Connections sub-tabs"/>
+</p>
 
 Pick an app, hit ▶ Record, and see every domain, IP, and routing decision — including which CDN your bank uses, where it gets routed, and whether part of the traffic leaks through a different outbound. Built-in connection-issue detection flags failed DNS and likely-blocked TCP connections.
 
@@ -190,7 +212,11 @@ Pick an app, hit ▶ Record, and see every domain, IP, and routing decision — 
 <details>
 <summary><strong>VPN Settings</strong> — tune the engine</summary>
 
-Organized in sections: General, Clash API, Network, Include Auto, DNS, TUN, DPI Bypass. URLTest parameters for auto-proxy latency testing. All changes autosaved.
+Two tabs (v1.7.3 reorg, see [§052](docs/spec/tasks/052-vpn-settings-system-service-tabs.md)):
+- **System** — Android-side `VpnService.Builder` toggles: `Allow VPN bypass` (apps using `ConnectivityManager` can step around the tun), `Keep VPN on exit` (tunnel survives app close), `Tunnel sleep mode` (`never` / `lazy` Doze-only / `always` screen-off — battery vs reliability trade-off).
+- **Core** — sing-box engine vars (`chapter: 'core'` in template — `mtu` / `log_level` / `dns_final` / etc). Routing- and DNS-specific vars live on their own screens (Routing, DNS Settings).
+
+All changes autosaved. URLTest parameters for auto-proxy latency testing. Permissions block (Battery / Notifications / Location / Wi-Fi / App info) lives in **App Settings → Diagnostics** (interactive — tap to grant).
 </details>
 
 <details>
@@ -292,4 +318,4 @@ The script wraps `flutter build apk --release` with `--dart-define`s that embed 
 
 L×Box is licensed under the [GNU General Public License v3.0](LICENSE).
 
-Commercial licensing from Leadaxe is available for uses that are not compatible with GPLv3. **Commercial terms are negotiated privately and are not published** in this repository. Contact: [ledaxe@gmail.com](mailto:ledaxe@gmail.com). See [LICENSING.md](LICENSING.md).
+Commercial licensing from Leadaxe may be available for **Leadaxe's own code in L×Box**. Note that L×Box links against [`libbox`](https://github.com/SagerNet/sing-box) (sing-box, GPLv3), so any compiled L×Box build remains under GPLv3 regardless — a Leadaxe-only commercial license cannot authorize embedding L×Box into a proprietary product. Scope and limits: [LICENSING.md](LICENSING.md). Inquiries: [ledaxe@gmail.com](mailto:ledaxe@gmail.com).

@@ -83,14 +83,16 @@ Future<DebugResponse> _storage(DebugRequest req, DebugContext ctx) async {
 
 Future<DebugResponse> _vpn(DebugRequest req, DebugContext ctx) async {
   final vpn = BoxVpnClient();
-  final results = await Future.wait([
-    vpn.getAutoStart(),
-    vpn.getKeepOnExit(),
-    vpn.isIgnoringBatteryOptimizations(),
-  ]);
+  final autoStart = await vpn.getAutoStart();
+  final keepOnExit = await vpn.getKeepOnExit();
+  final allowBypass = await vpn.getAllowBypass();
+  final backgroundMode = await vpn.getBackgroundMode();
+  final battery = await vpn.isIgnoringBatteryOptimizations();
   return JsonResponse({
-    'auto_start': results[0],
-    'keep_on_exit': results[1],
-    'is_ignoring_battery_optimizations': results[2],
+    'auto_start': autoStart,
+    'keep_on_exit': keepOnExit,
+    'allow_bypass': allowBypass,
+    'background_mode': backgroundMode.wireValue,
+    'is_ignoring_battery_optimizations': battery,
   });
 }

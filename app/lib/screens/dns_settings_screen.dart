@@ -13,9 +13,9 @@ import '../services/builder/preset_expand.dart';
 import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
 
-/// DNS Settings (§014, §041).
+/// DNS Settings (§014, §061 dns-rules-refactor, бывший feature §041).
 ///
-/// §041 — DNS rules refactored to first-class named/toggleable model:
+/// §061 — DNS rules refactored to first-class named/toggleable model:
 /// `dns_options.rules: List<{enabled, type, title, rule?}>` где
 /// `type ∈ {user, template, rule}`. Linear order (free reorder через
 /// drag-handle), individual enable/disable, user-rules editable.
@@ -51,7 +51,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
   /// ref'ов и для override-detection. preset > template на tag-collision.
   Map<String, Map<String, dynamic>> _presetServersByTag = {};
 
-  /// §041 + §032: structured rules list `{enabled, kind, title?, presetId?, rule?}`.
+  /// §061 + §032: structured rules list `{enabled, kind, title?, presetId?, rule?}`.
   List<Map<String, dynamic>> _rules = [];
 
   /// Name-keyed map: template defaults from wizard_template.json
@@ -676,7 +676,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
 
           const Divider(height: 32),
 
-          // --- DNS Rules (§041) ---
+          // --- DNS Rules (§061 dns-rules-refactor) ---
           Row(
             children: [
               Text('DNS Rules', style: theme.textTheme.titleMedium),
@@ -724,30 +724,178 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
           const Divider(height: 32),
 
           // --- Final ---
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('DNS Final'),
-            subtitle: const Text('Fallback DNS server', style: TextStyle(fontSize: 12)),
-            trailing: DropdownButton<String>(
-              value: serverTags.contains(_dnsFinal) ? _dnsFinal : null,
-              hint: const Text('select'),
-              items: serverTags.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13)))).toList(),
-              onChanged: (v) { if (v != null) setState(() { _dnsFinal = v; _scheduleSave(); }); },
-            ),
+          // §048/§047 tooltip — `dns.final` — catch-all для app's DNS queries
+          // (когда не match'ит ни один rule). `local_dns_resolver` тут БЕЗОПАСЕН:
+          // app's queries не recurse через TUN потому что system resolver
+          // вызывается через protected JNI path для apps. Encrypted options
+          // (`google_doh`, `*_dot`) рекомендуем для privacy.
+          _resolverPicker(
+            context: context,
+            title: 'DNS Final',
+            subtitle:
+                'For apps · default fallback when no DNS rule matches',
+            value: _dnsFinal,
+            serverTags: serverTags,
+            onChanged: (v) => setState(() { _dnsFinal = v; _scheduleSave(); }),
+            tooltip: 'Default fallback DNS server. Used when an app makes a '
+                'DNS query and no DNS rule above matches it. Every app DNS '
+                'query that isn\'t routed by a rule ends up here.\n\n'
+                'Recommended:\n'
+                '  • google_doh — encrypted (DoH)\n'
+                '  • cloudflare_dot / google_dot — encrypted (DoT)\n'
+                '  • cloudflare_udp / google_udp — fast plain UDP\n\n'
+                'local_dns_resolver works but reveals queries to your ISP. '
+                'Encrypted options keep them private.',
+            warnIfLocal: false,
           ),
 
           // --- Default Resolver ---
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Default Domain Resolver'),
-            subtitle: const Text('Resolves domains in DNS server addresses', style: TextStyle(fontSize: 12)),
-            trailing: DropdownButton<String>(
-              value: serverTags.contains(_defaultResolver) ? _defaultResolver : null,
-              hint: const Text('select'),
-              items: serverTags.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13)))).toList(),
-              onChanged: (v) { if (v != null) setState(() { _defaultResolver = v; _scheduleSave(); }); },
+          // §047 tooltip — `route.default_domain_resolver` — internal sing-box
+          // DNS lookups (outbound endpoint hostname'ы, domain matching в routing
+          // rules). Здесь `local_dns_resolver` ОПАСЕН: на Android-VPN system
+          // resolver может recurse через TUN и накапливать stale kernel state
+          // → §047 deterioration через несколько часов uptime. Показываем
+          // жёлтый ⚠ если выбран local_dns_resolver.
+          _resolverPicker(
+            context: context,
+            title: 'Default Domain Resolver',
+            subtitle:
+                'For routing · resolves hostnames inside sing-box (outbound '
+                'endpoints, routing rules)',
+            value: _defaultResolver,
+            serverTags: serverTags,
+            onChanged: (v) => setState(() { _defaultResolver = v; _scheduleSave(); }),
+            tooltip: 'Used by routing engine to resolve hostnames internally '
+                '(outbound endpoints, routing rules). Not the resolver apps '
+                'use.\n\n'
+                'Recommended:\n'
+                '  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n'
+                '  • google_udp — UDP to 8.8.8.8 (fast)\n'
+                '  • google_doh — encrypted\n\n'
+                '⚠ local_dns_resolver here leaks lookups to your ISP — '
+                'system DNS bypasses the VPN.',
+            warnIfLocal: true,
+          ),
+          if (_defaultResolver == 'local_dns_resolver')
+            _localResolverWarningBanner(context),
+        ],
+      ),
+    );
+  }
+
+  /// §047/§048 — DNS resolver picker с info-icon ℹ tooltip'ом и опциональным
+  /// жёлтым ⚠ маркером когда выбран `local_dns_resolver` (только для
+  /// `Default Domain Resolver` поля — там это antipattern).
+  Widget _resolverPicker({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
+    required String value,
+    required List<String> serverTags,
+    required ValueChanged<String> onChanged,
+    required String tooltip,
+    required bool warnIfLocal,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final showWarn = warnIfLocal && value == 'local_dns_resolver';
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Row(
+        children: [
+          Tooltip(
+            message: tooltip,
+            preferBelow: false,
+            triggerMode: TooltipTriggerMode.tap,
+            showDuration: const Duration(seconds: 12),
+            waitDuration: const Duration(milliseconds: 100),
+            child: Icon(
+              showWarn ? Icons.warning_amber_rounded : Icons.info_outline,
+              size: 18,
+              color: showWarn ? Colors.amber.shade700 : cs.onSurfaceVariant,
             ),
           ),
+          const SizedBox(width: 6),
+          Text(title),
+        ],
+      ),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+      trailing: DropdownButton<String>(
+        value: serverTags.contains(value) ? value : null,
+        hint: const Text('select'),
+        items: serverTags
+            .map((t) => DropdownMenuItem(
+                value: t,
+                child: Text(t, style: const TextStyle(fontSize: 13))))
+            .toList(),
+        onChanged: (v) {
+          if (v != null) onChanged(v);
+        },
+      ),
+    );
+  }
+
+  /// §047 — banner который показывается под `Default Domain Resolver` когда
+  /// выбран `local_dns_resolver`. Объясняет риск + предлагает quick-fix
+  /// «Switch to cloudflare_udp» если этот server существует в catalog'е.
+  Widget _localResolverWarningBanner(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final hasCloudflareUdp = _servers.any((s) => s['tag'] == 'cloudflare_udp');
+    return Container(
+      margin: const EdgeInsets.fromLTRB(0, 4, 0, 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade100,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.amber.shade400),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.warning_amber_rounded,
+                  size: 18, color: Colors.amber.shade800),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'System DNS leaks lookups to your ISP',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Hostnames sing-box resolves internally (your VPN server '
+            'addresses, custom outbound endpoints) will go through your '
+            'ISP\'s DNS, bypassing the VPN tunnel. Pick a regular DNS '
+            'server for full privacy.',
+            style: TextStyle(fontSize: 12, color: cs.onSurface),
+          ),
+          if (hasCloudflareUdp) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                icon: const Icon(Icons.bolt, size: 16),
+                label: const Text('Switch to cloudflare_udp'),
+                onPressed: () => setState(() {
+                  _defaultResolver = 'cloudflare_udp';
+                  _scheduleSave();
+                }),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.amber.shade900,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

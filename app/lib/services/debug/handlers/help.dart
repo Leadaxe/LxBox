@@ -66,7 +66,7 @@ GET /state/clash                    Clash endpoint info (secret замаскир
 GET /state/subs[?reveal=true]       Подписки. URL masked default; reveal=true — full URL
 GET /state/rules                    CustomRule[] — sealed: inline | srs | preset (с per-kind полями)
 GET /state/storage                  Raw SettingsStorage._cache JSON (для отладки)
-GET /state/vpn                      { auto_start, keep_on_exit, is_ignoring_battery_optimizations }
+GET /state/vpn                      { auto_start, keep_on_exit, allow_bypass, background_mode, is_ignoring_battery_optimizations }
 GET /state/config_locked            { "locked": bool } — состояние §037 lock'а auto-rebuild
 
 === Device ===
@@ -150,11 +150,51 @@ POST   /rules/reorder                          Body: {"order":[id1,id2,...]} —
 
 `?rebuild=true` на любом write-методе → автоматически вызывает rebuild-config.
 
+=== Wi-Fi history (§051 Phase 3 — saved networks for routing rule editor) ===
+
+GET    /wifi_history                           list [{ssid, bssid, last_seen}]
+POST   /wifi_history                           upsert. body {"ssid": "...", "bssid": "..."}
+DELETE /wifi_history                           remove specific. body {"ssid": "...", "bssid": "..."}
+DELETE /wifi_history/all                       clear all
+
+Cap 50 entries (LRU evict by last_seen). BSSID нормализуется к lower-case.
+
 === Files (read-only) ===
 
 GET /files/srs/list                            Cached SRS files: [{rule_id, size, mtime}]
 GET /files/srs?ruleId=<id>                     Binary SRS dump (octet-stream)
 GET /files/local?name=<n>                      Whitelisted internal-storage файлы (cache.db, stderr.log). `/files/external` — legacy alias.
+
+=== Traffic Profiler (§044 per-app + §048 system-wide) ===
+
+Per-app session (в один момент только одна active):
+POST   /profiler/start                         Body: {"package":"<pkg>", "verbose":false, "secondary_packages":["<pkg>",...]}.
+                                                 verbose=true → log_level toggle на debug; secondary_packages →
+                                                 события related apps идут с confidence=secondary.
+                                                 409 если уже active (с current id).
+POST   /profiler/stop                          Stop active session. 404 если nothing active.
+GET    /profiler/active                        Current session metadata. 404 если nothing.
+GET    /profiler/sessions                      Last 5 completed sessions (FIFO ring).
+DELETE /profiler/sessions                      Clear all completed.
+GET    /profiler/session/{id}?include=events,domains,ips
+                                                 events — full event log; domains — by-domain agg;
+                                                 ips — by-IP agg. Без include — только meta.
+DELETE /profiler/session/{id}                  Удалить одну session.
+GET    /profiler/stream                        SSE per-session live stream (требует active session).
+PATCH  /profiler/secondary-packages            Body: {"secondary_packages":[...]}; обновляет live на active.
+                                                 Возвращает 404 если нет active.
+
+System-wide (§048 inclusive observer — Live tab в Statistics):
+POST   /profiler/live/start                    startGlobalRecording — подписывает на core logs +
+                                                 запускает _pollConnections (5s). Idempotent.
+POST   /profiler/live/stop                     stopGlobalRecording. Idempotent.
+GET    /profiler/live/state                    {recording, started_at, buffer_count, unattributed_count, banner_active}.
+GET    /profiler/live?seconds=60               Snapshot global rolling buffer за окно (default 60s).
+                                                 Returns {window_seconds, count, events:[...]}.
+GET    /profiler/live/stream                   SSE — все system-wide events live (DNS resolves +
+                                                 TCP/UDP open/close по всем packages).
+GET    /profiler/live/unattributed             Recent unattributed ring (DNS-fail без owner / TCP без
+                                                 process attribution). Используется для banner detection.
 
 === Diagnostics (§038) ===
 
@@ -184,6 +224,13 @@ PUT    /settings/core_logs_enabled              body {"enabled":true|false}. Def
                                                  живёт). Force-stop приложения + relaunch, либо UI-кнопка
                                                  «Quit & reopen app» в App Settings → Diagnostics или
                                                  Debug screen → Log tab.
+GET|PUT /settings/vpn/allow_bypass              §052 VpnService.Builder.allowBypass(). body {"enabled":bool}.
+                                                 Effect at next establish() — reload VPN.
+GET|PUT /settings/vpn/keep_on_exit              §052 keep VPN running when app closed. body {"enabled":bool}.
+GET|PUT /settings/vpn/background_mode           §052 foreground-service tunnel sleep mode.
+                                                 body {"mode":"never|lazy|always"}.
+                                                 never (default) — always-on; lazy — pause in deep Doze;
+                                                 always — pause on screen-off. Effect at next VPN connect.
 POST   /settings/rebuild-config                Alias /action/rebuild-config
 
 === Backup ===
@@ -261,7 +308,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/state/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Subscriptions list'},
     {'method': 'GET', 'path': '/state/rules', 'description': 'CustomRule[] sealed (inline|srs|preset)'},
     {'method': 'GET', 'path': '/state/storage', 'description': 'Raw SettingsStorage._cache JSON'},
-    {'method': 'GET', 'path': '/state/vpn', 'description': 'auto_start, keep_on_exit, battery_whitelisted'},
+    {'method': 'GET', 'path': '/state/vpn', 'description': 'auto_start, keep_on_exit, allow_bypass, background_mode, battery_whitelisted'},
     {'method': 'GET', 'path': '/state/config_locked', 'description': '{locked: bool} — §037 auto-rebuild lock state'},
     // Device
     {'method': 'GET', 'path': '/device', 'description': 'Android version, model, ABI, app version, network, uptime'},
@@ -305,10 +352,31 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'PATCH', 'path': '/rules/{id}', 'params': {'rebuild': 'true|false'}, 'body': 'Partial CustomRule', 'description': 'Update'},
     {'method': 'DELETE', 'path': '/rules/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Delete'},
     {'method': 'POST', 'path': '/rules/reorder', 'body': '{"order":[id,...]}', 'description': 'Reorder (all ids required)'},
+    // Wi-Fi history (§051 Phase 3)
+    {'method': 'GET', 'path': '/wifi_history', 'description': 'List [{ssid, bssid, last_seen}], cap 50'},
+    {'method': 'POST', 'path': '/wifi_history', 'body': '{"ssid":"...","bssid":"..."}', 'description': 'Upsert entry; bssid lower-cased'},
+    {'method': 'DELETE', 'path': '/wifi_history', 'body': '{"ssid":"...","bssid":"..."}', 'description': 'Remove specific entry'},
+    {'method': 'DELETE', 'path': '/wifi_history/all', 'description': 'Clear all entries'},
     // Files
     {'method': 'GET', 'path': '/files/srs/list', 'description': 'Cached SRS [{rule_id,size,mtime}]'},
     {'method': 'GET', 'path': '/files/srs', 'params': {'ruleId': 'id'}, 'description': 'Binary SRS dump'},
     {'method': 'GET', 'path': '/files/local', 'params': {'name': 'cache.db|stderr.log'}, 'description': 'Whitelisted internal-storage files (filesDir). `/files/external` — legacy alias.'},
+    // Profiler (§044 per-app + §048 system-wide)
+    {'method': 'POST', 'path': '/profiler/start', 'body': '{"package":"<pkg>","verbose":false,"secondary_packages":[...]}', 'description': '§044 Start per-app session. 409 if already active.'},
+    {'method': 'POST', 'path': '/profiler/stop', 'description': 'Stop active session. 404 if none.'},
+    {'method': 'GET', 'path': '/profiler/active', 'description': 'Active session metadata or 404.'},
+    {'method': 'GET', 'path': '/profiler/sessions', 'description': 'Last 5 completed sessions (FIFO ring).'},
+    {'method': 'DELETE', 'path': '/profiler/sessions', 'description': 'Clear all completed.'},
+    {'method': 'GET', 'path': '/profiler/session/{id}', 'params': {'include': 'events,domains,ips (any subset)'}, 'description': 'Session details. include=events for full log.'},
+    {'method': 'DELETE', 'path': '/profiler/session/{id}', 'description': 'Delete one session.'},
+    {'method': 'GET', 'path': '/profiler/stream', 'description': 'SSE per-session live events (requires active).'},
+    {'method': 'PATCH', 'path': '/profiler/secondary-packages', 'body': '{"secondary_packages":[...]}', 'description': 'Update secondary packages on active session. POST also accepted.'},
+    {'method': 'POST', 'path': '/profiler/live/start', 'description': '§048 startGlobalRecording (system-wide). Idempotent.'},
+    {'method': 'POST', 'path': '/profiler/live/stop', 'description': '§048 stopGlobalRecording. Idempotent.'},
+    {'method': 'GET', 'path': '/profiler/live/state', 'description': '{recording,started_at,buffer_count,unattributed_count,banner_active}'},
+    {'method': 'GET', 'path': '/profiler/live', 'params': {'seconds': 'window (default 60)'}, 'description': '§048 global rolling buffer snapshot — TCP/UDP open/close + DNS resolves of all packages.'},
+    {'method': 'GET', 'path': '/profiler/live/stream', 'description': '§048 SSE — system-wide events live.'},
+    {'method': 'GET', 'path': '/profiler/live/unattributed', 'description': '§048 recent unattributed ring (DNS-fail / TCP без attribution).'},
     // Diagnostics (§038)
     {'method': 'GET', 'path': '/diag/dump', 'description': 'Full DumpBuilder JSON-pack'},
     {'method': 'GET', 'path': '/diag/exit-info', 'description': 'ApplicationExitInfo entries (API 30+; empty on lower)'},
@@ -323,6 +391,12 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'PUT', 'path': '/settings/dns_options/servers', 'body': '{"servers":[...]}', 'description': 'Set DNS servers list'},
     {'method': 'PUT', 'path': '/settings/dns_options/rules', 'body': '{"rules":"<json-string>"}', 'description': 'Set DNS rules (legacy json-string shape)'},
     {'method': 'PUT', 'path': '/settings/config_locked', 'body': '{"locked":true|false}', 'description': '§037 toggle auto-rebuild lock — true pins config from UI rebuilds'},
+    {'method': 'GET', 'path': '/settings/vpn/allow_bypass', 'description': '§052 VpnService.Builder.allowBypass() state'},
+    {'method': 'PUT', 'path': '/settings/vpn/allow_bypass', 'body': '{"enabled":true|false}', 'description': '§052 toggle allowBypass — apply on next establish()'},
+    {'method': 'GET', 'path': '/settings/vpn/keep_on_exit', 'description': '§052 keep-VPN-on-app-exit state'},
+    {'method': 'PUT', 'path': '/settings/vpn/keep_on_exit', 'body': '{"enabled":true|false}', 'description': '§052 toggle keep-on-exit'},
+    {'method': 'GET', 'path': '/settings/vpn/background_mode', 'description': '§052 tunnel sleep mode (never|lazy|always)'},
+    {'method': 'PUT', 'path': '/settings/vpn/background_mode', 'body': '{"mode":"never|lazy|always"}', 'description': '§052 set tunnel sleep mode — apply on next VPN connect'},
     // Backup
     {'method': 'GET', 'path': '/backup/export', 'params': {'include': 'config,vars,subs (default all)'}, 'description': 'Pure-data snapshot (no diag noise)'},
     {'method': 'POST', 'path': '/backup/import', 'params': {'merge': 'true|false', 'rebuild': 'true|false'}, 'body': '{config?, vars?, server_lists?}', 'description': 'Restore from export or /diag/dump'},

@@ -7,11 +7,12 @@ import '../services/app_info_cache.dart';
 import '../services/clash_api_client.dart';
 import '../services/traffic_profiler.dart';
 import 'connections_screen.dart';
+import 'live_events_tab.dart';
 import 'per_app_trace_tab.dart';
 
-/// §044: enum для start-tab выбора в StatsScreen. Передаётся при
+/// §044/§048: enum для start-tab выбора в StatsScreen. Передаётся при
 /// `Navigator.push(StatsScreen(initialTab: StatsTab.perApp))`.
-enum StatsTab { overview, connections, perApp }
+enum StatsTab { overview, connections, perApp, live }
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({
@@ -192,45 +193,71 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       initialIndex: widget.initialTab.index,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Statistics'),
-          bottom: TabBar(
-            tabs: [
-              const Tab(icon: Icon(Icons.dashboard_outlined), text: 'Overview'),
-              const Tab(icon: Icon(Icons.link), text: 'Connections'),
-              Tab(
-                icon: const Icon(Icons.travel_explore),
-                child: AnimatedBuilder(
-                  animation: TrafficProfiler.I,
-                  builder: (_, _) => Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text('Per-app'),
-                      if (TrafficProfiler.I.isRecording) ...[
-                        const SizedBox(width: 4),
-                        Icon(
-                          Icons.bolt,
-                          size: 14,
-                          color: Theme.of(context).colorScheme.error,
-                        ),
+      child: Builder(
+        builder: (innerCtx) => Scaffold(
+          appBar: AppBar(
+            title: const Text('Statistics'),
+            bottom: TabBar(
+              // §048: 4 tab'а делят width поровну. «Connections» → «Conns»
+              // чтобы влезли без horizontal scroll'а на 360dp экранах.
+              tabs: [
+                const Tab(icon: Icon(Icons.dashboard_outlined), text: 'Stats'),
+                const Tab(icon: Icon(Icons.link), text: 'Conns'),
+                Tab(
+                  icon: const Icon(Icons.travel_explore),
+                  child: AnimatedBuilder(
+                    animation: TrafficProfiler.I,
+                    builder: (_, _) => Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('App'),
+                        if (TrafficProfiler.I.isRecording) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.bolt,
+                            size: 14,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                Tab(
+                  icon: const Icon(Icons.podcasts),
+                  child: AnimatedBuilder(
+                    animation: TrafficProfiler.I,
+                    builder: (_, _) => Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('Live'),
+                        if (TrafficProfiler.I.unattributedBannerActive) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.warning_amber,
+                            size: 14,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            children: [
+              _buildOverview(context),
+              ConnectionsView(clash: widget.clash),
+              PerAppTraceTab(clash: widget.clash),
+              const LiveEventsTab(),
             ],
           ),
-        ),
-        body: TabBarView(
-          children: [
-            _buildOverview(context),
-            ConnectionsView(clash: widget.clash),
-            PerAppTraceTab(clash: widget.clash),
-          ],
         ),
       ),
     );

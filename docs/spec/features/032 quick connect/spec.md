@@ -2,9 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Done (MVP) — реализовано в v1.6.0, см. [task 014](../../tasks/014-quick-connect-tile-shortcut.md) |
-| Дата | 2026-04-20 (Draft) → 2026-04-28 (реализация) |
-| Зависимости | `BoxVpnService` (native VPN lifecycle), `MainActivity`, AndroidManifest |
+| Статус | **Done (v1.6.0)** — обе части (QS tile + dynamic app shortcut) shipped. UI кнопка "Add to Quick Settings" в App Settings → Quick connect. См. [task 014](../../tasks/014-quick-connect-tile-shortcut.md). |
+| Дата | 2026-04-20 (Draft) → 2026-04-28 (реализация) → 2026-05-10 (audit + spec sync) |
+| Зависимости | `BoxVpnService` / `BoxApplication` / `MainActivity` / `AndroidManifest` |
+| Что **не** реализовано | Per-group shortcut'ы / homescreen widget / Wear OS / Tasker intents — см. [Out of scope / future](#out-of-scope--future) |
 
 ## Цель
 
@@ -171,41 +172,25 @@ class LxBoxTileService : TileService() {
 
 ---
 
-### Часть 2 — App shortcut
+### Часть 2 — App shortcut (dynamic-only)
 
-#### Static shortcut: `res/xml/shortcuts.xml`
+#### Финальная реализация — только dynamic shortcuts
 
-```xml
-<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
-  <shortcut
-    android:shortcutId="toggle_vpn"
-    android:enabled="true"
-    android:icon="@mipmap/ic_launcher"
-    android:shortcutShortLabel="@string/shortcut_toggle_short"
-    android:shortcutLongLabel="@string/shortcut_toggle_long">
-    <intent
-      android:action="android.intent.action.VIEW"
-      android:targetPackage="com.leadaxe.lxbox"
-      android:targetClass="com.leadaxe.lxbox.MainActivity">
-      <extra android:name="action" android:value="toggle" />
-    </intent>
-    <categories android:name="android.shortcut.conversation" />
-  </shortcut>
-</shortcuts>
-```
+В v1.6.0 решено отказаться от static `<shortcuts>` xml в пользу **только dynamic** через `ShortcutManager` — иконка меняет label/intent в зависимости от текущего `BoxVpnService.currentStatus`. Логика — в [`QuickShortcuts.kt`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/QuickShortcuts.kt).
 
-`strings.xml`:
-```xml
-<string name="shortcut_toggle_short">Toggle VPN</string>
-<string name="shortcut_toggle_long">Toggle VPN</string>
-```
+| `BoxVpnService.currentStatus` | Пункт меню (long-press на иконке) |
+|---|---|
+| `Stopped` | один пункт — **«Connect»** (`extra action=connect`) |
+| `Started` | один пункт — **«Disconnect»** (`extra action=disconnect`) |
+| `Starting` / `Stopping` | оба: **«Connect»** + **«Disconnect»** (даём юзеру и cancel-старт, и форс-стоп) |
 
-`AndroidManifest.xml` (внутри MainActivity):
-```xml
-<meta-data
-  android:name="android.app.shortcuts"
-  android:resource="@xml/shortcuts" />
-```
+**Init-точка:** `BoxApplication.onCreate` (любой запуск процесса) + после каждого `BoxVpnService.setStatus(...)`. Гейт `Build.VERSION.SDK_INT >= R` (Android 11+) — Quick Connect это primary support tier; на 8-10 — no-op (избегаем API/OEM-сюрпризов с `ShortcutManager`).
+
+Все вызовы `ShortcutManager` обёрнуты в `runCatching` — `IllegalStateException` (rate-limit когда лаунчер сбрасывает счётчик) логируем и продолжаем; следующий `setStatus` всё равно повторит push.
+
+Иконка shortcut'а — `R.drawable.ic_lxbox_tile` (Material `verified_user`/shield, monochrome). Та же что и у QS tile, для визуальной консистентности.
+
+**Static shortcut удалён:** файл `res/xml/shortcuts.xml` снят, `<meta-data android:name="android.app.shortcuts">` из манифеста выпилен. Причина — статический shortcut не отражал состояние (всегда «Toggle VPN»), юзер не понимал что произойдёт; dynamic с явным «Connect» / «Disconnect» — без ambiguity.
 
 #### MainActivity intent handling
 
@@ -253,22 +238,6 @@ override fun onActivityResult(req: Int, res: Int, data: Intent?) {
 }
 ```
 
-#### Dynamic shortcut — финальная реализация
-
-В v1.6.0 реализованы **только** динамические shortcut'ы (статический «Toggle VPN» из `res/xml/shortcuts.xml` снят, файл удалён, `<meta-data android:name="android.app.shortcuts">` из манифеста выпилен). Логика в [`QuickShortcuts.kt`](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/QuickShortcuts.kt):
-
-| `BoxVpnService.currentStatus` | Пункт меню (long-press на иконке) |
-|---|---|
-| `Stopped` | один пункт — **«Connect»** (`extra action=connect`) |
-| `Started` | один пункт — **«Disconnect»** (`extra action=disconnect`) |
-| `Starting` / `Stopping` | оба: **«Connect»** + **«Disconnect»** (даём юзеру и cancel-старт, и форс-стоп) |
-
-Init-точка: `BoxApplication.initialize` (любой запуск процесса) + после каждого `BoxVpnService.setStatus(...)`. Гейт `Build.VERSION.SDK_INT >= R` (Android 11+) — Quick Connect это primary support tier; на 8-10 — no-op (избегаем API/OEM-сюрпризов с `ShortcutManager`).
-
-Все вызовы `ShortcutManager` обёрнуты в `runCatching` — `IllegalStateException` (rate-limit когда лаунчер сбрасывает счётчик) логируем и продолжаем; следующий `setStatus` всё равно повторит push.
-
-Иконка shortcut'а — `R.drawable.ic_lxbox_tile` (Material `verified_user`/shield, monochrome). Та же что и у QS tile, для визуальной консистентности.
-
 ---
 
 ## Edge cases
@@ -311,34 +280,34 @@ Shortcut'ы на home screen Android создаёт юзер сам (long-press 
 
 ---
 
-## Файлы (план реализации)
+## Файлы (актуальная реализация)
 
 | Файл | Что |
 |------|-----|
-| `android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/LxBoxTileService.kt` | TileService класс |
-| `android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt` | В `setStatus` дернуть `TileService.requestListeningState`; в `onDestroy` сбросить `currentStatus` |
-| `android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt` | `handleQuickAction` + intent extras `connect/disconnect/toggle` |
-| `android/app/src/main/AndroidManifest.xml` | Регистрация TileService + meta-data `android.app.shortcuts` |
-| `android/app/src/main/res/xml/shortcuts.xml` | Static shortcut "Toggle VPN" |
-| `android/app/src/main/res/values/strings.xml` | Локализованные label'ы |
-| `lib/screens/app_settings_screen.dart` | Блок "Quick connect" с кнопкой Add (API 33+) |
-| `lib/vpn/box_vpn_client.dart` | Wrapper `requestAddTile()` → MethodChannel метод |
+| `android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/LxBoxTileService.kt` | TileService — onClick toggle, refreshTile с двухступенчатой перерисовкой (direct + requestListeningState) |
+| `android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/QuickShortcuts.kt` | Dynamic shortcuts через `ShortcutManager` — refresh из `BoxApplication.onCreate` + после каждого `setStatus` |
+| `android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt` | В `setStatus` дёргает `LxBoxTileService.refreshTile` + `QuickShortcuts.refresh`; в `onDestroy` сбрасывает `currentStatus = Stopped` |
+| `android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt` | `handleQuickAction(intent)` + `ACTION_TOGGLE` constant + intent extras `connect/disconnect/toggle` |
+| `android/app/src/main/AndroidManifest.xml` | Регистрация `<service .LxBoxTileService>` с `BIND_QUICK_SETTINGS_TILE` permission + intent-filter `QS_TILE`. **Static shortcuts удалены** (`<meta-data android.app.shortcuts>` snято). |
+| `lib/screens/app_settings_screen.dart` | Блок "Quick connect" в General tab с кнопкой "Add to Quick Settings" (API 33+) + текстовая инструкция для < 33 |
+| `lib/vpn/box_vpn_client.dart` | `requestAddTile()` → MethodChannel метод (timeout 10s) |
 | `android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt` | Handler `requestAddTile` → `StatusBarManager.requestAddTileService` |
+| ~~`android/app/src/main/res/xml/shortcuts.xml`~~ | **Удалён в v1.6.0** — заменён на dynamic через `QuickShortcuts.kt` |
 
 ---
 
-## Acceptance
+## Acceptance — все выполнено в v1.6.0 ✅
 
-- [ ] Юзер тянет шторку → редактирование → видит L×Box tile, перетаскивает в активные.
-- [ ] Тап на L×Box tile когда VPN off → запускается VPN (с consent-диалогом если первый раз).
-- [ ] Тап на L×Box tile когда VPN on → выключается. Subtitle меняется на "Disconnected".
-- [ ] Tile subtitle отражает live-статус: Connecting → Connected → Stopping → Disconnected.
-- [ ] Тапы во время Starting/Stopping игнорятся (нет race'а).
-- [ ] Long-press на иконку app'а на home screen показывает "Toggle VPN".
-- [ ] Тап shortcut'а вызывает toggle: VPN включается / выключается без открытия UI (после первого consent'а).
-- [ ] Первый shortcut-тап без consent → MainActivity открывается, после consent'а сервис стартует.
-- [ ] App Settings → Quick connect показывает блок с кнопкой Add tile (на API 33+) и инструкцией для < 33.
-- [ ] После убийства сервиса OOM → `currentStatus = Stopped`, tile показывает Disconnected.
+- [x] Юзер тянет шторку → редактирование → видит L×Box tile, перетаскивает в активные.
+- [x] Тап на L×Box tile когда VPN off → запускается VPN (с consent-диалогом если первый раз).
+- [x] Тап на L×Box tile когда VPN on → выключается. Subtitle меняется на "Disconnected".
+- [x] Tile subtitle отражает live-статус: Connecting → Connected → Stopping → Disconnected.
+- [x] Тапы во время Starting/Stopping игнорятся (нет race'а).
+- [x] Long-press на иконку app'а на home screen показывает контекстный пункт **"Connect"** или **"Disconnect"** (вместо абстрактного "Toggle VPN" — финальная dynamic-реализация).
+- [x] Тап shortcut'а вызывает соответствующее действие: VPN включается / выключается без открытия UI (после первого consent'а).
+- [x] Первый shortcut-тап без consent → MainActivity открывается, после consent'а сервис стартует.
+- [x] App Settings → Quick connect показывает блок с кнопкой "Add to Quick Settings" (на API 33+) и инструкцией для < 33.
+- [x] После убийства сервиса OOM → `currentStatus = Stopped`, tile показывает Disconnected.
 
 ---
 
@@ -356,7 +325,7 @@ Shortcut'ы на home screen Android создаёт юзер сам (long-press 
 
 ## Out of scope / future
 
-- **Per-group shortcut'ы** — "Connect to vpn-1", "Connect to vpn-2" — динамические shortcut'ы с extras `{action: connect, group: vpn-2}`. Требует UI для выбора какие группы выставлять.
-- **Виджет на home screen** с трафик-графиком + selector группы. Отдельный спек.
-- **Tasker / automation integration** — broadcast intent'ы для внешних автоматизаций. Может пересечься с спекой `031 debug api` (action endpoints).
-- **Wear OS companion** — отдельная история.
+- **Per-group shortcut'ы** — "Connect to vpn-1", "Connect to vpn-2" — динамические shortcut'ы с extras `{action: connect, group: vpn-2}`. Требует UI для выбора какие группы выставлять. Не в работе.
+- **Homescreen widget** с трафик-графиком + selector группы. Отдельный спек, не в работе.
+- **Tasker / automation broadcast intents** — `com.leadaxe.lxbox.{START_VPN, STOP_VPN, TOGGLE_VPN, SWITCH_NODE, SET_GROUP}` для Tasker / Macrodroid / Llama. Естественно расширяет §032 — те же самые actions через broadcast вместо tile/shortcut. Будет вынесено в **отдельный spec** (см. ARCHITECTURE → Reusable layers / extension targets), сейчас можно делать через Debug API но это нестандартно для automation tools. Связан с [`031 debug api`](../031%20debug%20api/spec.md) action handler'ами — реализация будет переиспользовать ту же логику.
+- **Wear OS companion** — отдельная история, не в работе.

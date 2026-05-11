@@ -14,6 +14,7 @@ import '../services/template_loader.dart';
 import '../widgets/outbound_picker.dart';
 import '../widgets/template_var_list.dart';
 import 'custom_rule_edit_screen.dart';
+import 'tun_apps_tab.dart';
 
 class RoutingScreen extends StatefulWidget {
   const RoutingScreen({
@@ -445,7 +446,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
     final bottomPad = MediaQuery.of(context).padding.bottom + 24;
 
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Routing'),
@@ -456,6 +457,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
               Tab(text: 'Channels'),
               Tab(text: 'Presets'),
               Tab(text: 'Rules'),
+              Tab(text: 'Tunnel apps'),
             ],
           ),
         ),
@@ -531,6 +533,12 @@ class _RoutingScreenState extends State<RoutingScreen> {
                   ),
                 ),
               ],
+            ),
+
+            // ─── Tunnel apps: §046 OS-level split-tunneling ───
+            TunAppsTab(
+              homeController: widget.homeController,
+              subController: widget.subController,
             ),
           ],
         ),

@@ -1,4 +1,4 @@
-// §041 + §033: DNS rules resolver + applyCustomDns с unified kind set.
+// §061 + §033: DNS rules resolver + applyCustomDns с unified kind set.
 //
 // Покрывает:
 // - resolveDnsRulesList: orphan cleanup, auto-discovery, persist на изменении,
@@ -38,7 +38,7 @@ void main() {
     if (tmp.existsSync()) await tmp.delete(recursive: true);
   });
 
-  group('resolveDnsRulesList (§041 + §033)', () {
+  group('resolveDnsRulesList (§061 + §033)', () {
     test('первый запуск: storage пуст → preset перед template (default order)', () async {
       final templateRules = [
         {'name': 'Default → Google DoH', 'enabled_default': true, 'server': 'google_doh'},

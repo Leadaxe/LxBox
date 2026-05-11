@@ -4,23 +4,33 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../main.dart';
-import '../models/background_mode.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/transport/server.dart';
 import '../services/haptic_service.dart';
 import '../services/relative_time.dart';
 import '../services/settings_storage.dart';
 import '../services/update_checker.dart';
+import '../services/url_launcher.dart' as ul;
+import '../services/wifi_history_listener.dart';
+import '../widgets/wifi_permission_dialog.dart';
 import '../vpn/box_vpn_client.dart';
 import 'about_screen.dart';
 import 'backup_screen.dart';
 
 class AppSettingsScreen extends StatefulWidget {
-  const AppSettingsScreen({super.key, this.initialTab = 0});
+  const AppSettingsScreen({
+    super.key,
+    this.initialTab = 0,
+    this.highlightCoreLogs = false,
+  });
 
-  /// Tab index to open: 0 = General, 1 = Background, 2 = Diagnostics.
-  /// Used by deep-links (e.g. DebugScreen → "Diagnostics settings" в попапе).
+  /// 0 = General, 1 = Diagnostics. Used by deep-links.
   final int initialTab;
+
+  /// Если true — после первого render'а скроллим к «Forward sing-box logs»
+  /// SwitchListTile и пульсируем подсветку 2.5s. Используется banner'ом
+  /// в Live tab чтобы юзер сразу увидел нужный toggle.
+  final bool highlightCoreLogs;
 
   @override
   State<AppSettingsScreen> createState() => _AppSettingsScreenState();
@@ -29,26 +39,33 @@ class AppSettingsScreen extends StatefulWidget {
 class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindingObserver {
   final _vpn = BoxVpnClient();
   bool _autoStart = false;
-  bool _keepOnExit = false;
   bool _autoRebuild = false;
   bool _haptic = true;
   bool _batteryWhitelisted = false;
   bool _notificationsEnabled = true;
-  BackgroundMode _backgroundMode = BackgroundMode.never;
+  bool _backgroundLocationGranted = false;
+  bool _nearbyWifiGranted = false;
   bool _autoPing = true;
   bool _autoUpdateSubs = true;
   bool _autoCheckUpdates = true;
   bool _loaded = false;
 
-  // §031 Debug API.
   bool _debugEnabled = false;
   String _debugToken = '';
   int _debugPort = SettingsStorage.debugPortDefault;
   late final TextEditingController _debugPortCtl;
   String _debugPortError = '';
 
-  // §043 sing-box core logs forwarding (требует restart Service'а)
   bool _coreLogsEnabled = false;
+  bool _configLocked = false;
+
+  // Для deep-link «highlightCoreLogs» из Live tab banner'а — скроллим
+  // к этому tile'у после первого render'а и пульсируем background 2.5s.
+  final GlobalKey _coreLogsTileKey = GlobalKey();
+  bool _coreLogsHighlighted = false;
+  Timer? _coreLogsHighlightTimer;
+  // §051 Phase 3 — auto-record visited Wi-Fi networks (default off).
+  bool _autoRecordWifi = false;
 
   @override
   void initState() {
@@ -56,12 +73,37 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     WidgetsBinding.instance.addObserver(this);
     _debugPortCtl = TextEditingController();
     unawaited(_loadAutoStart());
+    if (widget.highlightCoreLogs) {
+      // Tile живёт в Diagnostics tab (initialTab=1). Tab сам строит
+      // children когда juзер на нём — postFrame этого build'а гарантирует
+      // что _coreLogsTileKey.currentContext доступен.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToAndHighlightCoreLogs();
+      });
+    }
+  }
+
+  void _scrollToAndHighlightCoreLogs() {
+    final ctx = _coreLogsTileKey.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+      alignment: 0.3, // tile в верхней трети viewport'а — так юзер сразу видит
+    );
+    setState(() => _coreLogsHighlighted = true);
+    _coreLogsHighlightTimer?.cancel();
+    _coreLogsHighlightTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _coreLogsHighlighted = false);
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _debugPortCtl.dispose();
+    _coreLogsHighlightTimer?.cancel();
     super.dispose();
   }
 
@@ -75,29 +117,31 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
 
   Future<void> _loadAutoStart() async {
     final auto = await _vpn.getAutoStart();
-    final keep = await _vpn.getKeepOnExit();
     final rebuild = await SettingsStorage.getVar('auto_rebuild', 'true');
     final haptic = await SettingsStorage.getVar(HapticService.prefsKey, 'true');
     final autoPing = await SettingsStorage.getVar('auto_ping_on_start', 'true');
     final battery = await _vpn.isIgnoringBatteryOptimizations();
     final notifications = await _vpn.areNotificationsEnabled();
-    final bgMode = await _vpn.getBackgroundMode();
+    final bgLocation = await ul.UrlLauncher.checkBackgroundLocationPermission();
+    final nearbyWifi = await ul.UrlLauncher.checkNearbyWifiPermission();
     final autoUpdateSubs = await SettingsStorage.getAutoUpdateSubs();
     final autoCheckUpdates = await SettingsStorage.getAutoCheckUpdates();
     final debugEnabled = await SettingsStorage.getDebugEnabled();
     final debugToken = await SettingsStorage.getDebugToken();
     final debugPort = await SettingsStorage.getDebugPort();
     final coreLogsEnabled = await _vpn.getCoreLogsEnabled();
+    final configLocked = await SettingsStorage.getConfigLockedForDebug();
+    final autoRecordWifi = await SettingsStorage.getAutoRecordWifi();
     if (mounted) {
       setState(() {
         _autoStart = auto;
-        _keepOnExit = keep;
         _autoRebuild = rebuild == 'true';
         _haptic = haptic != 'false';
         _autoPing = autoPing != 'false';
         _batteryWhitelisted = battery;
         _notificationsEnabled = notifications;
-        _backgroundMode = bgMode;
+        _backgroundLocationGranted = bgLocation;
+        _nearbyWifiGranted = nearbyWifi;
         _autoUpdateSubs = autoUpdateSubs;
         _autoCheckUpdates = autoCheckUpdates;
         _debugEnabled = debugEnabled;
@@ -105,9 +149,29 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _debugPort = debugPort;
         _debugPortCtl.text = debugPort.toString();
         _coreLogsEnabled = coreLogsEnabled;
+        _configLocked = configLocked;
+        _autoRecordWifi = autoRecordWifi;
         _loaded = true;
       });
     }
+  }
+
+  /// §037 — toggle config_locked_for_debug.
+  /// Когда true — `SubscriptionController.generateConfig()` тихо skip'ает
+  /// rebuild при UI-действиях, и pinned config.json (например, отправленный
+  /// через Debug API `PUT /config`) остаётся в живых.
+  Future<void> _toggleConfigLocked(bool locked) async {
+    setState(() => _configLocked = locked);
+    await SettingsStorage.setConfigLockedForDebug(locked);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(locked
+            ? 'Config locked. UI actions will not rebuild config.'
+            : 'Config unlocked. Next UI action will rebuild from settings.'),
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -124,6 +188,14 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       final token = DebugServer.generateToken();
       await SettingsStorage.setDebugToken(token);
       if (mounted) setState(() => _debugToken = token);
+    }
+    // §037 — config lock is a debug-only feature. Disabling Debug API
+    // implicitly unlocks: иначе юзер останется с pinned config'ом без
+    // UI-способа его разблокировать (lock toggle живёт под Debug API
+    // блоком и спрятан, когда API выключен).
+    if (!enable && _configLocked) {
+      await SettingsStorage.setConfigLockedForDebug(false);
+      if (mounted) setState(() => _configLocked = false);
     }
     await applyDebugApiSettings();
   }
@@ -162,12 +234,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     });
     await SettingsStorage.setDebugPort(port);
     await applyDebugApiSettings();
-  }
-
-  Future<void> _applyBackgroundMode(BackgroundMode? mode) async {
-    if (mode == null || mode == _backgroundMode) return;
-    setState(() => _backgroundMode = mode);
-    await _vpn.setBackgroundMode(mode);
   }
 
   /// §043: toggle forwarding sing-box логов в наш AppLog как `DebugSource.core`.
@@ -244,15 +310,88 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     messenger.showSnackBar(SnackBar(content: Text(msg), duration: duration));
   }
 
+  /// Tap on the Notifications row in Background → System setup.
+  ///
+  /// — granted   → open per-app notification settings (toggle categories etc.)
+  /// — denied    → try the runtime POST_NOTIFICATIONS prompt; if that returns
+  ///               with permission still denied (user picked "Don't allow", or
+  ///               had previously selected "Don't ask again"), fall back to
+  ///               the App Permissions screen.
+  Future<void> _onNotificationsTap() async {
+    final granted = await ul.UrlLauncher.checkNotificationPermission();
+    if (granted) {
+      await _vpn.openNotificationSettings();
+      return;
+    }
+    await ul.UrlLauncher.requestNotificationPermission();
+    // Re-check; system dialog is async, but on API 33+ it resolves before the
+    // call returns. If "Don't ask again" was previously chosen, the prompt
+    // is silently skipped — push the user to Settings instead.
+    final after = await ul.UrlLauncher.checkNotificationPermission();
+    if (mounted) {
+      setState(() => _notificationsEnabled = after);
+    }
+    if (!after) {
+      await ul.UrlLauncher.openAppSettings();
+    }
+  }
+
   Future<void> _refreshBatteryStatus() async {
     final battery = await _vpn.isIgnoringBatteryOptimizations();
     final notifications = await _vpn.areNotificationsEnabled();
+    final bgLocation = await ul.UrlLauncher.checkBackgroundLocationPermission();
+    final nearbyWifi = await ul.UrlLauncher.checkNearbyWifiPermission();
     if (mounted) {
       setState(() {
         _batteryWhitelisted = battery;
         _notificationsEnabled = notifications;
+        _backgroundLocationGranted = bgLocation;
+        _nearbyWifiGranted = nearbyWifi;
       });
     }
+  }
+
+  /// §051 — tap на «Nearby Wi-Fi» row. Симметрично Notifications row:
+  /// - granted → App Permissions screen (юзер видит/может revoke)
+  /// - denied  → shared `WifiPermissionDialog` (объяснение + runtime prompt
+  ///             + Settings fallback)
+  /// State после возврата из Settings рефрешится через
+  /// `didChangeAppLifecycleState` → `_refreshBatteryStatus`.
+  Future<void> _onNearbyWifiTap() async {
+    final granted = await ul.UrlLauncher.checkNearbyWifiPermission();
+    if (granted) {
+      await ul.UrlLauncher.openAppSettings();
+      return;
+    }
+    if (!mounted) return;
+    await WifiPermissionDialog.show(
+      context,
+      missing: const ['android.permission.NEARBY_WIFI_DEVICES'],
+    );
+    final after = await ul.UrlLauncher.checkNearbyWifiPermission();
+    if (mounted) setState(() => _nearbyWifiGranted = after);
+  }
+
+  /// §051 — tap на «Location (background)» row.
+  /// - granted → App Permissions screen
+  /// - denied  → shared `WifiPermissionDialog` (для BACKGROUND_LOCATION
+  ///             runtime prompt бесполезен на API 30+, dialog покажет
+  ///             только «Open Settings»).
+  Future<void> _onBackgroundLocationTap() async {
+    final granted =
+        await ul.UrlLauncher.checkBackgroundLocationPermission();
+    if (granted) {
+      await ul.UrlLauncher.openAppSettings();
+      return;
+    }
+    if (!mounted) return;
+    await WifiPermissionDialog.show(
+      context,
+      missing: const ['android.permission.ACCESS_BACKGROUND_LOCATION'],
+    );
+    final after =
+        await ul.UrlLauncher.checkBackgroundLocationPermission();
+    if (mounted) setState(() => _backgroundLocationGranted = after);
   }
 
   /// Preset-инструкции перед переходом в system App info — OEM'ы прячут
@@ -294,15 +433,14 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       animation: themeNotifier,
       builder: (context, _) {
         return DefaultTabController(
-          length: 3,
-          initialIndex: widget.initialTab.clamp(0, 2),
+          length: 2,
+          initialIndex: widget.initialTab.clamp(0, 1),
           child: Scaffold(
             appBar: AppBar(
               title: const Text('App Settings'),
               bottom: const TabBar(
                 tabs: [
                   Tab(text: 'General'),
-                  Tab(text: 'Background'),
                   Tab(text: 'Diagnostics'),
                 ],
               ),
@@ -310,7 +448,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
             body: TabBarView(
               children: [
                 _buildGeneralTab(context),
-                _buildBackgroundTab(context),
                 _buildDiagnosticsTab(context),
               ],
             ),
@@ -479,21 +616,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     );
   }
 
-  Widget _buildBackgroundTab(BuildContext context) {
+  Widget _buildDiagnosticsTab(BuildContext context) {
     return ListView(
       padding: _tabPadding(context),
       children: [
-        SwitchListTile(
-          title: const Text('Keep VPN on exit'),
-          subtitle: const Text('VPN stays active when app is closed'),
-          secondary: const Icon(Icons.exit_to_app),
-          value: _keepOnExit,
-          onChanged: _loaded ? (val) {
-            setState(() => _keepOnExit = val);
-            unawaited(_vpn.setKeepOnExit(val));
-          } : null,
-        ),
-        const Divider(height: 32),
         Text('System setup', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         ListTile(
@@ -526,9 +652,43 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
               ? 'Allowed — foreground service shows VPN status'
               : 'Blocked — Android may throttle the VPN service. Tap to allow.'),
           trailing: const Icon(Icons.chevron_right, size: 18),
-          onTap: () async {
-            await _vpn.openNotificationSettings();
-          },
+          onTap: _onNotificationsTap,
+        ),
+        // §051 — Wi-Fi rules permissions: BACKGROUND_LOCATION (API 29+) и
+        // NEARBY_WIFI_DEVICES (API 33+). Без них sing-box `wifi_ssid` /
+        // `wifi_bssid` правила не сматчатся (`WifiInfo.ssid` возвращает
+        // `<unknown ssid>`). См. spec/050 findings + spec/051.
+        ListTile(
+          leading: Icon(
+            _backgroundLocationGranted
+                ? Icons.location_on_outlined
+                : Icons.location_off_outlined,
+            color: _backgroundLocationGranted
+                ? Colors.green
+                : Theme.of(context).colorScheme.error,
+          ),
+          title: const Text('Location (background)'),
+          subtitle: Text(_backgroundLocationGranted
+              ? 'Granted — sing-box can read Wi-Fi state for routing rules'
+              : 'Required for Wi-Fi-based routing rules. Tap to grant.'),
+          trailing: const Icon(Icons.chevron_right, size: 18),
+          onTap: _onBackgroundLocationTap,
+        ),
+        ListTile(
+          leading: Icon(
+            _nearbyWifiGranted
+                ? Icons.wifi_outlined
+                : Icons.wifi_off_outlined,
+            color: _nearbyWifiGranted
+                ? Colors.green
+                : Theme.of(context).colorScheme.error,
+          ),
+          title: const Text('Nearby Wi-Fi devices'),
+          subtitle: Text(_nearbyWifiGranted
+              ? 'Granted — real SSID/BSSID accessible'
+              : 'Android 13+ requires this for SSID. Tap to grant.'),
+          trailing: const Icon(Icons.chevron_right, size: 18),
+          onTap: _onNearbyWifiTap,
         ),
         ListTile(
           leading: const Icon(Icons.settings_applications_outlined),
@@ -537,82 +697,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
               'OEM-specific toggles to keep VPN alive in background.'),
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: _openAppInfoWithHint,
-        ),
-        const Divider(height: 32),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-          child: Row(
-            children: [
-              const Icon(Icons.bedtime_outlined, size: 20),
-              const SizedBox(width: 12),
-              Text('Tunnel sleep mode',
-                  style: Theme.of(context).textTheme.titleSmall),
-            ],
-          ),
-        ),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(48, 0, 16, 4),
-          child: Text(
-            'When to pause the tunnel to save battery. Takes effect on '
-            'next VPN connect.',
-            style: TextStyle(fontSize: 12),
-          ),
-        ),
-        RadioGroup<BackgroundMode>(
-          groupValue: _backgroundMode,
-          onChanged: (BackgroundMode? m) {
-            if (!_loaded) return;
-            unawaited(_applyBackgroundMode(m));
-          },
-          child: const Column(
-            children: [
-              RadioListTile<BackgroundMode>(
-                value: BackgroundMode.never,
-                title: Text('Never sleep (recommended)'),
-                subtitle: Text(
-                    'Tunnel is always active. Best reliability — pushes '
-                    'and long-lived sockets survive. Higher battery use.'),
-              ),
-              RadioListTile<BackgroundMode>(
-                value: BackgroundMode.lazy,
-                title: Text('Lazy sleep'),
-                subtitle: Text(
-                    'Pause only in deep Doze (screen off for a long '
-                    'time + no motion). Balanced.'),
-              ),
-              RadioListTile<BackgroundMode>(
-                value: BackgroundMode.always,
-                title: Text('Aggressive battery saving'),
-                subtitle: Text(
-                    'Pause tunnel whenever screen turns off. Max '
-                    'battery savings, but pushes, incoming calls and '
-                    'background sync stop until unlock.'),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDiagnosticsTab(BuildContext context) {
-    return ListView(
-      padding: _tabPadding(context),
-      children: [
-        Text('Granted permissions',
-            style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        _permissionRow(
-          context,
-          ok: _batteryWhitelisted,
-          okLabel: 'Battery optimization: Unrestricted',
-          badLabel: 'Battery optimization: Restricted',
-        ),
-        _permissionRow(
-          context,
-          ok: _notificationsEnabled,
-          okLabel: 'Notifications: Allowed',
-          badLabel: 'Notifications: Blocked',
         ),
         const Divider(height: 32),
         Text('Developer', style: Theme.of(context).textTheme.titleMedium),
@@ -691,24 +775,50 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
               ],
             ),
           ),
+        // §037 — config_locked_for_debug. Видим только когда Debug API ON,
+        // чтобы lock не висел сиротой без UI-возврата к разблокировке (его
+        // снимают через Debug API `PUT /settings/config_locked` или этим
+        // toggle'ом). При выключении Debug API toggle выше — lock auto-снимется.
+        if (_debugEnabled)
+          SwitchListTile(
+            title: const Text('Lock config (debug)'),
+            subtitle: Text(
+              _configLocked
+                  ? 'Pinned. UI actions skip config rebuild — useful when testing PUT /config overrides.'
+                  : 'Off — UI actions rebuild config from settings as usual.',
+            ),
+            secondary: const Icon(Icons.lock_outline),
+            value: _configLocked,
+            onChanged: _loaded
+                ? (val) => unawaited(_toggleConfigLocked(val))
+                : null,
+          ),
         // §043: forwarding sing-box internal logs into our AppLog (Debug
         // screen → Core tab + /logs/core endpoint). Off by default — sing-box
         // на busy traffic эмитит сотни строк/минуту; opt-in для диагностики.
         // Subtitle короткий и timeless — без «after restart» (показывался бы
         // и после самого рестарта, misleading); пояснялка про process-restart
         // вынесена в полноширинный блок ниже.
-        SwitchListTile(
-          title: const Text('Forward sing-box logs'),
-          subtitle: Text(
-            _coreLogsEnabled
-                ? 'Visible in Debug → Core.'
-                : 'Off.',
+        AnimatedContainer(
+          key: _coreLogsTileKey,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOut,
+          color: _coreLogsHighlighted
+              ? Theme.of(context).colorScheme.tertiaryContainer
+              : Colors.transparent,
+          child: SwitchListTile(
+            title: const Text('Forward sing-box logs'),
+            subtitle: Text(
+              _coreLogsEnabled
+                  ? 'Visible in Debug → Core.'
+                  : 'Off.',
+            ),
+            secondary: const Icon(Icons.terminal),
+            value: _coreLogsEnabled,
+            onChanged: _loaded
+                ? (val) => unawaited(_toggleCoreLogs(val))
+                : null,
           ),
-          secondary: const Icon(Icons.terminal),
-          value: _coreLogsEnabled,
-          onChanged: _loaded
-              ? (val) => unawaited(_toggleCoreLogs(val))
-              : null,
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -734,25 +844,54 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
             ],
           ),
         ),
+        // §051 Phase 3 — auto-record visited Wi-Fi networks. Default ON:
+        // без auto-record «Pick saved» picker почти всегда пустой,
+        // фича теряет смысл. 5-минутный stickiness отсекает drive-by
+        // сети (магазин/проход). Toggle для тех кто не хочет logging.
+        const Divider(height: 8),
+        SwitchListTile(
+          title: const Text('Auto-record visited Wi-Fi networks'),
+          subtitle: Text(
+            _autoRecordWifi
+                ? 'Networks where you stay ≥ 5 minutes appear in routing rule editor → Pick saved.'
+                : 'Off. Pick saved is populated only by Add current / Manual.',
+          ),
+          secondary: const Icon(Icons.history),
+          value: _autoRecordWifi,
+          onChanged: _loaded
+              ? (val) => unawaited(_toggleAutoRecordWifi(val))
+              : null,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
+          child: Text(
+            'Stored locally only. Existing entries persist when you turn this off — '
+            'remove individually in Pick saved (long-press chip → Remove).',
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  /// Compact read-only row for diagnostics — icon + status text, not tappable.
-  /// Actions (fix/grant) живут в Background tab — здесь только статус.
-  Widget _permissionRow(
-    BuildContext context, {
-    required bool ok,
-    required String okLabel,
-    required String badLabel,
-  }) {
-    return ListTile(
-      dense: true,
-      leading: Icon(
-        ok ? Icons.check_circle : Icons.cancel,
-        color: ok ? Colors.green : Theme.of(context).colorScheme.error,
+  /// §051 Phase 3 — toggle для auto-record. Сразу sync'ит state в native
+  /// observer (start/stop NetworkCallback). Существующая история не
+  /// чистится при OFF — это user data, явный поход в Pick saved.
+  Future<void> _toggleAutoRecordWifi(bool enabled) async {
+    setState(() => _autoRecordWifi = enabled);
+    await SettingsStorage.setAutoRecordWifi(enabled);
+    await WifiHistoryListener.I.setEnabled(enabled);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 2),
+        content: Text(enabled
+            ? 'Auto-record on. Networks added after 5 min of stay.'
+            : 'Auto-record off. Existing history kept.'),
       ),
-      title: Text(ok ? okLabel : badLabel),
     );
   }
 }

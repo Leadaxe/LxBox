@@ -228,12 +228,10 @@ class _DebugScreenState extends State<DebugScreen> {
     ];
   }
 
-  /// §043: открыть App Settings → Diagnostics. Юзер видит что Core пустой
-  /// → 3-точечное меню → Diagnostics settings → toggle "Forward sing-box logs".
   void _openDiagnosticsSettings() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => const AppSettingsScreen(initialTab: 2),
+        builder: (_) => const AppSettingsScreen(initialTab: 1),
       ),
     );
   }

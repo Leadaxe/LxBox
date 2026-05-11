@@ -71,7 +71,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ presetId              string        ссылка на selectable_rules[].preset_id
 │       └─ varsValues            object          юзерские vars override (включая 'outbound')
 │
-├─ dns_options                   object          §041 (rules) + §043+§044 (servers)
+├─ dns_options                   object          §061 (rules) + §043+§044 (servers)
 │   ├─ servers[]                 list          §044 kind-discriminated refs:
 │   │   └─ <DnsServerRef>        object
 │   │       ├─ kind              "template"|"preset"|"inline"
@@ -80,13 +80,13 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │   │       ├─ description       string?       optional override / для inline — primary
 │   │       └─ body              object?         только inline; partial sing-box server
 │   │                                          БЕЗ tag/description/enabled
-│   ├─ rules[]                   list          §041 origin-discriminated:
+│   ├─ rules[]                   list          §061 origin-discriminated:
 │   │   └─ <DnsRuleRef>          object
 │   │       ├─ enabled           bool
 │   │       ├─ type              "user"|"template"|"rule"
 │   │       ├─ title             string        display
 │   │       └─ rule              object?         sing-box rule body (для type=user)
-│   └─ rules_json                string        DEPRECATED legacy single-string (§041)
+│   └─ rules_json                string        DEPRECATED legacy single-string (§061)
 │
 ├─ ping_options                  object          §040
 │   ├─ url                       string?       global default URL
@@ -190,6 +190,8 @@ Per-key спеки и shape — в разделах ниже.
 | `debug_token` | `''` | [§031] | Bearer token для всех `/api/*`. |
 | `debug_port` | `'9269'` | [§031] | TCP-порт. Range 1024–49151. |
 | `dns_final` | template | [§043][043-dns] | Финальный DNS-резолвер (`cloudflare_udp` / `google_udp` / `local_dns_resolver` / `yandex_udp` / любой tag из `dns_options.servers`). |
+| `auto_record_wifi_history` | `'false'` | [§051] Phase 3 | Native `WifiNetworkObserver` пушит current SSID/BSSID в `wifi_history` если provel >5 минут на сети. Default off — privacy default. Toggle в App Settings → Diagnostics. |
+| `wifi_history` | `'[]'` | [§051] Phase 3 | JSON-encoded `[{ssid, bssid, last_seen}]` (см. отдельный раздел ниже). |
 | `<custom>` | — | — | Любые юзерские template-vars, выставленные через UI / `PUT /settings/vars/<key>`. |
 
 `removeVar(k)` ≠ `setVar(k, '')` — пустая строка может быть legitimate value, отсутствие ключа возвращает default.
@@ -343,7 +345,7 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 
 ---
 
-## `dns_options` — [§041] (rules) + [§043][043-dns] + [§044] (servers)
+## `dns_options` — [§061] (rules) + [§043][043-dns] + [§044] (servers)
 
 ```jsonc
 {
@@ -375,7 +377,7 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 
 **Builder** синтезирует `body.tag` обратно при сборке финального sing-box-конфига. В storage tag живёт **только** на ref-level.
 
-### `dns_options.rules[i]` — [§041]
+### `dns_options.rules[i]` — [§061]
 
 ```jsonc
 {
@@ -393,7 +395,7 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 ### Migration history
 
 - v1.5.x: `dns_options.rules_json` — single JSON-string (`@Deprecated`). Сейчас игнорится; поле остаётся на диске для downgrade-friendliness.
-- v1.6.0 ([§041]): `dns_options.rules[]` — структурированный список с `type`/`enabled`/`title`/`rule`.
+- v1.6.0 ([§061]): `dns_options.rules[]` — структурированный список с `type`/`enabled`/`title`/`rule`.
 - v1.6.0 ([§043][043-dns]): `dns_options.servers[]` — kind-refs впервые. Tag/description/enabled тогда жили в `body`.
 - v1.6.1 ([§044]): `dns_options.servers[]` — clean schema. Tag/description/enabled подняты на ref-level. Underscore-аннотации (`_kind`, `_overrides`, `_origin`, `_preset_label`) удалены. Builder синтезирует tag в body. One-shot migration в `_migrateLegacyDnsServers`.
 
@@ -421,6 +423,68 @@ CRUD-helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clear
 
 ---
 
+## `tun_apps` — [§046]
+
+OS-level split-tunneling: какие приложения идут через VPN-tun, а какие — direct через cellular/wifi (минуя sing-box полностью).
+
+```jsonc
+{
+  "mode": "off" | "allow" | "deny",
+  "packages": ["com.example.app", "ru.tinkoff.investing", ...]
+}
+```
+
+| `mode` | Что попадает в `inbound[type=tun]` финального config | Эффект |
+|---|---|---|
+| `"off"` | (ничего не пишем) | Все apps через tun (Android-default) |
+| `"allow"` | `"include_package": [...packages]` | Только перечисленные через tun. Остальные direct |
+| `"deny"`  | `"exclude_package": [...packages]` | Все КРОМЕ перечисленных через tun |
+
+**Native слой** (`BoxVpnService.kt:557-560`) читает `options.includePackage` / `excludePackage` от libbox и зовёт `VpnService.Builder.addAllowedApplication` / `addDisallowedApplication`. Применяется на `builder.establish()` — на изменение нужен **full VPN restart**, light reload (`startOrReloadService`) не пересоздаёт tun.
+
+**Default для existing юзеров:** `{mode: "off", packages: []}` — backward-compat. Migration unconditional на первом `_load()` после upgrade, без guard'а.
+
+**В `/state/storage` exposed без scrubber'а** — package-names не sensitive.
+
+CRUD: `getTunApps()` / `setTunApps()` (replace целиком). API: `GET/PUT /settings/tun_apps` ([Debug API reference](api/debug-api-reference.md)).
+
+**Конфликт с `package_name` rules в custom_rules:** apps в `Allow-list` (или вне `Deny-list`) идут через tun → routing rules (rule_set / package_name match / etc) применяются нормально. Apps вне `Allow-list` (или внутри `Deny-list`) **не попадают в tun вообще** — sing-box их не видит, custom rules с `package_name` для них не сматчатся.
+
+---
+
+## `wifi_history` — [§051] Phase 3
+
+JSON-encoded array записей сетей которые юзер реально посетил — для editor'а custom rules (`Pick saved` picker когда пишешь правило с условием `wifi_ssid` / `wifi_bssid`). Хранится как **JSON-string** в `vars.wifi_history` (не отдельный top-level ключ — чтобы не плодить shape'ы), декодируется при чтении.
+
+```jsonc
+[
+  {"ssid": "HomeWiFi", "bssid": "aa:bb:cc:dd:ee:ff", "last_seen": "2026-05-10T12:34:56.789Z"},
+  {"ssid": "OfficeWiFi", "bssid": "11:22:33:44:55:66", "last_seen": "2026-05-09T08:15:32.000Z"},
+  ...
+]
+```
+
+| Поле | Тип | Notes |
+|---|---|---|
+| `ssid` | String | Required. Не нормализуется (case-sensitive — провайдеры могут так и эдак). |
+| `bssid` | String | Может быть пустым. При upsert нормализуется к **lower-case** + trim. Composite-key `(ssid, bssid)` — `Home/aa:bb:..` и `Home/AA:BB:..` это одна запись (после normalize), `Home/aa:bb` и `Home/cc:dd` — разные. |
+| `last_seen` | String (ISO-8601 UTC) | Время последнего observe. `addToWifiHistory` обновляет на upsert. |
+
+**Cap 50 записей** (`_wifiHistoryCap` constant). LRU evict — newest-first (insert at index 0), oldest падает с tail при overflow.
+
+**Источники наполнения:**
+1. **Auto-record** (`auto_record_wifi_history=true`) — native `WifiNetworkObserver` через `NetworkCallback` listener. Stickiness debounce: записывается только если юзер сидит на сети ≥5 минут (фильтр от random transitions home/office/coffeeshop).
+2. **Manual** — editor UI: `Add current` button (читает sing-box `readWIFIState` напрямую), `Pick saved` (выбирает из существующих записей).
+3. **Debug API** — `POST /wifi_history` (для test fixtures, restore, etc) — см. [Debug API reference](api/debug-api-reference.md#wi-fi-history--wifi_history).
+
+CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHistory(ssid, bssid)` / `clearWifiHistory()` в `SettingsStorage`.
+
+**Privacy default** — `auto_record_wifi_history=false`. Юзер opt-in'ит в App Settings → Diagnostics. Silent network logging это privacy-след даже local-only.
+
+**В `/state/storage` exposed без scrubber'а** — SSID/BSSID не sensitive в контексте настроек (если уже видны в `WifiInfo` системного уровня).
+
+---
+
 ## Прочие top-level ключи
 
 | Ключ | Тип | Назначение |
@@ -441,7 +505,7 @@ CRUD-helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clear
 | `app_rules` | до v1.3.2 | `custom_rules` (kind=inline, c `packages`) — [§030] | `_absorbLegacyAppRules` — one-shot, удаляется. |
 | `enabled_rules` | до [§030] | `custom_rules` | One-shot в `RoutingScreen._load`, обнуляется (`saveEnabledRules({})`). Гард: `presets_migrated`. |
 | `rule_outbounds` | до v1.3.2 | `custom_rules.outbound` (или `varsValues.outbound` для preset) | См. выше, обнуляется (`saveRuleOutbounds({})`). |
-| `dns_options.rules_json` | [§041] (intermediate) | `dns_options.rules[]` | Поле остаётся для downgrade-friendliness, builder/UI больше не читают. |
+| `dns_options.rules_json` | [§061] (intermediate) | `dns_options.rules[]` | Поле остаётся для downgrade-friendliness, builder/UI больше не читают. |
 | `node_overrides` | удалённое | — | Удаляется на каждом `_save()`. |
 | `show_detour_servers` | удалённое | — | Удаляется на каждом `_save()`. |
 
@@ -486,7 +550,8 @@ CRUD-helpers: `setGlobalPingUrl`, `setGlobalPingTimeout`, `setGroupPing`, `clear
 [§037]: ./spec/tasks/037-debug-api-write-config-and-lock-rebuild.md
 [§038]: ./spec/features/038%20crash%20diagnostics/spec.md
 [§040]: ./spec/tasks/040-per-group-ping-test-settings.md
-[§041]: ./spec/features/041%20dns%20rules%20refactor/spec.md
+[§061]: ./spec/tasks/061-dns-rules-refactor/spec.md
 [§044]: ./spec/tasks/044-dns-servers-clean-schema.md
+[§046]: ./spec/features/046%20tunnel%20apps%20split-tunneling/spec.md
 [043-applog]: ./spec/features/043%20applog%20per-source%20quotas/spec.md
 [043-dns]: ./spec/tasks/043-dns-servers-refs-by-kind.md

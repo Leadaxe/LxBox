@@ -11,6 +11,7 @@ import '../models/home_state.dart';
 import '../models/node_spec.dart';
 import '../services/clash_api_client.dart';
 import '../widgets/node_row.dart';
+import '../widgets/wifi_permission_dialog.dart';
 import 'outbound_view_screen.dart';
 import 'about_screen.dart';
 import 'config_screen.dart';
@@ -110,6 +111,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _prevError = _controller.state.lastError;
     _controller.addListener(_onControllerChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_maybeShowNotificationPermissionDialog());
       unawaited(_maybeShowBatteryOptimizationDialog());
     });
     // Update check (§036): hydrate cached "last known version" сразу,
@@ -177,6 +179,49 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   static const _batteryPromptKey = 'battery_opt_last_prompt_ms';
   static const _batteryPromptCooldownMs = 24 * 60 * 60 * 1000; // 24h
 
+  /// On Android 13+ (API 33+) `POST_NOTIFICATIONS` is a runtime permission.
+  /// Without it, the foreground-service notification used by VPN may not
+  /// be shown — the user has no visual indicator that VPN is active.
+  /// We show an explainer once on first launch (or after revocation),
+  /// then trigger the system permission dialog.
+  static const _notifPromptKey = 'notif_perm_prompted_v1';
+
+  Future<void> _maybeShowNotificationPermissionDialog() async {
+    final granted = await ul.UrlLauncher.checkNotificationPermission();
+    if (granted) return;
+    final asked = await SettingsStorage.getVar(_notifPromptKey, '0');
+    if (asked == '1') return;
+    await SettingsStorage.setVar(_notifPromptKey, '1');
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog.adaptive(
+        title: const Text('Allow notifications'),
+        content: const Text(
+          'L×Box runs as a foreground service while VPN is active. '
+          'A persistent notification is required by Android — it lets you '
+          'see at a glance that VPN is on, and prevents the system from '
+          'killing the tunnel in the background.\n\n'
+          'No promotional or alert notifications will be sent.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Skip'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Allow'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await ul.UrlLauncher.requestNotificationPermission();
+    }
+  }
+
   Future<void> _maybeShowBatteryOptimizationDialog() async {
     final ok = await _vpn.isIgnoringBatteryOptimizations();
     if (ok) return;
@@ -189,25 +234,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (!mounted) return;
     await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Разрешите работу в фоне'),
+      builder: (ctx) => AlertDialog.adaptive(
+        title: const Text('Allow background activity'),
         content: const Text(
-          'Android ограничивает фоновую активность приложений для экономии батареи. '
-          'Без whitelist\'а VPN-туннель может засыпать вместе с экраном — '
-          'интернет «отваливается» до следующего открытия L×Box.\n\n'
-          'Откройте системные настройки и выберите «Без ограничений» / «Not optimized».',
+          'Android restricts background activity to save battery. '
+          'Without an exception, the VPN tunnel may be killed when the '
+          'screen turns off — your connection drops until you reopen L×Box.\n\n'
+          'Open system settings and choose "Unrestricted" / "Not optimized".',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Позже'),
+            child: const Text('Later'),
           ),
           FilledButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
               await _vpn.openBatteryOptimizationSettings();
             },
-            child: const Text('Разрешить'),
+            child: const Text('Allow'),
           ),
         ],
       ),
@@ -236,11 +281,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       _showRevokedSnackBar();
     }
 
-    // Auto-dismiss timer для lastError. Раньше жил в Builder внутри build —
-    // логика завязана на прохождение build, хрупко при агрессивных
-    // rebuild'ах. Теперь явный transition detection: ошибка изменилась —
-    // перезапускаем 15с таймер; ошибка очистилась — cancel.
-    if (nowError != _prevError) {
+    // §050 — structured alert prefix `alert:permission_location:<perm>` →
+    // show AlertDialog with "Open Settings" button instead of plain error.
+    // Background: ACCESS_BACKGROUND_LOCATION on API 30+ can only be granted
+    // through Settings (not via runtime permission dialog), so we explain
+    // and offer button.
+    if (nowError != _prevError &&
+        nowError.contains('alert:permission_location:') &&
+        !_permissionDialogShowing) {
+      _permissionDialogShowing = true;
+      // Strip the "Stopped: " prefix that HomeController prepends.
+      final permName = nowError
+          .replaceFirst(RegExp(r'^Stopped:\s*'), '')
+          .replaceFirst('alert:permission_location:', '')
+          .trim();
+      // Clear immediately so toast/snackbar для same error не показывается.
+      _controller.clearError();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showLocationPermissionDialog(permName);
+      });
+    } else if (nowError != _prevError) {
+      // Auto-dismiss timer для lastError. Раньше жил в Builder внутри build —
+      // логика завязана на прохождение build, хрупко при агрессивных
+      // rebuild'ах. Теперь явный transition detection: ошибка изменилась —
+      // перезапускаем 15с таймер; ошибка очистилась — cancel.
       _errorTimer?.cancel();
       _errorTimer = null;
       if (nowError.isNotEmpty) {
@@ -252,6 +316,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
 
     _prevTunnel = now;
     _prevError = nowError;
+  }
+
+  bool _permissionDialogShowing = false;
+
+  Future<void> _showLocationPermissionDialog(String permName) async {
+    if (!mounted) return;
+    // permName из BoxService alert prefix — может быть comma-separated:
+    // "android.permission.ACCESS_BACKGROUND_LOCATION,android.permission.NEARBY_WIFI_DEVICES".
+    final missing = permName.split(',').map((p) => p.trim()).toList();
+    await WifiPermissionDialog.show(context, missing: missing);
+    _permissionDialogShowing = false;
   }
 
   void _showRevokedSnackBar() {
@@ -275,9 +350,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// init подписок + затем `start()` AutoUpdater'а (триггер #1 appStart
   /// и заведение periodic-таймера на 1 час). Порядок важен — AutoUpdater
   /// итерирует `entries`, они должны быть загружены с диска.
+  ///
+  /// Bootstrap-config после init: если в storage есть subs но native ещё
+  /// не имеет загруженного config'а (`state.configRaw.isEmpty`) — авто-
+  /// генерируем и сохраняем. Закрывает класс «UI пустой после backup-
+  /// import + restart» / «storage был мутирован через Debug API, нужно
+  /// руками идти в Subscriptions чтобы UI ожил».
   Future<void> _initSubsAndAutoUpdate() async {
     await _subController.init();
     _autoUpdater.start();
+
+    // Wait one frame: HomeController.init() is also unawaited above; даём
+    // ему успеть прочитать существующий config (если был). После этого
+    // решаем: bootstrap нужен только если config реально пустой.
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    if (!mounted) return;
+    if (_subController.entries.isNotEmpty &&
+        _controller.state.configRaw.isEmpty) {
+      final config = await _subController.generateConfig();
+      if (config != null && mounted) {
+        await _controller.saveParsedConfig(config);
+      }
+    }
   }
 
   Future<void> _loadHapticPref() async {
@@ -931,6 +1025,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   context,
                   Icons.bolt,
                   _shortPkg(profiler.active!.targetPackage),
+                  cs.error,
+                ),
+              ],
+              if (profiler.isGlobalRecording) ...[
+                const SizedBox(width: 8),
+                _trafficChip(
+                  context,
+                  Icons.podcasts,
+                  'Live',
                   cs.error,
                 ),
               ],

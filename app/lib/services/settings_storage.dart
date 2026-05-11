@@ -8,6 +8,13 @@ import '../models/server_list.dart';
 import 'migration/proxy_source_migration.dart';
 
 /// Persistent storage for user settings: vars, proxy sources, enabled rules.
+///
+/// **Convention для list getters**: возвращаем **growable** list (`toList()`)
+/// чтобы caller'ы могли делать `removeWhere`/`add` для optimistic UI update
+/// (особенно в setState callbacks — иначе silent `UnsupportedError`).
+/// Если нужна read-only гарантия — caller оборачивает в `UnmodifiableListView`.
+/// `toList(growable: false)` приводил к Phase 3 bug в `wifi_history` Pick
+/// saved sheet (см. commit `04ba3ce` follow-up).
 class SettingsStorage {
   SettingsStorage._();
 
@@ -430,10 +437,11 @@ class SettingsStorage {
     await savePingOptions(opts);
   }
 
-  /// DEPRECATED (§041): legacy `dns_options.rules_json` — single JSON-string
-  /// override. Заменён на структурированный [getDnsRulesList]. Поле в storage
-  /// остаётся для downgrade-friendliness, но билдер и UI больше не читают.
-  @Deprecated('Use getDnsRulesList()/saveDnsRulesList() instead. See spec 041.')
+  /// DEPRECATED (§061 dns-rules-refactor, бывший feature §041): legacy
+  /// `dns_options.rules_json` — single JSON-string override. Заменён на
+  /// структурированный [getDnsRulesList]. Поле в storage остаётся для
+  /// downgrade-friendliness, но билдер и UI больше не читают.
+  @Deprecated('Use getDnsRulesList()/saveDnsRulesList() instead. See task 061.')
   static Future<String> getDnsRules() async {
     final data = await _load();
     final dns = data['dns_options'] as Map<String, dynamic>?;
@@ -441,8 +449,8 @@ class SettingsStorage {
     return dns['rules_json'] as String? ?? '';
   }
 
-  /// DEPRECATED (§041): см. [getDnsRules].
-  @Deprecated('Use getDnsRulesList()/saveDnsRulesList() instead. See spec 041.')
+  /// DEPRECATED (§061 dns-rules-refactor, бывший feature §041): см. [getDnsRules].
+  @Deprecated('Use getDnsRulesList()/saveDnsRulesList() instead. See task 061.')
   static Future<void> saveDnsRules(String rulesJson) async {
     final data = await _load();
     final dns = (data['dns_options'] as Map<String, dynamic>?) ?? {};
@@ -452,7 +460,7 @@ class SettingsStorage {
     await _save();
   }
 
-  /// Структурированный список DNS-правил (§041). Каждая запись:
+  /// Структурированный список DNS-правил (§061 dns-rules-refactor, бывший feature §041). Каждая запись:
   /// `{enabled: bool, type: 'user'|'template'|'rule', title: String, rule?: Map}`.
   /// Если ключ отсутствует — возвращает пустой список (auto-discovery в
   /// builder/UI заполнит начальный набор).
@@ -466,7 +474,7 @@ class SettingsStorage {
   }
 
   /// Сохраняет структурированный список DNS-правил. Caller отвечает за
-  /// orphan-cleanup (§041) — выбрасывание `type: template/rule` чьи titles
+  /// orphan-cleanup (§061) — выбрасывание `type: template/rule` чьи titles
   /// не находятся в текущем шаблоне / активных пресетах. Этот метод просто
   /// пишет, что дали.
   static Future<void> saveDnsRulesList(List<Map<String, dynamic>> rules) async {
@@ -503,6 +511,78 @@ class SettingsStorage {
 
   static Future<void> setConfigLockedForDebug(bool locked) =>
       setVar('config_locked_for_debug', locked ? 'true' : 'false');
+
+  // ---------------------------------------------------------------------------
+  // §051 Phase 2 — Wi-Fi network history (для CustomRuleEditScreen «Pick saved»).
+  //
+  // Локальная история сетей которые юзер когда-либо прокинул через Add current
+  // / Manual в каком-либо custom rule. Stays in app private storage, никуда не
+  // уходит. Cap 50 entries, evict oldest by `lastSeen`.
+  //
+  // Schema: list of `{ssid, bssid, last_seen}` (last_seen — ISO8601 UTC).
+  // ---------------------------------------------------------------------------
+
+  static const int _wifiHistoryCap = 50;
+
+  static Future<List<Map<String, String>>> getWifiHistory() async {
+    final raw = await getVar('wifi_history', '[]');
+    final decoded = (jsonDecode(raw) as List?) ?? const [];
+    // Growable — caller'ы (Pick saved bottom sheet) делают `removeWhere`
+    // для optimistic UI update. `growable: false` ломал это с silent
+    // UnsupportedError в setState callback.
+    return decoded
+        .whereType<Map>()
+        .map<Map<String, String>>((e) => {
+              'ssid': (e['ssid'] as String?) ?? '',
+              'bssid': (e['bssid'] as String?) ?? '',
+              'last_seen': (e['last_seen'] as String?) ?? '',
+            })
+        .where((e) => (e['ssid'] ?? '').isNotEmpty)
+        .toList();
+  }
+
+  /// Upsert по composite key `(ssid, bssid)`. Если уже есть — обновляет
+  /// `last_seen`. Иначе добавляет в начало списка. Cap 50 (evict oldest).
+  static Future<void> addToWifiHistory(String ssid, String bssid) async {
+    if (ssid.isEmpty) return;
+    final normalized = bssid.trim().toLowerCase();
+    final history = (await getWifiHistory()).toList();
+    final now = DateTime.now().toUtc().toIso8601String();
+    history.removeWhere((e) =>
+        (e['ssid'] ?? '') == ssid && (e['bssid'] ?? '') == normalized);
+    history.insert(0, {
+      'ssid': ssid,
+      'bssid': normalized,
+      'last_seen': now,
+    });
+    if (history.length > _wifiHistoryCap) {
+      history.removeRange(_wifiHistoryCap, history.length);
+    }
+    await setVar('wifi_history', jsonEncode(history));
+  }
+
+  static Future<void> removeFromWifiHistory(String ssid, String bssid) async {
+    final normalized = bssid.trim().toLowerCase();
+    final history = (await getWifiHistory()).toList();
+    final initial = history.length;
+    history.removeWhere((e) =>
+        (e['ssid'] ?? '') == ssid && (e['bssid'] ?? '') == normalized);
+    if (history.length != initial) {
+      await setVar('wifi_history', jsonEncode(history));
+    }
+  }
+
+  static Future<void> clearWifiHistory() => setVar('wifi_history', '[]');
+
+  /// §051 Phase 3 — flag для auto-record visited Wi-Fi networks в
+  /// `wifi_history`. Default false — silent network logging это privacy
+  /// след даже local-only. Юзер включает в Settings → Diagnostics когда
+  /// захочет. Stickiness threshold 5 минут (см. `WifiNetworkObserver`).
+  static Future<bool> getAutoRecordWifi() async =>
+      (await getVar('auto_record_wifi_history', 'false')) == 'true';
+
+  static Future<void> setAutoRecordWifi(bool enabled) =>
+      setVar('auto_record_wifi_history', enabled ? 'true' : 'false');
 
   // ---------------------------------------------------------------------------
   // App update check (§036) — GitHub Releases polling on launch with 24h cap.
@@ -576,4 +656,122 @@ class SettingsStorage {
     final data = await _load();
     return jsonDecode(jsonEncode(data)) as Map<String, dynamic>;
   }
+
+  /// Backup: глубокая копия всего `lxbox_settings.json` для export'а через
+  /// [BackupService]. Возвращает то же что [dumpCache] — alias для ясности
+  /// семантики на call-site.
+  static Future<Map<String, dynamic>> exportRaw() => dumpCache();
+
+  /// Backup: применить snapshot целиком. `merge=false` (default) — replace
+  /// (overwrite cache + flush на disk), `merge=true` — top-level merge:
+  /// присутствующие в [snapshot] ключи overwrite, отсутствующие — keep.
+  /// `vars` мерджится recursively (subkey-level upsert) при `merge=true`.
+  static Future<void> replaceRaw(
+    Map<String, dynamic> snapshot, {
+    bool merge = false,
+  }) async {
+    final clean = jsonDecode(jsonEncode(snapshot)) as Map<String, dynamic>;
+    if (!merge) {
+      _cache = clean;
+      await _save();
+      return;
+    }
+    final current = await _load();
+    for (final entry in clean.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      if (key == 'vars' && value is Map<String, dynamic>) {
+        final existing = (current['vars'] as Map<String, dynamic>?) ?? {};
+        for (final v in value.entries) {
+          existing[v.key] = v.value;
+        }
+        current['vars'] = existing;
+      } else {
+        current[key] = value;
+      }
+    }
+    _cache = current;
+    await _save();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tunnel apps — OS-level split-tunneling (§046)
+  //
+  // Storage shape: `{mode: "off"|"allow"|"deny", packages: [pkg, ...]}`.
+  // Builder transforms into `inbound[tun].include_package` (mode=allow) или
+  // `exclude_package` (mode=deny); mode=off → ничего не пишем (sing-box default
+  // = всё через tun).
+  //
+  // Native слой (BoxVpnService.kt:557-560) уже умеет — просто читает
+  // `options.includePackage`/`excludePackage` от libbox и зовёт
+  // `VpnService.Builder.addAllowedApplication`/`addDisallowedApplication`.
+  // applies на `builder.establish()` — на изменение нужен FULL VPN restart.
+  // ---------------------------------------------------------------------------
+
+  static const _tunAppsModeOff = 'off';
+  static const _tunAppsModeAllow = 'allow';
+  static const _tunAppsModeDeny = 'deny';
+
+  /// Возвращает текущий tun-apps config. Default: `{mode: 'off', packages: []}`
+  /// — backward-compat для existing юзеров.
+  static Future<TunAppsConfig> getTunApps() async {
+    final data = await _load();
+    final raw = data['tun_apps'];
+    if (raw is Map<String, dynamic>) {
+      final mode = raw['mode'];
+      final packages = (raw['packages'] as List<dynamic>?)
+              ?.whereType<String>()
+              .toList() ??
+          const <String>[];
+      if (mode == _tunAppsModeAllow ||
+          mode == _tunAppsModeDeny ||
+          mode == _tunAppsModeOff) {
+        return TunAppsConfig(mode: mode as String, packages: packages);
+      }
+    }
+    return const TunAppsConfig(mode: _tunAppsModeOff, packages: <String>[]);
+  }
+
+  /// Persist `tun_apps`. Caller передаёт финальный shape, мы только проверяем
+  /// валидность. Дубликаты в `packages` schлопываются (idempotent).
+  static Future<void> setTunApps(TunAppsConfig cfg) async {
+    if (![_tunAppsModeOff, _tunAppsModeAllow, _tunAppsModeDeny]
+        .contains(cfg.mode)) {
+      throw ArgumentError('tun_apps.mode must be off|allow|deny: ${cfg.mode}');
+    }
+    final dedup = <String>{};
+    for (final p in cfg.packages) {
+      final t = p.trim();
+      if (t.isEmpty) continue;
+      dedup.add(t);
+    }
+    final data = await _load();
+    data['tun_apps'] = {
+      'mode': cfg.mode,
+      'packages': dedup.toList()..sort(),
+    };
+    _cache = data;
+    await _save();
+  }
+}
+
+/// Typed wrapper over `tun_apps` storage shape (§046).
+class TunAppsConfig {
+  const TunAppsConfig({required this.mode, required this.packages});
+
+  /// `"off"` | `"allow"` | `"deny"`.
+  final String mode;
+  final List<String> packages;
+
+  bool get isOff => mode == 'off';
+  bool get isAllow => mode == 'allow';
+  bool get isDeny => mode == 'deny';
+
+  TunAppsConfig copyWith({String? mode, List<String>? packages}) =>
+      TunAppsConfig(
+        mode: mode ?? this.mode,
+        packages: packages ?? this.packages,
+      );
+
+  Map<String, Object?> toJson() => {'mode': mode, 'packages': packages};
 }

@@ -85,6 +85,26 @@ sealed class CustomRule {
         CustomRuleSrs(:final ipIsPrivate) => ipIsPrivate,
         _ => false,
       };
+
+  /// §051 — список SSID'ов для условия `wifi_ssid` в sing-box rule. Empty —
+  /// условие не эмитится. Чтение текущего ssid требует
+  /// `NEARBY_WIFI_DEVICES + ACCESS_BACKGROUND_LOCATION` permission на API 33+
+  /// (см. §050 findings); permission проверяется в `BoxService.startSingbox`
+  /// через `cs.needWIFIState()`.
+  List<String> get wifiSsids => switch (this) {
+        CustomRuleInline(:final wifiSsids) => wifiSsids,
+        CustomRuleSrs(:final wifiSsids) => wifiSsids,
+        _ => const [],
+      };
+
+  /// §051 — список BSSID'ов (`xx:xx:xx:xx:xx:xx` lower-case). Условие
+  /// `wifi_bssid` в sing-box rule.
+  List<String> get wifiBssids => switch (this) {
+        CustomRuleInline(:final wifiBssids) => wifiBssids,
+        CustomRuleSrs(:final wifiBssids) => wifiBssids,
+        _ => const [],
+      };
+
   String get srsUrl => switch (this) {
         CustomRuleSrs(:final srsUrl) => srsUrl,
         _ => '',
@@ -194,8 +214,11 @@ class CustomRuleInline extends CustomRule {
     this.packages = const [],
     this.protocols = const [],
     this.ipIsPrivate = false,
+    List<String> wifiSsids = const [],
+    List<String> wifiBssids = const [],
     this.outbound = 'direct-out',
-  });
+  })  : wifiSsids = wifiSsids,
+        wifiBssids = _normalizeBssids(wifiBssids);
 
   // OR-группа #1 (domain-family + ip). Внутри OR, между остальными — AND.
   @override
@@ -223,6 +246,13 @@ class CustomRuleInline extends CustomRule {
   @override
   bool ipIsPrivate;
 
+  /// §051 — wifi-условия на routing-rule level (headless rule_set этих полей
+  /// не поддерживает в sing-box). AND с rule_set body.
+  @override
+  List<String> wifiSsids;
+  @override
+  List<String> wifiBssids;
+
   /// Outbound-тег либо `kOutboundReject` (→ action: reject).
   @override
   String outbound;
@@ -242,6 +272,7 @@ class CustomRuleInline extends CustomRule {
     if (totalPorts > 0) parts.add('$totalPorts port');
     if (packages.isNotEmpty) parts.add('${packages.length} app');
     if (protocols.isNotEmpty) parts.add('${protocols.length} proto');
+    if (wifiSsids.isNotEmpty) parts.add('${wifiSsids.length} wifi');
     return parts.join(' · ');
   }
 
@@ -260,6 +291,8 @@ class CustomRuleInline extends CustomRule {
         if (packages.isNotEmpty) 'packages': packages,
         if (protocols.isNotEmpty) 'protocols': protocols,
         if (ipIsPrivate) 'ipIsPrivate': true,
+        if (wifiSsids.isNotEmpty) 'wifiSsids': wifiSsids,
+        if (wifiBssids.isNotEmpty) 'wifiBssids': wifiBssids,
         'outbound': outbound,
       };
 
@@ -276,6 +309,8 @@ class CustomRuleInline extends CustomRule {
         packages: _stringList(j['packages']),
         protocols: _stringList(j['protocols']),
         ipIsPrivate: (j['ipIsPrivate'] as bool?) ?? false,
+        wifiSsids: _stringList(j['wifiSsids']),
+        wifiBssids: _stringList(j['wifiBssids']),
         outbound: _outbound(j),
       );
 
@@ -291,6 +326,8 @@ class CustomRuleInline extends CustomRule {
     List<String>? packages,
     List<String>? protocols,
     bool? ipIsPrivate,
+    List<String>? wifiSsids,
+    List<String>? wifiBssids,
     String? outbound,
   }) =>
       CustomRuleInline(
@@ -306,6 +343,8 @@ class CustomRuleInline extends CustomRule {
         packages: packages ?? this.packages,
         protocols: protocols ?? this.protocols,
         ipIsPrivate: ipIsPrivate ?? this.ipIsPrivate,
+        wifiSsids: wifiSsids ?? this.wifiSsids,
+        wifiBssids: wifiBssids ?? this.wifiBssids,
         outbound: outbound ?? this.outbound,
       );
 
@@ -333,8 +372,11 @@ class CustomRuleSrs extends CustomRule {
     this.packages = const [],
     this.protocols = const [],
     this.ipIsPrivate = false,
+    List<String> wifiSsids = const [],
+    List<String> wifiBssids = const [],
     this.outbound = 'direct-out',
-  });
+  })  : wifiSsids = wifiSsids,
+        wifiBssids = _normalizeBssids(wifiBssids);
 
   @override
   String srsUrl;
@@ -352,6 +394,12 @@ class CustomRuleSrs extends CustomRule {
   List<String> protocols;
   @override
   bool ipIsPrivate;
+
+  /// §051 — wifi-условия. AND с rule_set match.
+  @override
+  List<String> wifiSsids;
+  @override
+  List<String> wifiBssids;
 
   @override
   String outbound;
@@ -378,6 +426,8 @@ class CustomRuleSrs extends CustomRule {
         if (packages.isNotEmpty) 'packages': packages,
         if (protocols.isNotEmpty) 'protocols': protocols,
         if (ipIsPrivate) 'ipIsPrivate': true,
+        if (wifiSsids.isNotEmpty) 'wifiSsids': wifiSsids,
+        if (wifiBssids.isNotEmpty) 'wifiBssids': wifiBssids,
         'outbound': outbound,
       };
 
@@ -391,6 +441,8 @@ class CustomRuleSrs extends CustomRule {
         packages: _stringList(j['packages']),
         protocols: _stringList(j['protocols']),
         ipIsPrivate: (j['ipIsPrivate'] as bool?) ?? false,
+        wifiSsids: _stringList(j['wifiSsids']),
+        wifiBssids: _stringList(j['wifiBssids']),
         outbound: _outbound(j),
       );
 
@@ -403,6 +455,8 @@ class CustomRuleSrs extends CustomRule {
     List<String>? packages,
     List<String>? protocols,
     bool? ipIsPrivate,
+    List<String>? wifiSsids,
+    List<String>? wifiBssids,
     String? outbound,
   }) =>
       CustomRuleSrs(
@@ -415,6 +469,8 @@ class CustomRuleSrs extends CustomRule {
         packages: packages ?? this.packages,
         protocols: protocols ?? this.protocols,
         ipIsPrivate: ipIsPrivate ?? this.ipIsPrivate,
+        wifiSsids: wifiSsids ?? this.wifiSsids,
+        wifiBssids: wifiBssids ?? this.wifiBssids,
         outbound: outbound ?? this.outbound,
       );
 
@@ -544,6 +600,15 @@ String _outbound(Map<String, dynamic> j) =>
 List<String> _stringList(dynamic v) {
   if (v is! List) return const [];
   return v.map((e) => e.toString()).toList();
+}
+
+/// §051 — нормализует BSSID к lower-case формату `xx:xx:xx:xx:xx:xx`.
+/// Юзер мог ввести uppercase из браузера/`adb shell` — sing-box матчит
+/// case-sensitive по строкам. Здесь tolerant'но lower-case'им и trim'аем,
+/// строгую regex-валидацию делает Debug API parser (на write-side).
+List<String> _normalizeBssids(List<String> bssids) {
+  if (bssids.isEmpty) return const [];
+  return bssids.map((b) => b.trim().toLowerCase()).toList(growable: false);
 }
 
 Map<String, String> _stringMap(dynamic v) {
