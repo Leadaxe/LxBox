@@ -214,11 +214,10 @@ class CustomRuleInline extends CustomRule {
     this.packages = const [],
     this.protocols = const [],
     this.ipIsPrivate = false,
-    List<String> wifiSsids = const [],
+    this.wifiSsids = const [],
     List<String> wifiBssids = const [],
     this.outbound = 'direct-out',
-  })  : wifiSsids = wifiSsids,
-        wifiBssids = _normalizeBssids(wifiBssids);
+  }) : wifiBssids = _normalizeBssids(wifiBssids);
 
   // OR-группа #1 (domain-family + ip). Внутри OR, между остальными — AND.
   @override
@@ -372,11 +371,10 @@ class CustomRuleSrs extends CustomRule {
     this.packages = const [],
     this.protocols = const [],
     this.ipIsPrivate = false,
-    List<String> wifiSsids = const [],
+    this.wifiSsids = const [],
     List<String> wifiBssids = const [],
     this.outbound = 'direct-out',
-  })  : wifiSsids = wifiSsids,
-        wifiBssids = _normalizeBssids(wifiBssids);
+  }) : wifiBssids = _normalizeBssids(wifiBssids);
 
   @override
   String srsUrl;
