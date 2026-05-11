@@ -297,68 +297,66 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
           // register'ы (sub-options для mode=use) хранятся независимо, не
           // обнуляются при переключении mode'а — юзер вернётся в use, флаги
           // на месте.
-          RadioListTile<_DetourMode>(
-            value: _DetourMode.use,
+          RadioGroup<_DetourMode>(
             groupValue: _detourMode,
-            title: const Text('Use subscription detour servers'),
-            subtitle: const Text('Nodes connect through detour servers'),
             onChanged: (m) => _setDetourMode(m!),
-          ),
-          // Sub-options только под Use — visibility-flags про ⚙-серверы
-          if (_detourMode == _DetourMode.use) ...[
-            Padding(
-              padding: const EdgeInsets.only(left: 24),
-              child: Column(children: [
-                SwitchListTile(
-                  title: const Text('Register detour servers'),
-                  subtitle: const Text('Add ⚙ servers to proxy groups (visible in node list)'),
-                  value: widget.entry.registerDetourServers,
-                  onChanged: (val) {
-                    setState(() => widget.entry.registerDetourServers = val);
-                    unawaited(widget.controller.persistSources());
-                  },
-                ),
-                SwitchListTile(
-                  title: const Text('Register detour in auto group'),
-                  subtitle: const Text('Include ⚙ servers in auto-proxy-out urltest'),
-                  value: widget.entry.registerDetourInAuto,
-                  onChanged: (val) {
-                    setState(() => widget.entry.registerDetourInAuto = val);
-                    unawaited(widget.controller.persistSources());
-                  },
-                ),
-              ]),
-            ),
-          ],
-          RadioListTile<_DetourMode>(
-            value: _DetourMode.override,
-            groupValue: _detourMode,
-            title: const Text('Override'),
-            subtitle: Text(widget.entry.overrideDetour.isEmpty
-                ? 'Replace chain target with a specific outbound'
-                : 'Override → ${widget.entry.overrideDetour}'),
-            onChanged: (m) => _setDetourMode(m!),
-          ),
-          // Sub-tile для смены target'а под Override mode
-          if (_detourMode == _DetourMode.override) ...[
-            Padding(
-              padding: const EdgeInsets.only(left: 24),
-              child: ListTile(
-                title: const Text('Outbound'),
-                subtitle: Text(widget.entry.overrideDetour.isEmpty
-                    ? '(tap to choose)'
-                    : widget.entry.overrideDetour),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _showOverrideDetourPicker(),
+            child: Column(children: [
+              const RadioListTile<_DetourMode>(
+                value: _DetourMode.use,
+                title: Text('Use subscription detour servers'),
+                subtitle: Text('Nodes connect through detour servers'),
               ),
-            ),
-          ],
-          RadioListTile<_DetourMode>(
-            value: _DetourMode.none,
-            groupValue: _detourMode,
-            title: const Text("Don't use detour servers"),
-            subtitle: const Text('Nodes connect directly, detour skipped'),
-            onChanged: (m) => _setDetourMode(m!),
+              // Sub-options только под Use — visibility-flags про ⚙-серверы
+              if (_detourMode == _DetourMode.use)
+                Padding(
+                  padding: const EdgeInsets.only(left: 24),
+                  child: Column(children: [
+                    SwitchListTile(
+                      title: const Text('Register detour servers'),
+                      subtitle: const Text('Add ⚙ servers to proxy groups (visible in node list)'),
+                      value: widget.entry.registerDetourServers,
+                      onChanged: (val) {
+                        setState(() => widget.entry.registerDetourServers = val);
+                        unawaited(widget.controller.persistSources());
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Register detour in auto group'),
+                      subtitle: const Text('Include ⚙ servers in auto-proxy-out urltest'),
+                      value: widget.entry.registerDetourInAuto,
+                      onChanged: (val) {
+                        setState(() => widget.entry.registerDetourInAuto = val);
+                        unawaited(widget.controller.persistSources());
+                      },
+                    ),
+                  ]),
+                ),
+              RadioListTile<_DetourMode>(
+                value: _DetourMode.override,
+                title: const Text('Override'),
+                subtitle: Text(widget.entry.overrideDetour.isEmpty
+                    ? 'Replace chain target with a specific outbound'
+                    : 'Override → ${widget.entry.overrideDetour}'),
+              ),
+              // Sub-tile для смены target'а под Override mode
+              if (_detourMode == _DetourMode.override)
+                Padding(
+                  padding: const EdgeInsets.only(left: 24),
+                  child: ListTile(
+                    title: const Text('Outbound'),
+                    subtitle: Text(widget.entry.overrideDetour.isEmpty
+                        ? '(tap to choose)'
+                        : widget.entry.overrideDetour),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _showOverrideDetourPicker(),
+                  ),
+                ),
+              const RadioListTile<_DetourMode>(
+                value: _DetourMode.none,
+                title: Text("Don't use detour servers"),
+                subtitle: Text('Nodes connect directly, detour skipped'),
+              ),
+            ]),
           ),
         ],
         if (widget.entry.list is SubscriptionServers) ...[
