@@ -95,6 +95,10 @@ class CustomRule {
 
 `lib/services/builder/post_steps.dart`.
 
+**Сигнатура:** `applyCustomRules(registry, rules, {srsPaths, skipDisabled = true})`.
+
+`skipDisabled` (default `true`) фильтрует disabled-правила — production pipeline (через `applyAllCustomRules` в §062) их пропускает. Editor `ViewTab` зовёт с `skipDisabled: false` чтобы показать «что родит правило при включении» независимо от Switch (см. [§064](../../tasks/064-view-tab-preview-independent-of-enabled.md)). Существующие callers + builder/ тесты не меняются — default сохраняет старое поведение.
+
 ### Inline (`kind == inline`)
 
 Для каждого правила:
@@ -248,7 +252,7 @@ Tabs **Params** / **View**:
 
 URL prefix-иконка (🔗) — tap копирует URL в clipboard.
 
-**View:** показывает sing-box config preview — JSON с `rule_set` + `rules`, собранный через тот же `applyCustomRules` со snapshot текущей формы. Поддерживает `Copy` button. Warnings (e.g. "no cached file") отображаются над preview'ом.
+**View:** показывает sing-box config preview — JSON с `rule_set` + `rules`, собранный через `applyCustomRules(skipDisabled: false)` со snapshot текущей формы. **`skipDisabled: false`** = preview независим от `Switch` (enabled): юзер открыл editor именно для inspect'а формы, фильтрация по `enabled` тут лишняя — production pipeline `applyAllCustomRules` (§062) её делает отдельно. См. [task §064](../../tasks/064-view-tab-preview-independent-of-enabled.md). Поддерживает `Copy` button. Warnings (e.g. "no cached file") отображаются над preview'ом.
 
 ### Dirty check
 
