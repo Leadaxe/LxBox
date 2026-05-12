@@ -39,7 +39,16 @@ class UpdateChecker {
   /// Гидратирует [latest] из cached `last_known_version` (если он newer
   /// чем [localVersion] и не dismissed). Вызывается одноразово при старте,
   /// чтобы UI мгновенно показал известный апдейт без сетевого запроса.
+  /// Dev builds (`X.Y.Z-dev.N`, `0.0.0-dev`) — это локальные сборки между
+  /// тегами. Сравнивать их с release tag'ами бессмысленно: они всегда
+  /// «younger» и UpdateChecker предложит «v1.8.3 available» сразу после
+  /// `flutter run`. Skip для всех dev-версий — manual «Check now» из UI
+  /// в любом случае работает.
+  bool _isDevBuild(String version) =>
+      version.contains('-dev') || version.startsWith('0.0.0');
+
   Future<void> hydrate({required String localVersion}) async {
+    if (_isDevBuild(localVersion)) return;
     final tag = await SettingsStorage.getLastKnownVersion();
     if (tag.isEmpty) return;
     final dismissed = await SettingsStorage.getDismissedUpdateVersion();
@@ -54,11 +63,13 @@ class UpdateChecker {
   }
 
   /// Проверка с учётом throttle / toggle. Тихо пропускает если:
+  /// - dev-build (`-dev.N`, `0.0.0-dev`)
   /// - `auto_check_updates` выключен
   /// - последний успешный check был < 24h назад
   /// - сеть недоступна / GitHub вернул не-200
   Future<void> maybeCheck({required String localVersion}) async {
     if (_inFlight) return;
+    if (_isDevBuild(localVersion)) return;
     final enabled = await SettingsStorage.getAutoCheckUpdates();
     if (!enabled) return;
     final last = await SettingsStorage.getLastUpdateCheck();
@@ -71,6 +82,7 @@ class UpdateChecker {
   /// Принудительная проверка — bypass cap и toggle. Вызывается из UI кнопки
   /// "Check now" (About / App Settings). Возвращает результат для caller'а
   /// (показать snackbar "you're up to date" / "checking..." и т.п.).
+  /// На dev-build всё равно выполняется — юзер явно нажал кнопку.
   Future<UpdateCheckResult> forceCheck({required String localVersion}) async {
     if (_inFlight) return UpdateCheckResult.skipped('check already in flight');
     return _check(localVersion: localVersion, source: 'manual');

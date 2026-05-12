@@ -124,24 +124,20 @@ jobs:
           flutter-version: "3.41.6"
           cache: true
 
-      - name: Inject release version
-        # Tag — единственный источник правды для версии. pubspec.yaml в репо
-        # это placeholder (`0.0.0-dev+0`); CI переписывает его перед `flutter
-        # build` чтобы APK получил правильные versionName/versionCode.
-        # Никаких bump-коммитов в репо при release не требуется.
+      - name: Inject release version from tag
+        # Pre-commit hook (.githooks/pre-commit) синхронизирует pubspec на
+        # каждом commit'е, но на момент tag'а HEAD имеет `-dev.N` версию
+        # (последний dev-commit до tag). CI override'ит на чистую `X.Y.Z`.
+        # Symmetric с scripts/sync-pubspec-version.sh — та же формула.
         shell: bash
         run: |
           set -euo pipefail
           VERSION="${{ needs.meta.outputs.version }}"
-          # Snip "v" prefix when on tag run (meta job отдаёт "v1.8.2" в release-mode).
           VERSION="${VERSION#v}"
-          # versionCode — monotonically increasing integer, derived от commits.
           BUILD_NUMBER=$(git rev-list --count HEAD)
-          echo "Injecting version: $VERSION+$BUILD_NUMBER"
           sed -i.bak -E "s/^version: .*/version: $VERSION+$BUILD_NUMBER/" pubspec.yaml
           rm -f pubspec.yaml.bak
-          echo "---pubspec.yaml head---"
-          head -8 pubspec.yaml
+          echo "Injected: $VERSION+$BUILD_NUMBER"
 
       - name: Dependencies
         run: flutter pub get

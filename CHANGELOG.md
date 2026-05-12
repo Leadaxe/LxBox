@@ -10,6 +10,29 @@
 
 ---
 
+## [1.8.3] — 2026-05-12
+
+«Pre-commit hook auto-sync» release. Завершает рефакторинг версионирования начатый в v1.8.2: теперь pubspec обновляется автоматом при каждом `git commit`, никаких manual шагов.
+
+### Changed
+
+- **Pre-commit hook автоматически синхронизирует `app/pubspec.yaml` с git state** ([§066 spec](docs/spec/tasks/066-pubspec-sync-hook.md), [.githooks/pre-commit](.githooks/pre-commit), [scripts/sync-pubspec-version.sh](scripts/sync-pubspec-version.sh)).
+  - `versionName` = `${last_tag#v}` (clean release) или `${last_tag#v}-dev.${commits_since}` (между тегами).
+  - `versionCode` = `git rev-list --count HEAD + 1` (monotonic).
+  - Setup: один раз после clone `./scripts/setup-hooks.sh` → `git config core.hooksPath .githooks`.
+  - На tag push CI override'ит pubspec из tag'а (hook не triggers на `git tag`) — production APK получает чистую `X.Y.Z`.
+- **UpdateChecker skip для `-dev` версий** ([update_checker.dart](app/lib/services/update_checker.dart)). `_isDevBuild(version)` → если version содержит `-dev` или начинается с `0.0.0` → `hydrate()` и `maybeCheck()` exit early. Никаких snackbar'ов «X.Y.Z available» в dev сессиях. `forceCheck()` (manual «Check now») не skip — юзер явно нажал.
+- **`scripts/build-local-apk.sh` упрощён** — убраны `--dart-define BUILD_LOCAL / BUILD_GIT_DESC / BUILD_LAST_TAG / BUILD_COMMITS_SINCE_TAG / BUILD_TIME`. Pubspec.yaml — единственный источник, читается через `PackageInfo.fromPlatform()`.
+- **`about_screen.dart` упрощён** — удалены 5 `String.fromEnvironment('BUILD_*')` const'ов и `_LocalBuildBadge` widget. Остаётся только `v${VersionInfo.I.version}` (уже включает `-dev.N` если dev build).
+
+### Removed
+
+- `--dart-define BUILD_*` pass-through между local build script ↔ Dart code.
+- `_LocalBuildBadge` widget в About screen.
+- pubspec.yaml comment block про «placeholder» — теперь pubspec не placeholder, hook поддерживает живую версию.
+
+---
+
 ## [1.8.2] — 2026-05-12
 
 «Version from tag — single source of truth» release. Финальный fix дублирования версии (v1.8.0 hotfix → v1.8.1 guard → v1.8.2 elimination). Tag теперь единственный источник правды, никаких bump-коммитов в репо при release-flow.
