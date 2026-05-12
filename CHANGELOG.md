@@ -8,6 +8,16 @@
 
 ## [Unreleased]
 
+### Removed
+
+- **Legacy `SelectableRule` режим без `preset_id`** ([§067 spec](docs/spec/tasks/067-selectable-rule-legacy-cleanup.md)). До §033 (v1.4.x) `SelectableRule` мог быть в шаблоне без `preset_id` — конвертировался в `CustomRule(kind: inline/srs)` копированием полей. С §033 (v1.5+) все рулы в `wizard_template.json` имеют `preset_id`, конвертер `selectableRuleToCustom` для empty presetId возвращал null silently — dead code.
+  - `SelectableRule.presetId` теперь `required` (default `''` удалён).
+  - `SelectableRule.fromJson` бросает `FormatException` если в шаблоне отсутствует `preset_id`.
+  - `selectableRuleToCustom` возвращает `CustomRulePreset` (non-nullable, был `?`).
+  - Убраны 2 null-check'а в `routing_screen.dart` (`_migrateLegacyRules` + `_copyPreset`).
+  - Docstring `parser_config.dart::SelectableRule` упрощён — упоминания «Legacy (1.4.x)» режима убраны.
+  - Test «без preset_id → null» переписан в «`fromJson` без preset_id → FormatException».
+
 ---
 
 ## [1.8.3] — 2026-05-12

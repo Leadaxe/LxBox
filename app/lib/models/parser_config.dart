@@ -251,24 +251,20 @@ class VarSection {
 
 /// A selectable routing rule from the wizard template.
 ///
-/// Два режима существования (spec §033):
+/// Bundle-режим (spec §033): пресет self-contained — несёт rule_set +
+/// dns_rule + routing rule + dns_servers + типизированные переменные.
+/// `CustomRule(kind: preset)` хранит только ссылку `{presetId, varsValues}`,
+/// expansion + merge выполняется в `preset_expand.dart`.
 ///
-/// 1. **Legacy (1.4.x)** — `presetId` пустой, `vars`/`dnsRule`/`dnsServers`
-///    пустые. Правило конвертируется в `CustomRule(kind: inline/srs)` через
-///    `selectableRuleToCustom`, содержимое копируется в правило.
-///
-/// 2. **Bundle (1.5+)** — `presetId` задан. Пресет self-contained: несёт
-///    rule_set + dns_rule + routing rule + dns_servers + типизированные
-///    переменные. `CustomRule(kind: preset)` хранит только ссылку
-///    `{presetId, varsValues}`. Expansion + merge в `preset_expand.dart`.
+/// `presetId` обязательный (§067 убрал legacy mode без preset_id).
 class SelectableRule {
   SelectableRule({
     required this.label,
+    required this.presetId,
     this.description = '',
     this.defaultEnabled = false,
     this.ruleSets = const [],
     this.rule = const {},
-    this.presetId = '',
     this.vars = const [],
     this.dnsRule,
     this.dnsServers = const [],
@@ -297,6 +293,13 @@ class SelectableRule {
   final List<Map<String, dynamic>> dnsServers;
 
   factory SelectableRule.fromJson(Map<String, dynamic> json) {
+    final presetId = (json['preset_id'] as String?) ?? '';
+    if (presetId.isEmpty) {
+      throw FormatException(
+        'SelectableRule "${json['label'] ?? '<no-label>'}" missing required '
+        '`preset_id` (§067 — legacy без preset_id больше не поддерживается)',
+      );
+    }
     return SelectableRule(
       label: json['label'] as String? ?? '',
       description: json['description'] as String? ?? '',
@@ -306,7 +309,7 @@ class SelectableRule {
               .toList() ??
           [],
       rule: json['rule'] as Map<String, dynamic>? ?? {},
-      presetId: json['preset_id'] as String? ?? '',
+      presetId: presetId,
       vars: (json['vars'] as List<dynamic>?)
               ?.whereType<Map<String, dynamic>>()
               .map((v) => WizardVar.fromJson(v))

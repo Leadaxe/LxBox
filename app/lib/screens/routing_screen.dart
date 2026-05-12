@@ -382,7 +382,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
         template,
         overrideOutbound: legacyOutbounds[label],
       );
-      if (cr != null) _customRules.add(cr);
+      _customRules.add(cr);
     }
 
     await SettingsStorage.saveCustomRules(_customRules);
@@ -620,13 +620,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
   }
 
   void _copyPreset(SelectableRule rule, WizardTemplate template) {
-    CustomRule? cr = selectableRuleToCustom(rule, template);
-    if (cr == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Cannot represent "${rule.label}" as a rule')),
-      );
-      return;
-    }
+    CustomRule cr = selectableRuleToCustom(rule, template);
     // Правила нуждающиеся в SRS-файле добавляются disabled — юзер сначала
     // качает через ☁, потом включает switch (или toggle-on сам auto-
     // download'ит и enable на успехе).
@@ -637,7 +631,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
 
     final insertAt = _computeInsertIndex(cr);
     setState(() {
-      _customRules.insert(insertAt, cr!);
+      _customRules.insert(insertAt, cr);
       _scheduleSave();
     });
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1234,4 +1228,9 @@ class _OutboundOption {
   final String tag;
 }
 
-final SelectableRule _emptySelectable = SelectableRule(label: '');
+/// Sentinel для `firstWhere(..., orElse: ...)` lookups — содержимое игнорируется,
+/// caller проверяет `label.isEmpty` после поиска. `presetId` обязательный
+/// (§067), кладём marker который заведомо никогда не матчится в реальных
+/// preset_id.
+final SelectableRule _emptySelectable =
+    SelectableRule(label: '', presetId: '__empty_sentinel__');
