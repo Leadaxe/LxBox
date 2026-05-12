@@ -10,7 +10,7 @@ import '../../rule_set_downloader.dart';
 import '../../settings_storage.dart';
 import '../../subscription/auto_updater.dart';
 import '../../update_checker.dart';
-import '../../../screens/about_screen.dart';
+import '../../version_info.dart';
 import '../../../vpn/box_vpn_client.dart';
 import '../context.dart';
 import '../contract/errors.dart';
@@ -86,7 +86,7 @@ Future<DebugResponse> _previewEmptyState(
 ///            "tag": "v1.5.0", "html_url": "...", "message": "...", "dismissed": false}
 Future<DebugResponse> _checkUpdates(DebugRequest req, DebugContext ctx) async {
   final result = await UpdateChecker.I.forceCheck(
-    localVersion: AboutScreen.versionString,
+    localVersion: VersionInfo.I.version,
   );
   final body = <String, Object?>{
     'ok': true,

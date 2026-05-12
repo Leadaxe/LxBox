@@ -10,11 +10,11 @@ import '../services/haptic_service.dart';
 import '../services/relative_time.dart';
 import '../services/settings_storage.dart';
 import '../services/update_checker.dart';
+import '../services/version_info.dart';
 import '../services/url_launcher.dart' as ul;
 import '../services/wifi_history_listener.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import '../vpn/box_vpn_client.dart';
-import 'about_screen.dart';
 import 'backup_screen.dart';
 
 class AppSettingsScreen extends StatefulWidget {
@@ -928,7 +928,7 @@ class _UpdateStatusRowState extends State<_UpdateStatusRow> {
       _resultLine = null;
     });
     final result = await UpdateChecker.I.forceCheck(
-      localVersion: AboutScreen.versionString,
+      localVersion: VersionInfo.I.version,
     );
     final dt = await SettingsStorage.getLastUpdateCheck();
     if (!mounted) return;

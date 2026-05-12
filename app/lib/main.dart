@@ -9,10 +9,15 @@ import 'screens/home_screen.dart';
 import 'services/app_log.dart';
 import 'services/clash_log_pump.dart';
 import 'services/debug/bootstrap.dart' as debug_bootstrap;
+import 'services/version_info.dart';
 import 'services/wifi_history_listener.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // VersionInfo загружает PackageInfo → sync доступ к версии для About /
+  // UpdateChecker (см. §066). Раньше версия дублировалась hardcoded const'ом
+  // в AboutScreen — поднимать вручную легко забыть (произошло на v1.8.0).
+  await VersionInfo.I.init();
   // §038 — подгружаем persistent warning+error entries предыдущей сессии
   // (из обоих файлов applog.txt + corelog.txt — §043) до runApp, чтобы
   // Debug-экран сразу видел pre-crash JVM-events.

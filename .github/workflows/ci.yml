@@ -90,34 +90,6 @@ jobs:
       - name: Dependencies
         run: flutter pub get
 
-      - name: Version consistency check
-        # Guard against the v1.8.0 incident — pubspec.yaml `version:` and
-        # `app/lib/screens/about_screen.dart` `_version` are two independent
-        # sources of truth; if they drift, the UI shows the wrong version and
-        # update_checker recommends an "update" to the same release the user
-        # already runs. On a tag push we additionally require the tag to match.
-        shell: bash
-        run: |
-          pubspec_version=$(grep -E "^version:" pubspec.yaml | sed -E 's/^version: ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
-          about_version=$(grep -E "_version = '" lib/screens/about_screen.dart | sed -E "s/.*_version = '([^']+)'.*/\1/")
-          tag_version=""
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            tag_version="${GITHUB_REF#refs/tags/v}"
-          fi
-          echo "pubspec.yaml:           $pubspec_version"
-          echo "about_screen.dart:      $about_version"
-          echo "git tag:                ${tag_version:-<not on tag>}"
-          fail=0
-          if [ "$pubspec_version" != "$about_version" ]; then
-            echo "::error file=app/lib/screens/about_screen.dart::pubspec.yaml version ($pubspec_version) != about_screen.dart _version ($about_version) — bump _version when bumping pubspec"
-            fail=1
-          fi
-          if [ -n "$tag_version" ] && [ "$tag_version" != "$pubspec_version" ]; then
-            echo "::error file=app/pubspec.yaml::git tag (v$tag_version) != pubspec.yaml version ($pubspec_version) — pubspec must match the tag"
-            fail=1
-          fi
-          exit $fail
-
       - name: Analyze
         run: flutter analyze
 
@@ -135,6 +107,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Нужны полные refs для `git rev-list --count HEAD` (versionCode).
+          fetch-depth: 0
 
       - name: Java 17
         uses: actions/setup-java@v4
@@ -148,6 +123,25 @@ jobs:
           channel: stable
           flutter-version: "3.41.6"
           cache: true
+
+      - name: Inject release version
+        # Tag — единственный источник правды для версии. pubspec.yaml в репо
+        # это placeholder (`0.0.0-dev+0`); CI переписывает его перед `flutter
+        # build` чтобы APK получил правильные versionName/versionCode.
+        # Никаких bump-коммитов в репо при release не требуется.
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.meta.outputs.version }}"
+          # Snip "v" prefix when on tag run (meta job отдаёт "v1.8.2" в release-mode).
+          VERSION="${VERSION#v}"
+          # versionCode — monotonically increasing integer, derived от commits.
+          BUILD_NUMBER=$(git rev-list --count HEAD)
+          echo "Injecting version: $VERSION+$BUILD_NUMBER"
+          sed -i.bak -E "s/^version: .*/version: $VERSION+$BUILD_NUMBER/" pubspec.yaml
+          rm -f pubspec.yaml.bak
+          echo "---pubspec.yaml head---"
+          head -8 pubspec.yaml
 
       - name: Dependencies
         run: flutter pub get
