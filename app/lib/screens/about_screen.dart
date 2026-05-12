@@ -4,21 +4,17 @@ import 'package:flutter/services.dart';
 import '../services/relative_time.dart';
 import '../services/update_checker.dart';
 import '../services/url_launcher.dart' as ul;
+import '../services/version_info.dart';
 import '../vpn/box_vpn_client.dart';
 
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  static const _version = '1.8.1';
   static const _repoUrl = 'https://github.com/Leadaxe/LxBox';
   static const _singboxUpstreamUrl = 'https://github.com/SagerNet/sing-box';
   static const _singboxLauncherUrl =
       'https://github.com/Leadaxe/singbox-launcher';
-
-  /// Public alias for callers (e.g. UpdateChecker / SnackBar) — single
-  /// source of truth for "current version".
-  static const String versionString = _version;
 
   // Заполняются `scripts/build-local-apk.sh` через --dart-define.
   // CI build (без define'ов) → пустые строки → метка "local" не показывается.
@@ -57,7 +53,7 @@ class AboutScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'v$_version',
+                  'v${VersionInfo.I.version}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),
@@ -338,7 +334,7 @@ class _UpdateBlockState extends State<_UpdateBlock> {
       _statusLine = null;
     });
     final result = await UpdateChecker.I.forceCheck(
-      localVersion: AboutScreen.versionString,
+      localVersion: VersionInfo.I.version,
     );
     if (!mounted) return;
     setState(() {

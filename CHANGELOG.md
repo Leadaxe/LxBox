@@ -10,6 +10,27 @@
 
 ---
 
+## [1.8.2] — 2026-05-12
+
+«Version from tag — single source of truth» release. Финальный fix дублирования версии (v1.8.0 hotfix → v1.8.1 guard → v1.8.2 elimination). Tag теперь единственный источник правды, никаких bump-коммитов в репо при release-flow.
+
+### Changed
+
+- **Версия — derived from git tag, не hardcoded в коде** ([§065 spec](docs/spec/tasks/065-version-from-tag.md), [version_info.dart](app/lib/services/version_info.dart), [.github/workflows/ci.yml](.github/workflows/ci.yml), [scripts/build-local-apk.sh](scripts/build-local-apk.sh)).
+  - `app/pubspec.yaml` навсегда удерживается на placeholder `version: 0.0.0-dev+0`. CI и local build script переписывают line перед `flutter build`, не commit'ят в репо.
+  - `versionName` = `${tag#v}` (например `v1.8.2 → 1.8.2`).
+  - `versionCode` = `git rev-list --count HEAD` (monotonic).
+  - About screen + UpdateChecker используют `VersionInfo.I.version` (load из `PackageInfo.fromPlatform()` в `main()` перед `runApp`). Sync-доступ, single source.
+  - **Удалена** `static const _version` в `about_screen.dart` + `AboutScreen.versionString` alias. Удалён CI «Version consistency check» step (нечего сверять — один источник).
+  - **Release commit message теперь `docs(release): vX.Y.Z notes`**, без `bump to X.Y.Z+N`. Bump-коммиты больше не нужны.
+  - [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md) §2.2 переписан под новый flow.
+
+### Fixed
+
+- **Local dev: `flutter run` показывал старую версию** — теперь `0.0.0-dev` (placeholder) или `X.Y.Z-dev.N` если запущен через `scripts/build-local-apk.sh` (derive'ит из `git describe`).
+
+---
+
 ## [1.8.1] — 2026-05-12
 
 Hotfix для v1.8.0: hardcoded UI-версия не была поднята при release-bump'е.

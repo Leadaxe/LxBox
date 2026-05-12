@@ -70,25 +70,18 @@ CI (`.github/workflows/ci.yml`) триггерится на:
 
    ⚠️ **Если собираете из worktree** (`.claude/worktrees/*`): `app/android/key.properties` и `upload-keystore.jks` в worktree **отсутствуют**. До первой release-сборки симлинкать их из основного checkout'а — иначе APK получит debug-подпись и не встанет поверх prod. См. memory `feedback_keystore_in_worktree`.
 
-### 2.2. Bump версии
+### 2.2. Версия — git tag это единственный source of truth
 
-Версия живёт **в двух местах одновременно** — обязательно поднимать оба:
+С v1.8.2 версия в репо **не правится при release-flow**:
 
-1. **`app/pubspec.yaml`** — `versionName` + `versionCode` для Android:
-   ```yaml
-   version: X.Y.Z+<build>
-   ```
-   `+<build>` — monotonic integer (VersionCode). Обычно `prev_build + 1`. Даунгрейдить нельзя — установка поверх prod упадёт.
+- `app/pubspec.yaml` навсегда удерживается на placeholder `version: 0.0.0-dev+0`. CI и `scripts/build-local-apk.sh` переписывают этот файл **перед** `flutter build`, и восстанавливают (trap on EXIT для local, ephemeral checkout для CI). Никаких bump-коммитов в репо.
+- `versionName` (X.Y.Z) — derived из git tag (`refs/tags/vX.Y.Z` → `X.Y.Z`).
+- `versionCode` (N) — derived из `git rev-list --count HEAD` (monotonic с каждым новым коммитом).
+- About screen и `UpdateChecker` читают версию через `VersionInfo.I.version` который load'ит `PackageInfo.fromPlatform()` (= встроенный в APK `pubspec.yaml` snapshot) в `main()` перед `runApp`. Sync-доступ из любого UI после init.
 
-2. **`app/lib/screens/about_screen.dart:13`** — UI source of truth:
-   ```dart
-   static const _version = 'X.Y.Z';
-   ```
-   Эту константу читает About screen и `UpdateChecker.checkForUpdate()` (через `AboutScreen.versionString`). Если не обновить — приложение собирается под новым тегом, но в About показывает старый, и `UpdateChecker` рекомендует «обновитесь до X.Y.Z» даже когда юзер уже на X.Y.Z (произошло в v1.8.0).
+> **Если в репо вернёт реальную версию через ошибку** — CI всё равно overwrite'нет из tag перед build'ом, релизный APK будет правильным. Local builds (`scripts/build-local-apk.sh`) тоже всегда пользуются git describe, не доверяя pubspec'у.
 
-CI проверяет согласованность обоих (+ совпадение с git tag на release run) в `checks` job → `Version consistency check`. Mismatch → fail до build'а, релиз не уедет с поломанной версией.
-
-> **Why двойная запись:** `PackageInfo.fromPlatform()` даёт `pubspec.yaml`-версию, но это `async` call, а About screen и UpdateChecker — sync constructors с `const`-значениями. Можно теоретически отрефакторить под `late final` / inherited widget — но сейчас compile-time const прозрачнее. Если хочется убрать дубль, см. отдельную задачу-кандидат.
+История: до v1.8.2 версия дублировалась в `pubspec.yaml` + `about_screen.dart _version` const. Они расходились вручную (v1.8.0 hotfix). v1.8.1 добавил CI consistency check как guard. v1.8.2 — финальный fix: убрана hardcoded const, pubspec → placeholder, всё derived из tag. См. [§065 spec](spec/tasks/065-version-from-tag.md).
 
 ### 2.3. RELEASE_NOTES.md → архив
 
@@ -97,9 +90,9 @@ CI проверяет согласованность обоих (+ совпад�
 3. Проверить, что внутри нет остатков прошлой версии: заголовок `# L×Box vX.Y.Z`, предыдущая ссылка внизу `Предыдущий релиз: [v...](docs/releases/v...md).`
 4. Один коммит в `develop`:
    ```
-   docs(release): vX.Y.Z notes + bump to X.Y.Z+N
+   docs(release): vX.Y.Z notes
    ```
-   Запушить в `origin/develop`.
+   Запушить в `origin/develop`. **Никаких pubspec/about_screen изменений** — версия будет инжектиться CI.
 
 ### 2.4. Merge в main и тег
 

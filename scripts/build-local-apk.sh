@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 # Локальная сборка APK с пометкой "local" + git describe.
-# CI-сборка в .github/workflows/ci.yml зовёт `flutter build` напрямую без
-# этих --dart-define'ов, поэтому release-APK из CI не помечается как local.
+#
+# Tag — единственный источник правды для версии (см. docs/RELEASE_PROCESS.md).
+# Этот скрипт временно переписывает app/pubspec.yaml (`version:`) на
+# `<last-tag>-dev.<commits-since-tag>+<commits-total>` перед `flutter build`,
+# и восстанавливает на EXIT через `git checkout`. Никаких commit'ов в репо.
+#
+# CI-сборка в .github/workflows/ci.yml использует тот же подход через
+# pubspec sed + git rev-list — pubspec.yaml в репо это всегда placeholder
+# `0.0.0-dev+0`.
 
 set -euo pipefail
 
@@ -25,15 +32,39 @@ COMMITS_SINCE=$(
     echo "0"
   fi
 )
+COMMITS_TOTAL=$(git rev-list HEAD --count 2>/dev/null || echo "0")
 BUILD_TIME=$(date -u +"%Y-%m-%d %H:%M UTC")
 
+# versionName / versionCode из git
+LAST_VERSION="${LAST_TAG#v}"  # "v1.8.1" → "1.8.1"; "" если no tag
+if [ -z "$LAST_VERSION" ]; then
+  LAST_VERSION="0.0.0"
+fi
+if [ "$COMMITS_SINCE" = "0" ]; then
+  # На самом tag — version = X.Y.Z (clean)
+  VERSION_NAME="$LAST_VERSION"
+else
+  # Между тегами — version = X.Y.Z-dev.N
+  VERSION_NAME="${LAST_VERSION}-dev.${COMMITS_SINCE}"
+fi
+VERSION_CODE="$COMMITS_TOTAL"
+
 echo "─── Local build ───────────────────────────────────────"
-echo "  git describe : $GIT_DESC"
-echo "  last tag     : ${LAST_TAG:-<none>}"
-echo "  commits since: $COMMITS_SINCE"
-echo "  short SHA    : $GIT_SHA"
-echo "  built at     : $BUILD_TIME"
+echo "  git describe   : $GIT_DESC"
+echo "  last tag       : ${LAST_TAG:-<none>}"
+echo "  commits since  : $COMMITS_SINCE"
+echo "  commits total  : $COMMITS_TOTAL"
+echo "  short SHA      : $GIT_SHA"
+echo "  built at       : $BUILD_TIME"
+echo "  injecting ver  : $VERSION_NAME+$VERSION_CODE"
 echo "───────────────────────────────────────────────────────"
+
+# Restore pubspec.yaml on any exit (success / failure / Ctrl+C).
+trap "git checkout -- app/pubspec.yaml 2>/dev/null || true" EXIT
+
+# Inject version into pubspec.yaml (sed in-place, BSD/macOS compatible).
+sed -i.bak -E "s/^version: .*/version: ${VERSION_NAME}+${VERSION_CODE}/" app/pubspec.yaml
+rm -f app/pubspec.yaml.bak
 
 cd app
 

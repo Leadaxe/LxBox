@@ -10,6 +10,7 @@ import '../controllers/subscription_controller.dart';
 import '../models/home_state.dart';
 import '../models/node_spec.dart';
 import '../services/clash_api_client.dart';
+import '../services/version_info.dart';
 import '../widgets/node_row.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import 'outbound_view_screen.dart';
@@ -119,11 +120,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // 24h в самом UpdateChecker. Listener подхватывает результат и
     // показывает SnackBar если есть newer + не dismissed.
     UpdateChecker.I.latest.addListener(_onLatestUpdateChanged);
-    unawaited(UpdateChecker.I.hydrate(localVersion: AboutScreen.versionString));
+    unawaited(UpdateChecker.I.hydrate(localVersion: VersionInfo.I.version));
     Timer(const Duration(seconds: 5), () {
       if (!mounted) return;
       unawaited(
-        UpdateChecker.I.maybeCheck(localVersion: AboutScreen.versionString),
+        UpdateChecker.I.maybeCheck(localVersion: VersionInfo.I.version),
       );
     });
   }
@@ -154,7 +155,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         duration: const Duration(seconds: 12),
         content: Text(
           'L×Box ${info.tag} available '
-          '(you have v${AboutScreen.versionString})',
+          '(you have v${VersionInfo.I.version})',
         ),
         action: SnackBarAction(
           label: 'View',
