@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Sync pubspec.yaml `version:` line с git state перед каждым commit'ом.
+# Запускается автоматически когда `git config core.hooksPath .githooks` set
+# (см. scripts/setup-hooks.sh).
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+"$repo_root/scripts/sync-pubspec-version.sh"
+git add "$repo_root/app/pubspec.yaml"

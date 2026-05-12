@@ -72,16 +72,28 @@ CI (`.github/workflows/ci.yml`) триггерится на:
 
 ### 2.2. Версия — git tag это единственный source of truth
 
-С v1.8.2 версия в репо **не правится при release-flow**:
+С v1.8.3 версия **не правится вручную нигде**:
 
-- `app/pubspec.yaml` навсегда удерживается на placeholder `version: 0.0.0-dev+0`. CI и `scripts/build-local-apk.sh` переписывают этот файл **перед** `flutter build`, и восстанавливают (trap on EXIT для local, ephemeral checkout для CI). Никаких bump-коммитов в репо.
-- `versionName` (X.Y.Z) — derived из git tag (`refs/tags/vX.Y.Z` → `X.Y.Z`).
-- `versionCode` (N) — derived из `git rev-list --count HEAD` (monotonic с каждым новым коммитом).
-- About screen и `UpdateChecker` читают версию через `VersionInfo.I.version` который load'ит `PackageInfo.fromPlatform()` (= встроенный в APK `pubspec.yaml` snapshot) в `main()` перед `runApp`. Sync-доступ из любого UI после init.
+- **`app/pubspec.yaml`** автоматически синхронизируется с git state через **pre-commit hook** (`.githooks/pre-commit` → [`scripts/sync-pubspec-version.sh`](../scripts/sync-pubspec-version.sh)). На каждом `git commit` версия пересчитывается:
+  - `versionName` = `${last_tag#v}` если HEAD на tag commit'е (clean release). Иначе `${last_tag#v}-dev.${commits_since_last_tag}` (например `1.8.2-dev.3`).
+  - `versionCode` = `git rev-list --count HEAD` + 1 (monotonic, всегда растёт).
+- **CI release** дополнительно override'ит pubspec из tag перед `flutter build` (потому что hook не triggers на `git tag`). Результат — чистая `X.Y.Z` без `-dev` суффикса в production APK.
+- **About screen / UpdateChecker** читают версию через `VersionInfo.I.version` (load из `PackageInfo.fromPlatform()` в `main()` перед `runApp`).
+- **UpdateChecker skip для `-dev` versions** — dev builds не получают snackbar «X.Y.Z available» (всегда выглядит как «обновитесь до latest»).
 
-> **Если в репо вернёт реальную версию через ошибку** — CI всё равно overwrite'нет из tag перед build'ом, релизный APK будет правильным. Local builds (`scripts/build-local-apk.sh`) тоже всегда пользуются git describe, не доверяя pubspec'у.
+### Setup для нового clone
 
-История: до v1.8.2 версия дублировалась в `pubspec.yaml` + `about_screen.dart _version` const. Они расходились вручную (v1.8.0 hotfix). v1.8.1 добавил CI consistency check как guard. v1.8.2 — финальный fix: убрана hardcoded const, pubspec → placeholder, всё derived из tag. См. [§065 spec](spec/tasks/065-version-from-tag.md).
+```bash
+./scripts/setup-hooks.sh
+```
+
+One-shot — включает `git config core.hooksPath .githooks`. После этого все локальные commits автоматически синхронизируют pubspec.
+
+### История
+
+- До v1.8.2 версия дублировалась в `pubspec.yaml` + `about_screen.dart _version` const. v1.8.0 ▼: расхождение, UI показал v1.7.0. v1.8.1 hotfix + CI consistency check как guard.
+- v1.8.2 ([§065](spec/tasks/065-version-from-tag.md)): убрана hardcoded const, pubspec → placeholder, CI/local-script инжектят. Но требовался manual `scripts/build-local-apk.sh` для realistic version при dev sessions.
+- v1.8.3 ([§066](spec/tasks/066-pubspec-sync-hook.md)): pre-commit hook делает sync автоматом. Pubspec всегда in sync с git state, `flutter run` показывает realistic версию без extra шагов.
 
 ### 2.3. RELEASE_NOTES.md → архив
 
@@ -101,8 +113,19 @@ CI запускает release job **только** на push тега, и тег
 ```bash
 git checkout main
 git pull --ff-only
-git merge --no-ff develop -m "Merge branch 'develop' into main (vX.Y.Z)"
+
+# ⚠ Two-step merge: `--no-commit` + explicit `commit -m`.
+# `git merge --no-ff -m "..."` падает с "Пустое сообщение коммита"
+# несмотря на -m (git CLI quirk, ловили дважды на v1.8.1 + v1.8.2).
+# Если script продолжает после fail → push выдаст "up-to-date" (main не
+# двинулся), tag создастся на старом commit'е, CI соберёт устаревший
+# код. Always two-step.
+git merge --no-ff --no-commit develop
+git commit -m "Merge branch 'develop' into main (vX.Y.Z)"
 git push origin main
+
+# Sanity: tag должен дотягиваться до hotfix commit'а
+git merge-base --is-ancestor <hotfix-sha> main && echo OK || echo "❌ retag needed"
 
 # Отдельно — тег
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
@@ -214,11 +237,11 @@ git tag -d vX.Y.Z
 
 - [ ] `develop` зелёная (`cd app && flutter analyze && flutter test`), descendant от прошлого stable-тега.
 - [ ] Релиз-доки синхронизированы: `CHANGELOG.md`, `ARCHITECTURE.md` / `DEVELOPMENT_REPORT.md` (если затронуты), `README.md` + `README_RU.md` (если фичи видимые), spec'и → `status: released`.
-- [ ] `app/pubspec.yaml`: `version: X.Y.Z+N` (N > прошлого build).
+- [ ] `app/pubspec.yaml` **не трогать** — там placeholder `0.0.0-dev+0`. Версия инжектится CI из tag (§065).
 - [ ] `RELEASE_NOTES.md` причёсан под финал, скопирован в `docs/releases/vX.Y.Z.md`.
-- [ ] Local smoke: `scripts/build-local-apk.sh` + `scripts/install-apk.sh` — ставится поверх prod без `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (при работе из worktree не забыть симлинки keystore).
-- [ ] Коммит `docs(release): vX.Y.Z notes + bump to X.Y.Z+N` запушен в `develop`.
-- [ ] `main` ← merge `--no-ff develop`, запушен; тег `vX.Y.Z` запушен **отдельной командой**.
+- [ ] Local smoke: `scripts/build-local-apk.sh` (derive'ит версию из `git describe`, sed pubspec + revert trap) + `scripts/install-apk.sh` — ставится поверх prod без `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (при работе из worktree не забыть симлинки keystore).
+- [ ] Коммит `docs(release): vX.Y.Z notes` запушен в `develop` (только doc-изменения; никаких pubspec/code bump'ов).
+- [ ] `main` ← merge `--no-ff --no-commit develop` → `commit -m "Merge ..."` → push; тег `vX.Y.Z` запушен **отдельной командой**. **NB:** именно `--no-commit` + явный `commit -m`, не `--no-ff -m` — последнее ломается на «Пустое сообщение коммита» и tag оказывается на старом commit'е (см. memory `feedback_git_merge_no_ff_quirk`).
 - [ ] `gh run watch` зелёный, APK `LxBox-vX.Y.Z.apk` в релизе, подпись — release.
 - [ ] `publish-manifest` отработал — `docs/latest.json` обновлён на `main`.
 - [ ] `main` слит обратно в `develop` (§2.6), запушен.
