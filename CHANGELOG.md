@@ -10,6 +10,22 @@
 
 ---
 
+## [1.8.1] — 2026-05-12
+
+Hotfix для v1.8.0: hardcoded UI-версия не была поднята при release-bump'е.
+
+### Fixed
+
+- **About screen и UpdateChecker показывали `v1.7.0` на v1.8.0 build** ([about_screen.dart:13](app/lib/screens/about_screen.dart:13)). При bump'е v1.8.0 поднял `pubspec.yaml` version и весь release-docs набор, но забыл `static const _version = '1.7.0'` в About screen — она читается `UpdateChecker.checkForUpdate()` через `AboutScreen.versionString` и показывается в Settings → About. Эффект: app собран как 1.8.0 (Android `versionName=1.8.0`), но в UI «v1.7.0» + snackbar «v1.8.0 available» сразу после установки.
+- Backup-файлы записывают `source_app_version` через `PackageInfo.fromPlatform()` (= pubspec) — там было корректно 1.8.0; UI был единственным affected surface.
+
+### Added
+
+- **CI version consistency check** ([.github/workflows/ci.yml](.github/workflows/ci.yml) → `checks` job, новый step «Version consistency check»). Сверяет `pubspec.yaml` `version:`, `about_screen.dart` `_version`, и git tag (на release run). Mismatch → CI fail до сборки APK, release-tag не уйдёт с расхождением.
+- **Release process docs обновлены** ([docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md) §2.2). Теперь явно перечислены **два** места куда записывается версия + why необходимы оба, со ссылкой на CI guard.
+
+---
+
 ## [1.8.0] — 2026-05-11
 
 «Backup overhaul + routing order fix» release. Главное — **§063/§040 backup format переписан** под полный snapshot (старый формат терял `custom_rules`, `tun_apps`, `enabled_groups` и т.д.); **§062 — fix custom_rules cross-kind order** (storage order теперь end-to-end управляемый между preset/inline/srs); **§053 — `custom_rule_edit_screen.dart` split** Stage 1+2+3 (2060 → 456 LOC, −77%); plus tooltip on Allow VPN bypass и View tab preview fix для disabled-правил.
