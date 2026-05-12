@@ -72,13 +72,23 @@ CI (`.github/workflows/ci.yml`) триггерится на:
 
 ### 2.2. Bump версии
 
-В `app/pubspec.yaml`:
+Версия живёт **в двух местах одновременно** — обязательно поднимать оба:
 
-```yaml
-version: X.Y.Z+<build>
-```
+1. **`app/pubspec.yaml`** — `versionName` + `versionCode` для Android:
+   ```yaml
+   version: X.Y.Z+<build>
+   ```
+   `+<build>` — monotonic integer (VersionCode). Обычно `prev_build + 1`. Даунгрейдить нельзя — установка поверх prod упадёт.
 
-`+<build>` — monotonic integer (VersionCode для Android Play-like). Обычно `prev_build + 1`. Даунгрейдить нельзя — установка поверх prod упадёт.
+2. **`app/lib/screens/about_screen.dart:13`** — UI source of truth:
+   ```dart
+   static const _version = 'X.Y.Z';
+   ```
+   Эту константу читает About screen и `UpdateChecker.checkForUpdate()` (через `AboutScreen.versionString`). Если не обновить — приложение собирается под новым тегом, но в About показывает старый, и `UpdateChecker` рекомендует «обновитесь до X.Y.Z» даже когда юзер уже на X.Y.Z (произошло в v1.8.0).
+
+CI проверяет согласованность обоих (+ совпадение с git tag на release run) в `checks` job → `Version consistency check`. Mismatch → fail до build'а, релиз не уедет с поломанной версией.
+
+> **Why двойная запись:** `PackageInfo.fromPlatform()` даёт `pubspec.yaml`-версию, но это `async` call, а About screen и UpdateChecker — sync constructors с `const`-значениями. Можно теоретически отрефакторить под `late final` / inherited widget — но сейчас compile-time const прозрачнее. Если хочется убрать дубль, см. отдельную задачу-кандидат.
 
 ### 2.3. RELEASE_NOTES.md → архив
 
