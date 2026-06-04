@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,7 +11,9 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/home_state.dart';
 import '../models/node_spec.dart';
+import '../services/backup_service.dart';
 import '../services/clash_api_client.dart';
+import '../services/error_format.dart';
 import '../services/version_info.dart';
 import '../widgets/node_row.dart';
 import '../widgets/wifi_permission_dialog.dart';
@@ -172,13 +176,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// foreground service + tunnel засыпает в Doze → интернет «отваливается»
   /// до следующего открытия приложения.
   ///
-  /// Rate-limit: не чаще 1 раза в 24 часа. Timestamp последнего показа —
-  /// `battery_opt_last_prompt_ms` в SettingsStorage. Пишется ДО показа:
-  /// если юзер убьёт app пока modal открыт, следующий запуск не покажет
-  /// сразу заново. Reliability > persistence — лучше пропустить показ,
-  /// чем nag'ить дважды в минуту.
-  static const _batteryPromptKey = 'battery_opt_last_prompt_ms';
-  static const _batteryPromptCooldownMs = 24 * 60 * 60 * 1000; // 24h
+  /// Без cooldown: показываем при **каждом** запуске пока юзер не даст
+  /// permission. Как только `isIgnoringBatteryOptimizations()=true` — dialog
+  /// никогда больше не появится.
 
   /// On Android 13+ (API 33+) `POST_NOTIFICATIONS` is a runtime permission.
   /// Without it, the foreground-service notification used by VPN may not
@@ -226,12 +226,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   Future<void> _maybeShowBatteryOptimizationDialog() async {
     final ok = await _vpn.isIgnoringBatteryOptimizations();
     if (ok) return;
-    final lastMs = int.tryParse(
-            await SettingsStorage.getVar(_batteryPromptKey, '0')) ??
-        0;
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    if (nowMs - lastMs < _batteryPromptCooldownMs) return;
-    await SettingsStorage.setVar(_batteryPromptKey, nowMs.toString());
     if (!mounted) return;
     await showDialog<void>(
       context: context,
@@ -252,8 +246,52 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
             onPressed: () async {
               Navigator.of(ctx).pop();
               await _vpn.openBatteryOptimizationSettings();
+              // OEM (ColorOS/MIUI/MagicOS) имеет proprietary battery toggles
+              // поверх AOSP — наш REQUEST_IGNORE_BATTERY_OPTIMIZATIONS их не
+              // контролирует. Followup показывается всегда (независимо от
+              // того что юзер выбрал в AOSP dialog) — OEM toggles важнее
+              // на проблемных device'ах.
+              if (mounted) await _showOemBatteryFollowupDialog();
             },
             child: const Text('Allow'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Standard AOSP REQUEST_IGNORE_BATTERY_OPTIMIZATIONS добавляет app в
+  /// AOSP whitelist, но на OEM (ColorOS/OxygenOS на OnePlus/OPPO/Realme,
+  /// MIUI на Xiaomi, MagicOS на Honor) есть **отдельные** proprietary
+  /// toggle'ы поверх AOSP («Background activity», «Stop when idle»),
+  /// которые AOSP intent НЕ контролирует. Open App Info чтобы юзер
+  /// тапнул их вручную.
+  Future<void> _showOemBatteryFollowupDialog() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog.adaptive(
+        title: const Text('Disable battery restrictions'),
+        content: const Text(
+          'To keep the VPN running in background, also disable battery '
+          'restrictions for L×Box. The settings screen will open — find '
+          'and toggle:\n\n'
+          '• "Battery usage" → "Don\'t optimize" or "Allow background '
+          'activity"\n\n'
+          '• On OnePlus / OPPO / Realme also:\n'
+          '  "Stop activity when idle" → OFF',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              await _vpn.openAppDetailsSettings();
+            },
+            child: const Text('Open Settings'),
           ),
         ],
       ),
@@ -1588,10 +1626,122 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 child: const Icon(Icons.add, size: 32),
               ),
             ),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: _restoreFromBackup,
+              icon: const Icon(Icons.restore, size: 18),
+              label: const Text('Restore from backup'),
+              style: TextButton.styleFrom(
+                foregroundColor: cs.onSurfaceVariant,
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  /// Empty-state quick-action: open SAF file picker → parse backup file →
+  /// `applyImport(merge: false, include: all)` → snackbar + restart hint.
+  /// Без preview dialog'а (юзер в empty state, явно хочет restore целиком —
+  /// никаких категорий снимать не надо). Polished restore через
+  /// `Settings → Backup` остаётся для merge-flow и selective import'а.
+  Future<void> _restoreFromBackup() async {
+    try {
+      final picked = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        withData: true,
+      );
+      if (picked == null || picked.files.isEmpty) return;
+      final file = picked.files.single;
+      String? raw;
+      if (file.bytes != null) {
+        try {
+          raw = const Utf8Decoder(allowMalformed: false).convert(file.bytes!);
+        } catch (_) {}
+      } else if (file.path != null) {
+        raw = await File(file.path!).readAsString();
+      }
+      if (raw == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not read file.')),
+          );
+        }
+        return;
+      }
+
+      const service = BackupService();
+      final BackupContents contents;
+      try {
+        contents = await service.parseImport(raw);
+      } on FormatException catch (e) {
+        if (!mounted) return;
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Invalid backup'),
+            content: Text(e.message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      final include = contents.availableCategories();
+      final apply = await service.applyImport(
+        contents,
+        merge: false,
+        include: include,
+      );
+      if (!mounted) return;
+
+      // Re-read storage в in-memory state controller'ов: `applyImport` записал
+      // в storage, но `_subController` всё ещё хранит entries времени init'а
+      // (когда server_lists был пуст). Без `init()` повтор юзер увидит «нет
+      // серверов» пока не перезапустит app.
+      await _subController.init();
+      // Backup хранит только URL/name/meta подписок — nodes re-fetch'аются.
+      // Triggers fetch немедленно (manual + force обходит auto_update_subs
+      // toggle и min-retry cooldown).
+      unawaited(
+          _autoUpdater.maybeUpdateAll(UpdateTrigger.manual, force: true));
+
+      final parts = <String>[];
+      if (apply.serverListsApplied > 0) {
+        parts.add('${apply.serverListsApplied} server lists');
+      }
+      if (apply.routingApplied > 0) parts.add('${apply.routingApplied} rules');
+      if (apply.appSettingsApplied > 0) {
+        parts.add('${apply.appSettingsApplied} app settings');
+      }
+      if (apply.debugConfigApplied > 0) parts.add('debug config');
+      if (apply.vpnSettingsApplied > 0) {
+        parts.add('${apply.vpnSettingsApplied} VPN settings');
+      }
+      final summary = parts.isEmpty
+          ? 'Imported nothing'
+          : 'Imported: ${parts.join(', ')} · fetching subscriptions…';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(summary),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Restore failed: ${formatUserError(e)}')),
+        );
+      }
+    }
   }
 
   Widget _buildNodeList(BuildContext context, HomeState state) {

@@ -8,6 +8,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- **OEM battery restrictions follow-up dialog** ([home_screen.dart](app/lib/screens/home_screen.dart)). После того как юзер тапнул «Allow» в нашем rationale и затем «Разрешить» в системном `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` dialog'е → app в AOSP whitelist, но **OEM (ColorOS/MIUI/MagicOS на OnePlus/OPPO/Realme/Xiaomi/Honor) имеют proprietary battery toggles поверх AOSP**, которые наш intent НЕ контролирует. Показывается follow-up dialog «Disable battery restrictions» с инструкцией («Battery usage → Don't optimize» + «On OnePlus/OPPO/Realme: Stop activity when idle → OFF») и deep-link на App Info через `ACTION_APPLICATION_DETAILS_SETTINGS`. Cooldown 24h на rationale убран — спрашиваем при каждом запуске пока permission не дан.
+- **«Restore from backup» link в empty state главного экрана** ([home_screen.dart::_buildAddServerCta](app/lib/screens/home_screen.dart)). Если у юзера нет server_lists/custom_rules (после fresh install) — под FAB «Add a server» появляется ненавязчивая кнопка «🔄 Restore from backup». Тап → SAF native file picker (`Intent.ACTION_OPEN_DOCUMENT` через `file_picker` plugin) — юзер выбирает `lxbox-backup-*.json`. После `applyImport` сразу триггерится `_subController.init()` + `AutoUpdater.maybeUpdateAll(manual, force: true)` — подписки fetch'аются в фоне без необходимости restart app'а. Snackbar «Imported: ... · fetching subscriptions…».
+
 ### Removed
 
 - **Legacy `SelectableRule` режим без `preset_id`** ([§067 spec](docs/spec/tasks/067-selectable-rule-legacy-cleanup.md)). До §033 (v1.4.x) `SelectableRule` мог быть в шаблоне без `preset_id` — конвертировался в `CustomRule(kind: inline/srs)` копированием полей. С §033 (v1.5+) все рулы в `wizard_template.json` имеют `preset_id`, конвертер `selectableRuleToCustom` для empty presetId возвращал null silently — dead code.
