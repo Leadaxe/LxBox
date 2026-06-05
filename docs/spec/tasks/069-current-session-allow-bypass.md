@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft |
+| Статус | Released в v1.9.0 |
 | Дата | 2026-06-05 |
 | Зависимости | §049 F15 (existing allow_bypass toggle), §052 (VPN Settings System tab), §063 (Debug API /state/vpn) |
 | Связанные | `BoxVpnService.kt:160-162` (existing `if (BootReceiver.isAllowBypass(this)) builder.allowBypass()`), `VpnPlugin.kt:197-205` (existing getAllowBypass/setAllowBypass handlers), `state.dart::_vpn` (Debug API /state/vpn handler), `stats_screen.dart` |

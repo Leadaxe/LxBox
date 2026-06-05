@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Done |
+| Статус | Released в v1.9.0 |
 | Дата | 2026-05-12 |
 | Связанные | [§033 preset bundles](../features/033%20preset%20bundles/spec.md), [§011 sealed split](../features/011%20sealed%20customrule/spec.md). |
 | Триггер | Аудит `SelectableRule` model: `presetId` имел default `''`, docstring описывал два режима — Legacy (1.4.x) и Bundle (1.5+). На самом деле legacy mode **не используется**: все 5 selectable_rules в `wizard_template.json` имеют `preset_id`, конвертер `selectableRuleToCustom` returns null для empty presetId. Mode = dead code. |

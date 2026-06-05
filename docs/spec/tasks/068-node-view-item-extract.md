@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft (выполняется **внутри PR §048** при срабатывании trigger'а, не отдельно) |
+| Статус | Released в v1.9.0 (выполнен **внутри PR §048** при срабатывании trigger'а) |
 | Дата | 2026-05-12 |
 | Зависимости | Нет. Pure refactor. |
 | Связанные | [`features/048 home-node-filters`](../features/048%20home-node-filters/spec.md) — extract делается внутри этого PR если itemBuilder раздулся или появился второй call-site `NodeRow`. |

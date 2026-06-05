@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft |
+| Статус | Released в v1.9.0 |
 | Дата | 2026-06-05 |
 | Зависимости | `NodeSortMode` (home_state.dart), `cycleSortMode` (home_controller.dart), §048 (filter panel — соседняя icon-кнопка в node header) |
 | Связанные | §071 (manual node reorder — отдельная фича, добавляет `NodeSortMode.manual`) |

@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft |
+| Статус | Released в v1.9.0 |
 | Дата | 2026-06-05 |
 | Зависимости | §070 (`HomeState` уже имеет pin toggles + `pingBatchGen`), `NodeSortMode` enum |
 | Связанные | §048 (filter — non-matching rows тоже draggable, dimming через Opacity сохраняется) |

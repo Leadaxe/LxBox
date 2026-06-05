@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft (all UX decisions locked, ready for implementation) |
+| Статус | Released в v1.9.0 |
 | Дата | 2026-05-12 |
 | Зависимости | Нет (hard). |
 | Связанные | [`tasks/068 — extract NodeViewItem`](../../tasks/068-node-view-item-extract.md) — выполняется **внутри** этого PR при срабатывании одного из trigger'ов. Home screen node list (`home_screen.dart::_buildNodeList`), `NodeRow` widget (`widgets/node_row.dart`), `HomeState.configCache.protoByTag` (proto lookup), `SubscriptionController.entries` (sub lookup), `state.lastDelay` (ping). |

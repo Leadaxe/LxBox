@@ -8,6 +8,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **§073 — Detour: `Override` → `Add detour` с режимом append (default) и checkbox replace** ([task spec](docs/spec/tasks/073-detour-append-vs-replace.md), [server_list.dart](app/lib/models/server_list.dart), [server_list_build.dart](app/lib/services/builder/server_list_build.dart), [subscription_detail_screen.dart](app/lib/screens/subscription_detail_screen.dart)). До §073 mode `Override` в Subscription detail полностью **заменял** нативную detour-цепочку из конфига одним выбранным outbound'ом. Юзер запросил режим **append**: ноды идут по своей родной цепочке, а в конец добавляется выбранный hop (jumphost ladder с дописываемым последним exit).
+  - **Renamed**: radio item `Override` → `Add detour`. Subtitle разводит «Append → X» (default) и «Replace chain → X» (toggle ON).
+  - **Added**: `SwitchListTile` «Replace existing chain» под outbound picker. OFF (default) = append; ON = старое replace.
+  - **Builder**: `ServerListBuild.build` — новая ветка для append: `skipDetour=false`, `main.detour = detours.first.tag`, `detours.last.map['detour'] = overrideDetour` (override спайс'ится хвостом). Пустая native chain → 1-hop как раньше.
+  - **Storage**: `DetourPolicy.replaceDetourChain: bool` (default false). JSON key `replace_detour_chain`. Старые backup'ы без ключа → default append. ⚠ **Поведение для existing юзеров с override меняется** — была implicit replace, стала append. Toggle ON чтобы вернуть старое поведение.
+
 ### Fixed
 
 - **§072 — `SettingsStorage` атомарная запись + восстановление из `.bak`** ([task spec](docs/spec/tasks/072-settings-storage-atomic-write.md), [settings_storage.dart](app/lib/services/settings_storage.dart), [settings_storage_test.dart](app/test/services/settings_storage_test.dart)). Раз в пару дней на Xiaomi/HyperOS (воспроизведено на Pad 8 Pro) у юзера **полностью** сбрасывались все настройки — vars, подписки, server lists, custom rules, DNS. Root cause: `_save()` использовал `File.writeAsString` без `flush` (truncate-then-write); kill между truncate и записью → пустой/обрезанный JSON; `_load()` ловил `FormatException` в немом `catch (_) {}` и проваливался в `_cache = {}`; первый же `setVar` после этого фиксировал потерю. Фикс:
