@@ -14,8 +14,12 @@ extension ServerListBuild on ServerList {
   /// 4. Регистрирует entry в ctx: addEntry, selector/auto-списки по политике.
   void build(EmitContext ctx) {
     if (!enabled) return;
-    final skipDetour =
-        !detourPolicy.useDetourServers || detourPolicy.overrideDetour.isNotEmpty;
+    // §073: replaceMode = override + replace toggle ON. Append mode
+    // (default false) keeps raw chain (skipDetour: false) и подставляет
+    // overrideDetour хвостом цепочки.
+    final replaceMode = detourPolicy.overrideDetour.isNotEmpty &&
+        detourPolicy.replaceDetourChain;
+    final skipDetour = !detourPolicy.useDetourServers || replaceMode;
 
     for (final server in nodes) {
       final raw = server.getEntries(ctx, skipDetour: skipDetour);
@@ -28,11 +32,22 @@ extension ServerListBuild on ServerList {
       }
       main.map['tag'] = ctx.allocateTag(_withPrefix(main.tag));
 
-      // Применить detour policy (только main ссылается на детур).
-      if (detourPolicy.overrideDetour.isNotEmpty) {
+      // Применить detour policy.
+      if (replaceMode) {
+        // REPLACE — цепочка дропнута (skipDetour=true), main → override.
         main.map['detour'] = detourPolicy.overrideDetour;
       } else if (!detourPolicy.useDetourServers) {
         main.map.remove('detour');
+      } else if (detourPolicy.overrideDetour.isNotEmpty) {
+        // §073 APPEND — нативная цепочка сохранена, override хвостом.
+        if (detours.isEmpty) {
+          // Цепочки нет в raw config → 1-hop (как replace).
+          main.map['detour'] = detourPolicy.overrideDetour;
+        } else {
+          // node → detours.first → ... → detours.last → overrideDetour
+          main.map['detour'] = detours.first.tag;
+          detours.last.map['detour'] = detourPolicy.overrideDetour;
+        }
       } else if (detours.isNotEmpty) {
         main.map['detour'] = detours.first.tag;
       }

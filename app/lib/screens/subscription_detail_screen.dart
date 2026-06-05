@@ -333,13 +333,17 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                 ),
               RadioListTile<_DetourMode>(
                 value: _DetourMode.override,
-                title: const Text('Override'),
+                title: const Text('Add detour'),
                 subtitle: Text(widget.entry.overrideDetour.isEmpty
-                    ? 'Replace chain target with a specific outbound'
-                    : 'Override → ${widget.entry.overrideDetour}'),
+                    ? 'Append an outbound to the end of the chain'
+                    : widget.entry.replaceDetourChain
+                        ? 'Replace chain → ${widget.entry.overrideDetour}'
+                        : 'Append → ${widget.entry.overrideDetour}'),
               ),
-              // Sub-tile для смены target'а под Override mode
-              if (_detourMode == _DetourMode.override)
+              // Sub-tiles под «Add detour»: outbound picker + replace toggle.
+              // §073: default behaviour = APPEND (toggle OFF). Включить
+              // toggle чтобы вернуться к старому replace-поведению.
+              if (_detourMode == _DetourMode.override) ...[
                 Padding(
                   padding: const EdgeInsets.only(left: 24),
                   child: ListTile(
@@ -351,6 +355,20 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                     onTap: () => _showOverrideDetourPicker(),
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 24),
+                  child: SwitchListTile(
+                    title: const Text('Replace existing chain'),
+                    subtitle: const Text(
+                        'Drop the native detour chain, use only this outbound'),
+                    value: widget.entry.replaceDetourChain,
+                    onChanged: (val) {
+                      setState(() => widget.entry.replaceDetourChain = val);
+                      unawaited(widget.controller.persistSources());
+                    },
+                  ),
+                ),
+              ],
               const RadioListTile<_DetourMode>(
                 value: _DetourMode.none,
                 title: Text("Don't use detour servers"),

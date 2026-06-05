@@ -25,6 +25,9 @@ List<ServerList> migrateProxySources(List<Map<String, dynamic>> rawSources) {
           (s['register_detour_in_auto'] as bool?) ?? false,
       useDetourServers: (s['use_detour_servers'] as bool?) ?? true,
       overrideDetour: (s['override_detour'] as String?) ?? '',
+      // §073 — старые backup'ы без ключа → append (default false). Меняет
+      // behaviour для existing юзеров с override (раньше was implicit replace).
+      replaceDetourChain: (s['replace_detour_chain'] as bool?) ?? false,
     );
 
     final source = (s['source'] as String?) ?? '';

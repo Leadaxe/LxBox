@@ -256,12 +256,17 @@ class DetourPolicy {
   final bool registerDetourInAuto;
   final bool useDetourServers;
   final String overrideDetour; // '' = no override
+  // §073 — поведение overrideDetour: false (default) = APPEND (нативная
+  // цепочка из конфига сохраняется, overrideDetour подставляется как
+  // tail); true = REPLACE (старое поведение, цепочка отбрасывается).
+  final bool replaceDetourChain;
 
   const DetourPolicy({
     this.registerDetourServers = false,
     this.registerDetourInAuto = false,
     this.useDetourServers = true,
     this.overrideDetour = '',
+    this.replaceDetourChain = false,
   });
 
   static const defaults = DetourPolicy();
@@ -273,6 +278,10 @@ class DetourPolicy {
             (j['register_detour_in_auto'] as bool?) ?? false,
         useDetourServers: (j['use_detour_servers'] as bool?) ?? true,
         overrideDetour: (j['override_detour'] as String?) ?? '',
+        // Старые backup'ы без ключа → default false (append). См. §073
+        // locked decision #4 (потенциально меняет поведение существующих
+        // юзеров с override — release notes должен это подсветить).
+        replaceDetourChain: (j['replace_detour_chain'] as bool?) ?? false,
       );
 
   Map<String, dynamic> toJson() => {
@@ -280,6 +289,7 @@ class DetourPolicy {
         'register_detour_in_auto': registerDetourInAuto,
         'use_detour_servers': useDetourServers,
         'override_detour': overrideDetour,
+        'replace_detour_chain': replaceDetourChain,
       };
 
   DetourPolicy copyWith({
@@ -287,6 +297,7 @@ class DetourPolicy {
     bool? registerDetourInAuto,
     bool? useDetourServers,
     String? overrideDetour,
+    bool? replaceDetourChain,
   }) =>
       DetourPolicy(
         registerDetourServers:
@@ -295,6 +306,8 @@ class DetourPolicy {
             registerDetourInAuto ?? this.registerDetourInAuto,
         useDetourServers: useDetourServers ?? this.useDetourServers,
         overrideDetour: overrideDetour ?? this.overrideDetour,
+        replaceDetourChain:
+            replaceDetourChain ?? this.replaceDetourChain,
       );
 
   @override
@@ -304,9 +317,10 @@ class DetourPolicy {
           registerDetourServers == other.registerDetourServers &&
           registerDetourInAuto == other.registerDetourInAuto &&
           useDetourServers == other.useDetourServers &&
-          overrideDetour == other.overrideDetour);
+          overrideDetour == other.overrideDetour &&
+          replaceDetourChain == other.replaceDetourChain);
 
   @override
   int get hashCode => Object.hash(registerDetourServers, registerDetourInAuto,
-      useDetourServers, overrideDetour);
+      useDetourServers, overrideDetour, replaceDetourChain);
 }
