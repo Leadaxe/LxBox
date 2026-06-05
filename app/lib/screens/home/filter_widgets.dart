@@ -63,52 +63,72 @@ class RegexFilterField extends StatelessWidget {
             onChanged: onChanged,
             decoration: InputDecoration(
               isDense: true,
+              // Asymmetric padding: left 4 (prefix уже даёт визуальный
+              // отступ от [!]), right 12 (привычный gap до ×).
               contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  const EdgeInsets.fromLTRB(4, 8, 12, 8),
               hintText: 'regex pattern',
-              prefixIcon: const Icon(Icons.search, size: 18),
+              // [!] 🔍 — invert toggle первым, потом лупа. Discoverability:
+              // [!] видно всегда. Голые SizedBox (без material tap-target),
+              // чтобы row не распирал высоту поля. [!] узкий (20×28),
+              // tight visual.
+              prefixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  InkWell(
+                    onTap: () => onInvertChanged(!invert),
+                    borderRadius: BorderRadius.circular(4),
+                    child: SizedBox(
+                      width: 20,
+                      height: 28,
+                      child: Center(
+                        child: Text(
+                          '!',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: invert
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: invert
+                                ? cs.error
+                                : cs.onSurfaceVariant.withAlpha(140),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(
+                    width: 20,
+                    height: 28,
+                    child: Center(child: Icon(Icons.search, size: 18)),
+                  ),
+                ],
+              ),
               prefixIconConstraints:
-                  const BoxConstraints(minWidth: 32, minHeight: 24),
+                  const BoxConstraints(minWidth: 40, minHeight: 28),
               errorText: valid ? null : 'Invalid regex',
               errorStyle: const TextStyle(fontSize: 10),
+              // ✕ — только когда есть text. Текстовый символ (не
+              // Icons.clear) — голый SizedBox 28×28, без material 48dp
+              // tap-target → suffix не прыгает в высоту.
               suffixIcon: controller.text.isEmpty
                   ? null
-                  : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Invert/NOT toggle. InkWell с фиксированным
-                        // tap-region (28x28) чтобы не путаться с tap'ом по
-                        // полю. Цвет: muted когда off, error(red)+bold когда on.
-                        InkWell(
-                          onTap: () => onInvertChanged(!invert),
-                          borderRadius: BorderRadius.circular(4),
-                          child: SizedBox(
-                            width: 28,
-                            height: 28,
-                            child: Center(
-                              child: Text(
-                                '!',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: invert
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  color: invert
-                                      ? cs.error
-                                      : cs.onSurfaceVariant.withAlpha(140),
-                                ),
-                              ),
+                  : InkWell(
+                      onTap: onClear,
+                      borderRadius: BorderRadius.circular(4),
+                      child: SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: Center(
+                          child: Text(
+                            '×',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: cs.onSurfaceVariant.withAlpha(180),
                             ),
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.clear, size: 18),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                              minWidth: 28, minHeight: 28),
-                          onPressed: onClear,
-                        ),
-                      ],
+                      ),
                     ),
               suffixIconConstraints:
                   const BoxConstraints(minWidth: 32, minHeight: 28),
