@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import '../config/consts.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
+import '../models/server_list.dart';
 import '../models/home_state.dart';
 import '../models/node_spec.dart';
 import '../services/backup_service.dart';
@@ -16,6 +17,9 @@ import '../services/clash_api_client.dart';
 import '../services/error_format.dart';
 import '../services/version_info.dart';
 import '../widgets/node_row.dart';
+import '../widgets/node_view_item.dart';
+import 'home/node_filter.dart';
+import 'home/filter_widgets.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import 'outbound_view_screen.dart';
 import 'about_screen.dart';
@@ -54,6 +58,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   final BoxVpnClient _vpn = BoxVpnClient();
   bool _showDetourNodes = true;
   bool _autoRebuild = true;
+
+  // §048 — node filter state (per-session in-memory, locked decision #5).
+  // `_showDetourNodes` остаётся выше — pool filter (Phase 1).
+  // Filter UI hidden by default (locked #1) — `Icons.tune` toggle expand.
+  bool _filterPanelExpanded = false;
+  // Regex (live debounced 300ms — locked #4). Checkbox toggle позволяет
+  // временно выключить filter не теряя pattern (та же UX-семантика что у
+  // `_pingFilterEnabled`). Auto-enable при вводе непустого валидного pattern.
+  // `_regexInvert` — `[!]` suffix toggle: matchает инверсно (NOT). Default
+  // off, сбрасывается на _clearRegex.
+  final TextEditingController _regexController = TextEditingController();
+  RegExp? _regexCompiled;
+  bool _regexValid = true;
+  bool _regexFilterEnabled = false;
+  bool _regexInvert = false;
+  Timer? _regexDebounceTimer;
+  // Multi-select chips
+  final Set<String> _enabledProtocols = <String>{};
+  final Set<String> _enabledSubscriptions = <String>{};
+  // Ping/Test (numeric input, debounced 300ms). Filter active только когда
+  // checkbox `_pingFilterEnabled == true` AND `_maxPingMs != null`.
+  // Раздельный toggle — позволяет временно выключить filter не теряя value.
+  final TextEditingController _pingController = TextEditingController();
+  int? _maxPingMs;
+  bool _pingFilterEnabled = false;
+  Timer? _pingDebounceTimer;
+  // Non-matching visibility (locked #7, default ON)
+  bool _showNonMatching = true;
   /// Derived UI flag. True когда:
   /// (а) `state.configStaleSinceStart` (sticky-флаг в HomeState: saveConfig
   ///     происходил при tunnelUp, сбрасывается на up↔down переходах), или
@@ -422,6 +454,125 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _autoRebuild = val == 'true';
   }
 
+  // §048 — filter event handlers + lookup closures.
+
+  /// Debounced 300ms regex compile. Invalid pattern → `_regexValid = false`,
+  /// `_regexCompiled = null` (filter no-op). Auto-enable checkbox при вводе
+  /// валидного non-empty pattern (UX: input «работает» без отдельного тапа
+  /// checkbox — те же правила что у `_onPingChanged`).
+  void _onRegexChanged(String text) {
+    _regexDebounceTimer?.cancel();
+    _regexDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      setState(() {
+        if (text.isEmpty) {
+          _regexCompiled = null;
+          _regexValid = true;
+        } else {
+          try {
+            _regexCompiled = RegExp(text, caseSensitive: false);
+            _regexValid = true;
+            _regexFilterEnabled = true;
+          } catch (_) {
+            _regexCompiled = null;
+            _regexValid = false;
+          }
+        }
+      });
+    });
+  }
+
+  void _clearRegex() {
+    _regexController.clear();
+    _regexDebounceTimer?.cancel();
+    setState(() {
+      _regexCompiled = null;
+      _regexValid = true;
+      _regexFilterEnabled = false;
+      _regexInvert = false;
+    });
+  }
+
+  void _onEmojiChipTap(String emoji) {
+    final current = _regexController.text;
+    // Если поле не пустое — добавляем OR-pattern (`|emoji`). Tap на 🇷🇺 потом
+    // 🇺🇸 → `🇷🇺|🇺🇸` (regex OR), matchает обе страны. Иначе тапы строили бы
+    // sequence `🇷🇺🇺🇸` который не matchает ничего.
+    final next = current.isEmpty ? emoji : '$current|$emoji';
+    _regexController.text = next;
+    _regexController.selection =
+        TextSelection.collapsed(offset: _regexController.text.length);
+    _onRegexChanged(next);
+  }
+
+  /// Debounced 300ms ping parse. Empty / unparsable → `_maxPingMs = null`.
+  /// Auto-enable checkbox когда юзер ввёл валидное число (UX: input «работает»
+  /// без отдельного тапа checkbox).
+  void _onPingChanged(String text) {
+    _pingDebounceTimer?.cancel();
+    _pingDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      final n = int.tryParse(text);
+      setState(() {
+        _maxPingMs = (n != null && n > 0) ? n : null;
+        if (_maxPingMs != null) _pingFilterEnabled = true;
+      });
+    });
+  }
+
+  void _clearPing() {
+    _pingController.clear();
+    _pingDebounceTimer?.cancel();
+    setState(() {
+      _maxPingMs = null;
+      _pingFilterEnabled = false;
+    });
+  }
+
+  void _toggleProtocol(String proto) {
+    setState(() {
+      if (!_enabledProtocols.add(proto)) {
+        _enabledProtocols.remove(proto);
+      }
+    });
+  }
+
+  void _toggleSubscription(String id) {
+    setState(() {
+      if (!_enabledSubscriptions.add(id)) {
+        _enabledSubscriptions.remove(id);
+      }
+    });
+  }
+
+  /// Lookup protocol for tag — учитывает urltest group fallback (см. §048
+  /// «Protocol detection»). Возвращает null если cache miss и urltest нет.
+  String? _protocolOfTag(String tag, HomeState state) {
+    final cache = state.configCache;
+    final urltestNow = ClashApiClient.urltestNow(state.proxiesJson, tag);
+    return cache.protoByTag[tag] ??
+        (urltestNow != null ? cache.protoByTag[urltestNow] : null);
+  }
+
+  /// Lookup subscription id для tag. Возвращает null если UserServer / не
+  /// в trackable subscription pool (caller treat'ит как `'custom'` category).
+  String? _subscriptionOfTag(String tag) {
+    for (final e in _subController.entries) {
+      final list = e.list;
+      if (list is SubscriptionServers) {
+        if (list.nodes.any((n) => n.tag == tag)) return e.id;
+      }
+    }
+    return null;
+  }
+
+  /// True если хоть один match-filter активен (для visual hint icon color).
+  bool get _isFilterActive =>
+      (_regexFilterEnabled && _regexCompiled != null) ||
+      _enabledProtocols.isNotEmpty ||
+      _enabledSubscriptions.isNotEmpty ||
+      (_pingFilterEnabled && _maxPingMs != null);
+
   @override
   void dispose() {
     // Порядок: сначала отменяем side-effects (timer, listener),
@@ -430,6 +581,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // созданию).
     _errorTimer?.cancel();
     _errorTimer = null;
+    _regexDebounceTimer?.cancel();
+    _regexDebounceTimer = null;
+    _pingDebounceTimer?.cancel();
+    _pingDebounceTimer = null;
+    _regexController.dispose();
+    _pingController.dispose();
     _controller.removeListener(_onControllerChange);
     UpdateChecker.I.latest.removeListener(_onLatestUpdateChanged);
     WidgetsBinding.instance.removeObserver(this);
@@ -1206,20 +1363,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   : _controller.cycleSortMode,
               icon: Icon(_controller.state.sortMode.icon, size: 20),
             ),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.tune, size: 20),
+            // §048 — `Icons.tune` теперь IconButton expand toggle, не popup.
+            // Existing «Show detour servers» переехал внутрь expanded panel.
+            // Color = primary когда есть active match-filter (visual hint что
+            // фильтрация активна даже когда panel collapsed).
+            IconButton(
+              tooltip: _filterPanelExpanded ? 'Hide filters' : 'Show filters',
+              visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              onSelected: (v) {
-                if (v == 'detour') setState(() => _showDetourNodes = !_showDetourNodes);
-              },
-              itemBuilder: (_) => [
-                CheckedPopupMenuItem(
-                  value: 'detour',
-                  checked: _showDetourNodes,
-                  child: const Text('Show detour servers'),
-                ),
-              ],
+              onPressed: () => setState(
+                  () => _filterPanelExpanded = !_filterPanelExpanded),
+              icon: Icon(
+                Icons.tune,
+                size: 20,
+                color: _isFilterActive
+                    ? Theme.of(context).colorScheme.primary
+                    : null,
+              ),
             ),
           ],
         ),
@@ -1818,61 +1979,214 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         ),
       );
     }
-    final displayNodes = _showDetourNodes
-        ? state.sortedNodes
-        : state.sortedNodes.where((t) => !t.startsWith(kDetourTagPrefix)).toList();
+    // §048 — двухфазная модель (см. spec):
+    // Phase 1 — pool filter: detour show/hide. Нода **отсутствует** в render
+    // если detour off и tag detour-prefixed.
+    final allTags = state.sortedNodes;
+    final pool = _showDetourNodes
+        ? allTags
+        : allTags.where((t) => !t.startsWith(kDetourTagPrefix)).toList();
+
     // configCache парсится один раз при saveParsedConfig (см. HomeState),
     // здесь просто читаем. Раньше jsonDecode шёл на каждый rebuild
     // ListView — с 50+ нодами и сортировкой это был hot-path выжиматель.
     final cache = state.configCache;
+
+    // Phase 2 — match filter: split pool на matching + nonMatching.
+    // NodeFilter НЕ знает про detour — он работает с уже-фильтрованным pool.
+    final filter = NodeFilter(
+      // Regex filter активен только когда checkbox включён (та же семантика
+      // что у `_pingFilterEnabled` — позволяет временно выключить не теряя
+      // pattern).
+      regex: _regexFilterEnabled ? _regexCompiled : null,
+      regexInvert: _regexInvert,
+      protocols: _enabledProtocols,
+      subscriptions: _enabledSubscriptions,
+      // Test filter активен только когда checkbox включён.
+      maxPingMs: _pingFilterEnabled ? _maxPingMs : null,
+      protocolOf: (t) => _protocolOfTag(t, state),
+      subscriptionOf: _subscriptionOfTag,
+      pingOf: (t) => state.lastDelay[t],
+    );
+    final matching = <String>[];
+    final nonMatching = <String>[];
+    for (final tag in pool) {
+      if (filter.passes(tag)) {
+        matching.add(tag);
+      } else {
+        nonMatching.add(tag);
+      }
+    }
+    final matchingSet = matching.toSet();
+
+    // Render list = matching + (showNonMatching ? nonMatching : []).
+    final displayList = _showNonMatching
+        ? <String>[...matching, ...nonMatching]
+        : matching;
+
+    // Available для chips — из всего pool (не от current filter state).
+    // Emoji — из allTags (locked decision #3, включая detour).
+    final emojis = NodeFilter.extractEmojis(allTags);
+    final availableProtocols = <String>{};
+    for (final t in pool) {
+      final p = _protocolOfTag(t, state);
+      if (p != null) availableProtocols.add(p);
+    }
+    final subOptions = <(String, String)>[];
+    for (final e in _subController.entries) {
+      final list = e.list;
+      // Показываем подписку только если она enabled И в ней есть хоть 1 нода.
+      // Disabled / пустые → шум, не дают полезный chip.
+      if (list is SubscriptionServers && e.enabled && list.nodes.isNotEmpty) {
+        subOptions.add((e.id, e.displayName));
+      }
+    }
+    // Special 'custom' chip — если в pool есть UserServer (subscriptionOf == null).
+    final hasCustom = pool.any((t) => _subscriptionOfTag(t) == null);
+    if (hasCustom) subOptions.add(('custom', 'Custom'));
+
     return Expanded(
-      child: RefreshIndicator(
-        onRefresh: _controller.reloadProxies,
-        child: ListView.separated(
-          padding: EdgeInsets.zero,
-          itemCount: displayNodes.length,
-          separatorBuilder: (_, _) => Divider(
-            height: 1,
-            thickness: 1,
-            color: Theme.of(context).colorScheme.outlineVariant.withAlpha(128),
+      child: Column(
+        children: [
+          if (_filterPanelExpanded)
+            _buildFilterPanel(
+              context,
+              emojis: emojis,
+              availableProtocols: availableProtocols.toList()..sort(),
+              subOptions: subOptions,
+            ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _controller.reloadProxies,
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                itemCount: displayList.length,
+                separatorBuilder: (_, _) => Divider(
+                  height: 1,
+                  thickness: 1,
+                  color:
+                      Theme.of(context).colorScheme.outlineVariant.withAlpha(128),
+                ),
+                itemBuilder: (context, i) {
+                  final tag = displayList[i];
+                  final urltestNow =
+                      ClashApiClient.urltestNow(state.proxiesJson, tag);
+                  // Определяем URLTest-ли тэг (даже если now пустой — тип есть).
+                  final proxyEntry =
+                      ClashApiClient.proxyEntry(state.proxiesJson, tag);
+                  final isUrltestGroup = proxyEntry != null &&
+                      (proxyEntry['type']?.toString().toLowerCase() ?? '')
+                          .contains('urltest');
+                  // Для urltest-группы (auto) сам тэг — control-узел без
+                  // протокола; берём proto той ноды, которую urltest сейчас выбрал.
+                  final protoType = cache.protoByTag[tag] ??
+                      (urltestNow != null ? cache.protoByTag[urltestNow] : null);
+                  return NodeRow(
+                    item: NodeViewItem(
+                      tag: tag,
+                      active: tag == state.activeInGroup,
+                      highlighted: tag == state.highlightedNode,
+                      delay: state.lastDelay[tag],
+                      pingBusy: state.pingBusy[tag] == '…',
+                      tunnelUp: state.tunnelUp,
+                      busy: state.busy,
+                      urltestNow: urltestNow,
+                      hasDetour: cache.detourTags.contains(tag),
+                      protocolLabel:
+                          protoType != null ? _protoLabel(protoType) : null,
+                      matches: matchingSet.contains(tag),
+                    ),
+                    onHighlight: () => _controller.setHighlightedNode(tag),
+                    onActivate: () => unawaited(_controller.switchNode(tag)),
+                    onPing: () => unawaited(_controller.runNodeUrltest(tag)),
+                    onCopy: (mode) => _copyNodeJson(tag, state, mode),
+                    onCopyUri: () => _copyNodeUri(tag),
+                    onViewJson: () => _viewOutboundJson(tag, state),
+                    onRunUrltest: isUrltestGroup
+                        ? () => unawaited(_controller.runGroupUrltest(tag))
+                        : null,
+                  );
+                },
+              ),
+            ),
           ),
-          itemBuilder: (context, i) {
-            final tag = displayNodes[i];
-            final urltestNow =
-                ClashApiClient.urltestNow(state.proxiesJson, tag);
-            // Определяем URLTest-ли тэг (даже если now пустой — тип есть).
-            final proxyEntry =
-                ClashApiClient.proxyEntry(state.proxiesJson, tag);
-            final isUrltestGroup = proxyEntry != null &&
-                (proxyEntry['type']?.toString().toLowerCase() ?? '')
-                    .contains('urltest');
-            // Для urltest-группы (auto) сам тэг — control-узел без
-            // протокола; берём proto той ноды, которую urltest сейчас выбрал.
-            final protoType = cache.protoByTag[tag] ??
-                (urltestNow != null ? cache.protoByTag[urltestNow] : null);
-            return NodeRow(
-              tag: tag,
-              active: tag == state.activeInGroup,
-              highlighted: tag == state.highlightedNode,
-              delay: state.lastDelay[tag],
-              pingBusy: state.pingBusy[tag] == '…',
-              tunnelUp: state.tunnelUp,
-              busy: state.busy,
-              onHighlight: () => _controller.setHighlightedNode(tag),
-              onActivate: () => unawaited(_controller.switchNode(tag)),
-              onPing: () => unawaited(_controller.runNodeUrltest(tag)),
-              onCopy: (mode) => _copyNodeJson(tag, state, mode),
-              onCopyUri: () => _copyNodeUri(tag),
-              onViewJson: () => _viewOutboundJson(tag, state),
-              urltestNow: urltestNow,
-              onRunUrltest: isUrltestGroup
-                  ? () => unawaited(_controller.runGroupUrltest(tag))
-                  : null,
-              hasDetour: cache.detourTags.contains(tag),
-              protocolLabel: protoType != null ? _protoLabel(protoType) : null,
-            );
-          },
+        ],
+      ),
+    );
+  }
+
+  /// §048 — Filter panel (expanded). Composed: regex field + emoji chips +
+  /// protocol chips + subscription chips + ping field + Show-detour +
+  /// Show-non-matching.
+  Widget _buildFilterPanel(
+    BuildContext context, {
+    required List<String> emojis,
+    required List<String> availableProtocols,
+    required List<(String, String)> subOptions,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        border: Border(
+          bottom: BorderSide(color: cs.outlineVariant.withAlpha(128)),
         ),
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          RegexFilterField(
+            controller: _regexController,
+            onChanged: _onRegexChanged,
+            valid: _regexValid,
+            enabled: _regexFilterEnabled,
+            onEnabledChanged: (v) => setState(() => _regexFilterEnabled = v),
+            invert: _regexInvert,
+            onInvertChanged: (v) => setState(() => _regexInvert = v),
+            onClear: _clearRegex,
+          ),
+          if (emojis.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            EmojiChipsRow(emojis: emojis, onTap: _onEmojiChipTap),
+          ],
+          if (availableProtocols.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            MultiSelectChipsRow(
+              options: [
+                for (final p in availableProtocols) (p, _protoLabel(p)),
+              ],
+              enabled: _enabledProtocols,
+              onToggle: _toggleProtocol,
+            ),
+          ],
+          if (subOptions.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            MultiSelectChipsRow(
+              options: subOptions,
+              enabled: _enabledSubscriptions,
+              onToggle: _toggleSubscription,
+            ),
+          ],
+          const SizedBox(height: 4),
+          PingFilterField(
+            controller: _pingController,
+            onChanged: _onPingChanged,
+            enabled: _pingFilterEnabled,
+            onEnabledChanged: (v) => setState(() => _pingFilterEnabled = v),
+            onClear: _clearPing,
+          ),
+          FilterCheckboxRow(
+            label: 'Show detour servers',
+            value: _showDetourNodes,
+            onChanged: (v) => setState(() => _showDetourNodes = v),
+          ),
+          FilterCheckboxRow(
+            label: 'Show non-matching (dimmed)',
+            value: _showNonMatching,
+            onChanged: (v) => setState(() => _showNonMatching = v),
+          ),
+        ],
       ),
     );
   }
