@@ -70,8 +70,7 @@ class HomeState {
 
 ```dart
 List<String> _computeSortedNodes() {
-  if (sortMode == NodeSortMode.defaultOrder) return nodes;
-
+  // §070 revised: pin применяется во всех modes включая defaultOrder.
   final pinnedOrder = <String>[
     if (pinDirect) 'direct-out',
     if (pinAuto) kAutoOutboundTag,
@@ -80,6 +79,9 @@ List<String> _computeSortedNodes() {
   final rest = nodes.where((n) => !pinnedOrder.contains(n)).toList();
 
   switch (sortMode) {
+    case NodeSortMode.defaultOrder:
+      // rest в pristine config order (без сортировки).
+      break;
     case NodeSortMode.latencyAsc:
       rest.sort(_compareLatency);
     case NodeSortMode.nameAsc:
@@ -92,8 +94,6 @@ List<String> _computeSortedNodes() {
         ...rest.where((n) => !manualOrder.contains(n)),  // новые → конец
       ];
       return [...pinned, ...ordered];
-    case NodeSortMode.defaultOrder:
-      break;
   }
   return [...pinned, ...rest];
 }

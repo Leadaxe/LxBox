@@ -58,10 +58,22 @@ void main() {
       expect(s.sortedNodes.first, isNot(kAutoOutboundTag));
     });
 
-    test('default mode: pin не применяется (pristine order)', () {
+    test('default mode + pin ON: pinned сверху, rest в pristine order', () {
       final s = HomeState(
         nodes: ['x', 'direct-out', 'y', kAutoOutboundTag],
         sortMode: NodeSortMode.defaultOrder,
+        // pinDirect/pinAuto defaults = true
+      );
+      // direct-out + ✨auto сверху в pinnedOrder, x/y в pristine config order.
+      expect(s.sortedNodes, ['direct-out', kAutoOutboundTag, 'x', 'y']);
+    });
+
+    test('default mode + pin OFF: чистый pristine config order', () {
+      final s = HomeState(
+        nodes: ['x', 'direct-out', 'y', kAutoOutboundTag],
+        sortMode: NodeSortMode.defaultOrder,
+        pinDirect: false,
+        pinAuto: false,
       );
       expect(s.sortedNodes, ['x', 'direct-out', 'y', kAutoOutboundTag]);
     });

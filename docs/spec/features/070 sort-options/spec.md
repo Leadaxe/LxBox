@@ -27,15 +27,16 @@ Yellow dot indicator на sort button когда хотя бы одна опци
 
 ---
 
-## Текущее состояние
+## Состояние до §070
 
 ```
 NodeSortMode { defaultOrder, latencyAsc, nameAsc }
   └─ cycleSortMode → tap sort button перебирает по кругу
 
 HomeState._computeSortedNodes:
-  if defaultOrder → return nodes;          // pin не применяется
+  if defaultOrder → return nodes;          // pin не применялся
   pinnedOrder = ['direct-out', '✨auto']    // HARDCODED, всегда применяется
+                                            //   в non-default modes
   pinned = nodes ∩ pinnedOrder
   rest = nodes \ pinnedOrder
   rest.sort(latencyAsc | nameAsc)
@@ -64,14 +65,28 @@ class HomeState {
 }
 ```
 
-`_computeSortedNodes` использует `pinDirect` / `pinAuto`:
+`_computeSortedNodes` использует `pinDirect` / `pinAuto` **во всех modes
+включая `defaultOrder`** (см. locked decision #4):
 
 ```dart
 final pinnedOrder = <String>[
   if (pinDirect) 'direct-out',
   if (pinAuto) kAutoOutboundTag,
 ];
+final pinned = pinnedOrder.where(nodes.contains).toList();
+final rest = nodes.where((n) => !pinnedOrder.contains(n)).toList();
+switch (sortMode) {
+  case defaultOrder: break;                  // rest в pristine order
+  case latencyAsc:   rest.sort(_compareLatency);
+  case nameAsc:      rest.sort(_compareName);
+  case manual:       return [...pinned, ...applyManualOrder(rest)];
+}
+return [...pinned, ...rest];
 ```
+
+В default mode: pinned section сверху + rest в pristine config order.
+В sorted modes: pinned section сверху + rest по выбранному критерию.
+Pin OFF → секция исчезает, full pristine / sorted.
 
 `resortOnManualPing` **НЕ** читается в HomeState — он управляет UI-cache (см. ниже).
 `pingBatchGen` — passive counter, тоже только для UI-cache invalidation.
@@ -204,7 +219,7 @@ Long-press открывает menu:
 | Сценарий | Поведение |
 |---|---|
 | pinDirect OFF, sort = ping | direct-out сортируется по latency как обычная нода |
-| pinDirect ON, sort = default | direct-out **не** пиннится — defaultOrder = `return nodes` без spec.обработки. ⚠ Спорно. **Decision: pin applies только для non-default mode.** Default = «как пришло из proxiesJson», pin — это override sort'а |
+| pinDirect ON, sort = default | direct-out пиннится сверху, остальные в pristine config order. **Revised after first APK feedback** — pin теперь применяется во всех modes включая `defaultOrder`. Если pin OFF — чистый pristine order. |
 | resort OFF + group switch | bump pingBatchGen → cache invalid → новый sort. OK. |
 | resort OFF + batch complete | bump → cache invalid → re-sort. OK. |
 | resort OFF + добавилась нода (subscription update) | `nodes.length` change → cache invalid → re-sort. OK. |
@@ -227,7 +242,7 @@ Long-press открывает menu:
 1. **Toggles per-session in-memory.** Persist = миграция storage, отдельный scope.
 2. **HomeState owns sort state.** Single source of truth — НЕ controller-side.
 3. **`pingBatchGen` — passive counter.** Не несёт semantic «сортируй сейчас», только маркер для cache invalidation.
-4. **Pin не работает в `defaultOrder` mode.** Default = pristine config order, pin это override для sorted modes.
+4. **Pin работает во всех modes включая `defaultOrder`.** В default mode: pinned section сверху + остальное в pristine config order. **Revised** от первого APK feedback — изначально pin был только для sorted modes, но юзеру это казалось багом «↕ не пиннит» когда yellow dot off.
 5. **PopupMenu (не bottom-sheet)** — 3 чекбокса, стандарт Material.
 6. **Yellow dot indicator** на sort button когда хоть одна опция non-default.
 7. **`resortOnManualPing` независим от sortMode.** Применяется ко всем modes (даже в `nameAsc` теоретически lastDelay в key — фактически не используется, но cache одинаков).

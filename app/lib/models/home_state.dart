@@ -167,10 +167,9 @@ class HomeState {
   late final List<String> sortedNodes = _computeSortedNodes();
 
   List<String> _computeSortedNodes() {
-    // §070: defaultOrder = pristine config order, pin **не** применяется.
-    // Pin это override для sorted modes; default = «как пришло».
-    if (sortMode == NodeSortMode.defaultOrder) return nodes;
-    // §070: pinDirect/pinAuto управляют наполнением pinned section.
+    // §070: pinDirect/pinAuto управляют наполнением pinned section во
+    // ВСЕХ modes включая `defaultOrder`. Default = pristine config order
+    // для non-pinned части, но pinned всегда сверху если toggle ON.
     final pinnedOrder = <String>[
       if (pinDirect) 'direct-out',
       if (pinAuto) kAutoOutboundTag,
@@ -178,6 +177,9 @@ class HomeState {
     final pinned = pinnedOrder.where(nodes.contains).toList();
     final rest = nodes.where((n) => !pinnedOrder.contains(n)).toList();
     switch (sortMode) {
+      case NodeSortMode.defaultOrder:
+        // rest в pristine config order (без сортировки).
+        break;
       case NodeSortMode.latencyAsc:
         rest.sort(_compareLatency);
       case NodeSortMode.nameAsc:
@@ -191,8 +193,6 @@ class HomeState {
           ...rest.where((n) => !manualOrder.contains(n)),
         ];
         return [...pinned, ...ordered];
-      case NodeSortMode.defaultOrder:
-        break;
     }
     return [...pinned, ...rest];
   }
