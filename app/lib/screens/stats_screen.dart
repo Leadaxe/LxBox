@@ -231,9 +231,13 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
                   showDuration: const Duration(seconds: 12),
                   waitDuration: const Duration(milliseconds: 100),
                   preferBelow: true,
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: Icon(Icons.warning_amber, size: 22),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Icon(
+                      Icons.warning_amber,
+                      size: 22,
+                      color: Colors.amber.shade700,
+                    ),
                   ),
                 ),
             ],
