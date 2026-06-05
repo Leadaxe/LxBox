@@ -202,6 +202,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "getAllowBypass" -> {
                 result.success(BootReceiver.isAllowBypass(context))
             }
+            // §069: runtime applied value (от последнего establish()), в отличие
+            // от persisted getAllowBypass() который меняется до VPN reload.
+            "getCurrentSessionAllowBypass" -> {
+                result.success(BoxVpnService.currentSessionAllowBypass)
+            }
             "quitApp" -> {
                 // §043 follow-up: завершить процесс целиком, чтобы при следующем
                 // запуске `BoxApplication.initialize` пересоздал libbox с новым

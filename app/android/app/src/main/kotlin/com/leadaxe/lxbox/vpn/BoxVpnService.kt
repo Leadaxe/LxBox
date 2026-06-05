@@ -38,6 +38,15 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         var currentStatus: VpnStatus = VpnStatus.Stopped
             private set
 
+        /// §069: snapshot значения `allow_bypass` при последнем `establish()`.
+        /// Отражает то что **сейчас applied** в `VpnService.Builder.allowBypass()`,
+        /// в отличие от persisted `BootReceiver.isAllowBypass()` который меняется
+        /// до `establish()` reload. Reset в `onDestroy()` чтобы UI warning исчезал
+        /// когда service умирает.
+        @Volatile
+        var currentSessionAllowBypass: Boolean = false
+            private set
+
         /// Internal — для BoxService.setStatus() обновлять companion-state.
         internal fun setCurrentStatus(s: VpnStatus) {
             currentStatus = s
@@ -127,6 +136,9 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
 
     override fun onDestroy() {
         service.onDestroy()
+        // §069: runtime applied значение больше не действует — clear snapshot
+        // чтобы Stats screen warning исчез при stop VPN.
+        currentSessionAllowBypass = false
         super.onDestroy()
     }
 
@@ -158,7 +170,10 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) builder.setMetered(false)
 
         // §049 F15: allowBypass opt-in toggle.
-        if (BootReceiver.isAllowBypass(this)) {
+        // §069: snapshot runtime applied value для UI warning + Debug API.
+        val allowBypass = BootReceiver.isAllowBypass(this)
+        currentSessionAllowBypass = allowBypass
+        if (allowBypass) {
             builder.allowBypass()
         }
 

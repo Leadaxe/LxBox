@@ -61,7 +61,7 @@ curl -s "$BASE/ping"
 | `GET /state/subs` | массив подписок, `?reveal=true` показывает clear URLs |
 | `GET /state/rules` | массив custom rules с `srs_cached/srs_mtime` |
 | `GET /state/storage` | весь `SettingsStorage._cache` со scrubber'ом (token/URL/nodes маскируются) |
-| `GET /state/vpn` | `{auto_start,keep_on_exit,allow_bypass,background_mode,is_ignoring_battery_optimizations}` |
+| `GET /state/vpn` | `{auto_start,keep_on_exit,allow_bypass,current_session_allow_bypass,background_mode,is_ignoring_battery_optimizations}`. **§069** — `current_session_allow_bypass` это **runtime applied** значение (snapshot из последнего `VpnService.Builder.allowBypass()` в `establish()`); может отличаться от persisted `allow_bypass` если юзер поменял toggle без VPN reload. `false` пока VPN never started или после `stop`. |
 | `GET /state/config_locked` | `{locked: bool}` — §037 текущее состояние auto-rebuild lock'а |
 | `GET /device` | Android version, model, ABI, app version, VPN permission, network type, uptime |
 
@@ -471,8 +471,15 @@ curl -s -H "$HDR" "$BASE/logs/core?level=warning,error&q=dial" | jq
 ```bash
 # Snapshot всех VPN-system флагов одним запросом
 curl -s -H "$HDR" "$BASE/state/vpn" | jq
-# {"auto_start":false,"keep_on_exit":false,"allow_bypass":false,
+# {"auto_start":false,"keep_on_exit":false,
+#  "allow_bypass":false,"current_session_allow_bypass":false,
 #  "background_mode":"never","is_ignoring_battery_optimizations":true}
+#
+# §069: mismatch allow_bypass != current_session_allow_bypass значит юзер
+# поменял toggle, но VPN не reload'ил — runtime всё ещё со старым значением.
+# Например `allow_bypass=false, current_session_allow_bypass=true` →
+# `setAllowBypass(false)` записал в SharedPreferences, но `establish()` от
+# прошлого start'а ещё с allowBypass()=true. Сделай stop+start чтобы apply.
 
 # Allow VPN bypass — apps могут использовать ConnectivityManager в обход tun
 curl -X PUT -H "$HDR" -H "Content-Type: application/json" \

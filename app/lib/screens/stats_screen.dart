@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../services/app_info_cache.dart';
 import '../services/clash_api_client.dart';
 import '../services/traffic_profiler.dart';
+import '../vpn/box_vpn_client.dart';
 import 'connections_screen.dart';
 import 'live_events_tab.dart';
 import 'per_app_trace_tab.dart';
@@ -42,6 +43,11 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
   Timer? _timer;
   final _expanded = <String>{};
   final _detourMap = <String, String>{};
+
+  /// §069 — runtime applied значение `allowBypass()` от последнего
+  /// `establish()`. Показывается warning icon в AppBar если true.
+  bool _currentSessionAllowBypass = false;
+  final _vpn = BoxVpnClient();
 
   static const _refreshInterval = Duration(seconds: 3);
 
@@ -117,7 +123,17 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  Future<void> _refreshAllowBypass() async {
+    final v = await _vpn.getCurrentSessionAllowBypass();
+    if (!mounted) return;
+    if (v != _currentSessionAllowBypass) {
+      setState(() => _currentSessionAllowBypass = v);
+    }
+  }
+
   Future<void> _refresh() async {
+    // §069: piggyback на 3-сек polling — bypass warning виден без отдельного таймера.
+    unawaited(_refreshAllowBypass());
     try {
       final data = await widget.clash.fetchConnections();
       final conns = (data['connections'] as List<dynamic>? ?? [])
@@ -199,6 +215,28 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
         builder: (innerCtx) => Scaffold(
           appBar: AppBar(
             title: const Text('Statistics'),
+            actions: [
+              // §069 — warning если bypass реально applied в текущей VPN-сессии
+              // (runtime, не persisted). Видимо на всех 4 tabs.
+              if (_currentSessionAllowBypass)
+                Tooltip(
+                  message:
+                      'VPN bypass is active in this session.\n\n'
+                      'Apps can use bindProcessToNetwork() to skip the tunnel '
+                      '(banking apps, WhatsApp, system services). '
+                      'Some traffic may not go through VPN.\n\n'
+                      'Disable in VPN Settings → System → Allow VPN bypass '
+                      'and reload VPN to enforce strict tunnel.',
+                  triggerMode: TooltipTriggerMode.tap,
+                  showDuration: const Duration(seconds: 12),
+                  waitDuration: const Duration(milliseconds: 100),
+                  preferBelow: true,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Icon(Icons.warning_amber, size: 22),
+                  ),
+                ),
+            ],
             bottom: TabBar(
               // §048: 4 tab'а делят width поровну. «Connections» → «Conns»
               // чтобы влезли без horizontal scroll'а на 360dp экранах.

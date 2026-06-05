@@ -221,6 +221,19 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// §069: runtime applied значение `allow_bypass` от последнего
+  /// `VpnService.Builder.allowBypass()` вызова в `establish()`. Отличается
+  /// от persisted [getAllowBypass] когда юзер поменял toggle но ещё не
+  /// reload'нул VPN. Reset в `false` когда VpnService умирает.
+  Future<bool> getCurrentSessionAllowBypass() async {
+    final ok = await _invoke<bool>(
+      _Methods.getCurrentSessionAllowBypass,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
   /// §043 follow-up: завершает Android-процесс целиком (`finishAffinity` +
   /// `killProcess`). Используется кнопкой «Quit & reopen app» рядом с toggle
   /// «Forward sing-box logs» — там флаг `debug` в `Libbox.setup` читается
@@ -515,6 +528,8 @@ class _Methods {
   // §049 F15 — VPN bypass opt-in
   static const setAllowBypass = 'setAllowBypass';
   static const getAllowBypass = 'getAllowBypass';
+  // §069 — runtime applied value of allowBypass
+  static const getCurrentSessionAllowBypass = 'getCurrentSessionAllowBypass';
 
   // App enumeration
   static const getInstalledApps = 'getInstalledApps';

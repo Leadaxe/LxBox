@@ -86,12 +86,16 @@ Future<DebugResponse> _vpn(DebugRequest req, DebugContext ctx) async {
   final autoStart = await vpn.getAutoStart();
   final keepOnExit = await vpn.getKeepOnExit();
   final allowBypass = await vpn.getAllowBypass();
+  // §069 — runtime applied value, может отличаться от persisted allowBypass
+  // если юзер поменял toggle но не reload'нул VPN.
+  final currentSessionAllowBypass = await vpn.getCurrentSessionAllowBypass();
   final backgroundMode = await vpn.getBackgroundMode();
   final battery = await vpn.isIgnoringBatteryOptimizations();
   return JsonResponse({
     'auto_start': autoStart,
     'keep_on_exit': keepOnExit,
     'allow_bypass': allowBypass,
+    'current_session_allow_bypass': currentSessionAllowBypass,
     'background_mode': backgroundMode.wireValue,
     'is_ignoring_battery_optimizations': battery,
   });
