@@ -93,8 +93,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   List<String>? _cachedSorted;
   ({NodeSortMode mode, int gen, int nodesLen, bool pinD, bool pinA})?
       _cachedSortKey;
-  // §070 — long-press anchor для popup menu (showMenu требует RenderBox).
-  final GlobalKey _sortBtnKey = GlobalKey();
   /// Derived UI flag. True когда:
   /// (а) `state.configStaleSinceStart` (sticky-флаг в HomeState: saveConfig
   ///     происходил при tunnelUp, сбрасывается на up↔down переходах), или
@@ -614,69 +612,69 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     return _cachedSorted!;
   }
 
-  /// §070 — popup menu по long-press на sort button. 3 чекбокса.
-  /// Anchor — `_sortBtnKey` (showMenu требует RenderBox).
+  /// §070 — modal bottom sheet по long-press на sort button. Тот же
+  /// pattern что у `_showPingSettings` — sheet остаётся открытым пока
+  /// юзер не закроет, можно тоггать несколько опций подряд. `StatefulBuilder`
+  /// — локальный setState чтоб checkbox'ы перерисовывались immediately,
+  /// без перезапуска sheet'а.
   Future<void> _showSortOptionsMenu(BuildContext ctx) async {
-    final btnBox =
-        _sortBtnKey.currentContext?.findRenderObject() as RenderBox?;
-    final overlay =
-        Overlay.of(ctx).context.findRenderObject() as RenderBox?;
-    if (btnBox == null || overlay == null) return;
-    final pos = RelativeRect.fromRect(
-      Rect.fromPoints(
-        btnBox.localToGlobal(Offset.zero, ancestor: overlay),
-        btnBox.localToGlobal(btnBox.size.bottomRight(Offset.zero),
-            ancestor: overlay),
-      ),
-      Offset.zero & overlay.size,
-    );
-    final s = _controller.state;
-    PopupMenuEntry<_SortMenuAction> mkItem(
-      _SortMenuAction value,
-      bool checked,
-      String label,
-    ) {
-      // Стандартный Material Checkbox (☑/☐), а не Icons.done из
-      // CheckedPopupMenuItem. IgnorePointer на Checkbox — tap по всему
-      // ряду обрабатывается PopupMenuItem; внутренний gesture не дёргается.
-      return PopupMenuItem<_SortMenuAction>(
-        value: value,
-        child: Row(
-          children: [
-            IgnorePointer(
-              child: Checkbox(
-                value: checked,
-                onChanged: (_) {},
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    await showModalBottomSheet<void>(
+      context: ctx,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (sheetCtx, setSheetState) {
+          // Читаем свежий state каждый rebuild — controller между нашими
+          // setSheetState мог уже emit'нуть.
+          final s = _controller.state;
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Sort options',
+                      style: Theme.of(sheetCtx).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    value: s.pinDirect,
+                    onChanged: (v) {
+                      _controller.setPinDirect(v ?? false);
+                      setSheetState(() {});
+                    },
+                    title: const Text('Pin DIRECT to top'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                  CheckboxListTile(
+                    value: s.pinAuto,
+                    onChanged: (v) {
+                      _controller.setPinAuto(v ?? false);
+                      setSheetState(() {});
+                    },
+                    title: const Text('Pin AUTO to top'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                  CheckboxListTile(
+                    value: s.resortOnManualPing,
+                    onChanged: (v) {
+                      _controller.setResortOnManualPing(v ?? false);
+                      setSheetState(() {});
+                    },
+                    title: const Text('Re-sort on manual ping'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 8),
-            Expanded(child: Text(label)),
-          ],
-        ),
-      );
-    }
-    final selected = await showMenu<_SortMenuAction>(
-      context: ctx,
-      position: pos,
-      items: [
-        mkItem(_SortMenuAction.pinDirect, s.pinDirect, 'Pin DIRECT to top'),
-        mkItem(_SortMenuAction.pinAuto, s.pinAuto, 'Pin AUTO to top'),
-        mkItem(_SortMenuAction.resortPing, s.resortOnManualPing,
-            'Re-sort on manual ping'),
-      ],
+          );
+        },
+      ),
     );
-    if (selected == null || !mounted) return;
-    final cur = _controller.state;
-    switch (selected) {
-      case _SortMenuAction.pinDirect:
-        _controller.setPinDirect(!cur.pinDirect);
-      case _SortMenuAction.pinAuto:
-        _controller.setPinAuto(!cur.pinAuto);
-      case _SortMenuAction.resortPing:
-        _controller.setResortOnManualPing(!cur.resortOnManualPing);
-    }
   }
 
   @override
@@ -1469,7 +1467,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 clipBehavior: Clip.none,
                 children: [
                   InkWell(
-                    key: _sortBtnKey,
                     onTap: _controller.state.nodes.isEmpty
                         ? null
                         : _controller.cycleSortMode,
@@ -2433,9 +2430,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     );
   }
 }
-
-/// §070 — popup menu actions для long-press на sort button.
-enum _SortMenuAction { pinDirect, pinAuto, resortPing }
 
 /// Короткий label протокола для строки ноды. TLS опускаем — у большинства
 /// протоколов (VLESS/Trojan/Hy2/TUIC) он дефолт, метить каждую — шум.

@@ -243,7 +243,7 @@ Long-press открывает menu:
 2. **HomeState owns sort state.** Single source of truth — НЕ controller-side.
 3. **`pingBatchGen` — passive counter.** Не несёт semantic «сортируй сейчас», только маркер для cache invalidation.
 4. **Pin работает во всех modes включая `defaultOrder`.** В default mode: pinned section сверху + остальное в pristine config order. **Revised** от первого APK feedback — изначально pin был только для sorted modes, но юзеру это казалось багом «↕ не пиннит» когда yellow dot off.
-5. **PopupMenu (не bottom-sheet)** — 3 чекбокса, стандарт Material.
+5. **Modal bottom-sheet** (`showModalBottomSheet`) с тем же pattern что у `_showPingSettings`. Sheet остаётся открытым → можно тоггать несколько опций подряд без re-open. `StatefulBuilder` для in-place rebuild чекбоксов. **Revised** после first APK feedback — изначально был `showMenu` PopupMenu (всплывал у sort button), но юзеру это казалось отличным от привычного pattern'а ping settings. Привели к одному стилю.
 6. **Yellow dot indicator** на sort button когда хоть одна опция non-default.
 7. **`resortOnManualPing` независим от sortMode.** Применяется ко всем modes (даже в `nameAsc` теоретически lastDelay в key — фактически не используется, но cache одинаков).
 
