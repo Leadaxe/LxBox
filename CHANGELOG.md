@@ -8,6 +8,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **§072 — `SettingsStorage` атомарная запись + восстановление из `.bak`** ([task spec](docs/spec/tasks/072-settings-storage-atomic-write.md), [settings_storage.dart](app/lib/services/settings_storage.dart), [settings_storage_test.dart](app/test/services/settings_storage_test.dart)). Раз в пару дней на Xiaomi/HyperOS (воспроизведено на Pad 8 Pro) у юзера **полностью** сбрасывались все настройки — vars, подписки, server lists, custom rules, DNS. Root cause: `_save()` использовал `File.writeAsString` без `flush` (truncate-then-write); kill между truncate и записью → пустой/обрезанный JSON; `_load()` ловил `FormatException` в немом `catch (_) {}` и проваливался в `_cache = {}`; первый же `setVar` после этого фиксировал потерю. Фикс:
+  - **Атомарная запись**: `_save()` теперь делает (1) `copy(main → .bak)` если main валиден, (2) `write(.tmp, flush: true)`, (3) `tmp.rename(main)` — POSIX `rename(2)` атомарен в пределах одной FS. Kill между copy и tmp-write оставляет main + старый .bak. Kill между tmp-write и rename — то же.
+  - **Decision tree в `_load()`**: main отсутствует → `{}` (fresh install); main парсится → return; main битый + `.bak` валиден → recovery (`AppLog.warning`); main битый + bak нет → return `{}` + sticky-флаг `_mainIsCorrupted` + `AppLog.error` (раз за сессию). Critical: при corruption main файл **не перезаписывается** автоматически — оставляется для ручной диагностики. Sticky-флаг сбрасывается на первой успешной atomic-записи (юзер начал заново вводить данные).
+  - **Cleanup**: stale `.tmp` от прошлого crashed save удаляется в начале `_load()`.
+  - +12 unit tests (`settings_storage_test.dart`): round-trip, recovery из .bak, drop без bak, empty file truncate, .tmp cleanup, migrate proxy_sources, .bak только из валидного main, fresh после drop.
+
 ### Added
 
 - **§070 — Sort options long-press menu** ([feature spec](docs/spec/features/070%20sort-options/spec.md), [home_state.dart](app/lib/models/home_state.dart), [home_controller.dart](app/lib/controllers/home_controller.dart), [home_screen.dart](app/lib/screens/home_screen.dart)). На главной у sort-кнопки в node header добавлен long-press → popup `CheckedPopupMenuItem`×3:
