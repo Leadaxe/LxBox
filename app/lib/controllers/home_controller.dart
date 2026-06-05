@@ -369,6 +369,8 @@ class HomeController extends ChangeNotifier {
       configRaw: raw,
       lastError: '',
       configStaleSinceStart: stale,
+      // §070: config change → новый pool возможно → sort заново.
+      pingBatchGen: _state.pingBatchGen + 1,
     ));
     _rebuildClashEndpoint();
     _addDebug(DebugSource.app, 'Config saved (${canonicalJson.length} bytes)');
@@ -870,6 +872,9 @@ class HomeController extends ChangeNotifier {
           timeoutMs: pingTimeoutFor(groupTag), url: url);
       _addDebug(DebugSource.app, 'Group URLTest done: $groupTag → $url');
       await reloadProxies();
+      // §070: bump cache gen — re-sort после group URLtest (latency мог
+      // существенно измениться).
+      _emit(_state.copyWith(pingBatchGen: _state.pingBatchGen + 1));
     } catch (e) {
       final msg = _formatProbeError(groupTag, url, e);
       _addDebug(DebugSource.app, msg);
@@ -939,7 +944,9 @@ class HomeController extends ChangeNotifier {
     if (_massPingEpoch == epoch) {
       _massPingRunning = false;
       _addDebug(DebugSource.app, 'Mass ping finished');
-      notifyListeners();
+      // §070: bump cache gen — single re-sort после batch.
+      // (notifyListeners выполнится внутри _emit.)
+      _emit(_state.copyWith(pingBatchGen: _state.pingBatchGen + 1));
 
       // Форсим URLTest на всех urltest-группах (auto и т.п.) —
       // без этого sing-box держит `now` пустым до первого interval-тика
@@ -986,7 +993,11 @@ class HomeController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   void setSelectedGroup(String? group) {
-    _emit(_state.copyWith(selectedGroup: group));
+    // §070: bump cache gen — group switch = новый pool, sort заново.
+    _emit(_state.copyWith(
+      selectedGroup: group,
+      pingBatchGen: _state.pingBatchGen + 1,
+    ));
   }
 
   void setHighlightedNode(String nodeTag) {
@@ -994,7 +1005,31 @@ class HomeController extends ChangeNotifier {
   }
 
   void cycleSortMode() {
-    _emit(_state.copyWith(sortMode: _state.sortMode.next));
+    final next = _state.sortMode.next;
+    // §071: exit из manual → defaultOrder сбрасывает manualOrder.
+    // Если юзер опять начнёт drag — manual mode re-enter с fresh order.
+    final clearManual = _state.sortMode == NodeSortMode.manual &&
+        next == NodeSortMode.defaultOrder;
+    _emit(_state.copyWith(
+      sortMode: next,
+      manualOrder: clearManual ? const <String>[] : _state.manualOrder,
+    ));
+  }
+
+  // §070 — sort options setters (per-session toggle'ы).
+  void setPinDirect(bool v) => _emit(_state.copyWith(pinDirect: v));
+  void setPinAuto(bool v) => _emit(_state.copyWith(pinAuto: v));
+  void setResortOnManualPing(bool v) =>
+      _emit(_state.copyWith(resortOnManualPing: v));
+
+  /// §071: commit drag-reorder в manual mode.
+  /// [newOrder] — полный non-pinned порядок (без direct/auto если они pinned).
+  /// Заодно переключает sortMode на `manual`.
+  void commitManualReorder(List<String> newOrder) {
+    _emit(_state.copyWith(
+      sortMode: NodeSortMode.manual,
+      manualOrder: List<String>.unmodifiable(newOrder),
+    ));
   }
 
   void clearError() {

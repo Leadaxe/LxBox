@@ -86,6 +86,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   Timer? _pingDebounceTimer;
   // Non-matching visibility (locked #7, default ON)
   bool _showNonMatching = true;
+
+  // §070 — UI-cache для frozen sort при `state.resortOnManualPing == false`.
+  // См. spec'у — manual single ping не двигает порядок, batch / group switch /
+  // config rebuild сбрасывает через `state.pingBatchGen` bump.
+  List<String>? _cachedSorted;
+  ({NodeSortMode mode, int gen, int nodesLen, bool pinD, bool pinA})?
+      _cachedSortKey;
+  // §070 — long-press anchor для popup menu (showMenu требует RenderBox).
+  final GlobalKey _sortBtnKey = GlobalKey();
   /// Derived UI flag. True когда:
   /// (а) `state.configStaleSinceStart` (sticky-флаг в HomeState: saveConfig
   ///     происходил при tunnelUp, сбрасывается на up↔down переходах), или
@@ -572,6 +581,103 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       _enabledProtocols.isNotEmpty ||
       _enabledSubscriptions.isNotEmpty ||
       (_pingFilterEnabled && _maxPingMs != null);
+
+  /// §070 — true если хоть одна sort-опция отклонена от default (для
+  /// yellow dot indicator).
+  bool _isSortNonDefault(HomeState s) =>
+      !s.pinDirect || !s.pinAuto || !s.resortOnManualPing;
+
+  /// §070 — frozen sort при `resortOnManualPing == false`. Cache hit ↔
+  /// (sortMode, pingBatchGen, nodes.length, pinDirect, pinAuto) совпадают
+  /// с предыдущим вызовом + все cached tags ещё в pool. Manual single ping
+  /// → новый state, та же key → cache hit → строка не прыгает.
+  List<String> _viewSortedNodes(HomeState s) {
+    if (s.resortOnManualPing) {
+      _cachedSortKey = null;
+      _cachedSorted = null;
+      return s.sortedNodes;
+    }
+    final key = (
+      mode: s.sortMode,
+      gen: s.pingBatchGen,
+      nodesLen: s.nodes.length,
+      pinD: s.pinDirect,
+      pinA: s.pinAuto,
+    );
+    if (key == _cachedSortKey && _cachedSorted != null) {
+      // sanity: все cached tags ещё в pool (защита от ноды удалённой из
+      // подписки между bump'ами).
+      if (_cachedSorted!.every(s.nodes.contains)) return _cachedSorted!;
+    }
+    _cachedSortKey = key;
+    _cachedSorted = List<String>.unmodifiable(s.sortedNodes);
+    return _cachedSorted!;
+  }
+
+  /// §070 — popup menu по long-press на sort button. 3 чекбокса.
+  /// Anchor — `_sortBtnKey` (showMenu требует RenderBox).
+  Future<void> _showSortOptionsMenu(BuildContext ctx) async {
+    final btnBox =
+        _sortBtnKey.currentContext?.findRenderObject() as RenderBox?;
+    final overlay =
+        Overlay.of(ctx).context.findRenderObject() as RenderBox?;
+    if (btnBox == null || overlay == null) return;
+    final pos = RelativeRect.fromRect(
+      Rect.fromPoints(
+        btnBox.localToGlobal(Offset.zero, ancestor: overlay),
+        btnBox.localToGlobal(btnBox.size.bottomRight(Offset.zero),
+            ancestor: overlay),
+      ),
+      Offset.zero & overlay.size,
+    );
+    final s = _controller.state;
+    PopupMenuEntry<_SortMenuAction> mkItem(
+      _SortMenuAction value,
+      bool checked,
+      String label,
+    ) {
+      // Стандартный Material Checkbox (☑/☐), а не Icons.done из
+      // CheckedPopupMenuItem. IgnorePointer на Checkbox — tap по всему
+      // ряду обрабатывается PopupMenuItem; внутренний gesture не дёргается.
+      return PopupMenuItem<_SortMenuAction>(
+        value: value,
+        child: Row(
+          children: [
+            IgnorePointer(
+              child: Checkbox(
+                value: checked,
+                onChanged: (_) {},
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: Text(label)),
+          ],
+        ),
+      );
+    }
+    final selected = await showMenu<_SortMenuAction>(
+      context: ctx,
+      position: pos,
+      items: [
+        mkItem(_SortMenuAction.pinDirect, s.pinDirect, 'Pin DIRECT to top'),
+        mkItem(_SortMenuAction.pinAuto, s.pinAuto, 'Pin AUTO to top'),
+        mkItem(_SortMenuAction.resortPing, s.resortOnManualPing,
+            'Re-sort on manual ping'),
+      ],
+    );
+    if (selected == null || !mounted) return;
+    final cur = _controller.state;
+    switch (selected) {
+      case _SortMenuAction.pinDirect:
+        _controller.setPinDirect(!cur.pinDirect);
+      case _SortMenuAction.pinAuto:
+        _controller.setPinAuto(!cur.pinAuto);
+      case _SortMenuAction.resortPing:
+        _controller.setResortOnManualPing(!cur.resortOnManualPing);
+    }
+  }
 
   @override
   void dispose() {
@@ -1353,15 +1459,55 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               ),
             ],
             const Spacer(),
-            IconButton(
-              tooltip: _controller.state.sortMode.label,
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              onPressed: _controller.state.nodes.isEmpty
-                  ? null
-                  : _controller.cycleSortMode,
-              icon: Icon(_controller.state.sortMode.icon, size: 20),
+            // §070: sort button = InkWell с tap (cycle) + long-press
+            // (popup menu) вместо IconButton (у того нет onLongPress).
+            // Yellow dot overlay когда хоть одна sort-опция non-default.
+            // Icon в `manual` mode = ⠿ (§071), невозможный через cycle.
+            Tooltip(
+              message: _controller.state.sortMode.label,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  InkWell(
+                    key: _sortBtnKey,
+                    onTap: _controller.state.nodes.isEmpty
+                        ? null
+                        : _controller.cycleSortMode,
+                    onLongPress: _controller.state.nodes.isEmpty
+                        ? null
+                        : () => _showSortOptionsMenu(context),
+                    borderRadius: BorderRadius.circular(18),
+                    child: SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: Center(
+                        child: Icon(
+                          _controller.state.sortMode.icon,
+                          size: 20,
+                          color: _controller.state.nodes.isEmpty
+                              ? Theme.of(context).disabledColor
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_isSortNonDefault(_controller.state))
+                    Positioned(
+                      right: 4,
+                      top: 4,
+                      child: IgnorePointer(
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.amber,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
             // §048 — `Icons.tune` теперь IconButton expand toggle, не popup.
             // Existing «Show detour servers» переехал внутрь expanded panel.
@@ -1982,7 +2128,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // §048 — двухфазная модель (см. spec):
     // Phase 1 — pool filter: detour show/hide. Нода **отсутствует** в render
     // если detour off и tag detour-prefixed.
-    final allTags = state.sortedNodes;
+    // §070: используем _viewSortedNodes — frozen sort при resortOnManualPing=false
+    // (manual single ping не дёргает порядок).
+    final allTags = _viewSortedNodes(state);
     final pool = _showDetourNodes
         ? allTags
         : allTags.where((t) => !t.startsWith(kDetourTagPrefix)).toList();
@@ -2058,60 +2206,154 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           Expanded(
             child: RefreshIndicator(
               onRefresh: _controller.reloadProxies,
-              child: ListView.separated(
-                padding: EdgeInsets.zero,
-                itemCount: displayList.length,
-                separatorBuilder: (_, _) => Divider(
-                  height: 1,
-                  thickness: 1,
-                  color:
-                      Theme.of(context).colorScheme.outlineVariant.withAlpha(128),
-                ),
-                itemBuilder: (context, i) {
-                  final tag = displayList[i];
-                  final urltestNow =
-                      ClashApiClient.urltestNow(state.proxiesJson, tag);
-                  // Определяем URLTest-ли тэг (даже если now пустой — тип есть).
-                  final proxyEntry =
-                      ClashApiClient.proxyEntry(state.proxiesJson, tag);
-                  final isUrltestGroup = proxyEntry != null &&
-                      (proxyEntry['type']?.toString().toLowerCase() ?? '')
-                          .contains('urltest');
-                  // Для urltest-группы (auto) сам тэг — control-узел без
-                  // протокола; берём proto той ноды, которую urltest сейчас выбрал.
-                  final protoType = cache.protoByTag[tag] ??
-                      (urltestNow != null ? cache.protoByTag[urltestNow] : null);
-                  return NodeRow(
-                    item: NodeViewItem(
-                      tag: tag,
-                      active: tag == state.activeInGroup,
-                      highlighted: tag == state.highlightedNode,
-                      delay: state.lastDelay[tag],
-                      pingBusy: state.pingBusy[tag] == '…',
-                      tunnelUp: state.tunnelUp,
-                      busy: state.busy,
-                      urltestNow: urltestNow,
-                      hasDetour: cache.detourTags.contains(tag),
-                      protocolLabel:
-                          protoType != null ? _protoLabel(protoType) : null,
-                      matches: matchingSet.contains(tag),
-                    ),
-                    onHighlight: () => _controller.setHighlightedNode(tag),
-                    onActivate: () => unawaited(_controller.switchNode(tag)),
-                    onPing: () => unawaited(_controller.runNodeUrltest(tag)),
-                    onCopy: (mode) => _copyNodeJson(tag, state, mode),
-                    onCopyUri: () => _copyNodeUri(tag),
-                    onViewJson: () => _viewOutboundJson(tag, state),
-                    onRunUrltest: isUrltestGroup
-                        ? () => unawaited(_controller.runGroupUrltest(tag))
-                        : null,
-                  );
-                },
+              // §071: ReorderableListView вместо ListView.separated.
+              // - buildDefaultDragHandles: false — мы провайдим свои через
+              //   transparent strip на левом 5% края каждого non-pinned ряда.
+              // - Separator делается через BorderSide bottom внутри itemBuilder
+              //   (ReorderableListView не имеет separatorBuilder).
+              // - pinnedCount определяется sequential check'ом первых элементов
+              //   displayList — robust против фильтра §048 (если pinned попал
+              //   в nonMatching, он не на index 0 → pinnedCount=0, корректно).
+              child: _buildReorderableNodeList(
+                context,
+                state: state,
+                displayList: displayList,
+                cache: cache,
+                matchingSet: matchingSet,
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  /// §071 — ReorderableListView для нод. Pinned section (direct/auto)
+  /// non-draggable; остальное — Stack с transparent 5%-strip overlay'ом
+  /// слева, который ловит long-press+drag через `ReorderableDragStartListener`.
+  /// Drag → `commitManualReorder` переключает в `NodeSortMode.manual` +
+  /// сохраняет новый порядок.
+  Widget _buildReorderableNodeList(
+    BuildContext context, {
+    required HomeState state,
+    required List<String> displayList,
+    required ConfigCache cache,
+    required Set<String> matchingSet,
+  }) {
+    // §070+§071: pinnedCount определяем sequential проверкой первых элементов.
+    // Если фильтр §048 затолкал pinned в nonMatching → pin не на index 0 →
+    // pinnedCount=0 (drag-handle покажется и на pinned, но это корректно
+    // т.к. формально он не pinned в текущем render'е).
+    int pinnedCount = 0;
+    if (state.pinDirect &&
+        pinnedCount < displayList.length &&
+        displayList[pinnedCount] == 'direct-out') {
+      pinnedCount++;
+    }
+    if (state.pinAuto &&
+        pinnedCount < displayList.length &&
+        displayList[pinnedCount] == kAutoOutboundTag) {
+      pinnedCount++;
+    }
+
+    final dividerColor =
+        Theme.of(context).colorScheme.outlineVariant.withAlpha(128);
+
+    return ReorderableListView.builder(
+      padding: EdgeInsets.zero,
+      buildDefaultDragHandles: false,
+      itemCount: displayList.length,
+      onReorder: (oldIndex, newIndex) {
+        // ReorderableListView convention: при move-down newIndex отступает.
+        if (newIndex > oldIndex) newIndex -= 1;
+        if (oldIndex < pinnedCount) return; // pinned ряды не двигаются
+        if (newIndex < pinnedCount) newIndex = pinnedCount; // не дроп в pinned
+        final restOnly = displayList.skip(pinnedCount).toList();
+        final restOld = oldIndex - pinnedCount;
+        final restNew = newIndex - pinnedCount;
+        final moved = restOnly.removeAt(restOld);
+        restOnly.insert(restNew, moved);
+        _controller.commitManualReorder(restOnly);
+      },
+      itemBuilder: (ctx, i) {
+        final tag = displayList[i];
+        final urltestNow =
+            ClashApiClient.urltestNow(state.proxiesJson, tag);
+        final proxyEntry = ClashApiClient.proxyEntry(state.proxiesJson, tag);
+        final isUrltestGroup = proxyEntry != null &&
+            (proxyEntry['type']?.toString().toLowerCase() ?? '')
+                .contains('urltest');
+        final protoType = cache.protoByTag[tag] ??
+            (urltestNow != null ? cache.protoByTag[urltestNow] : null);
+        final row = DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: dividerColor, width: 1),
+            ),
+          ),
+          child: NodeRow(
+            item: NodeViewItem(
+              tag: tag,
+              active: tag == state.activeInGroup,
+              highlighted: tag == state.highlightedNode,
+              delay: state.lastDelay[tag],
+              pingBusy: state.pingBusy[tag] == '…',
+              tunnelUp: state.tunnelUp,
+              busy: state.busy,
+              urltestNow: urltestNow,
+              hasDetour: cache.detourTags.contains(tag),
+              protocolLabel:
+                  protoType != null ? _protoLabel(protoType) : null,
+              matches: matchingSet.contains(tag),
+            ),
+            onHighlight: () => _controller.setHighlightedNode(tag),
+            onActivate: () => unawaited(_controller.switchNode(tag)),
+            onPing: () => unawaited(_controller.runNodeUrltest(tag)),
+            onCopy: (mode) => _copyNodeJson(tag, state, mode),
+            onCopyUri: () => _copyNodeUri(tag),
+            onViewJson: () => _viewOutboundJson(tag, state),
+            onRunUrltest: isUrltestGroup
+                ? () => unawaited(_controller.runGroupUrltest(tag))
+                : null,
+          ),
+        );
+        // Pinned ряды — без grab strip.
+        if (i < pinnedCount) {
+          return KeyedSubtree(key: ValueKey('node-$tag'), child: row);
+        }
+        // Non-pinned ряды — overlay strip 5% от ширины слева (transparent).
+        // LayoutBuilder даёт actual row width → strip всегда proportional.
+        return KeyedSubtree(
+          key: ValueKey('node-$tag'),
+          child: LayoutBuilder(
+            builder: (ctx, c) => Stack(
+              children: [
+                row,
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: c.maxWidth * 0.08,
+                  // ReorderableDelayedDragStartListener (long-press → drag)
+                  // вместо ReorderableDragStartListener (immediate). С
+                  // immediate scroll-жест Scrollable выигрывает gesture
+                  // arena у нашего vertical drag и reorder не начинается.
+                  // Delayed обходит арбитраж: scroll работает immediately,
+                  // drag активируется после long-press hold.
+                  child: ReorderableDelayedDragStartListener(
+                    index: i,
+                    // Container(color:...) — иначе пустой SizedBox не
+                    // hit-testable (RenderConstrainedBox.hitTestSelf=false,
+                    // нет child'а → жест проваливается на NodeRow ниже,
+                    // InkWell его съедает).
+                    child: Container(color: Colors.transparent),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -2191,6 +2433,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     );
   }
 }
+
+/// §070 — popup menu actions для long-press на sort button.
+enum _SortMenuAction { pinDirect, pinAuto, resortPing }
 
 /// Короткий label протокола для строки ноды. TLS опускаем — у большинства
 /// протоколов (VLESS/Trojan/Hy2/TUIC) он дефолт, метить каждую — шум.

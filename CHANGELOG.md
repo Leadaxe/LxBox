@@ -8,15 +8,24 @@
 
 ## [Unreleased]
 
-### Fixed
-
-- **§072 — `SettingsStorage` атомарная запись + восстановление из `.bak`** ([task spec](docs/spec/tasks/072-settings-storage-atomic-write.md), [settings_storage.dart](app/lib/services/settings_storage.dart), [settings_storage_test.dart](app/test/services/settings_storage_test.dart)). Раз в пару дней на Xiaomi/HyperOS (воспроизведено на Pad 8 Pro) у юзера **полностью** сбрасывались все настройки — vars, подписки, server lists, custom rules, DNS. Root cause: `_save()` использовал `File.writeAsString` без `flush` (truncate-then-write); kill между truncate и записью → пустой/обрезанный JSON; `_load()` ловил `FormatException` в немом `catch (_) {}` и проваливался в `_cache = {}`; первый же `setVar` после этого фиксировал потерю. Фикс:
-  - **Атомарная запись**: `_save()` теперь делает (1) `copy(main → .bak)` если main валиден, (2) `write(.tmp, flush: true)`, (3) `tmp.rename(main)` — POSIX `rename(2)` атомарен в пределах одной FS. Kill между copy и tmp-write оставляет main + старый .bak. Kill между tmp-write и rename — то же.
-  - **Decision tree в `_load()`**: main отсутствует → `{}` (fresh install); main парсится → return; main битый + `.bak` валиден → recovery (`AppLog.warning`); main битый + bak нет → return `{}` + sticky-флаг `_mainIsCorrupted` + `AppLog.error` (раз за сессию). Critical: при corruption main файл **не перезаписывается** автоматически — оставляется для ручной диагностики. Sticky-флаг сбрасывается на первой успешной atomic-записи (юзер начал заново вводить данные).
-  - **Cleanup**: stale `.tmp` от прошлого crashed save удаляется в начале `_load()`.
-  - +12 unit tests (`settings_storage_test.dart`): round-trip, recovery из .bak, drop без bak, empty file truncate, .tmp cleanup, migrate proxy_sources, .bak только из валидного main, fresh после drop.
-
 ### Added
+
+- **§070 — Sort options long-press menu** ([feature spec](docs/spec/features/070%20sort-options/spec.md), [home_state.dart](app/lib/models/home_state.dart), [home_controller.dart](app/lib/controllers/home_controller.dart), [home_screen.dart](app/lib/screens/home_screen.dart)). На главной у sort-кнопки в node header добавлен long-press → popup `CheckedPopupMenuItem`×3:
+  - **Pin DIRECT to top** (default ON) — `direct-out` в pinned section.
+  - **Pin AUTO to top** (default ON) — `✨auto` в pinned section.
+  - **Re-sort on manual ping** (default ON) — пересчитывать порядок при `runNodeUrltest(tag)` (single ping). OFF → manual ping обновляет число, но **ряд не прыгает**; UI-cache (`_viewSortedNodes`) держит frozen sort до `state.pingBatchGen` bump.
+  - `pingBatchGen` — passive counter, bump'ается в `runMassUrltest` финале, `runGroupUrltest`, `setSelectedGroup`, `saveParsedConfig` — четыре «легитимных re-sort» точки. Single manual ping → cache hit → frozen order.
+  - **Yellow dot indicator** на sort-кнопке когда хоть одна опция non-default.
+  - Toggles per-session in-memory (consistency с §048 filter state), не persist'ятся.
+  - Default behaviour bit-exact: все 3 toggle = ON → старый sort.
+
+- **§071 — Manual node reorder via drag** ([feature spec](docs/spec/features/071%20manual-node-reorder/spec.md), [home_state.dart](app/lib/models/home_state.dart), [home_controller.dart](app/lib/controllers/home_controller.dart), [home_screen.dart](app/lib/screens/home_screen.dart)). Четвёртый sort mode `NodeSortMode.manual` (icon `⠿ Icons.drag_indicator`), активируется **только** через drag — в `cycleSortMode` не входит (`NodeSortMode.next` обходит manual: default → ping → A-Z → default).
+  - **8% от ширины row, transparent strip** на левом крае каждого non-pinned ряда (Stack + Positioned overlay) с `ReorderableDragStartListener` — long-press + drag начинает reorder. Текст и иконки внутри `NodeRow` не сдвигаются.
+  - Drag → `commitManualReorder` переключает sortMode в `manual` + сохраняет порядок в `state.manualOrder`. Per-session in-memory.
+  - **Exit:** короткий tap по sort-кнопке (cycle) выходит из `manual` → `defaultOrder`, `manualOrder` **сбрасывается**. Юзер опять начал drag → manual mode re-enter с fresh порядком.
+  - **Pinned (direct/auto)** — non-draggable; drop в pinned зону clamped под pinned (`onReorder` guard).
+  - **Новые ноды** (subscription update / add server) → в конец manual order. Удалённые → автоматически отфильтрованы.
+  - +18 unit tests (`home_state_sort_test.dart`): `next` cycle exit, pin toggles в `latencyAsc`/`nameAsc`, manual order applied, новые в конец, удалённые отфильтрованы, pinDirect ON/OFF под manual, copyWith new fields.
 
 - **§048 — Home node filters: regex + emoji + protocol + subscription + test (ping)** ([feature spec](docs/spec/features/048%20home-node-filters/spec.md), [node_filter.dart](app/lib/screens/home/node_filter.dart), [filter_widgets.dart](app/lib/screens/home/filter_widgets.dart), [home_screen.dart](app/lib/screens/home_screen.dart)). На главной у списка нод есть icon-кнопка `Icons.tune` справа в header (раньше открывала popup с одним пунктом «Show detour servers» — теперь expand toggle для filter panel). Panel содержит:
   - **Regex** text field с двумя toggle: левый checkbox — on/off filter без потери pattern (auto-on при вводе валидного pattern); `[!]` внутри suffix перед `✕` — invert/NOT (`!regex.hasMatch(tag)`, OR-семантика alternations сохраняется — `!(a|b)`). Debounce 300ms; invalid pattern → red `Invalid regex` hint.
