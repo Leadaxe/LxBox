@@ -30,7 +30,8 @@ class RoutingScreen extends StatefulWidget {
   State<RoutingScreen> createState() => _RoutingScreenState();
 }
 
-class _RoutingScreenState extends State<RoutingScreen> {
+class _RoutingScreenState extends State<RoutingScreen>
+    with WidgetsBindingObserver {
   WizardTemplate? _template;
   final _enabledGroups = <String>{};
   String _routeFinal = '';
@@ -38,7 +39,10 @@ class _RoutingScreenState extends State<RoutingScreen> {
   final _srsCached = <String>{};      // rule.id → файл есть в кэше
   final _srsDownloading = <String>{}; // rule.id → идёт загрузка
   bool _loading = true;
-  Timer? _saveTimer;
+  // §076: dirty flag — нужно ли persist'ить на exit. Set'ится на mutation,
+  // clears'ся после _persist. Защищает от лишнего write если open+close
+  // без mutations.
+  bool _pendingChanges = false;
 
   /// chapter==routing vars (Auto Proxy tuning — urltest_url/interval/tolerance).
   /// Значения держим отдельно от custom_rules: apply'ит их через SettingsStorage.setVar.
@@ -47,18 +51,35 @@ class _RoutingScreenState extends State<RoutingScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_load());
   }
 
   @override
   void dispose() {
-    _saveTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    // §076 write-on-exit: Navigator.pop → flush. dispose не await'ит async —
+    // unawaited; SettingsStorage atomic (§072) → no corrupt state.
+    if (_pendingChanges) unawaited(_persist());
     super.dispose();
   }
 
-  void _scheduleSave() {
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 500), () => unawaited(_apply()));
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // §076 safety net: app backgrounded → flush. Только `paused` —
+    // `inactive` слишком часто (notification pull, transient overlays).
+    if (state == AppLifecycleState.paused && _pendingChanges) {
+      unawaited(_persist());
+    }
+  }
+
+  /// §076: any mutation → set in-memory flags **синхронно**. configDirty
+  /// должен быть видим _pushRoute.then() до того как .then() начнёт
+  /// проверять — иначе race: дисковая запись (через _persist в dispose)
+  /// ещё не завершилась, флаг false, rebuild не fires.
+  void _markDirty() {
+    _pendingChanges = true;
+    widget.subController.configDirty = true; // sync — race-safe
   }
 
   Future<void> _load() async {
@@ -103,7 +124,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
   void _onRoutingVarChanged(String name, String value) {
     _routingVarValues[name] = value;
     unawaited(SettingsStorage.setVar(name, value));
-    _scheduleSave();
+    _markDirty();
   }
 
   /// Рендерит все секции с `chapter: routing` из template (сейчас — только
@@ -183,7 +204,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
     // Fire-and-forget: удалить orphan'ов (файлы без соответствующего правила).
     // Не критично по времени, не влияет на UI — unawaited'им.
     unawaited(RuleSetDownloader.pruneOrphans(activeDiskIds));
-    if (changed) _scheduleSave();
+    if (changed) _markDirty();
   }
 
   /// Список remote `rule_set` пресета (type=remote + url). Пустой если
@@ -278,7 +299,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
     if (i < 0) return;
     setState(() {
       _customRules[i] = _customRules[i].withEnabled(true);
-      _scheduleSave();
+      _markDirty();
     });
   }
 
@@ -314,7 +335,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
             : 'Failed to download "${rule.name}" — check URL/network'),
       ),
     );
-    if (path != null) _scheduleSave();
+    if (path != null) _markDirty();
   }
 
   /// Скачивает все remote rule_set'ы пресета в локальный кэш
@@ -353,7 +374,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
             : 'Partial: $ok ok, $failed failed for "${rule.name}"'),
       ),
     );
-    if (ok > 0) _scheduleSave();
+    if (ok > 0) _markDirty();
   }
 
   /// One-shot переход на единую модель: legacy `enabled_rules` +
@@ -391,29 +412,19 @@ class _RoutingScreenState extends State<RoutingScreen> {
     await SettingsStorage.markPresetsMigrated();
   }
 
-  Future<void> _apply() async {
+  /// §076: atomic storage flush. Inline rebuild + snackbars удалены —
+  /// rebuild делается lazy на возврате на home через _pushRoute.then().
+  /// configDirty mark'ится для home banner / lazy rebuild trigger.
+  Future<void> _persist() async {
+    if (!_pendingChanges) return; // idempotent: already flushed
+    _pendingChanges = false;
     await SettingsStorage.saveEnabledGroups(_enabledGroups);
     await SettingsStorage.saveRouteFinal(_routeFinal);
     await SettingsStorage.saveCustomRules(_customRules);
-
-    if (!mounted) return;
-
-    final config = await widget.subController.generateConfig();
-    if (config != null && mounted) {
-      final ok = await widget.homeController.saveParsedConfig(config);
-      if (ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Routing applied, config regenerated')),
-        );
-        if (widget.homeController.state.tunnelUp) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Restart VPN to apply changes')),
-          );
-        }
-      }
-    }
-
-    setState(() {});
+    // §076: configDirty уже true (set синхронно в _markDirty). НЕ
+    // переставляем тут — между unawaited(_persist()) и завершением disk
+    // I/O home._pushRoute.then() уже мог fire'нуть _rebuildAndClearDirty
+    // и сбросить флаг. Повторный set => banner blink pink→blue.
   }
 
   /// Returns the list of available outbound options depending on enabled groups.
@@ -565,7 +576,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
           } else {
             _enabledGroups.remove(group.tag);
           }
-          _scheduleSave();
+          _markDirty();
         });
       },
     );
@@ -632,7 +643,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
     final insertAt = _computeInsertIndex(cr);
     setState(() {
       _customRules.insert(insertAt, cr);
-      _scheduleSave();
+      _markDirty();
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -665,7 +676,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
             if (val == null) return;
             setState(() {
               _routeFinal = val;
-              _scheduleSave();
+              _markDirty();
             });
           },
         ),
@@ -681,7 +692,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
       if (newIndex > oldIndex) newIndex -= 1;
       final moved = _customRules.removeAt(oldIndex);
       _customRules.insert(newIndex, moved);
-      _scheduleSave();
+      _markDirty();
     });
   }
 
@@ -725,7 +736,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
                     }
                     setState(() {
                       _customRules[index] = rule.withEnabled(v);
-                      _scheduleSave();
+                      _markDirty();
                     });
                   },
                 ),
@@ -755,7 +766,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
                     onChanged: (val) {
                       setState(() {
                         _customRules[index] = rule.withOutbound(val);
-                        _scheduleSave();
+                        _markDirty();
                       });
                     },
                   ),
@@ -951,7 +962,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
         if (i >= 0) {
           setState(() {
             _customRules[i] = rule.withEnabled(false);
-            _scheduleSave();
+            _markDirty();
           });
         } else {
           setState(() {});
@@ -1016,7 +1027,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
     setState(() {
       _customRules.removeAt(index);
       _srsCached.remove(rule.id);
-      _scheduleSave();
+      _markDirty();
     });
     // Подчищаем cached-файлы: SRS — один файл по `id`, preset — по каждому
     // remote rule_set'у пресета + убираем composite-ключи из _srsCached.
@@ -1055,7 +1066,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
       final insertAt = _computeInsertIndex(saved);
       setState(() {
         _customRules.insert(insertAt, saved);
-        _scheduleSave();
+        _markDirty();
       });
     }
   }
@@ -1081,7 +1092,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
     if (result.wasDeleted) {
       setState(() {
         _customRules.removeAt(index);
-        _scheduleSave();
+        _markDirty();
       });
     } else if (result.saved != null) {
       final saved = result.saved!;
@@ -1094,7 +1105,7 @@ class _RoutingScreenState extends State<RoutingScreen> {
         final next = (urlChanged || kindChanged) ? saved.withEnabled(false) : saved;
         _customRules[index] = next;
         if (urlChanged || kindChanged) _srsCached.remove(current.id);
-        _scheduleSave();
+        _markDirty();
       });
       if (urlChanged || kindChanged) {
         unawaited(RuleSetDownloader.delete(current.id));

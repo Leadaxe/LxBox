@@ -15,6 +15,7 @@ import '../services/url_mask.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/url_launcher.dart';
+import 'add_server_wizard_screen.dart';
 import 'node_filter_screen.dart';
 import 'node_settings_screen.dart';
 import 'subscription_detail_screen.dart';
@@ -90,6 +91,18 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       ),
     );
     return confirmed ?? false;
+  }
+
+  /// §074 — open Add server wizard (long-press на «+»). Wizard сам зовёт
+  /// `addUserServer`/`addFromInput`; после successful add — callback
+  /// делает `_regenerateAndSave` тут.
+  void _openAddServerWizard() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => AddServerWizardScreen(
+        subController: widget.subController,
+        onAdded: _regenerateAndSave,
+      ),
+    ));
   }
 
   Future<void> _add() async {
@@ -329,12 +342,18 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                 ),
                 PopupMenuButton<String>(
                   onSelected: (v) {
+                    // §074: «Add server» — duplicate access к wizard'у
+                    // (long-press на «+» — discoverability через accidental,
+                    // overflow menu — explicit affordance).
+                    if (v == 'wizard') _openAddServerWizard();
                     if (v == 'public') unawaited(_pickPublicTestServer());
                     if (v == 'paste') unawaited(_pasteFromClipboard());
                     if (v == 'qr') unawaited(_scanQrCode());
                     if (v == 'auto_update') unawaited(_toggleAutoUpdate());
                   },
                   itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'wizard', child: Text('Add server…')),
+                    const PopupMenuDivider(),
                     const PopupMenuItem(value: 'paste', child: Text('Paste from clipboard')),
                     const PopupMenuItem(value: 'qr', child: Text('Scan QR code')),
                     const PopupMenuDivider(),
@@ -435,10 +454,19 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          IconButton.filled(
-            tooltip: 'Add',
-            onPressed: ctrl.busy ? null : () => unawaited(_add()),
-            icon: const Icon(Icons.add, size: 20),
+          // §074: tap = paste-from-clipboard / parse text input (existing).
+          // long-press = full-screen Add server wizard (SOCKS5 form / Paste
+          // URI / Paste JSON tabs).
+          //
+          // НЕ IconButton — у того встроенный Tooltip widget (даже без
+          // tooltip:, Material InkWell внутри его перехватывает long-press
+          // первым в gesture arena). Используем raw InkWell + Material
+          // styled под IconButton.filled (primary container + circle).
+          // Pattern уже applied для §070 sort button.
+          _AddIconButton(
+            busy: ctrl.busy,
+            onTap: () => unawaited(_add()),
+            onLongPress: _openAddServerWizard,
           ),
         ],
       ),
@@ -895,4 +923,45 @@ class _ClipboardAnalysis {
   final String type;
   final String title;
   final String subtitle;
+}
+
+/// §074 — custom «+» button с поддержкой onTap + onLongPress (без
+/// встроенного Tooltip widget'а, который перехватывал бы long-press).
+/// Визуально match'ит `IconButton.filled` — primary background, circle,
+/// 40dp tap-target.
+class _AddIconButton extends StatelessWidget {
+  const _AddIconButton({
+    required this.busy,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  final bool busy;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: busy ? cs.surfaceContainerHighest : cs.primary,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: busy ? null : onTap,
+        onLongPress: busy ? null : onLongPress,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Center(
+            child: Icon(
+              Icons.add,
+              size: 20,
+              color: busy ? cs.onSurfaceVariant : cs.onPrimary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

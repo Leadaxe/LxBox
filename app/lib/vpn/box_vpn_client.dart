@@ -454,7 +454,7 @@ class BoxVpnClient {
   /// listener в `HomeController._statusSub` становился зомби: Dart-сторона
   /// считает что подписан, native-сторона давно выбросила sink и никуда
   /// больше не шлёт. Все последующие broadcast'ы в сессии терялись —
-  /// отсюда reconnect без сброса `configStaleSinceStart`, сломанные
+  /// отсюда reconnect без сброса `configChangedNeedRestart`, сломанные
   /// heartbeat-обновления и т.д.
   ///
   /// `asBroadcastStream()` даёт один underlying controller с несколькими

@@ -125,7 +125,7 @@ class HomeController extends ChangeNotifier {
     _addDebug(DebugSource.core,
         'status=${event.raw}${event.errorReason != null ? " reason=${event.errorReason}" : ""}');
     _addDebug(DebugSource.app,
-        '[vpn] _handleStatusEvent raw="${event.raw}" tunnel=${tunnel.name} prev=${prevTunnel.name} stale_before=${_state.configStaleSinceStart}');
+        '[vpn] _handleStatusEvent raw="${event.raw}" tunnel=${tunnel.name} prev=${prevTunnel.name} need_restart_before=${_state.configChangedNeedRestart}');
 
     // Все мутации state складываем в **одно** copyWith в конце — было три
     // отдельных _emit (tunnel; then connectedSince+stale; then cleanup-
@@ -136,7 +136,7 @@ class HomeController extends ChangeNotifier {
       _emit(_state.copyWith(
         tunnel: tunnel,
         connectedSince: DateTime.now(),
-        configStaleSinceStart: false,
+        configChangedNeedRestart: false,
       ));
       unawaited(_refreshClashAfterTunnel());
       _startHeartbeat();
@@ -168,7 +168,7 @@ class HomeController extends ChangeNotifier {
           highlightedNode: null,
           traffic: TrafficSnapshot.zero,
           connectedSince: null,
-          configStaleSinceStart: false,
+          configChangedNeedRestart: false,
         ),
       );
       // Haptic — на революд/краш тяжёлый, на user-инициированный stop лёгкий.
@@ -218,7 +218,7 @@ class HomeController extends ChangeNotifier {
         nodes: <String>[],
         traffic: TrafficSnapshot.zero,
         connectedSince: null,
-        configStaleSinceStart: false,
+        configChangedNeedRestart: false,
       ));
     });
   }
@@ -287,7 +287,7 @@ class HomeController extends ChangeNotifier {
     _autoPingTimer = null;
     // Полный cleanup как в `_handleStatusEvent` revoked/disconnected ветке —
     // включая _clash=null (старый endpoint с невалидным secret'ом), traffic
-    // reset, connectedSince=null, configStaleSinceStart=false. Единый
+    // reset, connectedSince=null, configChangedNeedRestart=false. Единый
     // контракт очистки: через какой бы путь ни попали в «tunnel down»
     // (broadcast от native или heartbeat-timeout) — state в одинаковом
     // финальном виде.
@@ -302,7 +302,7 @@ class HomeController extends ChangeNotifier {
         highlightedNode: null,
         traffic: TrafficSnapshot.zero,
         connectedSince: null,
-        configStaleSinceStart: false,
+        configChangedNeedRestart: false,
       ),
     );
     unawaited(_tryCleanStop());
@@ -348,10 +348,10 @@ class HomeController extends ChangeNotifier {
       // auto-updater, rebuild). В release выключено, оставляем для dev-диагностики.
       final callerFrames = StackTrace.current.toString().split('\n').take(4).join(' | ');
       _addDebug(DebugSource.app,
-          '[vpn] saveParsedConfig ENTER tunnelUp=${_state.tunnelUp} stale_before=${_state.configStaleSinceStart} caller=$callerFrames');
+          '[vpn] saveParsedConfig ENTER tunnelUp=${_state.tunnelUp} need_restart_before=${_state.configChangedNeedRestart} caller=$callerFrames');
     } else {
       _addDebug(DebugSource.app,
-          '[vpn] saveParsedConfig ENTER tunnelUp=${_state.tunnelUp} stale_before=${_state.configStaleSinceStart}');
+          '[vpn] saveParsedConfig ENTER tunnelUp=${_state.tunnelUp} need_restart_before=${_state.configChangedNeedRestart}');
     }
     final ok = await _vpn.saveConfig(canonicalJson);
     if (!ok) {
@@ -362,13 +362,13 @@ class HomeController extends ChangeNotifier {
     final raw = displayRaw ?? canonicalJson;
     // Если туннель уже крутит старый конфиг, поставим флаг — UI покажет
     // warning "Restart VPN to apply changes". Флаг sticky до up↔down.
-    final stale = _state.tunnelUp || _state.configStaleSinceStart;
+    final needRestart = _state.tunnelUp || _state.configChangedNeedRestart;
     _addDebug(DebugSource.app,
-        '[vpn] saveParsedConfig EXIT stale_after=$stale (tunnelUp=${_state.tunnelUp} || prev=${_state.configStaleSinceStart})');
+        '[vpn] saveParsedConfig EXIT need_restart_after=$needRestart (tunnelUp=${_state.tunnelUp} || prev=${_state.configChangedNeedRestart})');
     _emit(_state.copyWith(
       configRaw: raw,
       lastError: '',
-      configStaleSinceStart: stale,
+      configChangedNeedRestart: needRestart,
       // §070: config change → новый pool возможно → sort заново.
       pingBatchGen: _state.pingBatchGen + 1,
     ));
@@ -484,7 +484,7 @@ class HomeController extends ChangeNotifier {
   //
   // Дизайн (после sink-fix в BoxVpnClient + blocking stopVPN на native):
   //   - `_stopInternal` / `_startInternal` — внутренние примитивы, делают
-  //     один native call + intent-based reset `configStaleSinceStart=false`
+  //     один native call + intent-based reset `configChangedNeedRestart=false`
   //     на успехе. Без busy-management.
   //   - `stop` / `start` — public, оборачивают internal в `busy=true/false`
   //     try/finally + error surfacing в `lastError`.
@@ -493,7 +493,7 @@ class HomeController extends ChangeNotifier {
   //     стороне: `stopVPN` теперь блокирующий на native, caller получает
   //     control только после `setStatus(Stopped)`.
   //
-  // Почему intent-based reset `configStaleSinceStart=false` в _stopInternal
+  // Почему intent-based reset `configChangedNeedRestart=false` в _stopInternal
   // и _startInternal (а не только в _handleStatusEvent на Stopped/Started):
   //   1. Семантическая чистота. Юзер явно применил namерение (stop = "туннель
   //      прекращается, saved больше не vs running"; start = "running теперь
@@ -513,7 +513,7 @@ class HomeController extends ChangeNotifier {
     if (ok) {
       // Intent-based reset: юзер остановил туннель, saved конфиг больше
       // не "stale vs running" — running перестал существовать.
-      _emit(_state.copyWith(configStaleSinceStart: false));
+      _emit(_state.copyWith(configChangedNeedRestart: false));
     }
     return ok;
   }
@@ -527,7 +527,7 @@ class HomeController extends ChangeNotifier {
     if (ok) {
       // Intent-based reset: running теперь = saved (или станет через
       // мгновение на Started). Плашка "нужен restart" неактуальна.
-      _emit(_state.copyWith(configStaleSinceStart: false));
+      _emit(_state.copyWith(configChangedNeedRestart: false));
     }
     return ok;
   }
@@ -1021,6 +1021,18 @@ class HomeController extends ChangeNotifier {
   void setPinAuto(bool v) => _emit(_state.copyWith(pinAuto: v));
   void setResortOnManualPing(bool v) =>
       _emit(_state.copyWith(resortOnManualPing: v));
+
+  /// §076: external mark «running tunnel config устарел, нужен restart».
+  /// Используется когда настройка применяется **вне** config pipeline:
+  /// VpnService.Builder native toggles (allow_bypass / keep_on_exit /
+  /// background_mode) — они set'ятся на establish(), restart обновит.
+  /// Если tunnel down — флаг не set'им (новое значение подхватится на
+  /// следующем start без restart'а).
+  void markConfigChangedNeedRestart() {
+    if (_state.tunnelUp) {
+      _emit(_state.copyWith(configChangedNeedRestart: true));
+    }
+  }
 
   /// §071: commit drag-reorder в manual mode.
   /// [newOrder] — полный non-pinned порядок (без direct/auto если они pinned).

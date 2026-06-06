@@ -9,6 +9,7 @@ import 'screens/home_screen.dart';
 import 'services/app_log.dart';
 import 'services/clash_log_pump.dart';
 import 'services/debug/bootstrap.dart' as debug_bootstrap;
+import 'services/nav/home_return_observer.dart';
 import 'services/version_info.dart';
 import 'services/wifi_history_listener.dart';
 
@@ -156,6 +157,9 @@ class LxBoxApp extends StatelessWidget {
             useMaterial3: true,
           ),
           themeMode: themeNotifier.mode,
+          // §076: global observer срабатывает на возврат на home (root)
+          // — auto-rebuild config'а если configDirty.
+          navigatorObservers: [homeReturnObserver],
           home: const HomeScreen(),
         );
       },

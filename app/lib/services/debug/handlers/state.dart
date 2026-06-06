@@ -35,7 +35,11 @@ Future<DebugResponse> _configLocked(DebugRequest req, DebugContext ctx) async {
 
 Future<DebugResponse> _root(DebugRequest req, DebugContext ctx) async {
   final home = ctx.requireHome();
-  return JsonResponse(serializeHomeState(home.state));
+  final json = serializeHomeState(home.state);
+  // §076: добавляем config_dirty из SubscriptionController (in-memory флаг,
+  // не в HomeState). Computed read-only для диагностики lazy rebuild flow.
+  json['config_dirty'] = ctx.requireSub().configDirty;
+  return JsonResponse(json);
 }
 
 Future<DebugResponse> _clash(DebugRequest req, DebugContext ctx) async {

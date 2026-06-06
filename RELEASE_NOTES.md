@@ -21,7 +21,9 @@
 - **Node list filters** (§048): regex / emoji / protocol / subscription / test (ping) — все собрано в один collapse-panel под иконкой `Icons.tune` справа от sort.
 - **Manual node reorder** (§071): long-press за левый край ноды → ⠿ drag mode + custom order сохраняется до конца сессии.
 - **Sort options menu** (§070): long-press на иконку sort'а открывает bottom sheet с тремя toggle'ами — pin DIRECT, pin AUTO, re-sort on manual ping.
+- **Add server wizard** (§074): long-press на «+» в Subscriptions → full-screen wizard с 3 tabs (SOCKS5 form / Paste URI / Paste JSON). Default values для local SOCKS5 (`127.0.0.1:1080`) подходят для locally hosted proxy / DPI bypass tooling.
 - **Subscription detour: `Add detour` mode** (§073) — раньше `Override` полностью заменял родную detour-цепочку. Теперь default = append (chain + новый exit), а replace доступен через checkbox.
+- **Settings & config lifecycle унификация** (§076) — единый home banner для restart UX, lazy rebuild на возврат из editing screens, mtime-based bootstrap после kill, global NavigatorObserver покрывает все навигационные пути. **1 settings write + 1 config write per editing session** (раньше до 10 writes на rapid toggle'ах).
 - **Data loss fix для Xiaomi/HyperOS** (§072) — раз в пару дней у юзеров `lxbox_settings.json` обнулялся. Fixed через atomic write + `.bak` recovery.
 
 ---
@@ -50,6 +52,18 @@
 Двухфазная модель: detour show/hide — pool filter (caller), regex/protocol/subscription/test — match filter (`NodeFilter.passes`). All filters AND-combine. Per-session in-memory state. `Icons.tune` подсвечивается primary color когда любой match-filter активен.
 
 +27 unit tests на `NodeFilter` (extractEmojis с RIS flag pairs, invert ON/OFF, AND combine, untested ping passes).
+
+### §074 — Add server wizard
+
+[Feature spec](docs/spec/features/074%20add-server-wizard/spec.md).
+
+Long-press на «+» IconButton в Subscriptions screen → full-screen route с 3 tabs:
+
+- **SOCKS5 form** — структурированная форма для locally hosted SOCKS5 (DPI bypass tooling и другой local proxy). Defaults: tag `local-socks5-out`, host `127.0.0.1`, port `1080`. Username / password / display name optional. Display name отображается как entry title в Subscriptions list (persisted в `UserServer.name`). Constructs `SocksSpec` напрямую + persisted **как sing-box outbound JSON** — иначе URI fragment round-trip ломает tag (parser derive'ит tag из label-fragment'а).
+- **Paste URI** — multiline text area для `vless://…` / `vmess://…` / `trojan://…` / `socks5://…` / `wireguard://…` etc. Routes через тот же `addFromInput` что и tap-«+».
+- **Paste JSON** — multiline outbound JSON. Single object или array of outbounds. WireGuard auto-routes в `endpoints[]` через builder pipeline.
+
+Tab switch сохраняет поля. Cancel + Add buttons в AppBar. Открывается двумя путями: long-press на «+» (accidental discovery) или «Add server…» в overflow menu (три точки в AppBar — explicit affordance).
 
 ### §068 — `NodeViewItem` view-model class extracted
 
@@ -107,6 +121,41 @@ Incident 2026-06-05: юзер уверял что `allow_bypass` toggle off, н�
 
 ---
 
+### §076 — Settings and config lifecycle
+
+[Feature spec](docs/spec/features/076%20settings-and-config-lifecycle/spec.md).
+
+Унификация всего lifecycle от UI editing screen через persistent storage (`lxbox_settings.json`) → собранный sing-box config → running tunnel. Сделано как design choice — два паттерна работы со storage, каждый screen выбирает свой осознанно.
+
+**Lazy pattern (write-on-exit)** для toggle-flood editing screens:
+- `tun_apps_tab`, `routing_screen`, `dns_settings_screen`, `settings_screen` Core VPN tab.
+- Mutations только in-memory + sync mark `configDirty=true`.
+- Storage flush на `dispose()` + `AppLifecycleState.paused`.
+- Rebuild lazy на возврат к home через global `HomeReturnObserver` (NavigatorObserver зарегистрирован в `MaterialApp.navigatorObservers`).
+- **1 settings write + 1 config write per editing session** независимо от количества toggle'ов внутри session.
+
+**Eager pattern (immediate-write)** для discrete-event screens:
+- `subscriptions_screen` (add/remove subscription), `app_settings_screen` (UI prefs), `custom_rule_edit_screen` (Save button), `node_filter_screen` (Apply button).
+- Каждое user action → inline save + snackbar feedback.
+
+**Global `HomeReturnObserver`**: универсальный NavigatorObserver. Срабатывает на любой `didPop` когда home становится top route (`previousRoute.isFirst == true`). Покрывает все способы возврата — drawer, long-press, system back, swipe, programmatic pop, cross-navigation между settings screens. Раньше rebuild trigger был привязан к `_pushRoute.then()` callback и терялся при опен screen через альтернативные callsite'ы.
+
+**`HomeController.markConfigChangedNeedRestart()`**: external mark для настроек применяемых вне config pipeline. Native VPN System toggles (Allow Bypass / Keep on Exit / Background Mode) после save вызывают этот метод → home banner показывает «Restart VPN» если tunnelUp. Локальные snackbar'ы про restart удалены — единый source-of-truth.
+
+**Self-healing после kill mid-edit**: на launch `subController.init` сравнивает mtime'ы `lxbox_settings.json > singbox_config.json` → восстанавливает `configDirty` → `home._initSubsAndAutoUpdate` триггерит тихий bootstrap rebuild → юзер не видит banner на старте, config уже свежий.
+
+**Banner UX**:
+- Синий «Settings changed — tap to rebuild» при `configDirty=true` всегда (без `tunnelUp` gate). Юзер видит pending changes даже когда VPN off.
+- Розовый «Config changed — restart VPN» при `tunnelUp && configChangedNeedRestart && !configDirty`. Mutually exclusive с синим.
+- Auto-rebuild config setting в App Settings (default ON) контролирует автоматичность rebuild'а на возврат. OFF → только banner, юзер тапает сам.
+
+**Renames**:
+- In-memory field `HomeState.configStaleSinceStart` → `configChangedNeedRestart` (sweep across home_state, home_controller, home_screen, debug serializer).
+- Debug API JSON key `config_stale_since_start` → `config_changed_need_restart` (**breaking** для external consumers Debug API).
+- Добавлен computed `config_dirty: bool` в `/state` response для диагностики.
+
+---
+
 ## 🔧 Behavior changes
 
 ### §073 — Subscription detour: `Add detour` mode (append by default)
@@ -140,6 +189,20 @@ Builder splice новой цепочки: `detours.last.map['detour'] = override
 ---
 
 ## 🐛 Fixes
+
+### §075 — Tunnel apps: regenerate config перед restart VPN
+
+[Task spec](docs/spec/tasks/075-tun-apps-restart-regen-config.md).
+
+Incident 2026-06-06: юзер выбрал `Mode = Deny-list` + добавил Internet (`com.heytap.browser`) в Tunnel apps tab → tap «Restart» → Internet всё ещё ходил через VPN.
+
+Verified via Debug API:
+- `GET /settings/tun_apps` → `{mode: "deny", packages: ["com.heytap.browser"]}` ✅
+- `GET /config` → inbound[type=tun] — НЕТ `exclude_package` ❌
+
+**Root cause**: `_persist` обновлял только storage shape, `_restartVpn` делал `stop() → start()` без regenerate. Native side подхватывает **last saved config** — а тот не пересобран после изменения tun_apps. `applyTunPackages` post-step применяется только во время `subController.generateConfig`.
+
+**Fix**: `_persist` теперь приведён к pattern'у `routing_screen._apply` — `setTunApps → generateConfig → saveParsedConfig`. Локальный «Restart now» banner / button удалены — единый source-of-truth через `configStaleSinceStart` flag и глобальный home banner. То же UX что у routing changes.
 
 ### §072 — `SettingsStorage`: atomic write + `.bak` recovery
 
@@ -213,6 +276,7 @@ adb install -r app-release.apk
 Большой UX-релиз главного экрана:
 
 - **Фильтры списка нод** (§048): regex с invert toggle, emoji-чипсы стран, фильтры по протоколу / подписке / ping. Иконка `Icons.tune` справа от сортировки → expand-panel.
+- **Add server wizard** (§074): long-press на «+» в Subscriptions screen → wizard с 3 tabs (SOCKS5 form для locally hosted SOCKS5 / DPI bypass + Paste URI + Paste JSON).
 - **Ручное перетягивание нод** (§071): long-press за левый край ноды (~8% ширины) → ⠿ drag mode + custom порядок до конца сессии.
 - **Опции сортировки** (§070): long-press на иконку sort'а → bottom sheet с pin DIRECT / pin AUTO / Re-sort on manual ping. Yellow dot подсвечивается если хоть одна опция non-default.
 - **`Add detour` в подписках** (§073): раньше mode `Override` полностью заменял родной detour. Теперь default = append (chain + новый exit), а replace доступен через checkbox.

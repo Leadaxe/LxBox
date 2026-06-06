@@ -290,7 +290,7 @@ app/lib/
 │   ├── singbox_entry.dart                # sealed Outbound | Endpoint
 │   ├── template_vars.dart                # @vars resolution
 │   ├── validation.dart                   # ValidationResult + ValidationIssue
-│   ├── home_state.dart                   # Immutable state + NodeSortMode + configStaleSinceStart
+│   ├── home_state.dart                   # Immutable state + NodeSortMode + configChangedNeedRestart
 │   ├── tunnel_status.dart, debug_entry.dart, parser_config.dart
 ├── screens/                              # UI screens (see Navigation section)
 ├── services/
@@ -378,7 +378,7 @@ BoxVpnService.onStartCommand()
 Broadcast STATUS_CHANGED → "Started"
   ↓
 EventChannel → Dart: HomeController._handleStatusEvent()
-  ├─ state.configStaleSinceStart = false
+  ├─ state.configChangedNeedRestart = false
   ├─ HapticService.onVpnConnected() — medium impact
   └─ AutoUpdater.onVpnConnected() — triggers refresh after 2 min
   ↓
@@ -403,7 +403,7 @@ _persist() — writes to lxbox_settings.json
 _regenerateAndSave() — auto (v1.3.1+)
   ├─ generateConfig() — no HTTP, local assembly only
   └─ homeController.saveParsedConfig(config)
-        └─ state.configStaleSinceStart = tunnelUp  (sticky flag)
+        └─ state.configChangedNeedRestart = tunnelUp  (sticky flag)
   ↓
 UI refreshes row (subtitle: "<PROTOCOL> server") + snackbar
   ↓
@@ -978,7 +978,7 @@ Debug API `/clash/*` — transparent proxy в наш `ClashApiClient.endpoint` �
 
 | Controller | Responsibility |
 |-----------|---------------|
-| `HomeController` | VPN lifecycle, Clash API, nodes, ping (10 concurrent — `_pingConcurrency`), heartbeat, traffic, configStaleSinceStart, autoUpdater wiring, haptic on transitions |
+| `HomeController` | VPN lifecycle, Clash API, nodes, ping (10 concurrent — `_pingConcurrency`), heartbeat, traffic, configChangedNeedRestart, autoUpdater wiring, haptic on transitions |
 | `SubscriptionController` | CRUD entries (server_lists), `refreshEntry`/persist, `generateConfig` (no HTTP), `bindAutoUpdater`, init sweep (inProgress→failed) |
 | `ThemeNotifier` | Theme mode, SharedPreferences persistence |
 | `HapticService` (singleton) | Event-based haptic with 100 ms throttle, respects system setting (spec 029) |
@@ -986,7 +986,7 @@ Debug API `/clash/*` — transparent proxy в наш `ClashApiClient.endpoint` �
 
 Pattern: `ChangeNotifier` + `AnimatedBuilder`. `HomeState` is immutable with `copyWith` (sentinel `_unset` for nullable fields).
 
-`_needsRestart` in HomeScreen is a derived getter — returns `true` when `state.tunnelUp && (state.configStaleSinceStart || _subController.configDirty)`. Sticky until tunnel up↔down transition (see spec 003 §8a).
+`_needsRestart` in HomeScreen is a derived getter — returns `true` when `_subController.configDirty || (state.tunnelUp && state.configChangedNeedRestart)`. **§076 update**: `configDirty` branch is no longer gated on `tunnelUp` — settings-changed banner shows whenever there are pending changes, independent of tunnel state. Two banners mutually exclusive: blue «Settings changed» for `configDirty`, pink «Restart VPN» for `tunnelUp && configChangedNeedRestart && !configDirty`. Sticky until tunnel up↔down transition (see spec 003 §8a).
 
 ---
 
@@ -1043,14 +1043,18 @@ HomeScreen
 | **3-layer parser/builder** | Separation of concerns: parse ≠ build ≠ emit |
 | **UserServer.toJson stores only rawBody** | `nodes` is derivable via `parseAll(decode(rawBody))` on fromJson; saves disk space, avoids NodeSpec serialization drift |
 | **AutoUpdater gates** (spec 027) | `minRetryInterval=15min`, `maxFailsPerSession=5`, `_running`/`_inFlight` dedup — subscriptions never spam providers |
-| **configStaleSinceStart sticky flag** | Restart warning doesn't disappear on Stop-dialog cancel |
+| **configChangedNeedRestart sticky flag** | Restart warning doesn't disappear on Stop-dialog cancel |
 | **TLS-insecure → info severity** | Providers set it intentionally (REALITY, self-signed); shouldn't crowd out genuine warnings |
 | **Shared `asBroadcastStream` for status events** (v1.4.0) | `BoxVpnClient.onStatusChanged` cached as `late final` — один native `onListen`, `statusSink` стабилен. Раньше каждый вызов getter'а перезаписывал sink и ломал основной listener после первого reconnect'а. См. tasks/001. |
 | **Blocking `stopVPN` через Completer** (v1.4.0) | Method channel ждёт `setStatus(Stopped)` на native (5с timeout) — caller получает control только после реального завершения. Убирает race в `onStartCommand` guard в reconnect'е. См. tasks/002. |
-| **Intent-based sticky reset** (v1.4.0) | `configStaleSinceStart=false` в `_stopInternal`/`_startInternal` по факту применённого намерения, не только по transition event'у. Robust к Doze/OOM потерям broadcast'ов. |
+| **Intent-based sticky reset** (v1.4.0) | `configChangedNeedRestart=false` в `_stopInternal`/`_startInternal` по факту применённого намерения, не только по transition event'у. Robust к Doze/OOM потерям broadcast'ов. |
 | **`TunnelStatus.unknown`** (v1.4.0) | Default для неизвестного raw вместо `disconnected` — убирает ложные срабатывания `firstWhere` predicate'ов на мусорных events. UI маппит в Disconnected label. |
 | **`ConfigCache` в HomeState** (v1.4.0) | Outbound JSON (detour tags + protocol labels) парсится один раз при `saveParsedConfig`, не в itemBuilder'е. Убирает hot-path jsonDecode при сортировке 50+ нод. |
 | **`kDetourTagPrefix` single source of truth** (v1.4.0) | Константа `⚙ ` в `lib/config/consts.dart` — used by node_settings UI, builder, home filter, node_filter screen. Раньше литералы дублировались. |
+| **Two persist patterns: Lazy vs Eager** (v1.9.0, §076) | Editing screens с toggle-flood UX (`tun_apps_tab`, `routing_screen`, `dns_settings_screen`, `settings_screen` Core) используют **lazy** — mutations in-memory + `_markDirty` (sync `configDirty=true`), flush on `dispose()` + `paused`, rebuild lazy на возврат к home. Discrete-event screens (`subscriptions`, `app_settings`, `custom_rule_edit`, `node_filter`) — **eager** immediate-write + snackbar. 1 settings + 1 config write per editing session вместо до 10 (per-toggle eager). |
+| **Global `HomeReturnObserver`** (v1.9.0, §076) | Universal `NavigatorObserver` в `MaterialApp.navigatorObservers`. Срабатывает при `previousRoute.isFirst == true` (home стал top). Покрывает все navigation пути — drawer, long-press, system back, swipe, programmatic pop, cross-nav. Раньше rebuild trigger был в `_pushRoute.then()` callback'е — терялся при опен screen через non-drawer пути. |
+| **mtime-based bootstrap** (v1.9.0, §076) | `ConfigDirtyCheck.isDirty()` сравнивает `lxbox_settings.json.mtime > singbox_config.json.mtime` на launch. Восстанавливает `configDirty` после kill mid-edit без persist'а флага. `subController.init` set'ит флаг, `home._initSubsAndAutoUpdate` триггерит тихий bootstrap rebuild. |
+| **`markConfigChangedNeedRestart` external mark** (v1.9.0, §076) | `HomeController` method для настроек применяемых вне config pipeline. Native VPN System toggles (allow_bypass / keep_on_exit / background_mode) после `_vpn.setX` вызывают этот метод → home banner вместо локального snackbar'а. Gated на `tunnelUp`. |
 
 ---
 

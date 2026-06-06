@@ -110,7 +110,7 @@ class HomeState {
     this.manualOrder = const <String>[],
     this.traffic = TrafficSnapshot.zero,
     this.connectedSince,
-    this.configStaleSinceStart = false,
+    this.configChangedNeedRestart = false,
   }) : configCache = configCache ?? ConfigCache.parse(configRaw);
 
   final String configRaw;
@@ -150,10 +150,11 @@ class HomeState {
   final List<String> manualOrder;
   final TrafficSnapshot traffic;
   final DateTime? connectedSince;
-  /// True, если `saveParsedConfig` был вызван при работающем туннеле
-  /// с момента его последнего up-перехода. Значит туннель крутит config
-  /// старее, чем сохранённый. Сбрасывается на каждом up↔down переходе.
-  final bool configStaleSinceStart;
+  /// §076 (rename from `configStaleSinceStart`): True, если `saveParsedConfig`
+  /// был вызван при работающем туннеле — running config теперь устарел
+  /// относительно saved, нужен restart чтобы native перечитал.
+  /// Sticky in-memory flag, сбрасывается на каждом успешном `_startInternal`.
+  final bool configChangedNeedRestart;
 
   bool get tunnelUp => tunnel.isUp;
 
@@ -231,7 +232,7 @@ class HomeState {
     List<String>? manualOrder,
     TrafficSnapshot? traffic,
     Object? connectedSince = _unset,
-    bool? configStaleSinceStart,
+    bool? configChangedNeedRestart,
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
@@ -267,7 +268,7 @@ class HomeState {
       connectedSince: identical(connectedSince, _unset)
           ? this.connectedSince
           : connectedSince as DateTime?,
-      configStaleSinceStart: configStaleSinceStart ?? this.configStaleSinceStart,
+      configChangedNeedRestart: configChangedNeedRestart ?? this.configChangedNeedRestart,
     );
   }
 }

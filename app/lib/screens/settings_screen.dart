@@ -31,11 +31,16 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen>
+    with WidgetsBindingObserver {
   WizardTemplate? _template;
   final _varValues = <String, String>{};
+  // §076: template var changes pending для write-on-exit. Накапливается
+  // {var_name → value}, flush'ится в _persist (dispose + lifecycle.paused).
+  // Native VPN System toggles (allow_bypass / keep_on_exit / background_mode)
+  // — НЕ через этот mechanism, они идут immediate (discrete events).
+  final _pendingVars = <String, String>{};
   bool _loading = true;
-  Timer? _saveTimer;
 
   final _vpn = BoxVpnClient();
   bool _allowBypass = false;
@@ -46,13 +51,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_load());
   }
 
   @override
   void dispose() {
-    _saveTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    // §076 write-on-exit: Navigator.pop → flush pending vars.
+    if (_pendingVars.isNotEmpty) unawaited(_persist());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused && _pendingVars.isNotEmpty) {
+      unawaited(_persist());
+    }
+  }
+
+  /// §076: atomic flush pending template vars. Native System settings
+  /// (allow_bypass etc.) идут отдельно через `_vpn.setX` immediate.
+  Future<void> _persist() async {
+    if (_pendingVars.isEmpty) return;
+    final snapshot = Map<String, String>.from(_pendingVars);
+    _pendingVars.clear();
+    for (final entry in snapshot.entries) {
+      await SettingsStorage.setVar(entry.key, entry.value);
+    }
+    // configDirty уже true (set in _onVarChanged sync). Не трогаем.
   }
 
   Future<void> _load() async {
@@ -78,48 +105,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _allowBypass = enable);
     await _vpn.setAllowBypass(enable);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Saved. Reload VPN to apply.'),
-        duration: Duration(seconds: 3),
-      ),
-    );
+    // §076: home banner показывает «Restart VPN» если tunnelUp. Локальный
+    // snackbar удалён — единый source-of-truth.
+    widget.homeController.markConfigChangedNeedRestart();
   }
 
   void _toggleKeepOnExit(bool val) {
     setState(() => _keepOnExit = val);
     unawaited(_vpn.setKeepOnExit(val));
+    widget.homeController.markConfigChangedNeedRestart();
   }
 
   Future<void> _applyBackgroundMode(BackgroundMode? mode) async {
     if (mode == null || mode == _backgroundMode) return;
     setState(() => _backgroundMode = mode);
     await _vpn.setBackgroundMode(mode);
+    widget.homeController.markConfigChangedNeedRestart();
   }
 
+  /// §076: template var change. In-memory обновление + sync mark configDirty.
+  /// Actual storage write deferred to _persist (dispose / lifecycle.paused).
+  /// Rebuild — lazy через home._pushRoute.then() на возврате home.
   void _onVarChanged(String name, String value) {
     _varValues[name] = value;
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 500), () async {
-      await SettingsStorage.setVar(name, value);
-      await _regenerateConfig();
-    });
-  }
-
-  Future<void> _regenerateConfig() async {
-    if (!mounted) return;
-    final config = await widget.subController.generateConfig();
-    if (config == null || !mounted) return;
-    final ok = await widget.homeController.saveParsedConfig(config);
-    if (!ok || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Settings applied, config regenerated')),
-    );
-    if (widget.homeController.state.tunnelUp && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Restart VPN to apply changes')),
-      );
-    }
+    _pendingVars[name] = value;
+    widget.subController.configDirty = true; // sync race-safe
   }
 
   @override

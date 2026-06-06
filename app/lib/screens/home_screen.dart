@@ -35,6 +35,7 @@ import 'subscriptions_screen.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/debug_registry.dart';
 import '../services/haptic_service.dart';
+import '../services/nav/home_return_observer.dart';
 import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
 import '../services/traffic_profiler.dart';
@@ -93,15 +94,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   List<String>? _cachedSorted;
   ({NodeSortMode mode, int gen, int nodesLen, bool pinD, bool pinA})?
       _cachedSortKey;
-  /// Derived UI flag. True когда:
-  /// (а) `state.configStaleSinceStart` (sticky-флаг в HomeState: saveConfig
-  ///     происходил при tunnelUp, сбрасывается на up↔down переходах), или
-  /// (б) `_subController.configDirty` при tunnelUp (settings изменены,
-  ///     конфиг ещё не пересобран).
+  /// Derived UI flag. §076 banner gate:
+  /// (а) `_subController.configDirty` — ВСЕГДА показываем banner (независимо
+  ///     от tunnel state). Юзер видит pending changes даже когда VPN down,
+  ///     может Apply из banner.
+  /// (б) `state.configChangedNeedRestart && tunnelUp` — saved config обновлён
+  ///     во время работы tunnel, running config устарел, нужен restart.
   bool get _needsRestart {
     final state = _controller.state;
-    if (!state.tunnelUp) return false;
-    return state.configStaleSinceStart || _subController.configDirty;
+    return _subController.configDirty ||
+        (state.tunnelUp && state.configChangedNeedRestart);
   }
   Timer? _errorTimer;
 
@@ -154,6 +156,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _prevTunnel = _controller.state.tunnel;
     _prevError = _controller.state.lastError;
     _controller.addListener(_onControllerChange);
+    // §076: global home-return observer триггерит auto-rebuild когда
+    // юзер возвращается на home с любого settings screen'а.
+    homeReturnObserver.setHandler(_onReturnToHome);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_maybeShowNotificationPermissionDialog());
       unawaited(_maybeShowBatteryOptimizationDialog());
@@ -429,25 +434,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// и заведение periodic-таймера на 1 час). Порядок важен — AutoUpdater
   /// итерирует `entries`, они должны быть загружены с диска.
   ///
-  /// Bootstrap-config после init: если в storage есть subs но native ещё
-  /// не имеет загруженного config'а (`state.configRaw.isEmpty`) — авто-
-  /// генерируем и сохраняем. Закрывает класс «UI пустой после backup-
-  /// import + restart» / «storage был мутирован через Debug API, нужно
-  /// руками идти в Subscriptions чтобы UI ожил».
+  /// Bootstrap-config после init:
+  ///   - если в storage есть subs но native ещё не имеет загруженного config'а
+  ///     (`state.configRaw.isEmpty`) — auto-bootstrap (исходный сценарий).
+  ///   - §076: если `subController.configDirty == true` (восстановлен из
+  ///     mtime compare в `init`, означает kill mid-edit оставил settings
+  ///     новее saved config) — также bootstrap. Тихое согласование.
+  ///
+  /// Закрывает класс «UI пустой после backup-import + restart» / «storage
+  /// был мутирован через Debug API» / «kill во время editing → старый config».
   Future<void> _initSubsAndAutoUpdate() async {
     await _subController.init();
     _autoUpdater.start();
 
     // Wait one frame: HomeController.init() is also unawaited above; даём
     // ему успеть прочитать существующий config (если был). После этого
-    // решаем: bootstrap нужен только если config реально пустой.
+    // решаем: bootstrap нужен только если config реально пустой ИЛИ dirty.
     await Future<void>.delayed(const Duration(milliseconds: 100));
     if (!mounted) return;
-    if (_subController.entries.isNotEmpty &&
-        _controller.state.configRaw.isEmpty) {
+    final needBootstrap = _subController.entries.isNotEmpty &&
+        (_controller.state.configRaw.isEmpty || _subController.configDirty);
+    if (needBootstrap) {
       final config = await _subController.generateConfig();
       if (config != null && mounted) {
         await _controller.saveParsedConfig(config);
+        // §076: rebuild успешен → флаг гаснет (in-memory; mtime теперь
+        // tied — saved config обновлён, settings file не изменился).
+        _subController.configDirty = false;
+        setState(() {});
       }
     }
   }
@@ -694,6 +708,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _controller.removeListener(_onControllerChange);
     UpdateChecker.I.latest.removeListener(_onLatestUpdateChanged);
     WidgetsBinding.instance.removeObserver(this);
+    homeReturnObserver.clearHandler();
     _autoUpdater.dispose();
     // Ownership contract: HomeScreen владеет controller'ами + анимацией.
     // Раньше dispose пропускался — на проде ОС гасит процесс, но в
@@ -713,20 +728,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     }
   }
 
+  /// §076: drawer item → close drawer + push screen. Auto-rebuild на
+  /// возврат покрывается глобальным `homeReturnObserver` (см.
+  /// `services/nav/home_return_observer.dart`) — никаких per-callsite
+  /// `.then()` callback'ов не нужно.
   void _pushRoute(Widget screen) {
     Navigator.of(context).pop();
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen)).then((_) async {
-      // Re-read auto-rebuild in case it changed in App Settings
-      final val = await SettingsStorage.getVar('auto_rebuild', 'true');
-      _autoRebuild = val == 'true';
-      if (_subController.configDirty) {
-        if (_autoRebuild) {
-          unawaited(_rebuildAndClearDirty());
-        } else {
-          setState(() {});
-        }
-      }
-    });
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
   }
 
   @override
@@ -928,7 +936,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               ),
             ),
           ],
-          if (_needsRestart && state.tunnelUp) ...[
+          // §076: показываем «Restart» banner ТОЛЬКО когда rebuild уже
+          // сделан (configDirty=false) но running config устарел. Если
+          // configDirty=true — выше показывается «Apply» banner, юзер
+          // сначала тапнет его → rebuild → configDirty=false → configChangedNeedRestart=true
+          // → этот banner появится автоматически. Никаких stacked'ов.
+          if (state.tunnelUp &&
+              state.configChangedNeedRestart &&
+              !_subController.configDirty) ...[
             const SizedBox(height: 8),
             GestureDetector(
               // Не гасим `_needsRestart` на тап — если юзер отменит Stop-диалог,
@@ -1554,6 +1569,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (mounted) setState(() {});
   }
 
+  /// §076: callback зарегистрированный в `homeReturnObserver`. Срабатывает
+  /// когда юзер вернулся на home (root route стал top). Если есть pending
+  /// changes и юзер хочет авто-rebuild — пересобираем lazy.
+  ///
+  /// Re-read `auto_rebuild` на каждый возврат — юзер мог изменить
+  /// preference в App Settings между визитами.
+  void _onReturnToHome() {
+    if (!mounted) return;
+    if (!_subController.configDirty) return;
+    if (_subController.busy) return;
+    unawaited(() async {
+      final val = await SettingsStorage.getVar('auto_rebuild', 'true');
+      _autoRebuild = val == 'true';
+      if (!mounted) return;
+      if (_autoRebuild) {
+        await _rebuildAndClearDirty();
+      } else {
+        setState(() {});
+      }
+    }());
+  }
+
   Future<void> _rebuildConfig() async {
     // Только пересборка конфига — без HTTP-fetch'а подписок. За fetch
     // отвечает AutoUpdater (по 4 триггерам) и manual ⟳ на Servers.
@@ -1563,7 +1600,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       final ok = await _controller.saveParsedConfig(config);
       if (ok && mounted) {
         final nodeCount = _countNodesInConfig(config);
-        // configStaleSinceStart выставляется внутри saveParsedConfig,
+        // configChangedNeedRestart выставляется внутри saveParsedConfig,
         // AnimatedBuilder переотрисует через _needsRestart getter.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
