@@ -7,6 +7,7 @@ import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/subscription_meta.dart';
 import '../services/app_log.dart';
+import '../services/config_dirty_check.dart';
 import '../services/error_humanize.dart';
 import '../services/parse_hints.dart';
 import '../services/relative_time.dart';
@@ -100,6 +101,7 @@ class SubscriptionEntry extends ChangeNotifier {
   bool get registerDetourInAuto => detourPolicy.registerDetourInAuto;
   bool get useDetourServers => detourPolicy.useDetourServers;
   String get overrideDetour => detourPolicy.overrideDetour;
+  bool get replaceDetourChain => detourPolicy.replaceDetourChain;
 
   static String formatAgo(DateTime dt) => _formatAgo(dt);
 
@@ -171,6 +173,8 @@ class SubscriptionEntry extends ChangeNotifier {
       _replaceList(_copy(detourPolicy: detourPolicy.copyWith(useDetourServers: v)));
   set overrideDetour(String v) =>
       _replaceList(_copy(detourPolicy: detourPolicy.copyWith(overrideDetour: v)));
+  set replaceDetourChain(bool v) =>
+      _replaceList(_copy(detourPolicy: detourPolicy.copyWith(replaceDetourChain: v)));
 
   ServerList _copy({
     String? name,
@@ -226,6 +230,14 @@ class SubscriptionController extends ChangeNotifier {
   Future<void> init() async {
     final lists = await SettingsStorage.getServerLists();
     _entries = lists.map((l) => SubscriptionEntry(list: l)).toList();
+    // §076: bootstrap mtime compare — restore in-memory configDirty после
+    // possible kill mid-session. Если settings новее чем saved config →
+    // есть pending changes, нужен rebuild. Триггерится в home_screen
+    // bootstrap path или при первом возврате на home.
+    configDirty = await ConfigDirtyCheck.isDirty();
+    if (configDirty) {
+      AppLog.I.info('init: configDirty=true via mtime compare');
+    }
     // Если app был убит во время fetch'а, status=inProgress остаётся
     // на диске и залочит подписку навсегда (guard в _fetchEntryByRef).
     // Sweep: inProgress → failed. lastUpdateAttempt сохраняем — min-retry
@@ -274,6 +286,28 @@ class SubscriptionController extends ChangeNotifier {
       }
     }
     notifyListeners();
+  }
+
+  /// §074 — add a fully-constructed UserServer (used by Add server wizard
+  /// для SOCKS5 form тab). Не парсит — caller уже построил `UserServer` с
+  /// нодами. Persist + lastError-aware (паттерн как `addFromInput`).
+  /// URI/JSON tabs идут через [addFromInput] напрямую — тут только
+  /// structured form path.
+  Future<void> addUserServer(UserServer us) async {
+    _busy = true;
+    _lastError = '';
+    notifyListeners();
+    try {
+      _entries.add(SubscriptionEntry(list: us, nodeCount: us.nodes.length));
+      await _persist();
+      AppLog.I.info(
+          'addUserServer: ${us.id} ${us.name} (${us.nodes.length} node)');
+    } catch (e) {
+      _lastError = humanizeError(e);
+    } finally {
+      _busy = false;
+      notifyListeners();
+    }
   }
 
   Future<void> addFromInput(String input) async {

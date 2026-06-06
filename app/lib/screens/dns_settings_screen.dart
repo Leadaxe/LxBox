@@ -33,7 +33,8 @@ class DnsSettingsScreen extends StatefulWidget {
   State<DnsSettingsScreen> createState() => _DnsSettingsScreenState();
 }
 
-class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
+class _DnsSettingsScreenState extends State<DnsSettingsScreen>
+    with WidgetsBindingObserver {
   /// §043: kind-discriminated refs (резолвер `resolveDnsServersList`):
   /// - `{enabled, kind: 'inline',   tag, body}` — user-defined OR override
   /// - `{enabled, kind: 'template', tag}`        — ref на template-server
@@ -69,22 +70,44 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
 
 
   bool _loading = true;
-  Timer? _saveTimer;
+  // §076: _saveTimer удалён — write-on-exit pattern через _markDirty + _persist.
 
   String _strategy = '';
   String _dnsFinal = '';
   String _defaultResolver = '';
+  // §076: dirty flag — нужно ли persist на exit. Set'ится в _markDirty,
+  // clears'ся после _persist. Защита от лишнего write при open+close.
+  bool _pendingChanges = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_load());
   }
 
   @override
   void dispose() {
-    _saveTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    // §076 write-on-exit: Navigator.pop → flush pending.
+    if (_pendingChanges) unawaited(_persist());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // §076 safety net: app backgrounded → flush. Только `paused`.
+    if (state == AppLifecycleState.paused && _pendingChanges) {
+      unawaited(_persist());
+    }
+  }
+
+  /// §076: mutation → set in-memory flags синхронно. configDirty должен
+  /// быть видим _pushRoute.then() до того как .then() начнёт проверять —
+  /// иначе race condition (см. spec §076).
+  void _markDirty() {
+    _pendingChanges = true;
+    widget.subController.configDirty = true; // sync race-safe
   }
 
   Future<void> _load() async {
@@ -191,12 +214,11 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
     }
   }
 
-  void _scheduleSave() {
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 500), () => unawaited(_save()));
-  }
-
-  Future<void> _save() async {
+  /// §076: atomic storage flush. Inline rebuild удалён — lazy через
+  /// home._pushRoute.then() на возврате на home.
+  Future<void> _persist() async {
+    if (!_pendingChanges) return;
+    _pendingChanges = false;
     await SettingsStorage.saveDnsServers(_servers);
     // §033: orphan-cleanup safety — only persist entries whose source still
     // exists. UI mutation already filtered, но keep guard symmetric с
@@ -228,11 +250,8 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
     await SettingsStorage.setVar('dns_final', _dnsFinal);
     await SettingsStorage.setVar('dns_default_domain_resolver', _defaultResolver);
 
-    if (!mounted) return;
-    final config = await widget.subController.generateConfig();
-    if (config != null && mounted) {
-      await widget.homeController.saveParsedConfig(config);
-    }
+    // §076: configDirty уже true (set в _markDirty). Lazy rebuild на
+    // возврате home через _pushRoute.then().
   }
 
   /// §044: render list — typed `ResolvedServer` для каждой ref-записи.
@@ -347,7 +366,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
         'kind': newKind!,
         'tag': tag,
       };
-      _scheduleSave();
+      _markDirty();
     });
   }
 
@@ -376,7 +395,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
             if (savedDescription.isNotEmpty) 'description': savedDescription,
             'body': savedBody,
           });
-          _scheduleSave();
+          _markDirty();
         });
       },
     );
@@ -611,7 +630,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
                   } else {
                     _rules[index] = entry;
                   }
-                  _scheduleSave();
+                  _markDirty();
                 });
               },
               child: const Text('Save'),
@@ -670,7 +689,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
                 DropdownMenuItem(value: 'ipv4_only', child: Text('ipv4_only')),
                 DropdownMenuItem(value: 'ipv6_only', child: Text('ipv6_only')),
               ],
-              onChanged: (v) { if (v != null) setState(() { _strategy = v; _scheduleSave(); }); },
+              onChanged: (v) { if (v != null) setState(() { _strategy = v; _markDirty(); }); },
             ),
           ),
 
@@ -708,7 +727,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
                   if (newIndex > oldIndex) newIndex -= 1;
                   final moved = _rules.removeAt(oldIndex);
                   _rules.insert(newIndex, moved);
-                  _scheduleSave();
+                  _markDirty();
                 });
               },
               itemBuilder: (ctx, i) => _buildRuleTile(
@@ -736,7 +755,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
                 'For apps · default fallback when no DNS rule matches',
             value: _dnsFinal,
             serverTags: serverTags,
-            onChanged: (v) => setState(() { _dnsFinal = v; _scheduleSave(); }),
+            onChanged: (v) => setState(() { _dnsFinal = v; _markDirty(); }),
             tooltip: 'Default fallback DNS server. Used when an app makes a '
                 'DNS query and no DNS rule above matches it. Every app DNS '
                 'query that isn\'t routed by a rule ends up here.\n\n'
@@ -764,7 +783,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
                 'endpoints, routing rules)',
             value: _defaultResolver,
             serverTags: serverTags,
-            onChanged: (v) => setState(() { _defaultResolver = v; _scheduleSave(); }),
+            onChanged: (v) => setState(() { _defaultResolver = v; _markDirty(); }),
             tooltip: 'Used by routing engine to resolve hostnames internally '
                 '(outbound endpoints, routing rules). Not the resolver apps '
                 'use.\n\n'
@@ -884,7 +903,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
                 label: const Text('Switch to cloudflare_udp'),
                 onPressed: () => setState(() {
                   _defaultResolver = 'cloudflare_udp';
-                  _scheduleSave();
+                  _markDirty();
                 }),
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.amber.shade900,
@@ -990,7 +1009,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
     setState(() {
       _servers[idx] = Map<String, dynamic>.from(_servers[idx])
         ..['enabled'] = value;
-      _scheduleSave();
+      _markDirty();
     });
   }
 
@@ -998,7 +1017,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
   void _deleteServer(String tag) {
     setState(() {
       _servers.removeWhere((s) => s['tag'] == tag);
-      _scheduleSave();
+      _markDirty();
     });
   }
 
@@ -1063,7 +1082,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
             if (savedDescription.isNotEmpty) 'description': savedDescription,
             'body': savedBody,
           };
-          _scheduleSave();
+          _markDirty();
         });
       },
     );
@@ -1198,7 +1217,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
                 onChanged: (v) {
                   setState(() {
                     _rules[index] = Map<String, dynamic>.from(entry)..['enabled'] = v;
-                    _scheduleSave();
+                    _markDirty();
                   });
                 },
               ),
@@ -1246,7 +1265,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen> {
                     onPressed: () {
                       setState(() {
                         _rules.removeAt(index);
-                        _scheduleSave();
+                        _markDirty();
                       });
                     },
                     visualDensity: VisualDensity.compact,

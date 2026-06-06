@@ -10,7 +10,8 @@ void main() {
         name: 'My Sub',
         enabled: true,
         tagPrefix: '🌐',
-        detourPolicy: const DetourPolicy(overrideDetour: 'jump-1'),
+        detourPolicy: const DetourPolicy(
+            overrideDetour: 'jump-1', replaceDetourChain: true),
         url: 'https://example.com/sub?token=test',
         meta: const SubscriptionMeta(
           uploadBytes: 100,

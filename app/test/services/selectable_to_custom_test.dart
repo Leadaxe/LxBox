@@ -31,9 +31,8 @@ void main() {
         rule: const {'rule_set': 'ru-domains', 'outbound': '@out'},
       );
       final cr = selectableRuleToCustom(sr, blankTemplate);
-      expect(cr, isNotNull);
       expect(cr, isA<CustomRulePreset>());
-      expect(cr!.presetId, 'ru-direct');
+      expect(cr.presetId, 'ru-direct');
       expect(cr.name, 'Russian domains direct');
       expect(cr.varsValues, isEmpty);
     });
@@ -50,7 +49,7 @@ void main() {
       );
       final cr = selectableRuleToCustom(sr, blankTemplate);
       expect(cr, isA<CustomRulePreset>());
-      expect(cr!.presetId, 'block-ads');
+      expect(cr.presetId, 'block-ads');
     });
 
     test('overrideOutbound → varsValues["outbound"]', () {
@@ -62,22 +61,23 @@ void main() {
       final cr = selectableRuleToCustom(sr, blankTemplate,
           overrideOutbound: 'vpn-1');
       expect(cr, isA<CustomRulePreset>());
-      expect(cr!.varsValues['outbound'], 'vpn-1');
-    });
-
-    test('пресет без preset_id (ошибка шаблона) → null', () {
-      final sr = SelectableRule(
-        label: 'Malformed',
-        rule: const {'outbound': 'direct-out'},
-      );
-      final cr = selectableRuleToCustom(sr, blankTemplate);
-      expect(cr, isNull);
+      expect(cr.varsValues['outbound'], 'vpn-1');
     });
 
     test('label пустой → имя берётся из preset_id', () {
       final sr = SelectableRule(label: '', presetId: 'my-preset');
       final cr = selectableRuleToCustom(sr, blankTemplate);
-      expect(cr!.name, 'my-preset');
+      expect(cr.name, 'my-preset');
+    });
+
+    test('SelectableRule.fromJson без preset_id → FormatException (§067)', () {
+      expect(
+        () => SelectableRule.fromJson(const {
+          'label': 'Malformed',
+          'rule': {'outbound': 'direct-out'},
+        }),
+        throwsA(isA<FormatException>()),
+      );
     });
   });
 }

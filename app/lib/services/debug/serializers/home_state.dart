@@ -23,7 +23,14 @@ Map<String, Object?> serializeHomeState(HomeState s) {
     },
     'connected_since': s.connectedSince?.toUtc().toIso8601String(),
     'last_error': s.lastError,
-    'config_stale_since_start': s.configStaleSinceStart,
+    // §076 renamed from `config_stale_since_start`.
+    'config_changed_need_restart': s.configChangedNeedRestart,
     'sort_mode': s.sortMode.name,
+    // §070 / §071 — sort options + manual mode state. Non-breaking add.
+    'pin_direct': s.pinDirect,
+    'pin_auto': s.pinAuto,
+    'resort_on_manual_ping': s.resortOnManualPing,
+    'ping_batch_gen': s.pingBatchGen,
+    'manual_order': s.manualOrder,
   };
 }

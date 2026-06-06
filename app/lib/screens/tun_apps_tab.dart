@@ -32,37 +32,55 @@ class TunAppsTab extends StatefulWidget {
   State<TunAppsTab> createState() => _TunAppsTabState();
 }
 
-class _TunAppsTabState extends State<TunAppsTab> {
+class _TunAppsTabState extends State<TunAppsTab> with WidgetsBindingObserver {
   TunAppsConfig _cfg = const TunAppsConfig(mode: 'off', packages: <String>[]);
-  // `_appliedCfg` — snapshot того что **уже применено к active tun fd**
-  // (на момент последнего `establish()`). Banner «Restart needed»
-  // сравнивает _cfg с _appliedCfg, не с _savedCfg (last storage write):
-  //   - storage save идёт через debounce (400ms), временный mismatch не
-  //     должен flicker'ить banner
-  //   - изменения реально apply'ятся только на VPN restart, не на storage
-  //     save — поэтому baseline = last applied, не last saved
-  // На app load принимаем что VPN running с той же cfg что в storage
-  // (best approximation — storage мог быть mutated через Debug API после
-  // start, но это редкий edge case).
-  TunAppsConfig _appliedCfg =
-      const TunAppsConfig(mode: 'off', packages: <String>[]);
+  // §076: `_appliedCfg` / `_isModified` / `_listEq` / local restart banner +
+  // button — удалены. Использовано существующее unified mechanism:
+  //   - mutations → setState (in-memory)
+  //   - dispose / AppLifecycleState.paused → _persist (atomic write)
+  //   - _persist set'ит subController.configDirty = true
+  //   - home_screen._pushRoute.then на возврате → rebuild + save
+  //   - home banner показывает «Apply / Restart» глобально
+  //
   // packages для которых мы вызвали `AppInfoCache.ensure(pkg)`.
   // Используем для детекта uninstalled: если `_ensured.contains(pkg)` +
   // `AppInfoCache.of(pkg) == null` → native tried & not found.
   final Set<String> _ensured = <String>{};
   bool _loading = true;
-  Timer? _saveTimer;
+  // §076: dirty flag — нужно ли persist'ить на exit. Set'ится на mutation,
+  // clears'ся после _persist. Защищает от лишнего write если open+close
+  // без mutations.
+  bool _pendingChanges = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_load());
   }
 
   @override
   void dispose() {
-    _saveTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    // §076 write-on-exit: Navigator.pop → dispose → flush pending changes.
+    // Sync вызов через unawaited — dispose не await'ит async. Worst case:
+    // если app убьют между unawaited и actual write — write SettingsStorage
+    // atomic (§072), либо завершится либо не успеет; нет corrupt state.
+    if (_pendingChanges) unawaited(_persist());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // §076 write-on-exit safety net: app backgrounded → flush pending.
+    // Если юзер свернул app мid-edit (Home button, app switcher), OS может
+    // убить process через 30+ сек в background. Persist'им сейчас чтобы
+    // ничего не потерять. Только `paused` — `inactive` слишком часто
+    // (notification panel, app switcher transient) и вёл бы к spurious
+    // writes.
+    if (state == AppLifecycleState.paused && _pendingChanges) {
+      unawaited(_persist());
+    }
   }
 
   Future<void> _load() async {
@@ -70,7 +88,6 @@ class _TunAppsTabState extends State<TunAppsTab> {
     if (!mounted) return;
     setState(() {
       _cfg = cfg;
-      _appliedCfg = cfg; // assume VPN running with current storage cfg
       _loading = false;
     });
     for (final pkg in cfg.packages) {
@@ -79,50 +96,32 @@ class _TunAppsTabState extends State<TunAppsTab> {
     }
   }
 
-  void _scheduleSave() {
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 400), _persist);
+  /// §076: any mutation → set in-memory flags **синхронно**. configDirty
+  /// flag должен быть видим _pushRoute.then() до того как .then() начнёт
+  /// проверять — иначе race: дисковая запись ещё не завершилась, флаг
+  /// false, rebuild не fires.
+  void _markDirty() {
+    _pendingChanges = true;
+    widget.subController.configDirty = true; // sync — race-safe для .then()
   }
 
+  /// §076: atomic disk flush. Settings.setTunApps идёт через §072 atomic
+  /// write. configDirty уже set'нут в _markDirty синхронно.
   Future<void> _persist() async {
+    if (!_pendingChanges) return; // idempotent: already flushed
+    _pendingChanges = false;
     await SettingsStorage.setTunApps(_cfg);
-    // _appliedCfg НЕ трогаем — реально apply'ится только на restart.
-    // Banner показывается пока _cfg отличается от _appliedCfg.
+    // configDirty уже true (set в _markDirty), не трогаем.
   }
 
-  bool get _isModified =>
-      _cfg.mode != _appliedCfg.mode ||
-      !_listEq(_cfg.packages, _appliedCfg.packages);
-
-  bool _listEq(List<String> a, List<String> b) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
-  }
-
-  Future<void> _restartVpn() async {
-    final home = widget.homeController;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Restarting VPN...')),
-    );
-    // Snapshot pending → applied: при следующем `establish()` tun получит
-    // именно этот state. Если start() сразу зафейлится — _appliedCfg
-    // остаётся consistent с тем что юзер видит.
-    final pending = _cfg;
-    await home.stop();
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    await home.start();
-    if (mounted) setState(() => _appliedCfg = pending);
-  }
+  // §076: `_restartVpn` удалён. Restart инициируется единой home banner кнопкой,
+  // там же запускается rebuild + restart атомарно.
 
   void _setMode(String mode) {
     setState(() {
       _cfg = _cfg.copyWith(mode: mode);
     });
-    _scheduleSave();
+    _markDirty();
   }
 
   Future<void> _pickApps() async {
@@ -141,7 +140,7 @@ class _TunAppsTabState extends State<TunAppsTab> {
       _ensured.add(pkg);
       AppInfoCache.ensure(pkg);
     }
-    _scheduleSave();
+    _markDirty();
   }
 
   void _removeApp(String pkg) {
@@ -150,7 +149,7 @@ class _TunAppsTabState extends State<TunAppsTab> {
         packages: _cfg.packages.where((p) => p != pkg).toList(),
       );
     });
-    _scheduleSave();
+    _markDirty();
   }
 
   void _clearAll() {
@@ -171,7 +170,7 @@ class _TunAppsTabState extends State<TunAppsTab> {
             onPressed: () {
               Navigator.pop(ctx);
               setState(() => _cfg = _cfg.copyWith(packages: const <String>[]));
-              _scheduleSave();
+              _markDirty();
             },
             child: const Text('Clear'),
           ),
@@ -240,8 +239,8 @@ class _TunAppsTabState extends State<TunAppsTab> {
   Widget _buildBody(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final tunnelUp = widget.homeController.state.tunnelUp;
-    final showRestartBanner = _isModified && tunnelUp;
+    // §076: tunnelUp / showRestartBanner — удалены. Home banner показывает
+    // «Apply / Restart» глобально через configDirty + configChangedNeedRestart.
     final bottomPad = MediaQuery.of(context).padding.bottom + 24;
 
     return ListView(
@@ -316,33 +315,9 @@ class _TunAppsTabState extends State<TunAppsTab> {
           style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
         ),
 
-        if (showRestartBanner) ...[
-          const SizedBox(height: 16),
-          Card(
-            color: cs.tertiaryContainer,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-              child: Row(
-                children: [
-                  Icon(Icons.warning_amber_outlined,
-                      color: cs.onTertiaryContainer, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Changes will apply after VPN restart',
-                      style: tt.bodyMedium
-                          ?.copyWith(color: cs.onTertiaryContainer),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: _restartVpn,
-                    child: const Text('Restart now'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+        // §076: локальный «Restart needed» banner удалён.
+        // Home banner единый source-of-truth для «Apply / Restart».
+
 
         if (!_cfg.isOff) ...[
           const SizedBox(height: 16),

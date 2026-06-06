@@ -8,6 +8,91 @@
 
 ## [Unreleased]
 
+### Added
+
+- **§076 — Settings and config lifecycle (write-on-exit + lazy rebuild + universal NavigatorObserver)** ([feature spec](docs/spec/features/076%20settings-and-config-lifecycle/spec.md)). Унификация UI настроек, storage (`lxbox_settings.json`), saved config (`singbox_config.json`) и running tunnel в один прозрачный lifecycle. Два паттерна как design choice:
+  - **Lazy (write-on-exit)** для toggle-flood editing screens (`tun_apps_tab`, `routing_screen`, `dns_settings_screen`, `settings_screen` Core VPN tab): mutations только in-memory + sync `_markDirty` (configDirty=true), storage flush на `dispose()` + `AppLifecycleState.paused`, rebuild lazy на возврат к home. **1 settings write + 1 config write per editing session** независимо от количества toggle'ов.
+  - **Eager (immediate-write)** для discrete-event screens (`subscriptions_screen`, `app_settings_screen`, `custom_rule_edit_screen`, `node_filter_screen`): immediate save + snackbar feedback. Подходит для add/remove/Save button workflows.
+  - **Global `HomeReturnObserver`** ([home_return_observer.dart](app/lib/services/nav/home_return_observer.dart)): универсальный `NavigatorObserver` зарегистрирован в `MaterialApp.navigatorObservers`. Срабатывает на любой `didPop` когда home (root route) становится top. Покрывает все навигационные пути (drawer, long-press, system back, swipe, programmatic pop, cross-navigation между settings screens). Раньше rebuild trigger был в `_pushRoute.then()` callback — терялся при опен через long-press на Nodes header.
+  - **`HomeController.markConfigChangedNeedRestart()`** — external mark для настроек применяемых вне config pipeline (native VPN System toggles: `allow_bypass` / `keep_on_exit` / `background_mode`). Gated на `tunnelUp` (если tunnel down — значение применится на следующем start без restart prompt). Home banner показывает «Restart VPN» — единый source-of-truth, локальные snackbar'ы про restart удалены.
+  - **mtime-based bootstrap** ([config_dirty_check.dart](app/lib/services/config_dirty_check.dart)): на launch `subController.init` сравнивает `lxbox_settings.json.mtime > singbox_config.json.mtime` → восстанавливает `configDirty` после kill mid-edit. `home_screen._initSubsAndAutoUpdate` триггерит тихий bootstrap rebuild → юзер не видит banner на старте, всё применилось.
+  - **Banner gate переписан**: синий «Settings changed» показывается при `configDirty=true` **всегда** (без `tunnelUp` gate). Розовый «Restart VPN» показывается при `tunnelUp && configChangedNeedRestart && !configDirty` — mutually exclusive с синим (два banner'а одновременно не появляются).
+  - **Rename**: `HomeState.configStaleSinceStart` → `configChangedNeedRestart` (in 5 files). Debug API `/state` JSON key `config_stale_since_start` → `config_changed_need_restart` — **breaking** для external consumers. Добавлен computed `config_dirty: bool` для диагностики.
+  - **Race fixes**: `_markDirty` синхронно set'ит `configDirty=true` (race-safe для observer handler'а который читает сразу после dispose). `_persist` НЕ set'ит `configDirty` после await'ов (исправлен blink pink→blue после rebuild).
+
+- **§074 — Add server wizard (SOCKS5 form + Paste URI + Paste JSON)** ([feature spec](docs/spec/features/074%20add-server-wizard/spec.md), [add_server_wizard_screen.dart](app/lib/screens/add_server_wizard_screen.dart), [subscription_controller.dart](app/lib/controllers/subscription_controller.dart), [subscriptions_screen.dart](app/lib/screens/subscriptions_screen.dart)). Long-press на «+» в Subscriptions screen → full-screen route с 3 tabs:
+  - **SOCKS5** — структурированная форма: tag (default `local-socks5-out`), host (`127.0.0.1`), port (`1080`), username/password (optional), display name (optional → `UserServer.name`, отображается как entry title в Subscriptions list). Form validation (port 1..65535, host non-empty). Default values заточены под locally hosted SOCKS5 / DPI bypass tooling. Submit → constructs `SocksSpec(label = tag)` directly, persisted **как sing-box outbound JSON** в `rawBody` (не URI — URI fragment round-trip ломает tag т.к. `parseSocks` derive'ит tag из label-fragment'а), wraps в `UserServer(origin: manual)`, добавляется через новый `subController.addUserServer(...)` helper. Regression test: `socks_wizard_roundtrip_test.dart`.
+  - **Paste URI** — multiline text area для `vless://…` / `vmess://…` / `trojan://…` / `socks5://…` / `wireguard://…` etc. Routes через существующий `addFromInput` (тот же путь что у tap-«+»).
+  - **Paste JSON** — multiline outbound JSON ({type:vless,…}). Single object или array. WireGuard auto-routes в `endpoints[]` через builder pipeline.
+  - Cancel + Add buttons в AppBar (Material standard для full-screen modals).
+  - Tab switch сохраняет поля. Snackbar после add показывает tag который юзер ввёл (builder'овская суффиксация при collision видна в node list).
+  - Tap на «+» = existing paste-clipboard / parse-text-input flow без изменений. Wizard также доступен через «Add server…» в overflow menu (три точки в AppBar) — explicit affordance для discoverability.
+
+### Changed
+
+- **§073 — Detour: `Override` → `Add detour` с режимом append (default) и checkbox replace** ([task spec](docs/spec/tasks/073-detour-append-vs-replace.md), [server_list.dart](app/lib/models/server_list.dart), [server_list_build.dart](app/lib/services/builder/server_list_build.dart), [subscription_detail_screen.dart](app/lib/screens/subscription_detail_screen.dart)). До §073 mode `Override` в Subscription detail полностью **заменял** нативную detour-цепочку из конфига одним выбранным outbound'ом. Юзер запросил режим **append**: ноды идут по своей родной цепочке, а в конец добавляется выбранный hop (jumphost ladder с дописываемым последним exit).
+  - **Renamed**: radio item `Override` → `Add detour`. Subtitle разводит «Append → X» (default) и «Replace chain → X» (toggle ON).
+  - **Added**: `SwitchListTile` «Replace existing chain» под outbound picker. OFF (default) = append; ON = старое replace.
+  - **Builder**: `ServerListBuild.build` — новая ветка для append: `skipDetour=false`, `main.detour = detours.first.tag`, `detours.last.map['detour'] = overrideDetour` (override спайс'ится хвостом). Пустая native chain → 1-hop как раньше.
+  - **Storage**: `DetourPolicy.replaceDetourChain: bool` (default false). JSON key `replace_detour_chain`. Старые backup'ы без ключа → default append. ⚠ **Поведение для existing юзеров с override меняется** — была implicit replace, стала append. Toggle ON чтобы вернуть старое поведение.
+
+### Fixed
+
+- **§075 — Tunnel apps: regenerate config + единый restart flow** ([task spec](docs/spec/tasks/075-tun-apps-restart-regen-config.md), [tun_apps_tab.dart](app/lib/screens/tun_apps_tab.dart)). Incident 2026-06-06: юзер выбрал Mode=Deny-list + добавил Internet (`com.heytap.browser`), tap Restart → Internet всё равно ходил через VPN. Verified via Debug API: storage `{mode:deny, packages:[com.heytap.browser]}` ✅, applied config inbound[tun] — НЕТ `exclude_package` ❌. Root cause: `_persist` обновлял только storage, `_restartVpn` делал `stop()→start()` без regenerate, native читал **last saved config** который не пересобран. Фикс приводит tun_apps_tab к pattern'у `routing_screen._apply`: `_persist` теперь делает `setTunApps → generateConfig → saveParsedConfig`. Локальный «Restart needed» banner + локальный «Restart now» button + `_appliedCfg` snapshot удалены — единый source-of-truth через `configStaleSinceStart` flag и глобальный home banner. То же поведение что у routing changes.
+
+- **§072 — `SettingsStorage` атомарная запись + восстановление из `.bak`** ([task spec](docs/spec/tasks/072-settings-storage-atomic-write.md), [settings_storage.dart](app/lib/services/settings_storage.dart), [settings_storage_test.dart](app/test/services/settings_storage_test.dart)). Раз в пару дней на Xiaomi/HyperOS (воспроизведено на Pad 8 Pro) у юзера **полностью** сбрасывались все настройки — vars, подписки, server lists, custom rules, DNS. Root cause: `_save()` использовал `File.writeAsString` без `flush` (truncate-then-write); kill между truncate и записью → пустой/обрезанный JSON; `_load()` ловил `FormatException` в немом `catch (_) {}` и проваливался в `_cache = {}`; первый же `setVar` после этого фиксировал потерю. Фикс:
+  - **Атомарная запись**: `_save()` теперь делает (1) `copy(main → .bak)` если main валиден, (2) `write(.tmp, flush: true)`, (3) `tmp.rename(main)` — POSIX `rename(2)` атомарен в пределах одной FS. Kill между copy и tmp-write оставляет main + старый .bak. Kill между tmp-write и rename — то же.
+  - **Decision tree в `_load()`**: main отсутствует → `{}` (fresh install); main парсится → return; main битый + `.bak` валиден → recovery (`AppLog.warning`); main битый + bak нет → return `{}` + sticky-флаг `_mainIsCorrupted` + `AppLog.error` (раз за сессию). Critical: при corruption main файл **не перезаписывается** автоматически — оставляется для ручной диагностики. Sticky-флаг сбрасывается на первой успешной atomic-записи (юзер начал заново вводить данные).
+  - **Cleanup**: stale `.tmp` от прошлого crashed save удаляется в начале `_load()`.
+  - +12 unit tests (`settings_storage_test.dart`): round-trip, recovery из .bak, drop без bak, empty file truncate, .tmp cleanup, migrate proxy_sources, .bak только из валидного main, fresh после drop.
+
+### Added
+
+- **§070 — Sort options long-press menu** ([feature spec](docs/spec/features/070%20sort-options/spec.md), [home_state.dart](app/lib/models/home_state.dart), [home_controller.dart](app/lib/controllers/home_controller.dart), [home_screen.dart](app/lib/screens/home_screen.dart)). На главной у sort-кнопки в node header добавлен long-press → popup `CheckedPopupMenuItem`×3:
+  - **Pin DIRECT to top** (default ON) — `direct-out` в pinned section.
+  - **Pin AUTO to top** (default ON) — `✨auto` в pinned section.
+  - **Re-sort on manual ping** (default ON) — пересчитывать порядок при `runNodeUrltest(tag)` (single ping). OFF → manual ping обновляет число, но **ряд не прыгает**; UI-cache (`_viewSortedNodes`) держит frozen sort до `state.pingBatchGen` bump.
+  - `pingBatchGen` — passive counter, bump'ается в `runMassUrltest` финале, `runGroupUrltest`, `setSelectedGroup`, `saveParsedConfig` — четыре «легитимных re-sort» точки. Single manual ping → cache hit → frozen order.
+  - **Yellow dot indicator** на sort-кнопке когда хоть одна опция non-default.
+  - Toggles per-session in-memory (consistency с §048 filter state), не persist'ятся.
+  - Default behaviour bit-exact: все 3 toggle = ON → старый sort.
+
+- **§071 — Manual node reorder via drag** ([feature spec](docs/spec/features/071%20manual-node-reorder/spec.md), [home_state.dart](app/lib/models/home_state.dart), [home_controller.dart](app/lib/controllers/home_controller.dart), [home_screen.dart](app/lib/screens/home_screen.dart)). Четвёртый sort mode `NodeSortMode.manual` (icon `⠿ Icons.drag_indicator`), активируется **только** через drag — в `cycleSortMode` не входит (`NodeSortMode.next` обходит manual: default → ping → A-Z → default).
+  - **8% от ширины row, transparent strip** на левом крае каждого non-pinned ряда (Stack + Positioned overlay) с `ReorderableDragStartListener` — long-press + drag начинает reorder. Текст и иконки внутри `NodeRow` не сдвигаются.
+  - Drag → `commitManualReorder` переключает sortMode в `manual` + сохраняет порядок в `state.manualOrder`. Per-session in-memory.
+  - **Exit:** короткий tap по sort-кнопке (cycle) выходит из `manual` → `defaultOrder`, `manualOrder` **сбрасывается**. Юзер опять начал drag → manual mode re-enter с fresh порядком.
+  - **Pinned (direct/auto)** — non-draggable; drop в pinned зону clamped под pinned (`onReorder` guard).
+  - **Новые ноды** (subscription update / add server) → в конец manual order. Удалённые → автоматически отфильтрованы.
+  - +18 unit tests (`home_state_sort_test.dart`): `next` cycle exit, pin toggles в `latencyAsc`/`nameAsc`, manual order applied, новые в конец, удалённые отфильтрованы, pinDirect ON/OFF под manual, copyWith new fields.
+
+- **§048 — Home node filters: regex + emoji + protocol + subscription + test (ping)** ([feature spec](docs/spec/features/048%20home-node-filters/spec.md), [node_filter.dart](app/lib/screens/home/node_filter.dart), [filter_widgets.dart](app/lib/screens/home/filter_widgets.dart), [home_screen.dart](app/lib/screens/home_screen.dart)). На главной у списка нод есть icon-кнопка `Icons.tune` справа в header (раньше открывала popup с одним пунктом «Show detour servers» — теперь expand toggle для filter panel). Panel содержит:
+  - **Regex** text field с двумя toggle: левый checkbox — on/off filter без потери pattern (auto-on при вводе валидного pattern); `[!]` внутри suffix перед `✕` — invert/NOT (`!regex.hasMatch(tag)`, OR-семантика alternations сохраняется — `!(a|b)`). Debounce 300ms; invalid pattern → red `Invalid regex` hint.
+  - **Emoji chips** в горизонтальной полоске — extracted из всех node tags (включая detour), отсортированы по частоте + alphabetical tiebreak. Tap chip → emoji appended в regex field как OR-pattern (`🇷🇺` потом `🇺🇸` → `🇷🇺|🇺🇸`).
+  - **Protocol chips** (multi-select FilterChip, horizontal scroll row) — unique protocols из current pool (vless / vmess / trojan / shadowsocks / hysteria2 / ...). Empty selection = all allowed.
+  - **Subscription chips** (multi-select, horizontal scroll) — display names enabled подписок с непустым `nodes` (`SubscriptionServers.nodes.isNotEmpty`) + special «Custom» если есть `UserServer`'ы.
+  - **Test ≤ N ms** numeric input с собственным checkbox — debounced 300ms; untested nodes (`delay==null`) всегда matching (locked decision #11). Checkbox позволяет временно выключить filter не теряя значение.
+  - **Show detour servers** checkbox — existing toggle переехал из popup в panel.
+  - **Show non-matching (dimmed)** checkbox (default ON) — non-matching ноды рендерятся внизу с opacity 0.4 вместо скрытия. Юзер видит весь pool, понимает что подходит под фильтр. OFF → классический filter behaviour.
+  - **Двухфазная модель**: detour show/hide — pool filter (caller), regex / protocol / subscription / test — match filter (`NodeFilter.passes`). NodeFilter не знает про detour — clean separation.
+  - All filters AND-комбинируются. Per-session in-memory state (как `_showDetourNodes`).
+  - Visual hint: `Icons.tune` color = primary когда есть active match-filter, даже когда panel collapsed.
+  - +27 unit tests на `NodeFilter` (extractEmojis с RIS flags, regex case-insensitive, regex invert ON/OFF, protocol exclusive, untested ping pass, AND combine, detour не в predicate).
+
+- **§068 — `NodeViewItem` view-model class extracted** ([spec](docs/spec/tasks/068-node-view-item-extract.md), [node_view_item.dart](app/lib/widgets/node_view_item.dart), [node_row.dart](app/lib/widgets/node_row.dart)). `NodeRow` widget раньше принимал 14+ explicit args через конструктор — partial view-model в форме arguments-bag. Extract сделан **внутри** PR §048 (closes §068) потому что добавление `matches: bool` для filter feature раздуло itemBuilder и стало естественно отделить «собрали snapshot строки» от «нарисовали». `NodeRow(item: NodeViewItem, ...callbacks)` — single source data shape. `Opacity(opacity: item.matches ? 1.0 : 0.4)` wrapper внутри `NodeRow.build` — single source of opacity, magic 0.4 не утекает в caller.
+
+- **OEM battery restrictions follow-up dialog** ([home_screen.dart](app/lib/screens/home_screen.dart)). После того как юзер тапнул «Allow» в нашем rationale и затем «Разрешить» в системном `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` dialog'е → app в AOSP whitelist, но **OEM (ColorOS/MIUI/MagicOS на OnePlus/OPPO/Realme/Xiaomi/Honor) имеют proprietary battery toggles поверх AOSP**, которые наш intent НЕ контролирует. Показывается follow-up dialog «Disable battery restrictions» с инструкцией («Battery usage → Don't optimize» + «On OnePlus/OPPO/Realme: Stop activity when idle → OFF») и deep-link на App Info через `ACTION_APPLICATION_DETAILS_SETTINGS`. Cooldown 24h на rationale убран — спрашиваем при каждом запуске пока permission не дан.
+- **«Restore from backup» link в empty state главного экрана** ([home_screen.dart::_buildAddServerCta](app/lib/screens/home_screen.dart)). Если у юзера нет server_lists/custom_rules (после fresh install) — под FAB «Add a server» появляется ненавязчивая кнопка «🔄 Restore from backup». Тап → SAF native file picker (`Intent.ACTION_OPEN_DOCUMENT` через `file_picker` plugin) — юзер выбирает `lxbox-backup-*.json`. После `applyImport` сразу триггерится `_subController.init()` + `AutoUpdater.maybeUpdateAll(manual, force: true)` — подписки fetch'аются в фоне без необходимости restart app'а. Snackbar «Imported: ... · fetching subscriptions…».
+
+### Removed
+
+- **Legacy `SelectableRule` режим без `preset_id`** ([§067 spec](docs/spec/tasks/067-selectable-rule-legacy-cleanup.md)). До §033 (v1.4.x) `SelectableRule` мог быть в шаблоне без `preset_id` — конвертировался в `CustomRule(kind: inline/srs)` копированием полей. С §033 (v1.5+) все рулы в `wizard_template.json` имеют `preset_id`, конвертер `selectableRuleToCustom` для empty presetId возвращал null silently — dead code.
+  - `SelectableRule.presetId` теперь `required` (default `''` удалён).
+  - `SelectableRule.fromJson` бросает `FormatException` если в шаблоне отсутствует `preset_id`.
+  - `selectableRuleToCustom` возвращает `CustomRulePreset` (non-nullable, был `?`).
+  - Убраны 2 null-check'а в `routing_screen.dart` (`_migrateLegacyRules` + `_copyPreset`).
+  - Docstring `parser_config.dart::SelectableRule` упрощён — упоминания «Legacy (1.4.x)» режима убраны.
+  - Test «без preset_id → null» переписан в «`fromJson` без preset_id → FormatException».
+
 ---
 
 ## [1.8.3] — 2026-05-12

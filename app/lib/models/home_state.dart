@@ -13,13 +13,24 @@ export 'tunnel_status.dart';
 enum NodeSortMode {
   defaultOrder('Default', Icons.swap_vert),
   latencyAsc('Ping', Icons.signal_cellular_alt),
-  nameAsc('A–Z', Icons.sort_by_alpha);
+  nameAsc('A–Z', Icons.sort_by_alpha),
+  // §071 — manual режим. В cycle НЕ входит (см. `next`). Активируется
+  // ТОЛЬКО через drag в _buildNodeList. Cycle из manual → default
+  // одновременно сбрасывает manualOrder в HomeController.cycleSortMode.
+  manual('Custom', Icons.drag_indicator);
 
   const NodeSortMode(this.label, this.icon);
   final String label;
   final IconData icon;
 
-  NodeSortMode get next => NodeSortMode.values[(index + 1) % NodeSortMode.values.length];
+  /// §071: cycle обходит `manual` — default → latencyAsc → nameAsc → default.
+  /// Manual всегда возвращает в default (exit semantics).
+  NodeSortMode get next => switch (this) {
+        NodeSortMode.defaultOrder => NodeSortMode.latencyAsc,
+        NodeSortMode.latencyAsc => NodeSortMode.nameAsc,
+        NodeSortMode.nameAsc => NodeSortMode.defaultOrder,
+        NodeSortMode.manual => NodeSortMode.defaultOrder,
+      };
 }
 
 /// Кэш derived-полей из `configRaw` (outbound proto и detour tags).
@@ -87,9 +98,19 @@ class HomeState {
     this.pingBusy = const <String, String>{},
     this.debugEvents = const <DebugEntry>[],
     this.sortMode = NodeSortMode.latencyAsc,
+    // §070 — sort options (per-session, defaults = old behaviour bit-exact).
+    this.pinDirect = true,
+    this.pinAuto = true,
+    this.resortOnManualPing = true,
+    // §070 — passive counter, bump'ается на batch ping finish / group switch /
+    // config rebuild. Используется UI-cache (_HomeScreenState._viewSortedNodes)
+    // для frozen sort при resortOnManualPing=false.
+    this.pingBatchGen = 0,
+    // §071 — manual reorder (per-session). Empty = mode неактивен или не настроен.
+    this.manualOrder = const <String>[],
     this.traffic = TrafficSnapshot.zero,
     this.connectedSince,
-    this.configStaleSinceStart = false,
+    this.configChangedNeedRestart = false,
   }) : configCache = configCache ?? ConfigCache.parse(configRaw);
 
   final String configRaw;
@@ -112,12 +133,28 @@ class HomeState {
   final Map<String, String> pingBusy;
   final List<DebugEntry> debugEvents;
   final NodeSortMode sortMode;
+  /// §070 — pin direct/auto в pinned section при non-default sort.
+  /// `defaultOrder` mode игнорирует pin (см. `_computeSortedNodes`).
+  final bool pinDirect;
+  final bool pinAuto;
+  /// §070 — pересчитывать sort при manual `runNodeUrltest` (single tag delay
+  /// update). False → UI-cache держит frozen sort до `pingBatchGen` bump.
+  final bool resortOnManualPing;
+  /// §070 — counter, bumped в HomeController на mass URLtest finish /
+  /// runGroupUrltest / group switch / config rebuild. Pure UI-cache signal,
+  /// в `_computeSortedNodes` не используется.
+  final int pingBatchGen;
+  /// §071 — user-defined order для `NodeSortMode.manual`. Empty = mode
+  /// неактивен или не настроен. Filtering: `manualOrder.where(nodes.contains)`
+  /// + новые ноды (subscription update) в конце.
+  final List<String> manualOrder;
   final TrafficSnapshot traffic;
   final DateTime? connectedSince;
-  /// True, если `saveParsedConfig` был вызван при работающем туннеле
-  /// с момента его последнего up-перехода. Значит туннель крутит config
-  /// старее, чем сохранённый. Сбрасывается на каждом up↔down переходе.
-  final bool configStaleSinceStart;
+  /// §076 (rename from `configStaleSinceStart`): True, если `saveParsedConfig`
+  /// был вызван при работающем туннеле — running config теперь устарел
+  /// относительно saved, нужен restart чтобы native перечитал.
+  /// Sticky in-memory flag, сбрасывается на каждом успешном `_startInternal`.
+  final bool configChangedNeedRestart;
 
   bool get tunnelUp => tunnel.isUp;
 
@@ -131,17 +168,32 @@ class HomeState {
   late final List<String> sortedNodes = _computeSortedNodes();
 
   List<String> _computeSortedNodes() {
-    if (sortMode == NodeSortMode.defaultOrder) return nodes;
-    const pinnedOrder = ['direct-out', kAutoOutboundTag];
+    // §070: pinDirect/pinAuto управляют наполнением pinned section во
+    // ВСЕХ modes включая `defaultOrder`. Default = pristine config order
+    // для non-pinned части, но pinned всегда сверху если toggle ON.
+    final pinnedOrder = <String>[
+      if (pinDirect) 'direct-out',
+      if (pinAuto) kAutoOutboundTag,
+    ];
     final pinned = pinnedOrder.where(nodes.contains).toList();
     final rest = nodes.where((n) => !pinnedOrder.contains(n)).toList();
     switch (sortMode) {
+      case NodeSortMode.defaultOrder:
+        // rest в pristine config order (без сортировки).
+        break;
       case NodeSortMode.latencyAsc:
         rest.sort(_compareLatency);
       case NodeSortMode.nameAsc:
         rest.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-      case NodeSortMode.defaultOrder:
-        break;
+      case NodeSortMode.manual:
+        // §071: manualOrder filtered к present nodes + новые ноды
+        // (subscription update / add server) в конец.
+        final restSet = rest.toSet();
+        final ordered = <String>[
+          ...manualOrder.where(restSet.contains),
+          ...rest.where((n) => !manualOrder.contains(n)),
+        ];
+        return [...pinned, ...ordered];
     }
     return [...pinned, ...rest];
   }
@@ -173,9 +225,14 @@ class HomeState {
     Map<String, String>? pingBusy,
     List<DebugEntry>? debugEvents,
     NodeSortMode? sortMode,
+    bool? pinDirect,
+    bool? pinAuto,
+    bool? resortOnManualPing,
+    int? pingBatchGen,
+    List<String>? manualOrder,
     TrafficSnapshot? traffic,
     Object? connectedSince = _unset,
-    bool? configStaleSinceStart,
+    bool? configChangedNeedRestart,
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
@@ -202,11 +259,16 @@ class HomeState {
       pingBusy: pingBusy ?? this.pingBusy,
       debugEvents: debugEvents ?? this.debugEvents,
       sortMode: sortMode ?? this.sortMode,
+      pinDirect: pinDirect ?? this.pinDirect,
+      pinAuto: pinAuto ?? this.pinAuto,
+      resortOnManualPing: resortOnManualPing ?? this.resortOnManualPing,
+      pingBatchGen: pingBatchGen ?? this.pingBatchGen,
+      manualOrder: manualOrder ?? this.manualOrder,
       traffic: traffic ?? this.traffic,
       connectedSince: identical(connectedSince, _unset)
           ? this.connectedSince
           : connectedSince as DateTime?,
-      configStaleSinceStart: configStaleSinceStart ?? this.configStaleSinceStart,
+      configChangedNeedRestart: configChangedNeedRestart ?? this.configChangedNeedRestart,
     );
   }
 }

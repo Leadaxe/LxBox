@@ -1,17 +1,25 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../config/consts.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
+import '../models/server_list.dart';
 import '../models/home_state.dart';
 import '../models/node_spec.dart';
+import '../services/backup_service.dart';
 import '../services/clash_api_client.dart';
+import '../services/error_format.dart';
 import '../services/version_info.dart';
 import '../widgets/node_row.dart';
+import '../widgets/node_view_item.dart';
+import 'home/node_filter.dart';
+import 'home/filter_widgets.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import 'outbound_view_screen.dart';
 import 'about_screen.dart';
@@ -27,6 +35,7 @@ import 'subscriptions_screen.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/debug_registry.dart';
 import '../services/haptic_service.dart';
+import '../services/nav/home_return_observer.dart';
 import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
 import '../services/traffic_profiler.dart';
@@ -50,15 +59,51 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   final BoxVpnClient _vpn = BoxVpnClient();
   bool _showDetourNodes = true;
   bool _autoRebuild = true;
-  /// Derived UI flag. True когда:
-  /// (а) `state.configStaleSinceStart` (sticky-флаг в HomeState: saveConfig
-  ///     происходил при tunnelUp, сбрасывается на up↔down переходах), или
-  /// (б) `_subController.configDirty` при tunnelUp (settings изменены,
-  ///     конфиг ещё не пересобран).
+
+  // §048 — node filter state (per-session in-memory, locked decision #5).
+  // `_showDetourNodes` остаётся выше — pool filter (Phase 1).
+  // Filter UI hidden by default (locked #1) — `Icons.tune` toggle expand.
+  bool _filterPanelExpanded = false;
+  // Regex (live debounced 300ms — locked #4). Checkbox toggle позволяет
+  // временно выключить filter не теряя pattern (та же UX-семантика что у
+  // `_pingFilterEnabled`). Auto-enable при вводе непустого валидного pattern.
+  // `_regexInvert` — `[!]` suffix toggle: matchает инверсно (NOT). Default
+  // off, сбрасывается на _clearRegex.
+  final TextEditingController _regexController = TextEditingController();
+  RegExp? _regexCompiled;
+  bool _regexValid = true;
+  bool _regexFilterEnabled = false;
+  bool _regexInvert = false;
+  Timer? _regexDebounceTimer;
+  // Multi-select chips
+  final Set<String> _enabledProtocols = <String>{};
+  final Set<String> _enabledSubscriptions = <String>{};
+  // Ping/Test (numeric input, debounced 300ms). Filter active только когда
+  // checkbox `_pingFilterEnabled == true` AND `_maxPingMs != null`.
+  // Раздельный toggle — позволяет временно выключить filter не теряя value.
+  final TextEditingController _pingController = TextEditingController();
+  int? _maxPingMs;
+  bool _pingFilterEnabled = false;
+  Timer? _pingDebounceTimer;
+  // Non-matching visibility (locked #7, default ON)
+  bool _showNonMatching = true;
+
+  // §070 — UI-cache для frozen sort при `state.resortOnManualPing == false`.
+  // См. spec'у — manual single ping не двигает порядок, batch / group switch /
+  // config rebuild сбрасывает через `state.pingBatchGen` bump.
+  List<String>? _cachedSorted;
+  ({NodeSortMode mode, int gen, int nodesLen, bool pinD, bool pinA})?
+      _cachedSortKey;
+  /// Derived UI flag. §076 banner gate:
+  /// (а) `_subController.configDirty` — ВСЕГДА показываем banner (независимо
+  ///     от tunnel state). Юзер видит pending changes даже когда VPN down,
+  ///     может Apply из banner.
+  /// (б) `state.configChangedNeedRestart && tunnelUp` — saved config обновлён
+  ///     во время работы tunnel, running config устарел, нужен restart.
   bool get _needsRestart {
     final state = _controller.state;
-    if (!state.tunnelUp) return false;
-    return state.configStaleSinceStart || _subController.configDirty;
+    return _subController.configDirty ||
+        (state.tunnelUp && state.configChangedNeedRestart);
   }
   Timer? _errorTimer;
 
@@ -111,6 +156,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _prevTunnel = _controller.state.tunnel;
     _prevError = _controller.state.lastError;
     _controller.addListener(_onControllerChange);
+    // §076: global home-return observer триггерит auto-rebuild когда
+    // юзер возвращается на home с любого settings screen'а.
+    homeReturnObserver.setHandler(_onReturnToHome);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_maybeShowNotificationPermissionDialog());
       unawaited(_maybeShowBatteryOptimizationDialog());
@@ -172,13 +220,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// foreground service + tunnel засыпает в Doze → интернет «отваливается»
   /// до следующего открытия приложения.
   ///
-  /// Rate-limit: не чаще 1 раза в 24 часа. Timestamp последнего показа —
-  /// `battery_opt_last_prompt_ms` в SettingsStorage. Пишется ДО показа:
-  /// если юзер убьёт app пока modal открыт, следующий запуск не покажет
-  /// сразу заново. Reliability > persistence — лучше пропустить показ,
-  /// чем nag'ить дважды в минуту.
-  static const _batteryPromptKey = 'battery_opt_last_prompt_ms';
-  static const _batteryPromptCooldownMs = 24 * 60 * 60 * 1000; // 24h
+  /// Без cooldown: показываем при **каждом** запуске пока юзер не даст
+  /// permission. Как только `isIgnoringBatteryOptimizations()=true` — dialog
+  /// никогда больше не появится.
 
   /// On Android 13+ (API 33+) `POST_NOTIFICATIONS` is a runtime permission.
   /// Without it, the foreground-service notification used by VPN may not
@@ -226,12 +270,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   Future<void> _maybeShowBatteryOptimizationDialog() async {
     final ok = await _vpn.isIgnoringBatteryOptimizations();
     if (ok) return;
-    final lastMs = int.tryParse(
-            await SettingsStorage.getVar(_batteryPromptKey, '0')) ??
-        0;
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    if (nowMs - lastMs < _batteryPromptCooldownMs) return;
-    await SettingsStorage.setVar(_batteryPromptKey, nowMs.toString());
     if (!mounted) return;
     await showDialog<void>(
       context: context,
@@ -252,8 +290,52 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
             onPressed: () async {
               Navigator.of(ctx).pop();
               await _vpn.openBatteryOptimizationSettings();
+              // OEM (ColorOS/MIUI/MagicOS) имеет proprietary battery toggles
+              // поверх AOSP — наш REQUEST_IGNORE_BATTERY_OPTIMIZATIONS их не
+              // контролирует. Followup показывается всегда (независимо от
+              // того что юзер выбрал в AOSP dialog) — OEM toggles важнее
+              // на проблемных device'ах.
+              if (mounted) await _showOemBatteryFollowupDialog();
             },
             child: const Text('Allow'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Standard AOSP REQUEST_IGNORE_BATTERY_OPTIMIZATIONS добавляет app в
+  /// AOSP whitelist, но на OEM (ColorOS/OxygenOS на OnePlus/OPPO/Realme,
+  /// MIUI на Xiaomi, MagicOS на Honor) есть **отдельные** proprietary
+  /// toggle'ы поверх AOSP («Background activity», «Stop when idle»),
+  /// которые AOSP intent НЕ контролирует. Open App Info чтобы юзер
+  /// тапнул их вручную.
+  Future<void> _showOemBatteryFollowupDialog() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog.adaptive(
+        title: const Text('Disable battery restrictions'),
+        content: const Text(
+          'To keep the VPN running in background, also disable battery '
+          'restrictions for L×Box. The settings screen will open — find '
+          'and toggle:\n\n'
+          '• "Battery usage" → "Don\'t optimize" or "Allow background '
+          'activity"\n\n'
+          '• On OnePlus / OPPO / Realme also:\n'
+          '  "Stop activity when idle" → OFF',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              await _vpn.openAppDetailsSettings();
+            },
+            child: const Text('Open Settings'),
           ),
         ],
       ),
@@ -352,25 +434,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// и заведение periodic-таймера на 1 час). Порядок важен — AutoUpdater
   /// итерирует `entries`, они должны быть загружены с диска.
   ///
-  /// Bootstrap-config после init: если в storage есть subs но native ещё
-  /// не имеет загруженного config'а (`state.configRaw.isEmpty`) — авто-
-  /// генерируем и сохраняем. Закрывает класс «UI пустой после backup-
-  /// import + restart» / «storage был мутирован через Debug API, нужно
-  /// руками идти в Subscriptions чтобы UI ожил».
+  /// Bootstrap-config после init:
+  ///   - если в storage есть subs но native ещё не имеет загруженного config'а
+  ///     (`state.configRaw.isEmpty`) — auto-bootstrap (исходный сценарий).
+  ///   - §076: если `subController.configDirty == true` (восстановлен из
+  ///     mtime compare в `init`, означает kill mid-edit оставил settings
+  ///     новее saved config) — также bootstrap. Тихое согласование.
+  ///
+  /// Закрывает класс «UI пустой после backup-import + restart» / «storage
+  /// был мутирован через Debug API» / «kill во время editing → старый config».
   Future<void> _initSubsAndAutoUpdate() async {
     await _subController.init();
     _autoUpdater.start();
 
     // Wait one frame: HomeController.init() is also unawaited above; даём
     // ему успеть прочитать существующий config (если был). После этого
-    // решаем: bootstrap нужен только если config реально пустой.
+    // решаем: bootstrap нужен только если config реально пустой ИЛИ dirty.
     await Future<void>.delayed(const Duration(milliseconds: 100));
     if (!mounted) return;
-    if (_subController.entries.isNotEmpty &&
-        _controller.state.configRaw.isEmpty) {
+    final needBootstrap = _subController.entries.isNotEmpty &&
+        (_controller.state.configRaw.isEmpty || _subController.configDirty);
+    if (needBootstrap) {
       final config = await _subController.generateConfig();
       if (config != null && mounted) {
         await _controller.saveParsedConfig(config);
+        // §076: rebuild успешен → флаг гаснет (in-memory; mtime теперь
+        // tied — saved config обновлён, settings file не изменился).
+        _subController.configDirty = false;
+        setState(() {});
       }
     }
   }
@@ -384,6 +475,222 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _autoRebuild = val == 'true';
   }
 
+  // §048 — filter event handlers + lookup closures.
+
+  /// Debounced 300ms regex compile. Invalid pattern → `_regexValid = false`,
+  /// `_regexCompiled = null` (filter no-op). Auto-enable checkbox при вводе
+  /// валидного non-empty pattern (UX: input «работает» без отдельного тапа
+  /// checkbox — те же правила что у `_onPingChanged`).
+  void _onRegexChanged(String text) {
+    _regexDebounceTimer?.cancel();
+    _regexDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      setState(() {
+        if (text.isEmpty) {
+          _regexCompiled = null;
+          _regexValid = true;
+        } else {
+          try {
+            _regexCompiled = RegExp(text, caseSensitive: false);
+            _regexValid = true;
+            _regexFilterEnabled = true;
+          } catch (_) {
+            _regexCompiled = null;
+            _regexValid = false;
+          }
+        }
+      });
+    });
+  }
+
+  void _clearRegex() {
+    _regexController.clear();
+    _regexDebounceTimer?.cancel();
+    setState(() {
+      _regexCompiled = null;
+      _regexValid = true;
+      _regexFilterEnabled = false;
+      _regexInvert = false;
+    });
+  }
+
+  void _onEmojiChipTap(String emoji) {
+    final current = _regexController.text;
+    // Если поле не пустое — добавляем OR-pattern (`|emoji`). Tap на 🇷🇺 потом
+    // 🇺🇸 → `🇷🇺|🇺🇸` (regex OR), matchает обе страны. Иначе тапы строили бы
+    // sequence `🇷🇺🇺🇸` который не matchает ничего.
+    final next = current.isEmpty ? emoji : '$current|$emoji';
+    _regexController.text = next;
+    _regexController.selection =
+        TextSelection.collapsed(offset: _regexController.text.length);
+    _onRegexChanged(next);
+  }
+
+  /// Debounced 300ms ping parse. Empty / unparsable → `_maxPingMs = null`.
+  /// Auto-enable checkbox когда юзер ввёл валидное число (UX: input «работает»
+  /// без отдельного тапа checkbox).
+  void _onPingChanged(String text) {
+    _pingDebounceTimer?.cancel();
+    _pingDebounceTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      final n = int.tryParse(text);
+      setState(() {
+        _maxPingMs = (n != null && n > 0) ? n : null;
+        if (_maxPingMs != null) _pingFilterEnabled = true;
+      });
+    });
+  }
+
+  void _clearPing() {
+    _pingController.clear();
+    _pingDebounceTimer?.cancel();
+    setState(() {
+      _maxPingMs = null;
+      _pingFilterEnabled = false;
+    });
+  }
+
+  void _toggleProtocol(String proto) {
+    setState(() {
+      if (!_enabledProtocols.add(proto)) {
+        _enabledProtocols.remove(proto);
+      }
+    });
+  }
+
+  void _toggleSubscription(String id) {
+    setState(() {
+      if (!_enabledSubscriptions.add(id)) {
+        _enabledSubscriptions.remove(id);
+      }
+    });
+  }
+
+  /// Lookup protocol for tag — учитывает urltest group fallback (см. §048
+  /// «Protocol detection»). Возвращает null если cache miss и urltest нет.
+  String? _protocolOfTag(String tag, HomeState state) {
+    final cache = state.configCache;
+    final urltestNow = ClashApiClient.urltestNow(state.proxiesJson, tag);
+    return cache.protoByTag[tag] ??
+        (urltestNow != null ? cache.protoByTag[urltestNow] : null);
+  }
+
+  /// Lookup subscription id для tag. Возвращает null если UserServer / не
+  /// в trackable subscription pool (caller treat'ит как `'custom'` category).
+  String? _subscriptionOfTag(String tag) {
+    for (final e in _subController.entries) {
+      final list = e.list;
+      if (list is SubscriptionServers) {
+        if (list.nodes.any((n) => n.tag == tag)) return e.id;
+      }
+    }
+    return null;
+  }
+
+  /// True если хоть один match-filter активен (для visual hint icon color).
+  bool get _isFilterActive =>
+      (_regexFilterEnabled && _regexCompiled != null) ||
+      _enabledProtocols.isNotEmpty ||
+      _enabledSubscriptions.isNotEmpty ||
+      (_pingFilterEnabled && _maxPingMs != null);
+
+  /// §070 — true если хоть одна sort-опция отклонена от default (для
+  /// yellow dot indicator).
+  bool _isSortNonDefault(HomeState s) =>
+      !s.pinDirect || !s.pinAuto || !s.resortOnManualPing;
+
+  /// §070 — frozen sort при `resortOnManualPing == false`. Cache hit ↔
+  /// (sortMode, pingBatchGen, nodes.length, pinDirect, pinAuto) совпадают
+  /// с предыдущим вызовом + все cached tags ещё в pool. Manual single ping
+  /// → новый state, та же key → cache hit → строка не прыгает.
+  List<String> _viewSortedNodes(HomeState s) {
+    if (s.resortOnManualPing) {
+      _cachedSortKey = null;
+      _cachedSorted = null;
+      return s.sortedNodes;
+    }
+    final key = (
+      mode: s.sortMode,
+      gen: s.pingBatchGen,
+      nodesLen: s.nodes.length,
+      pinD: s.pinDirect,
+      pinA: s.pinAuto,
+    );
+    if (key == _cachedSortKey && _cachedSorted != null) {
+      // sanity: все cached tags ещё в pool (защита от ноды удалённой из
+      // подписки между bump'ами).
+      if (_cachedSorted!.every(s.nodes.contains)) return _cachedSorted!;
+    }
+    _cachedSortKey = key;
+    _cachedSorted = List<String>.unmodifiable(s.sortedNodes);
+    return _cachedSorted!;
+  }
+
+  /// §070 — modal bottom sheet по long-press на sort button. Тот же
+  /// pattern что у `_showPingSettings` — sheet остаётся открытым пока
+  /// юзер не закроет, можно тоггать несколько опций подряд. `StatefulBuilder`
+  /// — локальный setState чтоб checkbox'ы перерисовывались immediately,
+  /// без перезапуска sheet'а.
+  Future<void> _showSortOptionsMenu(BuildContext ctx) async {
+    await showModalBottomSheet<void>(
+      context: ctx,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (sheetCtx, setSheetState) {
+          // Читаем свежий state каждый rebuild — controller между нашими
+          // setSheetState мог уже emit'нуть.
+          final s = _controller.state;
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Sort options',
+                      style: Theme.of(sheetCtx).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    value: s.pinDirect,
+                    onChanged: (v) {
+                      _controller.setPinDirect(v ?? false);
+                      setSheetState(() {});
+                    },
+                    title: const Text('Pin DIRECT to top'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                  CheckboxListTile(
+                    value: s.pinAuto,
+                    onChanged: (v) {
+                      _controller.setPinAuto(v ?? false);
+                      setSheetState(() {});
+                    },
+                    title: const Text('Pin AUTO to top'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                  CheckboxListTile(
+                    value: s.resortOnManualPing,
+                    onChanged: (v) {
+                      _controller.setResortOnManualPing(v ?? false);
+                      setSheetState(() {});
+                    },
+                    title: const Text('Re-sort on manual ping'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   void dispose() {
     // Порядок: сначала отменяем side-effects (timer, listener),
@@ -392,9 +699,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // созданию).
     _errorTimer?.cancel();
     _errorTimer = null;
+    _regexDebounceTimer?.cancel();
+    _regexDebounceTimer = null;
+    _pingDebounceTimer?.cancel();
+    _pingDebounceTimer = null;
+    _regexController.dispose();
+    _pingController.dispose();
     _controller.removeListener(_onControllerChange);
     UpdateChecker.I.latest.removeListener(_onLatestUpdateChanged);
     WidgetsBinding.instance.removeObserver(this);
+    homeReturnObserver.clearHandler();
     _autoUpdater.dispose();
     // Ownership contract: HomeScreen владеет controller'ами + анимацией.
     // Раньше dispose пропускался — на проде ОС гасит процесс, но в
@@ -414,20 +728,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     }
   }
 
+  /// §076: drawer item → close drawer + push screen. Auto-rebuild на
+  /// возврат покрывается глобальным `homeReturnObserver` (см.
+  /// `services/nav/home_return_observer.dart`) — никаких per-callsite
+  /// `.then()` callback'ов не нужно.
   void _pushRoute(Widget screen) {
     Navigator.of(context).pop();
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen)).then((_) async {
-      // Re-read auto-rebuild in case it changed in App Settings
-      final val = await SettingsStorage.getVar('auto_rebuild', 'true');
-      _autoRebuild = val == 'true';
-      if (_subController.configDirty) {
-        if (_autoRebuild) {
-          unawaited(_rebuildAndClearDirty());
-        } else {
-          setState(() {});
-        }
-      }
-    });
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
   }
 
   @override
@@ -629,7 +936,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               ),
             ),
           ],
-          if (_needsRestart && state.tunnelUp) ...[
+          // §076: показываем «Restart» banner ТОЛЬКО когда rebuild уже
+          // сделан (configDirty=false) но running config устарел. Если
+          // configDirty=true — выше показывается «Apply» banner, юзер
+          // сначала тапнет его → rebuild → configDirty=false → configChangedNeedRestart=true
+          // → этот banner появится автоматически. Никаких stacked'ов.
+          if (state.tunnelUp &&
+              state.configChangedNeedRestart &&
+              !_subController.configDirty) ...[
             const SizedBox(height: 8),
             GestureDetector(
               // Не гасим `_needsRestart` на тап — если юзер отменит Stop-диалог,
@@ -1158,30 +1472,73 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               ),
             ],
             const Spacer(),
+            // §070: sort button = InkWell с tap (cycle) + long-press
+            // (popup menu) вместо IconButton (у того нет onLongPress).
+            // Yellow dot overlay когда хоть одна sort-опция non-default.
+            // Icon в `manual` mode = ⠿ (§071), невозможный через cycle.
+            Tooltip(
+              message: _controller.state.sortMode.label,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  InkWell(
+                    onTap: _controller.state.nodes.isEmpty
+                        ? null
+                        : _controller.cycleSortMode,
+                    onLongPress: _controller.state.nodes.isEmpty
+                        ? null
+                        : () => _showSortOptionsMenu(context),
+                    borderRadius: BorderRadius.circular(18),
+                    child: SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: Center(
+                        child: Icon(
+                          _controller.state.sortMode.icon,
+                          size: 20,
+                          color: _controller.state.nodes.isEmpty
+                              ? Theme.of(context).disabledColor
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_isSortNonDefault(_controller.state))
+                    Positioned(
+                      right: 4,
+                      top: 4,
+                      child: IgnorePointer(
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.amber,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            // §048 — `Icons.tune` теперь IconButton expand toggle, не popup.
+            // Existing «Show detour servers» переехал внутрь expanded panel.
+            // Color = primary когда есть active match-filter (visual hint что
+            // фильтрация активна даже когда panel collapsed).
             IconButton(
-              tooltip: _controller.state.sortMode.label,
+              tooltip: _filterPanelExpanded ? 'Hide filters' : 'Show filters',
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              onPressed: _controller.state.nodes.isEmpty
-                  ? null
-                  : _controller.cycleSortMode,
-              icon: Icon(_controller.state.sortMode.icon, size: 20),
-            ),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.tune, size: 20),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              onSelected: (v) {
-                if (v == 'detour') setState(() => _showDetourNodes = !_showDetourNodes);
-              },
-              itemBuilder: (_) => [
-                CheckedPopupMenuItem(
-                  value: 'detour',
-                  checked: _showDetourNodes,
-                  child: const Text('Show detour servers'),
-                ),
-              ],
+              onPressed: () => setState(
+                  () => _filterPanelExpanded = !_filterPanelExpanded),
+              icon: Icon(
+                Icons.tune,
+                size: 20,
+                color: _isFilterActive
+                    ? Theme.of(context).colorScheme.primary
+                    : null,
+              ),
             ),
           ],
         ),
@@ -1212,6 +1569,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (mounted) setState(() {});
   }
 
+  /// §076: callback зарегистрированный в `homeReturnObserver`. Срабатывает
+  /// когда юзер вернулся на home (root route стал top). Если есть pending
+  /// changes и юзер хочет авто-rebuild — пересобираем lazy.
+  ///
+  /// Re-read `auto_rebuild` на каждый возврат — юзер мог изменить
+  /// preference в App Settings между визитами.
+  void _onReturnToHome() {
+    if (!mounted) return;
+    if (!_subController.configDirty) return;
+    if (_subController.busy) return;
+    unawaited(() async {
+      final val = await SettingsStorage.getVar('auto_rebuild', 'true');
+      _autoRebuild = val == 'true';
+      if (!mounted) return;
+      if (_autoRebuild) {
+        await _rebuildAndClearDirty();
+      } else {
+        setState(() {});
+      }
+    }());
+  }
+
   Future<void> _rebuildConfig() async {
     // Только пересборка конфига — без HTTP-fetch'а подписок. За fetch
     // отвечает AutoUpdater (по 4 триггерам) и manual ⟳ на Servers.
@@ -1221,7 +1600,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       final ok = await _controller.saveParsedConfig(config);
       if (ok && mounted) {
         final nodeCount = _countNodesInConfig(config);
-        // configStaleSinceStart выставляется внутри saveParsedConfig,
+        // configChangedNeedRestart выставляется внутри saveParsedConfig,
         // AnimatedBuilder переотрисует через _needsRestart getter.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1588,10 +1967,122 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 child: const Icon(Icons.add, size: 32),
               ),
             ),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: _restoreFromBackup,
+              icon: const Icon(Icons.restore, size: 18),
+              label: const Text('Restore from backup'),
+              style: TextButton.styleFrom(
+                foregroundColor: cs.onSurfaceVariant,
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  /// Empty-state quick-action: open SAF file picker → parse backup file →
+  /// `applyImport(merge: false, include: all)` → snackbar + restart hint.
+  /// Без preview dialog'а (юзер в empty state, явно хочет restore целиком —
+  /// никаких категорий снимать не надо). Polished restore через
+  /// `Settings → Backup` остаётся для merge-flow и selective import'а.
+  Future<void> _restoreFromBackup() async {
+    try {
+      final picked = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        withData: true,
+      );
+      if (picked == null || picked.files.isEmpty) return;
+      final file = picked.files.single;
+      String? raw;
+      if (file.bytes != null) {
+        try {
+          raw = const Utf8Decoder(allowMalformed: false).convert(file.bytes!);
+        } catch (_) {}
+      } else if (file.path != null) {
+        raw = await File(file.path!).readAsString();
+      }
+      if (raw == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not read file.')),
+          );
+        }
+        return;
+      }
+
+      const service = BackupService();
+      final BackupContents contents;
+      try {
+        contents = await service.parseImport(raw);
+      } on FormatException catch (e) {
+        if (!mounted) return;
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Invalid backup'),
+            content: Text(e.message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      final include = contents.availableCategories();
+      final apply = await service.applyImport(
+        contents,
+        merge: false,
+        include: include,
+      );
+      if (!mounted) return;
+
+      // Re-read storage в in-memory state controller'ов: `applyImport` записал
+      // в storage, но `_subController` всё ещё хранит entries времени init'а
+      // (когда server_lists был пуст). Без `init()` повтор юзер увидит «нет
+      // серверов» пока не перезапустит app.
+      await _subController.init();
+      // Backup хранит только URL/name/meta подписок — nodes re-fetch'аются.
+      // Triggers fetch немедленно (manual + force обходит auto_update_subs
+      // toggle и min-retry cooldown).
+      unawaited(
+          _autoUpdater.maybeUpdateAll(UpdateTrigger.manual, force: true));
+
+      final parts = <String>[];
+      if (apply.serverListsApplied > 0) {
+        parts.add('${apply.serverListsApplied} server lists');
+      }
+      if (apply.routingApplied > 0) parts.add('${apply.routingApplied} rules');
+      if (apply.appSettingsApplied > 0) {
+        parts.add('${apply.appSettingsApplied} app settings');
+      }
+      if (apply.debugConfigApplied > 0) parts.add('debug config');
+      if (apply.vpnSettingsApplied > 0) {
+        parts.add('${apply.vpnSettingsApplied} VPN settings');
+      }
+      final summary = parts.isEmpty
+          ? 'Imported nothing'
+          : 'Imported: ${parts.join(', ')} · fetching subscriptions…';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(summary),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Restore failed: ${formatUserError(e)}')),
+        );
+      }
+    }
   }
 
   Widget _buildNodeList(BuildContext context, HomeState state) {
@@ -1668,39 +2159,174 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         ),
       );
     }
-    final displayNodes = _showDetourNodes
-        ? state.sortedNodes
-        : state.sortedNodes.where((t) => !t.startsWith(kDetourTagPrefix)).toList();
+    // §048 — двухфазная модель (см. spec):
+    // Phase 1 — pool filter: detour show/hide. Нода **отсутствует** в render
+    // если detour off и tag detour-prefixed.
+    // §070: используем _viewSortedNodes — frozen sort при resortOnManualPing=false
+    // (manual single ping не дёргает порядок).
+    final allTags = _viewSortedNodes(state);
+    final pool = _showDetourNodes
+        ? allTags
+        : allTags.where((t) => !t.startsWith(kDetourTagPrefix)).toList();
+
     // configCache парсится один раз при saveParsedConfig (см. HomeState),
     // здесь просто читаем. Раньше jsonDecode шёл на каждый rebuild
     // ListView — с 50+ нодами и сортировкой это был hot-path выжиматель.
     final cache = state.configCache;
+
+    // Phase 2 — match filter: split pool на matching + nonMatching.
+    // NodeFilter НЕ знает про detour — он работает с уже-фильтрованным pool.
+    final filter = NodeFilter(
+      // Regex filter активен только когда checkbox включён (та же семантика
+      // что у `_pingFilterEnabled` — позволяет временно выключить не теряя
+      // pattern).
+      regex: _regexFilterEnabled ? _regexCompiled : null,
+      regexInvert: _regexInvert,
+      protocols: _enabledProtocols,
+      subscriptions: _enabledSubscriptions,
+      // Test filter активен только когда checkbox включён.
+      maxPingMs: _pingFilterEnabled ? _maxPingMs : null,
+      protocolOf: (t) => _protocolOfTag(t, state),
+      subscriptionOf: _subscriptionOfTag,
+      pingOf: (t) => state.lastDelay[t],
+    );
+    final matching = <String>[];
+    final nonMatching = <String>[];
+    for (final tag in pool) {
+      if (filter.passes(tag)) {
+        matching.add(tag);
+      } else {
+        nonMatching.add(tag);
+      }
+    }
+    final matchingSet = matching.toSet();
+
+    // Render list = matching + (showNonMatching ? nonMatching : []).
+    final displayList = _showNonMatching
+        ? <String>[...matching, ...nonMatching]
+        : matching;
+
+    // Available для chips — из всего pool (не от current filter state).
+    // Emoji — из allTags (locked decision #3, включая detour).
+    final emojis = NodeFilter.extractEmojis(allTags);
+    final availableProtocols = <String>{};
+    for (final t in pool) {
+      final p = _protocolOfTag(t, state);
+      if (p != null) availableProtocols.add(p);
+    }
+    final subOptions = <(String, String)>[];
+    for (final e in _subController.entries) {
+      final list = e.list;
+      // Показываем подписку только если она enabled И в ней есть хоть 1 нода.
+      // Disabled / пустые → шум, не дают полезный chip.
+      if (list is SubscriptionServers && e.enabled && list.nodes.isNotEmpty) {
+        subOptions.add((e.id, e.displayName));
+      }
+    }
+    // Special 'custom' chip — если в pool есть UserServer (subscriptionOf == null).
+    final hasCustom = pool.any((t) => _subscriptionOfTag(t) == null);
+    if (hasCustom) subOptions.add(('custom', 'Custom'));
+
     return Expanded(
-      child: RefreshIndicator(
-        onRefresh: _controller.reloadProxies,
-        child: ListView.separated(
-          padding: EdgeInsets.zero,
-          itemCount: displayNodes.length,
-          separatorBuilder: (_, _) => Divider(
-            height: 1,
-            thickness: 1,
-            color: Theme.of(context).colorScheme.outlineVariant.withAlpha(128),
+      child: Column(
+        children: [
+          if (_filterPanelExpanded)
+            _buildFilterPanel(
+              context,
+              emojis: emojis,
+              availableProtocols: availableProtocols.toList()..sort(),
+              subOptions: subOptions,
+            ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _controller.reloadProxies,
+              // §071: ReorderableListView вместо ListView.separated.
+              // - buildDefaultDragHandles: false — мы провайдим свои через
+              //   transparent strip на левом 5% края каждого non-pinned ряда.
+              // - Separator делается через BorderSide bottom внутри itemBuilder
+              //   (ReorderableListView не имеет separatorBuilder).
+              // - pinnedCount определяется sequential check'ом первых элементов
+              //   displayList — robust против фильтра §048 (если pinned попал
+              //   в nonMatching, он не на index 0 → pinnedCount=0, корректно).
+              child: _buildReorderableNodeList(
+                context,
+                state: state,
+                displayList: displayList,
+                cache: cache,
+                matchingSet: matchingSet,
+              ),
+            ),
           ),
-          itemBuilder: (context, i) {
-            final tag = displayNodes[i];
-            final urltestNow =
-                ClashApiClient.urltestNow(state.proxiesJson, tag);
-            // Определяем URLTest-ли тэг (даже если now пустой — тип есть).
-            final proxyEntry =
-                ClashApiClient.proxyEntry(state.proxiesJson, tag);
-            final isUrltestGroup = proxyEntry != null &&
-                (proxyEntry['type']?.toString().toLowerCase() ?? '')
-                    .contains('urltest');
-            // Для urltest-группы (auto) сам тэг — control-узел без
-            // протокола; берём proto той ноды, которую urltest сейчас выбрал.
-            final protoType = cache.protoByTag[tag] ??
-                (urltestNow != null ? cache.protoByTag[urltestNow] : null);
-            return NodeRow(
+        ],
+      ),
+    );
+  }
+
+  /// §071 — ReorderableListView для нод. Pinned section (direct/auto)
+  /// non-draggable; остальное — Stack с transparent 5%-strip overlay'ом
+  /// слева, который ловит long-press+drag через `ReorderableDragStartListener`.
+  /// Drag → `commitManualReorder` переключает в `NodeSortMode.manual` +
+  /// сохраняет новый порядок.
+  Widget _buildReorderableNodeList(
+    BuildContext context, {
+    required HomeState state,
+    required List<String> displayList,
+    required ConfigCache cache,
+    required Set<String> matchingSet,
+  }) {
+    // §070+§071: pinnedCount определяем sequential проверкой первых элементов.
+    // Если фильтр §048 затолкал pinned в nonMatching → pin не на index 0 →
+    // pinnedCount=0 (drag-handle покажется и на pinned, но это корректно
+    // т.к. формально он не pinned в текущем render'е).
+    int pinnedCount = 0;
+    if (state.pinDirect &&
+        pinnedCount < displayList.length &&
+        displayList[pinnedCount] == 'direct-out') {
+      pinnedCount++;
+    }
+    if (state.pinAuto &&
+        pinnedCount < displayList.length &&
+        displayList[pinnedCount] == kAutoOutboundTag) {
+      pinnedCount++;
+    }
+
+    final dividerColor =
+        Theme.of(context).colorScheme.outlineVariant.withAlpha(128);
+
+    return ReorderableListView.builder(
+      padding: EdgeInsets.zero,
+      buildDefaultDragHandles: false,
+      itemCount: displayList.length,
+      onReorder: (oldIndex, newIndex) {
+        // ReorderableListView convention: при move-down newIndex отступает.
+        if (newIndex > oldIndex) newIndex -= 1;
+        if (oldIndex < pinnedCount) return; // pinned ряды не двигаются
+        if (newIndex < pinnedCount) newIndex = pinnedCount; // не дроп в pinned
+        final restOnly = displayList.skip(pinnedCount).toList();
+        final restOld = oldIndex - pinnedCount;
+        final restNew = newIndex - pinnedCount;
+        final moved = restOnly.removeAt(restOld);
+        restOnly.insert(restNew, moved);
+        _controller.commitManualReorder(restOnly);
+      },
+      itemBuilder: (ctx, i) {
+        final tag = displayList[i];
+        final urltestNow =
+            ClashApiClient.urltestNow(state.proxiesJson, tag);
+        final proxyEntry = ClashApiClient.proxyEntry(state.proxiesJson, tag);
+        final isUrltestGroup = proxyEntry != null &&
+            (proxyEntry['type']?.toString().toLowerCase() ?? '')
+                .contains('urltest');
+        final protoType = cache.protoByTag[tag] ??
+            (urltestNow != null ? cache.protoByTag[urltestNow] : null);
+        final row = DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: dividerColor, width: 1),
+            ),
+          ),
+          child: NodeRow(
+            item: NodeViewItem(
               tag: tag,
               active: tag == state.activeInGroup,
               highlighted: tag == state.highlightedNode,
@@ -1708,21 +2334,135 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               pingBusy: state.pingBusy[tag] == '…',
               tunnelUp: state.tunnelUp,
               busy: state.busy,
-              onHighlight: () => _controller.setHighlightedNode(tag),
-              onActivate: () => unawaited(_controller.switchNode(tag)),
-              onPing: () => unawaited(_controller.runNodeUrltest(tag)),
-              onCopy: (mode) => _copyNodeJson(tag, state, mode),
-              onCopyUri: () => _copyNodeUri(tag),
-              onViewJson: () => _viewOutboundJson(tag, state),
               urltestNow: urltestNow,
-              onRunUrltest: isUrltestGroup
-                  ? () => unawaited(_controller.runGroupUrltest(tag))
-                  : null,
               hasDetour: cache.detourTags.contains(tag),
-              protocolLabel: protoType != null ? _protoLabel(protoType) : null,
-            );
-          },
+              protocolLabel:
+                  protoType != null ? _protoLabel(protoType) : null,
+              matches: matchingSet.contains(tag),
+            ),
+            onHighlight: () => _controller.setHighlightedNode(tag),
+            onActivate: () => unawaited(_controller.switchNode(tag)),
+            onPing: () => unawaited(_controller.runNodeUrltest(tag)),
+            onCopy: (mode) => _copyNodeJson(tag, state, mode),
+            onCopyUri: () => _copyNodeUri(tag),
+            onViewJson: () => _viewOutboundJson(tag, state),
+            onRunUrltest: isUrltestGroup
+                ? () => unawaited(_controller.runGroupUrltest(tag))
+                : null,
+          ),
+        );
+        // Pinned ряды — без grab strip.
+        if (i < pinnedCount) {
+          return KeyedSubtree(key: ValueKey('node-$tag'), child: row);
+        }
+        // Non-pinned ряды — overlay strip 5% от ширины слева (transparent).
+        // LayoutBuilder даёт actual row width → strip всегда proportional.
+        return KeyedSubtree(
+          key: ValueKey('node-$tag'),
+          child: LayoutBuilder(
+            builder: (ctx, c) => Stack(
+              children: [
+                row,
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: c.maxWidth * 0.08,
+                  // ReorderableDelayedDragStartListener (long-press → drag)
+                  // вместо ReorderableDragStartListener (immediate). С
+                  // immediate scroll-жест Scrollable выигрывает gesture
+                  // arena у нашего vertical drag и reorder не начинается.
+                  // Delayed обходит арбитраж: scroll работает immediately,
+                  // drag активируется после long-press hold.
+                  child: ReorderableDelayedDragStartListener(
+                    index: i,
+                    // Container(color:...) — иначе пустой SizedBox не
+                    // hit-testable (RenderConstrainedBox.hitTestSelf=false,
+                    // нет child'а → жест проваливается на NodeRow ниже,
+                    // InkWell его съедает).
+                    child: Container(color: Colors.transparent),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// §048 — Filter panel (expanded). Composed: regex field + emoji chips +
+  /// protocol chips + subscription chips + ping field + Show-detour +
+  /// Show-non-matching.
+  Widget _buildFilterPanel(
+    BuildContext context, {
+    required List<String> emojis,
+    required List<String> availableProtocols,
+    required List<(String, String)> subOptions,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        border: Border(
+          bottom: BorderSide(color: cs.outlineVariant.withAlpha(128)),
         ),
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          RegexFilterField(
+            controller: _regexController,
+            onChanged: _onRegexChanged,
+            valid: _regexValid,
+            enabled: _regexFilterEnabled,
+            onEnabledChanged: (v) => setState(() => _regexFilterEnabled = v),
+            invert: _regexInvert,
+            onInvertChanged: (v) => setState(() => _regexInvert = v),
+            onClear: _clearRegex,
+          ),
+          if (emojis.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            EmojiChipsRow(emojis: emojis, onTap: _onEmojiChipTap),
+          ],
+          if (availableProtocols.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            MultiSelectChipsRow(
+              options: [
+                for (final p in availableProtocols) (p, _protoLabel(p)),
+              ],
+              enabled: _enabledProtocols,
+              onToggle: _toggleProtocol,
+            ),
+          ],
+          if (subOptions.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            MultiSelectChipsRow(
+              options: subOptions,
+              enabled: _enabledSubscriptions,
+              onToggle: _toggleSubscription,
+            ),
+          ],
+          const SizedBox(height: 4),
+          PingFilterField(
+            controller: _pingController,
+            onChanged: _onPingChanged,
+            enabled: _pingFilterEnabled,
+            onEnabledChanged: (v) => setState(() => _pingFilterEnabled = v),
+            onClear: _clearPing,
+          ),
+          FilterCheckboxRow(
+            label: 'Show detour servers',
+            value: _showDetourNodes,
+            onChanged: (v) => setState(() => _showDetourNodes = v),
+          ),
+          FilterCheckboxRow(
+            label: 'Show non-matching (dimmed)',
+            value: _showNonMatching,
+            onChanged: (v) => setState(() => _showNonMatching = v),
+          ),
+        ],
       ),
     );
   }

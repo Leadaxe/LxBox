@@ -3,74 +3,68 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../config/consts.dart';
+import 'node_view_item.dart';
 
+/// One row в node list на главной screen'е. Read-only widget от
+/// [NodeViewItem] data + callbacks.
+///
+/// Specs:
+/// - §068 — extract view-model class (item-based constructor вместо 14
+///   explicit args)
+/// - §048 — `item.matches == false` → render с opacity 0.4 (single source
+///   of opacity, magic 0.4 не утекает в caller)
 class NodeRow extends StatelessWidget {
   const NodeRow({
     super.key,
-    required this.tag,
-    required this.active,
-    required this.highlighted,
-    required this.delay,
-    required this.pingBusy,
-    required this.tunnelUp,
-    required this.busy,
+    required this.item,
     required this.onHighlight,
     required this.onActivate,
     required this.onPing,
     this.onCopy,
     this.onCopyUri,
     this.onViewJson,
-    this.urltestNow,
     this.onRunUrltest,
-    this.hasDetour = false,
-    this.protocolLabel,
   });
 
-  final String tag;
-  final bool active;
-  final bool highlighted;
-  final int? delay;
-  final bool pingBusy;
-  final bool tunnelUp;
-  final bool busy;
+  final NodeViewItem item;
   final VoidCallback onHighlight;
   final VoidCallback onActivate;
   final VoidCallback onPing;
+
   /// Called with 'server', 'detour', or 'both'.
   final void Function(String mode)? onCopy;
+
   /// Called when user wants the original URI (vless://, wireguard://, …).
   final VoidCallback? onCopyUri;
   final VoidCallback? onViewJson;
-  /// If this node is a URLTest group, shows which node it auto-selected.
-  final String? urltestNow;
+
   /// Non-null only for URLTest group tags — triggers `/group/<tag>/delay`
-  /// which forces sing-box to re-test all members and update `now`.
+  /// которое forces sing-box re-test всех members и update `now`.
   final VoidCallback? onRunUrltest;
-  final bool hasDetour;
-  /// Compact protocol label (e.g. "Hy2 + TLS", "VLESS + TLS", "WG").
-  /// Shown справа от имени ноды, ниже delay'я не лезет, серый цвет.
-  final String? protocolLabel;
 
   /// Right-side delay label (или PING… / ERR), цвет по latency.
   String get _delayLabel {
-    if (pingBusy) return 'PING…';
+    if (item.pingBusy) return 'PING…';
+    final delay = item.delay;
     if (delay == null) return '';
-    return delay! < 0 ? 'ERR' : '${delay}MS';
+    return delay < 0 ? 'ERR' : '${delay}MS';
   }
 
   Color? _delayColor(BuildContext context) {
-    if (delay == null || pingBusy) return null;
-    if (delay! < 0) return Theme.of(context).colorScheme.error;
-    if (delay! < 200) return Colors.green;
-    if (delay! < 500) return Colors.orange;
+    final delay = item.delay;
+    if (delay == null || item.pingBusy) return null;
+    if (delay < 0) return Theme.of(context).colorScheme.error;
+    if (delay < 200) return Colors.green;
+    if (delay < 500) return Colors.orange;
     return Theme.of(context).colorScheme.error;
   }
 
   /// `[ACTIVE] [protocol]              [50MS]` — left part flex, ping right-aligned.
   Widget _buildSubtitleRow(BuildContext context, ColorScheme cs) {
-    final hasActive = active;
-    final hasArrow = urltestNow != null && urltestNow!.isNotEmpty;
-    final hasProto = protocolLabel != null && protocolLabel!.isNotEmpty;
+    final hasActive = item.active;
+    final hasArrow = item.urltestNow != null && item.urltestNow!.isNotEmpty;
+    final hasProto =
+        item.protocolLabel != null && item.protocolLabel!.isNotEmpty;
     final dl = _delayLabel;
 
     if (!hasActive && !hasArrow && !hasProto && dl.isEmpty) {
@@ -98,7 +92,7 @@ class NodeRow extends StatelessWidget {
 
     final Widget? arrow = hasArrow
         ? Text(
-            '→ $urltestNow',
+            '→ ${item.urltestNow}',
             maxLines: 1,
             softWrap: false,
             overflow: TextOverflow.ellipsis,
@@ -112,7 +106,7 @@ class NodeRow extends StatelessWidget {
 
     final Widget? proto = hasProto
         ? Text(
-            protocolLabel!,
+            item.protocolLabel!,
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w600,
@@ -158,11 +152,12 @@ class NodeRow extends StatelessWidget {
     );
   }
 
-  bool get _isSpecial => tag == 'direct-out' || tag == kAutoOutboundTag;
+  bool get _isSpecial =>
+      item.tag == 'direct-out' || item.tag == kAutoOutboundTag;
 
   Future<void> _openLongPressMenu(BuildContext context) async {
-    final canPing = tunnelUp && !busy && !pingBusy;
-    final canActivate = tunnelUp && !busy && !active;
+    final canPing = item.tunnelUp && !item.busy && !item.pingBusy;
+    final canActivate = item.tunnelUp && !item.busy && !item.active;
     final showCopy = !_isSpecial;
     final box = context.findRenderObject() as RenderBox?;
     final overlay =
@@ -210,14 +205,14 @@ class NodeRow extends StatelessWidget {
         if (onRunUrltest != null)
           PopupMenuItem<String>(
             value: 'run_urltest',
-            enabled: tunnelUp && !busy,
+            enabled: item.tunnelUp && !item.busy,
             child: ListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: Icon(
                 Icons.auto_awesome,
                 size: 20,
-                color: (tunnelUp && !busy)
+                color: (item.tunnelUp && !item.busy)
                     ? null
                     : Theme.of(context).disabledColor,
               ),
@@ -256,7 +251,7 @@ class NodeRow extends StatelessWidget {
               title: const Text('Copy server (JSON)'),
             ),
           ),
-        if (showCopy && hasDetour)
+        if (showCopy && item.hasDetour)
           PopupMenuItem<String>(
             value: 'copy_detour',
             child: ListTile(
@@ -266,7 +261,7 @@ class NodeRow extends StatelessWidget {
               title: const Text('Copy detour'),
             ),
           ),
-        if (showCopy && hasDetour)
+        if (showCopy && item.hasDetour)
           PopupMenuItem<String>(
             value: 'copy_both',
             child: ListTile(
@@ -302,10 +297,10 @@ class NodeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final canActivate = tunnelUp && !busy && !active;
+    final canActivate = item.tunnelUp && !item.busy && !item.active;
 
-    return Material(
-      color: highlighted
+    final content = Material(
+      color: item.highlighted
           ? colorScheme.primaryContainer.withAlpha(55)
           : (_isSpecial ? colorScheme.secondaryContainer.withAlpha(40) : null),
       child: InkWell(
@@ -318,8 +313,8 @@ class NodeRow extends StatelessWidget {
             children: [
               AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                width: (active || highlighted) ? 3 : 0,
-                color: (active || highlighted)
+                width: (item.active || item.highlighted) ? 3 : 0,
+                color: (item.active || item.highlighted)
                     ? colorScheme.primary
                     : Colors.transparent,
               ),
@@ -331,22 +326,24 @@ class NodeRow extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        if (tag == kAutoOutboundTag) ...[
+                        if (item.tag == kAutoOutboundTag) ...[
                           Icon(Icons.speed,
                               size: 18, color: colorScheme.primary),
                           const SizedBox(width: 6),
                         ],
                         Flexible(
                           child: Text(
-                            tag,
+                            item.tag,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style:
-                                Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                      fontWeight: active
-                                          ? FontWeight.w600
-                                          : FontWeight.w500,
-                                    ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyLarge
+                                ?.copyWith(
+                                  fontWeight: item.active
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                ),
                           ),
                         ),
                       ],
@@ -359,12 +356,12 @@ class NodeRow extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
-                tooltip: active ? 'Active' : 'Use node',
+                tooltip: item.active ? 'Active' : 'Use node',
                 onPressed: canActivate ? onActivate : null,
                 icon: Icon(
-                  active ? Icons.check_circle : Icons.play_circle_outline,
+                  item.active ? Icons.check_circle : Icons.play_circle_outline,
                   size: 22,
-                  color: active
+                  color: item.active
                       ? colorScheme.primary
                       : colorScheme.onSurfaceVariant,
                 ),
@@ -374,6 +371,14 @@ class NodeRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+
+    // §048 — single source of opacity. Caller передаёт `matches` через
+    // `NodeViewItem`, widget сам решает как render себя в matching/non-matching
+    // состоянии. Magic 0.4 не утекает в caller.
+    return Opacity(
+      opacity: item.matches ? 1.0 : 0.4,
+      child: content,
     );
   }
 }

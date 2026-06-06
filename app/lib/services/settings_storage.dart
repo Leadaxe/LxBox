@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/custom_rule.dart';
 import '../models/server_list.dart';
+import 'app_log.dart';
 import 'migration/proxy_source_migration.dart';
 
 /// Persistent storage for user settings: vars, proxy sources, enabled rules.
@@ -19,8 +20,22 @@ class SettingsStorage {
   SettingsStorage._();
 
   static const _fileName = 'lxbox_settings.json';
+  static const _bakSuffix = '.bak';
+  static const _tmpSuffix = '.tmp';
   static Map<String, dynamic>? _cache;
   static Future<void>? _pendingSave;
+
+  /// §072 — sticky флаг что main файл был повреждён и .bak не помог.
+  /// Используется чтобы:
+  ///   (а) логировать факт повреждения ровно один раз за сессию (см.
+  ///       `_corruptionLogged`),
+  ///   (б) дать диагностикам/тестам способ узнать произошёл ли drop.
+  /// **Не блокирует** последующие записи — `_save()` после первого
+  /// успешного write флаг сбрасывает. Defaultнутый `_cache = {}` после
+  /// drop'а сохраняется только если юзер начал что-то записывать заново
+  /// (что и означает «хочу заново»).
+  static bool _mainIsCorrupted = false;
+  static bool _corruptionLogged = false;
 
   /// Test-only: drop in-memory cache so the next read goes back to disk.
   /// Used by unit tests that rotate `getApplicationDocumentsPath()` between
@@ -28,40 +43,189 @@ class SettingsStorage {
   static void resetCacheForTesting() {
     _cache = null;
     _pendingSave = null;
+    _mainIsCorrupted = false;
+    _corruptionLogged = false;
   }
+
+  /// §072 — true если последний `_load()` обнаружил битый main и не смог
+  /// восстановить из `.bak`. Сбрасывается на первой успешной записи
+  /// (юзер начал заново вводить данные).
+  static bool get mainIsCorruptedForTesting => _mainIsCorrupted;
 
   static Future<File> _file() async {
     final dir = await getApplicationDocumentsDirectory();
     return File('${dir.path}/$_fileName');
   }
 
+  static Future<File> _bakFile() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/$_fileName$_bakSuffix');
+  }
+
+  static Future<File> _tmpFile() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/$_fileName$_tmpSuffix');
+  }
+
+  /// §072 — попытаться прочитать файл как JSON Map. Возвращает `null` в
+  /// четырёх случаях: файл отсутствует / пустой / не Map / FormatException
+  /// при парсе. Все «не валидно» сводятся к одному `null` — caller сам
+  /// решает что делать (для main → пробовать `.bak`).
+  static Future<Map<String, dynamic>?> _tryParseFile(File f) async {
+    if (!await f.exists()) return null;
+    try {
+      final raw = await f.readAsString();
+      if (raw.isEmpty) return null;
+      final parsed = jsonDecode(raw);
+      if (parsed is Map<String, dynamic>) return parsed;
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// §072 — Decision tree:
+  ///   main отсутствует   → `{}` (fresh install)
+  ///   main парсится      → return parsed
+  ///   main битый, bak ok → recover из bak, log warning
+  ///   main битый, bak no → `{}` + sticky `_mainIsCorrupted` flag, log error.
+  ///                        Main файл НЕ перезаписывается на этом этапе —
+  ///                        оставляем для ручной диагностики.
   static Future<Map<String, dynamic>> _load() async {
     if (_cache != null) return _cache!;
     // Wait for any pending save to complete before loading
     if (_pendingSave != null) await _pendingSave;
+
+    // Если path provider недоступен (binding не инициализирован в тестах,
+    // platform unsupported и т.п.) — degrade к `{}`. Это сохраняет
+    // legacy-семантику оригинального `_load` (try-catch вокруг всего тела).
     try {
-      final f = await _file();
-      if (await f.exists()) {
-        final raw = await f.readAsString();
-        _cache = jsonDecode(raw) as Map<String, dynamic>;
+      final main = await _file();
+      final bak = await _bakFile();
+      final tmp = await _tmpFile();
+
+      // Best-effort: убираем `.tmp` от прошлого оборванного `_save()`.
+      // Rename консумирует `.tmp` при success — наличие файла значит save
+      // был убит. Содержимое не консистентно (partial write), нельзя
+      // использовать для recovery.
+      if (await tmp.exists()) {
+        try {
+          await tmp.delete();
+        } catch (_) {
+          // ignore — не критично
+        }
+      }
+
+      // 1. Main отсутствует → fresh install.
+      if (!await main.exists()) {
+        _cache = {};
         return _cache!;
       }
-    } catch (_) {}
-    _cache = {};
-    return _cache!;
+
+      // 2. Main парсится → ok.
+      final mainParsed = await _tryParseFile(main);
+      if (mainParsed != null) {
+        _cache = mainParsed;
+        return _cache!;
+      }
+
+      // 3. Main битый. Пробуем `.bak`.
+      final bakParsed = await _tryParseFile(bak);
+      if (bakParsed != null) {
+        AppLog.I.warning(
+          'SettingsStorage: main file corrupted, recovered from .bak '
+          '(${main.path})',
+        );
+        _cache = bakParsed;
+        // НЕ зовём _save() здесь — `_cache` уже консистентный, любой
+        // последующий setVar пройдёт через атомарный `_save`. Если
+        // процесс убьют до этого — следующий `_load` тот же recovery
+        // повторит (идемпотентно).
+        return _cache!;
+      }
+
+      // 4. Main битый, bak не помог → drop с sticky flag.
+      _mainIsCorrupted = true;
+      if (!_corruptionLogged) {
+        _corruptionLogged = true;
+        AppLog.I.error(
+          'SettingsStorage: main file corrupted, no recoverable .bak. '
+          'Settings reset to defaults; main file left on disk for diagnostics '
+          '(${main.path})',
+        );
+      }
+      _cache = {};
+      return _cache!;
+    } catch (_) {
+      // Path provider или filesystem unavailable — degrade к defaultам.
+      _cache = {};
+      return _cache!;
+    }
   }
 
+  /// §072 — атомарная запись:
+  ///   1. Copy валидного main → `.bak` (если main существует и валиден).
+  ///   2. Write новых данных в `.tmp` с `flush: true`.
+  ///   3. `tmp.rename(main)` — POSIX rename(2), атомарный в пределах одной
+  ///      FS. `getApplicationDocumentsDirectory()` это всегда app-internal
+  ///      storage (ext4/f2fs) → single mount → safe.
+  ///
+  /// Если kill попадёт:
+  ///   • между copy и tmp-write → main целый, .bak старый. Потерь нет.
+  ///   • между tmp-write и rename → main целый, .bak старый. Новые данные
+  ///     потеряны, но старые сохранены. Acceptable.
+  ///   • во время rename — это atomic syscall, либо main old либо main new.
   static Future<void> _save() async {
-    // Clean up removed keys
+    // Clean up removed keys (legacy schema cruft).
     _cache?.remove('node_overrides');
     _cache?.remove('show_detour_servers');
     final data = Map<String, dynamic>.from(_cache ?? {});
-    final f = await _file();
-    _pendingSave = f.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(data),
-    );
+
+    final main = await _file();
+    final bak = await _bakFile();
+    final tmp = await _tmpFile();
+
+    _pendingSave = _atomicSave(data, main: main, bak: bak, tmp: tmp);
     await _pendingSave;
     _pendingSave = null;
+  }
+
+  static Future<void> _atomicSave(
+    Map<String, dynamic> data, {
+    required File main,
+    required File bak,
+    required File tmp,
+  }) async {
+    final encoded = const JsonEncoder.withIndent('  ').convert(data);
+
+    // 1. Snapshot текущий **валидный** main → .bak. Битый main не копируем —
+    //    нет смысла плодить второй битый файл, лучше оставить старый .bak
+    //    если он был (он от ещё более раннего, но валидного состояния).
+    if (await main.exists()) {
+      final mainParsed = await _tryParseFile(main);
+      if (mainParsed != null) {
+        try {
+          await main.copy(bak.path);
+        } catch (_) {
+          // best-effort — не блокируем save если copy не получился
+          // (acceptable: новые данные всё равно перезапишут main атомарно).
+        }
+      }
+    }
+
+    // 2. Write в tmp с flush. Без flush rename может зафиксировать pointer
+    //    на ещё не сброшенные dirty pages → видимо как пустой/обрезанный
+    //    файл при kill сразу после rename.
+    await tmp.writeAsString(encoded, flush: true);
+
+    // 3. Атомарная замена.
+    await tmp.rename(main.path);
+
+    // 4. Main теперь свежий и валидный — сбрасываем sticky-флаги.
+    //    Следующий `_load()` (после `resetCacheForTesting` или рестарта
+    //    процесса) увидит чистый main и не пойдёт через corruption path.
+    _mainIsCorrupted = false;
+    _corruptionLogged = false;
   }
 
   // ---------------------------------------------------------------------------
