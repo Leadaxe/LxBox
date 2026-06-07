@@ -8,6 +8,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **§077 — Node filter: subscription chip не мэтчил подписки с `tagPrefix`** ([task spec](docs/spec/tasks/077-subscription-filter-with-prefix.md), [home_screen.dart](app/lib/screens/home_screen.dart)). На главной в `Icons.tune` panel выбор chip'а подписки с непустым `tag_prefix` приводил к тому что **все** её ноды отмечались как non-matching (dim) — фильтр не находил ни одной. Root cause: `_subscriptionOfTag` сравнивал bare `n.tag` со state.nodes тэгом, который через `server_list_build.dart::_withPrefix` уже несёт prefix (`'$tagPrefix $base'`). Fix: сравнение prefixed-form + best-effort handle collision-suffix (`-1`/`-2`/... от `allocateTag`). При пустом prefix поведение без изменений (regression-free).
+
+## [1.9.0] — 2026-06-07
+
 ### Added
 
 - **§076 — Settings and config lifecycle (write-on-exit + lazy rebuild + universal NavigatorObserver)** ([feature spec](docs/spec/features/076%20settings-and-config-lifecycle/spec.md)). Унификация UI настроек, storage (`lxbox_settings.json`), saved config (`singbox_config.json`) и running tunnel в один прозрачный lifecycle. Два паттерна как design choice:

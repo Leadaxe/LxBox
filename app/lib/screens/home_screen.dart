@@ -577,11 +577,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
 
   /// Lookup subscription id для tag. Возвращает null если UserServer / не
   /// в trackable subscription pool (caller treat'ит как `'custom'` category).
+  ///
+  /// Tag в `state.nodes` это **prefixed form** — `_withPrefix(n.tag)` =
+  /// `'$tagPrefix $base'` если `tagPrefix.isNotEmpty`, иначе `base`
+  /// (см. `server_list_build.dart::_withPrefix`). Сравниваем prefixed-form,
+  /// а не raw `n.tag` — иначе подписки с непустым prefix'ом никогда не
+  /// мэтчатся.
+  ///
+  /// Collision-suffix (`-1`, `-2`, ... от `allocateTag` при дубликатах) —
+  /// best-effort: считаем `'base-N'` принадлежащим тому же entry, где есть
+  /// `base`. Если два entry имеют одинаковую (prefix+tag) пару, suffix
+  /// уйдёт к тому что первый итерируется (acceptable: edge case, фильтр всё
+  /// равно показывает ноду в правильной категории «эта подписка» хотя бы
+  /// для одного из дублей).
   String? _subscriptionOfTag(String tag) {
     for (final e in _subController.entries) {
       final list = e.list;
-      if (list is SubscriptionServers) {
-        if (list.nodes.any((n) => n.tag == tag)) return e.id;
+      if (list is! SubscriptionServers) continue;
+      final prefix = list.tagPrefix;
+      for (final n in list.nodes) {
+        final base = prefix.isEmpty ? n.tag : '$prefix ${n.tag}';
+        if (tag == base) return e.id;
+        // collision-suffix: 'base-1', 'base-2', ... (см. _BuildCtx.allocateTag)
+        if (tag.length > base.length + 1 &&
+            tag.startsWith(base) &&
+            tag.codeUnitAt(base.length) == 0x2D /* '-' */) {
+          final rest = tag.substring(base.length + 1);
+          if (rest.isNotEmpty &&
+              rest.codeUnits.every((c) => c >= 0x30 && c <= 0x39)) {
+            return e.id;
+          }
+        }
       }
     }
     return null;
