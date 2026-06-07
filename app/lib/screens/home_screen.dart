@@ -848,7 +848,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
             ListTile(
               leading: const Icon(Icons.alt_route_outlined),
               title: const Text('Routing'),
-              subtitle: const Text('Proxy groups and routing rules'),
+              subtitle: const Text('Channels and routing rules'),
               onTap: () => _pushRoute(RoutingScreen(
                 subController: _subController,
                 homeController: _controller,
@@ -1047,7 +1047,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
             ),
           ],
           const SizedBox(height: 16),
-          const Text('Group', style: TextStyle(fontWeight: FontWeight.w600)),
+          const Text('Channel', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
           Row(
             children: [
@@ -1066,7 +1066,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                       value: state.groups.contains(state.selectedGroup)
                           ? state.selectedGroup
                           : null,
-                      hint: const Text('Select group'),
+                      hint: const Text('Select channel'),
                       items: state.groups
                           .map((g) => DropdownMenuItem(value: g, child: Text(g)))
                           .toList(),
@@ -1724,7 +1724,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   SegmentedButton<bool>(
                     segments: [
                       const ButtonSegment(
-                          value: false, label: Text('All groups')),
+                          value: false, label: Text('All channels')),
                       ButtonSegment(
                           value: true,
                           label: Text(currentGroup,
@@ -2163,7 +2163,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                       size: 48, color: cs.onSurfaceVariant.withAlpha(120)),
                   const SizedBox(height: 12),
                   Text(
-                    'No nodes in this group.\nTry another selector.',
+                    'No nodes in this channel.\nTry another one.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: cs.onSurfaceVariant,

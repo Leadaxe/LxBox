@@ -542,11 +542,27 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
 
   Future<void> _showOverrideDetourPicker() async {
     // Direct-server picker: все UserServer-узлы из других entries.
+    //
+    // §080: показываем и сохраняем **display-form** тэг (`'$tagPrefix $base'`),
+    // как `server_list_build._withPrefix`. `overrideDetour` подставляется
+    // builder'ом прямо в `main.map['detour']` без prefix-трансформации —
+    // поэтому bare `n.tag` ссылался бы на несуществующий outbound когда у
+    // UserServer непустой `tag_prefix`.
+    // NB: совпадает с эмитированным tag'ом только ДО `allocateTag` de-dup
+    // (collision-suffix `-N` при коллизии prefix+name между нодами здесь не
+    // учитывается — см. §080 «Известное ограничение», редкий edge).
     final tags = <String>[];
     for (final e in widget.controller.entries) {
-      if (e.list is! UserServer) continue;
-      for (final n in e.list.nodes) {
-        if (n.tag.isNotEmpty) tags.add(n.tag);
+      final list = e.list;
+      if (list is! UserServer) continue;
+      // §080: disabled UserServer не эмитит outbounds (server_list_build:
+      // `if (!enabled) return`) → выбор его ноды как detour дал бы dangling
+      // reference. Skip.
+      if (!list.enabled) continue;
+      final prefix = list.tagPrefix;
+      for (final n in list.nodes) {
+        if (n.tag.isEmpty) continue;
+        tags.add(prefix.isEmpty ? n.tag : '$prefix ${n.tag}');
       }
     }
 

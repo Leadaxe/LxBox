@@ -68,11 +68,29 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     _detour = widget.entry.overrideDetour;
 
     // Доступные detour-теги: все узлы всех `UserServer` кроме себя.
+    //
+    // §080: строим **display-form** (`'$tagPrefix $base'`) — как
+    // `server_list_build._withPrefix`. Значение сохраняется в
+    // `entry.overrideDetour` и подставляется builder'ом прямо в
+    // `main.map['detour']` без prefix-трансформации, поэтому bare `n.tag`
+    // ссылался бы на несуществующий outbound при непустом `tag_prefix`.
+    // Self-exclude тоже по display-form (текущая нода со своим prefix'ом).
+    // NB: совпадает с эмитированным tag'ом только ДО `allocateTag` de-dup
+    // (collision-suffix `-N` здесь не учитывается — редкий edge, §080).
+    final selfPrefix = widget.entry.list.tagPrefix;
+    final selfDisplay =
+        selfPrefix.isEmpty ? _originalTag : '$selfPrefix $_originalTag';
     final tags = <String>[];
     for (final e in widget.subController.entries) {
-      if (e.list is! UserServer) continue;
-      for (final n in e.list.nodes) {
-        if (n.tag.isNotEmpty && n.tag != _originalTag) tags.add(n.tag);
+      final list = e.list;
+      if (list is! UserServer) continue;
+      // §080: disabled UserServer не эмитит outbounds → skip (dangling).
+      if (!list.enabled) continue;
+      final prefix = list.tagPrefix;
+      for (final n in list.nodes) {
+        if (n.tag.isEmpty) continue;
+        final display = prefix.isEmpty ? n.tag : '$prefix ${n.tag}';
+        if (display != selfDisplay) tags.add(display);
       }
     }
     _availableNodes = tags;
