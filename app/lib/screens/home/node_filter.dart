@@ -18,7 +18,7 @@ class NodeFilter {
     required this.subscriptions,
     required this.maxPingMs,
     required this.protocolOf,
-    required this.subscriptionOf,
+    required this.subscriptionsOf,
     required this.pingOf,
   });
 
@@ -46,9 +46,13 @@ class NodeFilter {
   /// (locked decision #12).
   final String? Function(String) protocolOf;
 
-  /// Lookup subscription id по tag. `null` = UserServer / untracked
-  /// (попадает в категорию `'custom'`).
-  final String? Function(String) subscriptionOf;
+  /// Lookup subscription id'ы по tag. Возвращает **множество** —
+  /// потому что при коллизии имён между подписками (например, две подписки
+  /// дают prefixed-tag `'🇷🇺 M1'` — builder резолвит `_BuildCtx.allocateTag`
+  /// в `'🇷🇺 M1'` + `'🇷🇺 M1-1'`) нода честно отображается во **всех**
+  /// chip-фильтрах подписок которые могли её создать. Пустой Set =
+  /// UserServer / untracked (попадает в категорию `'custom'`).
+  final Set<String> Function(String) subscriptionsOf;
 
   /// Lookup ping ms по tag. `null` = untested (нет в `state.lastDelay`).
   final int? Function(String) pingOf;
@@ -70,9 +74,14 @@ class NodeFilter {
       // Unknown protocol при active filter → non-matching.
       if (p == null || !protocols.contains(p)) return false;
     }
-    if (subscriptions.isNotEmpty &&
-        !subscriptions.contains(subscriptionOf(tag) ?? 'custom')) {
-      return false;
+    if (subscriptions.isNotEmpty) {
+      final candidates = subscriptionsOf(tag);
+      // Пустой Set candidates → нода неизвестного происхождения → 'custom'.
+      // Иначе нода passes если хоть одна из подписок-кандидатов выбрана
+      // (intersection non-empty). Ambiguity-aware: коллизионная нода видна
+      // во всех chip'ах подписок которые могли её создать.
+      final effective = candidates.isEmpty ? const {'custom'} : candidates;
+      if (!effective.any(subscriptions.contains)) return false;
     }
     final delay = pingOf(tag);
     // Untested (delay == null) ВСЕГДА проходят ping filter.

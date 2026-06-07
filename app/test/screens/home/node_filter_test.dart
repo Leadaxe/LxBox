@@ -13,7 +13,7 @@ void main() {
     Set<String> subscriptions = const {},
     int? maxPingMs,
     Map<String, String?> proto = const {},
-    Map<String, String?> sub = const {},
+    Map<String, Set<String>> sub = const {},
     Map<String, int?> ping = const {},
   }) {
     return NodeFilter(
@@ -23,7 +23,7 @@ void main() {
       subscriptions: subscriptions,
       maxPingMs: maxPingMs,
       protocolOf: (t) => proto[t],
-      subscriptionOf: (t) => sub[t],
+      subscriptionsOf: (t) => sub[t] ?? const <String>{},
       pingOf: (t) => ping[t],
     );
   }
@@ -142,15 +142,15 @@ void main() {
     test('known sub id в set → true', () {
       final f = makeFilter(
         subscriptions: {'sub-1'},
-        sub: {'🇷🇺 M1': 'sub-1'},
+        sub: {'🇷🇺 M1': {'sub-1'}},
       );
       expect(f.passes('🇷🇺 M1'), isTrue);
     });
 
-    test('UserServer (null sub) попадает в `custom` category', () {
+    test('UserServer (empty Set) попадает в `custom` category', () {
       final f = makeFilter(
         subscriptions: {'custom'},
-        sub: {'CustomNode': null},
+        sub: {'CustomNode': const <String>{}},
       );
       expect(f.passes('CustomNode'), isTrue);
     });
@@ -158,9 +158,88 @@ void main() {
     test('UserServer без `custom` в set → false', () {
       final f = makeFilter(
         subscriptions: {'sub-1'},
-        sub: {'CustomNode': null},
+        sub: {'CustomNode': const <String>{}},
       );
       expect(f.passes('CustomNode'), isFalse);
+    });
+
+    test('§077 collision: нода с candidates {sub-a, sub-b} — chip sub-a → true', () {
+      final f = makeFilter(
+        subscriptions: {'sub-a'},
+        sub: {'🇷🇺 M1': {'sub-a', 'sub-b'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isTrue);
+    });
+
+    test('§077 collision: та же нода — chip sub-b → true (видна в обеих)', () {
+      final f = makeFilter(
+        subscriptions: {'sub-b'},
+        sub: {'🇷🇺 M1': {'sub-a', 'sub-b'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isTrue);
+    });
+
+    test('§077 collision: chip sub-c (не в candidates) → false', () {
+      final f = makeFilter(
+        subscriptions: {'sub-c'},
+        sub: {'🇷🇺 M1': {'sub-a', 'sub-b'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isFalse);
+    });
+
+    test('§077 multi-chip {sub-a, sub-c} ∩ candidates {sub-a, sub-b} → true (any-match)', () {
+      // Audit finding #4 — symmetric intersection: с multi-chip side.
+      final f = makeFilter(
+        subscriptions: {'sub-a', 'sub-c'},
+        sub: {'🇷🇺 M1': {'sub-a', 'sub-b'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isTrue);
+    });
+
+    test('§077 multi-chip {sub-c, sub-d} disjoint от candidates {sub-a, sub-b} → false', () {
+      final f = makeFilter(
+        subscriptions: {'sub-c', 'sub-d'},
+        sub: {'🇷🇺 M1': {'sub-a', 'sub-b'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isFalse);
+    });
+
+    test('custom chip + node с known sub → false (UserServer-only filter)', () {
+      // Audit finding #5: custom branch + non-empty candidates inversion check.
+      final f = makeFilter(
+        subscriptions: {'custom'},
+        sub: {'🇷🇺 M1': {'sub-1'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isFalse);
+    });
+
+    test('mixed {custom, sub-1} chips + UserServer → true', () {
+      final f = makeFilter(
+        subscriptions: {'custom', 'sub-1'},
+        sub: {'CustomNode': const <String>{}},
+      );
+      expect(f.passes('CustomNode'), isTrue);
+    });
+
+    test('mixed {custom, sub-1} chips + known sub-1 node → true', () {
+      final f = makeFilter(
+        subscriptions: {'custom', 'sub-1'},
+        sub: {'🇷🇺 M1': {'sub-1'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isTrue);
+    });
+
+    test('subscription filter off (empty Set) + non-empty candidates → true', () {
+      // Audit finding #16: контракт «filter off ignores whatever lookup returns».
+      final f = makeFilter(
+        sub: {'🇷🇺 M1': {'sub-a', 'sub-b'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isTrue);
+    });
+
+    test('subscription filter off (empty Set) + empty candidates → true', () {
+      final f = makeFilter(sub: {'CustomNode': const <String>{}});
+      expect(f.passes('CustomNode'), isTrue);
     });
   });
 
@@ -208,7 +287,7 @@ void main() {
         subscriptions: {'sub-1'},
         maxPingMs: 100,
         proto: {'🇷🇺 Moscow': 'vless'},
-        sub: {'🇷🇺 Moscow': 'sub-1'},
+        sub: {'🇷🇺 Moscow': {'sub-1'}},
         ping: {'🇷🇺 Moscow': 42},
       );
       expect(f.passes('🇷🇺 Moscow'), isTrue);

@@ -886,21 +886,28 @@ class HomeController extends ChangeNotifier {
   /// с concurrency cap (`_pingConcurrency`). Не путать с [runGroupUrltest]
   /// (там единый clash `/group/<tag>/delay`). Использует per-group resolved
   /// url/timeout (§040). Повторный вызов во время running — cancel.
-  Future<void> runMassUrltest() async {
+  ///
+  /// §078: [order] — optional explicit порядок тэгов для пинга. Если не
+  /// передан, iterates `_state.nodes` (raw config-order, backward-compat).
+  /// UI обычно передаёт `displayList` из home_screen → ping идёт в порядке
+  /// отображения (sort + manual + pinned + filter уже применены caller'ом),
+  /// что юзер ожидает визуально.
+  Future<void> runMassUrltest({List<String>? order}) async {
     final clash = _clash;
-    if (clash == null || _state.nodes.isEmpty) return;
+    if (clash == null) return;
 
     if (_massPingRunning) {
       cancelMassPing();
       return;
     }
 
+    final nodes = List<String>.from(order ?? _state.nodes);
+    if (nodes.isEmpty) return;
+
     _massPingRunning = true;
     _massPingEpoch++;
     final epoch = _massPingEpoch;
 
-    // Reset all delays and mark all nodes as busy
-    final nodes = List<String>.from(_state.nodes);
     final busyMap = {for (final tag in nodes) tag: '…'};
     _emit(_state.copyWith(lastDelay: <String, int>{}, pingBusy: busyMap));
     _addDebug(DebugSource.app, 'Mass ping started (${nodes.length} nodes, concurrency=$_pingConcurrency)');

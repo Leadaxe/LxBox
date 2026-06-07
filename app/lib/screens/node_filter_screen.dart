@@ -56,8 +56,11 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
 
     if (mounted) {
       setState(() {
-        // Hide detour servers (⚙ prefix) from filter
-        _allNodes = result.nodes.where((n) => !n.tag.startsWith(kDetourTagPrefix)).toList();
+        // §079 — Hide detour servers (`⚙ ` prefix) from filter.
+        // `result.nodes` это prefixed-form: подписка с tagPrefix даёт
+        // `'$tagPrefix ⚙ Name'`, поэтому bare `startsWith` ловит только
+        // подписки с пустым tagPrefix → helper покрывает оба случая.
+        _allNodes = result.nodes.where((n) => !isDetourDisplayTag(n.tag)).toList();
         // Use saved excluded if available, otherwise derive from config diff
         _excluded.addAll(savedExcluded.isNotEmpty ? savedExcluded : result.excluded);
         _loading = false;

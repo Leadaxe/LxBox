@@ -20,6 +20,7 @@ import '../widgets/node_row.dart';
 import '../widgets/node_view_item.dart';
 import 'home/node_filter.dart';
 import 'home/filter_widgets.dart';
+import 'home/subscription_lookup.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import 'outbound_view_screen.dart';
 import 'about_screen.dart';
@@ -575,42 +576,66 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         (urltestNow != null ? cache.protoByTag[urltestNow] : null);
   }
 
-  /// Lookup subscription id для tag. Возвращает null если UserServer / не
-  /// в trackable subscription pool (caller treat'ит как `'custom'` category).
+  /// §077 — Lookup subscription id'ов по display-тэгу. Тонкая обёртка
+  /// над pure helper'ом `subscriptionsOfTag` (см. `home/subscription_lookup.dart`).
+  /// Алгоритм + edge cases описаны в спеке §077 и docstring'е helper'а.
+  Set<String> _subscriptionsOfTag(String tag) =>
+      subscriptionsOfTag(tag, _subController.entries);
+
+  /// §078 — True если outbound с этим tag'ом — control (selector / urltest
+  /// / direct / block / dns), не payload-нода. Source-of-truth =
+  /// `state.proxiesJson` (Clash API знает типы outbound'ов лучше нас).
   ///
-  /// Tag в `state.nodes` это **prefixed form** — `_withPrefix(n.tag)` =
-  /// `'$tagPrefix $base'` если `tagPrefix.isNotEmpty`, иначе `base`
-  /// (см. `server_list_build.dart::_withPrefix`). Сравниваем prefixed-form,
-  /// а не raw `n.tag` — иначе подписки с непустым prefix'ом никогда не
-  /// мэтчатся.
+  /// Caller использует чтобы (a) короткозамкнуть filter passing — control
+  /// ноды **всегда** matching независимо от фильтров, (b) исключить из
+  /// 'Custom' chip detection — empty `subscriptionsOf` у control'ов не
+  /// должен триггерить 'Custom' chip когда у юзера нет UserServer'ов.
+  static const _controlProxyTypes = <String>{
+    'selector', 'urltest', 'direct', 'block', 'dns',
+  };
+
+  bool _isControlTag(String tag, HomeState state) {
+    final pmap = state.proxiesJson['proxies'];
+    if (pmap is! Map<String, dynamic>) return false;
+    final entry = pmap[tag];
+    if (entry is! Map<String, dynamic>) return false;
+    final type = (entry['type'] as String?)?.toLowerCase() ?? '';
+    return _controlProxyTypes.contains(type);
+  }
+
+  /// §078 — Recompute текущий displayList снаружи `_buildNodeList`.
+  /// Используется ping button onTap чтобы передать display-order в
+  /// `runMassUrltest(order: ...)`. Логика идентична `_buildNodeList`:
+  /// pool (detour show/hide) → filter (control короткозамкнут) → split →
+  /// matching + (optional) nonMatching.
   ///
-  /// Collision-suffix (`-1`, `-2`, ... от `allocateTag` при дубликатах) —
-  /// best-effort: считаем `'base-N'` принадлежащим тому же entry, где есть
-  /// `base`. Если два entry имеют одинаковую (prefix+tag) пару, suffix
-  /// уйдёт к тому что первый итерируется (acceptable: edge case, фильтр всё
-  /// равно показывает ноду в правильной категории «эта подписка» хотя бы
-  /// для одного из дублей).
-  String? _subscriptionOfTag(String tag) {
-    for (final e in _subController.entries) {
-      final list = e.list;
-      if (list is! SubscriptionServers) continue;
-      final prefix = list.tagPrefix;
-      for (final n in list.nodes) {
-        final base = prefix.isEmpty ? n.tag : '$prefix ${n.tag}';
-        if (tag == base) return e.id;
-        // collision-suffix: 'base-1', 'base-2', ... (см. _BuildCtx.allocateTag)
-        if (tag.length > base.length + 1 &&
-            tag.startsWith(base) &&
-            tag.codeUnitAt(base.length) == 0x2D /* '-' */) {
-          final rest = tag.substring(base.length + 1);
-          if (rest.isNotEmpty &&
-              rest.codeUnits.every((c) => c >= 0x30 && c <= 0x39)) {
-            return e.id;
-          }
-        }
+  /// Дублирование вычисления приемлемо: filter pass дешёвый (≤500 nodes ×
+  /// O(1) predicate calls = ~ms) и зовётся один раз на tap.
+  List<String> _computeDisplayList(HomeState state) {
+    final allTags = _viewSortedNodes(state);
+    final pool = _showDetourNodes
+        ? allTags
+        : allTags.where((t) => !isDetourDisplayTag(t)).toList();
+    final filter = NodeFilter(
+      regex: _regexFilterEnabled ? _regexCompiled : null,
+      regexInvert: _regexInvert,
+      protocols: _enabledProtocols,
+      subscriptions: _enabledSubscriptions,
+      maxPingMs: _pingFilterEnabled ? _maxPingMs : null,
+      protocolOf: (t) => _protocolOfTag(t, state),
+      subscriptionsOf: _subscriptionsOfTag,
+      pingOf: (t) => state.lastDelay[t],
+    );
+    final matching = <String>[];
+    final nonMatching = <String>[];
+    for (final tag in pool) {
+      if (_isControlTag(tag, state) || filter.passes(tag)) {
+        matching.add(tag);
+      } else {
+        nonMatching.add(tag);
       }
     }
-    return null;
+    return _showNonMatching ? [...matching, ...nonMatching] : matching;
   }
 
   /// True если хоть один match-filter активен (для visual hint icon color).
@@ -1062,7 +1087,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                         if (_controller.massPingRunning) {
                           _controller.cancelMassPing();
                         } else {
-                          unawaited(_controller.runMassUrltest());
+                          // §078 — пингуем в порядке отображения. Фильтр и
+                          // sort учитываются: ping всё что **видно**, в том
+                          // порядке как видно. Control-outbounds тоже в
+                          // списке (clash.delay для них вернёт error или
+                          // реальный latency для direct-out).
+                          unawaited(_controller.runMassUrltest(
+                              order: _computeDisplayList(state)));
                         }
                       },
                 onLongPress: _showPingSettings,
@@ -2193,7 +2224,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     final allTags = _viewSortedNodes(state);
     final pool = _showDetourNodes
         ? allTags
-        : allTags.where((t) => !t.startsWith(kDetourTagPrefix)).toList();
+        : allTags.where((t) => !isDetourDisplayTag(t)).toList();
 
     // configCache парсится один раз при saveParsedConfig (см. HomeState),
     // здесь просто читаем. Раньше jsonDecode шёл на каждый rebuild
@@ -2213,13 +2244,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       // Test filter активен только когда checkbox включён.
       maxPingMs: _pingFilterEnabled ? _maxPingMs : null,
       protocolOf: (t) => _protocolOfTag(t, state),
-      subscriptionOf: _subscriptionOfTag,
+      subscriptionsOf: _subscriptionsOfTag,
       pingOf: (t) => state.lastDelay[t],
     );
     final matching = <String>[];
     final nonMatching = <String>[];
     for (final tag in pool) {
-      if (filter.passes(tag)) {
+      // §078 — control outbounds (direct-out / ✨auto / selector / urltest
+      // / block / dns) **всегда** matching: фильтр про payload-ноды, control
+      // не относится к категории «нода из подписки» и не должен dim'иться
+      // при включённом filter.
+      if (_isControlTag(tag, state) || filter.passes(tag)) {
         matching.add(tag);
       } else {
         nonMatching.add(tag);
@@ -2249,8 +2284,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         subOptions.add((e.id, e.displayName));
       }
     }
-    // Special 'custom' chip — если в pool есть UserServer (subscriptionOf == null).
-    final hasCustom = pool.any((t) => _subscriptionOfTag(t) == null);
+    // §078 — 'Custom' chip отображается только если в pool есть **payload**
+    // тэги с empty subscriptionsOf (= UserServer / imported JSON outbound).
+    // Control outbounds (direct/auto/etc.) тоже дают empty Set, но они
+    // в свою категорию — exclude'им чтобы chip не появлялся когда у
+    // юзера нет UserServer'ов.
+    final hasCustom = pool.any((t) =>
+        !_isControlTag(t, state) && _subscriptionsOfTag(t).isEmpty);
     if (hasCustom) subOptions.add(('custom', 'Custom'));
 
     return Expanded(

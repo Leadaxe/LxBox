@@ -2,8 +2,26 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Released в v1.9.0 |
+| Статус | Released в v1.9.0; контракт NodeFilter уточнён в §077 (v1.9.1) |
 | Дата | 2026-05-12 |
+
+> **§077 update (2026-06-07)**: NodeFilter subscription contract обновлён:
+> `subscriptionOf: String? Function(String)` → `subscriptionsOf: Set<String> Function(String)`.
+> Predicate сводится к intersection (`effective.any(subscriptions.contains)`)
+> где empty Set candidates → `'custom'` fallback. Lookup helper переехал
+> в pure-функцию [`home/subscription_lookup.dart::subscriptionsOfTag`](../../../app/lib/screens/home/subscription_lookup.dart)
+> с prefix-aware comparison + collision-suffix detection + disabled-subs
+> skip. Раздел «### NodeFilter» ниже описывает **исходный** контракт;
+> текущая реализация = код. Полный rationale — [`tasks/077-subscription-filter-with-prefix.md`](../../tasks/077-subscription-filter-with-prefix.md).
+
+> **§078 update (2026-06-08)**: Filter split в home_screen теперь
+> короткозамыкает на control outbounds (selectors/urltest/direct/block/dns).
+> `_isControlTag(tag, state)` определяет их через `state.proxiesJson.type`
+> → они **всегда** matching независимо от фильтров. `hasCustom` тоже
+> исключает control → 'Custom' chip отображается только при наличии
+> реальных UserServer'ов. Pure NodeFilter не знает про это — special-case
+> в caller. См. [`tasks/078-control-outbound-and-display-order-ping.md`](../../tasks/078-control-outbound-and-display-order-ping.md).
+
 | Зависимости | Нет (hard). |
 | Связанные | [`tasks/068 — extract NodeViewItem`](../../tasks/068-node-view-item-extract.md) — выполняется **внутри** этого PR при срабатывании одного из trigger'ов. Home screen node list (`home_screen.dart::_buildNodeList`), `NodeRow` widget (`widgets/node_row.dart`), `HomeState.configCache.protoByTag` (proto lookup), `SubscriptionController.entries` (sub lookup), `state.lastDelay` (ping). |
 | Триггер | Сейчас на главной только один toggle — `_showDetourNodes` (показывать ли chained outbound). Юзеру нужно искать ноду по emoji-флагу страны (🇷🇺/🇺🇸/🇩🇪), regex pattern'у или protocol (vless/vmess/trojan/...) — приходится скроллить список или вспоминать tag. |
