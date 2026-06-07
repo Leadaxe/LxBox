@@ -21,6 +21,7 @@ import '../widgets/node_view_item.dart';
 import 'home/node_filter.dart';
 import 'home/filter_widgets.dart';
 import 'home/subscription_lookup.dart';
+import 'home/channel_filters.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import 'outbound_view_screen.dart';
 import 'about_screen.dart';
@@ -88,6 +89,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   Timer? _pingDebounceTimer;
   // Non-matching visibility (locked #7, default ON)
   bool _showNonMatching = true;
+
+  // §083 — per-channel match-filter memory (in-session). Снимок фильтров
+  // каждого канала; при смене selectedGroup save старого + restore нового.
+  // show-detour / show-dimmed НЕ входят (глобальные). Детект в
+  // `_onControllerChange`.
+  final Map<String, ChannelFilters> _filtersByChannel = {};
+  String? _activeFilterChannel;
 
   // §070 — UI-cache для frozen sort при `state.resortOnManualPing == false`.
   // См. spec'у — manual single ping не двигает порядок, batch / group switch /
@@ -398,6 +406,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       }
     }
 
+    // §083 — per-channel match-filter memory. Канал сменился → save старого
+    // + restore нового. Guard `channel == _activeFilterChannel` дешёвый —
+    // _onControllerChange дёргается часто (heartbeat/ping), но setState
+    // только при реальной смене канала.
+    if (_syncChannelFilters(state.selectedGroup)) {
+      if (mounted) setState(() {});
+    }
+
     _prevTunnel = now;
     _prevError = nowError;
   }
@@ -557,6 +573,78 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         _enabledProtocols.remove(proto);
       }
     });
+  }
+
+  /// §083 — снимок текущих match-фильтров (для save при уходе с канала).
+  ChannelFilters _captureFilters() => ChannelFilters(
+        regexPattern: _regexController.text,
+        regexEnabled: _regexFilterEnabled,
+        regexInvert: _regexInvert,
+        protocols: Set.of(_enabledProtocols),
+        subscriptions: Set.of(_enabledSubscriptions),
+        pingText: _pingController.text,
+        pingEnabled: _pingFilterEnabled,
+      );
+
+  /// §083 — восстановить match-фильтры из снимка (при входе в канал).
+  /// Caller оборачивает в setState. Отменяет pending debounce чтобы старый
+  /// ввод не протёк в новый канал.
+  void _restoreFilters(ChannelFilters f) {
+    _regexDebounceTimer?.cancel();
+    _pingDebounceTimer?.cancel();
+    // regex — установить text + перекомпилировать.
+    _regexController.text = f.regexPattern;
+    if (f.regexPattern.isEmpty) {
+      _regexCompiled = null;
+      _regexValid = true;
+    } else {
+      try {
+        _regexCompiled = RegExp(f.regexPattern, caseSensitive: false);
+        _regexValid = true;
+      } catch (_) {
+        _regexCompiled = null;
+        _regexValid = false;
+      }
+    }
+    _regexFilterEnabled = f.regexEnabled;
+    _regexInvert = f.regexInvert;
+    // protocols / subscriptions — копии (Set'ы mutable, нельзя шарить ссылку).
+    _enabledProtocols
+      ..clear()
+      ..addAll(f.protocols);
+    _enabledSubscriptions
+      ..clear()
+      ..addAll(f.subscriptions);
+    // ping — установить text + распарсить.
+    _pingController.text = f.pingText;
+    final n = int.tryParse(f.pingText);
+    _maxPingMs = (n != null && n > 0) ? n : null;
+    _pingFilterEnabled = f.pingEnabled;
+  }
+
+  /// §083 — реакция на смену `selectedGroup`: save фильтров старого канала,
+  /// restore нового. Вызывается из `_onControllerChange` (покрывает все пути
+  /// смены — dropdown, connect-time resolve, applyGroup). Возвращает true
+  /// если что-то восстановили (caller дёрнет setState).
+  bool _syncChannelFilters(String? channel) {
+    if (channel == _activeFilterChannel) return false;
+    // save старый канал (только если есть что сохранять — пустые не плодим).
+    final prev = _activeFilterChannel;
+    if (prev != null) {
+      final snap = _captureFilters();
+      if (snap.isEmpty) {
+        _filtersByChannel.remove(prev);
+      } else {
+        _filtersByChannel[prev] = snap;
+      }
+    }
+    if (channel == null) {
+      _activeFilterChannel = null;
+      return false;
+    }
+    _restoreFilters(_filtersByChannel[channel] ?? ChannelFilters.empty);
+    _activeFilterChannel = channel;
+    return true;
   }
 
   void _toggleSubscription(String id) {

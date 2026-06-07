@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **§083 — Per-channel match-filter memory (in-session)** ([task spec](docs/spec/tasks/083-per-channel-filter-memory.md), [channel_filters.dart](app/lib/screens/home/channel_filters.dart), [home_screen.dart](app/lib/screens/home_screen.dart)). Match-фильтры (regex / протоколы / подписки / ping) теперь запоминаются **отдельно для каждого канала** (selector group). Переключил канал → его набор фильтров восстанавливается; вернулся обратно → снова виден. Раньше фильтры были одни глобальные на все каналы. Реализация: `Map<channel → ChannelFilters>` snapshot в памяти, save/restore в `_onControllerChange` при смене `selectedGroup` (покрывает все пути — dropdown, connect-time resolve, applyGroup). `show-detour` / `show-dimmed` остаются глобальными (они про отображение, не про поиск). Без записи на диск (per-session, по запросу юзера). Pending debounce отменяется при смене канала (старый ввод не протекает). +12 unit tests на `ChannelFilters`.
+
 ### Fixed
 
 - **§080 — Detour-override picker ломал конфиг при непустом `tag_prefix`** ([task spec](docs/spec/tasks/080-detour-override-picker-prefix-aware.md), [subscription_detail_screen.dart](app/lib/screens/subscription_detail_screen.dart), [node_settings_screen.dart](app/lib/screens/node_settings_screen.dart)). Audit §077 (finding #13) обнаружил баг того же класса что §077/§079, но ломающий **сборку конфига целиком**. Detour-override picker'ы сохраняли **bare** `node.tag`, а `server_list_build._withPrefix` эмитит целевой outbound с prefixed-тэгом (`'$tagPrefix $base'`). `overrideDetour` подставляется builder'ом прямо в `main.detour` без prefix-трансформации → при непустом `tag_prefix` detour ссылался на несуществующий outbound (sing-box reject `'unknown outbound'` / VPN не стартует). Фикс: оба picker'a строят и сохраняют display-form. Graceful degradation для старых bare-сохранёнок (dropdown показывает None → юзер перевыбирает). Empty-prefix — regression-free. +3 builder теста (display-form valid / bare dangling / empty-prefix).
