@@ -183,6 +183,47 @@ updater).
 - Документ-аккумулятор заведён. Исполнение начнётся после завершения §089.
 - Первичные кандидаты внесены (A1, B1-2, C1, D1-3, E1-2). Пополняется по ходу.
 
+### 2026-06-08 (ночь) — автономный батч + morning-handoff
+
+**Сделано (закоммичено, тесты зелёные):**
+- **G1** update-dismiss ✅ (`479893f`, таска 092) — «Later» в snackbar.
+- **A2** formatBytes ✅ (`fee3125`) — clash байт-в-байт, subscription → канон.
+- **A1** formatDuration ✅ (`0a32e56`) — `daysRollup`-флаг, свернул
+  `traffic_bar._uptime`. Behavior-preserving (parity-tested).
+- На телефоне: **vc 2701** (== HEAD).
+
+**F2 (retry-дедуп) — ОЦЕНЕНО → ПРОПУЩЕНО.** `rule_set_downloader.download`
+(возвращает `null`) и `sources._fetch` (бросает) структурно разные: общий
+scaffold потребовал бы restructure control-flow обоих сетевых путей. Низкая
+ценность (recon ранжировал последним) × чувствительность сети × нет
+device-verify ночью = не оправдано. Кандидат на focused-сессию, не блокер.
+
+**НЕ делал вслепую ночью (нужен ты / device-verify) — handoff:**
+- **E1 — SRS-cache у Preset.** Sealed-split УЖЕ сделан (custom_rule sealed
+  Inline/Srs/Preset). Остаток = offline SRS-кэш remote rule_sets (spec 011) +
+  Preset.name read-only. Уже специфицировано: [task 011](011-sealed-customrule-split.md)
+  + [feature 011](../features/011%20local%20ruleset%20cache/spec.md) + memory-план.
+  **Почему не ночью:** корректность = sing-box принимает cached SRS по local
+  path → проверяется ТОЛЬКО на устройстве с реальным preset'ом; тихий fail =
+  routing не применяется. + memory прямо: «самостоятельный refactor, свой flow,
+  согласовать». **Утром:** скажешь «делай E1» → исполняю по task 011 с device-
+  проверкой routing'а.
+- **G2 — `⚙`/isDetour миграция — ОТКРЫТЫЙ ДИЗАЙН, нужно твоё решение.**
+  Модель готова (`ConfigNode.isDetour` по `detourRefCount`, `isMarkedDetour` по
+  `⚙`). Вопрос: что значит «detour» для hide/show-фильтра?
+  - **Сейчас:** прячет **вручную ⚙-помеченные** ноды (`TagResolver.isDetourMarker`).
+  - **Вариант (структурный):** прятать ноды, на которые **реально ссылаются**
+    через `detour` (`isDetour`) — корректнее (это и есть «релей»), ручная
+    пометка не нужна.
+  - **Нюанс:** не идентично — ⚙-нода без ссылок прячется сейчас, но не по
+    isDetour; и наоборот. + `⚙` есть и в **билдере** (`server_list_build`
+    ставит на main-as-detour) — там роль остаётся.
+  - **Моя рекомендация:** перейти на `isDetour` (структурно), `⚙` в
+    node_settings убрать как ручной toggle, оставить как build-time метку
+    «внутренний сервер подписки». Но это user-visible UX → **твой выбор утром.**
+- **D1/D2/D3** (VPN recovery, native Kotlin) / **B/C** (event-bus/routing
+  унификация, архитектурные решения) — крупные/рискованные, не для unattended.
+
 ### 2026-06-08 — начато исполнение (G1, A2)
 - **G1 update-dismiss** — ✅ DONE (таска [092](092-update-dismiss-wire.md)).
   «Later» в update-snackbar → `dismissCurrent` (persist + clear). +2 теста.
