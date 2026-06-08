@@ -22,6 +22,7 @@ import '../widgets/node_row.dart';
 import '../widgets/node_view_item.dart';
 import 'home/node_filter.dart';
 import 'home/filter_widgets.dart';
+import 'home/widgets/traffic_bar.dart';
 import 'home/subscription_lookup.dart';
 import 'home/node_filter_view_model.dart';
 import '../widgets/wifi_permission_dialog.dart';
@@ -717,7 +718,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 // не путала первого пользователя.
               if (state.configRaw.isNotEmpty) ...[
                 _buildControls(context, state, startActive, startEnabled, stopEnabled),
-                if (state.tunnelUp) _buildTrafficBar(context, state),
+                if (state.tunnelUp)
+                  TrafficBar(state: state, controller: _controller),
                 if (_subController.busy && _subController.progressMessage.isNotEmpty)
                   _buildProgressBanner(context),
                 const SizedBox(height: 12),
@@ -1251,115 +1253,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       avatar: iconWidget,
       backgroundColor: bgColor,
     );
-  }
-
-  Widget _buildTrafficBar(BuildContext context, HomeState state) {
-    final cs = Theme.of(context).colorScheme;
-    final uptime = state.connectedSince != null
-        ? _formatDuration(DateTime.now().difference(state.connectedSince!))
-        : '';
-    return GestureDetector(
-      onTap: () {
-        final clash = _controller.clashClient;
-        if (clash != null) {
-          // §044: если идёт recording — открываем StatsScreen сразу на
-          // Per-app tab'е, иначе на Overview.
-          final initial = TrafficProfiler.I.isRecording
-              ? StatsTab.perApp
-              : StatsTab.overview;
-          Navigator.push(context, MaterialPageRoute(
-            builder: (_) => StatsScreen(
-              clash: clash,
-              configRaw: _controller.state.configRaw,
-              initialTab: initial,
-            ),
-          ));
-        }
-      },
-      child: Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: AnimatedBuilder(
-        animation: TrafficProfiler.I,
-        builder: (_, _) {
-          final profiler = TrafficProfiler.I;
-          return Row(
-            children: [
-              _trafficChip(context, Icons.arrow_upward,
-                  state.traffic.uploadFormatted, cs.primary),
-              const SizedBox(width: 8),
-              _trafficChip(context, Icons.arrow_downward,
-                  state.traffic.downloadFormatted, cs.tertiary),
-              if (state.traffic.activeConnections > 0) ...[
-                const SizedBox(width: 8),
-                _trafficChip(context, Icons.link,
-                    '${state.traffic.activeConnections}', cs.secondary),
-              ],
-              if (profiler.isRecording) ...[
-                const SizedBox(width: 8),
-                _trafficChip(
-                  context,
-                  Icons.bolt,
-                  _shortPkg(profiler.active!.targetPackage),
-                  cs.error,
-                ),
-              ],
-              if (profiler.isGlobalRecording) ...[
-                const SizedBox(width: 8),
-                _trafficChip(
-                  context,
-                  Icons.podcasts,
-                  'Live',
-                  cs.error,
-                ),
-              ],
-              const Spacer(),
-              if (uptime.isNotEmpty)
-                Text(
-                  uptime,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                ),
-            ],
-          );
-        },
-      ),
-    ),
-    );
-  }
-
-  /// `_shortPkg("ru.tinkoff.investing")` → `"ru.tinkoff"` (первые два
-  /// сегмента package name'а), для chip'а в `_buildTrafficBar`.
-  static String _shortPkg(String pkg) {
-    final parts = pkg.split('.');
-    if (parts.length <= 2) return pkg;
-    return '${parts[0]}.${parts[1]}';
-  }
-
-  Widget _trafficChip(BuildContext context, IconData icon, String label, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: color),
-        const SizedBox(width: 2),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: color,
-              ),
-        ),
-      ],
-    );
-  }
-
-  static String _formatDuration(Duration d) {
-    if (d.inSeconds < 60) return '${d.inSeconds}s';
-    if (d.inMinutes < 60) return '${d.inMinutes}m ${d.inSeconds % 60}s';
-    final h = d.inHours;
-    final m = d.inMinutes % 60;
-    if (h < 24) return '${h}h ${m}m';
-    return '${d.inDays}d ${h % 24}h';
   }
 
   Future<void> _startWithAutoRefresh() async {

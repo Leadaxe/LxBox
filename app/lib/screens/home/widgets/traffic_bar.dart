@@ -1,0 +1,143 @@
+import 'package:flutter/material.dart';
+
+import '../../../controllers/home_controller.dart';
+import '../../../models/home_state.dart';
+import '../../../services/traffic_profiler.dart';
+import '../../stats_screen.dart';
+
+/// Полоса трафика под статус-чипом на главном экране: ↑/↓ скорость, число
+/// активных соединений, recording-индикаторы профайлера (§044) и uptime.
+/// Тап открывает [StatsScreen] (на Per-app tab'е если идёт recording).
+///
+/// Перерисовывается на `TrafficProfiler.I` (recording-флаги) через внутренний
+/// `AnimatedBuilder`; трафик/uptime приходят из переданного [state].
+class TrafficBar extends StatelessWidget {
+  const TrafficBar({super.key, required this.state, required this.controller});
+
+  final HomeState state;
+  final HomeController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final uptime = state.connectedSince != null
+        ? _uptime(DateTime.now().difference(state.connectedSince!))
+        : '';
+    return GestureDetector(
+      onTap: () {
+        final clash = controller.clashClient;
+        if (clash == null) return;
+        // §044: идёт recording → сразу Per-app tab, иначе Overview.
+        final initial = TrafficProfiler.I.isRecording
+            ? StatsTab.perApp
+            : StatsTab.overview;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => StatsScreen(
+              clash: clash,
+              configRaw: controller.state.configRaw,
+              initialTab: initial,
+            ),
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        child: AnimatedBuilder(
+          animation: TrafficProfiler.I,
+          builder: (_, _) {
+            final profiler = TrafficProfiler.I;
+            return Row(
+              children: [
+                _chip(
+                  context,
+                  Icons.arrow_upward,
+                  state.traffic.uploadFormatted,
+                  cs.primary,
+                ),
+                const SizedBox(width: 8),
+                _chip(
+                  context,
+                  Icons.arrow_downward,
+                  state.traffic.downloadFormatted,
+                  cs.tertiary,
+                ),
+                if (state.traffic.activeConnections > 0) ...[
+                  const SizedBox(width: 8),
+                  _chip(
+                    context,
+                    Icons.link,
+                    '${state.traffic.activeConnections}',
+                    cs.secondary,
+                  ),
+                ],
+                if (profiler.isRecording) ...[
+                  const SizedBox(width: 8),
+                  _chip(
+                    context,
+                    Icons.bolt,
+                    _shortPkg(profiler.active!.targetPackage),
+                    cs.error,
+                  ),
+                ],
+                if (profiler.isGlobalRecording) ...[
+                  const SizedBox(width: 8),
+                  _chip(context, Icons.podcasts, 'Live', cs.error),
+                ],
+                const Spacer(),
+                if (uptime.isNotEmpty)
+                  Text(
+                    uptime,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  static Widget _chip(
+    BuildContext context,
+    IconData icon,
+    String label,
+    Color color,
+  ) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 2),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// `"ru.tinkoff.investing"` → `"ru.tinkoff"` (первые два сегмента пакета).
+  static String _shortPkg(String pkg) {
+    final parts = pkg.split('.');
+    if (parts.length <= 2) return pkg;
+    return '${parts[0]}.${parts[1]}';
+  }
+
+  /// Uptime-формат `30s` / `5m 3s` / `2h 30m` / `1d 6h`. Сворачивает в дни —
+  /// в отличие от `formatDuration` (format_utils), поэтому отдельный helper.
+  static String _uptime(Duration d) {
+    if (d.inSeconds < 60) return '${d.inSeconds}s';
+    if (d.inMinutes < 60) return '${d.inMinutes}m ${d.inSeconds % 60}s';
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    if (h < 24) return '${h}h ${m}m';
+    return '${d.inDays}d ${h % 24}h';
+  }
+}
