@@ -29,6 +29,7 @@ import 'home/widgets/nodes_header.dart';
 import 'home/widgets/home_drawer.dart';
 import 'home/widgets/add_server_cta.dart';
 import 'home/home_menus.dart';
+import 'home/home_dialogs.dart';
 import 'home/subscription_lookup.dart';
 import 'home/node_filter_view_model.dart';
 import '../widgets/wifi_permission_dialog.dart';
@@ -686,7 +687,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                     ? () {
                         HapticService.I.onConnectTap();
                         if (state.tunnelUp) {
-                          _confirmStop(state);
+                          confirmStop(context, _controller, state);
                         } else {
                           unawaited(_startWithAutoRefresh());
                         }
@@ -746,7 +747,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
             GestureDetector(
               // Не гасим `_needsRestart` на тап — если юзер отменит Stop-диалог,
               // banner должен остаться. Гаснет только реальным tunnel up↔down.
-              onTap: () => _confirmStop(_controller.state),
+              onTap: () => confirmStop(context, _controller, _controller.state),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
@@ -1013,34 +1014,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           duration: const Duration(seconds: 5),
         ),
       );
-    }
-  }
-
-  void _confirmStop(HomeState state) {
-    if (state.traffic.activeConnections > 3) {
-      showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Stop VPN?'),
-          content: Text(
-            '${state.traffic.activeConnections} active connections will be closed.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Stop'),
-            ),
-          ],
-        ),
-      ).then((confirmed) {
-        if (confirmed == true) _controller.stop();
-      });
-    } else {
-      _controller.stop();
     }
   }
 
