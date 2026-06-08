@@ -92,7 +92,11 @@
 ### 🔵 Backlog (medium, по случаю)
 - Разбить HomeController (PingController/TrafficController) — shared-state hazard, осторожно.
 - State placement principle (Runtime/Preference/Cache) + документация в ARCHITECTURE.md.
-- Убрать dead import `home_state.dart`→clash_api_client.
+- ~~Убрать dead import `home_state.dart`→clash_api_client~~ — **false positive**
+  (как M13): `home_state` использует `TrafficSnapshot`, определённый в
+  `clash_api_client.dart`. Import нужен. NB: это указывает на **реальный**
+  долг — `TrafficSnapshot` (data) живёт в service-файле; перенос в models/
+  сделал бы home_state чище (отдельный рефактор, не «dead import»).
 - Унифицировать singleton pattern (ThemeNotifier → `.I`).
 - Вынести `custom_rule_edit/validators` из screens (widget→screen coupling).
 - typed Clash-API / config-schema модели.
