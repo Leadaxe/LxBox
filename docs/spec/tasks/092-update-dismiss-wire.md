@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **In progress** |
+| Статус | **DONE** — «Later» в snackbar → `dismissCurrent`; +2 теста; analyze + 802 green. |
 | Тип | logic-rewrite (§090 **G1**) — завершение half-wired фичи |
 | Источник | §089 P6 находка: read-guard `getDismissedUpdateVersion` активен, writer'а в UI нет |
 | Тип изменения | **behavior-changing** (новая кнопка + suppress) |

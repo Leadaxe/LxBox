@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/subscription_controller.dart';
 import '../../models/server_list.dart';
+import '../../services/format_utils.dart' as fmt;
 
 /// Pure formatting/status helpers for [SubscriptionDetailScreen].
 ///
@@ -70,13 +71,11 @@ String intervalHuman(int hours) {
   return '${d}d ${rem}h';
 }
 
-String formatBytes(int bytes) {
-  if (bytes <= 0) return '0';
-  if (bytes < 1024) return '${bytes}B';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-  if (bytes < 1024 * 1024 * 1024) return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
-  return '${(bytes / 1024 / 1024 / 1024).toStringAsFixed(2)} GB';
-}
+/// §090 A2 — делегирует канону (`format_utils.formatBytes`, spaced:true).
+/// Прежний локальный вариант был внутренне непоследователен (`500B` без
+/// пробела, но `1.5 KB` с пробелом, `0` вместо `0 B`) — теперь консистентно
+/// `0 B` / `500 B` / `1.5 KB` / `2.34 GB`.
+String formatBytes(int bytes) => fmt.formatBytes(bytes, spaced: true);
 
 String formatExpire(int timestamp) {
   if (timestamp <= 0) return 'Unlimited';

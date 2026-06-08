@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config/clash_endpoint.dart';
+import 'format_utils.dart';
 
 class ClashApiClient {
   ClashApiClient(this.endpoint, {http.Client? httpClient})
@@ -224,18 +225,9 @@ class TrafficSnapshot {
 
   static const zero = TrafficSnapshot();
 
-  String get uploadFormatted => _formatBytes(uploadTotal);
-  String get downloadFormatted => _formatBytes(downloadTotal);
-  String get memoryFormatted => _formatBytes(memory);
-
-  static String _formatBytes(int bytes) {
-    if (bytes < 1024) return '${bytes}B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)}GB';
-  }
+  String get uploadFormatted => formatBytes(uploadTotal);
+  String get downloadFormatted => formatBytes(downloadTotal);
+  String get memoryFormatted => formatBytes(memory);
 
   /// Парсит `/connections` JSON — вынесено из fetchTraffic для тестов с
   /// fixture'ами без сетевого вызова.

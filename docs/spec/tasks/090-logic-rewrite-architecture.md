@@ -183,6 +183,17 @@ updater).
 - Документ-аккумулятор заведён. Исполнение начнётся после завершения §089.
 - Первичные кандидаты внесены (A1, B1-2, C1, D1-3, E1-2). Пополняется по ходу.
 
+### 2026-06-08 — начато исполнение (G1, A2)
+- **G1 update-dismiss** — ✅ DONE (таска [092](092-update-dismiss-wire.md)).
+  «Later» в update-snackbar → `dismissCurrent` (persist + clear). +2 теста.
+- **A2 formatBytes** — ✅ DONE. `clash_api_client._formatBytes` → канон
+  (байт-в-байт), `subscription_detail_format.formatBytes` → делегат к
+  `formatBytes(spaced:true)` (косметика: `0`→`0 B`, `500B`→`500 B` —
+  консистентность). `connections_screen` НЕ трогал (compact, без GB —
+  намеренно). analyze + 802 green.
+- Осталось из реестра: A1 (formatDuration — аккуратнее, 3 разных вывода),
+  E1, G2, D1/D2/D3, F2, B/C.
+
 ### 2026-06-08 — переизучён после §089 + §091 (unblocked)
 - §089 + §091 завершены → реестр пересмотрен против текущего кода.
 - **Закрыто/spun-off:** §091 ConfigNode (отдельная таска, done); deepCopy/equals
