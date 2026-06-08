@@ -26,19 +26,11 @@ import 'home/widgets/traffic_bar.dart';
 import 'home/widgets/status_chip.dart';
 import 'home/widgets/progress_banner.dart';
 import 'home/widgets/nodes_header.dart';
+import 'home/widgets/home_drawer.dart';
 import 'home/subscription_lookup.dart';
 import 'home/node_filter_view_model.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import 'outbound_view_screen.dart';
-import 'about_screen.dart';
-import 'config_screen.dart';
-import 'debug_screen.dart';
-import 'dns_settings_screen.dart';
-import 'app_settings_screen.dart';
-import 'speed_test_screen.dart';
-import 'stats_screen.dart';
-import 'routing_screen.dart';
-import 'settings_screen.dart';
 import 'subscriptions_screen.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/debug_registry.dart';
@@ -683,15 +675,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (mounted) setState(() {});
   }
 
-  /// §076: drawer item → close drawer + push screen. Auto-rebuild на
-  /// возврат покрывается глобальным `homeReturnObserver` (см.
-  /// `services/nav/home_return_observer.dart`) — никаких per-callsite
-  /// `.then()` callback'ов не нужно.
-  void _pushRoute(Widget screen) {
-    Navigator.of(context).pop();
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
-  }
-
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -709,7 +692,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         final stopEnabled = !state.busy && state.tunnelUp;
         return Scaffold(
           appBar: AppBar(title: const Text('L×Box')),
-          drawer: _buildDrawer(state),
+          drawer: HomeDrawer(
+            controller: _controller,
+            subController: _subController,
+            autoUpdater: _autoUpdater,
+          ),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -736,96 +723,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           ),
         );
       },
-    );
-  }
-
-  Widget _buildDrawer(HomeState state) {
-    return Drawer(
-      child: SafeArea(
-        child: ListView(
-          children: [
-            const SizedBox(height: 12),
-            ListTile(
-              leading: const Icon(Icons.dns_outlined),
-              title: const Text('Servers'),
-              subtitle: const Text('Subscriptions & proxy'),
-              onTap: () => _pushRoute(SubscriptionsScreen(
-                subController: _subController,
-                homeController: _controller,
-                autoUpdater: _autoUpdater,
-              )),
-            ),
-            ListTile(
-              leading: const Icon(Icons.alt_route_outlined),
-              title: const Text('Routing'),
-              subtitle: const Text('Channels and routing rules'),
-              onTap: () => _pushRoute(RoutingScreen(
-                subController: _subController,
-                homeController: _controller,
-              )),
-            ),
-            ListTile(
-              leading: const Icon(Icons.dns_outlined),
-              title: const Text('DNS Settings'),
-              subtitle: const Text('DNS servers and rules'),
-              onTap: () => _pushRoute(DnsSettingsScreen(
-                subController: _subController,
-                homeController: _controller,
-              )),
-            ),
-            ListTile(
-              leading: const Icon(Icons.tune_outlined),
-              title: const Text('VPN Settings'),
-              subtitle: const Text('Config variables'),
-              onTap: () => _pushRoute(SettingsScreen(
-                subController: _subController,
-                homeController: _controller,
-              )),
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings_outlined),
-              title: const Text('App Settings'),
-              subtitle: const Text('Theme, appearance'),
-              onTap: () => _pushRoute(const AppSettingsScreen()),
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.speed_outlined),
-              title: const Text('Speed Test'),
-              subtitle: const Text('Test download/upload speed'),
-              onTap: () => _pushRoute(SpeedTestScreen(homeController: _controller)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.bar_chart_outlined),
-              title: const Text('Statistics'),
-              subtitle: const Text('Traffic by outbound'),
-              enabled: _controller.state.tunnelUp,
-              onTap: () {
-                final clash = _controller.clashClient;
-                if (clash != null) _pushRoute(StatsScreen(clash: clash, configRaw: _controller.state.configRaw));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.description_outlined),
-              title: const Text('Config Editor'),
-              subtitle: const Text('View, edit, import JSON'),
-              onTap: () => _pushRoute(ConfigScreen(controller: _controller)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.bug_report_outlined),
-              title: const Text('Debug'),
-              subtitle: const Text('Last 100 events'),
-              onTap: () => _pushRoute(const DebugScreen()),
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('About'),
-              onTap: () => _pushRoute(const AboutScreen()),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
