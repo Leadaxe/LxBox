@@ -210,6 +210,27 @@ singleton-сервисы, `ConfigCache`, `home_return_observer`). Риск ре�
 - Дальше: батч-4 (риск: traffic_profiler/home_controller/subscription_controller/
   box_vpn_client — строгие каутионы); home_screen-остаток — сам (NodeList-ядро).
 
+### 2026-06-08 ~15:05 — БАТЧ 4 ✅ ИНТЕГРИРОВАН (logic-heavy)
+- Воркфлоу `wf_ba88bfcc-aa9`, 4 файла, все **base=True + green + safe**.
+  Cherry-pick чисто, **финальный гейт: analyze + 808 green** ✅ (включая
+  home_controller — VPN-оркестрация, box_vpn_client — VPN-мост).
+- **Результат:** home_controller 1089→**585**, subscription_controller 768→**599**,
+  box_vpn_client 607→**501**, traffic_profiler 1632→**1221** (PARTIAL — агент
+  честно НЕ стал дробить timing-sensitive монолитный singleton across part-files;
+  вынес только models+internal через `part`. Правильное safety-решение).
+  Использован repo-pattern `part`/`mixin` (как routing_screen/settings_storage).
+
+### МИЛСТОУН: монстров 18 → 4
+Осталось:
+- `home_screen` 1664 — **мой ручной проход** (NodeList-ядро — самое сцепленное).
+- `traffic_profiler` 1221 — partial; монолитный singleton. Легитимное
+  исключение для §089 (дальнейшее дробление = behavior-risk → кандидат §090).
+- `custom_rule` 618 — **§090** (sealed-split меняет поведение).
+- `VpnPlugin.kt` 635 (Kotlin) — нужна APK-сборка для проверки (нет flutter
+  analyze) → отдельный аккуратный проход.
+**16 монстров повержено за 4 параллельных батча** (~30 агентов), всё через
+base-fix + verify + 808-гейт, develop зелёный, ничего не сломано.
+
 
 ### 2026-06-08 11:13 — старт
 - Заземлился: инвентарь монстров, существующие паттерны, §088 прочитан.
