@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../config/consts.dart';
+import '../services/tag_resolver.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/settings_storage.dart';
@@ -60,7 +61,7 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
         // `result.nodes` это prefixed-form: подписка с tagPrefix даёт
         // `'$tagPrefix ⚙ Name'`, поэтому bare `startsWith` ловит только
         // подписки с пустым tagPrefix → helper покрывает оба случая.
-        _allNodes = result.nodes.where((n) => !isDetourDisplayTag(n.tag)).toList();
+        _allNodes = result.nodes.where((n) => !TagResolver.isDetourMarker(n.tag)).toList();
         // Use saved excluded if available, otherwise derive from config diff
         _excluded.addAll(savedExcluded.isNotEmpty ? savedExcluded : result.excluded);
         _loading = false;

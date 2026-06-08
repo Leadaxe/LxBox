@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../config/consts.dart';
+import '../services/tag_resolver.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/error_format.dart';
 import '../models/server_list.dart';
@@ -77,9 +78,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     // Self-exclude тоже по display-form (текущая нода со своим prefix'ом).
     // NB: совпадает с эмитированным tag'ом только ДО `allocateTag` de-dup
     // (collision-suffix `-N` здесь не учитывается — редкий edge, §080).
-    final selfPrefix = widget.entry.list.tagPrefix;
     final selfDisplay =
-        selfPrefix.isEmpty ? _originalTag : '$selfPrefix $_originalTag';
+        TagResolver.displayTag(widget.entry.list.tagPrefix, _originalTag);
     final tags = <String>[];
     for (final e in widget.subController.entries) {
       final list = e.list;
@@ -89,7 +89,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
       final prefix = list.tagPrefix;
       for (final n in list.nodes) {
         if (n.tag.isEmpty) continue;
-        final display = prefix.isEmpty ? n.tag : '$prefix ${n.tag}';
+        final display = TagResolver.displayTag(prefix, n.tag);
         if (display != selfDisplay) tags.add(display);
       }
     }

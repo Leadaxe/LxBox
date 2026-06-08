@@ -12,6 +12,10 @@
 
 - **§083 — Per-channel match-filter memory (in-session)** ([task spec](docs/spec/tasks/083-per-channel-filter-memory.md), [channel_filters.dart](app/lib/screens/home/channel_filters.dart), [home_screen.dart](app/lib/screens/home_screen.dart)). Match-фильтры (regex / протоколы / подписки / ping) теперь запоминаются **отдельно для каждого канала** (selector group). Переключил канал → его набор фильтров восстанавливается; вернулся обратно → снова виден. Раньше фильтры были одни глобальные на все каналы. Реализация: `Map<channel → ChannelFilters>` snapshot в памяти, save/restore в `_onControllerChange` при смене `selectedGroup` (покрывает все пути — dropdown, connect-time resolve, applyGroup). `show-detour` / `show-dimmed` остаются глобальными (они про отображение, не про поиск). Без записи на диск (per-session, по запросу юзера). Pending debounce отменяется при смене канала (старый ввод не протекает). +12 unit tests на `ChannelFilters`.
 
+### Changed
+
+- **§085 R1 — `TagResolver` (единый владелец display-tag logic)** ([roadmap](docs/spec/tasks/085-architecture-roadmap.md), [tag_resolver.dart](app/lib/services/tag_resolver.dart)). Из 28-агентного архитектурного анализа: логика «display-tag ↔ bare-tag» (subscription prefix, detour-маркер `⚙`, collision-suffix) была размазана по 6+ местам, что породило класс багов §077/§079/§080. Вынесена в pure-static `TagResolver` (`displayTag`/`isDetourMarker`/`stripPrefix`/`matchesAllocated`). Рефакторены все call-sites: `server_list_build._withPrefix` (удалён), `subscription_lookup`, home_screen detour-hide + `_findNodeByDisplayTag`, node_filter_screen, detour-picker'ы. Структурно невозможен новый баг этого класса. +30 unit tests. Поведение без изменений.
+
 ### Fixed
 
 - **§084 — Code-audit cleanup: High-блок** ([task spec](docs/spec/tasks/084-code-audit-cleanup.md)). Из 46-агентного аудита кода исправлены все 6 high-находок:

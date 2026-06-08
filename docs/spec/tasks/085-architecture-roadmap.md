@@ -119,7 +119,14 @@
 
 ## Прогресс
 
-- [ ] R1 — TagResolver
+- [x] **R1 — TagResolver** ✅ `lib/services/tag_resolver.dart` (pure static:
+      `displayTag`/`isDetourMarker`/`stripPrefix`/`matchesAllocated`).
+      Рефактор 6 call-sites: `server_list_build._withPrefix` (удалён),
+      `subscription_lookup` (collision inline → helper), home_screen
+      ×2 detour-hide + `_findNodeByDisplayTag`, node_filter_screen,
+      node_settings + subscription_detail picker. `isDetourDisplayTag`
+      удалён из consts. +30 unit tests (`tag_resolver_test.dart`,
+      поглотил consts_test). Класс багов §077/§079/§080 структурно закрыт.
 - [ ] R2 — ConfigIntrospection
 - [ ] R3 — NodeFilterViewModel
 - [ ] R4 — LazyPersistMixin

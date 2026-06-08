@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../config/consts.dart';
+import '../services/tag_resolver.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/server_list.dart';
@@ -703,7 +704,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     final allTags = _viewSortedNodes(state);
     final pool = _showDetourNodes
         ? allTags
-        : allTags.where((t) => !isDetourDisplayTag(t)).toList();
+        : allTags.where((t) => !TagResolver.isDetourMarker(t)).toList();
     final filter = NodeFilter(
       regex: _regexFilterEnabled ? _regexCompiled : null,
       regexInvert: _regexInvert,
@@ -2027,11 +2028,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// "Copy URI" в long-press меню.
   NodeSpec? _findNodeByDisplayTag(String displayTag) {
     for (final e in _subController.entries) {
-      final prefix = e.tagPrefix;
-      var base = displayTag;
-      if (prefix.isNotEmpty && displayTag.startsWith('$prefix ')) {
-        base = displayTag.substring(prefix.length + 1);
-      }
+      final base = TagResolver.stripPrefix(displayTag, e.tagPrefix);
       for (final n in e.list.nodes) {
         if (n.tag == base) return n;
         // Detour-нода живёт под главным как `chained` — в config она тоже
@@ -2312,7 +2309,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     final allTags = _viewSortedNodes(state);
     final pool = _showDetourNodes
         ? allTags
-        : allTags.where((t) => !isDetourDisplayTag(t)).toList();
+        : allTags.where((t) => !TagResolver.isDetourMarker(t)).toList();
 
     // configCache парсится один раз при saveParsedConfig (см. HomeState),
     // здесь просто читаем. Раньше jsonDecode шёл на каждый rebuild

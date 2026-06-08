@@ -1,6 +1,7 @@
 import '../../config/consts.dart';
 import '../../models/emit_context.dart';
 import '../../models/server_list.dart';
+import '../tag_resolver.dart';
 
 /// Сборка одной подписки в контекст `EmitContext`.
 ///
@@ -28,9 +29,10 @@ extension ServerListBuild on ServerList {
 
       // Allocate tags (детуры первыми — чтобы main мог сослаться на tag).
       for (final d in detours) {
-        d.map['tag'] = ctx.allocateTag(_withPrefix(d.tag));
+        d.map['tag'] = ctx.allocateTag(TagResolver.displayTag(tagPrefix, d.tag));
       }
-      main.map['tag'] = ctx.allocateTag(_withPrefix(main.tag));
+      main.map['tag'] =
+          ctx.allocateTag(TagResolver.displayTag(tagPrefix, main.tag));
 
       // Применить detour policy.
       if (replaceMode) {
@@ -78,7 +80,4 @@ extension ServerListBuild on ServerList {
       }
     }
   }
-
-  String _withPrefix(String base) =>
-      tagPrefix.isEmpty ? base : '$tagPrefix $base';
 }

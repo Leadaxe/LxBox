@@ -8,6 +8,7 @@ import '../models/node_spec.dart';
 import '../models/node_warning.dart';
 import '../models/server_list.dart';
 import '../services/error_humanize.dart';
+import '../services/tag_resolver.dart';
 import '../services/subscription/sources.dart';
 import '../services/url_launcher.dart';
 
@@ -562,7 +563,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       final prefix = list.tagPrefix;
       for (final n in list.nodes) {
         if (n.tag.isEmpty) continue;
-        tags.add(prefix.isEmpty ? n.tag : '$prefix ${n.tag}');
+        tags.add(TagResolver.displayTag(prefix, n.tag));
       }
     }
 

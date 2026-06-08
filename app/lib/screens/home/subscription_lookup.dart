@@ -1,5 +1,6 @@
 import '../../controllers/subscription_controller.dart';
 import '../../models/server_list.dart';
+import '../../services/tag_resolver.dart';
 
 /// §077 — Pure helper для lookup'а подписок-кандидатов по display-тэгу.
 ///
@@ -36,22 +37,12 @@ Set<String> subscriptionsOfTag(
     if (!e.enabled) continue; // disabled subs не эмитят node'ы в config
     final prefix = list.tagPrefix;
     for (final n in list.nodes) {
-      final base = prefix.isEmpty ? n.tag : '$prefix ${n.tag}';
-      if (tag == base) {
+      // §085 R1 — display-form + collision-suffix через TagResolver
+      // (был inline дубль логики из server_list_build/_BuildCtx).
+      final base = TagResolver.displayTag(prefix, n.tag);
+      if (TagResolver.matchesAllocated(tag, base)) {
         result.add(e.id);
         break;
-      }
-      // collision-suffix: 'base-1', 'base-2', ...
-      // (см. services/builder/build_config.dart::_BuildCtx.allocateTag)
-      if (tag.length > base.length + 1 &&
-          tag.startsWith(base) &&
-          tag.codeUnitAt(base.length) == 0x2D /* '-' */) {
-        final rest = tag.substring(base.length + 1);
-        if (rest.isNotEmpty &&
-            rest.codeUnits.every((c) => c >= 0x30 && c <= 0x39)) {
-          result.add(e.id);
-          break;
-        }
       }
     }
   }

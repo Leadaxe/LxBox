@@ -24,16 +24,6 @@ const kAutoOutboundTag = '✨auto';
 /// `server_list_build.dart`). См. `docs/spec/tasks/006-per-node-detour-toggles.md`.
 const kDetourTagPrefix = '⚙ ';
 
-/// §079 — True если display-form `tag` принадлежит detour-серверу.
-///
-/// `ServerListBuild._withPrefix` собирает финальный display-тэг как
-/// `'$tagPrefix $base'` (при непустом `tagPrefix`), поэтому detour-prefix
-/// `⚙` оказывается в **середине** строки, а не в начале. Bare-prefix
-/// `startsWith` проверка ловит только подписки с пустым `tagPrefix`.
-///
-/// Heuristic: `startsWith('⚙ ')` ИЛИ `contains(' ⚙ ')`. False-positive на
-/// `⚙` в произвольном юзерском node-имени (`'My ⚙ Server'`) — приемлемо:
-/// `⚙` функциональный маркер detour-семантики, использовать его как
-/// декоративный символ сбивает с толку и без этой проверки.
-bool isDetourDisplayTag(String tag) =>
-    tag.startsWith(kDetourTagPrefix) || tag.contains(' $kDetourTagPrefix');
+// §079 detour-marker detection + §085 R1 — display↔bare логика переехала в
+// `services/tag_resolver.dart::TagResolver` (единый владелец domain-концепта
+// «display-tag»). Здесь остаётся только сама константа-маркер.
