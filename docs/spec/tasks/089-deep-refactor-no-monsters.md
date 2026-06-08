@@ -151,7 +151,27 @@ singleton-сервисы, `ConfigCache`, `home_return_observer`). Риск ре�
 - **КЛЮЧЕВОЙ урок:** агрессивные параллельные агенты МОГУТ ронять логику при
   больших извлечениях. Adversarial-verify обязателен; «тесты зелёные» не ловит
   такие регрессии (нет теста на §080-путь). Каждый результат = review+fix перед
-  merge. 3 оставшихся (per_app_trace/dns/routing) ещё билдятся.
+  merge.
+
+### 2026-06-08 ~13:55 — БАТЧ 1 DISCARDED (баг базы worktree)
+- Все 4 агента завершились green+committed (per_app_trace 1730→377,
+  dns 1410→587, routing 1247→822, subscription_detail 1063→339; 3 safe,
+  subscription_detail unsafe §080).
+- **НО cherry-pick конфликтнул → нашёл root cause:** `isolation:'worktree'`
+  создал worktree'ы от **`0dbd693` (Merge develop into main, v1.9.0)** —
+  это **НЕ предок develop** (общий предок `c294ab0`). Агенты рефакторили
+  **v1.9.0-версии** файлов, без develop-правок (§077/§080/§084: расхождение
+  +9/−47, +12/−34, +14/−42, +20/−3). Мердж бы **откатил** эти фиксы.
+  Это же объясняет «687 тестов» (v1.9.0-suite < develop 808).
+- **Batch-1 выброшен** (worktree'ы + 4 ветки удалены). ~85 мин/960K токенов —
+  sunk cost. develop не пострадал (ничего не мерджил).
+- **ФИКС для v2:** агент первым делом `git checkout -b wf-089-<name> <devSHA>`
+  (актуальный develop HEAD) → рефакторит develop-контент → ветка основана на
+  develop → cherry-pick чистый. Ускорение: агент гоняет только `flutter
+  analyze`; полные 808 тестов прогоняю я один раз после интеграции (+ verify
+  фаза ловит поведенческие регрессии).
+- **Урок процесса:** всегда проверять `git merge-base --is-ancestor <base>
+  develop` перед доверием worktree-результатам.
 
 
 ### 2026-06-08 11:13 — старт
