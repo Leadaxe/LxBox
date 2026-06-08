@@ -32,7 +32,6 @@ import 'home/home_menus.dart';
 import 'home/home_dialogs.dart';
 import 'home/subscription_lookup.dart';
 import 'home/node_filter_view_model.dart';
-import '../widgets/wifi_permission_dialog.dart';
 import 'outbound_view_screen.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/debug_registry.dart';
@@ -341,7 +340,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // Revoke → SnackBar.
     if (_prevTunnel != TunnelStatus.revoked &&
         now == TunnelStatus.revoked) {
-      _showRevokedSnackBar();
+      showRevokedSnackBar(context, _controller);
     }
 
     // §050 — structured alert prefix `alert:permission_location:<perm>` →
@@ -360,8 +359,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
           .trim();
       // Clear immediately so toast/snackbar для same error не показывается.
       _controller.clearError();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _showLocationPermissionDialog(permName);
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await showLocationPermissionDialog(context, permName);
+        _permissionDialogShowing = false;
       });
     } else if (nowError != _prevError) {
       // Auto-dismiss timer для lastError. Раньше жил в Builder внутри build —
@@ -387,33 +388,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   }
 
   bool _permissionDialogShowing = false;
-
-  Future<void> _showLocationPermissionDialog(String permName) async {
-    if (!mounted) return;
-    // permName из BoxService alert prefix — может быть comma-separated:
-    // "android.permission.ACCESS_BACKGROUND_LOCATION,android.permission.NEARBY_WIFI_DEVICES".
-    final missing = permName.split(',').map((p) => p.trim()).toList();
-    await WifiPermissionDialog.show(context, missing: missing);
-    _permissionDialogShowing = false;
-  }
-
-  void _showRevokedSnackBar() {
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger == null) return;
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: const Text('VPN taken by another app'),
-          duration: const Duration(seconds: 5),
-          action: SnackBarAction(
-            label: 'Start',
-            onPressed: () => unawaited(_controller.start()),
-          ),
-        ),
-      );
-  }
 
   /// init подписок + затем `start()` AutoUpdater'а (триггер #1 appStart
   /// и заведение periodic-таймера на 1 час). Порядок важен — AutoUpdater
