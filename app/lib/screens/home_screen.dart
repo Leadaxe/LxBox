@@ -23,7 +23,7 @@ import '../widgets/node_view_item.dart';
 import 'home/node_filter.dart';
 import 'home/filter_widgets.dart';
 import 'home/subscription_lookup.dart';
-import 'home/channel_filters.dart';
+import 'home/node_filter_view_model.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import 'outbound_view_screen.dart';
 import 'about_screen.dart';
@@ -61,43 +61,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   late final AutoUpdater _autoUpdater;
   late final AnimationController _connectingAnim;
   final BoxVpnClient _vpn = BoxVpnClient();
-  bool _showDetourNodes = true;
   bool _autoRebuild = true;
 
-  // §048 — node filter state (per-session in-memory, locked decision #5).
-  // `_showDetourNodes` остаётся выше — pool filter (Phase 1).
-  // Filter UI hidden by default (locked #1) — `Icons.tune` toggle expand.
-  bool _filterPanelExpanded = false;
-  // Regex (live debounced 300ms — locked #4). Checkbox toggle позволяет
-  // временно выключить filter не теряя pattern (та же UX-семантика что у
-  // `_pingFilterEnabled`). Auto-enable при вводе непустого валидного pattern.
-  // `_regexInvert` — `[!]` suffix toggle: matchает инверсно (NOT). Default
-  // off, сбрасывается на _clearRegex.
-  final TextEditingController _regexController = TextEditingController();
-  RegExp? _regexCompiled;
-  bool _regexValid = true;
-  bool _regexFilterEnabled = false;
-  bool _regexInvert = false;
-  Timer? _regexDebounceTimer;
-  // Multi-select chips
-  final Set<String> _enabledProtocols = <String>{};
-  final Set<String> _enabledSubscriptions = <String>{};
-  // Ping/Test (numeric input, debounced 300ms). Filter active только когда
-  // checkbox `_pingFilterEnabled == true` AND `_maxPingMs != null`.
-  // Раздельный toggle — позволяет временно выключить filter не теряя value.
-  final TextEditingController _pingController = TextEditingController();
-  int? _maxPingMs;
-  bool _pingFilterEnabled = false;
-  Timer? _pingDebounceTimer;
-  // Non-matching visibility (locked #7, default ON)
-  bool _showNonMatching = true;
-
-  // §083 — per-channel match-filter memory (in-session). Снимок фильтров
-  // каждого канала; при смене selectedGroup save старого + restore нового.
-  // show-detour / show-dimmed НЕ входят (глобальные). Детект в
-  // `_onControllerChange`.
-  final Map<String, ChannelFilters> _filtersByChannel = {};
-  String? _activeFilterChannel;
+  // §085 R3 — весь node-filter state (§048 regex/protocols/subscriptions/
+  // ping + show-detour/show-non-matching + §083 per-channel memory)
+  // инкапсулирован в `NodeFilterViewModel`. home_screen подписывается на
+  // него и rebuild'ит (`setState`) на каждый `notifyListeners`.
+  late final NodeFilterViewModel _filter;
 
   // §070 — UI-cache для frozen sort при `state.resortOnManualPing == false`.
   // См. spec'у — manual single ping не двигает порядок, batch / group switch /
@@ -136,6 +106,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _autoUpdater = AutoUpdater(_subController);
     _subController.bindAutoUpdater(_autoUpdater);
     _controller = HomeController(autoUpdater: _autoUpdater);
+    // §085 R3 — filter view-model: rebuild на любое изменение фильтров.
+    _filter = NodeFilterViewModel()..addListener(_onFilterChanged);
     _connectingAnim = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -409,12 +381,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     }
 
     // §083 — per-channel match-filter memory. Канал сменился → save старого
-    // + restore нового. Guard `channel == _activeFilterChannel` дешёвый —
-    // _onControllerChange дёргается часто (heartbeat/ping), но setState
-    // только при реальной смене канала.
-    if (_syncChannelFilters(state.selectedGroup)) {
-      if (mounted) setState(() {});
-    }
+    // + restore нового. ViewModel сам guard'ит no-op и notify'ит только при
+    // реальной смене (→ _onFilterChanged → setState).
+    _filter.syncChannel(state.selectedGroup);
 
     _prevTunnel = now;
     _prevError = nowError;
@@ -494,168 +463,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _autoRebuild = val == 'true';
   }
 
-  // §048 — filter event handlers + lookup closures.
-
-  /// Debounced 300ms regex compile. Invalid pattern → `_regexValid = false`,
-  /// `_regexCompiled = null` (filter no-op). Auto-enable checkbox при вводе
-  /// валидного non-empty pattern (UX: input «работает» без отдельного тапа
-  /// checkbox — те же правила что у `_onPingChanged`).
-  void _onRegexChanged(String text) {
-    _regexDebounceTimer?.cancel();
-    _regexDebounceTimer = Timer(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
-      setState(() {
-        if (text.isEmpty) {
-          _regexCompiled = null;
-          _regexValid = true;
-        } else {
-          try {
-            _regexCompiled = RegExp(text, caseSensitive: false);
-            _regexValid = true;
-            _regexFilterEnabled = true;
-          } catch (_) {
-            _regexCompiled = null;
-            _regexValid = false;
-          }
-        }
-      });
-    });
-  }
-
-  void _clearRegex() {
-    _regexController.clear();
-    _regexDebounceTimer?.cancel();
-    setState(() {
-      _regexCompiled = null;
-      _regexValid = true;
-      _regexFilterEnabled = false;
-      _regexInvert = false;
-    });
-  }
-
-  void _onEmojiChipTap(String emoji) {
-    final current = _regexController.text;
-    // Если поле не пустое — добавляем OR-pattern (`|emoji`). Tap на 🇷🇺 потом
-    // 🇺🇸 → `🇷🇺|🇺🇸` (regex OR), matchает обе страны. Иначе тапы строили бы
-    // sequence `🇷🇺🇺🇸` который не matchает ничего.
-    final next = current.isEmpty ? emoji : '$current|$emoji';
-    _regexController.text = next;
-    _regexController.selection =
-        TextSelection.collapsed(offset: _regexController.text.length);
-    _onRegexChanged(next);
-  }
-
-  /// Debounced 300ms ping parse. Empty / unparsable → `_maxPingMs = null`.
-  /// Auto-enable checkbox когда юзер ввёл валидное число (UX: input «работает»
-  /// без отдельного тапа checkbox).
-  void _onPingChanged(String text) {
-    _pingDebounceTimer?.cancel();
-    _pingDebounceTimer = Timer(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
-      final n = int.tryParse(text);
-      setState(() {
-        _maxPingMs = (n != null && n > 0) ? n : null;
-        if (_maxPingMs != null) _pingFilterEnabled = true;
-      });
-    });
-  }
-
-  void _clearPing() {
-    _pingController.clear();
-    _pingDebounceTimer?.cancel();
-    setState(() {
-      _maxPingMs = null;
-      _pingFilterEnabled = false;
-    });
-  }
-
-  void _toggleProtocol(String proto) {
-    setState(() {
-      if (!_enabledProtocols.add(proto)) {
-        _enabledProtocols.remove(proto);
-      }
-    });
-  }
-
-  /// §083 — снимок текущих match-фильтров (для save при уходе с канала).
-  ChannelFilters _captureFilters() => ChannelFilters(
-        regexPattern: _regexController.text,
-        regexEnabled: _regexFilterEnabled,
-        regexInvert: _regexInvert,
-        protocols: Set.of(_enabledProtocols),
-        subscriptions: Set.of(_enabledSubscriptions),
-        pingText: _pingController.text,
-        pingEnabled: _pingFilterEnabled,
-      );
-
-  /// §083 — восстановить match-фильтры из снимка (при входе в канал).
-  /// Caller оборачивает в setState. Отменяет pending debounce чтобы старый
-  /// ввод не протёк в новый канал.
-  void _restoreFilters(ChannelFilters f) {
-    _regexDebounceTimer?.cancel();
-    _pingDebounceTimer?.cancel();
-    // regex — установить text + перекомпилировать.
-    _regexController.text = f.regexPattern;
-    if (f.regexPattern.isEmpty) {
-      _regexCompiled = null;
-      _regexValid = true;
-    } else {
-      try {
-        _regexCompiled = RegExp(f.regexPattern, caseSensitive: false);
-        _regexValid = true;
-      } catch (_) {
-        _regexCompiled = null;
-        _regexValid = false;
-      }
-    }
-    _regexFilterEnabled = f.regexEnabled;
-    _regexInvert = f.regexInvert;
-    // protocols / subscriptions — копии (Set'ы mutable, нельзя шарить ссылку).
-    _enabledProtocols
-      ..clear()
-      ..addAll(f.protocols);
-    _enabledSubscriptions
-      ..clear()
-      ..addAll(f.subscriptions);
-    // ping — установить text + распарсить.
-    _pingController.text = f.pingText;
-    final n = int.tryParse(f.pingText);
-    _maxPingMs = (n != null && n > 0) ? n : null;
-    _pingFilterEnabled = f.pingEnabled;
-  }
-
-  /// §083 — реакция на смену `selectedGroup`: save фильтров старого канала,
-  /// restore нового. Вызывается из `_onControllerChange` (покрывает все пути
-  /// смены — dropdown, connect-time resolve, applyGroup). Возвращает true
-  /// если что-то восстановили (caller дёрнет setState).
-  bool _syncChannelFilters(String? channel) {
-    if (channel == _activeFilterChannel) return false;
-    // save старый канал (только если есть что сохранять — пустые не плодим).
-    final prev = _activeFilterChannel;
-    if (prev != null) {
-      final snap = _captureFilters();
-      if (snap.isEmpty) {
-        _filtersByChannel.remove(prev);
-      } else {
-        _filtersByChannel[prev] = snap;
-      }
-    }
-    if (channel == null) {
-      _activeFilterChannel = null;
-      return false;
-    }
-    _restoreFilters(_filtersByChannel[channel] ?? ChannelFilters.empty);
-    _activeFilterChannel = channel;
-    return true;
-  }
-
-  void _toggleSubscription(String id) {
-    setState(() {
-      if (!_enabledSubscriptions.add(id)) {
-        _enabledSubscriptions.remove(id);
-      }
-    });
-  }
+  // §085 R3 — filter event handlers + per-channel memory переехали в
+  // `NodeFilterViewModel` (`_filter`). Здесь остаются только lookup-замыкания
+  // (`_protocolOfTag` / `_subscriptionsOfTag` / `_isControlTag`), которые
+  // зависят от `state`/`_subController`, а не от filter-state.
 
   /// Lookup protocol for tag — учитывает urltest group fallback (см. §048
   /// «Protocol detection»). Возвращает null если cache miss и urltest нет.
@@ -693,29 +504,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     return _controlProxyTypes.contains(type);
   }
 
-  /// §078 — Recompute текущий displayList снаружи `_buildNodeList`.
-  /// Используется ping button onTap чтобы передать display-order в
-  /// `runMassUrltest(order: ...)`. Логика идентична `_buildNodeList`:
-  /// pool (detour show/hide) → filter (control короткозамкнут) → split →
-  /// matching + (optional) nonMatching.
-  ///
-  /// Дублирование вычисления приемлемо: filter pass дешёвый (≤500 nodes ×
-  /// O(1) predicate calls = ~ms) и зовётся один раз на tap.
-  List<String> _computeDisplayList(HomeState state) {
-    final allTags = _viewSortedNodes(state);
-    final pool = _showDetourNodes
-        ? allTags
-        : allTags.where((t) => !TagResolver.isDetourMarker(t)).toList();
-    final filter = NodeFilter(
-      regex: _regexFilterEnabled ? _regexCompiled : null,
-      regexInvert: _regexInvert,
-      protocols: _enabledProtocols,
-      subscriptions: _enabledSubscriptions,
-      maxPingMs: _pingFilterEnabled ? _maxPingMs : null,
-      protocolOf: (t) => _protocolOfTag(t, state),
-      subscriptionsOf: _subscriptionsOfTag,
-      pingOf: (t) => state.lastDelay[t],
-    );
+  /// §085 R3 — единый `NodeFilter` из view-model + state-зависимых lookup'ов.
+  /// Используется и `_computeDisplayList`, и `_buildNodeList` (был дубль §078).
+  NodeFilter _buildNodeFilter(HomeState state) => NodeFilter(
+        regex: _filter.activeRegex,
+        regexInvert: _filter.regexInvert,
+        protocols: _filter.enabledProtocols,
+        subscriptions: _filter.enabledSubscriptions,
+        maxPingMs: _filter.activeMaxPingMs,
+        protocolOf: (t) => _protocolOfTag(t, state),
+        subscriptionsOf: _subscriptionsOfTag,
+        pingOf: (t) => state.lastDelay[t],
+      );
+
+  /// §085 R3 — pool (detour show/hide) → split на matching/non-matching.
+  /// Control-узлы (direct/auto/…) короткозамкнуты в matching (§078).
+  /// Возвращает `(matching, nonMatching)`.
+  (List<String>, List<String>) _splitNodes(
+      List<String> sortedNodes, HomeState state) {
+    final pool = _filter.showDetour
+        ? sortedNodes
+        : sortedNodes.where((t) => !TagResolver.isDetourMarker(t)).toList();
+    final filter = _buildNodeFilter(state);
     final matching = <String>[];
     final nonMatching = <String>[];
     for (final tag in pool) {
@@ -725,15 +535,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         nonMatching.add(tag);
       }
     }
-    return _showNonMatching ? [...matching, ...nonMatching] : matching;
+    return (matching, nonMatching);
   }
 
-  /// True если хоть один match-filter активен (для visual hint icon color).
-  bool get _isFilterActive =>
-      (_regexFilterEnabled && _regexCompiled != null) ||
-      _enabledProtocols.isNotEmpty ||
-      _enabledSubscriptions.isNotEmpty ||
-      (_pingFilterEnabled && _maxPingMs != null);
+  /// §078 — текущий displayList снаружи `_buildNodeList` (для ping button →
+  /// `runMassUrltest(order:)` в порядке отображения).
+  List<String> _computeDisplayList(HomeState state) {
+    final (matching, nonMatching) = _splitNodes(_viewSortedNodes(state), state);
+    return _filter.showNonMatching
+        ? [...matching, ...nonMatching]
+        : matching;
+  }
 
   /// §070 — true если хоть одна sort-опция отклонена от default (для
   /// yellow dot indicator).
@@ -840,12 +652,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // созданию).
     _errorTimer?.cancel();
     _errorTimer = null;
-    _regexDebounceTimer?.cancel();
-    _regexDebounceTimer = null;
-    _pingDebounceTimer?.cancel();
-    _pingDebounceTimer = null;
-    _regexController.dispose();
-    _pingController.dispose();
+    _filter.removeListener(_onFilterChanged);
+    _filter.dispose();
     _controller.removeListener(_onControllerChange);
     UpdateChecker.I.latest.removeListener(_onLatestUpdateChanged);
     WidgetsBinding.instance.removeObserver(this);
@@ -867,6 +675,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (state == AppLifecycleState.resumed) {
       _controller.onAppResumed();
     }
+  }
+
+  /// §085 R3 — rebuild при изменении фильтров (NodeFilterViewModel notify).
+  void _onFilterChanged() {
+    if (mounted) setState(() {});
   }
 
   /// §076: drawer item → close drawer + push screen. Auto-rebuild на
@@ -1673,16 +1486,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
             // Color = primary когда есть active match-filter (visual hint что
             // фильтрация активна даже когда panel collapsed).
             IconButton(
-              tooltip: _filterPanelExpanded ? 'Hide filters' : 'Show filters',
+              tooltip: _filter.panelExpanded ? 'Hide filters' : 'Show filters',
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              onPressed: () => setState(
-                  () => _filterPanelExpanded = !_filterPanelExpanded),
+              onPressed: _filter.togglePanel,
               icon: Icon(
                 Icons.tune,
                 size: 20,
-                color: _isFilterActive
+                color: _filter.isActive
                     ? Theme.of(context).colorScheme.primary
                     : null,
               ),
@@ -2255,7 +2067,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // §070: используем _viewSortedNodes — frozen sort при resortOnManualPing=false
     // (manual single ping не дёргает порядок).
     final allTags = _viewSortedNodes(state);
-    final pool = _showDetourNodes
+    final pool = _filter.showDetour
         ? allTags
         : allTags.where((t) => !TagResolver.isDetourMarker(t)).toList();
 
@@ -2264,39 +2076,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // ListView — с 50+ нодами и сортировкой это был hot-path выжиматель.
     final cache = state.configCache;
 
-    // Phase 2 — match filter: split pool на matching + nonMatching.
-    // NodeFilter НЕ знает про detour — он работает с уже-фильтрованным pool.
-    final filter = NodeFilter(
-      // Regex filter активен только когда checkbox включён (та же семантика
-      // что у `_pingFilterEnabled` — позволяет временно выключить не теряя
-      // pattern).
-      regex: _regexFilterEnabled ? _regexCompiled : null,
-      regexInvert: _regexInvert,
-      protocols: _enabledProtocols,
-      subscriptions: _enabledSubscriptions,
-      // Test filter активен только когда checkbox включён.
-      maxPingMs: _pingFilterEnabled ? _maxPingMs : null,
-      protocolOf: (t) => _protocolOfTag(t, state),
-      subscriptionsOf: _subscriptionsOfTag,
-      pingOf: (t) => state.lastDelay[t],
-    );
-    final matching = <String>[];
-    final nonMatching = <String>[];
-    for (final tag in pool) {
-      // §078 — control outbounds (direct-out / ✨auto / selector / urltest
-      // / block / dns) **всегда** matching: фильтр про payload-ноды, control
-      // не относится к категории «нода из подписки» и не должен dim'иться
-      // при включённом filter.
-      if (_isControlTag(tag, state) || filter.passes(tag)) {
-        matching.add(tag);
-      } else {
-        nonMatching.add(tag);
-      }
-    }
+    // §048 Phase 2 — match filter: split pool на matching + nonMatching
+    // (control-узлы короткозамкнуты в matching, §078). См. `_splitNodes`.
+    final (matching, nonMatching) = _splitNodes(allTags, state);
     final matchingSet = matching.toSet();
 
     // Render list = matching + (showNonMatching ? nonMatching : []).
-    final displayList = _showNonMatching
+    final displayList = _filter.showNonMatching
         ? <String>[...matching, ...nonMatching]
         : matching;
 
@@ -2329,7 +2115,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     return Expanded(
       child: Column(
         children: [
-          if (_filterPanelExpanded)
+          if (_filter.panelExpanded)
             _buildFilterPanel(
               context,
               emojis: emojis,
@@ -2512,18 +2298,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           RegexFilterField(
-            controller: _regexController,
-            onChanged: _onRegexChanged,
-            valid: _regexValid,
-            enabled: _regexFilterEnabled,
-            onEnabledChanged: (v) => setState(() => _regexFilterEnabled = v),
-            invert: _regexInvert,
-            onInvertChanged: (v) => setState(() => _regexInvert = v),
-            onClear: _clearRegex,
+            controller: _filter.regexController,
+            onChanged: _filter.onRegexChanged,
+            valid: _filter.regexValid,
+            enabled: _filter.regexEnabled,
+            onEnabledChanged: _filter.setRegexEnabled,
+            invert: _filter.regexInvert,
+            onInvertChanged: _filter.setRegexInvert,
+            onClear: _filter.clearRegex,
           ),
           if (emojis.isNotEmpty) ...[
             const SizedBox(height: 6),
-            EmojiChipsRow(emojis: emojis, onTap: _onEmojiChipTap),
+            EmojiChipsRow(emojis: emojis, onTap: _filter.onEmojiChipTap),
           ],
           if (availableProtocols.isNotEmpty) ...[
             const SizedBox(height: 4),
@@ -2531,35 +2317,35 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
               options: [
                 for (final p in availableProtocols) (p, _protoLabel(p)),
               ],
-              enabled: _enabledProtocols,
-              onToggle: _toggleProtocol,
+              enabled: _filter.enabledProtocols,
+              onToggle: _filter.toggleProtocol,
             ),
           ],
           if (subOptions.isNotEmpty) ...[
             const SizedBox(height: 4),
             MultiSelectChipsRow(
               options: subOptions,
-              enabled: _enabledSubscriptions,
-              onToggle: _toggleSubscription,
+              enabled: _filter.enabledSubscriptions,
+              onToggle: _filter.toggleSubscription,
             ),
           ],
           const SizedBox(height: 4),
           PingFilterField(
-            controller: _pingController,
-            onChanged: _onPingChanged,
-            enabled: _pingFilterEnabled,
-            onEnabledChanged: (v) => setState(() => _pingFilterEnabled = v),
-            onClear: _clearPing,
+            controller: _filter.pingController,
+            onChanged: _filter.onPingChanged,
+            enabled: _filter.pingEnabled,
+            onEnabledChanged: _filter.setPingEnabled,
+            onClear: _filter.clearPing,
           ),
           FilterCheckboxRow(
             label: 'Show detour servers',
-            value: _showDetourNodes,
-            onChanged: (v) => setState(() => _showDetourNodes = v),
+            value: _filter.showDetour,
+            onChanged: _filter.setShowDetour,
           ),
           FilterCheckboxRow(
             label: 'Show non-matching (dimmed)',
-            value: _showNonMatching,
-            onChanged: (v) => setState(() => _showNonMatching = v),
+            value: _filter.showNonMatching,
+            onChanged: _filter.setShowNonMatching,
           ),
         ],
       ),

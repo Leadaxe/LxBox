@@ -138,10 +138,16 @@
       `_copyNodeJson`; stats `_parseDetourMap`+`_detourChain` (детур-chain
       был продублирован 3×). `ConfigCache` (hot-path render) оставлен —
       разные цели, задокументировано. +9 unit tests.
-- [ ] R3 — NodeFilterViewModel — ⚠ **отложен**: самый рискованный (большой
-      diff в home_screen 2639, setState coupling, `home_screen` не покрыт
-      widget-тестами → регрессию render'а юнит-тесты не поймают). Делать
-      когда юзер за рулём для device-verify фильтров. Не делал слепо ночью.
+- [x] **R3 — NodeFilterViewModel** ✅ `lib/screens/home/node_filter_view_model.dart`
+      (ChangeNotifier, 249 строк). Весь filter-state (17 полей + 11 методов:
+      regex/protocols/subscriptions/ping + show-detour/show-non-matching +
+      §083 per-channel memory + debounce) вынесен из `_HomeScreenState`.
+      **home_screen: 2639 → 2370** (−269). Бонус: `_buildNodeFilter` +
+      `_splitNodes` хелперы убрали дубль NodeFilter-construction (§078).
+      home подписан через `_filter.addListener(_onFilterChanged)` → setState.
+      +17 unit-tests (filter-логика раньше **не** покрыта). Adversarial
+      review (3 оси): **0 findings** — поведение идентично. Device-verify
+      фильтров — за юзером (render не покрыт widget-тестами).
 - [x] **R4 — LazyPersistMixin** ✅ `lib/screens/lazy_persist_mixin.dart`
       (`markDirty`/`persistChanges`/flush-on-dispose+paused/configDirty sync).
       Применён к 3 экранам с идентичным bool-скелетом: tun_apps_tab,
