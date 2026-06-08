@@ -20,7 +20,14 @@ String formatBytes(int b, {bool spaced = false}) {
 }
 
 /// Компактная длительность: `2h 5m` / `5m 30s` / `30s`.
-String formatDuration(Duration d) {
+///
+/// `daysRollup=true` добавляет дневной разряд (`1d 6h`) при ≥24h — для
+/// uptime-индикатора (§090 A1, было `traffic_bar._uptime`). По умолчанию
+/// (false) разряда дней нет — `30h 5m` остаётся в часах, как раньше.
+String formatDuration(Duration d, {bool daysRollup = false}) {
+  if (daysRollup && d.inHours >= 24) {
+    return '${d.inDays}d ${d.inHours % 24}h';
+  }
   if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes % 60}m';
   if (d.inMinutes > 0) return '${d.inMinutes}m ${d.inSeconds % 60}s';
   return '${d.inSeconds}s';

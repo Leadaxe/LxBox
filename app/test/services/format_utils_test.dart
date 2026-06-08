@@ -31,6 +31,32 @@ void main() {
     test('zero', () => expect(formatDuration(Duration.zero), '0s'));
   });
 
+  group('formatDuration — daysRollup (§090 A1, было traffic_bar._uptime)', () {
+    test('< 24h: идентично базовому', () {
+      expect(formatDuration(const Duration(seconds: 42), daysRollup: true),
+          '42s');
+      expect(
+          formatDuration(const Duration(minutes: 5, seconds: 3),
+              daysRollup: true),
+          '5m 3s');
+      expect(
+          formatDuration(const Duration(hours: 2, minutes: 30),
+              daysRollup: true),
+          '2h 30m');
+    });
+    test('≥ 24h → дневной разряд', () {
+      expect(formatDuration(const Duration(days: 1, hours: 6), daysRollup: true),
+          '1d 6h');
+      expect(formatDuration(const Duration(hours: 25), daysRollup: true),
+          '1d 1h');
+      expect(formatDuration(const Duration(days: 3), daysRollup: true), '3d 0h');
+    });
+    test('default (false): дней нет, часы продолжаются', () {
+      expect(formatDuration(const Duration(hours: 30, minutes: 5)), '30h 5m');
+      expect(formatDuration(const Duration(days: 1, hours: 6)), '30h 0m');
+    });
+  });
+
   group('formatTime', () {
     test('HH:mm:ss padded', () =>
         expect(formatTime(DateTime(2026, 1, 1, 9, 5, 3)), '09:05:03'));

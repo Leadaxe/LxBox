@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../controllers/home_controller.dart';
 import '../../../models/home_state.dart';
+import '../../../services/format_utils.dart';
 import '../../../services/traffic_profiler.dart';
 import '../../stats_screen.dart';
 
@@ -21,7 +22,10 @@ class TrafficBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final uptime = state.connectedSince != null
-        ? _uptime(DateTime.now().difference(state.connectedSince!))
+        ? formatDuration(
+            DateTime.now().difference(state.connectedSince!),
+            daysRollup: true,
+          )
         : '';
     return GestureDetector(
       onTap: () {
@@ -130,14 +134,4 @@ class TrafficBar extends StatelessWidget {
     return '${parts[0]}.${parts[1]}';
   }
 
-  /// Uptime-формат `30s` / `5m 3s` / `2h 30m` / `1d 6h`. Сворачивает в дни —
-  /// в отличие от `formatDuration` (format_utils), поэтому отдельный helper.
-  static String _uptime(Duration d) {
-    if (d.inSeconds < 60) return '${d.inSeconds}s';
-    if (d.inMinutes < 60) return '${d.inMinutes}m ${d.inSeconds % 60}s';
-    final h = d.inHours;
-    final m = d.inMinutes % 60;
-    if (h < 24) return '${h}h ${m}m';
-    return '${d.inDays}d ${h % 24}h';
-  }
 }
