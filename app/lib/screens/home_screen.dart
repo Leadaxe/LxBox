@@ -23,6 +23,9 @@ import '../widgets/node_view_item.dart';
 import 'home/node_filter.dart';
 import 'home/filter_widgets.dart';
 import 'home/widgets/traffic_bar.dart';
+import 'home/widgets/status_chip.dart';
+import 'home/widgets/progress_banner.dart';
+import 'home/widgets/nodes_header.dart';
 import 'home/subscription_lookup.dart';
 import 'home/node_filter_view_model.dart';
 import '../widgets/wifi_permission_dialog.dart';
@@ -550,9 +553,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
 
   /// §070 — true если хоть одна sort-опция отклонена от default (для
   /// yellow dot indicator).
-  bool _isSortNonDefault(HomeState s) =>
-      !s.pinDirect || !s.pinAuto || !s.resortOnManualPing;
-
   /// §070 — frozen sort при `resortOnManualPing == false`. Cache hit ↔
   /// (sortMode, pingBatchGen, nodes.length, pinDirect, pinAuto) совпадают
   /// с предыдущим вызовом + все cached tags ещё в pool. Manual single ping
@@ -721,9 +721,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 if (state.tunnelUp)
                   TrafficBar(state: state, controller: _controller),
                 if (_subController.busy && _subController.progressMessage.isNotEmpty)
-                  _buildProgressBanner(context),
+                  ProgressBanner(message: _subController.progressMessage),
                 const SizedBox(height: 12),
-                _buildNodesHeader(context),
+                NodesHeader(
+                  controller: _controller,
+                  subController: _subController,
+                  filter: _filter,
+                  onSortLongPress: () => _showSortOptionsMenu(context),
+                ),
                 const SizedBox(height: 4),
               ],
               _buildNodeList(context, state),
@@ -862,7 +867,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 label: Text(state.tunnelUp ? 'Stop' : 'Start'),
               ),
               const SizedBox(width: 8),
-              _buildStatusChip(state, isRevoked, isConnecting),
+              StatusChip(
+                state: state,
+                isRevoked: isRevoked,
+                isConnecting: isConnecting,
+                connectingAnim: _connectingAnim,
+              ),
               const SizedBox(width: 8),
               _buildReloadButton(context, state),
             ],
@@ -1202,59 +1212,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     }
   }
 
-  Widget _buildStatusChip(HomeState state, bool isRevoked, bool isConnecting) {
-    // Pure render — animation state (`_connectingAnim.repeat/stop/reset`)
-    // управляется в _onControllerChange при смене tunnel. Раньше было
-    // здесь, что нарушало Flutter-правило «build чистый» (hot-path из
-    // heartbeat'а и ping'а дёргал .repeat/.stop лишний раз).
-    //
-    // UI mapping: revoked отображаем как disconnected. Факт "нас выкинули"
-    // юзер получает через SnackBar (см. _showRevokedSnackBar), а chip
-    // показывает нейтральный off-state — так видна обычная Start кнопка,
-    // без алармирующего красного. Само значение state.tunnel=revoked
-    // внутри контроллера не меняется — это нужно для side-effect
-    // transition detection в _onControllerChange.
-    final icon = state.tunnelUp
-        ? Icons.shield
-        : isConnecting
-            ? Icons.sync
-            : Icons.shield_outlined;
-
-    final color = state.tunnelUp
-        ? Theme.of(context).colorScheme.primary
-        : null;
-
-    final bgColor = state.tunnelUp
-        ? Theme.of(context).colorScheme.primaryContainer
-        : null;
-
-    // Unknown от native (мусор в stream, неизвестный raw) маппим на
-    // Disconnected label — внутренний state.tunnel=unknown сохраняется
-    // для логики (см. TunnelStatus.fromNative), но юзеру не показываем
-    // loadable loading "Unknown" — просто off-state.
-    final label = (isRevoked || state.tunnel == TunnelStatus.unknown)
-        ? TunnelStatus.disconnected.label
-        : state.tunnel.label;
-
-    Widget iconWidget = Icon(icon, size: 18, color: color);
-    if (isConnecting) {
-      iconWidget = AnimatedBuilder(
-        animation: _connectingAnim,
-        builder: (_, child) => Transform.rotate(
-          angle: _connectingAnim.value * 2 * 3.14159,
-          child: child,
-        ),
-        child: iconWidget,
-      );
-    }
-
-    return Chip(
-      label: Text(label),
-      avatar: iconWidget,
-      backgroundColor: bgColor,
-    );
-  }
-
   Future<void> _startWithAutoRefresh() async {
     // Обновление подписок теперь через AutoUpdater (см. services/subscription/
     // auto_updater.dart) — 4 триггера, общая логика. При Start никакого
@@ -1271,133 +1228,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       );
     }
   }
-
-  Widget _buildProgressBanner(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Row(
-        children: [
-          const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _subController.progressMessage,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNodesHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onLongPress: () {
-          Navigator.of(context).push(MaterialPageRoute<void>(
-            builder: (_) => RoutingScreen(
-              subController: _subController,
-              homeController: _controller,
-            ),
-          ));
-        },
-        child: Row(
-          children: [
-            Text(
-              'Nodes',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-            if (_controller.state.nodes.isNotEmpty) ...[
-              const SizedBox(width: 4),
-              Text(
-                '(${_controller.state.nodes.length})',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ],
-            const Spacer(),
-            // §070: sort button = InkWell с tap (cycle) + long-press
-            // (popup menu) вместо IconButton (у того нет onLongPress).
-            // Yellow dot overlay когда хоть одна sort-опция non-default.
-            // Icon в `manual` mode = ⠿ (§071), невозможный через cycle.
-            Tooltip(
-              message: _controller.state.sortMode.label,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  InkWell(
-                    onTap: _controller.state.nodes.isEmpty
-                        ? null
-                        : _controller.cycleSortMode,
-                    onLongPress: _controller.state.nodes.isEmpty
-                        ? null
-                        : () => _showSortOptionsMenu(context),
-                    borderRadius: BorderRadius.circular(18),
-                    child: SizedBox(
-                      width: 36,
-                      height: 36,
-                      child: Center(
-                        child: Icon(
-                          _controller.state.sortMode.icon,
-                          size: 20,
-                          color: _controller.state.nodes.isEmpty
-                              ? Theme.of(context).disabledColor
-                              : null,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (_isSortNonDefault(_controller.state))
-                    Positioned(
-                      right: 4,
-                      top: 4,
-                      child: IgnorePointer(
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Colors.amber,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            // §048 — `Icons.tune` теперь IconButton expand toggle, не popup.
-            // Existing «Show detour servers» переехал внутрь expanded panel.
-            // Color = primary когда есть active match-filter (visual hint что
-            // фильтрация активна даже когда panel collapsed).
-            IconButton(
-              tooltip: _filter.panelExpanded ? 'Hide filters' : 'Show filters',
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              onPressed: _filter.togglePanel,
-              icon: Icon(
-                Icons.tune,
-                size: 20,
-                color: _filter.isActive
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
 
   Future<void> _rebuildAndClearDirty() async {
     await _rebuildConfig();
