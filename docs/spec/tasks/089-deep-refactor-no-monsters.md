@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **In progress** (автономная сессия, старт 2026-06-08 11:13 MSK) |
+| Статус | **DONE** (старт 2026-06-08 11:13 MSK; P1–P7 завершены) |
 | Тип | refactor / architecture / docs |
 | Скоуп | Весь `app/lib` + `app/android/.../kotlin` + `docs/ARCHITECTURE.md` |
 | Жёсткий инвариант | **Zero behavior change.** Каждый шаг: `flutter analyze` clean + `flutter test` (808) green. Не коммитить red. Инкрементальные коммиты. |
@@ -388,3 +388,52 @@ live_events 663, backup 627) · P3 сервисы (traffic_profiler 1632,
 settings_storage 941, post_steps 1132, box_vpn_client 607, uri_parsers 729) ·
 P4 контроллеры (home_controller 1089) · P5 Kotlin (VpnPlugin 635) · P6 дедуп/
 чистка · P7 ARCHITECTURE.md · P8 финал (APK build+install) + CHANGELOG.
+
+---
+
+### 2026-06-08 — P6 cross-cutting cleanup ✅ (commit `ff46f24`)
+Заземление через recon-воркфлоу (9 агентов: 3 cleanup-финдера + 6 subsystem-
+ридеров, ~700K токенов). Все находки grep-верифицированы перед применением.
+- **Мёртвый код удалён:** `services/download_saver.dart` (вытеснен `DumpBuilder`),
+  `debug/debug_server.dart` (unused barrel — потребители импортят части напрямую),
+  `_shared.jsonBodyAsList`, `subscription_controller.updateAllAndGenerate`,
+  `validation.UnknownField` (uncalled, нет exhaustive-switch refs).
+- **Дедуп:** новый `services/json_clone.dart` (`deepCopyJson`/`deepCloneJson`/
+  `deepEqualsJson`) схлопнул `_deepCopy` (build_config, preset_expand), `_deepClone`
+  (backup_service), `_deepEquals` (preset_expand, rule_set_registry) — 4 дубль-
+  определения → 1. formatBytes/uptime НЕ трогал (задокументированные отличия
+  вывода — 0-guard, days-rollup → §090, не behavior-preserving).
+- **Комментарии:** comment-cleanup-воркфлоу (4 агента, disjoint-файлы) убрал ~24
+  §089-split breadcrumb'а («вынесено из _HomeScreenState», «Extracted from X
+  (§089 split)») + осиротевшие §081-ссылки. Load-bearing WHY сохранены
+  (напр. home_controls reconnect()-rationale).
+- **Находка для §090:** `update_checker.dismissCurrent` — read-guard
+  (`getDismissedUpdateVersion`) активен, но writer'а в UI нет → фича «скрыть этот
+  апдейт» половинчатая. Stub оставлен намеренно (не dead code), зафлагован §090.
+- Гейт: analyze clean + 808 тестов green. Over-split <40-строк ревизия: большинство
+  мелких файлов — cohesive pure-хелперы (часто с тестами); re-merge ради merge так
+  же плох как нарезка ради нарезки → не трогал.
+
+### 2026-06-08 — P7 ARCHITECTURE.md overhaul ✅ (commit `bd56948`)
+Из 6 subsystem-карт recon'а:
+- **Обзор:** 4-слойная диаграмма зон ответственности (UI→State→Services→Platform,
+  однонаправленные зависимости) + брокеры событий (push status/coreLog streams) +
+  раздел «принцип cohesion over line-count» с таблицей задокументированных крупных
+  исключений + раздел «Планируется (§091)».
+- **Дерево исходников:** полный rewrite — per-file роли для vpn/config/models/
+  controllers(+parts)/screens(+subtrees)/services(parser·builder·subscription·
+  settings_storage·traffic_profiler·debug·nav)/widgets + полное native-дерево
+  Kotlin (§049-split, WifiInfoReader, §087). Сверено: все пути существуют
+  (поправлен single_app_picker — он в под-папке per_app_trace_tab/).
+- **Key Decisions:** +2 строки (§089 part/mixin декомпозиция, §091 ConfigNode).
+- Убраны stale-ссылки (download_saver) + pre-§049 native layout.
+
+### 🏁 §089 ЗАВЕРШЁН
+16 из 18 монстров раздроблены через base-fixed worktree-воркфлоу + adversarial-
+verify + 808-гейт. Задокументированные исключения (cohesion > line-count):
+`traffic_profiler` 1221, `custom_rule` 618 (→§090), `VpnPlugin.kt` 635.
+Поведение неизменно на каждом шаге. P6 cleanup + P7 доки done.
+**APK-ребилд намеренно отложен:** P6 = zero-behavior-change (verified 808 тестами),
+P7 docs-only → бинарь идентичен уже стоящему vc 2510; следующий build имеет смысл
+после §091/§090 (там реальные изменения поведения).
+Дальше: §091 (реализация ConfigNode) → §090 (переизучить/доработать).
