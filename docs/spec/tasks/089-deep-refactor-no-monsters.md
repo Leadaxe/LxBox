@@ -137,3 +137,69 @@ singleton-сервисы, `ConfigCache`, `home_return_observer`). Риск ре�
 - Создан этот документ. Базлайн: `d7a0edd`, 808 тестов green, analyze clean.
 - Дальше: Phase 0 (инспекция home_screen + точная карта декомпозиции) →
   Phase 1 (home_screen).
+
+### 2026-06-08 11:20 — ⚠️ важное решение: НЕ `dart format` существующих файлов
+- SDK 3.11 → `dart format` использует новый «tall»-стиль, который **раздувает**
+  компактный код проекта (один extract дал diff 618 строк reflow + файл вырос
+  2370→2380). Конфликтует с целью «меньше строк» + нечитаемый diff.
+- **Правило сессии:** ручные правки существующих файлов в их стиле; `dart
+  format` только на НОВЫХ файлах. Откатил первый коммит, переделал вручную.
+
+### 2026-06-08 11:24 — P1.1 TrafficBar извлечён (коммит `5ab387e`)
+- `_buildTrafficBar`+`_trafficChip`+`_shortPkg`+uptime-форматтер →
+  `screens/home/widgets/traffic_bar.dart` (StatelessWidget). home_screen
+  **2370→2263**. analyze clean, 808 green.
+- Дубль-находка: home uptime-форматтер (со сворачиванием в дни) ≠
+  `format_utils.formatDuration` (без дней) — дедуп = behavior change, оставлен
+  отдельным (помечено).
+
+### 2026-06-08 11:40 — P1.2 StatusChip+ProgressBanner+NodesHeader (`4841d30`)
+- 3 виджета → `screens/home/widgets/`. `_isSortNonDefault` инлайнен в NodesHeader.
+  home_screen **2263→2093**. analyze clean, 808 green.
+- **Заметка по NodeList:** `_buildNodeList`+`_buildReorderableNodeList` (~292
+  строки) — «твёрдое ядро», ~15 коллбэков/хелперов (filter/sort/split/copy/
+  ping/reorder). Требует выноса prep-логики в view-model — отдельный аккуратный
+  проход, НЕ механическое извлечение. Отложено.
+
+### 2026-06-08 11:55 — P1.3 HomeDrawer + декаплинг (`c553725`)
+- `_buildDrawer` → `screens/home/widgets/home_drawer.dart`. `_pushRoute`
+  (drawer-only) инлайнен. **9 импортов экранов** ушли из home_screen (теперь
+  только в HomeDrawer). home_screen **2093→1990**. analyze clean, 808 green.
+
+### CHECKPOINT 11:55 — состояние для продолжения (loop / свежий контекст)
+**home_screen: 2370 → 1990** (−380) за 5 коммитов: `5ab387e` TrafficBar ·
+`4841d30` StatusChip+ProgressBanner+NodesHeader · `c553725` HomeDrawer.
+Все коммиты green (analyze + 808 tests). Базлайн до §089: `fa75753`.
+
+**Новые файлы:** `screens/home/widgets/{traffic_bar,status_chip,
+progress_banner,nodes_header,home_drawer}.dart`.
+
+**Правила (ВАЖНО соблюдать при продолжении):**
+1. НЕ `dart format` существующих файлов (tall-стиль Dart 3 раздувает) —
+   ручные правки в стиле проекта. Новые файлы — format ок.
+2. Каждый шаг: `flutter analyze` clean + `flutter test` (808) green → коммит.
+   `flutter` в PATH: `/Users/macbook/projects/flutter-sdk/bin`.
+3. Behavior-preserving. Тесты менять только импорты, иначе стоп.
+4. PATH для git-hook бампает pubspec — это норма, не откатывать в коммите.
+
+**home_screen — осталось извлечь (позиции плавают, грепать `^  Widget _build`):**
+- `_buildAddServerCta` (~164 стр) — CTA пустого состояния. Чистый, но юзает
+  `_restoreFromBackup` + AddServerWizard nav + `_autoUpdater`. Низкий-средний риск.
+- `_buildControls` + `_buildReloadButton` (~370 стр) — connect-кнопки, reload-меню.
+  Юзает StatusChip (готов), `_confirmStop`, `_showReloadMenu`, `_rebuild*`. Средний.
+- `_buildNodeList` + `_buildReorderableNodeList` (~292) — ТВЁРДОЕ ЯДРО, отдельно.
+- `_buildFilterPanel` (~270) — делегирует filter_widgets; оценить.
+- **Диалоги/меню** (~600): `_maybeShow*PermissionDialog`, `_showOemBattery*`,
+  `_showLocationPermissionDialog`, `_showRevokedSnackBar`, `_showSortOptionsMenu`,
+  `_showReloadMenu`, `_showPingSettings`, `_confirmStop` → `home/home_dialogs.dart`.
+- **Node actions/helpers**: `_viewOutboundJson`/`_copyNodeJson`/`_copyNodeUri`
+  (ConfigIntrospection), `_subscriptionsOfTag`/`_buildNodeFilter`/`_splitNodes`/
+  `_viewSortedNodes`/`_protocolOfTag`/`_isControlTag`/`_protoLabel` → helper/VM.
+- **Bootstrap/prefs**: `_initSubsAndAutoUpdate`/`_loadHapticPref`/`_loadAutoRebuild`.
+
+**Дальше по плану §089:** P2 экраны (per_app_trace 1662, dns 1388, routing 1219,
+subscription_detail 1080, app_settings 982, subscriptions 967, stats 683,
+live_events 663, backup 627) · P3 сервисы (traffic_profiler 1632,
+settings_storage 941, post_steps 1132, box_vpn_client 607, uri_parsers 729) ·
+P4 контроллеры (home_controller 1089) · P5 Kotlin (VpnPlugin 635) · P6 дедуп/
+чистка · P7 ARCHITECTURE.md · P8 финал (APK build+install) + CHANGELOG.
