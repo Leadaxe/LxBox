@@ -16,7 +16,8 @@ enum UpdateTrigger {
   manual,        // юзер нажал ⟳ (force=true)
 }
 
-/// Авто-обновление подписок по 4 триггерам (§026 спека).
+/// Авто-обновление подписок по 5 триггерам (§027 спека):
+/// appStart / vpnConnected / periodic / vpnStopped / manual.
 ///
 /// Параметры фиксированы (в спеке документированы):
 /// - `updateIntervalHours` берётся с каждой подписки (default 24, из

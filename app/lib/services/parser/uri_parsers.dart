@@ -430,10 +430,6 @@ Hysteria2Spec? parseHysteria2(String uri) {
 // NaïveProxy — see spec 037.
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Charset для имени HTTP-заголовка из DuckSoft de-facto спеки naive URI.
-final RegExp _naiveHeaderName =
-    RegExp(r"^[!#$%&'*+\-.0-9A-Z\\^_`a-z|~]+$");
-
 /// Известные query-keys; всё остальное — log warning + ignore.
 const _naiveKnownQueryKeys = <String>{'extra-headers', 'padding'};
 
@@ -511,7 +507,7 @@ Map<String, String> parseNaiveExtraHeaders(String raw) {
     }
     final name = l.substring(0, colon).trim();
     final value = l.substring(colon + 1).trim();
-    if (name.isEmpty || !_naiveHeaderName.hasMatch(name)) {
+    if (!isValidNaiveHeaderName(name)) {
       AppLog.I
           .warning("naive: invalid header name '$name' in extra-headers, skipping");
       continue;

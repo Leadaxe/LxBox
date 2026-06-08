@@ -281,15 +281,8 @@ String toUriHysteria2(Hysteria2Spec s) {
 // ════════════════════════════════════════════════════════════════════════════
 // NaïveProxy
 // ════════════════════════════════════════════════════════════════════════════
-
-/// Charset для имени HTTP-заголовка из DuckSoft de-facto спеки naive URI:
-/// `! # $ % & ' * + - . 0-9 A-Z \ ^ _ ` a-z | ~`. Невалидные пары при
-/// сериализации/десериализации silently дропаются с лог-варном.
-final RegExp _naiveHeaderName =
-    RegExp(r"^[!#$%&'*+\-.0-9A-Z\\^_`a-z|~]+$");
-
-bool isValidNaiveHeaderName(String name) =>
-    name.isNotEmpty && _naiveHeaderName.hasMatch(name);
+// §084 M7: `isValidNaiveHeaderName` / `naiveHeaderNameRe` переехали в
+// services/parser/uri_utils.dart (единый источник, был дубль с uri_parsers).
 
 Outbound emitNaive(NaiveSpec s, TemplateVars vars) {
   final out = <String, dynamic>{

@@ -926,23 +926,6 @@ class _LiveView extends StatelessWidget {
     );
   }
 
-  // ignore: unused_element
-  static String _legacyEventSummary(TrafficEvent e) {
-    switch (e.kind) {
-      case TrafficEventKind.dnsResolve:
-        return '${e.domain ?? "?"} → ${e.ip ?? "?"}';
-      case TrafficEventKind.dnsFail:
-        return 'DNS exchange failed';
-      case TrafficEventKind.tcpOpen:
-      case TrafficEventKind.udpOpen:
-        final hp = '${e.domain ?? e.ip ?? "?"}:${e.port ?? "?"}';
-        return hp;
-      case TrafficEventKind.tcpClose:
-        final hp = '${e.domain ?? e.ip ?? "?"}:${e.port ?? "?"}';
-        final bytes = '↑${formatBytes(e.upBytes ?? 0)} ↓${formatBytes(e.downBytes ?? 0)}';
-        return '$hp closed · $bytes';
-    }
-  }
 }
 
 /// Domains tab — aggregated unique domains with CNAME chain & IPs.

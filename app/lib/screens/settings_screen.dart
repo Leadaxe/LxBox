@@ -36,9 +36,15 @@ class _SettingsScreenState extends State<SettingsScreen>
   WizardTemplate? _template;
   final _varValues = <String, String>{};
   // §076: template var changes pending для write-on-exit. Накапливается
-  // {var_name → value}, flush'ится в _persist (dispose + lifecycle.paused).
-  // Native VPN System toggles (allow_bypass / keep_on_exit / background_mode)
-  // — НЕ через этот mechanism, они идут immediate (discrete events).
+  // {var_name → value} в `_onVarChanged` (роль `_markDirty` других lazy-
+  // экранов; сигнатура отличается — здесь per-var, не boolean-флаг),
+  // flush'ится в `_persist` (dispose + lifecycle.paused).
+  //
+  // §084 M14: Native VPN System toggles (allow_bypass / keep_on_exit /
+  // background_mode) идут **другим** путём — НЕ через `_pendingVars`/
+  // `_persist`/`configDirty`, а через `_vpn.setX()` (immediate native write)
+  // + `homeController.markConfigChangedNeedRestart()` (home banner «Restart
+  // VPN»). Это discrete-event toggles, не config-rebuild vars.
   final _pendingVars = <String, String>{};
   bool _loading = true;
 

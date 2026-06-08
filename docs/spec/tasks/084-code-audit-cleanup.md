@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress — High-блок (H1–H6) закрыт; Medium/Low в backlog |
+| Статус | In progress — High (H1–H6) + Medium-«консистентность» (M7/M9/M10/M12/M14/M16) закрыты; M13 false-positive; остальные Medium/Low в backlog |
 | Дата | 2026-06-08 |
 | Тип | audit / tech-debt |
 | Метод | Multi-agent deep audit: 13 областей × (аудитор + adversarial-verify каждой high/medium находки). 46 агентов, 2.2M токенов. **28 confirmed** (6 high + 22 medium, прошли скептика), **62 low** (passed as-is), **5 refuted**. |
@@ -256,13 +256,15 @@ cross_cutting). Не включены выше — это шум аудита, �
 - [x] H5 — tcpClose/tcpOpen symmetry — убран guard, поведение = комментарию
 - [x] H6 — traffic_profiler двойной event — `TrafficEvent.copyWith`
 
-**Консистентность (один проход — высокий payoff):**
+**Консистентность (один проход — высокий payoff):** ✅ ЗАКРЫТ
 - [x] H4 — вынести format_utils (bytes/dur/time) — `format_utils.dart` + 15 тестов
-- [ ] M7 — `_naiveHeaderName` в uri_utils
-- [ ] M9 — profiler error-handling через DebugError
-- [ ] M12+M13+M14 — dirty-flag симметрия в settings/node_settings
-- [ ] M10 — auto_updater doc (5 триггеров, §027)
-- [ ] M16 — удалить `_legacyEventSummary`
+- [x] M7 — `_naiveHeaderName`/`isValidNaiveHeaderName` → `uri_utils.dart` (был дубль с node_spec_emit)
+- [x] M9 — profiler error-handling через `Conflict`/`NotFound` (4 raw JsonResponse → throw)
+- [x] M10 — auto_updater doc (5 триггеров, §027)
+- [x] M12 — settings_screen: уточнён комментарий `_onVarChanged`≡markDirty (переименование не делал — сигнатуры асимметричны)
+- [x] M14 — settings_screen §076 comment про native toggles уточнён
+- [x] M16 — удалён `_legacyEventSummary` (dead `// ignore: unused_element`)
+- [~] **M13 — FALSE POSITIVE при проверке**: `persistSources()` (subscription_controller:726) **уже** ставит `configDirty=true`, и `updateConnectionAt`→`_persist()` тоже. node_settings корректен (инкапсулирует флаг в методе vs explicit-вызов у DnsSettings — разные но оба валидные). Рабочий код не тронут.
 
 **Долг (когда трогаешь файл):**
 - [ ] M1+M2+M3 — home_screen config introspection → service
