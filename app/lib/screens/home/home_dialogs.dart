@@ -95,9 +95,25 @@ Future<void> maybeShowUpdateSnackbar(
   messenger.showSnackBar(
     SnackBar(
       duration: const Duration(seconds: 12),
-      content: Text(
-        'L×Box ${info.tag} available '
-        '(you have v${VersionInfo.I.version})',
+      content: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'L×Box ${info.tag} available '
+              '(you have v${VersionInfo.I.version})',
+            ),
+          ),
+          // §090 G1 — «Later» persist'ит dismissed-версию → этот релиз больше
+          // не всплывёт (read-guard выше + в UpdateChecker.hydrate/maybeCheck);
+          // следующий (бОльший tag) всё равно покажется через isNewer.
+          TextButton(
+            onPressed: () {
+              messenger.hideCurrentSnackBar();
+              unawaited(UpdateChecker.I.dismissCurrent());
+            },
+            child: const Text('Later'),
+          ),
+        ],
       ),
       action: SnackBarAction(
         label: 'View',
