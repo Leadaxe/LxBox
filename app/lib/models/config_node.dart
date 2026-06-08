@@ -134,6 +134,13 @@ class ParsedConfig {
   /// Tag detour-цели данной ноды, либо null.
   String? detourOf(String tag) => byTag[tag]?.detour;
 
+  /// Протокол payload-ноды (`null` для control-узла / missing). Прямая
+  /// замена `ConfigCache.protoByTag[tag]` (тот тоже скипал control-типы).
+  String? protocolOf(String tag) {
+    final n = byTag[tag];
+    return (n != null && !n.isControl) ? n.type : null;
+  }
+
   /// Цепочка raw-map'ов начиная с `tag`: `[self, detour1, detour2, …]`.
   /// Cycle-safe. Пустой список если tag не найден.
   List<Map<String, dynamic>> outboundChain(String tag) {

@@ -59,10 +59,10 @@ class NodeListPresenter {
   /// Lookup protocol for tag — учитывает urltest group fallback (см. §048
   /// «Protocol detection»). Возвращает null если cache miss и urltest нет.
   String? protocolOfTag(String tag, HomeState state) {
-    final cache = state.configCache;
+    final model = state.configModel;
     final urltestNow = ClashApiClient.urltestNow(state.proxiesJson, tag);
-    return cache.protoByTag[tag] ??
-        (urltestNow != null ? cache.protoByTag[urltestNow] : null);
+    return model.protocolOf(tag) ??
+        (urltestNow != null ? model.protocolOf(urltestNow) : null);
   }
 
   /// §077 — Lookup subscription id'ов по display-тэгу. Тонкая обёртка
@@ -175,10 +175,10 @@ class NodeListPresenter {
         ? allTags
         : allTags.where((t) => !TagResolver.isDetourMarker(t)).toList();
 
-    // configCache парсится один раз при saveParsedConfig (см. HomeState),
+    // configModel парсится один раз при смене configRaw (см. HomeState),
     // здесь просто читаем. Раньше jsonDecode шёл на каждый rebuild
     // ListView — с 50+ нодами и сортировкой это был hot-path выжиматель.
-    final cache = state.configCache;
+    final cache = state.configModel;
 
     // §048 Phase 2 — match filter: split pool на matching + nonMatching
     // (control-узлы короткозамкнуты в matching, §078). См. `splitNodes`.
@@ -238,7 +238,7 @@ class NodeListData {
     required this.subOptions,
   });
 
-  final ConfigCache cache;
+  final ParsedConfig cache;
   final Set<String> matchingSet;
   final List<String> displayList;
   final List<String> emojis;

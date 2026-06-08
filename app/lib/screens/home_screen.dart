@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/home_state.dart';
-import '../services/config_introspection.dart';
 import '../services/version_info.dart';
 import 'home/widgets/traffic_bar.dart';
 import 'home/widgets/progress_banner.dart';
@@ -484,7 +483,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (config != null) {
       final ok = await _controller.saveParsedConfig(config);
       if (ok && mounted) {
-        final nodeCount = ConfigIntrospection.parse(config).nodeCount;
+        final nodeCount = ParsedConfig.parse(config).nodeCount;
         // configChangedNeedRestart выставляется внутри saveParsedConfig,
         // AnimatedBuilder переотрисует через _needsRestart getter.
         ScaffoldMessenger.of(context).showSnackBar(

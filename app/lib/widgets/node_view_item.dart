@@ -2,8 +2,8 @@
 /// который захочет переиспользовать `NodeRow`).
 ///
 /// Все derived values для рендера — вычисляются в caller'е
-/// (например `home_screen::_buildNodeList::itemBuilder`: ping из
-/// `state.lastDelay`, urltest из `ClashApiClient`, proto из `cache.protoByTag`,
+/// (`home/widgets/node_list.dart` itemBuilder: ping из `state.lastDelay`,
+/// urltest из `ClashApiClient`, proto из `state.configModel.protocolOf`,
 /// matches из `NodeFilter.passes`) и пакуются сюда. `NodeRow` widget — pure
 /// render от этой модели, не делает state lookup внутри.
 ///

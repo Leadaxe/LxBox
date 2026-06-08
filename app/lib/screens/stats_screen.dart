@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../models/config_node.dart';
 import '../services/clash_api_client.dart';
-import '../services/config_introspection.dart';
 import '../services/traffic_profiler.dart';
 import '../vpn/box_vpn_client.dart';
 import 'connections_screen.dart';
@@ -42,10 +42,10 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
   Map<String, AppStat> _byApp = const {};
   bool _loading = true;
   Timer? _timer;
-  // §085 R2 — config-introspection через единый service (был локальный
-  // _detourMap + _parseDetourMap + _detourChain дубль).
-  late final ConfigIntrospection _intro =
-      ConfigIntrospection.parse(widget.configRaw);
+  // §091 — структурные запросы к конфигу через ParsedConfig (был локальный
+  // _detourMap + _parseDetourMap + _detourChain дубль; до §091 —
+  // ConfigIntrospection).
+  late final ParsedConfig _intro = ParsedConfig.parse(widget.configRaw);
 
   /// §069 — runtime applied значение `allowBypass()` от последнего
   /// `establish()`. Показывается warning icon в AppBar если true.

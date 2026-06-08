@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import '../../controllers/subscription_controller.dart';
 import '../../models/home_state.dart';
 import '../../models/node_spec.dart';
-import '../../services/config_introspection.dart';
 import '../../services/tag_resolver.dart';
 import '../outbound_view_screen.dart';
 
@@ -16,8 +15,8 @@ import '../outbound_view_screen.dart';
 
 void viewOutboundJson(BuildContext context, String tag, HomeState state) {
   if (state.configRaw.isEmpty) return;
-  // §085 R2 — config-introspection через единый service.
-  final intro = ConfigIntrospection.parse(state.configRaw);
+  // §091 — уже распарсенная модель из state (без ре-парса на каждый tap).
+  final intro = state.configModel;
   final chain = intro.outboundChain(tag);
   if (chain.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -41,13 +40,13 @@ void copyNodeJson(
     BuildContext context, String tag, HomeState state, String mode) {
   if (state.configRaw.isEmpty) return;
 
-  // §085 R2 — config-introspection через единый service.
-  final intro = ConfigIntrospection.parse(state.configRaw);
-  final Map<String, dynamic>? server = intro.outboundByTag(tag);
+  // §091 — уже распарсенная модель из state (без ре-парса на каждый tap).
+  final intro = state.configModel;
+  final Map<String, dynamic>? server = intro.rawOf(tag);
   Map<String, dynamic>? detour;
   if (server != null) {
     final detourTag = intro.detourOf(tag);
-    if (detourTag != null) detour = intro.outboundByTag(detourTag);
+    if (detourTag != null) detour = intro.rawOf(detourTag);
   }
 
   if (server == null) return;

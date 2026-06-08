@@ -1,11 +1,12 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../config/consts.dart';
 import '../services/clash_api_client.dart';
+import 'config_node.dart';
 import 'debug_entry.dart';
 import 'tunnel_status.dart';
+
+export 'config_node.dart';
 
 export 'debug_entry.dart';
 export 'tunnel_status.dart';
@@ -33,58 +34,10 @@ enum NodeSortMode {
       };
 }
 
-/// Кэш derived-полей из `configRaw` (outbound proto и detour tags).
-/// Парсится **один раз** в `HomeState.copyWith` когда `configRaw` меняется,
-/// далее читается O(1) из UI без jsonDecode в itemBuilder'ах.
-///
-/// Раньше `_buildNodeList` и `StatsScreen._parseDetourMap` парсили config
-/// на каждом ребилде ListView — с 50+ нодами это давало заметные аллокации
-/// в hot-path'е. Теперь parse один раз при save.
-class ConfigCache {
-  const ConfigCache.empty()
-      : detourTags = const <String>{},
-        protoByTag = const <String, String>{};
-
-  /// Control-узлы которые UI не показывает как ноды.
-  static const _skipTypes = <String>{
-    'selector', 'urltest', 'direct', 'block', 'dns',
-  };
-
-  factory ConfigCache.parse(String configRaw) {
-    if (configRaw.isEmpty) return const ConfigCache.empty();
-    final detourTags = <String>{};
-    final protoByTag = <String, String>{};
-    try {
-      final cfg = jsonDecode(configRaw) as Map<String, dynamic>;
-      final outbounds =
-          (cfg['outbounds'] as List<dynamic>? ?? <dynamic>[]).whereType<Map<String, dynamic>>();
-      final endpoints =
-          (cfg['endpoints'] as List<dynamic>? ?? <dynamic>[]).whereType<Map<String, dynamic>>();
-      for (final o in [...outbounds, ...endpoints]) {
-        final t = o['tag'];
-        if (t is! String) continue;
-        final d = o['detour'];
-        if (d is String && d.isNotEmpty) detourTags.add(t);
-        final type = (o['type'] as String?) ?? '';
-        if (type.isEmpty || _skipTypes.contains(type)) continue;
-        protoByTag[t] = type;
-      }
-    } catch (_) {
-      // malformed JSON — returns empty caches, UI деградирует к placeholder'ам.
-    }
-    return ConfigCache._(detourTags, protoByTag);
-  }
-
-  const ConfigCache._(this.detourTags, this.protoByTag);
-
-  final Set<String> detourTags;
-  final Map<String, String> protoByTag;
-}
-
 class HomeState {
   HomeState({
     this.configRaw = '',
-    ConfigCache? configCache,
+    ParsedConfig? configModel,
     this.tunnel = TunnelStatus.disconnected,
     this.lastError = '',
     this.busy = false,
@@ -111,14 +64,14 @@ class HomeState {
     this.traffic = TrafficSnapshot.zero,
     this.connectedSince,
     this.configChangedNeedRestart = false,
-  }) : configCache = configCache ?? ConfigCache.parse(configRaw);
+  }) : configModel = configModel ?? ParsedConfig.parse(configRaw);
 
   final String configRaw;
 
-  /// Derived из `configRaw` — prekомпилированные lookup'ы для UI, чтобы
-  /// itemBuilder'ы не делали jsonDecode на каждый rebuild. Пересобирается
-  /// в `copyWith` только при смене `configRaw`.
-  final ConfigCache configCache;
+  /// §091 — распарсенный конфиг (`Map<tag, ConfigNode>` + структурные
+  /// запросы). Статик-слой: пересобирается в `copyWith` ТОЛЬКО при смене
+  /// `configRaw`; пинги/active/urltest живут в отдельных динамик-map'ах.
+  final ParsedConfig configModel;
 
   final TunnelStatus tunnel;
   final String lastError;
@@ -236,10 +189,11 @@ class HomeState {
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
-      // ConfigCache пересчитываем ТОЛЬКО при смене configRaw. Иначе шарим
-      // тот же immutable объект — скрытая оптимизация: несколько copyWith
-      // без configRaw не делают jsonDecode.
-      configCache: configRaw != null ? ConfigCache.parse(configRaw) : configCache,
+      // configModel пересчитываем ТОЛЬКО при смене configRaw. Иначе шарим
+      // тот же immutable объект — несколько copyWith без configRaw не
+      // делают jsonDecode.
+      configModel:
+          configRaw != null ? ParsedConfig.parse(configRaw) : configModel,
       tunnel: tunnel ?? this.tunnel,
       lastError: lastError ?? this.lastError,
       busy: busy ?? this.busy,

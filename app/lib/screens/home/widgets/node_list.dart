@@ -174,7 +174,7 @@ class HomeNodeList extends StatelessWidget {
   Widget _buildReorderableNodeList(
     BuildContext context, {
     required List<String> displayList,
-    required ConfigCache cache,
+    required ParsedConfig cache,
     required Set<String> matchingSet,
   }) {
     // §070+§071: pinnedCount определяем sequential проверкой первых элементов.
@@ -220,8 +220,8 @@ class HomeNodeList extends StatelessWidget {
         final isUrltestGroup = proxyEntry != null &&
             (proxyEntry['type']?.toString().toLowerCase() ?? '')
                 .contains('urltest');
-        final protoType = cache.protoByTag[tag] ??
-            (urltestNow != null ? cache.protoByTag[urltestNow] : null);
+        final protoType = cache.protocolOf(tag) ??
+            (urltestNow != null ? cache.protocolOf(urltestNow) : null);
         final row = DecoratedBox(
           decoration: BoxDecoration(
             border: Border(
@@ -238,7 +238,7 @@ class HomeNodeList extends StatelessWidget {
               tunnelUp: state.tunnelUp,
               busy: state.busy,
               urltestNow: urltestNow,
-              hasDetour: cache.detourTags.contains(tag),
+              hasDetour: cache[tag]?.detour != null,
               protocolLabel:
                   protoType != null ? protoLabel(protoType) : null,
               matches: matchingSet.contains(tag),
