@@ -27,11 +27,11 @@ import 'home/widgets/status_chip.dart';
 import 'home/widgets/progress_banner.dart';
 import 'home/widgets/nodes_header.dart';
 import 'home/widgets/home_drawer.dart';
+import 'home/widgets/add_server_cta.dart';
 import 'home/subscription_lookup.dart';
 import 'home/node_filter_view_model.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import 'outbound_view_screen.dart';
-import 'subscriptions_screen.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/debug_registry.dart';
 import '../services/haptic_service.dart';
@@ -1443,67 +1443,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// First-run empty-state. Big icon + headline + subtitle + circular `+`
   /// button → SubscriptionsScreen. Замещает controls + node-list когда
   /// `configRaw.isEmpty`, чтобы юзер не упирался в disabled Start.
-  Widget _buildAddServerCta(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.dns_outlined, size: 64, color: cs.onSurfaceVariant.withAlpha(140)),
-            const SizedBox(height: 20),
-            Text(
-              'Add a server',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Connect a subscription or add a node manually to get started.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
-            ),
-            const SizedBox(height: 28),
-            Builder(
-              builder: (innerCtx) => FloatingActionButton(
-                heroTag: null,
-                // Прямой Navigator.push с context'ом из Builder'а — тот же
-                // путь что _buildTrafficBar → StatsScreen. Не через _pushRoute
-                // (там this.context state-level + .then'callback, который
-                // даёт другое поведение transition'а у этой FAB).
-                onPressed: () => Navigator.push(
-                  innerCtx,
-                  MaterialPageRoute(
-                    builder: (_) => SubscriptionsScreen(
-                      subController: _subController,
-                      homeController: _controller,
-                      autoUpdater: _autoUpdater,
-                    ),
-                  ),
-                ),
-                tooltip: 'Add a server',
-                child: const Icon(Icons.add, size: 32),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextButton.icon(
-              onPressed: _restoreFromBackup,
-              icon: const Icon(Icons.restore, size: 18),
-              label: const Text('Restore from backup'),
-              style: TextButton.styleFrom(
-                foregroundColor: cs.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   /// Empty-state quick-action: open SAF file picker → parse backup file →
   /// `applyImport(merge: false, include: all)` → snackbar + restart hint.
   /// Без preview dialog'а (юзер в empty state, явно хочет restore целиком —
@@ -1612,7 +1551,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       // Empty state: первый запуск (нет конфига) — гайд с CTA-кнопкой;
       // остальные пустые состояния — пассивный текст-подсказка.
       if (state.configRaw.isEmpty) {
-        return Expanded(child: _buildAddServerCta(context));
+        return Expanded(
+          child: AddServerCta(
+            controller: _controller,
+            subController: _subController,
+            autoUpdater: _autoUpdater,
+            onRestoreFromBackup: _restoreFromBackup,
+          ),
+        );
       }
       final cs = Theme.of(context).colorScheme;
       // tunnelUp — нет узлов в текущем selector'е; пассивный hint.
