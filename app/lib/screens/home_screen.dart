@@ -37,7 +37,6 @@ import '../services/debug/bootstrap.dart';
 import '../services/debug/debug_registry.dart';
 import '../services/haptic_service.dart';
 import '../services/nav/home_return_observer.dart';
-import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
 import '../services/traffic_profiler.dart';
 import '../services/subscription/auto_updater.dart';
@@ -844,7 +843,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                               order: _computeDisplayList(state)));
                         }
                       },
-                onLongPress: _showPingSettings,
+                onLongPress: () => showPingSettings(context, _controller),
                 child: Padding(
                   padding: const EdgeInsets.all(8),
                   child: Icon(
@@ -1110,160 +1109,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         );
       }
     }
-  }
-
-  Future<void> _showPingSettings() async {
-    final template = await TemplateLoader.load();
-    final pingOpts = template.pingOptions;
-    final presets = (pingOpts['presets'] as List<dynamic>? ?? [])
-        .whereType<Map<String, dynamic>>()
-        .toList();
-
-    if (!mounted) return;
-    // §040: dialog scope — global / per-group. Если у текущей group'ы есть
-    // override → стартуем в group-mode и подставляем her значения. Иначе
-    // global-mode с глобальным URL/timeout (resolved через storage > template).
-    final currentGroup = _controller.state.selectedGroup ?? '';
-    final allOpts = await SettingsStorage.getPingOptions();
-    final groupsRaw = allOpts['groups'];
-    final groupOverride =
-        (groupsRaw is Map<String, dynamic>) && currentGroup.isNotEmpty
-            ? (groupsRaw[currentGroup] as Map<String, dynamic>?)
-            : null;
-    final hasGroupOverride = groupOverride != null;
-
-    if (!mounted) return;
-    var applyToGroup = hasGroupOverride;
-    final initialUrl = hasGroupOverride
-        ? (groupOverride['url'] as String?) ?? _controller.pingUrl
-        : _controller.pingUrl;
-    final initialTimeout = hasGroupOverride
-        ? ((groupOverride['timeout_ms'] as num?)?.toInt() ?? _controller.pingTimeout)
-        : _controller.pingTimeout;
-
-    final urlCtrl = TextEditingController(text: initialUrl);
-    final timeoutCtrl = TextEditingController(text: '$initialTimeout');
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) {
-          // Refresh has-override каждый раз через рестарт sheet'а — но мы
-          // не закрывали sheet, так что просто храним в-памяти.
-          final canApplyToGroup = currentGroup.isNotEmpty;
-          return Padding(
-            padding: EdgeInsets.fromLTRB(
-                16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('Ping Settings', style: Theme.of(ctx).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                // Scope toggle.
-                if (canApplyToGroup) ...[
-                  SegmentedButton<bool>(
-                    segments: [
-                      const ButtonSegment(
-                          value: false, label: Text('All channels')),
-                      ButtonSegment(
-                          value: true,
-                          label: Text(currentGroup,
-                              overflow: TextOverflow.ellipsis)),
-                    ],
-                    selected: {applyToGroup},
-                    onSelectionChanged: (s) {
-                      setSheetState(() => applyToGroup = s.first);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (presets.isNotEmpty) ...[
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: presets.map((p) {
-                      final name = p['name']?.toString() ?? '';
-                      final url = p['url']?.toString() ?? '';
-                      final selected = urlCtrl.text == url;
-                      return ChoiceChip(
-                        label: Text(name, style: const TextStyle(fontSize: 12)),
-                        selected: selected,
-                        onSelected: (_) =>
-                            setSheetState(() => urlCtrl.text = url),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                TextField(
-                  controller: urlCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Test URL',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: timeoutCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Timeout (ms)',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    if (applyToGroup && hasGroupOverride)
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.restart_alt, size: 18),
-                          label: const Text('Reset to global'),
-                          onPressed: () async {
-                            await SettingsStorage.clearGroupPing(currentGroup);
-                            await _controller.reloadPingOptions();
-                            if (ctx.mounted) Navigator.pop(ctx);
-                          },
-                        ),
-                      ),
-                    if (applyToGroup && hasGroupOverride)
-                      const SizedBox(width: 8),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: () async {
-                          final url = urlCtrl.text.trim();
-                          final timeout =
-                              int.tryParse(timeoutCtrl.text) ?? 5000;
-                          if (applyToGroup && currentGroup.isNotEmpty) {
-                            await SettingsStorage.setGroupPing(
-                              currentGroup,
-                              url: url,
-                              timeoutMs: timeout,
-                            );
-                          } else {
-                            await SettingsStorage.setGlobalPingUrl(url);
-                            await SettingsStorage.setGlobalPingTimeout(timeout);
-                          }
-                          await _controller.reloadPingOptions();
-                          if (ctx.mounted) Navigator.pop(ctx);
-                        },
-                        child: const Text('Save'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-    urlCtrl.dispose();
-    timeoutCtrl.dispose();
   }
 
   void _viewOutboundJson(String tag, HomeState state) {
