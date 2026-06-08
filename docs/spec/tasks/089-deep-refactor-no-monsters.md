@@ -197,6 +197,19 @@ singleton-сервисы, `ConfigCache`, `home_return_observer`). Риск ре�
   develop-SHA) + analyze-only + adversarial-verify + base-check + финальный
   808-гейт в main. Работает быстро и безопасно. Дальше — следующий батч.
 
+### 2026-06-08 ~14:45 — БАТЧ 3 ✅ ИНТЕГРИРОВАН (~9.5 мин)
+- Воркфлоу `wf_0af74dc9-922`, 6 файлов, все **base=True + green + safe**.
+  Base-check + cherry-pick чисто, **финальный гейт: analyze + 808 green** ✅.
+- **Повержено:** stats_screen 683→294, live_events_tab 663→371,
+  backup_screen 627→229, settings_storage 941→411, uri_parsers 729→65
+  (barrel), post_steps 1132→29 (barrel). Сервисы (core, well-tested) прошли
+  808-гейт — каутионы «не трогать ключи/парсинг» сработали.
+- Коммиты по `2c3b015`. **Монстров осталось 6:** home_screen 1664,
+  traffic_profiler 1632, home_controller 1089, subscription_controller 768,
+  custom_rule 618 (→§090 sealed-split, не §089), box_vpn_client 607.
+- Дальше: батч-4 (риск: traffic_profiler/home_controller/subscription_controller/
+  box_vpn_client — строгие каутионы); home_screen-остаток — сам (NodeList-ядро).
+
 
 ### 2026-06-08 11:13 — старт
 - Заземлился: инвентарь монстров, существующие паттерны, §088 прочитан.
