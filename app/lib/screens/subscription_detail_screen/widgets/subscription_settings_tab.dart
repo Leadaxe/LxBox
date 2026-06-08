@@ -1,0 +1,213 @@
+import 'package:flutter/material.dart';
+
+import '../../../controllers/subscription_controller.dart';
+import '../../../models/server_list.dart';
+import '../detour_mode.dart';
+import '../subscription_detail_format.dart';
+
+/// Settings tab: tag-prefix field, detour-mode radio group (+ sub-options) and
+/// the subscription-info block. Extracted verbatim from `_buildSettingsTab` /
+/// `_buildSubscriptionInfo`. All mutation/persist/dialog logic stays in the
+/// screen and is wired in via the callbacks below.
+class SubscriptionSettingsTab extends StatelessWidget {
+  const SubscriptionSettingsTab({
+    super.key,
+    required this.entry,
+    required this.hasDetour,
+    required this.detourMode,
+    required this.onTagPrefixChanged,
+    required this.onSetDetourMode,
+    required this.onRegisterDetourServersChanged,
+    required this.onRegisterDetourInAutoChanged,
+    required this.onShowOverrideDetourPicker,
+    required this.onReplaceDetourChainChanged,
+    required this.onCopyUrl,
+    required this.onShowIntervalPicker,
+    required this.onRefreshNow,
+  });
+
+  final SubscriptionEntry entry;
+  final bool hasDetour;
+  final DetourMode detourMode;
+
+  final ValueChanged<String> onTagPrefixChanged;
+  final ValueChanged<DetourMode> onSetDetourMode;
+  final ValueChanged<bool> onRegisterDetourServersChanged;
+  final ValueChanged<bool> onRegisterDetourInAutoChanged;
+  final VoidCallback onShowOverrideDetourPicker;
+  final ValueChanged<bool> onReplaceDetourChainChanged;
+  final VoidCallback onCopyUrl;
+  final VoidCallback onShowIntervalPicker;
+  final VoidCallback onRefreshNow;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text('Tag prefix', style: theme.textTheme.titleSmall?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.bold,
+        )),
+        const SizedBox(height: 4),
+        Text(
+          'Prefix applied to every tag from this subscription '
+          '(e.g. "BL:" → "BL: Frankfurt"). Used to distinguish servers '
+          'from different subscriptions and resolve name collisions.',
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: TextFormField(
+            initialValue: entry.tagPrefix,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Prefix',
+              hintText: 'empty = no prefix',
+              isDense: true,
+            ),
+            onChanged: onTagPrefixChanged,
+          ),
+        ),
+        const SizedBox(height: 24),
+        if (hasDetour) ...[
+          Text('Detour servers', style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.bold,
+          )),
+          const Divider(),
+          // Тернарный mode (radio): три mutually-exclusive варианта над парой
+          // полей entry.{useDetourServers, overrideDetour}. Mapping:
+          //   use      → useDetour=true,  override=''
+          //   override → useDetour=true,  override='<tag>'
+          //   none     → useDetour=false, override=''
+          // register'ы (sub-options для mode=use) хранятся независимо, не
+          // обнуляются при переключении mode'а — юзер вернётся в use, флаги
+          // на месте.
+          RadioGroup<DetourMode>(
+            groupValue: detourMode,
+            onChanged: (m) => onSetDetourMode(m!),
+            child: Column(children: [
+              const RadioListTile<DetourMode>(
+                value: DetourMode.use,
+                title: Text('Use subscription detour servers'),
+                subtitle: Text('Nodes connect through detour servers'),
+              ),
+              // Sub-options только под Use — visibility-flags про ⚙-серверы
+              if (detourMode == DetourMode.use)
+                Padding(
+                  padding: const EdgeInsets.only(left: 24),
+                  child: Column(children: [
+                    SwitchListTile(
+                      title: const Text('Register detour servers'),
+                      subtitle: const Text('Add ⚙ servers to proxy groups (visible in node list)'),
+                      value: entry.registerDetourServers,
+                      onChanged: onRegisterDetourServersChanged,
+                    ),
+                    SwitchListTile(
+                      title: const Text('Register detour in auto group'),
+                      subtitle: const Text('Include ⚙ servers in auto-proxy-out urltest'),
+                      value: entry.registerDetourInAuto,
+                      onChanged: onRegisterDetourInAutoChanged,
+                    ),
+                  ]),
+                ),
+              RadioListTile<DetourMode>(
+                value: DetourMode.override,
+                title: const Text('Add detour'),
+                subtitle: Text(entry.overrideDetour.isEmpty
+                    ? 'Append an outbound to the end of the chain'
+                    : entry.replaceDetourChain
+                        ? 'Replace chain → ${entry.overrideDetour}'
+                        : 'Append → ${entry.overrideDetour}'),
+              ),
+              // Sub-tiles под «Add detour»: outbound picker + replace toggle.
+              // §073: default behaviour = APPEND (toggle OFF). Включить
+              // toggle чтобы вернуться к старому replace-поведению.
+              if (detourMode == DetourMode.override) ...[
+                Padding(
+                  padding: const EdgeInsets.only(left: 24),
+                  child: ListTile(
+                    title: const Text('Outbound'),
+                    subtitle: Text(entry.overrideDetour.isEmpty
+                        ? '(tap to choose)'
+                        : entry.overrideDetour),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: onShowOverrideDetourPicker,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 24),
+                  child: SwitchListTile(
+                    title: const Text('Replace existing chain'),
+                    subtitle: const Text(
+                        'Drop the native detour chain, use only this outbound'),
+                    value: entry.replaceDetourChain,
+                    onChanged: onReplaceDetourChainChanged,
+                  ),
+                ),
+              ],
+              const RadioListTile<DetourMode>(
+                value: DetourMode.none,
+                title: Text("Don't use detour servers"),
+                subtitle: Text('Nodes connect directly, detour skipped'),
+              ),
+            ]),
+          ),
+        ],
+        if (entry.list is SubscriptionServers) ...[
+          const SizedBox(height: 24),
+          Text('Subscription', style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.bold,
+          )),
+          const Divider(),
+          _buildSubscriptionInfo(theme),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSubscriptionInfo(ThemeData theme) {
+    final list = entry.list as SubscriptionServers;
+    final cs = theme.colorScheme;
+    final label = statusLabel(list);
+    final color = statusColor(list, cs);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ListTile(
+          leading: const Icon(Icons.link, size: 20),
+          title: const Text('URL'),
+          subtitle: Text(list.url, maxLines: 2, overflow: TextOverflow.ellipsis),
+          trailing: const Icon(Icons.content_copy, size: 18),
+          onTap: onCopyUrl,
+        ),
+        ListTile(
+          leading: const Icon(Icons.sync, size: 20),
+          title: const Text('Update interval'),
+          subtitle: Text('${list.updateIntervalHours}h '
+              '(auto-refresh every ${intervalHuman(list.updateIntervalHours)})'),
+          trailing: const Icon(Icons.edit, size: 18),
+          onTap: onShowIntervalPicker,
+        ),
+        ListTile(
+          leading: Icon(statusIcon(list), size: 20, color: color),
+          title: Text(label, style: TextStyle(color: color)),
+          subtitle: Text(subscriptionStatusSubtitle(list)),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 8),
+          child: OutlinedButton.icon(
+            onPressed: onRefreshNow,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Refresh now'),
+          ),
+        ),
+      ],
+    );
+  }
+}
