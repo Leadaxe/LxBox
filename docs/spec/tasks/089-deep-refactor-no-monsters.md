@@ -187,11 +187,17 @@ progress_banner,nodes_header,home_drawer,add_server_cta}.dart`.
   TemplateLoader; `mounted`→`context.mounted` экв.). home_screen **1872→1718**.
 - **home_screen: 2370 → 1718 (−652, −27.5%)** за 9 коммитов. Базлайн `fa75753`.
 
+### Прогресс P1 (продолжение)
+- `home/home_menus.dart` — `showSortOptionsMenu` + `showPingSettings` ✅
+- `home/home_dialogs.dart` — `confirmStop` + `showRevokedSnackBar` +
+  `showLocationPermissionDialog` ✅
+- **home_screen: 2370 → 1665 (−29.7%)**, 12 коммитов §089, всё green.
+
 ### Остаток home_screen (для продолжения)
-- **Диалоги** (permission/battery/location/revoked): `_maybeShowUpdateSnackbar`,
+- **Диалоги** остаток → `home/home_dialogs.dart`: `_maybeShowUpdateSnackbar`,
   `_maybeShowNotificationPermissionDialog`, `_maybeShowBatteryOptimizationDialog`,
-  `_showOemBatteryFollowupDialog`, `_showLocationPermissionDialog`,
-  `_showRevokedSnackBar` → `home/home_dialogs.dart` (mounted→context.mounted).
+  `_showOemBatteryFollowupDialog` (mounted→context.mounted; некоторые юзают
+  SettingsStorage flags + _controller — передавать параметрами).
 - `_buildControls` + `_buildReloadButton` + `_showReloadMenu` + `_confirmStop`
   (~450 стр) → `home/widgets/home_controls.dart` + reload-меню в home_menus.
 - **NodeList core** (`_buildNodeList`/`_buildReorderableNodeList` + prep-логика
