@@ -173,6 +173,30 @@ singleton-сервисы, `ConfigCache`, `home_return_observer`). Риск ре�
 - **Урок процесса:** всегда проверять `git merge-base --is-ancestor <base>
   develop` перед доверием worktree-результатам.
 
+### 2026-06-08 ~14:25 — БАТЧ 2 (v2, base-fixed) ✅ ИНТЕГРИРОВАН
+- Воркфлоу `wf_6ef3945a-379`, 6 экранов, **фикс базы сработал** (`baseOk=true`,
+  beforeLines = develop-версии). Analyze-only per-agent → **~24 мин** (vs 85).
+- **Все 6 — green + verdict=safe** (§080-caution для subscription_detail
+  сработала — verify подтвердил сохранность). Base-check `merge-base
+  --is-ancestor` прошёл для всех → cherry-pick всех 6 **чисто**.
+- **Авторитетный гейт в main: analyze clean + 808 тестов green.** ✅
+- **6 монстров повержено:**
+  - `per_app_trace_tab` 1662→446 (10 файлов)
+  - `dns_settings_screen` 1388→592 (11)
+  - `routing_screen` 1219→598 (9)
+  - `subscription_detail_screen` 1080→430 (7)
+  - `app_settings_screen` 982→516
+  - `subscriptions_screen` 967→445
+  - Σ ~7298→3027 строк, вынесено ~50 файлов.
+- Коммиты `179cf70..b3c4e57`. Ветки/worktree'ы вычищены.
+- **Монстров осталось 12** (было 18): home_screen 1664, traffic_profiler 1632,
+  post_steps 1132, home_controller 1089, settings_storage 941,
+  subscription_controller 768, uri_parsers 729, stats_screen 683,
+  live_events_tab 663, backup_screen 627, custom_rule 618, box_vpn_client 607.
+- **Подтверждённый рецепт:** worktree-агенты с base-fix (ветка от актуального
+  develop-SHA) + analyze-only + adversarial-verify + base-check + финальный
+  808-гейт в main. Работает быстро и безопасно. Дальше — следующий батч.
+
 
 ### 2026-06-08 11:13 — старт
 - Заземлился: инвентарь монстров, существующие паттерны, §088 прочитан.
