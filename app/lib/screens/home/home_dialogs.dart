@@ -4,6 +4,11 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/home_controller.dart';
 import '../../models/home_state.dart';
+import '../../services/settings_storage.dart';
+import '../../services/update_checker.dart';
+import '../../services/url_launcher.dart' as ul;
+import '../../services/version_info.dart';
+import '../../vpn/box_vpn_client.dart';
 import '../../widgets/wifi_permission_dialog.dart';
 
 /// Подтверждение остановки VPN: если активных соединений > 3 — показываем
@@ -71,4 +76,176 @@ Future<void> showLocationPermissionDialog(
   if (!context.mounted) return;
   final missing = permName.split(',').map((p) => p.trim()).toList();
   await WifiPermissionDialog.show(context, missing: missing);
+}
+
+/// §036 — SnackBar «новая версия доступна». Возвращает рано если юзер уже
+/// dismiss'нул эту версию. [onShown] вызывается ровно когда SnackBar реально
+/// показывается (State использует это чтобы выставить `_updateSnackbarShown`).
+///
+/// §089 — вынесено из `_HomeScreenState._maybeShowUpdateSnackbar`
+/// (`mounted` → `context.mounted`, флаг через callback).
+Future<void> maybeShowUpdateSnackbar(
+  BuildContext context,
+  UpdateInfo info, {
+  required VoidCallback onShown,
+}) async {
+  final dismissed = await SettingsStorage.getDismissedUpdateVersion();
+  if (dismissed == info.tag) return;
+  if (!context.mounted) return;
+  onShown();
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.clearSnackBars();
+  messenger.showSnackBar(
+    SnackBar(
+      duration: const Duration(seconds: 12),
+      content: Text(
+        'L×Box ${info.tag} available '
+        '(you have v${VersionInfo.I.version})',
+      ),
+      action: SnackBarAction(
+        label: 'View',
+        onPressed: () async {
+          await ul.UrlLauncher.open(info.htmlUrl);
+        },
+      ),
+    ),
+  );
+}
+
+/// On Android 13+ (API 33+) `POST_NOTIFICATIONS` is a runtime permission.
+/// Without it, the foreground-service notification used by VPN may not
+/// be shown — the user has no visual indicator that VPN is active.
+/// We show an explainer once on first launch (or after revocation),
+/// then trigger the system permission dialog.
+///
+/// §089 — вынесено из `_HomeScreenState._maybeShowNotificationPermissionDialog`.
+const _notifPromptKey = 'notif_perm_prompted_v1';
+
+Future<void> maybeShowNotificationPermissionDialog(BuildContext context) async {
+  final granted = await ul.UrlLauncher.checkNotificationPermission();
+  if (granted) return;
+  final asked = await SettingsStorage.getVar(_notifPromptKey, '0');
+  if (asked == '1') return;
+  await SettingsStorage.setVar(_notifPromptKey, '1');
+  if (!context.mounted) return;
+  final ok = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog.adaptive(
+      title: const Text('Allow notifications'),
+      content: const Text(
+        'L×Box runs as a foreground service while VPN is active. '
+        'A persistent notification is required by Android — it lets you '
+        'see at a glance that VPN is on, and prevents the system from '
+        'killing the tunnel in the background.\n\n'
+        'No promotional or alert notifications will be sent.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Skip'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Allow'),
+        ),
+      ],
+    ),
+  );
+  if (ok == true) {
+    await ul.UrlLauncher.requestNotificationPermission();
+  }
+}
+
+/// Показывает диалог-попап при старте, если приложение не в battery
+/// optimization whitelist'е. Без whitelist'а Android агрессивно throttle'ит
+/// foreground service + tunnel засыпает в Doze → интернет «отваливается»
+/// до следующего открытия приложения.
+///
+/// §089 — вынесено из `_HomeScreenState._maybeShowBatteryOptimizationDialog`
+/// (`mounted` → `context.mounted`, [vpn] передаётся явно).
+Future<void> maybeShowBatteryOptimizationDialog(
+  BuildContext context,
+  BoxVpnClient vpn,
+) async {
+  final ok = await vpn.isIgnoringBatteryOptimizations();
+  if (ok) return;
+  if (!context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog.adaptive(
+      title: const Text('Allow background activity'),
+      content: const Text(
+        'Android restricts background activity to save battery. '
+        'Without an exception, the VPN tunnel may be killed when the '
+        'screen turns off — your connection drops until you reopen L×Box.\n\n'
+        'Open system settings and choose "Unrestricted" / "Not optimized".',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Later'),
+        ),
+        FilledButton(
+          onPressed: () async {
+            Navigator.of(ctx).pop();
+            await vpn.openBatteryOptimizationSettings();
+            // OEM (ColorOS/MIUI/MagicOS) имеет proprietary battery toggles
+            // поверх AOSP — наш REQUEST_IGNORE_BATTERY_OPTIMIZATIONS их не
+            // контролирует. Followup показывается всегда (независимо от
+            // того что юзер выбрал в AOSP dialog) — OEM toggles важнее
+            // на проблемных device'ах.
+            // `context` (screen) — а не `ctx` (popped dialog route): после
+            // `pop()` dialog-context deactivated; screen-context = аналог
+            // State.mounted в оригинале.
+            if (context.mounted) await showOemBatteryFollowupDialog(context, vpn);
+          },
+          child: const Text('Allow'),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Standard AOSP REQUEST_IGNORE_BATTERY_OPTIMIZATIONS добавляет app в
+/// AOSP whitelist, но на OEM (ColorOS/OxygenOS на OnePlus/OPPO/Realme,
+/// MIUI на Xiaomi, MagicOS на Honor) есть **отдельные** proprietary
+/// toggle'ы поверх AOSP («Background activity», «Stop when idle»),
+/// которые AOSP intent НЕ контролирует. Open App Info чтобы юзер
+/// тапнул их вручную.
+///
+/// §089 — вынесено из `_HomeScreenState._showOemBatteryFollowupDialog`.
+Future<void> showOemBatteryFollowupDialog(
+  BuildContext context,
+  BoxVpnClient vpn,
+) async {
+  if (!context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog.adaptive(
+      title: const Text('Disable battery restrictions'),
+      content: const Text(
+        'To keep the VPN running in background, also disable battery '
+        'restrictions for L×Box. The settings screen will open — find '
+        'and toggle:\n\n'
+        '• "Battery usage" → "Don\'t optimize" or "Allow background '
+        'activity"\n\n'
+        '• On OnePlus / OPPO / Realme also:\n'
+        '  "Stop activity when idle" → OFF',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Close'),
+        ),
+        FilledButton(
+          onPressed: () async {
+            Navigator.of(ctx).pop();
+            await vpn.openAppDetailsSettings();
+          },
+          child: const Text('Open Settings'),
+        ),
+      ],
+    ),
+  );
 }

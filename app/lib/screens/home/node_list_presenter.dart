@@ -1,0 +1,248 @@
+import '../../controllers/home_controller.dart';
+import '../../controllers/subscription_controller.dart';
+import '../../models/home_state.dart';
+import '../../models/server_list.dart';
+import '../../services/clash_api_client.dart';
+import '../../services/tag_resolver.dart';
+import 'node_filter.dart';
+import 'node_filter_view_model.dart';
+import 'subscription_lookup.dart';
+
+/// Короткий label протокола для строки ноды. TLS опускаем — у большинства
+/// протоколов (VLESS/Trojan/Hy2/TUIC) он дефолт, метить каждую — шум.
+String protoLabel(String type) => switch (type) {
+      'vless' => 'VLESS',
+      'vmess' => 'VMess',
+      'trojan' => 'Trojan',
+      'shadowsocks' => 'SS',
+      'hysteria2' => 'Hy2',
+      'tuic' => 'TUIC',
+      'wireguard' => 'WG',
+      'ssh' => 'SSH',
+      'socks' => 'SOCKS',
+      'http' => 'HTTP',
+      _ => type.toUpperCase(),
+    };
+
+/// §089 — prep-logic для node-list главного экрана, вынесенная из
+/// `_HomeScreenState` (God-object) в отдельный presenter.
+///
+/// Владеет:
+/// - §070 frozen-sort UI-cache ([_cachedSorted]/[_cachedSortKey]) — должен
+///   жить через rebuild'ы (создаётся один раз в `initState`, hold как
+///   `late final`), семантика cache-key + invalidation идентична оригиналу;
+/// - §085 R3 сборка `NodeFilter` из `NodeFilterViewModel` + state-зависимых
+///   lookup'ов (`protocolOf`/`subscriptionsOf`/`isControlTag`);
+/// - §048 split pool → matching/non-matching (control-узлы §078 короткозамкнуты);
+/// - §078 displayList computation для ping-button order.
+///
+/// Читает `controller.state` / `subController.entries` свежими на каждый вызов
+/// (как и раньше в `_HomeScreenState`), поэтому stateless относительно
+/// контроллеров — единственное mutable-состояние = sort cache.
+class NodeListPresenter {
+  NodeListPresenter({
+    required this.controller,
+    required this.subController,
+    required this.filter,
+  });
+
+  final HomeController controller;
+  final SubscriptionController subController;
+  final NodeFilterViewModel filter;
+
+  // §070 — UI-cache для frozen sort при `state.resortOnManualPing == false`.
+  // См. spec'у — manual single ping не двигает порядок, batch / group switch /
+  // config rebuild сбрасывает через `state.pingBatchGen` bump.
+  List<String>? _cachedSorted;
+  ({NodeSortMode mode, int gen, int nodesLen, bool pinD, bool pinA})?
+      _cachedSortKey;
+
+  /// Lookup protocol for tag — учитывает urltest group fallback (см. §048
+  /// «Protocol detection»). Возвращает null если cache miss и urltest нет.
+  String? protocolOfTag(String tag, HomeState state) {
+    final cache = state.configCache;
+    final urltestNow = ClashApiClient.urltestNow(state.proxiesJson, tag);
+    return cache.protoByTag[tag] ??
+        (urltestNow != null ? cache.protoByTag[urltestNow] : null);
+  }
+
+  /// §077 — Lookup subscription id'ов по display-тэгу. Тонкая обёртка
+  /// над pure helper'ом `subscriptionsOfTag` (см. `home/subscription_lookup.dart`).
+  /// Алгоритм + edge cases описаны в спеке §077 и docstring'е helper'а.
+  Set<String> subscriptionsOfTag_(String tag) =>
+      subscriptionsOfTag(tag, subController.entries);
+
+  /// §078 — True если outbound с этим tag'ом — control (selector / urltest
+  /// / direct / block / dns), не payload-нода. Source-of-truth =
+  /// `state.proxiesJson` (Clash API знает типы outbound'ов лучше нас).
+  ///
+  /// Caller использует чтобы (a) короткозамкнуть filter passing — control
+  /// ноды **всегда** matching независимо от фильтров, (b) исключить из
+  /// 'Custom' chip detection — empty `subscriptionsOf` у control'ов не
+  /// должен триггерить 'Custom' chip когда у юзера нет UserServer'ов.
+  static const _controlProxyTypes = <String>{
+    'selector', 'urltest', 'direct', 'block', 'dns',
+  };
+
+  bool isControlTag(String tag, HomeState state) {
+    final pmap = state.proxiesJson['proxies'];
+    if (pmap is! Map<String, dynamic>) return false;
+    final entry = pmap[tag];
+    if (entry is! Map<String, dynamic>) return false;
+    final type = (entry['type'] as String?)?.toLowerCase() ?? '';
+    return _controlProxyTypes.contains(type);
+  }
+
+  /// §085 R3 — единый `NodeFilter` из view-model + state-зависимых lookup'ов.
+  /// Используется и `computeDisplayList`, и node-list (был дубль §078).
+  NodeFilter buildNodeFilter(HomeState state) => NodeFilter(
+        regex: filter.activeRegex,
+        regexInvert: filter.regexInvert,
+        protocols: filter.enabledProtocols,
+        subscriptions: filter.enabledSubscriptions,
+        maxPingMs: filter.activeMaxPingMs,
+        protocolOf: (t) => protocolOfTag(t, state),
+        subscriptionsOf: subscriptionsOfTag_,
+        pingOf: (t) => state.lastDelay[t],
+      );
+
+  /// §085 R3 — pool (detour show/hide) → split на matching/non-matching.
+  /// Control-узлы (direct/auto/…) короткозамкнуты в matching (§078).
+  /// Возвращает `(matching, nonMatching)`.
+  (List<String>, List<String>) splitNodes(
+      List<String> sortedNodes, HomeState state) {
+    final pool = filter.showDetour
+        ? sortedNodes
+        : sortedNodes.where((t) => !TagResolver.isDetourMarker(t)).toList();
+    final f = buildNodeFilter(state);
+    final matching = <String>[];
+    final nonMatching = <String>[];
+    for (final tag in pool) {
+      if (isControlTag(tag, state) || f.passes(tag)) {
+        matching.add(tag);
+      } else {
+        nonMatching.add(tag);
+      }
+    }
+    return (matching, nonMatching);
+  }
+
+  /// §078 — текущий displayList снаружи node-list (для ping button →
+  /// `runMassUrltest(order:)` в порядке отображения).
+  List<String> computeDisplayList(HomeState state) {
+    final (matching, nonMatching) = splitNodes(viewSortedNodes(state), state);
+    return filter.showNonMatching
+        ? [...matching, ...nonMatching]
+        : matching;
+  }
+
+  /// §070 — frozen sort при `resortOnManualPing == false`. Cache hit ↔
+  /// (sortMode, pingBatchGen, nodes.length, pinDirect, pinAuto) совпадают
+  /// с предыдущим вызовом + все cached tags ещё в pool. Manual single ping
+  /// → новый state, та же key → cache hit → строка не прыгает.
+  List<String> viewSortedNodes(HomeState s) {
+    if (s.resortOnManualPing) {
+      _cachedSortKey = null;
+      _cachedSorted = null;
+      return s.sortedNodes;
+    }
+    final key = (
+      mode: s.sortMode,
+      gen: s.pingBatchGen,
+      nodesLen: s.nodes.length,
+      pinD: s.pinDirect,
+      pinA: s.pinAuto,
+    );
+    if (key == _cachedSortKey && _cachedSorted != null) {
+      // sanity: все cached tags ещё в pool (защита от ноды удалённой из
+      // подписки между bump'ами).
+      if (_cachedSorted!.every(s.nodes.contains)) return _cachedSorted!;
+    }
+    _cachedSortKey = key;
+    _cachedSorted = List<String>.unmodifiable(s.sortedNodes);
+    return _cachedSorted!;
+  }
+
+  /// §089 — agregated данные для render node-list (см. `_buildNodeList`).
+  /// Собирает sorted/pool/split/displayList + chip-options одним проходом.
+  NodeListData computeListData(HomeState state) {
+    // §048 — двухфазная модель (см. spec):
+    // Phase 1 — pool filter: detour show/hide. Нода **отсутствует** в render
+    // если detour off и tag detour-prefixed.
+    // §070: используем viewSortedNodes — frozen sort при resortOnManualPing=false
+    // (manual single ping не дёргает порядок).
+    final allTags = viewSortedNodes(state);
+    final pool = filter.showDetour
+        ? allTags
+        : allTags.where((t) => !TagResolver.isDetourMarker(t)).toList();
+
+    // configCache парсится один раз при saveParsedConfig (см. HomeState),
+    // здесь просто читаем. Раньше jsonDecode шёл на каждый rebuild
+    // ListView — с 50+ нодами и сортировкой это был hot-path выжиматель.
+    final cache = state.configCache;
+
+    // §048 Phase 2 — match filter: split pool на matching + nonMatching
+    // (control-узлы короткозамкнуты в matching, §078). См. `splitNodes`.
+    final (matching, nonMatching) = splitNodes(allTags, state);
+    final matchingSet = matching.toSet();
+
+    // Render list = matching + (showNonMatching ? nonMatching : []).
+    final displayList = filter.showNonMatching
+        ? <String>[...matching, ...nonMatching]
+        : matching;
+
+    // Available для chips — из всего pool (не от current filter state).
+    // Emoji — из allTags (locked decision #3, включая detour).
+    final emojis = NodeFilter.extractEmojis(allTags);
+    final availableProtocols = <String>{};
+    for (final t in pool) {
+      final p = protocolOfTag(t, state);
+      if (p != null) availableProtocols.add(p);
+    }
+    final subOptions = <(String, String)>[];
+    for (final e in subController.entries) {
+      final list = e.list;
+      // Показываем подписку только если она enabled И в ней есть хоть 1 нода.
+      // Disabled / пустые → шум, не дают полезный chip.
+      if (list is SubscriptionServers && e.enabled && list.nodes.isNotEmpty) {
+        subOptions.add((e.id, e.displayName));
+      }
+    }
+    // §078 — 'Custom' chip отображается только если в pool есть **payload**
+    // тэги с empty subscriptionsOf (= UserServer / imported JSON outbound).
+    // Control outbounds (direct/auto/etc.) тоже дают empty Set, но они
+    // в свою категорию — exclude'им чтобы chip не появлялся когда у
+    // юзера нет UserServer'ов.
+    final hasCustom = pool.any((t) =>
+        !isControlTag(t, state) && subscriptionsOfTag_(t).isEmpty);
+    if (hasCustom) subOptions.add(('custom', 'Custom'));
+
+    return NodeListData(
+      cache: cache,
+      matchingSet: matchingSet,
+      displayList: displayList,
+      emojis: emojis,
+      availableProtocols: availableProtocols.toList()..sort(),
+      subOptions: subOptions,
+    );
+  }
+}
+
+/// §089 — immutable bundle вычисленных данных для node-list render.
+class NodeListData {
+  const NodeListData({
+    required this.cache,
+    required this.matchingSet,
+    required this.displayList,
+    required this.emojis,
+    required this.availableProtocols,
+    required this.subOptions,
+  });
+
+  final ConfigCache cache;
+  final Set<String> matchingSet;
+  final List<String> displayList;
+  final List<String> emojis;
+  final List<String> availableProtocols;
+  final List<(String, String)> subOptions;
+}
