@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 /// §047 — banner который показывается под `Default Domain Resolver` когда
 /// выбран `local_dns_resolver`. Объясняет риск + предлагает quick-fix
 /// «Switch to cloudflare_udp» если этот server существует в catalog'е.
-///
-/// Extracted from `DnsSettingsScreen._localResolverWarningBanner` (§089 split).
 class LocalResolverWarningBanner extends StatelessWidget {
   const LocalResolverWarningBanner({
     super.key,

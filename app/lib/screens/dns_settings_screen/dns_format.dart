@@ -1,5 +1,5 @@
 /// §033: pure helper — formats a DNS rule body into a compact one-line preview
-/// for the rule tile subtitle. Extracted from `DnsSettingsScreen` (§089 split).
+/// for the rule tile subtitle.
 String formatRulePreview(Map<String, dynamic>? body, {required String kind}) {
   if (body == null) {
     // Should not happen post-resolve; defensive fallback.

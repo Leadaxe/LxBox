@@ -9,11 +9,8 @@ import '../settings_storage.dart' show SettingsStorage, TunAppsConfig;
 import 'preset_expand.dart';
 import 'rule_set_registry.dart';
 
-// §089: post_steps split by responsibility (behavior-preserving).
-// Single library composed via `part`/`part of` — все приватные хелперы и
-// публичный API остаются в одной библиотеке, поэтому importers и тесты не
-// меняются. Каждый part = один шаг sing-box config post-processing'а,
-// порядок и трансформы сохранены 1:1.
+// Barrel stitching the post-step part files into one library via `part`/`part of`.
+// Каждый part = один шаг sing-box config post-processing'а.
 //
 //   - tls_transforms.dart — applyMixedCaseSni / applyTlsFragment (§028)
 //   - tun_packages.dart   — applyTunPackages (§046)

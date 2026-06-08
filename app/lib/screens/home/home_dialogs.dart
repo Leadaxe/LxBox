@@ -81,9 +81,6 @@ Future<void> showLocationPermissionDialog(
 /// §036 — SnackBar «новая версия доступна». Возвращает рано если юзер уже
 /// dismiss'нул эту версию. [onShown] вызывается ровно когда SnackBar реально
 /// показывается (State использует это чтобы выставить `_updateSnackbarShown`).
-///
-/// §089 — вынесено из `_HomeScreenState._maybeShowUpdateSnackbar`
-/// (`mounted` → `context.mounted`, флаг через callback).
 Future<void> maybeShowUpdateSnackbar(
   BuildContext context,
   UpdateInfo info, {
@@ -117,8 +114,6 @@ Future<void> maybeShowUpdateSnackbar(
 /// be shown — the user has no visual indicator that VPN is active.
 /// We show an explainer once on first launch (or after revocation),
 /// then trigger the system permission dialog.
-///
-/// §089 — вынесено из `_HomeScreenState._maybeShowNotificationPermissionDialog`.
 const _notifPromptKey = 'notif_perm_prompted_v1';
 
 Future<void> maybeShowNotificationPermissionDialog(BuildContext context) async {
@@ -161,9 +156,6 @@ Future<void> maybeShowNotificationPermissionDialog(BuildContext context) async {
 /// optimization whitelist'е. Без whitelist'а Android агрессивно throttle'ит
 /// foreground service + tunnel засыпает в Doze → интернет «отваливается»
 /// до следующего открытия приложения.
-///
-/// §089 — вынесено из `_HomeScreenState._maybeShowBatteryOptimizationDialog`
-/// (`mounted` → `context.mounted`, [vpn] передаётся явно).
 Future<void> maybeShowBatteryOptimizationDialog(
   BuildContext context,
   BoxVpnClient vpn,
@@ -213,8 +205,6 @@ Future<void> maybeShowBatteryOptimizationDialog(
 /// toggle'ы поверх AOSP («Background activity», «Stop when idle»),
 /// которые AOSP intent НЕ контролирует. Open App Info чтобы юзер
 /// тапнул их вручную.
-///
-/// §089 — вынесено из `_HomeScreenState._showOemBatteryFollowupDialog`.
 Future<void> showOemBatteryFollowupDialog(
   BuildContext context,
   BoxVpnClient vpn,

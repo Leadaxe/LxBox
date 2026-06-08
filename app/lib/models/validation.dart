@@ -34,7 +34,7 @@ final class DanglingOutboundRef extends ValidationIssue {
   String get message => 'Rule "$rule" references missing outbound "$tag".';
 }
 
-/// §084 H1 / §081 — outbound с `detour`, ссылающимся на несуществующий tag.
+/// §084 H1 — outbound с `detour`, ссылающимся на несуществующий tag.
 /// Возникает напр. когда override-detour хранит bare-tag, а целевой
 /// outbound эмитится prefixed (§080), или при ручном редактировании JSON.
 /// sing-box core реджектит такой config при старте → fatal.
@@ -73,17 +73,6 @@ final class InvalidDefault extends ValidationIssue {
   @override
   String get message =>
       'Selector "$group" default "$tag" is not in the options list.';
-}
-
-final class UnknownField extends ValidationIssue {
-  final String path;
-  const UnknownField(this.path);
-
-  @override
-  Severity get severity => Severity.warn;
-
-  @override
-  String get message => 'Unknown field at "$path".';
 }
 
 class ValidationResult {

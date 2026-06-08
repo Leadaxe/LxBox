@@ -11,7 +11,7 @@ import 'resolved_server.dart';
 ///
 /// `kind` / `overrides` / `presetLabel` — typed accessors на `ResolvedServer`.
 ///
-/// Extracted from `DnsSettingsScreen._displayedServers` (§089 split) — pure.
+/// — pure.
 List<ResolvedServer> resolveDisplayedServers(
   List<Map<String, dynamic>> servers,
   Map<String, Map<String, dynamic>> templateByTag,
@@ -88,7 +88,7 @@ List<ResolvedServer> resolveDisplayedServers(
 /// Tags доступные в dropdown'ах (DNS Final / Default Resolver / per-rule).
 /// Filter `enabled` на ref-level.
 ///
-/// Extracted from `DnsSettingsScreen._enabledServerTags` (§089 split) — pure.
+/// pure.
 List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
   final out = <String>[];
   for (final s in displayedServers) {
@@ -103,7 +103,7 @@ List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
 /// exists. UI mutation already filtered, но keep guard symmetric с
 /// resolveDnsRulesList semantics.
 ///
-/// Extracted from `DnsSettingsScreen.persistChanges` (§089 split) — pure.
+/// pure.
 List<Map<String, dynamic>> cleanDnsRulesForPersist(
   List<Map<String, dynamic>> rules,
   Map<String, Map<String, dynamic>> templateRulesByName,

@@ -10,8 +10,7 @@ import '../../services/backup_service.dart';
 import '../../services/error_format.dart';
 import '../../services/subscription/auto_updater.dart';
 
-/// §089 — empty-state quick-restore flow, вынесенный из
-/// `_HomeScreenState._restoreFromBackup` (`mounted` → `context.mounted`).
+/// Empty-state quick-restore flow.
 ///
 /// Open SAF file picker → parse backup file → `applyImport(merge: false,
 /// include: all)` → snackbar + restart hint. Без preview dialog'а (юзер в

@@ -1,3 +1,5 @@
+import '../json_clone.dart';
+
 /// Центральный реестр `route.rule_set` и `route.rules` секций.
 ///
 /// Владеет обоими списками на время сборки конфига. Post-steps (а в будущем
@@ -66,7 +68,7 @@ class RuleSetRegistry {
       (r) => r['tag'] == tag,
       orElse: () => const <String, dynamic>{},
     );
-    return !_deepEquals(existing, copy);
+    return !deepEqualsJson(existing, copy);
   }
 
   /// Insert routing rule (any shape). Порядок в `rules[]` = порядок матчинга
@@ -106,22 +108,3 @@ class RuleSetRegistry {
   }
 }
 
-bool _deepEquals(dynamic a, dynamic b) {
-  if (identical(a, b)) return true;
-  if (a is Map && b is Map) {
-    if (a.length != b.length) return false;
-    for (final k in a.keys) {
-      if (!b.containsKey(k)) return false;
-      if (!_deepEquals(a[k], b[k])) return false;
-    }
-    return true;
-  }
-  if (a is List && b is List) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (!_deepEquals(a[i], b[i])) return false;
-    }
-    return true;
-  }
-  return a == b;
-}

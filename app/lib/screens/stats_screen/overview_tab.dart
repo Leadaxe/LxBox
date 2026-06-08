@@ -5,11 +5,8 @@ import '../../services/clash_api_client.dart';
 import '../../services/format_utils.dart';
 import 'overview_models.dart';
 
-/// §089 — Overview-таб StatsScreen. Вынесен из stats_screen.dart
-/// поведение-сохраняюще: build-helpers перенесены 1:1, `_expanded`-множество
-/// теперь локальный state этого виджета (раньше жил в _StatsScreenState, но
-/// читался/писался только overview-кодом). Данные приходят через props при
-/// каждом refresh'е родителя.
+/// Overview tab of StatsScreen; receives data via props on each parent refresh.
+/// `_expanded` is local state of this widget.
 class OverviewTab extends StatefulWidget {
   const OverviewTab({
     super.key,

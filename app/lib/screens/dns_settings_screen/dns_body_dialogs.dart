@@ -7,8 +7,6 @@ import 'resolved_server.dart';
 /// Read-only dialog с полным JSON DNS-сервера.
 /// §044: read-only dialog показывает body синтезированного sing-box shape'а
 /// (без UI-аннотаций — их физически нет в `ResolvedServer.body`).
-///
-/// Extracted from `DnsSettingsScreen._showServerBodyDialog` (§089 split).
 void showServerBodyDialog(BuildContext context, ResolvedServer server) {
   final pretty = const JsonEncoder.withIndent('  ').convert(server.body);
   final title = server.description.isNotEmpty ? server.description : server.tag;
@@ -54,8 +52,6 @@ void showServerBodyDialog(BuildContext context, ResolvedServer server) {
 /// Read-only dialog с полным JSON body правила. Юзер видит что внутри
 /// без необходимости лезть в исходник (особенно для kind=template/rule
 /// где body proxy'ится из шаблона/пресета).
-///
-/// Extracted from `DnsSettingsScreen._showRuleBodyDialog` (§089 split).
 void showRuleBodyDialog(
     BuildContext context, String title, String kind, Map<String, dynamic>? body) {
   final pretty = body == null

@@ -3,9 +3,6 @@ import 'package:flutter/material.dart';
 /// §047/§048 — DNS resolver picker с info-icon ℹ tooltip'ом и опциональным
 /// жёлтым ⚠ маркером когда выбран `local_dns_resolver` (только для
 /// `Default Domain Resolver` поля — там это antipattern).
-///
-/// Extracted from `DnsSettingsScreen._resolverPicker` (§089 split) —
-/// behaviour-identical.
 class ResolverPicker extends StatelessWidget {
   const ResolverPicker({
     super.key,

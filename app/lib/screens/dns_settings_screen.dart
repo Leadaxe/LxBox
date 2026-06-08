@@ -219,7 +219,6 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   }
 
   /// §044: render list — typed `ResolvedServer` для каждой ref-записи.
-  /// Pure resolve вынесен в `dns_server_resolver.dart` (§089 split).
   List<ResolvedServer> get _displayedServers =>
       resolveDisplayedServers(_servers, _templateByTag, _presetServersByTag);
 

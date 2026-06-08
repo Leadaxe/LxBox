@@ -227,10 +227,6 @@ class HomeController extends ChangeNotifier
   // _onTunnelDead / _tryCleanStop) вынесен в `home_controller/heartbeat.dart`
   // (`_HeartbeatMixin`).
 
-  // _extractStopReason removed — логика переехала в TunnelStatusEvent._extractReason
-  // (см. lib/models/tunnel_status.dart). HomeController теперь использует
-  // event.errorReason напрямую.
-
   // Config persistence + import (clipboard / file) вынесены в
   // `home_controller/config_io.dart` (`_ConfigIoMixin`): _loadSavedConfig /
   // saveParsedConfig / saveConfigRaw / readFromClipboard / readFromFile.

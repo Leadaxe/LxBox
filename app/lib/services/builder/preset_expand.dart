@@ -1,7 +1,6 @@
-import 'dart:convert';
-
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
+import '../json_clone.dart';
 
 /// Результат expansion одного `CustomRule(kind: preset)` через его
 /// `SelectableRule`-определение в шаблоне (spec §033).
@@ -132,7 +131,7 @@ PresetFragments expandPreset(
       continue;
     }
 
-    final copy = _deepCopy(rs);
+    final copy = deepCopyJson(rs);
     final result = _substitute(copy, varsMap);
     if (result is! Map<String, dynamic>) continue;
     if (result['tag'] is! String) continue;
@@ -170,7 +169,7 @@ PresetFragments expandPreset(
 
   Map<String, dynamic>? dnsRule;
   if (preset.dnsRule != null) {
-    final copy = _deepCopy(preset.dnsRule!);
+    final copy = deepCopyJson(preset.dnsRule!);
     final result = _substitute(copy, varsMap);
     if (result is Map<String, dynamic> && result['server'] is String) {
       dnsRule = result;
@@ -179,7 +178,7 @@ PresetFragments expandPreset(
 
   Map<String, dynamic>? routingRule;
   {
-    final copy = _deepCopy(preset.rule);
+    final copy = deepCopyJson(preset.rule);
     final result = _substitute(copy, varsMap);
     if (result is Map<String, dynamic> &&
         (result['outbound'] is String || result['action'] is String)) {
@@ -257,7 +256,7 @@ PresetFragments expandPreset(
   if (selectedDns != null && selectedDns.isNotEmpty) {
     for (final s in preset.dnsServers) {
       if (s['tag'] != selectedDns) continue;
-      final copy = _deepCopy(s);
+      final copy = deepCopyJson(s);
       final result = _substitute(copy, varsMap);
       if (result is! Map<String, dynamic>) continue;
       if (result['tag'] is! String) continue;
@@ -305,7 +304,7 @@ BundleMerge mergeFragments(List<PresetFragments> all) {
       if (existing == null) {
         dnsServerByTag[tag] = s;
         dnsServers.add(s);
-      } else if (!_deepEquals(existing, s)) {
+      } else if (!deepEqualsJson(existing, s)) {
         warnings.add('dns server "$tag" skipped: conflicts with earlier preset');
       }
     }
@@ -320,7 +319,7 @@ BundleMerge mergeFragments(List<PresetFragments> all) {
       if (existing == null) {
         ruleSetByTag[tag] = rs;
         ruleSets.add(rs);
-      } else if (!_deepEquals(existing, rs)) {
+      } else if (!deepEqualsJson(existing, rs)) {
         warnings.add('rule_set "$tag" skipped: conflicts with earlier preset');
       }
     }
@@ -397,25 +396,3 @@ dynamic _substitute(dynamic obj, Map<String, dynamic> vars) {
   return obj;
 }
 
-Map<String, dynamic> _deepCopy(Map<String, dynamic> src) =>
-    jsonDecode(jsonEncode(src)) as Map<String, dynamic>;
-
-bool _deepEquals(dynamic a, dynamic b) {
-  if (identical(a, b)) return true;
-  if (a is Map && b is Map) {
-    if (a.length != b.length) return false;
-    for (final k in a.keys) {
-      if (!b.containsKey(k)) return false;
-      if (!_deepEquals(a[k], b[k])) return false;
-    }
-    return true;
-  }
-  if (a is List && b is List) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (!_deepEquals(a[i], b[i])) return false;
-    }
-    return true;
-  }
-  return a == b;
-}

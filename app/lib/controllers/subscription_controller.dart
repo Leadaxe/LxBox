@@ -25,9 +25,8 @@ import '../services/subscription/http_cache.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/subscription/sources.dart';
 
-// §089 split-by-responsibility. Та же библиотека (`part`), поэтому
-// library-private доступ (`_replaceList`, `_formatAgo`) к/между основным
-// файлом и part'ом сохраняется идентично исходнику.
+// Та же библиотека (`part`), поэтому library-private доступ
+// (`_replaceList`, `_formatAgo`) к/между основным файлом и part'ом доступен.
 part 'subscription_controller/subscription_entry.dart';
 
 /// Основной контроллер подписок. Владеет `List<ServerList>`, делает
@@ -335,39 +334,6 @@ class SubscriptionController extends ChangeNotifier {
     _entries[index]._replaceList(next);
     await _persist();
     notifyListeners();
-  }
-
-  Future<String?> updateAllAndGenerate() async {
-    _busy = true;
-    _lastError = '';
-    _progressMessage = 'Updating subscriptions...';
-    notifyListeners();
-
-    try {
-      for (var i = 0; i < _entries.length; i++) {
-        if (!_entries[i].enabled) continue;
-        if (_entries[i].list is SubscriptionServers &&
-            (_entries[i].list as SubscriptionServers).url.isNotEmpty) {
-          await _fetchEntry(i);
-        }
-      }
-      _progressMessage = 'Generating config...';
-      notifyListeners();
-
-      final config = await _generate();
-      _lastGeneratedConfig = config;
-      _progressMessage = '';
-      configDirty = false;
-      await SettingsStorage.setLastGlobalUpdate(DateTime.now());
-      return config;
-    } catch (e) {
-      _lastError = humanizeError(e);
-      return null;
-    } finally {
-      _busy = false;
-      _progressMessage = '';
-      notifyListeners();
-    }
   }
 
   Future<String?> generateConfig() async {

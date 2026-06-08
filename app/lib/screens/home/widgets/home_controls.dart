@@ -10,8 +10,7 @@ import '../home_dialogs.dart';
 import '../home_menus.dart';
 import '../node_list_presenter.dart';
 
-/// §089 — controls-блок главного экрана, вынесенный из
-/// `_HomeScreenState._buildControls` + `_buildReloadButton` + reload-menu.
+/// Controls-блок главного экрана.
 ///
 /// Поведение байт-в-байт идентично. Все state-mutating flows (rebuild /
 /// reconnect / start) приходят callback'ами из `_HomeScreenState`, чтобы

@@ -8,8 +8,7 @@ import '../node_list_presenter.dart';
 /// protocol chips + subscription chips + ping field + Show-detour +
 /// Show-non-matching.
 ///
-/// §089 — извлечено из `_HomeScreenState._buildFilterPanel` без изменения
-/// поведения. Все callbacks идут напрямую в [filter] (NodeFilterViewModel).
+/// Все callbacks идут напрямую в [filter] (NodeFilterViewModel).
 class FilterPanel extends StatelessWidget {
   const FilterPanel({
     super.key,

@@ -11,8 +11,6 @@ import 'dns_badge.dart';
 /// - `kind: preset`   — badge `Preset` (subtitle с preset-label), edit + switch
 /// - `kind: inline` + `overrides != null` — badge `Overridden`, edit + reset (↺)
 /// - `kind: inline` + `overrides == null` — badge `User`, edit + delete (🗑)
-///
-/// Extracted from `DnsSettingsScreen._buildMergedServerTile` (§089 split).
 class MergedServerTile extends StatelessWidget {
   const MergedServerTile({
     super.key,

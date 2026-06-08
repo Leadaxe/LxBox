@@ -6,7 +6,6 @@ import '../../services/error_format.dart';
 
 /// Bottom-sheet editor for an inline user DNS rule (`kind: inline`).
 ///
-/// Extracted from `DnsSettingsScreen._showUserRuleEditor` (§089 split).
 /// `existing` — текущий entry при edit (null при add). `onSave` получает уже
 /// собранный `entry` map (caller решает insert vs replace). `context` —
 /// screen context (для `ScaffoldMessenger` снаружи sheet'а).

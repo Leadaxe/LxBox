@@ -14,8 +14,7 @@ import '../../services/error_format.dart';
 /// - body — валидный JSON object; auto-strip tag/description/enabled
 ///   если случайно оставлены
 ///
-/// Extracted from `DnsSettingsScreen._showServerEditor` (§089 split). `context`
-/// is the screen context (used for `ScaffoldMessenger` снаружи sheet'а).
+/// `context` is the screen context (used for `ScaffoldMessenger` снаружи sheet'а).
 void showServerEditor(
   BuildContext context, {
   required String title,

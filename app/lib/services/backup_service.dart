@@ -6,6 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../models/background_mode.dart';
 import '../models/server_list.dart';
 import '../vpn/box_vpn_client.dart';
+import 'json_clone.dart';
 import 'settings_storage.dart';
 
 /// Backup categories — параллельно с UI-toggle'ами в [BackupScreen].
@@ -450,7 +451,7 @@ class BackupService {
       final key = entry.key;
       final value = entry.value;
       if (key == 'server_lists') {
-        if (wantServers) out[key] = _deepClone(value);
+        if (wantServers) out[key] = deepCloneJson(value);
       } else if (key == 'vars') {
         if (value is Map) {
           final filteredVars = <String, dynamic>{};
@@ -458,27 +459,23 @@ class BackupService {
             final vk = v.key.toString();
             final isDebug = _varDebugKeys.contains(vk);
             if (isDebug && wantDebug) {
-              filteredVars[vk] = _deepClone(v.value);
+              filteredVars[vk] = deepCloneJson(v.value);
             } else if (!isDebug && wantApp) {
-              filteredVars[vk] = _deepClone(v.value);
+              filteredVars[vk] = deepCloneJson(v.value);
             }
           }
           if (filteredVars.isNotEmpty) out[key] = filteredVars;
         }
       } else if (_topLevelRoutingKeys.contains(key)) {
-        if (wantRouting) out[key] = _deepClone(value);
+        if (wantRouting) out[key] = deepCloneJson(value);
       } else if (_topLevelAppKeys.contains(key)) {
-        if (wantApp) out[key] = _deepClone(value);
+        if (wantApp) out[key] = deepCloneJson(value);
       } else {
         // Unknown / future key — graceful default: bundle into App settings.
-        if (wantApp) out[key] = _deepClone(value);
+        if (wantApp) out[key] = deepCloneJson(value);
       }
     }
     return out;
   }
 
-  static Object? _deepClone(Object? v) {
-    if (v == null) return null;
-    return jsonDecode(jsonEncode(v));
-  }
 }

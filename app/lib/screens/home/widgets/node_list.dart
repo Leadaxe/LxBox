@@ -17,8 +17,7 @@ import '../node_list_presenter.dart';
 import 'add_server_cta.dart';
 import 'filter_panel.dart';
 
-/// §089 — node-list секция главного экрана, вынесенная из
-/// `_HomeScreenState._buildNodeList` + `_buildReorderableNodeList`.
+/// Node-list секция главного экрана.
 ///
 /// PRESERVED EXACTLY:
 /// - §048 двухфазный filter / split (через [presenter]);

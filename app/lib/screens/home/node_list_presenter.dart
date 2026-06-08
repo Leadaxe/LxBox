@@ -24,8 +24,7 @@ String protoLabel(String type) => switch (type) {
       _ => type.toUpperCase(),
     };
 
-/// §089 — prep-logic для node-list главного экрана, вынесенная из
-/// `_HomeScreenState` (God-object) в отдельный presenter.
+/// Prep-logic для node-list главного экрана.
 ///
 /// Владеет:
 /// - §070 frozen-sort UI-cache ([_cachedSorted]/[_cachedSortKey]) — должен
@@ -163,7 +162,7 @@ class NodeListPresenter {
     return _cachedSorted!;
   }
 
-  /// §089 — agregated данные для render node-list (см. `_buildNodeList`).
+  /// Aggregated данные для render node-list.
   /// Собирает sorted/pool/split/displayList + chip-options одним проходом.
   NodeListData computeListData(HomeState state) {
     // §048 — двухфазная модель (см. spec):

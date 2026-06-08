@@ -6,7 +6,7 @@ import 'dns_badge.dart';
 
 /// §033: builds a tile for a single `dns_options.rules[i]` entry.
 ///
-/// Extracted from `DnsSettingsScreen._buildRuleTile` (§089 split). Lookup maps
+/// Lookup maps
 /// (`templateRulesByName`/`presetRulesByPresetId`/`presetLabelByPresetId`) и
 /// mutating-actions переданы из state.
 class DnsRuleTile extends StatelessWidget {

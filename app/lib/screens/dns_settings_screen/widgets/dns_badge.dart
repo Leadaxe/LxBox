@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Small coloured badge used in DNS server / rule tiles. Extracted from
-/// `DnsSettingsScreen._badge` (§089 split) — behaviour-identical.
+/// Small coloured badge used in DNS server / rule tiles.
 class DnsBadge extends StatelessWidget {
   const DnsBadge(this.text, this.color, {super.key});
 

@@ -1,5 +1,4 @@
-/// §089 — модели overview-таба StatsScreen. Вынесены из stats_screen.dart
-/// без изменения семантики (были приватные `_OutboundGroup` / `_Connection`).
+/// Модели overview-таба StatsScreen.
 class OutboundGroup {
   OutboundGroup({required this.name, this.upload = 0, this.download = 0, required this.connections});
   final String name;

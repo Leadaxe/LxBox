@@ -10,7 +10,7 @@ import '../../services/config_introspection.dart';
 import '../../services/tag_resolver.dart';
 import '../outbound_view_screen.dart';
 
-/// §089 — node long-press action helpers, вынесенные из `_HomeScreenState`.
+/// Node long-press action helpers.
 /// Все принимают `context` явно (раньше использовали `mounted`/`context`
 /// напрямую); поведение байт-в-байт идентично.
 

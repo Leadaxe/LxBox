@@ -6,7 +6,7 @@ import '../../models/validation.dart';
 /// - `route.rules[].outbound` ссылается на существующий tag → иначе
 ///   `DanglingOutboundRef` (fatal).
 /// - `outbounds[]/endpoints[].detour` ссылается на существующий tag → иначе
-///   `DanglingDetourRef` (fatal). §084 H1 / §081.
+///   `DanglingDetourRef` (fatal). §084 H1.
 /// - `outbounds[type=urltest]` не пуст → иначе `EmptyUrltestGroup` (fatal).
 /// - `outbounds[type=selector].default` в options → иначе `InvalidDefault`
 ///   (fatal).

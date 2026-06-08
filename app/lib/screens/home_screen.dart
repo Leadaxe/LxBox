@@ -50,9 +50,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   // него и rebuild'ит (`setState`) на каждый `notifyListeners`.
   late final NodeFilterViewModel _filter;
 
-  // §089 — node-list prep-logic + §070 frozen-sort cache живут в presenter'е
-  // (создаётся один раз в initState → переживает rebuild'ы, cache-семантика
-  // идентична оригиналу).
+  // §070 frozen-sort cache живёт в presenter'е (создаётся один раз в
+  // initState → переживает rebuild'ы, cache-семантика идентична оригиналу).
   late final NodeListPresenter _nodeList;
 
   /// Derived UI flag. §076 banner gate:
@@ -88,8 +87,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _controller = HomeController(autoUpdater: _autoUpdater);
     // §085 R3 — filter view-model: rebuild на любое изменение фильтров.
     _filter = NodeFilterViewModel()..addListener(_onFilterChanged);
-    // §089 — presenter owns §070 frozen-sort cache; создаём один раз тут
-    // чтобы cache переживал rebuild'ы (как и раньше когда жил в State).
+    // Создаём presenter один раз тут чтобы §070 frozen-sort cache переживал
+    // rebuild'ы (как и раньше когда жил в State).
     _nodeList = NodeListPresenter(
       controller: _controller,
       subController: _subController,
@@ -159,9 +158,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       return;
     }
     if (_updateSnackbarShown) return;
-    // §089 — SnackBar-логика вынесена в home/home_dialogs.dart. Флаг
-    // `_updateSnackbarShown` выставляется через `onShown` callback ровно
-    // когда SnackBar реально показывается (как и раньше).
+    // Флаг `_updateSnackbarShown` выставляется через `onShown` callback ровно
+    // когда SnackBar реально показывается.
     if (!mounted) return;
     unawaited(maybeShowUpdateSnackbar(
       context,
@@ -169,10 +167,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       onShown: () => _updateSnackbarShown = true,
     ));
   }
-
-  /// §089 — permission/battery dialogs (notification / battery-opt /
-  /// OEM-followup) переехали в home/home_dialogs.dart как top-level функции
-  /// (`mounted` → `context.mounted`, `_vpn` передаётся явно). См. их docstring'и.
 
   void _onControllerChange() {
     final state = _controller.state;
@@ -286,13 +280,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     final val = await SettingsStorage.getVar('auto_rebuild', 'true');
     _autoRebuild = val == 'true';
   }
-
-  // §085 R3 — filter event handlers + per-channel memory переехали в
-  // `NodeFilterViewModel` (`_filter`).
-  // §089 — node-list prep-logic (protocolOf / subscriptionsOf / isControlTag /
-  // buildNodeFilter / splitNodes / computeDisplayList / viewSortedNodes +
-  // §070 frozen-sort cache) переехала в `NodeListPresenter` (`_nodeList`,
-  // home/node_list_presenter.dart). Cache живёт там и переживает rebuild'ы.
 
   @override
   void dispose() {
@@ -510,9 +497,4 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       }
     }
   }
-
-
-  // §089 — empty-state backup-restore flow переехал в
-  // home/restore_backup.dart как `restoreFromBackup(context, sub, auto)`
-  // (`mounted` → `context.mounted`).
 }
