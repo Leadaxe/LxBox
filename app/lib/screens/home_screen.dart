@@ -15,6 +15,7 @@ import '../models/home_state.dart';
 import '../models/node_spec.dart';
 import '../services/backup_service.dart';
 import '../services/clash_api_client.dart';
+import '../services/config_introspection.dart';
 import '../services/error_format.dart';
 import '../services/version_info.dart';
 import '../widgets/node_row.dart';
@@ -1692,22 +1693,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     );
   }
 
-  int _countNodesInConfig(String configJson) {
-    try {
-      final config = jsonDecode(configJson) as Map<String, dynamic>;
-      final outbounds = (config['outbounds'] as List<dynamic>? ?? [])
-          .whereType<Map<String, dynamic>>()
-          .where((o) {
-            final type = o['type']?.toString() ?? '';
-            // Skip groups and built-in outbounds
-            return type != 'selector' && type != 'urltest' && type != 'direct' && type != 'block' && type != 'dns';
-          }).length;
-      final endpoints = (config['endpoints'] as List<dynamic>? ?? []).length;
-      return outbounds + endpoints;
-    } catch (_) {
-      return 0;
-    }
-  }
 
   Future<void> _rebuildAndClearDirty() async {
     await _rebuildConfig();
@@ -1745,7 +1730,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (config != null) {
       final ok = await _controller.saveParsedConfig(config);
       if (ok && mounted) {
-        final nodeCount = _countNodesInConfig(config);
+        final nodeCount = ConfigIntrospection.parse(config).nodeCount;
         // configChangedNeedRestart выставляется внутри saveParsedConfig,
         // AnimatedBuilder переотрисует через _needsRestart getter.
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1915,44 +1900,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
 
   void _viewOutboundJson(String tag, HomeState state) {
     if (state.configRaw.isEmpty) return;
-    Map<String, Map<String, dynamic>> byTag = {};
-    Map<String, String> kindByTag = {};
-    try {
-      final cfg = jsonDecode(state.configRaw) as Map<String, dynamic>;
-      for (final o in (cfg['outbounds'] as List<dynamic>? ?? [])
-          .whereType<Map<String, dynamic>>()) {
-        final t = o['tag'];
-        if (t is String) {
-          byTag[t] = o;
-          kindByTag[t] = 'outbound';
-        }
-      }
-      for (final o in (cfg['endpoints'] as List<dynamic>? ?? [])
-          .whereType<Map<String, dynamic>>()) {
-        final t = o['tag'];
-        if (t is String) {
-          byTag[t] = o;
-          kindByTag[t] = 'endpoint';
-        }
-      }
-    } catch (_) {}
-
-    final entry = byTag[tag];
-    if (entry == null) {
+    // §085 R2 — config-introspection через единый service.
+    final intro = ConfigIntrospection.parse(state.configRaw);
+    final chain = intro.outboundChain(tag);
+    if (chain.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Not found: $tag')),
       );
       return;
-    }
-
-    final chain = <Map<String, dynamic>>[entry];
-    final seen = <String>{tag};
-    var cur = entry['detour'];
-    while (cur is String && cur.isNotEmpty && seen.add(cur)) {
-      final next = byTag[cur];
-      if (next == null) break;
-      chain.add(next);
-      cur = next['detour'];
     }
 
     final payload = chain.length == 1 ? chain.first : chain;
@@ -1960,7 +1915,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     Navigator.push(context, MaterialPageRoute(
       builder: (_) => OutboundViewScreen(
         tag: tag,
-        kind: kindByTag[tag] ?? 'outbound',
+        kind: intro.kindOf(tag),
         json: json,
       ),
     ));
@@ -1969,21 +1924,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   void _copyNodeJson(String tag, HomeState state, String mode) {
     if (state.configRaw.isEmpty) return;
 
-    Map<String, dynamic>? server;
+    // §085 R2 — config-introspection через единый service.
+    final intro = ConfigIntrospection.parse(state.configRaw);
+    final Map<String, dynamic>? server = intro.outboundByTag(tag);
     Map<String, dynamic>? detour;
-    try {
-      final config = jsonDecode(state.configRaw) as Map<String, dynamic>;
-      final outbounds = config['outbounds'] as List<dynamic>? ?? [];
-      final endpoints = config['endpoints'] as List<dynamic>? ?? [];
-      final all = [...outbounds, ...endpoints].whereType<Map<String, dynamic>>();
-      server = all.where((o) => o['tag'] == tag).firstOrNull;
-      if (server != null) {
-        final detourTag = server['detour'] as String?;
-        if (detourTag != null && detourTag.isNotEmpty) {
-          detour = all.where((o) => o['tag'] == detourTag).firstOrNull;
-        }
-      }
-    } catch (_) {}
+    if (server != null) {
+      final detourTag = intro.detourOf(tag);
+      if (detourTag != null) detour = intro.outboundByTag(detourTag);
+    }
 
     if (server == null) return;
 

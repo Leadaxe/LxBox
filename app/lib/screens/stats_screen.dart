@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
 import '../services/app_info_cache.dart';
 import '../services/clash_api_client.dart';
+import '../services/config_introspection.dart';
 import '../services/format_utils.dart';
 import '../services/traffic_profiler.dart';
 import '../vpn/box_vpn_client.dart';
@@ -43,7 +43,10 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
   bool _loading = true;
   Timer? _timer;
   final _expanded = <String>{};
-  final _detourMap = <String, String>{};
+  // §085 R2 — config-introspection через единый service (был локальный
+  // _detourMap + _parseDetourMap + _detourChain дубль).
+  late final ConfigIntrospection _intro =
+      ConfigIntrospection.parse(widget.configRaw);
 
   /// §069 — runtime applied значение `allowBypass()` от последнего
   /// `establish()`. Показывается warning icon в AppBar если true.
@@ -56,7 +59,6 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _parseDetourMap();
     unawaited(_refresh());
     _startTimer();
   }
@@ -90,32 +92,7 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _parseDetourMap() {
-    if (widget.configRaw.isEmpty) return;
-    try {
-      final cfg = jsonDecode(widget.configRaw) as Map<String, dynamic>;
-      final all = [
-        ...(cfg['outbounds'] as List<dynamic>? ?? []),
-        ...(cfg['endpoints'] as List<dynamic>? ?? []),
-      ].whereType<Map<String, dynamic>>();
-      for (final o in all) {
-        final t = o['tag'];
-        final d = o['detour'];
-        if (t is String && d is String && d.isNotEmpty) _detourMap[t] = d;
-      }
-    } catch (_) {}
-  }
-
-  List<String> _detourChain(String tag) {
-    final chain = <String>[];
-    final seen = <String>{tag};
-    var cur = _detourMap[tag];
-    while (cur != null && cur.isNotEmpty && seen.add(cur)) {
-      chain.add(cur);
-      cur = _detourMap[cur];
-    }
-    return chain;
-  }
+  List<String> _detourChain(String tag) => _intro.detourChain(tag);
 
   @override
   void dispose() {

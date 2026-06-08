@@ -14,6 +14,8 @@
 
 ### Changed
 
+- **§085 R2 — `ConfigIntrospection` (единый config-traversal service)** ([roadmap](docs/spec/tasks/085-architecture-roadmap.md), [config_introspection.dart](app/lib/services/config_introspection.dart)). Из arch-анализа: detour-chain traversal был продублирован 3× (home/stats/builder) + 15 ad-hoc `jsonDecode(configRaw)` сайтов. Создан on-demand query value-object (`outboundByTag`/`detourOf`/`detourChain`/`outboundChain`/`nodeCount`, cycle-safe). Заменены дубли в `home_screen` (count + view-JSON + copy-JSON) и `stats_screen` (detour-map + chain). `ConfigCache` (render hot-path) оставлен отдельно — иная цель. +9 unit tests. Поведение без изменений.
+
 - **§085 R1 — `TagResolver` (единый владелец display-tag logic)** ([roadmap](docs/spec/tasks/085-architecture-roadmap.md), [tag_resolver.dart](app/lib/services/tag_resolver.dart)). Из 28-агентного архитектурного анализа: логика «display-tag ↔ bare-tag» (subscription prefix, detour-маркер `⚙`, collision-suffix) была размазана по 6+ местам, что породило класс багов §077/§079/§080. Вынесена в pure-static `TagResolver` (`displayTag`/`isDetourMarker`/`stripPrefix`/`matchesAllocated`). Рефакторены все call-sites: `server_list_build._withPrefix` (удалён), `subscription_lookup`, home_screen detour-hide + `_findNodeByDisplayTag`, node_filter_screen, detour-picker'ы. Структурно невозможен новый баг этого класса. +30 unit tests. Поведение без изменений.
 
 ### Fixed

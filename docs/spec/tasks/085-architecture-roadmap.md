@@ -127,6 +127,12 @@
       node_settings + subscription_detail picker. `isDetourDisplayTag`
       удалён из consts. +30 unit tests (`tag_resolver_test.dart`,
       поглотил consts_test). Класс багов §077/§079/§080 структурно закрыт.
-- [ ] R2 — ConfigIntrospection
+- [x] **R2 — ConfigIntrospection** ✅ `lib/services/config_introspection.dart`
+      (on-demand query value-object: `outboundByTag`/`kindOf`/`detourOf`/
+      `detourChain`/`outboundChain`/`nodeCount`, cycle-safe). Заменил дубли:
+      home `_countNodesInConfig` (удалён) + `_viewOutboundJson` +
+      `_copyNodeJson`; stats `_parseDetourMap`+`_detourChain` (детур-chain
+      был продублирован 3×). `ConfigCache` (hot-path render) оставлен —
+      разные цели, задокументировано. +9 unit tests.
 - [ ] R3 — NodeFilterViewModel
 - [ ] R4 — LazyPersistMixin
