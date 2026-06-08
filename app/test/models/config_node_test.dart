@@ -53,6 +53,28 @@ void main() {
       expect(pc.rawOf('hop')?['type'], 'trojan');
       expect(pc.rawOf('missing'), isNull);
     });
+
+    test('protocolOf: payload type, null для control/missing', () {
+      expect(pc.protocolOf('a'), 'vless');
+      expect(pc.protocolOf('wg'), 'wireguard');
+      expect(pc.protocolOf('sel'), isNull); // control
+      expect(pc.protocolOf('missing'), isNull);
+    });
+  });
+
+  group('protocolOf — empty-type parity с ConfigCache.protoByTag', () {
+    test('type:"" → null (старый protoByTag тоже скипал пустой type)', () {
+      final pc = ParsedConfig.parse(cfg({
+        'outbounds': [
+          {'tag': 'weird', 'type': ''},
+          {'tag': 'notype'},
+        ],
+      }));
+      expect(pc.protocolOf('weird'), isNull);
+      expect(pc.protocolOf('notype'), isNull);
+      // но нода существует в модели (для raw / chain).
+      expect(pc['weird'], isNotNull);
+    });
   });
 
   group('detourRefCount / isDetour', () {

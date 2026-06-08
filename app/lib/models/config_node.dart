@@ -134,11 +134,12 @@ class ParsedConfig {
   /// Tag detour-цели данной ноды, либо null.
   String? detourOf(String tag) => byTag[tag]?.detour;
 
-  /// Протокол payload-ноды (`null` для control-узла / missing). Прямая
-  /// замена `ConfigCache.protoByTag[tag]` (тот тоже скипал control-типы).
+  /// Протокол payload-ноды (`null` для control-узла / пустого type / missing).
+  /// Прямая замена `ConfigCache.protoByTag[tag]` (тот скипал и control-типы,
+  /// и `type.isEmpty` — поэтому здесь тоже guard на непустой type).
   String? protocolOf(String tag) {
     final n = byTag[tag];
-    return (n != null && !n.isControl) ? n.type : null;
+    return (n != null && !n.isControl && n.type.isNotEmpty) ? n.type : null;
   }
 
   /// Цепочка raw-map'ов начиная с `tag`: `[self, detour1, detour2, …]`.
