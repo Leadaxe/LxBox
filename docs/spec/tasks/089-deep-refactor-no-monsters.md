@@ -179,11 +179,30 @@ singleton-сервисы, `ConfigCache`, `home_return_observer`). Риск ре�
 **Новые файлы:** `screens/home/widgets/{traffic_bar,status_chip,
 progress_banner,nodes_header,home_drawer,add_server_cta}.dart`.
 
-**Следующий шаг при возобновлении:** node-logic helpers (`_subscriptionsOfTag`/
-`_buildNodeFilter`/`_splitNodes`/`_viewSortedNodes`/`_protocolOfTag`/
-`_isControlTag`/`_protoLabel`) → `home/node_list_logic.dart` (pure helpers,
-низкий риск); затем `_buildControls`+reload, диалоги → `home/home_dialogs.dart`,
-затем NodeList. См. полный список remaining ниже.
+**Следующий шаг при возобновлении:** см. ниже.
+
+### 2026-06-08 — P1.5 модальные меню → home/home_menus.dart (`74ae07b`, ранее `…`)
+- `showSortOptionsMenu` + `showPingSettings` вынесены как свободные функции в
+  `screens/home/home_menus.dart` (decoupled: controller + SettingsStorage +
+  TemplateLoader; `mounted`→`context.mounted` экв.). home_screen **1872→1718**.
+- **home_screen: 2370 → 1718 (−652, −27.5%)** за 9 коммитов. Базлайн `fa75753`.
+
+### Остаток home_screen (для продолжения)
+- **Диалоги** (permission/battery/location/revoked): `_maybeShowUpdateSnackbar`,
+  `_maybeShowNotificationPermissionDialog`, `_maybeShowBatteryOptimizationDialog`,
+  `_showOemBatteryFollowupDialog`, `_showLocationPermissionDialog`,
+  `_showRevokedSnackBar` → `home/home_dialogs.dart` (mounted→context.mounted).
+- `_buildControls` + `_buildReloadButton` + `_showReloadMenu` + `_confirmStop`
+  (~450 стр) → `home/widgets/home_controls.dart` + reload-меню в home_menus.
+- **NodeList core** (`_buildNodeList`/`_buildReorderableNodeList` + prep-логика
+  `_buildNodeFilter`/`_splitNodes`/`_viewSortedNodes`(+кэш)/`_protocolOfTag`/
+  `_isControlTag`/`_computeDisplayList`/`_protoLabel`) → NodeListPresenter/VM +
+  `home/widgets/node_list.dart`. Самое сцепленное, аккуратно.
+- `_buildFilterPanel` (~270) → `home/widgets/filter_panel.dart` (делегирует
+  filter_widgets — оценить).
+- Node-actions: `_viewOutboundJson`/`_copyNodeJson`/`_copyNodeUri` (Config
+  Introspection) → helper.
+- Bootstrap/prefs: `_initSubsAndAutoUpdate`/`_loadHapticPref`/`_loadAutoRebuild`.
 
 **Правила (ВАЖНО соблюдать при продолжении):**
 1. НЕ `dart format` существующих файлов (tall-стиль Dart 3 раздувает) —
