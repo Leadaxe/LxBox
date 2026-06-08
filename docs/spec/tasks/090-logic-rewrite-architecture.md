@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **Planned** — исполнение gated на завершение [§089](089-deep-refactor-no-monsters.md) (структурный рефактор монстров). Сейчас — **аккумулятор кандидатов** (живой документ + отчёт). |
+| Статус | **Unblocked & re-studied** (2026-06-08): [§089](089-deep-refactor-no-monsters.md) DONE, [§091](091-config-node-model.md) DONE. Реестр пересмотрен против текущего кода — см. [Переоценку](#переоценка-после-089--091-2026-06-08). Исполнение по пунктам (каждый = своя таска); юзер выбирает порядок/когда. |
 | Тип | refactor / architecture / **behavior-changing** |
 | Отличие от §089 | §089 = **zero behavior change** (только извлечение/слои). §090 = **намеренные изменения рабочей логики**: дедуп с расхождениями, формализация брокеров, роутинг, чистка легаси-путей, «honest fix» из §086/§087/§088. |
 
@@ -45,19 +45,75 @@
 4. **Архитектурные решения — записывать** в ARCHITECTURE.md (раздел «логика
    ключевых решений»): что выбрали, какие альтернативы, почему.
 
+## Переоценка после §089 + §091 (2026-06-08)
+
+§089 (структурный) и §091 (ConfigNode) завершены — часть реестра закрылась или
+сменила форму.
+
+### Закрыто / spun-off
+- **§091 ConfigNode** (был behavior-changing кандидат §090) — **СДЕЛАН**
+  отдельной таской: `ConfigCache`+`ConfigIntrospection`+reverse-map
+  `subscriptionsOfTag` → `ParsedConfig`/`ConfigNode` + prefix-фильтр. Закрыл
+  класс §077/§079/§080.
+- **deepCopy/deepEquals дубли** (часть F) — были **behavior-preserving** →
+  сделаны в §089 P6 (`services/json_clone.dart`). Из §090 убираются.
+- **ARCHITECTURE.md overhaul** (раздел 4) — крупный проход сделан в §089 P7
+  (слои, зоны ответственности, дерево с per-file ролями, event/data-flow).
+  Остаток §090: вынос в под-файлы `docs/architecture/{...}.md` ТОЛЬКО если
+  основной разрастётся (~1360 строк — пока ок) + drift-сверка после каждого
+  §090-пункта.
+- **Документирование** event-flow / state-брокеров / routing-графа (часть
+  «задокументировать» из B1/B2/C1) — сделано в P7. Остаётся только
+  **поведенческая** часть (унификация/централизация).
+
+### Новые находки сессии (в реестр)
+- **G1. Update-dismiss half-wired** `[§089 P6-found]`.
+  `UpdateChecker.dismissCurrent` пишет `setDismissedUpdateVersion`, read-guard
+  `getDismissedUpdateVersion` активен (update-snackbar + check), но **writer'а
+  в UI нет** — фича «скрыть этот релиз» наполовину разведена. **§090:** либо
+  wire «Later»-action в update-snackbar → `dismissCurrent`, либо убрать
+  guard+storage целиком. Решение продуктовое (stub помечен в коде).
+- **G2. `⚙` / `isDetour` миграция** `[§091-deferred]`. `ConfigNode.isDetour`
+  (по `detourRefCount`) и `isMarkedDetour` (`⚙` в теге) есть в модели, но UI
+  (node_settings toggle, `splitNodes` detour-hide) ещё на ручной `⚙`-пометке
+  через `TagResolver.isDetourMarker`. **§090:** убрать ручную пометку → любой
+  одиночный сервер как detour, `⚙` = метка «внутренний сервер подписки»,
+  ориентир `isDetour` по факту. Behavior-changing, переходный период.
+
+### Подтверждённые (остаются)
+A1/F (форматтеры, уточнены ниже) · D1/D2/D3 (recovery/VPN) · E1 (CustomRule
+sealed-split — custom_rule 618, задокументир. исключение §089) · E2 (background
+updater).
+
+### Предлагаемый порядок (value / risk)
+1. **G1** (мелко, продуктовое решение) + **A1/F форматтеры** (низкий риск).
+2. **E1 CustomRule sealed-split** (изолированная модель, план в memory).
+3. **G2 `⚙`/isDetour** (завершает §091-арку).
+4. **D2 §042 watchdog** / **D1 §088 wake-heal** (VPN recovery — device-verify, осторожно).
+5. **B/C унификация** (брокеры/роутинг) — крупно, когда остальное устаканится.
+
+---
+
 ## 3. Реестр кандидатов на переписывание
 
 > Накапливается во время §089. Каждый — с: что не так / предложение / риск /
 > как проверить. Помечен `[§089-found]` если обнаружен по ходу структурного
 > прохода.
 
-### A. Дедупы с расхождением поведения
-- **A1. `formatDuration` divergence** `[§089-found]`. Home uptime-форматтер
-  (`traffic_bar.dart::_uptime`) сворачивает в дни (`1d 6h`), а
-  `format_utils.formatDuration` — нет (`30h 5m`). §089 оставил два, т.к. дедуп =
-  behavior change для durations ≥24h в stats/live/per-app. **§090:** решить
-  единый формат (вероятно — добавить days в общий + переключить всех),
-  обновить тесты форматтера, проверить вывод во всех 4 местах.
+### A. Дедупы с расхождением поведения (форматтеры) `[§089 P6 recon — точные локации]`
+- **A1. `formatDuration` divergence.** `traffic_bar.dart::_uptime` сворачивает в
+  дни (`1d 6h`, документировано в коде), `format_utils.formatDuration` — нет
+  (`30h`), `connections_screen.dart::_formatDuration` — третий вариант (без
+  секунд в минутах, без пробела в часах). Все **намеренно различны**. **§090:**
+  добавить опц. `maxUnit`/`daysRollup` + `compact` флаги в `format_utils` и
+  делегировать; проверить pixel-вывод во всех точках до merge.
+- **A2. `formatBytes` ×4.** `format_utils.formatBytes` (канон, §084) + НЕ
+  мигрированные копии: `clash_api_client.dart::_formatBytes` (нет 0-guard),
+  `subscription_detail_format.dart::formatBytes` (`'0'` вместо `'0 B'`, mixed
+  spacing), `connections_screen.dart::_formatBytes` (единичные литеры `B/K/M`,
+  **нет GB-tier** — overflow в огромные M). **§090:** мигрировать первые две на
+  канон (с 0-guard/spacing-проверкой); connections — отдельный `compact`-режим,
+  НЕ менять вывод вслепую.
 
 ### B. Брокеры событий / состояний (формализация)
 - **B1. Event-bus унификация.** Сейчас события идут двумя разными механизмами:
@@ -99,8 +155,16 @@
 - _(пополняется по ходу §089: дубли логики, мёртвые ветки, расходящиеся
   контракты, ad-hoc подписки, которые замечу при извлечении)._
 
-### F. Дубли логики (не только форматтеры)
-- _(TBD — §089 P6 cross-cutting cleanup выявит; кандидаты сюда)._
+### F. Дубли логики (не только форматтеры) `[§089 P6 recon]`
+- **F1. Done в §089 P6** (behavior-preserving): `_deepCopy`/`_deepClone`/
+  `_deepEquals` → `services/json_clone.dart`. Сюда НЕ относится (закрыто).
+- **F2. HTTP retry-policy дубль** (low). `rule_set_downloader.download` и
+  `subscription/sources._fetch` — одинаковый контракт «3 попытки, exp backoff
+  1s/3s, 4xx = permanent skip», но hand-rolled раздельно с расходящимся
+  success/permanent handling (return-null+atomic-file vs throw+multi-source).
+  **§090:** опц. вынести только scaffold `retryHttp({backoffs, isPermanent})`;
+  тела НЕ сливать. Низкий приоритет.
+- Форматтеры — см. A1/A2.
 
 ## 4. Архитектура + документация (общая цель §090)
 - **ARCHITECTURE.md** (сейчас 1231 стр) — полный апдейт: слои + правила
@@ -118,3 +182,17 @@
 ### 2026-06-08 — создан (gated на §089)
 - Документ-аккумулятор заведён. Исполнение начнётся после завершения §089.
 - Первичные кандидаты внесены (A1, B1-2, C1, D1-3, E1-2). Пополняется по ходу.
+
+### 2026-06-08 — переизучён после §089 + §091 (unblocked)
+- §089 + §091 завершены → реестр пересмотрен против текущего кода.
+- **Закрыто/spun-off:** §091 ConfigNode (отдельная таска, done); deepCopy/equals
+  дубли (§089 P6, behavior-preserving); ARCHITECTURE.md крупный overhaul (P7);
+  документирование event/state/routing (P7) — осталась только поведенческая
+  унификация.
+- **Новые находки:** G1 (update-dismiss half-wired), G2 (`⚙`/isDetour миграция
+  из §091-deferred).
+- **Уточнено:** A1→A1+A2 (форматтеры — точные локации formatBytes ×4 +
+  formatDuration ×3, все nameренно различны → нужны compact/maxUnit-флаги);
+  F заполнен (F1 done, F2 retry-policy low).
+- **Предложен порядок исполнения** по value/risk (G1+форматтеры → E1 → G2 →
+  D2/D1 → B/C). Исполнение по-прежнему по выбору юзера.
