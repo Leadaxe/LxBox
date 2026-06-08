@@ -166,13 +166,24 @@ singleton-сервисы, `ConfigCache`, `home_return_observer`). Риск ре�
   (drawer-only) инлайнен. **9 импортов экранов** ушли из home_screen (теперь
   только в HomeDrawer). home_screen **2093→1990**. analyze clean, 808 green.
 
-### CHECKPOINT 11:55 — состояние для продолжения (loop / свежий контекст)
-**home_screen: 2370 → 1990** (−380) за 5 коммитов: `5ab387e` TrafficBar ·
-`4841d30` StatusChip+ProgressBanner+NodesHeader · `c553725` HomeDrawer.
-Все коммиты green (analyze + 808 tests). Базлайн до §089: `fa75753`.
+### 2026-06-08 12:05 — P1.4 AddServerCta (`038e87f`)
+- `_buildAddServerCta` → `screens/home/widgets/add_server_cta.dart`.
+  `_restoreFromBackup` остаётся в экране (callback). home_screen **1990→1937**.
+
+### CHECKPOINT 12:05 — состояние для продолжения (loop / свежий контекст)
+**home_screen: 2370 → 1937** (−433) за 6 коммитов: `5ab387e` TrafficBar ·
+`4841d30` StatusChip+ProgressBanner+NodesHeader · `c553725` HomeDrawer ·
+`038e87f` AddServerCta. Все коммиты green (analyze + 808 tests). Базлайн до
+§089: `fa75753`. Установлен 15-мин loop для продолжения.
 
 **Новые файлы:** `screens/home/widgets/{traffic_bar,status_chip,
-progress_banner,nodes_header,home_drawer}.dart`.
+progress_banner,nodes_header,home_drawer,add_server_cta}.dart`.
+
+**Следующий шаг при возобновлении:** node-logic helpers (`_subscriptionsOfTag`/
+`_buildNodeFilter`/`_splitNodes`/`_viewSortedNodes`/`_protocolOfTag`/
+`_isControlTag`/`_protoLabel`) → `home/node_list_logic.dart` (pure helpers,
+низкий риск); затем `_buildControls`+reload, диалоги → `home/home_dialogs.dart`,
+затем NodeList. См. полный список remaining ниже.
 
 **Правила (ВАЖНО соблюдать при продолжении):**
 1. НЕ `dart format` существующих файлов (tall-стиль Dart 3 раздувает) —
