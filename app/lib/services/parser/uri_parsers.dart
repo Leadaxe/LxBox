@@ -405,6 +405,10 @@ Hysteria2Spec? parseHysteria2(String uri) {
   final warnings = <NodeWarning>[];
   if (tls.insecure) warnings.add(const InsecureTlsWarning());
 
+  // §084 H3: bandwidth hint'ы для round-trip с toUriHysteria2.
+  final upMbps = int.tryParse(q['up_mbps'] ?? '');
+  final downMbps = int.tryParse(q['down_mbps'] ?? '');
+
   return Hysteria2Spec(
     id: newUuidV4(),
     tag: tag,
@@ -416,6 +420,8 @@ Hysteria2Spec? parseHysteria2(String uri) {
     obfs: obfs,
     obfsPassword: obfsPass,
     tls: tls,
+    upMbps: upMbps,
+    downMbps: downMbps,
     warnings: warnings,
   );
 }

@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Open (backlog — чистится инкрементально) |
+| Статус | In progress — High-блок (H1–H6) закрыт; Medium/Low в backlog |
 | Дата | 2026-06-08 |
 | Тип | audit / tech-debt |
 | Метод | Multi-agent deep audit: 13 областей × (аудитор + adversarial-verify каждой high/medium находки). 46 агентов, 2.2M токенов. **28 confirmed** (6 high + 22 medium, прошли скептика), **62 low** (passed as-is), **5 refuted**. |
@@ -38,9 +38,13 @@ Low — приняты as-is без adversarial-проверки (низкий �
 
 ---
 
-## 🔴 HIGH (реальные баги / gap'ы — приоритет)
+## 🔴 HIGH (реальные баги / gap'ы — приоритет) — ✅ ВСЕ ЗАКРЫТЫ
 
-### H1 — Validator не проверяет `detour`-ссылки (builder) → §081
+> Все 6 high-находок исправлены в commit'е §084 (см. ниже). Тесты:
+> validator (+3), hysteria2 round-trip (+2), format_utils (+15),
+> traffic_profiler (existing pass). 762/762 suite зелёный.
+
+### H1 — Validator не проверяет `detour`-ссылки (builder) → §081 ✅
 `lib/services/builder/validator.dart:11-57`. Валидируется только
 `route.rules[].outbound`, но **не** `outbounds[].detour`. Dangling detour
 (см. §080) не ловится → возможен невалидный config до native-уровня.
@@ -246,13 +250,14 @@ cross_cutting). Не включены выше — это шум аудита, �
 ## Приоритизированный чек-лист
 
 **Сразу (реальные баги/gap):**
-- [ ] H1 — validator detour-check (= §081)
-- [ ] H2 — удалить `VlessSpec.encryption`
-- [ ] H3 — hysteria2 Mbps round-trip
-- [ ] H5 — tcpClose/tcpOpen symmetry (или поправить комментарий)
+- [x] H1 — validator detour-check (= §081) — `DanglingDetourRef` + 3 теста
+- [x] H2 — удалить `VlessSpec.encryption`
+- [x] H3 — hysteria2 Mbps round-trip — emit→uri + parse + 2 теста
+- [x] H5 — tcpClose/tcpOpen symmetry — убран guard, поведение = комментарию
+- [x] H6 — traffic_profiler двойной event — `TrafficEvent.copyWith`
 
 **Консистентность (один проход — высокий payoff):**
-- [ ] H4 — вынести format_utils (bytes/dur/time) ← дубли в 3 экранах
+- [x] H4 — вынести format_utils (bytes/dur/time) — `format_utils.dart` + 15 тестов
 - [ ] M7 — `_naiveHeaderName` в uri_utils
 - [ ] M9 — profiler error-handling через DebugError
 - [ ] M12+M13+M14 — dirty-flag симметрия в settings/node_settings
@@ -263,7 +268,6 @@ cross_cutting). Не включены выше — это шум аудита, �
 - [ ] M1+M2+M3 — home_screen config introspection → service
 - [ ] M5+M6 — allocateTag fallback + collision-handling unify
 - [ ] M4 — runMassUrltest аллокации (профайлить сначала)
-- [ ] H6 — traffic_profiler двойной event
 - [ ] M8, M11, M17, M18
 
 **Low** — по случаю, не отдельными коммитами (кроме unused imports /

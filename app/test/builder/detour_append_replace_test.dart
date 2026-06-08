@@ -271,6 +271,9 @@ void main() {
       expect(main['detour'], 'WG');
       expect(tags.contains('WG'), false,
           reason: 'bare "WG" не эмитится — это и есть §080 баг');
+      // §084 H1 — validator теперь ловит этот dangling detour как fatal.
+      expect(result.validation.hasFatal, true,
+          reason: 'dangling detour "WG" → DanglingDetourRef');
     });
 
     test('empty tagPrefix target: display-form == bare (regression-free)',

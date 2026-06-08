@@ -270,6 +270,11 @@ String toUriHysteria2(Hysteria2Spec s) {
   if (s.tls.insecure) q['insecure'] = '1';
   if (s.tls.alpn.isNotEmpty) q['alpn'] = s.tls.alpn.join(',');
   if (s.tls.fingerprint != null) q['fp'] = s.tls.fingerprint!;
+  // §084 H3: round-trip bandwidth hint'ов. emit пишет up_mbps/down_mbps в
+  // sing-box JSON — URI должен их сохранять, иначе parse→emit→toUri→parse
+  // теряет значения (parseHysteria2 читает те же ключи обратно).
+  if (s.upMbps != null) q['up_mbps'] = s.upMbps.toString();
+  if (s.downMbps != null) q['down_mbps'] = s.downMbps.toString();
   return _buildUri('hysteria2', s.password, s.server, s.port, q, s.label);
 }
 

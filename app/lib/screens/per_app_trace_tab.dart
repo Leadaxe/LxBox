@@ -26,6 +26,7 @@ import '../models/app_info.dart';
 import '../services/app_info_cache.dart';
 import '../services/clash_api_client.dart';
 import '../services/traffic_profiler.dart';
+import '../services/format_utils.dart';
 import '../widgets/core_logs_hint_banner.dart';
 import 'app_picker_screen.dart';
 
@@ -397,7 +398,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
           const SizedBox(width: 8),
-          Text(_fmtDur(dur),
+          Text(formatDuration(dur),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           const SizedBox(width: 16),
           Text('${s.byDomain.length} doms · ${s.byIp.length} ips · ${s.events.length} ev',
@@ -525,7 +526,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
                 title: Text(s.targetPackage,
                     style: const TextStyle(fontSize: 13)),
                 subtitle: Text(
-                  '${_fmtDur(s.finishedAt!.difference(s.startedAt))} · '
+                  '${formatDuration(s.finishedAt!.difference(s.startedAt))} · '
                   '${s.byDomain.length} doms · ${s.byIp.length} ips',
                   style: const TextStyle(fontSize: 11),
                 ),
@@ -596,15 +597,6 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
     );
   }
 
-  static String _fmtDur(Duration d) {
-    if (d.inHours > 0) {
-      return '${d.inHours}h ${d.inMinutes % 60}m';
-    }
-    if (d.inMinutes > 0) {
-      return '${d.inMinutes}m ${d.inSeconds % 60}s';
-    }
-    return '${d.inSeconds}s';
-  }
 }
 
 Map<String, Object?> _sessionToJson(Session s) => {
@@ -852,7 +844,7 @@ class _LiveView extends StatelessWidget {
         }
       case TrafficEventKind.tcpClose:
         final bytes =
-            '↑${_fmtBytes(e.upBytes ?? 0)} ↓${_fmtBytes(e.downBytes ?? 0)}';
+            '↑${formatBytes(e.upBytes ?? 0)} ↓${formatBytes(e.downBytes ?? 0)}';
         if (domain != null && domain.isNotEmpty) {
           head = '$domain:${port ?? "?"} closed · $bytes';
         } else {
@@ -947,7 +939,7 @@ class _LiveView extends StatelessWidget {
         return hp;
       case TrafficEventKind.tcpClose:
         final hp = '${e.domain ?? e.ip ?? "?"}:${e.port ?? "?"}';
-        final bytes = '↑${_fmtBytes(e.upBytes ?? 0)} ↓${_fmtBytes(e.downBytes ?? 0)}';
+        final bytes = '↑${formatBytes(e.upBytes ?? 0)} ↓${formatBytes(e.downBytes ?? 0)}';
         return '$hp closed · $bytes';
     }
   }
@@ -1107,7 +1099,7 @@ class _DomainsViewState extends State<_DomainsView> {
           Text('${d.connections} conns',
               style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
           const SizedBox(width: 8),
-          Text('↑${_fmtBytes(d.upBytes)} ↓${_fmtBytes(d.downBytes)}',
+          Text('↑${formatBytes(d.upBytes)} ↓${formatBytes(d.downBytes)}',
               style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
           if (d.issues.isNotEmpty) ...[
             const SizedBox(width: 6),
@@ -1124,8 +1116,8 @@ class _DomainsViewState extends State<_DomainsView> {
         if (d.outbounds.isNotEmpty)
           _kv(cs, 'Outbound', d.outbounds.join(' / ')),
         if (d.firstSeen != null)
-          _kv(cs, 'First', _fmtTime(d.firstSeen!)),
-        if (d.lastSeen != null) _kv(cs, 'Last', _fmtTime(d.lastSeen!)),
+          _kv(cs, 'First', formatTime(d.firstSeen!)),
+        if (d.lastSeen != null) _kv(cs, 'Last', formatTime(d.lastSeen!)),
         for (final a in d.issues)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -1222,7 +1214,7 @@ class _IpsView extends StatelessWidget {
           ),
           subtitle: Text(
             'ports ${ip.ports.join(", ")} · ${ip.connections} conns · '
-            '↑${_fmtBytes(ip.upBytes)} ↓${_fmtBytes(ip.downBytes)}'
+            '↑${formatBytes(ip.upBytes)} ↓${formatBytes(ip.downBytes)}'
             '${ip.outbounds.isEmpty ? "" : " · ${ip.outbounds.join(" / ")}"}',
             style: const TextStyle(fontSize: 11),
           ),
@@ -1335,7 +1327,7 @@ class _ConnTileState extends State<_ConnTile> {
                 ),
               ),
               Text(
-                '↑${_fmtBytes(e.upBytes ?? 0)} ↓${_fmtBytes(e.downBytes ?? 0)}',
+                '↑${formatBytes(e.upBytes ?? 0)} ↓${formatBytes(e.downBytes ?? 0)}',
                 style:
                     TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
               ),
@@ -1549,19 +1541,6 @@ Widget _ipChipList(
   );
 }
 
-String _fmtBytes(int b) {
-  if (b < 1024) return '${b}B';
-  if (b < 1024 * 1024) return '${(b / 1024).toStringAsFixed(1)}KB';
-  if (b < 1024 * 1024 * 1024) {
-    return '${(b / 1024 / 1024).toStringAsFixed(1)}MB';
-  }
-  return '${(b / 1024 / 1024 / 1024).toStringAsFixed(2)}GB';
-}
-
-String _fmtTime(DateTime t) =>
-    '${t.hour.toString().padLeft(2, '0')}:'
-    '${t.minute.toString().padLeft(2, '0')}:'
-    '${t.second.toString().padLeft(2, '0')}';
 
 // ─── Single-app picker ──────────────────────────────────────────────────
 

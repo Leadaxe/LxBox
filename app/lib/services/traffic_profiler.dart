@@ -199,6 +199,43 @@ class TrafficEvent {
         if (issues.isNotEmpty)
           'issues': issues.map((a) => a.toJson()).toList(),
       };
+
+  /// §084 H6 — копия с переопределением полей. Используется в
+  /// `_pollConnections` чтобы из `raw` (session-snapshot) собрать `globalEv`
+  /// (global-buffer вариант с confidence/matchedVia) без ручного копирования
+  /// всех 20+ полей (источник дрейфа при добавлении нового поля).
+  TrafficEvent copyWith({
+    ConfidenceLevel? confidence,
+    String? matchedVia,
+    bool? backfilled,
+    List<ConnectionIssue>? issues,
+  }) =>
+      TrafficEvent(
+        ts: ts,
+        kind: kind,
+        domain: domain,
+        cnameChain: cnameChain,
+        ip: ip,
+        port: port,
+        outboundChain: outboundChain,
+        upBytes: upBytes,
+        downBytes: downBytes,
+        duration: duration,
+        connId: connId,
+        process: process,
+        processInferred: processInferred,
+        network: network,
+        rule: rule,
+        rulePayload: rulePayload,
+        rawLogLine: rawLogLine,
+        confidence: confidence ?? this.confidence,
+        matchedVia: matchedVia ?? this.matchedVia,
+        shownBecause: shownBecause,
+        dnsRecordType: dnsRecordType,
+        backfilled: backfilled ?? this.backfilled,
+        issues: issues ?? this.issues,
+        extra: extra,
+      );
 }
 
 class DomainStats {
@@ -1288,32 +1325,13 @@ class TrafficProfiler extends ChangeNotifier {
         );
         // Global rolling: всегда добавляем (даже не-target conn'ы, для
         // Live system-wide tab'а) с confidence verified если process
-        // известен, иначе unattributed.
-        final globalEv = TrafficEvent(
-          ts: raw.ts,
-          kind: raw.kind,
-          domain: raw.domain,
-          cnameChain: raw.cnameChain,
-          ip: raw.ip,
-          port: raw.port,
-          outboundChain: raw.outboundChain,
-          upBytes: raw.upBytes,
-          downBytes: raw.downBytes,
-          duration: raw.duration,
-          connId: raw.connId,
-          process: raw.process,
-          processInferred: raw.processInferred,
-          network: raw.network,
-          rule: raw.rule,
-          rulePayload: raw.rulePayload,
-          rawLogLine: raw.rawLogLine,
+        // известен, иначе unattributed. §084 H6: copyWith вместо ручного
+        // копирования 20+ полей.
+        final globalEv = raw.copyWith(
           confidence: raw.process == null
               ? ConfidenceLevel.unattributed
               : ConfidenceLevel.verified,
           matchedVia: raw.process == null ? null : 'connections_meta',
-          dnsRecordType: raw.dnsRecordType,
-          issues: raw.issues,
-          extra: raw.extra,
         );
         _appendToGlobalRollingBuffer(globalEv);
         _emitGlobalStream(
@@ -1396,12 +1414,13 @@ class TrafficProfiler extends ChangeNotifier {
         matchedVia: snap.matchedVia,
         issues: _classifyConnectionClose(snap, now),
       );
-      // Global stream/buffer — всегда (для Live system-wide tab).
-      if (_globalRecordingActive) {
-        _appendToGlobalRollingBuffer(closeEv);
-        _emitGlobalStream(
-            {'event': 'traffic_event', 'data': closeEv.toJson()});
-      }
+      // §084 H5 — Global stream/buffer всегда, симметрично tcpOpen (который
+      // пишется безусловно выше). Раньше под `if (_globalRecordingActive)` —
+      // при active session без global recording lifecycle был неполным
+      // (open в buffer'е, close — нет). Комментарий «всегда» противоречил
+      // коду; теперь поведение соответствует.
+      _appendToGlobalRollingBuffer(closeEv);
+      _emitGlobalStream({'event': 'traffic_event', 'data': closeEv.toJson()});
       // Session — только если active.
       if (s != null) {
         _appendEvent(s, closeEv);

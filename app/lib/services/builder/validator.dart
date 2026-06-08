@@ -5,6 +5,8 @@ import '../../models/validation.dart';
 /// Проверяет:
 /// - `route.rules[].outbound` ссылается на существующий tag → иначе
 ///   `DanglingOutboundRef` (fatal).
+/// - `outbounds[]/endpoints[].detour` ссылается на существующий tag → иначе
+///   `DanglingDetourRef` (fatal). §084 H1 / §081.
 /// - `outbounds[type=urltest]` не пуст → иначе `EmptyUrltestGroup` (fatal).
 /// - `outbounds[type=selector].default` в options → иначе `InvalidDefault`
 ///   (fatal).
@@ -33,6 +35,14 @@ ValidationResult validateConfig(Map<String, dynamic> config) {
       issues.add(DanglingOutboundRef('rules[$ruleIdx]', outRef));
     }
     ruleIdx++;
+  }
+
+  // §084 H1 — detour references (outbounds + endpoints) → existing tag.
+  for (final o in [...outbounds, ...endpoints]) {
+    final detour = o['detour'];
+    if (detour is String && detour.isNotEmpty && !allTags.contains(detour)) {
+      issues.add(DanglingDetourRef(o['tag'] as String? ?? '', detour));
+    }
   }
 
   // Empty urltest + invalid selector default.

@@ -99,7 +99,6 @@ sealed class NodeSpec {
 final class VlessSpec extends NodeSpec {
   final String uuid;
   final String flow;
-  final String encryption;
   final TlsSpec tls;
   final TransportSpec? transport;
   final String packetEncoding;
@@ -113,7 +112,6 @@ final class VlessSpec extends NodeSpec {
     required super.rawUri,
     required this.uuid,
     this.flow = '',
-    this.encryption = 'none',
     this.tls = TlsSpec.disabled,
     this.transport,
     this.packetEncoding = '',

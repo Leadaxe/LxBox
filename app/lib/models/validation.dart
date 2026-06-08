@@ -34,6 +34,23 @@ final class DanglingOutboundRef extends ValidationIssue {
   String get message => 'Rule "$rule" references missing outbound "$tag".';
 }
 
+/// §084 H1 / §081 — outbound с `detour`, ссылающимся на несуществующий tag.
+/// Возникает напр. когда override-detour хранит bare-tag, а целевой
+/// outbound эмитится prefixed (§080), или при ручном редактировании JSON.
+/// sing-box core реджектит такой config при старте → fatal.
+final class DanglingDetourRef extends ValidationIssue {
+  final String owner; // tag outbound'а с битым detour
+  final String tag;   // на что ссылается (отсутствует в конфиге)
+  const DanglingDetourRef(this.owner, this.tag);
+
+  @override
+  Severity get severity => Severity.fatal;
+
+  @override
+  String get message =>
+      'Outbound "$owner" detour references missing outbound "$tag".';
+}
+
 final class EmptyUrltestGroup extends ValidationIssue {
   final String tag;
   const EmptyUrltestGroup(this.tag);

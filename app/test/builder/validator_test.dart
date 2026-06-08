@@ -25,6 +25,39 @@ void main() {
       expect(r.fatal.single, isA<DanglingOutboundRef>());
     });
 
+    test('§084 H1 — dangling detour ref → fatal', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'main', 'type': 'vless', 'detour': 'ghost'},
+          {'tag': 'direct-out', 'type': 'direct'},
+        ],
+      });
+      expect(r.hasFatal, true);
+      expect(r.fatal.single, isA<DanglingDetourRef>());
+    });
+
+    test('§084 H1 — detour на существующий outbound → ok', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'main', 'type': 'vless', 'detour': 'hop'},
+          {'tag': 'hop', 'type': 'vless'},
+        ],
+      });
+      expect(r.isOk, true);
+    });
+
+    test('§084 H1 — detour на endpoint (wireguard) → ok', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'main', 'type': 'vless', 'detour': 'wg-1'},
+        ],
+        'endpoints': [
+          {'tag': 'wg-1', 'type': 'wireguard'},
+        ],
+      });
+      expect(r.isOk, true);
+    });
+
     test('empty urltest → fatal', () {
       final r = validateConfig({
         'outbounds': [

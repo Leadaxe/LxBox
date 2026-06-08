@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../services/app_info_cache.dart';
 import '../services/clash_api_client.dart';
+import '../services/format_utils.dart';
 import '../services/traffic_profiler.dart';
 import '../vpn/box_vpn_client.dart';
 import 'connections_screen.dart';
@@ -320,10 +321,10 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _totalChip(context, 'Upload', _formatBytes(_totalUp), Icons.arrow_upward, Theme.of(context).colorScheme.primary),
-                _totalChip(context, 'Download', _formatBytes(_totalDown), Icons.arrow_downward, Theme.of(context).colorScheme.tertiary),
+                _totalChip(context, 'Upload', formatBytes(_totalUp, spaced: true), Icons.arrow_upward, Theme.of(context).colorScheme.primary),
+                _totalChip(context, 'Download', formatBytes(_totalDown, spaced: true), Icons.arrow_downward, Theme.of(context).colorScheme.tertiary),
                 _totalChip(context, 'Connections', '$_totalConns', Icons.link, Theme.of(context).colorScheme.secondary),
-                _totalChip(context, 'sing-box', _formatBytes(_memory), Icons.memory, Theme.of(context).colorScheme.secondary),
+                _totalChip(context, 'sing-box', formatBytes(_memory, spaced: true), Icons.memory, Theme.of(context).colorScheme.secondary),
               ],
             ),
           ),
@@ -404,8 +405,8 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('↑ ${_formatBytes(group.upload)}', style: const TextStyle(fontSize: 12)),
-                    Text('↓ ${_formatBytes(group.download)}', style: const TextStyle(fontSize: 12)),
+                    Text('↑ ${formatBytes(group.upload, spaced: true)}', style: const TextStyle(fontSize: 12)),
+                    Text('↓ ${formatBytes(group.download, spaced: true)}', style: const TextStyle(fontSize: 12)),
                   ],
                 ),
                 const SizedBox(width: 4),
@@ -453,7 +454,7 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
                 ),
               ),
               Text(
-                '↑${_formatBytes(c.upload)} ↓${_formatBytes(c.download)}',
+                '↑${formatBytes(c.upload, spaced: true)} ↓${formatBytes(c.download, spaced: true)}',
                 style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
               ),
             ],
@@ -644,9 +645,9 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
             children: [
               Text('${s.count} conns',
                   style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
-              Text('↑ ${_formatBytes(s.upload)}',
+              Text('↑ ${formatBytes(s.upload, spaced: true)}',
                   style: const TextStyle(fontSize: 10)),
-              Text('↓ ${_formatBytes(s.download)}',
+              Text('↓ ${formatBytes(s.download, spaced: true)}',
                   style: const TextStyle(fontSize: 10)),
             ],
           ),
@@ -655,25 +656,17 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
     );
   }
 
+  // §084 H4 — ISO-string → compact duration. Парсит timestamp + delta от
+  // now, форматирование делегирует format_utils. Спецфичен для stats
+  // (другие экраны принимают готовый Duration).
   String _formatDuration(String startIso) {
     if (startIso.isEmpty) return '';
     try {
-      final start = DateTime.parse(startIso);
-      final diff = DateTime.now().difference(start);
-      if (diff.inHours > 0) return '${diff.inHours}h ${diff.inMinutes % 60}m';
-      if (diff.inMinutes > 0) return '${diff.inMinutes}m ${diff.inSeconds % 60}s';
-      return '${diff.inSeconds}s';
+      final diff = DateTime.now().difference(DateTime.parse(startIso));
+      return formatDuration(diff);
     } catch (_) {
       return '';
     }
-  }
-
-  static String _formatBytes(int bytes) {
-    if (bytes <= 0) return '0 B';
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
-    return '${(bytes / 1024 / 1024 / 1024).toStringAsFixed(2)} GB';
   }
 }
 

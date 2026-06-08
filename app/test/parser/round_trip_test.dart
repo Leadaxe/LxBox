@@ -52,6 +52,26 @@ void main() {
       expect(b.tls.alpn, a.tls.alpn);
     });
 
+    test('§084 H3 — Hysteria2 up_mbps/down_mbps round-trip', () {
+      final a = parseHysteria2(
+        'hysteria2://secret@h:443?up_mbps=100&down_mbps=200&sni=h#H',
+      )!;
+      expect(a.upMbps, 100);
+      expect(a.downMbps, 200);
+      final b = parseHysteria2(a.toUri())!;
+      expect(b.upMbps, 100, reason: 'up_mbps должен пережить toUri round-trip');
+      expect(b.downMbps, 200);
+    });
+
+    test('§084 H3 — Hysteria2 без Mbps: остаются null', () {
+      final a = parseHysteria2('hysteria2://secret@h:443?sni=h#H')!;
+      expect(a.upMbps, isNull);
+      expect(a.downMbps, isNull);
+      final b = parseHysteria2(a.toUri())!;
+      expect(b.upMbps, isNull);
+      expect(b.downMbps, isNull);
+    });
+
     test('TUIC: all core fields preserved', () {
       final a = parseTuic(
         'tuic://uuid-1:secret@srv:443?congestion_control=bbr&udp_relay_mode=native&alpn=h3,h3-29&sni=srv&reduce_rtt=1#TUIC',

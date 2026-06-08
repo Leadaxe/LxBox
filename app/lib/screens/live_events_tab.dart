@@ -21,6 +21,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/traffic_profiler.dart';
+import '../services/format_utils.dart';
 import '../widgets/core_logs_hint_banner.dart';
 
 class LiveEventsTab extends StatefulWidget {
@@ -245,7 +246,7 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
                 ),
                 Text(
                   isRec
-                      ? '${_fmtDur(duration)} · ${_events.length} events'
+                      ? '${formatDuration(duration)} · ${_events.length} events'
                       : 'Tap START to begin capture. Recording continues '
                           'when you leave this tab.',
                   style: TextStyle(
@@ -268,12 +269,6 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
         ],
       ),
     );
-  }
-
-  static String _fmtDur(Duration d) {
-    if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes % 60}m';
-    if (d.inMinutes > 0) return '${d.inMinutes}m ${d.inSeconds % 60}s';
-    return '${d.inSeconds}s';
   }
 
   Widget _filterBar(BuildContext context) {
@@ -644,7 +639,7 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
         return '${e.domain ?? e.ip ?? "?"}:${e.port ?? "?"}';
       case TrafficEventKind.tcpClose:
         final bytes =
-            '↑${_fmtBytes(e.upBytes ?? 0)} ↓${_fmtBytes(e.downBytes ?? 0)}';
+            '↑${formatBytes(e.upBytes ?? 0)} ↓${formatBytes(e.downBytes ?? 0)}';
         return '${e.domain ?? e.ip ?? "?"}:${e.port ?? "?"} closed · $bytes';
     }
   }
@@ -665,13 +660,4 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
         TextSelection.collapsed(offset: clean.length);
     setState(() => _search = clean);
   }
-}
-
-String _fmtBytes(int b) {
-  if (b < 1024) return '${b}B';
-  if (b < 1024 * 1024) return '${(b / 1024).toStringAsFixed(1)}KB';
-  if (b < 1024 * 1024 * 1024) {
-    return '${(b / 1024 / 1024).toStringAsFixed(1)}MB';
-  }
-  return '${(b / 1024 / 1024 / 1024).toStringAsFixed(2)}GB';
 }
