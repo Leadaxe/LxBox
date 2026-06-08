@@ -28,6 +28,7 @@ import 'home/widgets/progress_banner.dart';
 import 'home/widgets/nodes_header.dart';
 import 'home/widgets/home_drawer.dart';
 import 'home/widgets/add_server_cta.dart';
+import 'home/home_menus.dart';
 import 'home/subscription_lookup.dart';
 import 'home/node_filter_view_model.dart';
 import '../widgets/wifi_permission_dialog.dart';
@@ -572,71 +573,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     return _cachedSorted!;
   }
 
-  /// §070 — modal bottom sheet по long-press на sort button. Тот же
-  /// pattern что у `_showPingSettings` — sheet остаётся открытым пока
-  /// юзер не закроет, можно тоггать несколько опций подряд. `StatefulBuilder`
-  /// — локальный setState чтоб checkbox'ы перерисовывались immediately,
-  /// без перезапуска sheet'а.
-  Future<void> _showSortOptionsMenu(BuildContext ctx) async {
-    await showModalBottomSheet<void>(
-      context: ctx,
-      builder: (sheetCtx) => StatefulBuilder(
-        builder: (sheetCtx, setSheetState) {
-          // Читаем свежий state каждый rebuild — controller между нашими
-          // setSheetState мог уже emit'нуть.
-          final s = _controller.state;
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('Sort options',
-                      style: Theme.of(sheetCtx).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  CheckboxListTile(
-                    value: s.pinDirect,
-                    onChanged: (v) {
-                      _controller.setPinDirect(v ?? false);
-                      setSheetState(() {});
-                    },
-                    title: const Text('Pin DIRECT to top'),
-                    controlAffinity: ListTileControlAffinity.leading,
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                  ),
-                  CheckboxListTile(
-                    value: s.pinAuto,
-                    onChanged: (v) {
-                      _controller.setPinAuto(v ?? false);
-                      setSheetState(() {});
-                    },
-                    title: const Text('Pin AUTO to top'),
-                    controlAffinity: ListTileControlAffinity.leading,
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                  ),
-                  CheckboxListTile(
-                    value: s.resortOnManualPing,
-                    onChanged: (v) {
-                      _controller.setResortOnManualPing(v ?? false);
-                      setSheetState(() {});
-                    },
-                    title: const Text('Re-sort on manual ping'),
-                    controlAffinity: ListTileControlAffinity.leading,
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   @override
   void dispose() {
     // Порядок: сначала отменяем side-effects (timer, listener),
@@ -714,7 +650,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   controller: _controller,
                   subController: _subController,
                   filter: _filter,
-                  onSortLongPress: () => _showSortOptionsMenu(context),
+                  onSortLongPress: () => showSortOptionsMenu(context, _controller),
                 ),
                 const SizedBox(height: 4),
               ],
