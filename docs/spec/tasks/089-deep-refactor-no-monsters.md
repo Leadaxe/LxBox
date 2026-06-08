@@ -231,6 +231,24 @@ singleton-сервисы, `ConfigCache`, `home_return_observer`). Риск ре�
 **16 монстров повержено за 4 параллельных батча** (~30 агентов), всё через
 base-fix + verify + 808-гейт, develop зелёный, ничего не сломано.
 
+### 2026-06-08 ~15:25 — home_screen ✅ (последний крупный Dart-монстр)
+- Воркфлоу `wf_8a5587db-37c` (single-target, hot-path caution). **home_screen
+  1664→518** (под 600!), base=True, green, **verdict=safe** (verify детально
+  подтвердил sort-кэш + §048/§070/§071/§078/§083 + side-effects-в-listener).
+- Вынесено: `NodeListPresenter` (owns §070 frozen-sort cache, создан раз в
+  initState→переживает rebuild'ы), `widgets/node_list.dart`,
+  `widgets/filter_panel.dart`, `widgets/home_controls.dart`, `node_actions.dart`,
+  `restore_backup.dart` + permission/battery/update диалоги → `home_dialogs.dart`.
+- Cherry-pick чисто, **финальный гейт analyze + 808 green** ✅.
+- **🏆 home_screen: 2370 → 518 за весь §089** (исходный монстр №1).
+
+### §089 Dart-рефакторинг ЗАВЕРШЁН. Осталось >600 строк:
+- `traffic_profiler` 1221 — accepted exception (монолитный singleton; → §090).
+- `custom_rule` 618 — → §090 (sealed-split, behavior-changing).
+- `VpnPlugin.kt` 635 (Kotlin) — отдельный проход (gate = APK build).
+**Dart-монстры (которые можно безопасно дробить) — все повержены.**
+Дальше: VpnPlugin (Kotlin) → P6 чистка → P7 ARCHITECTURE.md → P8 APK+install.
+
 
 ### 2026-06-08 11:13 — старт
 - Заземлился: инвентарь монстров, существующие паттерны, §088 прочитан.
