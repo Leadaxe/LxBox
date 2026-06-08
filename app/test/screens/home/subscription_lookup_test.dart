@@ -4,9 +4,10 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/screens/home/subscription_lookup.dart';
 
-/// §077 — Unit tests для pure helper'а `subscriptionsOfTag`.
-/// Покрывают: prefix reconstruction, collision-suffix (digit-only),
-/// ambiguity-aware multi-match, UserServer empty Set, disabled subs skip.
+/// §091 — Unit tests для prefix-based `subscriptionsOfTag`.
+/// Принадлежность ноды подписке = `tag.startsWith('$prefix ')`; пустой
+/// префикс не участвует; suffix после префикса игнорируется (никакого
+/// reverse-парсинга / collision-эвристики — класс багов §077/§079/§080 ушёл).
 
 NodeSpec _node(String tag) => VlessSpec(
       id: 'id-$tag',
@@ -23,7 +24,7 @@ SubscriptionEntry _sub({
   String name = '',
   String tagPrefix = '',
   bool enabled = true,
-  required List<String> nodes,
+  List<String> nodes = const ['M1'],
 }) {
   final list = SubscriptionServers(
     id: id,
@@ -40,7 +41,7 @@ SubscriptionEntry _sub({
 SubscriptionEntry _user({
   required String id,
   String tagPrefix = '',
-  required List<String> nodes,
+  List<String> nodes = const ['M1'],
 }) {
   final list = UserServer(
     id: id,
@@ -57,131 +58,97 @@ SubscriptionEntry _user({
 }
 
 void main() {
-  group('subscriptionsOfTag — prefix reconstruction', () {
-    test('non-empty prefix: display-tag matches → returns {entry.id}', () {
-      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺 RU', nodes: ['M1'])];
+  group('prefix match', () {
+    test('tag начинается с "\$prefix " → {entry.id}', () {
+      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺 RU')];
       expect(subscriptionsOfTag('🇷🇺 RU M1', entries), {'s1'});
     });
 
-    test('empty prefix: base == n.tag (regression check для §077 default case)', () {
+    test('пустой префикс → НЕ участвует (нет поиска), даже для своей ноды', () {
       final entries = [_sub(id: 's1', tagPrefix: '', nodes: ['M1'])];
-      expect(subscriptionsOfTag('M1', entries), {'s1'});
+      expect(subscriptionsOfTag('M1', entries), isEmpty);
     });
 
-    test('non-matching tag → empty Set', () {
-      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺', nodes: ['M1'])];
+    test('tag не начинается с префикса → empty', () {
+      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺')];
       expect(subscriptionsOfTag('Other', entries), isEmpty);
     });
 
-    test('prefix без последующего пробела — НЕ матчит (sanity check формата _withPrefix)', () {
-      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺', nodes: ['M1'])];
-      // _withPrefix формирует "RU M1" (space-separated), не "RUM1".
+    test('префикс без последующего пробела → НЕ матчит', () {
+      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺')];
       expect(subscriptionsOfTag('🇷🇺M1', entries), isEmpty);
     });
   });
 
-  group('subscriptionsOfTag — collision-suffix', () {
-    test('"base-1" suffix матчит (одна цифра)', () {
-      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺', nodes: ['M1'])];
-      expect(subscriptionsOfTag('🇷🇺 M1-1', entries), {'s1'});
-    });
+  group('suffix-agnostic (§091 — больше нет collision-эвристики)', () {
+    final entries = [_sub(id: 's1', tagPrefix: '🇷🇺')];
 
-    test('"base-23" suffix матчит (несколько цифр)', () {
-      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺', nodes: ['M1'])];
-      expect(subscriptionsOfTag('🇷🇺 M1-23', entries), {'s1'});
-    });
-
-    test('"base-X" (non-digit suffix) НЕ матчит', () {
-      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺', nodes: ['M1'])];
-      expect(subscriptionsOfTag('🇷🇺 M1-X', entries), isEmpty);
-    });
-
-    test('"base-1a" (mixed) НЕ матчит', () {
-      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺', nodes: ['M1'])];
-      expect(subscriptionsOfTag('🇷🇺 M1-1a', entries), isEmpty);
-    });
-
-    test('"base-" (empty digits part) НЕ матчит', () {
-      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺', nodes: ['M1'])];
-      expect(subscriptionsOfTag('🇷🇺 M1-', entries), isEmpty);
-    });
-
-    test('space instead of "-" НЕ матчит', () {
-      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺', nodes: ['M1'])];
-      expect(subscriptionsOfTag('🇷🇺 M1 1', entries), isEmpty);
+    test('любой суффикс после "\$prefix " матчит', () {
+      // Раньше (reverse-map) различал digit-only collision-suffix; теперь
+      // принадлежность определяется ровно префиксом.
+      expect(subscriptionsOfTag('🇷🇺 M1', entries), {'s1'});
+      expect(subscriptionsOfTag('🇷🇺 M1-1', entries), {'s1'}); // collision
+      expect(subscriptionsOfTag('🇷🇺 M1-X', entries), {'s1'}); // non-digit
+      expect(subscriptionsOfTag('🇷🇺 M1 extra', entries), {'s1'});
+      expect(subscriptionsOfTag('🇷🇺 что угодно', entries), {'s1'});
     });
   });
 
-  group('subscriptionsOfTag — ambiguity-aware (multi-match)', () {
-    test('две подписки одного prefix+name → tag мэтчит ОБЕ', () {
-      // Builder реально дал бы "🇷🇺 M1" одной и "🇷🇺 M1-1" второй,
-      // но lookup не знает кто получил suffix → возвращает обе.
+  group('ambiguity / разные префиксы', () {
+    test('две подписки с одинаковым префиксом → tag матчит ОБЕ', () {
       final entries = [
-        _sub(id: 'A', tagPrefix: '🇷🇺', nodes: ['M1']),
-        _sub(id: 'B', tagPrefix: '🇷🇺', nodes: ['M1']),
+        _sub(id: 'A', tagPrefix: '🇷🇺'),
+        _sub(id: 'B', tagPrefix: '🇷🇺'),
       ];
       expect(subscriptionsOfTag('🇷🇺 M1', entries), {'A', 'B'});
-      expect(subscriptionsOfTag('🇷🇺 M1-1', entries), {'A', 'B'});
     });
 
-    test('пересечение через разные форматы prefix+name → тоже multi-match', () {
-      // Sub A: prefix='' node='🇷🇺 M1' → base='🇷🇺 M1'
-      // Sub B: prefix='🇷🇺' node='M1' → base='🇷🇺 M1'
-      // Одинаковая base строка.
+    test('разные префиксы → узкий мэтч', () {
       final entries = [
-        _sub(id: 'A', tagPrefix: '', nodes: ['🇷🇺 M1']),
-        _sub(id: 'B', tagPrefix: '🇷🇺', nodes: ['M1']),
-      ];
-      expect(subscriptionsOfTag('🇷🇺 M1', entries), {'A', 'B'});
-      expect(subscriptionsOfTag('🇷🇺 M1-1', entries), {'A', 'B'});
-    });
-
-    test('коллизия не между всеми подписками — узкий мэтч', () {
-      final entries = [
-        _sub(id: 'A', tagPrefix: '🇷🇺', nodes: ['M1']),
-        _sub(id: 'B', tagPrefix: '🇩🇪', nodes: ['M1']),
+        _sub(id: 'A', tagPrefix: '🇷🇺'),
+        _sub(id: 'B', tagPrefix: '🇩🇪'),
       ];
       expect(subscriptionsOfTag('🇷🇺 M1', entries), {'A'});
       expect(subscriptionsOfTag('🇩🇪 M1', entries), {'B'});
     });
+
+    test('префикс A — префикс другого B (prefix-of-prefix) разводится пробелом', () {
+      // 'RU' и 'RU2': tag 'RU2 M1' начинается с 'RU2 ', но НЕ с 'RU '
+      // (после 'RU' идёт '2', не пробел) → только B.
+      final entries = [
+        _sub(id: 'A', tagPrefix: 'RU'),
+        _sub(id: 'B', tagPrefix: 'RU2'),
+      ];
+      expect(subscriptionsOfTag('RU2 M1', entries), {'B'});
+      expect(subscriptionsOfTag('RU M1', entries), {'A'});
+    });
   });
 
-  group('subscriptionsOfTag — UserServer / disabled', () {
-    test('UserServer (не SubscriptionServers) → empty Set', () {
-      final entries = [_user(id: 'u1', nodes: ['M1'])];
-      expect(subscriptionsOfTag('M1', entries), isEmpty);
+  group('UserServer / disabled / empty', () {
+    test('UserServer (не SubscriptionServers) → empty (→ custom)', () {
+      final entries = [_user(id: 'u1', tagPrefix: 'X')];
+      expect(subscriptionsOfTag('X M1', entries), isEmpty);
     });
 
-    test('mix: SubscriptionServers + UserServer', () {
+    test('disabled SubscriptionServers пропущена', () {
       final entries = [
-        _sub(id: 's1', tagPrefix: '🇷🇺', nodes: ['M1']),
+        _sub(id: 'A', tagPrefix: '🇷🇺', enabled: true),
+        _sub(id: 'B', tagPrefix: '🇷🇺', enabled: false),
+      ];
+      expect(subscriptionsOfTag('🇷🇺 M1', entries), {'A'});
+    });
+
+    test('пустой список entries → empty', () {
+      expect(subscriptionsOfTag('M1', const []), isEmpty);
+    });
+
+    test('mix: prefixed sub + UserServer', () {
+      final entries = [
+        _sub(id: 's1', tagPrefix: '🇷🇺'),
         _user(id: 'u1', nodes: ['Custom1']),
       ];
       expect(subscriptionsOfTag('🇷🇺 M1', entries), {'s1'});
       expect(subscriptionsOfTag('Custom1', entries), isEmpty);
-    });
-
-    test('disabled SubscriptionServers пропущена (§077 audit finding #15)', () {
-      // Disabled subs не эмитят node-ы через ServerListBuild.build,
-      // поэтому в state.nodes их display-tag-ов нет. Lookup тоже не
-      // должен их рассматривать — иначе false-positive в chip filter.
-      final entries = [
-        _sub(id: 'A', tagPrefix: '🇷🇺', nodes: ['M1'], enabled: true),
-        _sub(id: 'B', tagPrefix: '🇷🇺', nodes: ['M1'], enabled: false),
-      ];
-      expect(subscriptionsOfTag('🇷🇺 M1', entries), {'A'});
-      expect(subscriptionsOfTag('🇷🇺 M1-1', entries), {'A'});
-    });
-  });
-
-  group('subscriptionsOfTag — empty input', () {
-    test('пустой список entries → empty Set', () {
-      expect(subscriptionsOfTag('M1', []), isEmpty);
-    });
-
-    test('подписка с empty nodes → empty Set', () {
-      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺', nodes: [])];
-      expect(subscriptionsOfTag('🇷🇺 M1', entries), isEmpty);
     });
   });
 }

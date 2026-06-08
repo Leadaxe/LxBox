@@ -66,37 +66,4 @@ void main() {
       expect(TagResolver.stripPrefix(display, prefix), bare);
     });
   });
-
-  group('matchesAllocated (collision-suffix aware)', () {
-    test('exact match', () {
-      expect(TagResolver.matchesAllocated('M1', 'M1'), isTrue);
-    });
-    test('"base-1" suffix (одна цифра) → true', () {
-      expect(TagResolver.matchesAllocated('M1-1', 'M1'), isTrue);
-    });
-    test('"base-23" (несколько цифр) → true', () {
-      expect(TagResolver.matchesAllocated('M1-23', 'M1'), isTrue);
-    });
-    test('"base-X" (non-digit) → false', () {
-      expect(TagResolver.matchesAllocated('M1-X', 'M1'), isFalse);
-    });
-    test('"base-1a" (mixed) → false', () {
-      expect(TagResolver.matchesAllocated('M1-1a', 'M1'), isFalse);
-    });
-    test('"base-" (пустая цифра-часть) → false', () {
-      expect(TagResolver.matchesAllocated('M1-', 'M1'), isFalse);
-    });
-    test('space вместо "-" → false', () {
-      expect(TagResolver.matchesAllocated('M1 1', 'M1'), isFalse);
-    });
-    test('совсем другой → false', () {
-      expect(TagResolver.matchesAllocated('Other', 'M1'), isFalse);
-    });
-    test('prefixed base round-trip', () {
-      final base = TagResolver.displayTag('🇷🇺', 'M1'); // '🇷🇺 M1'
-      expect(TagResolver.matchesAllocated('🇷🇺 M1', base), isTrue);
-      expect(TagResolver.matchesAllocated('🇷🇺 M1-1', base), isTrue);
-      expect(TagResolver.matchesAllocated('🇷🇺 M2', base), isFalse);
-    });
-  });
 }

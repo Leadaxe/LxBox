@@ -1,31 +1,25 @@
 import '../../controllers/subscription_controller.dart';
 import '../../models/server_list.dart';
-import '../../services/tag_resolver.dart';
 
-/// §077 — Pure helper для lookup'а подписок-кандидатов по display-тэгу.
+/// §091 — какие подписки «владеют» данным display-тэгом, по **префиксу**.
 ///
-/// **Ambiguity-aware**: возвращает Set всех subscription id'ов которые
-/// **могли** создать данный display-тэг (включая collision-suffix
-/// `'base-N'` от `_BuildCtx.allocateTag`). Пустой Set = нода неизвестного
-/// происхождения (UserServer / control outbound / imported JSON) — caller
-/// маппит в категорию `'custom'`.
+/// `config-tag == нода в Clash`, но `subId` в конфиг не пишется — единственный
+/// реальный mismatch (§091 spec). Восстанавливаем принадлежность чисто по
+/// эмитированному префиксу: билдер кладёт тег как `'$tagPrefix $bare'`
+/// (`TagResolver.displayTag`), поэтому нода принадлежит подписке ⇔
+/// `tag.startsWith('$prefix ')`.
 ///
-/// Tag в `state.nodes` это **prefixed form** — `_withPrefix(n.tag)` =
-/// `'$tagPrefix $base'` если `tagPrefix.isNotEmpty`, иначе `base`
-/// (см. `services/builder/server_list_build.dart::_withPrefix`).
+/// **Только подписки с заданным префиксом** участвуют (юзер: «префикс не
+/// задан → нет поиска»). Пустой результат = тег не начинается ни с одного
+/// префикса → caller относит его к категории `'custom'` (UserServer,
+/// подписка без префикса, импортированный JSON).
 ///
-/// При коллизии (две подписки даёт одинаковый prefixed-tag —
-/// `_BuildCtx.allocateTag` добавляет `-1`/`-2`/... к одной из них)
-/// honestly возвращаем **все** entries у которых `(tagPrefix, n.tag)`
-/// пара мэтчит. Юзер видит ноду в chip-фильтре каждой подписки которая
-/// могла её создать — без deceptive disambiguation.
+/// Заменил §077 reverse-map по node-спискам + collision-suffix эвристику
+/// (`TagResolver.matchesAllocated`) — целый класс багов §077/§079/§080
+/// исчезает структурно (UI больше не reverse-парсит тег).
 ///
-/// **Known false-positive**: если подписка A имеет node literally
-/// названный `'M1-1'` (без префикса), а подписка B имеет node `'M1'`,
-/// то tag `'M1-1'` мэтчит обе (A через exact + B через collision-suffix
-/// heuristic). Builder allocation order не персистится в `state.nodes`,
-/// поэтому различить literal-suffix от collision-suffix без второго
-/// прохода невозможно. UX impact: superset в chip filter — приемлемо.
+/// Коллизия префиксов (две подписки с одинаковым префиксом) честно даёт обе —
+/// нода видна в chip-фильтре каждой. Редко; опц. валидация уникальности.
 Set<String> subscriptionsOfTag(
   String tag,
   List<SubscriptionEntry> entries,
@@ -36,15 +30,8 @@ Set<String> subscriptionsOfTag(
     if (list is! SubscriptionServers) continue;
     if (!e.enabled) continue; // disabled subs не эмитят node'ы в config
     final prefix = list.tagPrefix;
-    for (final n in list.nodes) {
-      // §085 R1 — display-form + collision-suffix через TagResolver
-      // (был inline дубль логики из server_list_build/_BuildCtx).
-      final base = TagResolver.displayTag(prefix, n.tag);
-      if (TagResolver.matchesAllocated(tag, base)) {
-        result.add(e.id);
-        break;
-      }
-    }
+    if (prefix.isEmpty) continue; // §091: нет префикса → нет фильтра
+    if (tag.startsWith('$prefix ')) result.add(e.id);
   }
   return result;
 }

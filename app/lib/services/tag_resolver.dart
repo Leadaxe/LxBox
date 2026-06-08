@@ -39,19 +39,4 @@ class TagResolver {
         : displayTag;
   }
 
-  /// True если `tag` это ровно `base` ИЛИ `base` + collision-suffix `-N`
-  /// (только цифры), который `_BuildCtx.allocateTag` добавляет при коллизии
-  /// тегов. Используется reverse-lookup'ом (`subscriptionsOfTag`).
-  ///
-  /// NB: эвристика — не различает реальный allocateTag-suffix от literal
-  /// node-имени вида `'M1-1'` (см. §077 «Известное ограничение»).
-  static bool matchesAllocated(String tag, String base) {
-    if (tag == base) return true;
-    if (tag.length <= base.length + 1) return false;
-    if (!tag.startsWith(base)) return false;
-    if (tag.codeUnitAt(base.length) != 0x2D /* '-' */) return false;
-    final rest = tag.substring(base.length + 1);
-    return rest.isNotEmpty &&
-        rest.codeUnits.every((c) => c >= 0x30 && c <= 0x39);
-  }
 }

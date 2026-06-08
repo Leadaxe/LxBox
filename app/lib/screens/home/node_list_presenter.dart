@@ -65,9 +65,8 @@ class NodeListPresenter {
         (urltestNow != null ? model.protocolOf(urltestNow) : null);
   }
 
-  /// §077 — Lookup subscription id'ов по display-тэгу. Тонкая обёртка
+  /// §091 — какие подписки владеют тегом (prefix-based). Тонкая обёртка
   /// над pure helper'ом `subscriptionsOfTag` (см. `home/subscription_lookup.dart`).
-  /// Алгоритм + edge cases описаны в спеке §077 и docstring'е helper'а.
   Set<String> subscriptionsOfTag_(String tag) =>
       subscriptionsOfTag(tag, subController.entries);
 
@@ -201,9 +200,14 @@ class NodeListPresenter {
     final subOptions = <(String, String)>[];
     for (final e in subController.entries) {
       final list = e.list;
-      // Показываем подписку только если она enabled И в ней есть хоть 1 нода.
-      // Disabled / пустые → шум, не дают полезный chip.
-      if (list is SubscriptionServers && e.enabled && list.nodes.isNotEmpty) {
+      // §091 — chip показываем только для enabled-подписки с непустым
+      // префиксом И ≥1 нодой. Фильтрация теперь чисто prefix-based
+      // (subscriptionsOfTag), поэтому без префикса chip бесполезен — её
+      // ноды попадают в «Custom». Disabled / пустые → шум.
+      if (list is SubscriptionServers &&
+          e.enabled &&
+          list.tagPrefix.isNotEmpty &&
+          list.nodes.isNotEmpty) {
         subOptions.add((e.id, e.displayName));
       }
     }

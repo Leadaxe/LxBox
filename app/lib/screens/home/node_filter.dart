@@ -46,12 +46,11 @@ class NodeFilter {
   /// (locked decision #12).
   final String? Function(String) protocolOf;
 
-  /// Lookup subscription id'ы по tag. Возвращает **множество** —
-  /// потому что при коллизии имён между подписками (например, две подписки
-  /// дают prefixed-tag `'🇷🇺 M1'` — builder резолвит `_BuildCtx.allocateTag`
-  /// в `'🇷🇺 M1'` + `'🇷🇺 M1-1'`) нода честно отображается во **всех**
-  /// chip-фильтрах подписок которые могли её создать. Пустой Set =
-  /// UserServer / untracked (попадает в категорию `'custom'`).
+  /// §091 — какие подписки владеют tag'ом, по префиксу
+  /// (`tag.startsWith('$prefix ')`). Возвращает **множество**: при общем
+  /// префиксе у нескольких подписок нода видна в chip-фильтре каждой.
+  /// Пустой Set = тег не начинается ни с одного префикса (UserServer /
+  /// подписка без префикса / импорт) → категория `'custom'`.
   final Set<String> Function(String) subscriptionsOf;
 
   /// Lookup ping ms по tag. `null` = untested (нет в `state.lastDelay`).
