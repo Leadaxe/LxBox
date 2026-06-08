@@ -1,0 +1,156 @@
+import '../../models/custom_rule.dart';
+import '../../models/parser_config.dart';
+
+/// Remote `rule_set` пресета (type=remote + url).
+class PresetRemoteRuleSet {
+  const PresetRemoteRuleSet({required this.tag, required this.url});
+  final String tag;
+  final String url;
+}
+
+/// Outbound-опция для селекторов на экране Routing.
+class RoutingOutboundOption {
+  const RoutingOutboundOption({required this.label, required this.tag});
+  final String label;
+  final String tag;
+}
+
+/// Sentinel для `firstWhere(..., orElse: ...)` lookups — содержимое игнорируется,
+/// caller проверяет `label.isEmpty` после поиска. `presetId` обязательный
+/// (§067), кладём marker который заведомо никогда не матчится в реальных
+/// preset_id.
+final SelectableRule kEmptySelectable =
+    SelectableRule(label: '', presetId: '__empty_sentinel__');
+
+/// Pure-функции экрана Routing (без доступа к State). Вынесены из
+/// `_RoutingScreenState` чтобы ужать сам экран — поведение идентично.
+class RoutingHelpers {
+  const RoutingHelpers._();
+
+  /// Список remote `rule_set` пресета (type=remote + url). Пустой если
+  /// пресет только inline или без rule_set'ов.
+  ///
+  /// `rule` опционален — если передан, фильтруются rule_set'ы выключенные
+  /// через `enabled: "@var"` гейтинг (§045). Без `rule` — все remote
+  /// rule_set'ы (для cleanup-операций когда хотим тронуть все cached files).
+  static List<PresetRemoteRuleSet> remoteRuleSetsOf(
+    SelectableRule preset, [
+    CustomRulePreset? rule,
+  ]) {
+    final out = <PresetRemoteRuleSet>[];
+    for (final rs in preset.ruleSets) {
+      if (rs['type'] != 'remote') continue;
+      final tag = rs['tag'];
+      final url = rs['url'];
+      if (tag is! String || tag.isEmpty) continue;
+      if (url is! String || url.isEmpty) continue;
+      if (rule != null && !isRuleSetEnabled(rs, preset, rule)) continue;
+      out.add(PresetRemoteRuleSet(tag: tag, url: url));
+    }
+    return out;
+  }
+
+  /// Резолв `rule_set.enabled` (§045). Поле может быть string substitution
+  /// (`"@varname"`), bool literal, или отсутствовать (= always-on).
+  static bool isRuleSetEnabled(
+    Map<String, dynamic> rs,
+    SelectableRule preset,
+    CustomRulePreset rule,
+  ) {
+    final raw = rs['enabled'];
+    if (raw == null) return true;
+    if (raw is bool) return raw;
+    if (raw is String) {
+      String resolved = raw;
+      if (raw.startsWith('@')) {
+        final varName = raw.substring(1);
+        final stored = rule.varsValues[varName];
+        if (stored != null && stored.isNotEmpty) {
+          resolved = stored;
+        } else {
+          final v = preset.vars.firstWhere(
+            (x) => x.name == varName,
+            orElse: () => WizardVar(name: '', type: '', defaultValue: 'true'),
+          );
+          resolved = v.defaultValue.isNotEmpty ? v.defaultValue : 'true';
+        }
+      }
+      return resolved.toLowerCase() == 'true';
+    }
+    return true;
+  }
+
+  /// Composite ключ для `_srsCached` / `_srsDownloading` у preset-rule_set'ов.
+  /// У `CustomRuleSrs` там просто `rule.id`; у preset'ов — `<id>|<tag>`,
+  /// чтобы не путаться между несколькими rule_set'ами одного пресета.
+  static String presetSrsKey(CustomRulePreset rule, String tag) =>
+      '${rule.id}|$tag';
+
+  /// `true` если у preset-правила есть remote rule_set'ы и хотя бы один из
+  /// них НЕ закэширован. Используется для disabled-switch (switch auto-
+  /// download'ит при toggle-on) и для выбора иконки ☁/✅.
+  static bool presetNeedsDownload(
+    CustomRulePreset rule,
+    SelectableRule preset,
+    Set<String> srsCached,
+  ) {
+    final remotes = remoteRuleSetsOf(preset, rule); // §045: enabled-gating
+    if (remotes.isEmpty) return false;
+    for (final rs in remotes) {
+      if (!srsCached.contains(presetSrsKey(rule, rs.tag))) return true;
+    }
+    return false;
+  }
+
+  static String presetOut(CustomRule rule, SelectableRule? preset) {
+    final explicit = rule.varsValues['outbound'];
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    if (preset == null) return 'direct-out';
+    for (final v in preset.vars) {
+      if (v.name == 'outbound') return v.defaultValue;
+    }
+    final action = preset.rule['action'];
+    if (action is String && action.isNotEmpty) return action;
+    final literal = preset.rule['outbound'];
+    if (literal is String && literal.isNotEmpty && !literal.startsWith('@')) {
+      return literal;
+    }
+    return 'direct-out';
+  }
+
+  static String ruleSubtitle(CustomRule rule, SelectableRule? preset) {
+    if (rule.kind == CustomRuleKind.preset) {
+      if (preset == null) return 'Preset not found — tap to fix';
+      // §045: только non-default vars; preset.label дублирует title (rule.name)
+      final extras = <String>[];
+      for (final v in preset.vars) {
+        final value = rule.varsValues[v.name] ?? v.defaultValue;
+        if (value.isEmpty || value == v.defaultValue) continue;
+        extras.add('${v.name}: $value');
+      }
+      if (extras.isEmpty) return 'Tap to edit';
+      return '${extras.take(2).join(' · ')} — tap to edit';
+    }
+    final summary = rule.summary;
+    return summary.isEmpty
+        ? 'Tap to add match fields'
+        : '$summary — tap to edit';
+  }
+
+  static String uniqueCustomRuleName(
+    String requested,
+    String selfId,
+    List<CustomRule> customRules,
+  ) {
+    final others = customRules
+        .where((r) => r.id != selfId)
+        .map((r) => r.name)
+        .toSet();
+    if (!others.contains(requested)) return requested;
+    var i = 2;
+    while (others.contains('$requested ($i)')) {
+      i++;
+    }
+    return '$requested ($i)';
+  }
+}
