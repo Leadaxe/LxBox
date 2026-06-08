@@ -1,0 +1,109 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+
+import '../../services/error_format.dart';
+
+/// Bottom-sheet editor for an inline user DNS rule (`kind: inline`).
+///
+/// Extracted from `DnsSettingsScreen._showUserRuleEditor` (§089 split).
+/// `existing` — текущий entry при edit (null при add). `onSave` получает уже
+/// собранный `entry` map (caller решает insert vs replace). `context` —
+/// screen context (для `ScaffoldMessenger` снаружи sheet'а).
+void showUserRuleEditor(
+  BuildContext context, {
+  required bool isNew,
+  required Map<String, dynamic>? existing,
+  required void Function(Map<String, dynamic> entry) onSave,
+}) {
+  final nameCtrl = TextEditingController(
+    text: existing?['name']?.toString() ?? '',
+  );
+  final body = existing?['rule'];
+  final bodyCtrl = TextEditingController(
+    text: body is Map<String, dynamic>
+        ? const JsonEncoder.withIndent('  ').convert(body)
+        : '{\n  "rule_set": "geoip-ru",\n  "server": "yandex_doh"\n}',
+  );
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    builder: (ctx) => Padding(
+      padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(ctx).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(isNew ? 'Add DNS Rule' : 'Edit DNS Rule',
+              style: Theme.of(ctx).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          TextField(
+            controller: nameCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Name',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 180,
+            child: TextField(
+              controller: bodyCtrl,
+              maxLines: null,
+              expands: true,
+              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              decoration: const InputDecoration(
+                labelText: 'Rule body (JSON)',
+                border: OutlineInputBorder(),
+                isDense: true,
+                alignLabelWithHint: true,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'sing-box DNS rule shape: {rule_set, domain, domain_suffix, server, ...}',
+            style: TextStyle(fontSize: 11, color: Colors.grey),
+          ),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: () {
+              final name = nameCtrl.text.trim();
+              if (name.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Name is required')));
+                return;
+              }
+              Map<String, dynamic>? parsed;
+              try {
+                final obj = jsonDecode(bodyCtrl.text);
+                if (obj is! Map<String, dynamic>) {
+                  throw const FormatException('Rule body must be a JSON object');
+                }
+                parsed = obj;
+              } catch (e) {
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text('Invalid JSON: ${formatUserError(e)}')));
+                return;
+              }
+              Navigator.pop(ctx);
+              final entry = <String, dynamic>{
+                'enabled': existing?['enabled'] ?? true,
+                'kind': 'inline',
+                'name': name,
+                'rule': parsed,
+              };
+              onSave(entry);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    ),
+  ).then((_) {
+    nameCtrl.dispose();
+    bodyCtrl.dispose();
+  });
+}
