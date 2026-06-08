@@ -21,8 +21,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/traffic_profiler.dart';
-import '../services/format_utils.dart';
 import '../widgets/core_logs_hint_banner.dart';
+import 'live_events_tab/event_tile.dart';
+import 'live_events_tab/recording_header.dart';
+import 'live_events_tab/unattributed_banner.dart';
 
 class LiveEventsTab extends StatefulWidget {
   const LiveEventsTab({super.key});
@@ -160,32 +162,15 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
     final filtered = _filtered;
     return Column(
       children: [
-        _recordingHeader(context),
+        LiveRecordingHeader(
+          eventCount: _events.length,
+          onToggle: _toggleRecording,
+        ),
         _filterBar(context),
         const Divider(height: 1),
         const CoreLogsHintBanner(),
         if (TrafficProfiler.I.unattributedBannerActive)
-          Container(
-            width: double.infinity,
-            color: cs.errorContainer,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
-              children: [
-                Icon(Icons.warning_amber,
-                    size: 16, color: cs.onErrorContainer),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '${TrafficProfiler.I.recentUnattributedCount} unattributed events / 30s — '
-                    'sing-box не смог детектить owner package для части DNS/TCP traffic\'а',
-                    style: TextStyle(
-                        fontSize: 12, color: cs.onErrorContainer),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const UnattributedBanner(),
         Expanded(
           child: filtered.isEmpty
               ? Center(
@@ -205,69 +190,13 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
                 )
               : ListView.builder(
                   itemCount: filtered.length,
-                  itemBuilder: (_, i) =>
-                      _eventTile(context, filtered[i]),
+                  itemBuilder: (_, i) => LiveEventTile(
+                    event: filtered[i],
+                    onSearchKey: _applySearchKey,
+                  ),
                 ),
         ),
       ],
-    );
-  }
-
-  /// §048 — header с recording control. ▶ START / ⏹ STOP + duration badge.
-  /// Аналогичен Per-app trace header'у, но без target picker'а — Live это
-  /// system-wide recording, фокусируется через filter chips.
-  Widget _recordingHeader(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isRec = TrafficProfiler.I.isGlobalRecording;
-    final startedAt = TrafficProfiler.I.globalRecordingStartedAt;
-    final duration = startedAt == null
-        ? Duration.zero
-        : DateTime.now().difference(startedAt);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-      child: Row(
-        children: [
-          Icon(
-            isRec ? Icons.fiber_manual_record : Icons.podcasts,
-            size: 16,
-            color: isRec ? cs.error : cs.onSurfaceVariant,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isRec ? 'Recording system-wide events' : 'Not recording',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: isRec ? cs.error : cs.onSurface),
-                ),
-                Text(
-                  isRec
-                      ? '${formatDuration(duration)} · ${_events.length} events'
-                      : 'Tap START to begin capture. Recording continues '
-                          'when you leave this tab.',
-                  style: TextStyle(
-                      fontSize: 11, color: cs.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          FilledButton.icon(
-            onPressed: _toggleRecording,
-            icon: Icon(isRec ? Icons.stop : Icons.fiber_manual_record,
-                size: 18),
-            label: Text(isRec ? 'STOP' : 'START'),
-            style: FilledButton.styleFrom(
-              backgroundColor: isRec ? cs.error : cs.primary,
-              foregroundColor: isRec ? cs.onError : cs.onPrimary,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -421,227 +350,6 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
         );
       },
     );
-  }
-
-  Widget _eventTile(BuildContext context, TrafficEvent e) {
-    final cs = Theme.of(context).colorScheme;
-    final ts = '${e.ts.hour.toString().padLeft(2, '0')}:'
-        '${e.ts.minute.toString().padLeft(2, '0')}:'
-        '${e.ts.second.toString().padLeft(2, '0')}';
-    Color kindColor;
-    String kindLabel;
-    switch (e.kind) {
-      case TrafficEventKind.dnsResolve:
-        kindColor = cs.tertiary;
-        kindLabel = 'DNS';
-      case TrafficEventKind.dnsFail:
-        kindColor = cs.error;
-        kindLabel = 'DNS×';
-      case TrafficEventKind.tcpOpen:
-        kindColor = cs.primary;
-        kindLabel = 'TCP';
-      case TrafficEventKind.tcpClose:
-        kindColor = cs.outline;
-        kindLabel = 'TCP·';
-      case TrafficEventKind.udpOpen:
-        kindColor = cs.secondary;
-        kindLabel = 'UDP';
-    }
-
-    // У одного event'а часто есть domain, IP и process одновременно — каждое
-    // поле кликабельное независимо. Tap по конкретному значению → search
-    // заполняется именно им (см. _applySearchKey).
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(ts,
-                  style: TextStyle(
-                      fontSize: 11,
-                      fontFamily: 'monospace',
-                      color: cs.onSurfaceVariant)),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 4, vertical: 1),
-                decoration: BoxDecoration(
-                  color: kindColor.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-                child: Text(kindLabel,
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.bold,
-                        color: kindColor)),
-              ),
-              const SizedBox(width: 6),
-              _confidenceBadge(context, e),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _eventSummaryRow(context, e),
-              ),
-            ],
-          ),
-          if ((e.process ?? '').isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: 60, top: 1),
-              child: _processChips(context, e),
-            ),
-          if (e.dnsRecordType != null)
-            Padding(
-              padding: const EdgeInsets.only(left: 60, top: 1),
-              child: Text('record: ${e.dnsRecordType}',
-                  style: TextStyle(
-                      fontSize: 10, color: cs.onSurfaceVariant)),
-            ),
-        ],
-      ),
-    );
-  }
-
-  /// Inline summary с независимыми tap-зонами: domain · arrow · ip:port.
-  Widget _eventSummaryRow(BuildContext context, TrafficEvent e) {
-    final cs = Theme.of(context).colorScheme;
-    final domain = (e.domain ?? '').trim();
-    final ip = (e.ip ?? '').trim();
-    final port = e.port;
-    final children = <Widget>[];
-    if (domain.isNotEmpty) {
-      children.add(_tappableText(
-        domain,
-        () => _applySearchKey(domain),
-        style: const TextStyle(fontSize: 12),
-      ));
-    }
-    if (ip.isNotEmpty) {
-      if (children.isNotEmpty) {
-        children.add(Text(' → ',
-            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)));
-      }
-      final ipPort = port != null ? '$ip:$port' : ip;
-      children.add(_tappableText(
-        ipPort,
-        () => _applySearchKey(ip),
-        style: const TextStyle(fontSize: 12),
-      ));
-    }
-    if (children.isEmpty) {
-      // dnsFail без resolve / closed event без host — fallback на summary текст.
-      return Text(_eventSummary(e),
-          style: const TextStyle(fontSize: 12),
-          overflow: TextOverflow.ellipsis);
-    }
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: children,
-    );
-  }
-
-  /// Process line — может быть comma-list ("pkgA, pkgB (uid)"); каждый pkg
-  /// — отдельный tap-зон, заполняет search его именем.
-  Widget _processChips(BuildContext context, TrafficEvent e) {
-    final cs = Theme.of(context).colorScheme;
-    final raw = (e.process ?? '').trim();
-    if (raw.isEmpty) return const SizedBox.shrink();
-    final items = raw
-        .split(',')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .map((s) => s.replaceAll(RegExp(r'\s*\(\d+\)\s*$'), ''))
-        .toList();
-    final color = e.confidence == ConfidenceLevel.unattributed
-        ? cs.error
-        : cs.primary;
-    final widgets = <Widget>[];
-    for (var i = 0; i < items.length; i++) {
-      if (i > 0) {
-        widgets.add(Text(', ',
-            style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)));
-      }
-      widgets.add(_tappableText(
-        items[i],
-        () => _applySearchKey(items[i]),
-        style: TextStyle(
-          fontSize: 10,
-          fontFamily: 'monospace',
-          color: color,
-        ),
-      ));
-    }
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: widgets,
-    );
-  }
-
-  /// Inline tap-zone — InkWell с маленькой hitbox'ой, без splash-overflow.
-  Widget _tappableText(String text, VoidCallback onTap, {TextStyle? style}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(2),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
-        child: Text(text, style: style, overflow: TextOverflow.ellipsis),
-      ),
-    );
-  }
-
-  Widget _confidenceBadge(BuildContext context, TrafficEvent e) {
-    final cs = Theme.of(context).colorScheme;
-    Color color;
-    String label;
-    switch (e.confidence) {
-      case ConfidenceLevel.verified:
-        return const SizedBox.shrink();
-      case ConfidenceLevel.secondary:
-        color = cs.tertiary;
-        label = 'sec';
-      case ConfidenceLevel.inferred:
-        color = cs.secondary;
-        label = '〽';
-      case ConfidenceLevel.unattributed:
-        color = cs.error;
-        label = '?';
-    }
-    return Tooltip(
-      message: 'confidence: ${e.confidence.name}'
-          '${e.matchedVia != null ? "\nmatched via: ${e.matchedVia}" : ""}'
-          '${e.shownBecause != null ? "\nshown because: ${e.shownBecause}" : ""}',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(3),
-        ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 10,
-                fontFamily: 'monospace',
-                color: color)),
-      ),
-    );
-  }
-
-  String _eventSummary(TrafficEvent e) {
-    switch (e.kind) {
-      case TrafficEventKind.dnsResolve:
-        return e.ip != null
-            ? '${e.domain ?? "?"} → ${e.ip}'
-            : (e.domain ?? '?');
-      case TrafficEventKind.dnsFail:
-        return 'DNS× ${e.domain ?? "?"}';
-      case TrafficEventKind.tcpOpen:
-      case TrafficEventKind.udpOpen:
-        return '${e.domain ?? e.ip ?? "?"}:${e.port ?? "?"}';
-      case TrafficEventKind.tcpClose:
-        final bytes =
-            '↑${formatBytes(e.upBytes ?? 0)} ↓${formatBytes(e.downBytes ?? 0)}';
-        return '${e.domain ?? e.ip ?? "?"}:${e.port ?? "?"} closed · $bytes';
-    }
   }
 
   /// Кладём `key` в существующий search field, фильтруя список по нему.
