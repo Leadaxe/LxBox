@@ -24,6 +24,8 @@
 
 ### Fixed
 
+- **§087 — Stale-соединения после смены сети (WiFi↔LTE) — force-reset в корне** ([task spec](docs/spec/tasks/087-network-change-force-reset.md), [research §086](docs/spec/tasks/086-stale-connections-network-change-doze.md), [DefaultNetworkMonitor.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/DefaultNetworkMonitor.kt), [BoxService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt)). При переключении сети native слал libbox только **passive** `updateDefaultInterface(...)` — ядро узнавало про новый интерфейс (новые коннекты биндились верно), но **существующие** сокеты на мёртвом NIC не закрывались → браузер ретрансмитил в них до TCP-таймаута («старое висит, новое грузится»). `resetNetwork()` (ядро CloseAll + flush DNS + rebind) был реализован, но не вызывался авто. Фикс (§086 variant C): `DefaultNetworkMonitor.checkUpdate` детектит **genuine** смену интерфейса (`prev → new`, оба непустые и разные — НЕ на первый connect / capability-update / disconnect, иначе регрессия класса sing-box #3400 «убить весь TCP на каждый чих») и debounced (1.5s) дёргает `resetNetwork()`. Closes failure mode 1 из §086. (Failure mode 2 — Doze freeze — вне скоупа, research §086 не закончен.)
+
 - **§084 — Code-audit cleanup: High-блок** ([task spec](docs/spec/tasks/084-code-audit-cleanup.md)). Из 46-агентного аудита кода исправлены все 6 high-находок:
   - **H1 / §081** — `validateConfig` теперь проверяет `outbounds[]/endpoints[].detour` ссылки → `DanglingDetourRef` (fatal). Раньше dangling detour (см. §080) не ловился на Dart-уровне. [validator.dart](app/lib/services/builder/validator.dart), +3 теста.
   - **H2** — удалено мёртвое поле `VlessSpec.encryption` (нигде не читалось/эмитилось).
