@@ -134,5 +134,14 @@
       `_copyNodeJson`; stats `_parseDetourMap`+`_detourChain` (детур-chain
       был продублирован 3×). `ConfigCache` (hot-path render) оставлен —
       разные цели, задокументировано. +9 unit tests.
-- [ ] R3 — NodeFilterViewModel
-- [ ] R4 — LazyPersistMixin
+- [ ] R3 — NodeFilterViewModel — ⚠ **отложен**: самый рискованный (большой
+      diff в home_screen 2639, setState coupling, `home_screen` не покрыт
+      widget-тестами → регрессию render'а юнит-тесты не поймают). Делать
+      когда юзер за рулём для device-verify фильтров. Не делал слепо ночью.
+- [x] **R4 — LazyPersistMixin** ✅ `lib/screens/lazy_persist_mixin.dart`
+      (`markDirty`/`persistChanges`/flush-on-dispose+paused/configDirty sync).
+      Применён к 3 экранам с идентичным bool-скелетом: tun_apps_tab,
+      dns_settings_screen, routing_screen (byte-for-byte дубль lifecycle
+      убран). `settings_screen` (Map `_pendingVars`, иная семантика) —
+      оставлен с пометкой (адаптация под bool-mixin рискованна ради 1
+      экрана). +4 widget-tests (lazy-persist раньше **не** покрыт).

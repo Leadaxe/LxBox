@@ -14,6 +14,7 @@ import '../services/template_loader.dart';
 import '../widgets/outbound_picker.dart';
 import '../widgets/template_var_list.dart';
 import 'custom_rule_edit_screen.dart';
+import 'lazy_persist_mixin.dart';
 import 'tun_apps_tab.dart';
 
 class RoutingScreen extends StatefulWidget {
@@ -31,7 +32,7 @@ class RoutingScreen extends StatefulWidget {
 }
 
 class _RoutingScreenState extends State<RoutingScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, LazyPersistMixin<RoutingScreen> {
   WizardTemplate? _template;
   final _enabledGroups = <String>{};
   String _routeFinal = '';
@@ -39,48 +40,23 @@ class _RoutingScreenState extends State<RoutingScreen>
   final _srsCached = <String>{};      // rule.id → файл есть в кэше
   final _srsDownloading = <String>{}; // rule.id → идёт загрузка
   bool _loading = true;
-  // §076: dirty flag — нужно ли persist'ить на exit. Set'ится на mutation,
-  // clears'ся после _persist. Защищает от лишнего write если open+close
-  // без mutations.
-  bool _pendingChanges = false;
+  // §076/§085 R4: write-on-exit через LazyPersistMixin (markDirty/persistChanges).
 
   /// chapter==routing vars (Auto Proxy tuning — urltest_url/interval/tolerance).
   /// Значения держим отдельно от custom_rules: apply'ит их через SettingsStorage.setVar.
   final Map<String, String> _routingVarValues = {};
 
   @override
+  SubscriptionController get lazyController => widget.subController;
+
+  @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     unawaited(_load());
   }
 
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    // §076 write-on-exit: Navigator.pop → flush. dispose не await'ит async —
-    // unawaited; SettingsStorage atomic (§072) → no corrupt state.
-    if (_pendingChanges) unawaited(_persist());
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // §076 safety net: app backgrounded → flush. Только `paused` —
-    // `inactive` слишком часто (notification pull, transient overlays).
-    if (state == AppLifecycleState.paused && _pendingChanges) {
-      unawaited(_persist());
-    }
-  }
-
-  /// §076: any mutation → set in-memory flags **синхронно**. configDirty
-  /// должен быть видим _pushRoute.then() до того как .then() начнёт
-  /// проверять — иначе race: дисковая запись (через _persist в dispose)
-  /// ещё не завершилась, флаг false, rebuild не fires.
-  void _markDirty() {
-    _pendingChanges = true;
-    widget.subController.configDirty = true; // sync — race-safe
-  }
+  // §085 R4 — alias: сохраняет существующие call-sites `_markDirty()`.
+  void _markDirty() => markDirty();
 
   Future<void> _load() async {
     final template = await TemplateLoader.load();
@@ -412,19 +388,15 @@ class _RoutingScreenState extends State<RoutingScreen>
     await SettingsStorage.markPresetsMigrated();
   }
 
-  /// §076: atomic storage flush. Inline rebuild + snackbars удалены —
-  /// rebuild делается lazy на возврате на home через _pushRoute.then().
-  /// configDirty mark'ится для home banner / lazy rebuild trigger.
-  Future<void> _persist() async {
-    if (!_pendingChanges) return; // idempotent: already flushed
-    _pendingChanges = false;
+  /// §076/§085 R4: atomic storage flush (вызывается mixin'ом на dispose/
+  /// paused). Inline rebuild + snackbars удалены — lazy на возврате home.
+  @override
+  Future<void> persistChanges() async {
     await SettingsStorage.saveEnabledGroups(_enabledGroups);
     await SettingsStorage.saveRouteFinal(_routeFinal);
     await SettingsStorage.saveCustomRules(_customRules);
-    // §076: configDirty уже true (set синхронно в _markDirty). НЕ
-    // переставляем тут — между unawaited(_persist()) и завершением disk
-    // I/O home._pushRoute.then() уже мог fire'нуть _rebuildAndClearDirty
-    // и сбросить флаг. Повторный set => banner blink pink→blue.
+    // §076: configDirty уже true (set синхронно в markDirty). НЕ
+    // переставляем тут — race с home return observer (banner blink).
   }
 
   /// Returns the list of available outbound options depending on enabled groups.

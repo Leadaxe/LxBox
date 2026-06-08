@@ -12,6 +12,7 @@ import '../services/error_format.dart';
 import '../services/builder/preset_expand.dart';
 import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
+import 'lazy_persist_mixin.dart';
 
 /// DNS Settings (§014, §061 dns-rules-refactor, бывший feature §041).
 ///
@@ -34,7 +35,10 @@ class DnsSettingsScreen extends StatefulWidget {
 }
 
 class _DnsSettingsScreenState extends State<DnsSettingsScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, LazyPersistMixin<DnsSettingsScreen> {
+  @override
+  SubscriptionController get lazyController => widget.subController;
+
   /// §043: kind-discriminated refs (резолвер `resolveDnsServersList`):
   /// - `{enabled, kind: 'inline',   tag, body}` — user-defined OR override
   /// - `{enabled, kind: 'template', tag}`        — ref на template-server
@@ -70,45 +74,20 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
 
 
   bool _loading = true;
-  // §076: _saveTimer удалён — write-on-exit pattern через _markDirty + _persist.
+  // §076/§085 R4: write-on-exit через LazyPersistMixin (markDirty/persistChanges).
 
   String _strategy = '';
   String _dnsFinal = '';
   String _defaultResolver = '';
-  // §076: dirty flag — нужно ли persist на exit. Set'ится в _markDirty,
-  // clears'ся после _persist. Защита от лишнего write при open+close.
-  bool _pendingChanges = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     unawaited(_load());
   }
 
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    // §076 write-on-exit: Navigator.pop → flush pending.
-    if (_pendingChanges) unawaited(_persist());
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // §076 safety net: app backgrounded → flush. Только `paused`.
-    if (state == AppLifecycleState.paused && _pendingChanges) {
-      unawaited(_persist());
-    }
-  }
-
-  /// §076: mutation → set in-memory flags синхронно. configDirty должен
-  /// быть видим _pushRoute.then() до того как .then() начнёт проверять —
-  /// иначе race condition (см. spec §076).
-  void _markDirty() {
-    _pendingChanges = true;
-    widget.subController.configDirty = true; // sync race-safe
-  }
+  // §085 R4 — alias: сохраняет существующие call-sites `_markDirty()`.
+  void _markDirty() => markDirty();
 
   Future<void> _load() async {
     final template = await TemplateLoader.load();
@@ -214,11 +193,10 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     }
   }
 
-  /// §076: atomic storage flush. Inline rebuild удалён — lazy через
-  /// home._pushRoute.then() на возврате на home.
-  Future<void> _persist() async {
-    if (!_pendingChanges) return;
-    _pendingChanges = false;
+  /// §076/§085 R4: atomic storage flush (вызывается mixin'ом). Inline rebuild
+  /// удалён — lazy через home return observer.
+  @override
+  Future<void> persistChanges() async {
     await SettingsStorage.saveDnsServers(_servers);
     // §033: orphan-cleanup safety — only persist entries whose source still
     // exists. UI mutation already filtered, но keep guard symmetric с

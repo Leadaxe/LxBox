@@ -16,6 +16,7 @@ import '../controllers/subscription_controller.dart';
 import '../services/app_info_cache.dart';
 import '../services/settings_storage.dart' show SettingsStorage, TunAppsConfig;
 import 'app_picker_screen.dart';
+import 'lazy_persist_mixin.dart';
 import 'settings_screen.dart';
 
 class TunAppsTab extends StatefulWidget {
@@ -32,55 +33,27 @@ class TunAppsTab extends StatefulWidget {
   State<TunAppsTab> createState() => _TunAppsTabState();
 }
 
-class _TunAppsTabState extends State<TunAppsTab> with WidgetsBindingObserver {
+class _TunAppsTabState extends State<TunAppsTab>
+    with WidgetsBindingObserver, LazyPersistMixin<TunAppsTab> {
   TunAppsConfig _cfg = const TunAppsConfig(mode: 'off', packages: <String>[]);
   // §076: `_appliedCfg` / `_isModified` / `_listEq` / local restart banner +
-  // button — удалены. Использовано существующее unified mechanism:
-  //   - mutations → setState (in-memory)
-  //   - dispose / AppLifecycleState.paused → _persist (atomic write)
-  //   - _persist set'ит subController.configDirty = true
-  //   - home_screen._pushRoute.then на возврате → rebuild + save
+  // button — удалены. Lazy write-on-exit через LazyPersistMixin (§085 R4):
+  //   - mutations → markDirty() + setState (in-memory)
+  //   - dispose / AppLifecycleState.paused → persistChanges (atomic write)
+  //   - markDirty set'ит subController.configDirty = true sync
   //   - home banner показывает «Apply / Restart» глобально
   //
   // packages для которых мы вызвали `AppInfoCache.ensure(pkg)`.
-  // Используем для детекта uninstalled: если `_ensured.contains(pkg)` +
-  // `AppInfoCache.of(pkg) == null` → native tried & not found.
   final Set<String> _ensured = <String>{};
   bool _loading = true;
-  // §076: dirty flag — нужно ли persist'ить на exit. Set'ится на mutation,
-  // clears'ся после _persist. Защищает от лишнего write если open+close
-  // без mutations.
-  bool _pendingChanges = false;
+
+  @override
+  SubscriptionController get lazyController => widget.subController;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     unawaited(_load());
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    // §076 write-on-exit: Navigator.pop → dispose → flush pending changes.
-    // Sync вызов через unawaited — dispose не await'ит async. Worst case:
-    // если app убьют между unawaited и actual write — write SettingsStorage
-    // atomic (§072), либо завершится либо не успеет; нет corrupt state.
-    if (_pendingChanges) unawaited(_persist());
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // §076 write-on-exit safety net: app backgrounded → flush pending.
-    // Если юзер свернул app мid-edit (Home button, app switcher), OS может
-    // убить process через 30+ сек в background. Persist'им сейчас чтобы
-    // ничего не потерять. Только `paused` — `inactive` слишком часто
-    // (notification panel, app switcher transient) и вёл бы к spurious
-    // writes.
-    if (state == AppLifecycleState.paused && _pendingChanges) {
-      unawaited(_persist());
-    }
   }
 
   Future<void> _load() async {
@@ -96,32 +69,19 @@ class _TunAppsTabState extends State<TunAppsTab> with WidgetsBindingObserver {
     }
   }
 
-  /// §076: any mutation → set in-memory flags **синхронно**. configDirty
-  /// flag должен быть видим _pushRoute.then() до того как .then() начнёт
-  /// проверять — иначе race: дисковая запись ещё не завершилась, флаг
-  /// false, rebuild не fires.
-  void _markDirty() {
-    _pendingChanges = true;
-    widget.subController.configDirty = true; // sync — race-safe для .then()
-  }
-
-  /// §076: atomic disk flush. Settings.setTunApps идёт через §072 atomic
-  /// write. configDirty уже set'нут в _markDirty синхронно.
-  Future<void> _persist() async {
-    if (!_pendingChanges) return; // idempotent: already flushed
-    _pendingChanges = false;
+  /// §076/§085 R4: atomic disk flush (вызывается mixin'ом на dispose/paused).
+  /// `setTunApps` идёт через §072 atomic write. `configDirty` уже set'нут в
+  /// `markDirty()` синхронно — не трогаем.
+  @override
+  Future<void> persistChanges() async {
     await SettingsStorage.setTunApps(_cfg);
-    // configDirty уже true (set в _markDirty), не трогаем.
   }
-
-  // §076: `_restartVpn` удалён. Restart инициируется единой home banner кнопкой,
-  // там же запускается rebuild + restart атомарно.
 
   void _setMode(String mode) {
     setState(() {
       _cfg = _cfg.copyWith(mode: mode);
     });
-    _markDirty();
+    markDirty();
   }
 
   Future<void> _pickApps() async {
@@ -140,7 +100,7 @@ class _TunAppsTabState extends State<TunAppsTab> with WidgetsBindingObserver {
       _ensured.add(pkg);
       AppInfoCache.ensure(pkg);
     }
-    _markDirty();
+    markDirty();
   }
 
   void _removeApp(String pkg) {
@@ -149,7 +109,7 @@ class _TunAppsTabState extends State<TunAppsTab> with WidgetsBindingObserver {
         packages: _cfg.packages.where((p) => p != pkg).toList(),
       );
     });
-    _markDirty();
+    markDirty();
   }
 
   void _clearAll() {
@@ -170,7 +130,7 @@ class _TunAppsTabState extends State<TunAppsTab> with WidgetsBindingObserver {
             onPressed: () {
               Navigator.pop(ctx);
               setState(() => _cfg = _cfg.copyWith(packages: const <String>[]));
-              _markDirty();
+              markDirty();
             },
             child: const Text('Clear'),
           ),
