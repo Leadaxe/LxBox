@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **Design agreed** (обсуждено с юзером, эта сессия). Реализация — отдельно, **behavior-changing** → своя реализация + тесты. НЕ начата. |
+| Статус | **IMPLEMENTED** (2026-06-08). Phase A модель + B миграция + C prefix-filter; analyze clean + тесты green; adversarial-verify пройден. Журнал — в конце. |
 | Тип | refactor / architecture / **logic-rewrite** (§090-класс, но своя focused-таска) |
 | Закрывает | §077 / §079 / §080 — структурно (целый класс багов «reverse-парсим display-тег») |
 | Связанные | §048 (node filters), §068 (`NodeViewItem`), §085 R2 (`ConfigIntrospection`), §083 (per-channel filter) |
@@ -117,8 +117,18 @@ node_list_presenter.dart` (`buildNodeFilter`/`splitNodes`/`protocolOfTag`/
 
 - **Подписки без префикса** — не фильтруются (нет чипа). Принято (юзер: «не
   задан — нет поиска»).
-- **Одинаковый префикс у 2 подписок** — конфлейтит. Редко; опц. валидация
-  уникальности префикса.
+- **Одинаковый префикс у 2 подписок** — конфлейтит (нода в chip'е обеих).
+  Редко; опц. валидация уникальности префикса.
+- **Чужая нода с совпавшим префиксом** (verify §091) — если UserServer
+  (или список без своего chip'а) имеет непустой `tagPrefix`, совпадающий с
+  префиксом реальной подписки, его нода `'PFX X'` приписывается подписке, а
+  не «Custom» (`startsWith('PFX ')` истинно). Регрессия vs старый reverse-map
+  (тот матчил по членству в node-списке). **Принято** как тот же
+  prefix-collision tradeoff: достижимо только нестандартно (UI не даёт
+  UserServer'у с нодами префикс — лишь `proxy_source_migration` v1 или
+  backup-импорт) + коллизия с живой подпиской. Чистого prefix-фикса нет без
+  возврата node-list проверки (= откат сути §091). Решение — уникальность
+  префиксов.
 - **Ручной импорт конфига** (config editor/backup) — ноды = «custom» (префикс
   не совпадёт). Консистентно.
 - **`auto`/urltest-группа** — `type=urltest`, без protocol-лейбла (как сейчас на
@@ -136,6 +146,50 @@ node_list_presenter.dart` (`buildNodeFilter`/`splitNodes`/`protocolOfTag`/
 
 ## Не в скопе
 
-- Реализация (своя итерация, behavior-changing, тесты).
+- ~~Реализация~~ → **сделана** (см. журнал ниже).
 - Миграция/удаление `⚙` ручной пометки (отдельно, после переходного периода).
+  `isMarkedDetour` оставлен переходным; detour show/hide в splitNodes пока
+  через `TagResolver.isDetourMarker` (поведенчески идентично).
 - §089 (структурный рефактор) — независим, уже сделан.
+
+---
+
+## Журнал реализации (2026-06-08)
+
+Три фазы, каждая с гейтом `flutter analyze` clean + тесты green:
+
+**Phase A — модель (additive, commit `38075f0`).** `lib/models/config_node.dart`:
+`ConfigNode{tag, type, kind, detour, isMarkedDetour, detourRefCount, raw}` +
+`isDetour`/`isControl` геттеры; контейнер `ParsedConfig` (Map<tag,ConfigNode>
++ `protocolOf`/`detourOf`/`rawOf`/`kindOf`/`outboundChain`/`detourChain`/
+`nodeCount`). +14 юнит-тестов (`test/models/config_node_test.dart`). Добавил
+`kind` (outbound/endpoint) сверх исходного дизайна — нужен для «View JSON»
+заголовка.
+
+**Phase B — миграция (behavior-preserving, commit `6375d0f`).**
+`HomeState.configCache: ConfigCache` → `configModel: ParsedConfig`
+(`protoByTag`→`protocolOf`, `detourTags`→`node.detour!=null`). `node_actions`/
+`stats`/`home_screen` читают `state.configModel` (node_actions больше **не**
+ре-парсит конфиг на каждый long-press). `services/config_introspection.dart`
++ тест удалены (схлопнуты в ParsedConfig). 813 тестов green.
+
+**Phase C — prefix-filter (behavior change, commit `362a0dc`).**
+`subscriptionsOfTag`: reverse-map по node-спискам + collision-эвристика →
+`tag.startsWith('$prefix ')`. Подписки без префикса не участвуют → их ноды в
+«Custom»; chip только для подписок с префиксом. Удалён ненужный
+`TagResolver.matchesAllocated` + его тесты. **Класс багов §077/§079/§080
+закрыт структурно** (UI больше не reverse-парсит display-тег). Тесты
+переписаны prefix-based.
+
+**Adversarial verify (6 агентов, commit фиксов `e5a2dd9`).** Нашёл 2 реальные
+дивергенции: (1) `protocolOf('')` возвращал `''` вместо null для empty-type
+outbound'а → spurious пустой proto-chip (через `availableProtocols`) →
+**починено** (`n.type.isNotEmpty` guard + тест); (2) foreign-node
+prefix-collision → задокументировано как принятый tradeoff (см. Edge cases).
+Nits подтверждены non-issue: нет dangling-refs, perf-инвариант (rebuild только
+на смену `configRaw`) сохранён, nodeCount-divergence на control-endpoint'ах
+недостижим (endpoints = только wireguard).
+
+**Что НЕ тронуто (переходное / отдельно):** `⚙`-миграция; `isDetour`-toggle в
+UI (поле есть в модели, но node_settings ещё юзает старую ручную пометку —
+отдельная итерация после переходного периода).
