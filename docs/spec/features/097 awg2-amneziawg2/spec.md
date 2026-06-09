@@ -179,6 +179,30 @@ fork), `BUILD.md`/`RELEASE_PROCESS.md` (если Phase 0 = локальный li
   endpoints[] появились в 1.11, текущий пин 1.13.11)?
 - **Q8:** UI — JSON-only MVP (2a) ок, или сразу выделенные поля (2b)?
 
+## 7b. Phase 0 — ВЫПОЛНЕНО ✅ (dev-build, 2026-06-09)
+
+Юзер дал `libbox-aar.zip` (= **локальный AAR**, ответ на Q1: НЕ published Maven).
+Внутри: `libbox.aar` (modern, minSdk 23, 4 ABI) + `libbox-legacy.aar` (minSdk 21).
+Используем **modern** (legacy = fallback для старых устройств — Q7-смежное).
+
+**Факты (из `strings` arm64 `libbox.so`):**
+- версия ядра **`1.13.13-lx.1-94c7702c`** (`Libbox.version()` это вернёт);
+- build-теги: `with_gvisor,with_quic,with_wireguard,with_utls,with_naive_outbound,with_clash_api,with_xhttp,with_awg`;
+- присутствуют `option.AmneziaWGOptions` (AWG2) и `option.V2RayXHTTPOptions`/`v2rayxhttp` (XHTTP).
+
+**Интеграция (DEV-ONLY, НЕ коммитим):**
+- AAR → `app/android/app/libs/libbox.aar` (gitignored, 73MB);
+- `build.gradle.kts:123` Maven-строка → `implementation(files("libs/libbox.aar"))`
+  (закомментирована старая; вернуть для стокового ядра). CI остаётся на Maven.
+- Собрано: vc 2726, APK 28.9MB (arm64 `.so` 51MB vs ~55-66 у 1.13.11); **Kotlin
+  `VpnPlugin`/`BoxService` скомпилировались без правок** → libbox API совместим
+  (Q4 ✅). Установлено + verified.
+
+**Остаётся:** Phase 1 (app-side AWG2-поля parse/emit) — сейчас новое ядро
+**работает на обычных конфигах**, но AWG2-поля app-парсер всё ещё дропает.
+Для интеграции в CI/release — опубликовать fork-AAR (jitpack/GH Packages) или
+git-lfs/CI-fetch (отдельное решение).
+
 ## 8. Phasing-вывод
 
 Минимальный путь к рабочему AWG2: **Phase 0 (0a если артефакт есть) → Phase 1 →
