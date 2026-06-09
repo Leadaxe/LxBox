@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/custom_rule.dart';
 import '../../../widgets/outbound_picker.dart';
+import '../../../widgets/reorder_grab_strip.dart';
 import '../routing_screen_helpers.dart';
 
 /// Один tile custom-rule на табе Rules (spec §030): drag-handle, switch,
@@ -109,19 +110,7 @@ class CustomRuleTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ReorderableDragStartListener(
-            index: index,
-            child: Container(
-              width: 18,
-              margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Icon(Icons.drag_indicator,
-                  size: 16, color: cs.onSurfaceVariant),
-            ),
-          ),
+          ReorderGrabStrip(index: index),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -403,16 +403,24 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         onPickPublicTestServer: () => unawaited(_pickPublicTestServer()),
       );
     }
-    return ListView.separated(
-      // AlwaysScrollable — чтобы pull-to-refresh работал и на коротких
-      // списках, не заполняющих экран (night T3-2).
+    return ReorderableListView.builder(
+      // §098 — drag-reorder подписок (grab-strip слева, как routing rules).
+      // AlwaysScrollable — pull-to-refresh на коротких списках. Divider теперь
+      // внутри самой строки (у ReorderableListView нет separatorBuilder).
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 12),
+      buildDefaultDragHandles: false,
       itemCount: ctrl.entries.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
+      onReorder: (oldIndex, newIndex) {
+        // ReorderableListView сдвигает newIndex на 1 при move вниз.
+        if (newIndex > oldIndex) newIndex -= 1;
+        unawaited(widget.subController.moveEntry(oldIndex, newIndex));
+      },
       itemBuilder: (context, i) {
         final entry = ctrl.entries[i];
         return SubscriptionEntryTile(
+          key: ValueKey(entry.id),
+          dragIndex: i,
           entry: entry,
           onToggle: () {
             unawaited(widget.subController.toggleAt(i));

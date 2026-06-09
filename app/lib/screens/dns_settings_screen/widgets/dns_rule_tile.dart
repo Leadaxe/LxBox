@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../widgets/reorder_grab_strip.dart';
 import '../dns_body_dialogs.dart';
 import '../dns_format.dart';
 import 'dns_badge.dart';
@@ -79,29 +80,22 @@ class DnsRuleTile extends StatelessWidget {
       _ => theme.colorScheme.secondary,
     };
 
-    return Card(
-      key: key,
-      child: ListTile(
-        onTap: () => showRuleBodyDialog(context, displayTitle, kind, body),
-        leading: SizedBox(
-          width: 80,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ReorderableDragStartListener(
-                index: index,
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4),
-                  child: Icon(Icons.drag_handle, size: 20),
+    // §098 — единый grab-strip слева (как в routing rules), вместо прежней
+    // мелкой inline-иконки drag_handle рядом со Switch.
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ReorderGrabStrip(index: index),
+          Expanded(
+            child: Card(
+              child: ListTile(
+                onTap: () =>
+                    showRuleBodyDialog(context, displayTitle, kind, body),
+                leading: Switch(
+                  value: enabled,
+                  onChanged: (v) => onToggleEnabled(index, v),
                 ),
-              ),
-              Switch(
-                value: enabled,
-                onChanged: (v) => onToggleEnabled(index, v),
-              ),
-            ],
-          ),
-        ),
         title: Text(
           displayTitle,
           style: TextStyle(
@@ -148,6 +142,10 @@ class DnsRuleTile extends StatelessWidget {
             ],
           ],
         ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

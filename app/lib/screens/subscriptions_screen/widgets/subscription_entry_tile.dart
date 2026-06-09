@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../../../controllers/subscription_controller.dart';
+import '../../../widgets/reorder_grab_strip.dart';
 import 'subscription_entry_subtitle.dart';
 
-/// Одна строка списка подписок/серверов. Поведение 1:1 с прежним
-/// inline `ListTile` в `_buildList`.
+/// Одна строка списка подписок/серверов. §098 — слева grab-strip для
+/// drag-reorder (как в routing rules), снизу divider (раньше был
+/// `separatorBuilder` у `ListView.separated`).
 class SubscriptionEntryTile extends StatelessWidget {
   const SubscriptionEntryTile({
     super.key,
     required this.entry,
+    required this.dragIndex,
     required this.onToggle,
     required this.onLaunchUrl,
     required this.onLongPress,
@@ -16,6 +19,9 @@ class SubscriptionEntryTile extends StatelessWidget {
   });
 
   final SubscriptionEntry entry;
+
+  /// Индекс в `ReorderableListView` для drag-старта (§098).
+  final int dragIndex;
   final VoidCallback onToggle;
   final void Function(String url) onLaunchUrl;
   final void Function(BuildContext context) onLongPress;
@@ -24,7 +30,7 @@ class SubscriptionEntryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = entry.enabled;
-    return ListTile(
+    final tile = ListTile(
       contentPadding: EdgeInsets.zero,
       leading: SizedBox(
         width: 40,
@@ -71,6 +77,22 @@ class SubscriptionEntryTile extends StatelessWidget {
           : null,
       onLongPress: () => onLongPress(context),
       onTap: () => onTap(context),
+    );
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ReorderGrabStrip(index: dragIndex),
+          Expanded(
+            child: Column(
+              children: [
+                tile,
+                const Divider(height: 1),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
