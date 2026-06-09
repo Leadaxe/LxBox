@@ -92,14 +92,17 @@ class _FilterPanelState extends State<FilterPanel>
         onDeleted: f.clearPing,
       ));
     }
-    // §096 — чип только для особого режима «только detour» (дефолтное скрытие
-    // detour чипа не даёт). tap → Settings, ✕ → вернуть скрытие (дефолт).
-    if (f.detourOnly) {
+    // §096 — чип когда detour-фильтр включён (дефолт «показать всё» чипа не
+    // даёт): ⊘ = скрыт detour, ⚙ = только detour. tap → Settings, ✕ → выкл
+    // фильтр (вернуть «показать всё»).
+    if (f.detourActive) {
       chips.add(InputChip(
-        tooltip: 'Только detour',
-        label: const Icon(Icons.settings, size: 18),
+        tooltip: f.detourHide ? 'Detour скрыт' : 'Только detour',
+        label: f.detourHide
+            ? _gearOffIcon()
+            : const Icon(Icons.settings, size: 18),
         onPressed: () => _tab.animateTo(3),
-        onDeleted: f.toggleDetourHide,
+        onDeleted: () => f.setDetourEnabled(false),
       ));
     }
     if (f.nonMatchingHidden) {
@@ -111,6 +114,26 @@ class _FilterPanelState extends State<FilterPanel>
       ));
     }
     return chips;
+  }
+
+  /// Перечёркнутая шестерёнка = «detour скрыт» (⚙ без перечёркивания = только
+  /// detour). Используется в чипе-сводке detour-фильтра.
+  Widget _gearOffIcon() {
+    final c = Theme.of(context).colorScheme.onSurfaceVariant;
+    return SizedBox(
+      width: 20,
+      height: 20,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(Icons.settings, size: 17, color: c),
+          Transform.rotate(
+            angle: -0.785, // -45°
+            child: Container(width: 22, height: 2, color: c),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _dotTab(String label, bool active) {
@@ -203,9 +226,9 @@ class _FilterPanelState extends State<FilterPanel>
               onEnabledChanged: f.setPingEnabled,
               onClear: f.clearPing,
             ),
-            // §096 — detour: чекбокс «show all» + [!] (hide↔only). Чекбокс
-            // вкл → показать ВСЁ; иначе [!] ON (дефолт) = скрыть detour,
-            // OFF = только detour. Лейбл ряда отражает итоговый режим.
+            // §096 — detour: чекбокс-enable + [!] (hide↔only). Чекбокс ВЫКЛ
+            // (старт) = показать всё (фильтр off, [!] серый/неактивен); ВКЛ →
+            // [!] ON = скрыть detour, OFF = только detour. Лейбл = итог-режим.
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: Row(
@@ -214,23 +237,25 @@ class _FilterPanelState extends State<FilterPanel>
                     width: 28,
                     height: 28,
                     child: Checkbox(
-                      value: f.detourShowAll,
-                      onChanged: (v) => f.setDetourShowAll(v ?? false),
+                      value: f.detourEnabled,
+                      onChanged: (v) => f.setDetourEnabled(v ?? false),
                       visualDensity: VisualDensity.compact,
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   ),
                   const SizedBox(width: 2),
                   NegateToggle(
-                    active: f.detourHide,
-                    onToggle: f.toggleDetourHide,
-                    tooltip: 'Hide (вкл) / только detour (выкл)',
+                    // Красный только когда фильтр вкл И режим hide; при выкл-
+                    // фильтре [!] серый (неважен), tap — no-op.
+                    active: f.detourEnabled && f.detourHide,
+                    onToggle: f.detourEnabled ? f.toggleDetourHide : () {},
+                    tooltip: 'Скрыть detour (вкл) / только detour (выкл)',
                   ),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      f.detourShowAll
-                          ? 'Show detour servers'
+                      !f.detourEnabled
+                          ? 'Show all servers'
                           : (f.detourHide
                               ? 'Hide detour servers'
                               : 'Show only detour servers'),

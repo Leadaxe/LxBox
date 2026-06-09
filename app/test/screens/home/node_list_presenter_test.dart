@@ -63,18 +63,25 @@ void main() {
     expect(state.configModel['Z'], isNull);
   });
 
-  test('дефолт (hide detour): detour B скрыт, остальное видно', () {
-    expect(filter.detourHide, true);
+  test('старт (фильтр выкл): показаны ВСЕ, включая detour B', () {
+    expect(filter.detourEnabled, false);
     final (matching, nonMatching) = presenter.splitNodes(tags, state);
-    // нет match-фильтра → весь pool в matching.
-    expect(matching, containsAll(['A', 'C', 'auto', 'direct', 'Z']));
-    expect(matching, isNot(contains('B')), reason: 'detour скрыт по дефолту');
+    // нет match-фильтра + detour выкл → весь pool в matching.
+    expect(matching, containsAll(['A', 'B', 'C', 'auto', 'direct', 'Z']));
     expect(nonMatching, isEmpty);
   });
 
-  test('только detour: видны B + control, A/C/Z скрыты', () {
+  test('checkbox on (! on): скрыть detour — B убран, остальное видно', () {
+    filter.setDetourEnabled(true);
+    final (matching, _) = presenter.splitNodes(tags, state);
+    expect(matching, containsAll(['A', 'C', 'auto', 'direct', 'Z']));
+    expect(matching, isNot(contains('B')), reason: 'detour B скрыт');
+  });
+
+  test('checkbox on + ! off: только detour — B + control, A/C/Z скрыты', () {
+    filter.setDetourEnabled(true);
     filter.toggleDetourHide(); // hide → only-detour
-    final (matching, nonMatching) = presenter.splitNodes(tags, state);
+    final (matching, _) = presenter.splitNodes(tags, state);
     expect(matching, contains('B'), reason: 'detour-нода видна');
     expect(matching, containsAll(['auto', 'direct']),
         reason: 'control-узлы не отсеиваются pool-ом');
@@ -82,30 +89,20 @@ void main() {
     expect(matching, isNot(contains('C')));
     expect(matching, isNot(contains('Z')),
         reason: 'нет в configModel → non-detour (?? false) → скрыт в only-detour');
-    expect(nonMatching, isEmpty);
   });
 
-  test('showAll (чекбокс): все ноды видны, включая detour B', () {
-    filter.setDetourShowAll(true);
-    final (matching, nonMatching) = presenter.splitNodes(tags, state);
-    expect(matching, containsAll(['A', 'B', 'C', 'auto', 'direct', 'Z']));
-    expect(nonMatching, isEmpty);
+  test('control-узлы видны во ВСЕХ detour-режимах (никогда не drop)', () {
+    // фильтр выкл (показать всё)
+    expect(presenter.splitNodes(tags, state).$1, containsAll(['auto', 'direct']));
+    filter.setDetourEnabled(true); // скрыть detour
+    expect(presenter.splitNodes(tags, state).$1, containsAll(['auto', 'direct']));
+    filter.toggleDetourHide(); // только detour
+    expect(presenter.splitNodes(tags, state).$1, containsAll(['auto', 'direct']));
   });
 
-  test('control-узлы видны в ОБОИХ detour-режимах (никогда не drop)', () {
-    final (m1, _) = presenter.splitNodes(tags, state);
-    expect(m1, containsAll(['auto', 'direct']));
-    filter.toggleDetourHide();
-    final (m2, _) = presenter.splitNodes(tags, state);
-    expect(m2, containsAll(['auto', 'direct']));
-  });
-
-  test('computeListData.displayList согласован со splitNodes (re-derive pool)',
-      () {
-    // pin off → displayList не тасуется; sanity что обёртка не теряет ноды.
+  test('computeListData (старт): displayList включает detour B', () {
     final data = presenter.computeListData(state);
-    // дефолт hide: B detour скрыт, control + payload видны.
-    expect(data.displayList, isNot(contains('B')));
+    expect(data.displayList, contains('B'), reason: 'старт = показать всё');
     expect(data.matchingSet, containsAll(['auto', 'direct']));
   });
 }

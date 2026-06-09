@@ -11,8 +11,8 @@ import 'channel_filters.dart';
 /// подписывается и делает `setState` на `notifyListeners`.
 ///
 /// Состоит из (см. §048 / §083 / §096):
-/// - **pool filter**: detour (§096) — чекбокс [detourShowAll] (показать всё) +
-///   `!` [detourHide]: ON (дефолт) = скрыть detour, OFF = показать только detour;
+/// - **pool filter**: detour (§096) — чекбокс [detourEnabled] (выкл = показать
+///   всё, старт) + `!` [detourHide]: ON = скрыть detour, OFF = только detour;
 /// - **match filters**: regex (+invert), protocols (+invert), subscriptions
 ///   (+invert), ping — помечают ноды matching/non-matching; у каждой категории
 ///   единый `!`-negate (§096);
@@ -31,17 +31,17 @@ class NodeFilterViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Pool: detour (§096, чекбокс + `!`, глобальный) ─────────────────────
-  // Чекбокс [_detourShowAll]: вкл → показать ВСЁ (detour + non-detour).
-  // `!` [_detourHide] (когда не showAll): ON (дефолт) → скрыть detour (только
-  // non-detour, чистый список); OFF → показать ТОЛЬКО detour (диагностика).
-  bool _detourShowAll = false;
+  // ─── Pool: detour (§096, чекбокс-enable + `!`, глобальный) ──────────────
+  // Чекбокс [_detourEnabled]: ВЫКЛ (СТАРТ) → показать ВСЁ (фильтр off, `!`
+  // неважен); ВКЛ → фильтровать. `!` [_detourHide] (когда enabled): ON →
+  // скрыть detour (только non-detour); OFF → показать ТОЛЬКО detour.
+  bool _detourEnabled = false;
   bool _detourHide = true;
-  bool get detourShowAll => _detourShowAll;
+  bool get detourEnabled => _detourEnabled;
   bool get detourHide => _detourHide;
 
-  void setDetourShowAll(bool v) {
-    _detourShowAll = v;
+  void setDetourEnabled(bool v) {
+    _detourEnabled = v;
     notifyListeners();
   }
 
@@ -50,15 +50,18 @@ class NodeFilterViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Pool-предикат: showAll → всё проходит; иначе hide → проходят non-detour,
+  /// Pool-предикат: фильтр off → всё проходит; иначе hide → проходят non-detour,
   /// show-only → проходят detour.
   bool detourPoolPasses(bool isDetour) =>
-      _detourShowAll || (_detourHide ? !isDetour : isDetour);
+      !_detourEnabled || (_detourHide ? !isDetour : isDetour);
 
-  /// «Только detour» — особый диагностический режим (не дефолт): зажигает
-  /// точку на табе/кнопке + чип-сводку. Дефолт (скрыть detour) и showAll —
-  /// нормальные режимы, точку НЕ зажигают.
-  bool get detourOnly => !_detourShowAll && !_detourHide;
+  /// Detour-фильтр включён — зажигает точку на табе/кнопке + чип-сводку.
+  /// Дефолт (выкл = показать всё) точку НЕ зажигает.
+  bool get detourActive => _detourEnabled;
+
+  /// «Только detour» (`!` off при enabled) — для иконки чипа: только-detour
+  /// (⚙) vs скрыть-detour (⊘).
+  bool get detourOnly => _detourEnabled && !_detourHide;
 
   // ─── Visibility (глобальный) ────────────────────────────────────────────
   bool _showNonMatching = true;
@@ -217,13 +220,13 @@ class NodeFilterViewModel extends ChangeNotifier {
   /// Non-matching скрыты visibility-тоглом (для чипа-сводки + точки Settings).
   bool get nonMatchingHidden => !_showNonMatching;
 
-  /// Settings-таб активен (ping ИЛИ «только detour» ИЛИ non-matching скрыты).
-  /// Дефолтное скрытие detour точку НЕ зажигает (это нормальный режим).
-  bool get settingsActive => pingActive || detourOnly || nonMatchingHidden;
+  /// Settings-таб активен (ping ИЛИ detour-фильтр вкл ИЛИ non-matching скрыты).
+  /// Дефолт (detour-фильтр выкл = показать всё) точку НЕ зажигает.
+  bool get settingsActive => pingActive || detourActive || nonMatchingHidden;
 
-  /// Любой применённый фильтр (match ИЛИ «только detour» ИЛИ visibility) —
-  /// точка на кнопке `Icons.tune` в закрытом режиме.
-  bool get hasActiveFilters => isActive || detourOnly || nonMatchingHidden;
+  /// Любой применённый фильтр (match ИЛИ detour ИЛИ visibility) — точка на
+  /// кнопке `Icons.tune` в закрытом режиме.
+  bool get hasActiveFilters => isActive || detourActive || nonMatchingHidden;
 
   // ─── Per-channel memory (§083) ─────────────────────────────────────────
   final Map<String, ChannelFilters> _byChannel = {};

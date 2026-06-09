@@ -18,9 +18,10 @@ void main() {
   group('defaults', () {
     test('чистое состояние', () {
       expect(vm.showNonMatching, true);
-      // §096 — detour: дефолт «скрыть detour» (нормальный режим).
-      expect(vm.detourShowAll, false);
-      expect(vm.detourHide, true);
+      // §096 — detour: старт = фильтр выкл → показать всё (точку не зажигает).
+      expect(vm.detourEnabled, false);
+      expect(vm.detourHide, true); // `!` дефолт on, но фильтр выкл → неважен
+      expect(vm.detourActive, false);
       expect(vm.detourOnly, false);
       expect(vm.panelExpanded, false);
       expect(vm.regexInvert, false);
@@ -45,11 +46,11 @@ void main() {
       expect(vm.panelExpanded, true);
       expect(notifications, 1);
     });
-    test('toggleDetourHide / setShowNonMatching', () {
-      vm.toggleDetourHide(); // hide → только detour
+    test('setDetourEnabled / setShowNonMatching', () {
+      vm.setDetourEnabled(true);
       vm.setShowNonMatching(false);
-      expect(vm.detourHide, false);
-      expect(vm.detourOnly, true);
+      expect(vm.detourEnabled, true);
+      expect(vm.detourActive, true);
       expect(vm.showNonMatching, false);
       expect(vm.nonMatchingHidden, true);
       expect(notifications, 2);
@@ -80,42 +81,38 @@ void main() {
     });
   });
 
-  group('detour (§096 — чекбокс + !)', () {
-    test('дефолт — скрыть detour (только non-detour)', () {
-      expect(vm.detourShowAll, false);
-      expect(vm.detourHide, true);
+  group('detour (§096 — чекбокс-enable + !)', () {
+    test('старт — фильтр выкл → показать всё', () {
+      expect(vm.detourEnabled, false);
+      expect(vm.detourActive, false);
       expect(vm.detourOnly, false);
-      expect(vm.detourPoolPasses(false), true, reason: 'non-detour виден');
-      expect(vm.detourPoolPasses(true), false, reason: 'detour скрыт');
-      // дефолтное скрытие — нормальный режим, точку не зажигает
+      expect(vm.detourPoolPasses(true), true, reason: 'detour показан');
+      expect(vm.detourPoolPasses(false), true, reason: 'non-detour показан');
       expect(vm.settingsActive, false);
       expect(vm.hasActiveFilters, false);
     });
-    test('! off → только detour (особый режим)', () {
-      vm.toggleDetourHide();
-      expect(vm.detourHide, false);
-      expect(vm.detourOnly, true);
-      expect(vm.detourPoolPasses(true), true, reason: 'detour виден');
-      expect(vm.detourPoolPasses(false), false, reason: 'non-detour отсеян');
+    test('checkbox on (! on, дефолт) → скрыть detour', () {
+      vm.setDetourEnabled(true);
+      expect(vm.detourActive, true);
+      expect(vm.detourOnly, false);
+      expect(vm.detourPoolPasses(true), false, reason: 'detour скрыт');
+      expect(vm.detourPoolPasses(false), true, reason: 'non-detour виден');
       expect(vm.settingsActive, true);
       expect(vm.hasActiveFilters, true);
     });
-    test('checkbox showAll → всё проходит, перекрывает !', () {
-      vm.setDetourShowAll(true);
+    test('checkbox on + ! off → только detour', () {
+      vm.setDetourEnabled(true);
+      vm.toggleDetourHide();
+      expect(vm.detourOnly, true);
+      expect(vm.detourPoolPasses(true), true, reason: 'detour виден');
+      expect(vm.detourPoolPasses(false), false, reason: 'non-detour отсеян');
+    });
+    test('checkbox off → ! неважен, всё проходит', () {
+      vm.toggleDetourHide(); // hide=false, но фильтр выкл
+      expect(vm.detourEnabled, false);
       expect(vm.detourPoolPasses(true), true);
       expect(vm.detourPoolPasses(false), true);
-      expect(vm.detourOnly, false, reason: 'showAll — не особый режим');
-      // даже с ! off (only) showAll перекрывает:
-      vm.toggleDetourHide();
-      expect(vm.detourHide, false);
-      expect(vm.detourPoolPasses(false), true, reason: 'showAll перекрывает !');
-      expect(vm.detourOnly, false);
-    });
-    test('toggle ! обратно → снова скрыть detour', () {
-      vm.toggleDetourHide();
-      vm.toggleDetourHide();
-      expect(vm.detourHide, true);
-      expect(vm.detourOnly, false);
+      expect(vm.detourActive, false);
     });
   });
 
@@ -244,11 +241,11 @@ void main() {
 
     test('detour/show-non-matching глобальны (не per-channel)', () {
       vm.syncChannel('A');
-      vm.toggleDetourHide(); // → только detour
+      vm.setDetourEnabled(true); // → скрыть detour
       vm.syncChannel('B');
       // глобальный флаг не сбрасывается при смене канала
-      expect(vm.detourHide, false);
-      expect(vm.detourOnly, true);
+      expect(vm.detourEnabled, true);
+      expect(vm.detourActive, true);
     });
 
     test('§096 protocol/subscription invert — per-channel', () {
