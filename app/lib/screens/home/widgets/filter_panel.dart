@@ -245,10 +245,11 @@ class _FilterPanelState extends State<FilterPanel>
                   ),
                   const SizedBox(width: 2),
                   NegateToggle(
-                    // Красный только когда фильтр вкл И режим hide; при выкл-
-                    // фильтре [!] серый (неважен), tap — no-op.
-                    active: f.detourEnabled && f.detourHide,
-                    onToggle: f.detourEnabled ? f.toggleDetourHide : () {},
+                    // §096 — [!] независим от чекбокса: отражает _detourHide
+                    // (красный = hide, дефолт ON) и всегда переключаем, даже
+                    // при выкл-фильтре (две ортогональные оси, как в спеке).
+                    active: f.detourHide,
+                    onToggle: f.toggleDetourHide,
                     tooltip: 'Скрыть detour (вкл) / только detour (выкл)',
                   ),
                   const SizedBox(width: 4),
