@@ -101,15 +101,22 @@ class NodeFilterViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Tap по emoji-chip'у — append OR-pattern (`|emoji`) к regex field.
+  /// Tap по emoji-chip'у — **toggle** в OR-паттерне regex: нет → добавить,
+  /// есть → убрать. Подсветка выбранных — через [selectedEmojis].
   void onEmojiChipTap(String emoji) {
-    final current = regexController.text;
-    final next = current.isEmpty ? emoji : '$current|$emoji';
+    final parts =
+        regexController.text.split('|').where((p) => p.isNotEmpty).toList();
+    if (!parts.remove(emoji)) parts.add(emoji);
+    final next = parts.join('|');
     regexController.text = next;
-    regexController.selection =
-        TextSelection.collapsed(offset: regexController.text.length);
+    regexController.selection = TextSelection.collapsed(offset: next.length);
+    notifyListeners(); // мгновенная подсветка чипа (recompile — debounced ниже)
     onRegexChanged(next);
   }
+
+  /// Эмодзи, присутствующие в regex-паттерне (OR-термы) — для подсветки чипов.
+  Set<String> get selectedEmojis =>
+      regexController.text.split('|').where((p) => p.isNotEmpty).toSet();
 
   // ─── Protocols / subscriptions (multi-select chips) ─────────────────────
   final Set<String> enabledProtocols = <String>{};

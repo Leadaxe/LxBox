@@ -162,10 +162,30 @@ class _FilterPanelState extends State<FilterPanel>
 
   Widget _tabContent(int index) {
     switch (index) {
-      case 0: // Regex → emoji-чипы (вставляют в regex-поле)
-        return widget.emojis.isEmpty
-            ? _hint('Нет эмодзи в именах нод')
-            : EmojiChipsRow(emojis: widget.emojis, onTap: f.onEmojiChipTap);
+      case 0: // Regex → поле regex (ТОЛЬКО тут) + эмодзи-чипы под ним
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            RegexFilterField(
+              controller: f.regexController,
+              onChanged: f.onRegexChanged,
+              valid: f.regexValid,
+              enabled: f.regexEnabled,
+              onEnabledChanged: f.setRegexEnabled,
+              invert: f.regexInvert,
+              onInvertChanged: f.setRegexInvert,
+              onClear: f.clearRegex,
+            ),
+            if (widget.emojis.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              EmojiChipsRow(
+                emojis: widget.emojis,
+                onTap: f.onEmojiChipTap,
+                selected: f.selectedEmojis,
+              ),
+            ],
+          ],
+        );
       case 1: // Protocol
         return widget.availableProtocols.isEmpty
             ? _hint('Нет протоколов')
@@ -223,19 +243,21 @@ class _FilterPanelState extends State<FilterPanel>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // §095 — строка поиска + ✕ закрытия (на месте кнопки открытия).
+          // §095 — табы СВЕРХУ + ✕ закрытия справа.
           Row(
             children: [
               Expanded(
-                child: RegexFilterField(
-                  controller: f.regexController,
-                  onChanged: f.onRegexChanged,
-                  valid: f.regexValid,
-                  enabled: f.regexEnabled,
-                  onEnabledChanged: f.setRegexEnabled,
-                  invert: f.regexInvert,
-                  onInvertChanged: f.setRegexInvert,
-                  onClear: f.clearRegex,
+                child: TabBar(
+                  controller: _tab,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 14),
+                  tabs: [
+                    _dotTab('Regex', f.regexActive),
+                    _dotTab('Protocol', f.protocolActive),
+                    _dotTab('Subscribes', f.subscriptionActive),
+                    _dotTab('Settings', f.settingsActive),
+                  ],
                 ),
               ),
               IconButton(
@@ -246,8 +268,7 @@ class _FilterPanelState extends State<FilterPanel>
               ),
             ],
           ),
-          // Сводка активных фильтров (tap=таб, ✕=снять) — горизонтальный
-          // скролл в один ряд (лейблы обрезаны до 15 симв.).
+          // Сводка активных фильтров (tap=таб, ✕=снять) — горизонтальный скролл.
           if (summary.isNotEmpty) ...[
             const SizedBox(height: 6),
             SingleChildScrollView(
@@ -262,19 +283,6 @@ class _FilterPanelState extends State<FilterPanel>
               ),
             ),
           ],
-          const SizedBox(height: 2),
-          TabBar(
-            controller: _tab,
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            labelPadding: const EdgeInsets.symmetric(horizontal: 14),
-            tabs: [
-              _dotTab('Regex', f.regexActive),
-              _dotTab('Protocol', f.protocolActive),
-              _dotTab('Subscribes', f.subscriptionActive),
-              _dotTab('Settings', f.settingsActive),
-            ],
-          ),
           const SizedBox(height: 6),
           // Рендерим только активный таб → авто-высота (не TabBarView).
           AnimatedBuilder(

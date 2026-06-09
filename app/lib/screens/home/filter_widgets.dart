@@ -143,23 +143,26 @@ class RegexFilterField extends StatelessWidget {
   }
 }
 
-/// Horizontal scroll row с emoji chips. Tap chip → callback вставляет emoji
-/// в regex field (append).
+/// Horizontal scroll row с emoji chips. Tap chip → toggle emoji в regex
+/// OR-паттерне; выбранные (присутствующие в паттерне) — подсвечены
+/// ([selected]), повторный tap снимает.
 class EmojiChipsRow extends StatelessWidget {
   const EmojiChipsRow({
     super.key,
     required this.emojis,
     required this.onTap,
+    this.selected = const <String>{},
   });
 
   final List<String> emojis;
   final ValueChanged<String> onTap;
+  final Set<String> selected;
 
   @override
   Widget build(BuildContext context) {
     if (emojis.isEmpty) return const SizedBox.shrink();
     return SizedBox(
-      height: 32,
+      height: 34,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.zero,
@@ -167,12 +170,14 @@ class EmojiChipsRow extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(width: 4),
         itemBuilder: (_, i) {
           final e = emojis[i];
-          return ActionChip(
+          return FilterChip(
             label: Text(e, style: const TextStyle(fontSize: 14)),
+            selected: selected.contains(e),
+            showCheckmark: false,
+            onSelected: (_) => onTap(e),
             padding: const EdgeInsets.symmetric(horizontal: 4),
             visualDensity: VisualDensity.compact,
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            onPressed: () => onTap(e),
           );
         },
       ),
