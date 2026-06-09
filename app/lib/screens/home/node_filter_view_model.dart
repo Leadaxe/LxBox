@@ -133,8 +133,15 @@ class NodeFilterViewModel extends ChangeNotifier {
   }
 
   // ─── Ping / Test (debounced 300ms) ─────────────────────────────────────
-  final TextEditingController pingController = TextEditingController();
-  int? _maxPingMs;
+  /// §095 — поле ping предзаполнено реальным «200» (не placeholder), но чекбокс
+  /// выключен: значение видно как настоящее, а не серый hint, при этом фильтр
+  /// не активен пока юзер его не включит. Дефолт нормализуется обратно в «пусто»
+  /// при capture, чтобы не плодить orphan-записи per-channel (см. [_capture]).
+  static const defaultPingText = '200';
+
+  final TextEditingController pingController =
+      TextEditingController(text: defaultPingText);
+  int? _maxPingMs = int.tryParse(defaultPingText);
   bool _pingEnabled = false;
   Timer? _pingTimer;
 
@@ -192,13 +199,18 @@ class NodeFilterViewModel extends ChangeNotifier {
   final Map<String, ChannelFilters> _byChannel = {};
   String? _activeChannel;
 
+  /// Дефолтное «200» при выключенном чекбоксе = «ping-фильтр не настроен».
+  bool get _pingIsDefault =>
+      !_pingEnabled && pingController.text == defaultPingText;
+
   ChannelFilters _capture() => ChannelFilters(
         regexPattern: regexController.text,
         regexEnabled: _regexEnabled,
         regexInvert: _regexInvert,
         protocols: Set.of(enabledProtocols),
         subscriptions: Set.of(enabledSubscriptions),
-        pingText: pingController.text,
+        // дефолт «200» (disabled) → '' чтобы канал считался пустым (no orphan).
+        pingText: _pingIsDefault ? '' : pingController.text,
         pingEnabled: _pingEnabled,
       );
 
@@ -226,8 +238,10 @@ class NodeFilterViewModel extends ChangeNotifier {
     enabledSubscriptions
       ..clear()
       ..addAll(f.subscriptions);
-    pingController.text = f.pingText;
-    final n = int.tryParse(f.pingText);
+    // пустой снимок → дефолтное «200» (disabled), иначе сохранённое значение.
+    final restoredPing = f.pingText.isEmpty ? defaultPingText : f.pingText;
+    pingController.text = restoredPing;
+    final n = int.tryParse(restoredPing);
     _maxPingMs = (n != null && n > 0) ? n : null;
     _pingEnabled = f.pingEnabled;
   }

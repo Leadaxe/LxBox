@@ -27,6 +27,8 @@ void main() {
       expect(vm.enabledProtocols, isEmpty);
       expect(vm.enabledSubscriptions, isEmpty);
       expect(vm.pingEnabled, false);
+      // §095 — поле предзаполнено реальным «200», но disabled → не активно.
+      expect(vm.pingController.text, '200');
       expect(vm.activeMaxPingMs, isNull);
       expect(vm.isActive, false);
     });
@@ -108,6 +110,13 @@ void main() {
   });
 
   group('ping', () {
+    test('§095 дефолт 200 disabled → не активен; чекбокс включает на 200', () {
+      expect(vm.pingController.text, '200');
+      expect(vm.pingEnabled, false);
+      expect(vm.activeMaxPingMs, isNull, reason: 'disabled by default');
+      vm.setPingEnabled(true);
+      expect(vm.activeMaxPingMs, 200, reason: 'значение уже было 200');
+    });
     test('onPingChanged parse + enable (debounced)', () async {
       vm.onPingChanged('200');
       await Future.delayed(const Duration(milliseconds: 350));
@@ -162,6 +171,16 @@ void main() {
       final before = notifications;
       vm.syncChannel('A'); // no-op
       expect(notifications, before);
+    });
+
+    test('§095 дефолтный ping (200, disabled) переживает смену канала', () {
+      vm.syncChannel('A');
+      expect(vm.pingController.text, '200');
+      vm.syncChannel('B'); // capture A нормализует дефолт → '' (no orphan)
+      expect(vm.pingController.text, '200');
+      vm.syncChannel('A'); // restore A → пусто → дефолтное «200»
+      expect(vm.pingController.text, '200');
+      expect(vm.pingEnabled, false);
     });
 
     test('show-detour/show-non-matching глобальны (не per-channel)', () {
