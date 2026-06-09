@@ -255,11 +255,12 @@ class _FilterPanelState extends State<FilterPanel>
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      !f.detourEnabled
-                          ? 'Show all servers'
-                          : (f.detourHide
-                              ? 'Hide detour servers'
-                              : 'Show only detour servers'),
+                      // §096 — лейбл отражает направление (`!`), НЕ чекбокс:
+                      // снятие галки надпись не меняет (вкл/выкл видно по
+                      // чекбоксу + чипу/точке).
+                      f.detourHide
+                          ? 'Hide detour servers'
+                          : 'Show only detour servers',
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),

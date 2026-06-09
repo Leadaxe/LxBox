@@ -134,6 +134,8 @@ fork'а), типизация только для UI. Рекомендация: �
   JSON-таб (полный endpoint редактируется как есть). После Phase 1 (parse/emit
   сохраняют поля) AWG2 уже редактируется через JSON-таб. `add_server_wizard`
   Paste-URI/JSON — работает heuristic'ом. **Нужен только** парс/эмит (Phase 1).
+  Detour-ряд: чекбокс-enable + `!` (независим, ON по умолчанию) + лейбл
+  по `!` (Hide/Only) — снятие галки лейбл НЕ меняет (вкл/выкл = чекбокс+чип).
 - **2b (follow-up):** выделенная сворачиваемая секция «AmneziaWG2» в
   `node_settings` Settings-табе с полями jc/jmin/jmax, s1-s4, h1-h4, i1-i5 +
   bidirectional sync с JSON-табом. Делать по фидбеку.
