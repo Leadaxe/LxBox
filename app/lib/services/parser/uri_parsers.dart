@@ -55,6 +55,7 @@ NodeSpec? parseUri(String uri) {
         return parseSocks(t);
       case 'wg':
       case 'wireguard':
+      case 'awg': // §097 — AmneziaWG2 алиас (та же endpoint-логика, что WG)
         return parseWireguardUri(t);
       default:
         return null;

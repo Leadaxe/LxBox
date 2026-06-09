@@ -203,6 +203,31 @@ fork), `BUILD.md`/`RELEASE_PROCESS.md` (если Phase 0 = локальный li
 Для интеграции в CI/release — опубликовать fork-AAR (jitpack/GH Packages) или
 git-lfs/CI-fetch (отдельное решение).
 
+## 7c. Phase 1 — ВЫПОЛНЕНО ✅ (2026-06-09, по образцу singbox-launcher SPEC 073)
+
+Сквозной проход AWG-полей в Dart-модели (pure-Dart, мержится независимо от
+core-swap; «спит» на стоковом ядре, активна на lx).
+
+- **Модель** (`node_spec.dart`): класс `Awg{fields: Map<String,Object>}` —
+  числовые (`numKeys`: jc/jmin/jmax/s1–s4/h1–h4) хранятся как `int`, `i1`–`i5`
+  (`strKeys`) как `String` (регистр сохранён). `WireguardSpec.awg` (null = WG).
+  `fromQuery`/`fromJson`/`writeInto`/`writeQuery`.
+- **Parse:** URI (`wireguard_parser` → `Awg.fromQuery`), JSON
+  (`json_parsers` wireguard-case → `Awg.fromJson`), INI (`ini_parser`: AWG-ключи
+  из `[Interface]` → query → `Awg.fromQuery`; rebuild для `rawIni` теперь
+  копирует `awg`). Алиас **`awg://`** (`uri_parsers` dispatcher → WG-путь).
+- **Emit:** `emitWireguard` → `awg.writeInto(map)` (корень endpoint, числа →
+  JSON number); `toUriWireguard` → `awg.writeQuery(q)` (round-trip).
+- **Forward-compat:** битое число в URI (`jc=abc`) → поле пропущено, парс не
+  падает. Обычный WG без AWG → `awg == null` (backward-compatible).
+- **UI:** через Raw-JSON в node_settings уже работает (emit/parse несут AWG).
+  Выделенная форма (Фаза 5 в 073) — опц. follow-up.
+- **Тесты:** `test/parser/awg_test.dart` — 10 кейсов (parse URI/JSON/INI, awg://,
+  emit type-fidelity `jc:10` number, round-trip + `jc=0`, регистр `i*`). 853 green.
+
+**Конец-в-конец:** с локальным lx-ядром (Phase 0) AWG-узел теперь
+парсится → эмитится → ядро понимает. Для CI/release остаётся опубликовать fork-AAR.
+
 ## 8. Phasing-вывод
 
 Минимальный путь к рабочему AWG2: **Phase 0 (0a если артефакт есть) → Phase 1 →

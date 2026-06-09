@@ -393,6 +393,7 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
           )
         ],
         mtu: (entry['mtu'] as num?)?.toInt(),
+        awg: Awg.fromJson(entry), // §097 — AmneziaWG2 obfuscation params
       );
     default:
       return null;

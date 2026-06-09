@@ -432,6 +432,66 @@ final class SocksSpec extends NodeSpec {
 // WireGuard — emit'ится в Endpoint, не в Outbound.
 // ════════════════════════════════════════════════════════════════════════════
 
+/// §097 Phase 1 — AmneziaWG 2.0 obfuscation params (по образцу singbox-launcher
+/// SPEC 073). **Endpoint-level** (корень endpoint, не peer), **config-only** (не
+/// негоциируются — mismatch client/server рвёт соединение). Числовые
+/// (`jc`/`jmin`/`jmax`/`s1`–`s4`/`h1`–`h4`) — uint32 → JSON **number**; `i1`–`i5`
+/// — CPS-строки (тег-формат `<b 0xHEX>`/`<r N>`/…, **регистр сохраняется**).
+///
+/// Хранит ровно заданные поля (`fields`: key→`int` для числовых, key→`String`
+/// для `i*`). Пусто → `WireguardSpec.awg == null` (обычный WG, backward-compat).
+class Awg {
+  const Awg(this.fields);
+
+  /// key → `int` (числовые jc/jmin/jmax/s1–s4/h1–h4) | `String` (i1–i5).
+  final Map<String, Object> fields;
+
+  static const numKeys = <String>{
+    'jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4', 'h1', 'h2', 'h3', 'h4',
+  };
+  static const strKeys = <String>{'i1', 'i2', 'i3', 'i4', 'i5'};
+
+  bool get isEmpty => fields.isEmpty;
+
+  /// Из URI query (строки). Числа → `int.tryParse` (битое → пропуск поля, не
+  /// валим парс — forward-compat, как mtu/keepalive). `i*` пустые пропускаем.
+  static Awg? fromQuery(Map<String, String> q) {
+    final f = <String, Object>{};
+    for (final k in numKeys) {
+      final v = q[k];
+      if (v == null) continue;
+      final n = int.tryParse(v.trim());
+      if (n != null) f[k] = n;
+    }
+    for (final k in strKeys) {
+      final v = q[k];
+      if (v != null && v.isNotEmpty) f[k] = v; // регистр НЕ трогаем
+    }
+    return f.isEmpty ? null : Awg(f);
+  }
+
+  /// Из endpoint-JSON (корень). Числа: `num`→`int`; `i*`: непустые `String`.
+  static Awg? fromJson(Map<String, dynamic> m) {
+    final f = <String, Object>{};
+    for (final k in numKeys) {
+      final v = m[k];
+      if (v is num) f[k] = v.toInt();
+    }
+    for (final k in strKeys) {
+      final v = m[k];
+      if (v is String && v.isNotEmpty) f[k] = v;
+    }
+    return f.isEmpty ? null : Awg(f);
+  }
+
+  /// В endpoint-map (корень). `int`→JSON number, `String`→JSON string.
+  void writeInto(Map<String, dynamic> m) => m.addAll(fields);
+
+  /// В URI query (числа → строка, `i*` как есть; encode делает `buildQuery`).
+  void writeQuery(Map<String, String> q) =>
+      fields.forEach((k, v) => q[k] = v.toString());
+}
+
 class WireguardPeer {
   final String publicKey;
   final String preSharedKey;
@@ -470,6 +530,9 @@ final class WireguardSpec extends NodeSpec {
   final int? mtu;
   final String? rawIni; // если парсили из INI, сохраняем оригинал
 
+  /// §097 Phase 1 — AmneziaWG2 obfuscation params (null = обычный WG).
+  final Awg? awg;
+
   WireguardSpec({
     required super.id,
     required super.tag,
@@ -482,6 +545,7 @@ final class WireguardSpec extends NodeSpec {
     required this.peers,
     this.mtu,
     this.rawIni,
+    this.awg,
     super.chained,
     super.warnings,
   });

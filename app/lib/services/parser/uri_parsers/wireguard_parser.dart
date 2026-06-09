@@ -65,5 +65,6 @@ WireguardSpec? parseWireguardUri(String uri) {
     localAddresses: localAddresses,
     peers: [peer],
     mtu: mtu,
+    awg: Awg.fromQuery(q), // §097 — AmneziaWG2 obfuscation params (null = WG)
   );
 }

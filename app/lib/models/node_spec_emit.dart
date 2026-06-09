@@ -481,6 +481,8 @@ Endpoint emitWireguard(WireguardSpec s, TemplateVars vars) {
     'private_key': s.privateKey,
     'peers': peers,
   };
+  // §097 — AmneziaWG2 obfuscation-поля в корень endpoint (числа → JSON number).
+  s.awg?.writeInto(map);
   return Endpoint(map);
 }
 
@@ -500,6 +502,8 @@ String toUriWireguard(WireguardSpec s) {
   if (peer?.persistentKeepalive != null) {
     q['keepalive'] = peer!.persistentKeepalive.toString();
   }
+  // §097 — AmneziaWG2 query-params (round-trip); buildQuery эскейпит i*.
+  s.awg?.writeQuery(q);
   final userinfo = encodeParam(s.privateKey);
   final host = _wrapIpv6(s.server);
   final qs = buildQuery(q);
