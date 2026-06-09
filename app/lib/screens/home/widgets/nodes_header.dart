@@ -120,11 +120,11 @@ class NodesHeader extends StatelessWidget {
                   Icon(
                     Icons.tune,
                     size: 20,
-                    color: filter.isActive
+                    color: filter.hasActiveFilters
                         ? Theme.of(context).colorScheme.primary
                         : null,
                   ),
-                  if (filter.isActive)
+                  if (filter.hasActiveFilters)
                     Positioned(
                       right: -2,
                       top: -2,
@@ -132,8 +132,8 @@ class NodesHeader extends StatelessWidget {
                         child: Container(
                           width: 8,
                           height: 8,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary,
+                          decoration: const BoxDecoration(
+                            color: Colors.amber, // видимый маркер «фильтр активен»
                             shape: BoxShape.circle,
                           ),
                         ),

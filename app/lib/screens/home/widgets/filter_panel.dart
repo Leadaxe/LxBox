@@ -51,14 +51,17 @@ class _FilterPanelState extends State<FilterPanel>
     return id;
   }
 
+  /// Макс. ширина чипа: обрезаем лейбл до 15 символов + «…» (имена подписок
+  /// бывают длинные).
+  static String _truncate(String s, [int max = 15]) =>
+      s.length > max ? '${s.substring(0, max)}…' : s;
+
   /// Сводка активных фильтров: tap по чипу → его таб, ✕ → снять.
   List<Widget> _summaryChips() {
     final chips = <Widget>[];
     if (f.regexActive) {
-      final p = f.regexController.text;
-      final label = p.length > 14 ? '${p.substring(0, 14)}…' : p;
       chips.add(InputChip(
-        label: Text('/$label/'),
+        label: Text('/${_truncate(f.regexController.text)}/'),
         onPressed: () => _tab.animateTo(0),
         onDeleted: f.clearRegex,
       ));
@@ -72,7 +75,7 @@ class _FilterPanelState extends State<FilterPanel>
     }
     for (final id in f.enabledSubscriptions) {
       chips.add(InputChip(
-        label: Text(_subName(id)),
+        label: Text(_truncate(_subName(id))),
         onPressed: () => _tab.animateTo(2),
         onDeleted: () => f.toggleSubscription(id),
       ));
@@ -85,7 +88,43 @@ class _FilterPanelState extends State<FilterPanel>
         onDeleted: f.clearPing,
       ));
     }
+    // §095 — visibility-тоглы как чипы (tap → Settings, ✕ → вернуть показ).
+    if (f.detourHidden) {
+      chips.add(InputChip(
+        tooltip: 'Detour servers hidden',
+        label: _gearOffIcon(),
+        onPressed: () => _tab.animateTo(3),
+        onDeleted: () => f.setShowDetour(true),
+      ));
+    }
+    if (f.nonMatchingHidden) {
+      chips.add(InputChip(
+        tooltip: 'Non-matching hidden',
+        label: const Icon(Icons.visibility_off, size: 18),
+        onPressed: () => _tab.animateTo(3),
+        onDeleted: () => f.setShowNonMatching(true),
+      ));
+    }
     return chips;
+  }
+
+  /// Перечёркнутая шестерёнка = «detour скрыт» (⚙ = detour-маркер приложения).
+  Widget _gearOffIcon() {
+    final c = Theme.of(context).colorScheme.onSurfaceVariant;
+    return SizedBox(
+      width: 20,
+      height: 20,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(Icons.settings, size: 17, color: c),
+          Transform.rotate(
+            angle: -0.785, // -45°
+            child: Container(width: 22, height: 2, color: c),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _dotTab(String label, bool active) {
@@ -100,8 +139,8 @@ class _FilterPanelState extends State<FilterPanel>
             Container(
               width: 7,
               height: 7,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
+              decoration: const BoxDecoration(
+                color: Colors.amber,
                 shape: BoxShape.circle,
               ),
             ),
@@ -207,10 +246,21 @@ class _FilterPanelState extends State<FilterPanel>
               ),
             ],
           ),
-          // Сводка активных фильтров (tap=таб, ✕=снять).
+          // Сводка активных фильтров (tap=таб, ✕=снять) — горизонтальный
+          // скролл в один ряд (лейблы обрезаны до 15 симв.).
           if (summary.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Wrap(spacing: 6, runSpacing: 4, children: summary),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var i = 0; i < summary.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 6),
+                    summary[i],
+                  ],
+                ],
+              ),
+            ),
           ],
           const SizedBox(height: 2),
           TabBar(
@@ -222,7 +272,7 @@ class _FilterPanelState extends State<FilterPanel>
               _dotTab('Regex', f.regexActive),
               _dotTab('Protocol', f.protocolActive),
               _dotTab('Subscribes', f.subscriptionActive),
-              _dotTab('Settings', f.pingActive),
+              _dotTab('Settings', f.settingsActive),
             ],
           ),
           const SizedBox(height: 6),

@@ -166,9 +166,20 @@ class NodeFilterViewModel extends ChangeNotifier {
   bool get subscriptionActive => enabledSubscriptions.isNotEmpty;
   bool get pingActive => _pingEnabled && _maxPingMs != null;
 
-  /// Любой активный match-фильтр (точка на кнопке `Icons.tune` + summary).
+  /// Любой активный match-фильтр.
   bool get isActive =>
       regexActive || protocolActive || subscriptionActive || pingActive;
+
+  /// «Скрыто» visibility-тоглами (для чипов-сводки + точки Settings-таба).
+  bool get detourHidden => !_showDetour;
+  bool get nonMatchingHidden => !_showNonMatching;
+
+  /// Settings-таб активен (ping ИЛИ что-то скрыто visibility-тоглами).
+  bool get settingsActive => pingActive || detourHidden || nonMatchingHidden;
+
+  /// Любой применённый фильтр (match ИЛИ visibility) — точка на кнопке
+  /// `Icons.tune` в закрытом режиме.
+  bool get hasActiveFilters => isActive || detourHidden || nonMatchingHidden;
 
   // ─── Per-channel memory (§083) ─────────────────────────────────────────
   final Map<String, ChannelFilters> _byChannel = {};
