@@ -216,14 +216,9 @@ class NodeListPresenter {
         subOptions.add((e.id, e.displayName));
       }
     }
-    // §078 — 'Custom' chip отображается только если в pool есть **payload**
-    // тэги с empty subscriptionsOf (= UserServer / imported JSON outbound).
-    // Control outbounds (direct/auto/etc.) тоже дают empty Set, но они
-    // в свою категорию — exclude'им чтобы chip не появлялся когда у
-    // юзера нет UserServer'ов.
-    final hasCustom = pool.any((t) =>
-        !isControlTag(t, state) && subscriptionsOfTag_(t).isEmpty);
-    if (hasCustom) subOptions.add(('custom', 'Custom'));
+    // §095 — синтетический «Custom»-чип убран (юзер): не-подписочные ноды
+    // (UserServer / без префикса / импорт) фильтруются прочими средствами,
+    // отдельный chip только путал.
 
     return NodeListData(
       cache: cache,
