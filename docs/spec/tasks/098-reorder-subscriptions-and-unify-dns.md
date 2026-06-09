@@ -33,6 +33,7 @@
 | `dns_settings_screen/widgets/dns_rule_tile.dart` | убрана inline `drag_handle`; `Card/ListTile` обёрнут в `IntrinsicHeight > Row > [ReorderGrabStrip, Expanded(Card)]`; leading = только Switch |
 | `subscriptions_screen/widgets/subscription_entry_tile.dart` | +`dragIndex`; `ListTile` обёрнут в `IntrinsicHeight > Row > [ReorderGrabStrip, Expanded(Column[tile, Divider])]` (divider раньше был `separatorBuilder`) |
 | `subscriptions_screen.dart` | `_buildList`: `ListView.separated` → `ReorderableListView.builder` (`buildDefaultDragHandles:false`), `onReorder` → `moveEntry` (с `newIndex-=1` при move вниз), `key: ValueKey(entry.id)` |
+| `home/widgets/node_list.dart` | §071 manual-сортировка: в режиме `NodeSortMode.manual` non-pinned ряд = `IntrinsicHeight > Row [ReorderGrabStrip, Expanded(row)]` (видимая полоса как routing, immediate-drag); в остальных режимах — прежний transparent overlay + long-press (drag → switch в manual). Pinned (direct/auto) — без полосы. |
 
 ## Поведение
 

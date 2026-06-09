@@ -11,6 +11,7 @@ import '../../../services/haptic_service.dart';
 import '../../../services/subscription/auto_updater.dart';
 import '../../../widgets/node_row.dart';
 import '../../../widgets/node_view_item.dart';
+import '../../../widgets/reorder_grab_strip.dart';
 import '../node_actions.dart';
 import '../node_filter_view_model.dart';
 import '../node_list_presenter.dart';
@@ -196,6 +197,11 @@ class HomeNodeList extends StatelessWidget {
     final dividerColor =
         Theme.of(context).colorScheme.outlineVariant.withAlpha(128);
 
+    // §098 — видимый grab-strip (как в routing) показываем ТОЛЬКО в ручной
+    // сортировке. В остальных режимах drag-аффорданс — прежний transparent
+    // overlay (long-press → drag переключает в manual).
+    final isManual = state.sortMode == NodeSortMode.manual;
+
     return ReorderableListView.builder(
       padding: EdgeInsets.zero,
       buildDefaultDragHandles: false,
@@ -258,7 +264,23 @@ class HomeNodeList extends StatelessWidget {
         if (i < pinnedCount) {
           return KeyedSubtree(key: ValueKey('node-$tag'), child: row);
         }
-        // Non-pinned ряды — overlay strip 5% от ширины слева (transparent).
+        // §098 — manual-режим: видимый grab-strip слева (как routing/DNS/subs),
+        // immediate-drag (dedicated handle не конфликтует со scroll-ареной).
+        if (isManual) {
+          return KeyedSubtree(
+            key: ValueKey('node-$tag'),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ReorderGrabStrip(index: i),
+                  Expanded(child: row),
+                ],
+              ),
+            ),
+          );
+        }
+        // Non-pinned, не-manual — overlay strip 5% от ширины слева (transparent).
         // LayoutBuilder даёт actual row width → strip всегда proportional.
         return KeyedSubtree(
           key: ValueKey('node-$tag'),
