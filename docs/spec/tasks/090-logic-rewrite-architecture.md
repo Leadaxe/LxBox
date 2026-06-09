@@ -226,6 +226,17 @@ device-verify ночью = не оправдано. Кандидат на focuse
 - **D1/D2/D3** (VPN recovery, native Kotlin) / **B/C** (event-bus/routing
   унификация, архитектурные решения) — крупные/рискованные, не для unattended.
 
+### 2026-06-09 — G2 завершён (G2a + G2b/эмодзи-теги, таска 094)
+- **G2a** ✅ detour-фильтр по `isDetour` (commit `0fb2f69`).
+- **G2b/094** ✅ (commits `7a02329` node_emoji, `7725597` node_settings-tabs,
+  + auto-insert): node_settings → вкладки [Settings, JSON-editable]; убран
+  ручной ⚙-toggle + дубль register-тоглов; эмодзи-пикер (node_settings +
+  SOCKS-форма wizard); авто-вставка дефолтного эмодзи при создании UserServer
+  (🔁local/🏠WG/🚀UDP/⚡TCP); subscription_detail reword «⚙»→«detour servers».
+  ⚙ теперь чисто визуал. Все тоглы register остались в subscription_detail.
+- Реестр §090: G1 ✅ A1 ✅ A2 ✅ G2 ✅ F2 (skip). Осталось: E1 (SRS-cache,
+  нужен device-verify), D1/D2/D3 (VPN recovery), B/C (архитектура).
+
 ### 2026-06-08 — начато исполнение (G1, A2)
 - **G1 update-dismiss** — ✅ DONE (таска [092](092-update-dismiss-wire.md)).
   «Later» в update-snackbar → `dismissCurrent` (persist + clear). +2 теста.

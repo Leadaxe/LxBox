@@ -11,6 +11,7 @@ import '../services/config_dirty_check.dart';
 import '../services/error_humanize.dart';
 import '../services/parse_hints.dart';
 import '../services/relative_time.dart';
+import '../services/node_emoji.dart';
 import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
 import '../services/parser/body_decoder.dart';
@@ -128,7 +129,9 @@ class SubscriptionController extends ChangeNotifier {
     _lastError = '';
     notifyListeners();
     try {
-      _entries.add(SubscriptionEntry(list: us, nodeCount: us.nodes.length));
+      final tagged = _autoEmoji(us);
+      _entries
+          .add(SubscriptionEntry(list: tagged, nodeCount: tagged.nodes.length));
       await _persist();
       AppLog.I.info(
           'addUserServer: ${us.id} ${us.name} (${us.nodes.length} node)');
@@ -137,6 +140,22 @@ class SubscriptionController extends ChangeNotifier {
     } finally {
       _busy = false;
       notifyListeners();
+    }
+  }
+
+  /// §090 G2b — авто-эмодзи при создании UserServer: если в теге первой ноды
+  /// нет эмодзи, кладём дефолтный (по протоколу/серверу) в name-часть rawBody
+  /// и ре-деривим nodes из него (UserServer персистит только rawBody). На
+  /// ошибку парса / отсутствие изменений — возвращаем исходный.
+  UserServer _autoEmoji(UserServer us) {
+    if (us.nodes.isEmpty || us.rawBody.isEmpty) return us;
+    final newRaw = withDefaultEmoji(us.rawBody, us.nodes.first);
+    if (newRaw == us.rawBody) return us;
+    try {
+      final newNodes = parseAll(decode(newRaw));
+      return newNodes.isEmpty ? us : us.copyWith(rawBody: newRaw, nodes: newNodes);
+    } catch (_) {
+      return us;
     }
   }
 
@@ -175,20 +194,19 @@ class SubscriptionController extends ChangeNotifier {
           _lastError = 'Invalid WireGuard config';
           return;
         }
-        _entries.add(SubscriptionEntry(
-          list: UserServer(
-            id: newUuidV4(),
-            name: '',
-            enabled: true,
-            tagPrefix: '',
-            detourPolicy: DetourPolicy.defaults,
-            origin: UserSource.paste,
-            createdAt: DateTime.now(),
-            rawBody: spec.rawUri,
-            nodes: [spec],
-          ),
-          nodeCount: 1,
+        final wgServer = _autoEmoji(UserServer(
+          id: newUuidV4(),
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          origin: UserSource.paste,
+          createdAt: DateTime.now(),
+          rawBody: spec.rawUri,
+          nodes: [spec],
         ));
+        _entries.add(SubscriptionEntry(
+            list: wgServer, nodeCount: wgServer.nodes.length));
         await _persist();
       } else if (isDirectLink(trimmed)) {
         final spec = parseUri(trimmed);
@@ -196,20 +214,19 @@ class SubscriptionController extends ChangeNotifier {
           _lastError = 'Could not parse direct link';
           return;
         }
-        _entries.add(SubscriptionEntry(
-          list: UserServer(
-            id: newUuidV4(),
-            name: '',
-            enabled: true,
-            tagPrefix: '',
-            detourPolicy: DetourPolicy.defaults,
-            origin: UserSource.paste,
-            createdAt: DateTime.now(),
-            rawBody: trimmed,
-            nodes: [spec],
-          ),
-          nodeCount: 1,
+        final dlServer = _autoEmoji(UserServer(
+          id: newUuidV4(),
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          origin: UserSource.paste,
+          createdAt: DateTime.now(),
+          rawBody: trimmed,
+          nodes: [spec],
         ));
+        _entries.add(SubscriptionEntry(
+            list: dlServer, nodeCount: dlServer.nodes.length));
         await _persist();
       } else if (_isJsonOutbound(trimmed)) {
         await _addJsonOutbounds(trimmed);
@@ -258,20 +275,19 @@ class SubscriptionController extends ChangeNotifier {
       final decoded = decode(jsonEncode(ob));
       final nodes = parseAll(decoded);
       if (nodes.isEmpty) continue;
-      _entries.add(SubscriptionEntry(
-        list: UserServer(
-          id: newUuidV4(),
-          name: '',
-          enabled: true,
-          tagPrefix: '',
-          detourPolicy: DetourPolicy.defaults,
-          origin: UserSource.paste,
-          createdAt: DateTime.now(),
-          rawBody: jsonEncode(ob),
-          nodes: nodes,
-        ),
-        nodeCount: nodes.length,
+      final jsonServer = _autoEmoji(UserServer(
+        id: newUuidV4(),
+        name: '',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        rawBody: jsonEncode(ob),
+        nodes: nodes,
       ));
+      _entries.add(SubscriptionEntry(
+          list: jsonServer, nodeCount: jsonServer.nodes.length));
     }
     await _persist();
   }

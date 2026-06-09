@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **In progress** |
+| Статус | **DONE** — P1 node_emoji + P2 node_settings-tabs/picker + P3 авто-вставка + пикер в wizard + reword. analyze + тесты green. |
 | Тип | feature / logic-rewrite (§090 G2b, продолжение §091/G2a) |
 | Решения | согласованы с юзером (эта сессия) |
 
