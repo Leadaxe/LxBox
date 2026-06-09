@@ -37,15 +37,29 @@ class FilterPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          RegexFilterField(
-            controller: filter.regexController,
-            onChanged: filter.onRegexChanged,
-            valid: filter.regexValid,
-            enabled: filter.regexEnabled,
-            onEnabledChanged: filter.setRegexEnabled,
-            invert: filter.regexInvert,
-            onInvertChanged: filter.setRegexInvert,
-            onClear: filter.clearRegex,
+          // §095 Filter mode — строка поиска + кнопка ✕ закрытия фильтра
+          // (справа, на месте бывшей кнопки открытия Icons.tune).
+          Row(
+            children: [
+              Expanded(
+                child: RegexFilterField(
+                  controller: filter.regexController,
+                  onChanged: filter.onRegexChanged,
+                  valid: filter.regexValid,
+                  enabled: filter.regexEnabled,
+                  onEnabledChanged: filter.setRegexEnabled,
+                  invert: filter.regexInvert,
+                  onInvertChanged: filter.setRegexInvert,
+                  onClear: filter.clearRegex,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Close filters',
+                visualDensity: VisualDensity.compact,
+                onPressed: filter.togglePanel,
+                icon: const Icon(Icons.close, size: 20),
+              ),
+            ],
           ),
           if (emojis.isNotEmpty) ...[
             const SizedBox(height: 6),

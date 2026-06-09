@@ -373,18 +373,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   onRebuildAndReconnect: _rebuildAndReconnect,
                   onRebuildAndStart: _rebuildAndStart,
                 ),
-                if (state.tunnelUp)
+                // §095 Filter mode — при открытой фильтр-панели прячем
+                // стат-полосу + Nodes-хедер, освобождая зону под ноды.
+                if (state.tunnelUp && !_filter.panelExpanded)
                   TrafficBar(state: state, controller: _controller),
                 if (_subController.busy && _subController.progressMessage.isNotEmpty)
                   ProgressBanner(message: _subController.progressMessage),
-                const SizedBox(height: 12),
-                NodesHeader(
-                  controller: _controller,
-                  subController: _subController,
-                  filter: _filter,
-                  onSortLongPress: () => showSortOptionsMenu(context, _controller),
-                ),
-                const SizedBox(height: 4),
+                if (!_filter.panelExpanded) ...[
+                  const SizedBox(height: 12),
+                  NodesHeader(
+                    controller: _controller,
+                    subController: _subController,
+                    filter: _filter,
+                    onSortLongPress: () =>
+                        showSortOptionsMenu(context, _controller),
+                  ),
+                  const SizedBox(height: 4),
+                ],
               ],
               HomeNodeList(
                 controller: _controller,
