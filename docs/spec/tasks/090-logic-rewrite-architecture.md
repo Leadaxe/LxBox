@@ -163,7 +163,9 @@ updater).
   1s/3s, 4xx = permanent skip», но hand-rolled раздельно с расходящимся
   success/permanent handling (return-null+atomic-file vs throw+multi-source).
   **§090:** опц. вынести только scaffold `retryHttp({backoffs, isPermanent})`;
-  тела НЕ сливать. Низкий приоритет.
+  тела НЕ сливать. **РЕШЕНИЕ (юзер 2026-06-08): ПРОПУСТИТЬ** — низкая
+  ценность × два структурно разных пути (rule_set возвращает `null`, sources
+  бросает). Не баг, не делаем.
 - Форматтеры — см. A1/A2.
 
 ## 4. Архитектура + документация (общая цель §090)
