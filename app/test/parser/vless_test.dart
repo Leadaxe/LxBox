@@ -45,14 +45,22 @@ void main() {
       expect((spec!.transport as GrpcTransport).serviceName, 'svc');
     });
 
-    test('xhttp transport triggers UnsupportedTransportWarning on emit', () {
-      final spec = parseVless('vless://u@h:443?type=xhttp&path=/x&host=h&security=tls');
-      expect(spec!.transport, isA<XhttpTransport>());
-      spec.emit(TemplateVars.empty);
-      expect(
-        spec.warnings.whereType<UnsupportedTransportWarning>(),
-        hasLength(1),
-      );
+    test('§097 — xhttp transport → нативный emit (без fallback-warning)', () {
+      final spec = parseVless(
+          'vless://u@h:443?type=xhttp&path=/x&host=h&mode=stream-one'
+          '&xPaddingBytes=100-1000&noGRPCHeader=true&security=tls');
+      final t = spec!.transport as XhttpTransport;
+      expect(t.path, '/x');
+      expect(t.host, 'h');
+      expect(t.mode, 'stream-one');
+      expect(t.xPaddingBytes, '100-1000');
+      expect(t.noGrpcHeader, true);
+      final tr = spec.emit(TemplateVars.empty).map['transport'] as Map;
+      expect(tr['type'], 'xhttp');
+      expect(tr['mode'], 'stream-one');
+      expect(tr['x_padding_bytes'], '100-1000');
+      expect(tr['no_grpc_header'], true);
+      expect(spec.warnings.whereType<UnsupportedTransportWarning>(), isEmpty);
     });
   });
 

@@ -44,11 +44,21 @@ void main() {
       expect(spec.warnings.single, isA<InsecureTlsWarning>());
     });
 
-    test('XhttpTransport emits fallback warning', () {
-      final (map, warnings) =
-          const XhttpTransport(path: '/xh', host: 'h').toSingbox(TemplateVars.empty);
-      expect(map['type'], 'httpupgrade');
-      expect(warnings.single, isA<UnsupportedTransportWarning>());
+    test('§097 — XhttpTransport emits native xhttp (no fallback)', () {
+      final (map, warnings) = const XhttpTransport(
+        path: '/xh',
+        host: 'h',
+        mode: 'packet-up',
+        xPaddingBytes: '100-1000',
+        noGrpcHeader: true,
+      ).toSingbox(TemplateVars.empty);
+      expect(map['type'], 'xhttp');
+      expect(map['path'], '/xh');
+      expect(map['host'], 'h');
+      expect(map['mode'], 'packet-up');
+      expect(map['x_padding_bytes'], '100-1000');
+      expect(map['no_grpc_header'], true);
+      expect(warnings, isEmpty);
     });
 
     test('WireguardSpec.emit returns Endpoint (not Outbound)', () {

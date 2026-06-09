@@ -142,12 +142,20 @@ fork'а), типизация только для UI. Рекомендация: �
 - **Лейбл (опц.):** `protoLabel` → `'WG'`; можно `'AWG2'` когда `awg != null`
   (требует прокинуть признак в `NodeViewItem`/`ParsedConfig`). Defer до 2b.
 
-### Phase 3 — XHTTP (родственное, разблокируется сменой ядра)
+### Phase 3 — XHTTP — ВЫПОЛНЕНО ✅ (по образцу singbox-launcher SPEC 071)
 
-`transport_spec.dart` уже имеет `XhttpTransport`, который **фоллбэчит в
-httpupgrade** с `UnsupportedTransportWarning` (ядро 1.12.x не умело xhttp). После
-Phase 0 (fork-ядро с xhttp) — заменить fallback на нативный emit `{"type":
-"xhttp", host, path, mode}`. Отдельная мелкая таска; в этой фиче — только пометка.
+`XhttpTransport` (`transport_spec.dart`) расширен полями Xray splithttp
+(`mode`/`xPaddingBytes`/`noGrpcHeader`/`headers`) и теперь эмитит **нативный**
+`type:"xhttp"` (без fallback в httpupgrade / без `UnsupportedTransportWarning`).
+- **parse:** `parseTransport` (URI, camelCase Xray + snake sing-box: `xPaddingBytes`/
+  `x_padding_bytes`, `noGRPCHeader`/`no_grpc_header`); `_transportFromSingbox`
+  (sing-box JSON); `_xrayTransportFromStream` (Xray `xhttpSettings`).
+- **emit/round-trip:** `XhttpTransport.toSingbox` → endpoint transport-map;
+  `transportToQuery` → share-URI. `httpupgrade` остаётся **отдельным** типом.
+- **Тесты:** `test/parser/xhttp_test.dart` (8) + обновлены vless/node_spec/
+  pipeline_e2e (раньше ждали fallback-warning → теперь нативный xhttp). 860 green.
+- **NB:** как AWG — на стоковом ядре (CI без `with_xhttp`) конфиг с `type=xhttp`
+  отвергается; фича «спит» до релиза fork-ядра.
 
 ## 5. Validation (Phase 1)
 

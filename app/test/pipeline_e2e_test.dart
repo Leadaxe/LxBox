@@ -112,10 +112,12 @@ tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=t
     expect(tags, isNot(contains('A')));
   });
 
-  test('XHTTP node produces UI warning from builder', () async {
+  test('§097 — XHTTP node builds NATIVE xhttp transport (no fallback warning)',
+      () async {
     final r = await parseFromSource(
       const InlineSource(
-          'vless://u@h.example:443?type=xhttp&security=tls&path=/x&sni=h.example#XH\n'),
+          'vless://u@h.example:443?type=xhttp&security=tls&path=/x&sni=h.example'
+          '&mode=stream-one&xPaddingBytes=100-1000#XH\n'),
     );
     final list = UserServer(
       id: 'xh',
@@ -128,14 +130,18 @@ tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=t
       nodes: r.nodes,
     );
     final result = await buildConfig(
-        lists: [list],
-        template: template,
-        settings: const BuildSettings(userVars: {'clash_api': '127.0.0.1:9090'}),
+      lists: [list],
+      template: template,
+      settings: const BuildSettings(userVars: {'clash_api': '127.0.0.1:9090'}),
     );
-    expect(
-      result.emitWarnings.any((w) => w.contains('xhttp')),
-      true,
-      reason: 'expected xhttp warning in emitWarnings: ${result.emitWarnings}',
-    );
+    // §097 — больше нет fallback-warning про xhttp (нативный transport).
+    expect(result.emitWarnings.any((w) => w.contains('xhttp')), false);
+    // В конфиге — нативный `transport.type=xhttp` со своими полями.
+    final outs = result.config['outbounds'] as List;
+    final vless = outs.firstWhere((o) => (o as Map)['type'] == 'vless') as Map;
+    final tr = vless['transport'] as Map;
+    expect(tr['type'], 'xhttp');
+    expect(tr['mode'], 'stream-one');
+    expect(tr['x_padding_bytes'], '100-1000');
   });
 }

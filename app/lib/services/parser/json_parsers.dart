@@ -200,6 +200,13 @@ TransportSpec? _xrayTransportFromStream(Map stream) {
       final hosts = (h['host'] as List?)?.map((e) => e.toString()).toList() ??
           const <String>[];
       return HttpTransport(path: h['path']?.toString() ?? '/', hosts: hosts);
+    case 'xhttp': // §097 — Xray xhttpSettings → нативный xhttp
+      final x = stream['xhttpSettings'] as Map? ?? const {};
+      return XhttpTransport(
+        path: x['path']?.toString() ?? '/',
+        host: x['host']?.toString() ?? '',
+        mode: x['mode']?.toString() ?? '',
+      );
     default:
       return null;
   }
@@ -443,6 +450,17 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
       return HttpUpgradeTransport(
         path: raw['path']?.toString() ?? '/',
         host: raw['host']?.toString() ?? '',
+      );
+    case 'xhttp': // §097 — нативный xhttp из sing-box JSON
+      return XhttpTransport(
+        path: raw['path']?.toString() ?? '/',
+        host: raw['host']?.toString() ?? '',
+        mode: raw['mode']?.toString() ?? '',
+        xPaddingBytes: raw['x_padding_bytes']?.toString() ?? '',
+        noGrpcHeader: raw['no_grpc_header'] == true,
+        headers: (raw['headers'] as Map?)
+                ?.map((k, v) => MapEntry(k.toString(), v.toString())) ??
+            const {},
       );
     default:
       return null;
