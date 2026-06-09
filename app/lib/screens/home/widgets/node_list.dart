@@ -252,7 +252,6 @@ class HomeNodeList extends StatelessWidget {
             onHighlight: () => controller.setHighlightedNode(tag),
             onActivate: () => unawaited(controller.switchNode(tag)),
             onPing: () => unawaited(controller.runNodeUrltest(tag)),
-            onCopy: (mode) => copyNodeJson(context, tag, state, mode),
             onCopyUri: () => copyNodeUri(context, tag, subController),
             onViewJson: () => viewOutboundJson(context, tag, state),
             onRunUrltest: isUrltestGroup

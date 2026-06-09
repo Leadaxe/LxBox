@@ -27,11 +27,15 @@ void viewOutboundJson(BuildContext context, String tag, HomeState state) {
 
   final payload = chain.length == 1 ? chain.first : chain;
   final json = const JsonEncoder.withIndent('  ').convert(payload);
+  final hasDetour = intro.detourOf(tag) != null;
   Navigator.push(context, MaterialPageRoute(
     builder: (_) => OutboundViewScreen(
       tag: tag,
       kind: intro.kindOf(tag),
       json: json,
+      hasDetour: hasDetour,
+      // §099 — copy-варианты JSON перенесены из контекстного меню сюда.
+      onCopy: (mode) => copyNodeJson(context, tag, state, mode),
     ),
   ));
 }
