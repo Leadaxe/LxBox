@@ -44,6 +44,9 @@
 
 - Отменяет §071-«exit из manual сбрасывает manualOrder» — теперь порядок sticky
   (юзер явно просил персист).
+- **Carousel:** `NodeSortMode.next` теперь включает `manual` — tap по кнопке
+  сортировки циклит все 4: default → ping → A–Z → **Custom** → default (раньше
+  обходил manual). Custom доступен и из меню (чипы), и tap'ом.
 - Персистится и сам `sortMode` (не только manual) — последний режим
   восстанавливается на старте. Pin/re-sort остаются per-session (не просили).
 

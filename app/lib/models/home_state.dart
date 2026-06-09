@@ -15,21 +15,20 @@ enum NodeSortMode {
   defaultOrder('Default', Icons.swap_vert),
   latencyAsc('Ping', Icons.signal_cellular_alt),
   nameAsc('A–Z', Icons.sort_by_alpha),
-  // §071 — manual режим. В cycle НЕ входит (см. `next`). Активируется
-  // ТОЛЬКО через drag в _buildNodeList. Cycle из manual → default
-  // одновременно сбрасывает manualOrder в HomeController.cycleSortMode.
+  // §071/§100 — manual («Custom»). Теперь ВХОДИТ в tap-cycle (carousel, см.
+  // `next`) И выбирается из sort-меню; активируется выбором/cycle ИЛИ drag'ом.
   manual('Custom', Icons.drag_indicator);
 
   const NodeSortMode(this.label, this.icon);
   final String label;
   final IconData icon;
 
-  /// §071: cycle обходит `manual` — default → latencyAsc → nameAsc → default.
-  /// Manual всегда возвращает в default (exit semantics).
+  /// §100: cycle включает все 4 режима (carousel) —
+  /// default → ping → A–Z → Custom(manual) → default.
   NodeSortMode get next => switch (this) {
         NodeSortMode.defaultOrder => NodeSortMode.latencyAsc,
         NodeSortMode.latencyAsc => NodeSortMode.nameAsc,
-        NodeSortMode.nameAsc => NodeSortMode.defaultOrder,
+        NodeSortMode.nameAsc => NodeSortMode.manual,
         NodeSortMode.manual => NodeSortMode.defaultOrder,
       };
 }
