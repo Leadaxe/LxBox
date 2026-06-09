@@ -24,6 +24,19 @@ mixin _ConfigIoMixin on ChangeNotifier {
     } catch (e) {
       _addDebug(DebugSource.app, 'Load config: $e');
     }
+    // §100 — restore last node sort (mode + manual order) из storage.
+    try {
+      final saved = await SettingsStorage.getNodeSort();
+      if (saved.mode.isNotEmpty) {
+        final mode = NodeSortMode.values.firstWhere(
+          (m) => m.name == saved.mode,
+          orElse: () => _state.sortMode,
+        );
+        _emit(_state.copyWith(sortMode: mode, manualOrder: saved.order));
+      }
+    } catch (e) {
+      _addDebug(DebugSource.app, 'Load sort: $e');
+    }
   }
 
   Future<bool> saveParsedConfig(String canonicalJson, {String? displayRaw}) async {

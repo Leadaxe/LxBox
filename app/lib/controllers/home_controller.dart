@@ -504,15 +504,25 @@ class HomeController extends ChangeNotifier
   }
 
   void cycleSortMode() {
-    final next = _state.sortMode.next;
-    // §071: exit из manual → defaultOrder сбрасывает manualOrder.
-    // Если юзер опять начнёт drag — manual mode re-enter с fresh order.
-    final clearManual = _state.sortMode == NodeSortMode.manual &&
-        next == NodeSortMode.defaultOrder;
-    _emit(_state.copyWith(
-      sortMode: next,
-      manualOrder: clearManual ? const <String>[] : _state.manualOrder,
-    ));
+    // §100 — manualOrder больше НЕ сбрасывается при уходе из manual: порядок
+    // персистится, повторный выбор «Custom» восстанавливает его.
+    _emit(_state.copyWith(sortMode: _state.sortMode.next));
+    _persistSort();
+  }
+
+  /// §100 — выбрать режим сортировки напрямую (из sort-меню), включая `manual`
+  /// (раньше manual входился только через drag). При выборе manual — видимые
+  /// grab-strip'ы (§098). Порядок ручной сортировки сохраняется.
+  void setSortMode(NodeSortMode mode) {
+    if (mode == _state.sortMode) return;
+    _emit(_state.copyWith(sortMode: mode));
+    _persistSort();
+  }
+
+  /// §100 — персист текущего режима + manual-порядка в `lxbox_settings.json`.
+  void _persistSort() {
+    unawaited(
+        SettingsStorage.setNodeSort(_state.sortMode.name, _state.manualOrder));
   }
 
   // §070 — sort options setters (per-session toggle'ы).
@@ -541,6 +551,7 @@ class HomeController extends ChangeNotifier
       sortMode: NodeSortMode.manual,
       manualOrder: List<String>.unmodifiable(newOrder),
     ));
+    _persistSort(); // §100 — сохранить порядок ручной сортировки
   }
 
   void clearError() {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../controllers/home_controller.dart';
+import '../../models/home_state.dart';
 import '../../services/settings_storage.dart';
 import '../../services/template_loader.dart';
 
@@ -27,7 +28,27 @@ Future<void> showSortOptionsMenu(
               children: [
                 Text('Sort options',
                     style: Theme.of(sheetCtx).textTheme.titleMedium),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
+                // §100 — выбор режима сортировки (incl. Custom = ручная,
+                // включает видимые drag-полоски §098). Раньше manual входился
+                // только через drag; теперь — явный выбор.
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    for (final m in NodeSortMode.values)
+                      ChoiceChip(
+                        avatar: Icon(m.icon, size: 16),
+                        label: Text(m.label),
+                        selected: s.sortMode == m,
+                        onSelected: (_) {
+                          controller.setSortMode(m);
+                          setSheetState(() {});
+                        },
+                      ),
+                  ],
+                ),
+                const Divider(height: 24),
                 CheckboxListTile(
                   value: s.pinDirect,
                   onChanged: (v) {

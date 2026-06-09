@@ -169,6 +169,23 @@ class SettingsStorage {
   static Future<void> saveExcludedNodes(Set<String> excluded) =>
       _saveExcludedNodes(excluded);
 
+  // §100 — персист сортировки нод (имя режима + порядок ручной сортировки).
+  static Future<({String mode, List<String> order})> getNodeSort() async {
+    final c = await _load();
+    final raw = c['node_manual_order'];
+    return (
+      mode: c['node_sort_mode'] as String? ?? '',
+      order: raw is List ? raw.whereType<String>().toList() : const <String>[],
+    );
+  }
+
+  static Future<void> setNodeSort(String mode, List<String> order) async {
+    final c = await _load();
+    c['node_sort_mode'] = mode;
+    c['node_manual_order'] = List<String>.from(order);
+    await _save();
+  }
+
   static Future<List<Map<String, dynamic>>> getDnsServers() => _getDnsServers();
 
   static Future<void> saveDnsServers(List<Map<String, dynamic>> servers) =>
