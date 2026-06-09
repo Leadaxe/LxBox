@@ -160,12 +160,15 @@ class NodeFilterViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Активность (для visual hint на `Icons.tune`) ──────────────────────
+  // ─── Активность (per-category — для точек на табах + сводки) ────────────
+  bool get regexActive => _regexEnabled && _regexCompiled != null;
+  bool get protocolActive => enabledProtocols.isNotEmpty;
+  bool get subscriptionActive => enabledSubscriptions.isNotEmpty;
+  bool get pingActive => _pingEnabled && _maxPingMs != null;
+
+  /// Любой активный match-фильтр (точка на кнопке `Icons.tune` + summary).
   bool get isActive =>
-      (_regexEnabled && _regexCompiled != null) ||
-      enabledProtocols.isNotEmpty ||
-      enabledSubscriptions.isNotEmpty ||
-      (_pingEnabled && _maxPingMs != null);
+      regexActive || protocolActive || subscriptionActive || pingActive;
 
   // ─── Per-channel memory (§083) ─────────────────────────────────────────
   final Map<String, ChannelFilters> _byChannel = {};

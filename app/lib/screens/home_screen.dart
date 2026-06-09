@@ -379,7 +379,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   TrafficBar(state: state, controller: _controller),
                 if (_subController.busy && _subController.progressMessage.isNotEmpty)
                   ProgressBanner(message: _subController.progressMessage),
-                if (!_filter.panelExpanded) ...[
+                // §095 — NODES-строка только когда подключено И фильтр закрыт.
+                // STOP-режим: нод нет → фильтровать нечего → строку прячем.
+                if (state.tunnelUp && !_filter.panelExpanded) ...[
                   const SizedBox(height: 12),
                   NodesHeader(
                     controller: _controller,

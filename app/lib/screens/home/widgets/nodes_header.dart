@@ -106,20 +106,40 @@ class NodesHeader extends StatelessWidget {
                 ],
               ),
             ),
-            // §048 — `Icons.tune` toggle панели фильтров. Primary-цвет когда
-            // есть active match-filter (hint что фильтрация активна).
+            // §048 — `Icons.tune` toggle панели фильтров. Primary-цвет + точка
+            // когда есть active match-filter (§095 — маркер «фильтр применён»).
             IconButton(
               tooltip: filter.panelExpanded ? 'Hide filters' : 'Show filters',
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               onPressed: filter.togglePanel,
-              icon: Icon(
-                Icons.tune,
-                size: 20,
-                color: filter.isActive
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
+              icon: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    Icons.tune,
+                    size: 20,
+                    color: filter.isActive
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
+                  ),
+                  if (filter.isActive)
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: IgnorePointer(
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ],

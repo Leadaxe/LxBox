@@ -4,12 +4,16 @@ import '../filter_widgets.dart';
 import '../node_filter_view_model.dart';
 import '../node_list_presenter.dart';
 
-/// §048 — Filter panel (expanded). Composed: regex field + emoji chips +
-/// protocol chips + subscription chips + ping field + Show-detour +
-/// Show-non-matching.
+/// §048 / §095 — Filter panel (expanded), tabbed.
 ///
-/// Все callbacks идут напрямую в [filter] (NodeFilterViewModel).
-class FilterPanel extends StatelessWidget {
+/// Layout (Filter mode — стат-полоса и Nodes-хедер скрыты родителем):
+/// - **строка поиска** (regex) всегда сверху + ✕ закрытия (→ [togglePanel]);
+/// - **сводка активных фильтров** чипами (`InputChip`: tap → нужный таб,
+///   ✕ → снять фильтр);
+/// - **табы** Regex / Protocol / Subscribes / Settings — с точкой на табе,
+///   где есть активный фильтр;
+/// - контент активного таба (авто-высота — рендерим только его, не TabBarView).
+class FilterPanel extends StatefulWidget {
   const FilterPanel({
     super.key,
     required this.filter,
@@ -24,82 +28,208 @@ class FilterPanel extends StatelessWidget {
   final List<(String, String)> subOptions;
 
   @override
+  State<FilterPanel> createState() => _FilterPanelState();
+}
+
+class _FilterPanelState extends State<FilterPanel>
+    with SingleTickerProviderStateMixin {
+  // Regex=0 · Protocol=1 · Subscribes=2 · Settings=3.
+  late final TabController _tab = TabController(length: 4, vsync: this);
+
+  NodeFilterViewModel get f => widget.filter;
+
+  @override
+  void dispose() {
+    _tab.dispose();
+    super.dispose();
+  }
+
+  String _subName(String id) {
+    for (final (sid, name) in widget.subOptions) {
+      if (sid == id) return name;
+    }
+    return id;
+  }
+
+  /// Сводка активных фильтров: tap по чипу → его таб, ✕ → снять.
+  List<Widget> _summaryChips() {
+    final chips = <Widget>[];
+    if (f.regexActive) {
+      final p = f.regexController.text;
+      final label = p.length > 14 ? '${p.substring(0, 14)}…' : p;
+      chips.add(InputChip(
+        label: Text('/$label/'),
+        onPressed: () => _tab.animateTo(0),
+        onDeleted: f.clearRegex,
+      ));
+    }
+    for (final proto in f.enabledProtocols) {
+      chips.add(InputChip(
+        label: Text(protoLabel(proto)),
+        onPressed: () => _tab.animateTo(1),
+        onDeleted: () => f.toggleProtocol(proto),
+      ));
+    }
+    for (final id in f.enabledSubscriptions) {
+      chips.add(InputChip(
+        label: Text(_subName(id)),
+        onPressed: () => _tab.animateTo(2),
+        onDeleted: () => f.toggleSubscription(id),
+      ));
+    }
+    final ms = f.activeMaxPingMs;
+    if (ms != null) {
+      chips.add(InputChip(
+        label: Text('≤${ms}ms'),
+        onPressed: () => _tab.animateTo(3),
+        onDeleted: f.clearPing,
+      ));
+    }
+    return chips;
+  }
+
+  Widget _dotTab(String label, bool active) {
+    return Tab(
+      height: 40,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label),
+          if (active) ...[
+            const SizedBox(width: 5),
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _hint(String text) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          text,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+      );
+
+  Widget _tabContent(int index) {
+    switch (index) {
+      case 0: // Regex → emoji-чипы (вставляют в regex-поле)
+        return widget.emojis.isEmpty
+            ? _hint('Нет эмодзи в именах нод')
+            : EmojiChipsRow(emojis: widget.emojis, onTap: f.onEmojiChipTap);
+      case 1: // Protocol
+        return widget.availableProtocols.isEmpty
+            ? _hint('Нет протоколов')
+            : MultiSelectChipsRow(
+                options: [
+                  for (final p in widget.availableProtocols) (p, protoLabel(p)),
+                ],
+                enabled: f.enabledProtocols,
+                onToggle: f.toggleProtocol,
+              );
+      case 2: // Subscribes
+        return widget.subOptions.isEmpty
+            ? _hint('Нет подписок')
+            : MultiSelectChipsRow(
+                options: widget.subOptions,
+                enabled: f.enabledSubscriptions,
+                onToggle: f.toggleSubscription,
+              );
+      default: // Settings — ping + visibility toggles
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            PingFilterField(
+              controller: f.pingController,
+              onChanged: f.onPingChanged,
+              enabled: f.pingEnabled,
+              onEnabledChanged: f.setPingEnabled,
+              onClear: f.clearPing,
+            ),
+            FilterCheckboxRow(
+              label: 'Show detour servers',
+              value: f.showDetour,
+              onChanged: f.setShowDetour,
+            ),
+            FilterCheckboxRow(
+              label: 'Show non-matching (dimmed)',
+              value: f.showNonMatching,
+              onChanged: f.setShowNonMatching,
+            ),
+          ],
+        );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final summary = _summaryChips();
     return Container(
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
-        border: Border(
-          bottom: BorderSide(color: cs.outlineVariant.withAlpha(128)),
-        ),
+        border: Border(bottom: BorderSide(color: cs.outlineVariant.withAlpha(128))),
       ),
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // §095 Filter mode — строка поиска + кнопка ✕ закрытия фильтра
-          // (справа, на месте бывшей кнопки открытия Icons.tune).
+          // §095 — строка поиска + ✕ закрытия (на месте кнопки открытия).
           Row(
             children: [
               Expanded(
                 child: RegexFilterField(
-                  controller: filter.regexController,
-                  onChanged: filter.onRegexChanged,
-                  valid: filter.regexValid,
-                  enabled: filter.regexEnabled,
-                  onEnabledChanged: filter.setRegexEnabled,
-                  invert: filter.regexInvert,
-                  onInvertChanged: filter.setRegexInvert,
-                  onClear: filter.clearRegex,
+                  controller: f.regexController,
+                  onChanged: f.onRegexChanged,
+                  valid: f.regexValid,
+                  enabled: f.regexEnabled,
+                  onEnabledChanged: f.setRegexEnabled,
+                  invert: f.regexInvert,
+                  onInvertChanged: f.setRegexInvert,
+                  onClear: f.clearRegex,
                 ),
               ),
               IconButton(
                 tooltip: 'Close filters',
                 visualDensity: VisualDensity.compact,
-                onPressed: filter.togglePanel,
+                onPressed: f.togglePanel,
                 icon: const Icon(Icons.close, size: 20),
               ),
             ],
           ),
-          if (emojis.isNotEmpty) ...[
+          // Сводка активных фильтров (tap=таб, ✕=снять).
+          if (summary.isNotEmpty) ...[
             const SizedBox(height: 6),
-            EmojiChipsRow(emojis: emojis, onTap: filter.onEmojiChipTap),
+            Wrap(spacing: 6, runSpacing: 4, children: summary),
           ],
-          if (availableProtocols.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            MultiSelectChipsRow(
-              options: [
-                for (final p in availableProtocols) (p, protoLabel(p)),
-              ],
-              enabled: filter.enabledProtocols,
-              onToggle: filter.toggleProtocol,
-            ),
-          ],
-          if (subOptions.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            MultiSelectChipsRow(
-              options: subOptions,
-              enabled: filter.enabledSubscriptions,
-              onToggle: filter.toggleSubscription,
-            ),
-          ],
-          const SizedBox(height: 4),
-          PingFilterField(
-            controller: filter.pingController,
-            onChanged: filter.onPingChanged,
-            enabled: filter.pingEnabled,
-            onEnabledChanged: filter.setPingEnabled,
-            onClear: filter.clearPing,
+          const SizedBox(height: 2),
+          TabBar(
+            controller: _tab,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            labelPadding: const EdgeInsets.symmetric(horizontal: 14),
+            tabs: [
+              _dotTab('Regex', f.regexActive),
+              _dotTab('Protocol', f.protocolActive),
+              _dotTab('Subscribes', f.subscriptionActive),
+              _dotTab('Settings', f.pingActive),
+            ],
           ),
-          FilterCheckboxRow(
-            label: 'Show detour servers',
-            value: filter.showDetour,
-            onChanged: filter.setShowDetour,
-          ),
-          FilterCheckboxRow(
-            label: 'Show non-matching (dimmed)',
-            value: filter.showNonMatching,
-            onChanged: filter.setShowNonMatching,
+          const SizedBox(height: 6),
+          // Рендерим только активный таб → авто-высота (не TabBarView).
+          AnimatedBuilder(
+            animation: _tab,
+            builder: (_, _) => _tabContent(_tab.index),
           ),
         ],
       ),
