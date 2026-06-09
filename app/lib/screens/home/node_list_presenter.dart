@@ -3,7 +3,6 @@ import '../../controllers/subscription_controller.dart';
 import '../../models/home_state.dart';
 import '../../models/server_list.dart';
 import '../../services/clash_api_client.dart';
-import '../../services/tag_resolver.dart';
 import 'node_filter.dart';
 import 'node_filter_view_model.dart';
 import 'subscription_lookup.dart';
@@ -105,13 +104,16 @@ class NodeListPresenter {
       );
 
   /// §085 R3 — pool (detour show/hide) → split на matching/non-matching.
-  /// Control-узлы (direct/auto/…) короткозамкнуты в matching (§078).
-  /// Возвращает `(matching, nonMatching)`.
+  /// §090 G2 — detour-hide по `ConfigNode.isDetour` (структурно: на ноду
+  /// ссылаются как на hop), не по ⚙-метке. Control-узлы (direct/auto/…)
+  /// короткозамкнуты в matching (§078). Возвращает `(matching, nonMatching)`.
   (List<String>, List<String>) splitNodes(
       List<String> sortedNodes, HomeState state) {
     final pool = filter.showDetour
         ? sortedNodes
-        : sortedNodes.where((t) => !TagResolver.isDetourMarker(t)).toList();
+        : sortedNodes
+            .where((t) => !(state.configModel[t]?.isDetour ?? false))
+            .toList();
     final f = buildNodeFilter(state);
     final matching = <String>[];
     final nonMatching = <String>[];
@@ -165,14 +167,17 @@ class NodeListPresenter {
   /// Собирает sorted/pool/split/displayList + chip-options одним проходом.
   NodeListData computeListData(HomeState state) {
     // §048 — двухфазная модель (см. spec):
-    // Phase 1 — pool filter: detour show/hide. Нода **отсутствует** в render
-    // если detour off и tag detour-prefixed.
+    // Phase 1 — pool filter: detour show/hide. §090 G2 — «detour» теперь
+    // СТРУКТУРНО: нода скрыта (detour off) если на неё ссылаются как на
+    // detour-таргет (`ConfigNode.isDetour`, detourRefCount>0), а не по ⚙-метке.
     // §070: используем viewSortedNodes — frozen sort при resortOnManualPing=false
     // (manual single ping не дёргает порядок).
     final allTags = viewSortedNodes(state);
     final pool = filter.showDetour
         ? allTags
-        : allTags.where((t) => !TagResolver.isDetourMarker(t)).toList();
+        : allTags
+            .where((t) => !(state.configModel[t]?.isDetour ?? false))
+            .toList();
 
     // configModel парсится один раз при смене configRaw (см. HomeState),
     // здесь просто читаем. Раньше jsonDecode шёл на каждый rebuild
