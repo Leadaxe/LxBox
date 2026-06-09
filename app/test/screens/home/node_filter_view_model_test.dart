@@ -17,20 +17,24 @@ void main() {
 
   group('defaults', () {
     test('чистое состояние', () {
-      expect(vm.showDetour, true);
       expect(vm.showNonMatching, true);
+      // §096 — detour бинарный: дефолт «скрыть detour» (нормальный режим).
+      expect(vm.detourHide, true);
+      expect(vm.detourOnly, false);
       expect(vm.panelExpanded, false);
-      expect(vm.regexEnabled, false);
       expect(vm.regexInvert, false);
       expect(vm.regexValid, true);
       expect(vm.activeRegex, isNull);
       expect(vm.enabledProtocols, isEmpty);
+      expect(vm.protocolsInvert, false);
       expect(vm.enabledSubscriptions, isEmpty);
+      expect(vm.subscriptionsInvert, false);
       expect(vm.pingEnabled, false);
       // §095 — поле предзаполнено реальным «200», но disabled → не активно.
       expect(vm.pingController.text, '200');
       expect(vm.activeMaxPingMs, isNull);
       expect(vm.isActive, false);
+      expect(vm.hasActiveFilters, false);
     });
   });
 
@@ -40,11 +44,13 @@ void main() {
       expect(vm.panelExpanded, true);
       expect(notifications, 1);
     });
-    test('setShowDetour / setShowNonMatching', () {
-      vm.setShowDetour(false);
+    test('toggleDetourHide / setShowNonMatching', () {
+      vm.toggleDetourHide(); // hide → только detour
       vm.setShowNonMatching(false);
-      expect(vm.showDetour, false);
+      expect(vm.detourHide, false);
+      expect(vm.detourOnly, true);
       expect(vm.showNonMatching, false);
+      expect(vm.nonMatchingHidden, true);
       expect(notifications, 2);
     });
     test('toggleProtocol add/remove', () {
@@ -62,16 +68,52 @@ void main() {
       vm.toggleSubscription('sub-1');
       expect(vm.enabledSubscriptions, isEmpty);
     });
+    test('§096 toggleProtocolsInvert / toggleSubscriptionsInvert', () {
+      vm.toggleProtocolsInvert();
+      expect(vm.protocolsInvert, true);
+      vm.toggleSubscriptionsInvert();
+      expect(vm.subscriptionsInvert, true);
+      vm.toggleProtocolsInvert();
+      expect(vm.protocolsInvert, false);
+      expect(notifications, 3);
+    });
+  });
+
+  group('detour бинарный (§096)', () {
+    test('дефолт — скрыть detour (только non-detour)', () {
+      expect(vm.detourHide, true);
+      expect(vm.detourOnly, false);
+      expect(vm.detourPoolPasses(false), true, reason: 'non-detour виден');
+      expect(vm.detourPoolPasses(true), false, reason: 'detour скрыт');
+      // дефолтное скрытие — нормальный режим, точку не зажигает
+      expect(vm.settingsActive, false);
+      expect(vm.hasActiveFilters, false);
+    });
+    test('toggle → только detour (особый режим)', () {
+      vm.toggleDetourHide();
+      expect(vm.detourHide, false);
+      expect(vm.detourOnly, true);
+      expect(vm.detourPoolPasses(true), true, reason: 'detour виден');
+      expect(vm.detourPoolPasses(false), false, reason: 'non-detour отсеян');
+      expect(vm.settingsActive, true);
+      expect(vm.hasActiveFilters, true);
+    });
+    test('toggle обратно → снова скрыть detour', () {
+      vm.toggleDetourHide();
+      vm.toggleDetourHide();
+      expect(vm.detourHide, true);
+      expect(vm.detourOnly, false);
+    });
   });
 
   group('regex', () {
-    test('onRegexChanged компилирует + enable (debounced)', () async {
+    test('onRegexChanged компилирует (debounced)', () async {
       vm.onRegexChanged('Moscow');
       await Future.delayed(const Duration(milliseconds: 350));
-      expect(vm.regexEnabled, true);
       expect(vm.regexValid, true);
       expect(vm.activeRegex, isNotNull);
       expect(vm.activeRegex!.hasMatch('Moscow Node'), true);
+      expect(vm.regexActive, true);
       expect(vm.isActive, true);
     });
 
@@ -80,25 +122,29 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 350));
       expect(vm.regexValid, false);
       expect(vm.activeRegex, isNull);
+      expect(vm.regexActive, false);
     });
 
-    test('setRegexEnabled gate: compiled но disabled → activeRegex null', () async {
+    test('§096 toggleRegexInvert не выключает regex', () async {
       vm.onRegexChanged('RU');
       await Future.delayed(const Duration(milliseconds: 350));
-      expect(vm.activeRegex, isNotNull);
-      vm.setRegexEnabled(false);
-      expect(vm.activeRegex, isNull, reason: 'disabled gate');
+      expect(vm.regexInvert, false);
+      vm.toggleRegexInvert();
+      expect(vm.regexInvert, true);
+      expect(vm.activeRegex, isNotNull, reason: 'invert ≠ disable');
+      vm.toggleRegexInvert();
+      expect(vm.regexInvert, false);
     });
 
     test('clearRegex сбрасывает всё', () async {
       vm.onRegexChanged('X');
       await Future.delayed(const Duration(milliseconds: 350));
-      vm.setRegexInvert(true);
+      vm.toggleRegexInvert();
       vm.clearRegex();
       expect(vm.regexController.text, '');
-      expect(vm.regexEnabled, false);
       expect(vm.regexInvert, false);
       expect(vm.activeRegex, isNull);
+      expect(vm.regexActive, false);
     });
 
     test('onEmojiChipTap append OR-pattern', () async {
@@ -183,12 +229,27 @@ void main() {
       expect(vm.pingEnabled, false);
     });
 
-    test('show-detour/show-non-matching глобальны (не per-channel)', () {
+    test('detour/show-non-matching глобальны (не per-channel)', () {
       vm.syncChannel('A');
-      vm.setShowDetour(false);
+      vm.toggleDetourHide(); // → только detour
       vm.syncChannel('B');
       // глобальный флаг не сбрасывается при смене канала
-      expect(vm.showDetour, false);
+      expect(vm.detourHide, false);
+      expect(vm.detourOnly, true);
+    });
+
+    test('§096 protocol/subscription invert — per-channel', () {
+      vm.syncChannel('A');
+      vm.toggleProtocol('vless');
+      vm.toggleProtocolsInvert();
+      vm.toggleSubscriptionsInvert();
+      vm.syncChannel('B');
+      expect(vm.protocolsInvert, false, reason: 'B чистый');
+      expect(vm.subscriptionsInvert, false);
+      vm.syncChannel('A');
+      expect(vm.protocolsInvert, true, reason: 'A восстановлен');
+      expect(vm.subscriptionsInvert, true);
+      expect(vm.enabledProtocols, {'vless'});
     });
   });
 }

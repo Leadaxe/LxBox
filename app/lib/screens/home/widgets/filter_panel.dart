@@ -4,15 +4,16 @@ import '../filter_widgets.dart';
 import '../node_filter_view_model.dart';
 import '../node_list_presenter.dart';
 
-/// §048 / §095 — Filter panel (expanded), tabbed.
+/// §048 / §095 / §096 — Filter panel (expanded), tabbed.
 ///
 /// Layout (Filter mode — стат-полоса и Nodes-хедер скрыты родителем):
-/// - **строка поиска** (regex) всегда сверху + ✕ закрытия (→ [togglePanel]);
+/// - **табы** Regex / Protocol / Subscribes / Settings сверху + ✕ закрытия
+///   (→ [togglePanel]) — с точкой на табе, где есть активный фильтр;
 /// - **сводка активных фильтров** чипами (`InputChip`: tap → нужный таб,
-///   ✕ → снять фильтр);
-/// - **табы** Regex / Protocol / Subscribes / Settings — с точкой на табе,
-///   где есть активный фильтр;
-/// - контент активного таба (авто-высота — рендерим только его, не TabBarView).
+///   ✕ → снять фильтр; «!» в лейбле = инверсия, §096);
+/// - контент активного таба (авто-высота — рендерим только его, не TabBarView):
+///   у regex/protocol/subscriptions ведущий `!`-negate ([NegateToggle]),
+///   detour — tri-state на Settings.
 class FilterPanel extends StatefulWidget {
   const FilterPanel({
     super.key,
@@ -59,23 +60,26 @@ class _FilterPanelState extends State<FilterPanel>
   /// Сводка активных фильтров: tap по чипу → его таб, ✕ → снять.
   List<Widget> _summaryChips() {
     final chips = <Widget>[];
+    // §096 — префикс инверсии в лейбле чипа («!VLESS», «!/pat/»).
+    String neg(bool invert) => invert ? '!' : '';
     if (f.regexActive) {
       chips.add(InputChip(
-        label: Text('/${_truncate(f.regexController.text)}/'),
+        label: Text(
+            '${neg(f.regexInvert)}/${_truncate(f.regexController.text)}/'),
         onPressed: () => _tab.animateTo(0),
         onDeleted: f.clearRegex,
       ));
     }
     for (final proto in f.enabledProtocols) {
       chips.add(InputChip(
-        label: Text(protoLabel(proto)),
+        label: Text('${neg(f.protocolsInvert)}${protoLabel(proto)}'),
         onPressed: () => _tab.animateTo(1),
         onDeleted: () => f.toggleProtocol(proto),
       ));
     }
     for (final id in f.enabledSubscriptions) {
       chips.add(InputChip(
-        label: Text(_truncate(_subName(id))),
+        label: Text('${neg(f.subscriptionsInvert)}${_truncate(_subName(id))}'),
         onPressed: () => _tab.animateTo(2),
         onDeleted: () => f.toggleSubscription(id),
       ));
@@ -88,13 +92,14 @@ class _FilterPanelState extends State<FilterPanel>
         onDeleted: f.clearPing,
       ));
     }
-    // §095 — visibility-тоглы как чипы (tap → Settings, ✕ → вернуть показ).
-    if (f.detourHidden) {
+    // §096 — чип только для особого режима «только detour» (дефолтное скрытие
+    // detour чипа не даёт). tap → Settings, ✕ → вернуть скрытие (дефолт).
+    if (f.detourOnly) {
       chips.add(InputChip(
-        tooltip: 'Detour servers hidden',
-        label: _gearOffIcon(),
+        tooltip: 'Только detour',
+        label: const Icon(Icons.settings, size: 18),
         onPressed: () => _tab.animateTo(3),
-        onDeleted: () => f.setShowDetour(true),
+        onDeleted: f.toggleDetourHide,
       ));
     }
     if (f.nonMatchingHidden) {
@@ -106,25 +111,6 @@ class _FilterPanelState extends State<FilterPanel>
       ));
     }
     return chips;
-  }
-
-  /// Перечёркнутая шестерёнка = «detour скрыт» (⚙ = detour-маркер приложения).
-  Widget _gearOffIcon() {
-    final c = Theme.of(context).colorScheme.onSurfaceVariant;
-    return SizedBox(
-      width: 20,
-      height: 20,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(Icons.settings, size: 17, color: c),
-          Transform.rotate(
-            angle: -0.785, // -45°
-            child: Container(width: 22, height: 2, color: c),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _dotTab(String label, bool active) {
@@ -170,10 +156,8 @@ class _FilterPanelState extends State<FilterPanel>
               controller: f.regexController,
               onChanged: f.onRegexChanged,
               valid: f.regexValid,
-              enabled: f.regexEnabled,
-              onEnabledChanged: f.setRegexEnabled,
               invert: f.regexInvert,
-              onInvertChanged: f.setRegexInvert,
+              onInvertToggle: f.toggleRegexInvert,
               onClear: f.clearRegex,
             ),
             if (widget.emojis.isNotEmpty) ...[
@@ -195,6 +179,8 @@ class _FilterPanelState extends State<FilterPanel>
                 ],
                 enabled: f.enabledProtocols,
                 onToggle: f.toggleProtocol,
+                invert: f.protocolsInvert,
+                onInvertToggle: f.toggleProtocolsInvert,
               );
       case 2: // Subscribes
         return widget.subOptions.isEmpty
@@ -203,8 +189,10 @@ class _FilterPanelState extends State<FilterPanel>
                 options: widget.subOptions,
                 enabled: f.enabledSubscriptions,
                 onToggle: f.toggleSubscription,
+                invert: f.subscriptionsInvert,
+                onInvertToggle: f.toggleSubscriptionsInvert,
               );
-      default: // Settings — ping + visibility toggles
+      default: // Settings — ping + detour tri-state + non-matching
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -215,10 +203,31 @@ class _FilterPanelState extends State<FilterPanel>
               onEnabledChanged: f.setPingEnabled,
               onClear: f.clearPing,
             ),
-            FilterCheckboxRow(
-              label: 'Show detour servers',
-              value: f.showDetour,
-              onChanged: f.setShowDetour,
+            // §096 — detour бинарный (без чекбокса): [!] ON (дефолт) = скрыть
+            // detour, OFF = только detour. Tap по всему ряду = toggle.
+            InkWell(
+              onTap: f.toggleDetourHide,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  children: [
+                    NegateToggle(
+                      active: f.detourHide,
+                      onToggle: f.toggleDetourHide,
+                      tooltip: f.detourHide
+                          ? 'detour скрыты'
+                          : 'показаны только detour',
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      f.detourHide
+                          ? 'Hide detour servers'
+                          : 'Show only detour servers',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
             ),
             FilterCheckboxRow(
               label: 'Show non-matching (dimmed)',

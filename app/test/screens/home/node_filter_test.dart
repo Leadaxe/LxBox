@@ -10,7 +10,9 @@ void main() {
     RegExp? regex,
     bool regexInvert = false,
     Set<String> protocols = const {},
+    bool protocolsInvert = false,
     Set<String> subscriptions = const {},
+    bool subscriptionsInvert = false,
     int? maxPingMs,
     Map<String, String?> proto = const {},
     Map<String, Set<String>> sub = const {},
@@ -20,7 +22,9 @@ void main() {
       regex: regex,
       regexInvert: regexInvert,
       protocols: protocols,
+      protocolsInvert: protocolsInvert,
       subscriptions: subscriptions,
+      subscriptionsInvert: subscriptionsInvert,
       maxPingMs: maxPingMs,
       protocolOf: (t) => proto[t],
       subscriptionsOf: (t) => sub[t] ?? const <String>{},
@@ -138,6 +142,41 @@ void main() {
     });
   });
 
+  group('NodeFilter.passes — protocol invert (NOT, §096)', () {
+    test('invert ON + proto в set → false (excluded)', () {
+      final f = makeFilter(
+        protocols: {'vless'},
+        protocolsInvert: true,
+        proto: {'🇷🇺 M1': 'vless'},
+      );
+      expect(f.passes('🇷🇺 M1'), isFalse);
+    });
+
+    test('invert ON + proto не в set → true (included)', () {
+      final f = makeFilter(
+        protocols: {'vless'},
+        protocolsInvert: true,
+        proto: {'🇺🇸 N1': 'vmess'},
+      );
+      expect(f.passes('🇺🇸 N1'), isTrue);
+    });
+
+    test('invert ON + unknown proto (null) → true (не входит в set)', () {
+      final f = makeFilter(
+        protocols: {'vless'},
+        protocolsInvert: true,
+        proto: {'🇩🇪 B1': null},
+      );
+      expect(f.passes('🇩🇪 B1'), isTrue,
+          reason: 'unknown ≠ vless → под invert проходит');
+    });
+
+    test('invert ON но protocols пуст → no-op (true)', () {
+      final f = makeFilter(protocolsInvert: true, proto: {'X': 'vless'});
+      expect(f.passes('X'), isTrue);
+    });
+  });
+
   group('NodeFilter.passes — subscription', () {
     test('known sub id в set → true', () {
       final f = makeFilter(
@@ -240,6 +279,53 @@ void main() {
     test('subscription filter off (empty Set) + empty candidates → true', () {
       final f = makeFilter(sub: {'CustomNode': const <String>{}});
       expect(f.passes('CustomNode'), isTrue);
+    });
+  });
+
+  group('NodeFilter.passes — subscription invert (NOT, §096)', () {
+    test('invert ON + нода из выбранной подписки → false', () {
+      final f = makeFilter(
+        subscriptions: {'sub-1'},
+        subscriptionsInvert: true,
+        sub: {'🇷🇺 M1': {'sub-1'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isFalse);
+    });
+
+    test('invert ON + нода НЕ из выбранной → true', () {
+      final f = makeFilter(
+        subscriptions: {'sub-1'},
+        subscriptionsInvert: true,
+        sub: {'🇺🇸 N1': {'sub-2'}},
+      );
+      expect(f.passes('🇺🇸 N1'), isTrue);
+    });
+
+    test('invert ON + custom-нода (empty candidates) при chip sub-1 → true', () {
+      final f = makeFilter(
+        subscriptions: {'sub-1'},
+        subscriptionsInvert: true,
+        sub: {'CustomNode': const <String>{}},
+      );
+      expect(f.passes('CustomNode'), isTrue,
+          reason: 'custom ≠ sub-1 → под invert проходит');
+    });
+
+    test('invert ON + custom chip + custom-нода → false (исключена)', () {
+      final f = makeFilter(
+        subscriptions: {'custom'},
+        subscriptionsInvert: true,
+        sub: {'CustomNode': const <String>{}},
+      );
+      expect(f.passes('CustomNode'), isFalse);
+    });
+
+    test('invert ON но subscriptions пуст → no-op (true)', () {
+      final f = makeFilter(
+        subscriptionsInvert: true,
+        sub: {'🇷🇺 M1': {'sub-1'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isTrue);
     });
   });
 

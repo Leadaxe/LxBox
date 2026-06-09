@@ -15,15 +15,17 @@ class NodeFilter {
     required this.regex,
     this.regexInvert = false,
     required this.protocols,
+    this.protocolsInvert = false,
     required this.subscriptions,
+    this.subscriptionsInvert = false,
     required this.maxPingMs,
     required this.protocolOf,
     required this.subscriptionsOf,
     required this.pingOf,
   });
 
-  /// Compiled regex. `null` если pattern пустой / invalid / checkbox off
-  /// (filter no-op).
+  /// Compiled regex. `null` если pattern пустой / invalid (filter no-op).
+  /// §096 — enable-галки больше нет: активность = непустой валидный паттерн.
   final RegExp? regex;
 
   /// `true` → invert match (regex работает как NOT): tag passes только если
@@ -33,9 +35,18 @@ class NodeFilter {
   /// Allowed protocol names (`vless`, `vmess`, ...). `empty = no filter`.
   final Set<String> protocols;
 
+  /// §096 — `true` → invert protocol-фильтр (NOT): нода passes если её протокол
+  /// **не** входит в [protocols]. Имеет смысл только при непустом [protocols].
+  final bool protocolsInvert;
+
   /// Allowed subscription identifiers. `entry.id` для подписок, `'custom'`
   /// для UserServer'ов. `empty = no filter`.
   final Set<String> subscriptions;
+
+  /// §096 — `true` → invert subscription-фильтр (NOT): нода passes если она
+  /// **не** из выбранных подписок. Имеет смысл только при непустом
+  /// [subscriptions].
+  final bool subscriptionsInvert;
 
   /// Maximum delay в ms. `null = no filter`. Untested nodes (`pingOf(tag) == null`)
   /// **всегда** проходят filter (locked decision #11).
@@ -70,17 +81,23 @@ class NodeFilter {
     }
     if (protocols.isNotEmpty) {
       final p = protocolOf(tag);
-      // Unknown protocol при active filter → non-matching.
-      if (p == null || !protocols.contains(p)) return false;
+      // Membership = протокол известен И выбран. Unknown (null) → не member.
+      // §096: fail когда `member == invert` (см. regex выше):
+      //   • !invert → fail если !member (unknown при active filter →
+      //     non-matching, locked decision #12; «не VLESS» под invert → passes);
+      //   •  invert → fail если member.
+      final member = p != null && protocols.contains(p);
+      if (member == protocolsInvert) return false;
     }
     if (subscriptions.isNotEmpty) {
       final candidates = subscriptionsOf(tag);
       // Пустой Set candidates → нода неизвестного происхождения → 'custom'.
-      // Иначе нода passes если хоть одна из подписок-кандидатов выбрана
-      // (intersection non-empty). Ambiguity-aware: коллизионная нода видна
-      // во всех chip'ах подписок которые могли её создать.
+      // Member = хоть одна подписка-кандидат выбрана (intersection non-empty).
+      // Ambiguity-aware: коллизионная нода видна во всех chip'ах подписок,
+      // которые могли её создать. §096: fail когда `member == invert`.
       final effective = candidates.isEmpty ? const {'custom'} : candidates;
-      if (!effective.any(subscriptions.contains)) return false;
+      final member = effective.any(subscriptions.contains);
+      if (member == subscriptionsInvert) return false;
     }
     final delay = pingOf(tag);
     // Untested (delay == null) ВСЕГДА проходят ping filter.

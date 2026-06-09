@@ -4,35 +4,66 @@ import 'package:flutter/services.dart';
 /// §048 — UI components для filter panel в node list header.
 /// Все слим, compact, default collapsed (см. spec).
 
-/// Slim TextField для regex pattern с двумя toggle:
-///   • **слева**: `enabled` — on/off фильтра, не теряя pattern (как у Test ≤).
-///     Auto-on при вводе валидного pattern.
-///   • **внутри suffix**: `[!]` — invert/NOT. Default off (muted), tap →
-///     bold red, regex matchает инвертно (`!hasMatch`). Виден только когда
-///     поле не пустое (рядом с `✕ clear`).
-///
-/// `errorText` («Invalid regex») показывается всегда когда pattern сломан
-/// (независимо от enabled — pattern всё равно битый и юзеру нужен фидбек).
+/// §096 — компактный `!`-тогл инверсии (negate). Серый = обычный фильтр,
+/// bold-красный = инверсия (показать НЕ совпадающие/выбранные). Единый
+/// визуальный язык для regex / protocol / subscriptions / detour.
+class NegateToggle extends StatelessWidget {
+  const NegateToggle({
+    super.key,
+    required this.active,
+    required this.onToggle,
+    this.tooltip,
+  });
+
+  final bool active;
+  final VoidCallback onToggle;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final w = InkWell(
+      onTap: onToggle,
+      borderRadius: BorderRadius.circular(6),
+      child: SizedBox(
+        width: 30,
+        height: 30,
+        child: Center(
+          child: Text(
+            '!',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: active ? FontWeight.bold : FontWeight.normal,
+              color: active ? cs.error : cs.onSurfaceVariant.withAlpha(140),
+            ),
+          ),
+        ),
+      ),
+    );
+    return tooltip == null ? w : Tooltip(message: tooltip!, child: w);
+  }
+}
+
+/// Slim TextField для regex pattern. Слева — `!`-negate ([NegateToggle], §096:
+/// занял слот бывшей enable-галки); внутри prefix — лупа, suffix — `✕ clear`
+/// (виден когда поле непустое). Regex активен пока поле непустое (выключение =
+/// очистка). `errorText` («Invalid regex») — всегда при битом паттерне.
 class RegexFilterField extends StatelessWidget {
   const RegexFilterField({
     super.key,
     required this.controller,
     required this.onChanged,
     required this.valid,
-    required this.enabled,
-    required this.onEnabledChanged,
     required this.invert,
-    required this.onInvertChanged,
+    required this.onInvertToggle,
     this.onClear,
   });
 
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final bool valid;
-  final bool enabled;
-  final ValueChanged<bool> onEnabledChanged;
   final bool invert;
-  final ValueChanged<bool> onInvertChanged;
+  final VoidCallback onInvertToggle;
   final VoidCallback? onClear;
 
   @override
@@ -42,18 +73,13 @@ class RegexFilterField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          // top:4 — иначе checkbox центрируется ОТ всей высоты row (включая
+          // top:4 — иначе тогл центрируется ОТ всей высоты row (включая
           // errorText) и съезжает вниз когда regex invalid.
           padding: const EdgeInsets.only(top: 4),
-          child: SizedBox(
-            width: 28,
-            height: 28,
-            child: Checkbox(
-              value: enabled,
-              onChanged: (v) => onEnabledChanged(v ?? false),
-              visualDensity: VisualDensity.compact,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
+          child: NegateToggle(
+            active: invert,
+            onToggle: onInvertToggle,
+            tooltip: 'Показать НЕ совпадающие',
           ),
         ),
         const SizedBox(width: 4),
@@ -63,49 +89,17 @@ class RegexFilterField extends StatelessWidget {
             onChanged: onChanged,
             decoration: InputDecoration(
               isDense: true,
-              // Asymmetric padding: left 4 (prefix уже даёт визуальный
-              // отступ от [!]), right 12 (привычный gap до ×).
-              contentPadding:
-                  const EdgeInsets.fromLTRB(4, 8, 12, 8),
+              contentPadding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
               hintText: 'regex pattern',
-              // [!] 🔍 — invert toggle первым, потом лупа. Discoverability:
-              // [!] видно всегда. Голые SizedBox (без material tap-target),
-              // чтобы row не распирал высоту поля. [!] узкий (20×28),
-              // tight visual.
-              prefixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  InkWell(
-                    onTap: () => onInvertChanged(!invert),
-                    borderRadius: BorderRadius.circular(4),
-                    child: SizedBox(
-                      width: 20,
-                      height: 28,
-                      child: Center(
-                        child: Text(
-                          '!',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: invert
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            color: invert
-                                ? cs.error
-                                : cs.onSurfaceVariant.withAlpha(140),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(
-                    width: 20,
-                    height: 28,
-                    child: Center(child: Icon(Icons.search, size: 18)),
-                  ),
-                ],
+              // §096 — invert переехал в ведущий [!] (NegateToggle слева от
+              // поля); внутри prefix остаётся только лупа.
+              prefixIcon: const SizedBox(
+                width: 30,
+                height: 28,
+                child: Center(child: Icon(Icons.search, size: 18)),
               ),
               prefixIconConstraints:
-                  const BoxConstraints(minWidth: 40, minHeight: 28),
+                  const BoxConstraints(minWidth: 34, minHeight: 28),
               errorText: valid ? null : 'Invalid regex',
               errorStyle: const TextStyle(fontSize: 10),
               // ✕ — только когда есть text. Текстовый символ (не
@@ -194,6 +188,8 @@ class MultiSelectChipsRow extends StatelessWidget {
     required this.options,
     required this.enabled,
     required this.onToggle,
+    required this.invert,
+    required this.onInvertToggle,
   });
 
   /// Список `(id, label)` пар. `id` хранится в [enabled], `label` —
@@ -202,28 +198,44 @@ class MultiSelectChipsRow extends StatelessWidget {
   final Set<String> enabled;
   final ValueChanged<String> onToggle;
 
+  /// §096 — invert (NOT) всей категории + тогл. Ведущий [NegateToggle].
+  final bool invert;
+  final VoidCallback onInvertToggle;
+
   @override
   Widget build(BuildContext context) {
     if (options.isEmpty) return const SizedBox.shrink();
-    return SizedBox(
-      height: 36,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.zero,
-        itemCount: options.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 6),
-        itemBuilder: (_, i) {
-          final (id, label) = options[i];
-          return FilterChip(
-            label: Text(label, style: const TextStyle(fontSize: 11)),
-            selected: enabled.contains(id),
-            onSelected: (_) => onToggle(id),
-            visualDensity: VisualDensity.compact,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-          );
-        },
-      ),
+    return Row(
+      children: [
+        NegateToggle(
+          active: invert,
+          onToggle: onInvertToggle,
+          tooltip: 'Показать НЕ выбранные',
+        ),
+        const SizedBox(width: 4),
+        Expanded(
+          child: SizedBox(
+            height: 36,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.zero,
+              itemCount: options.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 6),
+              itemBuilder: (_, i) {
+                final (id, label) = options[i];
+                return FilterChip(
+                  label: Text(label, style: const TextStyle(fontSize: 11)),
+                  selected: enabled.contains(id),
+                  onSelected: (_) => onToggle(id),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

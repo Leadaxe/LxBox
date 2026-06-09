@@ -7,10 +7,11 @@ void main() {
     test('конструктор без аргументов = все дефолты', () {
       const f = ChannelFilters();
       expect(f.regexPattern, '');
-      expect(f.regexEnabled, false);
       expect(f.regexInvert, false);
       expect(f.protocols, isEmpty);
+      expect(f.protocolsInvert, false);
       expect(f.subscriptions, isEmpty);
+      expect(f.subscriptionsInvert, false);
       expect(f.pingText, '');
       expect(f.pingEnabled, false);
     });
@@ -29,10 +30,6 @@ void main() {
       expect(const ChannelFilters(regexPattern: '🇷🇺').isEmpty, false);
     });
 
-    test('regexEnabled → isEmpty false', () {
-      expect(const ChannelFilters(regexEnabled: true).isEmpty, false);
-    });
-
     test('regexInvert → isEmpty false', () {
       expect(const ChannelFilters(regexInvert: true).isEmpty, false);
     });
@@ -41,8 +38,16 @@ void main() {
       expect(const ChannelFilters(protocols: {'vless'}).isEmpty, false);
     });
 
+    test('protocolsInvert → isEmpty false', () {
+      expect(const ChannelFilters(protocolsInvert: true).isEmpty, false);
+    });
+
     test('subscriptions непустой → isEmpty false', () {
       expect(const ChannelFilters(subscriptions: {'sub-1'}).isEmpty, false);
+    });
+
+    test('subscriptionsInvert → isEmpty false', () {
+      expect(const ChannelFilters(subscriptionsInvert: true).isEmpty, false);
     });
 
     test('pingText непустой → isEmpty false', () {
@@ -58,18 +63,20 @@ void main() {
     test('round-trip всех полей', () {
       const f = ChannelFilters(
         regexPattern: 'Moscow',
-        regexEnabled: true,
         regexInvert: true,
         protocols: {'vless', 'vmess'},
+        protocolsInvert: true,
         subscriptions: {'sub-1', 'custom'},
+        subscriptionsInvert: true,
         pingText: '150',
         pingEnabled: true,
       );
       expect(f.regexPattern, 'Moscow');
-      expect(f.regexEnabled, true);
       expect(f.regexInvert, true);
       expect(f.protocols, {'vless', 'vmess'});
+      expect(f.protocolsInvert, true);
       expect(f.subscriptions, {'sub-1', 'custom'});
+      expect(f.subscriptionsInvert, true);
       expect(f.pingText, '150');
       expect(f.pingEnabled, true);
       expect(f.isEmpty, false);

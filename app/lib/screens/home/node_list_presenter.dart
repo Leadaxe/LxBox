@@ -96,24 +96,29 @@ class NodeListPresenter {
         regex: filter.activeRegex,
         regexInvert: filter.regexInvert,
         protocols: filter.enabledProtocols,
+        protocolsInvert: filter.protocolsInvert,
         subscriptions: filter.enabledSubscriptions,
+        subscriptionsInvert: filter.subscriptionsInvert,
         maxPingMs: filter.activeMaxPingMs,
         protocolOf: (t) => protocolOfTag(t, state),
         subscriptionsOf: subscriptionsOfTag_,
         pingOf: (t) => state.lastDelay[t],
       );
 
-  /// §085 R3 — pool (detour show/hide) → split на matching/non-matching.
-  /// §090 G2 — detour-hide по `ConfigNode.isDetour` (структурно: на ноду
-  /// ссылаются как на hop), не по ⚙-метке. Control-узлы (direct/auto/…)
-  /// короткозамкнуты в matching (§078). Возвращает `(matching, nonMatching)`.
+  /// §085 R3 — pool (detour-фильтр) → split на matching/non-matching.
+  /// §090 G2 — detour определяется по `ConfigNode.isDetour` (структурно: на ноду
+  /// ссылаются как на hop), не по ⚙-метке. §096 — detour бинарный: скрыть
+  /// detour (дефолт) / только detour ([detourPoolPasses]). Control-узлы
+  /// (selector/urltest/direct/…) НИКОГДА не отсеиваются pool'ом (§078 — всегда
+  /// видны, даже если случайно isDetour) и короткозамкнуты в matching.
+  /// Возвращает `(matching, nonMatching)`.
   (List<String>, List<String>) splitNodes(
       List<String> sortedNodes, HomeState state) {
-    final pool = filter.showDetour
-        ? sortedNodes
-        : sortedNodes
-            .where((t) => !(state.configModel[t]?.isDetour ?? false))
-            .toList();
+    final pool = sortedNodes
+        .where((t) =>
+            isControlTag(t, state) ||
+            filter.detourPoolPasses(state.configModel[t]?.isDetour ?? false))
+        .toList();
     final f = buildNodeFilter(state);
     final matching = <String>[];
     final nonMatching = <String>[];
@@ -167,17 +172,20 @@ class NodeListPresenter {
   /// Собирает sorted/pool/split/displayList + chip-options одним проходом.
   NodeListData computeListData(HomeState state) {
     // §048 — двухфазная модель (см. spec):
-    // Phase 1 — pool filter: detour show/hide. §090 G2 — «detour» теперь
-    // СТРУКТУРНО: нода скрыта (detour off) если на неё ссылаются как на
-    // detour-таргет (`ConfigNode.isDetour`, detourRefCount>0), а не по ⚙-метке.
+    // Phase 1 — pool filter: detour (§096 бинарный). §090 G2 — «detour»
+    // СТРУКТУРНО: на ноду ссылаются как на detour-таргет (`ConfigNode.isDetour`,
+    // detourRefCount>0), а не по ⚙-метке. §096 — скрыть detour (дефолт) /
+    // только detour (см. [NodeFilterViewModel.detourPoolPasses]); control-узлы
+    // никогда не отсеиваются. Pool здесь только для chip-опций
+    // (availableProtocols); splitNodes re-derive'ит идентичный pool из allTags.
     // §070: используем viewSortedNodes — frozen sort при resortOnManualPing=false
     // (manual single ping не дёргает порядок).
     final allTags = viewSortedNodes(state);
-    final pool = filter.showDetour
-        ? allTags
-        : allTags
-            .where((t) => !(state.configModel[t]?.isDetour ?? false))
-            .toList();
+    final pool = allTags
+        .where((t) =>
+            isControlTag(t, state) ||
+            filter.detourPoolPasses(state.configModel[t]?.isDetour ?? false))
+        .toList();
 
     // configModel парсится один раз при смене configRaw (см. HomeState),
     // здесь просто читаем. Раньше jsonDecode шёл на каждый rebuild

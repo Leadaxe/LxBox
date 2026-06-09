@@ -5,15 +5,17 @@
 /// `Map<String /*channel*/, ChannelFilters>` в памяти (per-session, без
 /// записи на диск — см. spec §083).
 ///
-/// Содержит **только match-фильтры**. `_showDetourNodes` / `_showNonMatching`
-/// остаются глобальными (они про отображение, не про поиск).
+/// Содержит **только match-фильтры** (regex/protocol/subscription +их §096
+/// invert, ping). Detour tri-state (`_detourEnabled`/`_detourInvert`) и
+/// `_showNonMatching` остаются глобальными (про отображение, не про поиск).
 class ChannelFilters {
   const ChannelFilters({
     this.regexPattern = '',
-    this.regexEnabled = false,
     this.regexInvert = false,
     this.protocols = const <String>{},
+    this.protocolsInvert = false,
     this.subscriptions = const <String>{},
+    this.subscriptionsInvert = false,
     this.pingText = '',
     this.pingEnabled = false,
   });
@@ -21,17 +23,20 @@ class ChannelFilters {
   /// Raw regex pattern (как введён юзером; компиляция — на restore).
   final String regexPattern;
 
-  /// Regex checkbox on/off (позволяет выключить не теряя pattern).
-  final bool regexEnabled;
-
-  /// Invert/NOT toggle.
+  /// Invert/NOT toggle (§096 — `!`-negate, занявший слот бывшего enable).
   final bool regexInvert;
 
   /// Выбранные protocol chips. `empty` = no filter.
   final Set<String> protocols;
 
+  /// §096 — invert protocol-фильтра (NOT).
+  final bool protocolsInvert;
+
   /// Выбранные subscription chips (id / 'custom'). `empty` = no filter.
   final Set<String> subscriptions;
+
+  /// §096 — invert subscription-фильтра (NOT).
+  final bool subscriptionsInvert;
 
   /// Raw ping value (как введён; parse — на restore).
   final String pingText;
@@ -47,10 +52,11 @@ class ChannelFilters {
   /// чтобы не плодить orphan-записи в map за пустые каналы.
   bool get isEmpty =>
       regexPattern.isEmpty &&
-      !regexEnabled &&
       !regexInvert &&
       protocols.isEmpty &&
+      !protocolsInvert &&
       subscriptions.isEmpty &&
+      !subscriptionsInvert &&
       pingText.isEmpty &&
       !pingEnabled;
 }

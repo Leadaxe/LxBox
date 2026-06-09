@@ -10,16 +10,18 @@ import 'channel_filters.dart';
 /// прямо в `_HomeScreenState` (God-object). `ChangeNotifier`: home_screen
 /// подписывается и делает `setState` на `notifyListeners`.
 ///
-/// Состоит из (см. §048 / §083):
-/// - **pool filter**: [showDetour] (показывать ли detour-сервера вообще);
-/// - **match filters**: regex (+enabled/invert), protocols, subscriptions,
-///   ping — помечают ноды matching/non-matching;
+/// Состоит из (см. §048 / §083 / §096):
+/// - **pool filter**: detour ([detourHide], §096 бинарный) — `!` ON (дефолт)
+///   = скрыть detour (только non-detour), `!` OFF = показать только detour;
+/// - **match filters**: regex (+invert), protocols (+invert), subscriptions
+///   (+invert), ping — помечают ноды matching/non-matching; у каждой категории
+///   единый `!`-negate (§096);
 /// - **visibility**: [showNonMatching] (dimmed внизу vs скрыты);
 /// - **per-channel memory** (§083): снимок match-фильтров на канал,
 ///   save/restore при смене канала через [syncChannel].
 ///
-/// `showDetour` / `showNonMatching` — глобальные (не входят в per-channel
-/// снимок); match-фильтры — per-channel.
+/// Detour-фильтр / `showNonMatching` — глобальные (не входят в per-channel
+/// снимок); match-фильтры (+их invert) — per-channel.
 class NodeFilterViewModel extends ChangeNotifier {
   // ─── UI ───────────────────────────────────────────────────────────────
   bool _panelExpanded = false;
@@ -29,14 +31,27 @@ class NodeFilterViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Pool / visibility (глобальные) ─────────────────────────────────────
-  bool _showDetour = true;
-  bool get showDetour => _showDetour;
-  void setShowDetour(bool v) {
-    _showDetour = v;
+  // ─── Pool: detour (§096, бинарный `!`, глобальный) ──────────────────────
+  // `!` ON (дефолт) → скрыть detour (только non-detour, чистый список);
+  // `!` OFF → показать ТОЛЬКО detour (диагностика разрыва цепочки).
+  // «Show all» состояния нет — detour либо скрыт, либо изолирован.
+  bool _detourHide = true;
+  bool get detourHide => _detourHide;
+  void toggleDetourHide() {
+    _detourHide = !_detourHide;
     notifyListeners();
   }
 
+  /// Pool-предикат по detour-флагу ноды: hide → проходят non-detour;
+  /// show-only → проходят detour.
+  bool detourPoolPasses(bool isDetour) => _detourHide ? !isDetour : isDetour;
+
+  /// «Только detour» — особый диагностический режим (не дефолт): зажигает
+  /// точку на табе/кнопке + чип-сводку. Дефолтное скрытие detour — нормальный
+  /// режим, точку НЕ зажигает.
+  bool get detourOnly => !_detourHide;
+
+  // ─── Visibility (глобальный) ────────────────────────────────────────────
   bool _showNonMatching = true;
   bool get showNonMatching => _showNonMatching;
   void setShowNonMatching(bool v) {
@@ -48,17 +63,16 @@ class NodeFilterViewModel extends ChangeNotifier {
   final TextEditingController regexController = TextEditingController();
   RegExp? _regexCompiled;
   bool _regexValid = true;
-  bool _regexEnabled = false;
   bool _regexInvert = false;
   Timer? _regexTimer;
 
   bool get regexValid => _regexValid;
-  bool get regexEnabled => _regexEnabled;
   bool get regexInvert => _regexInvert;
 
-  /// Скомпилированный regex для predicate'а — `null` если filter выключен /
-  /// пустой / invalid.
-  RegExp? get activeRegex => _regexEnabled ? _regexCompiled : null;
+  /// §096 — regex активен пока поле непустое и валидно: enable-галку убрали, её
+  /// слот занял `!`-negate. `_regexCompiled` уже `null` при пустом/невалидном
+  /// паттерне, поэтому отдельный enable-gate не нужен.
+  RegExp? get activeRegex => _regexCompiled;
 
   void onRegexChanged(String text) {
     _regexTimer?.cancel();
@@ -71,7 +85,6 @@ class NodeFilterViewModel extends ChangeNotifier {
         try {
           _regexCompiled = RegExp(text, caseSensitive: false);
           _regexValid = true;
-          _regexEnabled = true;
         } catch (_) {
           _regexCompiled = null;
           _regexValid = false;
@@ -81,13 +94,8 @@ class NodeFilterViewModel extends ChangeNotifier {
     });
   }
 
-  void setRegexEnabled(bool v) {
-    _regexEnabled = v;
-    notifyListeners();
-  }
-
-  void setRegexInvert(bool v) {
-    _regexInvert = v;
+  void toggleRegexInvert() {
+    _regexInvert = !_regexInvert;
     notifyListeners();
   }
 
@@ -96,7 +104,6 @@ class NodeFilterViewModel extends ChangeNotifier {
     _regexTimer?.cancel();
     _regexCompiled = null;
     _regexValid = true;
-    _regexEnabled = false;
     _regexInvert = false;
     notifyListeners();
   }
@@ -118,17 +125,31 @@ class NodeFilterViewModel extends ChangeNotifier {
   Set<String> get selectedEmojis =>
       regexController.text.split('|').where((p) => p.isNotEmpty).toSet();
 
-  // ─── Protocols / subscriptions (multi-select chips) ─────────────────────
+  // ─── Protocols / subscriptions (multi-select chips + §096 invert) ───────
   final Set<String> enabledProtocols = <String>{};
   final Set<String> enabledSubscriptions = <String>{};
+  bool _protocolsInvert = false;
+  bool _subscriptionsInvert = false;
+  bool get protocolsInvert => _protocolsInvert;
+  bool get subscriptionsInvert => _subscriptionsInvert;
 
   void toggleProtocol(String proto) {
     if (!enabledProtocols.add(proto)) enabledProtocols.remove(proto);
     notifyListeners();
   }
 
+  void toggleProtocolsInvert() {
+    _protocolsInvert = !_protocolsInvert;
+    notifyListeners();
+  }
+
   void toggleSubscription(String id) {
     if (!enabledSubscriptions.add(id)) enabledSubscriptions.remove(id);
+    notifyListeners();
+  }
+
+  void toggleSubscriptionsInvert() {
+    _subscriptionsInvert = !_subscriptionsInvert;
     notifyListeners();
   }
 
@@ -175,7 +196,7 @@ class NodeFilterViewModel extends ChangeNotifier {
   }
 
   // ─── Активность (per-category — для точек на табах + сводки) ────────────
-  bool get regexActive => _regexEnabled && _regexCompiled != null;
+  bool get regexActive => _regexCompiled != null;
   bool get protocolActive => enabledProtocols.isNotEmpty;
   bool get subscriptionActive => enabledSubscriptions.isNotEmpty;
   bool get pingActive => _pingEnabled && _maxPingMs != null;
@@ -184,16 +205,16 @@ class NodeFilterViewModel extends ChangeNotifier {
   bool get isActive =>
       regexActive || protocolActive || subscriptionActive || pingActive;
 
-  /// «Скрыто» visibility-тоглами (для чипов-сводки + точки Settings-таба).
-  bool get detourHidden => !_showDetour;
+  /// Non-matching скрыты visibility-тоглом (для чипа-сводки + точки Settings).
   bool get nonMatchingHidden => !_showNonMatching;
 
-  /// Settings-таб активен (ping ИЛИ что-то скрыто visibility-тоглами).
-  bool get settingsActive => pingActive || detourHidden || nonMatchingHidden;
+  /// Settings-таб активен (ping ИЛИ «только detour» ИЛИ non-matching скрыты).
+  /// Дефолтное скрытие detour точку НЕ зажигает (это нормальный режим).
+  bool get settingsActive => pingActive || detourOnly || nonMatchingHidden;
 
-  /// Любой применённый фильтр (match ИЛИ visibility) — точка на кнопке
-  /// `Icons.tune` в закрытом режиме.
-  bool get hasActiveFilters => isActive || detourHidden || nonMatchingHidden;
+  /// Любой применённый фильтр (match ИЛИ «только detour» ИЛИ visibility) —
+  /// точка на кнопке `Icons.tune` в закрытом режиме.
+  bool get hasActiveFilters => isActive || detourOnly || nonMatchingHidden;
 
   // ─── Per-channel memory (§083) ─────────────────────────────────────────
   final Map<String, ChannelFilters> _byChannel = {};
@@ -205,10 +226,11 @@ class NodeFilterViewModel extends ChangeNotifier {
 
   ChannelFilters _capture() => ChannelFilters(
         regexPattern: regexController.text,
-        regexEnabled: _regexEnabled,
         regexInvert: _regexInvert,
         protocols: Set.of(enabledProtocols),
+        protocolsInvert: _protocolsInvert,
         subscriptions: Set.of(enabledSubscriptions),
+        subscriptionsInvert: _subscriptionsInvert,
         // дефолт «200» (disabled) → '' чтобы канал считался пустым (no orphan).
         pingText: _pingIsDefault ? '' : pingController.text,
         pingEnabled: _pingEnabled,
@@ -230,14 +252,15 @@ class NodeFilterViewModel extends ChangeNotifier {
         _regexValid = false;
       }
     }
-    _regexEnabled = f.regexEnabled;
     _regexInvert = f.regexInvert;
     enabledProtocols
       ..clear()
       ..addAll(f.protocols);
+    _protocolsInvert = f.protocolsInvert;
     enabledSubscriptions
       ..clear()
       ..addAll(f.subscriptions);
+    _subscriptionsInvert = f.subscriptionsInvert;
     // пустой снимок → дефолтное «200» (disabled), иначе сохранённое значение.
     final restoredPing = f.pingText.isEmpty ? defaultPingText : f.pingText;
     pingController.text = restoredPing;
