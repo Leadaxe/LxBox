@@ -6,7 +6,7 @@ class OutboundViewScreen extends StatelessWidget {
     required this.tag,
     required this.kind,
     required this.json,
-    required this.hasDetour,
+    required this.detourCount,
     required this.onCopy,
   });
 
@@ -14,8 +14,9 @@ class OutboundViewScreen extends StatelessWidget {
   final String kind;
   final String json;
 
-  /// §099 — есть ли у ноды detour-цель: определяет вид Copy-аффорданса.
-  final bool hasDetour;
+  /// §099 — число detour-хопов у ноды (0 = нет). Определяет вид Copy-аффорданса
+  /// и лейбл «server + detour(s)».
+  final int detourCount;
 
   /// Копирование JSON-варианта (перенесено из контекстного меню ноды, §099).
   /// `mode`: `'server'` | `'detour'` | `'both'` → `copyNodeJson`.
@@ -24,19 +25,23 @@ class OutboundViewScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // §099 — лейбл «both»: единственное «detour» или «detours(N)» при N>1.
+    final bothLabel = detourCount > 1
+        ? 'Copy server + detours($detourCount)'
+        : 'Copy server + detour';
     return Scaffold(
       appBar: AppBar(
         title: Text('$kind · $tag', overflow: TextOverflow.ellipsis),
         actions: [
           // §099 — без detour: простая кнопка Copy (JSON ноды). С detour:
-          // выпадашка (Copy JSON / Copy detour / Copy server + detour).
-          if (hasDetour)
+          // выпадашка (Copy server JSON / Copy detour / Copy server + detour(s)).
+          if (detourCount > 0)
             PopupMenuButton<String>(
               tooltip: 'Copy',
               icon: const Icon(Icons.content_copy),
               onSelected: onCopy,
-              itemBuilder: (_) => const [
-                PopupMenuItem(
+              itemBuilder: (_) => [
+                const PopupMenuItem(
                   value: 'server',
                   child: ListTile(
                     dense: true,
@@ -45,7 +50,7 @@ class OutboundViewScreen extends StatelessWidget {
                     title: Text('Copy server JSON'),
                   ),
                 ),
-                PopupMenuItem(
+                const PopupMenuItem(
                   value: 'detour',
                   child: ListTile(
                     dense: true,
@@ -59,8 +64,8 @@ class OutboundViewScreen extends StatelessWidget {
                   child: ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.copy_all, size: 20),
-                    title: Text('Copy server + detour'),
+                    leading: const Icon(Icons.copy_all, size: 20),
+                    title: Text(bothLabel),
                   ),
                 ),
               ],

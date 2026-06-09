@@ -27,13 +27,13 @@ void viewOutboundJson(BuildContext context, String tag, HomeState state) {
 
   final payload = chain.length == 1 ? chain.first : chain;
   final json = const JsonEncoder.withIndent('  ').convert(payload);
-  final hasDetour = intro.detourOf(tag) != null;
+  final detourCount = chain.length - 1; // [self, d1, …] → кол-во detour'ов
   Navigator.push(context, MaterialPageRoute(
     builder: (_) => OutboundViewScreen(
       tag: tag,
       kind: intro.kindOf(tag),
       json: json,
-      hasDetour: hasDetour,
+      detourCount: detourCount,
       // §099 — copy-варианты JSON перенесены из контекстного меню сюда.
       onCopy: (mode) => copyNodeJson(context, tag, state, mode),
     ),
@@ -70,14 +70,19 @@ void copyNodeJson(
       toCopy = Map<String, dynamic>.from(detour)..remove('detour');
       label = 'Detour copied';
     case 'both':
-      final cleanServer = Map<String, dynamic>.from(server)..remove('detour');
-      if (detour != null) {
-        final cleanDetour = Map<String, dynamic>.from(detour)..remove('detour');
-        toCopy = [cleanDetour, cleanServer];
+      // §099 — server + ВСЯ цепочка detour'ов (не только первый hop), каждый
+      // без своего detour-указателя (standalone outbounds для вставки).
+      final chain = intro.outboundChain(tag); // [self, d1, d2, …]
+      final n = chain.length - 1;
+      if (n <= 0) {
+        toCopy = Map<String, dynamic>.from(server)..remove('detour');
+        label = 'Server copied';
       } else {
-        toCopy = cleanServer;
+        toCopy = [
+          for (final m in chain) Map<String, dynamic>.from(m)..remove('detour'),
+        ];
+        label = 'Server + $n detour${n > 1 ? "s" : ""} copied';
       }
-      label = 'Server${detour != null ? " + detour" : ""} copied';
     default: // 'server'
       toCopy = Map<String, dynamic>.from(server)..remove('detour');
       label = 'Server copied';
