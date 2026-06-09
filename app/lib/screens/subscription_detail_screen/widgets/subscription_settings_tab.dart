@@ -95,27 +95,8 @@ class SubscriptionSettingsTab extends StatelessWidget {
                 title: Text('Use subscription detour servers'),
                 subtitle: Text('Nodes connect through detour servers'),
               ),
-              // Sub-options только под Use — visibility-flags про ⚙-серверы
-              if (detourMode == DetourMode.use)
-                Padding(
-                  padding: const EdgeInsets.only(left: 24),
-                  child: Column(children: [
-                    SwitchListTile(
-                      title: const Text('Register detour servers'),
-                      subtitle: const Text(
-                          'Add detour servers to proxy groups (visible in node list)'),
-                      value: entry.registerDetourServers,
-                      onChanged: onRegisterDetourServersChanged,
-                    ),
-                    SwitchListTile(
-                      title: const Text('Register detour in auto group'),
-                      subtitle: const Text(
-                          'Include detour servers in auto-proxy-out urltest'),
-                      value: entry.registerDetourInAuto,
-                      onChanged: onRegisterDetourInAutoChanged,
-                    ),
-                  ]),
-                ),
+              // §096 — register-тоглы под Use (нативные детуры используются).
+              if (detourMode == DetourMode.use) _registerToggles(),
               RadioListTile<DetourMode>(
                 value: DetourMode.override,
                 title: const Text('Add detour'),
@@ -150,6 +131,9 @@ class SubscriptionSettingsTab extends StatelessWidget {
                     onChanged: onReplaceDetourChainChanged,
                   ),
                 ),
+                // §096 — при APPEND (Replace выкл) нативные детуры подписки
+                // сохраняются в цепочке → register-тоглы осмысленны и тут.
+                if (!entry.replaceDetourChain) _registerToggles(),
               ],
               const RadioListTile<DetourMode>(
                 value: DetourMode.none,
@@ -171,6 +155,31 @@ class SubscriptionSettingsTab extends StatelessWidget {
       ],
     );
   }
+
+  /// §096/§026 — register-тоглы detour-серверов. Показываются когда нативные
+  /// детуры в игре: режим **Use** ИЛИ **Add detour + APPEND** (Replace выкл).
+  /// Прячутся при REPLACE / None (нативных детуров нет — регистрировать нечего).
+  /// Делают detour-сервера видимыми как ноды (selector) / в ✨auto. Флаги
+  /// хранятся независимо от режима — переключение Use↔Add detour их не теряет.
+  Widget _registerToggles() => Padding(
+        padding: const EdgeInsets.only(left: 24),
+        child: Column(children: [
+          SwitchListTile(
+            title: const Text('Register detour servers'),
+            subtitle: const Text(
+                'Add detour servers to proxy groups (visible in node list)'),
+            value: entry.registerDetourServers,
+            onChanged: onRegisterDetourServersChanged,
+          ),
+          SwitchListTile(
+            title: const Text('Register detour in auto group'),
+            subtitle: const Text(
+                'Include detour servers in auto-proxy-out urltest'),
+            value: entry.registerDetourInAuto,
+            onChanged: onRegisterDetourInAutoChanged,
+          ),
+        ]),
+      );
 
   Widget _buildSubscriptionInfo(ThemeData theme) {
     final list = entry.list as SubscriptionServers;

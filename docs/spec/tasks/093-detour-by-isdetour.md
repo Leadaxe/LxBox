@@ -34,3 +34,21 @@ Detour-hide фильтр на главном (`NodeListPresenter.splitNodes` /
 - (c) оставить, но привязать к `isDetour` вместо ⚙.
 
 → UX-развязка, **согласовать с юзером** перед реализацией.
+
+### G2b — РЕШЕНО ✅ (§096, 2026-06): политики ОСТАВЛЯЕМ (вариант b)
+
+Юзер обосновал кейсом «добавить свой detour, но не заменять детуры подписки»
+(= режим **Add detour + APPEND**, §073, Replace выкл): нативные детуры подписки
+остаются в цепочке, поэтому `registerDetourServers` / `registerDetourInAuto`
+**нужны и имеют смысл**. Решение: политики живут на subscription-level
+(`DetourPolicy`, как и сейчас — вариант b), НЕ убираем.
+
+UX-доработка (§096): register-тоглы в `subscription_settings_tab` теперь
+показываются не только под **Use**, но и под **Add detour** при APPEND
+(Replace выкл) — там нативные детуры в игре. Прячутся при REPLACE / None.
+Флаги хранятся независимо от режима (переключение Use↔Add detour их не теряет).
+
+Ручной per-node toggle «Mark as detour» уже убран (§094); `isMainAsDetour`
+(⚙-префикс) теперь только из парсинга/`TagResolver`. (NB: комментарий в
+`server_list_build.dart` ~стр.64 «см. toggle в node_settings_screen» —
+устаревший, toggle'а там больше нет.)
