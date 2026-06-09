@@ -102,13 +102,15 @@ class SubscriptionSettingsTab extends StatelessWidget {
                   child: Column(children: [
                     SwitchListTile(
                       title: const Text('Register detour servers'),
-                      subtitle: const Text('Add ⚙ servers to proxy groups (visible in node list)'),
+                      subtitle: const Text(
+                          'Add detour servers to proxy groups (visible in node list)'),
                       value: entry.registerDetourServers,
                       onChanged: onRegisterDetourServersChanged,
                     ),
                     SwitchListTile(
                       title: const Text('Register detour in auto group'),
-                      subtitle: const Text('Include ⚙ servers in auto-proxy-out urltest'),
+                      subtitle: const Text(
+                          'Include detour servers in auto-proxy-out urltest'),
                       value: entry.registerDetourInAuto,
                       onChanged: onRegisterDetourInAutoChanged,
                     ),

@@ -3,13 +3,17 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../config/consts.dart';
 import '../services/tag_resolver.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/error_format.dart';
 import '../models/server_list.dart';
 import '../models/template_vars.dart';
+import '../widgets/emoji_picker_button.dart';
 
+/// Настройки одиночного сервера (UserServer). Две вкладки (§090 G2b):
+/// **Settings** (Protocol/Server/Tag + эмодзи-пикер + Detour) и **JSON**
+/// (редактируемый outbound). Ручная ⚙-detour-пометка убрана — detour теперь
+/// структурный (§091/G2a), ⚙ остаётся как обычный эмодзи в палитре.
 class NodeSettingsScreen extends StatefulWidget {
   const NodeSettingsScreen({
     super.key,
@@ -98,16 +102,21 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     if (mounted) setState(() {});
   }
 
-  bool get _isMarkedDetour => _tagCtrl.text.startsWith(kDetourTagPrefix);
-
-  void _toggleDetourMark(bool on) {
-    setState(() {
-      if (on && !_isMarkedDetour) {
-        _tagCtrl.text = '$kDetourTagPrefix${_tagCtrl.text}';
-      } else if (!on && _isMarkedDetour) {
-        _tagCtrl.text = _tagCtrl.text.substring(kDetourTagPrefix.length);
-      }
-    });
+  /// §090 G2b — вставка эмодзи из пикера в позицию курсора поля Tag.
+  void _insertEmoji(String emoji) {
+    final text = _tagCtrl.text;
+    final sel = _tagCtrl.selection;
+    final start =
+        (sel.start >= 0 && sel.start <= text.length) ? sel.start : text.length;
+    final end = (sel.end >= 0 && sel.end <= text.length) ? sel.end : start;
+    const space = ' ';
+    final insert = '$emoji$space';
+    final newText = text.replaceRange(start, end, insert);
+    _tagCtrl.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: start + insert.length),
+    );
+    setState(() {});
   }
 
   void _saveJson() {
@@ -139,167 +148,151 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_tagCtrl.text.isNotEmpty ? _tagCtrl.text : 'Node Settings'),
-        actions: [
-          IconButton(
-            tooltip: 'Save',
-            icon: const Icon(Icons.save),
-            onPressed: _saveJson,
-          ),
-        ],
-      ),
-      body: _originalTag.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
-              children: [
-                // --- Info section ---
-                _sectionHeader('Info', 'Protocol and server details', theme),
-                ListTile(
-                  leading: const Icon(Icons.security, size: 20),
-                  title: const Text('Protocol'),
-                  trailing: Text(_scheme, style: theme.textTheme.bodyMedium),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.dns, size: 20),
-                  title: const Text('Server'),
-                  trailing: Text(_serverInfo, style: theme.textTheme.bodyMedium),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                  child: TextField(
-                    controller: _tagCtrl,
-                    onChanged: (_) => setState(() {}),
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Tag',
-                      hintText: 'Display name in node list',
-                      isDense: true,
-                      prefixIcon: Icon(Icons.label_outline, size: 18),
-                    ),
-                  ),
-                ),
-                SwitchListTile(
-                  secondary: const Icon(Icons.alt_route, size: 20),
-                  title: const Text('Mark as detour server'),
-                  subtitle: const Text(
-                      'Adds ⚙ prefix — use when this node serves as the first '
-                      'hop for other nodes (Override detour in subscription)'),
-                  value: _isMarkedDetour,
-                  onChanged: _toggleDetourMark,
-                ),
-                // Per-server detour registration policy. Появляются только
-                // когда ⚙ ON — когда сервер помечен как detour, его по
-                // умолчанию прячем из selector-списка и ✨auto (ведёт себя
-                // как звено цепочки, а не endpoint). Галки ниже — явные
-                // overrides для кейсов когда хочется оба ролей.
-                if (_isMarkedDetour) ...[
-                  SwitchListTile(
-                    secondary: const Icon(Icons.list_alt, size: 20),
-                    title: const Text('Register in VPN groups'),
-                    subtitle: const Text(
-                        'Show this detour server in the outbound selector'),
-                    value: widget.entry.registerDetourServers,
-                    onChanged: (v) {
-                      setState(() {
-                        widget.entry.registerDetourServers = v;
-                      });
-                      unawaited(widget.subController.persistSources());
-                    },
-                  ),
-                  SwitchListTile(
-                    secondary: const Icon(Icons.speed, size: 20),
-                    title: const Text('Register in auto group'),
-                    subtitle: const Text(
-                        'Include in ✨auto urltest polling'),
-                    value: widget.entry.registerDetourInAuto,
-                    onChanged: (v) {
-                      setState(() {
-                        widget.entry.registerDetourInAuto = v;
-                      });
-                      unawaited(widget.subController.persistSources());
-                    },
-                  ),
-                ],
-                const SizedBox(height: 16),
-
-                // --- Detour section ---
-                _sectionHeader('Detour', 'Route through another server first', theme),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _detour.isEmpty ? '' : (_availableNodes.contains(_detour) ? _detour : ''),
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Detour server',
-                      isDense: true,
-                    ),
-                    items: [
-                      const DropdownMenuItem(value: '', child: Text('None (direct)')),
-                      ..._availableNodes.map((tag) =>
-                          DropdownMenuItem(value: tag, child: Text(tag, overflow: TextOverflow.ellipsis))),
-                    ],
-                    onChanged: (v) {
-                      setState(() => _detour = v ?? '');
-                      // Persist через ServerList.detourPolicy.overrideDetour —
-                      // builder подхватит и перезапишет main.map['detour'].
-                      // Не трогаем JSON ноды, иначе после save через
-                      // parseSingboxEntry поле снова потеряется.
-                      widget.entry.overrideDetour = _detour;
-                      unawaited(widget.subController.persistSources());
-                    },
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Text(
-                    _detour.isEmpty
-                        ? 'Traffic goes directly to this server.'
-                        : 'Phone \u2192 $_detour \u2192 $_originalTag \u2192 Internet',
-                    style: theme.textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // --- JSON editor ---
-                _sectionHeader('Outbound JSON', 'Edit tag, detour, and all server parameters', theme),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Stack(
-                      children: [
-                        TextField(
-                          controller: _jsonCtrl,
-                          maxLines: null,
-                          minLines: 8,
-                          style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                            contentPadding: EdgeInsets.fromLTRB(12, 12, 40, 12),
-                          ),
-                        ),
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: IconButton(
-                            icon: const Icon(Icons.copy, size: 16),
-                            tooltip: 'Copy JSON',
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () {
-                              Clipboard.setData(ClipboardData(text: _jsonCtrl.text));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('JSON copied')),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title:
+              Text(_tagCtrl.text.isNotEmpty ? _tagCtrl.text : 'Node Settings'),
+          actions: [
+            IconButton(
+              tooltip: 'Save',
+              icon: const Icon(Icons.save),
+              onPressed: _saveJson,
             ),
+          ],
+          bottom: const TabBar(
+            tabs: [Tab(text: 'Settings'), Tab(text: 'JSON')],
+          ),
+        ),
+        body: _originalTag.isEmpty
+            ? const Center(child: CircularProgressIndicator())
+            : TabBarView(
+                children: [
+                  _buildSettingsTab(theme),
+                  _buildJsonTab(theme),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsTab(ThemeData theme) {
+    return ListView(
+      padding:
+          EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
+      children: [
+        _sectionHeader('Info', 'Protocol and server details', theme),
+        ListTile(
+          leading: const Icon(Icons.security, size: 20),
+          title: const Text('Protocol'),
+          trailing: Text(_scheme, style: theme.textTheme.bodyMedium),
+        ),
+        ListTile(
+          leading: const Icon(Icons.dns, size: 20),
+          title: const Text('Server'),
+          trailing: Text(_serverInfo, style: theme.textTheme.bodyMedium),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: TextField(
+            controller: _tagCtrl,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: 'Tag',
+              hintText: 'Display name in node list',
+              isDense: true,
+              prefixIcon: const Icon(Icons.label_outline, size: 18),
+              // §090 G2b — эмодзи-пикер: тап → палитра → вставка в курсор.
+              suffixIcon: EmojiPickerButton(onPick: _insertEmoji),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        _sectionHeader('Detour', 'Route through another server first', theme),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: DropdownButtonFormField<String>(
+            initialValue: _detour.isEmpty
+                ? ''
+                : (_availableNodes.contains(_detour) ? _detour : ''),
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Detour server',
+              isDense: true,
+            ),
+            items: [
+              const DropdownMenuItem(value: '', child: Text('None (direct)')),
+              ..._availableNodes.map((tag) => DropdownMenuItem(
+                  value: tag,
+                  child: Text(tag, overflow: TextOverflow.ellipsis))),
+            ],
+            onChanged: (v) {
+              setState(() => _detour = v ?? '');
+              // Persist через ServerList.detourPolicy.overrideDetour — builder
+              // подхватит и перезапишет main.map['detour']. Не трогаем JSON
+              // ноды, иначе после save через parseSingboxEntry поле теряется.
+              widget.entry.overrideDetour = _detour;
+              unawaited(widget.subController.persistSources());
+            },
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Text(
+            _detour.isEmpty
+                ? 'Traffic goes directly to this server.'
+                : 'Phone → $_detour → $_originalTag → Internet',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildJsonTab(ThemeData theme) {
+    return ListView(
+      padding:
+          EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
+      children: [
+        _sectionHeader(
+            'Outbound JSON', 'Edit tag, detour, and all server parameters', theme),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Stack(
+            children: [
+              TextField(
+                controller: _jsonCtrl,
+                maxLines: null,
+                minLines: 12,
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  contentPadding: EdgeInsets.fromLTRB(12, 12, 40, 12),
+                ),
+              ),
+              Positioned(
+                top: 4,
+                right: 4,
+                child: IconButton(
+                  icon: const Icon(Icons.copy, size: 16),
+                  tooltip: 'Copy JSON',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: _jsonCtrl.text));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('JSON copied')),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
