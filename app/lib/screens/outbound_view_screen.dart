@@ -42,7 +42,7 @@ class OutboundViewScreen extends StatelessWidget {
                     dense: true,
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(Icons.content_copy, size: 20),
-                    title: Text('Copy JSON'),
+                    title: Text('Copy server JSON'),
                   ),
                 ),
                 PopupMenuItem(
