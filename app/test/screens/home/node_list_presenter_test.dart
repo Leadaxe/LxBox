@@ -85,6 +85,13 @@ void main() {
     expect(nonMatching, isEmpty);
   });
 
+  test('showAll (чекбокс): все ноды видны, включая detour B', () {
+    filter.setDetourShowAll(true);
+    final (matching, nonMatching) = presenter.splitNodes(tags, state);
+    expect(matching, containsAll(['A', 'B', 'C', 'auto', 'direct', 'Z']));
+    expect(nonMatching, isEmpty);
+  });
+
   test('control-узлы видны в ОБОИХ detour-режимах (никогда не drop)', () {
     final (m1, _) = presenter.splitNodes(tags, state);
     expect(m1, containsAll(['auto', 'direct']));

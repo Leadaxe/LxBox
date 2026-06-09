@@ -203,30 +203,41 @@ class _FilterPanelState extends State<FilterPanel>
               onEnabledChanged: f.setPingEnabled,
               onClear: f.clearPing,
             ),
-            // §096 — detour бинарный (без чекбокса): [!] ON (дефолт) = скрыть
-            // detour, OFF = только detour. Tap по всему ряду = toggle.
-            InkWell(
-              onTap: f.toggleDetourHide,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(
-                  children: [
-                    NegateToggle(
-                      active: f.detourHide,
-                      onToggle: f.toggleDetourHide,
-                      tooltip: f.detourHide
-                          ? 'detour скрыты'
-                          : 'показаны только detour',
+            // §096 — detour: чекбокс «show all» + [!] (hide↔only). Чекбокс
+            // вкл → показать ВСЁ; иначе [!] ON (дефолт) = скрыть detour,
+            // OFF = только detour. Лейбл ряда отражает итоговый режим.
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: Checkbox(
+                      value: f.detourShowAll,
+                      onChanged: (v) => f.setDetourShowAll(v ?? false),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      f.detourHide
-                          ? 'Hide detour servers'
-                          : 'Show only detour servers',
+                  ),
+                  const SizedBox(width: 2),
+                  NegateToggle(
+                    active: f.detourHide,
+                    onToggle: f.toggleDetourHide,
+                    tooltip: 'Hide (вкл) / только detour (выкл)',
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      f.detourShowAll
+                          ? 'Show detour servers'
+                          : (f.detourHide
+                              ? 'Hide detour servers'
+                              : 'Show only detour servers'),
                       style: const TextStyle(fontSize: 12),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             FilterCheckboxRow(

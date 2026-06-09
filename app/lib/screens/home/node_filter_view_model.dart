@@ -11,8 +11,8 @@ import 'channel_filters.dart';
 /// подписывается и делает `setState` на `notifyListeners`.
 ///
 /// Состоит из (см. §048 / §083 / §096):
-/// - **pool filter**: detour ([detourHide], §096 бинарный) — `!` ON (дефолт)
-///   = скрыть detour (только non-detour), `!` OFF = показать только detour;
+/// - **pool filter**: detour (§096) — чекбокс [detourShowAll] (показать всё) +
+///   `!` [detourHide]: ON (дефолт) = скрыть detour, OFF = показать только detour;
 /// - **match filters**: regex (+invert), protocols (+invert), subscriptions
 ///   (+invert), ping — помечают ноды matching/non-matching; у каждой категории
 ///   единый `!`-negate (§096);
@@ -31,25 +31,34 @@ class NodeFilterViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Pool: detour (§096, бинарный `!`, глобальный) ──────────────────────
-  // `!` ON (дефолт) → скрыть detour (только non-detour, чистый список);
-  // `!` OFF → показать ТОЛЬКО detour (диагностика разрыва цепочки).
-  // «Show all» состояния нет — detour либо скрыт, либо изолирован.
+  // ─── Pool: detour (§096, чекбокс + `!`, глобальный) ─────────────────────
+  // Чекбокс [_detourShowAll]: вкл → показать ВСЁ (detour + non-detour).
+  // `!` [_detourHide] (когда не showAll): ON (дефолт) → скрыть detour (только
+  // non-detour, чистый список); OFF → показать ТОЛЬКО detour (диагностика).
+  bool _detourShowAll = false;
   bool _detourHide = true;
+  bool get detourShowAll => _detourShowAll;
   bool get detourHide => _detourHide;
+
+  void setDetourShowAll(bool v) {
+    _detourShowAll = v;
+    notifyListeners();
+  }
+
   void toggleDetourHide() {
     _detourHide = !_detourHide;
     notifyListeners();
   }
 
-  /// Pool-предикат по detour-флагу ноды: hide → проходят non-detour;
+  /// Pool-предикат: showAll → всё проходит; иначе hide → проходят non-detour,
   /// show-only → проходят detour.
-  bool detourPoolPasses(bool isDetour) => _detourHide ? !isDetour : isDetour;
+  bool detourPoolPasses(bool isDetour) =>
+      _detourShowAll || (_detourHide ? !isDetour : isDetour);
 
   /// «Только detour» — особый диагностический режим (не дефолт): зажигает
-  /// точку на табе/кнопке + чип-сводку. Дефолтное скрытие detour — нормальный
-  /// режим, точку НЕ зажигает.
-  bool get detourOnly => !_detourHide;
+  /// точку на табе/кнопке + чип-сводку. Дефолт (скрыть detour) и showAll —
+  /// нормальные режимы, точку НЕ зажигают.
+  bool get detourOnly => !_detourShowAll && !_detourHide;
 
   // ─── Visibility (глобальный) ────────────────────────────────────────────
   bool _showNonMatching = true;

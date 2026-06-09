@@ -18,7 +18,8 @@ void main() {
   group('defaults', () {
     test('чистое состояние', () {
       expect(vm.showNonMatching, true);
-      // §096 — detour бинарный: дефолт «скрыть detour» (нормальный режим).
+      // §096 — detour: дефолт «скрыть detour» (нормальный режим).
+      expect(vm.detourShowAll, false);
       expect(vm.detourHide, true);
       expect(vm.detourOnly, false);
       expect(vm.panelExpanded, false);
@@ -79,8 +80,9 @@ void main() {
     });
   });
 
-  group('detour бинарный (§096)', () {
+  group('detour (§096 — чекбокс + !)', () {
     test('дефолт — скрыть detour (только non-detour)', () {
+      expect(vm.detourShowAll, false);
       expect(vm.detourHide, true);
       expect(vm.detourOnly, false);
       expect(vm.detourPoolPasses(false), true, reason: 'non-detour виден');
@@ -89,7 +91,7 @@ void main() {
       expect(vm.settingsActive, false);
       expect(vm.hasActiveFilters, false);
     });
-    test('toggle → только detour (особый режим)', () {
+    test('! off → только detour (особый режим)', () {
       vm.toggleDetourHide();
       expect(vm.detourHide, false);
       expect(vm.detourOnly, true);
@@ -98,7 +100,18 @@ void main() {
       expect(vm.settingsActive, true);
       expect(vm.hasActiveFilters, true);
     });
-    test('toggle обратно → снова скрыть detour', () {
+    test('checkbox showAll → всё проходит, перекрывает !', () {
+      vm.setDetourShowAll(true);
+      expect(vm.detourPoolPasses(true), true);
+      expect(vm.detourPoolPasses(false), true);
+      expect(vm.detourOnly, false, reason: 'showAll — не особый режим');
+      // даже с ! off (only) showAll перекрывает:
+      vm.toggleDetourHide();
+      expect(vm.detourHide, false);
+      expect(vm.detourPoolPasses(false), true, reason: 'showAll перекрывает !');
+      expect(vm.detourOnly, false);
+    });
+    test('toggle ! обратно → снова скрыть detour', () {
       vm.toggleDetourHide();
       vm.toggleDetourHide();
       expect(vm.detourHide, true);
