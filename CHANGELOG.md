@@ -24,6 +24,7 @@ lazy-persist, v1.9.0+; field report с 4PDA). Release notes:
 - **§107 — Start при pending-изменениях достраивает конфиг перед запуском** ([home_screen.dart](app/lib/screens/home_screen.dart)). Гейт в `_startWithAutoRefresh`: незавершённая пересборка await'ится (single-flight), `configDirty` → rebuild до native start. Туннель всегда поднимается со свежими правилами; плашка «restart to apply» остаётся только для сбоя сборки / config-lock (§037).
 - **§107 — Ошибка пересборки больше не гасит баннер**. `configDirty` сбрасывается только при успешном generate+save (раньше — безусловно, и юзер не узнавал, что конфиг остался старым); при неудачном save флаг восстанавливается.
 - **§107 — Триггер rebuild не теряется при busy**. Возврат на home во время фонового fetch'а раньше молча скипал пересборку; теперь one-shot listener догоняет её, когда controller освободится.
+- **§108 — AppPicker: системный back больше не теряет выбор приложений** ([task spec](docs/spec/tasks/108-app-picker-back-loses-selection.md), [app_picker_screen.dart](app/lib/screens/app_picker_screen.dart)). В пикере приложений (Tunnel Applications → Add) результат возвращала только стрелка в AppBar; системный «назад»/жест проходил через пустой `PopScope` (canPop=true) — роут попался с `result=null`, и выбор молча выкидывался. Жил с §017. Теперь back перехватывается (`canPop: false`) и возвращает селекцию, как стрелка. +2 теста [app_picker_pop_test.dart](app/test/screens/app_picker_pop_test.dart).
 
 ### Removed
 

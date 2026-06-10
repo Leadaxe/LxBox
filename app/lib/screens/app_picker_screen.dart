@@ -146,7 +146,15 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
     final apps = _loading ? <AppInfo>[] : _filtered;
 
     return PopScope(
-      onPopInvokedWithResult: (didPop, _) {},
+      canPop: false,
+      // §108: системный back/жест обязан возвращать выбор так же, как
+      // стрелка в AppBar. С пустым handler'ом (canPop=true по умолчанию)
+      // роут попался с result=null — caller (`_pickApps`) молча выкидывал
+      // селекцию.
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _safePop();
+      },
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Select apps'),
