@@ -30,6 +30,12 @@ Patch-релиз: **§107 — изменения правил роутинга (
 
 Если пересборка конфига упала, баннер «Settings changed» больше не гаснет — раньше флаг сбрасывался безусловно, и приложение делало вид, что всё применилось. Плюс: пересборка, отложенная из-за фонового обновления подписок, теперь догоняется автоматически, а не теряется.
 
+### §108 — Пикер приложений: системный «назад» больше не теряет выбор
+
+[Task spec](docs/spec/tasks/108-app-picker-back-loses-selection.md).
+
+В пикере приложений (Tunnel Applications → Add) выбор сохранялся только при выходе стрелкой в AppBar; системный «назад» или жест молча выкидывал отмеченное — добавить приложение в allow/deny-список жестом было невозможно. Баг жил с самого появления пикера. Теперь любой способ выхода возвращает выбор.
+
 ---
 
 ## 🗑 Removed
@@ -42,7 +48,7 @@ App Settings → General → «Auto-rebuild config» (ключ `auto_rebuild`) �
 
 ## 🔬 Verified
 
-- `flutter analyze` clean; **915 тестов** зелёные (+7 новых в [settings_storage_staging_test.dart](app/test/services/settings_storage_staging_test.dart): staged-записи не трогают диск до flush, читатель видит staged-правила сразу — регрессионный сценарий §107; обновлён [lazy_persist_mixin_test.dart](app/test/screens/lazy_persist_mixin_test.dart) под staging-контракт).
+- `flutter analyze` clean; **917 тестов** зелёные (+7 новых в [settings_storage_staging_test.dart](app/test/services/settings_storage_staging_test.dart): staged-записи не трогают диск до flush, читатель видит staged-правила сразу — регрессионный сценарий §107; +2 в [app_picker_pop_test.dart](app/test/screens/app_picker_pop_test.dart); обновлён [lazy_persist_mixin_test.dart](app/test/screens/lazy_persist_mixin_test.dart) под staging-контракт).
 - Root cause подтверждён построчной трассировкой `didPop` → rebuild → dispose-flush; неверный race-анализ в спеке §076 исправлен ([addendum](docs/spec/features/076%20settings-and-config-lifecycle/spec.md)).
 
 ---
@@ -64,6 +70,7 @@ Patch — фикс применения настроек:
 - **Правки правил теперь реально применяются**: раньше конфиг собирался из состояния «до последней правки» (гонка ленивого сохранения, с v1.9.0), и не помогал даже рестарт VPN — отсюда «нет трафика, пока не потыкаешь Tunnel Applications». Теперь изменения подхватываются мгновенно.
 - **Start сам достраивает конфиг**: жмёшь Start при несохранённых изменениях — туннель поднимется уже с новыми правилами.
 - **Баннер не врёт**: при ошибке пересборки «Settings changed» остаётся висеть, а не гаснет молча.
+- **Пикер приложений (Tunnel Applications)**: системный «назад» больше не теряет отмеченные приложения — раньше выбор сохранялся только через стрелку в AppBar.
 - **Убрана настройка «Auto-rebuild config»** — пересборка теперь всегда автоматическая, тумблер потерял смысл.
 
 Предыдущий релиз: [v2.0.1](docs/releases/v2.0.1.md).
