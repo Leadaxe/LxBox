@@ -443,7 +443,8 @@ final class SocksSpec extends NodeSpec {
 class Awg {
   const Awg(this.fields);
 
-  /// key → `int` (числовые jc/jmin/jmax/s1–s4/h1–h4) | `String` (i1–i5).
+  /// key → `int` (числовые jc/jmin/jmax/s1–s4 и одиночные h1–h4) |
+  /// `String` (i1–i5, а также h1–h4-диапазоны `"N-M"` — §112).
   final Map<String, Object> fields;
 
   static const numKeys = <String>{
@@ -451,15 +452,38 @@ class Awg {
   };
   static const strKeys = <String>{'i1', 'i2', 'i3', 'i4', 'i5'};
 
+  /// §112 — magic headers: с AWG 2.0 значение бывает диапазоном `N-M`
+  /// (ranged headers). Подмножество [numKeys] — consumers, проверяющие
+  /// наличие ключа (ini_parser, securityLabel), не меняются.
+  static const headerKeys = <String>{'h1', 'h2', 'h3', 'h4'};
+
+  /// `N` или `N-M`. Глубже (uint32, start ≤ end, непересечение) не
+  /// валидируем: ядро даёт явную ошибку старта, а молчаливый drop
+  /// здесь = тихо сломанный handshake (исходный баг §112).
+  static final _headerRe = RegExp(r'^\d+(-\d+)?$');
+
+  /// h1–h4: `"5"` → `int 5` (type-fidelity §097), `"N-M"` → `String`,
+  /// мусор → null (поле пропускается, как `jc=abc`).
+  static Object? _parseHeader(String v) {
+    if (!_headerRe.hasMatch(v)) return null;
+    return int.tryParse(v) ?? v;
+  }
+
   bool get isEmpty => fields.isEmpty;
 
   /// Из URI query (строки). Числа → `int.tryParse` (битое → пропуск поля, не
-  /// валим парс — forward-compat, как mtu/keepalive). `i*` пустые пропускаем.
+  /// валим парс — forward-compat, как mtu/keepalive). h1–h4 дополнительно
+  /// принимают диапазон `N-M` (§112). `i*` пустые пропускаем.
   static Awg? fromQuery(Map<String, String> q) {
     final f = <String, Object>{};
     for (final k in numKeys) {
       final v = q[k];
       if (v == null) continue;
+      if (headerKeys.contains(k)) {
+        final h = _parseHeader(v.trim());
+        if (h != null) f[k] = h;
+        continue;
+      }
       final n = int.tryParse(v.trim());
       if (n != null) f[k] = n;
     }
@@ -470,12 +494,18 @@ class Awg {
     return f.isEmpty ? null : Awg(f);
   }
 
-  /// Из endpoint-JSON (корень). Числа: `num`→`int`; `i*`: непустые `String`.
+  /// Из endpoint-JSON (корень). Числа: `num`→`int`; h1–h4 также `String`
+  /// `"N"`/`"N-M"` (§112, контракт ядра lx.6); `i*`: непустые `String`.
   static Awg? fromJson(Map<String, dynamic> m) {
     final f = <String, Object>{};
     for (final k in numKeys) {
       final v = m[k];
-      if (v is num) f[k] = v.toInt();
+      if (v is num) {
+        f[k] = v.toInt();
+      } else if (v is String && headerKeys.contains(k)) {
+        final h = _parseHeader(v.trim());
+        if (h != null) f[k] = h;
+      }
     }
     for (final k in strKeys) {
       final v = m[k];
@@ -484,7 +514,8 @@ class Awg {
     return f.isEmpty ? null : Awg(f);
   }
 
-  /// В endpoint-map (корень). `int`→JSON number, `String`→JSON string.
+  /// В endpoint-map (корень). `int`→JSON number, `String`→JSON string
+  /// (h-диапазоны эмитятся строкой — ровно контракт ядра lx.6, §112).
   void writeInto(Map<String, dynamic> m) => m.addAll(fields);
 
   /// В URI query (числа → строка, `i*` как есть; encode делает `buildQuery`).

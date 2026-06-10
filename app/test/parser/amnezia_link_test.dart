@@ -110,6 +110,15 @@ void main() {
       expect(spec.rawIni, isNot(contains(r'$PRIMARY_DNS')));
     });
 
+    test('ranged magic headers (§112) доезжают через vpn://', () {
+      final ranged = _awgIni.replaceFirst(
+          'H1 = 1239197098', 'H1 = 43613244-384550127');
+      final link = makeLink(_export([_container('awg', ranged)]));
+      final spec = parseAll(decode(link)).single as WireguardSpec;
+      expect(spec.awg!.fields['h1'], '43613244-384550127');
+      expect(spec.awg!.fields['h2'], 1929999858); // одиночный остался int
+    });
+
     test('wireguard-контейнер (plain WG) → нода без awg', () {
       final link = makeLink(_export([_container('wireguard', _plainWgIni)]));
       final spec = parseAll(decode(link)).single as WireguardSpec;

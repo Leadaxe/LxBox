@@ -725,12 +725,13 @@ awg://PRIVATE_KEY@host:port?publickey=...&address=...&jc=4&jmin=40&jmax=70&s1=0&
 | `jc`, `jmin`, `jmax` | int | junk-пакеты перед handshake: количество и границы размера | AWG 1.x |
 | `s1`, `s2` | int | junk-prefix у init/response handshake-пакетов | AWG 1.x |
 | `s3`, `s4` | int | transport-padding (data-пакеты) | AWG 2.0 |
-| `h1`–`h4` | int | magic headers — подмена типов пакетов | AWG 1.x |
+| `h1`–`h4` | int \| `"N-M"` | magic headers — подмена типов пакетов; диапазон `N-M` = ranged headers (§112) | AWG 1.x / 2.0 |
 | `i1`–`i5` | string | CPS decoy-пакеты, тег-формат `<b 0xHEX><r N>…` | AWG 2.0 |
 
 - Числовые поля — uint32, эмитятся как JSON **number**.
+- `h1`–`h4` (§112): значение `N` → `int` (строка-число `"5"` нормализуется в `int 5`), диапазон `N-M` → `String`, эмитится JSON **string** (контракт ядра ≥ `lx.6`). Глубже не валидируем (start ≤ end, uint32, непересечение диапазонов) — это делает ядро с явной ошибкой на старте; молчаливый drop здесь дал бы тихо сломанный handshake.
 - `i1`–`i5` — строки, **регистр сохраняется** как есть (case-sensitive, менять нельзя).
-- Битое число в query → поле молча пропускается (forward-compat, как `mtu`/`keepalive`), парс узла не валится.
+- Битое число в query → поле молча пропускается (forward-compat, как `mtu`/`keepalive`), парс узла не валится. Для `h*` «битое» = не подходящее под `N`/`N-M`.
 
 Модель: класс `Awg` в [`node_spec.dart`](../app/lib/models/node_spec.dart) (`WireguardSpec.awg`, `null` = обычный WG). Round-trip полный: URI / INI / sing-box JSON → `Awg` → `emit()` / `toUri()` без потерь.
 
@@ -786,6 +787,13 @@ I1 = <b 0xffffffff><r 16>
 }
 ```
 
+Ranged headers (§112) — диапазоны строками, одиночные числами, можно смешивать:
+
+```jsonc
+  "h1": "43613244-384550127", "h2": "826869626-2105069164",
+  "h3": "2124774725-2141151992", "h4": "2144594503-2146278491",
+```
+
 Обратный парс (JSON-редактор, Smart-Paste) собирает те же поля из корня entry (`Awg.fromJson` в `parseSingboxEntry`).
 
 ### Уровни awg / awg2
@@ -800,7 +808,7 @@ Subtitle узла и variant-фильтр (§102/§103) различают ур�
 
 ### Требование к ядру
 
-Работает только на бандленном fork-ядре `sing-box-lx` (build-тег `with_awg`). Стоковый upstream sing-box этих полей не знает и **отвергает конфиг на load**.
+Работает только на бандленном fork-ядре `sing-box-lx` (build-тег `with_awg`). Стоковый upstream sing-box этих полей не знает и **отвергает конфиг на load**. Ranged headers (`"h1": "N-M"` строкой) требуют ядро ≥ `v1.13.13-lx.6` — старое ядро падает на unmarshal такого конфига (поэтому §112 перепинивает [libbox.version](../app/android/libbox.version) в том же коммите).
 
 ### Reference
 
