@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress — код и тесты готовы, девайс-smoke pending |
+| Статус | Done |
 | Дата старта | 2026-06-11 |
-| Дата завершения | — |
-| Коммиты | — |
+| Дата завершения | 2026-06-11 |
+| Коммиты | `6f09cb6` (feat + перепин lx.6), `1203c4a` (pubspec sync) |
 | Связанные spec'ы | features/097 (AWG2), tasks/110 (vpn://-импорт; реальный конфиг, вскрывший проблему), sing-box-lx `SPECS/005` (core-часть) |
 
 ## Проблема
@@ -79,9 +79,16 @@ sing-box-lx `v1.13.13-lx.6` (SPECS/005): JSON-поля `h1`–`h4` endpoint'а
 - Unit [amnezia_link_test.dart](../../app/test/parser/amnezia_link_test.dart):
   vpn:// с ranged-INI → поля доехали. ✅
 - `flutter analyze` чистый, полный `flutter test` — 953 passed. ✅
-- `fetch-libbox.sh` тянет `v1.13.13-lx.6` (SHA256 ок), сборка release
-  APK проходит. ✅
-- Smoke на устройстве с конфигом Seliv'а — pending (vc-вопрос, §110).
+- `fetch-libbox.sh` тянет `v1.13.13-lx.6` (SHA256 ок = `083e131…` из
+  релиза), сборка release APK проходит. ✅
+- **Live-smoke (desktop-бинарь lx.6, без устройства)**: реальный awg2
+  `.conf` (ranged H1–H4 + S3/S4 + CPS I1) → `parseWireguardIni` →
+  `emit()` → `sing-box check` ОК → `sing-box run` (socks inbound) →
+  **handshake прошёл, туннель работает** — `curl` через socks вернул
+  внешний IP = endpoint AWG-сервера; DNS/HTTPS через туннель. Это
+  закрывает протокольный риск целиком. ✅
+- UI-проход на устройстве (вставка → коннект) — поедет с релизом 2.0.3,
+  отдельной проверки не требует (тот же код-путь, что §110 + этот emit).
 
 ## Нерешённое / follow-up
 
