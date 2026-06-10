@@ -141,6 +141,11 @@ jobs:
           set -euo pipefail
           VERSION="${{ needs.meta.outputs.version }}"
           VERSION="${VERSION#v}"
+          # run_mode=build (без тега) даёт 'dev-<sha>' — не semver, pub
+          # отвергает. Префиксуем до валидного pre-release: 0.0.0-dev-<sha>.
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            VERSION="0.0.0-${VERSION}"
+          fi
           BUILD_NUMBER=$(git rev-list --count HEAD)
           sed -i.bak -E "s/^version: .*/version: $VERSION+$BUILD_NUMBER/" pubspec.yaml
           rm -f pubspec.yaml.bak
