@@ -283,16 +283,40 @@ class BoxVpnClient {
     return s ?? '';
   }
 
-  /// Полные метаданные одного app'а одним native-call'ом. `null` если package
-  /// не установлен.
-  Future<AppInfo?> getAppInfo(String packageName) async {
+  /// §109: маркер «таймаут» для [getAppInfo]. Const-канонизированная map —
+  /// `identical` отличает её от любого decoded-ответа native (codec всегда
+  /// создаёт новые инстансы). Наружу не отдаётся.
+  static const Map<dynamic, dynamic> _appInfoTimeoutMarker = <dynamic, dynamic>{
+    '__timeout__': true,
+  };
+
+  /// Метаданные одного app'а одним native-call'ом — **без иконки** (она
+  /// тяжёлая, грузится отдельно через [getAppIcon]).
+  ///
+  /// Контракт (§109, см. tasks/109):
+  ///   - `AppInfo` — пакет установлен;
+  ///   - `null`    — native ПОДТВЕРДИЛ «не установлен»
+  ///                 (NameNotFoundException → `{"notFound": true}`);
+  ///   - throw     — проверить не удалось (TimeoutException /
+  ///                 PlatformException) — caller обязан трактовать как
+  ///                 retryable, НЕ как «не установлен».
+  ///
+  /// [timeout] переопределяется только в тестах.
+  Future<AppInfo?> getAppInfo(String packageName, {Duration? timeout}) async {
     final r = await _invoke<Map<dynamic, dynamic>>(
       _Methods.getAppInfo,
       args: {'packageName': packageName},
-      timeout: _Timeouts.app,
-      onTimeoutValue: null,
+      timeout: timeout ?? _Timeouts.app,
+      onTimeoutValue: _appInfoTimeoutMarker,
     );
-    if (r == null) return null;
+    if (identical(r, _appInfoTimeoutMarker)) {
+      throw TimeoutException('getAppInfo($packageName)');
+    }
+    if (r == null) {
+      // Native по контракту null не шлёт — считаем сбоем канала (retryable).
+      throw StateError('getAppInfo($packageName): null reply');
+    }
+    if (r['notFound'] == true) return null;
     return AppInfo.fromMap(Map<String, dynamic>.from(r));
   }
 

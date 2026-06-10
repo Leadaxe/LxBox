@@ -42,9 +42,6 @@ class _TunAppsTabState extends State<TunAppsTab>
   //   - dispose / AppLifecycleState.paused → flushToDisk (atomic write)
   //   - markDirty set'ит subController.configDirty = true sync
   //   - home banner показывает «Apply / Restart» глобально
-  //
-  // packages для которых мы вызвали `AppInfoCache.ensure(pkg)`.
-  final Set<String> _ensured = <String>{};
   bool _loading = true;
 
   @override
@@ -64,7 +61,6 @@ class _TunAppsTabState extends State<TunAppsTab>
       _loading = false;
     });
     for (final pkg in cfg.packages) {
-      _ensured.add(pkg);
       AppInfoCache.ensure(pkg);
     }
   }
@@ -97,7 +93,6 @@ class _TunAppsTabState extends State<TunAppsTab>
       _cfg = _cfg.copyWith(packages: newPackages);
     });
     for (final pkg in newPackages) {
-      _ensured.add(pkg);
       AppInfoCache.ensure(pkg);
     }
     markDirty();
@@ -328,8 +323,10 @@ class _TunAppsTabState extends State<TunAppsTab>
     final info = AppInfoCache.of(pkg);
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    // Native пыталась найти, не нашла → uninstalled.
-    final uninstalled = info == null && _ensured.contains(pkg);
+    // §109: метка только при ПОДТВЕРЖДЁННОМ native'ом not-found.
+    // «Ещё грузится» / «проверка сорвалась (timeout)» → обычный tile без
+    // метки (раньше любая неудача красила «uninstalled» до конца сессии).
+    final uninstalled = AppInfoCache.isNotFound(pkg);
     final displayName = info?.appName ?? pkg;
 
     Widget leading;

@@ -947,7 +947,7 @@ Three Flutter-Android channels live в `VpnPlugin.kt`:
 | **Notifications** | setNotificationTitle | `title: String` | bool — кастомный foreground notification title |
 | **Per-app routing helpers** | getInstalledApps | — | List<Map> (`package` / `appName` / `isSystemApp`) — без icons (тяжело) |
 | | getAppIcon | `packageName: String` | String (base64 PNG) |
-| | getAppInfo | `packageName: String` | Map (name+icon+isSystem) \| null |
+| | getAppInfo | `packageName: String` | Map (name+isSystem, **без icon** — §109) \| `{notFound: true}` (подтверждённо не установлен) \| error (retryable) |
 | **System helpers** | isIgnoringBatteryOptimizations | — | bool |
 | | openBatteryOptimizationSettings | — | bool — primary `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` prompt; fallback на список apps для OEM где direct prompt молча отбрасывается (ColorOS / MIUI / HyperOS) |
 | | openAppDetailsSettings | — | bool |
