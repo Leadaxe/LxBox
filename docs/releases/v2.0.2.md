@@ -50,6 +50,7 @@ App Settings → General → «Auto-rebuild config» (ключ `auto_rebuild`) �
 
 - `flutter analyze` clean; **917 тестов** зелёные (+7 новых в [settings_storage_staging_test.dart](app/test/services/settings_storage_staging_test.dart): staged-записи не трогают диск до flush, читатель видит staged-правила сразу — регрессионный сценарий §107; +2 в [app_picker_pop_test.dart](app/test/screens/app_picker_pop_test.dart); обновлён [lazy_persist_mixin_test.dart](app/test/screens/lazy_persist_mixin_test.dart) под staging-контракт).
 - Root cause подтверждён построчной трассировкой `didPop` → rebuild → dispose-flush; неверный race-анализ в спеке §076 исправлен ([addendum](docs/spec/features/076%20settings-and-config-lifecycle/spec.md)).
+- Оба фикса проверены вручную на устройстве (release-сборка): пикер сохраняет выбор при системном «назад»; правила применяются сразу после Start, без перезахода в настройки.
 
 ---
 
