@@ -10,6 +10,25 @@
 
 —
 
+## [2.0.3] — 2026-06-10
+
+Patch: §107 — изменения настроек (правила роутинга, DNS, tunnel apps, core
+vars) не попадали в конфиг: пересборка на возврате к home читала состояние
+«до последней правки», и рестарт туннеля не помогал (регрессия §076
+lazy-persist, v1.9.0+; field report с 4PDA). Release notes:
+[docs/releases/v2.0.3.md](docs/releases/v2.0.3.md).
+
+### Fixed
+
+- **§107 — Rebuild на возврате к home читал несфлашенный storage** ([task spec](docs/spec/tasks/107-lazy-persist-stale-read-race.md), [lazy_persist_mixin.dart](app/lib/screens/lazy_persist_mixin.dart), [settings_storage.dart](app/lib/services/settings_storage.dart)). `didPop` срабатывает в момент pop'а, а write-on-exit flush экрана — после exit-анимации (~300 мс позже): конфиг хронически собирался из состояния «до последней правки» (отставал на один визит editing-экрана), Start/restart не помогали — на диске лежал stale `singbox_config.json`. Симптом: «поменял правила → нет трафика, лечится только танцем с Tunnel Applications». Теперь каждая мутация staged в in-memory кэш сразу (`setX(..., flush: false)`), на dispose/paused остаётся только атомарный `flushToDisk()` — любой читатель (rebuild, гейт на Start, bootstrap) видит свежие данные. Затронуты все lazy-экраны: routing, DNS, tunnel apps, core vars. +7 тестов [settings_storage_staging_test.dart](app/test/services/settings_storage_staging_test.dart).
+- **§107 — Start при pending-изменениях достраивает конфиг перед запуском** ([home_screen.dart](app/lib/screens/home_screen.dart)). Гейт в `_startWithAutoRefresh`: незавершённая пересборка await'ится (single-flight), `configDirty` → rebuild до native start. Туннель всегда поднимается со свежими правилами; плашка «restart to apply» остаётся только для сбоя сборки / config-lock (§037).
+- **§107 — Ошибка пересборки больше не гасит баннер**. `configDirty` сбрасывается только при успешном generate+save (раньше — безусловно, и юзер не узнавал, что конфиг остался старым); при неудачном save флаг восстанавливается.
+- **§107 — Триггер rebuild не теряется при busy**. Возврат на home во время фонового fetch'а раньше молча скипал пересборку; теперь one-shot listener догоняет её, когда controller освободится.
+
+### Removed
+
+- **§107 — Настройка «Auto-rebuild config» удалена** (App Settings → General, ключ `auto_rebuild`). Пересборка на возврате к home теперь всегда автоматическая — корректность конфига на старте гарантирует гейт, OFF-режим потерял смысл. Stale-ключ вычищается из storage автоматически.
+
 ## [2.0.1] — 2026-06-10
 
 Patch: два бага парсинга WireGuard / AmneziaWG (репорт из desktop,
