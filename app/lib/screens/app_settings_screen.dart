@@ -39,7 +39,6 @@ class AppSettingsScreen extends StatefulWidget {
 class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindingObserver {
   final _vpn = BoxVpnClient();
   bool _autoStart = false;
-  bool _autoRebuild = false;
   bool _haptic = true;
   bool _batteryWhitelisted = false;
   bool _notificationsEnabled = true;
@@ -117,7 +116,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
 
   Future<void> _loadAutoStart() async {
     final auto = await _vpn.getAutoStart();
-    final rebuild = await SettingsStorage.getVar('auto_rebuild', 'true');
     final haptic = await SettingsStorage.getVar(HapticService.prefsKey, 'true');
     final autoPing = await SettingsStorage.getVar('auto_ping_on_start', 'true');
     final battery = await _vpn.isIgnoringBatteryOptimizations();
@@ -135,7 +133,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     if (mounted) {
       setState(() {
         _autoStart = auto;
-        _autoRebuild = rebuild == 'true';
         _haptic = haptic != 'false';
         _autoPing = autoPing != 'false';
         _batteryWhitelisted = battery;
@@ -418,7 +415,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     return GeneralTab(
       loaded: _loaded,
       autoStart: _autoStart,
-      autoRebuild: _autoRebuild,
       autoUpdateSubs: _autoUpdateSubs,
       autoCheckUpdates: _autoCheckUpdates,
       autoPing: _autoPing,
@@ -427,10 +423,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       onAutoStartChanged: (val) {
         setState(() => _autoStart = val);
         unawaited(_vpn.setAutoStart(val));
-      },
-      onAutoRebuildChanged: (val) {
-        setState(() => _autoRebuild = val);
-        unawaited(SettingsStorage.setVar('auto_rebuild', val.toString()));
       },
       onAutoUpdateSubsChanged: (val) {
         setState(() => _autoUpdateSubs = val);

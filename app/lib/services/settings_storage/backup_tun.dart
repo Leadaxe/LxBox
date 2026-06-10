@@ -60,7 +60,7 @@ Future<TunAppsConfig> _getTunApps() async {
   );
 }
 
-Future<void> _setTunApps(TunAppsConfig cfg) async {
+Future<void> _setTunApps(TunAppsConfig cfg, {bool flush = true}) async {
   if (![
     SettingsStorage._tunAppsModeOff,
     SettingsStorage._tunAppsModeAllow,
@@ -80,7 +80,7 @@ Future<void> _setTunApps(TunAppsConfig cfg) async {
     'packages': dedup.toList()..sort(),
   };
   SettingsStorage._cache = data;
-  await _save();
+  if (flush) await _save();
 }
 
 /// Typed wrapper over `tun_apps` storage shape (§046).

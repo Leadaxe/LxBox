@@ -69,6 +69,15 @@ class SettingsStorage {
   /// Clears the in-memory cache (useful for tests).
   static void clearCache() => _cache = null;
 
+  /// §107 — дисковый flush staged-изменений. Lazy-экраны (LazyPersistMixin /
+  /// settings_screen Core vars) пишут мутации в `_cache` сразу через
+  /// `setX(..., flush: false)`, а на диск — одним атомарным `_save()` на
+  /// dispose/paused. No-op если `_cache` ещё не загружен (нечего флашить).
+  static Future<void> flushToDisk() async {
+    if (_cache == null) return;
+    await _save();
+  }
+
   // ---------------------------------------------------------------------------
   // Vars
   // ---------------------------------------------------------------------------
@@ -76,7 +85,11 @@ class SettingsStorage {
   static Future<String> getVar(String name, String defaultValue) =>
       _getVar(name, defaultValue);
 
-  static Future<void> setVar(String name, String value) => _setVar(name, value);
+  /// `flush: false` (§107) — staged-запись: обновляет только in-memory
+  /// `_cache`, дисковый `_save()` откладывается до [flushToDisk].
+  static Future<void> setVar(String name, String value,
+          {bool flush = true}) =>
+      _setVar(name, value, flush: flush);
 
   static Future<Map<String, String>> getAllVars() => _getAllVars();
 
@@ -110,8 +123,9 @@ class SettingsStorage {
 
   static Future<Set<String>> getEnabledGroups() => _getEnabledGroups();
 
-  static Future<void> saveEnabledGroups(Set<String> groups) =>
-      _saveEnabledGroups(groups);
+  static Future<void> saveEnabledGroups(Set<String> groups,
+          {bool flush = true}) =>
+      _saveEnabledGroups(groups, flush: flush);
 
   // ---------------------------------------------------------------------------
   // Last global update timestamp
@@ -146,8 +160,9 @@ class SettingsStorage {
 
   static Future<List<CustomRule>> getCustomRules() => _getCustomRules();
 
-  static Future<void> saveCustomRules(List<CustomRule> rules) =>
-      _saveCustomRules(rules);
+  static Future<void> saveCustomRules(List<CustomRule> rules,
+          {bool flush = true}) =>
+      _saveCustomRules(rules, flush: flush);
 
   /// Флаг one-shot миграции `enabled_rules` + `rule_outbounds` → `custom_rules`.
   /// Выставляется после первого прохода миграции в `RoutingScreen._load`.
@@ -161,8 +176,8 @@ class SettingsStorage {
 
   static Future<String> getRouteFinal() => _getRouteFinal();
 
-  static Future<void> saveRouteFinal(String outbound) =>
-      _saveRouteFinal(outbound);
+  static Future<void> saveRouteFinal(String outbound, {bool flush = true}) =>
+      _saveRouteFinal(outbound, flush: flush);
 
   static Future<Set<String>> getExcludedNodes() => _getExcludedNodes();
 
@@ -188,8 +203,9 @@ class SettingsStorage {
 
   static Future<List<Map<String, dynamic>>> getDnsServers() => _getDnsServers();
 
-  static Future<void> saveDnsServers(List<Map<String, dynamic>> servers) =>
-      _saveDnsServers(servers);
+  static Future<void> saveDnsServers(List<Map<String, dynamic>> servers,
+          {bool flush = true}) =>
+      _saveDnsServers(servers, flush: flush);
 
   // ---------------------------------------------------------------------------
   // Ping/test options (§040)
@@ -248,8 +264,9 @@ class SettingsStorage {
   /// orphan-cleanup (§061) — выбрасывание `type: template/rule` чьи titles
   /// не находятся в текущем шаблоне / активных пресетах. Этот метод просто
   /// пишет, что дали.
-  static Future<void> saveDnsRulesList(List<Map<String, dynamic>> rules) =>
-      _saveDnsRulesList(rules);
+  static Future<void> saveDnsRulesList(List<Map<String, dynamic>> rules,
+          {bool flush = true}) =>
+      _saveDnsRulesList(rules, flush: flush);
 
   // ---------------------------------------------------------------------------
   // Auto-update subscriptions (§027) — global on/off gate. Manual refresh
@@ -424,5 +441,6 @@ class SettingsStorage {
 
   /// Persist `tun_apps`. Caller передаёт финальный shape, мы только проверяем
   /// валидность. Дубликаты в `packages` schлопываются (idempotent).
-  static Future<void> setTunApps(TunAppsConfig cfg) => _setTunApps(cfg);
+  static Future<void> setTunApps(TunAppsConfig cfg, {bool flush = true}) =>
+      _setTunApps(cfg, flush: flush);
 }

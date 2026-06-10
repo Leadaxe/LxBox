@@ -35,14 +35,14 @@ void main() {
         'vars': {
           'debug_enabled': 'true',
           'debug_token': 'secret123',
-          'auto_rebuild': 'true',
+          'auto_update_subs': 'true',
           'unknown_new_key': 'value',
         },
       };
       final out = serializeStorageCache(cache);
       final vars = out['vars'] as Map;
       expect(vars['debug_enabled'], 'true');
-      expect(vars['auto_rebuild'], 'true');
+      expect(vars['auto_update_subs'], 'true');
       expect(vars['debug_token'], '***',
           reason: 'secret token must always be masked');
       expect(vars['unknown_new_key'], 'value',

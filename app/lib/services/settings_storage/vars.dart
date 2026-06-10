@@ -11,13 +11,13 @@ Future<String> _getVar(String name, String defaultValue) async {
   return vars[name]?.toString() ?? defaultValue;
 }
 
-Future<void> _setVar(String name, String value) async {
+Future<void> _setVar(String name, String value, {bool flush = true}) async {
   final data = await _load();
   final vars = (data['vars'] as Map<String, dynamic>?) ?? {};
   vars[name] = value;
   data['vars'] = vars;
   SettingsStorage._cache = data;
-  await _save();
+  if (flush) await _save();
 }
 
 Future<Map<String, String>> _getAllVars() async {

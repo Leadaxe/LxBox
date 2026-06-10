@@ -26,7 +26,6 @@ import '../services/debug/bootstrap.dart';
 import '../services/debug/debug_registry.dart';
 import '../services/haptic_service.dart';
 import '../services/nav/home_return_observer.dart';
-import '../services/settings_storage.dart';
 import '../services/traffic_profiler.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/update_checker.dart';
@@ -49,7 +48,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   late final Future<void> _controllerInit;
   late final AnimationController _connectingAnim;
   final BoxVpnClient _vpn = BoxVpnClient();
-  bool _autoRebuild = true;
+
+  /// §107 single-flight: текущая пересборка конфига. Гейт на Start и
+  /// повторные триггеры await'ят её вместо параллельного запуска второй.
+  Future<void>? _rebuildInFlight;
+
+  /// §107 (R3): one-shot listener «subController освободился — догнать
+  /// pending rebuild», см. [_retryRebuildWhenIdle].
+  VoidCallback? _idleRetryListener;
 
   // §085 R3 — весь node-filter state (§048 regex/protocols/subscriptions/
   // ping + show-detour/show-non-matching + §083 per-channel memory)
@@ -124,7 +130,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _controllerInit = _controller.init();
     unawaited(_controllerInit);
     unawaited(_initSubsAndAutoUpdate());
-    unawaited(_loadAutoRebuild());
     unawaited(_loadHapticPref());
     // Track tunnel transitions для side-effect'ов (SnackBar при revoke,
     // animation для connecting, auto-dismiss timer для lastError).
@@ -290,10 +295,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         if (needBootstrap) {
           final config = await _subController.generateConfig();
           if (config != null && mounted) {
-            await _controller.saveParsedConfig(config);
-            // §076: rebuild успешен → флаг гаснет (in-memory; mtime теперь
-            // tied — saved config обновлён, settings file не изменился).
-            _subController.configDirty = false;
+            // §107: generateConfig сбросил configDirty до записи на диск —
+            // при неудачном save восстанавливаем (конфиг на диске стар).
+            final ok = await _controller.saveParsedConfig(config);
+            if (!ok) _subController.configDirty = true;
             setState(() {});
           }
         }
@@ -316,11 +321,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     await HapticService.I.loadFromPrefs();
   }
 
-  Future<void> _loadAutoRebuild() async {
-    final val = await SettingsStorage.getVar('auto_rebuild', 'true');
-    _autoRebuild = val == 'true';
-  }
-
   @override
   void dispose() {
     // Порядок: сначала отменяем side-effects (timer, listener),
@@ -329,6 +329,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // созданию).
     _errorTimer?.cancel();
     _errorTimer = null;
+    final idleRetry = _idleRetryListener;
+    if (idleRetry != null) {
+      _subController.removeListener(idleRetry);
+      _idleRetryListener = null;
+    }
     _filter.removeListener(_onFilterChanged);
     _filter.dispose();
     _controller.removeListener(_onControllerChange);
@@ -493,11 +498,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   }
 
 
-  /// Rebuild config → reconnect (если up) или start (если down). Очищает
-  /// dirty-флаг как и `_rebuildAndClearDirty`.
+  /// Rebuild config → reconnect (если up) или start (если down). §107:
+  /// dirty-флаг сбрасывает только успешный rebuild (внутри `_rebuildConfig`);
+  /// при ошибке reconnect идёт со старым конфигом, banner остаётся.
   Future<void> _rebuildAndReconnect() async {
     await _rebuildConfig();
-    _subController.configDirty = false;
     if (!mounted) return;
     await _controller.reconnect();
   }
@@ -505,7 +510,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// Off-state: rebuild then start. Используется как default когда VPN off.
   Future<void> _rebuildAndStart() async {
     await _rebuildConfig();
-    _subController.configDirty = false;
     if (!mounted) return;
     await _controller.start();
     if (mounted && _controller.state.lastError.isNotEmpty && !_controller.state.tunnelUp) {
@@ -519,6 +523,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   }
 
   Future<void> _startWithAutoRefresh() async {
+    // §107 гейт: pending-изменения или пересборка в полёте — сначала довести
+    // конфиг на диске до актуального, потом стартовать. При ошибке сборки
+    // (configDirty остаётся true) стартуем со старым конфигом — banner
+    // продолжает гореть. Lock §037: generateConfig вернёт null silently,
+    // стартуем с pinned-конфигом.
+    final inFlight = _rebuildInFlight;
+    if (inFlight != null) await inFlight;
+    if (_subController.configDirty) await _rebuildAndClearDirty();
     // Обновление подписок теперь через AutoUpdater (см. services/subscription/
     // auto_updater.dart) — 4 триггера, общая логика. При Start никакого
     // синхронного HTTP-fetch'а не делаем: если подписки протухли, trigger 2
@@ -535,53 +547,83 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     }
   }
 
-  Future<void> _rebuildAndClearDirty() async {
-    await _rebuildConfig();
-    _subController.configDirty = false;
-    if (mounted) setState(() {});
+  /// §107 single-flight: параллельные триггеры (возврат на home + гейт на
+  /// Start) делят одну пересборку. Dirty-флаг сбрасывает только успешный
+  /// generate+save внутри `_rebuildConfig`.
+  Future<void> _rebuildAndClearDirty() {
+    return _rebuildInFlight ??= () async {
+      try {
+        await _rebuildConfig();
+        if (mounted) setState(() {});
+      } finally {
+        _rebuildInFlight = null;
+      }
+    }();
   }
 
-  /// §076: callback зарегистрированный в `homeReturnObserver`. Срабатывает
-  /// когда юзер вернулся на home (root route стал top). Если есть pending
-  /// changes и юзер хочет авто-rebuild — пересобираем lazy.
-  ///
-  /// Re-read `auto_rebuild` на каждый возврат — юзер мог изменить
-  /// preference в App Settings между визитами.
+  /// §076/§107: callback зарегистрированный в `homeReturnObserver`.
+  /// Срабатывает когда юзер вернулся на home (root route стал top). Если
+  /// есть pending changes — пересобираем lazy (всегда автоматически;
+  /// настройка `auto_rebuild` удалена в §107). Staged-кэш (§107) к этому
+  /// моменту уже содержит мутации экрана — гонки с dispose-flush'ем нет.
   void _onReturnToHome() {
     if (!mounted) return;
     if (!_subController.configDirty) return;
-    if (_subController.busy) return;
-    unawaited(() async {
-      final val = await SettingsStorage.getVar('auto_rebuild', 'true');
-      _autoRebuild = val == 'true';
-      if (!mounted) return;
-      if (_autoRebuild) {
-        await _rebuildAndClearDirty();
-      } else {
-        setState(() {});
-      }
-    }());
+    if (_subController.busy) {
+      // §107 (R3): сейчас не запустить (fetch/rebuild в полёте) — догнать,
+      // когда controller освободится, не теряя триггер.
+      _retryRebuildWhenIdle();
+      return;
+    }
+    unawaited(_rebuildAndClearDirty());
   }
 
-  Future<void> _rebuildConfig() async {
-    // Только пересборка конфига — без HTTP-fetch'а подписок. За fetch
-    // отвечает AutoUpdater (по 4 триггерам) и manual ⟳ на Servers.
-    final config = await _subController.generateConfig();
-    if (!mounted) return;
-    if (config != null) {
-      final ok = await _controller.saveParsedConfig(config);
-      if (ok && mounted) {
-        final nodeCount = ParsedConfig.parse(config).nodeCount;
-        // configChangedNeedRestart выставляется внутри saveParsedConfig,
-        // AnimatedBuilder переотрисует через _needsRestart getter.
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Config rebuilt: $nodeCount nodes${_controller.state.tunnelUp ? " — restart VPN to apply" : ""}',
-            ),
-          ),
-        );
-      }
+  /// §107 (R3): one-shot подписка — на первом `!busy` перепроверяем
+  /// configDirty и догоняем pending rebuild.
+  void _retryRebuildWhenIdle() {
+    if (_idleRetryListener != null) return;
+    void listener() {
+      if (_subController.busy) return;
+      _subController.removeListener(listener);
+      _idleRetryListener = null;
+      if (!mounted || !_subController.configDirty) return;
+      unawaited(_rebuildAndClearDirty());
     }
+
+    _idleRetryListener = listener;
+    _subController.addListener(listener);
+  }
+
+  /// Только пересборка конфига — без HTTP-fetch'а подписок. За fetch
+  /// отвечает AutoUpdater (по 4 триггерам) и manual ⟳ на Servers.
+  ///
+  /// §107: `configDirty` сбрасывает успешная генерация (`generateConfig`,
+  /// до записи на диск); если save не состоялся — восстанавливаем флаг,
+  /// конфиг на диске остался старым.
+  Future<bool> _rebuildConfig() async {
+    final config = await _subController.generateConfig();
+    if (config == null) return false;
+    if (!mounted) {
+      _subController.configDirty = true;
+      return false;
+    }
+    final ok = await _controller.saveParsedConfig(config);
+    if (!ok) {
+      _subController.configDirty = true;
+      return false;
+    }
+    if (mounted) {
+      final nodeCount = ParsedConfig.parse(config).nodeCount;
+      // configChangedNeedRestart выставляется внутри saveParsedConfig,
+      // AnimatedBuilder переотрисует через _needsRestart getter.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Config rebuilt: $nodeCount nodes${_controller.state.tunnelUp ? " — restart VPN to apply" : ""}',
+          ),
+        ),
+      );
+    }
+    return true;
   }
 }

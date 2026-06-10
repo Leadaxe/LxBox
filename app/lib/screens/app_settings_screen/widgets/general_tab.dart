@@ -14,14 +14,12 @@ class GeneralTab extends StatelessWidget {
     super.key,
     required this.loaded,
     required this.autoStart,
-    required this.autoRebuild,
     required this.autoUpdateSubs,
     required this.autoCheckUpdates,
     required this.autoPing,
     required this.haptic,
     required this.padding,
     required this.onAutoStartChanged,
-    required this.onAutoRebuildChanged,
     required this.onAutoUpdateSubsChanged,
     required this.onAutoCheckUpdatesChanged,
     required this.onAutoPingChanged,
@@ -32,7 +30,6 @@ class GeneralTab extends StatelessWidget {
 
   final bool loaded;
   final bool autoStart;
-  final bool autoRebuild;
   final bool autoUpdateSubs;
   final bool autoCheckUpdates;
   final bool autoPing;
@@ -40,7 +37,6 @@ class GeneralTab extends StatelessWidget {
   final EdgeInsets padding;
 
   final ValueChanged<bool> onAutoStartChanged;
-  final ValueChanged<bool> onAutoRebuildChanged;
   final ValueChanged<bool> onAutoUpdateSubsChanged;
   final ValueChanged<bool> onAutoCheckUpdatesChanged;
   final ValueChanged<bool> onAutoPingChanged;
@@ -87,13 +83,6 @@ class GeneralTab extends StatelessWidget {
           secondary: const Icon(Icons.power_settings_new),
           value: autoStart,
           onChanged: loaded ? onAutoStartChanged : null,
-        ),
-        SwitchListTile(
-          title: const Text('Auto-rebuild config'),
-          subtitle: const Text('Rebuild config automatically when settings change'),
-          secondary: const Icon(Icons.build_circle_outlined),
-          value: autoRebuild,
-          onChanged: loaded ? onAutoRebuildChanged : null,
         ),
         const Divider(height: 32),
         Text('Quick connect', style: Theme.of(context).textTheme.titleMedium),

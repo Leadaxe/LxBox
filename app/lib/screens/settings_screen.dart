@@ -76,15 +76,14 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
-  /// §076: atomic flush pending template vars. Native System settings
-  /// (allow_bypass etc.) идут отдельно через `_vpn.setX` immediate.
+  /// §107: дисковый flush staged vars — мутации уже в `_cache` (см.
+  /// `_onVarChanged`), осталось одно атомарное `flushToDisk()`. Native
+  /// System settings (allow_bypass etc.) идут отдельно через `_vpn.setX`
+  /// immediate.
   Future<void> _persist() async {
     if (_pendingVars.isEmpty) return;
-    final snapshot = Map<String, String>.from(_pendingVars);
     _pendingVars.clear();
-    for (final entry in snapshot.entries) {
-      await SettingsStorage.setVar(entry.key, entry.value);
-    }
+    await SettingsStorage.flushToDisk();
     // configDirty уже true (set in _onVarChanged sync). Не трогаем.
   }
 
@@ -129,12 +128,13 @@ class _SettingsScreenState extends State<SettingsScreen>
     widget.homeController.markConfigChangedNeedRestart();
   }
 
-  /// §076: template var change. In-memory обновление + sync mark configDirty.
-  /// Actual storage write deferred to _persist (dispose / lifecycle.paused).
-  /// Rebuild — lazy через home._pushRoute.then() на возврате home.
+  /// §076/§107: template var change. Staged-запись в `_cache` сразу + sync
+  /// mark configDirty; дисковая запись — одним flush'ем в `_persist`
+  /// (dispose / lifecycle.paused).
   void _onVarChanged(String name, String value) {
     _varValues[name] = value;
     _pendingVars[name] = value;
+    unawaited(SettingsStorage.setVar(name, value, flush: false));
     widget.subController.configDirty = true; // sync race-safe
   }
 
