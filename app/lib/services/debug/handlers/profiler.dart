@@ -83,13 +83,9 @@ Future<DebugResponse> _start(DebugRequest req) async {
   }
 
   if (TrafficProfiler.I.isRecording) {
-    return JsonResponse(
-      {
-        'error': 'already_active',
-        'active_session_id': TrafficProfiler.I.active!.id,
-      },
-      status: 409,
-    );
+    // §084 M9 — единый error-envelope через DebugError (was raw JsonResponse).
+    throw Conflict(
+        'session already active: ${TrafficProfiler.I.active!.id}');
   }
   final s = await TrafficProfiler.I.start(
     pkg,
@@ -105,7 +101,7 @@ Future<DebugResponse> _stop(DebugRequest req) async {
   }
   final s = await TrafficProfiler.I.stop();
   if (s == null) {
-    return JsonResponse({'error': 'no_active_session'}, status: 404);
+    throw const NotFound('no active session');
   }
   return JsonResponse(s.toMetaJson());
 }
@@ -116,7 +112,7 @@ Future<DebugResponse> _active(DebugRequest req) async {
   }
   final s = TrafficProfiler.I.active;
   if (s == null) {
-    return JsonResponse({'error': 'no_active_session'}, status: 404);
+    throw const NotFound('no active session');
   }
   return JsonResponse(s.toMetaJson());
 }
@@ -262,7 +258,7 @@ Future<DebugResponse> _patchSecondaryPackages(DebugRequest req) async {
   }
   final ok = TrafficProfiler.I.updateSecondaryPackages(pkgs);
   if (TrafficProfiler.I.active == null) {
-    return JsonResponse({'error': 'no_active_session'}, status: 404);
+    throw const NotFound('no active session');
   }
   return JsonResponse({
     'ok': true,

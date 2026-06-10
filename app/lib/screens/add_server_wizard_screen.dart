@@ -9,6 +9,7 @@ import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/template_vars.dart';
 import '../services/parser/uri_utils.dart' show newUuidV4;
+import '../widgets/emoji_picker_button.dart';
 
 // SocksSpec.emit() требует TemplateVars — для wizard-created SOCKS5 без
 // substitution используем пустые. Это match'ит manual UserServer pattern
@@ -234,6 +235,21 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     );
   }
 
+  /// §090 G2b — вставка эмодзи из пикера в позицию курсора поля Tag (SOCKS).
+  void _insertSocksTagEmoji(String emoji) {
+    final text = _socksTag.text;
+    final sel = _socksTag.selection;
+    final start =
+        (sel.start >= 0 && sel.start <= text.length) ? sel.start : text.length;
+    final end = (sel.end >= 0 && sel.end <= text.length) ? sel.end : start;
+    final insert = '$emoji ';
+    _socksTag.value = TextEditingValue(
+      text: text.replaceRange(start, end, insert),
+      selection: TextSelection.collapsed(offset: start + insert.length),
+    );
+    setState(() {});
+  }
+
   Widget _buildSocksForm(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -246,7 +262,9 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
             _label('Tag'),
             TextFormField(
               controller: _socksTag,
-              decoration: _input('local-socks5-out'),
+              decoration: _input('local-socks5-out').copyWith(
+                suffixIcon: EmojiPickerButton(onPick: _insertSocksTagEmoji),
+              ),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Tag required' : null,
             ),

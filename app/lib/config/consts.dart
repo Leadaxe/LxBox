@@ -23,3 +23,7 @@ const kAutoOutboundTag = '✨auto';
 /// `DetourPolicy` вместо дефолтной регистрации в selector/auto (см.
 /// `server_list_build.dart`). См. `docs/spec/tasks/006-per-node-detour-toggles.md`.
 const kDetourTagPrefix = '⚙ ';
+
+// §079 detour-marker detection + §085 R1 — display↔bare логика переехала в
+// `services/tag_resolver.dart::TagResolver` (единый владелец domain-концепта
+// «display-tag»). Здесь остаётся только сама константа-маркер.

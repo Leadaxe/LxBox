@@ -88,17 +88,39 @@ final class HttpUpgradeTransport extends TransportSpec {
   }
 }
 
-/// XHTTP → httpupgrade. sing-box 1.12.x не поддерживает xhttp как transport
-/// (см. docs/PROTOCOLS.md §XHTTP). Компилятор проверяет sealed-кейс, поэтому
-/// fallback невозможно забыть добавить в новый вариант.
+/// §097 — XHTTP (Xray-совместимый `splithttp`). Форк `sing-box-lx` (`with_xhttp`)
+/// умеет нативный `type: "xhttp"` — по образцу singbox-launcher SPEC 071: режимы
+/// `auto|packet-up|stream-up|stream-one`, `x_padding_bytes`-обфускация,
+/// `no_grpc_header`, extra-headers. Раньше деградировал в httpupgrade (стоковое
+/// ядро без xhttp) — теперь **нативный** emit, без подмены wire-протокола.
+///
+/// NB: на СТОКОВОМ ядре (CI без `with_xhttp`) конфиг с `type=xhttp` отвергается
+/// на load — фича «спит» до релиза fork-ядра (как AWG, §097).
 final class XhttpTransport extends TransportSpec {
   final String path;
   final String host;
-  const XhttpTransport({this.path = '/', this.host = ''});
+  final String mode; // '' = ядро решает (auto)
+  final String xPaddingBytes; // '' = none, напр. '100-1000'
+  final bool noGrpcHeader;
+  final Map<String, String> headers;
+
+  const XhttpTransport({
+    this.path = '/',
+    this.host = '',
+    this.mode = '',
+    this.xPaddingBytes = '',
+    this.noGrpcHeader = false,
+    this.headers = const {},
+  });
 
   @override
   (Map<String, dynamic>, List<NodeWarning>) toSingbox(TemplateVars vars) {
-    final (m, _) = HttpUpgradeTransport(path: path, host: host).toSingbox(vars);
-    return (m, const [UnsupportedTransportWarning('xhttp', 'httpupgrade')]);
+    final m = <String, dynamic>{'type': 'xhttp', 'path': path};
+    if (host.isNotEmpty) m['host'] = host;
+    if (mode.isNotEmpty) m['mode'] = mode;
+    if (xPaddingBytes.isNotEmpty) m['x_padding_bytes'] = xPaddingBytes;
+    if (noGrpcHeader) m['no_grpc_header'] = true;
+    if (headers.isNotEmpty) m['headers'] = Map<String, String>.from(headers);
+    return (m, const []);
   }
 }

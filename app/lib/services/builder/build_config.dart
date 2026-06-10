@@ -9,6 +9,7 @@ import '../../models/singbox_entry.dart';
 import '../../models/template_vars.dart';
 import '../../config/consts.dart';
 import '../../models/validation.dart';
+import '../json_clone.dart';
 import '../rule_set_downloader.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
@@ -94,7 +95,7 @@ Future<BuildResult> buildConfig({
   final generatedVars = <String, String>{};
   _ensureClashApiDefaults(vars, generatedVars);
 
-  final config = _deepCopy(template.config);
+  final config = deepCopyJson(template.config);
   _substituteVars(config, vars);
 
   // Remove sniff rule if disabled
@@ -396,7 +397,7 @@ List<Map<String, dynamic>> _buildPresetGroups({
       tags.add('direct-out');
     }
 
-    final options = _deepCopy(preset.options);
+    final options = deepCopyJson(preset.options);
     _substituteVars(options, vars);
     final def = options['default'];
     if (def is String && !tags.contains(def)) options.remove('default');
@@ -428,9 +429,6 @@ void _ensureClashApiDefaults(Map<String, String> vars, Map<String, String> gener
     generated['clash_secret'] = vars['clash_secret']!;
   }
 }
-
-Map<String, dynamic> _deepCopy(Map<String, dynamic> s) =>
-    jsonDecode(jsonEncode(s)) as Map<String, dynamic>;
 
 void _substituteVars(dynamic obj, Map<String, String> vars) {
   if (obj is Map<String, dynamic>) {

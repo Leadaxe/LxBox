@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import '../context.dart';
 import '../contract/errors.dart';
 import '../transport/request.dart';
@@ -35,23 +33,6 @@ Future<Map<String, Object?>> maybeRebuild(DebugRequest req, DebugContext ctx) as
     return {'rebuilt': true, 'config_bytes': json.length};
   } catch (e) {
     return {'rebuilt': false, 'rebuild_error': e.toString()};
-  }
-}
-
-/// JSON-body как `List<dynamic>`. Пустой/не-массив → [BadRequest].
-List<dynamic> jsonBodyAsList(DebugRequest req) {
-  if (req.body.isEmpty) {
-    throw const BadRequest('body required (JSON array)');
-  }
-  try {
-    final text = utf8.decode(req.body, allowMalformed: false);
-    final parsed = jsonDecode(text);
-    if (parsed is! List) {
-      throw const BadRequest('body must be JSON array');
-    }
-    return parsed;
-  } on FormatException catch (e) {
-    throw BadRequest('invalid JSON body: ${e.message}');
   }
 }
 

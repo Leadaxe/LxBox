@@ -44,6 +44,10 @@ CI (`.github/workflows/ci.yml`) триггерится на:
 
 ### 2.1. Pre-flight
 
+0. **Ядро — fork sing-box-lx, не сток.** Релиз с AWG/XHTTP (§097) валиден только на ядре fork'а (механика — [§104](spec/tasks/104-libbox-fork-ci-fetch.md)):
+   - в `app/android/app/build.gradle.kts` зависимость — `implementation(files("libs/libbox.aar"))`, активной Maven-строки `com.github.singbox-android:libbox` **нет**;
+   - в `ci.yml` (job `android`) есть шаг `Fetch sing-box-lx core (libbox.aar)`, а пин `app/android/libbox.version` = версия, которой прогнан local smoke (п. 4) — пин общий для local и CI, расходиться им не с чего;
+   - стоковое ядро 1.13.11 отвергает конфиги с AWG-полями (`jc`/`jmin`/…) и `type:"xhttp"` — релиз, собранный на нём, брак.
 1. На `develop` всё зелёное:
    ```bash
    cd app
@@ -69,6 +73,8 @@ CI (`.github/workflows/ci.yml`) триггерится на:
    Это ловит debug-подпись, упавший build, несовместимый `versionCode` **до** того, как тег уедет на origin.
 
    ⚠️ **Если собираете из worktree** (`.claude/worktrees/*`): `app/android/key.properties` и `upload-keystore.jks` в worktree **отсутствуют**. До первой release-сборки симлинкать их из основного checkout'а — иначе APK получит debug-подпись и не встанет поверх prod. См. memory `feedback_keystore_in_worktree`.
+
+   ⚠️ **Ядро для smoke:** `app/android/app/libs/libbox.aar` — в `.gitignore`, в свежем clone/worktree его нет; `build-local-apk.sh` сам скачивает версию из пина `app/android/libbox.version` (`scripts/fetch-libbox.sh`, идемпотентно) — см. [BUILD.md → «Ядро sing-box-lx»](BUILD.md#ядро-sing-box-lx-libbox). CI использует тот же пин, так что smoke и релиз гарантированно на одной версии ядра; smoke на версии, отличной от пина (ручной override fetch-скрипта), не считается.
 
 ### 2.2. Версия — git tag это единственный source of truth
 
@@ -143,7 +149,7 @@ gh run watch "$RUN_ID" --exit-status
 
 На финише ожидаем:
 - Release опубликован (`draft=false`).
-- APK `LxBox-vX.Y.Z.apk` приложен (подпись — **release**, не debug; иначе установка поверх prod отвалится).
+- Приложены 4 APK: `LxBox-vX.Y.Z-arm64-v8a.apk` / `-armeabi-v7a` / `-x86_64` / `-universal` (подпись — **release**, не debug; иначе установка поверх prod отвалится).
 - Тело релиза = содержимое `RELEASE_NOTES.md` на момент тега.
 - `docs/latest.json` обновлён бот-коммитом в `main` (`[skip ci]`).
 
@@ -177,6 +183,7 @@ curl -sL https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/latest.json |
 ```
 
 - APK качается из release-страницы, `scripts/install-apk.sh` ставит его поверх prod без `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (значит подпись — release).
+- В установленном из релиза APK версия ядра (About/Debug, `Libbox.version()`) — `1.13.13-lx.*` (fork sing-box-lx), **не** `1.13.11`: гарантия, что CI собрал fork-ядро и AWG/XHTTP-конфиги работают.
 - На устройстве с предыдущей версией L×Box UpdateChecker показывает SnackBar с новым релизом.
 
 ---
@@ -194,6 +201,14 @@ curl -sL https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/latest.json |
 No ANDROID_KEYSTORE_BASE64 secret; release APK will use debug signing.
 ```
 Это **не** надо игнорировать — юзеры с prod-установкой не смогут обновиться. Заполнить secrets и перевыпустить (см. «Тег уже существует» ниже).
+
+### Релизный APK собран на стоковом ядре (AWG/XHTTP отвергаются)
+
+Симптом: Start падает с ошибкой ядра на конфигах с AWG-полями (`jc`/`jmin`/…) или `type:"xhttp"`; версия ядра в About/Debug — `1.13.11` без `-lx`.
+
+Причина: CI собрал стоковый Maven-libbox — в `build.gradle.kts` вернулась Maven-строка, либо шаг `Fetch sing-box-lx core` в `ci.yml` убран/не отработал (или пин `app/android/libbox.version` указывает не туда).
+
+Это брак релиза. Чинить `ci.yml`/gradle/пин и перевыпускать тег (см. «Тег уже существует»). ⚠ **Не** подменять артефакт локально собранным APK через `gh release upload` — релизы только CI-built.
 
 ### Запушил `main` и тег одной командой — build не стартовал
 
@@ -236,13 +251,14 @@ git tag -d vX.Y.Z
 ### Stable vX.Y.Z
 
 - [ ] `develop` зелёная (`cd app && flutter analyze && flutter test`), descendant от прошлого stable-тега.
+- [ ] **Ядро:** `app/android/app/build.gradle.kts` → `implementation(files("libs/libbox.aar"))` (активной Maven-строки стокового libbox нет); в `ci.yml` job `android` есть шаг `Fetch sing-box-lx core`, пин `app/android/libbox.version` = версии local smoke. Стоковое 1.13.11 отвергает AWG/XHTTP-конфиги — такой релиз не выпускать.
 - [ ] Релиз-доки синхронизированы: `CHANGELOG.md`, `ARCHITECTURE.md` / `DEVELOPMENT_REPORT.md` (если затронуты), `README.md` + `README_RU.md` (если фичи видимые), spec'и → `status: released`.
 - [ ] `app/pubspec.yaml` **не трогать** — там placeholder `0.0.0-dev+0`. Версия инжектится CI из tag (§065).
 - [ ] `RELEASE_NOTES.md` причёсан под финал, скопирован в `docs/releases/vX.Y.Z.md`.
 - [ ] Local smoke: `scripts/build-local-apk.sh` (derive'ит версию из `git describe`, sed pubspec + revert trap) + `scripts/install-apk.sh` — ставится поверх prod без `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (при работе из worktree не забыть симлинки keystore).
 - [ ] Коммит `docs(release): vX.Y.Z notes` запушен в `develop` (только doc-изменения; никаких pubspec/code bump'ов).
 - [ ] `main` ← merge `--no-ff --no-commit develop` → `commit -m "Merge ..."` → push; тег `vX.Y.Z` запушен **отдельной командой**. **NB:** именно `--no-commit` + явный `commit -m`, не `--no-ff -m` — последнее ломается на «Пустое сообщение коммита» и tag оказывается на старом commit'е (см. memory `feedback_git_merge_no_ff_quirk`).
-- [ ] `gh run watch` зелёный, APK `LxBox-vX.Y.Z.apk` в релизе, подпись — release.
+- [ ] `gh run watch` зелёный; в релизе 4 APK `LxBox-vX.Y.Z-{arm64-v8a,armeabi-v7a,x86_64,universal}.apk`, подпись — release; версия ядра в APK — `1.13.13-lx.*`.
 - [ ] `publish-manifest` отработал — `docs/latest.json` обновлён на `main`.
 - [ ] `main` слит обратно в `develop` (§2.6), запушен.
 - [ ] `git describe` на `develop` показывает `vX.Y.Z`.

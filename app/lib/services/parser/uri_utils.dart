@@ -6,6 +6,17 @@ import '../app_log.dart';
 /// Максимальная длина URI (защита от мусорных base64-бомб). Совпадает с v1.
 const int maxURILength = 65536;
 
+/// §084 M7 — charset валидного имени HTTP-заголовка из DuckSoft de-facto
+/// спеки naive URI: `! # $ % & ' * + - . 0-9 A-Z \ ^ _ ` a-z | ~`.
+/// Единый источник для parser (uri_parsers) и emit (node_spec_emit).
+final RegExp naiveHeaderNameRe =
+    RegExp(r"^[!#$%&'*+\-.0-9A-Z\\^_`a-z|~]+$");
+
+/// True если `name` — валидное имя naive HTTP-заголовка (непустое +
+/// matches [naiveHeaderNameRe]).
+bool isValidNaiveHeaderName(String name) =>
+    name.isNotEmpty && naiveHeaderNameRe.hasMatch(name);
+
 /// Безопасный base64-decode с пробой 4 вариантов (standard/url-safe ×
 /// padded/unpadded). Возвращает bytes или null. Порт v1 `_decodeBase64`.
 List<int>? decodeBase64Safe(String s) {
@@ -120,6 +131,22 @@ String normalizePacketEncoding(String raw, {String? tag}) {
     "unknown packetEncoding='$raw'${tag != null ? ' in $tag' : ''} — dropping",
   );
   return '';
+}
+
+/// §097 — клиентский MTU для AWG-endpoint'а: `min(mtu, 1280)`.
+///
+/// 1280 = рекомендованный клиентский MTU самой AmneziaWG и минимальный
+/// IPv6 MTU → безопасно на любом пути (PPPoE 1492, mobile, вложенные
+/// туннели). Точный потолок `1500−60−max(s3,s4)` хрупок: предполагает
+/// path-MTU ровно 1500, чего у AWG-юзеров обычно нет. Асимметрия рисков:
+/// занижение лишь чуть мельчит пакеты, завышение — тихий облом
+/// (handshake есть, данных нет). Явно заниженный MTU уважаем; обычный
+/// WG не трогаем (вызывать только при наличии AWG-полей).
+int awgClampMtu(int? raw, String tag) {
+  if (raw == null) return 1280;
+  if (raw <= 1280) return raw;
+  AppLog.I.debug('$tag: clamped AWG mtu $raw→1280');
+  return 1280;
 }
 
 /// Case-insensitive lookup query-параметра. В подписках `packetEncoding`

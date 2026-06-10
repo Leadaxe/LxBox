@@ -1,6 +1,6 @@
 # Отчёт о разработке L×Box
 
-**Дата:** 19 апреля 2026 (обновлено до v1.3.1)
+**Дата:** 19 апреля 2026 (подробный нарратив — до v1.3.1; хроника ниже — до v1.9.0)
 **Период:** Эволюция от MVP до полноценного приложения + Parser v2 landmark-рефакторинг
 
 ---
@@ -485,12 +485,13 @@ L×Box прошёл путь от MVP (один экран: Read config → Star
 | **v1.8.1** | 12 мая 2026 | Hotfix v1.8.0: hardcoded `_version = '1.7.0'` в `about_screen.dart` не был поднят при release-bump → UI показывал v1.7.0 на v1.8.0 build + UpdateChecker рекомендовал «обновитесь до 1.8.0». Поднят до 1.8.1 + добавлен CI `Version consistency check` (сверяет pubspec ↔ about_screen ↔ tag, fail до build при mismatch) + обновлён [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md) §2.2 с явным указанием двух мест для bump'а. |
 | **v1.8.2** | 12 мая 2026 | Tag = single source of truth для версии ([§065](spec/tasks/065-version-from-tag.md)). Удалён `static const _version` в `about_screen.dart` + `AboutScreen.versionString` alias; pubspec.yaml = placeholder `0.0.0-dev+0`; CI sed'ит `version: ${tag#v}+${git rev-list --count HEAD}` перед `flutter build` (раньше — consistency check, теперь — injection); `scripts/build-local-apk.sh` derive'ит из `git describe` с `trap EXIT` revert. About screen + UpdateChecker → новый `VersionInfo` service (load из `PackageInfo.fromPlatform()` в `main()` перед `runApp`). Release-flow: больше нет bump-коммитов в репо. |
 | **v1.8.3** | 12 мая 2026 | Pre-commit hook auto-sync для pubspec.yaml ([§066](spec/tasks/066-pubspec-sync-hook.md)). `.githooks/pre-commit` → `scripts/sync-pubspec-version.sh` (derive `versionName` + `versionCode` из `git describe` + `rev-list --count`). Setup: `scripts/setup-hooks.sh` (one-shot после clone). UpdateChecker skip для `-dev` версий (no snackbar в dev sessions). Удалены `--dart-define BUILD_*` pass-through + `_LocalBuildBadge` widget. `flutter run` теперь показывает realistic `X.Y.Z-dev.N` без extra шагов. |
+| **v1.9.0** | 6 июня 2026 | Главный экран UX: node filters ([§048](spec/features/048%20home-node-filters/spec.md)), sort options menu ([§070](spec/features/070%20sort-options/spec.md)) + manual reorder ([§071](spec/features/071%20manual-node-reorder/spec.md)), Add-server wizard ([§074](spec/features/074%20add-server-wizard/spec.md)), subscription detour `Add detour`/append ([§073](spec/tasks/073-detour-append-vs-replace.md)), settings & config lifecycle ([§076](spec/features/076%20settings-and-config-lifecycle/spec.md)); atomic settings write + `.bak` — data-loss fix Xiaomi/HyperOS ([§072](spec/tasks/072-settings-storage-atomic-write.md)) |
 
-Текущее состояние (v1.8.3):
-- **Тесты:** 620+ зелёных (debug handler + parser + builder + pipeline + service-level + backup round-trip)
-- **Спецификации:** 001–064 (60+ feature и task specs)
-- **Релизы:** 16+ stable tags
-- **LOC:** `app/lib/` ≈ 35k, native Kotlin ≈ 4k
+Текущее состояние (после v1.9.0; в develop готовится **v2.0.0** — §089–§104: deep-refactor «монстров», ConfigNode, filter mode, смена ядра на **sing-box-lx** — постоянно, пин `v1.13.13-lx.5` + fetch-скрипт в local-build и CI (§104) — AWG2, нативный XHTTP):
+- **Тесты:** 860+ зелёных
+- **Спецификации:** 001–103 (features + tasks)
+- **Релизы:** 17 stable tags
+- **LOC:** `app/lib/` ≈ 45k, native Kotlin ≈ 3.3k
 
 ## Что дальше
 

@@ -216,8 +216,10 @@ class UpdateChecker {
     return '1.x'; // stable UA, не утекаем точную версию (privacy chrome)
   }
 
-  /// Юзер сказал "Not now" в snackbar для текущей версии. Persist + clear
-  /// notifier чтобы snackbar не показался повторно в этой сессии.
+  /// Persist «не показывать этот релиз» + clear notifier. Read-guard уже
+  /// работает (getDismissedUpdateVersion в update-snackbar), но writer'а в
+  /// UI пока нет — фича половинчатая. Wire «Later»-action или убрать guard
+  /// целиком — решение §090. Stub оставлен намеренно (не dead code).
   Future<void> dismissCurrent() async {
     final cur = latest.value;
     if (cur == null) return;

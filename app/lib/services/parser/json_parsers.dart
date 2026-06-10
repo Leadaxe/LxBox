@@ -200,6 +200,13 @@ TransportSpec? _xrayTransportFromStream(Map stream) {
       final hosts = (h['host'] as List?)?.map((e) => e.toString()).toList() ??
           const <String>[];
       return HttpTransport(path: h['path']?.toString() ?? '/', hosts: hosts);
+    case 'xhttp': // §097 — Xray xhttpSettings → нативный xhttp
+      final x = stream['xhttpSettings'] as Map? ?? const {};
+      return XhttpTransport(
+        path: x['path']?.toString() ?? '/',
+        host: x['host']?.toString() ?? '',
+        mode: x['mode']?.toString() ?? '',
+      );
     default:
       return null;
   }
@@ -372,9 +379,13 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
       final allowedIps =
           (p['allowed_ips'] as List?)?.map((e) => e.toString()).toList() ??
               const ['0.0.0.0/0', '::/0'];
+      final awg = Awg.fromJson(entry); // §097 — AmneziaWG2 obfuscation params
+      final wgTag = tag.isEmpty ? 'wg-$peerServer-$peerPort' : tag;
+      // §097 — AWG: клампим MTU до 1280; plain WG как было (null = omitted).
+      final rawMtu = (entry['mtu'] as num?)?.toInt();
       return WireguardSpec(
         id: newUuidV4(),
-        tag: tag.isEmpty ? 'wg-$peerServer-$peerPort' : tag,
+        tag: wgTag,
         label: label,
         server: peerServer,
         port: peerPort,
@@ -392,7 +403,8 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
                 (p['persistent_keepalive_interval'] as num?)?.toInt(),
           )
         ],
-        mtu: (entry['mtu'] as num?)?.toInt(),
+        mtu: awg != null ? awgClampMtu(rawMtu, wgTag) : rawMtu,
+        awg: awg,
       );
     default:
       return null;
@@ -442,6 +454,17 @@ TransportSpec? _transportFromSingbox(dynamic raw) {
       return HttpUpgradeTransport(
         path: raw['path']?.toString() ?? '/',
         host: raw['host']?.toString() ?? '',
+      );
+    case 'xhttp': // §097 — нативный xhttp из sing-box JSON
+      return XhttpTransport(
+        path: raw['path']?.toString() ?? '/',
+        host: raw['host']?.toString() ?? '',
+        mode: raw['mode']?.toString() ?? '',
+        xPaddingBytes: raw['x_padding_bytes']?.toString() ?? '',
+        noGrpcHeader: raw['no_grpc_header'] == true,
+        headers: (raw['headers'] as Map?)
+                ?.map((k, v) => MapEntry(k.toString(), v.toString())) ??
+            const {},
       );
     default:
       return null;

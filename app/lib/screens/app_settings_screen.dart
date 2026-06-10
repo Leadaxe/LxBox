@@ -7,14 +7,14 @@ import '../main.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/transport/server.dart';
 import '../services/haptic_service.dart';
-import '../services/relative_time.dart';
 import '../services/settings_storage.dart';
-import '../services/update_checker.dart';
-import '../services/version_info.dart';
 import '../services/url_launcher.dart' as ul;
 import '../services/wifi_history_listener.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import '../vpn/box_vpn_client.dart';
+import 'app_settings_screen/app_settings_dialogs.dart';
+import 'app_settings_screen/widgets/diagnostics_tab.dart';
+import 'app_settings_screen/widgets/general_tab.dart';
 import 'backup_screen.dart';
 
 class AppSettingsScreen extends StatefulWidget {
@@ -259,27 +259,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   /// через ~250ms; Future от quitApp в норме не ресолвится — поэтому ничего
   /// не делаем после await.
   Future<void> _confirmQuitApp() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Quit & reopen app?'),
-        content: const Text(
-          'This will fully close the app process so the new "Forward sing-box logs" '
-          'value is picked up at next launch (Libbox.setup is one-shot per process). '
-          'VPN service will stop. Tap the app icon to reopen.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Quit'),
-          ),
-        ],
-      ),
-    );
+    final ok = await AppSettingsDialogs.confirmQuitApp(context);
     if (ok != true) return;
     await _vpn.quitApp();
   }
@@ -397,33 +377,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   /// Preset-инструкции перед переходом в system App info — OEM'ы прячут
   /// нужные тоглы в разных местах, юзер без подсказки теряется.
   Future<void> _openAppInfoWithHint() async {
-    final proceed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Find these toggles'),
-        content: const SingleChildScrollView(
-          child: Text(
-            'In the next screen (system App info) look for:\n\n'
-            '• Autostart / Startup manager — allow\n'
-            '• Background activity / Allow in background — allow\n'
-            '• Battery / Power usage → "Don\'t optimize" or "No restrictions"\n'
-            '• Battery saver exceptions — add L×Box\n\n'
-            'Location of these toggles varies by OEM (Xiaomi/MIUI, Samsung/One UI, Oppo/ColorOS, Huawei, Google Pixel). Some are under Battery, others under App permissions.',
-            style: TextStyle(fontSize: 13, height: 1.4),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Open settings'),
-          ),
-        ],
-      ),
-    );
+    final proceed = await AppSettingsDialogs.openAppInfoHint(context);
     if (proceed == true) await _vpn.openAppDetailsSettings();
   }
 
@@ -461,419 +415,84 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       12, 12, 12, MediaQuery.of(context).padding.bottom + 24);
 
   Widget _buildGeneralTab(BuildContext context) {
-    return ListView(
+    return GeneralTab(
+      loaded: _loaded,
+      autoStart: _autoStart,
+      autoRebuild: _autoRebuild,
+      autoUpdateSubs: _autoUpdateSubs,
+      autoCheckUpdates: _autoCheckUpdates,
+      autoPing: _autoPing,
+      haptic: _haptic,
       padding: _tabPadding(context),
-      children: [
-        Text('Appearance', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        RadioGroup<ThemeMode>(
-          groupValue: themeNotifier.mode,
-          onChanged: (v) { if (v != null) themeNotifier.setMode(v); },
-          child: Column(
-            children: ThemeMode.values.map((mode) {
-              final label = switch (mode) {
-                ThemeMode.system => 'System',
-                ThemeMode.light => 'Light',
-                ThemeMode.dark => 'Dark',
-              };
-              final icon = switch (mode) {
-                ThemeMode.system => Icons.brightness_auto,
-                ThemeMode.light => Icons.light_mode,
-                ThemeMode.dark => Icons.dark_mode,
-              };
-              return RadioListTile<ThemeMode>(
-                value: mode,
-                title: Text(label),
-                secondary: Icon(icon),
-              );
-            }).toList(),
-          ),
-        ),
-        const Divider(height: 32),
-        Text('Behavior', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        SwitchListTile(
-          title: const Text('Auto-start on boot'),
-          subtitle: const Text('Start VPN when device turns on'),
-          secondary: const Icon(Icons.power_settings_new),
-          value: _autoStart,
-          onChanged: _loaded ? (val) {
-            setState(() => _autoStart = val);
-            unawaited(_vpn.setAutoStart(val));
-          } : null,
-        ),
-        SwitchListTile(
-          title: const Text('Auto-rebuild config'),
-          subtitle: const Text('Rebuild config automatically when settings change'),
-          secondary: const Icon(Icons.build_circle_outlined),
-          value: _autoRebuild,
-          onChanged: _loaded ? (val) {
-            setState(() => _autoRebuild = val);
-            unawaited(SettingsStorage.setVar('auto_rebuild', val.toString()));
-          } : null,
-        ),
-        const Divider(height: 32),
-        Text('Quick connect', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        ListTile(
-          leading: const Icon(Icons.dashboard_customize_outlined),
-          title: const Text('Quick Settings tile'),
-          subtitle: const Text(
-              'Add to status-bar shade for one-tap toggle. '
-              'Android 13+ shows a system prompt; on older versions edit the shade manually.'),
-          trailing: TextButton(
-            onPressed: () => unawaited(_addQuickSettingsTile()),
-            child: const Text('Add'),
-          ),
-        ),
-        const ListTile(
-          leading: Icon(Icons.touch_app_outlined),
-          title: Text('Home-screen shortcut'),
-          subtitle: Text(
-              'Long-press the L×Box icon on your home screen → choose "Toggle VPN".'),
-        ),
-        const Divider(height: 32),
-        Text('Subscriptions', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        SwitchListTile(
-          title: const Text('Auto-update subscriptions'),
-          subtitle: const Text(
-              'Refresh on app start, after VPN connects, and periodically. '
-              'Manual ⟳ works regardless.'),
-          secondary: const Icon(Icons.cloud_sync_outlined),
-          value: _autoUpdateSubs,
-          onChanged: _loaded
-              ? (val) {
-                  setState(() => _autoUpdateSubs = val);
-                  unawaited(SettingsStorage.setAutoUpdateSubs(val));
-                }
-              : null,
-        ),
-        const Divider(height: 32),
-        Text('Updates', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        SwitchListTile(
-          title: const Text('Check for updates on launch'),
-          subtitle: const Text(
-              'Pings github.com once a day to check for new releases. '
-              '"View" opens the release page in browser; install is manual.'),
-          secondary: const Icon(Icons.system_update_alt),
-          value: _autoCheckUpdates,
-          onChanged: _loaded
-              ? (val) {
-                  setState(() => _autoCheckUpdates = val);
-                  unawaited(SettingsStorage.setAutoCheckUpdates(val));
-                }
-              : null,
-        ),
-        const _UpdateStatusRow(),
-        const Divider(height: 32),
-        Text('Feedback', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        SwitchListTile(
-          title: const Text('Auto-ping after connect'),
-          subtitle: const Text(
-              'Ping nodes of active group 5s after VPN starts (once per connect)'),
-          secondary: const Icon(Icons.network_ping),
-          value: _autoPing,
-          onChanged: _loaded
-              ? (val) {
-                  setState(() => _autoPing = val);
-                  unawaited(SettingsStorage.setVar(
-                      'auto_ping_on_start', val.toString()));
-                }
-              : null,
-        ),
-        SwitchListTile(
-          title: const Text('Haptic feedback'),
-          subtitle: const Text('Vibrate on connect, disconnect and errors. Respects system "Touch feedback" setting'),
-          secondary: const Icon(Icons.vibration),
-          value: _haptic,
-          onChanged: _loaded ? (val) {
-            setState(() => _haptic = val);
-            HapticService.I.enabled = val;
-            unawaited(SettingsStorage.setVar(HapticService.prefsKey, val.toString()));
-            if (val) {
-              HapticService.I.onConnectTap();
-            }
-          } : null,
-        ),
-        const Divider(height: 32),
-        Text('Backup & restore', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        ListTile(
-          leading: const Icon(Icons.import_export),
-          title: const Text('Backup & restore'),
-          subtitle: const Text(
-              'Export subscriptions, routing setup and preferences as JSON.'),
-          trailing: const Icon(Icons.chevron_right),
-          contentPadding: EdgeInsets.zero,
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const BackupScreen()),
-          ),
-        ),
-      ],
+      onAutoStartChanged: (val) {
+        setState(() => _autoStart = val);
+        unawaited(_vpn.setAutoStart(val));
+      },
+      onAutoRebuildChanged: (val) {
+        setState(() => _autoRebuild = val);
+        unawaited(SettingsStorage.setVar('auto_rebuild', val.toString()));
+      },
+      onAutoUpdateSubsChanged: (val) {
+        setState(() => _autoUpdateSubs = val);
+        unawaited(SettingsStorage.setAutoUpdateSubs(val));
+      },
+      onAutoCheckUpdatesChanged: (val) {
+        setState(() => _autoCheckUpdates = val);
+        unawaited(SettingsStorage.setAutoCheckUpdates(val));
+      },
+      onAutoPingChanged: (val) {
+        setState(() => _autoPing = val);
+        unawaited(SettingsStorage.setVar(
+            'auto_ping_on_start', val.toString()));
+      },
+      onHapticChanged: (val) {
+        setState(() => _haptic = val);
+        HapticService.I.enabled = val;
+        unawaited(SettingsStorage.setVar(HapticService.prefsKey, val.toString()));
+        if (val) {
+          HapticService.I.onConnectTap();
+        }
+      },
+      onAddQuickSettingsTile: () => unawaited(_addQuickSettingsTile()),
+      onOpenBackup: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const BackupScreen()),
+      ),
     );
   }
 
   Widget _buildDiagnosticsTab(BuildContext context) {
-    return ListView(
+    return DiagnosticsTab(
+      loaded: _loaded,
       padding: _tabPadding(context),
-      children: [
-        Text('System setup', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        ListTile(
-          leading: Icon(
-            _batteryWhitelisted ? Icons.battery_full : Icons.battery_alert,
-            color: _batteryWhitelisted
-                ? Colors.green
-                : Theme.of(context).colorScheme.error,
-          ),
-          title: const Text('Battery optimization'),
-          subtitle: Text(_batteryWhitelisted
-              ? 'Whitelisted — VPN can run in background'
-              : 'Restricted — Android may pause VPN in idle. Tap to grant.'),
-          trailing: const Icon(Icons.chevron_right, size: 18),
-          onTap: () async {
-            await _vpn.openBatteryOptimizationSettings();
-          },
-        ),
-        ListTile(
-          leading: Icon(
-            _notificationsEnabled
-                ? Icons.notifications_active_outlined
-                : Icons.notifications_off_outlined,
-            color: _notificationsEnabled
-                ? Colors.green
-                : Theme.of(context).colorScheme.error,
-          ),
-          title: const Text('Notifications'),
-          subtitle: Text(_notificationsEnabled
-              ? 'Allowed — foreground service shows VPN status'
-              : 'Blocked — Android may throttle the VPN service. Tap to allow.'),
-          trailing: const Icon(Icons.chevron_right, size: 18),
-          onTap: _onNotificationsTap,
-        ),
-        // §051 — Wi-Fi rules permissions: BACKGROUND_LOCATION (API 29+) и
-        // NEARBY_WIFI_DEVICES (API 33+). Без них sing-box `wifi_ssid` /
-        // `wifi_bssid` правила не сматчатся (`WifiInfo.ssid` возвращает
-        // `<unknown ssid>`). См. spec/050 findings + spec/051.
-        ListTile(
-          leading: Icon(
-            _backgroundLocationGranted
-                ? Icons.location_on_outlined
-                : Icons.location_off_outlined,
-            color: _backgroundLocationGranted
-                ? Colors.green
-                : Theme.of(context).colorScheme.error,
-          ),
-          title: const Text('Location (background)'),
-          subtitle: Text(_backgroundLocationGranted
-              ? 'Granted — sing-box can read Wi-Fi state for routing rules'
-              : 'Required for Wi-Fi-based routing rules. Tap to grant.'),
-          trailing: const Icon(Icons.chevron_right, size: 18),
-          onTap: _onBackgroundLocationTap,
-        ),
-        ListTile(
-          leading: Icon(
-            _nearbyWifiGranted
-                ? Icons.wifi_outlined
-                : Icons.wifi_off_outlined,
-            color: _nearbyWifiGranted
-                ? Colors.green
-                : Theme.of(context).colorScheme.error,
-          ),
-          title: const Text('Nearby Wi-Fi devices'),
-          subtitle: Text(_nearbyWifiGranted
-              ? 'Granted — real SSID/BSSID accessible'
-              : 'Android 13+ requires this for SSID. Tap to grant.'),
-          trailing: const Icon(Icons.chevron_right, size: 18),
-          onTap: _onNearbyWifiTap,
-        ),
-        ListTile(
-          leading: const Icon(Icons.settings_applications_outlined),
-          title: const Text('App info (OEM power settings)'),
-          subtitle: const Text(
-              'OEM-specific toggles to keep VPN alive in background.'),
-          trailing: const Icon(Icons.chevron_right, size: 18),
-          onTap: _openAppInfoWithHint,
-        ),
-        const Divider(height: 32),
-        Text('Developer', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        SwitchListTile(
-          title: const Text('Debug API'),
-          subtitle: Text(
-            _debugEnabled
-                ? 'Exposed on http://127.0.0.1:$_debugPort (adb forward only)'
-                : 'Runtime HTTP server for adb-forwarded debugging.',
-          ),
-          secondary: const Icon(Icons.bug_report),
-          value: _debugEnabled,
-          onChanged: _loaded
-              ? (val) => unawaited(_toggleDebugApi(val))
-              : null,
-        ),
-        if (_debugEnabled)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Token',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SelectableText(
-                        _debugToken.isEmpty ? '(not set)' : _debugToken,
-                        style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Copy',
-                      icon: const Icon(Icons.copy, size: 18),
-                      onPressed:
-                          _debugToken.isEmpty ? null : _copyDebugToken,
-                    ),
-                    IconButton(
-                      tooltip: 'Regenerate',
-                      icon: const Icon(Icons.refresh, size: 18),
-                      onPressed: () =>
-                          unawaited(_regenerateDebugToken()),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _debugPortCtl,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Port',
-                    helperText: 'Range 1024..49151',
-                    errorText: _debugPortError.isEmpty
-                        ? null
-                        : _debugPortError,
-                    isDense: true,
-                    border: const OutlineInputBorder(),
-                  ),
-                  onSubmitted: (v) => unawaited(_applyDebugPort(v)),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Token is shown only here. It is NOT written to any '
-                  'file — use Copy to save. Server binds on 127.0.0.1 '
-                  'only; use `adb forward tcp:9269 tcp:9269`.',
-                  style: TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-        // §037 — config_locked_for_debug. Видим только когда Debug API ON,
-        // чтобы lock не висел сиротой без UI-возврата к разблокировке (его
-        // снимают через Debug API `PUT /settings/config_locked` или этим
-        // toggle'ом). При выключении Debug API toggle выше — lock auto-снимется.
-        if (_debugEnabled)
-          SwitchListTile(
-            title: const Text('Lock config (debug)'),
-            subtitle: Text(
-              _configLocked
-                  ? 'Pinned. UI actions skip config rebuild — useful when testing PUT /config overrides.'
-                  : 'Off — UI actions rebuild config from settings as usual.',
-            ),
-            secondary: const Icon(Icons.lock_outline),
-            value: _configLocked,
-            onChanged: _loaded
-                ? (val) => unawaited(_toggleConfigLocked(val))
-                : null,
-          ),
-        // §043: forwarding sing-box internal logs into our AppLog (Debug
-        // screen → Core tab + /logs/core endpoint). Off by default — sing-box
-        // на busy traffic эмитит сотни строк/минуту; opt-in для диагностики.
-        // Subtitle короткий и timeless — без «after restart» (показывался бы
-        // и после самого рестарта, misleading); пояснялка про process-restart
-        // вынесена в полноширинный блок ниже.
-        AnimatedContainer(
-          key: _coreLogsTileKey,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeOut,
-          color: _coreLogsHighlighted
-              ? Theme.of(context).colorScheme.tertiaryContainer
-              : Colors.transparent,
-          child: SwitchListTile(
-            title: const Text('Forward sing-box logs'),
-            subtitle: Text(
-              _coreLogsEnabled
-                  ? 'Visible in Debug → Core.'
-                  : 'Off.',
-            ),
-            secondary: const Icon(Icons.terminal),
-            value: _coreLogsEnabled,
-            onChanged: _loaded
-                ? (val) => unawaited(_toggleCoreLogs(val))
-                : null,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Setting is saved immediately, but `Libbox.setup` reads the '
-                '`debug` flag once per process. Stop/start VPN does NOT '
-                're-apply — force-stop the app (or use the button below) '
-                'and reopen.',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 6),
-              OutlinedButton.icon(
-                onPressed: _loaded ? () => unawaited(_confirmQuitApp()) : null,
-                icon: const Icon(Icons.logout, size: 18),
-                label: const Text('Quit & reopen app'),
-              ),
-            ],
-          ),
-        ),
-        // §051 Phase 3 — auto-record visited Wi-Fi networks. Default ON:
-        // без auto-record «Pick saved» picker почти всегда пустой,
-        // фича теряет смысл. 5-минутный stickiness отсекает drive-by
-        // сети (магазин/проход). Toggle для тех кто не хочет logging.
-        const Divider(height: 8),
-        SwitchListTile(
-          title: const Text('Auto-record visited Wi-Fi networks'),
-          subtitle: Text(
-            _autoRecordWifi
-                ? 'Networks where you stay ≥ 5 minutes appear in routing rule editor → Pick saved.'
-                : 'Off. Pick saved is populated only by Add current / Manual.',
-          ),
-          secondary: const Icon(Icons.history),
-          value: _autoRecordWifi,
-          onChanged: _loaded
-              ? (val) => unawaited(_toggleAutoRecordWifi(val))
-              : null,
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
-          child: Text(
-            'Stored locally only. Existing entries persist when you turn this off — '
-            'remove individually in Pick saved (long-press chip → Remove).',
-            style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-      ],
+      batteryWhitelisted: _batteryWhitelisted,
+      notificationsEnabled: _notificationsEnabled,
+      backgroundLocationGranted: _backgroundLocationGranted,
+      nearbyWifiGranted: _nearbyWifiGranted,
+      debugEnabled: _debugEnabled,
+      debugPort: _debugPort,
+      debugToken: _debugToken,
+      debugPortError: _debugPortError,
+      debugPortCtl: _debugPortCtl,
+      configLocked: _configLocked,
+      coreLogsEnabled: _coreLogsEnabled,
+      coreLogsHighlighted: _coreLogsHighlighted,
+      coreLogsTileKey: _coreLogsTileKey,
+      autoRecordWifi: _autoRecordWifi,
+      onBatteryTap: () async {
+        await _vpn.openBatteryOptimizationSettings();
+      },
+      onNotificationsTap: _onNotificationsTap,
+      onBackgroundLocationTap: _onBackgroundLocationTap,
+      onNearbyWifiTap: _onNearbyWifiTap,
+      onAppInfoTap: _openAppInfoWithHint,
+      onDebugApiChanged: (val) => unawaited(_toggleDebugApi(val)),
+      onCopyDebugToken: _copyDebugToken,
+      onRegenerateDebugToken: () => unawaited(_regenerateDebugToken()),
+      onDebugPortSubmitted: (v) => unawaited(_applyDebugPort(v)),
+      onConfigLockedChanged: (val) => unawaited(_toggleConfigLocked(val)),
+      onCoreLogsChanged: (val) => unawaited(_toggleCoreLogs(val)),
+      onQuitApp: () => unawaited(_confirmQuitApp()),
+      onAutoRecordWifiChanged: (val) => unawaited(_toggleAutoRecordWifi(val)),
     );
   }
 
@@ -891,91 +510,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         content: Text(enabled
             ? 'Auto-record on. Networks added after 5 min of stay.'
             : 'Auto-record off. Existing history kept.'),
-      ),
-    );
-  }
-}
-
-/// "Last check: …" + Check now-кнопка под Updates-toggle. Подписан на
-/// `UpdateChecker.latest` чтобы при успешном fetch'е результат сразу
-/// отрендерился.
-class _UpdateStatusRow extends StatefulWidget {
-  const _UpdateStatusRow();
-
-  @override
-  State<_UpdateStatusRow> createState() => _UpdateStatusRowState();
-}
-
-class _UpdateStatusRowState extends State<_UpdateStatusRow> {
-  DateTime? _lastCheck;
-  bool _checking = false;
-  String? _resultLine;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_loadLastCheck());
-  }
-
-  Future<void> _loadLastCheck() async {
-    final dt = await SettingsStorage.getLastUpdateCheck();
-    if (mounted) setState(() => _lastCheck = dt);
-  }
-
-  Future<void> _checkNow() async {
-    setState(() {
-      _checking = true;
-      _resultLine = null;
-    });
-    final result = await UpdateChecker.I.forceCheck(
-      localVersion: VersionInfo.I.version,
-    );
-    final dt = await SettingsStorage.getLastUpdateCheck();
-    if (!mounted) return;
-    setState(() {
-      _checking = false;
-      _lastCheck = dt;
-      switch (result.kind) {
-        case UpdateCheckKind.newer:
-          _resultLine = '${result.info!.tag} available';
-        case UpdateCheckKind.upToDate:
-          _resultLine = "You're up to date";
-        case UpdateCheckKind.failed:
-          _resultLine = 'Check failed: ${result.message ?? ''}';
-        case UpdateCheckKind.skipped:
-          _resultLine = null;
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final lastCheckText = _lastCheck == null
-        ? 'Last check: never'
-        : 'Last check: ${relativeTime(DateTime.now(), _lastCheck!)}';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              _resultLine ?? lastCheckText,
-              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-            ),
-          ),
-          if (_checking)
-            const SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          else
-            TextButton(
-              onPressed: _checkNow,
-              child: const Text('Check now'),
-            ),
-        ],
       ),
     );
   }

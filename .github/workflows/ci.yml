@@ -117,6 +117,13 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Fetch sing-box-lx core (libbox.aar)
+        # §104 — ядро: fork Leadaxe/sing-box-lx (AWG2 + XHTTP). AAR не в git;
+        # скачиваем из GH Releases форка с проверкой SHA256. Пин версии —
+        # app/android/libbox.version (single source для local + CI).
+        working-directory: .
+        run: ./scripts/fetch-libbox.sh
+
       - name: Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -134,6 +141,11 @@ jobs:
           set -euo pipefail
           VERSION="${{ needs.meta.outputs.version }}"
           VERSION="${VERSION#v}"
+          # run_mode=build (без тега) даёт 'dev-<sha>' — не semver, pub
+          # отвергает. Префиксуем до валидного pre-release: 0.0.0-dev-<sha>.
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            VERSION="0.0.0-${VERSION}"
+          fi
           BUILD_NUMBER=$(git rev-list --count HEAD)
           sed -i.bak -E "s/^version: .*/version: $VERSION+$BUILD_NUMBER/" pubspec.yaml
           rm -f pubspec.yaml.bak

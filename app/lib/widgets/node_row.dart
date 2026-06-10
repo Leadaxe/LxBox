@@ -20,7 +20,6 @@ class NodeRow extends StatelessWidget {
     required this.onHighlight,
     required this.onActivate,
     required this.onPing,
-    this.onCopy,
     this.onCopyUri,
     this.onViewJson,
     this.onRunUrltest,
@@ -30,9 +29,6 @@ class NodeRow extends StatelessWidget {
   final VoidCallback onHighlight;
   final VoidCallback onActivate;
   final VoidCallback onPing;
-
-  /// Called with 'server', 'detour', or 'both'.
-  final void Function(String mode)? onCopy;
 
   /// Called when user wants the original URI (vless://, wireguard://, …).
   final VoidCallback? onCopyUri;
@@ -241,36 +237,7 @@ class NodeRow extends StatelessWidget {
               title: const Text('Copy URI'),
             ),
           ),
-        if (showCopy)
-          PopupMenuItem<String>(
-            value: 'copy_server',
-            child: ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.content_copy, size: 20),
-              title: const Text('Copy server (JSON)'),
-            ),
-          ),
-        if (showCopy && item.hasDetour)
-          PopupMenuItem<String>(
-            value: 'copy_detour',
-            child: ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.alt_route, size: 20),
-              title: const Text('Copy detour'),
-            ),
-          ),
-        if (showCopy && item.hasDetour)
-          PopupMenuItem<String>(
-            value: 'copy_both',
-            child: ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.copy_all, size: 20),
-              title: const Text('Copy server + detour'),
-            ),
-          ),
+        // §099 — Copy JSON / detour / server+detour перенесены в View JSON.
       ],
     );
     if (!context.mounted) return;
@@ -283,12 +250,6 @@ class NodeRow extends StatelessWidget {
         if (onRunUrltest != null) onRunUrltest!();
       case 'copy_uri':
         if (onCopyUri != null) onCopyUri!();
-      case 'copy_server':
-        if (onCopy != null) onCopy!('server');
-      case 'copy_detour':
-        if (onCopy != null) onCopy!('detour');
-      case 'copy_both':
-        if (onCopy != null) onCopy!('both');
       case 'view_json':
         if (onViewJson != null) onViewJson!();
     }

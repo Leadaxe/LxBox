@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/github/v/release/Leadaxe/LxBox?label=version)](https://github.com/Leadaxe/LxBox/releases)
 [![Dart](https://img.shields.io/badge/Dart-3.11%2B-blue)](https://dart.dev/)
 
-Android-клиент с глубокими оптимизациями по производительности и безопасности [sing-box](https://sing-box.sagernet.org/) для гибкой маршрутизации сетевого трафика, предназначенный для сетевых специалистов различного уровня подготовики. Мульти-подписки, умные правила, встроенный тест скорости.
+Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — форке [sing-box](https://sing-box.sagernet.org/) с AmneziaWG 2.0 и нативным XHTTP — для гибкой маршрутизации сетевого трафика, предназначенный для сетевых специалистов различного уровня подготовки. Мульти-подписки, умные правила, встроенный тест скорости.
 
 **[Скачать последний релиз](https://github.com/Leadaxe/LxBox/releases/latest)** | **[English README](README.md)**
 
@@ -27,7 +27,7 @@ Android-клиент с глубокими оптимизациями по пр�
 
 Добавляйте серверы по URL подписки, прямой ссылке, WireGuard URI/INI или raw sing-box JSON outbound. Умный диалог вставки определяет формат автоматически и показывает превью. Включение/отключение подписок без удаления. Офлайн-rehydrate — ноды восстанавливаются из кеша тела при старте app. Per-subscription настройки detour серверов.
 
-- **10 протоколов**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard
+- **10 протоколов**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard (вкл. **AmneziaWG / AWG 2.0** — `awg://` URI, AmneziaWG `.conf`, JSON)
 - Форматы: Base64, Xray JSON Array (chained proxy), plain text, raw sing-box JSON
 - Per-subscription picker **Update interval** (1/3/6/12/24/48/72/168h), учитывает заголовок `profile-update-interval`
 - Subtitle в строке подписки: `124 nodes · 🔄 24h · 🕐 3h ago · (2 fails)`
@@ -46,14 +46,17 @@ Android-клиент с глубокими оптимизациями по пр�
 
 **Главный экран** — подключение и управление нодами
 
-Запуск/остановка туннеля одним нажатием с анимированным статусом. Выбор группы прокси, сортировка нод по пингу/имени, массовый пинг. Панель трафика с реалтайм скоростью, соединениями и аптаймом.
+Запуск/остановка туннеля одним нажатием с анимированным статусом. Выбор группы прокси, сортировка нод по пингу/имени/вручную, массовый пинг. Панель трафика с реалтайм скоростью, соединениями и аптаймом.
 
 - **Разметка строки ноды** (v1.3.1+): `[ACTIVE зелёная] ПРОТОКОЛ · · · 50MS →` — лейбл протокола (VLESS/Hy2/WG/TUIC/SS) из типа outbound'а, ping справа с цветом по latency
+- **Подзаголовок ноды `ПРОТОКОЛ · транспорт · security`** (v2.0.0): `VLESS·xhttp·TLS`, `VLESS·tcp·Reality+Vision`, `WG·awg2` — видно, что внутри ноды, не открывая JSON
+- **Filter workspace** (v2.0.0): фильтр-панель с табами **Regex · Protocol · Subscribes · Settings** + сводка активных фильтров чипами; у каждой категории своя `!`-инверсия (NOT); строка чипов по транспорту/безопасности (`tcp`/`ws`/`grpc`/`h2`/`httpupgrade`/`quic`/`xhttp` + `TLS`/`Reality`/`+Vision`/`awg`/`awg2`); фильтры запоминаются per-channel
+- **Detour-фильтр — tri-state** (v2.0.0): показать всё / скрыть detour / **только detour** (чистый список релеев для диагностики)
+- **Персистентная сортировка Custom** (v2.0.0): ручной порядок выбирается из меню сортировок и tap-карусели (Default → Ping → A-Z → Custom), переживает рестарт; подписки перетаскиваются за grab-strip
 - Группы прокси: `auto-proxy-out`, VPN ①/②/③
 - Фильтр нод: выбор участников автоподбора
-- Переключатель видимости detour серверов (⚙)
 - Sticky restart warning под Stop — не пропадает при отмене Stop-диалога
-- Long-press: Ping · Use this node · View JSON · **Copy URI** (vless://, wireguard://, …) · Copy server (JSON) · Copy detour · Copy server + detour
+- Long-press: Ping · Use this node · View JSON · **Copy URI** (vless://, awg://, …) — действия Copy-JSON живут внутри диалога View JSON (Copy server / Copy detour / Copy server + detours(N))
 
 **Quick Connect** — toggle VPN без открытия app'а (v1.5.0)
 
@@ -184,8 +187,8 @@ Multi-hop цепочки: трафик идёт через промежуточ�
 
 | Протокол    | URI-схема                          | Транспорт                                      |
 | ----------- | ---------------------------------- | ---------------------------------------------- |
-| VLESS       | `vless://`                         | TCP, WebSocket, gRPC, H2, HTTPUpgrade, REALITY |
-| VMess       | `vmess://` (v2rayN base64)         | TCP, WebSocket, gRPC, H2, HTTPUpgrade          |
+| VLESS       | `vless://`                         | TCP, WebSocket, gRPC, H2, HTTPUpgrade, **XHTTP**, REALITY |
+| VMess       | `vmess://` (v2rayN base64)         | TCP, WebSocket, gRPC, H2, HTTPUpgrade, **XHTTP** |
 | Trojan      | `trojan://`                        | TCP, WebSocket, gRPC                           |
 | Shadowsocks | `ss://` (SIP002 + legacy + SS2022) | TCP, UDP, SIP003-плагины                       |
 | Hysteria2   | `hy2://` / `hysteria2://`          | QUIC, Salamander obfs                          |
@@ -193,10 +196,10 @@ Multi-hop цепочки: трафик идёт через промежуточ�
 | **NaïveProxy** | `naive+https://`                | Настоящий Chrome TLS через cronet, `extra-headers` |
 | SSH         | `ssh://`                           | TCP, host key / password / private key         |
 | SOCKS       | `socks://` / `socks5://`           | TCP, auth                                      |
-| WireGuard   | `wireguard://`, INI config         | UDP, multi-peer                                |
+| WireGuard / **AmneziaWG** | `wireguard://`, `awg://`, INI / `.conf` | UDP, multi-peer, **обфускация AWG 1.x/2.0** (jc/jmin/jmax, s1–s4, h1–h4, i1–i5), авто-MTU 1280 |
 
 
-**XHTTP transport** автоматически fallback'ится в HTTPUpgrade (sing-box 1.12.x не поддерживает xhttp напрямую) — warning отображается в UI.
+**XHTTP** — нативный транспорт с v2.0.0 (Xray splithttp: `mode` auto/packet-up/stream-up/stream-one, `x_padding_bytes`, `no_grpc_header`) — работает с TLS и Reality, несовместим с XTLS-Vision (ограничение протокола).
 
 Подробная документация: [docs/PROTOCOLS.md](docs/PROTOCOLS.md)
 
@@ -222,6 +225,7 @@ buildConfig(lists, settings)  ← template + post-steps (resilience, DNS, rules)
 sing-box JSON
 ```
 
+- **Bundled-ядро** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **1.13.13-lx.5**: форк sing-box 1.13.13, собранный с тегами `with_awg` / `with_xhttp`; версия пинится в `app/android/libbox.version`, AAR скачивается из GitHub Releases форка скриптом `scripts/fetch-libbox.sh` с проверкой SHA256
 - **Sealed `NodeSpec`** — 9 протоколов, полиморфный `emit(vars)` / `toUri()` (round-trip инвариант)
 - `**EmitContext**` — пробрасывает шаблонные vars в per-node emit
 - `**NodeEntries{main, detours[]}**` — именованный struct для chain-результатов

@@ -1,0 +1,16 @@
+{
+  "$schema_comment": "§105 — ТЕСТОВЫЙ стенд support-message (порог 0 → показ сразу). Прод-канал — docs/support.json на main. Сборка с этим каналом: ./scripts/build-local-apk.sh --dart-define=LXBOX_SUPPORT_URL=https://raw.githubusercontent.com/Leadaxe/LxBox/develop/docs/support.test.json",
+  "id": "support-test",
+  "min_active_hours": 0,
+  "min_session_minutes": 0,
+  "snooze_active_hours": 0,
+  "title": "Привет! Я автор этого приложения",
+  "message": "Чтобы L×Box заработал, было потрачено множество времени и сил — собственное ядро, обфускация, и всё это бесплатно и без рекламы.\n\nЯ вижу, что приложение приносит тебе пользу (VPN отработал уже больше 3 часов 🎉). Поддержи проект, пожалуйста — это занимает минуту:\n\n⭐ Отметь звездой репозитории на GitHub\n💬 Отпишись в теме на 4PDA\n💰 Или поддержи деньгами\n\nНе оставайся безучастным — каждая звезда и каждый отзыв реально помогают проекту жить!",
+  "links": [
+    { "label": "⭐ LxBox — Android-клиент", "url": "https://github.com/Leadaxe/LxBox" },
+    { "label": "⭐ sing-box-lx — ядро", "url": "https://github.com/Leadaxe/sing-box-lx" },
+    { "label": "💬 Тема на 4PDA", "url": "https://4pda.to/forum/index.php?showtopic=1122662" },
+    { "label": "👥 Группа поддержки в Telegram", "url": "https://t.me/singbox_launcher/" },
+    { "label": "💰 Поддержать деньгами", "url": "https://t.me/singbox_launcher/340/3621" }
+  ]
+}

@@ -10,20 +10,30 @@ void main() {
     RegExp? regex,
     bool regexInvert = false,
     Set<String> protocols = const {},
+    bool protocolsInvert = false,
+    Set<String> variants = const {},
+    bool variantsInvert = false,
     Set<String> subscriptions = const {},
+    bool subscriptionsInvert = false,
     int? maxPingMs,
     Map<String, String?> proto = const {},
-    Map<String, String?> sub = const {},
+    Map<String, Set<String>> vari = const {},
+    Map<String, Set<String>> sub = const {},
     Map<String, int?> ping = const {},
   }) {
     return NodeFilter(
       regex: regex,
       regexInvert: regexInvert,
       protocols: protocols,
+      protocolsInvert: protocolsInvert,
+      variants: variants,
+      variantsInvert: variantsInvert,
       subscriptions: subscriptions,
+      subscriptionsInvert: subscriptionsInvert,
       maxPingMs: maxPingMs,
       protocolOf: (t) => proto[t],
-      subscriptionOf: (t) => sub[t],
+      variantsOf: (t) => vari[t] ?? const <String>{},
+      subscriptionsOf: (t) => sub[t] ?? const <String>{},
       pingOf: (t) => ping[t],
     );
   }
@@ -138,19 +148,54 @@ void main() {
     });
   });
 
+  group('NodeFilter.passes — protocol invert (NOT, §096)', () {
+    test('invert ON + proto в set → false (excluded)', () {
+      final f = makeFilter(
+        protocols: {'vless'},
+        protocolsInvert: true,
+        proto: {'🇷🇺 M1': 'vless'},
+      );
+      expect(f.passes('🇷🇺 M1'), isFalse);
+    });
+
+    test('invert ON + proto не в set → true (included)', () {
+      final f = makeFilter(
+        protocols: {'vless'},
+        protocolsInvert: true,
+        proto: {'🇺🇸 N1': 'vmess'},
+      );
+      expect(f.passes('🇺🇸 N1'), isTrue);
+    });
+
+    test('invert ON + unknown proto (null) → true (не входит в set)', () {
+      final f = makeFilter(
+        protocols: {'vless'},
+        protocolsInvert: true,
+        proto: {'🇩🇪 B1': null},
+      );
+      expect(f.passes('🇩🇪 B1'), isTrue,
+          reason: 'unknown ≠ vless → под invert проходит');
+    });
+
+    test('invert ON но protocols пуст → no-op (true)', () {
+      final f = makeFilter(protocolsInvert: true, proto: {'X': 'vless'});
+      expect(f.passes('X'), isTrue);
+    });
+  });
+
   group('NodeFilter.passes — subscription', () {
     test('known sub id в set → true', () {
       final f = makeFilter(
         subscriptions: {'sub-1'},
-        sub: {'🇷🇺 M1': 'sub-1'},
+        sub: {'🇷🇺 M1': {'sub-1'}},
       );
       expect(f.passes('🇷🇺 M1'), isTrue);
     });
 
-    test('UserServer (null sub) попадает в `custom` category', () {
+    test('UserServer (empty Set) попадает в `custom` category', () {
       final f = makeFilter(
         subscriptions: {'custom'},
-        sub: {'CustomNode': null},
+        sub: {'CustomNode': const <String>{}},
       );
       expect(f.passes('CustomNode'), isTrue);
     });
@@ -158,9 +203,180 @@ void main() {
     test('UserServer без `custom` в set → false', () {
       final f = makeFilter(
         subscriptions: {'sub-1'},
-        sub: {'CustomNode': null},
+        sub: {'CustomNode': const <String>{}},
       );
       expect(f.passes('CustomNode'), isFalse);
+    });
+
+    test('§077 collision: нода с candidates {sub-a, sub-b} — chip sub-a → true', () {
+      final f = makeFilter(
+        subscriptions: {'sub-a'},
+        sub: {'🇷🇺 M1': {'sub-a', 'sub-b'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isTrue);
+    });
+
+    test('§077 collision: та же нода — chip sub-b → true (видна в обеих)', () {
+      final f = makeFilter(
+        subscriptions: {'sub-b'},
+        sub: {'🇷🇺 M1': {'sub-a', 'sub-b'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isTrue);
+    });
+
+    test('§077 collision: chip sub-c (не в candidates) → false', () {
+      final f = makeFilter(
+        subscriptions: {'sub-c'},
+        sub: {'🇷🇺 M1': {'sub-a', 'sub-b'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isFalse);
+    });
+
+    test('§077 multi-chip {sub-a, sub-c} ∩ candidates {sub-a, sub-b} → true (any-match)', () {
+      // Audit finding #4 — symmetric intersection: с multi-chip side.
+      final f = makeFilter(
+        subscriptions: {'sub-a', 'sub-c'},
+        sub: {'🇷🇺 M1': {'sub-a', 'sub-b'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isTrue);
+    });
+
+    test('§077 multi-chip {sub-c, sub-d} disjoint от candidates {sub-a, sub-b} → false', () {
+      final f = makeFilter(
+        subscriptions: {'sub-c', 'sub-d'},
+        sub: {'🇷🇺 M1': {'sub-a', 'sub-b'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isFalse);
+    });
+
+    test('custom chip + node с known sub → false (UserServer-only filter)', () {
+      // Audit finding #5: custom branch + non-empty candidates inversion check.
+      final f = makeFilter(
+        subscriptions: {'custom'},
+        sub: {'🇷🇺 M1': {'sub-1'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isFalse);
+    });
+
+    test('mixed {custom, sub-1} chips + UserServer → true', () {
+      final f = makeFilter(
+        subscriptions: {'custom', 'sub-1'},
+        sub: {'CustomNode': const <String>{}},
+      );
+      expect(f.passes('CustomNode'), isTrue);
+    });
+
+    test('mixed {custom, sub-1} chips + known sub-1 node → true', () {
+      final f = makeFilter(
+        subscriptions: {'custom', 'sub-1'},
+        sub: {'🇷🇺 M1': {'sub-1'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isTrue);
+    });
+
+    test('subscription filter off (empty Set) + non-empty candidates → true', () {
+      // Audit finding #16: контракт «filter off ignores whatever lookup returns».
+      final f = makeFilter(
+        sub: {'🇷🇺 M1': {'sub-a', 'sub-b'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isTrue);
+    });
+
+    test('subscription filter off (empty Set) + empty candidates → true', () {
+      final f = makeFilter(sub: {'CustomNode': const <String>{}});
+      expect(f.passes('CustomNode'), isTrue);
+    });
+  });
+
+  group('NodeFilter.passes — subscription invert (NOT, §096)', () {
+    test('invert ON + нода из выбранной подписки → false', () {
+      final f = makeFilter(
+        subscriptions: {'sub-1'},
+        subscriptionsInvert: true,
+        sub: {'🇷🇺 M1': {'sub-1'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isFalse);
+    });
+
+    test('invert ON + нода НЕ из выбранной → true', () {
+      final f = makeFilter(
+        subscriptions: {'sub-1'},
+        subscriptionsInvert: true,
+        sub: {'🇺🇸 N1': {'sub-2'}},
+      );
+      expect(f.passes('🇺🇸 N1'), isTrue);
+    });
+
+    test('invert ON + custom-нода (empty candidates) при chip sub-1 → true', () {
+      final f = makeFilter(
+        subscriptions: {'sub-1'},
+        subscriptionsInvert: true,
+        sub: {'CustomNode': const <String>{}},
+      );
+      expect(f.passes('CustomNode'), isTrue,
+          reason: 'custom ≠ sub-1 → под invert проходит');
+    });
+
+    test('invert ON + custom chip + custom-нода → false (исключена)', () {
+      final f = makeFilter(
+        subscriptions: {'custom'},
+        subscriptionsInvert: true,
+        sub: {'CustomNode': const <String>{}},
+      );
+      expect(f.passes('CustomNode'), isFalse);
+    });
+
+    test('invert ON но subscriptions пуст → no-op (true)', () {
+      final f = makeFilter(
+        subscriptionsInvert: true,
+        sub: {'🇷🇺 M1': {'sub-1'}},
+      );
+      expect(f.passes('🇷🇺 M1'), isTrue);
+    });
+  });
+
+  group('NodeFilter.passes — variants (transport/security, §103)', () {
+    final vari = {
+      'a': {'tcp', 'Reality+Vision'},
+      'b': {'xhttp', 'TLS'},
+      'c': {'awg2'},
+    };
+
+    test('пустой набор = no filter', () {
+      final f = makeFilter(vari: vari);
+      expect(f.passes('a'), isTrue);
+      expect(f.passes('unknown'), isTrue);
+    });
+
+    test('выбран xhttp → проходит только b', () {
+      final f = makeFilter(variants: {'xhttp'}, vari: vari);
+      expect(f.passes('a'), isFalse);
+      expect(f.passes('b'), isTrue);
+      expect(f.passes('c'), isFalse);
+    });
+
+    test('микс transport+security — OR по тегам ноды', () {
+      final f = makeFilter(variants: {'tcp', 'awg2'}, vari: vari);
+      expect(f.passes('a'), isTrue);
+      expect(f.passes('b'), isFalse);
+      expect(f.passes('c'), isTrue);
+    });
+
+    test('invert (§096): NOT xhttp', () {
+      final f =
+          makeFilter(variants: {'xhttp'}, variantsInvert: true, vari: vari);
+      expect(f.passes('a'), isTrue);
+      expect(f.passes('b'), isFalse);
+      expect(f.passes('c'), isTrue);
+    });
+
+    test('unknown нода (пустой Set) при active фильтре → non-matching', () {
+      final f = makeFilter(variants: {'TLS'}, vari: vari);
+      expect(f.passes('unknown'), isFalse);
+      // под invert наоборот — проходит («не TLS»)
+      final fi =
+          makeFilter(variants: {'TLS'}, variantsInvert: true, vari: vari);
+      expect(fi.passes('unknown'), isTrue);
     });
   });
 
@@ -208,7 +424,7 @@ void main() {
         subscriptions: {'sub-1'},
         maxPingMs: 100,
         proto: {'🇷🇺 Moscow': 'vless'},
-        sub: {'🇷🇺 Moscow': 'sub-1'},
+        sub: {'🇷🇺 Moscow': {'sub-1'}},
         ping: {'🇷🇺 Moscow': 42},
       );
       expect(f.passes('🇷🇺 Moscow'), isTrue);

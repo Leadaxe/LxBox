@@ -270,21 +270,19 @@ String toUriHysteria2(Hysteria2Spec s) {
   if (s.tls.insecure) q['insecure'] = '1';
   if (s.tls.alpn.isNotEmpty) q['alpn'] = s.tls.alpn.join(',');
   if (s.tls.fingerprint != null) q['fp'] = s.tls.fingerprint!;
+  // §084 H3: round-trip bandwidth hint'ов. emit пишет up_mbps/down_mbps в
+  // sing-box JSON — URI должен их сохранять, иначе parse→emit→toUri→parse
+  // теряет значения (parseHysteria2 читает те же ключи обратно).
+  if (s.upMbps != null) q['up_mbps'] = s.upMbps.toString();
+  if (s.downMbps != null) q['down_mbps'] = s.downMbps.toString();
   return _buildUri('hysteria2', s.password, s.server, s.port, q, s.label);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
 // NaïveProxy
 // ════════════════════════════════════════════════════════════════════════════
-
-/// Charset для имени HTTP-заголовка из DuckSoft de-facto спеки naive URI:
-/// `! # $ % & ' * + - . 0-9 A-Z \ ^ _ ` a-z | ~`. Невалидные пары при
-/// сериализации/десериализации silently дропаются с лог-варном.
-final RegExp _naiveHeaderName =
-    RegExp(r"^[!#$%&'*+\-.0-9A-Z\\^_`a-z|~]+$");
-
-bool isValidNaiveHeaderName(String name) =>
-    name.isNotEmpty && _naiveHeaderName.hasMatch(name);
+// §084 M7: `isValidNaiveHeaderName` / `naiveHeaderNameRe` переехали в
+// services/parser/uri_utils.dart (единый источник, был дубль с uri_parsers).
 
 Outbound emitNaive(NaiveSpec s, TemplateVars vars) {
   final out = <String, dynamic>{
@@ -483,6 +481,8 @@ Endpoint emitWireguard(WireguardSpec s, TemplateVars vars) {
     'private_key': s.privateKey,
     'peers': peers,
   };
+  // §097 — AmneziaWG2 obfuscation-поля в корень endpoint (числа → JSON number).
+  s.awg?.writeInto(map);
   return Endpoint(map);
 }
 
@@ -502,6 +502,8 @@ String toUriWireguard(WireguardSpec s) {
   if (peer?.persistentKeepalive != null) {
     q['keepalive'] = peer!.persistentKeepalive.toString();
   }
+  // §097 — AmneziaWG2 query-params (round-trip); buildQuery эскейпит i*.
+  s.awg?.writeQuery(q);
   final userinfo = encodeParam(s.privateKey);
   final host = _wrapIpv6(s.server);
   final qs = buildQuery(q);

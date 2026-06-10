@@ -1,0 +1,61 @@
+import '../../../models/node_spec.dart';
+import '../../../models/node_warning.dart';
+import '../transport.dart';
+import '../uri_utils.dart';
+
+// ════════════════════════════════════════════════════════════════════════════
+// VLESS
+// ════════════════════════════════════════════════════════════════════════════
+
+VlessSpec? parseVless(String uri) {
+  final p = Uri.tryParse(uri);
+  if (p == null || p.host.isEmpty || p.userInfo.isEmpty) return null;
+
+  final uuid = Uri.decodeComponent(p.userInfo.split(':').first);
+  final server = p.host;
+  final port = p.hasPort ? p.port : 443;
+  final q = Map<String, String>.from(p.queryParameters);
+  final label = decodeFragment(p.fragment);
+  final tag = tagFromLabel(label, 'vless', server, port);
+
+  final transport = parseTransport(q);
+  final tls = parseVlessTls(q, server, port);
+
+  var flow = (q['flow'] ?? '').trim();
+  final warnings = <NodeWarning>[];
+  var packetEncoding = '';
+
+  // v1 quirk: flow=xtls-rprx-vision-udp443 → vision + packet_encoding=xudp.
+  if (flow == 'xtls-rprx-vision-udp443') {
+    flow = 'xtls-rprx-vision';
+    packetEncoding = 'xudp';
+  }
+  // v1 quirk: auto-flow когда REALITY активна без transport'а.
+  if (flow.isEmpty && (q['pbk'] ?? '').trim().isNotEmpty && transport == null) {
+    flow = 'xtls-rprx-vision';
+  }
+  // packet_encoding: sing-box принимает только {"", xudp, packetaddr};
+  // xray-style `none` и любой мусор → panic в libbox. Allow-list нормализуем
+  // на входе, чтобы emit'ить безопасно. См. normalizePacketEncoding.
+  if (packetEncoding.isEmpty) {
+    final raw = queryParamCI(q, 'packetEncoding') ?? '';
+    packetEncoding = normalizePacketEncoding(raw, tag: tag);
+  }
+
+  if (tls.insecure) warnings.add(const InsecureTlsWarning());
+
+  return VlessSpec(
+    id: newUuidV4(),
+    tag: tag,
+    label: label,
+    server: server,
+    port: port,
+    rawUri: uri,
+    uuid: uuid,
+    flow: flow,
+    tls: tls,
+    transport: transport,
+    packetEncoding: packetEncoding,
+    warnings: warnings,
+  );
+}

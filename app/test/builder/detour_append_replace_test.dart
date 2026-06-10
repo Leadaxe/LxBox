@@ -188,6 +188,177 @@ void main() {
     });
   });
 
+  group('§080 — overrideDetour ссылается на prefixed-form целевого outbound', () {
+    // Target UserServer с непустым tagPrefix='Home' и нодой 'WG' →
+    // эмитится в config как outbound с tag '🏠'-prefixed = 'Home WG'.
+    // Consumer UserServer выбирает её как detour. Picker (§080) сохраняет
+    // **display-form** 'Home WG' — это совпадает с эмитированным tag'ом.
+
+    UserServer targetWG() => UserServer(
+          id: 'wg-target',
+          name: 'WG Target',
+          enabled: true,
+          tagPrefix: 'Home',
+          detourPolicy: const DetourPolicy(),
+          origin: UserSource.paste,
+          createdAt: DateTime.now(),
+          nodes: [parseUri('vless://wg@hop.com:443?type=ws&security=tls#WG')!],
+        );
+
+    test('display-form override → detour ссылается на существующий outbound',
+        () async {
+      final consumer = UserServer(
+        id: 'consumer',
+        name: 'Consumer',
+        enabled: true,
+        tagPrefix: '',
+        // §080: picker сохраняет display-form 'Home WG' (= _withPrefix).
+        detourPolicy: const DetourPolicy(overrideDetour: 'Home WG'),
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        nodes: [parseUri('vless://u1@h1.com:443?type=ws&security=tls#Main')!],
+      );
+
+      final result = await buildConfig(
+        lists: [targetWG(), consumer],
+        template: template,
+        settings: const BuildSettings(
+          userVars: {'clash_api': '127.0.0.1:9090'},
+          enabledGroups: {'vpn-1', kAutoOutboundTag},
+        ),
+      );
+
+      expect(result.validation.isOk, true,
+          reason: result.validation.issues.join('\n'));
+      final outs = (result.config['outbounds'] as List).cast<Map>();
+      final main = outs.firstWhere((o) => o['tag'] == 'Main');
+      // detour указывает на 'Home WG' …
+      expect(main['detour'], 'Home WG');
+      // … и такой outbound реально существует в конфиге (no dangling ref).
+      final tags = outs.map((o) => o['tag']).toSet();
+      expect(tags.contains('Home WG'), true,
+          reason: 'целевой outbound эмитится как prefixed-form "Home WG"');
+    });
+
+    test('bare-form override (старый баг) → detour ссылается на '
+        'несуществующий outbound', () async {
+      final consumer = UserServer(
+        id: 'consumer-bad',
+        name: 'Consumer',
+        enabled: true,
+        tagPrefix: '',
+        // Pre-§080 поведение: picker сохранял bare 'WG'. Целевой outbound
+        // эмитится как 'Home WG' → 'WG' не существует → dangling reference.
+        detourPolicy: const DetourPolicy(overrideDetour: 'WG'),
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        nodes: [parseUri('vless://u1@h1.com:443?type=ws&security=tls#Main')!],
+      );
+
+      final result = await buildConfig(
+        lists: [targetWG(), consumer],
+        template: template,
+        settings: const BuildSettings(
+          userVars: {'clash_api': '127.0.0.1:9090'},
+          enabledGroups: {'vpn-1', kAutoOutboundTag},
+        ),
+      );
+
+      final outs = (result.config['outbounds'] as List).cast<Map>();
+      final main = outs.firstWhere((o) => o['tag'] == 'Main');
+      final tags = outs.map((o) => o['tag']).toSet();
+      // main.detour == 'WG', но такого outbound нет (есть только 'Home WG').
+      expect(main['detour'], 'WG');
+      expect(tags.contains('WG'), false,
+          reason: 'bare "WG" не эмитится — это и есть §080 баг');
+      // §084 H1 — validator теперь ловит этот dangling detour как fatal.
+      expect(result.validation.hasFatal, true,
+          reason: 'dangling detour "WG" → DanglingDetourRef');
+    });
+
+    test('empty tagPrefix target: display-form == bare (regression-free)',
+        () async {
+      final target = UserServer(
+        id: 'wg-noprefix',
+        name: 'WG',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: const DetourPolicy(),
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        nodes: [parseUri('vless://wg@hop.com:443?type=ws&security=tls#WG')!],
+      );
+      final consumer = UserServer(
+        id: 'consumer2',
+        name: 'Consumer',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: const DetourPolicy(overrideDetour: 'WG'),
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        nodes: [parseUri('vless://u1@h1.com:443?type=ws&security=tls#Main')!],
+      );
+
+      final result = await buildConfig(
+        lists: [target, consumer],
+        template: template,
+        settings: const BuildSettings(
+          userVars: {'clash_api': '127.0.0.1:9090'},
+          enabledGroups: {'vpn-1', kAutoOutboundTag},
+        ),
+      );
+
+      expect(result.validation.isOk, true,
+          reason: result.validation.issues.join('\n'));
+      final outs = (result.config['outbounds'] as List).cast<Map>();
+      final main = outs.firstWhere((o) => o['tag'] == 'Main');
+      expect(main['detour'], 'WG');
+      expect(outs.map((o) => o['tag']).toSet().contains('WG'), true);
+    });
+
+    test('disabled target UserServer не эмитит outbound (picker должен '
+        'был его skip\'нуть)', () async {
+      // Подтверждает review finding #7: disabled UserServer → no outbounds.
+      // Picker фильтрует disabled (см. _showOverrideDetourPicker / _load),
+      // здесь — builder-side инвариант: disabled list не в config.
+      final disabledTarget = UserServer(
+        id: 'wg-disabled',
+        name: 'WG',
+        enabled: false,
+        tagPrefix: 'Home',
+        detourPolicy: const DetourPolicy(),
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        nodes: [parseUri('vless://wg@hop.com:443?type=ws&security=tls#WG')!],
+      );
+      final consumer = UserServer(
+        id: 'consumer3',
+        name: 'Consumer',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: const DetourPolicy(overrideDetour: 'Home WG'),
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        nodes: [parseUri('vless://u1@h1.com:443?type=ws&security=tls#Main')!],
+      );
+
+      final result = await buildConfig(
+        lists: [disabledTarget, consumer],
+        template: template,
+        settings: const BuildSettings(
+          userVars: {'clash_api': '127.0.0.1:9090'},
+          enabledGroups: {'vpn-1', kAutoOutboundTag},
+        ),
+      );
+
+      final outs = (result.config['outbounds'] as List).cast<Map>();
+      // disabled target НЕ в config → 'Home WG' отсутствует → если бы picker
+      // его предложил, был бы dangling. Picker теперь его skip'ает.
+      expect(outs.map((o) => o['tag']).toSet().contains('Home WG'), false,
+          reason: 'disabled UserServer не эмитит outbound');
+    });
+  });
+
   group('DetourPolicy JSON round-trip — replaceDetourChain', () {
     test('default false: missing key → false', () {
       final policy = DetourPolicy.fromJson({

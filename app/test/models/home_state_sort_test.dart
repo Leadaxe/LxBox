@@ -6,17 +6,17 @@ import 'package:lxbox/models/home_state.dart';
 /// Covers: pin direct/auto toggles, manual order application, new nodes
 /// to end, cycle exit-from-manual semantics (next).
 void main() {
-  group('NodeSortMode.next — §071 cycle exit', () {
+  group('NodeSortMode.next — §100 carousel (incl. manual)', () {
     test('default → latencyAsc', () {
       expect(NodeSortMode.defaultOrder.next, NodeSortMode.latencyAsc);
     });
     test('latencyAsc → nameAsc', () {
       expect(NodeSortMode.latencyAsc.next, NodeSortMode.nameAsc);
     });
-    test('nameAsc → defaultOrder (cycle continues)', () {
-      expect(NodeSortMode.nameAsc.next, NodeSortMode.defaultOrder);
+    test('nameAsc → manual (§100 — Custom теперь в карусели)', () {
+      expect(NodeSortMode.nameAsc.next, NodeSortMode.manual);
     });
-    test('manual → defaultOrder (exit, не входит в cycle)', () {
+    test('manual → defaultOrder (замыкает цикл)', () {
       expect(NodeSortMode.manual.next, NodeSortMode.defaultOrder);
     });
   });

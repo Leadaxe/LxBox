@@ -235,7 +235,14 @@ class BoxService(
             return
         }
 
-        DefaultNetworkMonitor.start(serviceScope)
+        // §087 — на genuine смену интерфейса (WiFi↔LTE) дёргаем resetNetwork()
+        // (ядро CloseAll + flush DNS + rebind): закрывает стейл-сокеты на мёртвом
+        // NIC, иначе app виснет на них до TCP-таймаута. См. docs/spec/tasks/087.
+        DefaultNetworkMonitor.start(serviceScope) {
+            Log.d(TAG, "[vpn] interface switch → resetNetwork()")
+            runCatching { commandServer.get()?.resetNetwork() }
+                .onFailure { Log.e(TAG, "auto resetNetwork failed", it) }
+        }
         Libbox.setMemoryLimit(true)
 
         val cs = commandServer.get() ?: run {

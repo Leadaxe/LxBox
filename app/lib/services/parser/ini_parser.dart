@@ -22,6 +22,7 @@ WireguardSpec? parseWireguardIni(String config) {
     peers: spec.peers,
     mtu: spec.mtu,
     rawIni: config,
+    awg: spec.awg, // §097 — не теряем AWG при rebuild для rawIni
     warnings: spec.warnings,
   );
 }
@@ -36,6 +37,9 @@ String? _iniToUri(String config) {
   String presharedKey = '';
   int mtu = 0;
   int keepalive = 0;
+  // §097 — AmneziaWG2 поля из [Interface] (Jc/Jmin/.../I1-I5; регистр value
+  // сохраняем, ключ lowercase). Прокинем в URI-query → Awg.fromQuery.
+  final awg = <String, String>{};
 
   for (final line in lines) {
     final t = line.trim();
@@ -51,6 +55,7 @@ String? _iniToUri(String config) {
       if (k == 'privatekey') privateKey = v;
       if (k == 'address') address = v;
       if (k == 'mtu') mtu = int.tryParse(v) ?? 0;
+      if (Awg.numKeys.contains(k) || Awg.strKeys.contains(k)) awg[k] = v;
     } else if (section == '[peer]') {
       if (k == 'publickey') publicKey = v;
       if (k == 'endpoint') endpoint = v;
@@ -92,6 +97,10 @@ String? _iniToUri(String config) {
   if (mtu > 0) params['mtu'] = mtu.toString();
   if (presharedKey.isNotEmpty) params['presharedkey'] = presharedKey;
   if (keepalive > 0) params['keepalive'] = keepalive.toString();
+  // §097 — AWG-поля в query (encodeComponent ниже эскейпит i* с <>/пробелами).
+  awg.forEach((k, v) {
+    if (v.isNotEmpty) params[k] = v;
+  });
 
   final query = params.entries
       .map((e) =>

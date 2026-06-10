@@ -1,0 +1,442 @@
+part of '../post_steps.dart';
+
+/// Post-step: expansion + merge bundle-пресетов (spec §033).
+///
+/// Для каждого `CustomRule(kind: preset, enabled: true)` ищет
+/// соответствующий `SelectableRule` по `presetId`, разворачивает
+/// через [expandPreset], merge'ит через [mergeFragments]. Результирующие
+/// rule-sets и routing rules регистрирует в [registry] (rule-sets через
+/// [RuleSetRegistry.tryRegisterRuleSet] — identical-skip / first-wins).
+/// Extra DNS-данные возвращаются вверх — инжектируются [applyCustomDns].
+///
+/// Broken preset (`presetId` не найден в шаблоне) пропускается с warning;
+/// UI показывает broken-card для таких правил.
+PresetApplyResult applyPresetBundles(
+  RuleSetRegistry registry,
+  List<CustomRule> rules,
+  List<SelectableRule> presets, {
+  Map<String, String> presetSrsPaths = const {},
+  Map<String, bool> isPresetDnsEnabled = const {},
+}) {
+  // §062: shim вокруг `_applyPresetSingle` — обходит ТОЛЬКО preset rules
+  // в storage order (фильтруя inline/srs). Сохраняет старый publi API +
+  // backward-compat для тестов. Real pipeline использует [applyAllCustomRules]
+  // которое обходит все kinds в одном цикле сохраняя cross-kind order.
+  final state = _PresetSharedState();
+  final warnings = <String>[];
+  for (final cr in rules) {
+    if (cr is! CustomRulePreset) continue;
+    warnings.addAll(_applyPresetSingle(
+      cr,
+      registry,
+      presets,
+      state,
+      presetSrsPaths: presetSrsPaths,
+      isPresetDnsEnabled: isPresetDnsEnabled,
+    ));
+  }
+  return PresetApplyResult(
+    extraDnsServers: state.dnsServers,
+    extraDnsRules: state.dnsRules,
+    dnsRulesByPresetId: state.dnsRulesByPresetId,
+    labelByPresetId: state.labelByPresetId,
+    warnings: warnings,
+  );
+}
+
+/// §062: shared state, накапливаемый across preset rules (cross-preset
+/// dedup для DNS servers + agg для DNS rules / labels). Передаётся в
+/// `_applyPresetSingle` чтобы обработка одного preset видела что уже
+/// зарегистрировано предыдущими.
+class _PresetSharedState {
+  final List<Map<String, dynamic>> dnsServers = [];
+  final Map<String, Map<String, dynamic>> dnsServerByTag = {};
+  final List<Map<String, dynamic>> dnsRules = [];
+  final Map<String, Map<String, dynamic>> dnsRulesByPresetId = {};
+  final Map<String, String> labelByPresetId = {};
+}
+
+/// §062: обработка одного preset rule. Регистрирует rule_sets через
+/// `registry.tryRegisterRuleSet` (identical-skip / first-wins warning),
+/// routing rule — если route-aspect enabled, DNS аспекты — если dns-aspect
+/// enabled. Cross-preset DNS-server dedup через [state].dnsServerByTag.
+List<String> _applyPresetSingle(
+  CustomRulePreset cr,
+  RuleSetRegistry registry,
+  List<SelectableRule> presets,
+  _PresetSharedState state, {
+  Map<String, String> presetSrsPaths = const {},
+  Map<String, bool> isPresetDnsEnabled = const {},
+}) {
+  final warnings = <String>[];
+  if (cr.presetId.isEmpty) return warnings;
+
+  final routeEnabled = cr.enabled;
+  final dnsEnabled = isPresetDnsEnabled[cr.presetId] ?? false;
+  // §033: expand если хотя бы одна сторона активна.
+  if (!routeEnabled && !dnsEnabled) return warnings;
+
+  SelectableRule? match;
+  for (final p in presets) {
+    if (p.presetId == cr.presetId) {
+      match = p;
+      break;
+    }
+  }
+  if (match == null) {
+    warnings.add('preset "${cr.presetId}" not found in template (rule skipped)');
+    return warnings;
+  }
+
+  // Из плоской мапы `presetSrsPaths["<presetId>|<tag>"]` собираем subset
+  // для текущего пресета: tag → path.
+  final srsSubset = <String, String>{};
+  final prefix = '${cr.presetId}|';
+  for (final entry in presetSrsPaths.entries) {
+    if (entry.key.startsWith(prefix)) {
+      srsSubset[entry.key.substring(prefix.length)] = entry.value;
+    }
+  }
+
+  final raw = expandPreset(cr, match, srsPaths: srsSubset);
+  warnings.addAll(raw.warnings);
+
+  // Rule sets — identical-skip / first-wins через registry.
+  // Преcет может ссылаться на rule_set которые уже зарегистрировал
+  // другой ранее обработанный preset (тот же presetId, identical fragment).
+  for (final rs in raw.ruleSets) {
+    final conflict = registry.tryRegisterRuleSet(rs);
+    if (conflict) {
+      final tag = rs['tag'];
+      warnings.add(
+          'rule_set "$tag" skipped: conflicts with earlier registered rule_set');
+    }
+  }
+
+  // Routing rule — только если route-aspect активен.
+  if (routeEnabled && raw.routingRule != null) {
+    registry.addRule(raw.routingRule!);
+  }
+
+  // DNS аспекты — только если dns-aspect активен.
+  if (dnsEnabled) {
+    if (raw.dnsRule != null) {
+      state.dnsRules.add(raw.dnsRule!);
+      state.dnsRulesByPresetId[cr.presetId] = raw.dnsRule!;
+    }
+    for (final s in raw.dnsServers) {
+      final tag = s['tag'];
+      if (tag is! String) {
+        state.dnsServers.add(s);
+        continue;
+      }
+      final existing = state.dnsServerByTag[tag];
+      if (existing == null) {
+        state.dnsServerByTag[tag] = s;
+        state.dnsServers.add(s);
+      } else if (!const DeepCollectionEquality().equals(existing, s)) {
+        warnings
+            .add('dns server "$tag" skipped: conflicts with earlier preset');
+      }
+    }
+  }
+
+  state.labelByPresetId[cr.presetId] = match.label;
+  return warnings;
+}
+
+/// Результат [applyPresetBundles] — rule-sets/routing rules уже записаны в
+/// registry; DNS-фрагменты нельзя записать напрямую (они живут в другой
+/// секции конфига), поэтому возвращаются вверх.
+///
+/// §033: `dnsRulesByPresetId` — авторитативный источник для `applyCustomDns`
+/// (resolve `kind: preset` записей по immutable preset id, ТОЛЬКО для
+/// preset'ов где DNS-aspect enabled). `labelByPresetId` — для UI рендера
+/// title'а строки. `extraDnsRules` сохранён как legacy / debug.
+class PresetApplyResult {
+  final List<Map<String, dynamic>> extraDnsServers;
+  final List<Map<String, dynamic>> extraDnsRules;
+  final Map<String, Map<String, dynamic>> dnsRulesByPresetId;
+  final Map<String, String> labelByPresetId;
+  final List<String> warnings;
+
+  const PresetApplyResult({
+    this.extraDnsServers = const [],
+    this.extraDnsRules = const [],
+    this.dnsRulesByPresetId = const {},
+    this.labelByPresetId = const {},
+    this.warnings = const [],
+  });
+}
+
+/// Post-step: пользовательские routing-правила (spec §030).
+///
+/// Эмит зависит от `cr.kind`:
+///
+/// - `inline` — headless rule со всеми непустыми match-полями сразу. Per
+///   sing-box default rule: внутри domain-family (domain/suffix/keyword/ip_cidr)
+///   — OR; внутри port-family — OR; между категориями — AND. `package_name`
+///   — отдельная категория (AND). `protocol` в headless rule **не
+///   поддерживается**, выносим на routing-rule level.
+///
+/// - `srs` — **local** rule_set по пути из `srsPaths[cr.id]` (pre-resolved
+///   caller'ом через `RuleSetDownloader`). Если правило srs но файла нет
+///   — скипаем и пушим warning. URL в конфиг не попадает: sing-box сам
+///   ничего не качает, всё managed'ится юзером через download button.
+///
+/// Collision handling — auto-suffix через `RuleSetRegistry`.
+///
+/// [skipDisabled] — по умолчанию `true`: disabled-правила пропускаются как в
+/// production pipeline. **Set `false` для preview-режима**, когда caller хочет
+/// видеть «что родит правило при включении» независимо от Switch (e.g.
+/// `ViewTab` в editor'е — юзер открыл редактор именно для inspect'а формы,
+/// `enabled` тут отдельная история). Production pipeline всегда оставляет
+/// default `true`.
+List<String> applyCustomRules(
+  RuleSetRegistry registry,
+  List<CustomRule> rules, {
+  Map<String, String> srsPaths = const {},
+  bool skipDisabled = true,
+}) {
+  // §062: shim вокруг `_applyInlineSingle` / `_applySrsSingle`. Обходит
+  // ТОЛЬКО inline/srs (фильтруя preset). Сохраняет старый publi API +
+  // backward-compat для тестов. Real pipeline использует [applyAllCustomRules]
+  // которое обходит все kinds в одном цикле сохраняя cross-kind order.
+  final warnings = <String>[];
+  for (final cr in rules) {
+    if (skipDisabled && !cr.enabled) continue;
+    switch (cr) {
+      case CustomRulePreset():
+        // Preset-правила обрабатывает applyPresetBundles (spec §033).
+        continue;
+      case CustomRuleSrs():
+        warnings.addAll(_applySrsSingle(cr, registry, srsPaths));
+      case CustomRuleInline():
+        warnings.addAll(_applyInlineSingle(cr, registry));
+    }
+  }
+  return warnings;
+}
+
+/// §062: одно srs-правило. Skip если outbound пустой / нет cached file.
+List<String> _applySrsSingle(
+  CustomRuleSrs cr,
+  RuleSetRegistry registry,
+  Map<String, String> srsPaths,
+) {
+  final warnings = <String>[];
+  if (cr.outbound.isEmpty) return warnings;
+  final requestedTag = cr.name.trim().isEmpty ? 'unnamed' : cr.name.trim();
+  final path = srsPaths[cr.id];
+  if (path == null) {
+    warnings.add(
+        'SRS rule "${cr.name}" skipped: no cached file (Download first).');
+    return warnings;
+  }
+  final tag = registry.addRuleSet({
+    'type': 'local',
+    'tag': requestedTag,
+    'format': 'binary',
+    'path': path,
+  });
+  registry.addRule(_outboundToRoute(
+    tag,
+    cr.outbound,
+    ports: cr.intPorts,
+    portRanges: cr.portRanges,
+    packages: cr.packages,
+    protocols: cr.protocols,
+    ipIsPrivate: cr.ipIsPrivate,
+    wifiSsids: cr.wifiSsids,
+    wifiBssids: cr.wifiBssids,
+  ));
+  return warnings;
+}
+
+/// §062: одно inline-правило. Headless rule_set с непустыми match-полями
+/// (если они есть), плюс routing rule с routing-level полями (protocol /
+/// ip_is_private / wifi_*). Если оба пусты — skip.
+List<String> _applyInlineSingle(
+  CustomRuleInline cr,
+  RuleSetRegistry registry,
+) {
+  final warnings = <String>[];
+  if (cr.outbound.isEmpty) return warnings;
+  final requestedTag = cr.name.trim().isEmpty ? 'unnamed' : cr.name.trim();
+  // Inline: all non-empty match fields в один headless rule.
+  final match = <String, dynamic>{};
+  if (cr.domains.isNotEmpty) match['domain'] = cr.domains;
+  if (cr.domainSuffixes.isNotEmpty) {
+    match['domain_suffix'] = cr.domainSuffixes;
+  }
+  if (cr.domainKeywords.isNotEmpty) {
+    match['domain_keyword'] = cr.domainKeywords;
+  }
+  if (cr.ipCidrs.isNotEmpty) match['ip_cidr'] = cr.ipCidrs;
+  final intPorts = cr.intPorts;
+  if (intPorts.isNotEmpty) match['port'] = intPorts;
+  if (cr.portRanges.isNotEmpty) match['port_range'] = cr.portRanges;
+  if (cr.packages.isNotEmpty) match['package_name'] = cr.packages;
+  // `ip_is_private`, `wifi_ssid`, `wifi_bssid` НЕ поддерживаются в
+  // headless rule — sing-box отрежет конфиг на парсинге. Выносим на
+  // routing-rule level (там OR с rule_set per default-rule formula).
+
+  if (match.isEmpty) {
+    // Нет полей для inline headless rule. Если есть routing-level
+    // поля (protocol / ip_is_private / wifi_*) — эмитим routing rule
+    // без rule_set, иначе правило пустое, скипаем.
+    if (cr.protocols.isEmpty &&
+        !cr.ipIsPrivate &&
+        cr.wifiSsids.isEmpty &&
+        cr.wifiBssids.isEmpty) {
+      return warnings;
+    }
+    registry.addRule(_outboundToRoute(
+      '',
+      cr.outbound,
+      protocols: cr.protocols,
+      ipIsPrivate: cr.ipIsPrivate,
+      wifiSsids: cr.wifiSsids,
+      wifiBssids: cr.wifiBssids,
+    ));
+    return warnings;
+  }
+
+  final tag = registry.addRuleSet({
+    'type': 'inline',
+    'tag': requestedTag,
+    'rules': [match],
+  });
+  // Protocol + ip_is_private + wifi_* — на routing rule level (headless
+  // их не поддерживает). `ip_is_private` становится OR с rule_set (per
+  // sing-box default-rule formula) — это ровно то что юзер ожидает.
+  // Wifi-условия AND-ятся: фильтруют match на конкретный wifi network.
+  registry.addRule(_outboundToRoute(
+    tag,
+    cr.outbound,
+    protocols: cr.protocols,
+    ipIsPrivate: cr.ipIsPrivate,
+    wifiSsids: cr.wifiSsids,
+    wifiBssids: cr.wifiBssids,
+  ));
+  return warnings;
+}
+
+/// §062: единый entry-point — обходит **все** custom rules в storage order
+/// с dispatch по kind. Регистрирует rule_sets и routing rules в [registry]
+/// в порядке storage, аккумулирует DNS-аспекты в [UnifiedApplyResult].
+///
+/// Это **исправление** артефакта старого pipeline (две группы preset →
+/// inline/srs независимо), который ломал юзер-управляемый order. Storage
+/// `custom_rules` это один список с mixed kind, и order этого списка
+/// = order matching в sing-box.
+///
+/// Старые [applyPresetBundles] и [applyCustomRules] остаются как public
+/// shim'ы (используются тестами), но build pipeline вызывает только этот
+/// единый entry-point.
+UnifiedApplyResult applyAllCustomRules(
+  RuleSetRegistry registry,
+  List<CustomRule> rules,
+  List<SelectableRule> presets, {
+  Map<String, String> srsPaths = const {},
+  Map<String, String> presetSrsPaths = const {},
+  Map<String, bool> isPresetDnsEnabled = const {},
+}) {
+  final state = _PresetSharedState();
+  final warnings = <String>[];
+  for (final cr in rules) {
+    switch (cr) {
+      case CustomRulePreset():
+        // Note: preset enabled-флаг проверяется внутри (route vs dns aspect
+        // independently) — НЕ skip-снаружи, иначе потеряем DNS-only
+        // обработку для preset где route выключен но dns включен.
+        warnings.addAll(_applyPresetSingle(
+          cr,
+          registry,
+          presets,
+          state,
+          presetSrsPaths: presetSrsPaths,
+          isPresetDnsEnabled: isPresetDnsEnabled,
+        ));
+      case CustomRuleInline():
+        if (!cr.enabled) continue;
+        warnings.addAll(_applyInlineSingle(cr, registry));
+      case CustomRuleSrs():
+        if (!cr.enabled) continue;
+        warnings.addAll(_applySrsSingle(cr, registry, srsPaths));
+    }
+  }
+  return UnifiedApplyResult(
+    extraDnsServers: state.dnsServers,
+    extraDnsRules: state.dnsRules,
+    dnsRulesByPresetId: state.dnsRulesByPresetId,
+    labelByPresetId: state.labelByPresetId,
+    warnings: warnings,
+  );
+}
+
+/// §062: результат [applyAllCustomRules]. Same shape as [PresetApplyResult]
+/// (DNS аспекты идут вверх в applyCustomDns), но семантически шире —
+/// включает обработку inline/srs тоже.
+class UnifiedApplyResult {
+  final List<Map<String, dynamic>> extraDnsServers;
+  final List<Map<String, dynamic>> extraDnsRules;
+  final Map<String, Map<String, dynamic>> dnsRulesByPresetId;
+  final Map<String, String> labelByPresetId;
+  final List<String> warnings;
+
+  const UnifiedApplyResult({
+    this.extraDnsServers = const [],
+    this.extraDnsRules = const [],
+    this.dnsRulesByPresetId = const {},
+    this.labelByPresetId = const {},
+    this.warnings = const [],
+  });
+}
+
+/// `outbound` (tag или `kOutboundReject`) → routing rule. Опциональные
+/// AND-поля (port/port_range/packages/protocol) — для srs-режима, где эти
+/// фильтры нельзя зашить в remote rule_set.
+Map<String, dynamic> _outboundToRoute(
+  String tag,
+  String outbound, {
+  List<int>? ports,
+  List<String>? portRanges,
+  List<String>? packages,
+  List<String>? protocols,
+  bool ipIsPrivate = false,
+  List<String>? wifiSsids,
+  List<String>? wifiBssids,
+}) {
+  final rule = <String, dynamic>{};
+  if (tag.isNotEmpty) rule['rule_set'] = tag;
+  if (ports != null && ports.isNotEmpty) rule['port'] = ports;
+  if (portRanges != null && portRanges.isNotEmpty) {
+    rule['port_range'] = portRanges;
+  }
+  if (packages != null && packages.isNotEmpty) rule['package_name'] = packages;
+  if (protocols != null && protocols.isNotEmpty) rule['protocol'] = protocols;
+  if (ipIsPrivate) rule['ip_is_private'] = true;
+  // §051 — wifi_ssid / wifi_bssid эмитятся только non-empty. sing-box
+  // AND-ит со всеми остальными полями rule'а; без них — fallback на любую
+  // сеть (поведение pre-§051).
+  //
+  // ⚠ Cross-product semantic risk (low impact): sing-box обрабатывает
+  // wifi_ssid и wifi_bssid как **независимые** OR-списки, AND-ясь на уровне
+  // правила. Несколько chip'ов с разными BSSID-парами в editor становятся
+  // `wifi_ssid:[A,B] AND wifi_bssid:[X,Y]` — теоретически matches «A на BSSID Y»
+  // (не задумано юзером). На практике риск мал — BSSID = глобально уникальный
+  // MAC, коллизии "правильный SSID + чужой BSSID" нереалистичны. Для exact
+  // pair semantic нужно эмитить N отдельных rules (по одному chip'у),
+  // решение deferred до реального use-case.
+  if (wifiSsids != null && wifiSsids.isNotEmpty) rule['wifi_ssid'] = wifiSsids;
+  if (wifiBssids != null && wifiBssids.isNotEmpty) {
+    rule['wifi_bssid'] = wifiBssids;
+  }
+  if (outbound == kOutboundReject) {
+    rule['action'] = 'reject';
+  } else {
+    rule['outbound'] = outbound;
+  }
+  return rule;
+}

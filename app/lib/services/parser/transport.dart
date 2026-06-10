@@ -59,10 +59,18 @@ TransportSpec? parseTransport(
       if (host.isEmpty) host = (q['sni'] ?? '').trim();
       return HttpUpgradeTransport(path: path, host: host);
     case 'xhttp':
+      // §097 — нативный xhttp + поля Xray splithttp (SPEC 071). Ключи
+      // читаем в обеих формах: camelCase (Xray URI) и snake (sing-box).
       final path = q['path'] ?? '/';
       var host = (q['host'] ?? '').trim();
       if (host.isEmpty) host = (q['sni'] ?? '').trim();
-      return XhttpTransport(path: path, host: host);
+      return XhttpTransport(
+        path: path,
+        host: host,
+        mode: (q['mode'] ?? '').trim(),
+        xPaddingBytes: (q['xPaddingBytes'] ?? q['x_padding_bytes'] ?? '').trim(),
+        noGrpcHeader: _truthy(q['noGRPCHeader'] ?? q['no_grpc_header']),
+      );
     case 'raw':
     case 'tcp':
     case '':
@@ -159,6 +167,12 @@ TlsSpec parseVmessTls(Map<String, dynamic> cfg, String server, String net) {
   );
 }
 
+/// §097 — query-bool: `true`/`1` → true (для `no_grpc_header`).
+bool _truthy(String? v) {
+  final s = (v ?? '').toLowerCase().trim();
+  return s == 'true' || s == '1';
+}
+
 List<String> _alpnFromQuery(Map<String, String> q) {
   final raw = q['alpn'] ?? '';
   if (raw.isEmpty) return const [];
@@ -192,11 +206,20 @@ Map<String, String> transportToQuery(TransportSpec t) {
         if (p.isNotEmpty && p != '/') 'path': p,
         if (h.isNotEmpty) 'host': h,
       };
-    case XhttpTransport(path: final p, host: final h):
+    case XhttpTransport(
+        path: final p,
+        host: final h,
+        mode: final mode,
+        xPaddingBytes: final pad,
+        noGrpcHeader: final noGrpc,
+      ):
       return {
         'type': 'xhttp',
         if (p.isNotEmpty && p != '/') 'path': p,
         if (h.isNotEmpty) 'host': h,
+        if (mode.isNotEmpty) 'mode': mode,
+        if (pad.isNotEmpty) 'x_padding_bytes': pad,
+        if (noGrpc) 'no_grpc_header': 'true',
       };
   }
 }

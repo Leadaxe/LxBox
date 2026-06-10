@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
@@ -11,6 +12,7 @@ import '../services/config_dirty_check.dart';
 import '../services/error_humanize.dart';
 import '../services/parse_hints.dart';
 import '../services/relative_time.dart';
+import '../services/node_emoji.dart';
 import '../services/url_mask.dart';
 import '../services/builder/build_config.dart';
 import '../services/parser/body_decoder.dart';
@@ -25,179 +27,9 @@ import '../services/subscription/http_cache.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/subscription/sources.dart';
 
-/// UI-обёртка вокруг `ServerList`. Хранит кэшированный nodeCount и статус.
-/// Делегирует мутации полей на wrapped список через `copyWith` + persist
-/// через контроллер.
-class SubscriptionEntry extends ChangeNotifier {
-  ServerList _list;
-  int nodeCount;
-  String status;
-
-  SubscriptionEntry({
-    required ServerList list,
-    int? nodeCount,
-    this.status = '',
-  })  : _list = list,
-        nodeCount = nodeCount ??
-            (list is SubscriptionServers ? list.lastNodeCount : list.nodes.length);
-
-  ServerList get list => _list;
-
-  String get id => _list.id;
-  String get name => _list.name;
-  bool get enabled => _list.enabled;
-  String get tagPrefix => _list.tagPrefix;
-  DetourPolicy get detourPolicy => _list.detourPolicy;
-  String get type => _list.type;
-
-  /// URL подписки (пусто для UserServer).
-  String get url => _list is SubscriptionServers ? (_list as SubscriptionServers).url : '';
-
-  /// Inline-URI строки (пусто для SubscriptionServers).
-  List<String> get connections {
-    if (_list is UserServer) {
-      final raw = (_list as UserServer).rawBody;
-      if (raw.isEmpty) return const [];
-      return raw
-          .split(RegExp(r'\r?\n'))
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toList();
-    }
-    return const [];
-  }
-
-  DateTime? get lastUpdated =>
-      _list is SubscriptionServers ? (_list as SubscriptionServers).lastUpdated : null;
-
-  SubscriptionMeta? get meta =>
-      _list is SubscriptionServers ? (_list as SubscriptionServers).meta : null;
-
-  int get uploadBytes => meta?.uploadBytes ?? 0;
-  int get downloadBytes => meta?.downloadBytes ?? 0;
-  int get totalBytes => meta?.totalBytes ?? 0;
-  int get expireTimestamp => meta?.expireTimestamp ?? 0;
-  String get supportUrl => meta?.supportUrl ?? '';
-  String get webPageUrl => meta?.webPageUrl ?? '';
-  int get updateIntervalHours => _list is SubscriptionServers
-      ? (_list as SubscriptionServers).updateIntervalHours
-      : 0;
-
-  int get consecutiveFails => _list is SubscriptionServers
-      ? (_list as SubscriptionServers).consecutiveFails
-      : 0;
-
-  UpdateStatus get lastUpdateStatus => _list is SubscriptionServers
-      ? (_list as SubscriptionServers).lastUpdateStatus
-      : UpdateStatus.never;
-
-  /// Количество chained-детур узлов (⚙). В `nodeCount` они не включены,
-  /// потому что в списке `.nodes` детуры живут как поле `.chained` у
-  /// главного узла, не отдельным элементом.
-  int get detourCount =>
-      _list.nodes.where((n) => n.chained != null).length;
-
-  bool get registerDetourServers => detourPolicy.registerDetourServers;
-  bool get registerDetourInAuto => detourPolicy.registerDetourInAuto;
-  bool get useDetourServers => detourPolicy.useDetourServers;
-  String get overrideDetour => detourPolicy.overrideDetour;
-  bool get replaceDetourChain => detourPolicy.replaceDetourChain;
-
-  static String formatAgo(DateTime dt) => _formatAgo(dt);
-
-  String get displayName {
-    if (name.isNotEmpty) return name;
-    if (url.isNotEmpty) {
-      final uri = Uri.tryParse(url);
-      if (uri != null && uri.host.isNotEmpty) return uri.host;
-      return url.length > 40 ? '${url.substring(0, 40)}…' : url;
-    }
-    if (_list.nodes.isNotEmpty) {
-      return _list.nodes.first.label.isNotEmpty
-          ? _list.nodes.first.label
-          : _list.nodes.first.tag;
-    }
-    final conns = connections;
-    if (conns.isNotEmpty) {
-      final c = conns.first;
-      if (c.startsWith('{')) {
-        final tagMatch = RegExp(r'"tag"\s*:\s*"([^"]+)"').firstMatch(c);
-        if (tagMatch != null) return tagMatch.group(1)!;
-      }
-      return c.length > 40 ? '${c.substring(0, 40)}...' : c;
-    }
-    return '(empty)';
-  }
-
-  String get subtitle {
-    final parts = <String>[];
-    if (status.isNotEmpty) parts.add(status);
-    if (lastUpdated != null) parts.add(_formatAgo(lastUpdated!));
-    return parts.join(' · ');
-  }
-
-  static String _formatAgo(DateTime dt) =>
-      relativeTime(DateTime.now(), dt);
-
-  void _replaceList(ServerList next) {
-    _list = next;
-    notifyListeners();
-  }
-
-  // ─── UI-facing mutable setters (persist via controller.persistSources) ───
-  //
-  // Каждый setter мутирует обёрнутый ServerList через `copyWith` по типу.
-  // UI после каждого set должен вызвать `controller.persistSources()`, чтобы
-  // записать на диск. Так же было в v1 ProxySource-паттерне.
-
-  set name(String v) => _replaceList(_copy(name: v));
-  set enabled(bool v) => _replaceList(_copy(enabled: v));
-  set tagPrefix(String v) => _replaceList(_copy(tagPrefix: v));
-
-  /// Только для SubscriptionServers. Пользовательский override дефолта
-  /// `profile-update-interval` (24ч). AutoUpdater читает значение через
-  /// `updateIntervalHours` каждый раз при проверке — persist'им через
-  /// `controller.persistSources()` на стороне UI.
-  set updateIntervalHours(int v) {
-    final list = _list;
-    if (list is! SubscriptionServers) return;
-    final clamped = v < 1 ? 1 : v;
-    _replaceList(list.copyWith(updateIntervalHours: clamped));
-  }
-
-  set registerDetourServers(bool v) =>
-      _replaceList(_copy(detourPolicy: detourPolicy.copyWith(registerDetourServers: v)));
-  set registerDetourInAuto(bool v) =>
-      _replaceList(_copy(detourPolicy: detourPolicy.copyWith(registerDetourInAuto: v)));
-  set useDetourServers(bool v) =>
-      _replaceList(_copy(detourPolicy: detourPolicy.copyWith(useDetourServers: v)));
-  set overrideDetour(String v) =>
-      _replaceList(_copy(detourPolicy: detourPolicy.copyWith(overrideDetour: v)));
-  set replaceDetourChain(bool v) =>
-      _replaceList(_copy(detourPolicy: detourPolicy.copyWith(replaceDetourChain: v)));
-
-  ServerList _copy({
-    String? name,
-    bool? enabled,
-    String? tagPrefix,
-    DetourPolicy? detourPolicy,
-  }) {
-    if (_list is SubscriptionServers) {
-      return (_list as SubscriptionServers).copyWith(
-        name: name,
-        enabled: enabled,
-        tagPrefix: tagPrefix,
-        detourPolicy: detourPolicy,
-      );
-    }
-    return (_list as UserServer).copyWith(
-      name: name,
-      enabled: enabled,
-      tagPrefix: tagPrefix,
-      detourPolicy: detourPolicy,
-    );
-  }
-}
+// Та же библиотека (`part`), поэтому library-private доступ
+// (`_replaceList`, `_formatAgo`) к/между основным файлом и part'ом доступен.
+part 'subscription_controller/subscription_entry.dart';
 
 /// Основной контроллер подписок. Владеет `List<ServerList>`, делает
 /// fetch/parse через `parseFromSource`, собирает конфиг через `buildConfig`.
@@ -218,6 +50,16 @@ class SubscriptionController extends ChangeNotifier {
 
   bool configDirty = false;
 
+  /// §101 — завершение стартового восстановления нод из HTTP-кеша.
+  /// Bootstrap-rebuild (home_screen) обязан дождаться, иначе соберёт конфиг
+  /// из подписок с ещё пустыми `nodes` и молча потеряет их outbounds.
+  final Completer<void> _rehydrated = Completer<void>();
+  Future<void> get rehydrationDone => _rehydrated.future;
+
+  /// §101 — test seam: подменный HTTP-клиент для `_fetchEntryByRef`.
+  @visibleForTesting
+  http.Client? httpClientForTesting;
+
   String _lastError = '';
   String get lastError => _lastError;
 
@@ -228,6 +70,18 @@ class SubscriptionController extends ChangeNotifier {
   String? get lastGeneratedConfig => _lastGeneratedConfig;
 
   Future<void> init() async {
+    try {
+      await _initBody();
+    } catch (_) {
+      // §101 review: если init упал ДО запуска rehydrate, completer не
+      // должен зависнуть навечно для сторонних awaiter'ов rehydrationDone
+      // (restore-flow вызывает init() повторно; тесты).
+      if (!_rehydrated.isCompleted) _rehydrated.complete();
+      rethrow;
+    }
+  }
+
+  Future<void> _initBody() async {
     final lists = await SettingsStorage.getServerLists();
     _entries = lists.map((l) => SubscriptionEntry(list: l)).toList();
     // §076: bootstrap mtime compare — restore in-memory configDirty после
@@ -261,31 +115,59 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   Future<void> _rehydrateFromCache() async {
-    for (var i = 0; i < _entries.length; i++) {
-      final list = _entries[i].list;
-      if (list is! SubscriptionServers) continue;
-      if (list.nodes.isNotEmpty) continue;
-      final body = await HttpCache.loadBody(list.url);
-      if (body == null || body.isEmpty) continue;
-      try {
-        final decoded = decode(body);
-        final nodes = parseAll(decoded);
-        if (nodes.isEmpty) continue;
-        final next = list.copyWith(nodes: nodes, lastNodeCount: nodes.length);
-        _entries[i]._replaceList(next);
-        final detours = nodes.where((n) => n.chained != null).length;
-        _entries[i].nodeCount = nodes.length;
-        _entries[i].status = detours > 0
-            ? '${nodes.length} +$detours⚙ nodes (cached)'
-            : '${nodes.length} nodes (cached)';
-        AppLog.I.info(
-            'Re-hydrated ${nodes.length} nodes from cache: ${maskSubscriptionUrl(list.url)}');
-      } catch (e) {
-        AppLog.I.warning(
-            'Re-hydrate failed for ${maskSubscriptionUrl(list.url)}: ${humanizeError(e)}');
+    try {
+      // §101 — обход по снапшоту ссылок (паттерн _fetchEntryByRef): между
+      // await'ами юзер может перетащить (§098 moveEntry) или удалить entry,
+      // запись по индексу затёрла бы list ЧУЖОЙ entry.
+      final entries = List<SubscriptionEntry>.of(_entries);
+      for (final entry in entries) {
+        final list = entry.list;
+        if (list is! SubscriptionServers) continue;
+        if (list.nodes.isNotEmpty) continue;
+        final body = await HttpCache.loadBody(list.url);
+        if (body == null || body.isEmpty) continue;
+        try {
+          final decoded = decode(body);
+          final nodes = parseAll(decoded);
+          if (nodes.isEmpty) {
+            // §101 — раньше скипали молча; UI-счётчик при этом показывает
+            // stale lastNodeCount. Логируем с подсказкой, что в кеше.
+            final hint = diagnoseEmptyParse(body);
+            AppLog.I.warning(
+                'Re-hydrate: cached body parsed to 0 nodes for '
+                '${maskSubscriptionUrl(list.url)}${hint != null ? ' — $hint' : ''}');
+            continue;
+          }
+          // §101 — guard после await'ов: entry могли удалить; list мог
+          // подменить конкурентный fetch или UI-сеттер (rename/enabled —
+          // они сохраняют nodes как есть). Применяем кеш только если у
+          // ТЕКУЩЕГО list по-прежнему нет нод, и копируем на него (не на
+          // устаревший снимок) — правки юзера не теряются.
+          if (!_entries.contains(entry)) continue;
+          final cur = entry.list;
+          if (cur is! SubscriptionServers ||
+              cur.url != list.url ||
+              cur.nodes.isNotEmpty) {
+            continue;
+          }
+          final next = cur.copyWith(nodes: nodes, lastNodeCount: nodes.length);
+          entry._replaceList(next);
+          final detours = nodes.where((n) => n.chained != null).length;
+          entry.nodeCount = nodes.length;
+          entry.status = detours > 0
+              ? '${nodes.length} +$detours⚙ nodes (cached)'
+              : '${nodes.length} nodes (cached)';
+          AppLog.I.info(
+              'Re-hydrated ${nodes.length} nodes from cache: ${maskSubscriptionUrl(list.url)}');
+        } catch (e) {
+          AppLog.I.warning(
+              'Re-hydrate failed for ${maskSubscriptionUrl(list.url)}: ${humanizeError(e)}');
+        }
       }
+      notifyListeners();
+    } finally {
+      if (!_rehydrated.isCompleted) _rehydrated.complete();
     }
-    notifyListeners();
   }
 
   /// §074 — add a fully-constructed UserServer (used by Add server wizard
@@ -298,7 +180,9 @@ class SubscriptionController extends ChangeNotifier {
     _lastError = '';
     notifyListeners();
     try {
-      _entries.add(SubscriptionEntry(list: us, nodeCount: us.nodes.length));
+      final tagged = _autoEmoji(us);
+      _entries
+          .add(SubscriptionEntry(list: tagged, nodeCount: tagged.nodes.length));
       await _persist();
       AppLog.I.info(
           'addUserServer: ${us.id} ${us.name} (${us.nodes.length} node)');
@@ -307,6 +191,22 @@ class SubscriptionController extends ChangeNotifier {
     } finally {
       _busy = false;
       notifyListeners();
+    }
+  }
+
+  /// §090 G2b — авто-эмодзи при создании UserServer: если в теге первой ноды
+  /// нет эмодзи, кладём дефолтный (по протоколу/серверу) в name-часть rawBody
+  /// и ре-деривим nodes из него (UserServer персистит только rawBody). На
+  /// ошибку парса / отсутствие изменений — возвращаем исходный.
+  UserServer _autoEmoji(UserServer us) {
+    if (us.nodes.isEmpty || us.rawBody.isEmpty) return us;
+    final newRaw = withDefaultEmoji(us.rawBody, us.nodes.first);
+    if (newRaw == us.rawBody) return us;
+    try {
+      final newNodes = parseAll(decode(newRaw));
+      return newNodes.isEmpty ? us : us.copyWith(rawBody: newRaw, nodes: newNodes);
+    } catch (_) {
+      return us;
     }
   }
 
@@ -345,20 +245,19 @@ class SubscriptionController extends ChangeNotifier {
           _lastError = 'Invalid WireGuard config';
           return;
         }
-        _entries.add(SubscriptionEntry(
-          list: UserServer(
-            id: newUuidV4(),
-            name: '',
-            enabled: true,
-            tagPrefix: '',
-            detourPolicy: DetourPolicy.defaults,
-            origin: UserSource.paste,
-            createdAt: DateTime.now(),
-            rawBody: spec.rawUri,
-            nodes: [spec],
-          ),
-          nodeCount: 1,
+        final wgServer = _autoEmoji(UserServer(
+          id: newUuidV4(),
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          origin: UserSource.paste,
+          createdAt: DateTime.now(),
+          rawBody: spec.rawUri,
+          nodes: [spec],
         ));
+        _entries.add(SubscriptionEntry(
+            list: wgServer, nodeCount: wgServer.nodes.length));
         await _persist();
       } else if (isDirectLink(trimmed)) {
         final spec = parseUri(trimmed);
@@ -366,20 +265,19 @@ class SubscriptionController extends ChangeNotifier {
           _lastError = 'Could not parse direct link';
           return;
         }
-        _entries.add(SubscriptionEntry(
-          list: UserServer(
-            id: newUuidV4(),
-            name: '',
-            enabled: true,
-            tagPrefix: '',
-            detourPolicy: DetourPolicy.defaults,
-            origin: UserSource.paste,
-            createdAt: DateTime.now(),
-            rawBody: trimmed,
-            nodes: [spec],
-          ),
-          nodeCount: 1,
+        final dlServer = _autoEmoji(UserServer(
+          id: newUuidV4(),
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          origin: UserSource.paste,
+          createdAt: DateTime.now(),
+          rawBody: trimmed,
+          nodes: [spec],
         ));
+        _entries.add(SubscriptionEntry(
+            list: dlServer, nodeCount: dlServer.nodes.length));
         await _persist();
       } else if (_isJsonOutbound(trimmed)) {
         await _addJsonOutbounds(trimmed);
@@ -428,20 +326,19 @@ class SubscriptionController extends ChangeNotifier {
       final decoded = decode(jsonEncode(ob));
       final nodes = parseAll(decoded);
       if (nodes.isEmpty) continue;
-      _entries.add(SubscriptionEntry(
-        list: UserServer(
-          id: newUuidV4(),
-          name: '',
-          enabled: true,
-          tagPrefix: '',
-          detourPolicy: DetourPolicy.defaults,
-          origin: UserSource.paste,
-          createdAt: DateTime.now(),
-          rawBody: jsonEncode(ob),
-          nodes: nodes,
-        ),
-        nodeCount: nodes.length,
+      final jsonServer = _autoEmoji(UserServer(
+        id: newUuidV4(),
+        name: '',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        rawBody: jsonEncode(ob),
+        nodes: nodes,
       ));
+      _entries.add(SubscriptionEntry(
+          list: jsonServer, nodeCount: jsonServer.nodes.length));
     }
     await _persist();
   }
@@ -504,39 +401,6 @@ class SubscriptionController extends ChangeNotifier {
     _entries[index]._replaceList(next);
     await _persist();
     notifyListeners();
-  }
-
-  Future<String?> updateAllAndGenerate() async {
-    _busy = true;
-    _lastError = '';
-    _progressMessage = 'Updating subscriptions...';
-    notifyListeners();
-
-    try {
-      for (var i = 0; i < _entries.length; i++) {
-        if (!_entries[i].enabled) continue;
-        if (_entries[i].list is SubscriptionServers &&
-            (_entries[i].list as SubscriptionServers).url.isNotEmpty) {
-          await _fetchEntry(i);
-        }
-      }
-      _progressMessage = 'Generating config...';
-      notifyListeners();
-
-      final config = await _generate();
-      _lastGeneratedConfig = config;
-      _progressMessage = '';
-      configDirty = false;
-      await SettingsStorage.setLastGlobalUpdate(DateTime.now());
-      return config;
-    } catch (e) {
-      _lastError = humanizeError(e);
-      return null;
-    } finally {
-      _busy = false;
-      _progressMessage = '';
-      notifyListeners();
-    }
   }
 
   Future<String?> generateConfig() async {
@@ -650,34 +514,56 @@ class SubscriptionController extends ChangeNotifier {
       await _persist();
       notifyListeners();
 
-      final result = await parseFromSource(UrlSource(list.url));
-      // Кешируем сырое тело и заголовки на диск для офлайн-реактивации после
-      // перезапуска (см. `_rehydrateFromCache`) и для Source-вкладки (fallback).
-      unawaited(HttpCache.save(list.url, result.rawBody, result.headers));
+      final result = await parseFromSource(UrlSource(list.url),
+          client: httpClientForTesting);
       AppLog.I.info(
           'Fetched ${result.nodes.length} nodes from $shortUrl'
           '${result.meta?.profileTitle == null ? "" : " (title: ${result.meta!.profileTitle})"}');
+
+      // §101 (R4) — HTTP 200, но тело распарсилось в 0 нод (HTML-заглушка,
+      // DDoS-challenge, чужой формат). Это failure, не success: НЕ затираем
+      // рабочий кеш на диске и in-memory ноды последнего удачного fetch'а.
+      // Parse hint (night T3-3) диагностирует, что пришло вместо подписки.
+      if (result.nodes.isEmpty) {
+        final hint = diagnoseEmptyParse(result.rawBody);
+        if (hint != null) AppLog.I.warning('Parse hint: $hint');
+        AppLog.I.warning(
+            'Fetch returned 0 nodes for $shortUrl — keeping previous state');
+        entry.status = entry.nodeCount > 0
+            ? '${entry.nodeCount} nodes (update failed: 0 parsed)'
+            : (hint != null ? '0 nodes — $hint' : '0 nodes');
+        final current = entry.list as SubscriptionServers;
+        entry._replaceList(current.copyWith(
+          lastUpdateAttempt: attemptAt,
+          lastUpdateStatus: UpdateStatus.failed,
+          consecutiveFails: current.consecutiveFails + 1,
+        ));
+        try {
+          await _persist();
+        } catch (e) {
+          // §101 review: persist-фейл не должен уйти в общий catch — там
+          // consecutiveFails инкрементится повторно и haptic дублируется.
+          // In-memory состояние уже корректно; теряем только запись на диск.
+          AppLog.I.error(
+              'Persist failed after empty fetch: ${humanizeError(e)}');
+        }
+        if (trigger == UpdateTrigger.manual) HapticService.I.onFetchError();
+        notifyListeners();
+        return;
+      }
+
+      // Кешируем сырое тело и заголовки на диск для офлайн-реактивации после
+      // перезапуска (см. `_rehydrateFromCache`) и для Source-вкладки (fallback).
+      unawaited(HttpCache.save(list.url, result.rawBody, result.headers));
       final warnNodes = result.nodes.where((n) => n.warnings.isNotEmpty).length;
       if (warnNodes > 0) {
         AppLog.I.warning('$warnNodes nodes with warnings (XHTTP fallback etc.)');
       }
-      // Parse hint (night T3-3): 0 узлов при успешном HTTP → вероятно
-      // body не распознан. Диагностируем и логируем подсказку, чтобы юзер
-      // знал что делать (HTML / Clash YAML / error page / full config).
-      if (result.nodes.isEmpty) {
-        final hint = diagnoseEmptyParse(result.rawBody);
-        if (hint != null) AppLog.I.warning('Parse hint: $hint');
-      }
       entry.nodeCount = result.nodes.length;
       final detours = result.nodes.where((n) => n.chained != null).length;
-      if (result.nodes.isEmpty) {
-        final hint = diagnoseEmptyParse(result.rawBody);
-        entry.status = hint != null ? '0 nodes — $hint' : '0 nodes';
-      } else {
-        entry.status = detours > 0
-            ? '${result.nodes.length} +$detours⚙ nodes'
-            : '${result.nodes.length} nodes';
-      }
+      entry.status = detours > 0
+          ? '${result.nodes.length} +$detours⚙ nodes'
+          : '${result.nodes.length} nodes';
 
       final current = entry.list as SubscriptionServers;
       final nextName = current.name.isEmpty && result.meta?.profileTitle != null
