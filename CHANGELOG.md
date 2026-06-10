@@ -10,13 +10,13 @@
 
 —
 
-## [2.0.3] — 2026-06-10
+## [2.0.2] — 2026-06-10
 
 Patch: §107 — изменения настроек (правила роутинга, DNS, tunnel apps, core
 vars) не попадали в конфиг: пересборка на возврате к home читала состояние
 «до последней правки», и рестарт туннеля не помогал (регрессия §076
 lazy-persist, v1.9.0+; field report с 4PDA). Release notes:
-[docs/releases/v2.0.3.md](docs/releases/v2.0.3.md).
+[docs/releases/v2.0.2.md](docs/releases/v2.0.2.md).
 
 ### Fixed
 

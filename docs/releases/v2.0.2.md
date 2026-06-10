@@ -1,4 +1,4 @@
-# L×Box v2.0.3
+# L×Box v2.0.2
 
 Patch-релиз: **§107 — изменения правил роутинга (и других настроек) не применялись к туннелю**. Если после правки правил у тебя «нет трафика», и не помогает даже выключить/включить VPN — это чинит ровно это. Регрессия жила с v1.9.0 (lazy-persist §076) и доехала до всех в v2.0.x; спасибо за репорт на 4PDA.
 
@@ -6,7 +6,7 @@ Patch-релиз: **§107 — изменения правил роутинга (
 [🐛 Fixes](#-fixes) ·
 [🗑 Removed](#-removed) ·
 [📲 Install](#-install) ·
-[🇷🇺 На русском](#-lxbox-v203-на-русском)
+[🇷🇺 На русском](#-lxbox-v202-на-русском)
 
 ---
 
@@ -50,6 +50,7 @@ App Settings → General → «Auto-rebuild config» (ключ `auto_rebuild`) �
 
 - `flutter analyze` clean; **917 тестов** зелёные (+7 новых в [settings_storage_staging_test.dart](app/test/services/settings_storage_staging_test.dart): staged-записи не трогают диск до flush, читатель видит staged-правила сразу — регрессионный сценарий §107; +2 в [app_picker_pop_test.dart](app/test/screens/app_picker_pop_test.dart); обновлён [lazy_persist_mixin_test.dart](app/test/screens/lazy_persist_mixin_test.dart) под staging-контракт).
 - Root cause подтверждён построчной трассировкой `didPop` → rebuild → dispose-flush; неверный race-анализ в спеке §076 исправлен ([addendum](docs/spec/features/076%20settings-and-config-lifecycle/spec.md)).
+- Оба фикса проверены вручную на устройстве (release-сборка): пикер сохраняет выбор при системном «назад»; правила применяются сразу после Start, без перезахода в настройки.
 
 ---
 
@@ -63,7 +64,7 @@ adb install -r app-release.apk
 
 ---
 
-## 🇷🇺 L×Box v2.0.3 на русском
+## 🇷🇺 L×Box v2.0.2 на русском
 
 Patch — фикс применения настроек:
 
