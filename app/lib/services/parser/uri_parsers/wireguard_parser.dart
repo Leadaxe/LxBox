@@ -6,7 +6,8 @@ import '../uri_utils.dart';
 // ════════════════════════════════════════════════════════════════════════════
 
 WireguardSpec? parseWireguardUri(String uri) {
-  final p = Uri.tryParse(uri);
+  // §106 — сырой `/` в base64-ключе (userInfo) ломает Uri.tryParse.
+  final p = Uri.tryParse(encodeUserInfoSlashes(uri));
   if (p == null || p.host.isEmpty) return null;
 
   final q = p.queryParameters;
@@ -25,10 +26,12 @@ WireguardSpec? parseWireguardUri(String uri) {
   final address = q['address'] ?? '';
   if (address.isEmpty) return null;
 
+  // §106 — bare IP → CIDR (/32 | /128), иначе sing-box не грузит endpoint.
   final localAddresses = address
       .split(',')
       .map((e) => e.trim())
       .where((e) => e.isNotEmpty)
+      .map(ensureCidr)
       .toList();
 
   final allowedIpsRaw = q['allowedips'] ?? q['allowed_ips'] ?? '0.0.0.0/0, ::/0';
@@ -36,6 +39,7 @@ WireguardSpec? parseWireguardUri(String uri) {
       .split(',')
       .map((e) => e.trim())
       .where((e) => e.isNotEmpty)
+      .map(ensureCidr)
       .toList();
 
   final psk = q['presharedkey'] ?? q['preshared_key'] ?? '';

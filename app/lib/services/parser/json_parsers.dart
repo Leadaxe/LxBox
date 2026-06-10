@@ -368,7 +368,10 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         password: entry['password']?.toString() ?? '',
       );
     case 'wireguard':
-      final addr = (entry['address'] as List?)?.map((e) => e.toString()).toList() ??
+      // §106 — bare IP → CIDR (/32 | /128) для address и allowed_ips.
+      final addr = (entry['address'] as List?)
+              ?.map((e) => ensureCidr(e.toString()))
+              .toList() ??
           const <String>[];
       final peers = (entry['peers'] as List?)?.cast<Map>() ?? const [];
       if (peers.isEmpty) return null;
@@ -376,9 +379,10 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
       final peerServer = p['address']?.toString() ?? server;
       final peerPort = (p['port'] as num?)?.toInt() ?? port;
       if (peerServer.isEmpty) return null;
-      final allowedIps =
-          (p['allowed_ips'] as List?)?.map((e) => e.toString()).toList() ??
-              const ['0.0.0.0/0', '::/0'];
+      final allowedIps = (p['allowed_ips'] as List?)
+              ?.map((e) => ensureCidr(e.toString()))
+              .toList() ??
+          const ['0.0.0.0/0', '::/0'];
       final awg = Awg.fromJson(entry); // §097 — AmneziaWG2 obfuscation params
       final wgTag = tag.isEmpty ? 'wg-$peerServer-$peerPort' : tag;
       // §097 — AWG: клампим MTU до 1280; plain WG как было (null = omitted).

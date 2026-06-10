@@ -10,6 +10,16 @@
 
 —
 
+## [2.0.1] — 2026-06-10
+
+Patch: два бага парсинга WireGuard / AmneziaWG (репорт из desktop,
+воспроизведены в LxBox). Release notes: [docs/releases/v2.0.1.md](docs/releases/v2.0.1.md).
+
+### Fixed
+
+- **§106 — Private key с сырым `/` больше не ломает ноду** ([task spec](docs/spec/tasks/106-wireguard-slash-key-and-bare-cidr.md), [uri_utils.dart](app/lib/services/parser/uri_utils.dart), [wireguard_parser.dart](app/lib/services/parser/uri_parsers/wireguard_parser.dart)). `wireguard://`/`awg://`-ссылка, у которой base64 private key содержит сырой `/` (`wireguard://FgFc1x9371GE/DV6bE…@host`), не парсилась: `Uri.tryParse` принимал `/` за начало path, терял ключ → нода отклонялась с «missing private key». Симптом — сервер виден в **Sources**, но пропадает из **Preview / all servers**. Теперь сырой `/` percent-энкодится **только в userInfo-части** до парсинга (уже-`%2F` не затрагиваются, query вроде `address=10.0.0.2/32` — тоже). *Workaround на старых сборках: заменить `/` на `%2F` в ключе.*
+- **§106 — Bare-адрес без `/32` больше не мешает старту ядра** ([json_parsers.dart](app/lib/services/parser/json_parsers.dart)). WireGuard/AmneziaWG-нода, у которой `address` (или элемент `allowed_ips`) — голый IP без CIDR-префикса (`172.16.0.2` вместо `172.16.0.2/32`, частый вид в AmneziaWG `.conf`-экспортах), давала `config.json`, который ядро отказывалось грузить: `netip.ParsePrefix("172.16.0.2"): no '/'`. Теперь bare IPv4 дефолтится в `/32`, bare IPv6 — в `/128`, для `address` и `allowed_ips`, во всех входах (URI / INI / JSON). +тесты [wireguard_edge_test.dart](app/test/parser/wireguard_edge_test.dart).
+
 ## [2.0.0] — 2026-06-10
 
 Мажорный релиз: bundled-ядро сменено на собственный fork
