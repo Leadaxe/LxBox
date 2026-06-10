@@ -38,7 +38,6 @@ WireguardSpec? parseWireguardUri(String uri) {
       .where((e) => e.isNotEmpty)
       .toList();
 
-  final mtu = int.tryParse(q['mtu'] ?? '') ?? 1408;
   final psk = q['presharedkey'] ?? q['preshared_key'] ?? '';
   final keepalive = int.tryParse(q['keepalive'] ?? '');
 
@@ -54,6 +53,12 @@ WireguardSpec? parseWireguardUri(String uri) {
   final label = decodeFragment(p.fragment);
   final tag = tagFromLabel(label, 'wireguard', p.host, port);
 
+  // §097 — AWG: клиентский MTU клампим до 1280 (awgClampMtu); обычный WG
+  // не трогаем (дефолт 1408 как в sing-box).
+  final awg = Awg.fromQuery(q);
+  final rawMtu = int.tryParse(q['mtu'] ?? '');
+  final mtu = awg != null ? awgClampMtu(rawMtu, tag) : (rawMtu ?? 1408);
+
   return WireguardSpec(
     id: newUuidV4(),
     tag: tag,
@@ -65,6 +70,6 @@ WireguardSpec? parseWireguardUri(String uri) {
     localAddresses: localAddresses,
     peers: [peer],
     mtu: mtu,
-    awg: Awg.fromQuery(q), // §097 — AmneziaWG2 obfuscation params (null = WG)
+    awg: awg, // §097 — AmneziaWG2 obfuscation params (null = WG)
   );
 }

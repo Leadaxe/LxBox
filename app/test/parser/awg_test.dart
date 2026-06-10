@@ -99,6 +99,72 @@ void main() {
     });
   });
 
+  group('MTU clamp — min(mtu, 1280) только при AWG-полях', () {
+    const base = 'wireguard://P@h:51820?publickey=K&address=10.0.0.2/32';
+
+    test('AWG без mtu → 1280 (вместо WG-дефолта)', () {
+      final spec = parseWireguardUri('$base&jc=10')!;
+      expect(spec.mtu, 1280);
+      expect(spec.emit(TemplateVars.empty).map['mtu'], 1280);
+    });
+
+    test('AWG mtu=1420 → кламп до 1280', () {
+      final spec = parseWireguardUri('$base&jc=10&mtu=1420')!;
+      expect(spec.mtu, 1280);
+    });
+
+    test('AWG mtu=1200 (явно ниже) → уважаем', () {
+      final spec = parseWireguardUri('$base&jc=10&mtu=1200')!;
+      expect(spec.mtu, 1200);
+    });
+
+    test('AWG mtu=1280 (граница) → без изменений', () {
+      final spec = parseWireguardUri('$base&jc=10&mtu=1280')!;
+      expect(spec.mtu, 1280);
+    });
+
+    test('plain WG не трогаем: без mtu → 1408, mtu=1420 → 1420', () {
+      expect(parseWireguardUri(base)!.mtu, 1408);
+      expect(parseWireguardUri('$base&mtu=1420')!.mtu, 1420);
+    });
+
+    test('JSON endpoint: AWG без mtu → 1280, plain WG без mtu → null', () {
+      Map<String, dynamic> entry({bool awg = false, int? mtu}) => {
+            'type': 'wireguard',
+            'tag': 't',
+            'private_key': 'PRIV',
+            'address': ['10.0.0.2/32'],
+            'mtu': ?mtu,
+            if (awg) 'jc': 10,
+            'peers': [
+              {
+                'address': 'host',
+                'port': 51821,
+                'public_key': 'PUB',
+                'allowed_ips': ['0.0.0.0/0'],
+              }
+            ],
+          };
+      expect((parseSingboxEntry(entry(awg: true)) as WireguardSpec).mtu, 1280);
+      expect(
+          (parseSingboxEntry(entry(awg: true, mtu: 1420)) as WireguardSpec).mtu,
+          1280);
+      expect((parseSingboxEntry(entry()) as WireguardSpec).mtu, isNull);
+      expect((parseSingboxEntry(entry(mtu: 1420)) as WireguardSpec).mtu, 1420);
+    });
+
+    test('AmneziaWG INI без MTU → 1280', () {
+      const conf = '[Interface]\n'
+          'PrivateKey = PRIV\n'
+          'Address = 10.0.0.2/32\n'
+          'Jc = 10\n'
+          '[Peer]\n'
+          'PublicKey = PUB\n'
+          'Endpoint = host.example.com:51821\n';
+      expect(parseWireguardIni(conf)!.mtu, 1280);
+    });
+  });
+
   group('JSON / INI пути', () {
     test('parseSingboxEntry (endpoint JSON) → spec.awg, i пустые скип', () {
       final spec = parseSingboxEntry({

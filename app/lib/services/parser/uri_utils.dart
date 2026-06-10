@@ -133,6 +133,22 @@ String normalizePacketEncoding(String raw, {String? tag}) {
   return '';
 }
 
+/// §097 — клиентский MTU для AWG-endpoint'а: `min(mtu, 1280)`.
+///
+/// 1280 = рекомендованный клиентский MTU самой AmneziaWG и минимальный
+/// IPv6 MTU → безопасно на любом пути (PPPoE 1492, mobile, вложенные
+/// туннели). Точный потолок `1500−60−max(s3,s4)` хрупок: предполагает
+/// path-MTU ровно 1500, чего у AWG-юзеров обычно нет. Асимметрия рисков:
+/// занижение лишь чуть мельчит пакеты, завышение — тихий облом
+/// (handshake есть, данных нет). Явно заниженный MTU уважаем; обычный
+/// WG не трогаем (вызывать только при наличии AWG-полей).
+int awgClampMtu(int? raw, String tag) {
+  if (raw == null) return 1280;
+  if (raw <= 1280) return raw;
+  AppLog.I.debug('$tag: clamped AWG mtu $raw→1280');
+  return 1280;
+}
+
 /// Case-insensitive lookup query-параметра. В подписках `packetEncoding`
 /// встречается в разных регистрах (`packetencoding`, `PacketEncoding`),
 /// `Uri.queryParameters` case-sensitive. Возвращает первое совпадение

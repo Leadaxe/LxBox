@@ -379,9 +379,13 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
       final allowedIps =
           (p['allowed_ips'] as List?)?.map((e) => e.toString()).toList() ??
               const ['0.0.0.0/0', '::/0'];
+      final awg = Awg.fromJson(entry); // §097 — AmneziaWG2 obfuscation params
+      final wgTag = tag.isEmpty ? 'wg-$peerServer-$peerPort' : tag;
+      // §097 — AWG: клампим MTU до 1280; plain WG как было (null = omitted).
+      final rawMtu = (entry['mtu'] as num?)?.toInt();
       return WireguardSpec(
         id: newUuidV4(),
-        tag: tag.isEmpty ? 'wg-$peerServer-$peerPort' : tag,
+        tag: wgTag,
         label: label,
         server: peerServer,
         port: peerPort,
@@ -399,8 +403,8 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
                 (p['persistent_keepalive_interval'] as num?)?.toInt(),
           )
         ],
-        mtu: (entry['mtu'] as num?)?.toInt(),
-        awg: Awg.fromJson(entry), // §097 — AmneziaWG2 obfuscation params
+        mtu: awg != null ? awgClampMtu(rawMtu, wgTag) : rawMtu,
+        awg: awg,
       );
     default:
       return null;

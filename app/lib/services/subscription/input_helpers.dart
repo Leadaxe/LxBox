@@ -19,6 +19,7 @@ bool isDirectLink(String input) {
       t.startsWith('ssh://') ||
       t.startsWith('wireguard://') ||
       t.startsWith('wg://') ||
+      t.startsWith('awg://') ||
       t.startsWith('socks5://') ||
       t.startsWith('socks://');
 }
