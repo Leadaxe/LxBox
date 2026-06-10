@@ -64,6 +64,38 @@ class NodeListPresenter {
         (urltestNow != null ? model.protocolOf(urltestNow) : null);
   }
 
+  /// §103 — transport/security теги ноды для variant-фильтра. Тот же
+  /// urltest-fallback что у [protocolOfTag] (payload-узел, давший протокол,
+  /// даёт и теги). Пустой Set = unknown.
+  Set<String> variantsOfTag(String tag, HomeState state) {
+    final model = state.configModel;
+    var n = model[tag];
+    if (n == null || n.isControl || n.type.isEmpty) {
+      final urltestNow = ClashApiClient.urltestNow(state.proxiesJson, tag);
+      n = urltestNow != null ? model[urltestNow] : null;
+      // Паритет с protocolOfTag: fallback-цель тоже должна быть payload-узлом
+      // (control с tls/transport-полями дал бы лейблы при protocol == null).
+      if (n != null && (n.isControl || n.type.isEmpty)) n = null;
+    }
+    if (n == null) return const <String>{};
+    return {
+      ?n.transportLabel,
+      ?n.securityLabel,
+    };
+  }
+
+  /// §103 — канонический порядок variant-чипов: транспорты, затем security;
+  /// незнакомые теги — в конец по алфавиту (forward-compat).
+  static const _variantOrder = <String>[
+    'tcp', 'ws', 'grpc', 'h2', 'httpupgrade', 'quic', 'xhttp',
+    'TLS', 'TLS+Vision', 'Reality', 'Reality+Vision', 'awg', 'awg2',
+  ];
+
+  static int _variantRank(String v) {
+    final i = _variantOrder.indexOf(v);
+    return i >= 0 ? i : _variantOrder.length;
+  }
+
   /// §091 — какие подписки владеют тегом (prefix-based). Тонкая обёртка
   /// над pure helper'ом `subscriptionsOfTag` (см. `home/subscription_lookup.dart`).
   Set<String> subscriptionsOfTag_(String tag) =>
@@ -97,10 +129,13 @@ class NodeListPresenter {
         regexInvert: filter.regexInvert,
         protocols: filter.enabledProtocols,
         protocolsInvert: filter.protocolsInvert,
+        variants: filter.enabledVariants,
+        variantsInvert: filter.variantsInvert,
         subscriptions: filter.enabledSubscriptions,
         subscriptionsInvert: filter.subscriptionsInvert,
         maxPingMs: filter.activeMaxPingMs,
         protocolOf: (t) => protocolOfTag(t, state),
+        variantsOf: (t) => variantsOfTag(t, state),
         subscriptionsOf: subscriptionsOfTag_,
         pingOf: (t) => state.lastDelay[t],
       );
@@ -206,9 +241,11 @@ class NodeListPresenter {
     // Emoji — из allTags (locked decision #3, включая detour).
     final emojis = NodeFilter.extractEmojis(allTags);
     final availableProtocols = <String>{};
+    final availableVariants = <String>{};
     for (final t in pool) {
       final p = protocolOfTag(t, state);
       if (p != null) availableProtocols.add(p);
+      availableVariants.addAll(variantsOfTag(t, state));
     }
     final subOptions = <(String, String)>[];
     for (final e in subController.entries) {
@@ -234,6 +271,11 @@ class NodeListPresenter {
       displayList: displayList,
       emojis: emojis,
       availableProtocols: availableProtocols.toList()..sort(),
+      availableVariants: availableVariants.toList()
+        ..sort((a, b) {
+          final byRank = _variantRank(a).compareTo(_variantRank(b));
+          return byRank != 0 ? byRank : a.compareTo(b);
+        }),
       subOptions: subOptions,
     );
   }
@@ -247,6 +289,7 @@ class NodeListData {
     required this.displayList,
     required this.emojis,
     required this.availableProtocols,
+    required this.availableVariants,
     required this.subOptions,
   });
 
@@ -255,5 +298,10 @@ class NodeListData {
   final List<String> displayList;
   final List<String> emojis;
   final List<String> availableProtocols;
+
+  /// §103 — transport/security теги, присутствующие в pool'е (канонический
+  /// порядок: транспорты → security).
+  final List<String> availableVariants;
+
   final List<(String, String)> subOptions;
 }

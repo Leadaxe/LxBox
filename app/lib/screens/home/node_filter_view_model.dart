@@ -13,8 +13,9 @@ import 'channel_filters.dart';
 /// Состоит из (см. §048 / §083 / §096):
 /// - **pool filter**: detour (§096) — чекбокс [detourEnabled] (выкл = показать
 ///   всё, старт) + `!` [detourHide]: ON = скрыть detour, OFF = только detour;
-/// - **match filters**: regex (+invert), protocols (+invert), subscriptions
-///   (+invert), ping — помечают ноды matching/non-matching; у каждой категории
+/// - **match filters**: regex (+invert), protocols (+invert), variants
+///   (transport/security теги, §103, +invert), subscriptions (+invert),
+///   ping — помечают ноды matching/non-matching; у каждой категории
 ///   единый `!`-negate (§096);
 /// - **visibility**: [showNonMatching] (dimmed внизу vs скрыты);
 /// - **per-channel memory** (§083): снимок match-фильтров на канал,
@@ -137,12 +138,15 @@ class NodeFilterViewModel extends ChangeNotifier {
   Set<String> get selectedEmojis =>
       regexController.text.split('|').where((p) => p.isNotEmpty).toSet();
 
-  // ─── Protocols / subscriptions (multi-select chips + §096 invert) ───────
+  // ─── Protocols / variants / subscriptions (multi-select + §096 invert) ──
   final Set<String> enabledProtocols = <String>{};
+  final Set<String> enabledVariants = <String>{};
   final Set<String> enabledSubscriptions = <String>{};
   bool _protocolsInvert = false;
+  bool _variantsInvert = false;
   bool _subscriptionsInvert = false;
   bool get protocolsInvert => _protocolsInvert;
+  bool get variantsInvert => _variantsInvert;
   bool get subscriptionsInvert => _subscriptionsInvert;
 
   void toggleProtocol(String proto) {
@@ -152,6 +156,18 @@ class NodeFilterViewModel extends ChangeNotifier {
 
   void toggleProtocolsInvert() {
     _protocolsInvert = !_protocolsInvert;
+    notifyListeners();
+  }
+
+  /// §103 — transport/security теги (`tcp`/`ws`/`xhttp`/…/`TLS`/`Reality`/
+  /// `awg2`) — вторая строка чипов под протоколами, та же §096-семантика.
+  void toggleVariant(String v) {
+    if (!enabledVariants.add(v)) enabledVariants.remove(v);
+    notifyListeners();
+  }
+
+  void toggleVariantsInvert() {
+    _variantsInvert = !_variantsInvert;
     notifyListeners();
   }
 
@@ -210,12 +226,17 @@ class NodeFilterViewModel extends ChangeNotifier {
   // ─── Активность (per-category — для точек на табах + сводки) ────────────
   bool get regexActive => _regexCompiled != null;
   bool get protocolActive => enabledProtocols.isNotEmpty;
+  bool get variantActive => enabledVariants.isNotEmpty;
   bool get subscriptionActive => enabledSubscriptions.isNotEmpty;
   bool get pingActive => _pingEnabled && _maxPingMs != null;
 
   /// Любой активный match-фильтр.
   bool get isActive =>
-      regexActive || protocolActive || subscriptionActive || pingActive;
+      regexActive ||
+      protocolActive ||
+      variantActive ||
+      subscriptionActive ||
+      pingActive;
 
   /// Non-matching скрыты visibility-тоглом (для чипа-сводки + точки Settings).
   bool get nonMatchingHidden => !_showNonMatching;
@@ -241,6 +262,8 @@ class NodeFilterViewModel extends ChangeNotifier {
         regexInvert: _regexInvert,
         protocols: Set.of(enabledProtocols),
         protocolsInvert: _protocolsInvert,
+        variants: Set.of(enabledVariants),
+        variantsInvert: _variantsInvert,
         subscriptions: Set.of(enabledSubscriptions),
         subscriptionsInvert: _subscriptionsInvert,
         // дефолт «200» (disabled) → '' чтобы канал считался пустым (no orphan).
@@ -269,6 +292,10 @@ class NodeFilterViewModel extends ChangeNotifier {
       ..clear()
       ..addAll(f.protocols);
     _protocolsInvert = f.protocolsInvert;
+    enabledVariants
+      ..clear()
+      ..addAll(f.variants);
+    _variantsInvert = f.variantsInvert;
     enabledSubscriptions
       ..clear()
       ..addAll(f.subscriptions);

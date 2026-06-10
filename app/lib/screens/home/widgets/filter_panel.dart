@@ -20,12 +20,17 @@ class FilterPanel extends StatefulWidget {
     required this.filter,
     required this.emojis,
     required this.availableProtocols,
+    required this.availableVariants,
     required this.subOptions,
   });
 
   final NodeFilterViewModel filter;
   final List<String> emojis;
   final List<String> availableProtocols;
+
+  /// §103 — transport/security теги (вторая строка чипов на Protocol-табе).
+  final List<String> availableVariants;
+
   final List<(String, String)> subOptions;
 
   @override
@@ -75,6 +80,14 @@ class _FilterPanelState extends State<FilterPanel>
         label: Text('${neg(f.protocolsInvert)}${protoLabel(proto)}'),
         onPressed: () => _tab.animateTo(1),
         onDeleted: () => f.toggleProtocol(proto),
+      ));
+    }
+    // §103 — transport/security чипы (тот же таб, что протоколы).
+    for (final v in f.enabledVariants) {
+      chips.add(InputChip(
+        label: Text('${neg(f.variantsInvert)}$v'),
+        onPressed: () => _tab.animateTo(1),
+        onDeleted: () => f.toggleVariant(v),
       ));
     }
     for (final id in f.enabledSubscriptions) {
@@ -193,17 +206,35 @@ class _FilterPanelState extends State<FilterPanel>
             ],
           ],
         );
-      case 1: // Protocol
+      case 1: // Protocol + §103 transport/security строкой ниже
         return widget.availableProtocols.isEmpty
             ? _hint('Нет протоколов')
-            : MultiSelectChipsRow(
-                options: [
-                  for (final p in widget.availableProtocols) (p, protoLabel(p)),
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  MultiSelectChipsRow(
+                    options: [
+                      for (final p in widget.availableProtocols)
+                        (p, protoLabel(p)),
+                    ],
+                    enabled: f.enabledProtocols,
+                    onToggle: f.toggleProtocol,
+                    invert: f.protocolsInvert,
+                    onInvertToggle: f.toggleProtocolsInvert,
+                  ),
+                  if (widget.availableVariants.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    MultiSelectChipsRow(
+                      options: [
+                        for (final v in widget.availableVariants) (v, v),
+                      ],
+                      enabled: f.enabledVariants,
+                      onToggle: f.toggleVariant,
+                      invert: f.variantsInvert,
+                      onInvertToggle: f.toggleVariantsInvert,
+                    ),
+                  ],
                 ],
-                enabled: f.enabledProtocols,
-                onToggle: f.toggleProtocol,
-                invert: f.protocolsInvert,
-                onInvertToggle: f.toggleProtocolsInvert,
               );
       case 2: // Subscribes
         return widget.subOptions.isEmpty
@@ -301,7 +332,7 @@ class _FilterPanelState extends State<FilterPanel>
                   labelPadding: const EdgeInsets.symmetric(horizontal: 14),
                   tabs: [
                     _dotTab('Regex', f.regexActive),
-                    _dotTab('Protocol', f.protocolActive),
+                    _dotTab('Protocol', f.protocolActive || f.variantActive),
                     _dotTab('Subscribes', f.subscriptionActive),
                     _dotTab('Settings', f.settingsActive),
                   ],

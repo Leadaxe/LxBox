@@ -5,15 +5,18 @@
 /// `Map<String /*channel*/, ChannelFilters>` в памяти (per-session, без
 /// записи на диск — см. spec §083).
 ///
-/// Содержит **только match-фильтры** (regex/protocol/subscription +их §096
-/// invert, ping). Detour tri-state (`_detourEnabled`/`_detourInvert`) и
-/// `_showNonMatching` остаются глобальными (про отображение, не про поиск).
+/// Содержит **только match-фильтры** (regex/protocol/variants §103/
+/// subscription +их §096 invert, ping). Detour tri-state
+/// (`_detourEnabled`/`_detourInvert`) и `_showNonMatching` остаются
+/// глобальными (про отображение, не про поиск).
 class ChannelFilters {
   const ChannelFilters({
     this.regexPattern = '',
     this.regexInvert = false,
     this.protocols = const <String>{},
     this.protocolsInvert = false,
+    this.variants = const <String>{},
+    this.variantsInvert = false,
     this.subscriptions = const <String>{},
     this.subscriptionsInvert = false,
     this.pingText = '',
@@ -31,6 +34,13 @@ class ChannelFilters {
 
   /// §096 — invert protocol-фильтра (NOT).
   final bool protocolsInvert;
+
+  /// §103 — выбранные transport/security chips (`tcp`/`xhttp`/`TLS`/`awg2`/…).
+  /// `empty` = no filter.
+  final Set<String> variants;
+
+  /// §103 — invert variant-фильтра (NOT).
+  final bool variantsInvert;
 
   /// Выбранные subscription chips (id / 'custom'). `empty` = no filter.
   final Set<String> subscriptions;
@@ -55,6 +65,8 @@ class ChannelFilters {
       !regexInvert &&
       protocols.isEmpty &&
       !protocolsInvert &&
+      variants.isEmpty &&
+      !variantsInvert &&
       subscriptions.isEmpty &&
       !subscriptionsInvert &&
       pingText.isEmpty &&

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../services/tag_resolver.dart';
+import 'node_spec.dart' show Awg;
 
 /// §091 — структурные метаданные одной ноды собранного sing-box config'а.
 ///
@@ -21,6 +22,8 @@ class ConfigNode {
     required this.isMarkedDetour,
     required this.detourRefCount,
     required this.raw,
+    required this.transportLabel,
+    required this.securityLabel,
   });
 
   /// Тег как в конфиге = нода в Clash (`proxies[...].all` элемент).
@@ -50,6 +53,53 @@ class ConfigNode {
 
   /// Структурно: «я — релей/hop-таргет» (на меня кто-то ссылается).
   bool get isDetour => detourRefCount > 0;
+
+  /// §102 — транспорт-слот subtitle: `transport.type` из конфига
+  /// (`ws`/`grpc`/`xhttp`/`httpupgrade`/`quic`; sing-box `http` ≙ H2 → `h2`),
+  /// либо `tcp` для v2ray-протоколов без transport-блока (default stream).
+  /// `null` = слот не показываем (wg/hy2/tuic — транспорт зашит в протокол).
+  /// §103 — вычисляется один раз в [ParsedConfig.parse] (eager, не getter).
+  final String? transportLabel;
+
+  /// §102 — security-слот subtitle. WireGuard — уровень обфускации:
+  /// `awg2` = есть transport-padding `s3`/`s4` и/или CPS-пакеты `i1`–`i5`;
+  /// `awg` (1.x) = только базовые поля (jc/jmin/jmax/s1/s2/h1–h4);
+  /// ни одного AWG-поля = plain WG (null). Остальные протоколы —
+  /// `Reality`/`TLS` (+`+Vision` при `flow=xtls-rprx-vision`) по конфигу.
+  /// §103 — вычисляется один раз в [ParsedConfig.parse] (eager, не getter).
+  final String? securityLabel;
+
+  static String? _deriveTransport(String type, Map<String, dynamic> raw) {
+    final tr = raw['transport'];
+    if (tr is Map) {
+      final t = tr['type'];
+      if (t is String && t.isNotEmpty) return t == 'http' ? 'h2' : t;
+    }
+    if (const {'vless', 'vmess', 'trojan'}.contains(type)) return 'tcp';
+    return null;
+  }
+
+  static String? _deriveSecurity(String type, Map<String, dynamic> raw) {
+    if (type == 'wireguard') {
+      const awg2Keys = <String>{'s3', 's4', 'i1', 'i2', 'i3', 'i4', 'i5'};
+      if (awg2Keys.any(raw.containsKey)) return 'awg2';
+      if (Awg.numKeys.any(raw.containsKey)) return 'awg';
+      return null;
+    }
+    final tls = raw['tls'];
+    if (tls is Map && tls['enabled'] == true) {
+      final reality = tls['reality'];
+      final base =
+          (reality is Map && reality['enabled'] == true) ? 'Reality' : 'TLS';
+      // Vision (xtls-rprx-vision) — поверх TLS/Reality, только на голом TCP
+      // (с v2ray-транспортами несовместим по протоколу).
+      final flow = raw['flow'];
+      return flow is String && flow.startsWith('xtls-rprx-vision')
+          ? '$base+Vision'
+          : base;
+    }
+    return null;
+  }
 
   /// Служебный outbound (не payload-нода) — UI не показывает его как ноду.
   bool get isControl => kControlTypes.contains(type);
@@ -99,18 +149,22 @@ class ParsedConfig {
         }
       }
       // Проход 2 — построить ConfigNode'ы (detourRefCount уже известен).
+      // §103 — transport/security лейблы деривятся здесь же, один раз.
       for (final (o, kind) in raws) {
         final t = o['tag'];
         if (t is! String) continue;
         final d = o['detour'];
+        final type = (o['type'] as String?) ?? '';
         byTag[t] = ConfigNode(
           tag: t,
-          type: (o['type'] as String?) ?? '',
+          type: type,
           kind: kind,
           detour: (d is String && d.isNotEmpty) ? d : null,
           isMarkedDetour: TagResolver.isDetourMarker(t),
           detourRefCount: detourTargets[t] ?? 0,
           raw: o,
+          transportLabel: ConfigNode._deriveTransport(type, o),
+          securityLabel: ConfigNode._deriveSecurity(type, o),
         );
       }
     } catch (_) {

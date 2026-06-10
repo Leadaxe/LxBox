@@ -158,6 +158,99 @@ void main() {
     });
   });
 
+  group('§102 — transport/security слоты для subtitle', () {
+    final pc = ParsedConfig.parse(cfg({
+      'outbounds': [
+        {
+          'tag': 'xh',
+          'type': 'vless',
+          'transport': {'type': 'xhttp', 'mode': 'auto'},
+        },
+        {
+          'tag': 'h2',
+          'type': 'vless',
+          'transport': {'type': 'http'},
+        },
+        {'tag': 'plain', 'type': 'trojan'},
+        {'tag': 'hy2', 'type': 'hysteria2', 'tls': {'enabled': true}},
+        {
+          'tag': 'rlt',
+          'type': 'vless',
+          'tls': {
+            'enabled': true,
+            'reality': {'enabled': true, 'public_key': 'pk'},
+          },
+        },
+        {
+          'tag': 'vision',
+          'type': 'vless',
+          'flow': 'xtls-rprx-vision',
+          'tls': {
+            'enabled': true,
+            'reality': {'enabled': true, 'public_key': 'pk'},
+          },
+        },
+        {
+          'tag': 'visiontls',
+          'type': 'vless',
+          'flow': 'xtls-rprx-vision',
+          'tls': {'enabled': true, 'server_name': 'x'},
+        },
+        {
+          'tag': 'tls',
+          'type': 'vless',
+          'tls': {'enabled': true, 'server_name': 'x'},
+        },
+        {
+          'tag': 'tlsoff',
+          'type': 'vless',
+          'tls': {'enabled': false},
+        },
+      ],
+      'endpoints': [
+        {'tag': 'awg2', 'type': 'wireguard', 'jc': 10, 'i1': '<r 24>'},
+        {'tag': 'awg2s', 'type': 'wireguard', 'jc': 10, 's3': 60, 's4': 60},
+        {'tag': 'awg1', 'type': 'wireguard', 'jc': 10, 's1': 20, 'h1': 1},
+        {'tag': 'wg', 'type': 'wireguard'},
+      ],
+    }));
+
+    test('transport: явный type; http → h2; v2ray-дефолт → tcp', () {
+      expect(pc['xh']?.transportLabel, 'xhttp');
+      expect(pc['h2']?.transportLabel, 'h2');
+      expect(pc['plain']?.transportLabel, 'tcp');
+      expect(pc['rlt']?.transportLabel, 'tcp');
+    });
+
+    test('transport: протоколы со встроенным транспортом → null', () {
+      expect(pc['hy2']?.transportLabel, isNull);
+      expect(pc['wg']?.transportLabel, isNull);
+      expect(pc['awg2']?.transportLabel, isNull);
+    });
+
+    test('security: Reality > TLS; off/absent → null', () {
+      expect(pc['rlt']?.securityLabel, 'Reality');
+      expect(pc['tls']?.securityLabel, 'TLS');
+      expect(pc['hy2']?.securityLabel, 'TLS');
+      expect(pc['tlsoff']?.securityLabel, isNull);
+      expect(pc['plain']?.securityLabel, isNull);
+    });
+
+    test('Vision (flow=xtls-rprx-vision) → суффикс +Vision', () {
+      expect(pc['vision']?.securityLabel, 'Reality+Vision');
+      expect(pc['visiontls']?.securityLabel, 'TLS+Vision');
+      // без flow — без суффикса
+      expect(pc['rlt']?.securityLabel, 'Reality');
+    });
+
+    test('security: awg2 (s3/s4 и/или i*) vs awg 1.x (база) vs чистый WG', () {
+      expect(pc['awg2']?.securityLabel, 'awg2');
+      expect(pc['awg2s']?.securityLabel, 'awg2');
+      expect(pc['awg1']?.securityLabel, 'awg');
+      expect(pc['wg']?.securityLabel, isNull);
+    });
+  });
+
   group('nodeCount + malformed/empty', () {
     test('counts non-control outbounds + endpoints', () {
       final pc = ParsedConfig.parse(cfg({

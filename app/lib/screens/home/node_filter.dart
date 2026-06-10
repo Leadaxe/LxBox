@@ -16,10 +16,13 @@ class NodeFilter {
     this.regexInvert = false,
     required this.protocols,
     this.protocolsInvert = false,
+    required this.variants,
+    this.variantsInvert = false,
     required this.subscriptions,
     this.subscriptionsInvert = false,
     required this.maxPingMs,
     required this.protocolOf,
+    required this.variantsOf,
     required this.subscriptionsOf,
     required this.pingOf,
   });
@@ -39,6 +42,14 @@ class NodeFilter {
   /// **не** входит в [protocols]. Имеет смысл только при непустом [protocols].
   final bool protocolsInvert;
 
+  /// §103 — выбранные transport/security теги (`tcp`/`ws`/`xhttp`/…/`TLS`/
+  /// `Reality`/`awg2`). `empty = no filter`. Member = пересечение с
+  /// [variantsOf] непусто.
+  final Set<String> variants;
+
+  /// §103 — invert variant-фильтра (NOT), семантика как у [protocolsInvert].
+  final bool variantsInvert;
+
   /// Allowed subscription identifiers. `entry.id` для подписок, `'custom'`
   /// для UserServer'ов. `empty = no filter`.
   final Set<String> subscriptions;
@@ -56,6 +67,11 @@ class NodeFilter {
   /// selected member). При active protocol filter → non-matching
   /// (locked decision #12).
   final String? Function(String) protocolOf;
+
+  /// §103 — transport/security теги ноды (`{tcp, Reality+Vision}` и т.п.).
+  /// Пустой Set = unknown → при active variant-фильтре non-matching
+  /// (паттерн locked decision #12).
+  final Set<String> Function(String) variantsOf;
 
   /// §091 — какие подписки владеют tag'ом, по префиксу
   /// (`tag.startsWith('$prefix ')`). Возвращает **множество**: при общем
@@ -88,6 +104,12 @@ class NodeFilter {
       //   •  invert → fail если member.
       final member = p != null && protocols.contains(p);
       if (member == protocolsInvert) return false;
+    }
+    if (variants.isNotEmpty) {
+      // §103 — member = хоть один тег ноды выбран; семантика §096 как у
+      // протоколов: fail когда `member == invert`.
+      final member = variantsOf(tag).any(variants.contains);
+      if (member == variantsInvert) return false;
     }
     if (subscriptions.isNotEmpty) {
       final candidates = subscriptionsOf(tag);

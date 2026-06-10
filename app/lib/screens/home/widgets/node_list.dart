@@ -141,6 +141,7 @@ class HomeNodeList extends StatelessWidget {
               filter: filter,
               emojis: data.emojis,
               availableProtocols: data.availableProtocols,
+              availableVariants: data.availableVariants,
               subOptions: data.subOptions,
             ),
           Expanded(
@@ -226,8 +227,17 @@ class HomeNodeList extends StatelessWidget {
         final isUrltestGroup = proxyEntry != null &&
             (proxyEntry['type']?.toString().toLowerCase() ?? '')
                 .contains('urltest');
-        final protoType = cache.protocolOf(tag) ??
-            (urltestNow != null ? cache.protocolOf(urltestNow) : null);
+        // §102 — протокол и variant (transport/awg) берём с ОДНОГО узла:
+        // сам tag, либо текущий выбор urltest-группы (§048 fallback).
+        final protoSrc = cache.protocolOf(tag) != null
+            ? tag
+            : (urltestNow != null && cache.protocolOf(urltestNow) != null
+                ? urltestNow
+                : null);
+        final protoSrcNode = protoSrc != null ? cache[protoSrc] : null;
+        final protoType = protoSrc != null ? cache.protocolOf(protoSrc) : null;
+        final transport = protoSrcNode?.transportLabel;
+        final security = protoSrcNode?.securityLabel;
         final row = DecoratedBox(
           decoration: BoxDecoration(
             border: Border(
@@ -245,8 +255,13 @@ class HomeNodeList extends StatelessWidget {
               busy: state.busy,
               urltestNow: urltestNow,
               hasDetour: cache[tag]?.detour != null,
-              protocolLabel:
-                  protoType != null ? protoLabel(protoType) : null,
+              protocolLabel: protoType == null
+                  ? null
+                  : [
+                      protoLabel(protoType),
+                      ?transport,
+                      ?security,
+                    ].join('·'),
               matches: matchingSet.contains(tag),
             ),
             onHighlight: () => controller.setHighlightedNode(tag),

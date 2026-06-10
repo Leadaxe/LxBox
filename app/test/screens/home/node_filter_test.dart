@@ -11,10 +11,13 @@ void main() {
     bool regexInvert = false,
     Set<String> protocols = const {},
     bool protocolsInvert = false,
+    Set<String> variants = const {},
+    bool variantsInvert = false,
     Set<String> subscriptions = const {},
     bool subscriptionsInvert = false,
     int? maxPingMs,
     Map<String, String?> proto = const {},
+    Map<String, Set<String>> vari = const {},
     Map<String, Set<String>> sub = const {},
     Map<String, int?> ping = const {},
   }) {
@@ -23,10 +26,13 @@ void main() {
       regexInvert: regexInvert,
       protocols: protocols,
       protocolsInvert: protocolsInvert,
+      variants: variants,
+      variantsInvert: variantsInvert,
       subscriptions: subscriptions,
       subscriptionsInvert: subscriptionsInvert,
       maxPingMs: maxPingMs,
       protocolOf: (t) => proto[t],
+      variantsOf: (t) => vari[t] ?? const <String>{},
       subscriptionsOf: (t) => sub[t] ?? const <String>{},
       pingOf: (t) => ping[t],
     );
@@ -326,6 +332,51 @@ void main() {
         sub: {'🇷🇺 M1': {'sub-1'}},
       );
       expect(f.passes('🇷🇺 M1'), isTrue);
+    });
+  });
+
+  group('NodeFilter.passes — variants (transport/security, §103)', () {
+    final vari = {
+      'a': {'tcp', 'Reality+Vision'},
+      'b': {'xhttp', 'TLS'},
+      'c': {'awg2'},
+    };
+
+    test('пустой набор = no filter', () {
+      final f = makeFilter(vari: vari);
+      expect(f.passes('a'), isTrue);
+      expect(f.passes('unknown'), isTrue);
+    });
+
+    test('выбран xhttp → проходит только b', () {
+      final f = makeFilter(variants: {'xhttp'}, vari: vari);
+      expect(f.passes('a'), isFalse);
+      expect(f.passes('b'), isTrue);
+      expect(f.passes('c'), isFalse);
+    });
+
+    test('микс transport+security — OR по тегам ноды', () {
+      final f = makeFilter(variants: {'tcp', 'awg2'}, vari: vari);
+      expect(f.passes('a'), isTrue);
+      expect(f.passes('b'), isFalse);
+      expect(f.passes('c'), isTrue);
+    });
+
+    test('invert (§096): NOT xhttp', () {
+      final f =
+          makeFilter(variants: {'xhttp'}, variantsInvert: true, vari: vari);
+      expect(f.passes('a'), isTrue);
+      expect(f.passes('b'), isFalse);
+      expect(f.passes('c'), isTrue);
+    });
+
+    test('unknown нода (пустой Set) при active фильтре → non-matching', () {
+      final f = makeFilter(variants: {'TLS'}, vari: vari);
+      expect(f.passes('unknown'), isFalse);
+      // под invert наоборот — проходит («не TLS»)
+      final fi =
+          makeFilter(variants: {'TLS'}, variantsInvert: true, vari: vari);
+      expect(fi.passes('unknown'), isTrue);
     });
   });
 

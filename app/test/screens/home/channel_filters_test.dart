@@ -42,6 +42,14 @@ void main() {
       expect(const ChannelFilters(protocolsInvert: true).isEmpty, false);
     });
 
+    test('§103 variants непустой → isEmpty false', () {
+      expect(const ChannelFilters(variants: {'xhttp'}).isEmpty, false);
+    });
+
+    test('§103 variantsInvert → isEmpty false', () {
+      expect(const ChannelFilters(variantsInvert: true).isEmpty, false);
+    });
+
     test('subscriptions непустой → isEmpty false', () {
       expect(const ChannelFilters(subscriptions: {'sub-1'}).isEmpty, false);
     });

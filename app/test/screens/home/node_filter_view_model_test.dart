@@ -261,5 +261,30 @@ void main() {
       expect(vm.subscriptionsInvert, true);
       expect(vm.enabledProtocols, {'vless'});
     });
+
+    test('§103 variants (+invert) — per-channel', () {
+      vm.syncChannel('A');
+      vm.toggleVariant('xhttp');
+      vm.toggleVariant('Reality');
+      vm.toggleVariantsInvert();
+      expect(vm.variantActive, true);
+      expect(vm.isActive, true);
+      vm.syncChannel('B');
+      expect(vm.enabledVariants, isEmpty, reason: 'B чистый');
+      expect(vm.variantsInvert, false);
+      expect(vm.variantActive, false);
+      vm.syncChannel('A');
+      expect(vm.enabledVariants, {'xhttp', 'Reality'},
+          reason: 'A восстановлен');
+      expect(vm.variantsInvert, true);
+    });
+
+    test('§103 toggleVariant — add/remove симметричен', () {
+      vm.toggleVariant('tcp');
+      expect(vm.enabledVariants, {'tcp'});
+      vm.toggleVariant('tcp');
+      expect(vm.enabledVariants, isEmpty);
+      expect(vm.variantActive, false);
+    });
   });
 }
