@@ -42,6 +42,26 @@
 L×Box — Android VPN-клиент на базе **sing-box** (через **libbox**). Полный цикл:
 подписки → парсинг → конфиг → VPN-туннель → управление через **Clash API**.
 
+### Ядро: fork `sing-box-lx` (§097 / §104)
+
+С §097 ядро — наш fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)
+(ветка `lx`): upstream sing-box + AmneziaWG 2.0 (`with_awg`) + нативный XHTTP
+(`with_xhttp`). Build-теги: `with_gvisor,with_quic,with_wireguard,with_utls,
+with_naive_outbound,with_clash_api,with_xhttp,with_awg`.
+
+С §104 fork — **единственное ядро для всех сборок** (local + CI + release;
+готовится релиз v2.0.0):
+
+- пин версии — `app/android/libbox.version` (**`v1.13.13-lx.5`**, single source
+  of truth для local + CI);
+- `scripts/fetch-libbox.sh` скачивает `libbox.aar` из GitHub Releases форка с
+  проверкой SHA256 (идемпотентен — маркер `.libbox.version`); вызывается из
+  `scripts/build-local-apk.sh` и из CI (`ci.yml` → android job → шаг
+  «Fetch sing-box-lx core»);
+- AAR не в git (~73MB, `libs/` в `.gitignore`); в `build.gradle.kts` —
+  `implementation(files("libs/libbox.aar"))`, Maven-строка стокового
+  `libbox 1.13.11` удалена.
+
 ### Слои и зоны ответственности
 
 Четыре слоя с однонаправленными зависимостями: **UI → State → Services →
@@ -61,12 +81,13 @@ Platform напрямую — только через контроллеры.
 │                    config_io · heartbeat · ping_orchestration)         │
 │  SubscriptionController — entries, fetch, generateConfig (+ part)       │
 │  view-model'и: NodeFilterViewModel · CustomRuleEditController           │
-│  Иммутабельный HomeState + copyWith (_unset sentinel) + ConfigCache.    │
+│  Иммутабельный HomeState + copyWith (_unset sentinel) + ParsedConfig.   │
 ├──────────────────────────────────────────────────────────────────────┤
 │  SERVICES   lib/services · lib/models · lib/config                     │
 │  Parser v2 (parser/) · Builder (builder/) · subscription/ ·            │
 │  settings_storage/ · traffic_profiler/ · debug/ (HTTP Debug API) ·     │
-│  clash_api_client · app_log · кэши (ConfigCache·AppInfoCache·HttpCache).│
+│  clash_api_client · app_log · кэши (AppInfoCache·HttpCache) ·           │
+│  ConfigNode/ParsedConfig (§091).                                        │
 │  Sealed-модели: NodeSpec · SingboxEntry · CustomRule · ValidationIssue. │
 ├──────────────────────────────────────────────────────────────────────┤
 │  PLATFORM / NATIVE                                                      │
@@ -96,14 +117,24 @@ library-private доступ сохранён) либо вынос виджет-
 | `models/custom_rule.dart` | 618 | Уже sealed `Inline`/`Srs`/`Preset`; объём присущ трём структурно разным вариантам. Дальнейший split + SRS-cache у Preset (spec 011) — **behavior-changing** → отложен в §090. |
 | `android/.../VpnPlugin.kt` | 635 | Единый `MethodCallHandler`-контракт; split разнёс бы channel-контракт по файлам. |
 
-### Планируется (§091)
+### ConfigNode / ParsedConfig (§091 — реализовано)
 
 `ConfigCache` + `ConfigIntrospection` + reverse-map `subscriptionsOfTag`
-схлопываются в один `ConfigNode{tag, type, detour, isMarkedDetour,
-detourRefCount, raw}` map (parsed раз на смену `configRaw`; пинги — отдельный
-динамик-слой). Убирает целый класс багов «UI reverse-парсит display-тег»
-(§077/§079/§080). Design-agreed, реализация отдельной итерацией с тестами —
-см. [`spec/tasks/091`](./spec/tasks/091-config-node-model.md).
+схлопнуты в `ParsedConfig` — `Map<tag, ConfigNode{tag, type, section, detour,
+isMarkedDetour, detourRefCount, raw, transportLabel, securityLabel}>`,
+парсится один раз на смену `configRaw` (поле `HomeState.configModel`);
+пинги — отдельный динамик-слой, джойн на рендере (`NodeViewItem`).
+Принадлежность подписке — **prefix-фильтр** по эмитированному тегу
+(`home/subscription_lookup.dart`), без членства в node-списках. Убран целый
+класс багов «UI reverse-парсит display-тег» (§077/§079/§080).
+
+`transportLabel`/`securityLabel` (§102/§103) — eager-лейблы subtitle ноды
+(протокол · транспорт · security: `tcp`/`ws`/`grpc`/`h2`/`httpupgrade`/`quic`/`xhttp`;
+`TLS`/`Reality` + `+Vision` при `flow=xtls-rprx-vision`; для WireGuard —
+уровень обфускации `awg`/`awg2`) — вычисляются один раз в `ParsedConfig.parse`,
+не в getter'ах. См. [`spec/tasks/091`](./spec/tasks/091-config-node-model.md),
+[`102`](./spec/tasks/102-subtitle-transport-variant.md),
+[`103`](./spec/tasks/103-variant-filter-chips.md).
 
 ---
 
@@ -149,7 +180,7 @@ HomeController.saveParsedConfig(configJson)  →  native VpnService
 - Each `NodeSpec` has round-trip `parseUri(spec.toUri()) ≈ spec`.
 - Polymorphic `emit(vars)` — WireGuard → Endpoint, others → Outbound.
 - `EmitContext.allocateTag(baseTag)` guarantees global uniqueness across all lists.
-- Warnings bubble up: parse-time → `NodeSpec.warnings`, emit-time → appended by emit (e.g. XHTTP fallback).
+- Warnings bubble up: parse-time → `NodeSpec.warnings`, emit-time → appended by emit. (XHTTP-фолбэк в `httpupgrade` убран в §097 — emit нативный, ядро `with_xhttp`.)
 
 ---
 
@@ -301,14 +332,17 @@ consts.dart                  # kAutoOutboundTag (✨auto), kDetourTagPrefix (⚙
 
 ```
 node_spec.dart               # sealed NodeSpec (10 вариантов: Vless/Vmess/Trojan/Shadowsocks/
-                             #   Hysteria2/Naive/Tuic/Ssh/Socks + Wireguard); getEntries detour-chain
+                             #   Hysteria2/Naive/Tuic/Ssh/Socks + Wireguard); getEntries detour-chain;
+                             #   Awg value-object (§097): AWG/AWG2-поля WireguardSpec (jc/jmin/jmax/
+                             #   s1–s4/h1–h4/i1–i5), round-trip parse/emit; null = обычный WG
 node_spec_emit.dart          # emit()/toUri() impl на вариант (NodeSpec → SingboxEntry); parity-tested
 singbox_entry.dart           # sealed SingboxEntry = Outbound | Endpoint (WireGuard → Endpoint)
 node_entries.dart            # NodeEntries{main, detours} — результат getEntries
 emit_context.dart            # abstract EmitContext: allocateTag/addEntry/selector+auto регистрация
 template_vars.dart           # TemplateVars — глобальные emit-флаги (tls_fragment/mux/sniOverride)
 tls_spec.dart                # TlsSpec + RealitySpec (utls/reality/alpn) → toSingbox()
-transport_spec.dart          # sealed TransportSpec (Ws/Grpc/Http/HttpUpgrade/Xhttp); XHTTP→httpupgrade fallback
+transport_spec.dart          # sealed TransportSpec (Ws/Grpc/Http/HttpUpgrade/Xhttp); XHTTP — нативный
+                             #   emit (§097, ядро with_xhttp: mode/x_padding_bytes/no_grpc_header)
 node_warning.dart            # sealed NodeWarning + WarningSeverity (parse/emit warnings)
 validation.dart              # sealed ValidationIssue + ValidationResult (dangling refs/empty urltest → fatal)
 parser_config.dart           # модели wizard_template.json: WizardTemplate/PresetGroup/SelectableRule/WizardVar
@@ -319,8 +353,14 @@ app_info.dart                # AppInfo — метаданные установл
 background_mode.dart         # enum BackgroundMode (never|lazy|always) — Doze-поведение туннеля
 tunnel_status.dart           # TunnelStatus enum + TunnelStatusEvent (native status mapping + errorReason)
 debug_entry.dart             # DebugEntry + DebugSource/Level/Filter (унифицированная лог-строка)
-home_state.dart              # immutable HomeState + copyWith; ConfigCache.parse (detourTags+protoByTag,
-                             #   lazy на смену configRaw); NodeSortMode; memoized sortedNodes
+home_state.dart              # immutable HomeState + copyWith; configModel: ParsedConfig (§091,
+                             #   re-parse на смену configRaw); NodeSortMode (default/latency/name/
+                             #   manual — §100: manual в карусели и меню, mode + manual order
+                             #   персистятся в settings_storage); memoized sortedNodes
+config_node.dart             # §091 ConfigNode + ParsedConfig — структурная мета нод собранного
+                             #   конфига (type/section/detour/isMarkedDetour/detourRefCount/raw);
+                             #   §102/§103 eager transportLabel/securityLabel (transport-слот +
+                             #   TLS/Reality/+Vision, awg/awg2); parsed раз на смену configRaw
 ```
 
 #### `controllers/` — ChangeNotifier-брокеры состояния
@@ -331,7 +371,10 @@ home_controller.dart         # главный VPN-брокер: _state/_vpn/_cla
 home_controller/config_io.dart          # part _ConfigIoMixin: load/saveParsedConfig, import, configChangedNeedRestart
 home_controller/heartbeat.dart          # part _HeartbeatMixin: 20s Clash poll + dead-tunnel detection
 home_controller/ping_orchestration.dart # part _PingMixin: single/group/mass URLTest, 10 worker'ов, epoch-cancel
-subscription_controller.dart            # подписки: List<ServerList>, add/remove/rename/toggle/move, fetch, buildConfig
+subscription_controller.dart            # подписки: List<ServerList>, add/remove/rename/toggle/move
+                                        #   (§098 drag-reorder), fetch, buildConfig; §101 — rehydrationDone
+                                        #   (фикс стартовой гонки rehydrate↔bootstrap) + empty-fetch guard
+                                        #   (HTTP 200 с 0 нод не затирает кэшированные ноды)
 subscription_controller/subscription_entry.dart # part SubscriptionEntry: ChangeNotifier-обёртка над immutable ServerList
 ```
 
@@ -339,18 +382,25 @@ subscription_controller/subscription_entry.dart # part SubscriptionEntry: Change
 
 ```
 home_screen.dart             # композиционный корень (518): владеет брокерами, side-effects, rebuild/reconnect
-home/node_list_presenter.dart   # §089 presenter: §048 фильтр/split + §070 frozen-sort cache + chip-options
-home/node_filter_view_model.dart# ChangeNotifier VM: regex/protocol/sub/ping фильтры + §083 per-channel память
-home/node_filter.dart           # pure NodeFilter helper + extractEmojis
-home/node_actions.dart          # long-press действия ноды (View JSON / Copy URI / Copy server/detour)
-home/home_menus.dart            # showSortOptionsMenu + showPingSettings (free functions)
+home/node_list_presenter.dart   # §089 presenter: §048 фильтр/split + §070 frozen-sort cache +
+                                #   chip-options; §103 variantsOfTag + канонич. порядок variant-чипов
+home/node_filter_view_model.dart# ChangeNotifier VM: regex/protocol/variants(§103)/sub/ping фильтры,
+                                #   единый !-negate на категорию (§096) + detour tri-state (чекбокс+!,
+                                #   §096), §083 per-channel память
+home/node_filter.dart           # pure NodeFilter helper (match-предикаты + inverts) + extractEmojis
+home/node_actions.dart          # long-press действия ноды; §099 — copy-JSON варианты (node / server /
+                                #   server+detours(N)) перенесены в dropdown внутри View JSON
+home/home_menus.dart            # showSortOptionsMenu (+ Custom/manual §100) + showPingSettings
 home/home_dialogs.dart          # top-level dialog/snackbar функции (update/permission/battery/revoked)
 home/restore_backup.dart        # empty-state quick-restore flow (SAF)
-home/subscription_lookup.dart   # subscriptionsOfTag reverse-map (§077; →§091 удаляется)
-home/channel_filters.dart       # per-channel filter persistence helper
-home/filter_widgets.dart        # filter chip/row виджеты
+home/subscription_lookup.dart   # §091 prefix-фильтр: нода принадлежит подписке ⇔ tag.startsWith
+                                #   ('$prefix '); заменил §077 reverse-map по node-спискам
+home/channel_filters.dart       # §083 immutable снимок match-фильтров канала (+ variants §103)
+home/filter_widgets.dart        # filter chip/row виджеты (viz-toggle чипы §095, NegateToggle §096)
 home/widgets/                   # node_list · home_controls · home_drawer (nav-хаб) · nodes_header ·
-                             #   traffic_bar · status_chip · progress_banner · filter_panel · add_server_cta
+                             #   traffic_bar · status_chip · progress_banner · filter_panel (§095
+                             #   Filter mode: табы Regex/Protocol/Subscribes/Settings + чипы-сводка)
+                             #   · add_server_cta
 routing_screen.dart          # routing-конфиг (598) + LazyPersistMixin + _RoutingSrsCacheMixin (part)
 routing_screen/                 # widgets/ (custom_rule/preset_catalog/route_final/routing_group/srs_status) + menus
 dns_settings_screen.dart     # DNS-настройки (592) + editor-sheets + dns_server_resolver + widgets/
@@ -381,7 +431,8 @@ parser/                      # Parser v2 (text → NodeSpec)
   json_parsers.dart          #   parseXrayOutbound + parseSingboxEntry (round-trip)
   ini_parser.dart            #   WireGuard INI → wg:// URI → WireguardSpec
   transport.dart             #   parseTransport (query→TransportSpec) + transportToQuery
-  uri_utils.dart             #   shared: base64-safe decode, newUuidV4, tagFromLabel, packet-encoding allow-list
+  uri_utils.dart             #   shared: base64-safe decode, newUuidV4, tagFromLabel, packet-encoding
+                             #   allow-list; awgClampMtu (§097 — клиентский MTU AWG-нод ≤1280)
 builder/                     # NodeSpec + template → sing-box config
   build_config.dart          #   buildConfig() orchestrator → BuildResult; _BuildCtx (EmitContext + tag allocator)
   server_list_build.dart     #   per-subscription emit: detour policy, tag allocation, selector/auto регистрация
@@ -397,8 +448,9 @@ builder/                     # NodeSpec + template → sing-box config
 subscription/                # fetch/auto-update подписок
   sources.dart               #   sealed SubscriptionSource (Url/File/Clipboard/Inline/Qr) + fetch (3-try backoff)
   auto_updater.dart          #   5-триггерный refresh + per-sub interval + retry/fail-caps + dedup (§027)
-  http_cache.dart            #   on-disk кэш последнего raw body + headers (offline rehydrate)
-  input_helpers.dart         #   isSubscriptionUrl/isDirectLink/isWireGuardConfig (paste UX)
+  http_cache.dart            #   on-disk кэш последнего raw body + headers (offline rehydrate);
+                             #   §101 — атомарная запись tmp→rename (kill-safe при unawaited save)
+  input_helpers.dart         #   isSubscriptionUrl/isDirectLink (вкл. awg://, §097)/isWireGuardConfig (paste UX)
 settings_storage.dart        # фасад над lxbox_settings.json — тонкие делегаты в part-файлы:
 settings_storage/io.dart            #   атомарный load/save/recovery (main→.bak→{}, §072)
 settings_storage/vars.dart          #   vars-домен + Wi-Fi history (§051)
@@ -428,7 +480,6 @@ nav/home_return_observer.dart          # глобальный NavigatorObserver 
 clash_api_client.dart        # Clash REST (/proxies, /connections, delay/groupDelay); отдельный cancelable client
 app_log.dart                 # AppLog ChangeNotifier-singleton: per-source ring buffers + persistent warn/error (§043)
 app_info_cache.dart          # AppInfoCache — session-кэш AppInfo по package + revision ValueNotifier
-config_introspection.dart    # ConfigIntrospection.parse — by-tag/detour-chain/nodeCount (View JSON; →§091)
 json_clone.dart              # deepCopyJson/deepCloneJson/deepEqualsJson (§089 P6 — общий для builder/backup)
 format_utils.dart            # formatBytes/formatDuration/formatTime (канонические форматтеры)
 relative_time.dart           # relativeTime(now, past) — "2h ago" (pure, тестируемый)
@@ -438,9 +489,11 @@ template_loader.dart         # wizard_template.json loader (singleton, deep-copy
 rule_set_downloader.dart     # download+cache remote .srs (parallel, atomic tmp+rename, retry)
 backup_service.dart          # export/import полного снапшота настроек (§031)
 update_checker.dart          # GitHub-релиз check + dismissed-version guard (см. §090 по half-wired stub)
-haptic_service.dart · get_free_loader.dart · dump_builder.dart · url_launcher.dart ·
-config_dirty_check.dart · error_humanize.dart · parse_hints.dart · clash_log_pump.dart ·
-logcat_reader.dart · exit_info_reader.dart · selectable_to_custom.dart  # вспомогательные
+node_emoji.dart              # §094 emoji-теги: палитра + protocol-default emoji + вставка в rawBody/tag
+haptic_service.dart · community_servers_loader.dart · dump_builder.dart · url_launcher.dart ·
+config_dirty_check.dart · error_humanize.dart · error_format.dart · parse_hints.dart ·
+clash_log_pump.dart · logcat_reader.dart · stderr_reader.dart · exit_info_reader.dart ·
+selectable_to_custom.dart · version_info.dart · wifi_history_listener.dart  # вспомогательные
 ```
 
 #### `widgets/` — кросс-экранные
@@ -448,6 +501,9 @@ logcat_reader.dart · exit_info_reader.dart · selectable_to_custom.dart  # вс
 ```
 node_row.dart                # строка ноды: ACTIVE pill + proto label + ping (принимает NodeViewItem, §068)
 node_view_item.dart          # NodeViewItem — immutable view-row (статик-мета + динамика, §068)
+emoji_picker_button.dart     # §094 — popup-палитра emoji (node_settings, add-server wizard)
+reorder_grab_strip.dart      # §098 — единый grab-strip для drag-reorder (routing/DNS rules ·
+                             #   subscriptions · node list в manual-sort mode §098/§100)
 outbound_picker.dart · template_var_list.dart · core_logs_hint_banner.dart ·
 wifi_entry.dart · wifi_manual_add_dialog.dart · wifi_permission_dialog.dart · wifi_saved_picker_sheet.dart
 ```
@@ -698,7 +754,7 @@ Sensitive-поля при `GET /state/storage` фильтруются allow-list
 - `PerAppTraceTab` 4 sub-tab'а: Live / Domains / IPs / Connections. Search-by-IP в Domains, inline expand на Connections, ↗ IP-jump иконки везде где рендерится IP — все три view связаны двусторонней навигацией.
 
 **Coupling (важно для extraction):**
-- **Sing-box log format** — Source A парсит конкретные log lines `router: found package name`, `dns: exchanged|cached`, `dns: exchange failed` regex'ами в `_dnsRe` / `_dnsFailRe` / `_routerRe`. Если sing-box изменит формат логов — TrafficProfiler сломается silent. Сейчас формат стабилен (libbox 1.13.11), но при upgrade libbox это первое что надо verify.
+- **Sing-box log format** — Source A парсит конкретные log lines `router: found package name`, `dns: exchanged|cached`, `dns: exchange failed` regex'ами в `_dnsRe` / `_dnsFailRe` / `_routerRe`. Если sing-box изменит формат логов — TrafficProfiler сломается silent. Формат стабилен на текущем ядре (`sing-box-lx 1.13.13-lx.5`, §097/§104 — относительно стокового 1.13.11 формат не менялся), но при любой смене/апгрейде ядра это первое, что надо verify.
 - **`AppLog` instance + `DebugSource.core` filter** — TrafficProfiler subscribe'ит на `AppLog.I.notifyListeners` и фильтрует по source. Зависимость двунаправленная: `core_logs_enabled=false` → core source пуст → TrafficProfiler видит только Source B (Clash poll), теряет DNS resolves и process attribution. UI показывает `CoreLogsHintBanner` чтобы юзер включил forwarding.
 - **`ClashApiClient` instance** — Source B использует наш Clash API client. Поэтому профайлер не работает пока Clash endpoint не resolved (см. раздел Clash API client → wiring).
 
@@ -1148,8 +1204,10 @@ HomeScreen
   ├─ Traffic bar → tap → StatsScreen
   ├─ Group dropdown (selector groups only)
   └─ Node list:
-       ├─ NodeRow layout: [ACTIVE pill] [PROTOCOL] ... [ping →]
-       └─ long-press: Ping · Use · View JSON · Copy URI · Copy server/detour/both
+       ├─ NodeRow layout: [ACTIVE pill] [PROTOCOL · transport · security (§102)] ... [ping →]
+       └─ long-press: Ping · Use · View JSON · Copy URI
+          (§099 — copy-JSON варианты в dropdown внутри View JSON:
+           Copy node JSON / Copy server JSON / Copy server + detours(N))
 ```
 
 ---
@@ -1179,14 +1237,14 @@ HomeScreen
 | **Blocking `stopVPN` через Completer** (v1.4.0) | Method channel ждёт `setStatus(Stopped)` на native (5с timeout) — caller получает control только после реального завершения. Убирает race в `onStartCommand` guard в reconnect'е. См. tasks/002. |
 | **Intent-based sticky reset** (v1.4.0) | `configChangedNeedRestart=false` в `_stopInternal`/`_startInternal` по факту применённого намерения, не только по transition event'у. Robust к Doze/OOM потерям broadcast'ов. |
 | **`TunnelStatus.unknown`** (v1.4.0) | Default для неизвестного raw вместо `disconnected` — убирает ложные срабатывания `firstWhere` predicate'ов на мусорных events. UI маппит в Disconnected label. |
-| **`ConfigCache` в HomeState** (v1.4.0) | Outbound JSON (detour tags + protocol labels) парсится один раз при `saveParsedConfig`, не в itemBuilder'е. Убирает hot-path jsonDecode при сортировке 50+ нод. |
+| **`ConfigCache` в HomeState** (v1.4.0; superseded §091 → `ParsedConfig`) | Outbound JSON парсился один раз при `saveParsedConfig`, не в itemBuilder'е. §091 заменил пару `protoByTag`/`detourTags` полноценной моделью `ConfigNode` (см. строку §091 ниже). |
 | **`kDetourTagPrefix` single source of truth** (v1.4.0) | Константа `⚙ ` в `lib/config/consts.dart` — used by node_settings UI, builder, home filter, node_filter screen. Раньше литералы дублировались. |
 | **Two persist patterns: Lazy vs Eager** (v1.9.0, §076) | Editing screens с toggle-flood UX (`tun_apps_tab`, `routing_screen`, `dns_settings_screen`, `settings_screen` Core) используют **lazy** — mutations in-memory + `_markDirty` (sync `configDirty=true`), flush on `dispose()` + `paused`, rebuild lazy на возврат к home. Discrete-event screens (`subscriptions`, `app_settings`, `custom_rule_edit`, `node_filter`) — **eager** immediate-write + snackbar. 1 settings + 1 config write per editing session вместо до 10 (per-toggle eager). |
 | **Global `HomeReturnObserver`** (v1.9.0, §076) | Universal `NavigatorObserver` в `MaterialApp.navigatorObservers`. Срабатывает при `previousRoute.isFirst == true` (home стал top). Покрывает все navigation пути — drawer, long-press, system back, swipe, programmatic pop, cross-nav. Раньше rebuild trigger был в `_pushRoute.then()` callback'е — терялся при опен screen через non-drawer пути. |
 | **mtime-based bootstrap** (v1.9.0, §076) | `ConfigDirtyCheck.isDirty()` сравнивает `lxbox_settings.json.mtime > singbox_config.json.mtime` на launch. Восстанавливает `configDirty` после kill mid-edit без persist'а флага. `subController.init` set'ит флаг, `home._initSubsAndAutoUpdate` триггерит тихий bootstrap rebuild. |
 | **`markConfigChangedNeedRestart` external mark** (v1.9.0, §076) | `HomeController` method для настроек применяемых вне config pipeline. Native VPN System toggles (allow_bypass / keep_on_exit / background_mode) после `_vpn.setX` вызывают этот метод → home banner вместо локального snackbar'а. Gated на `tunnelUp`. |
 | **Cohesion over line-count + `part`/`mixin` декомпозиция** (§089) | Монстры (home_screen 2370, home_controller 1089, …) раздроблены не по числу строк, а по ответственности: тонкий экран + `<screen>/widgets/` + presenter/VM; контроллер + `part`-mixin'ы (та же библиотека → library-private доступ сохранён, поведение bit-identical). ~600 строк легитимны для cohesive-файла; крупные исключения задокументированы (см. [Обзор](#принцип-cohesion-over-line-count-089)). |
-| **`ConfigNode` структурная мета вместо reverse-parse тега** (§091, planned) | `config-tag == нода в Clash`; протокол/detour лежат в конфиге по тегу → достаются без reverse-map. Один `ConfigNode` map (parsed раз на `configRaw`) заменяет `ConfigCache.protoByTag/detourTags` + `ConfigIntrospection` + `subscriptionsOfTag`. Подписка = prefix-фильтр. Убирает класс §077/§079/§080. Behavior-changing → отдельная итерация. |
+| **`ConfigNode` структурная мета вместо reverse-parse тега** (§091, реализовано) | `config-tag == нода в Clash`; протокол/detour достаются из конфига по тегу без reverse-map. Один `ParsedConfig` (parsed раз на `configRaw`, поле `HomeState.configModel`) заменил `ConfigCache.protoByTag/detourTags` + `ConfigIntrospection` + reverse-map `subscriptionsOfTag` (теперь prefix-фильтр, `home/subscription_lookup.dart`). Класс багов §077/§079/§080 устранён структурно. §102/§103 — eager `transportLabel`/`securityLabel` для subtitle и variant-фильтра. +14 тестов. |
 
 ---
 
@@ -1200,7 +1258,7 @@ HomeScreen
 | `path_provider` | Documents directory for persistent storage |
 | `shared_preferences` | Theme mode, haptic toggle |
 | `share_plus` | Config/log export via system share sheet |
-| **libbox** (native) | sing-box core (JitPack: `com.github.singbox-android:libbox:1.13.11` — миграция из `io.github.sagernet:libbox` сделана в spec 039) |
+| **libbox** (native) | sing-box core — fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (`with_awg` + `with_xhttp`, §097/§104). Пин — `app/android/libbox.version` (`v1.13.13-lx.5`); AAR скачивает `scripts/fetch-libbox.sh` из GH Releases форка (SHA256-verify) в gitignored `libs/` — и локально (`build-local-apk.sh`), и в CI (`ci.yml` → «Fetch sing-box-lx core»). Maven-строка стокового `libbox 1.13.11` удалена из `build.gradle.kts` (исторически: JitPack `com.github.singbox-android:libbox:1.13.11`, миграция из `io.github.sagernet:libbox` — spec 039) |
 
 ---
 
@@ -1270,6 +1328,12 @@ Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`]
 | 045 | TLS ECH (Encrypted Client Hello) — anti-DPI extension прячущий SNI целиком — *Draft* |
 | 046 | Tunnel apps split-tunneling (per-app include/exclude через VpnService.Builder) |
 | 047 | Public Intent API (Tasker / Macrodroid automation через Android broadcast intents) — *Draft* |
+| 048 | Home node filters (двухфазная pool/match модель — фундамент Filter mode §095/§096/§103) |
+| 070 | Sort options (меню сортировки нод) |
+| 071 | Manual node reorder (drag; §100 — manual в карусели + персист) |
+| 074 | Add server wizard |
+| 076 | Settings & config lifecycle (lazy/eager persist, HomeReturnObserver, mtime-bootstrap) |
+| **097** | **AWG2 (AmneziaWG 2.0) + смена ядра на `sing-box-lx`** (`with_awg`/`with_xhttp`: AWG/AWG2 end-to-end, нативный XHTTP, MTU-кламп 1280; §104 — fork-ядро во всех сборках через `fetch-libbox.sh`) |
 
 **Демотированные (через §054) — теперь в `tasks/`:**
 

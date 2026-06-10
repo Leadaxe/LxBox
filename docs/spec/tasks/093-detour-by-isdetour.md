@@ -19,7 +19,7 @@ Detour-hide фильтр на главном (`NodeListPresenter.splitNodes` /
   → прячется как раньше; ⚙-нода без ссылок больше не прячется (она и не detour).
 - analyze + 805 тестов green. (Device-verify toggle «Show detour» — на юзере.)
 
-## G2b — ОТКРЫТО (нужно решение юзера)
+## G2b — БЫЛ ОТКРЫТ → РЕШЁН ✅ (см. ниже)
 
 Ручной toggle **«Mark as detour server»** в `node_settings_screen` —
 **не чисто визуальный**: он (1) красит тег ⚙, (2) гейтит policy-тогглы
@@ -49,6 +49,6 @@ UX-доработка (§096): register-тоглы в `subscription_settings_tab
 Флаги хранятся независимо от режима (переключение Use↔Add detour их не теряет).
 
 Ручной per-node toggle «Mark as detour» уже убран (§094); `isMainAsDetour`
-(⚙-префикс) теперь только из парсинга/`TagResolver`. (NB: комментарий в
-`server_list_build.dart` ~стр.64 «см. toggle в node_settings_screen» —
-устаревший, toggle'а там больше нет.)
+(⚙-префикс) теперь только из парсинга/`TagResolver`. (Комментарий в
+`server_list_build.dart` про node_settings-toggle обновлён — ссылается
+на §094; долг снят.)

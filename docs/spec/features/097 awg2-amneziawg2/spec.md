@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | Feature (новый протокол-вариант + смена bundled-ядра) |
-| Статус | **DRAFT / на согласование** — код НЕ начат (spec-first) |
+| Статус | **In progress** — Phase 0 ✅ (core-swap на `sing-box-lx` — ПОСТОЯННО, §104: пин **v1.13.13-lx.5** в `app/android/libbox.version` + `scripts/fetch-libbox.sh`, fetch в local-build и CI; см. §7b) · Phase 1 ✅ (AWG/AWG2 parse→emit→round-trip + MTU-кламп 1280, §7c/§7c.1) · Phase 2a ✅ (JSON-only UI приходит с Phase 1) · Phase 3 ✅ (нативный XHTTP). Готовится релиз **v2.0.0**; Phase 2b (выделенные UI-поля) — опц. follow-up |
 | Источник | Юзер: «готовимся к смене ядра», fork [`Leadaxe/sing-box-lx@lx`](https://github.com/Leadaxe/sing-box-lx/blob/lx/README.ru.md) |
 | Зависит от | §019 (wireguard endpoint), §026 (parser v2), §012 (native VPN) |
 
@@ -15,11 +15,12 @@ Fork `sing-box-lx` (ветка `lx`) добавляет к upstream sing-box:
   уровне endpoint'а).
 - **XHTTP** transport (Xray-совместимый «splithttp» поверх Reality/TLS/h2c).
 
-LxBox сейчас бандлит ядро как **prebuilt Maven AAR** —
+LxBox на момент написания спеки бандлил ядро как **prebuilt Maven AAR** —
 `com.github.singbox-android:libbox:1.13.11` (единственный пин в
 `app/android/app/build.gradle.kts:123`). «Смена ядра» = заменить этот артефакт
 на libbox из `sing-box-lx`. Это **prerequisite** для AWG2/XHTTP: app-side
-парсинг/эмит бесполезны, если ядро не понимает поля.
+парсинг/эмит бесполезны, если ядро не понимает поля. (Выполнено: §7b +
+§104 — fork-ядро ПОСТОЯННО, пин в `app/android/libbox.version`.)
 
 ## 2. Что такое AWG2 — поля
 
@@ -68,7 +69,7 @@ AWG2 без явной поддержки не переживёт `parse→build
 
 ## 4. Фазы
 
-### Phase 0 — Смена ядра (`sing-box-lx` libbox) — PREREQUISITE
+### Phase 0 — Смена ядра (`sing-box-lx` libbox) — ВЫПОЛНЕНО ✅ (см. §7b)
 
 Самый большой неизвестный. Варианты получения артефакта:
 - **(0a)** fork опубликован как Maven/jitpack-артефакт → сменить строку
@@ -87,7 +88,7 @@ OverrideOptions())`) и `ConfigManager` **прозрачны** к payload'у —
 **Output Phase 0:** APK с fork-ядром, `Libbox.version()` подтверждает fork,
 существующие конфиги (vless/wg/…) работают как раньше (regression-gate).
 
-### Phase 1 — Data layer AWG2 (parse → model → emit → round-trip)
+### Phase 1 — Data layer AWG2 (parse → model → emit → round-trip) — ВЫПОЛНЕНО ✅ (см. §7c)
 
 **Модель** (`node_spec.dart`): добавить опциональный value-object на
 `WireguardSpec` (endpoint-level), `null` = обычный WG:
@@ -134,8 +135,6 @@ fork'а), типизация только для UI. Рекомендация: �
   JSON-таб (полный endpoint редактируется как есть). После Phase 1 (parse/emit
   сохраняют поля) AWG2 уже редактируется через JSON-таб. `add_server_wizard`
   Paste-URI/JSON — работает heuristic'ом. **Нужен только** парс/эмит (Phase 1).
-  Detour-ряд: чекбокс-enable + `!` (независим, ON по умолчанию) + лейбл
-  по `!` (Hide/Only) — снятие галки лейбл НЕ меняет (вкл/выкл = чекбокс+чип).
 - **2b (follow-up):** выделенная сворачиваемая секция «AmneziaWG2» в
   `node_settings` Settings-табе с полями jc/jmin/jmax, s1-s4, h1-h4, i1-i5 +
   bidirectional sync с JSON-табом. Делать по фидбеку.
@@ -154,8 +153,8 @@ fork'а), типизация только для UI. Рекомендация: �
   `transportToQuery` → share-URI. `httpupgrade` остаётся **отдельным** типом.
 - **Тесты:** `test/parser/xhttp_test.dart` (8) + обновлены vless/node_spec/
   pipeline_e2e (раньше ждали fallback-warning → теперь нативный xhttp). 860 green.
-- **NB:** как AWG — на стоковом ядре (CI без `with_xhttp`) конфиг с `type=xhttp`
-  отвергается; фича «спит» до релиза fork-ядра.
+- **NB:** требует ядро с `with_xhttp` — с §104 local-build и CI собираются на
+  `sing-box-lx` (пин **v1.13.13-lx.5**), нативный `type=xhttp` работает из коробки.
 
 ## 5. Validation (Phase 1)
 
@@ -198,18 +197,21 @@ fork), `BUILD.md`/`RELEASE_PROCESS.md` (если Phase 0 = локальный li
 - build-теги: `with_gvisor,with_quic,with_wireguard,with_utls,with_naive_outbound,with_clash_api,with_xhttp,with_awg`;
 - присутствуют `option.AmneziaWGOptions` (AWG2) и `option.V2RayXHTTPOptions`/`v2rayxhttp` (XHTTP).
 
-**Интеграция (DEV-ONLY, НЕ коммитим):**
+**Интеграция (на тот момент DEV-ONLY; с §104 — ПОСТОЯННАЯ):**
 - AAR → `app/android/app/libs/libbox.aar` (gitignored, 73MB);
-- `build.gradle.kts:123` Maven-строка → `implementation(files("libs/libbox.aar"))`
-  (закомментирована старая; вернуть для стокового ядра). CI остаётся на Maven.
+- `build.gradle.kts` → `implementation(files("libs/libbox.aar"))`; Maven-строка
+  стокового libbox 1.13.11 удалена (§104). AAR в `libs/` кладёт
+  `scripts/fetch-libbox.sh` (GH Releases форка + SHA256, пин
+  `app/android/libbox.version` = **v1.13.13-lx.5**) — вызывается из
+  `build-local-apk.sh` и из CI (шаг «Fetch sing-box-lx core» в android job).
 - Собрано: vc 2726, APK 28.9MB (arm64 `.so` 51MB vs ~55-66 у 1.13.11); **Kotlin
   `VpnPlugin`/`BoxService` скомпилировались без правок** → libbox API совместим
   (Q4 ✅). Установлено + verified.
 
 **Остаётся:** Phase 1 (app-side AWG2-поля parse/emit) — сейчас новое ядро
 **работает на обычных конфигах**, но AWG2-поля app-парсер всё ещё дропает.
-Для интеграции в CI/release — опубликовать fork-AAR (jitpack/GH Packages) или
-git-lfs/CI-fetch (отдельное решение).
+CI/release-путь fork-ядра — решён в §104: AAR публикуется в GH Releases форка,
+`scripts/fetch-libbox.sh` качает его по пину с проверкой SHA256.
 
 ## 7c. Phase 1 — ВЫПОЛНЕНО ✅ (2026-06-09, по образцу singbox-launcher SPEC 073)
 
@@ -233,8 +235,28 @@ core-swap; «спит» на стоковом ядре, активна на lx).
 - **Тесты:** `test/parser/awg_test.dart` — 10 кейсов (parse URI/JSON/INI, awg://,
   emit type-fidelity `jc:10` number, round-trip + `jc=0`, регистр `i*`). 853 green.
 
-**Конец-в-конец:** с локальным lx-ядром (Phase 0) AWG-узел теперь
-парсится → эмитится → ядро понимает. Для CI/release остаётся опубликовать fork-AAR.
+**Конец-в-конец:** с lx-ядром (Phase 0) AWG-узел теперь
+парсится → эмитится → ядро понимает. CI/release-путь ядра закрыт §104
+(fetch AAR из GH Releases форка по пину `libbox.version`).
+
+### 7c.1 MTU-policy для AWG (добавлено 2026-06-10)
+
+Только при наличии AWG-полей: `mtu = min(mtu_из_источника_или_1280, 1280)`
+(parse-time во всех трёх входах: URI/awg:// и INI через `parseWireguardUri`,
+JSON через `parseSingboxEntry`; helper `awgClampMtu` в `uri_utils.dart`):
+
+- нет `mtu` → **1280** (вместо WG-дефолта 1408);
+- `mtu=1420` → кламп до 1280 + debug-лог `clamped AWG mtu 1420→1280`;
+- `mtu=1200` (явно ниже) → уважаем;
+- **plain WG не трогаем** — работает на 1408/1420 (доказано Routerich).
+
+Почему 1280, а не вычисляемый потолок (`1500−60−max(s3,s4)` ≈ 1380):
+1280 = рекомендованный клиентский MTU самой AmneziaWG и минимальный IPv6 MTU →
+безопасно на любом пути (PPPoE 1492, mobile, вложенные туннели); точный потолок
+предполагает path-MTU ровно 1500, чего у AWG-юзеров (как раз в недружелюбных
+сетях) обычно нет. Асимметрия рисков: занижение чуть мельчит пакеты;
+завышение — тихий облом (handshake есть, данных нет). Persisted-ноды
+накрывает автоматически: `UserServer.fromJson` re-parse'ит из rawBody.
 
 ## 8. Phasing-вывод
 

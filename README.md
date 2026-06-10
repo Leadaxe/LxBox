@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/github/v/release/Leadaxe/LxBox?label=version)](https://github.com/Leadaxe/LxBox/releases)
 [![Dart](https://img.shields.io/badge/Dart-3.11%2B-blue)](https://dart.dev/)
 
-Android VPN client powered by [sing-box](https://sing-box.sagernet.org/). Multi-subscription, smart routing, built-in speed test.
+Android VPN client powered by [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — a [sing-box](https://sing-box.sagernet.org/) fork with AmneziaWG 2.0 and native XHTTP. Multi-subscription, smart routing, built-in speed test.
 
 **[Download latest release](https://github.com/Leadaxe/LxBox/releases/latest)** | **[Документация на русском](README_RU.md)**
 
@@ -41,7 +41,7 @@ Android VPN client powered by [sing-box](https://sing-box.sagernet.org/). Multi-
 
 Add servers by subscription URL, direct proxy link, WireGuard URI/INI, or raw sing-box JSON outbound. Smart-paste dialog auto-detects format and previews the content. Enable/disable subscriptions without deleting. Offline rehydrate — nodes restored from body cache after app restart. Per-subscription settings for detour servers.
 
-- **10 protocols**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard
+- **10 protocols**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard (incl. **AmneziaWG / AWG 2.0** — `awg://` URI, AmneziaWG `.conf`, JSON)
 - Formats: Base64, Xray JSON Array (chained proxy), plain text, raw sing-box JSON
 - Per-subscription **Update interval** picker (1/3/6/12/24/48/72/168h), honors `profile-update-interval` header
 - Subscription row subtitle: `124 nodes · 🔄 24h · 🕐 3h ago · (2 fails)`
@@ -64,14 +64,17 @@ Subscriptions refresh in the background without spamming providers. Every reques
 <details>
 <summary><strong>Home Screen</strong> — connect and manage nodes</summary>
 
-One-tap VPN start/stop with animated status chip. Choose proxy group, sort nodes by ping/name, mass-ping all servers. Traffic bar shows real-time speed, connections count, uptime.
+One-tap VPN start/stop with animated status chip. Choose proxy group, sort nodes by ping/name/manual order, mass-ping all servers. Traffic bar shows real-time speed, connections count, uptime.
 
 - **Node row layout** (v1.3.1+): `[ACTIVE green pill] PROTOCOL · · · 50MS →` — protocol label (VLESS/Hy2/WG/TUIC/SS) from outbound type, ping right-aligned with colour by latency
+- **Node subtitle `PROTOCOL · transport · security`** (v2.0.0): `VLESS·xhttp·TLS`, `VLESS·tcp·Reality+Vision`, `WG·awg2` — see what's inside a node without opening JSON
+- **Filter workspace** (v2.0.0): filter panel with **Regex · Protocol · Subscribes · Settings** tabs + active-filter summary chips; each category has its own `!` inversion (NOT); transport/security chip row (`tcp`/`ws`/`grpc`/`h2`/`httpupgrade`/`quic`/`xhttp` + `TLS`/`Reality`/`+Vision`/`awg`/`awg2`); filters remembered per channel
+- **Detour filter — tri-state** (v2.0.0): show all / hide detours / **detours only** (clean relay-list diagnostics)
+- **Custom sort persisted** (v2.0.0): manual order selectable from the sort menu and the tap-carousel (Default → Ping → A-Z → Custom), survives restart; subscriptions drag-reorder by grab-strip
 - Proxy groups: `auto-proxy-out`, VPN ①/②/③
 - Node filter: choose which nodes participate in auto-selection
-- Detour servers (⚙) visibility toggle
 - Sticky restart warning under Stop — doesn't disappear when you cancel Stop dialog
-- Long-press: Ping · Use this node · View JSON · **Copy URI** (vless://, wireguard://, etc) · Copy server (JSON) · Copy detour · Copy server + detour
+- Long-press: Ping · Use this node · View JSON · **Copy URI** (vless://, awg://, etc) — Copy-JSON actions live inside the View JSON dialog (Copy server / Copy detour / Copy server + detours(N))
 </details>
 
 <details>
@@ -245,8 +248,8 @@ View and edit raw sing-box JSON config. Pretty-printed display with copy button.
 
 | Protocol | URI scheme | Transport |
 |----------|-----------|-----------|
-| VLESS | `vless://` | TCP, WebSocket, gRPC, H2, HTTPUpgrade, REALITY |
-| VMess | `vmess://` (v2rayN base64) | TCP, WebSocket, gRPC, H2, HTTPUpgrade |
+| VLESS | `vless://` | TCP, WebSocket, gRPC, H2, HTTPUpgrade, **XHTTP**, REALITY |
+| VMess | `vmess://` (v2rayN base64) | TCP, WebSocket, gRPC, H2, HTTPUpgrade, **XHTTP** |
 | Trojan | `trojan://` | TCP, WebSocket, gRPC |
 | Shadowsocks | `ss://` (SIP002 + legacy + SS2022) | TCP, UDP, SIP003 plugins |
 | Hysteria2 | `hy2://` / `hysteria2://` | QUIC, Salamander obfs |
@@ -254,9 +257,9 @@ View and edit raw sing-box JSON config. Pretty-printed display with copy button.
 | **NaïveProxy** | `naive+https://` | Real Chrome TLS via cronet, `extra-headers` |
 | SSH | `ssh://` | TCP, host key / password / private key |
 | SOCKS | `socks://` / `socks5://` | TCP, auth |
-| WireGuard | `wireguard://`, INI config | UDP, multi-peer |
+| WireGuard / **AmneziaWG** | `wireguard://`, `awg://`, INI / `.conf` | UDP, multi-peer, **AWG 1.x/2.0 obfuscation** (jc/jmin/jmax, s1–s4, h1–h4, i1–i5), auto-MTU 1280 |
 
-**XHTTP transport** auto-falls back to HTTPUpgrade (sing-box 1.12.x doesn't support xhttp natively) — warning surfaced in UI.
+**XHTTP** is a native transport since v2.0.0 (Xray splithttp: `mode` auto/packet-up/stream-up/stream-one, `x_padding_bytes`, `no_grpc_header`) — works with TLS and Reality, incompatible with XTLS-Vision (protocol limitation).
 
 See [Protocol Documentation](docs/PROTOCOLS.md) for full URI format details and sing-box mapping.
 
@@ -282,6 +285,7 @@ buildConfig(lists, settings)  ← template + post-steps (DPI, DNS, rules)
 sing-box JSON
 ```
 
+- **Bundled core** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **1.13.13-lx.5**: sing-box 1.13.13 fork built with `with_awg` / `with_xhttp` tags; version pinned in `app/android/libbox.version`, AAR fetched from the fork's GitHub Releases by `scripts/fetch-libbox.sh` with SHA256 verification
 - **Sealed `NodeSpec`** — 9 protocols, polymorphic `emit(vars)` / `toUri()` (round-trip invariant)
 - **`EmitContext`** — passes template vars into per-node emit
 - **`NodeEntries{main, detours[]}`** — named struct for chain results

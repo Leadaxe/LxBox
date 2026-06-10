@@ -17,8 +17,9 @@
   (+ их switch-кейсы + неиспользуемый `onCopy`-параметр `NodeRow`). Остался
   `Copy URI` (это URI-ссылка, не JSON).
 - **View JSON** (`OutboundViewScreen`): Copy-аффорданс в AppBar стал умным —
-  - **есть detour** → `PopupMenuButton` (выпадашка): `Copy JSON` (server) /
-    `Copy detour` / `Copy server + detour`;
+  - **есть detour** → `PopupMenuButton` (выпадашка): `Copy server JSON` /
+    `Copy detour` / `Copy server + detour` (при multi-hop цепочке —
+    `Copy server + detours(N)` с числом хопов);
   - **нет detour** → простая `IconButton` Copy (= `Copy JSON`).
 - `viewOutboundJson` считает `hasDetour = intro.detourOf(tag) != null` и
   пробрасывает `onCopy: (mode) => copyNodeJson(context, tag, state, mode)`

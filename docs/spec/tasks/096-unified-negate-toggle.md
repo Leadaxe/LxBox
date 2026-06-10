@@ -80,8 +80,10 @@ selector/urltest/direct/…) НИКОГДА не отсеиваются pool'о�
 - `filter_widgets.dart` — новый `NegateToggle`; `RegexFilterField` (ведущий `!`,
   без enable, prefix = лупа); `MultiSelectChipsRow` +ведущий `!`.
 - `filter_panel.dart` — сводка-чипы с `!`-префиксом + detour-чип (⚙ только-detour
-  / ⊘ скрыт, когда фильтр вкл); detour-ряд на Settings (чекбокс-enable +
-  NegateToggle + динамический лейбл Show-all/Hide/Only).
+  / ⊘ скрыт, когда фильтр вкл); detour-ряд на Settings: чекбокс-enable +
+  NegateToggle (`!` независим от чекбокса, ON по умолчанию) + лейбл по `!` —
+  Hide/Only detour servers; снятие галки лейбл НЕ меняет (вкл/выкл фильтра =
+  чекбокс + summary-чип).
 
 ## Тесты
 
