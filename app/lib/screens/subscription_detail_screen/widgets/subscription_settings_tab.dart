@@ -142,6 +142,33 @@ class SubscriptionSettingsTab extends StatelessWidget {
               ),
             ]),
           ),
+        ] else ...[
+          // §111 — у подписки нет родных detour-цепочек: полный radio
+          // (Use/Add/None) вырождается — Use≡None, register-тоглы и Replace
+          // неприменимы. Вместо него один пикер поверх тех же полей
+          // DetourPolicy: выбор тага → useDetourServers=true + override
+          // (builder: APPEND на пустой цепочке = 1-hop), None → override=''.
+          Text('Detour', style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.bold,
+          )),
+          const SizedBox(height: 4),
+          Text(
+            'This subscription has no detour servers of its own. You can '
+            'still route all its nodes through one of your servers.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.alt_route, size: 20),
+            title: const Text('Detour server'),
+            subtitle: Text(entry.overrideDetour.isEmpty
+                ? 'None — nodes connect directly'
+                : 'Nodes → ${entry.overrideDetour} → Internet'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: onShowOverrideDetourPicker,
+          ),
         ],
         if (entry.list is SubscriptionServers) ...[
           const SizedBox(height: 24),
