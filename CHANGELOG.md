@@ -10,6 +10,8 @@
 
 ### Added
 
+- **§111 — Detour для подписок без родных detour-серверов** ([task spec](docs/spec/tasks/111-subscription-detour-without-native-chain.md), [subscription_settings_tab.dart](app/lib/screens/subscription_detail_screen/widgets/subscription_settings_tab.dart)). Секция «Detour» на Settings tab подписки показывалась только при наличии родных detour-цепочек у нод — подписке с плоским списком серверов detour прописать было негде, хотя builder (APPEND, §073) уже умеет 1-hop на пустой цепочке. Теперь для таких подписок показывается компактный пикер «Detour server» поверх тех же полей `DetourPolicy`: выбранный сервер прописывается всем нодам подписки (`"detour": "<tag>"`), без неприменимых radio-режимов/register-тоглов. Плюс fix: пикер ставит `useDetourServers=true` при непустом выборе — leftover-состояние «mode был None» молча гасило override в builder'е.
+
 - **§110 — Импорт Amnezia `vpn://`-ссылок** ([task spec](docs/spec/tasks/110-amnezia-vpn-link-import.md), [amnezia_link.dart](app/lib/services/parser/amnezia_link.dart)). Контейнерный share-формат Amnezia/awg2 (`.vpn`-файл = та же строка) теперь распознаётся при вставке в Subscriptions «+»: `vpn://` + base64url(qCompress(JSON)) декодится (включая несжатый fallback и padded base64), из `containers[]` берутся все WG/AWG контейнеры (`last_config.config` → существующий INI-парс §097/§106, `$PRIMARY_DNS`/`$SECONDARY_DNS` подставляются из `dns1`/`dns2`), не-WG контейнеры скипаются. Один `UserServer` на ссылку, `rawBody` хранит оригинал — персист ре-парсит тем же путём. Анти-zlib-бомба: ссылка ≤ 64 KiB, claimed size ≤ 4 MiB. Карточка вставки показывает endpoint и число контейнеров. +20 тестов [amnezia_link_test.dart](app/test/parser/amnezia_link_test.dart).
 
 ### Fixed
