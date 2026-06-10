@@ -139,8 +139,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       if (!mounted) return;
       unawaited(maybeShowNotificationPermissionDialog(context));
       unawaited(maybeShowBatteryOptimizationDialog(context, _vpn));
-      // §105 — «поддержи автора»: fetch + порог активного времени внутри.
-      unawaited(maybeShowSupportDialog(context));
+      // §105 — «поддержи автора»: cold-start. Покажется только если VPN
+      // уже работает ≥5 мин на момент открытия (обычно после kill+restart
+      // при живой сессии); иначе — на следующем app resume.
+      _maybeShowSupport();
     });
     // Update check (§036): hydrate cached "last known version" сразу,
     // network fetch — через 5 сек чтобы не мешать запуску VPN. Throttled
@@ -345,7 +347,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _controller.onAppResumed();
+      // §105 — открытие HOME (возврат в приложение): показать support-диалог,
+      // если туннель активен ≥5 мин и пройден порог суммарного времени.
+      _maybeShowSupport();
     }
+  }
+
+  /// §105 — gate показа support-диалога: только при живом туннеле, текущая
+  /// сессия (`now − connectedSince`) проверяется внутри сервиса. Вызывается
+  /// при открытии HOME (cold-start postframe + app resume). Сам диалог
+  /// один раз за процесс (read-guard `dismissed_id`/`snooze` в сервисе).
+  void _maybeShowSupport() {
+    if (!mounted) return;
+    final since = _controller.state.connectedSince;
+    final seconds =
+        since == null ? 0 : DateTime.now().difference(since).inSeconds;
+    unawaited(maybeShowSupportDialog(context, sessionSeconds: seconds));
   }
 
   /// §085 R3 — rebuild при изменении фильтров (NodeFilterViewModel notify).

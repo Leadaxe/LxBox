@@ -19,6 +19,7 @@ class SupportMessage {
   const SupportMessage({
     required this.id,
     required this.minActiveHours,
+    required this.minSessionMinutes,
     required this.snoozeActiveHours,
     required this.title,
     required this.message,
@@ -26,7 +27,15 @@ class SupportMessage {
   });
 
   final String id;
+
+  /// Порог накопленной лояльности — суммарное время работы туннеля.
   final int minActiveHours;
+
+  /// §105 — минимум для ТЕКУЩЕЙ сессии туннеля: показываем только когда
+  /// пользователь реально пользуется VPN прямо сейчас (не дёргаем в момент
+  /// подключения/теста). Гейт «уже пользуется», не «когда-то пользовался».
+  final int minSessionMinutes;
+
   final int snoozeActiveHours;
   final String title;
   final String message;
@@ -49,6 +58,7 @@ class SupportMessage {
     return SupportMessage(
       id: id,
       minActiveHours: (raw['min_active_hours'] as num?)?.toInt() ?? 3,
+      minSessionMinutes: (raw['min_session_minutes'] as num?)?.toInt() ?? 5,
       snoozeActiveHours: (raw['snooze_active_hours'] as num?)?.toInt() ?? 10,
       title: raw['title'] as String? ?? '',
       message: raw['message'] as String? ?? '',
@@ -102,21 +112,32 @@ class SupportMessageService {
   }
 
   /// Pure-решение о показе — для тестов без IO.
+  ///
+  /// [currentSessionSeconds] — длительность ТЕКУЩЕЙ сессии туннеля
+  /// (`0`, если VPN не подключён). Гейт «уже пользуется»: показываем только
+  /// при живом туннеле, проработавшем ≥ `min_session_minutes`.
   static bool decide({
     required SupportMessage m,
     required int totalActiveSeconds,
+    required int currentSessionSeconds,
     required String dismissedId,
     required int snoozeAfterSeconds,
   }) {
     if (m.id == dismissedId) return false;
+    if (currentSessionSeconds < m.minSessionMinutes * 60) return false;
     if (totalActiveSeconds < m.minActiveHours * 3600) return false;
     if (totalActiveSeconds < snoozeAfterSeconds) return false;
     return true;
   }
 
-  Future<bool> shouldShow(SupportMessage m) async => decide(
+  Future<bool> shouldShow(
+    SupportMessage m, {
+    required int currentSessionSeconds,
+  }) async =>
+      decide(
         m: m,
         totalActiveSeconds: await ActiveTimeTracker.I.totalSeconds(),
+        currentSessionSeconds: currentSessionSeconds,
         dismissedId: await SupportState.I.getString('dismissed_id'),
         snoozeAfterSeconds: await SupportState.I.getInt('snooze_after_seconds'),
       );

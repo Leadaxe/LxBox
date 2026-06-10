@@ -28,16 +28,21 @@ void main() {
   SupportMessage msg({
     String id = 'c1',
     int minHours = 3,
+    int minSessionMin = 5,
     int snoozeHours = 10,
   }) =>
       SupportMessage(
         id: id,
         minActiveHours: minHours,
+        minSessionMinutes: minSessionMin,
         snoozeActiveHours: snoozeHours,
         title: 't',
         message: 'm',
         links: const [('⭐ Repo', 'https://example.com')],
       );
+
+  // Текущая сессия заведомо выше порога — для кейсов, проверяющих другие оси.
+  const liveSession = 99999;
 
   setUp(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -61,6 +66,7 @@ void main() {
         SupportMessageService.decide(
             m: msg(),
             totalActiveSeconds: 3 * 3600 - 60,
+            currentSessionSeconds: liveSession,
             dismissedId: '',
             snoozeAfterSeconds: 0),
         false,
@@ -69,6 +75,7 @@ void main() {
         SupportMessageService.decide(
             m: msg(),
             totalActiveSeconds: 3 * 3600,
+            currentSessionSeconds: liveSession,
             dismissedId: '',
             snoozeAfterSeconds: 0),
         true,
@@ -80,6 +87,7 @@ void main() {
         SupportMessageService.decide(
             m: msg(id: 'c1'),
             totalActiveSeconds: 99999,
+            currentSessionSeconds: liveSession,
             dismissedId: 'c1',
             snoozeAfterSeconds: 0),
         false,
@@ -88,7 +96,42 @@ void main() {
         SupportMessageService.decide(
             m: msg(id: 'c2'),
             totalActiveSeconds: 99999,
+            currentSessionSeconds: liveSession,
             dismissedId: 'c1',
+            snoozeAfterSeconds: 0),
+        true,
+      );
+    });
+
+    test('session-gate: VPN не активен / <5мин → false даже при 100ч total', () {
+      // Накопил уйму суммарного, но прямо сейчас туннель выключен.
+      expect(
+        SupportMessageService.decide(
+            m: msg(),
+            totalActiveSeconds: 100 * 3600,
+            currentSessionSeconds: 0,
+            dismissedId: '',
+            snoozeAfterSeconds: 0),
+        false,
+        reason: 'не пользуется сейчас',
+      );
+      // Только что подключился (4 мин) — рано.
+      expect(
+        SupportMessageService.decide(
+            m: msg(minSessionMin: 5),
+            totalActiveSeconds: 100 * 3600,
+            currentSessionSeconds: 4 * 60,
+            dismissedId: '',
+            snoozeAfterSeconds: 0),
+        false,
+      );
+      // Сессия 5 мин ровно — порог пройден.
+      expect(
+        SupportMessageService.decide(
+            m: msg(minSessionMin: 5),
+            totalActiveSeconds: 100 * 3600,
+            currentSessionSeconds: 5 * 60,
+            dismissedId: '',
             snoozeAfterSeconds: 0),
         true,
       );
@@ -101,6 +144,7 @@ void main() {
         SupportMessageService.decide(
             m: msg(),
             totalActiveSeconds: 12 * 3600,
+            currentSessionSeconds: liveSession,
             dismissedId: '',
             snoozeAfterSeconds: snoozeAfter),
         false,
@@ -109,6 +153,7 @@ void main() {
         SupportMessageService.decide(
             m: msg(),
             totalActiveSeconds: 13 * 3600,
+            currentSessionSeconds: liveSession,
             dismissedId: '',
             snoozeAfterSeconds: snoozeAfter),
         true,
@@ -192,20 +237,20 @@ void main() {
     test('snooze поднимает порог от текущего total', () async {
       final svc = SupportMessageService.I;
       await SupportState.I.set('active_seconds', 3 * 3600);
-      expect(await svc.shouldShow(msg()), true);
+      expect(await svc.shouldShow(msg(), currentSessionSeconds: liveSession), true);
       await svc.snooze(msg());
-      expect(await svc.shouldShow(msg()), false);
+      expect(await svc.shouldShow(msg(), currentSessionSeconds: liveSession), false);
       // Доработал ещё 10ч активного времени → снова показ.
       await SupportState.I.set('active_seconds', 13 * 3600);
-      expect(await svc.shouldShow(msg()), true);
+      expect(await svc.shouldShow(msg(), currentSessionSeconds: liveSession), true);
     });
 
     test('dismissForever гасит кампанию навсегда', () async {
       final svc = SupportMessageService.I;
       await SupportState.I.set('active_seconds', 99 * 3600);
       await svc.dismissForever(msg(id: 'c1'));
-      expect(await svc.shouldShow(msg(id: 'c1')), false);
-      expect(await svc.shouldShow(msg(id: 'c2')), true);
+      expect(await svc.shouldShow(msg(id: 'c1'), currentSessionSeconds: liveSession), false);
+      expect(await svc.shouldShow(msg(id: 'c2'), currentSessionSeconds: liveSession), true);
     });
   });
 

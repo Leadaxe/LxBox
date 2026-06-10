@@ -257,16 +257,23 @@ Future<void> showOemBatteryFollowupDialog(
   );
 }
 
-/// §105 — «поддержи автора»: показывается при открытии, когда суммарное
-/// время работы туннеля перевалило порог из remote-конфига
-/// (docs/support.json в репо). Кнопки-ссылки диалог НЕ закрывают (юзер
-/// может пройтись по нескольким); закрытие — «Позже» (повтор через
-/// +N часов активного времени) или «Не показывать» (навсегда для кампании).
-Future<void> maybeShowSupportDialog(BuildContext context) async {
+/// §105 — «поддержи автора»: показывается при открытии HOME, когда туннель
+/// активен и текущая сессия уже ≥ `min_session_minutes` (пользователь
+/// реально пользуется), а суммарное время работы перевалило порог из
+/// remote-конфига (docs/support.json в репо). [sessionSeconds] — длина
+/// текущей сессии туннеля (0 = не подключён). Кнопки-ссылки диалог НЕ
+/// закрывают (юзер может пройтись по нескольким); закрытие — «Позже»
+/// (повтор через +N часов активного времени) или «Не показывать»
+/// (навсегда для кампании).
+Future<void> maybeShowSupportDialog(
+  BuildContext context, {
+  required int sessionSeconds,
+}) async {
+  if (sessionSeconds <= 0) return; // не подключён — короткое замыкание без fetch'а
   final svc = SupportMessageService.I;
   final m = await svc.fetchOrCached();
   if (m == null) return;
-  if (!await svc.shouldShow(m)) return;
+  if (!await svc.shouldShow(m, currentSessionSeconds: sessionSeconds)) return;
   if (!context.mounted) return;
   await showDialog<void>(
     context: context,
