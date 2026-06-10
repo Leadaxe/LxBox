@@ -117,6 +117,13 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Fetch sing-box-lx core (libbox.aar)
+        # §104 — ядро: fork Leadaxe/sing-box-lx (AWG2 + XHTTP). AAR не в git;
+        # скачиваем из GH Releases форка с проверкой SHA256. Пин версии —
+        # app/android/libbox.version (single source для local + CI).
+        working-directory: .
+        run: ./scripts/fetch-libbox.sh
+
       - name: Flutter
         uses: subosito/flutter-action@v2
         with:

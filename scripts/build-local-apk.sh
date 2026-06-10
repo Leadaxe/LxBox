@@ -19,6 +19,9 @@ cd "$(dirname "$0")/.."
 # можем билдить из uncommited state (например, после edit) — sync на всякий.
 ./scripts/sync-pubspec-version.sh
 
+# §104 — ядро sing-box-lx: качаем пиненую версию AAR если ещё нет (идемпотентно).
+./scripts/fetch-libbox.sh
+
 cd app
 export LXBOX_ABI_FILTER=arm64-v8a
 flutter build apk --release --target-platform android-arm64 "$@"
