@@ -61,8 +61,14 @@ class SupportMessageService {
   SupportMessageService._();
   static final SupportMessageService I = SupportMessageService._();
 
-  static const _url =
-      'https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/support.json';
+  /// Прод-канал — main. Для проверки кампании до публикации можно собрать
+  /// тестовый APK с override'ом:
+  /// `--dart-define=LXBOX_SUPPORT_URL=https://raw.githubusercontent.com/Leadaxe/LxBox/develop/docs/support.test.json`
+  static const _url = String.fromEnvironment(
+    'LXBOX_SUPPORT_URL',
+    defaultValue:
+        'https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/support.json',
+  );
   static const _httpTimeout = Duration(seconds: 10);
 
   /// Test seam (паттерн §101 httpClientForTesting).
