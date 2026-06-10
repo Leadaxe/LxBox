@@ -39,9 +39,9 @@ Android VPN client powered by [sing-box-lx](https://github.com/Leadaxe/sing-box-
 <details>
 <summary><strong>Servers & Subscriptions</strong> — manage proxy sources in one place</summary>
 
-Add servers by subscription URL, direct proxy link, WireGuard URI/INI, or raw sing-box JSON outbound. Smart-paste dialog auto-detects format and previews the content. Enable/disable subscriptions without deleting. Offline rehydrate — nodes restored from body cache after app restart. Per-subscription settings for detour servers.
+Add servers by subscription URL, direct proxy link, WireGuard URI/INI, Amnezia `vpn://` link, or raw sing-box JSON outbound. Smart-paste dialog auto-detects format and previews the content. Enable/disable subscriptions without deleting. Offline rehydrate — nodes restored from body cache after app restart. Per-subscription settings for detour servers.
 
-- **10 protocols**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard (incl. **AmneziaWG / AWG 2.0** — `awg://` URI, AmneziaWG `.conf`, JSON)
+- **10 protocols**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard (incl. **AmneziaWG / AWG 2.0** — `awg://` URI, AmneziaWG `.conf`, **Amnezia `vpn://` links** (v2.0.3), JSON)
 - Formats: Base64, Xray JSON Array (chained proxy), plain text, raw sing-box JSON
 - Per-subscription **Update interval** picker (1/3/6/12/24/48/72/168h), honors `profile-update-interval` header
 - Subscription row subtitle: `124 nodes · 🔄 24h · 🕐 3h ago · (2 fails)`
@@ -257,7 +257,7 @@ View and edit raw sing-box JSON config. Pretty-printed display with copy button.
 | **NaïveProxy** | `naive+https://` | Real Chrome TLS via cronet, `extra-headers` |
 | SSH | `ssh://` | TCP, host key / password / private key |
 | SOCKS | `socks://` / `socks5://` | TCP, auth |
-| WireGuard / **AmneziaWG** | `wireguard://`, `awg://`, INI / `.conf` | UDP, multi-peer, **AWG 1.x/2.0 obfuscation** (jc/jmin/jmax, s1–s4, h1–h4, i1–i5), auto-MTU 1280 |
+| WireGuard / **AmneziaWG** | `wireguard://`, `awg://`, INI / `.conf`, **Amnezia `vpn://`** | UDP, multi-peer, **AWG 1.x/2.0 obfuscation** (jc/jmin/jmax, s1–s4, h1–h4 incl. **`N-M` ranges**, i1–i5), auto-MTU 1280 |
 
 **XHTTP** is a native transport since v2.0.0 (Xray splithttp: `mode` auto/packet-up/stream-up/stream-one, `x_padding_bytes`, `no_grpc_header`) — works with TLS and Reality, incompatible with XTLS-Vision (protocol limitation).
 

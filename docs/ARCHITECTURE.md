@@ -425,6 +425,7 @@ lazy_persist_mixin.dart      # LazyPersistMixin — отложенный persist
 ```
 parser/                      # Parser v2 (text → NodeSpec)
   body_decoder.dart          #   Layer-1: raw body → sealed DecodedBody (base64 sniff + JSON-flavor)
+  amnezia_link.dart          #   Amnezia vpn:// → WG/AWG INI-тексты (base64url+qCompress, §110)
   parse_all.dart             #   Layer-2: exhaustive switch DecodedBody → List<NodeSpec> (per-line null-skip)
   uri_parsers.dart           #   barrel + parseUri scheme-dispatcher
   uri_parsers/<proto>.dart   #   per-protocol URI→NodeSpec (vless/vmess/trojan/ss/hy2/naive/tuic/ssh/socks/wg)

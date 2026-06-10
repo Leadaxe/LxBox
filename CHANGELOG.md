@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+—
+
+## [2.0.3] — 2026-06-11
+
 ### Added
 
 - **§112 — AWG ranged magic headers (`h1`–`h4` как диапазон `N-M`)** ([task spec](docs/spec/tasks/112-awg-ranged-magic-headers.md), [node_spec.dart](app/lib/models/node_spec.dart)). Живые awg2-экспорты несут magic headers нового формата AWG 2.0 — `H1 = 43613244-384550127`; модель §097 держала h-поля как `int`, диапазон молча выпадал на парсе, и handshake тихо не проходил (клиент слал WG-дефолтные типы пакетов). Теперь `h1`–`h4` принимают «число-или-диапазон» во всех трёх входах (URI query / INI `[Interface]` / sing-box JSON, включая `vpn://`-импорт §110): одиночное значение остаётся `int` (строка-число нормализуется), диапазон хранится строкой и эмитится JSON string — контракт ядра. Глубокая валидация (uint32, start ≤ end, непересечение) сознательно оставлена ядру — оно даёт явную ошибку на старте вместо молчаливого drop'а. Ядро перепинено `v1.13.13-lx.5` → **`v1.13.13-lx.6`** ([libbox.version](app/android/libbox.version), core-часть — sing-box-lx SPECS/005): старое ядро не анмаршалит строковые `h*`. +7 тестов ([awg_test.dart](app/test/parser/awg_test.dart), [amnezia_link_test.dart](app/test/parser/amnezia_link_test.dart)).
