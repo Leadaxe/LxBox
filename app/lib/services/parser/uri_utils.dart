@@ -149,6 +149,33 @@ int awgClampMtu(int? raw, String tag) {
   return 1280;
 }
 
+/// §106 — bare IP без CIDR-префикса (`172.16.0.2`) ломает sing-box на
+/// загрузке endpoint'а: `netip.ParsePrefix(...): no '/'`. Дефолтим bare
+/// IPv4 → `/32`, bare IPv6 (есть `:`) → `/128`. Пустое и уже-с-`/` не трогаем.
+/// Применяется к `address` и `allowed_ips` WG/AWG из всех входов.
+String ensureCidr(String addr) {
+  final s = addr.trim();
+  if (s.isEmpty || s.contains('/')) return s;
+  return s.contains(':') ? '$s/128' : '$s/32';
+}
+
+/// §106 — `wireguard://KEY@host`: если base64-ключ содержит сырой `/`,
+/// `Uri.tryParse` примет его за начало path и потеряет userInfo → ключ
+/// пропадёт. Percent-энкодим `/` **только** в userInfo-части (между `://`
+/// и первым `@`); уже-`%2F` не трогаем (там нет raw `/`); query не задеваем.
+String encodeUserInfoSlashes(String uri) {
+  final schemeEnd = uri.indexOf('://');
+  if (schemeEnd < 0) return uri;
+  final start = schemeEnd + 3;
+  final at = uri.indexOf('@', start);
+  if (at < 0) return uri;
+  final userInfo = uri.substring(start, at);
+  if (!userInfo.contains('/')) return uri;
+  return uri.substring(0, start) +
+      userInfo.replaceAll('/', '%2F') +
+      uri.substring(at);
+}
+
 /// Case-insensitive lookup query-параметра. В подписках `packetEncoding`
 /// встречается в разных регистрах (`packetencoding`, `PacketEncoding`),
 /// `Uri.queryParameters` case-sensitive. Возвращает первое совпадение
