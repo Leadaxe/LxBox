@@ -8,7 +8,8 @@
   "links": [
     { "label": "⭐ LxBox — Android-клиент", "url": "https://github.com/Leadaxe/LxBox" },
     { "label": "⭐ sing-box-lx — ядро", "url": "https://github.com/Leadaxe/sing-box-lx" },
-    { "label": "💬 Тема на 4PDA", "url": "https://4pda.to/forum/" },
-    { "label": "💰 Поддержать деньгами", "url": "https://github.com/Leadaxe" }
+    { "label": "💬 Тема на 4PDA", "url": "https://4pda.to/forum/index.php?showtopic=1122662" },
+    { "label": "👥 Группа поддержки в Telegram", "url": "https://t.me/singbox_launcher/" },
+    { "label": "💰 Поддержать деньгами", "url": "https://t.me/singbox_launcher/340/3621" }
   ]
 }
