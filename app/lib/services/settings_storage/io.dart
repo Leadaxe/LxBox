@@ -134,6 +134,8 @@ Future<void> _save() async {
   // Clean up removed keys (legacy schema cruft).
   SettingsStorage._cache?.remove('node_overrides');
   SettingsStorage._cache?.remove('show_detour_servers');
+  // §107: настройка auto_rebuild удалена (rebuild всегда автоматический).
+  (SettingsStorage._cache?['vars'] as Map?)?.remove('auto_rebuild');
   final data = Map<String, dynamic>.from(SettingsStorage._cache ?? {});
 
   final main = await _file();

@@ -153,7 +153,9 @@ void _onReturnToHome() {
   промежуточных pop'ах внутри stack.
 - Setting **«Auto-rebuild config»** в App Settings (`auto_rebuild` var,
   default `true`) re-read'ится на каждое срабатывание — юзер может
-  переключить behavior без рестарта app'а.
+  переключить behavior без рестарта app'а. **[§107: настройка удалена —
+  rebuild на возврате всегда автоматический; свежесть конфига на старте
+  гарантирует гейт в `_startWithAutoRefresh`.]**
 
 ### External restart marker — `markConfigChangedNeedRestart`
 
@@ -425,12 +427,15 @@ class _SomeEditScreenState extends State<SomeEditScreen>
 - `_persist` **не set'ит configDirty** после await'ов — это создавало
   бы race (rebuild мог уже сbросить флаг между dispose и завершением
   storage write'а).
-- Race window между dispose's `unawaited(_persist())` и
-  `homeReturnObserver` handler'ом: дисковый write ещё в процессе, но
-  - `configDirty` уже true (set синхронно в `_markDirty`),
-  - `SettingsStorage._cache` обновлён в microtask раньше чем handler
-    дойдёт до `generateConfig` (Dart event loop ordering),
-  - handler видит fresh state и триггерит lazy rebuild корректно.
+- ~~Race window между dispose's `unawaited(_persist())` и
+  `homeReturnObserver` handler'ом: … handler видит fresh state и
+  триггерит lazy rebuild корректно~~ — **анализ был неверен (§107)**:
+  handler стреляет синхронно в момент pop'а, а dispose (и flush) —
+  только после exit-анимации, ~300 мс позже. Rebuild детерминированно
+  читал несфлашенный storage; конфиг отставал на один визит экрана.
+  Исправлено в §107: мутация сразу stage'ится в `SettingsStorage._cache`
+  (`stageChanges`), на dispose остаётся только дисковый
+  `flushToDisk()`.
 
 ---
 
@@ -469,7 +474,7 @@ toggle-flood. Eager оставлен для discrete events где он есте
 | Tap по home banner (configDirty + tunnelUp) | `_rebuildAndClearDirty` → after success `configDirty=false`, `configChangedNeedRestart=true` (sticky) → синий banner гаснет, розовый появляется. Юзер видит prompt для restart. |
 | User кликает Restart button в banner | `_confirmStop` → stop + start. `_startInternal` reset'ит `configChangedNeedRestart=false`. |
 | Routing screen открыт, user navigates через drawer (не pop) | drawer обычно `Navigator.push` — RoutingScreen unmount'ится → dispose fires → flush. |
-| Race: `homeReturnObserver` стартует пока dispose `_persist` ещё пишет на диск | `configDirty` уже true (sync в `_markDirty`). `SettingsStorage._cache` обновлён в microtask раньше handler body. `generateConfig` читает fresh _cache. Race безопасен. |
+| Race: `homeReturnObserver` стартует пока dispose `_persist` ещё пишет на диск | ~~Race безопасен~~ — **неверно (§107)**: handler срабатывает на pop, dispose-flush — после exit-анимации; `generateConfig` читал stale `_cache`. Исправлено staging'ом в §107 (см. tasks/107). |
 | Cross-navigation (home → Stats → VPN Settings → toggle → pop pop → home) | Каждое intermediate pop проверяет `previousRoute.isFirst`. Pop VPN Settings → previousRoute=Stats (не first) → handler не fires. Pop Stats → previousRoute=home (isFirst) → handler fires → rebuild. |
 | Native VPN System toggle (Allow Bypass / Keep on Exit / Background Mode) при tunnelUp | `_vpn.setX` пишет в native SharedPreferences. После — `homeController.markConfigChangedNeedRestart()` set'ит флаг. Home banner показывает «Restart VPN». На tap restart применяет новое значение через `VpnService.Builder` на свежем `establish()`. |
 | Native VPN System toggle при tunnel down | `markConfigChangedNeedRestart` gated на `tunnelUp` → не set'ит флаг. Значение применится на следующем start без restart prompt. |
@@ -639,6 +644,7 @@ app/test/services/subscription_controller_init_test.dart (NEW)
       нет stale references.
 - [x] Auto-rebuild config toggle (App Settings → `auto_rebuild` var) —
       ON триггерит auto-rebuild на возврат; OFF только показывает banner.
+      **[§107: toggle и OFF-режим удалены.]**
 - [x] Existing 687+ tests pass.
 - [x] Eager screens (subscriptions / app_settings / custom_rule_edit /
       node_filter) поведение НЕ меняется — immediate save + snackbar как
@@ -652,3 +658,19 @@ app/test/services/subscription_controller_init_test.dart (NEW)
   baseline Android 14, отложено.
 - AppLifecycleState — следить за future Android-versions если `hidden`
   станет caller'ом чаще `paused`.
+
+---
+
+## §107 addendum (2026-06-10)
+
+Field report (4PDA, v2.0.x) выявил, что race-анализ lazy pattern'а в этой
+спеке был неверен: `didPop` срабатывает синхронно в момент pop'а, а
+dispose-flush экрана — после exit-анимации (~300 мс позже), поэтому
+rebuild на возврате к home читал состояние «до последней правки» — конфиг
+хронически отставал на один визит editing-экрана, и рестарт туннеля не
+лечил.
+
+Исправление (staging мутаций в `SettingsStorage._cache` + гейт пересборки
+на Start + single-flight rebuild), а также удаление настройки
+`auto_rebuild` со всей логикой OFF-режима — в
+[`tasks/107-lazy-persist-stale-read-race.md`](../../tasks/107-lazy-persist-stale-read-race.md).

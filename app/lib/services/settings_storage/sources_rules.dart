@@ -70,11 +70,12 @@ Future<Set<String>> _getEnabledGroups() async {
   return list.map((e) => e.toString()).toSet();
 }
 
-Future<void> _saveEnabledGroups(Set<String> groups) async {
+Future<void> _saveEnabledGroups(Set<String> groups,
+    {bool flush = true}) async {
   final data = await _load();
   data['enabled_groups'] = groups.toList();
   SettingsStorage._cache = data;
-  await _save();
+  if (flush) await _save();
 }
 
 // ---------------------------------------------------------------------------
@@ -183,11 +184,12 @@ Future<void> _absorbLegacyAppRules(Map<String, dynamic> data) async {
   await _save();
 }
 
-Future<void> _saveCustomRules(List<CustomRule> rules) async {
+Future<void> _saveCustomRules(List<CustomRule> rules,
+    {bool flush = true}) async {
   final data = await _load();
   data['custom_rules'] = rules.map((r) => r.toJson()).toList();
   SettingsStorage._cache = data;
-  await _save();
+  if (flush) await _save();
 }
 
 Future<bool> _hasPresetsMigrated() async {

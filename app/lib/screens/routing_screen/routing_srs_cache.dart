@@ -61,21 +61,21 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     });
   }
 
-  /// Обработчик изменения переменной `chapter: routing` — сохраняем в
-  /// SettingsStorage и через debounce триггерим rebuild конфига.
+  /// Обработчик изменения переменной `chapter: routing` — staged-запись в
+  /// `_cache` (диск догонит на flushToDisk из mixin'а).
   void _onRoutingVarChanged(String name, String value) {
     _routingVarValues[name] = value;
-    unawaited(SettingsStorage.setVar(name, value));
+    unawaited(SettingsStorage.setVar(name, value, flush: false));
     _markDirty();
   }
 
-  /// §076/§085 R4: atomic storage flush (вызывается mixin'ом на dispose/
-  /// paused). Inline rebuild + snackbars удалены — lazy на возврате home.
+  /// §107: staging — буфер экрана в `_cache` на каждую мутацию; дисковый
+  /// flush — mixin'ом (flushToDisk) на dispose/paused.
   @override
-  Future<void> persistChanges() async {
-    await SettingsStorage.saveEnabledGroups(_enabledGroups);
-    await SettingsStorage.saveRouteFinal(_routeFinal);
-    await SettingsStorage.saveCustomRules(_customRules);
+  Future<void> stageChanges() async {
+    await SettingsStorage.saveEnabledGroups(_enabledGroups, flush: false);
+    await SettingsStorage.saveRouteFinal(_routeFinal, flush: false);
+    await SettingsStorage.saveCustomRules(_customRules, flush: false);
     // §076: configDirty уже true (set синхронно в markDirty). НЕ
     // переставляем тут — race с home return observer (banner blink).
   }

@@ -24,7 +24,7 @@
 
 - **Auto-start on boot** — VPN стартует при загрузке устройства. Реализация: `BootReceiver` (BroadcastReceiver) + `RECEIVE_BOOT_COMPLETED` permission.
 - **Keep VPN on exit** — VPN не гасится при swipe'е приложения из recents. Реализация: `onTaskRemoved` в `BoxVpnService` проверяет флаг.
-- **Auto-rebuild config** — при любом изменении настроек (routing, подписки, vars) автоматом триггерится `generateConfig` + `saveParsedConfig`. Дефолт ON. Ключ `auto_rebuild`.
+- **Auto-rebuild config** — при любом изменении настроек (routing, подписки, vars) автоматом триггерится `generateConfig` + `saveParsedConfig`. Дефолт ON. Ключ `auto_rebuild`. **[§107: тумблер удалён — rebuild всегда автоматический, OFF-режим упразднён.]**
 
 ### Background (v1.4.0)
 
@@ -61,7 +61,6 @@
 │  Startup                                 │
 │   Auto-start on boot             [☐]    │
 │   Keep VPN on exit               [☐]    │
-│   Auto-rebuild config            [☑]    │
 ├──────────────────────────────────────────┤
 │  Background                              │
 │   🔋 Battery optimization          >     │
@@ -88,7 +87,7 @@
 | `theme_mode` | String | `system` | `lxbox_settings.json` |
 | `auto_start_on_boot` | bool | false | native (BootReceiver) |
 | `keep_vpn_on_exit` | bool | false | native |
-| `auto_rebuild` | String | `"true"` | settings |
+| ~~`auto_rebuild`~~ | String | `"true"` | settings — **удалён в §107** (stale-ключ чистится в `_save()`) |
 | `auto_update_subs` | String | `"true"` | settings |
 | `auto_ping_on_start` | String | `"true"` | settings |
 | `haptic_enabled` | String | `"true"` | settings |

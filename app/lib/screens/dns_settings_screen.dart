@@ -80,7 +80,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
 
 
   bool _loading = true;
-  // §076/§085 R4: write-on-exit через LazyPersistMixin (markDirty/persistChanges).
+  // §076/§085 R4/§107: staging через LazyPersistMixin (markDirty/stageChanges).
 
   String _strategy = '';
   String _dnsFinal = '';
@@ -199,23 +199,26 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     }
   }
 
-  /// §076/§085 R4: atomic storage flush (вызывается mixin'ом). Inline rebuild
-  /// удалён — lazy через home return observer.
+  /// §107: staging — буфер экрана в `_cache` на каждую мутацию; дисковый
+  /// flush — mixin'ом (flushToDisk) на dispose/paused.
   @override
-  Future<void> persistChanges() async {
-    await SettingsStorage.saveDnsServers(_servers);
+  Future<void> stageChanges() async {
+    await SettingsStorage.saveDnsServers(_servers, flush: false);
     final cleaned = cleanDnsRulesForPersist(
       _rules,
       _templateRulesByName,
       _presetRulesByPresetId,
     );
-    await SettingsStorage.saveDnsRulesList(cleaned);
-    await SettingsStorage.setVar('dns_strategy', _strategy);
-    await SettingsStorage.setVar('dns_final', _dnsFinal);
-    await SettingsStorage.setVar('dns_default_domain_resolver', _defaultResolver);
+    await SettingsStorage.saveDnsRulesList(cleaned, flush: false);
+    await SettingsStorage.setVar('dns_strategy', _strategy, flush: false);
+    await SettingsStorage.setVar('dns_final', _dnsFinal, flush: false);
+    await SettingsStorage.setVar(
+      'dns_default_domain_resolver',
+      _defaultResolver,
+      flush: false,
+    );
 
-    // §076: configDirty уже true (set в _markDirty). Lazy rebuild на
-    // возврате home через _pushRoute.then().
+    // §076: configDirty уже true (set в _markDirty).
   }
 
   /// §044: render list — typed `ResolvedServer` для каждой ref-записи.

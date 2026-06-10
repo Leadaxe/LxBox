@@ -37,9 +37,9 @@ class _TunAppsTabState extends State<TunAppsTab>
     with WidgetsBindingObserver, LazyPersistMixin<TunAppsTab> {
   TunAppsConfig _cfg = const TunAppsConfig(mode: 'off', packages: <String>[]);
   // §076: `_appliedCfg` / `_isModified` / `_listEq` / local restart banner +
-  // button — удалены. Lazy write-on-exit через LazyPersistMixin (§085 R4):
-  //   - mutations → markDirty() + setState (in-memory)
-  //   - dispose / AppLifecycleState.paused → persistChanges (atomic write)
+  // button — удалены. Staging через LazyPersistMixin (§085 R4 / §107):
+  //   - mutations → markDirty() + setState; буфер сразу в _cache (stageChanges)
+  //   - dispose / AppLifecycleState.paused → flushToDisk (atomic write)
   //   - markDirty set'ит subController.configDirty = true sync
   //   - home banner показывает «Apply / Restart» глобально
   //
@@ -69,12 +69,12 @@ class _TunAppsTabState extends State<TunAppsTab>
     }
   }
 
-  /// §076/§085 R4: atomic disk flush (вызывается mixin'ом на dispose/paused).
-  /// `setTunApps` идёт через §072 atomic write. `configDirty` уже set'нут в
+  /// §107: staging — `_cfg` в `_cache` на каждую мутацию; дисковый flush —
+  /// mixin'ом (flushToDisk) на dispose/paused. `configDirty` уже set'нут в
   /// `markDirty()` синхронно — не трогаем.
   @override
-  Future<void> persistChanges() async {
-    await SettingsStorage.setTunApps(_cfg);
+  Future<void> stageChanges() async {
+    await SettingsStorage.setTunApps(_cfg, flush: false);
   }
 
   void _setMode(String mode) {

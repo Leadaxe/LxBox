@@ -15,11 +15,11 @@ Future<String> _getRouteFinal() async {
   return (data['route_final'] as String?) ?? '';
 }
 
-Future<void> _saveRouteFinal(String outbound) async {
+Future<void> _saveRouteFinal(String outbound, {bool flush = true}) async {
   final data = await _load();
   data['route_final'] = outbound;
   SettingsStorage._cache = data;
-  await _save();
+  if (flush) await _save();
 }
 
 Future<Set<String>> _getExcludedNodes() async {
@@ -45,13 +45,14 @@ Future<List<Map<String, dynamic>>> _getDnsServers() async {
   return servers.whereType<Map<String, dynamic>>().toList();
 }
 
-Future<void> _saveDnsServers(List<Map<String, dynamic>> servers) async {
+Future<void> _saveDnsServers(List<Map<String, dynamic>> servers,
+    {bool flush = true}) async {
   final data = await _load();
   final dns = (data['dns_options'] as Map<String, dynamic>?) ?? {};
   dns['servers'] = servers;
   data['dns_options'] = dns;
   SettingsStorage._cache = data;
-  await _save();
+  if (flush) await _save();
 }
 
 // ---------------------------------------------------------------------------
@@ -151,11 +152,12 @@ Future<List<Map<String, dynamic>>> _getDnsRulesList() async {
   return rules.whereType<Map<String, dynamic>>().toList();
 }
 
-Future<void> _saveDnsRulesList(List<Map<String, dynamic>> rules) async {
+Future<void> _saveDnsRulesList(List<Map<String, dynamic>> rules,
+    {bool flush = true}) async {
   final data = await _load();
   final dns = (data['dns_options'] as Map<String, dynamic>?) ?? {};
   dns['rules'] = rules;
   data['dns_options'] = dns;
   SettingsStorage._cache = data;
-  await _save();
+  if (flush) await _save();
 }

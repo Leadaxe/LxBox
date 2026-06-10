@@ -60,7 +60,7 @@ class _RoutingScreenState extends State<RoutingScreen>
   final _srsDownloading = <String>{}; // rule.id → идёт загрузка
   @override
   bool _loading = true;
-  // §076/§085 R4: write-on-exit через LazyPersistMixin (markDirty/persistChanges).
+  // §076/§085 R4/§107: staging через LazyPersistMixin (markDirty/stageChanges).
 
   /// chapter==routing vars (Auto Proxy tuning — urltest_url/interval/tolerance).
   /// Значения держим отдельно от custom_rules: apply'ит их через SettingsStorage.setVar.
