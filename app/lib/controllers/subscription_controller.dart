@@ -259,6 +259,29 @@ class SubscriptionController extends ChangeNotifier {
         _entries.add(SubscriptionEntry(
             list: wgServer, nodeCount: wgServer.nodes.length));
         await _persist();
+      } else if (isAmneziaVpnLink(trimmed)) {
+        // §110 — Amnezia vpn://: один UserServer на ссылку, нод может быть
+        // несколько (по WG/AWG контейнеру). rawBody = оригинальная ссылка,
+        // fromJson ре-парсит её тем же decode-путём.
+        final nodes = parseAll(decode(trimmed));
+        if (nodes.isEmpty) {
+          _lastError = 'No WireGuard/AmneziaWG config in vpn:// link';
+          return;
+        }
+        final vpnServer = _autoEmoji(UserServer(
+          id: newUuidV4(),
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          origin: UserSource.paste,
+          createdAt: DateTime.now(),
+          rawBody: trimmed,
+          nodes: nodes,
+        ));
+        _entries.add(SubscriptionEntry(
+            list: vpnServer, nodeCount: vpnServer.nodes.length));
+        await _persist();
       } else if (isDirectLink(trimmed)) {
         final spec = parseUri(trimmed);
         if (spec == null) {

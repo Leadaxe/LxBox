@@ -26,10 +26,11 @@ L×Box parses proxy URIs from subscriptions and converts them into [sing-box](ht
 9. [WireGuard](#8-wireguard)
 10. [AmneziaWG (AWG, AWG2)](#85-amneziawg-awg-awg2)
 11. [WireGuard INI Config](#9-wireguard-ini-config)
-12. [TUIC v5](#95-tuic-v5)
-13. [JSON Outbound (raw sing-box)](#10-json-outbound)
-14. [Xray JSON Array](#11-xray-json-array)
-15. [XHTTP transport](#xhttp-transport)
+12. [Amnezia vpn:// Link](#92-amnezia-vpn-link)
+13. [TUIC v5](#95-tuic-v5)
+14. [JSON Outbound (raw sing-box)](#10-json-outbound)
+15. [Xray JSON Array](#11-xray-json-array)
+16. [XHTTP transport](#xhttp-transport)
 
 ---
 
@@ -848,6 +849,31 @@ The INI config is converted to a `wireguard://` URI internally using `wireGuardC
 - `Endpoint` (in `[Peer]`)
 
 Missing any of these throws a `FormatException`.
+
+---
+
+## 9.2 Amnezia vpn:// Link
+
+Добавлено в §110 (task spec [`110`](./spec/tasks/110-amnezia-vpn-link-import.md)). Контейнерный share-формат Amnezia / awg2; `.vpn`-файл содержит ту же строку.
+
+### Format
+
+```
+vpn://<base64url( qCompress(JSON, 8) )>
+```
+
+- base64url **без padding** (алфавит `-_`, `Base64UrlEncoding | OmitTrailingEquals`); padded и standard-варианты тоже принимаются (`decodeBase64Safe`).
+- `qCompress` = 4 байта big-endian (длина распакованного) + стандартный zlib-поток. Несжатый payload (голый base64-JSON) — fallback, паритет с `importController` Amnezia.
+- В JSON: `containers[]` → под-объекты `awg` / `wireguard` → `last_config` (JSON-строка; защитно принимаем и объект) → `config` = готовый WG/AWG INI (секция 9). Плейсхолдеры `$PRIMARY_DNS`/`$SECONDARY_DNS` подставляются из корневых `dns1`/`dns2`.
+
+### Detection / Flow
+
+Шаг 0 в `decode()` ([body_decoder.dart](../app/lib/services/parser/body_decoder.dart)): `startsWith('vpn://')` → [`amnezia_link.dart`](../app/lib/services/parser/amnezia_link.dart) → `AmneziaConfig(iniTexts)` → `parseAll` → каждый INI через `parseWireguardIni`. Все WG/AWG контейнеры ссылки становятся нодами **одного** `UserServer` (`rawBody` = оригинальная ссылка, персист ре-парсит тем же путём); прочие протоколы Amnezia (openvpn/xray/cloak/…) скипаются; нет ни одного WG/AWG → `DecodeFailure` с явной причиной.
+
+### Limits
+
+- Ссылка ≤ 64 KiB (`maxURILength`), claimed uncompressed size ≤ 4 MiB — защита от zlib-бомб.
+- Reference: [config-decoder](https://github.com/amnezia-vpn/config-decoder) (эталон формата), `exportController.cpp` / `importController.cpp` в [amnezia-client](https://github.com/amnezia-vpn/amnezia-client).
 
 ---
 
