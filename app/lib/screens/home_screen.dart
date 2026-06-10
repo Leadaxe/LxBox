@@ -8,6 +8,7 @@ import '../models/home_state.dart';
 import '../services/app_log.dart';
 import '../services/error_humanize.dart';
 import '../services/support/active_time_tracker.dart';
+import '../services/support/support_message.dart';
 import '../services/version_info.dart';
 import 'home/widgets/traffic_bar.dart';
 import 'home/widgets/progress_banner.dart';
@@ -139,10 +140,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       if (!mounted) return;
       unawaited(maybeShowNotificationPermissionDialog(context));
       unawaited(maybeShowBatteryOptimizationDialog(context, _vpn));
-      // §105 — «поддержи автора»: cold-start. Покажется только если VPN
-      // уже работает ≥5 мин на момент открытия (обычно после kill+restart
-      // при живой сессии); иначе — на следующем app resume.
-      _maybeShowSupport();
+      // §105 — cold-start: на этот момент статус туннеля обычно ещё не
+      // пришёл от native (connectedSince=null) → no-op; реальный показ
+      // ловит _onControllerChange, когда придёт connected и сессия дорастёт.
+      unawaited(_maybeShowSupport());
     });
     // Update check (§036): hydrate cached "last known version" сразу,
     // network fetch — через 5 сек чтобы не мешать запуску VPN. Throttled
@@ -250,6 +251,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     } else if (isUp) {
       unawaited(ActiveTimeTracker.I.tick());
     }
+    // §105 — пока туннель активен и экран открыт, проверяем порог показа
+    // (gate внутри: foreground + сессия ≥5мин + суммарно ≥3ч). Терминальный.
+    if (isUp) unawaited(_maybeShowSupport());
 
     _prevTunnel = now;
     _prevError = nowError;
@@ -345,24 +349,49 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _lifecycle = state;
     if (state == AppLifecycleState.resumed) {
       _controller.onAppResumed();
-      // §105 — открытие HOME (возврат в приложение): показать support-диалог,
-      // если туннель активен ≥5 мин и пройден порог суммарного времени.
       _maybeShowSupport();
     }
   }
 
-  /// §105 — gate показа support-диалога: только при живом туннеле, текущая
-  /// сессия (`now − connectedSince`) проверяется внутри сервиса. Вызывается
-  /// при открытии HOME (cold-start postframe + app resume). Сам диалог
-  /// один раз за процесс (read-guard `dismissed_id`/`snooze` в сервисе).
-  void _maybeShowSupport() {
-    if (!mounted) return;
+  // §105 — состояние показа support-диалога (за процесс).
+  AppLifecycleState _lifecycle = AppLifecycleState.resumed;
+  SupportMessage? _supportMsg;
+  bool _supportFetchTried = false;
+  bool _supportShown = false;
+  bool _supportInFlight = false;
+
+  /// §105 — показ «поддержи автора» при открытии HOME, когда пользователь
+  /// реально пользуется: app на переднем плане, туннель активен, текущая
+  /// сессия (`now − connectedSince`) ≥ `min_session_minutes` И суммарное
+  /// время ≥ `min_active_hours`. Вызывается из app-resume и из
+  /// `_onControllerChange` (тикает ~раз/сек при connected) — гейт ловит
+  /// момент, когда сессия дорастает до порога, пока экран открыт.
+  /// Терминальный (`_supportShown`) — один показ за процесс; fetch — однократ.
+  Future<void> _maybeShowSupport() async {
+    if (_supportShown || _supportInFlight || !mounted) return;
+    if (_lifecycle != AppLifecycleState.resumed) return;
     final since = _controller.state.connectedSince;
-    final seconds =
-        since == null ? 0 : DateTime.now().difference(since).inSeconds;
-    unawaited(maybeShowSupportDialog(context, sessionSeconds: seconds));
+    if (since == null) return; // туннель не активен — гейт «пользуется сейчас»
+    _supportInFlight = true;
+    try {
+      if (!_supportFetchTried) {
+        _supportFetchTried = true; // одна попытка fetch за процесс
+        _supportMsg = await SupportMessageService.I.fetchOrCached();
+      }
+      final m = _supportMsg;
+      if (m == null || !mounted) return;
+      final session = DateTime.now().difference(since).inSeconds;
+      final ok = await SupportMessageService.I
+          .shouldShow(m, currentSessionSeconds: session);
+      if (!ok || _supportShown || !mounted) return;
+      _supportShown = true;
+      await showSupportDialog(context, m);
+    } finally {
+      _supportInFlight = false;
+    }
   }
 
   /// §085 R3 — rebuild при изменении фильтров (NodeFilterViewModel notify).
