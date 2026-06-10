@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-—
+### Fixed
+
+- **§109 — Tunnel apps: установленные приложения помечались «uninstalled, auto-skipped»** ([task spec](docs/spec/tasks/109-tun-apps-false-uninstalled.md), [app_info_cache.dart](app/lib/services/app_info_cache.dart), [VpnPlugin.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt)). Таймаут (5s) и ошибка канала в `getAppInfo` кэшировались как «не установлено» без ретраев: при открытии таба запросы по всему списку стреляют разом, native отвечает по одному на main thread, и каждый ответ тащил PNG-encode иконки — на медленных устройствах с длинным списком хвост очереди стабильно помечался «удалённым» до перезапуска приложения (field report, 4PDA). Метка была косметической (в tun пакеты уходили корректно — `include_package` собирается из настроек, мимо этого кэша), но текст «auto-skipped» уводил диагностику в ложный след. Теперь: native явно различает «не установлено» (`NameNotFoundException` → `{"notFound": true}`) и сбой проверки (retryable error); сорвавшаяся проверка не кэшируется и ретраится (2s/5s/15s); иконка убрана из `getAppInfo` — метаданные мгновенные, иконка дотягивается отдельным `getAppIcon`; метка рисуется только при подтверждённом not-found. +9 тестов ([app_info_cache_test.dart](app/test/services/app_info_cache_test.dart), [box_vpn_client_test.dart](app/test/vpn/box_vpn_client_test.dart)).
 
 ## [2.0.2] — 2026-06-10
 
