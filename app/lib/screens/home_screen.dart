@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/home_state.dart';
+import '../services/app_log.dart';
+import '../services/error_humanize.dart';
 import '../services/version_info.dart';
 import 'home/widgets/traffic_bar.dart';
 import 'home/widgets/progress_banner.dart';
@@ -39,6 +41,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   late final HomeController _controller;
   late final SubscriptionController _subController;
   late final AutoUpdater _autoUpdater;
+
+  /// §101 — future от `_controller.init()`: bootstrap в
+  /// `_initSubsAndAutoUpdate` ждёт его вместо слепой задержки 100ms.
+  late final Future<void> _controllerInit;
   late final AnimationController _connectingAnim;
   final BoxVpnClient _vpn = BoxVpnClient();
   bool _autoRebuild = true;
@@ -113,7 +119,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       return c.fetchConnections();
     });
     unawaited(applyDebugApiSettings());
-    unawaited(_controller.init());
+    _controllerInit = _controller.init();
+    unawaited(_controllerInit);
     unawaited(_initSubsAndAutoUpdate());
     unawaited(_loadAutoRebuild());
     unawaited(_loadHapticPref());
@@ -250,24 +257,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// был мутирован через Debug API» / «kill во время editing → старый config».
   Future<void> _initSubsAndAutoUpdate() async {
     await _subController.init();
-    _autoUpdater.start();
 
-    // Wait one frame: HomeController.init() is also unawaited above; даём
-    // ему успеть прочитать существующий config (если был). После этого
-    // решаем: bootstrap нужен только если config реально пустой ИЛИ dirty.
-    await Future<void>.delayed(const Duration(milliseconds: 100));
-    if (!mounted) return;
-    final needBootstrap = _subController.entries.isNotEmpty &&
-        (_controller.state.configRaw.isEmpty || _subController.configDirty);
-    if (needBootstrap) {
-      final config = await _subController.generateConfig();
-      if (config != null && mounted) {
-        await _controller.saveParsedConfig(config);
-        // §076: rebuild успешен → флаг гаснет (in-memory; mtime теперь
-        // tied — saved config обновлён, settings file не изменился).
-        _subController.configDirty = false;
-        setState(() {});
+    // §101 — bootstrap обязан дождаться:
+    //   1. rehydrationDone — ноды подписок восстановлены из HTTP-кеша
+    //      (иначе соберём конфиг из nodes=[] и молча потеряем подписку);
+    //   2. _controllerInit — HomeController прочитал существующий config
+    //      (нужен для решения `configRaw.isEmpty`; раньше — delay 100ms).
+    try {
+      await Future.wait([_subController.rehydrationDone, _controllerInit]);
+      if (mounted) {
+        final needBootstrap = _subController.entries.isNotEmpty &&
+            (_controller.state.configRaw.isEmpty || _subController.configDirty);
+        if (needBootstrap) {
+          final config = await _subController.generateConfig();
+          if (config != null && mounted) {
+            await _controller.saveParsedConfig(config);
+            // §076: rebuild успешен → флаг гаснет (in-memory; mtime теперь
+            // tied — saved config обновлён, settings file не изменился).
+            _subController.configDirty = false;
+            setState(() {});
+          }
+        }
       }
+    } catch (e) {
+      // §101 review: throw из HomeController.init() (PlatformException из
+      // getVpnStatus и т.п.) или saveParsedConfig не должен убивать метод —
+      // ниже единственный call-site AutoUpdater.start() во всём app.
+      // Bootstrap скипается, работаем с прежним конфигом.
+      AppLog.I.error('Bootstrap skipped: ${humanizeError(e)}');
+    } finally {
+      // §101 — AutoUpdater после bootstrap'а: его appStart-fetch'и персистят
+      // настройки (mtime bump) и не должны попадать в окно сборки конфига.
+      // mounted-guard: после dispose (autoUpdater остановлен) не рестартуем.
+      if (mounted) _autoUpdater.start();
     }
   }
 

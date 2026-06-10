@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
@@ -49,6 +50,16 @@ class SubscriptionController extends ChangeNotifier {
 
   bool configDirty = false;
 
+  /// §101 — завершение стартового восстановления нод из HTTP-кеша.
+  /// Bootstrap-rebuild (home_screen) обязан дождаться, иначе соберёт конфиг
+  /// из подписок с ещё пустыми `nodes` и молча потеряет их outbounds.
+  final Completer<void> _rehydrated = Completer<void>();
+  Future<void> get rehydrationDone => _rehydrated.future;
+
+  /// §101 — test seam: подменный HTTP-клиент для `_fetchEntryByRef`.
+  @visibleForTesting
+  http.Client? httpClientForTesting;
+
   String _lastError = '';
   String get lastError => _lastError;
 
@@ -59,6 +70,18 @@ class SubscriptionController extends ChangeNotifier {
   String? get lastGeneratedConfig => _lastGeneratedConfig;
 
   Future<void> init() async {
+    try {
+      await _initBody();
+    } catch (_) {
+      // §101 review: если init упал ДО запуска rehydrate, completer не
+      // должен зависнуть навечно для сторонних awaiter'ов rehydrationDone
+      // (restore-flow вызывает init() повторно; тесты).
+      if (!_rehydrated.isCompleted) _rehydrated.complete();
+      rethrow;
+    }
+  }
+
+  Future<void> _initBody() async {
     final lists = await SettingsStorage.getServerLists();
     _entries = lists.map((l) => SubscriptionEntry(list: l)).toList();
     // §076: bootstrap mtime compare — restore in-memory configDirty после
@@ -92,31 +115,59 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   Future<void> _rehydrateFromCache() async {
-    for (var i = 0; i < _entries.length; i++) {
-      final list = _entries[i].list;
-      if (list is! SubscriptionServers) continue;
-      if (list.nodes.isNotEmpty) continue;
-      final body = await HttpCache.loadBody(list.url);
-      if (body == null || body.isEmpty) continue;
-      try {
-        final decoded = decode(body);
-        final nodes = parseAll(decoded);
-        if (nodes.isEmpty) continue;
-        final next = list.copyWith(nodes: nodes, lastNodeCount: nodes.length);
-        _entries[i]._replaceList(next);
-        final detours = nodes.where((n) => n.chained != null).length;
-        _entries[i].nodeCount = nodes.length;
-        _entries[i].status = detours > 0
-            ? '${nodes.length} +$detours⚙ nodes (cached)'
-            : '${nodes.length} nodes (cached)';
-        AppLog.I.info(
-            'Re-hydrated ${nodes.length} nodes from cache: ${maskSubscriptionUrl(list.url)}');
-      } catch (e) {
-        AppLog.I.warning(
-            'Re-hydrate failed for ${maskSubscriptionUrl(list.url)}: ${humanizeError(e)}');
+    try {
+      // §101 — обход по снапшоту ссылок (паттерн _fetchEntryByRef): между
+      // await'ами юзер может перетащить (§098 moveEntry) или удалить entry,
+      // запись по индексу затёрла бы list ЧУЖОЙ entry.
+      final entries = List<SubscriptionEntry>.of(_entries);
+      for (final entry in entries) {
+        final list = entry.list;
+        if (list is! SubscriptionServers) continue;
+        if (list.nodes.isNotEmpty) continue;
+        final body = await HttpCache.loadBody(list.url);
+        if (body == null || body.isEmpty) continue;
+        try {
+          final decoded = decode(body);
+          final nodes = parseAll(decoded);
+          if (nodes.isEmpty) {
+            // §101 — раньше скипали молча; UI-счётчик при этом показывает
+            // stale lastNodeCount. Логируем с подсказкой, что в кеше.
+            final hint = diagnoseEmptyParse(body);
+            AppLog.I.warning(
+                'Re-hydrate: cached body parsed to 0 nodes for '
+                '${maskSubscriptionUrl(list.url)}${hint != null ? ' — $hint' : ''}');
+            continue;
+          }
+          // §101 — guard после await'ов: entry могли удалить; list мог
+          // подменить конкурентный fetch или UI-сеттер (rename/enabled —
+          // они сохраняют nodes как есть). Применяем кеш только если у
+          // ТЕКУЩЕГО list по-прежнему нет нод, и копируем на него (не на
+          // устаревший снимок) — правки юзера не теряются.
+          if (!_entries.contains(entry)) continue;
+          final cur = entry.list;
+          if (cur is! SubscriptionServers ||
+              cur.url != list.url ||
+              cur.nodes.isNotEmpty) {
+            continue;
+          }
+          final next = cur.copyWith(nodes: nodes, lastNodeCount: nodes.length);
+          entry._replaceList(next);
+          final detours = nodes.where((n) => n.chained != null).length;
+          entry.nodeCount = nodes.length;
+          entry.status = detours > 0
+              ? '${nodes.length} +$detours⚙ nodes (cached)'
+              : '${nodes.length} nodes (cached)';
+          AppLog.I.info(
+              'Re-hydrated ${nodes.length} nodes from cache: ${maskSubscriptionUrl(list.url)}');
+        } catch (e) {
+          AppLog.I.warning(
+              'Re-hydrate failed for ${maskSubscriptionUrl(list.url)}: ${humanizeError(e)}');
+        }
       }
+      notifyListeners();
+    } finally {
+      if (!_rehydrated.isCompleted) _rehydrated.complete();
     }
-    notifyListeners();
   }
 
   /// §074 — add a fully-constructed UserServer (used by Add server wizard
@@ -463,34 +514,56 @@ class SubscriptionController extends ChangeNotifier {
       await _persist();
       notifyListeners();
 
-      final result = await parseFromSource(UrlSource(list.url));
-      // Кешируем сырое тело и заголовки на диск для офлайн-реактивации после
-      // перезапуска (см. `_rehydrateFromCache`) и для Source-вкладки (fallback).
-      unawaited(HttpCache.save(list.url, result.rawBody, result.headers));
+      final result = await parseFromSource(UrlSource(list.url),
+          client: httpClientForTesting);
       AppLog.I.info(
           'Fetched ${result.nodes.length} nodes from $shortUrl'
           '${result.meta?.profileTitle == null ? "" : " (title: ${result.meta!.profileTitle})"}');
+
+      // §101 (R4) — HTTP 200, но тело распарсилось в 0 нод (HTML-заглушка,
+      // DDoS-challenge, чужой формат). Это failure, не success: НЕ затираем
+      // рабочий кеш на диске и in-memory ноды последнего удачного fetch'а.
+      // Parse hint (night T3-3) диагностирует, что пришло вместо подписки.
+      if (result.nodes.isEmpty) {
+        final hint = diagnoseEmptyParse(result.rawBody);
+        if (hint != null) AppLog.I.warning('Parse hint: $hint');
+        AppLog.I.warning(
+            'Fetch returned 0 nodes for $shortUrl — keeping previous state');
+        entry.status = entry.nodeCount > 0
+            ? '${entry.nodeCount} nodes (update failed: 0 parsed)'
+            : (hint != null ? '0 nodes — $hint' : '0 nodes');
+        final current = entry.list as SubscriptionServers;
+        entry._replaceList(current.copyWith(
+          lastUpdateAttempt: attemptAt,
+          lastUpdateStatus: UpdateStatus.failed,
+          consecutiveFails: current.consecutiveFails + 1,
+        ));
+        try {
+          await _persist();
+        } catch (e) {
+          // §101 review: persist-фейл не должен уйти в общий catch — там
+          // consecutiveFails инкрементится повторно и haptic дублируется.
+          // In-memory состояние уже корректно; теряем только запись на диск.
+          AppLog.I.error(
+              'Persist failed after empty fetch: ${humanizeError(e)}');
+        }
+        if (trigger == UpdateTrigger.manual) HapticService.I.onFetchError();
+        notifyListeners();
+        return;
+      }
+
+      // Кешируем сырое тело и заголовки на диск для офлайн-реактивации после
+      // перезапуска (см. `_rehydrateFromCache`) и для Source-вкладки (fallback).
+      unawaited(HttpCache.save(list.url, result.rawBody, result.headers));
       final warnNodes = result.nodes.where((n) => n.warnings.isNotEmpty).length;
       if (warnNodes > 0) {
         AppLog.I.warning('$warnNodes nodes with warnings (XHTTP fallback etc.)');
       }
-      // Parse hint (night T3-3): 0 узлов при успешном HTTP → вероятно
-      // body не распознан. Диагностируем и логируем подсказку, чтобы юзер
-      // знал что делать (HTML / Clash YAML / error page / full config).
-      if (result.nodes.isEmpty) {
-        final hint = diagnoseEmptyParse(result.rawBody);
-        if (hint != null) AppLog.I.warning('Parse hint: $hint');
-      }
       entry.nodeCount = result.nodes.length;
       final detours = result.nodes.where((n) => n.chained != null).length;
-      if (result.nodes.isEmpty) {
-        final hint = diagnoseEmptyParse(result.rawBody);
-        entry.status = hint != null ? '0 nodes — $hint' : '0 nodes';
-      } else {
-        entry.status = detours > 0
-            ? '${result.nodes.length} +$detours⚙ nodes'
-            : '${result.nodes.length} nodes';
-      }
+      entry.status = detours > 0
+          ? '${result.nodes.length} +$detours⚙ nodes'
+          : '${result.nodes.length} nodes';
 
       final current = entry.list as SubscriptionServers;
       final nextName = current.name.isEmpty && result.meta?.profileTitle != null

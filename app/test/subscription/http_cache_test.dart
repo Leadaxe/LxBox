@@ -66,5 +66,15 @@ void main() {
       expect(await HttpCache.loadBody('http://x/'), 'v2');
       expect((await HttpCache.loadHeaders('http://x/'))!['v'], '2');
     });
+
+    test('§101 — save атомарен: .tmp-резидуалов не остаётся', () async {
+      await HttpCache.save('http://x/', 'body', {'h': 'v'});
+      final files = Directory('${tempDir.path}/sub_cache')
+          .listSync()
+          .map((f) => f.path)
+          .toList();
+      expect(files.where((p) => p.endsWith('.tmp')), isEmpty);
+      expect(await HttpCache.loadBody('http://x/'), 'body');
+    });
   });
 }

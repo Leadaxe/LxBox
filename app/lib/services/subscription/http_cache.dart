@@ -29,9 +29,21 @@ class HttpCache {
   ) async {
     final dir = await _dir();
     final key = _hash(url);
-    await File('${dir.path}/$key').writeAsString(body);
-    await File('${dir.path}/$key.headers')
-        .writeAsString(jsonEncode(headers));
+    // §101 — атомарно (tmp → rename): save вызывается unawaited, kill
+    // процесса mid-write не должен оставить обрезанное тело (rehydrate
+    // распарсит его в 0 нод при «живом» lastNodeCount).
+    await _writeAtomic('${dir.path}/$key', body);
+    await _writeAtomic('${dir.path}/$key.headers', jsonEncode(headers));
+  }
+
+  /// Монотонный суффикс tmp-файлов: конкурентные save одного URL не должны
+  /// красть tmp друг у друга (rename бросал бы PathNotFound в unawaited).
+  static int _tmpSeq = 0;
+
+  static Future<void> _writeAtomic(String path, String content) async {
+    final tmp = File('$path.${_tmpSeq++}.tmp');
+    await tmp.writeAsString(content, flush: true);
+    await tmp.rename(path);
   }
 
   static Future<String?> loadBody(String url) async {
