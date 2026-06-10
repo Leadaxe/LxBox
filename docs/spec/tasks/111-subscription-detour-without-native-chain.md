@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Done — код в working tree (develop), не закоммичен; установлено на тест-телефон (vc 2522), визуальная проверка за юзером |
+| Статус | Done — в develop, установлено на тест-телефон (vc 2522); визуальная проверка за юзером |
 | Дата старта | 2026-06-10 |
 | Дата завершения | 2026-06-10 |
-| Коммиты | — |
+| Коммиты | `9573f57` feat(§111): detour для подписок без родных detour-серверов |
 | Связанные spec'ы | [`018 detour server management`](../features/018%20detour%20server%20management/spec.md), [`026 parser v2`](../features/026%20parser%20v2/spec.md) §1.3/§3.4, [`073 append vs replace`](./073-detour-append-vs-replace.md), [`080`](./080-display-form-override-detour.md), [`096`](./096-register-toggles-in-append-mode.md) |
 
 ## Проблема
