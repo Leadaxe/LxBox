@@ -7,6 +7,7 @@ import '../controllers/subscription_controller.dart';
 import '../models/home_state.dart';
 import '../services/app_log.dart';
 import '../services/error_humanize.dart';
+import '../services/support/active_time_tracker.dart';
 import '../services/version_info.dart';
 import 'home/widgets/traffic_bar.dart';
 import 'home/widgets/progress_banner.dart';
@@ -138,6 +139,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       if (!mounted) return;
       unawaited(maybeShowNotificationPermissionDialog(context));
       unawaited(maybeShowBatteryOptimizationDialog(context, _vpn));
+      // §105 — «поддержи автора»: fetch + порог активного времени внутри.
+      unawaited(maybeShowSupportDialog(context));
     });
     // Update check (§036): hydrate cached "last known version" сразу,
     // network fetch — через 5 сек чтобы не мешать запуску VPN. Throttled
@@ -235,6 +238,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // + restore нового. ViewModel сам guard'ит no-op и notify'ит только при
     // реальной смене (→ _onFilterChanged → setState).
     _filter.syncChannel(state.selectedGroup);
+
+    // §105 — накопление активного времени туннеля (порог support-диалога).
+    // tick() дешёвый: пишет не чаще раза в минуту, сам решает когда.
+    final wasUp = _prevTunnel == TunnelStatus.connected;
+    final isUp = now == TunnelStatus.connected;
+    if (wasUp != isUp) {
+      unawaited(ActiveTimeTracker.I.onTunnelChanged(isUp));
+    } else if (isUp) {
+      unawaited(ActiveTimeTracker.I.tick());
+    }
 
     _prevTunnel = now;
     _prevError = nowError;

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../controllers/home_controller.dart';
 import '../../models/home_state.dart';
 import '../../services/settings_storage.dart';
+import '../../services/support/support_message.dart';
 import '../../services/update_checker.dart';
 import '../../services/url_launcher.dart' as ul;
 import '../../services/version_info.dart';
@@ -250,6 +251,58 @@ Future<void> showOemBatteryFollowupDialog(
             await vpn.openAppDetailsSettings();
           },
           child: const Text('Open Settings'),
+        ),
+      ],
+    ),
+  );
+}
+
+/// §105 — «поддержи автора»: показывается при открытии, когда суммарное
+/// время работы туннеля перевалило порог из remote-конфига
+/// (docs/support.json в репо). Кнопки-ссылки диалог НЕ закрывают (юзер
+/// может пройтись по нескольким); закрытие — «Позже» (повтор через
+/// +N часов активного времени) или «Не показывать» (навсегда для кампании).
+Future<void> maybeShowSupportDialog(BuildContext context) async {
+  final svc = SupportMessageService.I;
+  final m = await svc.fetchOrCached();
+  if (m == null) return;
+  if (!await svc.shouldShow(m)) return;
+  if (!context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog.adaptive(
+      title: Text(m.title),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(m.message),
+            const SizedBox(height: 16),
+            for (final (label, url) in m.links) ...[
+              FilledButton.tonal(
+                onPressed: () => ul.UrlLauncher.open(url),
+                child: Text(label),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () async {
+            Navigator.of(ctx).pop();
+            await svc.dismissForever(m);
+          },
+          child: const Text('Не показывать'),
+        ),
+        FilledButton(
+          onPressed: () async {
+            Navigator.of(ctx).pop();
+            await svc.snooze(m);
+          },
+          child: const Text('Позже'),
         ),
       ],
     ),
