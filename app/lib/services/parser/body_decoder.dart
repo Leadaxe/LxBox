@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'amnezia_link.dart';
 import 'uri_utils.dart';
 
 /// Результат декодирования тела подписки (§3.2 спеки 026).
@@ -19,6 +20,13 @@ final class IniConfig extends DecodedBody {
   const IniConfig(this.text);
 }
 
+/// §110 — Amnezia `vpn://`-ссылка: по одному WG/AWG INI-тексту на
+/// контейнер (см. `amnezia_link.dart`).
+final class AmneziaConfig extends DecodedBody {
+  final List<String> iniTexts;
+  const AmneziaConfig(this.iniTexts);
+}
+
 final class JsonConfig extends DecodedBody {
   final Object value;
   final JsonFlavor flavor;
@@ -36,6 +44,7 @@ enum JsonFlavor { xrayArray, singboxOutbound, clashYaml, unknown }
 /// Декодирует body подписки. Не throws.
 ///
 /// Алгоритм:
+/// 0. Начинается с `vpn://` → Amnezia-ссылка (§110, `decodeAmneziaLink`).
 /// 1. Пробуем base64 (все варианты). Успех + валидный UTF-8 → заменяем body.
 /// 2. Trim начинается с `{` / `[` → `jsonDecode` + определяем flavor.
 /// 3. Первая непустая строка `[Interface]` → IniConfig.
@@ -44,6 +53,12 @@ enum JsonFlavor { xrayArray, singboxOutbound, clashYaml, unknown }
 DecodedBody decode(String body) {
   final original = body.trimRight();
   if (original.isEmpty) return const DecodeFailure('empty body');
+
+  // Step 0: Amnezia vpn:// (§110). База64-эвристика ниже её не зацепит
+  // (`:` вне base64-алфавита), но явная ветка должна идти первой.
+  if (original.trimLeft().startsWith('vpn://')) {
+    return decodeAmneziaLink(original);
+  }
 
   // Step 1: base64 attempt. Только если body выглядит как base64 (буквы/+/=//).
   final trimmedNoWs = original.replaceAll(RegExp(r'\s+'), '');

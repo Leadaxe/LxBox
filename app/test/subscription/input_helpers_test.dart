@@ -46,8 +46,26 @@ void main() {
     test('https → false (subscription, not direct)', () {
       expect(isDirectLink('https://x/sub'), isFalse);
     });
+    test('vpn:// → false (Amnezia-контейнер, не direct link, §110)', () {
+      expect(isDirectLink('vpn://abc'), isFalse);
+    });
     test('trimmed leading space', () {
       expect(isDirectLink('   vmess://xxx'), isTrue);
+    });
+  });
+
+  group('isAmneziaVpnLink (§110)', () {
+    test('vpn://… → true', () {
+      expect(isAmneziaVpnLink('vpn://AAAA'), isTrue);
+    });
+    test('leading whitespace → trimmed', () {
+      expect(isAmneziaVpnLink('  vpn://AAAA '), isTrue);
+    });
+    test('vless:// → false', () {
+      expect(isAmneziaVpnLink('vless://u@h:443'), isFalse);
+    });
+    test('пустая строка → false', () {
+      expect(isAmneziaVpnLink(''), isFalse);
     });
   });
 

@@ -378,7 +378,13 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       ),
     );
     if (chosen == null) return;
-    setState(() => widget.entry.overrideDetour = chosen);
+    setState(() {
+      widget.entry.overrideDetour = chosen;
+      // §111: leftover useDetourServers=false (mode был None) молча гасит
+      // override в builder'е (server_list_build.dart:41 старше APPEND-ветки).
+      // Для полного UI идемпотентно — туда приходим только из mode=override.
+      if (chosen.isNotEmpty) widget.entry.useDetourServers = true;
+    });
     unawaited(widget.controller.persistSources());
   }
 

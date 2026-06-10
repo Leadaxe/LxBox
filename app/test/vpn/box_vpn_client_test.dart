@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/background_mode.dart';
@@ -70,6 +72,57 @@ void main() {
       final batt = await BoxVpnClient().isIgnoringBatteryOptimizations();
       expect(notif, isTrue);
       expect(batt, isFalse);
+    });
+  });
+
+  // §109 — контракт getAppInfo: null ТОЛЬКО при подтверждённом not-found;
+  // timeout/ошибка канала обязаны бросать, не маскироваться под null
+  // (регрессия: ложный «uninstalled, auto-skipped» на Tunnel apps).
+  group('BoxVpnClient.getAppInfo (§109)', () {
+    test('{notFound: true} → null (подтверждённый not-found)', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        return {'notFound': true};
+      });
+      final info = await BoxVpnClient().getAppInfo('com.gone.app');
+      expect(info, isNull);
+    });
+
+    test('metadata map → AppInfo (иконки в ответе больше нет)', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.arguments, equals({'packageName': 'ru.fourpda.client'}));
+        return {
+          'packageName': 'ru.fourpda.client',
+          'appName': '4PDA',
+          'isSystemApp': false,
+        };
+      });
+      final info = await BoxVpnClient().getAppInfo('ru.fourpda.client');
+      expect(info, isNotNull);
+      expect(info!.appName, '4PDA');
+      expect(info.isSystem, isFalse);
+      expect(info.icon, isNull);
+    });
+
+    test('timeout → TimeoutException, НЕ null', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        return {'notFound': true};
+      });
+      await expectLater(
+        BoxVpnClient().getAppInfo('com.slow.app',
+            timeout: const Duration(milliseconds: 20)),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+
+    test('PlatformException пробрасывается (retryable)', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        throw PlatformException(code: 'APP_INFO_ERROR', message: 'boom');
+      });
+      await expectLater(
+        BoxVpnClient().getAppInfo('com.any.app'),
+        throwsA(isA<PlatformException>()),
+      );
     });
   });
 }

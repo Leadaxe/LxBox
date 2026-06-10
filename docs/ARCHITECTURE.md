@@ -425,6 +425,7 @@ lazy_persist_mixin.dart      # LazyPersistMixin — отложенный persist
 ```
 parser/                      # Parser v2 (text → NodeSpec)
   body_decoder.dart          #   Layer-1: raw body → sealed DecodedBody (base64 sniff + JSON-flavor)
+  amnezia_link.dart          #   Amnezia vpn:// → WG/AWG INI-тексты (base64url+qCompress, §110)
   parse_all.dart             #   Layer-2: exhaustive switch DecodedBody → List<NodeSpec> (per-line null-skip)
   uri_parsers.dart           #   barrel + parseUri scheme-dispatcher
   uri_parsers/<proto>.dart   #   per-protocol URI→NodeSpec (vless/vmess/trojan/ss/hy2/naive/tuic/ssh/socks/wg)
@@ -947,7 +948,7 @@ Three Flutter-Android channels live в `VpnPlugin.kt`:
 | **Notifications** | setNotificationTitle | `title: String` | bool — кастомный foreground notification title |
 | **Per-app routing helpers** | getInstalledApps | — | List<Map> (`package` / `appName` / `isSystemApp`) — без icons (тяжело) |
 | | getAppIcon | `packageName: String` | String (base64 PNG) |
-| | getAppInfo | `packageName: String` | Map (name+icon+isSystem) \| null |
+| | getAppInfo | `packageName: String` | Map (name+isSystem, **без icon** — §109) \| `{notFound: true}` (подтверждённо не установлен) \| error (retryable) |
 | **System helpers** | isIgnoringBatteryOptimizations | — | bool |
 | | openBatteryOptimizationSettings | — | bool — primary `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` prompt; fallback на список apps для OEM где direct prompt молча отбрасывается (ColorOS / MIUI / HyperOS) |
 | | openAppDetailsSettings | — | bool |

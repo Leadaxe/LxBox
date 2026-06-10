@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../services/parser/body_decoder.dart';
 import '../../services/subscription/input_helpers.dart';
 
 /// Result of analyzing clipboard text before adding it as a server/sub.
@@ -34,6 +35,26 @@ ClipboardAnalysis analyzeClipboard(String text) {
       title: 'WireGuard config',
       subtitle: endpoint.isNotEmpty ? endpoint : '[Interface] + [Peer]',
     );
+  }
+  // §110 — Amnezia vpn://: декодим сразу, чтобы показать endpoint и число
+  // контейнеров. Битая ссылка → unknown (юзер увидит стандартный диалог).
+  if (isAmneziaVpnLink(text)) {
+    final decoded = decode(text);
+    if (decoded is AmneziaConfig) {
+      final endpoint = decoded.iniTexts.first
+          .split('\n')
+          .where((l) => l.trim().toLowerCase().startsWith('endpoint'))
+          .map((l) => l.split('=').last.trim())
+          .firstOrNull ?? '';
+      final n = decoded.iniTexts.length;
+      return ClipboardAnalysis(
+        type: 'amnezia_vpn',
+        title: 'Amnezia VPN config',
+        subtitle: '${endpoint.isNotEmpty ? endpoint : "WG/AWG"}'
+            '${n > 1 ? " × $n" : ""}',
+      );
+    }
+    return ClipboardAnalysis(type: 'unknown', title: 'Unknown', subtitle: '');
   }
   if (isDirectLink(text)) {
     final uri = Uri.tryParse(text);

@@ -251,8 +251,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(encodeAppIcon(pkg))
             }
             "getAppInfo" -> {
-                // Combined: name + icon + isSystem в одном round-trip'е, для
-                // stats-экрана где нужно и то и другое.
+                // §109: metadata-only — иконку НЕ тащим (PNG-encode на main
+                // thread сериализовал очередь и выбивал Dart-side timeout на
+                // длинных списках; иконка грузится отдельно через getAppIcon).
+                // Контракт ответа:
+                //   {packageName, appName, isSystemApp} — установлен
+                //   {"notFound": true}  — подтверждённо не установлен
+                //   result.error(...)   — проверить не удалось, Dart считает
+                //                         retryable (НЕ «не установлен»)
                 val pkg = call.argument<String>("packageName") ?: ""
                 val pm = context.packageManager
                 try {
@@ -262,12 +268,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                         "packageName" to pkg,
                         "appName" to (pm.getApplicationLabel(info)?.toString() ?: pkg),
                         "isSystemApp" to isSystem,
-                        "icon" to encodeAppIcon(pkg),
                     ))
-                } catch (_: Exception) {
-                    // Package uninstalled / not found — возвращаем null, Dart
-                    // сторона покажет placeholder с именем = packageName.
-                    result.success(null)
+                } catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+                    result.success(mapOf("notFound" to true))
+                } catch (e: Exception) {
+                    result.error("APP_INFO_ERROR", e.message, null)
                 }
             }
             "isIgnoringBatteryOptimizations" -> {

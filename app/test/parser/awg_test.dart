@@ -214,4 +214,102 @@ void main() {
       expect(spec.awg!.fields['i1'], i1);
     });
   });
+
+  group('§112 — ranged magic headers (h1–h4 как N-M)', () {
+    const base = 'wireguard://P@h:51820?publickey=K&address=10.0.0.2/32';
+
+    test('URI: h1=N-M → String, одиночный h2 → int', () {
+      final awg =
+          parseWireguardUri('$base&h1=43613244-384550127&h2=826869626')!.awg!;
+      expect(awg.fields['h1'], '43613244-384550127');
+      expect(awg.fields['h1'], isA<String>());
+      expect(awg.fields['h2'], 826869626);
+      expect(awg.fields['h2'], isA<int>());
+    });
+
+    test('битые формы (10-, a-b, -5, 1-2-3) → drop, парс не падает', () {
+      final awg = parseWireguardUri(
+          '$base&h1=10-&h2=a-b&h3=-5&h4=1-2-3&jc=4')!.awg!;
+      expect(awg.fields.keys.where(Awg.headerKeys.contains), isEmpty);
+      expect(awg.fields['jc'], 4);
+    });
+
+    test('JSON endpoint: h1 строкой N-M, h2 числом, h3="5" → int 5', () {
+      final spec = parseSingboxEntry({
+        'type': 'wireguard',
+        'tag': 'awg',
+        'private_key': 'PRIV',
+        'address': ['10.0.0.2/32'],
+        'h1': '43613244-384550127',
+        'h2': 826869626,
+        'h3': '5',
+        'peers': [
+          {
+            'address': 'host',
+            'port': 51821,
+            'public_key': 'PUB',
+            'allowed_ips': ['0.0.0.0/0'],
+          }
+        ],
+      }) as WireguardSpec;
+      expect(spec.awg!.fields['h1'], '43613244-384550127');
+      expect(spec.awg!.fields['h2'], 826869626);
+      expect(spec.awg!.fields['h3'], 5); // нормализация строки-числа
+      expect(spec.awg!.fields['h3'], isA<int>());
+    });
+
+    test('emit: диапазон → JSON string, одиночное → number', () {
+      final spec = parseWireguardUri('$base&h1=10-20&h2=30')!;
+      final json = jsonEncode(spec.emit(TemplateVars.empty).map);
+      expect(json, contains('"h1":"10-20"'));
+      expect(json, contains('"h2":30'));
+      expect(json, isNot(contains('"h2":"30"')));
+    });
+
+    test('round-trip share-URI с диапазоном', () {
+      final s1 = parseWireguardUri('$base&h1=10-20&h2=30&jc=4')!;
+      final s2 = parseWireguardUri(s1.toUri())!;
+      expect(s2.awg!.fields, s1.awg!.fields);
+      expect(s2.awg!.fields['h1'], '10-20');
+    });
+
+    test('INI реального awg2-экспорта (ranged H + S3/S4 + CPS I1) end-to-end',
+        () {
+      const conf = '[Interface]\n'
+          'Address = 10.8.1.25/32\n'
+          'DNS = 172.29.172.254, 1.0.0.1\n'
+          'PrivateKey = PRIV\n'
+          'Jc = 5\n'
+          'Jmin = 10\n'
+          'Jmax = 50\n'
+          'S1 = 28\n'
+          'S2 = 121\n'
+          'S3 = 25\n'
+          'S4 = 9\n'
+          'H1 = 43613244-384550127\n'
+          'H2 = 826869626-2105069164\n'
+          'H3 = 2124774725-2141151992\n'
+          'H4 = 2144594503-2146278491\n'
+          'I1 = <b 0x084481800001>\n'
+          'I2 = \n'
+          '[Peer]\n'
+          'PublicKey = PUB\n'
+          'PresharedKey = PSK\n'
+          'AllowedIPs = 0.0.0.0/0, ::/0\n'
+          'Endpoint = 64.188.69.128:44733\n'
+          'PersistentKeepalive = 25\n';
+      final spec = parseWireguardIni(conf)!;
+      final f = spec.awg!.fields;
+      expect(f['h1'], '43613244-384550127');
+      expect(f['h4'], '2144594503-2146278491');
+      expect(f['jc'], 5);
+      expect(f['s4'], 9);
+      expect(f['i1'], '<b 0x084481800001>');
+      expect(f.containsKey('i2'), false);
+      expect(spec.mtu, 1280);
+      final map = spec.emit(TemplateVars.empty).map;
+      expect(map['h1'], '43613244-384550127');
+      expect(map['s3'], 25);
+    });
+  });
 }

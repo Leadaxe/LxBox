@@ -28,3 +28,7 @@ bool isWireGuardConfig(String input) {
   final t = input.trim();
   return t.contains('[Interface]') && t.contains('[Peer]');
 }
+
+/// §110 — Amnezia `vpn://`-ссылка (контейнерный экспорт Amnezia/awg2).
+/// Не direct link: внутри не одноузловой URI, а base64-контейнер.
+bool isAmneziaVpnLink(String input) => input.trim().startsWith('vpn://');

@@ -15,6 +15,9 @@ List<NodeSpec> parseAll(DecodedBody decoded) {
     IniConfig(text: final t) => [
         parseWireguardIni(t),
       ].whereType<NodeSpec>().toList(),
+    // §110 — Amnezia vpn://: каждый контейнер → INI → нода (null-skip).
+    AmneziaConfig(iniTexts: final ts) =>
+      ts.map(parseWireguardIni).whereType<NodeSpec>().toList(),
     JsonConfig() => _parseJson(decoded),
     DecodeFailure() => const <NodeSpec>[],
   };
