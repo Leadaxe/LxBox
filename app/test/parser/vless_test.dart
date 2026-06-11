@@ -36,6 +36,17 @@ void main() {
         'xtls-rprx-vision',
       );
     });
+    test('литеральный flow=none в ссылке → flow не эмитится (не мусор в ядро)',
+        () {
+      expect(emittedFlow('vless://u@h:443?type=tcp&flow=none&$reality#L'),
+          isNull);
+    });
+    test('deprecated flow=xtls-rprx-direct → flow не эмитится', () {
+      expect(
+          emittedFlow(
+              'vless://u@h:443?type=tcp&flow=xtls-rprx-direct&$reality#L'),
+          isNull);
+    });
   });
 
   group('VLESS Reality + flow', () {
