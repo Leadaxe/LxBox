@@ -19,12 +19,12 @@ final class UrlSource extends SubscriptionSource {
   final String url;
 
   /// Кастомный UA. `null` (дефолт) → `_fetch` резолвит брендированный
-  /// `LxBox-android/<ver> (sing-box/<core>; ...)` (см. [user_agent.dart]).
+  /// `LxBox-android/<ver> (android <sdk> <abi>)` (см. [user_agent.dart]).
   ///
-  /// Некоторые провайдеры выбирают формат тела по UA: Clash-клиентам отдают
-  /// YAML, опознанному sing-box-клиенту — base64 URI-list (который ест парсер
-  /// v2). Брендированный UA с токеном `sing-box/<core>` и без голого `singbox`
-  /// гарантирует правильную маршрутизацию у Remnawave/Marzban-панелей.
+  /// Некоторые провайдеры выбирают формат тела по UA: неопознанному клиенту
+  /// отдают JSON-конфиг/заглушку, опознанному — base64 URI-list (который ест
+  /// парсер v2). Бренд-токен `LxBox-android` опознаётся панелями
+  /// (Remnawave/Marzban); голого `singbox` в UA нет.
   final String? userAgent;
   final Duration timeout;
   const UrlSource(
@@ -135,7 +135,7 @@ Future<FetchResult> fetchRaw(SubscriptionSource source,
 Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async {
   switch (source) {
     case UrlSource(url: final u, userAgent: final ua, timeout: final t):
-      // null → брендированный UA с токеном sing-box (см. user_agent.dart).
+      // null → брендированный LxBox-android UA (см. user_agent.dart).
       final effectiveUa = ua ?? await resolveSubscriptionUserAgent();
       // 3 попытки с exp backoff (1s, 3s) — worst case ~31s (9+1+9+3+9).
       // Retry нужен для transient'ов мобильной сети (DNS fail, RST сразу

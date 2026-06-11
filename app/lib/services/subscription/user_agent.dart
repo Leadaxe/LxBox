@@ -2,59 +2,55 @@ import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
 
-import '../../vpn/box_vpn_client.dart';
 import '../version_info.dart';
 
 /// User-Agent, отправляемый на каждый HTTP-fetch подписки.
 ///
 /// **Зачем это важно.** Часть subscription-панелей (Remnawave / Marzban-типа)
 /// маршрутизирует тело ответа по подстроке в User-Agent: клиента, опознанного
-/// как sing-box, кормят base64/URI-списком, который парсер v2 умеет ингестить;
-/// неопознанному клиенту панель может отдать полный sing-box JSON-конфиг
-/// (`{dns,route,inbounds,outbounds,...}`) или generic-заглушку — такой формат
-/// парсер не переваривает, и добавление подписки падает.
+/// как наш лаунчер, кормят base64/URI-списком, который парсер v2 умеет
+/// ингестить; неопознанному клиенту панель может отдать полный sing-box
+/// JSON-конфиг (`{dns,route,inbounds,outbounds,...}`) или generic-заглушку —
+/// такой формат парсер не переваривает, и добавление подписки падает.
 ///
 /// Эмпирически (боевая панель `sub.vern13.ru`): UA с голым `singbox` (без
-/// дефиса) → JSON-объект; UA с `sing-box` (с дефисом) или `LxBox` → base64.
+/// дефиса) → JSON-объект; UA с подстрокой `LxBox` → base64 URI-list. Поэтому
+/// бренд-токен `LxBox-android` сам по себе достаточен для распознавания —
+/// токен `sing-box` сознательно НЕ включаем (см. таск 114).
 ///
-/// Поэтому UA обязан держать инварианты — зеркалят десктоп `LxBox-desktop`
-/// (singbox-launcher `core/config/configtypes`, коммит 18aaafd):
-///   1. бренд-токен начинается с `LxBox-android/` — продуктовая марка,
-///      суффикс `-android` отличает от десктопной сборки;
-///   2. присутствует токен `sing-box/<core>` — по нему панели опознают
-///      настоящий sing-box-клиент;
-///   3. НЕТ голой подстроки `singbox` (без дефиса) — именно она триггерит
+/// Инварианты:
+///   1. бренд-токен начинается с `LxBox-android/` — по нему панель опознаёт
+///      клиента и отдаёт base64/URI-list; суффикс `-android` отличает от
+///      десктопной сборки `LxBox-desktop`;
+///   2. голой подстроки `singbox` (без дефиса) нет нигде — именно она триггерит
 ///      неправильную маршрутизацию (см. regression-тест в
 ///      `test/subscription/user_agent_test.dart`).
 ///
-/// Формат (зеркалит десктоп `LxBox-desktop/<ver> (sing-box/<core>; <os> <arch>)`):
+/// Формат:
 ///
 /// ```
-/// LxBox-android/<appVersion> (sing-box/<coreVersion>; android <sdk> <abi>)
+/// LxBox-android/<appVersion> (android <sdk> <abi>)
 /// ```
 ///
-/// например `LxBox-android/2.0.4 (sing-box/1.13.13-lx.6; android 34 arm64-v8a)`.
+/// например `LxBox-android/2.0.4 (android 34 arm64-v8a)`.
 
 const _kProductToken = 'LxBox-android';
 
-/// Чистая функция-конструктор UA. Подставляет значения и гарантирует все три
-/// инварианта независимо от мусора на входе. Вынесена отдельно ради
+/// Чистая функция-конструктор UA. Подставляет значения и гарантирует
+/// инварианты независимо от мусора на входе. Вынесена отдельно ради
 /// regression-теста и переиспользования резолвером ниже.
 String buildSubscriptionUserAgent({
   required String appVersion,
-  required String coreVersion,
   String platform = 'android',
 }) {
   final ver = _sanitizeToken(appVersion, fallback: 'unknown');
-  final core = _sanitizeToken(coreVersion, fallback: 'unknown');
   final plat = platform.trim().isEmpty ? 'android' : platform.trim();
-  return '$_kProductToken/$ver (sing-box/$core; $plat)';
+  return '$_kProductToken/$ver ($plat)';
 }
 
-/// Срезает ведущий `v` (`libbox.version` = `v1.13.13-lx.6`) и символы, которые
-/// сломали бы структуру UA-комментария (скобки / точка-с-запятой / пробелы).
-/// На пустом результате — [fallback], чтобы инварианты держались даже на
-/// недоступных runtime-источниках.
+/// Срезает ведущий `v` и символы, которые сломали бы структуру UA-комментария
+/// (скобки / точка-с-запятой / пробелы). На пустом результате — [fallback],
+/// чтобы инварианты держались даже на недоступных runtime-источниках.
 String _sanitizeToken(String raw, {required String fallback}) {
   var s = raw.trim();
   if (s.startsWith('v')) s = s.substring(1);
@@ -65,36 +61,25 @@ String _sanitizeToken(String raw, {required String fallback}) {
 String? _cachedUa;
 
 /// Резолвит UA из runtime-источников: версия приложения — [VersionInfo],
-/// версия ядра — `Libbox.version()` через [BoxVpnClient], SDK/ABI —
-/// `device_info_plus`. Тяжёлые вызовы кешируются: версия/ядро/устройство в
-/// рамках процесса не меняются.
-///
-/// Если ядро ещё не подняло method-channel (core == '', ранний старт или
-/// тестовое окружение), результат **не** кешируется — следующий fetch получит
-/// настоящую core-версию. Все источники best-effort: их недоступность даёт
-/// `unknown`-токены, но инварианты UA сохраняются.
+/// SDK/ABI — `device_info_plus`. Кешируется: версия/устройство в рамках
+/// процесса не меняются. Пока версия не инициализирована
+/// (`VersionInfo.init()` ещё не отработал — ранний старт / тесты), результат
+/// **не** кешируется. Источники best-effort: их недоступность даёт
+/// `unknown`/`android`-токены, но инварианты UA сохраняются.
 Future<String> resolveSubscriptionUserAgent() async {
   final cached = _cachedUa;
   if (cached != null) return cached;
 
   final appVersion = VersionInfo.I.version;
-
-  var core = '';
-  try {
-    core = await BoxVpnClient().getCoreVersion();
-  } catch (_) {
-    // method-channel недоступен (ранний старт / тесты) — fallback в билдере.
-  }
-
   final platform = await _platformToken();
 
   final ua = buildSubscriptionUserAgent(
     appVersion: appVersion,
-    coreVersion: core,
     platform: platform,
   );
 
-  if (core.trim().isNotEmpty) _cachedUa = ua; // не кешируем degraded core
+  // '0.0.0' — дефолт до VersionInfo.init(); не кешируем degraded версию.
+  if (appVersion != '0.0.0') _cachedUa = ua;
   return ua;
 }
 
