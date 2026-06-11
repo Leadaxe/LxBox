@@ -51,8 +51,19 @@ class ConfigDirtyCheck {
     final c = await configModifiedTime();
     if (s == null) return false; // fresh install / no settings
     if (c == null) return true; // settings есть, config нет
-    return s.isAfter(c);
+    // §113 — сравнение с СЕКУНДНОЙ резолюцией. `setLastModified`
+    // (touchConfig после чистой записи) усекает mtime до целой секунды, а
+    // `stat().modified` натуральной записи настроек хранит суб-секунду —
+    // прямой `isAfter` ловил бы эту разницу как ложное «грязно». Флор обоих
+    // до секунды: правка в одной секунде с последней чистой записью → equal
+    // → чисто; реальное изменение (≥ следующая секунда) → грязно.
+    return _floorToSecond(s).isAfter(_floorToSecond(c));
   }
+
+  static DateTime _floorToSecond(DateTime t) =>
+      DateTime.fromMillisecondsSinceEpoch(
+          (t.millisecondsSinceEpoch ~/ 1000) * 1000,
+          isUtc: t.isUtc);
 
   static Future<DateTime?> _mtimeOf(String fileName) async {
     try {
@@ -64,6 +75,34 @@ class ConfigDirtyCheck {
     } catch (_) {
       // path_provider unavailable / IO error → treat as null (clean state).
       return null;
+    }
+  }
+
+  /// §113 — выровнять mtime config-файла **к mtime файла настроек**, чтобы
+  /// bootstrap mtime-compare ([isDirty], строгий `isAfter`) не дал ложного
+  /// «грязно». Зовётся из `SettingsStorage._save()` после записи настроек,
+  /// когда `configDirty` снят (конфиг уже в синхроне — либо пересобран, либо
+  /// правка была не config-значимой).
+  ///
+  /// Важно: выравниваем именно к mtime настроек, **не** к `now()`.
+  /// `FileStat.modified` имеет секундную резолюцию — `now()` после записи
+  /// попадает в ту же секунду, но граница округления плавает и может дать
+  /// `config < settings`. Точное равенство → `isAfter` = false, а следующая
+  /// грязная запись (без touch) честно уходит вперёд.
+  ///
+  /// No-op если config-файла ещё нет (VPN ни разу не стартовал → `isDirty`
+  /// честно вернёт true) или файла настроек нет. Не throws.
+  static Future<void> touchConfig() async {
+    try {
+      final settingsMtime = await settingsModifiedTime();
+      if (settingsMtime == null) return;
+      final dir = await getApplicationDocumentsDirectory();
+      final f = File('${dir.path}/$_singboxConfigFileName');
+      if (await f.exists()) {
+        await f.setLastModified(settingsMtime);
+      }
+    } catch (_) {
+      // path_provider / IO error — touch best-effort, не критично.
     }
   }
 }

@@ -80,6 +80,7 @@ Future<void> _setTunApps(TunAppsConfig cfg, {bool flush = true}) async {
     'packages': dedup.toList()..sort(),
   };
   SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
   if (flush) await _save();
 }
 

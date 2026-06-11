@@ -48,7 +48,11 @@ class SubscriptionController extends ChangeNotifier {
   bool _busy = false;
   bool get busy => _busy;
 
-  bool configDirty = false;
+  /// §113 — флаг живёт в `SettingsStorage` (объект, где меняются настройки):
+  /// config-значимые сейверы сами его поднимают. Здесь — делегат, чтобы все
+  /// существующие read/write-сайты (home, debug, bootstrap) не менялись.
+  bool get configDirty => SettingsStorage.configDirty;
+  set configDirty(bool v) => SettingsStorage.configDirty = v;
 
   /// §101 — завершение стартового восстановления нод из HTTP-кеша.
   /// Bootstrap-rebuild (home_screen) обязан дождаться, иначе соберёт конфиг

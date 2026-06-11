@@ -10,6 +10,12 @@
 
 —
 
+## [2.0.4] — 2026-06-11
+
+### Fixed
+
+- **§113 — Ложный баннер «config changed» после kill приложения** ([task spec](docs/spec/tasks/113-false-config-changed-banner.md), [settings_storage.dart](app/lib/services/settings_storage.dart), [config_dirty_check.dart](app/lib/services/config_dirty_check.dart)). Field report (4PDA): правишь Tunnel apps, смахиваешь приложение из recents, запускаешь — вверху красный «config changed, restart VPN», хотя ничего не менялось. Причина: §107 инвертировал порядок дисковых записей (конфиг пишется на возврате к home, настройки — позже на `dispose`), из-за чего `settings.mtime > config.mtime` стало нормой после **любой** правки — а bootstrap mtime-compare читал это как «грязно». Пока процесс жив, флаг в памяти снят пересборкой; swipe убивает процесс → флаг передеривается из mtime и врёт. Фикс двойной: (а) `configDirty` переехал в `SettingsStorage` (объект, где меняются настройки) — config-значимые сейверы сами поднимают флаг, «поменять настройку, не пометив» стало структурно невозможно; (б) при записи настроек со снятым флагом `_save` выравнивает mtime конфига к mtime настроек (`touchConfig`), сравнение mtime — с секундной резолюцией. Без диффа содержимого (сознательно — чтобы аномалии были видны). Не затрагивает реальные правки (баннер показывается как было). +6 тестов [config_dirty_flag_test.dart](app/test/services/config_dirty_flag_test.dart).
+
 ## [2.0.3] — 2026-06-11
 
 ### Added

@@ -146,6 +146,14 @@ Future<void> _save() async {
       _atomicSave(data, main: main, bak: bak, tmp: tmp);
   await SettingsStorage._pendingSave;
   SettingsStorage._pendingSave = null;
+
+  // §113 — настройки записаны; если конфиг НЕ помечен грязным, выровнять его
+  // mtime, чтобы bootstrap mtime-compare не дал ложного «config changed»
+  // после kill. dirty=true (свёрнут посреди config-правки, пересборки ещё не
+  // было) → не трогаем: конфиг честно устарел, следующий старт пересоберёт.
+  if (!SettingsStorage.configDirty) {
+    await ConfigDirtyCheck.touchConfig();
+  }
 }
 
 Future<void> _atomicSave(

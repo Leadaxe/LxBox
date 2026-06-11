@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/custom_rule.dart';
 import '../models/server_list.dart';
 import 'app_log.dart';
+import 'config_dirty_check.dart';
 import 'migration/proxy_source_migration.dart';
 
 part 'settings_storage/io.dart';
@@ -39,6 +40,44 @@ class SettingsStorage {
   static Map<String, dynamic>? _cache;
   static Future<void>? _pendingSave;
 
+  // ---------------------------------------------------------------------------
+  // §113 — config-dirty флаг живёт здесь (в объекте, где меняются настройки),
+  // а не на SubscriptionController. `configDirty` контроллера — делегат сюда,
+  // так что все существующие read/write-сайты работают без правок.
+  //
+  // Поднимается автоматически config-значимыми сейверами (`markConfigDirty`):
+  // типизированные сейверы целиком, `setVar` — только для config-vars из
+  // [_configVarKeys]. Снимается успешной пересборкой (контроллер ставит
+  // `configDirty = false`). При снятом флаге `_save()` выравнивает mtime
+  // конфига (`ConfigDirtyCheck.touchConfig`) — см. §113 spec.
+  // ---------------------------------------------------------------------------
+  /// Текущее значение config-dirty (sync). Читают home/контроллер/debug;
+  /// пересборка ставит false; bootstrap mtime-compare и узловые правки — true.
+  /// Config-значимые сейверы поднимают его через [markConfigDirty].
+  static bool configDirty = false;
+
+  /// Помечает конфиг грязным. Зовётся из config-значимых сейверов.
+  static void markConfigDirty() => configDirty = true;
+
+  /// §113 — template-`@var`, реально подставляемые в `config`
+  /// (`wizard_template.json`), минус машинно-генерируемые `clash_api`/
+  /// `clash_secret` (выходы сборки, не пользовательский ввод). Запись любого
+  /// из этих var через `setVar` → авто-dirty.
+  static const _configVarKeys = <String>{
+    'auto_detect_interface',
+    'dns_default_domain_resolver',
+    'dns_final',
+    'dns_strategy',
+    'log_level',
+    'resolve_strategy',
+    'tun_address',
+    'tun_auto_route',
+    'tun_mtu',
+    'tun_name',
+    'tun_stack',
+    'tun_strict_route',
+  };
+
   /// §072 — sticky флаг что main файл был повреждён и .bak не помог.
   /// Используется чтобы:
   ///   (а) логировать факт повреждения ровно один раз за сессию (см.
@@ -59,6 +98,7 @@ class SettingsStorage {
     _pendingSave = null;
     _mainIsCorrupted = false;
     _corruptionLogged = false;
+    configDirty = false; // §113
   }
 
   /// §072 — true если последний `_load()` обнаружил битый main и не смог
