@@ -17,6 +17,11 @@ Future<void> _setVar(String name, String value, {bool flush = true}) async {
   vars[name] = value;
   data['vars'] = vars;
   SettingsStorage._cache = data;
+  // §113 — config-var → конфиг устарел. Прочие var (сортировка, таймстемпы
+  // обновлений, wifi_history) флаг не поднимают.
+  if (SettingsStorage._configVarKeys.contains(name)) {
+    SettingsStorage.markConfigDirty();
+  }
   if (flush) await _save();
 }
 

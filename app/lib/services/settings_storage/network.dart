@@ -19,6 +19,7 @@ Future<void> _saveRouteFinal(String outbound, {bool flush = true}) async {
   final data = await _load();
   data['route_final'] = outbound;
   SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
   if (flush) await _save();
 }
 
@@ -33,6 +34,7 @@ Future<void> _saveExcludedNodes(Set<String> excluded) async {
   final data = await _load();
   data['excluded_nodes'] = excluded.toList();
   SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
   await _save();
 }
 
@@ -52,6 +54,7 @@ Future<void> _saveDnsServers(List<Map<String, dynamic>> servers,
   dns['servers'] = servers;
   data['dns_options'] = dns;
   SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
   if (flush) await _save();
 }
 
@@ -140,6 +143,7 @@ Future<void> _saveDnsRules(String rulesJson) async {
   dns['rules_json'] = rulesJson;
   data['dns_options'] = dns;
   SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
   await _save();
 }
 
@@ -159,5 +163,6 @@ Future<void> _saveDnsRulesList(List<Map<String, dynamic>> rules,
   dns['rules'] = rules;
   data['dns_options'] = dns;
   SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
   if (flush) await _save();
 }

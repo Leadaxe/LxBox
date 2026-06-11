@@ -57,6 +57,7 @@ Future<void> _saveEnabledRules(Set<String> rules) async {
   final data = await _load();
   data['enabled_rules'] = rules.toList();
   SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
   await _save();
 }
 
@@ -75,6 +76,7 @@ Future<void> _saveEnabledGroups(Set<String> groups,
   final data = await _load();
   data['enabled_groups'] = groups.toList();
   SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
   if (flush) await _save();
 }
 
@@ -132,6 +134,7 @@ Future<void> _saveRuleOutbounds(Map<String, String> outbounds) async {
   final data = await _load();
   data['rule_outbounds'] = outbounds;
   SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
   await _save();
 }
 
@@ -189,6 +192,7 @@ Future<void> _saveCustomRules(List<CustomRule> rules,
   final data = await _load();
   data['custom_rules'] = rules.map((r) => r.toJson()).toList();
   SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
   if (flush) await _save();
 }
 
