@@ -46,5 +46,34 @@ void main() {
       expect(v.uuid, '11111111-2222-3333-4444-555555555555');
       expect(v.tls.reality?.publicKey, isNotEmpty);
     });
+
+    test('§115: Xray REALITY+tcp без flow → flow ПУСТОЙ (не навязываем)', () {
+      final spec = parseXrayOutbound({
+        'outbounds': [
+          {
+            'tag': 'proxy',
+            'protocol': 'vless',
+            'settings': {
+              'vnext': [
+                {
+                  'address': 'h.example',
+                  'port': 443,
+                  'users': [
+                    {'id': '11111111-2222-3333-4444-555555555555'}
+                  ],
+                }
+              ],
+            },
+            'streamSettings': {
+              'network': 'tcp',
+              'security': 'reality',
+              'realitySettings': {'publicKey': 'PK', 'shortId': 'abcd'},
+            },
+          }
+        ],
+      }) as VlessSpec;
+      expect(spec.flow, '', reason: 'REALITY+tcp без flow → не vision');
+      expect(spec.tls.reality?.publicKey, isNotEmpty);
+    });
   });
 }

@@ -7,15 +7,43 @@ import 'package:lxbox/services/parser/uri_utils.dart';
 
 void main() {
   group('VLESS Reality + flow', () {
-    test('reality with pbk auto-sets flow when no transport', () {
+    test('§115: REALITY+bare TCP без flow → flow ПУСТОЙ (honor ссылку)', () {
+      // Раньше навязывали xtls-rprx-vision → ломались валидные none-сетапы
+      // (x3-ui flow: none). Теперь flow берём из ссылки как есть.
       final spec = parseVless(
         'vless://u@h:443?type=tcp&security=reality&pbk=PK&sid=ABCD&sni=w.example.com&fp=chrome#L',
       );
       expect(spec, isNotNull);
-      expect(spec!.flow, 'xtls-rprx-vision');
+      expect(spec!.flow, '', reason: 'flow не навязывается');
       expect(spec.tls.reality?.publicKey, 'PK');
       expect(spec.tls.reality?.shortId, 'abcd');
       expect(spec.tls.fingerprint, 'chrome');
+    });
+
+    test('§115: явный flow=vision на bare TCP → сохраняется', () {
+      final spec = parseVless(
+        'vless://u@h:443?type=tcp&security=reality&flow=xtls-rprx-vision&pbk=PK&sid=ABCD#L',
+      );
+      expect(spec!.flow, 'xtls-rprx-vision');
+      expect(spec.transport, isNull);
+    });
+
+    test('§115: vision + транспорт (ws) → flow погашен + warning', () {
+      final spec = parseVless(
+        'vless://u@h:443?type=ws&path=/x&security=tls&flow=xtls-rprx-vision#L',
+      );
+      expect(spec!.flow, '', reason: 'vision несовместим с транспортом');
+      expect(spec.transport, isA<WsTransport>());
+      expect(spec.warnings.whereType<VisionWithTransportWarning>(), isNotEmpty);
+    });
+
+    test('§115: vision + xhttp → flow погашен (XHTTP+Vision protocol limit)',
+        () {
+      final spec = parseVless(
+        'vless://u@h:443?type=xhttp&host=cdn.example&security=reality&pbk=PK&flow=xtls-rprx-vision#L',
+      );
+      expect(spec!.flow, '');
+      expect(spec.warnings.whereType<VisionWithTransportWarning>(), isNotEmpty);
     });
 
     test('flow=xtls-rprx-vision-udp443 → vision + xudp packet encoding', () {

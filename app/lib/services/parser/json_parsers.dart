@@ -1,4 +1,5 @@
 import '../../models/node_spec.dart';
+import '../../models/node_warning.dart';
 import '../../models/tls_spec.dart';
 import '../../models/transport_spec.dart';
 import 'uri_utils.dart';
@@ -87,6 +88,7 @@ VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
 
   var port2 = port;
   var packetEncoding = '';
+  final warnings = <NodeWarning>[];
   if (flow == 'xtls-rprx-vision-udp443') {
     flow = 'xtls-rprx-vision';
     packetEncoding = 'xudp';
@@ -97,10 +99,13 @@ VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
   final tls = _xrayTlsFromStream(stream, server);
   final transport = _xrayTransportFromStream(stream);
 
-  if (stream['security'] == 'reality' &&
-      flow.isEmpty &&
-      (stream['network'] ?? 'tcp') == 'tcp') {
-    flow = 'xtls-rprx-vision';
+  // §115 — flow берём из конфига как есть (раньше REALITY+tcp без flow
+  // получал навязанный vision → ломались валидные none-сетапы). vision
+  // несовместим с транспортом → гасим flow + warning.
+  if (flow == 'xtls-rprx-vision' && transport != null) {
+    warnings.add(
+        VisionWithTransportWarning((stream['network'] ?? 'transport').toString()));
+    flow = '';
   }
 
   final label = remarks.isNotEmpty ? remarks : (o['tag']?.toString() ?? '');
@@ -118,6 +123,7 @@ VlessSpec? _xrayVlessToSpec(Map<String, dynamic> o, String remarks) {
     tls: tls,
     transport: transport,
     packetEncoding: packetEncoding,
+    warnings: warnings,
   );
 }
 

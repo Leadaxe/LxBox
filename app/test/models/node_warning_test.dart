@@ -33,6 +33,7 @@ void main() {
         UnsupportedProtocolWarning() => 'protocol',
         MissingFieldWarning() => 'field',
         DeprecatedFlowWarning() => 'flow',
+        VisionWithTransportWarning() => 'vision_transport',
         InsecureTlsWarning() => 'tls',
         NaiveBuildTagWarning() => 'naive_build',
       };
