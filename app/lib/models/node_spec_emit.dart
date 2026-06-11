@@ -36,7 +36,11 @@ Outbound emitVless(VlessSpec s, TemplateVars vars) {
     }
   }
 
-  if (s.flow.isNotEmpty) out['flow'] = s.flow;
+  // §115 — flow ('xtls-rprx-vision') валиден ТОЛЬКО на голом TLS; с любым
+  // транспортом (ws/grpc/http/httpupgrade/xhttp) ядро отвергает конфиг на
+  // load. Универсальный net на все пути парсинга (URI/Xray/raw sing-box JSON,
+  // manual): пишем flow только когда транспорта нет.
+  if (s.flow.isNotEmpty && s.transport == null) out['flow'] = s.flow;
   if (s.packetEncoding.isNotEmpty) out['packet_encoding'] = s.packetEncoding;
 
   final tlsMap = s.tls.toSingbox();
@@ -49,7 +53,9 @@ Outbound emitVless(VlessSpec s, TemplateVars vars) {
 
 String toUriVless(VlessSpec s) {
   final q = <String, String>{};
-  if (s.flow.isNotEmpty) q['flow'] = s.flow;
+  // §115 — vision только на bare TLS (см. emitVless); share-URI тоже не
+  // должен нести flow при транспорте.
+  if (s.flow.isNotEmpty && s.transport == null) q['flow'] = s.flow;
   if (s.packetEncoding.isNotEmpty) q['packetEncoding'] = s.packetEncoding;
 
   if (s.transport != null) {

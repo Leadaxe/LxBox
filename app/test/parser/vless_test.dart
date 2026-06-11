@@ -6,6 +6,38 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/parser/uri_utils.dart';
 
 void main() {
+  // §115 — эталонная матрица брифа: эмитим flow ТОЛЬКО если (а) явно есть во
+  // входе И (б) нет транспорта. Проверяем именно сгенерированный outbound.
+  group('§115 flow-эмиссия (эталонная матрица)', () {
+    String? emittedFlow(String uri) {
+      final spec = parseVless(uri)!;
+      return spec.emit(TemplateVars.empty).map['flow'] as String?;
+    }
+
+    const reality = 'security=reality&pbk=PK&sid=ABCD&sni=w.example.com';
+
+    test('bare TCP + REALITY, без flow → flow не эмитится', () {
+      expect(emittedFlow('vless://u@h:443?type=tcp&$reality#L'), isNull);
+    });
+    test('XHTTP + REALITY, без flow → flow не эмитится', () {
+      expect(emittedFlow('vless://u@h:443?type=xhttp&host=cdn&$reality#L'),
+          isNull);
+    });
+    test('XHTTP + REALITY, flow=vision → flow гасится', () {
+      expect(
+        emittedFlow(
+            'vless://u@h:443?type=xhttp&host=cdn&flow=xtls-rprx-vision&$reality#L'),
+        isNull,
+      );
+    });
+    test('bare TCP + REALITY, flow=vision → flow=vision', () {
+      expect(
+        emittedFlow('vless://u@h:443?type=tcp&flow=xtls-rprx-vision&$reality#L'),
+        'xtls-rprx-vision',
+      );
+    });
+  });
+
   group('VLESS Reality + flow', () {
     test('§115: REALITY+bare TCP без flow → flow ПУСТОЙ (honor ссылку)', () {
       // Раньше навязывали xtls-rprx-vision → ломались валидные none-сетапы

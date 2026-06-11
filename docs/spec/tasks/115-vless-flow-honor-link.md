@@ -70,6 +70,13 @@ REALITY активна (`pbk`/`security=reality`) и транспорта нет
    && transport != null` → `flow = ''` + warning. Vision валиден только на
    bare TLS; с транспортом (ws/grpc/xhttp) — невалидная комбинация, ядро
    её не поднимет. Закрывает явный vision+XHTTP кейс.
+3. **Универсальный net на эмиссии** ([node_spec_emit.dart](../../app/lib/models/node_spec_emit.dart),
+   `emitVless` + `toUriVless`): `flow` пишется в outbound/share-URI **только**
+   когда `transport == null`. Это покрывает ВСЕ пути конструирования
+   `VlessSpec` одним местом — включая `parseSingboxEntry` (прямой sing-box
+   JSON, читает `flow`/`transport` без guard) и ручную правку, которые
+   парсерные guard'ы URI/Xray не трогают. Паттерн десктоп-лаунчера
+   (`outboundHasTransport` в `GenerateNodeJSON`).
 
 Сохраняем без изменений: нормализацию `xtls-rprx-vision-udp443` →
 `xtls-rprx-vision` + `packet_encoding=xudp` (это валидное явное значение).
@@ -84,6 +91,7 @@ REALITY активна (`pbk`/`security=reality`) и транспорта нет
 
 - [vless_parser.dart](../../app/lib/services/parser/uri_parsers/vless_parser.dart) — убрать блок 33-36, добавить vision+transport guard.
 - [json_parsers.dart](../../app/lib/services/parser/json_parsers.dart) — убрать блок 100-104, тот же guard (`transport != null`).
+- [node_spec_emit.dart](../../app/lib/models/node_spec_emit.dart) — `emitVless`/`toUriVless`: flow только при `transport == null` (универсальный net).
 - [node_warning.dart](../../app/lib/models/node_warning.dart) — `VisionWithTransportWarning`.
 
 ## Locked decisions
@@ -116,6 +124,13 @@ REALITY активна (`pbk`/`security=reality`) и транспорта нет
 - Unit [json_parsers_test.dart](../../app/test/parser/json_parsers_test.dart):
   Xray REALITY+tcp без flow → `''`; фикстура с явным flow → vision (как
   было).
-- `flutter analyze` чистый, полный `flutter test` — 969 passed. ✅
-- Smoke: импорт реального x3-ui REALITY-none конфига → в собранном config
-  нет `flow` → подключение поднимается. **Pending** (войдёт с релизом).
+- Unit [vless_test.dart](../../app/test/parser/vless_test.dart) — эталонная
+  матрица брифа на **эмиссии** (4 строки: bare/transport × flow/none →
+  ожидаемый emit); [json_parsers_test.dart](../../app/test/parser/json_parsers_test.dart)
+  — raw sing-box JSON flow=vision+transport → emit гасит flow (net). ✅
+- `flutter analyze` чистый, полный `flutter test` — 974 passed. ✅
+- **`sing-box check` ядром lx.6** на сгенерированных конфигах: VLESS+XHTTP+
+  Reality (flow=vision в ссылке → погашен) и bare-TCP+Reality без flow —
+  **оба грузятся** (валидный reality-keypair). ✅
+- Девайс-smoke с реальным x3-ui REALITY-none → подключение: **pending**
+  (войдёт с релизом).

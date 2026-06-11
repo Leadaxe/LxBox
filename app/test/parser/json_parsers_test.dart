@@ -3,10 +3,31 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
+import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/parser/json_parsers.dart';
 
 void main() {
   group('parseSingboxEntry', () {
+    test('§115: raw sing-box JSON flow=vision + transport → emit гасит flow',
+        () {
+      // parseSingboxEntry читает flow напрямую (spec.flow=vision), но
+      // универсальный net на эмиссии (§115) убирает flow при транспорте —
+      // покрывает путь, который парсерные guard'ы URI/Xray не трогают.
+      final spec = parseSingboxEntry({
+        'type': 'vless',
+        'tag': 't',
+        'server': 'h.example',
+        'server_port': 443,
+        'uuid': '11111111-2222-3333-4444-555555555555',
+        'flow': 'xtls-rprx-vision',
+        'tls': {'enabled': true, 'server_name': 'w.example'},
+        'transport': {'type': 'ws', 'path': '/x'},
+      }) as VlessSpec;
+      final emitted = spec.emit(TemplateVars.empty).map;
+      expect(emitted['flow'], isNull, reason: 'flow+transport невалидно');
+      expect(emitted['transport'], isNotNull);
+    });
+
     test('vless outbound fixture', () {
       final j = jsonDecode(
         File('test/fixtures/json/singbox_vless_outbound.json').readAsStringSync(),
