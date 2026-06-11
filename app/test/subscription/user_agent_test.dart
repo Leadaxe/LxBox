@@ -5,16 +5,15 @@ import 'package:lxbox/services/subscription/user_agent.dart';
 //   - бренд-токен начинается с `LxBox-android/` — по нему substring-панели
 //     (Remnawave/Marzban) опознают клиента и отдают base64/URI-список
 //     (проверено на боевой vern13);
-//   - голого `singbox` (без дефиса, триггер бага) нет нигде; токен `sing-box`
-//     сознательно не включаем вовсе (см. таск 114).
+//   - голого `singbox` (без дефиса, триггер бага) нет нигде; токена `sing-box`
+//     и платформенного комментария тоже нет (см. таск 114).
 void main() {
   group('buildSubscriptionUserAgent — panel-routing invariants', () {
-    test('типичные Android-значения дают ожидаемую строку', () {
-      final ua = buildSubscriptionUserAgent(
-        appVersion: '2.0.4',
-        platform: 'android 34 arm64-v8a',
+    test('версия даёт ожидаемую строку', () {
+      expect(
+        buildSubscriptionUserAgent(appVersion: '2.0.4'),
+        'LxBox-android/2.0.4',
       );
-      expect(ua, 'LxBox-android/2.0.4 (android 34 arm64-v8a)');
     });
 
     test('начинается с бренд-токена LxBox-android/', () {
@@ -28,20 +27,21 @@ void main() {
       expect(ua.contains('sing-box'), isFalse, reason: ua);
     });
 
-    test('срезает ведущий v и держит инварианты на пустом appVersion', () {
-      final ua = buildSubscriptionUserAgent(appVersion: '');
-      expect(ua, 'LxBox-android/unknown (android)');
-      expect(ua.startsWith('LxBox-android/'), isTrue, reason: ua);
-      expect(ua.contains('singbox'), isFalse, reason: ua);
+    test('держит dev-версию с дефисами', () {
+      expect(
+        buildSubscriptionUserAgent(appVersion: '2.0.3-dev.2'),
+        'LxBox-android/2.0.3-dev.2',
+      );
     });
 
-    test('мусор/скобки в токенах не ломают структуру UA', () {
-      final ua = buildSubscriptionUserAgent(
-        appVersion: 'v2.0.4 (dev)',
-        platform: '   ',
-      );
-      // ведущий v срезан, скобки/пробелы вырезаны, пустая платформа → android
-      expect(ua, 'LxBox-android/2.0.4dev (android)');
+    test('срезает ведущий v и держит инварианты на пустом appVersion', () {
+      expect(buildSubscriptionUserAgent(appVersion: ''), 'LxBox-android/unknown');
+      expect(buildSubscriptionUserAgent(appVersion: 'v2.0.4'), 'LxBox-android/2.0.4');
+    });
+
+    test('мусор/скобки/пробелы в версии не ломают структуру UA', () {
+      final ua = buildSubscriptionUserAgent(appVersion: 'v2.0.4 (dev)');
+      expect(ua, 'LxBox-android/2.0.4dev');
       expect(ua.contains('singbox'), isFalse, reason: ua);
     });
   });

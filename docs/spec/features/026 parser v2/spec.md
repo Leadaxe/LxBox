@@ -226,7 +226,7 @@ final class InlineSource     (String body)                       extends Subscri
 final class QrSource         (String content)                    extends SubscriptionSource;
 ```
 
-`UrlSource` — `userAgent` по умолчанию `null` → `_fetch` подставляет брендированный `LxBox-android/<ver> (android <sdk> <abi>)` (резолвится в `lib/services/subscription/user_agent.dart`). Некоторые панели (Remnawave/Marzban-типа) маршрутизируют тело по подстроке в UA: бренд-токен `LxBox-android` опознаётся → панель отдаёт base64/URI-list (который ест парсер v2); голого `singbox` без дефиса быть не должно — он триггерит выдачу полного JSON-конфига или заглушки (см. таск 114). Default timeout 9с; `_fetch` делает **2 попытки с паузой 2с** между (cap ≈ 20с). Ретрай — против transient'ов мобильной сети (DNS/RST/DDoS-guard challenge).
+`UrlSource` — `userAgent` по умолчанию `null` → `_fetch` подставляет брендированный `LxBox-android/<ver>` (резолвится в `lib/services/subscription/user_agent.dart`). Некоторые панели (Remnawave/Marzban-типа) маршрутизируют тело по подстроке в UA: бренд-токен `LxBox-android` опознаётся → панель отдаёт base64/URI-list (который ест парсер v2); голого `singbox` без дефиса быть не должно — он триггерит выдачу полного JSON-конфига или заглушки (см. таск 114). Default timeout 9с; `_fetch` делает **2 попытки с паузой 2с** между (cap ≈ 20с). Ретрай — против transient'ов мобильной сети (DNS/RST/DDoS-guard challenge).
 
 `FetchResult.headers` — сырые HTTP response headers. `profile-title: base64:...` автоматически декодируется в `_decodeBase64Title`.
 
@@ -538,7 +538,7 @@ Warning-тексты — plain en-string (i18n-инфры в проекте не
 | 8 | `registerDetourServers` default | Поменяли с `true` → `false` по юзер-фидбеку (лишние ⚙ в proxy-группах). Existing подписки сохраняют свои сохранённые значения. |
 | 9 | TUIC v5 | Добавлен с нуля (в v1 отсутствовал). |
 | 10 | preset_groups.dart как отдельный файл | Удалён, слит в `build_config.dart` как приватный `_buildPresetGroups` — вызывается из одного места. |
-| 11 | User-Agent default | Брендированный `LxBox-android/<ver> (android <sdk> <abi>)` (таск 114). Бренд-токен `LxBox-android` → панель отдаёт base64/URI-list; голого `singbox` без дефиса нет (триггерит JSON-конфиг). Токен `sing-box` сознательно не включён. Раньше — `SubscriptionParserClient`/`LxBox Android subscription client`. |
+| 11 | User-Agent default | Брендированный `LxBox-android/<ver>` (таск 114). Бренд-токен `LxBox-android` → панель отдаёт base64/URI-list; голого `singbox` без дефиса нет (триггерит JSON-конфиг). Токен `sing-box` и платформенный комментарий сознательно не включены. Раньше — `SubscriptionParserClient`/`LxBox Android subscription client`. |
 
 ---
 

@@ -19,7 +19,7 @@ final class UrlSource extends SubscriptionSource {
   final String url;
 
   /// Кастомный UA. `null` (дефолт) → `_fetch` резолвит брендированный
-  /// `LxBox-android/<ver> (android <sdk> <abi>)` (см. [user_agent.dart]).
+  /// `LxBox-android/<ver>` (см. [user_agent.dart]).
   ///
   /// Некоторые провайдеры выбирают формат тела по UA: неопознанному клиенту
   /// отдают JSON-конфиг/заглушку, опознанному — base64 URI-list (который ест
@@ -136,7 +136,7 @@ Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async 
   switch (source) {
     case UrlSource(url: final u, userAgent: final ua, timeout: final t):
       // null → брендированный LxBox-android UA (см. user_agent.dart).
-      final effectiveUa = ua ?? await resolveSubscriptionUserAgent();
+      final effectiveUa = ua ?? resolveSubscriptionUserAgent();
       // 3 попытки с exp backoff (1s, 3s) — worst case ~31s (9+1+9+3+9).
       // Retry нужен для transient'ов мобильной сети (DNS fail, RST сразу
       // после TCP-open, DDoS-guard challenge, 5xx). 4xx — permanent,

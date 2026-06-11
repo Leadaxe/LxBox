@@ -45,34 +45,34 @@
   Все начинаются с `LxBox`, голого `singbox` не содержат — оставлены как есть.
 - Кастомного UA в UI/настройках нет.
 
-Источники для runtime-сборки UA: appVersion — `VersionInfo.I.version`
-(PackageInfo); SDK/ABI — `device_info_plus` (как в `debug/handlers/device.dart`).
+Источник для runtime-сборки UA: appVersion — `VersionInfo.I.version`
+(PackageInfo). Платформа/ядро сознательно не включаются.
 
 ## Решение
 
 Бренд-токен `LxBox-android` сам по себе опознаётся панелями (проверено curl'ом).
-Токен `sing-box/<core>` **сознательно не включаем** — по решению владельца UA не
-должен содержать никакого `sing-box`/`singbox` вовсе.
+По решению владельца UA = **только бренд + версия приложения**: ни `sing-box`/
+`singbox`, ни платформенный комментарий (SDK/ABI) не включаются.
 
 ### A. Новый билдер UA — [`subscription/user_agent.dart`](../../app/lib/services/subscription/user_agent.dart)
 
-- `buildSubscriptionUserAgent({appVersion, platform})` — чистая функция, формат:
+- `buildSubscriptionUserAgent({appVersion})` — чистая функция, формат:
 
   ```
-  LxBox-android/<appVersion> (android <sdk> <abi>)
+  LxBox-android/<appVersion>
   ```
 
-  например `LxBox-android/2.0.4 (android 34 arm64-v8a)`. Санитайзит токены
-  (срез ведущего `v`, вырез `()`/`;`/пробелов), на пустых значениях — `unknown`,
-  чтобы инварианты держались всегда.
-- `resolveSubscriptionUserAgent()` — резолвит runtime-источники (appVersion +
-  platform), кеширует результат; до `VersionInfo.init()` (appVersion `0.0.0`,
-  ранний старт / тесты) **не** кешируется. Источники best-effort.
+  например `LxBox-android/2.0.4`. Санитайзит версию (срез ведущего `v`, вырез
+  `()`/`;`/пробелов), на пустом значении — `unknown`, чтобы инварианты держались
+  всегда.
+- `resolveSubscriptionUserAgent()` — **синхронный**, читает `VersionInfo.I.version`
+  (инициализируется в `main()` до `runApp`). Async-источников больше нет, кеш не
+  нужен.
 
 ### B. Проводка в fetch — [`sources.dart`](../../app/lib/services/subscription/sources.dart)
 
 - `UrlSource.userAgent` → `String?`, дефолт `null` (const-конструктор сохранён).
-- `_fetch`: `final effectiveUa = ua ?? await resolveSubscriptionUserAgent();`.
+- `_fetch`: `final effectiveUa = ua ?? resolveSubscriptionUserAgent();`.
 - Явный UA по-прежнему можно передать (override) — поведение не сломано.
 
 ### Инварианты
@@ -85,10 +85,11 @@
 - **Опора только на `LxBox`-бренд.** Распознавание держится на подстроке
   `LxBox`. Если попадётся панель, которая роутит **строго** по `sing-box` и не
   знает про `LxBox`, она вернёт не тот формат. На целевой панели (vern13)
-  `LxBox` распознаётся; решение сознательное (владелец отказался от токена
-  `sing-box`).
-- **Не-Android / тесты** → platform-токен схлопывается в `android`,
-  device_info недоступен → ловится try/catch.
+  `LxBox` распознаётся; решение сознательное (владелец отказался и от токена
+  `sing-box`, и от платформенного комментария).
+- **До `VersionInfo.init()`** (тесты / ранний старт) версия = `0.0.0` →
+  `LxBox-android/0.0.0`. Инвариант №1 держится. На практике fetch идёт сильно
+  после `init()`.
 - Намеренно **не** трогали GitHub-UA (update/rule-set/support) — privacy, и они
   не ходят к подписочным панелям.
 
@@ -96,12 +97,12 @@
 
 - Unit: [`user_agent_test.dart`](../../app/test/subscription/user_agent_test.dart)
   — инварианты (старт с `LxBox-android/`, отсутствие `singbox`/`sing-box`) +
-  санитайзинг (срез `v`, вырез скобок, fallback'и).
-- `flutter analyze` чисто; полный `flutter test` зелёный (965 тестов).
+  санитайзинг (срез `v`, вырез скобок, dev-версии, fallback).
+- `flutter analyze` чисто; полный `flutter test` зелёный.
 - **Live-панель (curl против vern13)** — подтверждён routing UA → формат тела:
   - `singbox-launcher/1.1.4` → JSON-объект (плохо, 2008 байт);
   - `LxBox Android subscription client` (старый) → base64 (308 байт);
-  - `LxBox-android/2.0.4 (android 34 arm64-v8a)` (новый) → base64, декодится
+  - `LxBox-android` и `LxBox-android/2.0.4` (новые) → base64, декодится
     в `vless://`-узел (308 байт).
 - **Pending device-smoke**: добавление подписки vern13 в самом приложении без
   краша; старые подписки работают как раньше.
