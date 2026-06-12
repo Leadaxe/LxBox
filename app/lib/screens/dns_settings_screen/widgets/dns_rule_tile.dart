@@ -76,8 +76,8 @@ class DnsRuleTile extends StatelessWidget {
     final preview = formatRulePreview(body, kind: kind);
 
     final badgeText = switch (kind) {
-      'template' => 'from template',
-      'preset' => 'from preset',
+      'template' => 'template',
+      'preset' => 'preset',
       'srs' => 'srs',
       _ => 'inline',
     };

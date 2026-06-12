@@ -58,8 +58,8 @@ void showRuleBodyDialog(
       ? '(content unavailable)'
       : const JsonEncoder.withIndent('  ').convert(body);
   final sourceLabel = switch (kind) {
-    'template' => 'from template',
-    'preset' => 'from preset',
+    'template' => 'template',
+    'preset' => 'preset',
     'srs' => 'srs',
     _ => 'user rule',
   };
