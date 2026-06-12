@@ -9,15 +9,25 @@ class DnsBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Высота с запасом + single-line: на крупном шрифте/скейле текст в
+    // плоском чипе рвался на строки и вылезал из контейнера.
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         text,
-        style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w500),
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.fade,
+        style: TextStyle(
+          fontSize: 10,
+          height: 1.2,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
