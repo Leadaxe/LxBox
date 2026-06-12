@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Code-complete — все 3 задачи реализованы (+ lifecycle-фикс) |
+| Статус | Задачи 1–3 — code-complete; задача 4 (редизайн редактора DNS-сервера) — Draft |
 | Дата старта | 2026-06-12 |
-| Дата завершения | 2026-06-12 |
-| Коммиты | задачи 1+2 — a2137c5; задача 3 — 858d17e |
+| Дата завершения | — (задачи 1–3 закрыты 2026-06-12; задача 4 в работе) |
+| Коммиты | задачи 1+2 — a2137c5; задача 3 — 858d17e; задача 4 — — |
 | Связанные spec'ы | features/033 (preset-бандлы — уже бандлят DNS через vars/`@outbound`), features/043 (DNS servers refs), features/061 (DNS rules refs), features/030 (custom rules) |
 
 ## Зачем
@@ -21,16 +21,18 @@ detour'ом у сервера. Цель — сделать DNS управляе�
 - у правила маршрутизации — **опция DNS**: само регистрирует DNS-правило на
   выбранный сервер (не писать руками).
 
-## Состав — 3 задачи (порядок выполнения)
+## Состав — 4 задачи (порядок выполнения)
 
 | # | Задача | Суть | Очередь |
 |---|--------|------|---------|
-| 1 | Формат DNS-секции шаблона | `{description, enabled, vars, server}` с `@placeholders` | первая |
-| 2 | Переменные у DNS-серверов (UI + build) | resolve `{vars,server}`, подстановка, var-редакторы, `outbound`-пикер | вторая |
-| 3 | Опция DNS у правила | правило → rule_set + DNS-rule на сервер | **последняя** |
+| 1 | Формат DNS-секции шаблона | `{description, enabled, vars, server}` с `@placeholders` | ✅ done (a2137c5) |
+| 2 | Переменные у DNS-серверов (UI + build) | resolve `{vars,server}`, подстановка, var-редакторы, `outbound`-пикер | ✅ done (a2137c5) |
+| 3 | Опция DNS у правила | правило → rule_set + DNS-rule на сервер | ✅ done (858d17e) |
+| 4 | Редизайн редактора DNS-сервера (+ inline-detour) | тап→полноэкранный редактор (Params/JSON) по паттерну `CustomRuleEditScreen`; detour у inline-сервера | **текущая** |
 
-Задачи 1+2 неразделимы при шиппинге (формат без обработки ломает DNS — см.
-ниже). Задача 3 — поверх 1+2.
+Задачи 1+2 неразделимы при шиппинге (формат без обработки ломает DNS) —
+зашиплены вместе (a2137c5). Задача 3 — поверх 1+2 (858d17e). Задача 4 —
+UX-консолидация редактора DNS-серверов, независима от 1–3.
 
 ## Контракт ядра (проверено по sing-box-lx)
 
@@ -120,7 +122,7 @@ Done: новый шаблон (задача 1) резолвится коррек
 
 ---
 
-## Задача 3 — опция DNS у правила (DNS follows the rule) [последняя]
+## Задача 3 — опция DNS у правила (DNS follows the rule) [✅ done — 858d17e]
 
 Удобство: правило само регистрирует DNS-правило на выбранный сервер, чтобы не
 писать DNS-rule руками. Обобщение того, что preset-бандлы (`applyPresetBundles`,
@@ -164,6 +166,75 @@ DNS **тихо** пропадает (без warning); backward-compat (нет `d
 
 ---
 
+## Задача 4 — редизайн редактора DNS-сервера (+ inline-detour) [текущая]
+
+Текущий UX DNS-серверов фрагментирован: `MergedServerTile` с инлайн-тюнером
+(vars) + тап-диалог `dns_body_dialogs` (read-only тело) + боттом-шит
+`server_editor_sheet` (tag/desc/enabled + body JSON) + иконки edit/reset/delete
+на тайле. Правила (`CustomRule`) редактируются одним чистым полноэкранным
+редактором с табами. Приводим серверы к тому же паттерну. Заодно закрываем
+inline-detour (поле в Params).
+
+**Эталон 1:1 — `lib/screens/custom_rule_edit*`:**
+
+| Правила (эталон) | DNS-серверы (новое) |
+|---|---|
+| `openCustomRuleEditor()` → `Navigator.push(MaterialPageRoute)` | `openDnsServerEditor()` |
+| `CustomRuleEditScreen` (Scaffold-route) | `DnsServerEditScreen` |
+| `CustomRuleEditController` (`ChangeNotifier`; `isDirty`/`snapshot`) + `CustomRuleEditScope` (InheritedNotifier) | `DnsServerEditController` + `DnsServerEditScope` |
+| `DefaultTabController(2)` · `ParamsTab` / `ViewTab` | Params / JSON |
+| AppBar: back-guard (`PopScope`+dialog) · Delete · Save (dirty-highlight) | то же |
+| тайл: switch + тап→экран | `MergedServerTile` упрощается так же |
+
+**Заменяет/удаляет:** `server_editor_sheet.dart` (`showServerEditor`),
+`dns_body_dialogs.dart` (`showServerBodyDialog`), инлайн-тюнер + иконки
+edit/reset/delete в `merged_server_tile.dart`. Тайл ужимается до: switch
+(enabled; locked+ON у preset, пометка «used by …») + title/subtitle + badge +
+тап→`openDnsServerEditor`.
+
+**Вкладка Params (по kind):**
+- общее: **Description** (text); **Enabled** (switch; заблокирован+ON при
+  `lockedByPreset`, пометка «used by <пресет>»);
+- **template** → `TemplateVarListView` (vars: outbound/enum/dns_servers) —
+  detour это var `outbound` (перенос текущего тюнера на экран, логика
+  `varValues` без изменений);
+- **inline** → **Tag** (locked при edit existing) + **Outbound (detour)**
+  `OutboundPicker` → пишет/стирает `body['detour']`, дефолт `direct` (= ключ
+  отсутствует на билде). **Это и есть inline-detour**;
+- **preset** → read-only параметры (locked).
+
+**Вкладка JSON** (единственное расхождение с эталоном — у правил `ViewTab`
+read-only):
+- **inline** → **редактируемое** тело (sing-box JSON без tag/desc/enabled) + та
+  же валидация/strip, что в текущем `server_editor_sheet` (для inline тело —
+  источник правды, без editable-JSON сервер не создать);
+- **template/preset** → **read-only** превью отрезолвленного тела
+  (`resolveTemplateDnsServerBody` + `normalizeDnsDetour`) + storage-shape +
+  Copy (как `ViewTab`).
+
+**inline «канал detour выключили → тихо съехал»** — наследуется даром, отдельной
+логики нет:
+- build: `body.detour` идёт через тот же `normalizeDnsDetour(body,
+  knownOutboundTags)` (задача 2) → исчезнувший / `direct-out` / пустой канал →
+  ключ не пишется (решение №2);
+- UI: `OutboundPicker` фоллбэчит value-не-из-options на `options.first`
+  (`outbound_picker.dart:78`) → пикер не крэшит на мёртвом теге;
+- сторадж мёртвый тег сохраняет (ревайв при возврате канала; симметрично
+  template `varValues`).
+
+**Add server** («+») → `openDnsServerEditor` в new-режиме (kind inline, default
+body `{type:udp, server, server_port}`, detour отсутствует).
+
+Граница: модель/сторадж DNS-серверов (kind-refs, `varValues`, `body`) **не
+меняется** — это чистый UI-рефактор поверх задач 1–3. Эмиссия и резолв
+(`resolveDnsServersBodies`, `normalizeDnsDetour`) тоже не трогаются.
+
+Done: тап→полноэкранный редактор; Params/JSON по kind; inline-detour пишет
+`body.detour`, дефолт отсутствует; `server_editor_sheet`/`dns_body_dialogs`/
+инлайн-тюнер удалены; `flutter analyze` + `flutter test` зелёные.
+
+---
+
 ## Жизненный цикл DNS-сервера (баг + правило)
 
 **Существующий баг (до §117):** пресет регистрирует DNS-сервер (напр.
@@ -200,6 +271,16 @@ DNS **тихо** пропадает (без warning); backward-compat (нет `d
 6. detour = «var типа outbound», не bespoke-селектор (генерик через vars).
 7. DNS-сервер, реферимый активным пресетом/правилом, не выключается/не
    удаляется независимо (см. «Жизненный цикл DNS-сервера»).
+8. **(задача 4)** Редактор DNS-сервера — полноэкранный по паттерну
+   `CustomRuleEditScreen` (тап→экран, табы Params/JSON), не боттом-шит /
+   инлайн-тюнер. Тайл сохраняет быстрый enabled-switch; edit/reset/delete
+   переезжают в AppBar редактора.
+9. **(задача 4)** JSON-вкладка: **editable** для inline (тело — источник
+   правды), **read-only** превью для template/preset.
+10. **(задача 4)** inline-detour живёт в `body['detour']` (не в `varValues` —
+    у inline нет `@placeholder`'ов); «канал выключили → тихо съехал»
+    наследуется из `normalizeDnsDetour` (build) + фоллбэка `OutboundPicker`
+    (UI), решение №2. Модель/сторадж серверов задача 4 не меняет.
 
 ## Решения открытых вопросов
 
