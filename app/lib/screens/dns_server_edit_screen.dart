@@ -98,6 +98,16 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
         );
         return;
       }
+      // §117 задача 4b: rename existing — коллизия запрещена (replace-
+      // семантики у rename нет, ссылки каскадно поедут на save).
+      if (!_ctrl.isNew &&
+          tag != (widget.resolved?.tag ?? '') &&
+          widget.existingTags.contains(tag)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Tag "$tag" is already in use')),
+        );
+        return;
+      }
       // New-режим: коллизия с существующим tag'ом → явный confirm replace
       // (раньше боттом-шит заменял молча).
       if (_ctrl.isNew && widget.existingTags.contains(tag)) {

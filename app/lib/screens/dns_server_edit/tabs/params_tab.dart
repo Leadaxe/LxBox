@@ -34,7 +34,6 @@ class DnsServerParamsTab extends StatelessWidget {
         if (c.kind == ServerKind.inline) ...[
           TextField(
             controller: c.tagCtrl,
-            readOnly: !c.isNew,
             decoration: InputDecoration(
               labelText: 'Tag',
               border: const OutlineInputBorder(),
@@ -42,7 +41,9 @@ class DnsServerParamsTab extends StatelessWidget {
               prefixIcon: const Icon(Icons.tag, size: 18),
               helperText: c.isNew
                   ? 'Unique id — referenced by DNS rules / resolvers'
-                  : 'Tag locked while editing',
+                  // §117 задача 4b: rename каскадно обновляет все ссылки
+                  // (DNS-правила, resolvers, domain_resolver'ы).
+                  : 'Renaming updates all references automatically',
             ),
           ),
           const SizedBox(height: 12),

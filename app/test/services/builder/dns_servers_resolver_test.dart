@@ -284,7 +284,7 @@ void main() {
           'enabled': true,
           'kind': 'inline',
           'tag': 'my-dns',
-          'body': {'type': 'udp', 'server': '5.5.5.5', 'server_port': 53},
+          'body': {'type': 'udp', 'server': '192.168.1.1', 'server_port': 53},
         },
       ]);
 
@@ -403,7 +403,7 @@ void main() {
             'tag': 'my-dns',
             'body': {
               'type': 'udp',
-              'server': '5.5.5.5',
+              'server': '192.168.1.1',
               'server_port': 53,
               'detour': 'gone-channel',
             },
@@ -452,7 +452,7 @@ void main() {
             'body': {
               'type': 'udp',
               'tag': 'my-dns',
-              'server': '5.5.5.5',
+              'server': '192.168.1.1',
               'server_port': 53,
             },
           },
@@ -461,7 +461,7 @@ void main() {
         presetServersByTag: {},
       );
       expect(out.length, 1);
-      expect(out.first['server'], '5.5.5.5');
+      expect(out.first['server'], '192.168.1.1');
     });
 
     test('disabled refs filtered out', () {

@@ -328,6 +328,11 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       outboundOptions: _outboundOptions,
       // §117: dom_resolver-пикер — теги без самого сервера (петля).
       dnsServerTags: _enabledServerTags.where((t) => t != tag).toList(),
+      // §117 задача 4b: rename-коллизии (без текущего тега).
+      existingTags: {
+        for (final s in _servers)
+          if (s['tag'] != tag) s['tag'].toString(),
+      },
     );
     if (result == null || !mounted) return;
     setState(() {
@@ -335,6 +340,29 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         _servers.removeAt(idx);
       } else if (result.saved != null) {
         _servers[idx] = result.saved!;
+        // §117 задача 4b: rename → каскад по ссылкам, чтобы не орфанить
+        // (DNS-правила, resolvers, domain_resolver'ы, DNS-опции правил).
+        final newTag = result.saved!['tag']?.toString() ?? tag;
+        if (newTag.isNotEmpty && newTag != tag) {
+          final updated = renameDnsServerTagRefs(
+            servers: _servers,
+            rules: _rules,
+            templateByTag: _templateByTag,
+            oldTag: tag,
+            newTag: newTag,
+            dnsFinal: _dnsFinal,
+            defaultResolver: _defaultResolver,
+          );
+          _dnsFinal = updated.dnsFinal;
+          _defaultResolver = updated.defaultResolver;
+          final renamed = renameRuleDnsServerTag(_customRules, tag, newTag);
+          if (!identical(renamed, _customRules)) {
+            _customRules = renamed;
+            // custom_rules — чужой этому экрану storage (routing), staged
+            // персистом LazyPersistMixin не покрывается — пишем сразу.
+            unawaited(SettingsStorage.saveCustomRules(renamed));
+          }
+        }
       } else {
         return;
       }

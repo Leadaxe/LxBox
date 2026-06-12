@@ -372,9 +372,8 @@ class DnsServerEditController extends ChangeNotifier {
   /// что в бывшем server_editor_sheet); невалидный → jsonError, save
   /// блокируется, последний валидный body сохраняется.
   ///
-  /// `tag` — часть sing-box-тела: в new-режиме правка tag в JSON
-  /// синхронизирует поле Tag; при edit existing tag залочен (смена
-  /// орфанит ссылки) → jsonError до возврата исходного.
+  /// `tag` — часть sing-box-тела: правка tag в JSON синхронизирует поле
+  /// Tag (rename каскадит по ссылкам на save — §117 задача 4b).
   void onBodyTextChanged(String text) {
     try {
       final parsed = jsonDecode(text);
@@ -382,21 +381,16 @@ class DnsServerEditController extends ChangeNotifier {
         _jsonError = 'Body must be a JSON object';
       } else {
         final jsonTag = parsed['tag']?.toString().trim() ?? '';
-        final lockedTag = resolved?.tag ?? '';
-        if (!isNew && jsonTag.isNotEmpty && jsonTag != lockedTag) {
-          _jsonError = 'Tag is locked while editing — keep "$lockedTag"';
-        } else {
-          if (isNew && jsonTag.isNotEmpty && jsonTag != tagCtrl.text.trim()) {
-            _syncingFromJson = true;
-            tagCtrl.text = jsonTag;
-            _syncingFromJson = false;
-          }
-          parsed.remove('tag');
-          _stripRefLevelFields(parsed);
-          _body = parsed;
-          _jsonError = null;
-          _syncFormFromBody();
+        if (jsonTag.isNotEmpty && jsonTag != tagCtrl.text.trim()) {
+          _syncingFromJson = true;
+          tagCtrl.text = jsonTag;
+          _syncingFromJson = false;
         }
+        parsed.remove('tag');
+        _stripRefLevelFields(parsed);
+        _body = parsed;
+        _jsonError = null;
+        _syncFormFromBody();
       }
     } catch (e) {
       _jsonError = 'Invalid JSON';

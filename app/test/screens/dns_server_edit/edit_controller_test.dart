@@ -286,32 +286,30 @@ void main() {
       c.dispose();
     });
 
-    test('edit existing: смена tag в JSON → jsonError (tag залочен)', () {
+    test('edit existing: смена tag в JSON = rename (синхронизирует поле Tag)',
+        () {
       final c = DnsServerEditController(
         initialRef: {
           'enabled': true,
           'kind': 'inline',
           'tag': 'my-dns',
-          'body': {'type': 'udp', 'server': '5.5.5.5'},
+          'body': {'type': 'udp', 'server': '192.168.1.1'},
         },
         resolved: const ResolvedServer(
           kind: ServerKind.inline,
           tag: 'my-dns',
           description: '',
           enabled: true,
-          body: {'type': 'udp', 'tag': 'my-dns', 'server': '5.5.5.5'},
+          body: {'type': 'udp', 'tag': 'my-dns', 'server': '192.168.1.1'},
         ),
       );
       expect(c.bodyCtrl.text, contains('"tag": "my-dns"'));
-      c.onBodyTextChanged('{"tag":"other","type":"udp","server":"5.5.5.5"}');
-      expect(c.jsonError, contains('locked'));
-      // body не применился — последний валидный жив
-      expect(c.snapshot()['body']['server'], '5.5.5.5');
-      expect(c.snapshot()['tag'], 'my-dns');
-      // вернул исходный tag → ошибка снимается
-      c.onBodyTextChanged('{"tag":"my-dns","type":"udp","server":"6.6.6.6"}');
+      c.onBodyTextChanged(
+          '{"tag":"other","type":"udp","server":"192.168.1.1"}');
+      // §117 задача 4b: rename разрешён — каскад по ссылкам на save.
       expect(c.jsonError, null);
-      expect(c.snapshot()['body']['server'], '6.6.6.6');
+      expect(c.tagCtrl.text, 'other');
+      expect(c.snapshot()['tag'], 'other');
       c.dispose();
     });
 

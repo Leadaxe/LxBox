@@ -103,6 +103,24 @@
       },
 
       {
+        "description": "Quad9 UDP", "enabled": false,
+        "vars": [
+          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Which channel carries DNS queries to this server"},
+          {"name": "dns_ip", "type": "enum", "default_value": "9.9.9.9", "title": "UDP server IP", "tooltip": "Quad9 Public DNS address (built-in malware blocking). IPv4 — universal; IPv6 — if your network supports it.", "options": [
+            {"title": "9.9.9.9 · Primary v4",         "value": "9.9.9.9"},
+            {"title": "149.112.112.112 · Secondary v4", "value": "149.112.112.112"},
+            {"title": "2620:fe::fe · Primary v6",     "value": "2620:fe::fe"},
+            {"title": "2620:fe::9 · Secondary v6",    "value": "2620:fe::9"}
+          ]}
+        ],
+        "server": {
+          "type": "udp", "tag": "quad9_udp", "server_port": 53,
+          "server": "@dns_ip",
+          "detour": "@outbound"
+        }
+      },
+
+      {
         "description": "Safe DNS (DoT)", "enabled": false,
         "vars": [
           {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Which channel carries DNS queries to this server"},
