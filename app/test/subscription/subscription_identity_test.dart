@@ -24,6 +24,9 @@ void main() {
       SubscriptionIdentity.hwid = '';
       SubscriptionIdentity.osVersion = '';
       SubscriptionIdentity.deviceModel = '';
+      SubscriptionIdentity.deviceOsOverride = '';
+      SubscriptionIdentity.verOsOverride = '';
+      SubscriptionIdentity.deviceModelOverride = '';
     });
 
     test('sendHwid=false → пусто', () {
@@ -53,6 +56,20 @@ void main() {
       final full = SubscriptionIdentity.fetchHeaders();
       expect(full['x-ver-os'], '14');
       expect(full['x-device-model'], 'Pixel 7');
+    });
+
+    test('override > device-дефолт во всех meta', () {
+      SubscriptionIdentity.sendHwid = true;
+      SubscriptionIdentity.hwid = 'HW';
+      SubscriptionIdentity.osVersion = '14';
+      SubscriptionIdentity.deviceModel = 'Pixel 7';
+      SubscriptionIdentity.deviceOsOverride = 'harmonyos';
+      SubscriptionIdentity.verOsOverride = '4.2';
+      SubscriptionIdentity.deviceModelOverride = 'P60';
+      final h = SubscriptionIdentity.fetchHeaders();
+      expect(h['x-device-os'], 'harmonyos');
+      expect(h['x-ver-os'], '4.2');
+      expect(h['x-device-model'], 'P60');
     });
   });
 

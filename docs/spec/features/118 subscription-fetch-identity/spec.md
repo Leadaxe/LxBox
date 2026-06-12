@@ -22,8 +22,9 @@ Field-нужда: панели (Remnawave / Marzban-типа) различают
   слать HWID, а пользователю нужна **возможность переписать** его (привязать к
   «тому же» устройству, сбросить счётчик и т.п.).
 
-Обе настройки — **глобальные**, живут в **App Settings → General → секция
-Subscriptions**. Затрагивают только **HTTP-фетч подписки**, не sing-box-конфиг.
+Обе настройки — **глобальные**, живут в **App Settings → таб `Subscriptions`**
+(новый, между General и Diagnostics). Затрагивают только **HTTP-фетч
+подписки**, не sing-box-конфиг.
 
 ## Контракт (что шлём)
 
@@ -33,12 +34,14 @@ Subscriptions**. Затрагивают только **HTTP-фетч подпи�
 |---|---|---|
 | `User-Agent` | override **или** дефолт `LxBox-android/<ver>` | всегда |
 | `x-hwid` | UUID (дефолт) или override | только при включённом тоггле |
-| `x-device-os` | `android` | при включённом HWID |
-| `x-ver-os` | Android release (`Build.VERSION.RELEASE`, напр. `14`) | при включённом HWID |
-| `x-device-model` | `Build.MODEL` (напр. `Pixel 7`) | при включённом HWID |
+| `x-device-os` | override **или** `android` | при включённом HWID |
+| `x-ver-os` | override **или** `Build.VERSION.RELEASE` (напр. `14`) | при включённом HWID |
+| `x-device-model` | override **или** `Build.MODEL` (напр. `Pixel 7`) | при включённом HWID |
 
 `x-hwid` + device-meta — стандарт Remnawave (некоторые панели показывают meta в
-списке устройств).
+списке устройств). **Все четыре заголовка переписываемы**: у каждого
+device-дефолт + пользовательский override (пусто = device-дефолт). Пустой
+effective-заголовок не кладётся.
 
 ## Решения (locked — согласованы с юзером)
 
@@ -62,7 +65,10 @@ Subscriptions**. Затрагивают только **HTTP-фетч подпи�
 |---|---|---|---|
 | `subscription_user_agent` | String | `''` | пусто = брендированный UA; иначе override |
 | `subscription_send_hwid` | bool (`'true'`/`'false'`) | `false` | слать ли HWID-заголовки |
-| `subscription_hwid` | String | `''` → лениво UUIDv4 | значение `x-hwid`; генерится при первом показе/включении |
+| `subscription_hwid` | String | `''` → лениво UUIDv4 | значение `x-hwid`; генерится при первом включении |
+| `subscription_device_os` | String | `''` → `android` | override `x-device-os` |
+| `subscription_ver_os` | String | `''` → `Build.VERSION.RELEASE` | override `x-ver-os` |
+| `subscription_device_model` | String | `''` → `Build.MODEL` | override `x-device-model` |
 
 Лениво: при первом рендере HWID-секции (или включении тоггла), если
 `subscription_hwid` пуст → сгенерить UUIDv4 + персистнуть. Так в UI всегда есть
@@ -111,18 +117,22 @@ subscription _fetch:
   + SubscriptionIdentity.fetchHeaders()   // {x-hwid, x-device-os, x-ver-os, x-device-model} если sendHwid
 ```
 
-## UI — App Settings → General → секция «Subscriptions»
+## UI — App Settings → таб «Subscriptions»
 
-- **Custom User-Agent**: text-field (tile→dialog). Hint = текущий дефолт
+Новый таб (3-й, между General и Diagnostics → Diagnostics сдвинут на index 2,
+коллеры `initialTab:1` обновлены на `2`). Сюда переехал и тоггл **Auto-update
+subscriptions** (был в General).
+
+- **Custom User-Agent**: tile→dialog. Hint = текущий дефолт
   `LxBox-android/<ver>`. **Warning-helper**: «Часть панелей отдаёт конфиг по
   подстроке в UA — без токена `LxBox` подписка может вернуть неподдерживаемый
-  формат (см. §114). Меняй только если знаешь, что делаешь.»
-- **Send HWID** (switch, off по умолчанию). При on:
-  - **HWID** text-field (prefill UUID, editable) + **Regenerate** (↻) — новый UUID.
-  - read-only info: что уйдёт в meta (`android · <osVersion> · <deviceModel>`).
-
-Пустой UA-override → поле пустое, плейсхолдер = дефолт. Пустой HWID при включённом
-тоггле → сгенерить на лету.
+  формат (см. §114).» Per-source UA (модель) приоритетнее.
+- **Send HWID** (switch, off по умолчанию). При on — **четыре переписываемых
+  поля** (tile→dialog, показывают effective-значение, override пусто = дефолт):
+  - **HWID · x-hwid** (prefill UUID) + **Regenerate** (↻);
+  - **x-device-os** (дефолт `android`);
+  - **x-ver-os** (дефолт `Build.VERSION.RELEASE`);
+  - **x-device-model** (дефолт `Build.MODEL`).
 
 ## Затронутые файлы
 
@@ -132,7 +142,10 @@ subscription _fetch:
 | `services/subscription/user_agent.dart` | `resolveSubscriptionUserAgent` — учесть override (или оставить, override в holder) |
 | `services/subscription/sources.dart` | `_fetch` — UA из holder + merge `fetchHeaders()` |
 | `main.dart` | `SubscriptionIdentity.init()` после `VersionInfo` |
-| `screens/app_settings_screen.dart` + `widgets/general_tab.dart` | секция Subscriptions (UA + HWID UI), проброс state |
+| `screens/app_settings_screen/widgets/subscriptions_tab.dart` (new) | UI таба: auto-update + UA + HWID/meta (переписываемые) |
+| `screens/app_settings_screen.dart` | 3-й таб Subscriptions, state/колбэки UA+HWID+meta, проброс; auto-update убран из General |
+| `screens/app_settings_screen/widgets/general_tab.dart` | убрана секция Subscriptions (переехала в новый таб) |
+| `custom_rule_edit_screen.dart` / `debug_screen.dart` / `wifi_saved_picker_sheet.dart` / `core_logs_hint_banner.dart` | `initialTab: 1`→`2` (Diagnostics сдвинут вставкой Subscriptions) |
 | `services/settings_storage.dart` | (var'ы generic, allow-list не нужен; НЕ в `_configVarKeys`) |
 
 ## Риски и edge cases

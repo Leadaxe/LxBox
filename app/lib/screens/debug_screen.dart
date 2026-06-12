@@ -231,7 +231,7 @@ class _DebugScreenState extends State<DebugScreen> {
   void _openDiagnosticsSettings() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => const AppSettingsScreen(initialTab: 1),
+        builder: (_) => const AppSettingsScreen(initialTab: 2),
       ),
     );
   }

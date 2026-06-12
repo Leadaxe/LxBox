@@ -18,6 +18,9 @@ class SubscriptionIdentity {
   static const varUserAgent = 'subscription_user_agent';
   static const varSendHwid = 'subscription_send_hwid';
   static const varHwid = 'subscription_hwid';
+  static const varDeviceOs = 'subscription_device_os';
+  static const varVerOs = 'subscription_ver_os';
+  static const varDeviceModel = 'subscription_device_model';
 
   /// Пусто = слать брендированный `LxBox-android/<ver>` ([resolveSubscriptionUserAgent]).
   static String userAgentOverride = '';
@@ -25,14 +28,27 @@ class SubscriptionIdentity {
   /// Слать ли `x-hwid` + device-meta. OFF по умолчанию (решение №3).
   static bool sendHwid = false;
 
-  /// Значение `x-hwid` — UUIDv4 (решение №2), переписываемый юзером.
+  /// `x-hwid` — UUIDv4 (решение №2), переписываемый юзером.
   static String hwid = '';
 
-  /// device-meta (Remnawave: `x-device-os`/`x-ver-os`/`x-device-model`).
-  /// Кэшируются на init — в рантайме не меняются.
-  static const deviceOs = 'android';
-  static String osVersion = '';
-  static String deviceModel = '';
+  /// Override'ы device-meta. Пусто → device-дефолт (см. `effective*`).
+  /// Все четыре заголовка переписываемы.
+  static String deviceOsOverride = '';
+  static String verOsOverride = '';
+  static String deviceModelOverride = '';
+
+  /// device-дефолты (кэшируются на init, в рантайме не меняются).
+  static const deviceOsDefault = 'android';
+  static String osVersion = ''; // Build.VERSION.RELEASE
+  static String deviceModel = ''; // Build.MODEL
+
+  /// Эффективные значения: override > device-дефолт.
+  static String get effectiveDeviceOs =>
+      deviceOsOverride.isNotEmpty ? deviceOsOverride : deviceOsDefault;
+  static String get effectiveVerOs =>
+      verOsOverride.isNotEmpty ? verOsOverride : osVersion;
+  static String get effectiveDeviceModel =>
+      deviceModelOverride.isNotEmpty ? deviceModelOverride : deviceModel;
 
   /// Читает var'ы + device-info. Зовётся в `main()` после `VersionInfo`.
   static Future<void> init() async {
@@ -40,33 +56,57 @@ class SubscriptionIdentity {
         (await SettingsStorage.getVar(varUserAgent, '')).trim();
     sendHwid = (await SettingsStorage.getVar(varSendHwid, 'false')) == 'true';
     hwid = (await SettingsStorage.getVar(varHwid, '')).trim();
+    deviceOsOverride =
+        (await SettingsStorage.getVar(varDeviceOs, '')).trim();
+    verOsOverride = (await SettingsStorage.getVar(varVerOs, '')).trim();
+    deviceModelOverride =
+        (await SettingsStorage.getVar(varDeviceModel, '')).trim();
     try {
       final info = await DeviceInfoPlugin().androidInfo;
       osVersion = info.version.release;
       deviceModel = info.model;
     } catch (_) {
-      // Не-Android (общая lib) / сбой плагина — meta остаётся пустой,
-      // [fetchHeaders] просто не положит эти ключи.
+      // Не-Android (общая lib) / сбой плагина — device-дефолты пустые,
+      // effective* отдадут override либо пусто (заголовок не положится).
     }
   }
 
   /// Обновляет runtime-значения из App Settings на save (persist делает экран).
-  static void apply({String? userAgentOverride, bool? sendHwid, String? hwid}) {
+  static void apply({
+    String? userAgentOverride,
+    bool? sendHwid,
+    String? hwid,
+    String? deviceOsOverride,
+    String? verOsOverride,
+    String? deviceModelOverride,
+  }) {
     if (userAgentOverride != null) {
       SubscriptionIdentity.userAgentOverride = userAgentOverride.trim();
     }
     if (sendHwid != null) SubscriptionIdentity.sendHwid = sendHwid;
     if (hwid != null) SubscriptionIdentity.hwid = hwid.trim();
+    if (deviceOsOverride != null) {
+      SubscriptionIdentity.deviceOsOverride = deviceOsOverride.trim();
+    }
+    if (verOsOverride != null) {
+      SubscriptionIdentity.verOsOverride = verOsOverride.trim();
+    }
+    if (deviceModelOverride != null) {
+      SubscriptionIdentity.deviceModelOverride = deviceModelOverride.trim();
+    }
   }
 
   /// HWID-заголовки для GET подписки. Пусто, если HWID выключен или не задан.
+  /// Каждый meta-заголовок — effective (override > device-дефолт); пустые
+  /// не кладём.
   static Map<String, String> fetchHeaders() {
     if (!sendHwid || hwid.isEmpty) return const {};
     return {
       'x-hwid': hwid,
-      'x-device-os': deviceOs,
-      if (osVersion.isNotEmpty) 'x-ver-os': osVersion,
-      if (deviceModel.isNotEmpty) 'x-device-model': deviceModel,
+      if (effectiveDeviceOs.isNotEmpty) 'x-device-os': effectiveDeviceOs,
+      if (effectiveVerOs.isNotEmpty) 'x-ver-os': effectiveVerOs,
+      if (effectiveDeviceModel.isNotEmpty)
+        'x-device-model': effectiveDeviceModel,
     };
   }
 }
