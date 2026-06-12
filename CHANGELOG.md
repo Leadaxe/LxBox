@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [2.0.6] — 2026-06-13
+
 ### Changed
 
 - **§117 — DNS Rules: единый вид строк mirror-группы + тоггл DNS-аспекта правила** ([dns_mirror_group_card.dart](app/lib/screens/dns_settings_screen/widgets/dns_mirror_group_card.dart), [dns_settings_screen.dart](app/lib/screens/dns_settings_screen.dart), [custom_rule.dart](app/lib/models/custom_rule.dart)). DNS-аспект пресета и DNS-опция обычного routing-правила в mirror-группе отображались по-разному (большая карточка со switch vs компактная read-only строка). Теперь оба — единый `DnsMirrorTile`: switch + превью `rule_set` + плашка-источник (`preset`/`rule`), тап → read-only превью эмитимого DNS-rule. Switch у rule-строки тогглит `cr.dns.enabled` (DNS-аспект гаснет, routing-часть правила живёт); выключенная строка остаётся видимой (серая) — включается обратно, симметрично пресету. Новый предикат `dnsMirrorEligible` (видимость строки, без `dns.enabled`); `dnsMirrorActive = eligible && dns.enabled` (эмиссия + lifecycle-локи серверов). Превью-тело — из реального эмиттера (`applyAllCustomRules`, force-active), тег `rule_set` совпадает с конфигом.
