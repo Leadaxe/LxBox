@@ -1,0 +1,351 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import '../widgets/outbound_picker.dart';
+import 'dns_server_edit/edit_controller.dart';
+import 'dns_server_edit/tabs/json_tab.dart';
+import 'dns_server_edit/tabs/params_tab.dart';
+import 'dns_settings_screen/resolved_server.dart';
+
+/// §117 задача 4 — полноэкранный редактор DNS-сервера (locked decision №8).
+/// Паттерн 1:1 с [CustomRuleEditScreen]: Scaffold-route,
+/// `DefaultTabController(2)` (Params / JSON), AppBar с back-guard
+/// (`PopScope`+dialog Save/Keep/Discard), Delete (user-only inline, не
+/// locked), Reset-to-canonical (↺ для overridden) и Save (dirty-highlight).
+///
+/// Заменяет фрагментированный UX: боттом-шит `server_editor_sheet` +
+/// read-only диалог `dns_body_dialogs.showServerBodyDialog` + инлайн-тюнер
+/// на тайле.
+class DnsServerEditScreen extends StatefulWidget {
+  const DnsServerEditScreen({
+    super.key,
+    required this.initialRef,
+    this.resolved,
+    this.templateWrapper,
+    this.canonicalDescription = '',
+    this.outboundOptions = const [],
+    this.dnsServerTags = const [],
+    this.existingTags = const {},
+  });
+
+  /// Ref-запись стораджа (edit) или дефолтная inline-заготовка (new).
+  final Map<String, dynamic> initialRef;
+
+  /// Display-модель (null = new-режим: добавление inline-сервера).
+  final ResolvedServer? resolved;
+
+  /// §117-обёртка шаблона для kind=template (JSON-превью).
+  final Map<String, dynamic>? templateWrapper;
+
+  /// Каноническое описание template/preset (description-override детект).
+  final String canonicalDescription;
+
+  final List<OutboundOption> outboundOptions;
+  final List<String> dnsServerTags;
+
+  /// Существующие теги (new-режим): коллизия tag'а → confirm replace.
+  final Set<String> existingTags;
+
+  @override
+  State<DnsServerEditScreen> createState() => _DnsServerEditScreenState();
+}
+
+class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
+  late final DnsServerEditController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = DnsServerEditController(
+      initialRef: widget.initialRef,
+      resolved: widget.resolved,
+      templateWrapper: widget.templateWrapper,
+      canonicalDescription: widget.canonicalDescription,
+      outboundOptions: widget.outboundOptions,
+      dnsServerTags: widget.dnsServerTags,
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  // ─── Save / delete / reset / back ────────────────────────────────────
+
+  Future<void> _save() async {
+    if (_ctrl.kind == ServerKind.inline) {
+      final tag = _ctrl.tagCtrl.text.trim();
+      if (tag.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tag is required')),
+        );
+        return;
+      }
+      if (_ctrl.jsonError != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fix body JSON first: ${_ctrl.jsonError}')),
+        );
+        return;
+      }
+      // New-режим: коллизия с существующим tag'ом → явный confirm replace
+      // (раньше боттом-шит заменял молча).
+      if (_ctrl.isNew && widget.existingTags.contains(tag)) {
+        final replace = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text('Tag "$tag" exists'),
+            content: const Text('Replace the existing server with this one?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Replace'),
+              ),
+            ],
+          ),
+        );
+        if (replace != true || !mounted) return;
+      }
+    }
+    if (!mounted) return;
+    Navigator.pop(context, DnsServerEditResult.saved(_ctrl.snapshot()));
+  }
+
+  Future<void> _delete() async {
+    final tag = widget.resolved?.tag ?? '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete DNS server?'),
+        content: Text('Remove "$tag" permanently?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+                foregroundColor: Theme.of(ctx).colorScheme.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      Navigator.pop(context, DnsServerEditResult.deleted());
+    }
+  }
+
+  /// §043/§117: reset inline-override обратно к canonical (template/preset) —
+  /// ref схлопывается в `{enabled, kind: <canonical>, tag}`.
+  Future<void> _resetToCanonical() async {
+    final overrides = _ctrl.overrides;
+    final resolved = widget.resolved;
+    if (overrides == null || resolved == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset to default?'),
+        content: Text(
+            'Discard the override and restore the ${overrides.name} '
+            'definition of "${resolved.tag}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    Navigator.pop(
+      context,
+      DnsServerEditResult.saved({
+        'enabled': _ctrl.enabled,
+        'kind': overrides.name,
+        'tag': resolved.tag,
+      }),
+    );
+  }
+
+  Future<void> _handleBack() async {
+    if (!_ctrl.isDirty()) {
+      Navigator.pop(context);
+      return;
+    }
+    final action = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return AlertDialog(
+          title: const Text('Unsaved changes'),
+          content:
+              const Text('You have unsaved changes. Save before leaving?'),
+          actionsPadding:
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'discard'),
+              style: TextButton.styleFrom(foregroundColor: cs.error),
+              child: const Text('Discard'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'keep'),
+              child: const Text('Keep'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'save'),
+              style: TextButton.styleFrom(
+                foregroundColor: cs.primary,
+                textStyle: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted) return;
+    if (action == 'save') {
+      unawaited(_save()); // сам сделает Navigator.pop при успехе
+    } else if (action == 'discard') {
+      Navigator.pop(context);
+    }
+    // 'keep' / null — остаёмся на экране
+  }
+
+  // ─── Build ───────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final canDelete = !_ctrl.isNew && _ctrl.isUserOnly && !_ctrl.locked;
+    final canReset = !_ctrl.isNew && _ctrl.overrides != null;
+
+    return DnsServerEditScope(
+      notifier: _ctrl,
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          unawaited(_handleBack());
+        },
+        child: DefaultTabController(
+          length: 2,
+          child: Scaffold(
+            appBar: AppBar(
+              title: Text(_ctrl.isNew ? 'Add DNS Server' : 'Edit DNS Server'),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: _handleBack,
+              ),
+              actions: [
+                if (canReset)
+                  IconButton(
+                    tooltip: 'Reset to default',
+                    icon: const Icon(Icons.restart_alt),
+                    onPressed: _resetToCanonical,
+                  ),
+                if (canDelete)
+                  IconButton(
+                    tooltip: 'Delete server',
+                    icon: Icon(Icons.delete_outline,
+                        color: Theme.of(context).colorScheme.error),
+                    onPressed: _delete,
+                  ),
+                _SaveIconButton(controller: _ctrl, onPressed: _save),
+              ],
+              bottom: const TabBar(
+                tabs: [Tab(text: 'Params'), Tab(text: 'JSON')],
+              ),
+            ),
+            body: TabBarView(
+              children: [
+                DnsServerParamsTab(onSave: _save),
+                const DnsServerJsonTab(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Save-icon в AppBar: подсвечивается primary при `isDirty()` (как у
+/// rule-редактора — rebuild ограничен этой кнопкой).
+class _SaveIconButton extends StatelessWidget {
+  const _SaveIconButton({required this.controller, required this.onPressed});
+
+  final DnsServerEditController controller;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (ctx, _) {
+        final dirty = controller.isDirty();
+        return IconButton(
+          tooltip: 'Save',
+          icon: Icon(Icons.save,
+              color: dirty ? Theme.of(ctx).colorScheme.primary : null),
+          onPressed: onPressed,
+        );
+      },
+    );
+  }
+}
+
+/// Результат редактора — сохранённая ref-запись либо удаление.
+class DnsServerEditResult {
+  const DnsServerEditResult._({this.saved, this.wasDeleted = false});
+
+  /// Новый/обновлённый ref `{enabled, kind, tag, description?, body?,
+  /// varValues?}`. Для reset-to-canonical — схлопнутый ref.
+  final Map<String, dynamic>? saved;
+  final bool wasDeleted;
+
+  factory DnsServerEditResult.saved(Map<String, dynamic> ref) =>
+      DnsServerEditResult._(saved: ref);
+  factory DnsServerEditResult.deleted() =>
+      const DnsServerEditResult._(wasDeleted: true);
+}
+
+/// §117 задача 4 — opener (паттерн `openCustomRuleEditor`). null = back без
+/// изменений.
+Future<DnsServerEditResult?> openDnsServerEditor(
+  BuildContext context, {
+  required Map<String, dynamic> initialRef,
+  ResolvedServer? resolved,
+  Map<String, dynamic>? templateWrapper,
+  String canonicalDescription = '',
+  List<OutboundOption> outboundOptions = const [],
+  List<String> dnsServerTags = const [],
+  Set<String> existingTags = const {},
+}) {
+  return Navigator.push<DnsServerEditResult>(
+    context,
+    MaterialPageRoute(
+      builder: (_) => DnsServerEditScreen(
+        initialRef: initialRef,
+        resolved: resolved,
+        templateWrapper: templateWrapper,
+        canonicalDescription: canonicalDescription,
+        outboundOptions: outboundOptions,
+        dnsServerTags: dnsServerTags,
+        existingTags: existingTags,
+      ),
+    ),
+  );
+}

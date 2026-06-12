@@ -11,9 +11,9 @@ import '../services/builder/preset_expand.dart';
 import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
 import '../widgets/outbound_picker.dart';
+import 'dns_server_edit_screen.dart';
 import 'dns_settings_screen/dns_server_resolver.dart';
 import 'dns_settings_screen/resolved_server.dart';
-import 'dns_settings_screen/server_editor_sheet.dart';
 import 'dns_settings_screen/user_rule_editor_sheet.dart';
 import 'dns_settings_screen/widgets/dns_mirror_group_card.dart';
 import 'dns_settings_screen/widgets/dns_rule_tile.dart';
@@ -267,61 +267,82 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// Filter `enabled` на ref-level.
   List<String> get _enabledServerTags => enabledServerTags(_displayedServers);
 
-  /// §043: Reset inline-override обратно к canonical (template/preset).
-  /// Меняет ref kind с `inline` на `template`/`preset`, body убирается.
-  /// Если у tag'а нет canonical — это pure user, не reset а delete (отдельная action).
-  void _resetServerToCanonical(String tag) {
-    final idx = _servers.indexWhere((s) => s['tag'] == tag);
-    if (idx < 0) return;
-    final ref = _servers[idx];
-    if (ref['kind'] != 'inline') return; // только inline можно reset'нуть
-    String? newKind;
-    if (_presetServersByTag.containsKey(tag)) {
-      newKind = 'preset';
-    } else if (_templateByTag.containsKey(tag)) {
-      newKind = 'template';
-    }
-    if (newKind == null) return; // нечего reset'ить — pure user
+  /// §117 задача 4: «+» → полноэкранный редактор в new-режиме (kind inline,
+  /// default body без detour — ключ появляется только при выборе канала).
+  Future<void> _addServer() async {
+    final result = await openDnsServerEditor(
+      context,
+      initialRef: <String, dynamic>{
+        'enabled': true,
+        'kind': 'inline',
+        'tag': 'dns_new',
+        'description': 'My DNS',
+        'body': <String, dynamic>{
+          'type': 'udp',
+          'server': '1.1.1.1',
+          'server_port': 53,
+        },
+      },
+      outboundOptions: _outboundOptions,
+      dnsServerTags: _enabledServerTags,
+      existingTags: {for (final s in _servers) s['tag'].toString()},
+    );
+    if (result == null || !mounted) return;
+    final saved = result.saved;
+    if (saved == null) return;
     setState(() {
-      _servers[idx] = {
-        'enabled': ref['enabled'] != false,
-        'kind': newKind!,
-        'tag': tag,
-      };
+      // Tag conflict: replace existing (юзер подтвердил в редакторе).
+      _servers.removeWhere((s) => s['tag'] == saved['tag']);
+      _servers.add(saved);
       _markDirty();
     });
   }
 
-  /// §044: Add new inline server. Открывает editor с 3 input'ами + body
-  /// без tag/description/enabled. На save создаёт kind:inline ref.
-  void _addServer() {
-    showServerEditor(
+  /// §117 задача 4: тап по тайлу → полноэкранный редактор (Params/JSON).
+  /// Reset-to-canonical и Delete — AppBar-actions редактора, результат
+  /// приходит сюда единым `DnsServerEditResult`.
+  Future<void> _editServer(String tag) async {
+    final idx = _servers.indexWhere((s) => s['tag'] == tag);
+    if (idx < 0) return;
+    ResolvedServer? resolved;
+    for (final s in _displayedServers) {
+      if (s.tag == tag) {
+        resolved = s;
+        break;
+      }
+    }
+    if (resolved == null) return; // orphan/malformed — нечего редактировать
+
+    final canonicalDescription = switch (resolved.kind) {
+      ServerKind.template =>
+        _templateByTag[tag]?['description']?.toString() ?? '',
+      ServerKind.preset =>
+        _presetServersByTag[tag]?['description']?.toString() ?? '',
+      ServerKind.inline => '',
+    };
+
+    final result = await openDnsServerEditor(
       context,
-      title: 'Add DNS Server',
-      initialTag: 'dns_new',
-      lockedTag: false,
-      initialDescription: 'My DNS',
-      initialEnabled: true,
-      initialBody: <String, dynamic>{
-        'type': 'udp',
-        'server': '1.1.1.1',
-        'server_port': 53,
-      },
-      onSave: (savedTag, savedDescription, savedEnabled, savedBody) {
-        // Tag conflict: replace existing (юзер явно ввёл tag).
-        setState(() {
-          _servers.removeWhere((s) => s['tag'] == savedTag);
-          _servers.add({
-            'enabled': savedEnabled,
-            'kind': 'inline',
-            'tag': savedTag,
-            if (savedDescription.isNotEmpty) 'description': savedDescription,
-            'body': savedBody,
-          });
-          _markDirty();
-        });
-      },
+      initialRef: Map<String, dynamic>.from(_servers[idx]),
+      resolved: resolved,
+      templateWrapper:
+          resolved.kind == ServerKind.template ? _templateByTag[tag] : null,
+      canonicalDescription: canonicalDescription,
+      outboundOptions: _outboundOptions,
+      // §117: dom_resolver-пикер — теги без самого сервера (петля).
+      dnsServerTags: _enabledServerTags.where((t) => t != tag).toList(),
     );
+    if (result == null || !mounted) return;
+    setState(() {
+      if (result.wasDeleted) {
+        _servers.removeAt(idx);
+      } else if (result.saved != null) {
+        _servers[idx] = result.saved!;
+      } else {
+        return;
+      }
+      _markDirty();
+    });
   }
 
   void _addUserRule() => _showUserRuleEditor(-1);
@@ -473,20 +494,12 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
             ],
           ),
           const SizedBox(height: 4),
-          // §042: единый render через 3-tier merged list. Builder сам
-          // определяет UI поведение по `_origin` annotation.
+          // §042: единый render через 3-tier merged list. §117 задача 4:
+          // тайл — только switch + тап→полноэкранный редактор.
           ..._displayedServers.map((entry) => MergedServerTile(
                 entry: entry,
                 onToggleEnabled: _toggleServerEnabled,
-                onEdit: _editServerBody,
-                onReset: _resetServerToCanonical,
-                onDelete: _deleteServer,
-                onVarChanged: _setServerVarValue,
-                outboundOptions: _outboundOptions,
-                // §117: dom_resolver-пикер — теги без самого сервера
-                // (резолвить свой hostname самим собой = петля).
-                dnsServerTags:
-                    serverTags.where((t) => t != entry.tag).toList(),
+                onTap: _editServer,
               )),
 
           const Divider(height: 32),
@@ -639,23 +652,6 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     );
   }
 
-  /// §117: выбор значения var у template-сервера → `varValues` в ref-записи.
-  /// Build резолвит body с этими значениями (resolveTemplateDnsServerBody).
-  void _setServerVarValue(String tag, String name, String value) {
-    final idx = _servers.indexWhere((s) => s['tag'] == tag);
-    if (idx < 0) return;
-    setState(() {
-      final entry = Map<String, dynamic>.from(_servers[idx]);
-      final vv = entry['varValues'] is Map
-          ? Map<String, dynamic>.from(entry['varValues'] as Map)
-          : <String, dynamic>{};
-      vv[name] = value;
-      entry['varValues'] = vv;
-      _servers[idx] = entry;
-      _markDirty();
-    });
-  }
-
   /// §043: Toggle enabled — обновляет `enabled` в ref'е, kind не меняется.
   void _toggleServerEnabled(String tag, bool value) {
     final idx = _servers.indexWhere((s) => s['tag'] == tag);
@@ -663,14 +659,6 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     setState(() {
       _servers[idx] = Map<String, dynamic>.from(_servers[idx])
         ..['enabled'] = value;
-      _markDirty();
-    });
-  }
-
-  /// §043: Delete user-only inline server.
-  void _deleteServer(String tag) {
-    setState(() {
-      _servers.removeWhere((s) => s['tag'] == tag);
       _markDirty();
     });
   }
@@ -690,53 +678,6 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       _rules.removeAt(index);
       _markDirty();
     });
-  }
-
-  /// §044: Edit existing entry — диалог с 3 явными input'ами (tag locked,
-  /// description, enabled) + body JSON editor (без tag/description/enabled).
-  /// На save если entry был template/preset — kind transition в inline.
-  ///
-  /// §117: initial body — из `ResolvedServer.body` (единый резолв: для
-  /// template это `server` с подставленными vars — юзер видит конкретные
-  /// значения, не `@placeholder`'ы; copy-on-write замораживает их в inline).
-  void _editServerBody(String tag) {
-    final idx = _servers.indexWhere((s) => s['tag'] == tag);
-    if (idx < 0) return;
-    final ref = _servers[idx];
-
-    ResolvedServer? resolved;
-    for (final s in _displayedServers) {
-      if (s.tag == tag) {
-        resolved = s;
-        break;
-      }
-    }
-    if (resolved == null) return; // нечего редактировать (orphan/malformed)
-    final initialBody = Map<String, dynamic>.from(resolved.body)
-      ..remove('tag');
-    final initialDescription = resolved.description;
-
-    showServerEditor(
-      context,
-      title: 'Edit DNS Server',
-      initialTag: tag,
-      lockedTag: true, // tag нельзя менять при edit existing — иначе orphan'ит lookup
-      initialDescription: initialDescription,
-      initialEnabled: ref['enabled'] != false,
-      initialBody: initialBody,
-      onSave: (savedTag, savedDescription, savedEnabled, savedBody) {
-        setState(() {
-          _servers[idx] = {
-            'enabled': savedEnabled,
-            'kind': 'inline',
-            'tag': savedTag,
-            if (savedDescription.isNotEmpty) 'description': savedDescription,
-            'body': savedBody,
-          };
-          _markDirty();
-        });
-      },
-    );
   }
 
 }

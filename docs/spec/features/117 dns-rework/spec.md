@@ -2,9 +2,9 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Задачи 1–3 — code-complete; задача 4 (редизайн редактора DNS-сервера) — Draft |
+| Статус | Code-complete — все 4 задачи |
 | Дата старта | 2026-06-12 |
-| Дата завершения | — (задачи 1–3 закрыты 2026-06-12; задача 4 в работе) |
+| Дата завершения | 2026-06-12 |
 | Коммиты | задачи 1+2 — a2137c5; задача 3 — 858d17e (+ bac2c49 Debug API `dns`); задача 4 — — |
 | Связанные spec'ы | features/033 (preset-бандлы — уже бандлят DNS через vars/`@outbound`), features/043 (DNS servers refs), features/061 (DNS rules refs), features/030 (custom rules) |
 
@@ -28,7 +28,7 @@ detour'ом у сервера. Цель — сделать DNS управляе�
 | 1 | Формат DNS-секции шаблона | `{description, enabled, vars, server}` с `@placeholders` | ✅ done (a2137c5) |
 | 2 | Переменные у DNS-серверов (UI + build) | resolve `{vars,server}`, подстановка, var-редакторы, `outbound`-пикер | ✅ done (a2137c5) |
 | 3 | Опция DNS у правила | правило → rule_set + DNS-rule на сервер | ✅ done (858d17e) |
-| 4 | Редизайн редактора DNS-сервера (+ inline-detour) | тап→полноэкранный редактор (Params/JSON) по паттерну `CustomRuleEditScreen`; detour у inline-сервера | **текущая** |
+| 4 | Редизайн редактора DNS-сервера (+ inline-detour) | тап→полноэкранный редактор (Params/JSON) по паттерну `CustomRuleEditScreen`; detour у inline-сервера | ✅ done |
 
 Задачи 1+2 неразделимы при шиппинге (формат без обработки ломает DNS) —
 зашиплены вместе (a2137c5). Задача 3 — поверх 1+2 (858d17e). Задача 4 —
@@ -166,7 +166,7 @@ DNS **тихо** пропадает (без warning); backward-compat (нет `d
 
 ---
 
-## Задача 4 — редизайн редактора DNS-сервера (+ inline-detour) [текущая]
+## Задача 4 — редизайн редактора DNS-сервера (+ inline-detour) [✅ done]
 
 Текущий UX DNS-серверов фрагментирован: `MergedServerTile` с инлайн-тюнером
 (vars) + тап-диалог `dns_body_dialogs` (read-only тело) + боттом-шит

@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **§117 (задача 4) — Полноэкранный редактор DNS-сервера (+ inline-detour)** ([feature spec](docs/spec/features/117%20dns-rework/spec.md), [dns_server_edit_screen.dart](app/lib/screens/dns_server_edit_screen.dart), [merged_server_tile.dart](app/lib/screens/dns_settings_screen/widgets/merged_server_tile.dart)). UX DNS-серверов был фрагментирован: инлайн-тюнер на тайле + read-only диалог тела по тапу + боттом-шит редактирования + иконки edit/reset/delete. Теперь как у правил (`CustomRuleEditScreen`, паттерн 1:1): тап по тайлу → полноэкранный редактор с табами **Params** (Description/Enabled; template → var-редакторы, перенос тюнера; inline → Tag + пикер **Outbound (detour)**; preset → locked-пометка) и **JSON** (inline — редактируемое тело, источник правды; template/preset — read-only превью отрезолвленного тела + storage-shape + Copy). AppBar: back-guard Save/Keep/Discard, Reset-to-canonical (↺ для overridden), Delete (user-only, не locked), Save с dirty-подсветкой. Заодно закрыт **inline-detour**: у пользовательского сервера канал выбирается пикером и живёт в `body['detour']` (направление «канал исчез → ключ тихо не пишется» наследуется от задачи 2 даром). Тайл ужат до switch + title/badge; `server_editor_sheet`/server-body-диалог удалены. Модель/сторадж/эмиссия не тронуты. +11 тестов ([edit_controller_test.dart](app/test/screens/dns_server_edit/edit_controller_test.dart)).
+
 ### Added
 
 - **§117 — Debug API: поле `dns` у `/rules` CRUD** ([rules.dart](app/lib/services/debug/handlers/rules.dart)). Задача 3 добавила DNS-опцию в модель правила, но Debug API write-side её не знал — строгий парсер POST молча ронял поле. Теперь POST/PUT принимают `dns: {enabled, server_tag}` (`"dns": null` в PUT очищает), GET отдаёт ту же форму. Найдено на девайс-смоке §117.
