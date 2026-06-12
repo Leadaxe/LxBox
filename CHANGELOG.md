@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+—
+
+## [2.0.5] — 2026-06-12
+
 ### Changed
 
 - **§116 — Центральный banner-механизм + фикс ложного «config changed»** ([task spec](docs/spec/tasks/116-banner-mechanism-and-config-banner-fix.md), [app_banner.dart](app/lib/screens/home/widgets/app_banner.dart), [config_io.dart](app/lib/controllers/home_controller/config_io.dart)). Field report (MIUI): правишь настройки → смахиваешь приложение из recents (VPN жив, замочек) → на старте висит «Config changed — restart VPN», хотя ничего не менялось; §113 этот кейс не закрыл. Причина глубже одного флага: `configChangedNeedRestart` ставился в `saveParsedConfig` без сравнения содержимого (`tunnelUp || prev`), а bootstrap на старте пересобирает конфиг по **двум** триггерам (`configDirty` ИЛИ `configRaw.isEmpty` — последний горит, когда `getConfig()` не вернул конфиг на холодном MIUI-старте), и любая пересборка при живом туннеле зажигала баннер. Фикс: (1) **дифф** в `saveParsedConfig` — пересобрал, конфиг совпал с работающим → не ставим «config changed» (canonical-to-canonical, кроет оба триггера); (2) bootstrap разнесён по `tunnelUp`: нет конфига + туннель выключен → собрать молча; нет конфига + туннель жив → **постоянная плашка «Config loading error»** (рестарт), без пересборки; реальный `configDirty` → пересобрать. Параллельно — **единый banner-механизм**: три захардкоженных инлайн-плашки (`configDirty`/`configChangedNeedRestart`/`lastError`) + новая `config_load_error` сведены в декларативную проекцию состояния `activeBanners` + `BannerStack` (модель `autoDismiss: Duration?`, централизованный 15с-таймер lastError вместо размазанного в `_onControllerChange`); расширяется новым источником одной строкой-guard. SnackBar'ы (`ScaffoldMessenger`) — вне скоупа (event vs state). +9 тестов ([app_banner_test.dart](app/test/screens/app_banner_test.dart)).
