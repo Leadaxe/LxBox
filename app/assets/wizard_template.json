@@ -8,16 +8,118 @@
 
   "dns_options": {
     "servers": [
-      {"type": "local", "tag": "local_dns_resolver", "description": "System DNS", "enabled": true},
-      {"type": "udp", "tag": "google_udp", "server": "8.8.8.8", "server_port": 53, "description": "Google DNS (direct)", "enabled": true},
-      {"type": "udp", "tag": "cloudflare_udp", "server": "1.1.1.1", "server_port": 53, "description": "Cloudflare UDP", "enabled": true},
-      {"type": "https", "tag": "google_doh", "server": "dns.google", "server_port": 443, "path": "/dns-query", "domain_resolver": "google_udp", "description": "Google DoH", "enabled": true},
-      {"type": "tls", "tag": "cloudflare_dot", "server": "1.1.1.1", "server_port": 853, "description": "Cloudflare DoT", "enabled": false},
-      {"type": "tls", "tag": "google_dot", "server": "8.8.8.8", "server_port": 853, "description": "Google DoT", "enabled": false},
-      {"type": "tls", "tag": "quad9_dot", "server": "9.9.9.9", "server_port": 853, "description": "Quad9 (anti-malware)", "enabled": false},
-      {"type": "tls", "tag": "adguard_dot", "server": "dns.adguard-dns.com", "server_port": 853, "description": "AdGuard (ad block)", "enabled": false},
-      {"type": "tls", "tag": "adguard_family", "server": "family.adguard-dns.com", "server_port": 853, "description": "AdGuard Family (+ adult)", "enabled": false},
-      {"type": "https", "tag": "google_doh_vpn", "server": "dns.google", "server_port": 443, "path": "/dns-query", "domain_resolver": "google_udp", "detour": "vpn-1", "description": "Google DoH via VPN", "enabled": false}
+      {
+        "description": "System DNS", "enabled": true,
+        "server": {
+          "type": "local", "tag": "local_dns_resolver"
+        }
+      },
+
+      {
+        "description": "Google DNS (direct)", "enabled": true,
+        "vars": [
+          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Which channel carries DNS queries to this server"},
+          {"name": "dns_ip", "type": "enum", "default_value": "8.8.8.8", "title": "UDP server IP", "tooltip": "Google Public DNS address. IPv4 — universal; IPv6 — if your network supports it.", "options": [
+            {"title": "8.8.8.8 · Primary v4",   "value": "8.8.8.8"},
+            {"title": "8.8.4.4 · Secondary v4", "value": "8.8.4.4"},
+            {"title": "2001:4860:4860::8888 · Primary v6",   "value": "2001:4860:4860::8888"},
+            {"title": "2001:4860:4860::8844 · Secondary v6", "value": "2001:4860:4860::8844"}
+          ]}
+        ],
+        "server": {
+          "type": "udp", "tag": "google_udp", "server_port": 53,
+          "server": "@dns_ip",
+          "detour": "@outbound"
+        }
+      },
+      {
+        "description": "Google DoT", "enabled": false,
+        "vars": [
+          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Which channel carries DNS queries to this server"},
+          {"name": "dns_ip", "type": "enum", "default_value": "8.8.8.8", "title": "DoT server IP", "tooltip": "Google Public DNS address for DNS-over-TLS (port 853).", "options": [
+            {"title": "8.8.8.8 · Primary v4",   "value": "8.8.8.8"},
+            {"title": "8.8.4.4 · Secondary v4", "value": "8.8.4.4"},
+            {"title": "2001:4860:4860::8888 · Primary v6",   "value": "2001:4860:4860::8888"},
+            {"title": "2001:4860:4860::8844 · Secondary v6", "value": "2001:4860:4860::8844"}
+          ]}
+        ],
+        "server": {
+          "type": "tls", "tag": "google_dot", "server_port": 853,
+          "server": "@dns_ip",
+          "detour": "@outbound"
+        }
+      },
+      {
+        "description": "Google DoH", "enabled": false,
+        "vars": [
+          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Which channel carries DNS queries to this server"},
+          {"name": "dns_ip", "type": "enum", "default_value": "8.8.8.8", "title": "DoH server IP", "tooltip": "Google Public DNS IP for IP-based DoH. TLS SNI is pinned to dns.google.", "options": [
+            {"title": "8.8.8.8 · Primary v4",   "value": "8.8.8.8"},
+            {"title": "8.8.4.4 · Secondary v4", "value": "8.8.4.4"},
+            {"title": "2001:4860:4860::8888 · Primary v6",   "value": "2001:4860:4860::8888"},
+            {"title": "2001:4860:4860::8844 · Secondary v6", "value": "2001:4860:4860::8844"}
+          ]}
+        ],
+        "server": {
+          "type": "https", "tag": "google_doh", "server_port": 443, "path": "/dns-query", "tls": {"enabled": true, "server_name": "dns.google"},
+          "server": "@dns_ip",
+          "detour": "@outbound"
+        }
+      },
+
+      {
+        "description": "Cloudflare UDP", "enabled": true,
+        "vars": [
+          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Which channel carries DNS queries to this server"},
+          {"name": "dns_ip", "type": "enum", "default_value": "1.1.1.1", "title": "UDP server IP", "tooltip": "Cloudflare Public DNS address. IPv4 — universal; IPv6 — if your network supports it.", "options": [
+            {"title": "1.1.1.1 · Primary v4",   "value": "1.1.1.1"},
+            {"title": "1.0.0.1 · Secondary v4", "value": "1.0.0.1"},
+            {"title": "2606:4700:4700::1111 · Primary v6",   "value": "2606:4700:4700::1111"},
+            {"title": "2606:4700:4700::1001 · Secondary v6", "value": "2606:4700:4700::1001"}
+          ]}
+        ],
+        "server": {
+          "type": "udp", "tag": "cloudflare_udp", "server_port": 53,
+          "server": "@dns_ip",
+          "detour": "@outbound"
+        }
+      },
+      {
+        "description": "Cloudflare DoT", "enabled": false,
+        "vars": [
+          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Which channel carries DNS queries to this server"},
+          {"name": "dns_ip", "type": "enum", "default_value": "1.1.1.1", "title": "DoT server IP", "tooltip": "Cloudflare Public DNS address for DNS-over-TLS (port 853).", "options": [
+            {"title": "1.1.1.1 · Primary v4",   "value": "1.1.1.1"},
+            {"title": "1.0.0.1 · Secondary v4", "value": "1.0.0.1"},
+            {"title": "2606:4700:4700::1111 · Primary v6",   "value": "2606:4700:4700::1111"},
+            {"title": "2606:4700:4700::1001 · Secondary v6", "value": "2606:4700:4700::1001"}
+          ]}
+        ],
+        "server": {
+          "type": "tls", "tag": "cloudflare_dot", "server_port": 853,
+          "server": "@dns_ip",
+          "detour": "@outbound"
+        }
+      },
+
+      {
+        "description": "Safe DNS (DoT)", "enabled": false,
+        "vars": [
+          {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Which channel carries DNS queries to this server"},
+          {"name": "safe_profile", "type": "enum", "default_value": "9.9.9.9", "title": "Safe profile", "tooltip": "DNS-over-TLS with built-in blocking: malware (Quad9), ads (AdGuard), or ads + adult (AdGuard Family).", "options": [
+            {"title": "Quad9 · anti-malware",          "value": "9.9.9.9"},
+            {"title": "AdGuard · ad block",            "value": "dns.adguard-dns.com"},
+            {"title": "AdGuard Family · ad + adult",   "value": "family.adguard-dns.com"}
+          ]},
+          {"name": "dom_resolver", "type": "dns_servers", "default_value": "google_udp", "title": "Domain resolver", "tooltip": "DNS server used to resolve the Safe DNS hostname itself (AdGuard profiles use a domain address)."}
+        ],
+        "server": {
+          "type": "tls", "tag": "safe_dns_dot", "server_port": 853,
+          "server": "@safe_profile",
+          "domain_resolver": "@dom_resolver",
+          "detour": "@outbound"
+        }
+      }
     ],
     "rules": []
   },

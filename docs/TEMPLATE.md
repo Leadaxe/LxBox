@@ -202,39 +202,52 @@ Default DNS-конфигурация для новой установки. Stock
 }
 ```
 
-### `dns_options.servers[i]` — DNS-сервер catalog entry
+### `dns_options.servers[i]` — DNS-сервер catalog entry (§117)
 
-В template **shape sing-box-сервера напрямую** — без `kind`/`enabled` ref-обёртки. Builder при resolve конвертирует в `kind: template` ref-форму на ходу. Поля:
+Обёртка `{description, enabled, vars?, server}` — `server` это sing-box body с
+`@var`-плейсхолдерами, `vars` — те же определения, что у preset-vars (§033).
+Tag живёт в `server.tag` (top-level `tag` больше нет — `templateDnsServerTag`).
+Builder (`resolveTemplateDnsServerBody`) подставляет vars значениями юзера
+(`varValues` из storage-ref'а) или `default_value`:
 
 ```jsonc
 {
-  "type":        "udp" | "https" | "tls" | "local" | "h3",
-  "tag":         "<string>",         // unique id, ссылается из dns.final / dns.rules / vars dns_server type
-  "description": "<string>"?,         // показывается в UI
-  "enabled":     <bool>?,             // default true; false = в catalog'е есть, но пользователю не показываем
-  "server":      "<ip|host>"?,        // для udp/tls/h3
-  "server_port": <int>?,
-  "path":        "<string>"?,         // для https
-  "tls":         { "enabled": true, "server_name": "..." }?,  // для https/tls/h3
-  "detour":      "<outbound-tag>"?,   // через какой outbound резолвить (e.g. yandex_udp через ru-direct VPN)
-  "domain_resolver": "<tag>"?         // для https/tls — каким DNS резолвить host'а сервера (chicken-egg)
+  "description": "Google DNS (direct)",
+  "enabled":     true,               // default-enabled для auto-discovery
+  "vars": [                          // optional (local_dns_resolver — без vars)
+    {"name": "outbound", "type": "outbound", "default_value": "direct-out",
+     "title": "Outbound", "tooltip": "Which channel carries DNS queries…"},
+    {"name": "dns_ip", "type": "enum", "default_value": "8.8.8.8",
+     "title": "UDP server IP", "options": [ {"title": "…", "value": "8.8.8.8"}, … ]}
+  ],
+  "server": {                        // sing-box DNS server body + @placeholders
+    "type": "udp", "tag": "google_udp", "server_port": 53,
+    "server": "@dns_ip",
+    "detour": "@outbound"            // direct-out / пропавший канал → ключ стирается
+  }
 }
 ```
 
-10 default-серверов в текущем template'е:
+Конвенции (§117):
+
+- `detour: "@outbound"` + var default `direct-out` → по умолчанию ключ
+  **не пишется** (normalizeDnsDetour: `direct-out`, пустой и неизвестный
+  builder'у канал → ключ стирается; «нет detour» = и дефолт, и fallback).
+- Доменные серверы (адрес = hostname): `domain_resolver: "@dom_resolver"` +
+  var `{type: dns_servers, default_value: "google_udp"}` — чем резолвить имя
+  самого DNS-сервера.
+
+7 default-серверов в текущем template'е:
 
 | Tag | Type | Description |
 |---|---|---|
-| `local_dns_resolver` | local | System DNS (через Android getaddrinfo) |
-| `google_udp` | udp | 8.8.8.8:53 |
+| `local_dns_resolver` | local | System DNS (через Android getaddrinfo), без vars |
+| `google_udp` | udp | 8.8.8.8:53 (`dns_ip` enum v4/v6) |
+| `google_dot` | tls | 8.8.8.8:853 |
+| `google_doh` | https | IP-based DoH, SNI пришпилен `dns.google` |
 | `cloudflare_udp` | udp | 1.1.1.1:53 |
-| `google_doh` | https | dns.google/dns-query |
 | `cloudflare_dot` | tls | 1.1.1.1:853 |
-| `google_dot` | tls | dns.google:853 |
-| `quad9_dot` | tls | dns.quad9.net:853 |
-| `adguard_dot` | tls | DNS AdGuard |
-| `adguard_family` | tls | DNS AdGuard Family (ad+adult block) |
-| `google_doh_vpn` | https | Google DoH через bypass-VPN — для случая когда плоский DoH блокируется |
+| `safe_dns_dot` | tls | Safe DNS: Quad9 / AdGuard / AdGuard Family (`safe_profile` enum) + `dom_resolver` |
 
 ### `dns_options.rules[]` — template DNS rules (опционально)
 

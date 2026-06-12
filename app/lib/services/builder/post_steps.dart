@@ -5,6 +5,7 @@ import 'package:collection/collection.dart';
 
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
+import '../json_clone.dart';
 import '../settings_storage.dart' show SettingsStorage, TunAppsConfig;
 import 'preset_expand.dart';
 import 'rule_set_registry.dart';

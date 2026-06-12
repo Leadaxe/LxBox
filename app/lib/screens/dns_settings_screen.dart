@@ -10,6 +10,7 @@ import '../services/builder/post_steps.dart';
 import '../services/builder/preset_expand.dart';
 import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
+import '../widgets/outbound_picker.dart';
 import 'dns_settings_screen/dns_server_resolver.dart';
 import 'dns_settings_screen/resolved_server.dart';
 import 'dns_settings_screen/server_editor_sheet.dart';
@@ -78,6 +79,11 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// Live lookup: storage хранит presetId, UI отображает текущий label.
   Map<String, String> _presetLabelByPresetId = {};
 
+  /// §117: каналы для `type: outbound` vars DNS-серверов — Direct + активные
+  /// каналы (решение №2). Активность = как в `_buildPresetGroups`:
+  /// stored enabled_groups (или default_enabled при пустом) + vpn-1 всегда.
+  List<OutboundOption> _outboundOptions = const [];
+
 
   bool _loading = true;
   // §076/§085 R4/§107: staging через LazyPersistMixin (markDirty/stageChanges).
@@ -111,11 +117,27 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
 
     // §043: storage хранит kind-discriminated refs (симметрия с DNS rules).
     // Resolver делает auto-discovery + orphan cleanup + legacy migration.
-    final templateByTag = <String, Map<String, dynamic>>{
-      for (final s in templateServersRaw)
-        if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
-          s['tag'] as String: s,
-    };
+    // §117: template-серверы — обёртки `{description, enabled, vars?, server}`.
+    final templateByTag = templateDnsServersByTag(templateServersRaw);
+
+    // §117: активные каналы для outbound-пикера vars.
+    final storedGroups = await SettingsStorage.getEnabledGroups();
+    final activeGroupTags = <String>{};
+    if (storedGroups.isEmpty) {
+      for (final g in template.presetGroups) {
+        if (g.defaultEnabled) activeGroupTags.add(g.tag);
+      }
+    } else {
+      activeGroupTags.addAll(storedGroups);
+    }
+    activeGroupTags.add('vpn-1'); // required, как в routing
+    final outboundOptions = <OutboundOption>[
+      const OutboundOption(value: 'direct-out', label: 'direct'),
+      for (final g in template.presetGroups)
+        if (activeGroupTags.contains(g.tag))
+          OutboundOption(
+              value: g.tag, label: g.label.isNotEmpty ? g.label : g.tag),
+    ];
 
     // §033: build template rules map by name
     final templateRulesByName = <String, Map<String, dynamic>>{
@@ -191,6 +213,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         _templateRulesByName = templateRulesByName;
         _presetRulesByPresetId = presetRulesByPresetId;
         _presetLabelByPresetId = presetLabelByPresetId;
+        _outboundOptions = outboundOptions;
         _strategy = vars['dns_strategy'] ?? 'prefer_ipv4';
         _dnsFinal = vars['dns_final'] ?? '';
         _defaultResolver = vars['dns_default_domain_resolver'] ?? '';
@@ -345,6 +368,12 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                 onEdit: _editServerBody,
                 onReset: _resetServerToCanonical,
                 onDelete: _deleteServer,
+                onVarChanged: _setServerVarValue,
+                outboundOptions: _outboundOptions,
+                // §117: dom_resolver-пикер — теги без самого сервера
+                // (резолвить свой hostname самим собой = петля).
+                dnsServerTags:
+                    serverTags.where((t) => t != entry.tag).toList(),
               )),
 
           const Divider(height: 32),
@@ -487,6 +516,23 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     );
   }
 
+  /// §117: выбор значения var у template-сервера → `varValues` в ref-записи.
+  /// Build резолвит body с этими значениями (resolveTemplateDnsServerBody).
+  void _setServerVarValue(String tag, String name, String value) {
+    final idx = _servers.indexWhere((s) => s['tag'] == tag);
+    if (idx < 0) return;
+    setState(() {
+      final entry = Map<String, dynamic>.from(_servers[idx]);
+      final vv = entry['varValues'] is Map
+          ? Map<String, dynamic>.from(entry['varValues'] as Map)
+          : <String, dynamic>{};
+      vv[name] = value;
+      entry['varValues'] = vv;
+      _servers[idx] = entry;
+      _markDirty();
+    });
+  }
+
   /// §043: Toggle enabled — обновляет `enabled` в ref'е, kind не меняется.
   void _toggleServerEnabled(String tag, bool value) {
     final idx = _servers.indexWhere((s) => s['tag'] == tag);
@@ -526,47 +572,26 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// §044: Edit existing entry — диалог с 3 явными input'ами (tag locked,
   /// description, enabled) + body JSON editor (без tag/description/enabled).
   /// На save если entry был template/preset — kind transition в inline.
+  ///
+  /// §117: initial body — из `ResolvedServer.body` (единый резолв: для
+  /// template это `server` с подставленными vars — юзер видит конкретные
+  /// значения, не `@placeholder`'ы; copy-on-write замораживает их в inline).
   void _editServerBody(String tag) {
     final idx = _servers.indexWhere((s) => s['tag'] == tag);
     if (idx < 0) return;
     final ref = _servers[idx];
-    final kind = ref['kind'] as String?;
 
-    // Initial body — без tag/description/enabled (для inline это уже так в §044;
-    // для template/preset peel'им из canonical перед показом).
-    Map<String, dynamic> initialBody;
-    String initialDescription;
-    if (kind == 'inline' && ref['body'] is Map) {
-      initialBody = Map<String, dynamic>.from(ref['body'] as Map);
-      // На случай если в body всё ещё лежат tag/description/enabled (pre-§044
-      // данные ещё не мигрированные — defensive strip).
-      initialBody
-        ..remove('tag')
-        ..remove('description')
-        ..remove('enabled');
-      initialDescription = ref['description']?.toString() ?? '';
-    } else if (kind == 'preset' && _presetServersByTag.containsKey(tag)) {
-      final canonical = _presetServersByTag[tag]!;
-      initialBody = Map<String, dynamic>.from(canonical)
-        ..remove('tag')
-        ..remove('description')
-        ..remove('enabled')
-        ..remove('_preset_label');
-      initialDescription = ref['description']?.toString() ??
-          canonical['description']?.toString() ??
-          '';
-    } else if (kind == 'template' && _templateByTag.containsKey(tag)) {
-      final canonical = _templateByTag[tag]!;
-      initialBody = Map<String, dynamic>.from(canonical)
-        ..remove('tag')
-        ..remove('description')
-        ..remove('enabled');
-      initialDescription = ref['description']?.toString() ??
-          canonical['description']?.toString() ??
-          '';
-    } else {
-      return; // нечего редактировать
+    ResolvedServer? resolved;
+    for (final s in _displayedServers) {
+      if (s.tag == tag) {
+        resolved = s;
+        break;
+      }
     }
+    if (resolved == null) return; // нечего редактировать (orphan/malformed)
+    final initialBody = Map<String, dynamic>.from(resolved.body)
+      ..remove('tag');
+    final initialDescription = resolved.description;
 
     showServerEditor(
       context,

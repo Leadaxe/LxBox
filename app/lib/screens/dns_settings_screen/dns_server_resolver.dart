@@ -1,3 +1,7 @@
+import '../../models/parser_config.dart' show WizardVar;
+import '../../services/builder/post_steps.dart'
+    show resolveTemplateDnsServerBody;
+import '../../services/builder/preset_expand.dart' show normalizeDnsDetour;
 import 'resolved_server.dart';
 
 /// §044: render list — typed `ResolvedServer` для каждой ref-записи.
@@ -6,10 +10,13 @@ import 'resolved_server.dart';
 /// - `tag` — из ref'а (синтезируется в body для display)
 /// - `description` — из ref'а если переопределён, иначе из canonical
 /// - `enabled` — из ref'а
-/// - `body` — для inline это `ref.body` + injected tag; для template/preset —
-///   canonical lookup + strip meta + injected tag
+/// - `body` — для inline это `ref.body` + injected tag; для template —
+///   §117-обёртка `{vars, server}` с подставленными `@var`'ами (значения из
+///   `ref.varValues` / дефолты) + нормализованный detour (display = emit);
+///   для preset — canonical lookup + strip meta + injected tag
 ///
-/// `kind` / `overrides` / `presetLabel` — typed accessors на `ResolvedServer`.
+/// `kind` / `overrides` / `presetLabel` / `vars` / `varValues` /
+/// `lockedByPreset` — typed accessors на `ResolvedServer`.
 ///
 /// — pure.
 List<ResolvedServer> resolveDisplayedServers(
@@ -29,6 +36,8 @@ List<ResolvedServer> resolveDisplayedServers(
     ServerKind? overrides;
     String? presetLabel;
     String? canonicalDescription;
+    var vars = const <WizardVar>[];
+    var varValues = const <String, String>{};
 
     if (kind == ServerKind.inline) {
       final b = ref['body'];
@@ -52,7 +61,20 @@ List<ResolvedServer> resolveDisplayedServers(
     } else if (kind == ServerKind.template) {
       final t = templateByTag[tag];
       if (t == null) continue; // orphan
-      body = Map<String, dynamic>.from(t);
+      // §117: обёртка `{description, enabled, vars?, server}` — body это
+      // `server` с подставленными vars; display показывает emit-форму
+      // (detour normalized), поэтому direct-out в диалоге не светится.
+      final vv = ref['varValues'];
+      varValues = vv is Map
+          ? {for (final e in vv.entries) e.key.toString(): '${e.value}'}
+          : const {};
+      body = resolveTemplateDnsServerBody(t, varValues: varValues);
+      if (body == null) continue; // malformed wrapper
+      normalizeDnsDetour(body);
+      vars = (t['vars'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(WizardVar.fromJson)
+          .toList();
       canonicalDescription = t['description']?.toString();
     }
 
@@ -77,6 +99,8 @@ List<ResolvedServer> resolveDisplayedServers(
       body: body,
       overrides: overrides,
       presetLabel: presetLabel,
+      vars: vars,
+      varValues: varValues,
     ));
   }
   // §044: render-order — template → preset → inline (см. ServerKind enum).
@@ -86,13 +110,15 @@ List<ResolvedServer> resolveDisplayedServers(
 }
 
 /// Tags доступные в dropdown'ах (DNS Final / Default Resolver / per-rule).
-/// Filter `enabled` на ref-level.
+/// Filter `enabled` на ref-level. §117: locked-сервер (реферится активным
+/// пресетом) build всегда force-include'ит — показываем его даже при
+/// выключенном тоггле.
 ///
 /// pure.
 List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
   final out = <String>[];
   for (final s in displayedServers) {
-    if (!s.enabled) continue;
+    if (!s.enabled && !s.lockedByPreset) continue;
     if (s.tag.isEmpty) continue;
     out.add(s.tag);
   }

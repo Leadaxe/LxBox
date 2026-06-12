@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../models/parser_config.dart';
+import 'outbound_picker.dart';
 
 /// Рендерит список [WizardVar] с секция-заголовками и типизированными
 /// контролами:
@@ -10,6 +11,10 @@ import '../models/parser_config.dart';
 /// - `bool` → [SwitchListTile]
 /// - `enum` → [DropdownButton]
 /// - `secret` → text-input с обфускацией + eye-toggle + кнопка Generate
+/// - `outbound` → [OutboundPicker] из [outboundOptions] (§117); без options —
+///   fallback в text-input
+/// - `dns_servers` → dropdown из [dnsServerTags] (§117); без tags — fallback
+///   в text-input
 /// - `text` → text-input; при наличии `options` — combo с suffix-▾ popup'ом
 ///   пресетов. Юзер может и выбрать preset, и напечатать своё.
 ///
@@ -19,6 +24,7 @@ import '../models/parser_config.dart';
 /// Используется:
 /// - `settings_screen.dart` — chapter: core (sing-box низкоуровневое)
 /// - `routing_screen.dart` — chapter: routing (Auto Proxy)
+/// - `dns_settings_screen` — vars DNS-сервера (§117)
 class TemplateVarListView extends StatefulWidget {
   const TemplateVarListView({
     super.key,
@@ -27,6 +33,8 @@ class TemplateVarListView extends StatefulWidget {
     required this.onChanged,
     this.sectionDescriptions = const {},
     this.showSectionHeaders = true,
+    this.outboundOptions = const [],
+    this.dnsServerTags = const [],
   });
 
   /// Переменные для рендеринга. Порядок и секции сохраняются.
@@ -45,6 +53,14 @@ class TemplateVarListView extends StatefulWidget {
   /// заголовок (например, routing_screen показывает одну секцию под своей
   /// шапкой).
   final bool showSectionHeaders;
+
+  /// §117: каналы для `type: outbound` vars (Direct + активные каналы).
+  /// Пусто → outbound-var рендерится текстовым полем (fallback).
+  final List<OutboundOption> outboundOptions;
+
+  /// §117: DNS-сервер-теги для `type: dns_servers` vars (domain_resolver).
+  /// Пусто → var рендерится текстовым полем (fallback).
+  final List<String> dnsServerTags;
 
   @override
   State<TemplateVarListView> createState() => _TemplateVarListViewState();
@@ -174,19 +190,65 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
           ),
         );
 
-      default:
-        // text: если есть options — добавляется combo-popup ▾ с пресетами.
-        final hasSuggestions = v.options.isNotEmpty;
-        return _VarTextField(
-          key: ValueKey('text-${v.name}'),
-          value: _values[v.name] ?? '',
-          width: hasSuggestions ? 220 : 180,
+      case 'outbound':
+        // §117: пикер канала (Direct + активные каналы). Без options —
+        // fallback в text-input (экраны, не передающие каналы).
+        if (widget.outboundOptions.isEmpty) return _buildTextField(v);
+        final current = _values[v.name] ?? v.defaultValue;
+        return _LabelledField(
           label: v.title.isNotEmpty ? v.title : v.name,
           tooltip: v.tooltip,
-          suggestions: v.options.map((o) => o.value).toList(),
-          onChanged: (val) => _update(v.name, val),
+          field: OutboundPicker(
+            value: current,
+            options: widget.outboundOptions,
+            allowReject: false,
+            onChanged: (val) => _update(v.name, val),
+          ),
         );
+
+      case 'dns_servers':
+        // §117: dropdown DNS-сервер-тегов (domain_resolver и т.п.).
+        if (widget.dnsServerTags.isEmpty) return _buildTextField(v);
+        final currentTag = _values[v.name] ?? v.defaultValue;
+        final tags = widget.dnsServerTags.contains(currentTag)
+            ? widget.dnsServerTags
+            : [currentTag, ...widget.dnsServerTags];
+        return _LabelledField(
+          label: v.title.isNotEmpty ? v.title : v.name,
+          tooltip: v.tooltip,
+          field: DropdownButton<String>(
+            isExpanded: true,
+            value: currentTag,
+            items: tags
+                .map((t) => DropdownMenuItem(
+                      value: t,
+                      child: Text(t, style: const TextStyle(fontSize: 13)),
+                    ))
+                .toList(),
+            onChanged: (val) {
+              if (val == null) return;
+              _update(v.name, val);
+            },
+          ),
+        );
+
+      default:
+        return _buildTextField(v);
     }
+  }
+
+  /// text: если есть options — добавляется combo-popup ▾ с пресетами.
+  Widget _buildTextField(WizardVar v) {
+    final hasSuggestions = v.options.isNotEmpty;
+    return _VarTextField(
+      key: ValueKey('text-${v.name}'),
+      value: _values[v.name] ?? '',
+      width: hasSuggestions ? 220 : 180,
+      label: v.title.isNotEmpty ? v.title : v.name,
+      tooltip: v.tooltip,
+      suggestions: v.options.map((o) => o.value).toList(),
+      onChanged: (val) => _update(v.name, val),
+    );
   }
 }
 

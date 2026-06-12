@@ -1,7 +1,10 @@
 // ===========================================================================
 // §044: Typed render-layer for DNS servers (заменяет underscore-аннотации
 // в Map'ах из §043).
+// §117: + vars/varValues (template-серверы) и lockedByPreset (lifecycle).
 // ===========================================================================
+
+import '../../models/parser_config.dart' show WizardVar;
 
 /// Порядок enum-значений = порядок render'а в UI (§044): template первым
 /// (системные defaults), потом preset (от active preset'ов), потом inline
@@ -45,6 +48,8 @@ class ResolvedServer {
     required this.body,
     this.overrides,
     this.presetLabel,
+    this.vars = const [],
+    this.varValues = const {},
   });
 
   final ServerKind kind;
@@ -55,6 +60,19 @@ class ResolvedServer {
   final ServerKind? overrides;
   final String? presetLabel;
 
+  /// §117: var-определения template-обёртки (`{vars, server}`). Только для
+  /// `kind: template`; preset-vars редактируются в редакторе правила,
+  /// inline-body редактируется как JSON.
+  final List<WizardVar> vars;
+
+  /// §117: выбранные значения vars из ref-записи (`varValues` в storage).
+  final Map<String, String> varValues;
+
   bool get isOverridden => kind == ServerKind.inline && overrides != null;
   bool get isUserOnly => kind == ServerKind.inline && overrides == null;
+
+  /// §117 lifecycle: сервер реферится активным пресетом → управляемый
+  /// (enabled-тоггл и delete заблокированы, build делает force-include).
+  bool get lockedByPreset =>
+      kind == ServerKind.preset || overrides == ServerKind.preset;
 }

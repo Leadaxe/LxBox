@@ -8,7 +8,9 @@
 
 ## [Unreleased]
 
-—
+### Added
+
+- **§117 (задачи 1+2) — Переменные у DNS-серверов: per-server detour/IP-профиль в UI** ([feature spec](docs/spec/features/117%20dns-rework/spec.md), [wizard_template.json](app/assets/wizard_template.json), [dns_servers.dart](app/lib/services/builder/post_steps/dns_servers.dart), [merged_server_tile.dart](app/lib/screens/dns_settings_screen/widgets/merged_server_tile.dart)). Field report (4PDA, Pixel 7): DNS-запросы «нужных» приложений должны ходить **через VPN-канал**, но detour у DNS-сервера в UI не управлялся — собиралось вручную из трёх кусков. Теперь: (1) **формат шаблона** — каждый сервер в `dns_options.servers` это обёртка `{description, enabled, vars, server}` с `@var`-плейсхолдерами в body (tag в `server.tag`); консолидация Quad9+AdGuard+AdGuard Family → один «Safe DNS» с `safe_profile`-enum, IPv4/IPv6 варианты через `dns_ip`-enum, доменные серверы получили `domain_resolver: "@dom_resolver"` (var `type: dns_servers`, default `google_udp`); (2) **build** — `resolveTemplateDnsServerBody` подставляет vars значениями юзера (storage-ref расширен `varValues`) или дефолтами; `detour` нормализуется: `direct-out` / исчезнувший канал → ключ **не пишется** (вместо dangling-ссылки), правило применяется ко всем серверам включая inline; (3) **UI** — у template-сервера разворачиваемая секция параметров (`TemplateVarListView` + новые типы `outbound` — пикер «Direct + активные каналы», и `dns_servers` — дропдаун тегов). Кейс репортёра: у adguard-сервера выбрать Outbound=VPN-канал → `detour: "<канал>"` → DNS уходит через туннель. Бонус-фикс жизненного цикла (pre-§117 баг): DNS-сервер, реферимый активным пресетом, больше нельзя выключить под DNS-правилом пресета (битый конфиг) — UI-замок «used by <пресет>» + build force-include. Миграции нет — kind-ref'ы + орфан-чистка + дефолты vars покрывают старое состояние. Проверено `sing-box check` (lx.6). +13 тестов ([dns_servers_resolver_test.dart](app/test/services/builder/dns_servers_resolver_test.dart)). Задача 3 (опция DNS у routing-правила) — отдельно.
 
 ## [2.0.5] — 2026-06-12
 

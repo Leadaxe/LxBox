@@ -54,11 +54,8 @@ Future<void> applyCustomDns(
           .whereType<Map<String, dynamic>>()
           .map((s) => Map<String, dynamic>.from(s))
           .toList();
-  final templateByTag = <String, Map<String, dynamic>>{
-    for (final s in templateServers)
-      if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
-        s['tag'] as String: s,
-  };
+  // §117: template-серверы — обёртки `{description, enabled, vars?, server}`.
+  final templateByTag = templateDnsServersByTag(templateServers);
   final presetServersByTag = <String, Map<String, dynamic>>{
     for (final s in extraServers)
       if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
@@ -71,11 +68,21 @@ Future<void> applyCustomDns(
     presetServersByTag: presetServersByTag,
   );
 
+  // §117: known outbound-теги (outbounds + endpoints уже в конфиге на этом
+  // шаге пайплайна) — для зачистки dangling `detour` у DNS-серверов.
+  final knownOutboundTags = <String>{
+    for (final o in (config['outbounds'] as List<dynamic>? ?? const []))
+      if (o is Map && o['tag'] is String) o['tag'] as String,
+    for (final e in (config['endpoints'] as List<dynamic>? ?? const []))
+      if (e is Map && e['tag'] is String) e['tag'] as String,
+  };
+
   // Refs → final bodies для sing-box config.
   dns['servers'] = resolveDnsServersBodies(
     resolved: resolvedServers,
     templateByTag: templateByTag,
     presetServersByTag: presetServersByTag,
+    knownOutboundTags: knownOutboundTags,
   );
 
   // §033: resolve DNS rules — auto-discover + orphan cleanup + persist
