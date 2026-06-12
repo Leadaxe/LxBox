@@ -128,6 +128,14 @@ Future<DebugResponse> _update(
   // Preset-kind поля (task 011 / spec §033).
   setIfPresent('presetId', fieldString(body, 'preset_id'));
   setIfPresent('varsValues', fieldStringMap(body, 'vars_values'));
+  // §117 задача 3 — DNS-опция. `"dns": null` явно очищает поле.
+  if (body.containsKey('dns')) {
+    if (body['dns'] == null) {
+      patched.remove('dns');
+    } else {
+      patched['dns'] = _fieldRuleDns(body, 'dns')!.toJson();
+    }
+  }
 
   final updated = CustomRule.fromJson(patched);
   rules[idx] = updated;
@@ -211,6 +219,8 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
   final wifiSsids = fieldStringList(j, 'wifi_ssids') ?? const [];
   final wifiBssidsRaw = fieldStringList(j, 'wifi_bssids') ?? const [];
   final wifiBssids = _validateBssids(wifiBssidsRaw);
+  // §117 задача 3 — DNS-опция (inline/srs).
+  final dns = _fieldRuleDns(j, 'dns');
 
   switch (kind) {
     case CustomRuleKind.inline:
@@ -229,6 +239,7 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         wifiSsids: wifiSsids,
         wifiBssids: wifiBssids,
         outbound: outbound,
+        dns: dns,
       );
     case CustomRuleKind.srs:
       return CustomRuleSrs(
@@ -243,6 +254,7 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         wifiSsids: wifiSsids,
         wifiBssids: wifiBssids,
         outbound: outbound,
+        dns: dns,
       );
     case CustomRuleKind.preset:
       final presetId = fieldString(j, 'preset_id') ?? '';
@@ -256,6 +268,23 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         varsValues: fieldStringMap(j, 'vars_values'),
       );
   }
+}
+
+/// §117 задача 3 — DNS-опция правила. Wire shape (snake_case как у остальных
+/// полей API): `{"enabled": bool, "server_tag": "<dns-server tag>"}`.
+/// Отсутствие ключа → null (поле не задано). Сервер по tag не валидируем —
+/// пропавший реф build тихо не эмитит (решение №3).
+RuleDns? _fieldRuleDns(Map<String, dynamic> m, String key) {
+  if (!m.containsKey(key)) return null;
+  final v = m[key];
+  if (v is! Map) throw BadRequest('field "$key" must be object');
+  final enabled = v['enabled'];
+  if (enabled is! bool) throw BadRequest('field "$key.enabled" must be bool');
+  final tag = v['server_tag'];
+  if (tag is! String || tag.isEmpty) {
+    throw BadRequest('field "$key.server_tag" must be non-empty string');
+  }
+  return RuleDns(enabled: enabled, serverTag: tag);
 }
 
 /// §051 — strict BSSID validation для Debug API (write-side).
