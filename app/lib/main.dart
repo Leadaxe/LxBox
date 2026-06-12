@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
 import 'services/app_log.dart';
 import 'services/clash_log_pump.dart';
+import 'services/subscription/subscription_identity.dart';
 import 'services/debug/bootstrap.dart' as debug_bootstrap;
 import 'services/nav/home_return_observer.dart';
 import 'services/version_info.dart';
@@ -19,6 +20,10 @@ void main() async {
   // UpdateChecker (см. §066). Раньше версия дублировалась hardcoded const'ом
   // в AboutScreen — поднимать вручную легко забыть (произошло на v1.8.0).
   await VersionInfo.I.init();
+  // §118 — идентичность фетча подписок (UA override + HWID + device-meta).
+  // После VersionInfo (UA дефолт зависит от версии), до runApp — `_fetch`
+  // читает значения синхронно.
+  await SubscriptionIdentity.init();
   // §038 — подгружаем persistent warning+error entries предыдущей сессии
   // (из обоих файлов applog.txt + corelog.txt — §043) до runApp, чтобы
   // Debug-экран сразу видел pre-crash JVM-events.

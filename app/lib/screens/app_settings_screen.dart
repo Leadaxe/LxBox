@@ -8,6 +8,8 @@ import '../services/debug/bootstrap.dart';
 import '../services/debug/transport/server.dart';
 import '../services/haptic_service.dart';
 import '../services/settings_storage.dart';
+import '../services/subscription/subscription_identity.dart';
+import '../services/subscription/user_agent.dart';
 import '../services/url_launcher.dart' as ul;
 import '../services/wifi_history_listener.dart';
 import '../widgets/wifi_permission_dialog.dart';
@@ -65,6 +67,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   Timer? _coreLogsHighlightTimer;
   // §051 Phase 3 — auto-record visited Wi-Fi networks (default off).
   bool _autoRecordWifi = false;
+
+  // §118 — subscription fetch identity (UA override + HWID).
+  String _userAgent = '';
+  bool _sendHwid = false;
+  String _hwid = '';
 
   @override
   void initState() {
@@ -130,8 +137,19 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final coreLogsEnabled = await _vpn.getCoreLogsEnabled();
     final configLocked = await SettingsStorage.getConfigLockedForDebug();
     final autoRecordWifi = await SettingsStorage.getAutoRecordWifi();
+    final userAgent =
+        await SettingsStorage.getVar(SubscriptionIdentity.varUserAgent, '');
+    final sendHwid =
+        (await SettingsStorage.getVar(SubscriptionIdentity.varSendHwid,
+            'false')) ==
+            'true';
+    final hwid =
+        await SettingsStorage.getVar(SubscriptionIdentity.varHwid, '');
     if (mounted) {
       setState(() {
+        _userAgent = userAgent;
+        _sendHwid = sendHwid;
+        _hwid = hwid;
         _autoStart = auto;
         _haptic = haptic != 'false';
         _autoPing = autoPing != 'false';
@@ -411,6 +429,102 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   EdgeInsets _tabPadding(BuildContext context) => EdgeInsets.fromLTRB(
       12, 12, 12, MediaQuery.of(context).padding.bottom + 24);
 
+  // ─── §118 subscription fetch identity (UA override + HWID) ─────────────
+
+  String get _deviceMeta => [
+        'android',
+        if (SubscriptionIdentity.osVersion.isNotEmpty)
+          SubscriptionIdentity.osVersion,
+        if (SubscriptionIdentity.deviceModel.isNotEmpty)
+          SubscriptionIdentity.deviceModel,
+      ].join(' · ');
+
+  Future<String?> _editIdentityText({
+    required String title,
+    required String initial,
+    String? hint,
+    bool monospace = false,
+  }) async {
+    final ctl = TextEditingController(text: initial);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          maxLines: null,
+          style: monospace
+              ? const TextStyle(fontFamily: 'monospace', fontSize: 13)
+              : null,
+          decoration: InputDecoration(
+            hintText: hint,
+            border: const OutlineInputBorder(),
+            isDense: true,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctl.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    ctl.dispose();
+    return result;
+  }
+
+  Future<void> _editUserAgent() async {
+    final v = await _editIdentityText(
+      title: 'Custom User-Agent',
+      initial: _userAgent,
+      hint: resolveSubscriptionUserAgent(),
+    );
+    if (v == null) return;
+    final trimmed = v.trim();
+    setState(() => _userAgent = trimmed);
+    await SettingsStorage.setVar(SubscriptionIdentity.varUserAgent, trimmed);
+    SubscriptionIdentity.apply(userAgentOverride: trimmed);
+  }
+
+  void _setSendHwid(bool val) {
+    // §118 — лениво генерим UUID при первом включении (решение №2/№3).
+    if (val && _hwid.isEmpty) {
+      _hwid = generateUuidV4();
+      unawaited(SettingsStorage.setVar(SubscriptionIdentity.varHwid, _hwid));
+      SubscriptionIdentity.apply(hwid: _hwid);
+    }
+    setState(() => _sendHwid = val);
+    unawaited(SettingsStorage.setVar(
+        SubscriptionIdentity.varSendHwid, val.toString()));
+    SubscriptionIdentity.apply(sendHwid: val);
+  }
+
+  Future<void> _editHwid() async {
+    final v = await _editIdentityText(
+      title: 'HWID',
+      initial: _hwid,
+      monospace: true,
+    );
+    if (v == null) return;
+    final trimmed = v.trim();
+    setState(() => _hwid = trimmed);
+    await SettingsStorage.setVar(SubscriptionIdentity.varHwid, trimmed);
+    SubscriptionIdentity.apply(hwid: trimmed);
+  }
+
+  void _regenerateHwid() {
+    final v = generateUuidV4();
+    setState(() => _hwid = v);
+    unawaited(SettingsStorage.setVar(SubscriptionIdentity.varHwid, v));
+    SubscriptionIdentity.apply(hwid: v);
+  }
+
   Widget _buildGeneralTab(BuildContext context) {
     return GeneralTab(
       loaded: _loaded,
@@ -449,6 +563,15 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       onOpenBackup: () => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const BackupScreen()),
       ),
+      userAgent: _userAgent,
+      defaultUserAgent: resolveSubscriptionUserAgent(),
+      sendHwid: _sendHwid,
+      hwid: _hwid,
+      deviceMeta: _deviceMeta,
+      onEditUserAgent: () => unawaited(_editUserAgent()),
+      onSendHwidChanged: _setSendHwid,
+      onEditHwid: () => unawaited(_editHwid()),
+      onRegenerateHwid: _regenerateHwid,
     );
   }
 

@@ -26,6 +26,15 @@ class GeneralTab extends StatelessWidget {
     required this.onHapticChanged,
     required this.onAddQuickSettingsTile,
     required this.onOpenBackup,
+    required this.userAgent,
+    required this.defaultUserAgent,
+    required this.sendHwid,
+    required this.hwid,
+    required this.deviceMeta,
+    required this.onEditUserAgent,
+    required this.onSendHwidChanged,
+    required this.onEditHwid,
+    required this.onRegenerateHwid,
   });
 
   final bool loaded;
@@ -43,6 +52,20 @@ class GeneralTab extends StatelessWidget {
   final ValueChanged<bool> onHapticChanged;
   final VoidCallback onAddQuickSettingsTile;
   final VoidCallback onOpenBackup;
+
+  /// §118 — кастомный UA (пусто = дефолт) + HWID.
+  final String userAgent;
+  final String defaultUserAgent;
+  final bool sendHwid;
+  final String hwid;
+
+  /// `android · <osVersion> · <model>` — что уйдёт в device-meta заголовки.
+  final String deviceMeta;
+
+  final VoidCallback onEditUserAgent;
+  final ValueChanged<bool> onSendHwidChanged;
+  final VoidCallback onEditHwid;
+  final VoidCallback onRegenerateHwid;
 
   @override
   Widget build(BuildContext context) {
@@ -116,6 +139,76 @@ class GeneralTab extends StatelessWidget {
           value: autoUpdateSubs,
           onChanged: loaded ? onAutoUpdateSubsChanged : null,
         ),
+        // §118 — кастомный User-Agent (пусто = брендированный дефолт).
+        ListTile(
+          leading: const Icon(Icons.badge_outlined),
+          title: const Text('Custom User-Agent'),
+          subtitle: Text(
+            userAgent.isEmpty ? 'Default · $defaultUserAgent' : userAgent,
+            style: TextStyle(
+              fontStyle: userAgent.isEmpty ? FontStyle.italic : null,
+            ),
+          ),
+          trailing: const Icon(Icons.edit_outlined),
+          onTap: loaded ? onEditUserAgent : null,
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Text(
+            'Some panels return the config by a substring in the User-Agent — '
+            'a custom UA without the "LxBox" token may yield an unsupported '
+            'format and break the update. Change only if you know why.',
+            style: TextStyle(
+              fontSize: 11,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        // §118 — HWID (Remnawave x-hwid + device-meta), off по умолчанию.
+        SwitchListTile(
+          title: const Text('Send HWID'),
+          subtitle: const Text(
+              'Send x-hwid + device headers on every subscription fetch — for '
+              'panels with HWID device limits (Remnawave). Off by default.'),
+          secondary: const Icon(Icons.devices_outlined),
+          value: sendHwid,
+          onChanged: loaded ? onSendHwidChanged : null,
+        ),
+        if (sendHwid) ...[
+          ListTile(
+            leading: const Icon(Icons.tag),
+            title: const Text('HWID'),
+            subtitle: Text(
+              hwid.isEmpty ? '(not set)' : hwid,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 20),
+                  tooltip: 'Regenerate',
+                  onPressed: loaded ? onRegenerateHwid : null,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 20),
+                  tooltip: 'Edit',
+                  onPressed: loaded ? onEditHwid : null,
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Device headers sent with HWID: $deviceMeta',
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
         const Divider(height: 32),
         Text('Updates', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
