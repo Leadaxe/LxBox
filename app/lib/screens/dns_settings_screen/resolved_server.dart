@@ -50,6 +50,7 @@ class ResolvedServer {
     this.presetLabel,
     this.vars = const [],
     this.varValues = const {},
+    this.usedByRule,
   });
 
   final ServerKind kind;
@@ -68,6 +69,10 @@ class ResolvedServer {
   /// §117: выбранные значения vars из ref-записи (`varValues` в storage).
   final Map<String, String> varValues;
 
+  /// §117 задача 3: имя routing-правила с активной DNS-опцией, ссылающегося
+  /// на этот сервер. null = правила не ссылаются.
+  final String? usedByRule;
+
   bool get isOverridden => kind == ServerKind.inline && overrides != null;
   bool get isUserOnly => kind == ServerKind.inline && overrides == null;
 
@@ -75,4 +80,12 @@ class ResolvedServer {
   /// (enabled-тоггл и delete заблокированы, build делает force-include).
   bool get lockedByPreset =>
       kind == ServerKind.preset || overrides == ServerKind.preset;
+
+  /// §117 lifecycle (locked №7): реферимый активным пресетом ИЛИ правилом
+  /// с DNS-опцией — не выключается / не удаляется независимо.
+  bool get locked => lockedByPreset || usedByRule != null;
+
+  /// Кто ссылается — для «used by <…>» в UI.
+  String get lockedByLabel =>
+      lockedByPreset ? (presetLabel ?? 'preset') : (usedByRule ?? '');
 }

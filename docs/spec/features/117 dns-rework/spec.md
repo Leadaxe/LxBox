@@ -2,10 +2,10 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In Progress — задачи 1+2 реализованы (+ lifecycle-фикс), задача 3 pending |
+| Статус | Code-complete — все 3 задачи реализованы (+ lifecycle-фикс) |
 | Дата старта | 2026-06-12 |
-| Дата завершения | — |
-| Коммиты | задачи 1+2 — a2137c5 |
+| Дата завершения | 2026-06-12 |
+| Коммиты | задачи 1+2 — a2137c5; задача 3 — см. feat(§117) в develop |
 | Связанные spec'ы | features/033 (preset-бандлы — уже бандлят DNS через vars/`@outbound`), features/043 (DNS servers refs), features/061 (DNS rules refs), features/030 (custom rules) |
 
 ## Зачем

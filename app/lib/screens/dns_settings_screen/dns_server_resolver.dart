@@ -22,8 +22,11 @@ import 'resolved_server.dart';
 List<ResolvedServer> resolveDisplayedServers(
   List<Map<String, dynamic>> servers,
   Map<String, Map<String, dynamic>> templateByTag,
-  Map<String, Map<String, dynamic>> presetServersByTag,
-) {
+  Map<String, Map<String, dynamic>> presetServersByTag, {
+  // §117 задача 3: tag → имя routing-правила с активной DNS-опцией
+  // (lifecycle-лок «used by <правило>»).
+  Map<String, String> ruleRefsByTag = const {},
+}) {
   final out = <ResolvedServer>[];
   for (final ref in servers) {
     final kindStr = ref['kind']?.toString();
@@ -101,6 +104,7 @@ List<ResolvedServer> resolveDisplayedServers(
       presetLabel: presetLabel,
       vars: vars,
       varValues: varValues,
+      usedByRule: ruleRefsByTag[tag],
     ));
   }
   // §044: render-order — template → preset → inline (см. ServerKind enum).
@@ -111,14 +115,14 @@ List<ResolvedServer> resolveDisplayedServers(
 
 /// Tags доступные в dropdown'ах (DNS Final / Default Resolver / per-rule).
 /// Filter `enabled` на ref-level. §117: locked-сервер (реферится активным
-/// пресетом) build всегда force-include'ит — показываем его даже при
-/// выключенном тоггле.
+/// пресетом или правилом) build всегда force-include'ит — показываем его
+/// даже при выключенном тоггле.
 ///
 /// pure.
 List<String> enabledServerTags(List<ResolvedServer> displayedServers) {
   final out = <String>[];
   for (final s in displayedServers) {
-    if (!s.enabled && !s.lockedByPreset) continue;
+    if (!s.enabled && !s.locked) continue;
     if (s.tag.isEmpty) continue;
     out.add(s.tag);
   }

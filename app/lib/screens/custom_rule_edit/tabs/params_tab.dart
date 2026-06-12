@@ -4,6 +4,7 @@ import '../../../models/custom_rule.dart';
 import '../../../widgets/outbound_picker.dart';
 import '../edit_controller.dart';
 import '../sections/apps_section.dart';
+import '../sections/dns_section.dart';
 import '../sections/match_section.dart';
 import '../sections/port_section.dart';
 import '../sections/protocol_section.dart';
@@ -146,6 +147,15 @@ class ParamsTab extends StatelessWidget {
             onManual: actions.onManualAddWifi,
             onTapPermissionsHint: actions.onOpenWifiPermissions,
           ),
+        // §117 задача 3 — DNS follows the rule (только inline/srs).
+        DnsSection(
+          dns: c.dns,
+          serverTags: c.dnsServerTags,
+          gateBlocked: c.dnsGateBlocked,
+          isSrs: c.kind == CustomRuleKind.srs,
+          onEnabledChanged: c.setDnsEnabled,
+          onServerTagChanged: c.setDnsServerTag,
+        ),
         const SizedBox(height: 24),
         const Divider(),
         const SizedBox(height: 12),

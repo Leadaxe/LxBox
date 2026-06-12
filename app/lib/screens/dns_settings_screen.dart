@@ -15,6 +15,7 @@ import 'dns_settings_screen/dns_server_resolver.dart';
 import 'dns_settings_screen/resolved_server.dart';
 import 'dns_settings_screen/server_editor_sheet.dart';
 import 'dns_settings_screen/user_rule_editor_sheet.dart';
+import 'dns_settings_screen/widgets/dns_mirror_group_card.dart';
 import 'dns_settings_screen/widgets/dns_rule_tile.dart';
 import 'dns_settings_screen/widgets/local_resolver_warning_banner.dart';
 import 'dns_settings_screen/widgets/merged_server_tile.dart';
@@ -83,6 +84,10 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// каналы (решение №2). Активность = как в `_buildPresetGroups`:
   /// stored enabled_groups (или default_enabled при пустом) + vpn-1 всегда.
   List<OutboundOption> _outboundOptions = const [];
+
+  /// §117 задача 3: routing-правила (storage order) — источник mirror-группы
+  /// (DNS-mirror'ы inline/srs правил) и lifecycle-локов «used by <правило>».
+  List<CustomRule> _customRules = const [];
 
 
   bool _loading = true;
@@ -214,6 +219,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         _presetRulesByPresetId = presetRulesByPresetId;
         _presetLabelByPresetId = presetLabelByPresetId;
         _outboundOptions = outboundOptions;
+        _customRules = activeRules;
         _strategy = vars['dns_strategy'] ?? 'prefer_ipv4';
         _dnsFinal = vars['dns_final'] ?? '';
         _defaultResolver = vars['dns_default_domain_resolver'] ?? '';
@@ -244,9 +250,18 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     // §076: configDirty уже true (set в _markDirty).
   }
 
+  /// §117 задача 3: tag → имя routing-правила с активной DNS-опцией —
+  /// lifecycle-лок серверов («used by <правило>», тоггл/delete блокированы).
+  Map<String, String> get _ruleRefsByTag => {
+        for (final cr in _customRules)
+          if (cr.dnsMirrorActive)
+            cr.dns!.serverTag: cr.name.isNotEmpty ? cr.name : 'rule',
+      };
+
   /// §044: render list — typed `ResolvedServer` для каждой ref-записи.
-  List<ResolvedServer> get _displayedServers =>
-      resolveDisplayedServers(_servers, _templateByTag, _presetServersByTag);
+  List<ResolvedServer> get _displayedServers => resolveDisplayedServers(
+      _servers, _templateByTag, _presetServersByTag,
+      ruleRefsByTag: _ruleRefsByTag);
 
   /// Tags доступные в dropdown'ах (DNS Final / Default Resolver / per-rule).
   /// Filter `enabled` на ref-level.
@@ -310,6 +325,104 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   }
 
   void _addUserRule() => _showUserRuleEditor(-1);
+
+  /// §117 задача 3: routing-правила с активным DNS-mirror'ом (routing order).
+  List<CustomRule> get _ruleMirrors =>
+      [for (final cr in _customRules) if (cr.dnsMirrorActive) cr];
+
+  /// §117 (решение №6): display-модель списка DNS-правил. Элемент ≥0 —
+  /// индекс standalone-записи в [_rules]; `-1` — атомарная mirror-группа
+  /// (kind:preset записи + rule-mirror'ы, порядок = routing-правила).
+  /// Якорь группы зеркалит эмиссию `applyCustomDns`: первая kind:preset
+  /// запись → иначе перед template-блоком → иначе в конец.
+  List<int> get _ruleDisplayRows {
+    final hasGroup =
+        _rules.any((e) => e['kind'] == 'preset') || _ruleMirrors.isNotEmpty;
+    final rows = <int>[];
+    var groupInserted = false;
+    for (var i = 0; i < _rules.length; i++) {
+      final kind = _rules[i]['kind'];
+      if (kind == 'preset') {
+        if (!groupInserted) {
+          rows.add(-1);
+          groupInserted = true;
+        }
+        continue;
+      }
+      if (kind == 'template' && hasGroup && !groupInserted) {
+        rows.add(-1);
+        groupInserted = true;
+      }
+      rows.add(i);
+    }
+    if (hasGroup && !groupInserted) rows.add(-1);
+    return rows;
+  }
+
+  /// §117: содержимое mirror-группы в порядке routing-правил: preset-записи
+  /// (§061-тайлы, toggle работает, drag нет) + read-only mirror-строки
+  /// inline/srs правил с DNS-опцией.
+  List<Widget> _buildMirrorGroupChildren() {
+    final presetIdxByPid = <String, int>{};
+    for (var i = 0; i < _rules.length; i++) {
+      if (_rules[i]['kind'] == 'preset') {
+        final pid = _rules[i]['presetId']?.toString();
+        if (pid != null && pid.isNotEmpty) presetIdxByPid[pid] = i;
+      }
+    }
+    final children = <Widget>[];
+    final seenPresetIds = <String>{};
+    for (final cr in _customRules) {
+      if (cr is CustomRulePreset) {
+        final idx = presetIdxByPid[cr.presetId];
+        if (idx == null || !seenPresetIds.add(cr.presetId)) continue;
+        children.add(DnsRuleTile(
+          key: ValueKey('dns-rule-preset-${cr.presetId}'),
+          index: idx,
+          dragIndex: null, // группа атомарна — внутренний drag запрещён
+          entry: _rules[idx],
+          templateRulesByName: _templateRulesByName,
+          presetRulesByPresetId: _presetRulesByPresetId,
+          presetLabelByPresetId: _presetLabelByPresetId,
+          onToggleEnabled: _toggleRuleEnabled,
+          onEdit: _showUserRuleEditor,
+          onDelete: _deleteRule,
+        ));
+      } else if (cr.dnsMirrorActive) {
+        children.add(DnsMirrorRuleRow(
+          key: ValueKey('dns-mirror-${cr.id}'),
+          ruleName: cr.name,
+          serverTag: cr.dns!.serverTag,
+          isSrs: cr is CustomRuleSrs,
+          serverMissing: !_servers.any((s) => s['tag'] == cr.dns!.serverTag),
+        ));
+      }
+    }
+    return children;
+  }
+
+  /// §117 (решение №6): reorder в display-пространстве — группа двигается
+  /// как одна единица, standalone-правила не могут попасть внутрь неё.
+  void _onReorderRules(int oldIndex, int newIndex) {
+    if (newIndex > oldIndex) newIndex -= 1;
+    final rows = _ruleDisplayRows;
+    if (oldIndex < 0 || oldIndex >= rows.length) return;
+    final presetBlock = [
+      for (final e in _rules)
+        if (e['kind'] == 'preset') e,
+    ];
+    final units = <List<Map<String, dynamic>>>[
+      for (final r in rows) r == -1 ? presetBlock : [_rules[r]],
+    ];
+    final moved = units.removeAt(oldIndex);
+    units.insert(newIndex.clamp(0, units.length), moved);
+    setState(() {
+      _rules
+        ..clear()
+        ..addAll([for (final u in units) ...u]);
+      _markDirty();
+    });
+  }
 
   void _showUserRuleEditor(int index) {
     final isNew = index < 0;
@@ -410,7 +523,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
             ],
           ),
           const SizedBox(height: 4),
-          if (_rules.isEmpty)
+          if (_rules.isEmpty && _ruleMirrors.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Text(
@@ -419,34 +532,44 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
               ),
             )
           else
+            // §117 (решение №6): display-модель — standalone-записи +
+            // атомарная mirror-группа одним элементом (см. _ruleDisplayRows).
             ReorderableListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               buildDefaultDragHandles: false,
-              itemCount: _rules.length,
-              onReorder: (oldIndex, newIndex) {
-                setState(() {
-                  if (newIndex > oldIndex) newIndex -= 1;
-                  final moved = _rules.removeAt(oldIndex);
-                  _rules.insert(newIndex, moved);
-                  _markDirty();
-                });
+              itemCount: _ruleDisplayRows.length,
+              onReorder: _onReorderRules,
+              itemBuilder: (ctx, i) {
+                final row = _ruleDisplayRows[i];
+                if (row == -1) {
+                  // Группа draggable только при наличии preset-якорей —
+                  // иначе позицию не во что персистить.
+                  final draggable =
+                      _rules.any((e) => e['kind'] == 'preset');
+                  return DnsMirrorGroupCard(
+                    key: const ValueKey('dns-mirror-group'),
+                    dragIndex: draggable ? i : null,
+                    children: _buildMirrorGroupChildren(),
+                  );
+                }
+                return DnsRuleTile(
+                  index: row,
+                  dragIndex: i,
+                  entry: _rules[row],
+                  templateRulesByName: _templateRulesByName,
+                  presetRulesByPresetId: _presetRulesByPresetId,
+                  presetLabelByPresetId: _presetLabelByPresetId,
+                  onToggleEnabled: _toggleRuleEnabled,
+                  onEdit: _showUserRuleEditor,
+                  onDelete: _deleteRule,
+                  // §033: identity для reorder — name (inline/template/srs)
+                  // или presetId (preset). Нужно стабильное непустое значение.
+                  key: ValueKey(
+                    'dns-rule-$row-${_rules[row]['name'] ?? _rules[row]['presetId'] ?? ''}',
+                  ),
+                );
               },
-              itemBuilder: (ctx, i) => DnsRuleTile(
-                index: i,
-                entry: _rules[i],
-                templateRulesByName: _templateRulesByName,
-                presetRulesByPresetId: _presetRulesByPresetId,
-                presetLabelByPresetId: _presetLabelByPresetId,
-                onToggleEnabled: _toggleRuleEnabled,
-                onEdit: _showUserRuleEditor,
-                onDelete: _deleteRule,
-                // §033: identity для reorder — name (inline/template/srs) или
-                // presetId (preset). Нужно стабильное непустое значение.
-                key: ValueKey(
-                  'dns-rule-$i-${_rules[i]['name'] ?? _rules[i]['presetId'] ?? ''}',
-                ),
-              ),
             ),
 
           const Divider(height: 32),

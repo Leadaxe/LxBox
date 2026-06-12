@@ -1,0 +1,119 @@
+import 'package:flutter/material.dart';
+
+import '../../../widgets/reorder_grab_strip.dart';
+import 'dns_badge.dart';
+
+/// §117 (решение №6) — атомарная mirror-группа в списке DNS Rules.
+///
+/// Содержимое (DNS-правила пресетов + mirror'ы routing-правил с DNS-опцией)
+/// упорядочено **строго по routing-правилам** и внутри не реордерится.
+/// Сама группа — один элемент ReorderableListView: standalone-правила можно
+/// ставить только выше или ниже неё целиком.
+class DnsMirrorGroupCard extends StatelessWidget {
+  const DnsMirrorGroupCard({
+    super.key,
+    required this.children,
+    this.dragIndex,
+  });
+
+  /// Под-строки группы (preset-тайлы + mirror-строки) в порядке
+  /// routing-правил.
+  final List<Widget> children;
+
+  /// Display-индекс для drag'а группы целиком. null = позиция группы не
+  /// персистится (нет kind:preset записей-якорей) — grab-strip не рисуем.
+  final int? dragIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (dragIndex != null) ReorderGrabStrip(index: dragIndex!),
+          Expanded(
+            child: Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: theme.colorScheme.outlineVariant,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                    child: Row(
+                      children: [
+                        Icon(Icons.alt_route,
+                            size: 14, color: theme.colorScheme.primary),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'From routing rules · ordered as in Routing',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ...children,
+                  const SizedBox(height: 4),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// §117 задача 3 — read-only строка DNS-mirror'а routing-правила внутри
+/// [DnsMirrorGroupCard]. Управляется из редактора правила (Routing →
+/// правило → DNS), здесь только отображение.
+class DnsMirrorRuleRow extends StatelessWidget {
+  const DnsMirrorRuleRow({
+    super.key,
+    required this.ruleName,
+    required this.serverTag,
+    required this.isSrs,
+    required this.serverMissing,
+  });
+
+  final String ruleName;
+  final String serverTag;
+  final bool isSrs;
+
+  /// true — выбранный сервер исчез: mirror тихо не эмитится (решение №3).
+  final bool serverMissing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return ListTile(
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      leading: Icon(Icons.dns_outlined,
+          size: 18, color: serverMissing ? cs.onSurfaceVariant : cs.primary),
+      title: Text(
+        ruleName.isNotEmpty ? ruleName : '(unnamed rule)',
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(
+        serverMissing
+            ? 'server "$serverTag" missing — not emitted'
+            : '→ $serverTag'
+                '${isSrs ? ' · matches only domains in the rule-set' : ''}',
+        style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+      ),
+      trailing: DnsBadge('rule', cs.secondary),
+    );
+  }
+}

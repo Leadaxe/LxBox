@@ -21,9 +21,17 @@ class DnsRuleTile extends StatelessWidget {
     required this.onToggleEnabled,
     required this.onEdit,
     required this.onDelete,
+    this.dragIndex,
   });
 
+  /// Индекс записи в **storage**-списке (`_rules`) — для mutating-callbacks.
   final int index;
+
+  /// §117: индекс в **display**-списке ReorderableListView — для grab-strip.
+  /// null = строка не draggable (preset-записи внутри атомарной
+  /// mirror-группы, решение №6).
+  final int? dragIndex;
+
   final Map<String, dynamic> entry;
   final Map<String, Map<String, dynamic>> templateRulesByName;
   final Map<String, Map<String, dynamic>> presetRulesByPresetId;
@@ -86,7 +94,7 @@ class DnsRuleTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ReorderGrabStrip(index: index),
+          if (dragIndex != null) ReorderGrabStrip(index: dragIndex!),
           Expanded(
             child: Card(
               child: ListTile(

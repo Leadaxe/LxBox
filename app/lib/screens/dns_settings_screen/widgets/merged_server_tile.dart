@@ -16,9 +16,10 @@ import 'dns_badge.dart';
 /// - `kind: inline` + `overrides != null` — badge `Overridden`, edit + reset (↺)
 /// - `kind: inline` + `overrides == null` — badge `User`, edit + delete (🗑)
 ///
-/// §117 lifecycle: `lockedByPreset` (сервер реферится активным пресетом) —
-/// enabled-switch заблокирован и показывается включённым (build force-include),
-/// в subtitle «used by <пресет>» с замком.
+/// §117 lifecycle (locked №7): `locked` (сервер реферится активным пресетом
+/// ИЛИ routing-правилом с DNS-опцией) — enabled-switch заблокирован и
+/// показывается включённым (build force-include), delete заблокирован,
+/// в subtitle «used by <пресет/правило>» с замком.
 class MergedServerTile extends StatefulWidget {
   const MergedServerTile({
     super.key,
@@ -60,7 +61,7 @@ class _MergedServerTileState extends State<MergedServerTile> {
     final type = entry.body['type']?.toString() ?? '';
     final addr = entry.body['server']?.toString() ?? '';
     final theme = Theme.of(context);
-    final locked = entry.lockedByPreset;
+    final locked = entry.locked;
     final hasVars = entry.vars.isNotEmpty && widget.onVarChanged != null;
 
     // Короткие labels (§044).
@@ -117,7 +118,7 @@ class _MergedServerTileState extends State<MergedServerTile> {
                           size: 12, color: theme.colorScheme.primary),
                       const SizedBox(width: 4),
                       Text(
-                        'used by ${entry.presetLabel ?? 'preset'}',
+                        'used by ${entry.lockedByLabel}',
                         style: TextStyle(
                             fontSize: 11, color: theme.colorScheme.primary),
                       ),
@@ -161,9 +162,17 @@ class _MergedServerTileState extends State<MergedServerTile> {
                     else if (entry.isUserOnly)
                       IconButton(
                         icon: Icon(Icons.delete_outline,
-                            size: 18, color: theme.colorScheme.error),
-                        tooltip: 'Delete',
-                        onPressed: () => widget.onDelete(entry.tag),
+                            size: 18,
+                            color: locked
+                                ? theme.colorScheme.onSurfaceVariant
+                                : theme.colorScheme.error),
+                        // §117 lifecycle: реферимый сервер не удаляется.
+                        tooltip: locked
+                            ? 'In use — remove the DNS option from the '
+                                'referencing rule first'
+                            : 'Delete',
+                        onPressed:
+                            locked ? null : () => widget.onDelete(entry.tag),
                         visualDensity: VisualDensity.compact,
                       ),
                   ],

@@ -294,13 +294,16 @@ Sealed по полю `type`:
   "packages":       [ … ]?,        // OR-группа #3
   "protocols":      [ … ]?,        // routing-rule level (subset of kKnownProtocols)
   "ipIsPrivate":    true?,         // routing-rule level
-  "outbound":       "<tag>"        // или "reject" (sentinel → action: reject)
+  "outbound":       "<tag>",       // или "reject" (sentinel → action: reject)
+  "dns":            { "enabled": true, "serverTag": "<dns-server tag>" }?  // §117 задача 3
 }
 ```
 
 `name` — пользовательский, mutable.
 
 OR-семантика внутри category, AND между. `protocols` и `ipIsPrivate` не headless'ятся, выносятся в routing-rule level.
+
+`dns` ([§117] задача 3, «DNS follows the rule») — опционально: builder эмитит mirror DNS-rule `{rule_set: <тот же headless>, server: serverTag}` в атомарной mirror-группе (порядок = routing-правила). Отсутствует в старых записях → null → старое поведение. Гейт: при непустых `ports`/`protocols` mirror не эмитится.
 
 ### `kind: "srs"` — `CustomRuleSrs`
 
@@ -316,11 +319,14 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
   "packages":    [ … ]?,
   "protocols":   [ … ]?,
   "ipIsPrivate": true?,
-  "outbound":    "<tag>"
+  "outbound":    "<tag>",
+  "dns":         { "enabled": true, "serverTag": "<dns-server tag>" }?  // §117 задача 3
 }
 ```
 
 Сам бинарь `.srs` лежит отдельно в `rule_sets/<tag>.srs` (см. [таблицу файлов](#disk-layout) выше).
+
+`dns` ([§117] задача 3) — как у inline, но mirror ссылается на существующий `.srs`-тег + DNS-безопасные доп-фильтры (`packages`/wifi). Работает только если в rule-set есть домены (IP-only лист в DNS-контексте не матчит).
 
 ### `kind: "preset"` — `CustomRulePreset`
 

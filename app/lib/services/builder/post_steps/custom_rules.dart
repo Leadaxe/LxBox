@@ -54,6 +54,36 @@ class _PresetSharedState {
   final List<Map<String, dynamic>> dnsRules = [];
   final Map<String, Map<String, dynamic>> dnsRulesByPresetId = {};
   final Map<String, String> labelByPresetId = {};
+
+  /// §117 задача 3: упорядоченная mirror-группа DNS-правил — по одной записи
+  /// на routing-правило с активным DNS-аспектом (preset И inline/srs),
+  /// в порядке обхода `custom_rules` (решение №6: порядок группы строго =
+  /// порядку routing-правил).
+  final List<DnsMirrorEntry> dnsMirrors = [];
+}
+
+/// §117 задача 3: один элемент mirror-группы DNS-правил.
+///
+/// - **preset-источник** (`presetId != null`) — `body` это готовый dns_rule
+///   пресета (server уже внутри, §033).
+/// - **rule-источник** (`ruleId != null`) — `body` это DNS-безопасный матч
+///   БЕЗ `server`; `serverTag` подставляется эмиссией ([applyCustomDns])
+///   только если сервер дожил до финального `dns.servers` (пропавший реф —
+///   тихо не эмитится, решение №3).
+class DnsMirrorEntry {
+  const DnsMirrorEntry({
+    this.presetId,
+    this.ruleId,
+    this.ruleName = '',
+    this.serverTag = '',
+    required this.body,
+  });
+
+  final String? presetId;
+  final String? ruleId;
+  final String ruleName;
+  final String serverTag;
+  final Map<String, dynamic> body;
 }
 
 /// §062: обработка одного preset rule. Регистрирует rule_sets через
@@ -123,6 +153,12 @@ List<String> _applyPresetSingle(
     if (raw.dnsRule != null) {
       state.dnsRules.add(raw.dnsRule!);
       state.dnsRulesByPresetId[cr.presetId] = raw.dnsRule!;
+      // §117: в mirror-группу — в позиции routing-правила (решение №6).
+      state.dnsMirrors.add(DnsMirrorEntry(
+        presetId: cr.presetId,
+        ruleName: match.label,
+        body: raw.dnsRule!,
+      ));
     }
     for (final s in raw.dnsServers) {
       final tag = s['tag'];
@@ -219,11 +255,17 @@ List<String> applyCustomRules(
 }
 
 /// §062: одно srs-правило. Skip если outbound пустой / нет cached file.
+///
+/// §117 задача 3: при активной DNS-опции ([CustomRule.dnsMirrorActive]) в
+/// [dnsMirrors] добавляется mirror — rule_set НЕ генерится, DNS-rule
+/// ссылается на тот же `.srs`-тег + DNS-безопасные доп-фильтры
+/// (package_name / wifi_*; ports/protocols отрезаны гейтом).
 List<String> _applySrsSingle(
   CustomRuleSrs cr,
   RuleSetRegistry registry,
-  Map<String, String> srsPaths,
-) {
+  Map<String, String> srsPaths, {
+  List<DnsMirrorEntry>? dnsMirrors,
+}) {
   final warnings = <String>[];
   if (cr.outbound.isEmpty) return warnings;
   final requestedTag = cr.name.trim().isEmpty ? 'unnamed' : cr.name.trim();
@@ -250,18 +292,51 @@ List<String> _applySrsSingle(
     wifiSsids: cr.wifiSsids,
     wifiBssids: cr.wifiBssids,
   ));
+  if (dnsMirrors != null && cr.dnsMirrorActive) {
+    final mirror = <String, dynamic>{'rule_set': tag};
+    if (cr.packages.isNotEmpty) mirror['package_name'] = cr.packages;
+    if (cr.wifiSsids.isNotEmpty) mirror['wifi_ssid'] = cr.wifiSsids;
+    if (cr.wifiBssids.isNotEmpty) mirror['wifi_bssid'] = cr.wifiBssids;
+    dnsMirrors.add(DnsMirrorEntry(
+      ruleId: cr.id,
+      ruleName: cr.name,
+      serverTag: cr.dns!.serverTag,
+      body: mirror,
+    ));
+  }
   return warnings;
 }
 
 /// §062: одно inline-правило. Headless rule_set с непустыми match-полями
 /// (если они есть), плюс routing rule с routing-level полями (protocol /
 /// ip_is_private / wifi_*). Если оба пусты — skip.
+///
+/// §117 задача 3: при активной DNS-опции ([CustomRule.dnsMirrorActive])
+/// mirror шарит **тот же** headless rule_set (no split — гейт гарантирует
+/// отсутствие ports/protocols в матче) + wifi_* на DNS-rule уровне.
 List<String> _applyInlineSingle(
   CustomRuleInline cr,
-  RuleSetRegistry registry,
-) {
+  RuleSetRegistry registry, {
+  List<DnsMirrorEntry>? dnsMirrors,
+}) {
   final warnings = <String>[];
   if (cr.outbound.isEmpty) return warnings;
+
+  void addDnsMirror(String ruleSetTag) {
+    if (dnsMirrors == null || !cr.dnsMirrorActive) return;
+    final mirror = <String, dynamic>{};
+    if (ruleSetTag.isNotEmpty) mirror['rule_set'] = ruleSetTag;
+    if (cr.wifiSsids.isNotEmpty) mirror['wifi_ssid'] = cr.wifiSsids;
+    if (cr.wifiBssids.isNotEmpty) mirror['wifi_bssid'] = cr.wifiBssids;
+    // Пустой матч (только ip_is_private) — DNS-rule «match всё» не эмитим.
+    if (mirror.isEmpty) return;
+    dnsMirrors.add(DnsMirrorEntry(
+      ruleId: cr.id,
+      ruleName: cr.name,
+      serverTag: cr.dns!.serverTag,
+      body: mirror,
+    ));
+  }
   final requestedTag = cr.name.trim().isEmpty ? 'unnamed' : cr.name.trim();
   // Inline: all non-empty match fields в один headless rule.
   final match = <String, dynamic>{};
@@ -299,6 +374,7 @@ List<String> _applyInlineSingle(
       wifiSsids: cr.wifiSsids,
       wifiBssids: cr.wifiBssids,
     ));
+    addDnsMirror(''); // wifi-only правило: DNS-rule без rule_set
     return warnings;
   }
 
@@ -319,6 +395,7 @@ List<String> _applyInlineSingle(
     wifiSsids: cr.wifiSsids,
     wifiBssids: cr.wifiBssids,
   ));
+  addDnsMirror(tag);
   return warnings;
 }
 
@@ -360,10 +437,12 @@ UnifiedApplyResult applyAllCustomRules(
         ));
       case CustomRuleInline():
         if (!cr.enabled) continue;
-        warnings.addAll(_applyInlineSingle(cr, registry));
+        warnings.addAll(
+            _applyInlineSingle(cr, registry, dnsMirrors: state.dnsMirrors));
       case CustomRuleSrs():
         if (!cr.enabled) continue;
-        warnings.addAll(_applySrsSingle(cr, registry, srsPaths));
+        warnings.addAll(_applySrsSingle(cr, registry, srsPaths,
+            dnsMirrors: state.dnsMirrors));
     }
   }
   return UnifiedApplyResult(
@@ -371,6 +450,7 @@ UnifiedApplyResult applyAllCustomRules(
     extraDnsRules: state.dnsRules,
     dnsRulesByPresetId: state.dnsRulesByPresetId,
     labelByPresetId: state.labelByPresetId,
+    dnsMirrors: state.dnsMirrors,
     warnings: warnings,
   );
 }
@@ -378,11 +458,15 @@ UnifiedApplyResult applyAllCustomRules(
 /// §062: результат [applyAllCustomRules]. Same shape as [PresetApplyResult]
 /// (DNS аспекты идут вверх в applyCustomDns), но семантически шире —
 /// включает обработку inline/srs тоже.
+///
+/// §117: `dnsMirrors` — упорядоченная mirror-группа DNS-правил (порядок =
+/// routing-правила); единственный источник эмиссии группы в [applyCustomDns].
 class UnifiedApplyResult {
   final List<Map<String, dynamic>> extraDnsServers;
   final List<Map<String, dynamic>> extraDnsRules;
   final Map<String, Map<String, dynamic>> dnsRulesByPresetId;
   final Map<String, String> labelByPresetId;
+  final List<DnsMirrorEntry> dnsMirrors;
   final List<String> warnings;
 
   const UnifiedApplyResult({
@@ -390,6 +474,7 @@ class UnifiedApplyResult {
     this.extraDnsRules = const [],
     this.dnsRulesByPresetId = const {},
     this.labelByPresetId = const {},
+    this.dnsMirrors = const [],
     this.warnings = const [],
   });
 }

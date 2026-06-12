@@ -105,6 +105,26 @@ sealed class CustomRule {
         _ => const [],
       };
 
+  /// §117 задача 3 — DNS-опция правила (ортогональное поле, только
+  /// inline/srs; у preset DNS-аспект живёт в `dns_options.rules` §033).
+  /// `null` = выкл (backward-compat: старые записи без `dns`).
+  RuleDns? get dns => switch (this) {
+        CustomRuleInline(:final dns) => dns,
+        CustomRuleSrs(:final dns) => dns,
+        _ => null,
+      };
+
+  /// §117: DNS-mirror активен — правило включено, галка DNS стоит, сервер
+  /// выбран и нет ports/protocols (headless-гейт: порт/протокол неизвестны
+  /// в момент DNS-запроса). Build и UI используют один и тот же предикат.
+  bool get dnsMirrorActive =>
+      enabled &&
+      (dns?.enabled ?? false) &&
+      (dns?.serverTag.isNotEmpty ?? false) &&
+      ports.isEmpty &&
+      portRanges.isEmpty &&
+      protocols.isEmpty;
+
   String get srsUrl => switch (this) {
         CustomRuleSrs(:final srsUrl) => srsUrl,
         _ => '',
@@ -169,6 +189,37 @@ sealed class CustomRule {
 
 enum CustomRuleKind { inline, srs, preset }
 
+/// §117 задача 3 — DNS-опция правила («DNS follows the rule»). Правило
+/// **ссылается** на существующий DNS-сервер по tag (выбор из списка, не ввод
+/// адреса — locked decision №2); detour сервера — зона задач 1/2, правило
+/// его не трогает (№1). `enabled: false` сохраняет выбранный `serverTag`,
+/// чтобы повторное включение не теряло выбор.
+class RuleDns {
+  const RuleDns({this.enabled = false, this.serverTag = ''});
+
+  final bool enabled;
+  final String serverTag;
+
+  Map<String, dynamic> toJson() => {
+        'enabled': enabled,
+        'serverTag': serverTag,
+      };
+
+  /// Backward-compat: не-Map (отсутствует в старых записях) → null.
+  static RuleDns? fromJson(dynamic j) {
+    if (j is! Map) return null;
+    return RuleDns(
+      enabled: j['enabled'] == true,
+      serverTag: j['serverTag']?.toString() ?? '',
+    );
+  }
+
+  RuleDns copyWith({bool? enabled, String? serverTag}) => RuleDns(
+        enabled: enabled ?? this.enabled,
+        serverTag: serverTag ?? this.serverTag,
+      );
+}
+
 /// Sentinel-значение для `CustomRuleInline.outbound` / `CustomRuleSrs.outbound`.
 /// Билдер матчит на `{action: "reject"}` вместо `{outbound: <tag>}`. sing-box
 /// не имеет outbound'а с таким именем — коллизий нет.
@@ -217,6 +268,7 @@ class CustomRuleInline extends CustomRule {
     this.wifiSsids = const [],
     List<String> wifiBssids = const [],
     this.outbound = 'direct-out',
+    this.dns,
   }) : wifiBssids = _normalizeBssids(wifiBssids);
 
   // OR-группа #1 (domain-family + ip). Внутри OR, между остальными — AND.
@@ -256,6 +308,10 @@ class CustomRuleInline extends CustomRule {
   @override
   String outbound;
 
+  /// §117 задача 3 — DNS-опция (mirror DNS-rule на выбранный сервер).
+  @override
+  RuleDns? dns;
+
   @override
   CustomRuleKind get kind => CustomRuleKind.inline;
 
@@ -293,6 +349,7 @@ class CustomRuleInline extends CustomRule {
         if (wifiSsids.isNotEmpty) 'wifiSsids': wifiSsids,
         if (wifiBssids.isNotEmpty) 'wifiBssids': wifiBssids,
         'outbound': outbound,
+        if (dns != null) 'dns': dns!.toJson(),
       };
 
   factory CustomRuleInline.fromJson(Map<String, dynamic> j) => CustomRuleInline(
@@ -311,6 +368,7 @@ class CustomRuleInline extends CustomRule {
         wifiSsids: _stringList(j['wifiSsids']),
         wifiBssids: _stringList(j['wifiBssids']),
         outbound: _outbound(j),
+        dns: RuleDns.fromJson(j['dns']),
       );
 
   CustomRuleInline copyWith({
@@ -328,6 +386,7 @@ class CustomRuleInline extends CustomRule {
     List<String>? wifiSsids,
     List<String>? wifiBssids,
     String? outbound,
+    RuleDns? dns,
   }) =>
       CustomRuleInline(
         id: id,
@@ -345,6 +404,7 @@ class CustomRuleInline extends CustomRule {
         wifiSsids: wifiSsids ?? this.wifiSsids,
         wifiBssids: wifiBssids ?? this.wifiBssids,
         outbound: outbound ?? this.outbound,
+        dns: dns ?? this.dns,
       );
 
   @override
@@ -374,6 +434,7 @@ class CustomRuleSrs extends CustomRule {
     this.wifiSsids = const [],
     List<String> wifiBssids = const [],
     this.outbound = 'direct-out',
+    this.dns,
   }) : wifiBssids = _normalizeBssids(wifiBssids);
 
   @override
@@ -402,6 +463,12 @@ class CustomRuleSrs extends CustomRule {
   @override
   String outbound;
 
+  /// §117 задача 3 — DNS-опция. Серая пометка в UI: mirror работает, только
+  /// если в `.srs` есть домены (содержимое бинаря не парсим — IP-only лист
+  /// в DNS-контексте молча не сматчит).
+  @override
+  RuleDns? dns;
+
   @override
   CustomRuleKind get kind => CustomRuleKind.srs;
 
@@ -427,6 +494,7 @@ class CustomRuleSrs extends CustomRule {
         if (wifiSsids.isNotEmpty) 'wifiSsids': wifiSsids,
         if (wifiBssids.isNotEmpty) 'wifiBssids': wifiBssids,
         'outbound': outbound,
+        if (dns != null) 'dns': dns!.toJson(),
       };
 
   factory CustomRuleSrs.fromJson(Map<String, dynamic> j) => CustomRuleSrs(
@@ -442,6 +510,7 @@ class CustomRuleSrs extends CustomRule {
         wifiSsids: _stringList(j['wifiSsids']),
         wifiBssids: _stringList(j['wifiBssids']),
         outbound: _outbound(j),
+        dns: RuleDns.fromJson(j['dns']),
       );
 
   CustomRuleSrs copyWith({
@@ -456,6 +525,7 @@ class CustomRuleSrs extends CustomRule {
     List<String>? wifiSsids,
     List<String>? wifiBssids,
     String? outbound,
+    RuleDns? dns,
   }) =>
       CustomRuleSrs(
         id: id,
@@ -470,6 +540,7 @@ class CustomRuleSrs extends CustomRule {
         wifiSsids: wifiSsids ?? this.wifiSsids,
         wifiBssids: wifiBssids ?? this.wifiBssids,
         outbound: outbound ?? this.outbound,
+        dns: dns ?? this.dns,
       );
 
   @override

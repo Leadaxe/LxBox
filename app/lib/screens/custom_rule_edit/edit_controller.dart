@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
+import '../../services/builder/post_steps.dart' show templateDnsServersByTag;
 import '../../services/rule_set_downloader.dart';
+import '../../services/settings_storage.dart';
+import '../../services/template_loader.dart';
 import '../../widgets/wifi_entry.dart';
 import 'normalizers.dart' as norm;
 import 'sections/srs_section.dart' show SrsDownloadState;
@@ -80,6 +84,8 @@ class CustomRuleEditController extends ChangeNotifier {
   late List<String> _packages;
   late List<WifiEntry> _wifiNetworks;
   late Map<String, String> _varsValues;
+  late RuleDns? _dns;
+  List<String> _dnsServerTags = const [];
   Map<String, String> _presetSrsPaths = const {};
   SrsDownloadState _srsState = SrsDownloadState.none;
   final Set<String> _boolVarDownloading = <String>{};
@@ -99,6 +105,21 @@ class CustomRuleEditController extends ChangeNotifier {
   Map<String, String> get presetSrsPaths => _presetSrsPaths;
   SrsDownloadState get srsState => _srsState;
   Set<String> get boolVarDownloading => _boolVarDownloading;
+
+  /// §117 задача 3 — DNS-опция правила (null = не настраивалась).
+  RuleDns? get dns => _dns;
+
+  /// §117: теги существующих DNS-серверов для дропдауна (storage-refs ∪
+  /// template; правило ссылается по tag, не вводит адрес — решение №2).
+  List<String> get dnsServerTags => _dnsServerTags;
+
+  /// §117 гейт: headless rule_set не выражает port/protocol (и они неизвестны
+  /// в момент DNS-запроса) → DNS-чекбокс серый при непустых ports/protocols.
+  /// Live по текущему состоянию формы.
+  bool get dnsGateBlocked =>
+      norm.normalizedPorts(portCtrl.text).isNotEmpty ||
+      norm.normalizedPortRanges(portRangeCtrl.text).isNotEmpty ||
+      _protocols.isNotEmpty;
 
   // ─── Init / dispose ──────────────────────────────────────────────────
 
@@ -133,6 +154,8 @@ class CustomRuleEditController extends ChangeNotifier {
     _packages = List.of(r.packages);
     _wifiNetworks = unzipWifiEntries(r.wifiSsids, r.wifiBssids);
     _varsValues = Map<String, String>.from(r.varsValues);
+    _dns = r.dns;
+    unawaited(_loadDnsServerTags());
 
     // Forward text changes — AppBar Save-icon (dirty indicator) и
     // tab'ы re-evaluate isDirty / снимок при каждом keystroke.
@@ -155,6 +178,28 @@ class CustomRuleEditController extends ChangeNotifier {
 
   void _onTextChanged() {
     if (_disposed) return;
+    notifyListeners();
+  }
+
+  /// §117: теги DNS-серверов для дропдауна — storage-refs (kind-ref'ы §043,
+  /// синхронизируются на каждом build/DNS-screen open) ∪ template-серверы
+  /// (fallback для свежей установки, где storage ещё пуст).
+  Future<void> _loadDnsServerTags() async {
+    final stored = await SettingsStorage.getDnsServers();
+    final template = await TemplateLoader.load();
+    final templateServers =
+        (template.dnsOptions['servers'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map((s) => Map<String, dynamic>.from(s))
+            .toList();
+    final tags = <String>{};
+    for (final s in stored) {
+      final tag = s['tag']?.toString();
+      if (tag != null && tag.isNotEmpty) tags.add(tag);
+    }
+    tags.addAll(templateDnsServersByTag(templateServers).keys);
+    if (_disposed) return;
+    _dnsServerTags = tags.toList();
     notifyListeners();
   }
 
@@ -263,6 +308,26 @@ class CustomRuleEditController extends ChangeNotifier {
 
   void setVarValue(String name, String val) {
     _varsValues[name] = val;
+    notifyListeners();
+  }
+
+  /// §117: тоггл DNS-опции. Выбранный serverTag сохраняется при выключении
+  /// (повторное включение не теряет выбор). Первое включение без выбора —
+  /// преселект `google_udp` (дефолтный резолвер) или первый доступный tag.
+  void setDnsEnabled(bool v) {
+    var tag = _dns?.serverTag ?? '';
+    if (v && tag.isEmpty) {
+      tag = _dnsServerTags.contains('google_udp')
+          ? 'google_udp'
+          : (_dnsServerTags.isNotEmpty ? _dnsServerTags.first : '');
+    }
+    _dns = RuleDns(enabled: v, serverTag: tag);
+    notifyListeners();
+  }
+
+  /// §117: выбор DNS-сервера для mirror'а (по tag из существующих).
+  void setDnsServerTag(String tag) {
+    _dns = RuleDns(enabled: _dns?.enabled ?? false, serverTag: tag);
     notifyListeners();
   }
 
@@ -407,6 +472,7 @@ class CustomRuleEditController extends ChangeNotifier {
           wifiSsids: wifi.ssids,
           wifiBssids: wifi.bssids,
           outbound: _outbound,
+          dns: _dns,
         );
       case CustomRuleKind.inline:
         final wifi = zipWifiEntries(_wifiNetworks);
@@ -428,6 +494,7 @@ class CustomRuleEditController extends ChangeNotifier {
           wifiSsids: wifi.ssids,
           wifiBssids: wifi.bssids,
           outbound: _outbound,
+          dns: _dns,
         );
     }
   }

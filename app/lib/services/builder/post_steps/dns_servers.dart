@@ -292,9 +292,10 @@ Map<String, dynamic> _stripMetaForCompare(Map<String, dynamic> m) {
 /// - Strip `description` / `enabled` (sing-box их не использует) из body
 ///   независимо от source'а.
 /// - Filter `enabled != false` на уровне ref'а (вычитаем disabled-серверы).
-///   §117 исключение: сервер, реферимый активным пресетом (tag есть в
-///   `presetServersByTag`), **force-include** независимо от `enabled` —
-///   иначе DNS-правило пресета ссылается в пустоту (битый конфиг).
+///   §117 исключение (lifecycle, locked №7): сервер, реферимый активным
+///   пресетом (tag есть в `presetServersByTag`) ИЛИ активным правилом с
+///   DNS-опцией (tag в [ruleReferencedTags], задача 3), — **force-include**
+///   независимо от `enabled` — иначе DNS-правило ссылается в пустоту.
 /// - `detour` нормализуется ([normalizeDnsDetour]): `direct-out` /
 ///   отсутствующий в [knownOutboundTags] канал → ключ не пишется (§117
 ///   решение №2). `knownOutboundTags == null` — проверка только на direct-out.
@@ -303,6 +304,7 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
   required Map<String, Map<String, dynamic>> templateByTag,
   required Map<String, Map<String, dynamic>> presetServersByTag,
   Set<String>? knownOutboundTags,
+  Set<String> ruleReferencedTags = const {},
 }) {
   final out = <Map<String, dynamic>>[];
   final seen = <String>{};
@@ -310,7 +312,9 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
     final kind = entry['kind'] as String?;
     final tag = entry['tag']?.toString();
     if (kind == null || tag == null || tag.isEmpty) continue;
-    if (entry['enabled'] == false && !presetServersByTag.containsKey(tag)) {
+    if (entry['enabled'] == false &&
+        !presetServersByTag.containsKey(tag) &&
+        !ruleReferencedTags.contains(tag)) {
       continue;
     }
     if (seen.contains(tag)) continue;
