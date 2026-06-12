@@ -31,6 +31,7 @@
 ### Fixed
 
 - **DNS-тайлы: чип источника не рвётся на строки** ([dns_badge.dart](app/lib/screens/dns_settings_screen/widgets/dns_badge.dart)). На крупном системном шрифте текст в плоском чипе (font 9, padding 2) переносился и вылезал из контейнера. Чип подрос (padding 8×4, font 10) и стал строго однострочным (`maxLines: 1` + fade).
+- **DNS Rules: контент тайла больше не режется по высоте** ([dns_rule_tile.dart](app/lib/screens/dns_settings_screen/widgets/dns_rule_tile.dart), [dns_mirror_group_card.dart](app/lib/screens/dns_settings_screen/widgets/dns_mirror_group_card.dart)). При переносе заголовка правила на 2 строки низ карточки обрезался (превью `rule_set: …` уезжало за край). Причина — `ListTile` под `IntrinsicHeight` (нужным только для растяжки grab-strip) занижает intrinsic-высоту и не учитывает перенос. Grab-strip переведён на `Stack` + `Positioned(top:0,bottom:0)`, `IntrinsicHeight` убран — тайл получает натуральную высоту по контенту.
 
 ## [2.0.5] — 2026-06-12
 

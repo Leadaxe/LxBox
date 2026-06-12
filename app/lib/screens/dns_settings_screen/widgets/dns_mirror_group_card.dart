@@ -27,49 +27,58 @@ class DnsMirrorGroupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return IntrinsicHeight(
-      child: Row(
+    // §117-fix: Stack+Positioned grab-strip вместо IntrinsicHeight+Row.
+    // `ListTile`-дети группы под IntrinsicHeight занижают высоту и режут низ
+    // контента при переносе заголовка (overflow). Stack даёт карточке
+    // натуральную высоту по контенту.
+    final card = Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (dragIndex != null) ReorderGrabStrip(index: dragIndex!),
-          Expanded(
-            child: Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                  color: theme.colorScheme.outlineVariant,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                    child: Row(
-                      children: [
-                        Icon(Icons.alt_route,
-                            size: 14, color: theme.colorScheme.primary),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'From routing rules · ordered as in Routing',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: Row(
+              children: [
+                Icon(Icons.alt_route,
+                    size: 14, color: theme.colorScheme.primary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'From routing rules · ordered as in Routing',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  ...children,
-                  const SizedBox(height: 4),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
+          ...children,
+          const SizedBox(height: 4),
         ],
       ),
+    );
+
+    if (dragIndex == null) return card;
+    // Полоса 18px + горизонтальные margin 6+6 = 30px gutter слева.
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 30),
+          child: card,
+        ),
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          child: ReorderGrabStrip(index: dragIndex!),
+        ),
+      ],
     );
   }
 }
