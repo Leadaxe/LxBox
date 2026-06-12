@@ -71,6 +71,21 @@ final class DeprecatedFlowWarning extends NodeWarning {
   WarningSeverity get severity => WarningSeverity.info;
 }
 
+/// §115 — `xtls-rprx-vision` валиден только на голом TLS; с любым
+/// транспортом (ws/grpc/httpupgrade/xhttp) несовместим — ядро такую
+/// комбинацию не поднимет. Парсер гасит flow, warning сообщает почему.
+final class VisionWithTransportWarning extends NodeWarning {
+  final String transport;
+  const VisionWithTransportWarning(this.transport);
+
+  @override
+  String get message =>
+      'Flow "xtls-rprx-vision" is incompatible with "$transport" transport — flow dropped.';
+
+  @override
+  WarningSeverity get severity => WarningSeverity.info;
+}
+
 final class InsecureTlsWarning extends NodeWarning {
   const InsecureTlsWarning();
 

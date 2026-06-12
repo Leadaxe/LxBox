@@ -36,7 +36,15 @@ Outbound emitVless(VlessSpec s, TemplateVars vars) {
     }
   }
 
-  if (s.flow.isNotEmpty) out['flow'] = s.flow;
+  // §115 — ядро принимает РОВНО два flow: "" и "xtls-rprx-vision". vision
+  // валиден ТОЛЬКО на голом TLS (с любым транспортом ws/grpc/http/httpupgrade/
+  // xhttp ядро отвергает конфиг на load). Универсальный net на все пути
+  // (URI/Xray/raw sing-box JSON/manual): пишем flow только если он РОВНО
+  // vision И транспорта нет. Всё прочее (`none`, deprecated
+  // xtls-rprx-direct/origin/splice, мусор) → поле не пишется = plain VLESS.
+  if (s.flow == 'xtls-rprx-vision' && s.transport == null) {
+    out['flow'] = s.flow;
+  }
   if (s.packetEncoding.isNotEmpty) out['packet_encoding'] = s.packetEncoding;
 
   final tlsMap = s.tls.toSingbox();
@@ -49,7 +57,9 @@ Outbound emitVless(VlessSpec s, TemplateVars vars) {
 
 String toUriVless(VlessSpec s) {
   final q = <String, String>{};
-  if (s.flow.isNotEmpty) q['flow'] = s.flow;
+  // §115 — share-URI несёт flow только если он валиден: ровно vision на
+  // bare TLS (см. emitVless). Прочее (none/deprecated/мусор) опускаем.
+  if (s.flow == 'xtls-rprx-vision' && s.transport == null) q['flow'] = s.flow;
   if (s.packetEncoding.isNotEmpty) q['packetEncoding'] = s.packetEncoding;
 
   if (s.transport != null) {

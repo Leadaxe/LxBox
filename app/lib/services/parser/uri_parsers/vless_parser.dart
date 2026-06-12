@@ -30,9 +30,14 @@ VlessSpec? parseVless(String uri) {
     flow = 'xtls-rprx-vision';
     packetEncoding = 'xudp';
   }
-  // v1 quirk: auto-flow когда REALITY активна без transport'а.
-  if (flow.isEmpty && (q['pbk'] ?? '').trim().isNotEmpty && transport == null) {
-    flow = 'xtls-rprx-vision';
+  // §115 — flow = источник истины ссылка, НЕ угадываем по REALITY (раньше
+  // bare-TCP+REALITY без flow получал навязанный vision → ломались валидные
+  // none-сетапы). vision валиден только на голом TLS: с транспортом
+  // (ws/grpc/xhttp) несовместим → гасим flow + warning (ядро такую
+  // комбинацию не поднимет; XHTTP+Vision — protocol limitation).
+  if (flow == 'xtls-rprx-vision' && transport != null) {
+    warnings.add(VisionWithTransportWarning(q['type'] ?? 'transport'));
+    flow = '';
   }
   // packet_encoding: sing-box принимает только {"", xudp, packetaddr};
   // xray-style `none` и любой мусор → panic в libbox. Allow-list нормализуем

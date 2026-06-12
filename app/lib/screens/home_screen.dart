@@ -78,7 +78,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     return _subController.configDirty ||
         (state.tunnelUp && state.configChangedNeedRestart);
   }
-  Timer? _errorTimer;
 
   /// Для side-effect'ов на transition tunnel (SnackBar при → revoked,
   /// управление `_connectingAnim`, авто-dismiss timer для lastError).
@@ -228,19 +227,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         await showLocationPermissionDialog(context, permName);
         _permissionDialogShowing = false;
       });
-    } else if (nowError != _prevError) {
-      // Auto-dismiss timer для lastError. Раньше жил в Builder внутри build —
-      // логика завязана на прохождение build, хрупко при агрессивных
-      // rebuild'ах. Теперь явный transition detection: ошибка изменилась —
-      // перезапускаем 15с таймер; ошибка очистилась — cancel.
-      _errorTimer?.cancel();
-      _errorTimer = null;
-      if (nowError.isNotEmpty) {
-        _errorTimer = Timer(const Duration(seconds: 15), () {
-          if (mounted) _controller.clearError();
-        });
-      }
     }
+    // §116 — auto-dismiss таймер lastError переехал в BannerStack
+    // (централизованная banner-машинерия). Здесь больше не управляем.
 
     // §083 — per-channel match-filter memory. Канал сменился → save старого
     // + restore нового. ViewModel сам guard'ит no-op и notify'ит только при
@@ -290,9 +279,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     try {
       await Future.wait([_subController.rehydrationDone, _controllerInit]);
       if (mounted) {
-        final needBootstrap = _subController.entries.isNotEmpty &&
-            (_controller.state.configRaw.isEmpty || _subController.configDirty);
-        if (needBootstrap) {
+        final hasEntries = _subController.entries.isNotEmpty;
+        final emptyConfig = _controller.state.configRaw.isEmpty;
+        final tunnelUp = _controller.state.tunnelUp;
+        final dirty = _subController.configDirty;
+        // §116 — лог триггера для девайс-смока (какой путь bootstrap'а горит).
+        AppLog.I.info('bootstrap: entries=$hasEntries emptyConfig=$emptyConfig '
+            'tunnelUp=$tunnelUp dirty=$dirty');
+
+        if (hasEntries && emptyConfig && tunnelUp) {
+          // §116 case B — конфиг не прочёлся, но туннель жив и несёт рабочий
+          // конфиг. НЕ пересобираем (нечего примирять, пересборка+tunnelUp =
+          // ложный «config changed»). Постоянная error-плашка + рестарт.
+          _controller.markConfigLoadError();
+        } else if (hasEntries && (emptyConfig || dirty)) {
+          // case A (нет конфига, туннель не поднят) или реальный dirty →
+          // пересобрать. Дифф в saveParsedConfig снимет ложный «config changed»,
+          // если конфиг совпал с работающим.
           final config = await _subController.generateConfig();
           if (config != null && mounted) {
             // §107: generateConfig сбросил configDirty до записи на диск —
@@ -327,8 +330,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // потом сами владельцы (autoUpdater имеет ref на subController,
     // controller имеет ref на autoUpdater — dispose в обратном порядке
     // созданию).
-    _errorTimer?.cancel();
-    _errorTimer = null;
     final idleRetry = _idleRetryListener;
     if (idleRetry != null) {
       _subController.removeListener(idleRetry);
@@ -448,11 +449,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                   startEnabled: startEnabled,
                   stopEnabled: stopEnabled,
                   needsRestart: _needsRestart,
-                  errorTimerOnDismiss: () {
-                    _errorTimer?.cancel();
-                    _errorTimer = null;
-                    _controller.clearError();
-                  },
+                  // §116 — таймер теперь в BannerStack; здесь только clear.
+                  errorTimerOnDismiss: _controller.clearError,
                   onStartWithAutoRefresh: () =>
                       unawaited(_startWithAutoRefresh()),
                   onRebuildAndClearDirty: _rebuildAndClearDirty,

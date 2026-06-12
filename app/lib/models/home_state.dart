@@ -63,6 +63,7 @@ class HomeState {
     this.traffic = TrafficSnapshot.zero,
     this.connectedSince,
     this.configChangedNeedRestart = false,
+    this.configLoadError = false,
   }) : configModel = configModel ?? ParsedConfig.parse(configRaw);
 
   final String configRaw;
@@ -107,6 +108,13 @@ class HomeState {
   /// относительно saved, нужен restart чтобы native перечитал.
   /// Sticky in-memory flag, сбрасывается на каждом успешном `_startInternal`.
   final bool configChangedNeedRestart;
+
+  /// §116 — на старте `getConfig()` не вернул конфиг (`configRaw` пустой) ПРИ
+  /// живом туннеле: файл не прочёлся, но туннель уже несёт рабочий конфиг.
+  /// Аномалия загрузки → постоянный error-баннер «Config loading error» с
+  /// рестартом. Гаснет, когда `configRaw` стал непустым (load/save). Не
+  /// пересобираем (см. bootstrap split).
+  final bool configLoadError;
 
   bool get tunnelUp => tunnel.isUp;
 
@@ -185,6 +193,7 @@ class HomeState {
     TrafficSnapshot? traffic,
     Object? connectedSince = _unset,
     bool? configChangedNeedRestart,
+    bool? configLoadError,
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
@@ -222,6 +231,7 @@ class HomeState {
           ? this.connectedSince
           : connectedSince as DateTime?,
       configChangedNeedRestart: configChangedNeedRestart ?? this.configChangedNeedRestart,
+      configLoadError: configLoadError ?? this.configLoadError,
     );
   }
 }

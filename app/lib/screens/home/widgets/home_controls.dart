@@ -9,6 +9,7 @@ import '../../../services/haptic_service.dart';
 import '../home_dialogs.dart';
 import '../home_menus.dart';
 import '../node_list_presenter.dart';
+import 'app_banner.dart';
 
 /// Controls-блок главного экрана.
 ///
@@ -93,86 +94,24 @@ class HomeControls extends StatelessWidget {
               _buildReloadButton(context),
             ],
           ),
-          if (subController.configDirty && !subController.busy) ...[
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: () => unawaited(onRebuildAndClearDirty()),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.build_circle_outlined, size: 16, color: Theme.of(context).colorScheme.onPrimaryContainer),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Settings changed — tap to rebuild config',
-                        style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onPrimaryContainer),
-                      ),
-                    ),
-                  ],
-                ),
+          // §116 — единый banner-механизм: проекция состояния → BannerStack.
+          // Три исторических плашки (settings_changed / restart / last_error)
+          // + config_load_error деривятся в activeBanners.
+          BannerStack(
+            banners: activeBanners(
+              state,
+              configDirty: subController.configDirty,
+              busy: subController.busy,
+              actions: BannerActions(
+                onRebuild: () => unawaited(onRebuildAndClearDirty()),
+                // Не гасим restart на тап — если юзер отменит Stop-диалог,
+                // banner остаётся; гаснет реальным tunnel up↔down.
+                onConfirmStop: () =>
+                    confirmStop(context, controller, controller.state),
+                onClearError: errorTimerOnDismiss,
               ),
             ),
-          ],
-          // §076: показываем «Restart» banner ТОЛЬКО когда rebuild уже
-          // сделан (configDirty=false) но running config устарел. Если
-          // configDirty=true — выше показывается «Apply» banner, юзер
-          // сначала тапнет его → rebuild → configDirty=false → configChangedNeedRestart=true
-          // → этот banner появится автоматически. Никаких stacked'ов.
-          if (state.tunnelUp &&
-              state.configChangedNeedRestart &&
-              !subController.configDirty) ...[
-            const SizedBox(height: 8),
-            GestureDetector(
-              // Не гасим `_needsRestart` на тап — если юзер отменит Stop-диалог,
-              // banner должен остаться. Гаснет только реальным tunnel up↔down.
-              onTap: () => confirmStop(context, controller, controller.state),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.tertiaryContainer,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, size: 16, color: Theme.of(context).colorScheme.onTertiaryContainer),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Config changed — restart VPN to apply',
-                        style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onTertiaryContainer),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-          if (state.lastError.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            // Pure render — auto-dismiss timer завведён в _onControllerChange
-            // при изменении state.lastError (вне build-фазы).
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    state.lastError,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Dismiss',
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.close, size: 18),
-                  onPressed: errorTimerOnDismiss,
-                ),
-              ],
-            ),
-          ],
+          ),
           const SizedBox(height: 16),
           const Text('Channel', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),

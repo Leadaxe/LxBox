@@ -18,7 +18,8 @@ mixin _ConfigIoMixin on ChangeNotifier {
     try {
       final config = await _vpn.getConfig();
       if (config.isNotEmpty && config != '{}') {
-        _emit(_state.copyWith(configRaw: config));
+        // §116 — успешная загрузка снимает аномалию (config_load_error).
+        _emit(_state.copyWith(configRaw: config, configLoadError: false));
         _rebuildClashEndpoint();
       }
     } catch (e) {
@@ -37,6 +38,14 @@ mixin _ConfigIoMixin on ChangeNotifier {
     } catch (e) {
       _addDebug(DebugSource.app, 'Load sort: $e');
     }
+  }
+
+  /// §116 — пометить аномалию загрузки конфига (`configRaw` пустой при живом
+  /// туннеле). Постоянный error-баннер до успешной загрузки; bootstrap НЕ
+  /// пересобирает в этом случае. Идемпотентно.
+  void markConfigLoadError() {
+    if (_state.configLoadError) return;
+    _emit(_state.copyWith(configLoadError: true));
   }
 
   Future<bool> saveParsedConfig(String canonicalJson, {String? displayRaw}) async {
@@ -58,17 +67,38 @@ mixin _ConfigIoMixin on ChangeNotifier {
       return false;
     }
     final raw = displayRaw ?? canonicalJson;
-    // Если туннель уже крутит старый конфиг, поставим флаг — UI покажет
-    // warning "Restart VPN to apply changes". Флаг sticky до up↔down.
-    final needRestart = _state.tunnelUp || _state.configChangedNeedRestart;
+    // §116 — дифф: меняется ли saved config относительно текущего (работающего)
+    // `configRaw`. Если конфиг байт-в-байт тот же (canonical-to-canonical), эта
+    // запись running config НЕ устаревает → restart не нужен. Убирает ложный
+    // «Config changed» на bootstrap-пересборке при живом туннеле (репорт MIUI).
+    // Сравнение sticky: prev=true (более раннее реальное изменение, ещё не
+    // применённое рестартом) сохраняем.
+    bool changed;
+    try {
+      changed = _state.configRaw.isEmpty ||
+          canonicalJsonForSingbox(canonicalJson) !=
+              canonicalJsonForSingbox(_state.configRaw);
+    } catch (_) {
+      changed = true; // не смогли сравнить → safe: показать баннер, не спрятать
+    }
+    // Если туннель уже крутит старый конфиг И конфиг реально изменился — флаг.
+    // Флаг sticky до up↔down. saveConfig выше уже переписал файл (mtime=now),
+    // так что отдельный touch не нужен — config новее settings, §113-bootstrap
+    // не перепроверит.
+    final needRestart =
+        (changed && _state.tunnelUp) || _state.configChangedNeedRestart;
     _addDebug(DebugSource.app,
-        '[vpn] saveParsedConfig EXIT need_restart_after=$needRestart (tunnelUp=${_state.tunnelUp} || prev=${_state.configChangedNeedRestart})');
+        '[vpn] saveParsedConfig EXIT changed=$changed need_restart_after=$needRestart (tunnelUp=${_state.tunnelUp} || prev=${_state.configChangedNeedRestart})');
     _emit(_state.copyWith(
       configRaw: raw,
       lastError: '',
       configChangedNeedRestart: needRestart,
-      // §070: config change → новый pool возможно → sort заново.
-      pingBatchGen: _state.pingBatchGen + 1,
+      // §116 — configRaw стал непустым → аномалия загрузки снята.
+      configLoadError: false,
+      // §070: config change → новый pool возможно → sort заново. Только при
+      // реальном изменении (§116) — идентичная пересборка sort не трогает.
+      pingBatchGen:
+          changed ? _state.pingBatchGen + 1 : _state.pingBatchGen,
     ));
     _rebuildClashEndpoint();
     _addDebug(DebugSource.app, 'Config saved (${canonicalJson.length} bytes)');

@@ -7,6 +7,7 @@ import '../../models/node_spec.dart';
 import '../../models/subscription_meta.dart';
 import '../parser/body_decoder.dart';
 import '../parser/parse_all.dart';
+import 'user_agent.dart';
 
 /// Источник подписки/узлов (§3.1 спеки 026). Sealed — топ-функция `fetch`
 /// делает exhaustive switch.
@@ -16,15 +17,19 @@ sealed class SubscriptionSource {
 
 final class UrlSource extends SubscriptionSource {
   final String url;
-  final String userAgent;
+
+  /// Кастомный UA. `null` (дефолт) → `_fetch` резолвит брендированный
+  /// `LxBox-android/<ver>` (см. [user_agent.dart]).
+  ///
+  /// Некоторые провайдеры выбирают формат тела по UA: неопознанному клиенту
+  /// отдают JSON-конфиг/заглушку, опознанному — base64 URI-list (который ест
+  /// парсер v2). Бренд-токен `LxBox-android` опознаётся панелями
+  /// (Remnawave/Marzban); голого `singbox` в UA нет.
+  final String? userAgent;
   final Duration timeout;
   const UrlSource(
     this.url, {
-    // `SubscriptionParserClient` — исторический UA v1. Некоторые провайдеры
-    // (Liberty и др.) выбирают формат тела по UA: Clash-клиентам отдают
-    // YAML, парсерам-агентам — base64 URI-list. v2 плотно ест URI-list,
-    // YAML пока не парсит — оставляем v1-поведение.
-    this.userAgent = 'LxBox Android subscription client',
+    this.userAgent,
     // Короткий таймаут на попытку. Fetch делает 3 попытки с exp backoff
     // (1s, 3s): 9+1+9+3+9 ≈ 31s worst case (см. `_fetch`).
     this.timeout = const Duration(seconds: 9),
@@ -130,6 +135,8 @@ Future<FetchResult> fetchRaw(SubscriptionSource source,
 Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async {
   switch (source) {
     case UrlSource(url: final u, userAgent: final ua, timeout: final t):
+      // null → брендированный LxBox-android UA (см. user_agent.dart).
+      final effectiveUa = ua ?? resolveSubscriptionUserAgent();
       // 3 попытки с exp backoff (1s, 3s) — worst case ~31s (9+1+9+3+9).
       // Retry нужен для transient'ов мобильной сети (DNS fail, RST сразу
       // после TCP-open, DDoS-guard challenge, 5xx). 4xx — permanent,
@@ -139,7 +146,7 @@ Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async 
       for (var attempt = 0; attempt < 3; attempt++) {
         try {
           final resp = await client
-              .get(Uri.parse(u), headers: {'User-Agent': ua})
+              .get(Uri.parse(u), headers: {'User-Agent': effectiveUa})
               .timeout(t);
           if (resp.statusCode >= 400 && resp.statusCode < 500) {
             throw HttpException('HTTP ${resp.statusCode} for $u');

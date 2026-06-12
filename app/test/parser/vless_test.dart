@@ -6,16 +6,87 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/parser/uri_utils.dart';
 
 void main() {
+  // §115 — эталонная матрица брифа: эмитим flow ТОЛЬКО если (а) явно есть во
+  // входе И (б) нет транспорта. Проверяем именно сгенерированный outbound.
+  group('§115 flow-эмиссия (эталонная матрица)', () {
+    String? emittedFlow(String uri) {
+      final spec = parseVless(uri)!;
+      return spec.emit(TemplateVars.empty).map['flow'] as String?;
+    }
+
+    const reality = 'security=reality&pbk=PK&sid=ABCD&sni=w.example.com';
+
+    test('bare TCP + REALITY, без flow → flow не эмитится', () {
+      expect(emittedFlow('vless://u@h:443?type=tcp&$reality#L'), isNull);
+    });
+    test('XHTTP + REALITY, без flow → flow не эмитится', () {
+      expect(emittedFlow('vless://u@h:443?type=xhttp&host=cdn&$reality#L'),
+          isNull);
+    });
+    test('XHTTP + REALITY, flow=vision → flow гасится', () {
+      expect(
+        emittedFlow(
+            'vless://u@h:443?type=xhttp&host=cdn&flow=xtls-rprx-vision&$reality#L'),
+        isNull,
+      );
+    });
+    test('bare TCP + REALITY, flow=vision → flow=vision', () {
+      expect(
+        emittedFlow('vless://u@h:443?type=tcp&flow=xtls-rprx-vision&$reality#L'),
+        'xtls-rprx-vision',
+      );
+    });
+    test('литеральный flow=none в ссылке → flow не эмитится (не мусор в ядро)',
+        () {
+      expect(emittedFlow('vless://u@h:443?type=tcp&flow=none&$reality#L'),
+          isNull);
+    });
+    test('deprecated flow=xtls-rprx-direct → flow не эмитится', () {
+      expect(
+          emittedFlow(
+              'vless://u@h:443?type=tcp&flow=xtls-rprx-direct&$reality#L'),
+          isNull);
+    });
+  });
+
   group('VLESS Reality + flow', () {
-    test('reality with pbk auto-sets flow when no transport', () {
+    test('§115: REALITY+bare TCP без flow → flow ПУСТОЙ (honor ссылку)', () {
+      // Раньше навязывали xtls-rprx-vision → ломались валидные none-сетапы
+      // (x3-ui flow: none). Теперь flow берём из ссылки как есть.
       final spec = parseVless(
         'vless://u@h:443?type=tcp&security=reality&pbk=PK&sid=ABCD&sni=w.example.com&fp=chrome#L',
       );
       expect(spec, isNotNull);
-      expect(spec!.flow, 'xtls-rprx-vision');
+      expect(spec!.flow, '', reason: 'flow не навязывается');
       expect(spec.tls.reality?.publicKey, 'PK');
       expect(spec.tls.reality?.shortId, 'abcd');
       expect(spec.tls.fingerprint, 'chrome');
+    });
+
+    test('§115: явный flow=vision на bare TCP → сохраняется', () {
+      final spec = parseVless(
+        'vless://u@h:443?type=tcp&security=reality&flow=xtls-rprx-vision&pbk=PK&sid=ABCD#L',
+      );
+      expect(spec!.flow, 'xtls-rprx-vision');
+      expect(spec.transport, isNull);
+    });
+
+    test('§115: vision + транспорт (ws) → flow погашен + warning', () {
+      final spec = parseVless(
+        'vless://u@h:443?type=ws&path=/x&security=tls&flow=xtls-rprx-vision#L',
+      );
+      expect(spec!.flow, '', reason: 'vision несовместим с транспортом');
+      expect(spec.transport, isA<WsTransport>());
+      expect(spec.warnings.whereType<VisionWithTransportWarning>(), isNotEmpty);
+    });
+
+    test('§115: vision + xhttp → flow погашен (XHTTP+Vision protocol limit)',
+        () {
+      final spec = parseVless(
+        'vless://u@h:443?type=xhttp&host=cdn.example&security=reality&pbk=PK&flow=xtls-rprx-vision#L',
+      );
+      expect(spec!.flow, '');
+      expect(spec.warnings.whereType<VisionWithTransportWarning>(), isNotEmpty);
     });
 
     test('flow=xtls-rprx-vision-udp443 → vision + xudp packet encoding', () {
