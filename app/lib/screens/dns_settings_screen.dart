@@ -8,6 +8,7 @@ import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../services/builder/post_steps.dart';
 import '../services/builder/preset_expand.dart';
+import '../services/builder/rule_set_registry.dart';
 import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
 import '../widgets/outbound_picker.dart';
@@ -88,6 +89,11 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// §117 задача 3: routing-правила (storage order) — источник mirror-группы
   /// (DNS-mirror'ы inline/srs правил) и lifecycle-локов «used by <правило>».
   List<CustomRule> _customRules = const [];
+
+  /// §117: эмитимое DNS-rule тело каждого rule-источника mirror'а (ключ —
+  /// `cr.id`) для read-only превью по тапу. Реальный билд через
+  /// [applyAllCustomRules] (тот же тег rule_set, что в финальном конфиге).
+  Map<String, DnsMirrorEntry> _dnsMirrorByRuleId = const {};
 
 
   bool _loading = true;
@@ -209,6 +215,41 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       presetServersByTag: presetServersByTag,
     );
 
+    // §117: реальные тела DNS-mirror'ов (rule-источники) для превью —
+    // подзаголовок `rule_set` + read-only диалог по тапу. Гоним тот же
+    // эмиттер, что и финальный билд (тег rule_set совпадает), но с
+    // **force-active** eligible-правилами: тело строится и для выключенного
+    // DNS-аспекта, чтобы выключенная строка осталась видимой/информативной.
+    // Persisted-правила не трогаем. srs: dummy-path (как ViewTab) — mirror
+    // породится без скачанного .srs.
+    final previewRules = [
+      for (final cr in activeRules)
+        if (cr.dnsMirrorEligible && !(cr.dns?.enabled ?? false))
+          switch (cr) {
+            CustomRuleInline() =>
+              cr.copyWith(dns: cr.dns!.copyWith(enabled: true)),
+            CustomRuleSrs() =>
+              cr.copyWith(dns: cr.dns!.copyWith(enabled: true)),
+            _ => cr,
+          }
+        else
+          cr,
+    ];
+    final mirrorSrsPaths = <String, String>{
+      for (final cr in previewRules)
+        if (cr is CustomRuleSrs) cr.id: '<srs>',
+    };
+    final unifiedMirrors = applyAllCustomRules(
+      RuleSetRegistry(),
+      previewRules,
+      allPresets,
+      srsPaths: mirrorSrsPaths,
+    );
+    final dnsMirrorByRuleId = <String, DnsMirrorEntry>{
+      for (final m in unifiedMirrors.dnsMirrors)
+        if (m.ruleId != null && m.ruleId!.isNotEmpty) m.ruleId!: m,
+    };
+
     if (mounted) {
       setState(() {
         _servers = resolvedServers;
@@ -220,6 +261,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         _presetLabelByPresetId = presetLabelByPresetId;
         _outboundOptions = outboundOptions;
         _customRules = activeRules;
+        _dnsMirrorByRuleId = dnsMirrorByRuleId;
         _strategy = vars['dns_strategy'] ?? 'prefer_ipv4';
         _dnsFinal = vars['dns_final'] ?? '';
         _defaultResolver = vars['dns_default_domain_resolver'] ?? '';
@@ -420,27 +462,41 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     final seenPresetIds = <String>{};
     for (final cr in _customRules) {
       if (cr is CustomRulePreset) {
+        // §117: preset-источник DNS-аспекта — единый [DnsMirrorTile]. Switch
+        // тогглит §061-запись пресета в `_rules` (DNS-часть; routing-часть
+        // пресета живёт отдельно).
         final idx = presetIdxByPid[cr.presetId];
         if (idx == null || !seenPresetIds.add(cr.presetId)) continue;
-        children.add(DnsRuleTile(
+        children.add(DnsMirrorTile(
           key: ValueKey('dns-rule-preset-${cr.presetId}'),
-          index: idx,
-          dragIndex: null, // группа атомарна — внутренний drag запрещён
-          entry: _rules[idx],
-          templateRulesByName: _templateRulesByName,
-          presetRulesByPresetId: _presetRulesByPresetId,
-          presetLabelByPresetId: _presetLabelByPresetId,
-          onToggleEnabled: _toggleRuleEnabled,
-          onEdit: _showUserRuleEditor,
-          onDelete: _deleteRule,
+          title: _presetLabelByPresetId[cr.presetId] ?? cr.presetId,
+          previewBody: _presetRulesByPresetId[cr.presetId] ?? const {},
+          sourceKind: 'preset',
+          enabled: _rules[idx]['enabled'] == true,
+          onToggle: (v) => _toggleRuleEnabled(idx, v),
         ));
-      } else if (cr.dnsMirrorActive) {
-        children.add(DnsMirrorRuleRow(
+      } else if (cr.dnsMirrorEligible) {
+        // §117: rule-источник — тот же [DnsMirrorTile]. Switch тогглит
+        // `cr.dns.enabled` (DNS-аспект правила; routing-часть живёт). Строка
+        // видна и в выключенном состоянии (eligible, не active). Тап →
+        // read-only превью эмитимого DNS-rule (rule_set + server + фильтры).
+        final mirror = _dnsMirrorByRuleId[cr.id];
+        final previewBody = <String, dynamic>{
+          if (mirror != null) ...mirror.body,
+          'server': cr.dns!.serverTag,
+        };
+        final missing = !_servers.any((s) => s['tag'] == cr.dns!.serverTag);
+        children.add(DnsMirrorTile(
           key: ValueKey('dns-mirror-${cr.id}'),
-          ruleName: cr.name,
-          serverTag: cr.dns!.serverTag,
-          isSrs: cr is CustomRuleSrs,
-          serverMissing: !_servers.any((s) => s['tag'] == cr.dns!.serverTag),
+          title: cr.name,
+          previewBody: previewBody,
+          sourceKind: 'rule',
+          enabled: cr.dns!.enabled,
+          onToggle: (v) => _toggleRuleDns(cr, v),
+          note: [
+            if (cr is CustomRuleSrs) 'matches only domains in the rule-set',
+            if (missing) 'server missing',
+          ].join(' · '),
         ));
       }
     }
@@ -695,6 +751,26 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         ..['enabled'] = value;
       _markDirty();
     });
+  }
+
+  /// §117: тоггл DNS-аспекта rule-источника mirror-группы — пишет
+  /// `cr.dns.enabled` (routing-часть правила не трогается). DNS-аспект живёт
+  /// в custom rules storage, не в `dns.rules`, поэтому персистим явно
+  /// (как rename-каскад) + markDirty для пересборки конфига. Сервер-локи
+  /// (`_ruleRefsByTag`) пересчитаются на rebuild от обновлённого `_customRules`.
+  void _toggleRuleDns(CustomRule cr, bool value) {
+    final idx = _customRules.indexWhere((r) => r.id == cr.id);
+    if (idx < 0 || cr.dns == null) return;
+    final updated = switch (cr) {
+      CustomRuleInline() => cr.copyWith(dns: cr.dns!.copyWith(enabled: value)),
+      CustomRuleSrs() => cr.copyWith(dns: cr.dns!.copyWith(enabled: value)),
+      _ => cr,
+    };
+    setState(() {
+      _customRules = [..._customRules]..[idx] = updated;
+      _markDirty();
+    });
+    unawaited(SettingsStorage.saveCustomRules(_customRules));
   }
 
   /// §033: Delete inline user-rule.

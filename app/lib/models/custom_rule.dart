@@ -114,16 +114,21 @@ sealed class CustomRule {
         _ => null,
       };
 
-  /// §117: DNS-mirror активен — правило включено, галка DNS стоит, сервер
-  /// выбран и нет ports/protocols (headless-гейт: порт/протокол неизвестны
-  /// в момент DNS-запроса). Build и UI используют один и тот же предикат.
-  bool get dnsMirrorActive =>
+  /// §117: правило DNS-mirror-**способно** — включено, сервер выбран, нет
+  /// ports/protocols (headless-гейт: порт/протокол неизвестны в момент
+  /// DNS-запроса). НЕ зависит от `dns.enabled` — строка mirror-группы видна
+  /// и при выключенном DNS-аспекте (switch off, серая), чтобы его можно было
+  /// включить обратно отсюда (симметрично preset-строке).
+  bool get dnsMirrorEligible =>
       enabled &&
-      (dns?.enabled ?? false) &&
       (dns?.serverTag.isNotEmpty ?? false) &&
       ports.isEmpty &&
       portRanges.isEmpty &&
       protocols.isEmpty;
+
+  /// §117: DNS-mirror **активен** — [dnsMirrorEligible] И галка DNS включена.
+  /// Build (эмиссия) и UI (lifecycle-локи серверов) используют этот предикат.
+  bool get dnsMirrorActive => dnsMirrorEligible && (dns?.enabled ?? false);
 
   String get srsUrl => switch (this) {
         CustomRuleSrs(:final srsUrl) => srsUrl,

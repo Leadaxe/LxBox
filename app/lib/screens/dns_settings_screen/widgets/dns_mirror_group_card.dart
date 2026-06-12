@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../widgets/reorder_grab_strip.dart';
+import '../dns_body_dialogs.dart';
+import '../dns_format.dart';
 import 'dns_badge.dart';
 
 /// §117 (решение №6) — атомарная mirror-группа в списке DNS Rules.
@@ -83,46 +85,75 @@ class DnsMirrorGroupCard extends StatelessWidget {
   }
 }
 
-/// §117 задача 3 — read-only строка DNS-mirror'а routing-правила внутри
-/// [DnsMirrorGroupCard]. Управляется из редактора правила (Routing →
-/// правило → DNS), здесь только отображение.
-class DnsMirrorRuleRow extends StatelessWidget {
-  const DnsMirrorRuleRow({
+/// §117 — единый тайл строки внутри [DnsMirrorGroupCard]. Унифицирует оба
+/// источника DNS-mirror'а, чтобы выглядели одинаково:
+/// - **preset** — DNS-аспект bundle-пресета (§061-запись в `dns.rules`);
+/// - **rule** — DNS-опция обычного routing-правила (задача 3, `cr.dns`).
+///
+/// Вид как у preset-тайла: switch + превью `rule_set` + плашка-источник
+/// (`preset`/`rule`). Switch тогглит **только DNS-аспект** источника
+/// (routing-часть живёт отдельно). Тап → read-only превью эмитимого DNS-rule.
+class DnsMirrorTile extends StatelessWidget {
+  const DnsMirrorTile({
     super.key,
-    required this.ruleName,
-    required this.serverTag,
-    required this.isSrs,
-    required this.serverMissing,
+    required this.title,
+    required this.previewBody,
+    required this.sourceKind, // 'preset' | 'rule'
+    required this.enabled,
+    required this.onToggle,
+    this.note,
   });
 
-  final String ruleName;
-  final String serverTag;
-  final bool isSrs;
+  final String title;
 
-  /// true — выбранный сервер исчез: mirror тихо не эмитится (решение №3).
-  final bool serverMissing;
+  /// Эмитимое DNS-rule тело (`rule_set` + `server` + package/wifi) — для
+  /// превью-подзаголовка и read-only диалога по тапу.
+  final Map<String, dynamic> previewBody;
+
+  /// `'preset'` | `'rule'` — плашка-источник + label в диалоге.
+  final String sourceKind;
+
+  final bool enabled;
+  final ValueChanged<bool> onToggle;
+
+  /// Доп-пометка в подзаголовке (srs-каузат / пропавший сервер).
+  final String? note;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    return ListTile(
-      dense: true,
-      visualDensity: VisualDensity.compact,
-      leading: Icon(Icons.dns_outlined,
-          size: 18, color: serverMissing ? cs.onSurfaceVariant : cs.primary),
-      title: Text(
-        ruleName.isNotEmpty ? ruleName : '(unnamed rule)',
-        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+    final cs = Theme.of(context).colorScheme;
+    final (String badgeText, Color badgeColor) = sourceKind == 'preset'
+        ? ('preset', cs.primary)
+        : ('rule', cs.secondary);
+    final preview = formatRulePreview(previewBody, kind: sourceKind);
+    final subtitle = (note != null && note!.isNotEmpty)
+        ? '$preview · $note'
+        : preview;
+    return Card(
+      child: ListTile(
+        onTap: () =>
+            showRuleBodyDialog(context, title, sourceKind, previewBody),
+        leading: Switch(value: enabled, onChanged: onToggle),
+        title: Text(
+          title.isNotEmpty ? title : '(unnamed rule)',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: enabled ? null : cs.onSurfaceVariant,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            fontSize: 11,
+            color: cs.onSurfaceVariant,
+            fontFamily: 'monospace',
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: DnsBadge(badgeText, badgeColor),
       ),
-      subtitle: Text(
-        serverMissing
-            ? 'server "$serverTag" missing — not emitted'
-            : '→ $serverTag'
-                '${isSrs ? ' · matches only domains in the rule-set' : ''}',
-        style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-      ),
-      trailing: DnsBadge('rule', cs.secondary),
     );
   }
 }

@@ -15,6 +15,7 @@ void showRuleBodyDialog(
     'template' => 'template',
     'preset' => 'preset',
     'srs' => 'srs',
+    'rule' => 'routing rule',
     _ => 'user rule',
   };
   showDialog<void>(
