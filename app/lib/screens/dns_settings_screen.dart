@@ -8,12 +8,15 @@ import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../services/builder/post_steps.dart';
 import '../services/builder/preset_expand.dart';
+import '../services/builder/rule_set_registry.dart';
 import '../services/template_loader.dart';
 import '../services/settings_storage.dart';
+import '../widgets/outbound_picker.dart';
+import 'dns_server_edit_screen.dart';
 import 'dns_settings_screen/dns_server_resolver.dart';
 import 'dns_settings_screen/resolved_server.dart';
-import 'dns_settings_screen/server_editor_sheet.dart';
 import 'dns_settings_screen/user_rule_editor_sheet.dart';
+import 'dns_settings_screen/widgets/dns_mirror_group_card.dart';
 import 'dns_settings_screen/widgets/dns_rule_tile.dart';
 import 'dns_settings_screen/widgets/local_resolver_warning_banner.dart';
 import 'dns_settings_screen/widgets/merged_server_tile.dart';
@@ -78,6 +81,20 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// Live lookup: storage хранит presetId, UI отображает текущий label.
   Map<String, String> _presetLabelByPresetId = {};
 
+  /// §117: каналы для `type: outbound` vars DNS-серверов — Direct + активные
+  /// каналы (решение №2). Активность = как в `_buildPresetGroups`:
+  /// stored enabled_groups (или default_enabled при пустом) + vpn-1 всегда.
+  List<OutboundOption> _outboundOptions = const [];
+
+  /// §117 задача 3: routing-правила (storage order) — источник mirror-группы
+  /// (DNS-mirror'ы inline/srs правил) и lifecycle-локов «used by <правило>».
+  List<CustomRule> _customRules = const [];
+
+  /// §117: эмитимое DNS-rule тело каждого rule-источника mirror'а (ключ —
+  /// `cr.id`) для read-only превью по тапу. Реальный билд через
+  /// [applyAllCustomRules] (тот же тег rule_set, что в финальном конфиге).
+  Map<String, DnsMirrorEntry> _dnsMirrorByRuleId = const {};
+
 
   bool _loading = true;
   // §076/§085 R4/§107: staging через LazyPersistMixin (markDirty/stageChanges).
@@ -111,11 +128,27 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
 
     // §043: storage хранит kind-discriminated refs (симметрия с DNS rules).
     // Resolver делает auto-discovery + orphan cleanup + legacy migration.
-    final templateByTag = <String, Map<String, dynamic>>{
-      for (final s in templateServersRaw)
-        if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
-          s['tag'] as String: s,
-    };
+    // §117: template-серверы — обёртки `{description, enabled, vars?, server}`.
+    final templateByTag = templateDnsServersByTag(templateServersRaw);
+
+    // §117: активные каналы для outbound-пикера vars.
+    final storedGroups = await SettingsStorage.getEnabledGroups();
+    final activeGroupTags = <String>{};
+    if (storedGroups.isEmpty) {
+      for (final g in template.presetGroups) {
+        if (g.defaultEnabled) activeGroupTags.add(g.tag);
+      }
+    } else {
+      activeGroupTags.addAll(storedGroups);
+    }
+    activeGroupTags.add('vpn-1'); // required, как в routing
+    final outboundOptions = <OutboundOption>[
+      const OutboundOption(value: 'direct-out', label: 'direct'),
+      for (final g in template.presetGroups)
+        if (activeGroupTags.contains(g.tag))
+          OutboundOption(
+              value: g.tag, label: g.label.isNotEmpty ? g.label : g.tag),
+    ];
 
     // §033: build template rules map by name
     final templateRulesByName = <String, Map<String, dynamic>>{
@@ -182,6 +215,41 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       presetServersByTag: presetServersByTag,
     );
 
+    // §117: реальные тела DNS-mirror'ов (rule-источники) для превью —
+    // подзаголовок `rule_set` + read-only диалог по тапу. Гоним тот же
+    // эмиттер, что и финальный билд (тег rule_set совпадает), но с
+    // **force-active** eligible-правилами: тело строится и для выключенного
+    // DNS-аспекта, чтобы выключенная строка осталась видимой/информативной.
+    // Persisted-правила не трогаем. srs: dummy-path (как ViewTab) — mirror
+    // породится без скачанного .srs.
+    final previewRules = [
+      for (final cr in activeRules)
+        if (cr.dnsMirrorEligible && !(cr.dns?.enabled ?? false))
+          switch (cr) {
+            CustomRuleInline() =>
+              cr.copyWith(dns: cr.dns!.copyWith(enabled: true)),
+            CustomRuleSrs() =>
+              cr.copyWith(dns: cr.dns!.copyWith(enabled: true)),
+            _ => cr,
+          }
+        else
+          cr,
+    ];
+    final mirrorSrsPaths = <String, String>{
+      for (final cr in previewRules)
+        if (cr is CustomRuleSrs) cr.id: '<srs>',
+    };
+    final unifiedMirrors = applyAllCustomRules(
+      RuleSetRegistry(),
+      previewRules,
+      allPresets,
+      srsPaths: mirrorSrsPaths,
+    );
+    final dnsMirrorByRuleId = <String, DnsMirrorEntry>{
+      for (final m in unifiedMirrors.dnsMirrors)
+        if (m.ruleId != null && m.ruleId!.isNotEmpty) m.ruleId!: m,
+    };
+
     if (mounted) {
       setState(() {
         _servers = resolvedServers;
@@ -191,6 +259,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         _templateRulesByName = templateRulesByName;
         _presetRulesByPresetId = presetRulesByPresetId;
         _presetLabelByPresetId = presetLabelByPresetId;
+        _outboundOptions = outboundOptions;
+        _customRules = activeRules;
+        _dnsMirrorByRuleId = dnsMirrorByRuleId;
         _strategy = vars['dns_strategy'] ?? 'prefer_ipv4';
         _dnsFinal = vars['dns_final'] ?? '';
         _defaultResolver = vars['dns_default_domain_resolver'] ?? '';
@@ -221,72 +292,239 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     // §076: configDirty уже true (set в _markDirty).
   }
 
+  /// §117 задача 3: tag → имя routing-правила с активной DNS-опцией —
+  /// lifecycle-лок серверов («used by <правило>», тоггл/delete блокированы).
+  Map<String, String> get _ruleRefsByTag => {
+        for (final cr in _customRules)
+          if (cr.dnsMirrorActive)
+            cr.dns!.serverTag: cr.name.isNotEmpty ? cr.name : 'rule',
+      };
+
   /// §044: render list — typed `ResolvedServer` для каждой ref-записи.
-  List<ResolvedServer> get _displayedServers =>
-      resolveDisplayedServers(_servers, _templateByTag, _presetServersByTag);
+  List<ResolvedServer> get _displayedServers => resolveDisplayedServers(
+      _servers, _templateByTag, _presetServersByTag,
+      ruleRefsByTag: _ruleRefsByTag);
 
   /// Tags доступные в dropdown'ах (DNS Final / Default Resolver / per-rule).
   /// Filter `enabled` на ref-level.
   List<String> get _enabledServerTags => enabledServerTags(_displayedServers);
 
-  /// §043: Reset inline-override обратно к canonical (template/preset).
-  /// Меняет ref kind с `inline` на `template`/`preset`, body убирается.
-  /// Если у tag'а нет canonical — это pure user, не reset а delete (отдельная action).
-  void _resetServerToCanonical(String tag) {
-    final idx = _servers.indexWhere((s) => s['tag'] == tag);
-    if (idx < 0) return;
-    final ref = _servers[idx];
-    if (ref['kind'] != 'inline') return; // только inline можно reset'нуть
-    String? newKind;
-    if (_presetServersByTag.containsKey(tag)) {
-      newKind = 'preset';
-    } else if (_templateByTag.containsKey(tag)) {
-      newKind = 'template';
-    }
-    if (newKind == null) return; // нечего reset'ить — pure user
+  /// §117 задача 4: «+» → полноэкранный редактор в new-режиме (kind inline).
+  /// Заготовка — форма UDP с пустым адресом (save требует ввода); порт/
+  /// detour отсутствуют — ключи появляются только при явном выборе.
+  Future<void> _addServer() async {
+    final result = await openDnsServerEditor(
+      context,
+      initialRef: <String, dynamic>{
+        'enabled': true,
+        'kind': 'inline',
+        'tag': 'dns_new',
+        'description': 'My DNS',
+        'body': <String, dynamic>{'type': 'udp'},
+      },
+      outboundOptions: _outboundOptions,
+      dnsServerTags: _enabledServerTags,
+      existingTags: {for (final s in _servers) s['tag'].toString()},
+    );
+    if (result == null || !mounted) return;
+    final saved = result.saved;
+    if (saved == null) return;
     setState(() {
-      _servers[idx] = {
-        'enabled': ref['enabled'] != false,
-        'kind': newKind!,
-        'tag': tag,
-      };
+      // Tag conflict: replace existing (юзер подтвердил в редакторе).
+      _servers.removeWhere((s) => s['tag'] == saved['tag']);
+      _servers.add(saved);
       _markDirty();
     });
   }
 
-  /// §044: Add new inline server. Открывает editor с 3 input'ами + body
-  /// без tag/description/enabled. На save создаёт kind:inline ref.
-  void _addServer() {
-    showServerEditor(
+  /// §117 задача 4: тап по тайлу → полноэкранный редактор (Params/JSON).
+  /// Reset-to-canonical и Delete — AppBar-actions редактора, результат
+  /// приходит сюда единым `DnsServerEditResult`.
+  Future<void> _editServer(String tag) async {
+    final idx = _servers.indexWhere((s) => s['tag'] == tag);
+    if (idx < 0) return;
+    ResolvedServer? resolved;
+    for (final s in _displayedServers) {
+      if (s.tag == tag) {
+        resolved = s;
+        break;
+      }
+    }
+    if (resolved == null) return; // orphan/malformed — нечего редактировать
+
+    final canonicalDescription = switch (resolved.kind) {
+      ServerKind.template =>
+        _templateByTag[tag]?['description']?.toString() ?? '',
+      ServerKind.preset =>
+        _presetServersByTag[tag]?['description']?.toString() ?? '',
+      ServerKind.inline => '',
+    };
+
+    final result = await openDnsServerEditor(
       context,
-      title: 'Add DNS Server',
-      initialTag: 'dns_new',
-      lockedTag: false,
-      initialDescription: 'My DNS',
-      initialEnabled: true,
-      initialBody: <String, dynamic>{
-        'type': 'udp',
-        'server': '1.1.1.1',
-        'server_port': 53,
-      },
-      onSave: (savedTag, savedDescription, savedEnabled, savedBody) {
-        // Tag conflict: replace existing (юзер явно ввёл tag).
-        setState(() {
-          _servers.removeWhere((s) => s['tag'] == savedTag);
-          _servers.add({
-            'enabled': savedEnabled,
-            'kind': 'inline',
-            'tag': savedTag,
-            if (savedDescription.isNotEmpty) 'description': savedDescription,
-            'body': savedBody,
-          });
-          _markDirty();
-        });
+      initialRef: Map<String, dynamic>.from(_servers[idx]),
+      resolved: resolved,
+      templateWrapper:
+          resolved.kind == ServerKind.template ? _templateByTag[tag] : null,
+      canonicalDescription: canonicalDescription,
+      outboundOptions: _outboundOptions,
+      // §117: dom_resolver-пикер — теги без самого сервера (петля).
+      dnsServerTags: _enabledServerTags.where((t) => t != tag).toList(),
+      // §117 задача 4b: rename-коллизии (без текущего тега).
+      existingTags: {
+        for (final s in _servers)
+          if (s['tag'] != tag) s['tag'].toString(),
       },
     );
+    if (result == null || !mounted) return;
+    setState(() {
+      if (result.wasDeleted) {
+        _servers.removeAt(idx);
+      } else if (result.saved != null) {
+        _servers[idx] = result.saved!;
+        // §117 задача 4b: rename → каскад по ссылкам, чтобы не орфанить
+        // (DNS-правила, resolvers, domain_resolver'ы, DNS-опции правил).
+        final newTag = result.saved!['tag']?.toString() ?? tag;
+        if (newTag.isNotEmpty && newTag != tag) {
+          final updated = renameDnsServerTagRefs(
+            servers: _servers,
+            rules: _rules,
+            templateByTag: _templateByTag,
+            oldTag: tag,
+            newTag: newTag,
+            dnsFinal: _dnsFinal,
+            defaultResolver: _defaultResolver,
+          );
+          _dnsFinal = updated.dnsFinal;
+          _defaultResolver = updated.defaultResolver;
+          final renamed = renameRuleDnsServerTag(_customRules, tag, newTag);
+          if (!identical(renamed, _customRules)) {
+            _customRules = renamed;
+            // custom_rules — чужой этому экрану storage (routing), staged
+            // персистом LazyPersistMixin не покрывается — пишем сразу.
+            unawaited(SettingsStorage.saveCustomRules(renamed));
+          }
+        }
+      } else {
+        return;
+      }
+      _markDirty();
+    });
   }
 
   void _addUserRule() => _showUserRuleEditor(-1);
+
+  /// §117 задача 3: routing-правила с активным DNS-mirror'ом (routing order).
+  List<CustomRule> get _ruleMirrors =>
+      [for (final cr in _customRules) if (cr.dnsMirrorActive) cr];
+
+  /// §117 (решение №6): display-модель списка DNS-правил. Элемент ≥0 —
+  /// индекс standalone-записи в [_rules]; `-1` — атомарная mirror-группа
+  /// (kind:preset записи + rule-mirror'ы, порядок = routing-правила).
+  /// Якорь группы зеркалит эмиссию `applyCustomDns`: первая kind:preset
+  /// запись → иначе перед template-блоком → иначе в конец.
+  List<int> get _ruleDisplayRows {
+    final hasGroup =
+        _rules.any((e) => e['kind'] == 'preset') || _ruleMirrors.isNotEmpty;
+    final rows = <int>[];
+    var groupInserted = false;
+    for (var i = 0; i < _rules.length; i++) {
+      final kind = _rules[i]['kind'];
+      if (kind == 'preset') {
+        if (!groupInserted) {
+          rows.add(-1);
+          groupInserted = true;
+        }
+        continue;
+      }
+      if (kind == 'template' && hasGroup && !groupInserted) {
+        rows.add(-1);
+        groupInserted = true;
+      }
+      rows.add(i);
+    }
+    if (hasGroup && !groupInserted) rows.add(-1);
+    return rows;
+  }
+
+  /// §117: содержимое mirror-группы в порядке routing-правил: preset-записи
+  /// (§061-тайлы, toggle работает, drag нет) + read-only mirror-строки
+  /// inline/srs правил с DNS-опцией.
+  List<Widget> _buildMirrorGroupChildren() {
+    final presetIdxByPid = <String, int>{};
+    for (var i = 0; i < _rules.length; i++) {
+      if (_rules[i]['kind'] == 'preset') {
+        final pid = _rules[i]['presetId']?.toString();
+        if (pid != null && pid.isNotEmpty) presetIdxByPid[pid] = i;
+      }
+    }
+    final children = <Widget>[];
+    final seenPresetIds = <String>{};
+    for (final cr in _customRules) {
+      if (cr is CustomRulePreset) {
+        // §117: preset-источник DNS-аспекта — единый [DnsMirrorTile]. Switch
+        // тогглит §061-запись пресета в `_rules` (DNS-часть; routing-часть
+        // пресета живёт отдельно).
+        final idx = presetIdxByPid[cr.presetId];
+        if (idx == null || !seenPresetIds.add(cr.presetId)) continue;
+        children.add(DnsMirrorTile(
+          key: ValueKey('dns-rule-preset-${cr.presetId}'),
+          title: _presetLabelByPresetId[cr.presetId] ?? cr.presetId,
+          previewBody: _presetRulesByPresetId[cr.presetId] ?? const {},
+          sourceKind: 'preset',
+          enabled: _rules[idx]['enabled'] == true,
+          onToggle: (v) => _toggleRuleEnabled(idx, v),
+        ));
+      } else if (cr.dnsMirrorEligible) {
+        // §117: rule-источник — тот же [DnsMirrorTile]. Switch тогглит
+        // `cr.dns.enabled` (DNS-аспект правила; routing-часть живёт). Строка
+        // видна и в выключенном состоянии (eligible, не active). Тап →
+        // read-only превью эмитимого DNS-rule (rule_set + server + фильтры).
+        final mirror = _dnsMirrorByRuleId[cr.id];
+        final previewBody = <String, dynamic>{
+          if (mirror != null) ...mirror.body,
+          'server': cr.dns!.serverTag,
+        };
+        final missing = !_servers.any((s) => s['tag'] == cr.dns!.serverTag);
+        children.add(DnsMirrorTile(
+          key: ValueKey('dns-mirror-${cr.id}'),
+          title: cr.name,
+          previewBody: previewBody,
+          sourceKind: 'rule',
+          enabled: cr.dns!.enabled,
+          onToggle: (v) => _toggleRuleDns(cr, v),
+          note: [
+            if (cr is CustomRuleSrs) 'matches only domains in the rule-set',
+            if (missing) 'server missing',
+          ].join(' · '),
+        ));
+      }
+    }
+    return children;
+  }
+
+  /// §117 (решение №6): reorder в display-пространстве — группа двигается
+  /// как одна единица, standalone-правила не могут попасть внутрь неё.
+  void _onReorderRules(int oldIndex, int newIndex) {
+    if (newIndex > oldIndex) newIndex -= 1;
+    final rows = _ruleDisplayRows;
+    if (oldIndex < 0 || oldIndex >= rows.length) return;
+    final presetBlock = [
+      for (final e in _rules)
+        if (e['kind'] == 'preset') e,
+    ];
+    final units = <List<Map<String, dynamic>>>[
+      for (final r in rows) r == -1 ? presetBlock : [_rules[r]],
+    ];
+    final moved = units.removeAt(oldIndex);
+    units.insert(newIndex.clamp(0, units.length), moved);
+    setState(() {
+      _rules
+        ..clear()
+        ..addAll([for (final u in units) ...u]);
+      _markDirty();
+    });
+  }
 
   void _showUserRuleEditor(int index) {
     final isNew = index < 0;
@@ -337,14 +575,12 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
             ],
           ),
           const SizedBox(height: 4),
-          // §042: единый render через 3-tier merged list. Builder сам
-          // определяет UI поведение по `_origin` annotation.
+          // §042: единый render через 3-tier merged list. §117 задача 4:
+          // тайл — только switch + тап→полноэкранный редактор.
           ..._displayedServers.map((entry) => MergedServerTile(
                 entry: entry,
                 onToggleEnabled: _toggleServerEnabled,
-                onEdit: _editServerBody,
-                onReset: _resetServerToCanonical,
-                onDelete: _deleteServer,
+                onTap: _editServer,
               )),
 
           const Divider(height: 32),
@@ -381,7 +617,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
             ],
           ),
           const SizedBox(height: 4),
-          if (_rules.isEmpty)
+          if (_rules.isEmpty && _ruleMirrors.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Text(
@@ -390,34 +626,44 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
               ),
             )
           else
+            // §117 (решение №6): display-модель — standalone-записи +
+            // атомарная mirror-группа одним элементом (см. _ruleDisplayRows).
             ReorderableListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               buildDefaultDragHandles: false,
-              itemCount: _rules.length,
-              onReorder: (oldIndex, newIndex) {
-                setState(() {
-                  if (newIndex > oldIndex) newIndex -= 1;
-                  final moved = _rules.removeAt(oldIndex);
-                  _rules.insert(newIndex, moved);
-                  _markDirty();
-                });
+              itemCount: _ruleDisplayRows.length,
+              onReorder: _onReorderRules,
+              itemBuilder: (ctx, i) {
+                final row = _ruleDisplayRows[i];
+                if (row == -1) {
+                  // Группа draggable только при наличии preset-якорей —
+                  // иначе позицию не во что персистить.
+                  final draggable =
+                      _rules.any((e) => e['kind'] == 'preset');
+                  return DnsMirrorGroupCard(
+                    key: const ValueKey('dns-mirror-group'),
+                    dragIndex: draggable ? i : null,
+                    children: _buildMirrorGroupChildren(),
+                  );
+                }
+                return DnsRuleTile(
+                  index: row,
+                  dragIndex: i,
+                  entry: _rules[row],
+                  templateRulesByName: _templateRulesByName,
+                  presetRulesByPresetId: _presetRulesByPresetId,
+                  presetLabelByPresetId: _presetLabelByPresetId,
+                  onToggleEnabled: _toggleRuleEnabled,
+                  onEdit: _showUserRuleEditor,
+                  onDelete: _deleteRule,
+                  // §033: identity для reorder — name (inline/template/srs)
+                  // или presetId (preset). Нужно стабильное непустое значение.
+                  key: ValueKey(
+                    'dns-rule-$row-${_rules[row]['name'] ?? _rules[row]['presetId'] ?? ''}',
+                  ),
+                );
               },
-              itemBuilder: (ctx, i) => DnsRuleTile(
-                index: i,
-                entry: _rules[i],
-                templateRulesByName: _templateRulesByName,
-                presetRulesByPresetId: _presetRulesByPresetId,
-                presetLabelByPresetId: _presetLabelByPresetId,
-                onToggleEnabled: _toggleRuleEnabled,
-                onEdit: _showUserRuleEditor,
-                onDelete: _deleteRule,
-                // §033: identity для reorder — name (inline/template/srs) или
-                // presetId (preset). Нужно стабильное непустое значение.
-                key: ValueKey(
-                  'dns-rule-$i-${_rules[i]['name'] ?? _rules[i]['presetId'] ?? ''}',
-                ),
-              ),
             ),
 
           const Divider(height: 32),
@@ -498,14 +744,6 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     });
   }
 
-  /// §043: Delete user-only inline server.
-  void _deleteServer(String tag) {
-    setState(() {
-      _servers.removeWhere((s) => s['tag'] == tag);
-      _markDirty();
-    });
-  }
-
   /// §033: Toggle enabled на rule-entry (kind не меняется).
   void _toggleRuleEnabled(int index, bool value) {
     setState(() {
@@ -515,80 +753,32 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     });
   }
 
+  /// §117: тоггл DNS-аспекта rule-источника mirror-группы — пишет
+  /// `cr.dns.enabled` (routing-часть правила не трогается). DNS-аспект живёт
+  /// в custom rules storage, не в `dns.rules`, поэтому персистим явно
+  /// (как rename-каскад) + markDirty для пересборки конфига. Сервер-локи
+  /// (`_ruleRefsByTag`) пересчитаются на rebuild от обновлённого `_customRules`.
+  void _toggleRuleDns(CustomRule cr, bool value) {
+    final idx = _customRules.indexWhere((r) => r.id == cr.id);
+    if (idx < 0 || cr.dns == null) return;
+    final updated = switch (cr) {
+      CustomRuleInline() => cr.copyWith(dns: cr.dns!.copyWith(enabled: value)),
+      CustomRuleSrs() => cr.copyWith(dns: cr.dns!.copyWith(enabled: value)),
+      _ => cr,
+    };
+    setState(() {
+      _customRules = [..._customRules]..[idx] = updated;
+      _markDirty();
+    });
+    unawaited(SettingsStorage.saveCustomRules(_customRules));
+  }
+
   /// §033: Delete inline user-rule.
   void _deleteRule(int index) {
     setState(() {
       _rules.removeAt(index);
       _markDirty();
     });
-  }
-
-  /// §044: Edit existing entry — диалог с 3 явными input'ами (tag locked,
-  /// description, enabled) + body JSON editor (без tag/description/enabled).
-  /// На save если entry был template/preset — kind transition в inline.
-  void _editServerBody(String tag) {
-    final idx = _servers.indexWhere((s) => s['tag'] == tag);
-    if (idx < 0) return;
-    final ref = _servers[idx];
-    final kind = ref['kind'] as String?;
-
-    // Initial body — без tag/description/enabled (для inline это уже так в §044;
-    // для template/preset peel'им из canonical перед показом).
-    Map<String, dynamic> initialBody;
-    String initialDescription;
-    if (kind == 'inline' && ref['body'] is Map) {
-      initialBody = Map<String, dynamic>.from(ref['body'] as Map);
-      // На случай если в body всё ещё лежат tag/description/enabled (pre-§044
-      // данные ещё не мигрированные — defensive strip).
-      initialBody
-        ..remove('tag')
-        ..remove('description')
-        ..remove('enabled');
-      initialDescription = ref['description']?.toString() ?? '';
-    } else if (kind == 'preset' && _presetServersByTag.containsKey(tag)) {
-      final canonical = _presetServersByTag[tag]!;
-      initialBody = Map<String, dynamic>.from(canonical)
-        ..remove('tag')
-        ..remove('description')
-        ..remove('enabled')
-        ..remove('_preset_label');
-      initialDescription = ref['description']?.toString() ??
-          canonical['description']?.toString() ??
-          '';
-    } else if (kind == 'template' && _templateByTag.containsKey(tag)) {
-      final canonical = _templateByTag[tag]!;
-      initialBody = Map<String, dynamic>.from(canonical)
-        ..remove('tag')
-        ..remove('description')
-        ..remove('enabled');
-      initialDescription = ref['description']?.toString() ??
-          canonical['description']?.toString() ??
-          '';
-    } else {
-      return; // нечего редактировать
-    }
-
-    showServerEditor(
-      context,
-      title: 'Edit DNS Server',
-      initialTag: tag,
-      lockedTag: true, // tag нельзя менять при edit existing — иначе orphan'ит lookup
-      initialDescription: initialDescription,
-      initialEnabled: ref['enabled'] != false,
-      initialBody: initialBody,
-      onSave: (savedTag, savedDescription, savedEnabled, savedBody) {
-        setState(() {
-          _servers[idx] = {
-            'enabled': savedEnabled,
-            'kind': 'inline',
-            'tag': savedTag,
-            if (savedDescription.isNotEmpty) 'description': savedDescription,
-            'body': savedBody,
-          };
-          _markDirty();
-        });
-      },
-    );
   }
 
 }

@@ -273,6 +273,7 @@ Future<BuildResult> buildConfig({
     extraDnsRulesByPresetId: unifiedApply.dnsRulesByPresetId,
     activePresetIdsWithDnsRule: activePresetIdsWithDnsRule,
     dnsSrsCachedPaths: dnsSrsCachedPaths,
+    dnsMirrors: unifiedApply.dnsMirrors,
   );
 
   // §046: OS-level split-tunneling. Должен быть **последним** post-step'ом —

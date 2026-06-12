@@ -14,13 +14,11 @@ class GeneralTab extends StatelessWidget {
     super.key,
     required this.loaded,
     required this.autoStart,
-    required this.autoUpdateSubs,
     required this.autoCheckUpdates,
     required this.autoPing,
     required this.haptic,
     required this.padding,
     required this.onAutoStartChanged,
-    required this.onAutoUpdateSubsChanged,
     required this.onAutoCheckUpdatesChanged,
     required this.onAutoPingChanged,
     required this.onHapticChanged,
@@ -30,14 +28,12 @@ class GeneralTab extends StatelessWidget {
 
   final bool loaded;
   final bool autoStart;
-  final bool autoUpdateSubs;
   final bool autoCheckUpdates;
   final bool autoPing;
   final bool haptic;
   final EdgeInsets padding;
 
   final ValueChanged<bool> onAutoStartChanged;
-  final ValueChanged<bool> onAutoUpdateSubsChanged;
   final ValueChanged<bool> onAutoCheckUpdatesChanged;
   final ValueChanged<bool> onAutoPingChanged;
   final ValueChanged<bool> onHapticChanged;
@@ -103,18 +99,6 @@ class GeneralTab extends StatelessWidget {
           title: Text('Home-screen shortcut'),
           subtitle: Text(
               'Long-press the L×Box icon on your home screen → choose "Toggle VPN".'),
-        ),
-        const Divider(height: 32),
-        Text('Subscriptions', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        SwitchListTile(
-          title: const Text('Auto-update subscriptions'),
-          subtitle: const Text(
-              'Refresh on app start, after VPN connects, and periodically. '
-              'Manual ⟳ works regardless.'),
-          secondary: const Icon(Icons.cloud_sync_outlined),
-          value: autoUpdateSubs,
-          onChanged: loaded ? onAutoUpdateSubsChanged : null,
         ),
         const Divider(height: 32),
         Text('Updates', style: Theme.of(context).textTheme.titleMedium),

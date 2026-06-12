@@ -276,8 +276,8 @@ curl -H "Authorization: Bearer \$TOKEN" 'http://127.0.0.1:9269/logs?level=error,
 
 - emoji в URL path (✨auto и пр.) — обязательно URL-encode. curl сам не делает.
 - Subscription URLs masked default (`scheme://host/***`); ?reveal=true для full.
-- /rules CRUD принимает snake_case (domain_suffixes, ip_cidrs, preset_id, vars_values),
-  возвращает snake_case.
+- /rules CRUD принимает snake_case (domain_suffixes, ip_cidrs, preset_id, vars_values,
+  dns: {enabled, server_tag} — §117), возвращает snake_case.
 - Все timestamps в ISO-8601 UTC.
 - Token stable пока не Regenerate'ut в UI — стабильно для curl-сессий.
 ''';
@@ -417,7 +417,7 @@ const Map<String, dynamic> _capabilityJson = {
   'notes': [
     'Emoji в URL path (✨auto и пр.) — обязательно URL-encode',
     'Subscription URLs masked default; ?reveal=true для full URL',
-    '/rules CRUD: snake_case в обе стороны (domain_suffixes, preset_id, vars_values)',
+    '/rules CRUD: snake_case в обе стороны (domain_suffixes, preset_id, vars_values, dns.server_tag)',
     'Timestamps — ISO-8601 UTC',
     '`?rebuild=true` на /rules write → автоматически rebuild-config',
   ],

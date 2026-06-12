@@ -8,6 +8,8 @@ import '../services/debug/bootstrap.dart';
 import '../services/debug/transport/server.dart';
 import '../services/haptic_service.dart';
 import '../services/settings_storage.dart';
+import '../services/subscription/subscription_identity.dart';
+import '../services/subscription/user_agent.dart';
 import '../services/url_launcher.dart' as ul;
 import '../services/wifi_history_listener.dart';
 import '../widgets/wifi_permission_dialog.dart';
@@ -15,6 +17,7 @@ import '../vpn/box_vpn_client.dart';
 import 'app_settings_screen/app_settings_dialogs.dart';
 import 'app_settings_screen/widgets/diagnostics_tab.dart';
 import 'app_settings_screen/widgets/general_tab.dart';
+import 'app_settings_screen/widgets/subscriptions_tab.dart';
 import 'backup_screen.dart';
 
 class AppSettingsScreen extends StatefulWidget {
@@ -65,6 +68,15 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   Timer? _coreLogsHighlightTimer;
   // §051 Phase 3 — auto-record visited Wi-Fi networks (default off).
   bool _autoRecordWifi = false;
+
+  // §118 — subscription fetch identity (UA override + HWID + device-meta).
+  // _deviceOs/_verOs/_deviceModel — OVERRIDE-значения (пусто = device-дефолт).
+  String _userAgent = '';
+  bool _sendHwid = false;
+  String _hwid = '';
+  String _deviceOs = '';
+  String _verOs = '';
+  String _deviceModel = '';
 
   @override
   void initState() {
@@ -130,8 +142,28 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final coreLogsEnabled = await _vpn.getCoreLogsEnabled();
     final configLocked = await SettingsStorage.getConfigLockedForDebug();
     final autoRecordWifi = await SettingsStorage.getAutoRecordWifi();
+    final userAgent =
+        await SettingsStorage.getVar(SubscriptionIdentity.varUserAgent, '');
+    final sendHwid =
+        (await SettingsStorage.getVar(SubscriptionIdentity.varSendHwid,
+            'false')) ==
+            'true';
+    final hwid =
+        await SettingsStorage.getVar(SubscriptionIdentity.varHwid, '');
+    final deviceOs =
+        await SettingsStorage.getVar(SubscriptionIdentity.varDeviceOs, '');
+    final verOs =
+        await SettingsStorage.getVar(SubscriptionIdentity.varVerOs, '');
+    final deviceModel =
+        await SettingsStorage.getVar(SubscriptionIdentity.varDeviceModel, '');
     if (mounted) {
       setState(() {
+        _userAgent = userAgent;
+        _sendHwid = sendHwid;
+        _hwid = hwid;
+        _deviceOs = deviceOs;
+        _verOs = verOs;
+        _deviceModel = deviceModel;
         _autoStart = auto;
         _haptic = haptic != 'false';
         _autoPing = autoPing != 'false';
@@ -384,14 +416,15 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       animation: themeNotifier,
       builder: (context, _) {
         return DefaultTabController(
-          length: 2,
-          initialIndex: widget.initialTab.clamp(0, 1),
+          length: 3,
+          initialIndex: widget.initialTab.clamp(0, 2),
           child: Scaffold(
             appBar: AppBar(
               title: const Text('App Settings'),
               bottom: const TabBar(
                 tabs: [
                   Tab(text: 'General'),
+                  Tab(text: 'Subscriptions'),
                   Tab(text: 'Diagnostics'),
                 ],
               ),
@@ -399,6 +432,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
             body: TabBarView(
               children: [
                 _buildGeneralTab(context),
+                _buildSubscriptionsTab(context),
                 _buildDiagnosticsTab(context),
               ],
             ),
@@ -411,11 +445,163 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   EdgeInsets _tabPadding(BuildContext context) => EdgeInsets.fromLTRB(
       12, 12, 12, MediaQuery.of(context).padding.bottom + 24);
 
+  // ─── §118 subscription fetch identity (UA override + HWID + meta) ──────
+
+  Future<String?> _editIdentityText({
+    required String title,
+    required String initial,
+    String? hint,
+    bool monospace = false,
+  }) async {
+    final ctl = TextEditingController(text: initial);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          maxLines: null,
+          style: monospace
+              ? const TextStyle(fontFamily: 'monospace', fontSize: 13)
+              : null,
+          decoration: InputDecoration(
+            hintText: hint,
+            border: const OutlineInputBorder(),
+            isDense: true,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctl.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    ctl.dispose();
+    return result;
+  }
+
+  Future<void> _editUserAgent() async {
+    final v = await _editIdentityText(
+      title: 'Custom User-Agent',
+      initial: _userAgent,
+      hint: resolveSubscriptionUserAgent(),
+    );
+    if (v == null) return;
+    final trimmed = v.trim();
+    setState(() => _userAgent = trimmed);
+    await SettingsStorage.setVar(SubscriptionIdentity.varUserAgent, trimmed);
+    SubscriptionIdentity.apply(userAgentOverride: trimmed);
+  }
+
+  void _setSendHwid(bool val) {
+    // §118 — лениво генерим UUID при первом включении (решение №2/№3).
+    if (val && _hwid.isEmpty) {
+      _hwid = generateUuidV4();
+      unawaited(SettingsStorage.setVar(SubscriptionIdentity.varHwid, _hwid));
+      SubscriptionIdentity.apply(hwid: _hwid);
+    }
+    setState(() => _sendHwid = val);
+    unawaited(SettingsStorage.setVar(
+        SubscriptionIdentity.varSendHwid, val.toString()));
+    SubscriptionIdentity.apply(sendHwid: val);
+  }
+
+  Future<void> _editHwid() async {
+    final v = await _editIdentityText(
+      title: 'HWID',
+      initial: _hwid,
+      monospace: true,
+    );
+    if (v == null) return;
+    final trimmed = v.trim();
+    setState(() => _hwid = trimmed);
+    await SettingsStorage.setVar(SubscriptionIdentity.varHwid, trimmed);
+    SubscriptionIdentity.apply(hwid: trimmed);
+  }
+
+  void _regenerateHwid() {
+    final v = generateUuidV4();
+    setState(() => _hwid = v);
+    unawaited(SettingsStorage.setVar(SubscriptionIdentity.varHwid, v));
+    SubscriptionIdentity.apply(hwid: v);
+  }
+
+  Future<void> _editDeviceOs() async {
+    final v = await _editIdentityText(
+      title: 'x-device-os',
+      initial: _deviceOs,
+      hint: SubscriptionIdentity.deviceOsDefault,
+    );
+    if (v == null) return;
+    final t = v.trim();
+    setState(() => _deviceOs = t);
+    await SettingsStorage.setVar(SubscriptionIdentity.varDeviceOs, t);
+    SubscriptionIdentity.apply(deviceOsOverride: t);
+  }
+
+  Future<void> _editVerOs() async {
+    final v = await _editIdentityText(
+      title: 'x-ver-os',
+      initial: _verOs,
+      hint: SubscriptionIdentity.osVersion,
+    );
+    if (v == null) return;
+    final t = v.trim();
+    setState(() => _verOs = t);
+    await SettingsStorage.setVar(SubscriptionIdentity.varVerOs, t);
+    SubscriptionIdentity.apply(verOsOverride: t);
+  }
+
+  Future<void> _editDeviceModel() async {
+    final v = await _editIdentityText(
+      title: 'x-device-model',
+      initial: _deviceModel,
+      hint: SubscriptionIdentity.deviceModel,
+    );
+    if (v == null) return;
+    final t = v.trim();
+    setState(() => _deviceModel = t);
+    await SettingsStorage.setVar(SubscriptionIdentity.varDeviceModel, t);
+    SubscriptionIdentity.apply(deviceModelOverride: t);
+  }
+
+  Widget _buildSubscriptionsTab(BuildContext context) {
+    return SubscriptionsTab(
+      loaded: _loaded,
+      padding: _tabPadding(context),
+      autoUpdateSubs: _autoUpdateSubs,
+      onAutoUpdateSubsChanged: (val) {
+        setState(() => _autoUpdateSubs = val);
+        unawaited(SettingsStorage.setAutoUpdateSubs(val));
+      },
+      userAgent: _userAgent,
+      defaultUserAgent: resolveSubscriptionUserAgent(),
+      onEditUserAgent: () => unawaited(_editUserAgent()),
+      sendHwid: _sendHwid,
+      onSendHwidChanged: _setSendHwid,
+      hwid: _hwid,
+      deviceOs: SubscriptionIdentity.effectiveDeviceOs,
+      verOs: SubscriptionIdentity.effectiveVerOs,
+      deviceModel: SubscriptionIdentity.effectiveDeviceModel,
+      onEditHwid: () => unawaited(_editHwid()),
+      onRegenerateHwid: _regenerateHwid,
+      onEditDeviceOs: () => unawaited(_editDeviceOs()),
+      onEditVerOs: () => unawaited(_editVerOs()),
+      onEditDeviceModel: () => unawaited(_editDeviceModel()),
+    );
+  }
+
   Widget _buildGeneralTab(BuildContext context) {
     return GeneralTab(
       loaded: _loaded,
       autoStart: _autoStart,
-      autoUpdateSubs: _autoUpdateSubs,
       autoCheckUpdates: _autoCheckUpdates,
       autoPing: _autoPing,
       haptic: _haptic,
@@ -423,10 +609,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       onAutoStartChanged: (val) {
         setState(() => _autoStart = val);
         unawaited(_vpn.setAutoStart(val));
-      },
-      onAutoUpdateSubsChanged: (val) {
-        setState(() => _autoUpdateSubs = val);
-        unawaited(SettingsStorage.setAutoUpdateSubs(val));
       },
       onAutoCheckUpdatesChanged: (val) {
         setState(() => _autoCheckUpdates = val);

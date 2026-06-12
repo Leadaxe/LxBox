@@ -38,6 +38,8 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         if (r.wifiSsids.isNotEmpty) 'wifi_ssids': r.wifiSsids,
         if (r.wifiBssids.isNotEmpty) 'wifi_bssids': r.wifiBssids,
         'outbound': r.outbound,
+        // §117 задача 3 — DNS-опция правила (DNS follows the rule).
+        if (r.dns != null) 'dns': _serializeRuleDns(r.dns!),
       };
     case CustomRuleSrs():
       final cachedPath = await RuleSetDownloader.cachedPath(r.id);
@@ -53,6 +55,7 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         if (r.wifiSsids.isNotEmpty) 'wifi_ssids': r.wifiSsids,
         if (r.wifiBssids.isNotEmpty) 'wifi_bssids': r.wifiBssids,
         'outbound': r.outbound,
+        if (r.dns != null) 'dns': _serializeRuleDns(r.dns!),
         'srs': {
           'cached': cachedPath != null,
           'path': cachedPath,
@@ -109,6 +112,12 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
       };
   }
 }
+
+/// §117 задача 3 — snake_case wire-shape DNS-опции (как остальные поля API).
+Map<String, Object?> _serializeRuleDns(RuleDns dns) => {
+      'enabled': dns.enabled,
+      'server_tag': dns.serverTag,
+    };
 
 Future<dynamic> _lookupPreset(String presetId) async {
   if (presetId.isEmpty) return null;

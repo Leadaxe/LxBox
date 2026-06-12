@@ -21,9 +21,17 @@ class DnsRuleTile extends StatelessWidget {
     required this.onToggleEnabled,
     required this.onEdit,
     required this.onDelete,
+    this.dragIndex,
   });
 
+  /// Индекс записи в **storage**-списке (`_rules`) — для mutating-callbacks.
   final int index;
+
+  /// §117: индекс в **display**-списке ReorderableListView — для grab-strip.
+  /// null = строка не draggable (preset-записи внутри атомарной
+  /// mirror-группы, решение №6).
+  final int? dragIndex;
+
   final Map<String, dynamic> entry;
   final Map<String, Map<String, dynamic>> templateRulesByName;
   final Map<String, Map<String, dynamic>> presetRulesByPresetId;
@@ -68,8 +76,8 @@ class DnsRuleTile extends StatelessWidget {
     final preview = formatRulePreview(body, kind: kind);
 
     final badgeText = switch (kind) {
-      'template' => 'from template',
-      'preset' => 'from preset',
+      'template' => 'template',
+      'preset' => 'preset',
       'srs' => 'srs',
       _ => 'inline',
     };
@@ -80,22 +88,18 @@ class DnsRuleTile extends StatelessWidget {
       _ => theme.colorScheme.secondary,
     };
 
-    // §098 — единый grab-strip слева (как в routing rules), вместо прежней
-    // мелкой inline-иконки drag_handle рядом со Switch.
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ReorderGrabStrip(index: index),
-          Expanded(
-            child: Card(
-              child: ListTile(
-                onTap: () =>
-                    showRuleBodyDialog(context, displayTitle, kind, body),
-                leading: Switch(
-                  value: enabled,
-                  onChanged: (v) => onToggleEnabled(index, v),
-                ),
+    // §098 — grab-strip слева (как в routing rules). §117-fix: полоса через
+    // Stack+Positioned, БЕЗ IntrinsicHeight. `ListTile` под IntrinsicHeight
+    // занижает intrinsic-высоту при переносе заголовка на 2 строки и режет
+    // низ контента (overflow). Stack даёт тайлу натуральную высоту, полоса
+    // тянется Positioned(top:0,bottom:0).
+    final tile = Card(
+      child: ListTile(
+        onTap: () => showRuleBodyDialog(context, displayTitle, kind, body),
+        leading: Switch(
+          value: enabled,
+          onChanged: (v) => onToggleEnabled(index, v),
+        ),
         title: Text(
           displayTitle,
           style: TextStyle(
@@ -142,11 +146,24 @@ class DnsRuleTile extends StatelessWidget {
             ],
           ],
         ),
-              ),
-            ),
-          ),
-        ],
       ),
+    );
+
+    if (dragIndex == null) return tile;
+    // Полоса 18px + горизонтальные margin 6+6 = 30px gutter слева.
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 30),
+          child: tile,
+        ),
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          child: ReorderGrabStrip(index: dragIndex!),
+        ),
+      ],
     );
   }
 }

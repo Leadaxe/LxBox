@@ -294,13 +294,16 @@ Sealed по полю `type`:
   "packages":       [ … ]?,        // OR-группа #3
   "protocols":      [ … ]?,        // routing-rule level (subset of kKnownProtocols)
   "ipIsPrivate":    true?,         // routing-rule level
-  "outbound":       "<tag>"        // или "reject" (sentinel → action: reject)
+  "outbound":       "<tag>",       // или "reject" (sentinel → action: reject)
+  "dns":            { "enabled": true, "serverTag": "<dns-server tag>" }?  // §117 задача 3
 }
 ```
 
 `name` — пользовательский, mutable.
 
 OR-семантика внутри category, AND между. `protocols` и `ipIsPrivate` не headless'ятся, выносятся в routing-rule level.
+
+`dns` ([§117] задача 3, «DNS follows the rule») — опционально: builder эмитит mirror DNS-rule `{rule_set: <тот же headless>, server: serverTag}` в атомарной mirror-группе (порядок = routing-правила). Отсутствует в старых записях → null → старое поведение. Гейт: при непустых `ports`/`protocols` mirror не эмитится.
 
 ### `kind: "srs"` — `CustomRuleSrs`
 
@@ -316,11 +319,14 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
   "packages":    [ … ]?,
   "protocols":   [ … ]?,
   "ipIsPrivate": true?,
-  "outbound":    "<tag>"
+  "outbound":    "<tag>",
+  "dns":         { "enabled": true, "serverTag": "<dns-server tag>" }?  // §117 задача 3
 }
 ```
 
 Сам бинарь `.srs` лежит отдельно в `rule_sets/<tag>.srs` (см. [таблицу файлов](#disk-layout) выше).
+
+`dns` ([§117] задача 3) — как у inline, но mirror ссылается на существующий `.srs`-тег + DNS-безопасные доп-фильтры (`packages`/wifi). Работает только если в rule-set есть домены (IP-only лист в DNS-контексте не матчит).
 
 ### `kind: "preset"` — `CustomRulePreset`
 
@@ -363,13 +369,14 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
   "enabled":     <bool>,
   "tag":         "<string>",        // SINGLE source of truth, не дублируется в body
   "description": "<string>"?,        // optional override; для inline — primary
-  "body":        { … }?              // только inline; partial sing-box server БЕЗ tag/description/enabled
+  "body":        { … }?,             // только inline; partial sing-box server БЕЗ tag/description/enabled
+  "varValues":   { "<name>": "<value>", … }?  // §117, только template: выбранные значения vars
 }
 ```
 
 **Семантика kind:**
 
-- `template` — ссылка на сервер из шаблона. Юзер может оверрайднуть `enabled` / `description`, body берётся из шаблона.
+- `template` — ссылка на сервер из шаблона ([§117]: обёртка `{vars, server}`, tag в `server.tag`). Юзер может оверрайднуть `enabled` / `description` и выбрать значения vars (`varValues`: `outbound`-канал, IP-профиль, domain resolver — см. TEMPLATE.md); body резолвится из шаблона подстановкой `@var`'ов (`resolveTemplateDnsServerBody`).
 - `preset` — то же, но из активного preset-bundle (`server_lists` тут не при чём, имеется в виду template preset).
 - `inline` — пользовательский сервер. `body` обязателен. Если tag совпадает с template/preset И shape матчится → builder может схлопнуть в `template`/`preset` ref (см. `_serverShapesMatch`).
 
@@ -398,6 +405,7 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 - v1.6.0 ([§061]): `dns_options.rules[]` — структурированный список с `type`/`enabled`/`title`/`rule`.
 - v1.6.0 ([§043][043-dns]): `dns_options.servers[]` — kind-refs впервые. Tag/description/enabled тогда жили в `body`.
 - v1.6.1 ([§044]): `dns_options.servers[]` — clean schema. Tag/description/enabled подняты на ref-level. Underscore-аннотации (`_kind`, `_overrides`, `_origin`, `_preset_label`) удалены. Builder синтезирует tag в body. One-shot migration в `_migrateLegacyDnsServers`.
+- v1.7.x ([§117]): template-серверы в шаблоне — обёртки `{description, enabled, vars?, server}`; ref-запись `kind: template` получила `varValues`. Миграции нет (не нужна): kind-ref'ы валидны как есть, удалённые из шаблона теги (`quad9_dot`, `adguard_dot`, `adguard_family`, `google_doh_vpn`) орфан-чистятся, vars применяют дефолты; inline-серверы юзера не трогаются.
 
 ---
 
@@ -553,5 +561,6 @@ CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHist
 [§061]: ./spec/tasks/061-dns-rules-refactor/spec.md
 [§044]: ./spec/tasks/044-dns-servers-clean-schema.md
 [§046]: ./spec/features/046%20tunnel%20apps%20split-tunneling/spec.md
+[§117]: ./spec/features/117%20dns-rework/spec.md
 [043-applog]: ./spec/features/043%20applog%20per-source%20quotas/spec.md
 [043-dns]: ./spec/tasks/043-dns-servers-refs-by-kind.md

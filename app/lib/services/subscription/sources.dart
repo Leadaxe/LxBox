@@ -7,6 +7,7 @@ import '../../models/node_spec.dart';
 import '../../models/subscription_meta.dart';
 import '../parser/body_decoder.dart';
 import '../parser/parse_all.dart';
+import 'subscription_identity.dart';
 import 'user_agent.dart';
 
 /// Источник подписки/узлов (§3.1 спеки 026). Sealed — топ-функция `fetch`
@@ -135,8 +136,16 @@ Future<FetchResult> fetchRaw(SubscriptionSource source,
 Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async {
   switch (source) {
     case UrlSource(url: final u, userAgent: final ua, timeout: final t):
-      // null → брендированный LxBox-android UA (см. user_agent.dart).
-      final effectiveUa = ua ?? resolveSubscriptionUserAgent();
+      // §118: UA — per-source > глобальный override > брендированный
+      // LxBox-android (см. user_agent.dart). HWID-заголовки (если включены)
+      // мёржатся из SubscriptionIdentity.
+      final override = SubscriptionIdentity.userAgentOverride;
+      final effectiveUa = ua ??
+          (override.isNotEmpty ? override : resolveSubscriptionUserAgent());
+      final reqHeaders = <String, String>{
+        'User-Agent': effectiveUa,
+        ...SubscriptionIdentity.fetchHeaders(),
+      };
       // 3 попытки с exp backoff (1s, 3s) — worst case ~31s (9+1+9+3+9).
       // Retry нужен для transient'ов мобильной сети (DNS fail, RST сразу
       // после TCP-open, DDoS-guard challenge, 5xx). 4xx — permanent,
@@ -146,7 +155,7 @@ Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async 
       for (var attempt = 0; attempt < 3; attempt++) {
         try {
           final resp = await client
-              .get(Uri.parse(u), headers: {'User-Agent': effectiveUa})
+              .get(Uri.parse(u), headers: reqHeaders)
               .timeout(t);
           if (resp.statusCode >= 400 && resp.statusCode < 500) {
             throw HttpException('HTTP ${resp.statusCode} for $u');

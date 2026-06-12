@@ -147,15 +147,16 @@ void main() {
       );
 
       expect(resolved, hasLength(4));
-      // Stored entries сохраняют свой порядок: A (template), p-id (preset)
       // Новый preset new-p-id вставляется ПЕРЕД первой template-записью (A).
-      // Новый template NEW добавляется в конец.
+      // §117 (решение №6): kind:preset записи — атомарная mirror-группа,
+      // компактятся к позиции первой → p-id подтягивается к new-p-id,
+      // standalone A не может стоять внутри группы. NEW — в конец.
       expect(resolved[0]['kind'], 'preset');
       expect(resolved[0]['presetId'], 'new-p-id');
-      expect(resolved[1]['kind'], 'template');
-      expect(resolved[1]['name'], 'A');
-      expect(resolved[2]['kind'], 'preset');
-      expect(resolved[2]['presetId'], 'p-id');
+      expect(resolved[1]['kind'], 'preset');
+      expect(resolved[1]['presetId'], 'p-id');
+      expect(resolved[2]['kind'], 'template');
+      expect(resolved[2]['name'], 'A');
       expect(resolved[3]['kind'], 'template');
       expect(resolved[3]['name'], 'NEW');
     });

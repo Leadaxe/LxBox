@@ -253,7 +253,7 @@ Widget _autoRecordOffBanner(BuildContext ctx, BuildContext outerCtx) {
                   Navigator.of(ctx).pop<List<WifiEntry>>(null);
                   Navigator.of(outerCtx).push(MaterialPageRoute<void>(
                     builder: (_) =>
-                        const AppSettingsScreen(initialTab: 1),
+                        const AppSettingsScreen(initialTab: 2),
                   ));
                 },
                 style: OutlinedButton.styleFrom(

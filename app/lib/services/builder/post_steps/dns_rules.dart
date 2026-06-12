@@ -43,6 +43,7 @@ Future<void> applyCustomDns(
   Map<String, Map<String, dynamic>> extraDnsRulesByPresetId = const {},
   Set<String> activePresetIdsWithDnsRule = const {},
   Map<String, String> dnsSrsCachedPaths = const {},
+  List<DnsMirrorEntry> dnsMirrors = const [],
 }) async {
   final dns = (config['dns'] as Map<String, dynamic>?) ?? <String, dynamic>{};
 
@@ -54,11 +55,8 @@ Future<void> applyCustomDns(
           .whereType<Map<String, dynamic>>()
           .map((s) => Map<String, dynamic>.from(s))
           .toList();
-  final templateByTag = <String, Map<String, dynamic>>{
-    for (final s in templateServers)
-      if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
-        s['tag'] as String: s,
-  };
+  // §117: template-серверы — обёртки `{description, enabled, vars?, server}`.
+  final templateByTag = templateDnsServersByTag(templateServers);
   final presetServersByTag = <String, Map<String, dynamic>>{
     for (final s in extraServers)
       if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
@@ -71,12 +69,38 @@ Future<void> applyCustomDns(
     presetServersByTag: presetServersByTag,
   );
 
+  // §117: known outbound-теги (outbounds + endpoints уже в конфиге на этом
+  // шаге пайплайна) — для зачистки dangling `detour` у DNS-серверов.
+  final knownOutboundTags = <String>{
+    for (final o in (config['outbounds'] as List<dynamic>? ?? const []))
+      if (o is Map && o['tag'] is String) o['tag'] as String,
+    for (final e in (config['endpoints'] as List<dynamic>? ?? const []))
+      if (e is Map && e['tag'] is String) e['tag'] as String,
+  };
+
+  // §117 задача 3: серверы, реферимые активными правилами (rule-источники
+  // mirror-группы) — force-include в dns.servers (lifecycle, locked №7).
+  final ruleReferencedTags = <String>{
+    for (final m in dnsMirrors)
+      if (m.ruleId != null && m.serverTag.isNotEmpty) m.serverTag,
+  };
+
   // Refs → final bodies для sing-box config.
-  dns['servers'] = resolveDnsServersBodies(
+  final serverBodies = resolveDnsServersBodies(
     resolved: resolvedServers,
     templateByTag: templateByTag,
     presetServersByTag: presetServersByTag,
+    knownOutboundTags: knownOutboundTags,
+    ruleReferencedTags: ruleReferencedTags,
   );
+  dns['servers'] = serverBodies;
+
+  // §117: реально эмитированные серверы — фильтр mirror'ов с пропавшим
+  // serverTag (тихо, без warning — решение №3).
+  final emittedServerTags = <String>{
+    for (final s in serverBodies)
+      if (s['tag'] is String) s['tag'] as String,
+  };
 
   // §033: resolve DNS rules — auto-discover + orphan cleanup + persist
   final templateRules = (templateDnsOptions['rules'] as List<dynamic>? ?? const [])
@@ -97,10 +121,53 @@ Future<void> applyCustomDns(
   // Возвращаем наружу через config — caller должен мерджить в route.rule_set.
   final extraDnsSrsRuleSets = <Map<String, dynamic>>[];
 
+  // §117 (решение №6): mirror-группа эмитится один раз, атомарно, в порядке
+  // routing-правил. Якорь — первая kind:preset запись §061-списка; без
+  // preset-якоря — перед template-блоком; совсем без якоря — в конец.
+  var mirrorGroupEmitted = false;
+  void emitMirrorGroup() {
+    if (mirrorGroupEmitted) return;
+    mirrorGroupEmitted = true;
+    for (final m in dnsMirrors) {
+      if (m.presetId != null) {
+        // Preset-источник: body уже несёт server. Defensive: dangling server
+        // (преcет-сервер не дожил до dns.servers) → тихо пропускаем.
+        final srv = m.body['server'];
+        if (srv is String && !emittedServerTags.contains(srv)) continue;
+        outRules.add(m.body);
+      } else {
+        // Rule-источник: пропавший сервер → DNS-rule тихо не эмитится
+        // (решение №3).
+        if (!emittedServerTags.contains(m.serverTag)) continue;
+        outRules.add({...m.body, 'server': m.serverTag});
+      }
+    }
+  }
+
   for (final entry in resolved) {
-    if (entry['enabled'] != true) continue;
     final kind = entry['kind'] as String?;
     if (kind == null) continue;
+    if (kind == 'preset') {
+      if (dnsMirrors.isNotEmpty) {
+        // §117: запись — позиционный якорь группы; тела preset-правил живут
+        // в mirror-группе (порядок routing-правил), per-preset enabled уже
+        // учтён при её сборке (isPresetDnsEnabled).
+        emitMirrorGroup();
+        continue;
+      }
+      // Legacy-ветка (вызовы без dnsMirrors — shim'ы/старые тесты):
+      // позиционная эмиссия тела по записи, как до §117.
+      if (entry['enabled'] != true) continue;
+      final pid = entry['presetId'] as String?;
+      if (pid == null || pid.isEmpty) continue;
+      final body = extraDnsRulesByPresetId[pid];
+      if (body != null) outRules.add(body);
+      continue;
+    }
+    if (kind == 'template' && dnsMirrors.isNotEmpty && !mirrorGroupEmitted) {
+      emitMirrorGroup(); // нет preset-якоря → группа перед template-блоком
+    }
+    if (entry['enabled'] != true) continue;
     if (kind == 'inline') {
       final body = entry['rule'];
       if (body is Map<String, dynamic>) outRules.add(body);
@@ -114,11 +181,6 @@ Future<void> applyCustomDns(
           ..remove('enabled_default');
         outRules.add(clean);
       }
-    } else if (kind == 'preset') {
-      final pid = entry['presetId'] as String?;
-      if (pid == null || pid.isEmpty) continue;
-      final body = extraDnsRulesByPresetId[pid];
-      if (body != null) outRules.add(body);
     } else if (kind == 'srs') {
       final id = entry['id'] as String?;
       final name = entry['name'] as String?;
@@ -150,6 +212,8 @@ Future<void> applyCustomDns(
     }
     // unknown kind (e.g. legacy 'user', 'rule') — silently dropped
   }
+  // §117: якоря не нашлось (нет preset/template записей) → группа в конец.
+  if (dnsMirrors.isNotEmpty) emitMirrorGroup();
   if (outRules.isNotEmpty) dns['rules'] = outRules;
   if (extraDnsSrsRuleSets.isNotEmpty) {
     // Подмешиваем в route.rule_set (sing-box рекомендует rule_set'ы держать
@@ -289,6 +353,19 @@ Future<List<Map<String, dynamic>>> resolveDnsRulesList({
       'kind': 'template',
       'name': name,
     });
+  }
+
+  // §117 (решение №6): kind:preset записи — часть атомарной mirror-группы;
+  // держим их соседними (компакция к позиции первой). Standalone-правила
+  // могут стоять только выше или ниже группы целиком, не внутри.
+  final firstPresetIdx = result.indexWhere((e) => e['kind'] == 'preset');
+  if (firstPresetIdx >= 0) {
+    final presetBlock =
+        result.where((e) => e['kind'] == 'preset').toList(growable: false);
+    if (presetBlock.length > 1) {
+      result.removeWhere((e) => e['kind'] == 'preset');
+      result.insertAll(firstPresetIdx, presetBlock);
+    }
   }
 
   // Persist если изменилось.

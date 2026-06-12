@@ -123,7 +123,7 @@ PresetFragments expandPreset(
     // var резолвится не в "true". Отсутствие поля = always-on.
     final enabledRaw = rs['enabled'];
     if (enabledRaw is String) {
-      final substituted = _substitute(enabledRaw, varsMap);
+      final substituted = substituteVars(enabledRaw, varsMap);
       if (substituted is! String || substituted.toLowerCase() != 'true') {
         continue;
       }
@@ -132,7 +132,7 @@ PresetFragments expandPreset(
     }
 
     final copy = deepCopyJson(rs);
-    final result = _substitute(copy, varsMap);
+    final result = substituteVars(copy, varsMap);
     if (result is! Map<String, dynamic>) continue;
     if (result['tag'] is! String) continue;
     if (result['type'] is! String) continue;
@@ -170,7 +170,7 @@ PresetFragments expandPreset(
   Map<String, dynamic>? dnsRule;
   if (preset.dnsRule != null) {
     final copy = deepCopyJson(preset.dnsRule!);
-    final result = _substitute(copy, varsMap);
+    final result = substituteVars(copy, varsMap);
     if (result is Map<String, dynamic> && result['server'] is String) {
       dnsRule = result;
     }
@@ -179,7 +179,7 @@ PresetFragments expandPreset(
   Map<String, dynamic>? routingRule;
   {
     final copy = deepCopyJson(preset.rule);
-    final result = _substitute(copy, varsMap);
+    final result = substituteVars(copy, varsMap);
     if (result is Map<String, dynamic> &&
         (result['outbound'] is String || result['action'] is String)) {
       // Universal outbound override через `varsValues['outbound']` —
@@ -257,12 +257,10 @@ PresetFragments expandPreset(
     for (final s in preset.dnsServers) {
       if (s['tag'] != selectedDns) continue;
       final copy = deepCopyJson(s);
-      final result = _substitute(copy, varsMap);
+      final result = substituteVars(copy, varsMap);
       if (result is! Map<String, dynamic>) continue;
       if (result['tag'] is! String) continue;
-      if (result['detour'] == 'direct-out') {
-        result.remove('detour');
-      }
+      normalizeDnsDetour(result);
       dnsServers.add(result);
     }
   }
@@ -337,6 +335,27 @@ BundleMerge mergeFragments(List<PresetFragments> all) {
   );
 }
 
+/// §117: нормализация `detour` у DNS-сервера. Удаляет ключ когда:
+/// - `direct-out` / пустая строка — direct не требует detour (решение №2:
+///   «нет detour» = и дефолт, и fallback);
+/// - канал отсутствует в [knownOutbounds] (выбранный канал исчез из конфига,
+///   вкл. неотрезолвленный `@placeholder`) — отсутствие ключа вместо
+///   dangling-ссылки.
+///
+/// Не-String detour не трогаем — невалидную форму поймает sing-box check.
+void normalizeDnsDetour(
+  Map<String, dynamic> server, {
+  Set<String>? knownOutbounds,
+}) {
+  final detour = server['detour'];
+  if (detour is! String) return;
+  if (detour.isEmpty ||
+      detour == 'direct-out' ||
+      (knownOutbounds != null && !knownOutbounds.contains(detour))) {
+    server.remove('detour');
+  }
+}
+
 /// Sentinel: ключ/элемент был `@optional_var`, резолв дал `null` →
 /// родитель должен удалить этот ключ/элемент.
 class _Dropped {
@@ -348,13 +367,13 @@ class _Dropped {
 ///
 /// Правила:
 /// - Строка `"@name"` (целиком) — заменяется на `vars[name]`. Если
-///   `vars[name] == null` → возвращает [_Dropped.instance] (родитель
-///   удаляет ключ / элемент списка).
+///   `vars[name] == null` → возвращает sentinel «dropped» (родитель
+///   удаляет ключ / элемент списка; для Map/List input наружу не утекает).
 /// - Строка не `@`-prefix'нутая — возвращается как есть.
 /// - Unknown `@name` (ключа нет в varsMap) — возвращается как есть
 ///   (могли оставить legacy-плейсхолдер или имя глобальной section-var).
 /// - Map / List — обход in-place, удаление dropped-ключей/элементов.
-dynamic _substitute(dynamic obj, Map<String, dynamic> vars) {
+dynamic substituteVars(dynamic obj, Map<String, dynamic> vars) {
   if (obj is String) {
     if (!obj.startsWith('@')) return obj;
     final name = obj.substring(1);
@@ -367,7 +386,7 @@ dynamic _substitute(dynamic obj, Map<String, dynamic> vars) {
   if (obj is Map<String, dynamic>) {
     final toRemove = <String>[];
     for (final k in obj.keys.toList()) {
-      final replaced = _substitute(obj[k], vars);
+      final replaced = substituteVars(obj[k], vars);
       if (identical(replaced, _Dropped.instance)) {
         toRemove.add(k);
       } else {
@@ -383,7 +402,7 @@ dynamic _substitute(dynamic obj, Map<String, dynamic> vars) {
   if (obj is List) {
     final compact = <dynamic>[];
     for (final e in obj) {
-      final replaced = _substitute(e, vars);
+      final replaced = substituteVars(e, vars);
       if (identical(replaced, _Dropped.instance)) continue;
       compact.add(replaced);
     }

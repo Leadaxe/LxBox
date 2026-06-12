@@ -2,7 +2,61 @@ part of '../post_steps.dart';
 
 // ===========================================================================
 // §043: DNS servers — refs by kind (симметрия с §061 DNS rules)
+// §117: template-серверы в обёртке `{description, enabled, vars?, server}`
 // ===========================================================================
+
+/// §117: tag template-server-обёртки `{description, enabled, vars?, server}`.
+/// Single source of truth — `server.tag` (top-level `tag` больше нет).
+String? templateDnsServerTag(Map<String, dynamic> entry) {
+  final server = entry['server'];
+  if (server is! Map) return null;
+  final tag = server['tag'];
+  return (tag is String && tag.isNotEmpty) ? tag : null;
+}
+
+/// §117: tag → wrapper map для `dns_options.servers` шаблона. Используется
+/// и build'ом (applyCustomDns), и UI (DnsSettingsScreen) — единая точка.
+Map<String, Map<String, dynamic>> templateDnsServersByTag(
+    List<Map<String, dynamic>> templateServers) {
+  return {
+    for (final s in templateServers)
+      if (templateDnsServerTag(s) != null) templateDnsServerTag(s)!: s,
+  };
+}
+
+/// §117: резолв template-обёртки в sing-box server body.
+///
+/// Deep-copy `server` + подстановка `@var`-плейсхолдеров: значение юзера из
+/// `varValues` ref-записи (непустое) → иначе `default_value` определения
+/// (пустой → null → ключи с этим `@var` выпадают, семантика §033).
+/// Обёртка без `vars` (local_dns_resolver) — чистая копия `server`.
+///
+/// `detour` здесь НЕ нормализуется — это делает caller
+/// ([resolveDnsServersBodies] / UI), у которого есть контекст знакомых
+/// outbound'ов.
+Map<String, dynamic>? resolveTemplateDnsServerBody(
+  Map<String, dynamic> wrapper, {
+  Map<String, dynamic> varValues = const {},
+}) {
+  final server = wrapper['server'];
+  if (server is! Map) return null;
+  final body = deepCopyJson(Map<String, dynamic>.from(server));
+  final varsMap = <String, dynamic>{};
+  for (final d in (wrapper['vars'] as List<dynamic>? ?? const [])
+      .whereType<Map<String, dynamic>>()) {
+    final name = d['name']?.toString();
+    if (name == null || name.isEmpty) continue;
+    final user = varValues[name]?.toString();
+    if (user != null && user.isNotEmpty) {
+      varsMap[name] = user;
+    } else {
+      final def = d['default_value']?.toString() ?? '';
+      varsMap[name] = def.isEmpty ? null : def;
+    }
+  }
+  final result = substituteVars(body, varsMap);
+  return result is Map<String, dynamic> ? result : null;
+}
 
 /// §043: Auto-discovery + orphan cleanup + legacy migration для
 /// `dns_options.servers`. Возвращает список ref-записей шейпа
@@ -31,11 +85,9 @@ Future<List<Map<String, dynamic>>> resolveDnsServersList({
   required Map<String, Map<String, dynamic>> presetServersByTag,
 }) async {
   final raw = await SettingsStorage.getDnsServers();
-  final templateByTag = <String, Map<String, dynamic>>{
-    for (final s in templateServers)
-      if (s['tag'] is String && (s['tag'] as String).isNotEmpty)
-        s['tag'] as String: s,
-  };
+  // §117: template-серверы — обёртки `{description, enabled, vars?, server}`,
+  // tag живёт в `server.tag`.
+  final templateByTag = templateDnsServersByTag(templateServers);
 
   // Step 1: legacy migration (full-body snapshot → kind-refs).
   final stored = _migrateLegacyDnsServers(raw, templateByTag, presetServersByTag);
@@ -73,8 +125,8 @@ Future<List<Map<String, dynamic>>> resolveDnsServersList({
   }
   // Step 4: auto-discover missing template entries (наследуют enabled из template).
   for (final s in templateServers) {
-    final tag = s['tag']?.toString();
-    if (tag == null || tag.isEmpty) continue;
+    final tag = templateDnsServerTag(s);
+    if (tag == null) continue;
     if (seen.contains(tag)) continue;
     final enabled = s['enabled'] != false;
     result.add({'enabled': enabled, 'kind': 'template', 'tag': tag});
@@ -117,8 +169,12 @@ List<Map<String, dynamic>> _migrateLegacyDnsServers(
     final kind = s['kind']?.toString();
 
     if (kind == null) {
-      // pre-§043: classify by canonical match
-      final tpl = templateByTag[tag];
+      // pre-§043: classify by canonical match. §117: template canonical —
+      // обёртка, для сравнения с legacy-снапшотом резолвим в default-body.
+      final tplWrapper = templateByTag[tag];
+      final tpl =
+          tplWrapper == null ? null : resolveTemplateDnsServerBody(tplWrapper);
+      if (tpl != null) normalizeDnsDetour(tpl); // как в эмиссии — для compare
       final preset = presetServersByTag[tag];
       final canonical = preset ?? tpl; // preset > template
       final canonicalKind =
@@ -221,12 +277,14 @@ Map<String, dynamic> _stripMetaForCompare(Map<String, dynamic> m) {
   return out;
 }
 
-/// §043 + §044: Resolves ref-list в final list of sing-box server bodies для
-/// `config.dns.servers`.
+/// §043 + §044 + §117: Resolves ref-list в final list of sing-box server
+/// bodies для `config.dns.servers`.
 ///
 /// Source резолва:
 /// - `kind: inline` → `entry.body` (partial, без tag/description/enabled — §044).
-/// - `kind: template` → lookup `templateByTag[entry.tag]` (full canonical).
+/// - `kind: template` → `templateByTag[entry.tag]` — обёртка
+///   `{description, enabled, vars?, server}`; body = `server` с подставленными
+///   `@var`'ами (значения юзера из `entry.varValues` или дефолты — §117).
 /// - `kind: preset` → lookup `presetServersByTag[entry.tag]`.
 ///
 /// Synthesis (запротоколированная магия §044):
@@ -234,18 +292,31 @@ Map<String, dynamic> _stripMetaForCompare(Map<String, dynamic> m) {
 /// - Strip `description` / `enabled` (sing-box их не использует) из body
 ///   независимо от source'а.
 /// - Filter `enabled != false` на уровне ref'а (вычитаем disabled-серверы).
+///   §117 исключение (lifecycle, locked №7): сервер, реферимый активным
+///   пресетом (tag есть в `presetServersByTag`) ИЛИ активным правилом с
+///   DNS-опцией (tag в [ruleReferencedTags], задача 3), — **force-include**
+///   независимо от `enabled` — иначе DNS-правило ссылается в пустоту.
+/// - `detour` нормализуется ([normalizeDnsDetour]): `direct-out` /
+///   отсутствующий в [knownOutboundTags] канал → ключ не пишется (§117
+///   решение №2). `knownOutboundTags == null` — проверка только на direct-out.
 List<Map<String, dynamic>> resolveDnsServersBodies({
   required List<Map<String, dynamic>> resolved,
   required Map<String, Map<String, dynamic>> templateByTag,
   required Map<String, Map<String, dynamic>> presetServersByTag,
+  Set<String>? knownOutboundTags,
+  Set<String> ruleReferencedTags = const {},
 }) {
   final out = <Map<String, dynamic>>[];
   final seen = <String>{};
   for (final entry in resolved) {
-    if (entry['enabled'] == false) continue;
     final kind = entry['kind'] as String?;
     final tag = entry['tag']?.toString();
     if (kind == null || tag == null || tag.isEmpty) continue;
+    if (entry['enabled'] == false &&
+        !presetServersByTag.containsKey(tag) &&
+        !ruleReferencedTags.contains(tag)) {
+      continue;
+    }
     if (seen.contains(tag)) continue;
     Map<String, dynamic>? body;
     if (kind == 'inline') {
@@ -253,7 +324,13 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
       if (b is Map) body = Map<String, dynamic>.from(b);
     } else if (kind == 'template') {
       final t = templateByTag[tag];
-      if (t != null) body = Map<String, dynamic>.from(t);
+      if (t != null) {
+        final vv = entry['varValues'];
+        body = resolveTemplateDnsServerBody(
+          t,
+          varValues: vv is Map ? Map<String, dynamic>.from(vv) : const {},
+        );
+      }
     } else if (kind == 'preset') {
       final p = presetServersByTag[tag];
       if (p != null) body = Map<String, dynamic>.from(p);
@@ -266,6 +343,7 @@ List<Map<String, dynamic>> resolveDnsServersBodies({
       ..remove('_origin')
       ..remove('_overrides');
     body['tag'] = tag; // ensure tag set (даже если body lost его при edit'е)
+    normalizeDnsDetour(body, knownOutbounds: knownOutboundTags);
     out.add(body);
     seen.add(tag);
   }
