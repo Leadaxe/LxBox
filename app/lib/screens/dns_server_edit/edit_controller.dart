@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show InternetAddress;
 
 import 'package:collection/collection.dart';
 import 'package:flutter/widgets.dart';
@@ -6,6 +7,19 @@ import 'package:flutter/widgets.dart';
 import '../../models/parser_config.dart' show WizardVar;
 import '../../widgets/outbound_picker.dart';
 import '../dns_settings_screen/resolved_server.dart';
+
+/// §117 задача 4b — три режима формы создания/редактирования inline-сервера.
+/// Значение = sing-box `type`. Прочие типы (`local`, `h3`, …) формой не
+/// выражаются — редактируются на JSON-вкладке.
+const kDnsServerModes = ['udp', 'tls', 'https'];
+
+/// Дефолтный порт режима (sing-box применяет его сам при отсутствии
+/// `server_port` — храним ключ только для нестандартных портов).
+int defaultDnsPort(String mode) => switch (mode) {
+      'tls' => 853,
+      'https' => 443,
+      _ => 53,
+    };
 
 /// §117 задача 4 — единая точка истины для редактора DNS-сервера.
 /// Паттерн 1:1 с [CustomRuleEditController] (§053 Stage 3): `ChangeNotifier`
@@ -74,11 +88,22 @@ class DnsServerEditController extends ChangeNotifier {
   late final TextEditingController descCtrl;
   late final TextEditingController bodyCtrl;
 
+  // §117 задача 4b — поля формы inline-сервера (UDP/DoT/DoH). Пишут в
+  // канонический [_body]; JSON-вкладка синхронизируется текстом.
+  late final TextEditingController addressCtrl;
+  late final TextEditingController portCtrl;
+  late final TextEditingController pathCtrl;
+  late final TextEditingController sniCtrl;
+
   late bool _enabled;
   late Map<String, String> _varValues;
   late Map<String, dynamic> _body;
   String? _jsonError;
   bool _disposed = false;
+
+  /// Гард от петли: JSON-edit → tagCtrl.text → listener tagCtrl НЕ должен
+  /// перезаписывать bodyCtrl (сбил бы курсор юзера в JSON-поле).
+  bool _syncingFromJson = false;
 
   bool get enabled => _enabled;
   Map<String, String> get varValues => _varValues;
@@ -90,6 +115,26 @@ class DnsServerEditController extends ChangeNotifier {
     final d = _body['detour'];
     return d is String && d.isNotEmpty ? d : 'direct-out';
   }
+
+  /// §117 задача 4b — режим формы: `udp`/`tls`/`https`, либо null когда
+  /// `body.type` формой не выражается (local, h3, …) → JSON-only editing.
+  String? get serverMode {
+    final t = _body['type'];
+    return t is String && kDnsServerModes.contains(t) ? t : null;
+  }
+
+  /// Тип body как есть (для пометки «custom type — use JSON tab»).
+  String get rawServerType => _body['type']?.toString() ?? '';
+
+  /// Адрес — hostname (не IP)? Доменному серверу нужен `domain_resolver` —
+  /// чем резолвить имя самого DNS-сервера (решение №4, как Safe DNS).
+  bool get isHostnameAddress {
+    final addr = _body['server']?.toString() ?? '';
+    if (addr.isEmpty) return false;
+    return InternetAddress.tryParse(addr) == null;
+  }
+
+  String get domainResolver => _body['domain_resolver']?.toString() ?? '';
 
   void _init() {
     final r = resolved;
@@ -113,10 +158,15 @@ class DnsServerEditController extends ChangeNotifier {
     }
     _body = body;
     bodyCtrl = TextEditingController(
-        text: kind == ServerKind.inline
-            ? const JsonEncoder.withIndent('  ').convert(_body)
-            : '');
-    tagCtrl.addListener(_onTextChanged);
+        text: kind == ServerKind.inline ? _encodeBodyWithTag() : '');
+    addressCtrl = TextEditingController(text: _body['server']?.toString() ?? '');
+    portCtrl = TextEditingController(
+        text: _body['server_port'] is int ? '${_body['server_port']}' : '');
+    pathCtrl = TextEditingController(text: _body['path']?.toString() ?? '');
+    final tls = _body['tls'];
+    sniCtrl = TextEditingController(
+        text: tls is Map ? (tls['server_name']?.toString() ?? '') : '');
+    tagCtrl.addListener(_onTagChanged);
     descCtrl.addListener(_onTextChanged);
   }
 
@@ -125,16 +175,36 @@ class DnsServerEditController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Tag — поле sing-box-сервера: показываем его в JSON-вкладке. Правка
+  /// Tag в Params пересинхронизирует JSON-текст (кроме случая, когда сама
+  /// правка пришла из JSON — гард [_syncingFromJson]).
+  void _onTagChanged() {
+    if (_disposed) return;
+    if (kind == ServerKind.inline && !_syncingFromJson) {
+      _syncJsonFromBody();
+    }
+    notifyListeners();
+  }
+
+  /// Полное тело для JSON-вкладки: `tag` (из tagCtrl) первым ключом +
+  /// body. description/enabled — ref-level, в sing-box-тело не входят.
+  String _encodeBodyWithTag() => const JsonEncoder.withIndent('  ')
+      .convert({'tag': tagCtrl.text.trim(), ..._body});
+
   @override
   void dispose() {
     _disposed = true;
     tagCtrl
-      ..removeListener(_onTextChanged)
+      ..removeListener(_onTagChanged)
       ..dispose();
     descCtrl
       ..removeListener(_onTextChanged)
       ..dispose();
     bodyCtrl.dispose();
+    addressCtrl.dispose();
+    portCtrl.dispose();
+    pathCtrl.dispose();
+    sniCtrl.dispose();
     super.dispose();
   }
 
@@ -160,27 +230,173 @@ class DnsServerEditController extends ChangeNotifier {
     } else {
       _body['detour'] = tag;
     }
-    // JSON-вкладка показывает тот же body — пересинхронизируем текст
-    // (затирает невалидный недонабранный JSON — осознанный trade-off:
-    // detour меняют из Params, валидный _body — последний источник правды).
-    bodyCtrl.text = const JsonEncoder.withIndent('  ').convert(_body);
-    _jsonError = null;
+    _syncJsonFromBody();
     notifyListeners();
+  }
+
+  // ─── §117 задача 4b — форма inline-сервера (UDP/DoT/DoH) ─────────────
+  // Поля пишут в канонический _body; JSON-вкладка пересинхронизируется
+  // текстом (затирает невалидный недонабранный JSON — осознанный trade-off:
+  // валидный _body — последний источник правды).
+
+  /// Переключение режима UDP/DoT/DoH. Адрес/detour сохраняются; порт со
+  /// старого дефолта снимается (ключ уходит — sing-box применит дефолт
+  /// нового режима); path/tls чистятся под режим.
+  void setServerMode(String mode) {
+    if (!kDnsServerModes.contains(mode)) return;
+    final old = serverMode;
+    if (old == mode) return;
+    _body['type'] = mode;
+    // Порт: стандартный для старого режима → убираем (дефолт нового);
+    // нестандартный (юзер вводил) — сохраняем.
+    final port = _body['server_port'];
+    if (old != null && (port == null || port == defaultDnsPort(old))) {
+      _body.remove('server_port');
+      portCtrl.text = '';
+    }
+    if (mode != 'https') _body.remove('path');
+    if (mode == 'udp') _body.remove('tls');
+    if (mode != 'https') pathCtrl.text = '';
+    if (mode == 'udp') sniCtrl.text = '';
+    _syncJsonFromBody();
+    notifyListeners();
+  }
+
+  /// Адрес сервера. Для DoH принимает и URL-вставку
+  /// (`https://host/dns-query` → server=host, path=/dns-query).
+  /// Hostname-адрес автоматически получает `domain_resolver` (дефолт
+  /// google_udp — решение №4); IP-адрес — теряет его.
+  void onAddressChanged(String raw) {
+    var addr = raw.trim();
+    if (addr.startsWith('https://')) {
+      final uri = Uri.tryParse(addr);
+      if (uri != null && uri.host.isNotEmpty) {
+        addr = uri.host;
+        addressCtrl.text = addr;
+        addressCtrl.selection = TextSelection.collapsed(offset: addr.length);
+        if (uri.path.isNotEmpty && uri.path != '/') {
+          _body['path'] = uri.path;
+          pathCtrl.text = uri.path;
+        }
+        if (serverMode != 'https') setServerMode('https');
+      }
+    }
+    if (addr.isEmpty) {
+      _body.remove('server');
+    } else {
+      _body['server'] = addr;
+    }
+    if (isHostnameAddress) {
+      if (domainResolver.isEmpty) {
+        final def = dnsServerTags.contains('google_udp')
+            ? 'google_udp'
+            : (dnsServerTags.isNotEmpty ? dnsServerTags.first : '');
+        if (def.isNotEmpty) _body['domain_resolver'] = def;
+      }
+    } else {
+      _body.remove('domain_resolver');
+    }
+    _syncJsonFromBody();
+    notifyListeners();
+  }
+
+  /// Порт. Пусто/невалидно → ключ уходит (sing-box применит дефолт режима).
+  void onPortChanged(String raw) {
+    final port = int.tryParse(raw.trim());
+    if (port == null || port < 1 || port > 65535) {
+      _body.remove('server_port');
+    } else {
+      _body['server_port'] = port;
+    }
+    _syncJsonFromBody();
+    notifyListeners();
+  }
+
+  /// DoH path. Пусто → ключ уходит (sing-box дефолт /dns-query).
+  void onPathChanged(String raw) {
+    final p = raw.trim();
+    if (p.isEmpty) {
+      _body.remove('path');
+    } else {
+      _body['path'] = p.startsWith('/') ? p : '/$p';
+    }
+    _syncJsonFromBody();
+    notifyListeners();
+  }
+
+  /// TLS SNI (DoT/DoH с IP-адресом — каким именем проверять сертификат).
+  /// Пусто → tls-блок уходит.
+  void onSniChanged(String raw) {
+    final sni = raw.trim();
+    if (sni.isEmpty) {
+      _body.remove('tls');
+    } else {
+      _body['tls'] = {'enabled': true, 'server_name': sni};
+    }
+    _syncJsonFromBody();
+    notifyListeners();
+  }
+
+  /// Domain resolver для hostname-адреса (дропдаун существующих серверов).
+  void setDomainResolver(String tag) {
+    if (tag.isEmpty) {
+      _body.remove('domain_resolver');
+    } else {
+      _body['domain_resolver'] = tag;
+    }
+    _syncJsonFromBody();
+    notifyListeners();
+  }
+
+  void _syncJsonFromBody() {
+    bodyCtrl.text = _encodeBodyWithTag();
+    _jsonError = null;
+  }
+
+  /// После валидного JSON-edit'а подтягиваем поля формы (programmatic
+  /// `.text` не триггерит onChanged у TextField — петли нет).
+  void _syncFormFromBody() {
+    final addr = _body['server']?.toString() ?? '';
+    if (addressCtrl.text != addr) addressCtrl.text = addr;
+    final port = _body['server_port'] is int ? '${_body['server_port']}' : '';
+    if (portCtrl.text != port) portCtrl.text = port;
+    final path = _body['path']?.toString() ?? '';
+    if (pathCtrl.text != path) pathCtrl.text = path;
+    final tls = _body['tls'];
+    final sni = tls is Map ? (tls['server_name']?.toString() ?? '') : '';
+    if (sniCtrl.text != sni) sniCtrl.text = sni;
   }
 
   /// JSON-вкладка (inline): парс на каждый edit. Валидный объект →
   /// становится текущим body (со strip'ом ref-level полей, та же логика
   /// что в бывшем server_editor_sheet); невалидный → jsonError, save
   /// блокируется, последний валидный body сохраняется.
+  ///
+  /// `tag` — часть sing-box-тела: в new-режиме правка tag в JSON
+  /// синхронизирует поле Tag; при edit existing tag залочен (смена
+  /// орфанит ссылки) → jsonError до возврата исходного.
   void onBodyTextChanged(String text) {
     try {
       final parsed = jsonDecode(text);
       if (parsed is! Map<String, dynamic>) {
         _jsonError = 'Body must be a JSON object';
       } else {
-        _stripRefLevelFields(parsed);
-        _body = parsed;
-        _jsonError = null;
+        final jsonTag = parsed['tag']?.toString().trim() ?? '';
+        final lockedTag = resolved?.tag ?? '';
+        if (!isNew && jsonTag.isNotEmpty && jsonTag != lockedTag) {
+          _jsonError = 'Tag is locked while editing — keep "$lockedTag"';
+        } else {
+          if (isNew && jsonTag.isNotEmpty && jsonTag != tagCtrl.text.trim()) {
+            _syncingFromJson = true;
+            tagCtrl.text = jsonTag;
+            _syncingFromJson = false;
+          }
+          parsed.remove('tag');
+          _stripRefLevelFields(parsed);
+          _body = parsed;
+          _jsonError = null;
+          _syncFormFromBody();
+        }
       }
     } catch (e) {
       _jsonError = 'Invalid JSON';

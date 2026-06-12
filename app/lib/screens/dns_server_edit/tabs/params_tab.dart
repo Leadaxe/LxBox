@@ -4,6 +4,7 @@ import '../../../widgets/outbound_picker.dart';
 import '../../../widgets/template_var_list.dart';
 import '../../dns_settings_screen/resolved_server.dart';
 import '../edit_controller.dart';
+import '../sections/server_form_section.dart';
 
 /// §117 задача 4 — Params tab редактора DNS-сервера. Состав по `kind`:
 ///
@@ -88,28 +89,37 @@ class DnsServerParamsTab extends StatelessWidget {
               dnsServerTags: c.dnsServerTags,
               onChanged: c.setVarValue,
             ),
-          ServerKind.inline => Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('Outbound (detour)', style: theme.textTheme.bodyLarge),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Which channel carries DNS queries to this server. '
-                    'Direct — no detour key in the config.',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: cs.onSurfaceVariant),
+          // §117 задача 4b: структурная форма (UDP/DoT/DoH + адрес/порт/
+          // path/SNI/domain_resolver) + detour-пикер.
+          ServerKind.inline => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ServerFormSection(c: c),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('Outbound (detour)',
+                          style: theme.textTheme.bodyLarge),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Which channel carries DNS queries to this server. '
+                        'Direct — no detour key in the config.',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: cs.onSurfaceVariant),
+                      ),
+                      const SizedBox(height: 8),
+                      OutboundPicker(
+                        value: c.inlineDetour,
+                        options: c.outboundOptions,
+                        allowReject: false,
+                        onChanged: c.setInlineDetour,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  OutboundPicker(
-                    value: c.inlineDetour,
-                    options: c.outboundOptions,
-                    allowReject: false,
-                    onChanged: c.setInlineDetour,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ServerKind.preset => Container(
               margin: const EdgeInsets.only(top: 12),

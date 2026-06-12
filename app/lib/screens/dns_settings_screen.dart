@@ -267,8 +267,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// Filter `enabled` на ref-level.
   List<String> get _enabledServerTags => enabledServerTags(_displayedServers);
 
-  /// §117 задача 4: «+» → полноэкранный редактор в new-режиме (kind inline,
-  /// default body без detour — ключ появляется только при выборе канала).
+  /// §117 задача 4: «+» → полноэкранный редактор в new-режиме (kind inline).
+  /// Заготовка — форма UDP с пустым адресом (save требует ввода); порт/
+  /// detour отсутствуют — ключи появляются только при явном выборе.
   Future<void> _addServer() async {
     final result = await openDnsServerEditor(
       context,
@@ -277,11 +278,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         'kind': 'inline',
         'tag': 'dns_new',
         'description': 'My DNS',
-        'body': <String, dynamic>{
-          'type': 'udp',
-          'server': '1.1.1.1',
-          'server_port': 53,
-        },
+        'body': <String, dynamic>{'type': 'udp'},
       },
       outboundOptions: _outboundOptions,
       dnsServerTags: _enabledServerTags,

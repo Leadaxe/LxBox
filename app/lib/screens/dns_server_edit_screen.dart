@@ -90,6 +90,14 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
         );
         return;
       }
+      // §117 задача 4b: для форменных режимов (UDP/DoT/DoH) адрес обязателен.
+      if (_ctrl.serverMode != null &&
+          _ctrl.addressCtrl.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Server address is required')),
+        );
+        return;
+      }
       // New-режим: коллизия с существующим tag'ом → явный confirm replace
       // (раньше боттом-шит заменял молча).
       if (_ctrl.isNew && widget.existingTags.contains(tag)) {

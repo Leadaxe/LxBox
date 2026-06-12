@@ -43,8 +43,11 @@ class _InlineBodyEditor extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Body (sing-box JSON) — without tag/description/enabled, '
-            'they live on the list entry',
+            c.isNew
+                ? 'sing-box server JSON — tag editable here or in Params; '
+                    'description/enabled live on the list entry'
+                : 'sing-box server JSON — tag locked while editing; '
+                    'description/enabled live on the list entry',
             style: theme.textTheme.labelSmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
