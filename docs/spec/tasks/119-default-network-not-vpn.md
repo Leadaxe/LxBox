@@ -17,11 +17,11 @@
   [NetworkCapabilities.java (Connectivity module, master)](https://android.googlesource.com/platform/packages/modules/Connectivity/+/refs/heads/master/framework/src/android/net/NetworkCapabilities.java)
   — `static { defaultCapabilities = NOT_RESTRICTED | TRUSTED | NOT_VPN; … }`.
   Javadoc `NET_CAPABILITY_NOT_VPN`: *«This capability is set by default.»*
-- **per-app default network может быть VPN** — `getActiveNetwork()` /
-  `registerDefaultNetworkCallback()` отдают сеть приложения, которая *«may be a
-  physical network or a virtual network, such as a VPN that applies to the
-  application»*:
-  [Read network state — Android Developers](https://developer.android.com/develop/connectivity/network-ops/reading-network-state).
+- **per-app default network может быть VPN** — `registerDefaultNetworkCallback()`
+  (и тот же per-app default отдаёт `getActiveNetwork()`) описывает сеть
+  приложения, которая *«may be a physical network or a virtual network, such as a
+  VPN that applies to the application»*:
+  [`ConnectivityManager.registerDefaultNetworkCallback()` — Android Developers](https://developer.android.com/reference/android/net/ConnectivityManager#registerDefaultNetworkCallback(android.net.ConnectivityManager.NetworkCallback)).
 - **DNS-loop в Tun-режиме** — резолв через сам tun при `auto_route` рекурсивно
   заходит обратно в sing-box:
   [sing-box#3637](https://github.com/SagerNet/sing-box/issues/3637),
