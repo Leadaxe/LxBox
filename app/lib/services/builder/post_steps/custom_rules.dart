@@ -102,8 +102,11 @@ List<String> _applyPresetSingle(
   if (cr.presetId.isEmpty) return warnings;
 
   final routeEnabled = cr.enabled;
-  final dnsEnabled = isPresetDnsEnabled[cr.presetId] ?? false;
-  // §033: expand если хотя бы одна сторона активна.
+  // §121: routing-тоггл = король. Независимый DNS-флаг (§033) действует только
+  // пока routing включён — выключенный пресет не порождает ни серверы, ни
+  // правила, ни mirror-lock'и (как будто его нет в конфиге).
+  final dnsEnabled = routeEnabled && (isPresetDnsEnabled[cr.presetId] ?? false);
+  // Routing off + DNS gated off → пресет мёртв целиком.
   if (!routeEnabled && !dnsEnabled) return warnings;
 
   SelectableRule? match;
@@ -424,9 +427,10 @@ UnifiedApplyResult applyAllCustomRules(
   for (final cr in rules) {
     switch (cr) {
       case CustomRulePreset():
-        // Note: preset enabled-флаг проверяется внутри (route vs dns aspect
-        // independently) — НЕ skip-снаружи, иначе потеряем DNS-only
-        // обработку для preset где route выключен но dns включен.
+        // §121: routing-тоггл = король. `_applyPresetSingle` gate'ит DNS-аспект
+        // через `dnsEnabled = cr.enabled && isPresetDnsEnabled[...]`, поэтому
+        // выключенный preset (cr.enabled=false) внутри сам отсекается целиком
+        // (ни routing, ни DNS, ни mirror). Skip снаружи не нужен.
         warnings.addAll(_applyPresetSingle(
           cr,
           registry,

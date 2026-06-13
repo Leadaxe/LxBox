@@ -195,6 +195,35 @@ void main() {
           {'rule_set': 'ru-domains', 'server': 'yandex_doh'});
       expect(result.labelByPresetId['ru-direct'], 'Russian domains direct');
     });
+
+    test('§121 — routing off (cr.enabled=false) подавляет DNS-аспект '
+        'даже если isPresetDnsEnabled=true (routing = король)', () {
+      final preset = _ruDirect();
+      final rules = <CustomRule>[
+        CustomRulePreset(
+          name: 'X',
+          enabled: false, // routing-тоггл выключен
+          presetId: 'ru-direct',
+          varsValues: {'outbound': 'direct-out', 'dns_server': 'yandex_doh'},
+        ),
+      ];
+      final reg = RuleSetRegistry();
+
+      final result = applyAllCustomRules(
+        reg,
+        rules,
+        [preset],
+        isPresetDnsEnabled: const {'ru-direct': true}, // DNS-аспект on, но gated
+      );
+
+      // §121: выключенный routing-тоггл = пресет мёртв целиком.
+      expect(reg.getRules(), isEmpty, reason: 'нет routing-правила');
+      expect(result.extraDnsServers, isEmpty,
+          reason: 'серверы пресета не эмитятся');
+      expect(result.dnsRulesByPresetId, isEmpty,
+          reason: 'DNS-правило пресета не эмитится');
+      expect(result.dnsMirrors, isEmpty, reason: 'mirror-lock не создаётся');
+    });
   });
 }
 

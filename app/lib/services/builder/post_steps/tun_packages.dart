@@ -9,9 +9,9 @@ part of '../post_steps.dart';
 /// - `deny`       → `tun.exclude_package = packages` (все КРОМЕ этих)
 ///
 /// libbox потом читает эти поля из config и передаёт в native слой
-/// (BoxVpnService.kt:557-560), который зовёт `VpnService.Builder
-/// .addAllowedApplication`/`.addDisallowedApplication`. Применяется на
-/// `builder.establish()` — нужен FULL VPN restart, light reload не работает.
+/// (`BoxVpnService.openTun` → `addAllowedApplication`/`addDisallowedApplication`,
+/// ~`BoxVpnService.kt:208-211`). Применяется на `builder.establish()` — нужен
+/// FULL VPN restart, light reload не работает.
 ///
 /// Если `mode != off` но `packages` пустой — silently no-op (нечего apply'ить).
 /// Если в config нет tun-inbound — silently no-op (некуда apply'ить).

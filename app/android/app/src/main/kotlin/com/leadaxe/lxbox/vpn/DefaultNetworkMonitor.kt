@@ -1,7 +1,9 @@
 package com.leadaxe.lxbox.vpn
 
 import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Build
+import android.util.Log
 import io.nekohasekai.libbox.InterfaceUpdateListener
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,9 +33,19 @@ object DefaultNetworkMonitor {
     suspend fun start(scope: CoroutineScope, onNetworkSwitch: () -> Unit) {
         this.scope = scope
         this.onNetworkSwitch = onNetworkSwitch
+        // §119 — seed `defaultNetwork` из getActiveNetwork(), но НИКОГДА не нашим
+        // же VPN. getActiveNetwork() возвращает per-app default, который штатно
+        // ВКЛЮЧАЕТ наш tun, если VPN уже поднят к моменту start() (док:
+        // ConnectivityManager.getActiveNetwork / registerDefaultNetworkCallback —
+        // «may be ... a VPN that applies to the application»). Если пустить такой
+        // seed в LocalResolver, DnsResolver.query(VPN) уйдёт обратно в tun → loop.
+        // NOT_VPN из NetworkRequest сюда НЕ применяется (это прямой геттер, не
+        // запрос), поэтому фильтруем явно. Callback-источник (ниже) уже отфильтрован
+        // NOT_VPN'ом самого NetworkRequest и здесь перезапишет seed.
         defaultNetwork = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            BoxApplication.connectivity.activeNetwork
+            BoxApplication.connectivity.activeNetwork?.takeUnless(::isVpn)
         } else null
+        logDefaultNetwork("init", defaultNetwork)
 
         DefaultNetworkListener.start(this) {
             defaultNetwork = it
@@ -96,6 +108,7 @@ object DefaultNetworkMonitor {
             }
             return
         }
+        logDefaultNetwork("update", network)
         val linkProps = BoxApplication.connectivity.getLinkProperties(network)
         val ifName = linkProps?.interfaceName ?: return
         for (attempt in 0 until 10) {
@@ -128,6 +141,42 @@ object DefaultNetworkMonitor {
         resetJob = s.launch(Dispatchers.IO) {
             delay(RESET_DEBOUNCE_MS)
             runCatching { onNetworkSwitch?.invoke() }
+        }
+    }
+
+    /// §119 — true, если у network есть VPN-транспорт (наш собственный tun).
+    /// Источник истины: ConnectivityManager.getActiveNetwork() и
+    /// registerDefaultNetworkCallback() отдают per-app default, который штатно
+    /// включает VPN, применённый к процессу — это AOSP-поведение, не баг прошивки.
+    private fun isVpn(network: Network): Boolean =
+        BoxApplication.connectivity.getNetworkCapabilities(network)
+            ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+
+    /// §119 — постоянная диагностика: какой `defaultNetwork` поймали — VPN или
+    /// underlying-физика. Репро в проде у нас нет, поэтому лог безусловный
+    /// (`Log.i`, без debug-gating): следующий field-report диагностируется сразу.
+    /// Читать: `adb logcat -s LxBoxNet`.
+    ///
+    /// TECH DEBT (TD-119-1): безусловность временна. После подтверждения фикса на
+    /// реальном устройстве — свернуть (revert) или перенести в debug-форму
+    /// (`Log.isLoggable("LxBoxNet", Log.INFO)`). См. docs/spec/tasks/119, раздел
+    /// «Технический долг».
+    ///
+    /// Ожидаемые значения `vpn`:
+    ///   [init]   — ПОСЛЕ §119-фильтра (`takeUnless(::isVpn)`) всегда `false`;
+    ///              `true` здесь означало бы, что фильтр обойдён — копать.
+    ///   [update] — приходит из NetworkRequest с NOT_VPN (default-capability,
+    ///              API ≥ 28), поэтому штатно `false`. `true` — аномалия:
+    ///              underlying-сеть не сматчилась, выбран VPN вопреки NOT_VPN.
+    private fun logDefaultNetwork(where: String, network: Network?) {
+        runCatching {
+            if (network == null) {
+                Log.i("LxBoxNet", "[$where] defaultNetwork=null")
+                return
+            }
+            val ifName = BoxApplication.connectivity
+                .getLinkProperties(network)?.interfaceName ?: "?"
+            Log.i("LxBoxNet", "[$where] defaultNetwork iface=$ifName vpn=${isVpn(network)}")
         }
     }
 }

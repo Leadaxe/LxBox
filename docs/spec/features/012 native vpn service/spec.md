@@ -42,6 +42,7 @@
 | `stopVPN` | — | `bool` | **Blocking до `setStatus(Stopped)` или 5с timeout** (§ «Status pipeline»). `true` = реально остановлен, `false` = timeout/error |
 | `getVpnStatus` | — | `String` | Pull-метод: читает `BoxVpnService.Companion.currentStatus` (volatile mirror). Нужен для resync после reattach Flutter-процесса (broadcast'ы шлются только на transitions, steady-state pull даёт свежий статус) |
 | `setNotificationTitle` | `title: String` | `bool` | Обновляет title в foreground notification |
+| `setNotificationText` | `text: String` | `bool` | Обновляет подтекст foreground notification — тег активной ноды / `route.final` ([§123](../../tasks/123-server-name-in-notification.md)). Пусто → native fallback на `"Connected"` |
 | + ряд helper-методов | | | Battery-opt, installed apps, auto-start/keep-on-exit toggles, etc. |
 
 **EventChannel**: `"com.leadaxe.lxbox/status_events"`

@@ -71,13 +71,16 @@ void main() {
       expect(result.extraDnsServers, isEmpty);
     });
 
-    test('§033 independent enable: dns active, route disabled → '
-        'DNS fragments но без routing rule', () {
+    test('§121 routing = король: route disabled подавляет DNS-аспект целиком '
+        '(даже при dns enabled)', () {
+      // §033 раньше разрешал DNS-only пресет (route off, dns on). §121 это
+      // отменяет: routing-тоггл — король. cr.enabled=false → пресет мёртв
+      // целиком: ни routing rule, ни rule_set, ни DNS-фрагменты, ни mirror.
       final preset = _ruDirect();
       final rule = CustomRulePreset(
         name: 'X',
         presetId: 'ru-direct',
-        enabled: false, // route side выключен
+        enabled: false, // routing-тоггл выключен = король
         varsValues: {'outbound': 'direct-out', 'dns_server': 'yandex_doh'},
       );
       final reg = RuleSetRegistry();
@@ -86,21 +89,15 @@ void main() {
         reg,
         [rule],
         [preset],
-        isPresetDnsEnabled: const {'ru-direct': true},
+        isPresetDnsEnabled: const {'ru-direct': true}, // DNS on, но gated
       );
 
-      // Route side выключен — routing rule не эмитится
-      expect(reg.getRules(), isEmpty);
-      // Но rule_set всё равно регистрируется (на него ссылается DNS rule)
-      expect(reg.getRuleSets().length, 1);
-      expect(reg.getRuleSets().first['tag'], 'ru-domains');
-
-      // DNS side активен — dns_rule и dns_servers эмитятся
-      expect(result.dnsRulesByPresetId, hasLength(1));
-      expect(result.dnsRulesByPresetId['ru-direct'],
-          {'rule_set': 'ru-domains', 'server': 'yandex_doh'});
-      expect(result.extraDnsServers.length, 1);
-      expect(result.extraDnsServers.first['tag'], 'yandex_doh');
+      // Пресет мёртв целиком — ничего не эмитится.
+      expect(reg.getRules(), isEmpty, reason: 'нет routing rule');
+      expect(reg.getRuleSets(), isEmpty,
+          reason: 'rule_set не регистрируется (на него никто не ссылается)');
+      expect(result.dnsRulesByPresetId, isEmpty, reason: 'нет DNS-правила');
+      expect(result.extraDnsServers, isEmpty, reason: 'нет DNS-серверов');
     });
 
     test('broken preset (presetId не найден) → warning + skip', () {

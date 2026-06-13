@@ -221,9 +221,12 @@ Future<BuildResult> buildConfig({
 
   // §033: presetIds with custom_rules.kind:preset entry AND dns_rule defined
   // in template — для auto-discovery `kind:preset` записей в dns_options.rules.
+  // §121: routing-тоггл = король — выключенный пресет (cr.enabled=false) не
+  // считается active'ным для DNS-правил, поэтому его kind:preset запись в
+  // dns_options.rules orphan-чистится (симметрия с серверами).
   final activePresetIdsWithDnsRule = <String>{
     for (final cr in settings.customRules)
-      if (cr is CustomRulePreset && cr.presetId.isNotEmpty)
+      if (cr is CustomRulePreset && cr.enabled && cr.presetId.isNotEmpty)
         if (template.selectableRules
             .any((p) => p.presetId == cr.presetId && p.dnsRule != null))
           cr.presetId,

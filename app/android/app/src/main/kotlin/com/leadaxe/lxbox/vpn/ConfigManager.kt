@@ -14,6 +14,11 @@ object ConfigManager {
     var notificationTitle: String = "L×Box"
         private set
 
+    // §123 — подтекст уведомления (тег активной ноды / route.final). Пустая
+    // строка = native сам подставит статусный fallback ("Connected").
+    var notificationText: String = ""
+        private set
+
     private var cachedConfig: String? = null
 
     fun save(json: String): Boolean {
@@ -48,6 +53,10 @@ object ConfigManager {
 
     fun setNotificationTitle(title: String) {
         notificationTitle = title
+    }
+
+    fun setNotificationText(text: String) {
+        notificationText = text
     }
 }
 

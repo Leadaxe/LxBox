@@ -144,6 +144,18 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// §123 — set foreground-service notification text (подтекст: тег активной
+  /// ноды / route.final). Пустая строка → native fallback на статус.
+  Future<bool> setNotificationText(String text) async {
+    final ok = await _invoke<bool>(
+      _Methods.setNotificationText,
+      args: {'text': text},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
   Future<bool> setAutoStart(bool enabled) async {
     final ok = await _invoke<bool>(
       _Methods.setAutoStart,

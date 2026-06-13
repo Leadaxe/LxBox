@@ -304,7 +304,12 @@ class BoxService(
         setStatus(VpnStatus.Started)
 
         withContext(Dispatchers.Main) {
-            notification.show(ConfigManager.notificationTitle, "Connected")
+            // §123 — подтекст = тег активной ноды / route.final (из Dart через
+            // setNotificationText). Пусто → fallback на статус "Connected".
+            notification.show(
+                ConfigManager.notificationTitle,
+                ConfigManager.notificationText.ifEmpty { "Connected" },
+            )
         }
     }
 
