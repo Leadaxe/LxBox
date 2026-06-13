@@ -10,6 +10,8 @@ import '../../models/validation.dart';
 /// - `outbounds[type=urltest]` не пуст → иначе `EmptyUrltestGroup` (fatal).
 /// - `outbounds[type=selector].default` в options → иначе `InvalidDefault`
 ///   (fatal).
+/// - `dns.final` / `route.default_domain_resolver` ссылаются на существующий
+///   `dns.servers[].tag` → иначе `DanglingDnsServerRef` (fatal). §121.
 ValidationResult validateConfig(Map<String, dynamic> config) {
   final issues = <ValidationIssue>[];
 
@@ -43,6 +45,27 @@ ValidationResult validateConfig(Map<String, dynamic> config) {
     if (detour is String && detour.isNotEmpty && !allTags.contains(detour)) {
       issues.add(DanglingDetourRef(o['tag'] as String? ?? '', detour));
     }
+  }
+
+  // §121 — DNS resolver refs → existing dns.servers tag.
+  final dns = config['dns'];
+  final dnsServerTags = <String>{
+    for (final s in (dns?['servers'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>())
+      s['tag'] as String? ?? '',
+  }..remove('');
+  final dnsFinal = dns?['final'];
+  if (dnsFinal is String &&
+      dnsFinal.isNotEmpty &&
+      !dnsServerTags.contains(dnsFinal)) {
+    issues.add(DanglingDnsServerRef('dns.final', dnsFinal));
+  }
+  final domainResolver = config['route']?['default_domain_resolver'];
+  if (domainResolver is String &&
+      domainResolver.isNotEmpty &&
+      !dnsServerTags.contains(domainResolver)) {
+    issues.add(
+        DanglingDnsServerRef('route.default_domain_resolver', domainResolver));
   }
 
   // Empty urltest + invalid selector default.

@@ -175,5 +175,68 @@ void main() {
       expect(validateConfig({'outbounds': [], 'route': {'rules': []}}).isOk,
           true);
     });
+
+    // §121 — DNS resolver refs.
+
+    test('§121 — dns.final на отсутствующий сервер → fatal', () {
+      final r = validateConfig({
+        'dns': {
+          'servers': [
+            {'tag': 'cloudflare_udp', 'type': 'udp'},
+          ],
+          'final': 'yandex_dot', // исчез (пресет выключен)
+        },
+      });
+      expect(r.hasFatal, true);
+      expect(r.fatal.single, isA<DanglingDnsServerRef>());
+    });
+
+    test('§121 — default_domain_resolver на отсутствующий сервер → fatal', () {
+      final r = validateConfig({
+        'dns': {
+          'servers': [
+            {'tag': 'cloudflare_udp', 'type': 'udp'},
+          ],
+        },
+        'route': {'default_domain_resolver': 'yandex_udp'},
+      });
+      expect(r.hasFatal, true);
+      expect(r.fatal.single, isA<DanglingDnsServerRef>());
+    });
+
+    test('§121 — оба resolver-поля на существующие серверы → ok', () {
+      final r = validateConfig({
+        'dns': {
+          'servers': [
+            {'tag': 'local_dns_resolver', 'type': 'local'},
+            {'tag': 'cloudflare_udp', 'type': 'udp'},
+          ],
+          'final': 'local_dns_resolver',
+        },
+        'route': {'default_domain_resolver': 'cloudflare_udp'},
+      });
+      expect(r.isOk, true);
+    });
+
+    test('§121 — пустой/отсутствующий resolver-ref → ok (не fatal)', () {
+      // dns без final, route без default_domain_resolver — проверка скипается.
+      final r = validateConfig({
+        'dns': {
+          'servers': [
+            {'tag': 'cloudflare_udp', 'type': 'udp'},
+          ],
+        },
+      });
+      expect(r.isOk, true);
+    });
+
+    test('§121 — конфиг без dns-блока → проверка не срабатывает', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'direct-out', 'type': 'direct'},
+        ],
+      });
+      expect(r.isOk, true);
+    });
   });
 }

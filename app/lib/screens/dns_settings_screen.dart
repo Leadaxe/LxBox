@@ -157,10 +157,12 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           r['name'] as String: r,
     };
 
-    // §033: build active preset rules maps by presetId + dns_servers.
-    // Walk through ALL custom_rules.kind:preset entries (including disabled —
-    // because DNS-aspect может быть enabled независимо). expand для отображения
-    // body в DnsSettings UI.
+    // §033/§121: build active preset rules maps by presetId + dns_servers.
+    // §121 — routing-тоггл = король: выключенный пресет (cr.enabled=false) не
+    // порождает ни DNS-серверы, ни DNS-правила, ни mirror'ы. Симметрия с
+    // build-time (custom_rules.dart dnsEnabled gate + build_config
+    // activePresetIdsWithDnsRule). Иначе UI набрал бы серверы/правила
+    // выключенного пресета и orphan-cleanup рассинхронизировался бы с серверами.
     final presetRulesByPresetId = <String, Map<String, dynamic>>{};
     final presetLabelByPresetId = <String, String>{};
     final presetServersWithLabel = <Map<String, dynamic>>[];
@@ -170,6 +172,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     for (final cr in activeRules) {
       if (cr is! CustomRulePreset) continue;
       if (cr.presetId.isEmpty) continue;
+      if (!cr.enabled) continue; // §121: routing off → пресет мёртв целиком
       SelectableRule? match;
       for (final p in allPresets) {
         if (p.presetId == cr.presetId) {
@@ -250,6 +253,31 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         if (m.ruleId != null && m.ruleId!.isNotEmpty) m.ruleId!: m,
     };
 
+    // §121: автосброс DNS Final / Default Resolver на template-дефолт, если
+    // выбранный сервер исчез из каталога (напр. выключили пресет, чьи серверы
+    // были выбраны резольверами). Иначе битый tag уходит в config → sing-box
+    // реджектит «server not found» при старте. Считаем доступные tag'и из
+    // локальных resolved-значений (state ещё не присвоен).
+    final ruleRefsByTag = <String, String>{
+      for (final cr in activeRules)
+        if (cr.dnsMirrorActive)
+          cr.dns!.serverTag: cr.name.isNotEmpty ? cr.name : 'rule',
+    };
+    final availableTags = enabledServerTags(resolveDisplayedServers(
+      resolvedServers, templateByTag, presetServersByTag,
+      ruleRefsByTag: ruleRefsByTag));
+    var dnsFinal = vars['dns_final'] ?? '';
+    var defaultResolver = vars['dns_default_domain_resolver'] ?? '';
+    var resolverReset = false;
+    if (dnsFinal.isNotEmpty && !availableTags.contains(dnsFinal)) {
+      dnsFinal = 'local_dns_resolver'; // template default_value
+      resolverReset = true;
+    }
+    if (defaultResolver.isNotEmpty && !availableTags.contains(defaultResolver)) {
+      defaultResolver = 'cloudflare_udp'; // template default_value
+      resolverReset = true;
+    }
+
     if (mounted) {
       setState(() {
         _servers = resolvedServers;
@@ -263,10 +291,13 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         _customRules = activeRules;
         _dnsMirrorByRuleId = dnsMirrorByRuleId;
         _strategy = vars['dns_strategy'] ?? 'prefer_ipv4';
-        _dnsFinal = vars['dns_final'] ?? '';
-        _defaultResolver = vars['dns_default_domain_resolver'] ?? '';
+        _dnsFinal = dnsFinal;
+        _defaultResolver = defaultResolver;
         _loading = false;
       });
+      // §121: исчезнувший resolver-tag сброшен → persist (config dirty),
+      // чтобы битый ref не дожил до buildّа даже если юзер ничего не трогает.
+      if (resolverReset) _markDirty();
     }
   }
 

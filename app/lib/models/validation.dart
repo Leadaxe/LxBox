@@ -51,6 +51,22 @@ final class DanglingDetourRef extends ValidationIssue {
       'Outbound "$owner" detour references missing outbound "$tag".';
 }
 
+/// §121 — `dns.final` или `route.default_domain_resolver` ссылается на
+/// DNS-сервер, отсутствующий в `dns.servers`. Возникает напр. когда сервер
+/// был выбран резольвером, а потом исчез (выключили пресет, чьи серверы это
+/// были). sing-box core реджектит такой config при старте → fatal.
+final class DanglingDnsServerRef extends ValidationIssue {
+  final String field; // 'dns.final' | 'route.default_domain_resolver'
+  final String tag;
+  const DanglingDnsServerRef(this.field, this.tag);
+
+  @override
+  Severity get severity => Severity.fatal;
+
+  @override
+  String get message => '$field references missing DNS server "$tag".';
+}
+
 final class EmptyUrltestGroup extends ValidationIssue {
   final String tag;
   const EmptyUrltestGroup(this.tag);
