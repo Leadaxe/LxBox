@@ -168,6 +168,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 ConfigManager.setNotificationTitle(title)
                 result.success(true)
             }
+            "setNotificationText" -> {
+                // §123 — подтекст уведомления (тег активной ноды / route.final).
+                val text = call.argument<String>("text") ?: ""
+                ConfigManager.setNotificationText(text)
+                result.success(true)
+            }
             "setAutoStart" -> {
                 val enabled = call.argument<Boolean>("enabled") ?: false
                 BootReceiver.setEnabled(context, enabled)

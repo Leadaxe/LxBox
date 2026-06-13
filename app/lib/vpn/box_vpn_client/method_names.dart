@@ -23,6 +23,7 @@ class _Methods {
 
   // Notification + auto-start
   static const setNotificationTitle = 'setNotificationTitle';
+  static const setNotificationText = 'setNotificationText';
   static const setAutoStart = 'setAutoStart';
   static const getAutoStart = 'getAutoStart';
   static const setKeepOnExit = 'setKeepOnExit';

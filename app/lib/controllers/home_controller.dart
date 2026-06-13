@@ -275,10 +275,39 @@ class HomeController extends ChangeNotifier
     return ok;
   }
 
+  /// §123 — собрать и отправить строки foreground-уведомления.
+  ///   title = `L×Box [final = <route.final>]` (сырое route.final)
+  ///   text  = `<селектор>: <выбранная нода>`, напр. `vpn-1: L: 🇫🇮⚡Финляндия-2`.
+  ///           Селектор = selectedGroup, нода = его `now` (= activeInGroup,
+  ///           которое applyGroup заполняет из entry['now'] группы).
+  ///           Нет ноды → только селектор; нет конфига → пусто (native подставит
+  ///           статусный fallback "Connected").
+  /// Dart владеет обеими строками — native при своих show(...) не затирает их.
+  Future<void> _pushNotificationLabels() async {
+    final routeFinal = ClashEndpoint.routeFinalTag(_state.configRaw);
+    final title = (routeFinal == null || routeFinal.isEmpty)
+        ? 'L×Box'
+        : 'L×Box [final = $routeFinal]';
+
+    // selectedGroup = активный селектор (vpn-1), activeInGroup = его выбранная
+    // нода (`now`). Формат подтекста: «<селектор>: <нода>».
+    final group = _state.selectedGroup;
+    final node = _state.activeInGroup;
+    final String text;
+    if (group != null && group.isNotEmpty) {
+      text = (node != null && node.isNotEmpty) ? '$group: $node' : group;
+    } else {
+      text = (node != null && node.isNotEmpty) ? node : (routeFinal ?? '');
+    }
+
+    await _vpn.setNotificationTitle(title);
+    await _vpn.setNotificationText(text);
+  }
+
   /// Atomic start: native call + intent-based sticky reset.
   /// Returns true если startVPN принят (reached Starting), false иначе.
   Future<bool> _startInternal() async {
-    await _vpn.setNotificationTitle('L×Box');
+    await _pushNotificationLabels();
     final ok = await _vpn.startVPN();
     _addDebug(DebugSource.app, '[vpn] startVPN returned $ok');
     if (ok) {
@@ -462,6 +491,8 @@ class HomeController extends ChangeNotifier
         highlightedNode: now,
       ),
     );
+    // §123 — activeInGroup стал известен → обновить подтекст шторки.
+    await _pushNotificationLabels();
   }
 
   Future<void> switchNode(String nodeTag) async {
