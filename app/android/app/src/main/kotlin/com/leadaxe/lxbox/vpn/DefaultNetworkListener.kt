@@ -70,12 +70,17 @@ object DefaultNetworkListener {
     private val request = NetworkRequest.Builder().apply {
         addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
         addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
-        // §119 — форсим underlying-сеть (никогда не сам VPN). Без этого на
-        // некоторых прошивках (MIUI Android 13) registerBestMatchingNetworkCallback
-        // возвращает сам VPN как defaultNetwork → LocalResolver шлёт
-        // DnsResolver.query(VPN) → DNS уходит обратно в tun (loop) → у
-        // allowed-приложений не резолвятся имена. NOT_VPN исключает VPN из
-        // матча на всех прошивках, не полагаясь на их «доброту».
+        // §119 — явно требуем underlying-сеть, никогда не наш tun. ВАЖНО:
+        // NOT_VPN уже входит в NetworkCapabilities.DEFAULT_CAPABILITIES (наряду
+        // с TRUSTED и NOT_RESTRICTED), которыми инициализируется NetworkRequest
+        // .Builder — то есть эта строка по сути self-documenting/страховка от
+        // случайного removeCapability(NOT_VPN), а НЕ исправление поведения.
+        // Источник истины: AOSP NetworkCapabilities.DEFAULT_CAPABILITIES.
+        //   https://android.googlesource.com/platform/packages/modules/Connectivity/+/refs/heads/master/framework/src/android/net/NetworkCapabilities.java
+        // Следствие: callback-источник defaultNetwork (registerBestMatching/
+        // requestNetwork с этим request, API ≥ 28) и без §119 не отдавал бы VPN.
+        // Реальный §119-фикс — фильтр VPN на init-seed из getActiveNetwork() в
+        // DefaultNetworkMonitor.start(), куда NOT_VPN из request не применяется.
         addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
         if (Build.VERSION.SDK_INT == 23) {
             removeCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)

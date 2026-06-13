@@ -33,8 +33,17 @@ object DefaultNetworkMonitor {
     suspend fun start(scope: CoroutineScope, onNetworkSwitch: () -> Unit) {
         this.scope = scope
         this.onNetworkSwitch = onNetworkSwitch
+        // §119 — seed `defaultNetwork` из getActiveNetwork(), но НИКОГДА не нашим
+        // же VPN. getActiveNetwork() возвращает per-app default, который штатно
+        // ВКЛЮЧАЕТ наш tun, если VPN уже поднят к моменту start() (док:
+        // ConnectivityManager.getActiveNetwork / registerDefaultNetworkCallback —
+        // «may be ... a VPN that applies to the application»). Если пустить такой
+        // seed в LocalResolver, DnsResolver.query(VPN) уйдёт обратно в tun → loop.
+        // NOT_VPN из NetworkRequest сюда НЕ применяется (это прямой геттер, не
+        // запрос), поэтому фильтруем явно. Callback-источник (ниже) уже отфильтрован
+        // NOT_VPN'ом самого NetworkRequest и здесь перезапишет seed.
         defaultNetwork = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            BoxApplication.connectivity.activeNetwork
+            BoxApplication.connectivity.activeNetwork?.takeUnless(::isVpn)
         } else null
         logDefaultNetwork("init", defaultNetwork)
 
@@ -135,21 +144,34 @@ object DefaultNetworkMonitor {
         }
     }
 
+    /// §119 — true, если у network есть VPN-транспорт (наш собственный tun).
+    /// Источник истины: ConnectivityManager.getActiveNetwork() и
+    /// registerDefaultNetworkCallback() отдают per-app default, который штатно
+    /// включает VPN, применённый к процессу — это AOSP-поведение, не баг прошивки.
+    private fun isVpn(network: Network): Boolean =
+        BoxApplication.connectivity.getNetworkCapabilities(network)
+            ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+
     /// §119 — постоянная диагностика: какой `defaultNetwork` поймали — VPN или
-    /// underlying-физика. `vpn=true` у этого лога = тот самый баг (выбран сам
-    /// VPN, DNS allowed-приложений пойдёт в loop). После NOT_VPN-фикса всегда
-    /// ожидаем `vpn=false`. Читать: `adb logcat -s LxBoxNet`.
+    /// underlying-физика. Репро в проде у нас нет, поэтому лог безусловный
+    /// (`Log.i`, без debug-gating): следующий field-report диагностируется сразу.
+    /// Читать: `adb logcat -s LxBoxNet`.
+    ///
+    /// Ожидаемые значения `vpn`:
+    ///   [init]   — ПОСЛЕ §119-фильтра (`takeUnless(::isVpn)`) всегда `false`;
+    ///              `true` здесь означало бы, что фильтр обойдён — копать.
+    ///   [update] — приходит из NetworkRequest с NOT_VPN (default-capability,
+    ///              API ≥ 28), поэтому штатно `false`. `true` — аномалия:
+    ///              underlying-сеть не сматчилась, выбран VPN вопреки NOT_VPN.
     private fun logDefaultNetwork(where: String, network: Network?) {
         runCatching {
             if (network == null) {
                 Log.i("LxBoxNet", "[$where] defaultNetwork=null")
                 return
             }
-            val cm = BoxApplication.connectivity
-            val vpn = cm.getNetworkCapabilities(network)
-                ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
-            val ifName = cm.getLinkProperties(network)?.interfaceName ?: "?"
-            Log.i("LxBoxNet", "[$where] defaultNetwork iface=$ifName vpn=$vpn")
+            val ifName = BoxApplication.connectivity
+                .getLinkProperties(network)?.interfaceName ?: "?"
+            Log.i("LxBoxNet", "[$where] defaultNetwork iface=$ifName vpn=${isVpn(network)}")
         }
     }
 }

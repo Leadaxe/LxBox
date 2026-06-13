@@ -1,4 +1,4 @@
-# 119 — default-network: форсить underlying (NET_CAPABILITY_NOT_VPN)
+# 119 — default-network: seed из getActiveNetwork() мог быть нашим же VPN
 
 | Поле | Значение |
 |------|----------|
@@ -8,6 +8,25 @@
 | Коммиты | — |
 | Связанные spec'ы | features/046 (tunnel apps split-tunneling), features/047 (DNS/network deterioration) |
 
+## Источники истины (AOSP / Android docs)
+
+Решения ниже опираются строго на эти первоисточники, не на догадки о прошивках:
+
+- **`NetworkCapabilities.DEFAULT_CAPABILITIES`** — `NOT_VPN` входит в дефолт
+  `NetworkRequest.Builder` (вместе с `TRUSTED` и `NOT_RESTRICTED`):
+  [NetworkCapabilities.java (Connectivity module, master)](https://android.googlesource.com/platform/packages/modules/Connectivity/+/refs/heads/master/framework/src/android/net/NetworkCapabilities.java)
+  — `static { defaultCapabilities = NOT_RESTRICTED | TRUSTED | NOT_VPN; … }`.
+  Javadoc `NET_CAPABILITY_NOT_VPN`: *«This capability is set by default.»*
+- **per-app default network может быть VPN** — `getActiveNetwork()` /
+  `registerDefaultNetworkCallback()` отдают сеть приложения, которая *«may be a
+  physical network or a virtual network, such as a VPN that applies to the
+  application»*:
+  [Read network state — Android Developers](https://developer.android.com/develop/connectivity/network-ops/reading-network-state).
+- **DNS-loop в Tun-режиме** — резолв через сам tun при `auto_route` рекурсивно
+  заходит обратно в sing-box:
+  [sing-box#3637](https://github.com/SagerNet/sing-box/issues/3637),
+  [sing-box#2643](https://github.com/SagerNet/sing-box/issues/2643).
+
 ## Проблема (field report)
 
 Field report (4PDA, Михаил, **MIUI Android 13**): при **Allow-list** (только
@@ -16,68 +35,100 @@ Field report (4PDA, Михаил, **MIUI Android 13**): при **Allow-list** (�
 process сам не зависит от tun»), и на чистом Android / ColorOS (CPH2411)
 **не воспроизводится** — allow-list работает без самодобавления.
 
-## Root cause (по инспекции кода)
+> Почему репро на MIUI, но не на ColorOS/Pixel — **нам неизвестно** и в спеке не
+> утверждается. Различие в тайминге/поведении между прошивками реально, но без
+> устройства репортёра его причину мы не установили. Фикс ниже устраняет
+> известный код-путь, на котором `defaultNetwork` мог стать нашим VPN,
+> **независимо** от того, почему он срабатывал именно на той прошивке.
 
-Цепочка DNS allowed-приложения:
+## Цепочка DNS allowed-приложения
 
 1. `openTun` анонсирует на VpnService DNS-сервер
    ([BoxVpnService.kt:186](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt)
    `builder.addDnsServer`) → DNS захваченных приложений идёт в TUN → sing-box DNS.
 2. DNS Final по умолчанию = `local_dns_resolver` → `LocalResolver`.
 3. `LocalResolver` резолвит через `DnsResolver.query(defaultNetwork, …)`
-   ([LocalResolver.kt:38,118](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/LocalResolver.kt)),
+   ([LocalResolver.kt:38,78,118](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/LocalResolver.kt)),
    где `defaultNetwork` **обязан** быть underlying-физикой (иначе DNS уходит
    обратно в tun → loop).
-4. `defaultNetwork` берётся из `DefaultNetworkMonitor` ← `DefaultNetworkListener`
-   (NetworkCallback).
+4. `defaultNetwork` берётся из `DefaultNetworkMonitor`. У него **два** источника,
+   и ведут они себя по-разному (см. ниже).
 
-**Баг:** `NetworkRequest` в
-[DefaultNetworkListener.kt:70-77](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/DefaultNetworkListener.kt)
-требовал `INTERNET` + `NOT_RESTRICTED`, но **НЕ** `NOT_VPN`. На Android 12+
-регистрация идёт через `registerBestMatchingNetworkCallback(request)`
-([:83](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/DefaultNetworkListener.kt)).
-Наш собственный VPN-network тоже имеет `INTERNET`+`NOT_RESTRICTED` → «best
-matching» на некоторых прошивках (MIUI A13) возвращает **сам VPN** как
-`defaultNetwork`. Тогда `LocalResolver` шлёт `DnsResolver.query(VPN)` → loop →
-allowed-приложения не резолвят имена → «не работает».
+## Root cause (по инспекции кода + AOSP)
 
-«Добавление себя» лечит косвенно (меняет сетевой скоупинг так, что система
-начинает отдавать underlying) — это **симптом-патч**, не причина.
+`DefaultNetworkMonitor.defaultNetwork` пишется из двух источников:
 
-Почему не репро на ColorOS/Pixel: их прошивки сами исключают VPN из дефолта для
-VPN-приложения. MIUI конкретной сборки — нет. `NOT_VPN` убирает зависимость от
-«доброты прошивки».
+| Источник | Где | Фильтрует ли VPN? |
+|---|---|---|
+| **seed** `getActiveNetwork()` | [DefaultNetworkMonitor.kt:start()](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/DefaultNetworkMonitor.kt) | **НЕТ** — это прямой геттер, NOT_VPN из NetworkRequest к нему неприменим |
+| **callback** из `DefaultNetworkListener` | [DefaultNetworkListener.kt:register()](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/DefaultNetworkListener.kt) | **ДА** — `NetworkRequest` с `NOT_VPN` (он же дефолт), на API ≥ 28 (`requestNetwork` / `registerBestMatchingNetworkCallback`) |
+
+**Баг — в seed, а не в request.** `getActiveNetwork()` возвращает per-app
+default, который по документации Android **штатно включает наш собственный VPN**,
+если tun уже поднят к моменту `start()`. Этот seed напрямую кладётся в
+`defaultNetwork` и используется `LocalResolver`'ом до прихода первого callback'а.
+Если seed = наш VPN → `DnsResolver.query(VPN)` → DNS уходит обратно в tun →
+loop → allowed-приложения не резолвят имена → «не работает».
+
+**Опровергнутая гипотеза (для истории):** ранняя версия §119 считала, что
+`NetworkRequest` «не требовал `NOT_VPN`» и потому
+`registerBestMatchingNetworkCallback` возвращал VPN. Это **неверно**: `NOT_VPN`
+входит в `DEFAULT_CAPABILITIES` `NetworkRequest.Builder` (см. источники), то есть
+callback-путь VPN не отдавал и до §119. `addCapability(NOT_VPN)` в request —
+**no-op по поведению** (оставлен как self-documenting/страховка, не как фикс).
+
+«Добавление себя» в allow-list лечит косвенно (меняет сетевой скоупинг процесса
+так, что `getActiveNetwork()` начинает отдавать underlying) — это
+**симптом-патч**, не причина.
 
 ## Решение
 
-1. **`addCapability(NET_CAPABILITY_NOT_VPN)`** в `DefaultNetworkListener` request
-   → `defaultNetwork` **всегда** underlying-физика, никогда VPN — на всех
-   прошивках. Чинит `local_dns_resolver`-путь allowed-приложений **без**
-   прописывания себя.
-2. **Постоянный диаг-лог** `LxBoxNet` в `DefaultNetworkMonitor.logDefaultNetwork`
-   (`iface` + `vpn=true/false`). Репро у нас нет → следующий такой field-report
-   диагностируется сразу: `adb logcat -s LxBoxNet`. `vpn=true` = баг налицо;
-   после фикса ожидаем всегда `vpn=false`.
+1. **Фильтр VPN на seed** — в `DefaultNetworkMonitor.start()`
+   `activeNetwork?.takeUnless(::isVpn)`: init-`defaultNetwork` никогда не наш tun.
+   Это и есть содержательный фикс §119 — закрывает реальный код-путь, на котором
+   `LocalResolver` мог получить VPN.
+2. **`addCapability(NET_CAPABILITY_NOT_VPN)`** в `DefaultNetworkListener` request
+   — **поведенчески no-op** (NOT_VPN уже в дефолте Builder'а). Оставлен явно как
+   self-documenting + страховка от случайного `removeCapability(NOT_VPN)`.
+   Комментарий в коде это прямо фиксирует со ссылкой на AOSP.
+3. **Постоянный диаг-лог** `LxBoxNet` в `DefaultNetworkMonitor.logDefaultNetwork`
+   (`iface` + `vpn=true/false`). Репро у нас нет → следующий field-report
+   диагностируется сразу: `adb logcat -s LxBoxNet`. Лог **безусловный**
+   (`Log.i`, без debug-gating). Ожидаемые значения:
+   - `[init]` — после фильтра всегда `vpn=false`; `true` означало бы обход
+     фильтра — копать дальше.
+   - `[update]` — из NOT_VPN-request, штатно `vpn=false`; `true` — аномалия
+     (underlying не сматчился вопреки NOT_VPN).
 
 **НЕ делаем self-add** (отклонено): он гоняет служебный трафик L×Box через VPN и
 делает §046-заметку «adding L×Box has no effect» ложью.
 
 ## Затронутые файлы
 
-- `vpn/DefaultNetworkListener.kt` — `NET_CAPABILITY_NOT_VPN` в request.
-- `vpn/DefaultNetworkMonitor.kt` — `logDefaultNetwork` (init/update) + импорты.
+- `vpn/DefaultNetworkMonitor.kt` — фильтр `takeUnless(::isVpn)` на init-seed;
+  helper `isVpn`; `logDefaultNetwork` (init/update) + импорты.
+- `vpn/DefaultNetworkListener.kt` — `NET_CAPABILITY_NOT_VPN` в request (явный
+  no-op + комментарий со ссылкой на AOSP).
 - `services/builder/post_steps/tun_packages.dart` — поправлен устаревший
-  коммент (`557-560` → `208-211`).
+  коммент-якорь (`557-560` → `208-211`, split-tunneling в `BoxVpnService`). К
+  §119-логике отношения не имеет.
 
 ## Риски и edge cases
 
-- **Регрессии нет:** на устройствах, где `defaultNetwork` уже underlying
-  (ColorOS/Pixel), `NOT_VPN` даёт тот же результат, просто явно. Меняется
-  поведение только там, где прошивка возвращала VPN.
-- **API < 28** (`registerDefaultNetworkCallback` без request) — `NOT_VPN` к ним
-  не применяется, но там система и так отдаёт underlying для VPN-приложения.
-- **VPN-only без underlying** — `NOT_VPN`-запрос не сматчит ничего → `null` →
-  `notifySync` отдаёт «no interface» (как и раньше при отсутствии сети).
+- **Регрессии нет:** на устройствах, где `getActiveNetwork()` и так отдавал
+  underlying, `takeUnless(::isVpn)` — тот же результат. Меняется поведение только
+  там, где seed был VPN (init при уже поднятом tun).
+- **Остаточный путь без фильтра:** `DefaultNetworkListener.get()` fallback-ветки
+  ([DefaultNetworkListener.kt:58-60](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/DefaultNetworkListener.kt))
+  тоже читает `activeNetwork` без VPN-фильтра, но достижима только на API < 21,
+  где `requestNetwork(request, callback)` кинул `RuntimeException`. На целевых
+  устройствах (MIUI A13 = API 33) недостижима — фильтровать там не стали, чтобы
+  не раздувать фикс. Помечено здесь как известный edge-case.
+- **API < 28** (`registerDefaultNetworkCallback` без request) — `NOT_VPN` к
+  callback'у не применяется, но seed-фильтр работает на всех API ≥ 23.
+- **VPN-only без underlying** — seed после фильтра `null`, callback по NOT_VPN
+  тоже ничего не сматчит → `null` → `notifySync` отдаёт «no interface» (как и
+  раньше при отсутствии сети).
 
 ## Верификация
 
@@ -88,5 +139,6 @@ VPN-приложения. MIUI конкретной сборки — нет. `NO
   показывает `vpn=false iface=wlan0/rmnet…` (underlying — корректно).
 - **MIUI-фикс** на устройстве репортёра локально **не проверяем** (репро нет,
   репортёр недоступен). Фикс — по root-cause-анализу + принципиально безопасен.
-  Если будущий field-report покажет `vpn=true` после фикса — причина шире выбора
-  сети, копать дальше (лог уже встроен).
+  Если будущий field-report покажет `[init] vpn=true` после фикса — фильтр обойдён
+  (копать); `[update] vpn=true` — underlying не сматчился вопреки NOT_VPN (копать
+  шире выбора сети). Лог уже встроен.
