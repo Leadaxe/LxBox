@@ -173,3 +173,31 @@ callback-путь VPN не отдавал и до §119. `addCapability(NOT_VPN)
 
 > Пока §119 в статусе «device-repro отсутствует» — **не трогать**, лог зарабатывает
 > своё место. Снятие — отдельной мелкой таской после подтверждения.
+
+## Вне scope §119 — `missing default interface` при null defaultNetwork
+
+Code-review PR #61 (апстрим) и наша инспекция выявили: `LocalResolver` читает
+`DefaultNetworkMonitor.defaultNetwork` напрямую и кидает `error("missing default
+interface")` на любом `null` ([LocalResolver.kt:38,78](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/LocalResolver.kt)).
+Это **не регрессия §119** и в этой таске **не чинится** — вынесено в **[§122](122-default-network-null-onlost.md)**.
+
+Кратко, почему отдельно (полная трассировка — в §122):
+
+- §119/`takeUnless(::isVpn)` добавил **один** новый путь к null (VPN-seed на
+  старте), но он почти всегда перекрывается callback'ом до первого DNS. Чистый
+  эффект §119: `гарантированный DNS-loop → редкий быстрый fail в узком окне` —
+  **строго лучше**, не хуже.
+- Главный повторяющийся источник null — рантайм `onLost` (`Msg.Lost → null`,
+  [DefaultNetworkListener.kt:53](../../../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/DefaultNetworkListener.kt)) —
+  **старше §119**, существовал всегда, нашим фиксом не затронут.
+- `error()` здесь — **штатный** путь, не краш: интерфейс libbox
+  `LocalDNSTransport.exchange/lookup` объявлен `throws Exception` (проверено в
+  .aar), а Go-обёртка `platformTransport.Exchange/Lookup`
+  ([sing-box `experimental/libbox/dns.go`](https://github.com/SagerNet/sing-box/blob/testing/experimental/libbox/dns.go))
+  на ошибку из platform-транспорта делает `return err` / `return nil, err` —
+  отдаёт её наверх как **failed exchange** в DNS-движок. Что делает движок выше
+  (фейловер на другой DNS-сервер / SERVFAIL приложению) зависит от DNS-правил
+  конфига — **в обёртке тихого ретрая/проглатывания нет** (проверено в Go-коде).
+- Поэтому `require()`-обёртка — отдельное улучшение для `onLost`-окна, **с гейтом
+  на замер**: сначала подтвердить, что `missing default interface` вообще стреляет
+  в проде. Детали и развилка (таймаут vs нет) — §122.
