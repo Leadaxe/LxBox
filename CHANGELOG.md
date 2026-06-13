@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **§119 — Allow-list + DNS на MIUI: форсим underlying-сеть (`NET_CAPABILITY_NOT_VPN`)** ([DefaultNetworkListener.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/DefaultNetworkListener.kt), [task spec](docs/spec/tasks/119-default-network-not-vpn.md)). Field report (MIUI Android 13): при Allow-list трафик выбранных приложений не работал, пока в список не добавить сам L×Box. Корень — запрос на `defaultNetwork` не требовал `NOT_VPN`, и на части прошивок `registerBestMatchingNetworkCallback` возвращал **сам VPN** как underlying-сеть → `local_dns_resolver` (`LocalResolver`) слал DNS обратно в tun (loop) → имена у allowed-приложений не резолвились. Добавлен `NET_CAPABILITY_NOT_VPN` → `defaultNetwork` всегда физическая underlying-сеть, **без** прописывания себя (self-add отклонён). Плюс постоянный диаг-лог `LxBoxNet` (`adb logcat -s LxBoxNet`: `iface` + `vpn=true/false`) — следующий такой репорт диагностируется мгновенно. Регрессии нет: где сеть уже была underlying (ColorOS/Pixel) — результат тот же.
+
 ## [2.0.6] — 2026-06-13
 
 ### Changed

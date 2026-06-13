@@ -1,7 +1,9 @@
 package com.leadaxe.lxbox.vpn
 
 import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Build
+import android.util.Log
 import io.nekohasekai.libbox.InterfaceUpdateListener
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +36,7 @@ object DefaultNetworkMonitor {
         defaultNetwork = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             BoxApplication.connectivity.activeNetwork
         } else null
+        logDefaultNetwork("init", defaultNetwork)
 
         DefaultNetworkListener.start(this) {
             defaultNetwork = it
@@ -96,6 +99,7 @@ object DefaultNetworkMonitor {
             }
             return
         }
+        logDefaultNetwork("update", network)
         val linkProps = BoxApplication.connectivity.getLinkProperties(network)
         val ifName = linkProps?.interfaceName ?: return
         for (attempt in 0 until 10) {
@@ -128,6 +132,24 @@ object DefaultNetworkMonitor {
         resetJob = s.launch(Dispatchers.IO) {
             delay(RESET_DEBOUNCE_MS)
             runCatching { onNetworkSwitch?.invoke() }
+        }
+    }
+
+    /// §119 — постоянная диагностика: какой `defaultNetwork` поймали — VPN или
+    /// underlying-физика. `vpn=true` у этого лога = тот самый баг (выбран сам
+    /// VPN, DNS allowed-приложений пойдёт в loop). После NOT_VPN-фикса всегда
+    /// ожидаем `vpn=false`. Читать: `adb logcat -s LxBoxNet`.
+    private fun logDefaultNetwork(where: String, network: Network?) {
+        runCatching {
+            if (network == null) {
+                Log.i("LxBoxNet", "[$where] defaultNetwork=null")
+                return
+            }
+            val cm = BoxApplication.connectivity
+            val vpn = cm.getNetworkCapabilities(network)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+            val ifName = cm.getLinkProperties(network)?.interfaceName ?: "?"
+            Log.i("LxBoxNet", "[$where] defaultNetwork iface=$ifName vpn=$vpn")
         }
     }
 }
