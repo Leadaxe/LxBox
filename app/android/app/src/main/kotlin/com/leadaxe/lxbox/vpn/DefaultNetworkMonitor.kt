@@ -157,6 +157,11 @@ object DefaultNetworkMonitor {
     /// (`Log.i`, без debug-gating): следующий field-report диагностируется сразу.
     /// Читать: `adb logcat -s LxBoxNet`.
     ///
+    /// TECH DEBT (TD-119-1): безусловность временна. После подтверждения фикса на
+    /// реальном устройстве — свернуть (revert) или перенести в debug-форму
+    /// (`Log.isLoggable("LxBoxNet", Log.INFO)`). См. docs/spec/tasks/119, раздел
+    /// «Технический долг».
+    ///
     /// Ожидаемые значения `vpn`:
     ///   [init]   — ПОСЛЕ §119-фильтра (`takeUnless(::isVpn)`) всегда `false`;
     ///              `true` здесь означало бы, что фильтр обойдён — копать.
