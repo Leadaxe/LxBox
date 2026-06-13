@@ -1,6 +1,6 @@
 # §121 — Routing-тоггл = король: DNS-хвосты при выключении пресета
 
-**Статус:** In progress (develop)
+**Статус:** Released (v2.1.0)
 **Тип:** bug-fix (3-слойный)
 **Связано:** §033 (independent DNS-aspect), §043 (DNS servers refs), §061 (DNS rules refs), §117 (server lifecycle / locked)
 
