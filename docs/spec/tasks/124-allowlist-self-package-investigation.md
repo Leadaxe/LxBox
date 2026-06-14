@@ -168,7 +168,7 @@ VpnService.Builder.establish()
 ### Поток SFA / эталон (per-app живёт в OverrideOptions, конфиг не трогается)
 
 ```
-UI: PerAppProxy activity (+ managed/MDM mode)
+UI: PerAppProxy activity (+ «managed» China-apps авто-режим, см. ниже)
         ▼
 Storage: DataStore (НЕ в JSON-конфиге профиля)
    Settings.kt:78-82  perAppProxyEnabled / perAppProxyMode / perAppProxyList
@@ -198,7 +198,7 @@ VpnService.Builder.establish()
 |---|---|---|---|
 | UI | `tun_apps_tab.dart` (вкладка в RoutingScreen) | PerAppProxy activity | разные, эквивалентны |
 | Storage | `lxbox_settings.json` `tun_apps` (`backup_tun.dart`) | DataStore `perAppProxy*` (`Settings.kt:78-82`) | разные места |
-| Managed/MDM режим | ❌ нет | ✅ `getEffective*` (`Settings.kt:88-97`) | **только у SFA** |
+| «Managed» China-apps авто-режим | ❌ нет | ✅ `getEffective*` (`Settings.kt:88-97`) | **только у SFA — China-специфично, см. ниже** |
 | Гейт «включено» | mode≠off && packages≠∅ (`tun_packages.dart:19`) | `Vendor.isPerAppProxyAvailable() && perAppProxyEnabled` | разные условия |
 | Вычисление списка | post-step Dart, пишет в **config** | Kotlin, кладёт в **OverrideOptions** | **разные слои** |
 | **self-инъекция** | ❌ отсутствует | ✅ `appList ± packageName`, старт+reload | **ключевое отличие** |
@@ -272,6 +272,24 @@ VpnService.Builder.establish()
 - **Root-юзеры (существуют!):** это РАБОЧАЯ фича, которую мы НЕ пробрасываем → **реальный пропущенный функционал**, не «нерелевантный параметр».
 
 **Статус:** ✅ **проброс реализован** (2026-06-14). `BootReceiver.isAutoRedirect`/`setAutoRedirect` (persistent-флаг `auto_redirect`, default false, зеркало `allowBypass`); helper `buildOverrideOptions` шлёт `options.autoRedirect = BootReceiver.isAutoRedirect(service)`. **UI-тоггла пока НЕТ** — флаг управляется через prefs/adb; default false безопасен (на не-root ядро вернёт ошибку). Остаётся отдельной таской: UI-тоггл + `auto_route`-зависимость + девайс-тест на рутованном.
+
+---
+
+## «Managed»-режим SFA — это НЕ MDM, а China-apps авто-сканер (won't-fix)
+
+> ⚠️ Ранее в этом доке `perAppProxyManagedMode` был ошибочно назван «MDM / enterprise / админ организации». **Неверно** — это было додумывание, не код. Исправлено по факту.
+
+**Что это на самом деле** (по коду SFA):
+- `AppChangeReceiver.kt:48-49` — BroadcastReceiver на install/uninstall приложений: при `managedMode` зовёт `PerAppProxyScanner.scanAllChinaApps()` → пишет результат в `perAppProxyManagedList`.
+- `ProfileOverrideScreen.kt:93-98` + `PerAppProxyScreen.kt:201` (`scanChinaPackage`) — UI-кнопка «Scan China apps» (`R.string.per_app_proxy_scan_china_apps`).
+- `Settings.kt:87-95` — `getEffective*()`: при `managedMode` режим принудительно EXCLUDE, список = авто-сканированные China apps (перекрывает ручной выбор юзера).
+
+**Смысл:** автоматический deny-list китайских приложений (WeChat/Alipay/локальные банки → напрямую мимо прокси, иначе ломаются). «Managed» = «управляется приложением автоматически» (авто-ресканит при установке новых), НЕ «управляется админом». China-рынок sing-box.
+
+**Почему НЕ нужно LxBox (won't-fix):**
+- China-специфичная convenience-фича; наша аудитория — RU/обход блокировок.
+- Наш аналог («банки/госуслуги напрямую») уже покрыт иначе: GeoIP-роутинг ([§045](045-ru-direct-geoip-fallback.md)) + ручной deny-list (§046 прямо упоминает `ru.tinkoff`, `ru.sberbank`).
+- Это **фича чужого рынка**, а не пропущенный паритет. Если когда-нибудь понадобится «авто-deny RU-apps» — отдельная фича-спека, не §124.
 
 ---
 
