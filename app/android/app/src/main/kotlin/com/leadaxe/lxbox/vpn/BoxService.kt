@@ -28,6 +28,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import io.nekohasekai.libbox.StringIterator
+import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicReference
 
 /// §049 F1 split — port из reference SagerNet
@@ -251,7 +253,7 @@ class BoxService(
         }
 
         try {
-            cs.startOrReloadService(config, OverrideOptions())
+            cs.startOrReloadService(config, buildOverrideOptions(config))
         } catch (t: Throwable) {
             stopAndAlert("Failed to start service: ${t.message}")
             return
@@ -421,7 +423,7 @@ class BoxService(
             Log.e(TAG, "serviceReload: empty config")
             return
         }
-        runCatching { cs.startOrReloadService(config, OverrideOptions()) }
+        runCatching { cs.startOrReloadService(config, buildOverrideOptions(config)) }
             .onFailure {
                 Log.e(TAG, "serviceReload failed", it)
                 runCatching { cs.setError("android: reload: ${it.message}") }
@@ -429,6 +431,62 @@ class BoxService(
     }
 
     override fun serviceStop() { doStop() }
+
+    /// §124 — «тень» поверх конфига: докрутки, которых НЕ должно быть в
+    /// сохранённом конфиге (диагностируемом через `GET /config`). OverrideOptions
+    /// модифицирует только in-memory parsed options ядра (`daemon/instance.go`
+    /// `parseConfig` → append), сам `singbox_config.json` не трогает.
+    ///
+    /// Что кладём:
+    /// - **self** (`com.leadaxe.lxbox`) → `includePackage`, **ТОЛЬКО в allow-режиме**.
+    ///   В allow наш UID иначе выпадает из tun по whitelist'у; добавляем себя,
+    ///   чтобы egress ядра (вместе с `protect(fd)`) гарантированно проходил.
+    ///   ⛔ В deny self НЕ добавляем: иначе include(self из override) +
+    ///   exclude(юзер из конфига) в одном tun → Android `Builder` получит и
+    ///   `addAllowedApplication`, и `addDisallowedApplication` →
+    ///   `UnsupportedOperationException`. Режим выводим из самого конфига:
+    ///   наличие `include_package` = allow (его пишет post-step `tun_packages.dart`).
+    /// - **autoRedirect** — root-only tproxy-фича (`auto_redirect` в sing-tun,
+    ///   работает лишь на рутированном Android). Провод из persistent-флага
+    ///   `BootReceiver.isAutoRedirect` (default false); UI-тоггла пока нет.
+    private fun buildOverrideOptions(config: String): OverrideOptions {
+        val options = OverrideOptions()
+
+        // §124 — autoRedirect: root-only tproxy. Провод из persistent-флага
+        // (default false). UI-тоггла пока нет — флаг управляется через prefs/adb;
+        // на не-root устройстве ядро вернёт ошибку, поэтому дефолт false безопасен.
+        options.autoRedirect = BootReceiver.isAutoRedirect(service)
+
+        val isAllowMode = runCatching {
+            val inbounds = JSONObject(config).optJSONArray("inbounds") ?: return@runCatching false
+            for (i in 0 until inbounds.length()) {
+                val inb = inbounds.optJSONObject(i) ?: continue
+                if (inb.optString("type") == "tun") {
+                    return@runCatching inb.has("include_package")
+                }
+            }
+            false
+        }.getOrDefault(false)
+
+        if (isAllowMode) {
+            options.includePackage = singleStringIterator(service.packageName)
+            Log.d(TAG, "[vpn] override: +self (${service.packageName}) — allow-mode")
+        }
+        return options
+    }
+
+    /// Минимальный `StringIterator` на один элемент — для self-пакета в
+    /// `OverrideOptions.includePackage` (см. §124).
+    private fun singleStringIterator(value: String): StringIterator =
+        object : StringIterator {
+            private var consumed = false
+            override fun len(): Int = 1
+            override fun hasNext(): Boolean = !consumed
+            override fun next(): String {
+                consumed = true
+                return value
+            }
+        }
 
     /// §049 F17 — реальный state HTTP-proxy для Clash dashboard.
     /// Match reference: cast service → VPNService и читаем флаги (у нас
