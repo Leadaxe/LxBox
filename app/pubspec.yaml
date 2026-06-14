@@ -2,7 +2,7 @@ name: lxbox
 description: L×Box — Android MVP (sing-box + Clash API).
 publish_to: 'none'
 
-version: 2.2.0-dev.7+620
+version: 2.2.0-dev.8+621
 # ↑ placeholder. Реальная версия записывается из git tag:
 #   • CI release build (.github/workflows/ci.yml → "Inject release version") —
 #     `version: ${tag#v}+${git rev-list --count HEAD}` перед `flutter build`.
@@ -45,6 +45,7 @@ flutter:
   assets:
     - assets/wizard_template.json
     - assets/icons/app_icon.png
+    - assets/icons/cloudflare.png # §025 — официальный логотип Cloudflare (Simple Icons, CC0)
 
 # Иконка из sing-box Launcher (macOS .app Resources/app.icns → PNG 1024²).
 flutter_launcher_icons:

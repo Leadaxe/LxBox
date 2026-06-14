@@ -98,7 +98,9 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Icon(Icons.shield_outlined, size: 64, color: cs.primary),
+            // §025 — официальный двухтональный логотип-облако Cloudflare
+            // (Wikimedia Commons). Широкий (~3:1) — задаём только width.
+            Image.asset('assets/icons/cloudflare.png', width: 130),
             const SizedBox(height: 12),
             Text(
               'Cloudflare WARP',
