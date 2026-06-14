@@ -476,6 +476,10 @@ Endpoint emitWireguard(WireguardSpec s, TemplateVars vars) {
             'address': p.endpointHost,
             'port': p.endpointPort,
             'public_key': p.publicKey,
+            // §025 — WARP client_id → reserved (3 байта). Перед public_ key/
+            // allowed_ips порядок не важен (JSON-объект), но кладём рядом.
+            if (p.reserved != null && p.reserved!.isNotEmpty)
+              'reserved': List<int>.from(p.reserved!),
             'allowed_ips': List<String>.from(p.allowedIps),
             if (p.preSharedKey.isNotEmpty) 'pre_shared_key': p.preSharedKey,
             if (p.persistentKeepalive != null)
@@ -511,6 +515,11 @@ String toUriWireguard(WireguardSpec s) {
   }
   if (peer?.persistentKeepalive != null) {
     q['keepalive'] = peer!.persistentKeepalive.toString();
+  }
+  // §025 — WARP client_id round-trip (десятичный `b0,b1,b2`; parseReserved
+  // принимает его обратно).
+  if (peer?.reserved != null && peer!.reserved!.isNotEmpty) {
+    q['reserved'] = peer.reserved!.join(',');
   }
   // §097 — AmneziaWG2 query-params (round-trip); buildQuery эскейпит i*.
   s.awg?.writeQuery(q);

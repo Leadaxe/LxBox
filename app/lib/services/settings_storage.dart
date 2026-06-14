@@ -8,6 +8,7 @@ import '../models/server_list.dart';
 import 'app_log.dart';
 import 'config_dirty_check.dart';
 import 'migration/proxy_source_migration.dart';
+import 'warp/warp_account.dart';
 
 part 'settings_storage/io.dart';
 part 'settings_storage/vars.dart';
@@ -15,6 +16,7 @@ part 'settings_storage/sources_rules.dart';
 part 'settings_storage/network.dart';
 part 'settings_storage/backup_tun.dart';
 part 'settings_storage/vpn_mode.dart';
+part 'settings_storage/warp.dart';
 
 /// Persistent storage for user settings: vars, proxy sources, enabled rules.
 ///
@@ -506,4 +508,17 @@ class SettingsStorage {
   /// Persist `vpn_mode`. Caller передаёт финальный shape; валидируем mode.
   static Future<void> setVpnMode(VpnModeConfig cfg, {bool flush = true}) =>
       _setVpnMode(cfg, flush: flush);
+
+  // ---------------------------------------------------------------------------
+  // §025 — Cloudflare WARP account cache. Закешированный аккаунт переиспользуется
+  // при повторном «Get WARP» (идемпотентность), null = не зарегистрирован.
+  // ---------------------------------------------------------------------------
+
+  /// Закешированный WARP-аккаунт или null.
+  static Future<WarpAccount?> getWarpAccount() => _getWarpAccount();
+
+  /// Persist (или очистить при null) WARP-аккаунт.
+  static Future<void> setWarpAccount(WarpAccount? account,
+          {bool flush = true}) =>
+      _setWarpAccount(account, flush: flush);
 }

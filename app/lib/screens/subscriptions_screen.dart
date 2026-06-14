@@ -13,6 +13,7 @@ import 'add_server_wizard_screen.dart';
 import 'node_filter_screen.dart';
 import 'node_settings_screen.dart';
 import 'subscription_detail_screen.dart';
+import 'warp_wizard_screen.dart';
 import 'subscriptions_screen/clipboard_analysis.dart';
 import 'subscriptions_screen/entry_context_menu.dart';
 import 'subscriptions_screen/paste_dialogs.dart';
@@ -101,6 +102,16 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   void _openAddServerWizard() {
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => AddServerWizardScreen(
+        subController: widget.subController,
+        onAdded: _regenerateAndSave,
+      ),
+    ));
+  }
+
+  /// §025 — открыть full-screen визард Cloudflare WARP.
+  void _openWarpWizard() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => WarpWizardScreen(
         subController: widget.subController,
         onAdded: _regenerateAndSave,
       ),
@@ -239,6 +250,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     // (long-press на «+» — discoverability через accidental,
                     // overflow menu — explicit affordance).
                     if (v == 'wizard') _openAddServerWizard();
+                    if (v == 'warp') _openWarpWizard();
                     if (v == 'public') unawaited(_pickPublicTestServer());
                     if (v == 'paste') unawaited(_pasteFromClipboard());
                     if (v == 'qr') unawaited(_scanQrCode());
@@ -246,6 +258,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                   },
                   itemBuilder: (_) => [
                     const PopupMenuItem(value: 'wizard', child: Text('Add server…')),
+                    const PopupMenuItem(value: 'warp', child: Text('Get WARP')),
                     const PopupMenuDivider(),
                     const PopupMenuItem(value: 'paste', child: Text('Paste from clipboard')),
                     const PopupMenuItem(value: 'qr', child: Text('Scan QR code')),

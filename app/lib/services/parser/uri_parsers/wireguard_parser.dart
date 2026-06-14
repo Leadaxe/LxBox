@@ -45,6 +45,10 @@ WireguardSpec? parseWireguardUri(String uri) {
   final psk = q['presharedkey'] ?? q['preshared_key'] ?? '';
   final keepalive = int.tryParse(q['keepalive'] ?? '');
 
+  // §025 — WARP client_id: `reserved=b0,b1,b2` или base64 `client_id`.
+  final reservedRaw = q['reserved'] ?? q['client_id'] ?? '';
+  final reserved = reservedRaw.isEmpty ? null : parseReserved(reservedRaw);
+
   final peer = WireguardPeer(
     publicKey: publicKey,
     preSharedKey: psk,
@@ -52,6 +56,7 @@ WireguardSpec? parseWireguardUri(String uri) {
     endpointPort: port,
     allowedIps: allowedIps,
     persistentKeepalive: keepalive,
+    reserved: reserved,
   );
 
   final label = decodeFragment(p.fragment);

@@ -26,6 +26,8 @@ import '../services/subscription/auto_updater.dart';
 import '../services/subscription/http_cache.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/subscription/sources.dart';
+import '../services/warp/warp_account.dart';
+import '../services/warp/warp_client.dart';
 
 // Та же библиотека (`part`), поэтому library-private доступ
 // (`_replaceList`, `_formatAgo`) к/между основным файлом и part'ом доступен.
@@ -193,6 +195,70 @@ class SubscriptionController extends ChangeNotifier {
     } catch (e) {
       _lastError = humanizeError(e);
     } finally {
+      _busy = false;
+      notifyListeners();
+    }
+  }
+
+  /// §025 — «Get WARP». Регистрирует устройство в Cloudflare (приватный ключ
+  /// генерится на телефоне) и добавляет готовый WireGuard-узел как UserServer.
+  ///
+  /// Идемпотентность: при `reuse=true` (default) переиспользует закешированный
+  /// аккаунт вместо новой регистрации. Перед добавлением убирает прежний
+  /// WARP-узел (по тегу WARP/WARP+), чтобы не плодить дубли. `forceNew=true` —
+  /// чистит кеш и регистрирует заново.
+  ///
+  /// Возвращает зарегистрированный [WarpAccount] (для UI-статуса) или бросает —
+  /// caller показывает [lastError].
+  Future<WarpAccount?> addWarp({
+    String? licenseKey,
+    String endpoint = WarpAccount.defaultEndpoint,
+    bool reuse = true,
+    bool forceNew = false,
+    WarpClient? client,
+  }) async {
+    _busy = true;
+    _lastError = '';
+    notifyListeners();
+    final warp = client ?? WarpClient();
+    try {
+      WarpAccount? account =
+          (reuse && !forceNew) ? await SettingsStorage.getWarpAccount() : null;
+
+      // Если есть кеш, но юзер ввёл новый license, а аккаунт ещё free —
+      // регистрируем заново, чтобы привязать (PATCH к чужой сессии хрупок).
+      final wantsLicense = licenseKey != null && licenseKey.trim().isNotEmpty;
+      if (account != null && wantsLicense && !account.warpPlus) {
+        account = null;
+      }
+
+      account ??= await warp.register(
+        licenseKey: licenseKey,
+        endpoint: endpoint,
+        nowIso8601: DateTime.now().toUtc().toIso8601String(),
+      );
+
+      await SettingsStorage.setWarpAccount(account);
+
+      // Убираем прежние WARP-узлы (идемпотентность по тегу).
+      _entries.removeWhere((e) {
+        final l = e.list;
+        return l is UserServer &&
+            l.nodes.length == 1 &&
+            (l.nodes.first.tag == 'WARP' || l.nodes.first.tag == 'WARP+');
+      });
+      await _persist();
+
+      // Добавляем через стандартный путь (parseWireguardUri → reserved).
+      await addFromInput(account.toWireguardUri());
+      if (_lastError.isNotEmpty) return null;
+      return account;
+    } catch (e) {
+      _lastError = humanizeError(e);
+      AppLog.I.error('addWarp failed: $_lastError');
+      return null;
+    } finally {
+      if (client == null) warp.close();
       _busy = false;
       notifyListeners();
     }

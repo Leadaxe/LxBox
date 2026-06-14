@@ -501,6 +501,37 @@ CRUD: `getVpnMode()` / `setVpnMode()` (replace целиком).
 
 ---
 
+## `warp_account` — [§025]
+
+Кеш зарегистрированного Cloudflare WARP-аккаунта (кнопка «Get WARP»). Приватный ключ генерится X25519 **на устройстве** и сюда же кешируется; в Cloudflare уходит только публичная часть.
+
+```jsonc
+{
+  "priv_key": "<base64 X25519 — СЕКРЕТ, не логировать>",
+  "peer_pub": "<base64 peer public key>",
+  "client_v4": "172.16.0.2",
+  "client_v6": "2606:4700:110::…",
+  "client_id": "<base64, 3 байта → WireGuard reserved>",
+  "account_id": "…",
+  "device_id": "…",
+  "token": "<bearer — СЕКРЕТ, не логировать>",
+  "endpoint": "engage.cloudflareclient.com:2408",
+  "created_at": "<ISO8601>",
+  "license": "<WARP+ key или null>",
+  "warp_plus": false
+}
+```
+
+**Назначение — идемпотентность.** При повторном «Get WARP» (`reuse=true`, default) аккаунт переиспользуется вместо новой регистрации устройства в Cloudflare. «Re-register» (`forceNew`) чистит ключ → следующий вызов регистрирует заново. Сам WARP-узел в конфиг попадает **не** отсюда, а через обычный `UserServer` (собирается из `WarpAccount.toWireguardUri()` → `addFromInput` → endpoints[]). Поэтому ключ **не** config-significant: при его записи `markConfigDirty` не дёргается.
+
+**Секреты.** `priv_key`/`token` — реальные секреты в локальном файле приложения. В логах/diag-снапшотах маскируются (`WarpAccount.redacted()`). При добавлении новых diag-дампов — не включать сырой `warp_account`.
+
+**`reserved`.** `client_id` (base64, 3 байта) доносится до sing-box endpoint как per-peer `reserved: [b0,b1,b2]`. Без него WARP-handshake проходит, но трафик не идёт. Парсинг/emit — `parseReserved` (`uri_utils.dart`) + `WireguardPeer.reserved`.
+
+CRUD: `getWarpAccount()` / `setWarpAccount(account?)` (null = очистить). См. [features/025](spec/features/025%20warp%20integration/spec.md).
+
+---
+
 ## `wifi_history` — [§051] Phase 3
 
 JSON-encoded array записей сетей которые юзер реально посетил — для editor'а custom rules (`Pick saved` picker когда пишешь правило с условием `wifi_ssid` / `wifi_bssid`). Хранится как **JSON-string** в `vars.wifi_history` (не отдельный top-level ключ — чтобы не плодить shape'ы), декодируется при чтении.
