@@ -115,21 +115,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                   ),
             ),
             const SizedBox(height: 24),
-            _label('WARP+ license key (optional)'),
-            TextField(
-              controller: _license,
-              enabled: !_busy,
-              decoration: _input('Leave empty for free WARP'),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'WARP+ adds Argo Smart Routing (lower latency). Privacy is the '
-              'same as free. Leave empty to get free WARP.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
-            ),
-            const SizedBox(height: 16),
             ExpansionPanelList.radio(
               elevation: 0,
               expandedHeaderPadding: EdgeInsets.zero,
@@ -144,6 +129,21 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        _label('WARP+ license key (optional)'),
+                        TextField(
+                          controller: _license,
+                          enabled: !_busy,
+                          decoration: _input('Leave empty for free WARP'),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'WARP+ adds Argo Smart Routing (lower latency). '
+                          'Privacy is the same as free. Leave empty for free WARP.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                        ),
+                        const SizedBox(height: 12),
                         _label('Endpoint'),
                         TextField(
                           controller: _endpoint,
