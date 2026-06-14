@@ -502,8 +502,8 @@ L×Box прошёл путь от MVP (один экран: Read config → Star
 - ✅ Export/Import settings — `/backup/*` Debug API + Backup screen в v1.6
 - ✅ Quick Settings Tile — done в v1.5.0
 - ✅ Background subscription update — AutoUpdater (4-trigger model) в v1.6
+- ✅ **WARP integration** ([§025](spec/features/025%20warp%20integration/spec.md)) — one-tap Get WARP, on-device регистрация в Cloudflare (targeting v2.2.0)
 - 🔵 **Load Balance** ([§024](spec/features/024%20loadbalance/spec.md)) — ready spec, не реализовано (PuerNya fork или кастомный post-step)
 - 🔵 **Profile Management** — несколько конфигов + быстрое переключение, не реализовано
-- 🔵 **WARP integration** ([§025](spec/features/025%20warp/spec.md)) — ready spec, не реализовано
 
 Открытые направления ведутся в [`docs/spec/tasks/README.md`](spec/tasks/README.md) и [`docs/spec/features/`](spec/features/) — фильтр по статусу `Draft` / `In progress` / `Deferred`.

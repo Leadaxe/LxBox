@@ -32,7 +32,7 @@
 | 022 | [`022 app settings/`](022%20app%20settings/) | Theme, auto-start on boot, keep VPN on exit | Реализовано |
 | 023 | [`023 debug and logging/`](023%20debug%20and%20logging/) | Debug screen, log level, sing-box log viewer | Частично |
 | 024 | [`024 load balance/`](024%20load%20balance/) | Load Balance через PuerNya fork | Спека |
-| 025 | [`025 warp integration/`](025%20warp%20integration/) | Cloudflare WARP регистрация и интеграция | Спека |
+| 025 | [`025 warp integration/`](025%20warp%20integration/) | Cloudflare WARP регистрация и интеграция (one-tap Get WARP) | Реализовано |
 | 026 | [`026 parser v2/`](026%20parser%20v2/) | Sealed `NodeSpec` + 3-слойный pipeline parser/builder | Реализовано |
 | 027 | [`027 subscription auto update/`](027%20subscription%20auto%20update/) | Auto-refresh подписок: 4 триггера + spam-gates | Реализовано |
 | 028 | [`028 antidpi sni obfuscation/`](028%20antidpi%20sni%20obfuscation/) | Mixed-case SNI как post-step | Реализовано |
