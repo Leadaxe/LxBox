@@ -183,15 +183,19 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
           EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
       children: [
         _sectionHeader('Info', 'Protocol and server details', theme),
+        // Лейбл в title, значение в subtitle (во всю ширину, перенос по словам).
+        // Раньше длинное значение в `trailing` сжимало title до нуля и «Server»
+        // переносился вертикально по буквам (напр. WARP-хост
+        // engage.cloudflareclient.com:2408).
         ListTile(
           leading: const Icon(Icons.security, size: 20),
           title: const Text('Protocol'),
-          trailing: Text(_scheme, style: theme.textTheme.bodyMedium),
+          subtitle: Text(_scheme, style: theme.textTheme.bodyMedium),
         ),
         ListTile(
           leading: const Icon(Icons.dns, size: 20),
           title: const Text('Server'),
-          trailing: Text(_serverInfo, style: theme.textTheme.bodyMedium),
+          subtitle: Text(_serverInfo, style: theme.textTheme.bodyMedium),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
