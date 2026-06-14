@@ -24,8 +24,14 @@ final RegExp _emojiRe = RegExp(
 bool hasEmoji(String s) => _emojiRe.hasMatch(s);
 
 /// Дефолтный эмодзи по серверу/протоколу (приоритет сверху вниз):
-/// локальный → WireGuard → UDP/QUIC → TCP (fallback).
+/// WARP → локальный → WireGuard → UDP/QUIC → TCP (fallback).
 String defaultEmojiFor(NodeSpec node) {
+  // §025 — Cloudflare WARP: узел технически WireguardSpec, но тег ставится
+  // `WARP`/`WARP+` (toWireguardUri). Распознаём по тегу ДО ветки WireguardSpec,
+  // чтобы дать облако ☁️ вместо домашнего 🏠.
+  final bareTag = node.tag.trim();
+  if (bareTag == 'WARP' || bareTag == 'WARP+') return '☁️';
+
   final server = node.server.trim().toLowerCase();
   if (server == '127.0.0.1' || server == 'localhost' || server == '::1') {
     return '🔁';
