@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Реализовано (targeting v2.2.0) — 2026-06-14. Осталось: device-smoke на телефоне + сверка версии API перед релизом |
+| Статус | Released (v2.3.0) — 2026-06-15. Проверено на устройстве (CPH2411). NB: версия API (`v0a2158` / `CF-Client-Version`) подвижна — при поломке регистрации сверять с актуальным wgcf/warp-cli |
 | Дата старта | 2026-06-14 |
 | Связанные spec'ы | [`119 vpn-mode`](../119%20vpn-mode/spec.md) — WARP-нода работает в любом из режимов VPN/Proxy; [`118 subscription-fetch-identity`](../118%20subscription-fetch-identity/spec.md) — переиспользуем HTTP-identity/UA-паттерн; [`111 detour`](../111%20detour/spec.md) — «route through proxy» = outbound-цепочка proxy→WARP (см. [[project_detour_is_outbound_chain]]); WireGuard emit — `wireguard_parser.dart` + `node_spec_emit.dart` (endpoint, не outbound, sing-box 1.12+) |
 | Затронутые файлы | `app/lib/services/warp/warp_client.dart` (новый), `app/lib/services/warp/warp_account.dart` (новый), `app/lib/services/settings_storage/warp.dart` (новый), `app/lib/services/settings_storage.dart`, `app/lib/controllers/subscription_controller.dart`, `app/lib/screens/subscriptions_screen.dart`, `app/pubspec.yaml`, `app/test/warp/…`, `docs/STORAGE.md`, `docs/ARCHITECTURE.md` |

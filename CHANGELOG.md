@@ -8,6 +8,18 @@
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-06-15
+
+### Added
+
+- **features/025 — Get WARP: регистрация Cloudflare WARP в один тап** ([warp_client.dart](app/lib/services/warp/warp_client.dart), [warp_account.dart](app/lib/services/warp/warp_account.dart), [warp_wizard_screen.dart](app/lib/screens/warp_wizard_screen.dart), [settings_storage/warp.dart](app/lib/services/settings_storage/warp.dart), [feature spec](docs/spec/features/025%20warp%20integration/spec.md)). Новый пункт **Get WARP** в overflow-меню Servers → полноэкранный визард → регистрирует устройство в Cloudflare и добавляет готовый WireGuard-узел. **Приватный ключ X25519 генерится на устройстве и НЕ покидает его** — в Cloudflare (`api.cloudflareclient.com`) уходит только публичный ключ; чужие воркеры-генераторы не используются. **WARP+** (опционально, под Advanced): license key → `PATCH account` (Argo Smart Routing); пусто = free WARP; битый ключ не ломает регистрацию (узел добавляется как free). **Идемпотентность**: повторный Get WARP переиспользует закешированный аккаунт (`warp_account` в storage), не плодя регистрации; *Re-register* форсит новый. Custom endpoint под Advanced (рабочий `IP:port`, если дефолтный заблокирован). WARP-узел помечается эмодзи 🔥☁️ и официальным логотипом-облаком Cloudflare на экране визарда.
+- **§025 — WireGuard `reserved` (Cloudflare client_id)** ([node_spec.dart](app/lib/models/node_spec.dart), [node_spec_emit.dart](app/lib/models/node_spec_emit.dart), [wireguard_parser.dart](app/lib/services/parser/uri_parsers/wireguard_parser.dart), [uri_utils.dart](app/lib/services/parser/uri_utils.dart)). Добавлена поддержка per-peer `reserved: [b0,b1,b2]` (base64 client_id → 3 байта) — без него WARP-handshake проходит, но трафик не идёт. Парсинг (`reserved=`/`client_id=`, десятичный или base64), emit в endpoint-JSON и URI round-trip. Полезно для любого WARP-источника, не только Get WARP. +тесты.
+
+### Fixed
+
+- **§125 — Локальный versionCode согласован с релизным (`--split-per-abi`)** ([build-local-apk.sh](scripts/build-local-apk.sh), [install-apk.sh](scripts/install-apk.sh), [task spec](docs/spec/tasks/125-local-versioncode-split-per-abi.md)). Локальная dev-сборка (vc ~610) не вставала поверх релизного arm64-APK (vc 2612) — downgrade, каждый dev-install требовал ручного бампа. Причина: CI собирает `--split-per-abi` (Flutter применяет ABI-множитель `1000×abiIndex + git-count` → arm64 = 2xxx), а локальный скрипт собирал single-ABI без множителя. Перевели `build-local-apk.sh` на `--split-per-abi --target-platform android-arm64` — versionCode попадает в тот же диапазон, что CI; `install-apk.sh` берёт `app-arm64-v8a-release.apk`.
+- **§025 — Детали узла: длинный server-хост ломал вёрстку** ([node_settings_screen.dart](app/lib/screens/node_settings_screen.dart)). `ListTile` с длинным значением в `trailing` (`engage.cloudflareclient.com:2408`) сжимал лейбл «Server» до нуля → он переносился вертикально по буквам. Значение перенесено в `subtitle` (полная ширина, перенос по словам). Баг общий для любого длинного `host:port`.
+
 ## [2.2.0] — 2026-06-14
 
 ### Added
