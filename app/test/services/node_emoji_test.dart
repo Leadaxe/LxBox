@@ -8,9 +8,10 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 void main() {
   NodeSpec parse(String uri) => parseUri(uri)!;
 
-  WireguardSpec wg({String server = '5.6.7.8'}) => WireguardSpec(
+  WireguardSpec wg({String server = '5.6.7.8', String tag = 'wg-node'}) =>
+      WireguardSpec(
         id: '1',
-        tag: 'wg-node',
+        tag: tag,
         label: 'wg',
         server: server,
         port: 51820,
@@ -48,6 +49,20 @@ void main() {
     });
     test('wireguard → 🏠', () {
       expect(defaultEmojiFor(wg()), '🏠');
+    });
+    test('§025 WARP (тег WARP) → 🔥☁️ (приоритет над WireguardSpec)', () {
+      // Реальный путь: toWireguardUri даёт wireguard://…#WARP → parseUri.
+      final warp = parse('wireguard://k=@engage.cloudflareclient.com:2408'
+          '?publickey=PUB=&address=172.16.0.2/32&reserved=12,34,56#WARP');
+      expect(warp, isA<WireguardSpec>());
+      expect(warp.tag, 'WARP');
+      expect(defaultEmojiFor(warp), '🔥☁️');
+    });
+    test('§025 WARP+ → 🔥☁️', () {
+      expect(defaultEmojiFor(wg(tag: 'WARP+')), '🔥☁️');
+    });
+    test('обычный WireGuard (не WARP) остаётся 🏠', () {
+      expect(defaultEmojiFor(wg()), '🏠'); // тег wg-node, не WARP
     });
     test('local 127.0.0.1 → 🔁 (приоритет над протоколом)', () {
       expect(

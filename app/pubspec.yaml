@@ -2,7 +2,7 @@ name: lxbox
 description: L×Box — Android MVP (sing-box + Clash API).
 publish_to: 'none'
 
-version: 2.1.0-dev.1+606
+version: 2.2.0-dev.1+614
 # ↑ placeholder. Реальная версия записывается из git tag:
 #   • CI release build (.github/workflows/ci.yml → "Inject release version") —
 #     `version: ${tag#v}+${git rev-list --count HEAD}` перед `flutter build`.
@@ -18,6 +18,7 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   http: ^1.2.2
+  cryptography: ^2.7.0 # §025 — X25519 keygen для Cloudflare WARP-регистрации
   json5: ^0.8.2
   file_picker: ^11.0.2
   path_provider: ^2.1.5
@@ -44,6 +45,7 @@ flutter:
   assets:
     - assets/wizard_template.json
     - assets/icons/app_icon.png
+    - assets/icons/cloudflare.png # §025 — официальный логотип Cloudflare (Simple Icons, CC0)
 
 # Иконка из sing-box Launcher (macOS .app Resources/app.icns → PNG 1024²).
 flutter_launcher_icons:

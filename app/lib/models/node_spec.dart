@@ -531,6 +531,11 @@ class WireguardPeer {
   final List<String> allowedIps;
   final int? persistentKeepalive;
 
+  /// §025 — Cloudflare WARP `client_id` (3 байта). В sing-box 1.12+ эмитится
+  /// per-peer как `reserved: [b0, b1, b2]`. Без него WARP-handshake проходит,
+  /// но трафик не идёт. `null` для обычных WG-пиров.
+  final List<int>? reserved;
+
   const WireguardPeer({
     required this.publicKey,
     this.preSharedKey = '',
@@ -538,6 +543,7 @@ class WireguardPeer {
     required this.endpointPort,
     this.allowedIps = const ['0.0.0.0/0', '::/0'],
     this.persistentKeepalive,
+    this.reserved,
   });
 
   @override

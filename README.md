@@ -47,6 +47,19 @@ Add servers by subscription URL, direct proxy link, WireGuard URI/INI, Amnezia `
 - Subscription row subtitle: `124 nodes · 🔄 24h · 🕐 3h ago · (2 fails)`
 - Title fallback from `Content-Disposition: filename=...` (RFC 5987)
 - Quick Start with built-in free VPN preset
+- **Get WARP** — one-tap Cloudflare WARP: registers a device on Cloudflare and adds a ready WireGuard node
+</details>
+
+<details>
+<summary><strong>Get WARP</strong> — one-tap Cloudflare WARP, keys generated on-device</summary>
+
+Tap **Get WARP** in the Servers overflow menu → a WireGuard tunnel to Cloudflare is registered and added as a node. No copy-pasting configs from third-party generator sites.
+
+- **On-device registration**: the X25519 private key is generated on the phone and never leaves it — only the public key is sent to Cloudflare (`api.cloudflareclient.com`). We don't use third-party generator workers (they hand out a server-generated private key).
+- **WARP+** (optional): paste a license key under *Advanced* to bind WARP+ (Argo Smart Routing). Empty = free WARP.
+- **Idempotent**: re-tapping reuses the cached account instead of registering a new device; *Re-register* forces a fresh one.
+- Custom endpoint under *Advanced* (use a working `IP:port` if the default is blocked).
+- See [spec 025](docs/spec/features/025%20warp%20integration/spec.md)
 </details>
 
 <details>

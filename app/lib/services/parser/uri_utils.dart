@@ -37,6 +37,31 @@ List<int>? decodeBase64Safe(String s) {
   return null;
 }
 
+/// §025 — WireGuard `reserved` (Cloudflare WARP client_id), ровно 3 байта.
+/// Принимает два формата:
+///   • `b0,b1,b2` — три десятичных числа 0..255 (наш round-trip формат);
+///   • base64 (WARP `client_id`, 3 байта) — через [decodeBase64Safe].
+/// Возвращает `[b0,b1,b2]` или null (битый / не 3 байта / вне 0..255).
+List<int>? parseReserved(String raw) {
+  final s = raw.trim();
+  if (s.isEmpty) return null;
+  if (s.contains(',')) {
+    final parts = s.split(',').map((e) => e.trim()).toList();
+    if (parts.length != 3) return null;
+    final out = <int>[];
+    for (final p in parts) {
+      final n = int.tryParse(p);
+      if (n == null || n < 0 || n > 255) return null;
+      out.add(n);
+    }
+    return out;
+  }
+  final bytes = decodeBase64Safe(s);
+  if (bytes == null || bytes.length != 3) return null;
+  if (bytes.any((b) => b < 0 || b > 255)) return null;
+  return List<int>.from(bytes);
+}
+
 /// UTF-8 декод с fallback'ом на allowMalformed.
 String utf8Lossy(List<int> bytes) =>
     utf8.decode(bytes, allowMalformed: true);
