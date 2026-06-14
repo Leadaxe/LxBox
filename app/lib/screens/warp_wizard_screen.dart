@@ -99,9 +99,16 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // §025 — официальный двухтональный логотип-облако Cloudflare
-            // (Wikimedia Commons). Широкий (~3:1) — задаём только width.
-            Image.asset('assets/icons/cloudflare.png', width: 130),
-            const SizedBox(height: 12),
+            // (Wikimedia Commons, ~2.8:1). Ширина = доля экрана (≈40%,
+            // зажата 120..200 px), чтобы масштабировалось под любой телефон;
+            // BoxFit.contain сохраняет пропорции и не обрезает макушку.
+            Builder(builder: (context) {
+              final w = MediaQuery.of(context).size.width;
+              final logoW = (w * 0.40).clamp(120.0, 200.0);
+              return Image.asset('assets/icons/cloudflare.png',
+                  width: logoW, fit: BoxFit.contain);
+            }),
+            const SizedBox(height: 16),
             Text(
               'Cloudflare WARP',
               textAlign: TextAlign.center,
