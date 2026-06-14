@@ -47,7 +47,7 @@ jobs:
       is_release: ${{ steps.meta.outputs.is_release }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Compute version
@@ -78,7 +78,7 @@ jobs:
         working-directory: app
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Flutter
         uses: subosito/flutter-action@v2
@@ -106,7 +106,7 @@ jobs:
         working-directory: app
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # Нужны полные refs для `git rev-list --count HEAD` (versionCode).
           fetch-depth: 0
@@ -232,7 +232,7 @@ jobs:
     if: needs.meta.outputs.is_release == 'true'
     steps:
       - name: Checkout (for release notes)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           sparse-checkout: RELEASE_NOTES.md
           sparse-checkout-cone-mode: false
@@ -281,7 +281,7 @@ jobs:
     if: needs.meta.outputs.is_release == 'true'
     steps:
       - name: Checkout main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: main
           fetch-depth: 0
