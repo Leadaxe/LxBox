@@ -48,6 +48,10 @@ class BuildSettings {
   /// дефолт (mode=off — все apps через tun, sing-box обычное поведение).
   final TunAppsConfig? tunApps;
 
+  /// §119: VPN-mode (proxy/vpn/vpn_proxy). `null` = mode=vpn (текущее
+  /// поведение, post-step no-op).
+  final VpnModeConfig? vpnMode;
+
   const BuildSettings({
     this.userVars = const {},
     this.enabledGroups = const {},
@@ -55,6 +59,7 @@ class BuildSettings {
     this.customRules = const [],
     this.routeFinal = '',
     this.tunApps,
+    this.vpnMode,
   });
 }
 
@@ -278,6 +283,17 @@ Future<BuildResult> buildConfig({
     dnsSrsCachedPaths: dnsSrsCachedPaths,
     dnsMirrors: unifiedApply.dnsMirrors,
   );
+
+  // §119: VPN-mode transform inbounds. ДО applyTunPackages — в proxy-режиме
+  // удаляет tun-inbound (тогда applyTunPackages корректно no-op'ит); в
+  // vpn_proxy tun остаётся первым и applyTunPackages его находит.
+  if (settings.vpnMode != null) {
+    applyVpnMode(
+      config,
+      settings.vpnMode!,
+      sniffEnabled: vars['sniff_enabled'] != 'false',
+    );
+  }
 
   // §046: OS-level split-tunneling. Должен быть **последним** post-step'ом —
   // финальный transform tun-inbound, после всего остального.

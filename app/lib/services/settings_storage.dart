@@ -14,6 +14,7 @@ part 'settings_storage/vars.dart';
 part 'settings_storage/sources_rules.dart';
 part 'settings_storage/network.dart';
 part 'settings_storage/backup_tun.dart';
+part 'settings_storage/vpn_mode.dart';
 
 /// Persistent storage for user settings: vars, proxy sources, enabled rules.
 ///
@@ -483,4 +484,26 @@ class SettingsStorage {
   /// валидность. Дубликаты в `packages` schлопываются (idempotent).
   static Future<void> setTunApps(TunAppsConfig cfg, {bool flush = true}) =>
       _setTunApps(cfg, flush: flush);
+
+  // ---------------------------------------------------------------------------
+  // VPN mode — Proxy / VPN / VPN+Proxy (§119)
+  //
+  // Storage shape: `{mode, proxy_port, proxy_listen, proxy_auth_enabled,
+  // proxy_username, proxy_password}`. Билдер (`applyVpnMode`) трансформирует
+  // config.inbounds: mode=vpn → tun (как сейчас); mode=proxy → mixed без tun
+  // (libbox не зовёт openTun → нет establish); mode=vpn_proxy → tun + mixed.
+  // Смена inbounds → FULL VPN restart (наследуется от config-dirty машинерии).
+  // ---------------------------------------------------------------------------
+
+  static const _vpnModeVpn = 'vpn';
+  static const _vpnModeProxy = 'proxy';
+  static const _vpnModeVpnProxy = 'vpn_proxy';
+
+  /// Возвращает текущий VPN-mode config. Default: `mode=vpn` —
+  /// backward-compat для existing юзеров (= текущее поведение).
+  static Future<VpnModeConfig> getVpnMode() => _getVpnMode();
+
+  /// Persist `vpn_mode`. Caller передаёт финальный shape; валидируем mode.
+  static Future<void> setVpnMode(VpnModeConfig cfg, {bool flush = true}) =>
+      _setVpnMode(cfg, flush: flush);
 }

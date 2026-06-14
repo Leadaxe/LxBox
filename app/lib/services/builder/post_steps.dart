@@ -6,7 +6,8 @@ import 'package:collection/collection.dart';
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
 import '../json_clone.dart';
-import '../settings_storage.dart' show SettingsStorage, TunAppsConfig;
+import '../settings_storage.dart'
+    show SettingsStorage, TunAppsConfig, VpnModeConfig;
 import 'preset_expand.dart';
 import 'rule_set_registry.dart';
 
@@ -15,6 +16,7 @@ import 'rule_set_registry.dart';
 //
 //   - tls_transforms.dart — applyMixedCaseSni / applyTlsFragment (§028)
 //   - tun_packages.dart   — applyTunPackages (§046)
+//   - vpn_mode.dart       — applyVpnMode (§119)
 //   - dns_rules.dart      — applyCustomDns / resolveDnsRulesList (§061+§033)
 //   - custom_rules.dart   — applyPresetBundles / applyCustomRules /
 //                           applyAllCustomRules / _outboundToRoute (§030+§062)
@@ -22,6 +24,7 @@ import 'rule_set_registry.dart';
 //                           (§043+§044)
 part 'post_steps/tls_transforms.dart';
 part 'post_steps/tun_packages.dart';
+part 'post_steps/vpn_mode.dart';
 part 'post_steps/dns_rules.dart';
 part 'post_steps/custom_rules.dart';
 part 'post_steps/dns_servers.dart';
