@@ -460,6 +460,47 @@ CRUD: `getTunApps()` / `setTunApps()` (replace целиком). API: `GET/PUT /s
 
 ---
 
+## `vpn_mode` — [§119]
+
+Режим работы VPN (inbound-трактовка): как ядро ловит трафик.
+
+```jsonc
+{
+  "mode": "vpn" | "proxy" | "vpn_proxy",
+  "proxy_protocol": "mixed" | "http" | "socks",
+  "proxy_port": 2080,
+  "proxy_listen": "127.0.0.1" | "0.0.0.0",
+  "proxy_auth_enabled": true,
+  "proxy_username": "user",
+  "proxy_password": "<32-hex или пусто>"
+}
+```
+
+`proxy_protocol` = sing-box inbound `type` локального прокси: `mixed` (HTTP+SOCKS5 на одном порту, default), `http` (только HTTP, без UDP), `socks` (только SOCKS5). У всех трёх одинаковая auth-структура `users:[{username,password}]`; tag всегда `mixed-in` (от протокола не зависит).
+
+| `mode` | inbound'ы финального config | `VpnService.establish()` | Эффект |
+|---|---|---|---|
+| `"vpn"` | `tun-in` (auto_route) | да | весь трафик системы через tun (текущее поведение, **default**) |
+| `"proxy"` | `mixed-in` (без tun) | **нет** (libbox не зовёт `openTun`) | локальный HTTP+SOCKS-порт; приложения настраиваются вручную; нет иконки ключа VPN |
+| `"vpn_proxy"` | `tun-in` + `mixed-in` | да | системный перехват И локальный порт одновременно |
+
+**Builder** (`applyVpnMode`, `post_steps/vpn_mode.dart`) трансформирует `config.inbounds` императивно из этой модели (ДО `applyTunPackages`):
+- `proxy` — удаляет `tun-in`, добавляет `mixed-in`, re-tag'ит `tun-in` resolve/sniff правила на `mixed-in`.
+- `vpn_proxy` — оставляет `tun-in`, добавляет `mixed-in` + отдельные resolve/sniff для него (sniff только если `sniff_enabled != false`).
+- `mixed-in` = `{type:mixed, tag:mixed-in, listen, listen_port, users?}`.
+
+**Auth.** `users:[{username,password}]` пишется только при `effectiveAuth && password != ""`. На `0.0.0.0` (LAN-exposed) auth **форсится on** (снять нельзя — `effectiveAuth` игнорирует `proxy_auth_enabled`); на `127.0.0.1` — опционально. Пароль/username идут **императивно**, НЕ через `@var`-substitution (type-coercion `_resolveVar` испортил бы числовой/«true»-пароль). Пароль генерится в UI при первом включении auth (`generateProxyPassword`, 32-hex, образец `clash_secret`).
+
+**Смена режима меняет inbounds → full VPN restart** (наследуется от config-dirty машинерии: home banner Apply/Restart). `markConfigChangedNeedRestart()` дёргается при touch'е.
+
+**Default для existing юзеров:** ключ отсутствует → `mode=vpn` (= текущее поведение, post-step no-op). **Миграция не нужна** — отсутствие ключа эквивалентно дефолту.
+
+CRUD: `getVpnMode()` / `setVpnMode()` (replace целиком).
+
+**Native:** изменений в Kotlin нет — proxy-режим достигается чисто конфигом (foreground/`protect`/override tun-agnostic). См. [features/119](spec/features/119%20vpn-mode/spec.md).
+
+---
+
 ## `wifi_history` — [§051] Phase 3
 
 JSON-encoded array записей сетей которые юзер реально посетил — для editor'а custom rules (`Pick saved` picker когда пишешь правило с условием `wifi_ssid` / `wifi_bssid`). Хранится как **JSON-string** в `vars.wifi_history` (не отдельный top-level ключ — чтобы не плодить shape'ы), декодируется при чтении.

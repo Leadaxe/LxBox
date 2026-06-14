@@ -8,6 +8,12 @@
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-06-14
+
+### Added
+
+- **features/119 — Режим работы VPN: Proxy / VPN / VPN+Proxy** ([vpn_mode_tab.dart](app/lib/screens/vpn_mode_tab.dart), [post_steps/vpn_mode.dart](app/lib/services/builder/post_steps/vpn_mode.dart), [settings_storage/vpn_mode.dart](app/lib/services/settings_storage/vpn_mode.dart), [feature spec](docs/spec/features/119%20vpn-mode/spec.md)). Новый раздел настроек (3-я вкладка «Mode» в VPN Settings) с выбором того, как ядро ловит трафик: **VPN** — системный туннель через TUN (текущее поведение, default); **Proxy** — локальный прокси-порт без TUN (приложения настраиваются вручную, нет иконки ключа VPN); **VPN+Proxy** — туннель и локальный порт одновременно. Локальный прокси: выбор протокола **Mixed** (HTTP+SOCKS5 на одном порту), **HTTP** или **SOCKS5**; порт (default 2080); listen-адрес `127.0.0.1` (только это устройство) или `0.0.0.0` (LAN); авторизация логин/пароль с автогенерацией пароля (на `0.0.0.0` обязательна — снять нельзя). Реализовано чисто конфигом (sing-box `mixed`/`http`/`socks` inbound + трансформация `route.rules`), изменений в native Kotlin не потребовалось — libbox не вызывает `openTun` при отсутствии tun-inbound. Backward-compat: existing юзеры получают `mode=vpn` (байт-в-байт прежний конфиг).
+
 ## [2.1.0] — 2026-06-14
 
 ### Added

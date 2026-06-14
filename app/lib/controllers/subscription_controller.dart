@@ -469,6 +469,7 @@ class SubscriptionController extends ChangeNotifier {
       customRules: await SettingsStorage.getCustomRules(),
       routeFinal: await SettingsStorage.getRouteFinal(),
       tunApps: await SettingsStorage.getTunApps(),
+      vpnMode: await SettingsStorage.getVpnMode(),
     );
 
     final lists = _entries.map((e) => e.list).toList();

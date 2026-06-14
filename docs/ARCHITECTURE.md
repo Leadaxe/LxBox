@@ -518,6 +518,9 @@ vpn/VpnPlugin.kt             # Flutter-плагин (635, см. Обзор): Met
                              #   status+coreLog EventChannel sinks; statusReceiver мост; app-icon encode
 vpn/BoxVpnService.kt         # Android VpnService + PlatformInterface side (§049-split, тонкий):
                              #   openTun (Builder.establish, allowBypass §069, per-app routes); forwards в BoxService
+                             #   §119: openTun зовётся libbox'ом ТОЛЬКО при наличии tun-inbound. Режим Proxy
+                             #   (vpn_mode=proxy, config без tun) → нет openTun → нет establish → нет VPN-туннеля.
+                             #   Foreground/protect/override tun-agnostic → proxy-режим = config-only, Kotlin не трогаем.
 vpn/BoxService.kt            # CommandServerHandler — владеет libbox runtime (fileDescriptor/commandServer
                              #   AtomicReference, serviceScope); startSingbox/doStop/serviceReload; setStatus broadcast
 vpn/BoxApplication.kt        # Application: async Libbox.setup (libboxReady barrier); singleton wifiObserver

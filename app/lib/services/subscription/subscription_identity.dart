@@ -124,3 +124,11 @@ String generateUuidV4() {
   return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
       '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
 }
+
+/// §119 — пароль для локального mixed-inbound (proxy / vpn_proxy). Crypto-rand
+/// 16 байт → 32-hex. Тот же подход, что `clash_secret` (`build_config.dart`).
+String generateProxyPassword() {
+  final r = Random.secure();
+  final bytes = List<int>.generate(16, (_) => r.nextInt(256));
+  return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+}

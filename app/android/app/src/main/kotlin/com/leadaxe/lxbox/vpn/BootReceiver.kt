@@ -26,6 +26,14 @@ class BootReceiver : BroadcastReceiver() {
         /// Для большинства юзеров не нужно; opt-in для разработчиков.
         private const val KEY_ALLOW_BYPASS = "allow_bypass"
 
+        /// §124 — root-only tproxy через nftables/iptables (`auto_redirect` в
+        /// sing-tun). Работает ТОЛЬКО на рутированном Android (`redirect_linux.go`
+        /// требует `su` + `/system/bin/iptables`); на не-root ядро вернёт ошибку.
+        /// Default false. Проброс заведён (helper `BoxService.buildOverrideOptions`
+        /// читает getter), UI-тоггла пока НЕТ — выставить можно через prefs/adb;
+        /// полноценный UI + `auto_route` — отдельная таска.
+        private const val KEY_AUTO_REDIRECT = "auto_redirect"
+
         /// Три режима фоновой работы tunnel'а. По умолчанию "never" — максимум
         /// стабильности, минимум экономии батареи. VPN-пользователи обычно
         /// выбирают надёжность (пуши, длинные TCP-сокеты), поэтому default
@@ -90,6 +98,17 @@ class BootReceiver : BroadcastReceiver() {
         fun isAllowBypass(context: Context): Boolean {
             return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
                 .getBoolean(KEY_ALLOW_BYPASS, false)
+        }
+
+        /// §124 — см. KEY_AUTO_REDIRECT. Default false (strict / не-root безопасно).
+        fun setAutoRedirect(context: Context, enabled: Boolean) {
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_AUTO_REDIRECT, enabled).apply()
+        }
+
+        fun isAutoRedirect(context: Context): Boolean {
+            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_AUTO_REDIRECT, false)
         }
     }
 

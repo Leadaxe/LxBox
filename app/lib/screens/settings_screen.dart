@@ -10,6 +10,7 @@ import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
 import '../vpn/box_vpn_client.dart';
 import '../widgets/template_var_list.dart';
+import 'vpn_mode_tab.dart';
 
 /// VPN Settings — System (`VpnService.Builder` toggles) + Core (sing-box
 /// engine vars, `chapter: 'core'`). Routing/DNS vars живут на своих экранах.
@@ -24,7 +25,7 @@ class SettingsScreen extends StatefulWidget {
   final SubscriptionController subController;
   final HomeController homeController;
 
-  /// 0 = System, 1 = Core. Used by deep-links.
+  /// 0 = System, 1 = Core, 2 = Mode (§119). Used by deep-links.
   final int initialTab;
 
   @override
@@ -154,8 +155,8 @@ class _SettingsScreenState extends State<SettingsScreen>
         .toList();
 
     return DefaultTabController(
-      length: 2,
-      initialIndex: widget.initialTab.clamp(0, 1),
+      length: 3,
+      initialIndex: widget.initialTab.clamp(0, 2),
       child: Scaffold(
         appBar: AppBar(
           title: const Text('VPN Settings'),
@@ -163,6 +164,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             tabs: [
               Tab(text: 'System'),
               Tab(text: 'Core'),
+              Tab(text: 'Mode'),
             ],
           ),
         ),
@@ -170,6 +172,10 @@ class _SettingsScreenState extends State<SettingsScreen>
           children: [
             _buildSystemTab(context),
             _buildCoreTab(context, template, editableVars),
+            VpnModeTab(
+              homeController: widget.homeController,
+              subController: widget.subController,
+            ),
           ],
         ),
       ),

@@ -460,6 +460,7 @@ Storage override: `enabled_groups` в `lxbox_settings.json` контролиру
 - `config.dns.rules[+]` ← `dns_options.rules[*]` ([§061]) + `selectable_rules[*].dns_rule`
 - `config.route.rules[+]` ← `selectable_rules[*].rule` (после `selectable_rules[*]` enabled-проверки) + `custom_rules[*]` user routing rules
 - `config.route.rule_set[+]` ← `selectable_rules[*].rule_set[*]` (см. § ниже)
+- `config.inbounds[*]` ← трансформируется `applyVpnMode` ([§119]) под `vpn_mode` storage: `proxy` убирает `tun-in` и добавляет `mixed-in`; `vpn_proxy` добавляет `mixed-in` к `tun-in`. **`mixed-in` строится императивно из `VpnModeConfig`, НЕ через `@var`** — `users:[{username,password}]` не плоская строка, а пароль через substitution словил бы type-coercion (`_resolveVar`).
 
 `config.route.rule_set[]` в template **сам по себе пуст** — все rule-set'ы регистрируются через preset'ы. Если бы хотелось всем юзерам всегда одно rule-set'а — пишем сюда.
 
