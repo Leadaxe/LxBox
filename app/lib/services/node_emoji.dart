@@ -30,7 +30,7 @@ String defaultEmojiFor(NodeSpec node) {
   // `WARP`/`WARP+` (toWireguardUri). Распознаём по тегу ДО ветки WireguardSpec,
   // чтобы дать облако ☁️ вместо домашнего 🏠.
   final bareTag = node.tag.trim();
-  if (bareTag == 'WARP' || bareTag == 'WARP+') return '☁️';
+  if (bareTag == 'WARP' || bareTag == 'WARP+') return '🔥☁️';
 
   final server = node.server.trim().toLowerCase();
   if (server == '127.0.0.1' || server == 'localhost' || server == '::1') {

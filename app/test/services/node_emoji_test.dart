@@ -50,16 +50,16 @@ void main() {
     test('wireguard → 🏠', () {
       expect(defaultEmojiFor(wg()), '🏠');
     });
-    test('§025 WARP (тег WARP) → ☁️ (приоритет над WireguardSpec)', () {
+    test('§025 WARP (тег WARP) → 🔥☁️ (приоритет над WireguardSpec)', () {
       // Реальный путь: toWireguardUri даёт wireguard://…#WARP → parseUri.
       final warp = parse('wireguard://k=@engage.cloudflareclient.com:2408'
           '?publickey=PUB=&address=172.16.0.2/32&reserved=12,34,56#WARP');
       expect(warp, isA<WireguardSpec>());
       expect(warp.tag, 'WARP');
-      expect(defaultEmojiFor(warp), '☁️');
+      expect(defaultEmojiFor(warp), '🔥☁️');
     });
-    test('§025 WARP+ → ☁️', () {
-      expect(defaultEmojiFor(wg(tag: 'WARP+')), '☁️');
+    test('§025 WARP+ → 🔥☁️', () {
+      expect(defaultEmojiFor(wg(tag: 'WARP+')), '🔥☁️');
     });
     test('обычный WireGuard (не WARP) остаётся 🏠', () {
       expect(defaultEmojiFor(wg()), '🏠'); // тег wg-node, не WARP
