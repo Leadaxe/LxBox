@@ -1,4 +1,4 @@
-# 130 — AWG-узел: бейдж «AmneziaWG» + detour-список без WireGuard-целей
+# 130 — AWG-узел: подпись «WG (AWG)» + detour-список без WireGuard-целей
 
 | Поле | Значение |
 |------|----------|
@@ -6,7 +6,7 @@
 | Verification | `flutter analyze --no-pub` чисто; release arm64 build пройден; установлено на тест-телефон 2026-06-16. Ручная проверка UI — за юзером. |
 | Дата старта | 2026-06-16 |
 | Тип | UI-изменение existing feature (detour-пикер §111 / §080) → таска |
-| Цель | На экране редактирования узла: (1) показывать, что узел = **AmneziaWG** (а не просто «wireguard»); (2) если редактируемый узел — AWG, **исключить из списка detour-кандидатов все wireguard-узлы** (плоский WG + AWG); (3) если у AWG-узла уже сохранён detour на wireguard (старый конфиг) — **сбросить на None и сразу персистнуть**. |
+| Цель | На экране редактирования узла: (1) показывать в подписи протокола **«WG (AWG)»** (а не просто «wireguard»); (2) если редактируемый узел — AWG, **исключить из списка detour-кандидатов все wireguard-узлы** (плоский WG + AWG); (3) если у AWG-узла уже сохранён detour на wireguard (старый конфиг) — **сбросить на None и сразу персистнуть**. |
 | Причина | AWG с detour на wireguard **вешает ядро на Android** (issue [#2](https://github.com/Leadaxe/sing-box-lx/issues/2)). Ядро v1.13.13-lx.9 теперь само отвергает такой endpoint на старте (`amneziawg endpoint will not start: … AmneziaWG inside a WireGuard tunnel hangs the kernel on Android. Use a non-wireguard detour (e.g. vless)`). UI должен **не давать собрать** такую конфигурацию — guard в ядре это последняя линия, UI — первая. |
 | Связанные | §111 (detour-пикер подписок); §080 (display-form detour-тегов); §097 (AWG2 obfuscation params); §128 (won't-fix `detour: direct-out`); §129 (force-stop при зависшем ядре — защита для старых конфигов); issue [#2](https://github.com/Leadaxe/sing-box-lx/issues/2) |
 
@@ -17,9 +17,9 @@
 > На экране редактирования узла ([`node_settings_screen.dart`](../../../app/lib/screens/node_settings_screen.dart)):
 > AWG детектится как `node is WireguardSpec && node.awg != null` (у WG и AWG
 > одинаковый `protocol == 'wireguard'`, различие — поле `awg`). Если узел AWG:
-> бейдж «AmneziaWG» в шапку, из detour-dropdown убрать всех кандидатов-`WireguardSpec`,
-> сохранённый detour-на-wireguard сбросить на None + персистнуть. Для не-AWG
-> узлов поведение не меняется.
+> подпись Protocol = «WG (AWG)» (без отдельного чипа), из detour-dropdown убрать
+> всех кандидатов-`WireguardSpec`, сохранённый detour-на-wireguard сбросить на
+> None + персистнуть. Для не-AWG узлов поведение не меняется.
 
 ---
 
@@ -53,12 +53,12 @@ if (n is WireguardSpec) { /* исключить, если isAwg */ }
 
 Всё в [`node_settings_screen.dart`](../../../app/lib/screens/node_settings_screen.dart), метод `_load()` + блок шапки + detour-dropdown.
 
-### A. Детект AWG + бейдж в шапке
+### A. Детект AWG + подпись протокола
 В `_load()` после строки 61 завести `_isAwg = node is WireguardSpec && node.awg != null`.
-В шапке экрана (рядом со `_scheme`/`_serverInfo`) при `_isAwg` показать бейдж/метку
-**«AmneziaWG»** (Chip/Badge). Для не-AWG — как сейчас (`_scheme`).
-NB: `_scheme` (`node.protocol`) оставить, бейдж — дополнение, т.к. protocol честно
-`wireguard`. Опционально различать «WireGuard» vs «AmneziaWG» в самой подписи схемы.
+В подписи Protocol-тайла при `_isAwg` показать **`WG (AWG)`** (вместо сырого
+`node.protocol == 'wireguard'`), для не-AWG — `node.protocol` как есть. Без
+отдельного Chip/Badge — единообразно с остальными протоколами (просто текст в
+`subtitle`).
 
 ### B. Фильтр detour-кандидатов
 В цикле построения `_availableNodes` (строки 94-98) добавить: если `_isAwg` —

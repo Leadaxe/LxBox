@@ -70,9 +70,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     _isAwg = node is WireguardSpec && node.awg != null;
 
     _originalTag = node.tag;
-    // §130 — protocol у WG и AWG одинаков ('wireguard'); для AWG показываем
-    // явную подпись «AmneziaWG», чтобы юзер видел тип (а не просто wireguard).
-    _scheme = _isAwg ? 'AmneziaWG (wireguard)' : node.protocol;
+    // §130 — protocol у WG и AWG одинаков ('wireguard'); для AWG уточняем
+    // подпись «WG (AWG)», чтобы юзер видел, что это AmneziaWG-разновидность.
+    _scheme = _isAwg ? 'WG (AWG)' : node.protocol;
     _serverInfo = '${node.server}:${node.port}';
     _jsonCtrl.text = const JsonEncoder.withIndent('  ')
         .convert(node.emit(TemplateVars.empty).map);
@@ -223,18 +223,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
         ListTile(
           leading: const Icon(Icons.security, size: 20),
           title: const Text('Protocol'),
+          // §130 — для AWG subtitle = «WG (AWG)» (см. _scheme в _load).
           subtitle: Text(_scheme, style: theme.textTheme.bodyMedium),
-          // §130 — явный бейдж «AmneziaWG», т.к. node.protocol честно 'wireguard'
-          // и без метки AWG неотличим от плоского WG.
-          trailing: _isAwg
-              ? Chip(
-                  label: const Text('AmneziaWG'),
-                  labelStyle: theme.textTheme.labelSmall,
-                  visualDensity: VisualDensity.compact,
-                  backgroundColor: theme.colorScheme.secondaryContainer,
-                  side: BorderSide.none,
-                )
-              : null,
         ),
         ListTile(
           leading: const Icon(Icons.dns, size: 20),
