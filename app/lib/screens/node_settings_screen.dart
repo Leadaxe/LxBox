@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../config/consts.dart';
 import '../services/tag_resolver.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/error_format.dart';
@@ -37,6 +38,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   String _scheme = '';
   String _serverInfo = '';
   String _detour = '';
+  // §128 — «Force direct-out»: жёсткий прямой выход (overrideDetour=direct-out
+  // + replaceDetourChain). Отдельный флаг, т.к. это REPLACE-режим, а выбор
+  // обычного detour-узла — APPEND.
+  bool _forceDirect = false;
   List<String> _availableNodes = [];
 
   @override
@@ -70,7 +75,11 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     // Detour хранится в `entry.detourPolicy.overrideDetour` (применяется
     // builder'ом в server_list_build). Раньше писали в JSON node.detour,
     // но parseSingboxEntry это поле не восстанавливает — терялось при save.
-    _detour = widget.entry.overrideDetour;
+    // §128 — force-direct (REPLACE на direct-out) распознаём первым; иначе
+    // overrideDetour трактуется как обычный detour-тег (APPEND).
+    _forceDirect = widget.entry.overrideDetour == kDirectOutTag &&
+        widget.entry.replaceDetourChain;
+    _detour = _forceDirect ? '' : widget.entry.overrideDetour;
 
     // Доступные detour-теги: все узлы всех `UserServer` кроме себя.
     //
@@ -218,9 +227,13 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: DropdownButtonFormField<String>(
-            initialValue: _detour.isEmpty
-                ? ''
-                : (_availableNodes.contains(_detour) ? _detour : ''),
+            // §128 — три рода значений: '' (None/APPEND-нативная),
+            // kDirectOutTag (Force direct-out/REPLACE), <тег узла> (APPEND).
+            initialValue: _forceDirect
+                ? kDirectOutTag
+                : (_detour.isEmpty
+                    ? ''
+                    : (_availableNodes.contains(_detour) ? _detour : '')),
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
               labelText: 'Detour server',
@@ -228,16 +241,28 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
             ),
             items: [
               const DropdownMenuItem(value: '', child: Text('None (direct)')),
+              // §128 — жёсткий прямой выход (игнорирует нативную цепочку).
+              const DropdownMenuItem(
+                  value: kDirectOutTag, child: Text('Force direct-out')),
               ..._availableNodes.map((tag) => DropdownMenuItem(
                   value: tag,
                   child: Text(tag, overflow: TextOverflow.ellipsis))),
             ],
             onChanged: (v) {
-              setState(() => _detour = v ?? '');
-              // Persist через ServerList.detourPolicy.overrideDetour — builder
-              // подхватит и перезапишет main.map['detour']. Не трогаем JSON
-              // ноды, иначе после save через parseSingboxEntry поле теряется.
-              widget.entry.overrideDetour = _detour;
+              final value = v ?? '';
+              setState(() {
+                _forceDirect = value == kDirectOutTag;
+                _detour = _forceDirect ? '' : value;
+              });
+              // Persist через ServerList.detourPolicy — builder подхватит и
+              // перезапишет main.map['detour']. Не трогаем JSON ноды, иначе
+              // после save через parseSingboxEntry поле теряется.
+              //   • Force direct-out → REPLACE на direct-out (цепочка выкинута);
+              //   • None / узел      → APPEND (нативная цепочка сохранена).
+              widget.entry.setDetourOverride(
+                _forceDirect ? kDirectOutTag : _detour,
+                replace: _forceDirect,
+              );
               unawaited(widget.subController.persistSources());
             },
           ),
@@ -245,9 +270,11 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Text(
-            _detour.isEmpty
-                ? 'Traffic goes directly to this server.'
-                : 'Phone → $_detour → $_originalTag → Internet',
+            _forceDirect
+                ? 'Forced direct: ignores any built-in detour chain.'
+                : (_detour.isEmpty
+                    ? 'Traffic goes directly to this server.'
+                    : 'Phone → $_detour → $_originalTag → Internet'),
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),

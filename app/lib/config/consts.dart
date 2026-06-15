@@ -24,6 +24,13 @@ const kAutoOutboundTag = '✨auto';
 /// `server_list_build.dart`). См. `docs/spec/tasks/006-per-node-detour-toggles.md`.
 const kDetourTagPrefix = '⚙ ';
 
+/// §128 — тег direct-outbound'а sing-box (прямой выход в интернет без
+/// прокси/detour). **Source of truth:** base `outbounds` в
+/// `assets/wizard_template.json` (`{type: direct, tag: direct-out}`), также
+/// зарезервирован в `build_config.dart::_taken`. Используется в
+/// `node_settings_screen` как target «Force direct-out».
+const kDirectOutTag = 'direct-out';
+
 // §079 detour-marker detection + §085 R1 — display↔bare логика переехала в
 // `services/tag_resolver.dart::TagResolver` (единый владелец domain-концепта
 // «display-tag»). Здесь остаётся только сама константа-маркер.

@@ -155,6 +155,14 @@ class SubscriptionEntry extends ChangeNotifier {
   set replaceDetourChain(bool v) =>
       _replaceList(_copy(detourPolicy: detourPolicy.copyWith(replaceDetourChain: v)));
 
+  /// §128 — атомарно выставляет `overrideDetour` + `replaceDetourChain` одним
+  /// `copyWith` (один persist). Нужно для «Force direct-out» (tag=`direct-out`,
+  /// replace=true) и для смены пунктов detour-dropdown без двойной записи.
+  void setDetourOverride(String tag, {required bool replace}) =>
+      _replaceList(_copy(
+          detourPolicy: detourPolicy.copyWith(
+              overrideDetour: tag, replaceDetourChain: replace)));
+
   ServerList _copy({
     String? name,
     bool? enabled,
