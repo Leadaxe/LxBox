@@ -88,7 +88,9 @@ Android 10 без рута:
 
 ## Verification
 
-- [ ] `flutter analyze` / Kotlin compile чисто
-- [ ] Сборка release+arm64 (`build-local-apk.sh`)
+- [x] Kotlin compile чисто — `flutter build apk --release` (arm64) прошёл с
+      этим кодом (APK 14:08 > commit 0fd58ef 14:06)
+- [x] Сборка release+arm64 — `app-arm64-v8a-release.apk` собран
+- [ ] (по команде юзера) установка на тест-устройство + проверка connect/трафик
 - [ ] (если будет доступ) воспроизведение на Android 10 без GMS — pid alive
       после connect + трафик
