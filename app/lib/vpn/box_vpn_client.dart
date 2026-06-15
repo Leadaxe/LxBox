@@ -112,6 +112,21 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// §129 — **жёсткая** остановка для случая, когда ядро зависло вхолостую
+  /// (detour AWG→WG, #2): dial наружу заклинило, `setStatus(Stopped)` не
+  /// приходит, обычный [stopVPN] виснет на teardown и не убивает VpnService.
+  /// Fire-and-forget: native шлёт broadcast и сразу отвечает — `doForceStop`
+  /// делает `stopSelf()` не дожидаясь ядра, teardown идёт фоном best-effort.
+  /// Звать в точке таймаута `_armTransientTimeout`, НЕ вместо обычного stop.
+  Future<bool> forceStopVPN() async {
+    final ok = await _invoke<bool>(
+      _Methods.forceStopVPN,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
   /// Pull-запрос текущего статуса. Нужен на init — `onStatusChanged` шлёт
   /// только переходы; если Flutter-процесс перезапустился, а сервис всё ещё
   /// `Started` — без явного pull'а UI останется в `Disconnected`.

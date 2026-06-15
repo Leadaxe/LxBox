@@ -2,7 +2,8 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **Draft — анализ готов, реализация не начата** |
+| Статус | **✅ Done — проверено на устройстве вручную** (ядро v1.13.13-lx.8, конфиг `warp gen` AWG+detour) |
+| Verification | После неудавшегося `connecting` (зависший detour-узел) сервис больше НЕ виснет вхолостую: можно сразу переключить проблемный узел на рабочий и поднять соединение. Подтверждено вручную на тест-телефоне 2026-06-16. Kotlin compile + release arm64 build пройдены. |
 | Дата старта | 2026-06-16 |
 | Тип | Защита на стороне приложения (Dart + Kotlin), НЕ фикс ядра |
 | Симптом | После `Connecting… → timeout → disconnect` нативный `BoxVpnService` **не убивается** и **продолжает работать вхолостую**: tun0 поднят, ядро роутит входящий трафик (логи льются), VPN-иконка в системе — НО наружу проходит 0 байт (`up/down=0`, `connections=0`). UI показывает `stopping`/`disconnected`. Повторный start не проходит, кнопка не реагирует. Лечится только `am force-stop`. |
@@ -151,6 +152,25 @@ _transientTimeoutTimer = Timer(_transientTimeout, () async {
 зависания.
 
 ---
+
+## Реализация (что сделано)
+
+Поток: `_armTransientTimeout` таймаут (Dart) → `forceStopVPN` (method-channel) →
+`BoxVpnService.forceStop` (broadcast `ACTION_FORCE_STOP`) → `BoxService.doForceStop`
+(`stopSelf()` сразу + teardown ядра фоном с `withTimeout(2с)`).
+
+| Слой | Файл | Изменение |
+|---|---|---|
+| Dart | `home_controller.dart` `_armTransientTimeout` | callback → `async`; перед `_emit(disconnected)` зовёт `await _vpn.forceStopVPN()`; повторная проверка `_state.tunnel != expected` после await (защита от гонки с реальным Stopped) |
+| Dart | `box_vpn_client.dart` | новый `forceStopVPN()` — fire-and-forget, timeout `settings` (3с) |
+| Dart | `box_vpn_client/method_names.dart` | константа `forceStopVPN` |
+| Kotlin | `VpnPlugin.kt` | handler `"forceStopVPN"` → `BoxVpnService.forceStop(context)` + `success(true)` |
+| Kotlin | `BoxVpnService.kt` | `ACTION_FORCE_STOP` константа + companion `forceStop(context)` (broadcast) |
+| Kotlin | `BoxService.kt` | `doForceStop()` — БЕЗ guard на Stopping; `stopSelf()`+`setStatus(Stopped)` синхронно на Main; teardown ядра (`closeFileDescriptor`/`DefaultNetworkMonitor.stop`/`closeCommandServerAtomic`) фоном, каждый в `withTimeout(2с)`. Идемпотентен (уже Stopped → no-op). Receiver `ACTION_FORCE_STOP`→`doForceStop()` + регистрация в IntentFilter |
+
+Решения по open questions реализованы: (1) teardown best-effort с deadline 2с,
+не пропуск; (2) только `stopSelf()`, не `killProcess`; (3) явный `setStatus(Stopped)`;
+(4) идемпотентность + повторная проверка статуса в Dart после await.
 
 ## Файлы
 

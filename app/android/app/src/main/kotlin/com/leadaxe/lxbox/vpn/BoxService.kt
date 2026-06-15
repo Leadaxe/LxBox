@@ -28,6 +28,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import io.nekohasekai.libbox.StringIterator
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicReference
@@ -81,6 +82,7 @@ class BoxService(
             Log.d(TAG, "[vpn] service.receiver.onReceive action=${intent.action} status=${status.name} registered=$receiverRegistered")
             when (intent.action) {
                 BoxVpnService.ACTION_STOP -> doStop()
+                BoxVpnService.ACTION_FORCE_STOP -> doForceStop()
                 BoxVpnService.ACTION_RELOAD -> {
                     Log.d(TAG, "[vpn] receiver: ACTION_RELOAD → serviceReload()")
                     runCatching { serviceReload() }
@@ -137,6 +139,7 @@ class BoxService(
             Log.d(TAG, "[vpn] registerReceiver from onStartCommand mode=$mode")
             ContextCompat.registerReceiver(service, receiver, IntentFilter().apply {
                 addAction(BoxVpnService.ACTION_STOP)
+                addAction(BoxVpnService.ACTION_FORCE_STOP)
                 addAction(BoxVpnService.ACTION_RELOAD)
                 addAction(BoxVpnService.ACTION_RESET_NETWORK)
                 when (mode) {
@@ -348,6 +351,57 @@ class BoxService(
                 setStatus(VpnStatus.Stopped)
                 service.stopSelf()
             }
+        }
+    }
+
+    /// §129 — жёсткая остановка, когда ядро ЗАВИСЛО вхолостую (detour AWG→WG, #2):
+    /// dial наружу заклинило, `setStatus(Stopped)` от ядра не приходит, обычный
+    /// `doStop` повисает на teardown-вызовах в Go (`closeFileDescriptor` /
+    /// `closeCommandServerAtomic`) и НЕ доходит до `stopSelf()`. Сервис остаётся
+    /// жить и роутить вхолостую (tun0 поднят, 0 трафика).
+    ///
+    /// Отличие от `doStop`:
+    ///   1. НЕТ guard'а на `Stopping` — force обязан пройти, даже когда `doStop`
+    ///      уже застрял в `Stopping`.
+    ///   2. `stopSelf()` + `setStatus(Stopped)` — синхронно на Main, ГАРАНТИРОВАННО,
+    ///      НЕ зависит от завершения teardown'а ядра.
+    ///   3. Go-teardown (`closeFileDescriptor`/`closeCommandServerAtomic`) — в фоне
+    ///      best-effort с коротким deadline (`withTimeout`), чтобы зависший Go-вызов
+    ///      не блокировал убийство сервиса. НЕ пропускаем целиком: иначе Clash-порт
+    ///      63130 зависнет на след. старте (см. `stopAndAlert`).
+    ///
+    /// Идемпотентно: если уже `Stopped` — no-op.
+    private fun doForceStop() {
+        Log.w(TAG, "[vpn] doForceStop ENTER status=${status.name} receiverRegistered=$receiverRegistered")
+        if (status == VpnStatus.Stopped) {
+            Log.d(TAG, "[vpn] doForceStop — already Stopped, no-op")
+            return
+        }
+
+        // 1. Безусловно убиваем сервис на Main — НЕ ждём ядро.
+        if (receiverRegistered) {
+            runCatching { service.unregisterReceiver(receiver) }
+            receiverRegistered = false
+        }
+        notification.stop()
+        setStatus(VpnStatus.Stopped)
+        service.stopSelf()
+        Log.w(TAG, "[vpn] doForceStop — stopSelf() done, teardown в фоне (best-effort)")
+
+        // 2. Best-effort teardown ядра в фоне. Зависший Go-вызов отвалится по
+        // deadline и не помешает уже выполненному stopSelf(). serviceScope ещё
+        // жив (cancel будет в onDestroy) — запускаем на нём с таймаутом.
+        serviceScope.launch {
+            runCatching {
+                withTimeout(2_000) { closeFileDescriptor() }
+            }.onFailure { Log.w(TAG, "doForceStop: closeFileDescriptor timeout/fail: ${it.message}") }
+            runCatching {
+                withTimeout(2_000) { DefaultNetworkMonitor.stop() }
+            }.onFailure { Log.w(TAG, "doForceStop: DefaultNetworkMonitor.stop timeout/fail: ${it.message}") }
+            runCatching {
+                withTimeout(2_000) { closeCommandServerAtomic("doForceStop") }
+            }.onFailure { Log.w(TAG, "doForceStop: closeCommandServer timeout/fail: ${it.message}") }
+            Log.d(TAG, "[vpn] doForceStop — фоновый teardown завершён")
         }
     }
 

@@ -19,6 +19,8 @@ class _Methods {
   // VPN lifecycle
   static const startVPN = 'startVPN';
   static const stopVPN = 'stopVPN';
+  // §129 — force-stop при зависшем-вхолостую ядре (fire-and-forget).
+  static const forceStopVPN = 'forceStopVPN';
   static const getVpnStatus = 'getVpnStatus';
 
   // Notification + auto-start

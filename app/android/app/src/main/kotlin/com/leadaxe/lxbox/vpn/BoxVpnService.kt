@@ -26,6 +26,8 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         private const val TAG = "BoxVpnService"
         const val ACTION_START = "com.leadaxe.lxbox.ACTION_START"
         const val ACTION_STOP = "com.leadaxe.lxbox.ACTION_STOP"
+        /// §129 — force-stop при зависшем-вхолостую ядре (см. BoxService.doForceStop).
+        const val ACTION_FORCE_STOP = "com.leadaxe.lxbox.ACTION_FORCE_STOP"
         const val ACTION_RELOAD = "com.leadaxe.lxbox.ACTION_RELOAD"
         const val ACTION_RESET_NETWORK = "com.leadaxe.lxbox.ACTION_RESET_NETWORK"
         const val BROADCAST_STATUS = "com.leadaxe.lxbox.BROADCAST_STATUS"
@@ -77,6 +79,18 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
             Log.d(TAG, "[vpn] companion.stop() → sendBroadcast(ACTION_STOP), current status=${currentStatus.name}")
             context.sendBroadcast(
                 Intent(ACTION_STOP).setPackage(context.packageName)
+            )
+        }
+
+        /// §129 — fire-and-forget force-stop: НЕ ждём `setStatus(Stopped)` от
+        /// ядра (оно зависло вхолостую — detour AWG→WG, #2). Шлёт ACTION_FORCE_STOP;
+        /// `BoxService.doForceStop` сразу делает `stopSelf()`, teardown ядра — фоном
+        /// best-effort. В отличие от `stopAwait` — НЕ возвращает Deferred (ждать
+        /// нечего: ядро Stopped не отдаст).
+        fun forceStop(context: Context) {
+            Log.w(TAG, "[vpn] companion.forceStop() → sendBroadcast(ACTION_FORCE_STOP), current status=${currentStatus.name}")
+            context.sendBroadcast(
+                Intent(ACTION_FORCE_STOP).setPackage(context.packageName)
             )
         }
 
