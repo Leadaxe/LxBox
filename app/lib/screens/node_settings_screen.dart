@@ -71,8 +71,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
 
     _originalTag = node.tag;
     // §130 — protocol у WG и AWG одинаков ('wireguard'); для AWG уточняем
-    // подпись «WG (AWG)», чтобы юзер видел, что это AmneziaWG-разновидность.
-    _scheme = _isAwg ? 'WG (AWG)' : node.protocol;
+    // подпись «AmneziaWG (wireguard)», чтобы юзер видел, что это AWG-разновидность.
+    _scheme = _isAwg ? 'AmneziaWG (wireguard)' : node.protocol;
     _serverInfo = '${node.server}:${node.port}';
     _jsonCtrl.text = const JsonEncoder.withIndent('  ')
         .convert(node.emit(TemplateVars.empty).map);
@@ -223,7 +223,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
         ListTile(
           leading: const Icon(Icons.security, size: 20),
           title: const Text('Protocol'),
-          // §130 — для AWG subtitle = «WG (AWG)» (см. _scheme в _load).
+          // §130 — для AWG subtitle = «AmneziaWG (wireguard)» (см. _scheme в _load).
           subtitle: Text(_scheme, style: theme.textTheme.bodyMedium),
         ),
         ListTile(

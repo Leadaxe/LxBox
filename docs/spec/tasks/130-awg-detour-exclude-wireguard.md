@@ -1,4 +1,4 @@
-# 130 — AWG-узел: подпись «WG (AWG)» + detour-список без WireGuard-целей
+# 130 — AWG-узел: подпись «AmneziaWG (wireguard)» + detour-список без WireGuard-целей
 
 | Поле | Значение |
 |------|----------|
@@ -6,7 +6,7 @@
 | Verification | `flutter analyze --no-pub` чисто; release arm64 build пройден; установлено на тест-телефон 2026-06-16. Ручная проверка UI — за юзером. |
 | Дата старта | 2026-06-16 |
 | Тип | UI-изменение existing feature (detour-пикер §111 / §080) → таска |
-| Цель | На экране редактирования узла: (1) показывать в подписи протокола **«WG (AWG)»** (а не просто «wireguard»); (2) если редактируемый узел — AWG, **исключить из списка detour-кандидатов все wireguard-узлы** (плоский WG + AWG); (3) если у AWG-узла уже сохранён detour на wireguard (старый конфиг) — **сбросить на None и сразу персистнуть**. |
+| Цель | На экране редактирования узла: (1) показывать в подписи протокола **«AmneziaWG (wireguard)»** (а не просто «wireguard»); (2) если редактируемый узел — AWG, **исключить из списка detour-кандидатов все wireguard-узлы** (плоский WG + AWG); (3) если у AWG-узла уже сохранён detour на wireguard (старый конфиг) — **сбросить на None и сразу персистнуть**. |
 | Причина | AWG с detour на wireguard **вешает ядро на Android** (issue [#2](https://github.com/Leadaxe/sing-box-lx/issues/2)). Ядро v1.13.13-lx.9 теперь само отвергает такой endpoint на старте (`amneziawg endpoint will not start: … AmneziaWG inside a WireGuard tunnel hangs the kernel on Android. Use a non-wireguard detour (e.g. vless)`). UI должен **не давать собрать** такую конфигурацию — guard в ядре это последняя линия, UI — первая. |
 | Связанные | §111 (detour-пикер подписок); §080 (display-form detour-тегов); §097 (AWG2 obfuscation params); §128 (won't-fix `detour: direct-out`); §129 (force-stop при зависшем ядре — защита для старых конфигов); issue [#2](https://github.com/Leadaxe/sing-box-lx/issues/2) |
 
@@ -17,7 +17,7 @@
 > На экране редактирования узла ([`node_settings_screen.dart`](../../../app/lib/screens/node_settings_screen.dart)):
 > AWG детектится как `node is WireguardSpec && node.awg != null` (у WG и AWG
 > одинаковый `protocol == 'wireguard'`, различие — поле `awg`). Если узел AWG:
-> подпись Protocol = «WG (AWG)» (без отдельного чипа), из detour-dropdown убрать
+> подпись Protocol = «AmneziaWG (wireguard)» (без отдельного чипа), из detour-dropdown убрать
 > всех кандидатов-`WireguardSpec`, сохранённый detour-на-wireguard сбросить на
 > None + персистнуть. Для не-AWG узлов поведение не меняется.
 
@@ -55,7 +55,7 @@ if (n is WireguardSpec) { /* исключить, если isAwg */ }
 
 ### A. Детект AWG + подпись протокола
 В `_load()` после строки 61 завести `_isAwg = node is WireguardSpec && node.awg != null`.
-В подписи Protocol-тайла при `_isAwg` показать **`WG (AWG)`** (вместо сырого
+В подписи Protocol-тайла при `_isAwg` показать **`AmneziaWG (wireguard)`** (вместо сырого
 `node.protocol == 'wireguard'`), для не-AWG — `node.protocol` как есть. Без
 отдельного Chip/Badge — единообразно с остальными протоколами (просто текст в
 `subtitle`).
@@ -104,7 +104,8 @@ if (_isAwg && _detour.isNotEmpty && !_availableNodes.contains(_detour)) {
 
 ## Скоуп
 
-**В скоупе:** `node_settings_screen.dart` — AWG-бейдж, фильтр detour-кандидатов по
+**В скоупе:** `node_settings_screen.dart` — подпись протокола «AmneziaWG (wireguard)»
+для AWG-узла (текст в subtitle, без отдельного чипа), фильтр detour-кандидатов по
 `WireguardSpec` при редактировании AWG-узла, авто-сброс невалидного AWG→WG detour
 с персистом.
 
@@ -118,8 +119,8 @@ if (_isAwg && _detour.isNotEmpty && !_availableNodes.contains(_detour)) {
 
 ## Verification (план)
 1. `flutter analyze` чисто.
-2. Юнит/ручная: открыть редактирование AWG-узла → бейдж «AmneziaWG» виден; в detour-dropdown нет ни одного wireguard-узла (WG/AWG), есть vless/прочие; hint показан.
-3. Открыть редактирование не-AWG узла (vless) → список detour не изменился, бейджа нет.
+2. Юнит/ручная: открыть редактирование AWG-узла → подпись протокола «AmneziaWG (wireguard)»; в detour-dropdown нет ни одного wireguard-узла (WG/AWG), есть vless/прочие; hint показан.
+3. Открыть редактирование не-AWG узла (vless) → список detour не изменился, подпись = `node.protocol`.
 4. AWG-узел со старым detour на WG → при открытии detour сброшен на None, персистнут (проверить `lxbox_settings.json` / повторное открытие).
 5. На устройстве с ядром v1.13.13-lx.9: собрать AWG-узел, убедиться что WG-detour в UI недоступен.
 

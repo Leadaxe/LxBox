@@ -168,7 +168,7 @@ Default обе OFF. Галки скрыты, когда `⚙ ` снят (но з
 
 UI (`node_settings_screen.dart`) — **первая линия защиты**, не даёт собрать такую конфигурацию:
 - При редактировании AWG-узла (детект: `node is WireguardSpec && node.awg != null`) из detour-dropdown **исключены все wireguard-кандидаты** (WG + AWG); под полем — hint, почему.
-- Подпись протокола **«WG (AWG)»** (`node.protocol` честно `'wireguard'`, без уточнения неотличим от плоского WG).
+- Подпись протокола **«AmneziaWG (wireguard)»** (`node.protocol` честно `'wireguard'`, без уточнения неотличим от плоского WG).
 - Сохранённый невалидный AWG→WireGuard detour (старый конфиг) при открытии редактора **сбрасывается на None и сразу персистится**.
 
 Разрешённый detour для AWG — любой не-wireguard (vless и т.д.). Полная спека: [`docs/spec/tasks/130-awg-detour-exclude-wireguard.md`](../../tasks/130-awg-detour-exclude-wireguard.md).
