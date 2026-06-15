@@ -8,6 +8,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- **§130 — AWG-узел: бейдж «AmneziaWG» + detour-список без WireGuard-целей** ([node_settings_screen.dart](app/lib/screens/node_settings_screen.dart), [feature 018](docs/spec/features/018%20detour%20server%20management/spec.md), [task spec](docs/spec/tasks/130-awg-detour-exclude-wireguard.md)). AmneziaWG поверх WireGuard вешает ядро на Android (issue [#2](https://github.com/Leadaxe/sing-box-lx/issues/2)) — UI теперь не даёт собрать такую цепочку. На экране редактирования узла: (1) AWG-узел детектится (`node is WireguardSpec && node.awg != null` — у WG и AWG общий `protocol == 'wireguard'`, различие в поле `awg`) и помечается бейджем **«AmneziaWG»** (без него неотличим от плоского WG); (2) если узел AWG — из detour-dropdown **исключены все wireguard-кандидаты** (WG + AWG), под полем hint «используйте non-wireguard detour, например vless»; (3) уже сохранённый невалидный AWG→WireGuard detour (старый конфиг) при открытии редактора **сбрасывается на None и сразу персистится**. Для не-AWG узлов поведение detour-пикера не меняется. Первая линия защиты; ядровый guard (lx.9) — последняя.
+
+### Fixed
+
+- **§129 — Force-stop VpnService при зависшем-вхолостую ядре** ([home_controller.dart](app/lib/controllers/home_controller.dart), [BoxService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt), [BoxVpnService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt), [VpnPlugin.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt), [box_vpn_client.dart](app/lib/vpn/box_vpn_client.dart), [task spec](docs/spec/tasks/129-vpnservice-force-stop-on-stuck-core.md)). При зависшем dial-пути ядра (detour AWG→WG, [#2](https://github.com/Leadaxe/sing-box-lx/issues/2)) `setStatus(Stopped)` от ядра не приходит → обычный `doStop` повисал на Go-teardown, VpnService оставался жить и роутить вхолостую (tun0 поднят, 0 трафика наружу), UI в `connecting`/`stopping`, кнопка не реагировала — лечилось только `am force-stop`. Решение **без watchdog/поллинга**: реактивно в уже существующем триггере — таймаут `_armTransientTimeout` (Dart) перед `_emit(disconnected)` зовёт новый `forceStopVPN()` (fire-and-forget); native `BoxService.doForceStop` делает `stopSelf()` + `setStatus(Stopped)` синхронно на Main **в обход** зависшего `serviceScope`-cleanup, teardown ядра — фоном best-effort с `withTimeout(2с)`. Идемпотентно. Проверено вручную на устройстве.
+
+- **§ядро — bump sing-box-lx → v1.13.13-lx.9** ([libbox.version](app/android/libbox.version)). Фиксы AmneziaWG из форка: issue [#2](https://github.com/Leadaxe/sing-box-lx/issues/2) — AWG-endpoint с detour на wireguard теперь **отвергается на старте** с понятной ошибкой (`amneziawg endpoint will not start … hangs the kernel on Android. Use a non-wireguard detour (e.g. vless)`) вместо зависания всего ядра (вариант B: остальные узлы работают); issue [#3](https://github.com/Leadaxe/sing-box-lx/issues/3) — `validateJunk` отвергает `jmin > jmax` на уровне конфига вместо паники `rand.Int`. Подтверждено на устройстве: проблемный detour-узел больше не вешает ядро, переключение на рабочий узел поднимает соединение.
+
 ## [2.3.0] — 2026-06-15
 
 ### Added

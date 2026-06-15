@@ -162,8 +162,20 @@ Default обе OFF. Галки скрыты, когда `⚙ ` снят (но з
 
 **Scope:** только `UserServer` (инвариант проекта: 1 server = 1 node). Полная спецификация: [`docs/spec/tasks/006-per-node-detour-toggles.md`](../../tasks/006-per-node-detour-toggles.md).
 
+## AmneziaWG detour-ограничение (§130)
+
+**AmneziaWG-узел не может идти `detour`'ом через WireGuard-узел** (плоский WG или другой AWG): AWG-трафик инкапсулируется внутри WireGuard, junk-handshake связка **вешает ядро на Android** (issue [#2](https://github.com/Leadaxe/sing-box-lx/issues/2)). Ядро `sing-box-lx ≥ v1.13.13-lx.9` отвергает такой endpoint на старте (`amneziawg endpoint will not start: … AmneziaWG inside a WireGuard tunnel hangs the kernel on Android. Use a non-wireguard detour (e.g. vless)`).
+
+UI (`node_settings_screen.dart`) — **первая линия защиты**, не даёт собрать такую конфигурацию:
+- При редактировании AWG-узла (детект: `node is WireguardSpec && node.awg != null`) из detour-dropdown **исключены все wireguard-кандидаты** (WG + AWG); под полем — hint, почему.
+- Бейдж **«AmneziaWG»** в шапке (`node.protocol` честно `'wireguard'`, без метки неотличим от плоского WG).
+- Сохранённый невалидный AWG→WireGuard detour (старый конфиг) при открытии редактора **сбрасывается на None и сразу персистится**.
+
+Разрешённый detour для AWG — любой не-wireguard (vless и т.д.). Полная спека: [`docs/spec/tasks/130-awg-detour-exclude-wireguard.md`](../../tasks/130-awg-detour-exclude-wireguard.md).
+
 ## See also
 
 - [006 servers ui](../006%20servers%20ui/spec.md) — per-subscription settings
 - [019 wireguard endpoint](../019%20wireguard%20endpoint/spec.md) — WireGuard as detour
 - [tasks/006](../../tasks/006-per-node-detour-toggles.md) — per-node v1.4.0 extension
+- [tasks/130](../../tasks/130-awg-detour-exclude-wireguard.md) — AWG detour-фильтр (исключение wireguard-целей)

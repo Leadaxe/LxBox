@@ -3,9 +3,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/app_log.dart';
 import '../services/tag_resolver.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/error_format.dart';
+import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/template_vars.dart';
 import '../widgets/emoji_picker_button.dart';
@@ -38,6 +40,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   String _serverInfo = '';
   String _detour = '';
   List<String> _availableNodes = [];
+  // §130 — узел = AmneziaWG (WireguardSpec с непустыми AWG-obfuscation полями).
+  // У WG и AWG одинаковый protocol == 'wireguard'; различие — поле `awg`.
+  // AWG с detour на wireguard вешает ядро на Android (#2) → фильтруем detour.
+  bool _isAwg = false;
 
   @override
   void initState() {
@@ -60,8 +66,13 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     if (nodes.isEmpty) return;
     final node = nodes.first;
 
+    // §130 — AWG-детект: WireguardSpec с непустыми obfuscation-полями.
+    _isAwg = node is WireguardSpec && node.awg != null;
+
     _originalTag = node.tag;
-    _scheme = node.protocol;
+    // §130 — protocol у WG и AWG одинаков ('wireguard'); для AWG показываем
+    // явную подпись «AmneziaWG», чтобы юзер видел тип (а не просто wireguard).
+    _scheme = _isAwg ? 'AmneziaWG (wireguard)' : node.protocol;
     _serverInfo = '${node.server}:${node.port}';
     _jsonCtrl.text = const JsonEncoder.withIndent('  ')
         .convert(node.emit(TemplateVars.empty).map);
@@ -93,13 +104,35 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
       final prefix = list.tagPrefix;
       for (final n in list.nodes) {
         if (n.tag.isEmpty) continue;
+        // §130 — AWG-узел не может detour-ить в wireguard (вешает ядро #2):
+        // исключаем всех wireguard-кандидатов (плоский WG + AWG).
+        if (_isAwg && n is WireguardSpec) continue;
         final display = TagResolver.displayTag(prefix, n.tag);
         if (display != selfDisplay) tags.add(display);
       }
     }
     _availableNodes = tags;
 
+    // §130 — если у AWG-узла уже сохранён detour на wireguard-цель (старый
+    // сломанный конфиг), её больше нет в отфильтрованном списке → сбрасываем
+    // на None и СРАЗУ персистим (иначе юзер откроет/закроет не трогая dropdown
+    // и битый detour останется в lxbox_settings.json).
+    if (_isAwg && _detour.isNotEmpty && !_availableNodes.contains(_detour)) {
+      final removed = _detour;
+      _detour = '';
+      widget.entry.overrideDetour = '';
+      unawaited(widget.subController.persistSources());
+      _logResetDetour(removed);
+    }
+
     if (mounted) setState(() {});
+  }
+
+  /// §130 — лог сброса невалидного AWG→WireGuard detour при открытии редактора.
+  void _logResetDetour(String removed) {
+    AppLog.I.info(
+        '§130: AWG-узел "$_originalTag" — сброшен невалидный detour "$removed" '
+        '(AWG не может идти через WireGuard, вешает ядро на Android)');
   }
 
   /// §090 G2b — вставка эмодзи из пикера в позицию курсора поля Tag.
@@ -191,6 +224,17 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
           leading: const Icon(Icons.security, size: 20),
           title: const Text('Protocol'),
           subtitle: Text(_scheme, style: theme.textTheme.bodyMedium),
+          // §130 — явный бейдж «AmneziaWG», т.к. node.protocol честно 'wireguard'
+          // и без метки AWG неотличим от плоского WG.
+          trailing: _isAwg
+              ? Chip(
+                  label: const Text('AmneziaWG'),
+                  labelStyle: theme.textTheme.labelSmall,
+                  visualDensity: VisualDensity.compact,
+                  backgroundColor: theme.colorScheme.secondaryContainer,
+                  side: BorderSide.none,
+                )
+              : null,
         ),
         ListTile(
           leading: const Icon(Icons.dns, size: 20),
@@ -242,6 +286,28 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
             },
           ),
         ),
+        // §130 — для AWG-узла WireGuard-цели исключены из списка (AWG поверх
+        // WireGuard вешает ядро на Android). Поясняем, почему их нет.
+        if (_isAwg)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline,
+                    size: 16, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'AmneziaWG-узлы не могут идти через WireGuard — такие цели '
+                    'скрыты. Используйте non-wireguard detour (например, vless).',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+              ],
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Text(
