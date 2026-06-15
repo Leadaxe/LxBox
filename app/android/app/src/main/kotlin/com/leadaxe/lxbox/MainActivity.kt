@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.net.VpnService
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -16,6 +17,7 @@ import com.leadaxe.lxbox.vpn.WifiHistoryBridge
 import com.leadaxe.lxbox.vpn.WifiInfoReader
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterShellArgs
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
@@ -37,6 +39,35 @@ class MainActivity : FlutterActivity() {
     /// после успешного consent'а закрываемся, чтобы юзер вернулся на хоум —
     /// он не просил открывать app, он просил подключить VPN.
     private var finishAfterConsent = false
+
+    /// §131 — Impeller crash на старых GPU (Adreno 3xx, Android 10).
+    ///
+    /// Flutter (stable, Dart 3.11) по умолчанию рендерит через Impeller. Его
+    /// GLES-шейдеры валят драйвер `libsc-a3xx.so` на старых Adreno: SIGSEGV в
+    /// потоке `1.raster` сразу при работе с UI (tombstone — см. §131). На API
+    /// < 31 откатываемся на Skia, добавляя shell-флаг `--enable-impeller=false`
+    /// — ровно тот аргумент, который штатно генерит manifest-флаг
+    /// `EnableImpeller=false` (FlutterLoader.java:420), только условно по
+    /// версии Android. На API ≥ 31 (primary-tier, современные GPU) Impeller
+    /// остаётся включённым — поведение не меняется.
+    ///
+    /// Override `getFlutterShellArgs` вместо кастомного FlutterEngine: движок
+    /// по-прежнему создаёт сам FlutterActivity (plugin registration, deep
+    /// links, lifecycle — без изменений), мы лишь дописываем shell-флаг к тем,
+    /// что активити и так передаёт в native init.
+    ///
+    /// Гейт по `SDK_INT`, а не по реальному GPU — у Flutter нет чистого
+    /// рантайм-детекта GPU; на старом Android с хорошим GPU Impeller
+    /// отключится «зря», но для простого UI (списки/тогглы/формы) разница
+    /// Skia↔Impeller незначима.
+    override fun getFlutterShellArgs(): FlutterShellArgs {
+        val args = super.getFlutterShellArgs()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            Log.d(TAG, "API ${Build.VERSION.SDK_INT} < 31 — disabling Impeller (Skia renderer)")
+            args.add("--enable-impeller=false")
+        }
+        return args
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         Log.d(TAG, "configureFlutterEngine — registering VpnPlugin")

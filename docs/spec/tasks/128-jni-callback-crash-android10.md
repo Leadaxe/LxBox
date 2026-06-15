@@ -86,6 +86,15 @@ Android 10 без рута:
 совпадение симптома и best-effort-статуса API 29). Даже если краш не только
 здесь — эти дыры обязаны быть закрыты по правилу §050.
 
+> **Update 2026-06-16 — tombstone опроверг этот корень для данной жалобы.**
+> Жалобщик прислал logcat+DEBUG. Краш — SIGSEGV в потоке `1.raster` внутри
+> `libsc-a3xx.so` (драйвер Adreno 3xx) с `Impeller validation: Could not link
+> pipeline program`, **до** какого-либо connect. Это render-слой (Flutter
+> Impeller), не JNI/Go. Реальный фикс жалобы — [§131](131-impeller-adreno-gpu-crash.md).
+> §128 остаётся валидным **сам по себе**: три callback'а без try/catch — это
+> нарушение правила §050, дыры закрыть надо независимо. Но как фикс *этой*
+> жалобы §128 не подтверждён.
+
 ## Verification
 
 - [x] Kotlin compile чисто — `flutter build apk --release` (arm64) прошёл с
