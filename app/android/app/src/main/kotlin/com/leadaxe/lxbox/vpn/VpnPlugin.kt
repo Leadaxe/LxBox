@@ -134,6 +134,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "getConfig" -> result.success(ConfigManager.load())
             "startVPN" -> startVpn(result)
             "stopVPN" -> stopVpn(result)
+            "forceStopVPN" -> {
+                // §129 — жёсткая остановка при зависшем-вхолостую ядре. Fire-and-
+                // forget: BoxService.doForceStop сам делает stopSelf() не дожидаясь
+                // setStatus(Stopped) от ядра. Не ждём (в отличие от stopVPN).
+                BoxVpnService.forceStop(context)
+                result.success(true)
+            }
             "getVpnStatus" -> {
                 // Pull-метод для re-sync UI после reattach Flutter-процесса
                 // (broadcast'ятся только переходы — если service уже Started,

@@ -1,3 +1,4 @@
+import '../../models/node_spec.dart' show Awg;
 import '../parser/uri_utils.dart' show parseReserved;
 
 /// §025 — закешированный Cloudflare WARP-аккаунт.
@@ -20,6 +21,7 @@ class WarpAccount {
     required this.createdAt,
     this.license,
     this.warpPlus = false,
+    this.awg,
   });
 
   /// base64, X25519 private key — сгенерирован на устройстве. СЕКРЕТ: не
@@ -57,15 +59,23 @@ class WarpAccount {
   /// true если license успешно привязан (account.warp_plus).
   final bool warpPlus;
 
+  /// §126 — AmneziaWG 1.5 obfuscation поля (jc/jmin/jmax/s1-2/h1-4/i1). `null`
+  /// = обычный WARP (без обфускации, byte-for-byte plain WG). Когда задано —
+  /// узел добавляется через `.conf` ([toWireguardConf]), не через короткий URI.
+  final Awg? awg;
+
   static const String defaultEndpoint = 'engage.cloudflareclient.com:2408';
 
   /// `reserved` как 3 байта (из base64 client_id). null если client_id битый.
   List<int>? get reserved => parseReserved(clientId);
 
+  /// `clearAwg: true` снимает обфускацию (awg → null), игнорируя [awg].
   WarpAccount copyWith({
     String? license,
     bool? warpPlus,
     String? endpoint,
+    Awg? awg,
+    bool clearAwg = false,
   }) =>
       WarpAccount(
         privKey: privKey,
@@ -80,6 +90,7 @@ class WarpAccount {
         createdAt: createdAt,
         license: license ?? this.license,
         warpPlus: warpPlus ?? this.warpPlus,
+        awg: clearAwg ? null : (awg ?? this.awg),
       );
 
   /// Собирает `wireguard://` URI для добавления узла через стандартный
@@ -106,6 +117,46 @@ class WarpAccount {
     return 'wireguard://${Uri.encodeQueryComponent(privKey)}@$endpoint?$qs#$tag';
   }
 
+  /// §126 — собирает `.conf` (WireGuard INI) для обфусцированного узла.
+  ///
+  /// Используется когда [awg] задан (обфускация включена): `i1` ~1700b в hex
+  /// дружелюбнее провести через INI (`parseWireguardIni` уже читает AWG из
+  /// `[Interface]` и эскейпит `<>`/пробелы), формат 1:1 совпадает с тем, что
+  /// эмитит генератор Amnezia 1.5. `reserved` (client_id) идёт в `[Peer]`.
+  ///
+  /// Для plain WARP (awg==null) используем короткий [toWireguardUri].
+  String toWireguardConf() {
+    final res = reserved;
+    final tag = warpPlus ? 'WARP+' : 'WARP';
+    final addrs = [clientV4, if (clientV6.isNotEmpty) clientV6].join(', ');
+    final b = StringBuffer()
+      ..writeln('# $tag (Amnezia 1.5 obfuscation)')
+      ..writeln('[Interface]')
+      ..writeln('PrivateKey = $privKey')
+      ..writeln('Address = $addrs')
+      ..writeln('MTU = 1280');
+    // AWG-поля (Jc/Jmin/.../I1). Ключи — как ждёт ini_parser (он lowercase'ит);
+    // значения i* идут сырыми (`<b 0x…>`), парсер сам их эскейпит.
+    final awgFields = awg?.fields;
+    if (awgFields != null) {
+      // Детерминированный порядок: числовые сначала, i* в конце (читаемость).
+      final keys = awgFields.keys.toList()..sort();
+      for (final k in keys) {
+        b.writeln('${k.toUpperCase()} = ${awgFields[k]}');
+      }
+    }
+    b
+      ..writeln()
+      ..writeln('[Peer]')
+      ..writeln('PublicKey = $peerPub')
+      ..writeln('AllowedIPs = 0.0.0.0/0, ::/0')
+      ..writeln('Endpoint = $endpoint');
+    if (res != null) {
+      b.writeln('Reserved = ${res.join(',')}');
+    }
+    return b.toString();
+  }
+
   /// Storage JSON. Секреты идут в storage (это локальный зашифрованный файл
   /// приложения), но НЕ должны попадать в логи/diag — см. [redacted].
   Map<String, Object?> toJson() => {
@@ -121,6 +172,7 @@ class WarpAccount {
         'created_at': createdAt,
         'license': license,
         'warp_plus': warpPlus,
+        if (awg != null) 'awg': Map<String, Object>.from(awg!.fields),
       };
 
   static WarpAccount? fromJson(Map<String, dynamic> m) {
@@ -142,6 +194,9 @@ class WarpAccount {
       createdAt: (m['created_at'] as String?) ?? '',
       license: m['license'] as String?,
       warpPlus: m['warp_plus'] == true,
+      awg: m['awg'] is Map
+          ? Awg.fromJson(Map<String, dynamic>.from(m['awg'] as Map))
+          : null,
     );
   }
 
@@ -156,6 +211,7 @@ class WarpAccount {
         'endpoint': endpoint,
         'created_at': createdAt,
         'warp_plus': warpPlus,
+        'obfuscated': awg != null,
         'priv_key': '<redacted>',
         'token': '<redacted>',
         'license': license == null ? null : '<redacted>',

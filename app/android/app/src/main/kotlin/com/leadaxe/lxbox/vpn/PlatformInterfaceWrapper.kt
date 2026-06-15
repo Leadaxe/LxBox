@@ -38,17 +38,37 @@ interface PlatformInterfaceWrapper : PlatformInterface {
         sourceAddress: String, sourcePort: Int,
         destinationAddress: String, destinationPort: Int
     ): ConnectionOwner {
-        val uid = BoxApplication.connectivity.getConnectionOwnerUid(
-            ipProtocol,
-            InetSocketAddress(sourceAddress, sourcePort),
-            InetSocketAddress(destinationAddress, destinationPort)
-        )
-        if (uid == Process.INVALID_UID) error("android: connection owner not found")
+        // §128 (F12.3 generalization): этот callback зовётся Go на КАЖДОЕ
+        // соединение (`find_process: true` — глобальный дефолт template). На
+        // Android 10 без root `getConnectionOwnerUid` для недоступного владельца
+        // бросает SecurityException; `getPackagesForUid` может бросить
+        // RuntimeException. Без try/catch исключение пролетает через JNI →
+        // Runtime::Abort (см. §050 findings F12.3). Fail-safe: вернуть owner с
+        // INVALID_UID — sing-box трактует как «owner unknown», `find_process`
+        // правило просто не матчит, routing продолжает работать.
+        val uid = try {
+            BoxApplication.connectivity.getConnectionOwnerUid(
+                ipProtocol,
+                InetSocketAddress(sourceAddress, sourcePort),
+                InetSocketAddress(destinationAddress, destinationPort)
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("PIW", "findConnectionOwner: getConnectionOwnerUid failed: ${e.message}")
+            Process.INVALID_UID
+        }
+        if (uid == Process.INVALID_UID) {
+            return ConnectionOwner().apply { userId = Process.INVALID_UID }
+        }
         // Sing-box 1.13 ушёл от двухступенчатого callback'а
         // (`packageNameByUid`/`uidByPackageName`) к одной структуре `ConnectionOwner`,
         // которую мы заполняем сразу: UID + список пакетов под ним. Process path и
         // username на Android неприменимы (нет /proc-доступа без root) — оставляем пустыми.
-        val packages = BoxApplication.packageManager.getPackagesForUid(uid)?.toList() ?: emptyList()
+        val packages = try {
+            BoxApplication.packageManager.getPackagesForUid(uid)?.toList() ?: emptyList()
+        } catch (e: Exception) {
+            android.util.Log.w("PIW", "findConnectionOwner: getPackagesForUid failed: ${e.message}")
+            emptyList()
+        }
         return ConnectionOwner().apply {
             userId = uid
             // §049 F12.1: userName заполняется первым package'ом (как в reference
@@ -68,6 +88,21 @@ interface PlatformInterfaceWrapper : PlatformInterface {
     }
 
     override fun getInterfaces(): NetworkInterfaceIterator {
+        // §128 (F12.3 generalization): зовётся Go ВСЕГДА при connect (init
+        // маршрутизации). `allNetworks` / `getLinkProperties` /
+        // `getNetworkCapabilities` могут бросить SecurityException на Android 10
+        // без root / на кастомных прошивках; `getNetworkInterfaces` —
+        // SocketException. Без try/catch → JNI Runtime::Abort (см. §050 F12.3).
+        // Fail-safe: вернуть пустой итератор — sing-box деградирует к
+        // auto-detect интерфейса без явного списка.
+        return runCatching { buildInterfaces() }
+            .getOrElse {
+                android.util.Log.w("PIW", "getInterfaces failed, returning empty: ${it.message}")
+                emptyInterfaceIterator()
+            }
+    }
+
+    private fun buildInterfaces(): NetworkInterfaceIterator {
         val networks = BoxApplication.connectivity.allNetworks
         val sysInterfaces = NetworkInterface.getNetworkInterfaces().toList()
         val result = mutableListOf<LibboxNetworkInterface>()
@@ -104,6 +139,12 @@ interface PlatformInterfaceWrapper : PlatformInterface {
             override fun next() = iter.next()
         }
     }
+
+    private fun emptyInterfaceIterator(): NetworkInterfaceIterator =
+        object : NetworkInterfaceIterator {
+            override fun hasNext() = false
+            override fun next(): LibboxNetworkInterface = throw NoSuchElementException()
+        }
 
     override fun underNetworkExtension(): Boolean = false
     override fun includeAllNetworks(): Boolean = false
@@ -153,17 +194,26 @@ interface PlatformInterfaceWrapper : PlatformInterface {
         return state
     }
 
+    /// §128 (F12.3 generalization): зовётся Go при старте TLS-стека.
+    /// `KeyStore`/`cert.encoded` могут бросить (KeyStoreException, IOException,
+    /// CertificateEncodingException, NPE). Без try/catch → JNI Runtime::Abort.
+    /// Fail-safe: вернуть собранное-до-ошибки (или пусто) — sing-box упадёт
+    /// к встроенным сертификатам ядра.
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
     override fun systemCertificates(): StringIterator {
         val certs = mutableListOf<String>()
-        val ks = java.security.KeyStore.getInstance("AndroidCAStore")
-        if (ks != null) {
-            ks.load(null, null)
-            val aliases = ks.aliases()
-            while (aliases.hasMoreElements()) {
-                val cert = ks.getCertificate(aliases.nextElement())
-                certs.add("-----BEGIN CERTIFICATE-----\n${kotlin.io.encoding.Base64.encode(cert.encoded)}\n-----END CERTIFICATE-----")
+        runCatching {
+            val ks = java.security.KeyStore.getInstance("AndroidCAStore")
+            if (ks != null) {
+                ks.load(null, null)
+                val aliases = ks.aliases()
+                while (aliases.hasMoreElements()) {
+                    val cert = ks.getCertificate(aliases.nextElement()) ?: continue
+                    certs.add("-----BEGIN CERTIFICATE-----\n${kotlin.io.encoding.Base64.encode(cert.encoded)}\n-----END CERTIFICATE-----")
+                }
             }
+        }.onFailure {
+            android.util.Log.w("PIW", "systemCertificates failed (${certs.size} collected): ${it.message}")
         }
         return StringArray(certs.iterator())
     }

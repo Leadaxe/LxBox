@@ -35,6 +35,7 @@ String? _iniToUri(String config) {
   String publicKey = '';
   String endpoint = '';
   String presharedKey = '';
+  String reserved = ''; // §126 — WARP client_id (reserved/client_id в [Peer])
   int mtu = 0;
   int keepalive = 0;
   // §097 — AmneziaWG2 поля из [Interface] (Jc/Jmin/.../I1-I5; регистр value
@@ -61,6 +62,10 @@ String? _iniToUri(String config) {
       if (k == 'endpoint') endpoint = v;
       if (k == 'presharedkey') presharedKey = v;
       if (k == 'persistentkeepalive') keepalive = int.tryParse(v) ?? 0;
+      // §126 — WARP `client_id` → reserved. Amnezia-генератор кладёт его в
+      // [Peer] как `Reserved` (или `ClientId`); парсер reserved (parseReserved)
+      // принимает и `b0,b1,b2`, и base64. Прокидываем сырым в URI-query.
+      if (k == 'reserved' || k == 'client_id' || k == 'clientid') reserved = v;
     }
   }
 
@@ -97,6 +102,8 @@ String? _iniToUri(String config) {
   if (mtu > 0) params['mtu'] = mtu.toString();
   if (presharedKey.isNotEmpty) params['presharedkey'] = presharedKey;
   if (keepalive > 0) params['keepalive'] = keepalive.toString();
+  if (reserved.isNotEmpty) params['reserved'] = reserved; // §126
+
   // §097 — AWG-поля в query (encodeComponent ниже эскейпит i* с <>/пробелами).
   awg.forEach((k, v) {
     if (v.isNotEmpty) params[k] = v;

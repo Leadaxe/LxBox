@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:cryptography/cryptography.dart';
 import 'package:http/http.dart' as http;
 
+import '../../models/node_spec.dart' show Awg;
 import '../app_log.dart';
+import 'awg_junk.dart';
 import 'warp_account.dart';
 
 /// §025 — клиент регистрации Cloudflare WARP.
@@ -62,13 +64,44 @@ class WarpClient {
     );
   }
 
+  /// §126 — AmneziaWG **1.5** preset (без `i1` — он генерится на устройстве).
+  ///
+  /// Только поля, которые НЕ ломают WG: `s1=s2=0` (handshake без magic-префикса)
+  /// + `h1..h4=1,2,3,4` (стандартные WG message-types) → init/response пакеты
+  /// бит-в-бит как plain WireGuard, Cloudflare принимает. `jc=4`+`i1` (junk до
+  /// handshake) сбивают DPI-сигнатуру. См. [docs/spec/tasks/126].
+  static Map<String, Object> amnezia15Preset() => <String, Object>{
+        'jc': 4,
+        'jmin': 40,
+        'jmax': 70,
+        's1': 0,
+        's2': 0,
+        'h1': 1,
+        'h2': 2,
+        'h3': 3,
+        'h4': 4,
+      };
+
+  /// Собирает [Awg] для obfuscate-ветки: 1.5 preset + `i1` сгенерённый
+  /// выбранным [template] (на устройстве, уникальный).
+  static Awg buildAmnezia15Awg(JunkTemplate template) {
+    final fields = amnezia15Preset()..['i1'] = generateJunkI1(template);
+    return Awg(fields);
+  }
+
   /// Регистрирует устройство. Опциональный [licenseKey] — WARP+; если задан,
   /// после /reg делается PATCH account (ошибка PATCH НЕ роняет регистрацию —
   /// возвращается free-аккаунт с warpPlus=false).
+  ///
+  /// §126 — если [obfuscate] true, в аккаунт кладётся [Awg] из 1.5 preset +
+  /// `i1` шаблона [template]. Сама регистрация в Cloudflare не меняется
+  /// (обфускация — чисто клиентский конфиг поверх обычного WG-узла).
   Future<WarpAccount> register({
     String? licenseKey,
     String endpoint = WarpAccount.defaultEndpoint,
     required String nowIso8601,
+    bool obfuscate = false,
+    JunkTemplate template = JunkTemplate.wgTraffic,
   }) async {
     final kp = await genKeypair();
 
@@ -110,6 +143,10 @@ class WarpClient {
 
     if (licenseKey != null && licenseKey.trim().isNotEmpty) {
       account = await _applyLicenseSafe(account, licenseKey.trim());
+    }
+    if (obfuscate) {
+      account = account.copyWith(awg: buildAmnezia15Awg(template));
+      AppLog.I.info('WARP: Amnezia 1.5 obfuscation enabled ($template)');
     }
     return account;
   }

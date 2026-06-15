@@ -8,6 +8,15 @@
 
 ## [Unreleased]
 
+## [2.3.1] — 2026-06-16
+
+### Fixed
+
+- **AmneziaWG detour на WireGuard больше не вешает приложение** ([тех.детали §129](docs/spec/tasks/129-vpnservice-force-stop-on-stuck-core.md), [§130](docs/spec/tasks/130-awg-detour-exclude-wireguard.md), issues [#2](https://github.com/Leadaxe/sing-box-lx/issues/2)/[#3](https://github.com/Leadaxe/sing-box-lx/issues/3)). Раньше AmneziaWG-узел с detour на WireGuard намертво вешал VPN на Android (туннель висел в «Connecting…», другие узлы не подключались, помогал только перезапуск приложения). Исправлено на трёх уровнях:
+  - **Ядро** (sing-box-lx v1.13.13-lx.10): такой узел теперь отклоняется с понятной ошибкой вместо зависания — остальные узлы продолжают работать.
+  - **UI**: при редактировании AmneziaWG-узла из списка Detour убраны все WireGuard-цели, а в строке Protocol показывается «AmneziaWG (wireguard)». Уже сохранённый невалидный detour сбрасывается при открытии настроек узла.
+  - **Приложение**: если туннель всё же завис, VPN-сервис принудительно останавливается по таймауту, а не висит вхолостую — кнопка снова работает сразу.
+
 ## [2.3.0] — 2026-06-15
 
 ### Added

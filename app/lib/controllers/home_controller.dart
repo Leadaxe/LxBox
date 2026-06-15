@@ -206,10 +206,20 @@ class HomeController extends ChangeNotifier
   /// connecting подряд) и стартует новый на 10 сек.
   void _armTransientTimeout(TunnelStatus expected) {
     _transientTimeoutTimer?.cancel();
-    _transientTimeoutTimer = Timer(_transientTimeout, () {
+    _transientTimeoutTimer = Timer(_transientTimeout, () async {
       if (_state.tunnel != expected) return;
       _addDebug(
           DebugSource.app, 'Timeout in ${expected.label}, forcing disconnect');
+      // §129 — таймаут transient-фазы = ядро НЕ отдало Stopped само (зависло
+      // вхолостую: detour AWG→WG #2 — tun0 жив, 0 трафика, dial заклинен).
+      // Раньше тут был только _emit(disconnected) — UI «disconnected», а
+      // VpnService продолжал жить и роутить вхолостую, кнопка не реагировала.
+      // Теперь принудительно прибиваем сервис (stopSelf в обход зависшего
+      // teardown). НЕ обычный stopVPN — тот кооперативный, ждёт Stopped и сам
+      // виснет. forceStopVPN — fire-and-forget. После — синхронизируем UI.
+      await _vpn.forceStopVPN();
+      _addDebug(DebugSource.app, '[vpn] forceStopVPN sent (timeout in ${expected.label})');
+      if (_state.tunnel != expected) return;
       _emit(_state.copyWith(
         tunnel: TunnelStatus.disconnected,
         lastError: 'Connection timed out',

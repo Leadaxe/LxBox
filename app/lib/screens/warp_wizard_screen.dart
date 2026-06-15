@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../controllers/subscription_controller.dart';
+import '../services/warp/awg_junk.dart';
 import '../services/warp/warp_account.dart';
 
 /// §025 — Full-screen визард «Get WARP». Открывается из overflow-меню
@@ -35,6 +36,10 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
   bool _busy = false;
   WarpAccount? _result;
 
+  // §126 — AmneziaWG 1.5 обфускация (default off — обычный WARP).
+  bool _obfuscate = false;
+  JunkTemplate _template = JunkTemplate.wgTraffic;
+
   @override
   void dispose() {
     _license.dispose();
@@ -55,6 +60,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
         licenseKey: license.isEmpty ? null : license,
         endpoint: endpoint,
         forceNew: _forceNew,
+        obfuscate: _obfuscate,
+        template: _template,
       );
 
       if (!mounted) return;
@@ -123,7 +130,59 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                     color: cs.onSurfaceVariant,
                   ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+            // §126 — значимая опция (не прячем в Advanced): обфускация под DPI.
+            Card(
+              margin: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  CheckboxListTile(
+                    value: _obfuscate,
+                    onChanged: _busy
+                        ? null
+                        : (v) => setState(() => _obfuscate = v ?? false),
+                    title: const Text('Add Amnezia 1.5 obfuscation'),
+                    subtitle: const Text(
+                        'Masks WireGuard from DPI by adding junk traffic. '
+                        'Enable if WARP is blocked.'),
+                  ),
+                  if (_obfuscate) ...[
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _label('Junk template'),
+                      ),
+                    ),
+                    RadioListTile<JunkTemplate>(
+                      dense: true,
+                      value: JunkTemplate.wgTraffic,
+                      groupValue: _template,
+                      onChanged: _busy
+                          ? null
+                          : (v) => setState(
+                              () => _template = v ?? JunkTemplate.wgTraffic),
+                      title: const Text('WG-traffic'),
+                      subtitle: const Text('Junk mimics another WireGuard packet'),
+                    ),
+                    RadioListTile<JunkTemplate>(
+                      dense: true,
+                      value: JunkTemplate.sipTraffic,
+                      groupValue: _template,
+                      onChanged: _busy
+                          ? null
+                          : (v) => setState(
+                              () => _template = v ?? JunkTemplate.wgTraffic),
+                      title: const Text('SIP-traffic'),
+                      subtitle: const Text('Junk mimics a VoIP (SIP) call'),
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             ExpansionPanelList.radio(
               elevation: 0,
               expandedHeaderPadding: EdgeInsets.zero,
@@ -242,6 +301,7 @@ class _StatusCard extends StatelessWidget {
             _row('Device', account.deviceId),
             _row('Address', account.clientV4),
             _row('Endpoint', account.endpoint),
+            if (account.awg != null) _row('Obfuscation', 'Amnezia 1.5'),
           ],
         ),
       ),
