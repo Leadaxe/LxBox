@@ -26,6 +26,7 @@ import '../services/subscription/auto_updater.dart';
 import '../services/subscription/http_cache.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/subscription/sources.dart';
+import '../services/warp/awg_junk.dart';
 import '../services/warp/warp_account.dart';
 import '../services/warp/warp_client.dart';
 
@@ -215,6 +216,8 @@ class SubscriptionController extends ChangeNotifier {
     String endpoint = WarpAccount.defaultEndpoint,
     bool reuse = true,
     bool forceNew = false,
+    bool obfuscate = false,
+    JunkTemplate template = JunkTemplate.wgTraffic,
     WarpClient? client,
   }) async {
     _busy = true;
@@ -236,7 +239,14 @@ class SubscriptionController extends ChangeNotifier {
         licenseKey: licenseKey,
         endpoint: endpoint,
         nowIso8601: DateTime.now().toUtc().toIso8601String(),
+        obfuscate: obfuscate,
+        template: template,
       );
+
+      // §126 — обфускация чисто клиентская (не требует ре-регистрации в
+      // Cloudflare). Если переиспользуем кеш, но галка/шаблон сменились —
+      // (пере)генерируем awg поверх существующего аккаунта; off → снимаем.
+      account = _syncWarpObfuscation(account, obfuscate, template);
 
       await SettingsStorage.setWarpAccount(account);
 
@@ -249,8 +259,13 @@ class SubscriptionController extends ChangeNotifier {
       });
       await _persist();
 
-      // Добавляем через стандартный путь (parseWireguardUri → reserved).
-      await addFromInput(account.toWireguardUri());
+      // §126 — обфусцированный узел добавляем через `.conf` (i1 ~1700b удобнее
+      // провести INI-путём); plain WARP — короткий URI как раньше.
+      if (account.awg != null) {
+        await _addWarpObfuscated(account);
+      } else {
+        await addFromInput(account.toWireguardUri());
+      }
       if (_lastError.isNotEmpty) return null;
       return account;
     } catch (e) {
@@ -262,6 +277,60 @@ class SubscriptionController extends ChangeNotifier {
       _busy = false;
       notifyListeners();
     }
+  }
+
+  /// §126 — приводит obfuscation у [account] к запрошенному состоянию.
+  /// Обфускация клиентская → меняем `awg` без ре-регистрации в Cloudflare.
+  /// `obfuscate` off → снимаем awg (если был); on → ставим, если его нет
+  /// (свежий register уже проставил — тогда no-op; кешированный аккаунт без
+  /// awg или с awg — перегенерируем, чтобы применить актуальный шаблон).
+  WarpAccount _syncWarpObfuscation(
+      WarpAccount account, bool obfuscate, JunkTemplate template) {
+    if (!obfuscate) {
+      return account.awg == null ? account : account.copyWith(clearAwg: true);
+    }
+    return account.copyWith(awg: WarpClient.buildAmnezia15Awg(template));
+  }
+
+  /// §126 — добавляет обфусцированный WARP-узел через `.conf`/[parseWireguardIni]
+  /// (несёт AWG + reserved). Тег принудительно WARP/WARP+ (INI-путь иначе дал
+  /// бы `WireGuard` → сломалась бы идемпотентность по тегу и иконка 🔥☁️).
+  Future<void> _addWarpObfuscated(WarpAccount account) async {
+    final spec = parseWireguardIni(account.toWireguardConf());
+    if (spec == null) {
+      _lastError = 'Invalid WARP config (obfuscated)';
+      return;
+    }
+    final tag = account.warpPlus ? 'WARP+' : 'WARP';
+    final tagged = WireguardSpec(
+      id: spec.id,
+      tag: tag,
+      label: tag,
+      server: spec.server,
+      port: spec.port,
+      rawUri: spec.rawUri,
+      privateKey: spec.privateKey,
+      localAddresses: spec.localAddresses,
+      peers: spec.peers,
+      mtu: spec.mtu,
+      rawIni: spec.rawIni,
+      awg: spec.awg,
+      warnings: spec.warnings,
+    );
+    final wgServer = _autoEmoji(UserServer(
+      id: newUuidV4(),
+      name: '',
+      enabled: true,
+      tagPrefix: '',
+      detourPolicy: DetourPolicy.defaults,
+      origin: UserSource.paste,
+      createdAt: DateTime.now(),
+      rawBody: tagged.rawUri,
+      nodes: [tagged],
+    ));
+    _entries.add(
+        SubscriptionEntry(list: wgServer, nodeCount: wgServer.nodes.length));
+    await _persist();
   }
 
   /// §090 G2b — авто-эмодзи при создании UserServer: если в теге первой ноды
