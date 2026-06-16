@@ -138,7 +138,7 @@ generateQuicI1(sni, level):
 | Enum + QuicParams | `awg_junk.dart` — `JunkTemplate{quic,sip}` (wgTraffic убран), `QuicParams`, `generateSipI1`/`generateQuicI1` |
 | Preset + ветка + рандом-ep | `warp_client.dart` — `amneziaPreset(jc/jmin/jmax)`, `buildAmneziaAwg(template,params)`, `register(quicParams,randomEndpoint)` |
 | Прокидка + sync | `subscription_controller.dart` — `addWarp(quicParams)`, резолв SNI/random-ep через picker |
-| UI dropdown + Advanced QUIC params | `screens/warp_wizard_screen.dart` — DropdownButtonFormField QUIC/SIP, Advanced: SNI/Level/Jc/Jmin/Jmax |
+| UI dropdown + Advanced QUIC params | `screens/warp_wizard_screen.dart` — DropdownButtonFormField QUIC/SIP; Advanced: SNI = editable combo-box (`DropdownMenu`: «Random (default)» + пул из asset + свободный ввод), Level(0-4), Jc/Jmin/Jmax |
 | Тесты | `quic_i1_test.dart` (крипта против RFC/NIST + структура), `warp_endpoint_picker_test.dart`, обновлены `awg_junk_test.dart`/`warp_obfuscation_test.dart` |
 
 **Крипта доказана:** AES-ECB = FIPS-197 B; AES-GCM = NIST TC3 (no AAD) + TC4 (AAD);

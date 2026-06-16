@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/warp/awg_junk.dart';
 import '../services/warp/warp_account.dart';
+import '../services/warp/warp_endpoint_picker.dart';
 
 /// §025 — Full-screen визард «Get WARP». Открывается из overflow-меню
 /// Subscriptions. Один тап «Register» для free; license/endpoint опциональны
@@ -35,6 +36,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
 
   // §136 — QUIC-параметры (Advanced). Пустой SNI → рандом из пула.
   final _sni = TextEditingController();
+  List<String> _sniPool = const []; // подсказки для DropdownMenu
   int _quicLevel = 0;
   final _jc = TextEditingController(text: '4');
   final _jmin = TextEditingController(text: '40');
@@ -49,6 +51,15 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
   JunkTemplate _template = JunkTemplate.quic;
 
   @override
+  void initState() {
+    super.initState();
+    // §136 — подтягиваем SNI-пул для dropdown-подсказок (не блокирует UI).
+    WarpEndpointPicker.load().then((p) {
+      if (mounted) setState(() => _sniPool = p.sniPool);
+    });
+  }
+
+  @override
   void dispose() {
     _license.dispose();
     _endpoint.dispose();
@@ -59,14 +70,22 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     super.dispose();
   }
 
+  /// Sentinel-метка «рандом» в SNI-combobox (= пустой SNI → рандом из пула).
+  static const _sniRandomLabel = 'Random (default)';
+
   /// Собирает [QuicParams] из Advanced-полей (с дефолтами при пустых/битых).
-  QuicParams _buildQuicParams() => QuicParams(
-        sni: _sni.text.trim(),
-        level: _quicLevel,
-        jc: int.tryParse(_jc.text.trim()) ?? 4,
-        jmin: int.tryParse(_jmin.text.trim()) ?? 40,
-        jmax: int.tryParse(_jmax.text.trim()) ?? 70,
-      );
+  /// «Random (default)»-метку трактуем как пустой SNI (DropdownMenu пишет
+  /// label выбранного пункта в контроллер).
+  QuicParams _buildQuicParams() {
+    final sni = _sni.text.trim();
+    return QuicParams(
+      sni: sni == _sniRandomLabel ? '' : sni,
+      level: _quicLevel,
+      jc: int.tryParse(_jc.text.trim()) ?? 4,
+      jmin: int.tryParse(_jmin.text.trim()) ?? 40,
+      jmax: int.tryParse(_jmax.text.trim()) ?? 70,
+    );
+  }
 
   Future<void> _register() async {
     if (_busy) return;
@@ -258,16 +277,32 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                         if (_obfuscate && _template == JunkTemplate.quic) ...[
                           const SizedBox(height: 16),
                           _label('QUIC SNI (masquerade domain)'),
-                          TextField(
-                            controller: _sni,
-                            enabled: !_busy,
-                            decoration:
-                                _input('random (apteka.ru / google.com / …)'),
+                          // combo-box: пункты из sni_pool + «Random», и можно
+                          // вписать свой домен (editable). Пустой = рандом из пула.
+                          LayoutBuilder(
+                            builder: (ctx, c) => DropdownMenu<String>(
+                              controller: _sni,
+                              enabled: !_busy,
+                              width: c.maxWidth,
+                              hintText: _sniRandomLabel,
+                              requestFocusOnTap: true,
+                              menuHeight: 280,
+                              dropdownMenuEntries: [
+                                const DropdownMenuEntry(
+                                    value: '', label: _sniRandomLabel),
+                                for (final s in _sniPool)
+                                  DropdownMenuEntry(value: s, label: s),
+                              ],
+                              onSelected: (v) {
+                                // «Random» → очищаем поле (пусто = рандом).
+                                if (v == '') _sni.clear();
+                              },
+                            ),
                           ),
                           const SizedBox(height: 6),
                           Text(
                             'Domain the junk QUIC packet pretends to reach. '
-                            'Leave empty for a random pick.',
+                            'Pick one, type your own, or leave it on Random.',
                             style: Theme.of(context)
                                 .textTheme
                                 .bodySmall
