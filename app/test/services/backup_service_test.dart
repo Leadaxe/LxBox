@@ -193,14 +193,14 @@ void main() {
   group('BackupService.parseImport', () {
     test('rejects non-JSON', () async {
       final svc = const BackupService();
-      expect(() => svc.parseImport('not json'),
+      await expectLater(svc.parseImport('not json'),
           throwsA(isA<FormatException>()));
     });
 
     test('rejects file without app/kind markers', () async {
       final svc = const BackupService();
-      expect(
-          () => svc.parseImport(jsonEncode({'storage': {}})),
+      await expectLater(
+          svc.parseImport(jsonEncode({'storage': {}})),
           throwsA(isA<FormatException>()));
     });
 
@@ -212,8 +212,8 @@ void main() {
         'version': 1,
         'vars': {'log_level': 'info'},
       };
-      expect(
-          () => svc.parseImport(jsonEncode(legacy)),
+      await expectLater(
+          svc.parseImport(jsonEncode(legacy)),
           throwsA(isA<FormatException>().having(
               (e) => e.message, 'message', contains('Unsupported'))));
     });

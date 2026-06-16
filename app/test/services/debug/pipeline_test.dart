@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/debug/context.dart';
 import 'package:lxbox/services/debug/contract/errors.dart';
@@ -54,8 +56,8 @@ void main() {
     });
 
     test('evil.com → InvalidHost', () async {
-      expect(
-        () => runPipeline(_req(host: 'evil.com'), _ctx(), [hostCheck], _okHandler),
+      await expectLater(
+        runPipeline(_req(host: 'evil.com'), _ctx(), [hostCheck], _okHandler),
         throwsA(isA<InvalidHost>()),
       );
     });
@@ -96,8 +98,8 @@ void main() {
     });
 
     test('неверный токен → Unauthorized', () async {
-      expect(
-        () => runPipeline(
+      await expectLater(
+        runPipeline(
           _req(auth: 'Bearer wrong'),
           _ctx(),
           [mw],
@@ -108,8 +110,8 @@ void main() {
     });
 
     test('нет header → Unauthorized', () async {
-      expect(
-        () => runPipeline(_req(), _ctx(), [mw], _okHandler),
+      await expectLater(
+        runPipeline(_req(), _ctx(), [mw], _okHandler),
         throwsA(isA<Unauthorized>()),
       );
     });
@@ -126,8 +128,8 @@ void main() {
 
     test('пустой token → Unauthorized даже с Bearer', () async {
       final emptyMw = auth(token: '');
-      expect(
-        () => runPipeline(
+      await expectLater(
+        runPipeline(
           _req(auth: 'Bearer '),
           _ctx(),
           [emptyMw],
@@ -139,8 +141,8 @@ void main() {
 
     test('схема должна быть именно `Bearer `, не `bearer`', () async {
       // HTTP-заголовки case-insensitive по имени, но не по значению.
-      expect(
-        () => runPipeline(
+      await expectLater(
+        runPipeline(
           _req(auth: 'bearer secret-token'),
           _ctx(),
           [mw],
@@ -191,13 +193,14 @@ void main() {
     });
 
     test('долгий handler → RequestTimeout', () async {
-      Future<DebugResponse> slow(DebugRequest r, DebugContext c) async {
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-        return const JsonResponse({'ok': true});
-      }
+      // Handler «зависает» на Completer, который никогда не завершается:
+      // срабатывание таймаута зависит только от таймера middleware'а,
+      // а не от гонки двух реальных задержек (10ms vs 100ms — flaky на CI).
+      final hang = Completer<DebugResponse>();
+      Future<DebugResponse> slow(DebugRequest r, DebugContext c) => hang.future;
 
-      expect(
-        () => runPipeline(
+      await expectLater(
+        runPipeline(
           _req(),
           _ctx(),
           [timeoutMiddleware(const Duration(milliseconds: 10))],

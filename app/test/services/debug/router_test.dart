@@ -46,8 +46,8 @@ void main() {
   group('Router.handle', () {
     test('404 NotFound если префикс не замаунчен', () async {
       final r = Router()..mount('/state', _stub('state'));
-      expect(
-        () => r.handle(DebugRequest.forTest(path: '/missing'), _ctx()),
+      await expectLater(
+        r.handle(DebugRequest.forTest(path: '/missing'), _ctx()),
         throwsA(isA<NotFound>()),
       );
     });

@@ -204,7 +204,10 @@ class HomeNodeList extends StatelessWidget {
     final isManual = state.sortMode == NodeSortMode.manual;
 
     return ReorderableListView.builder(
-      padding: EdgeInsets.zero,
+      // §134 — bottom-spacer ~в одну строку (высота NodeRow=56): последний
+      // узел не липнет к нижнему краю / не уезжает под controls-блок, всегда
+      // можно доскроллить с запасом.
+      padding: const EdgeInsets.only(bottom: 56),
       buildDefaultDragHandles: false,
       itemCount: displayList.length,
       onReorder: (oldIndex, newIndex) {

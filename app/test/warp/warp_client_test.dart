@@ -65,18 +65,47 @@ void main() {
     expect(base64.decode(sentKey!).length, 32);
   });
 
+  test('§135 register: кастомный endpoint НЕ затирается ответом Cloudflare',
+      () async {
+    final client = MockClient(
+        (req) async => http.Response(jsonEncode(regResponse()), 200));
+
+    // Юзер вписал свой IP:port (Advanced). Ответ API несёт host
+    // engage.cloudflareclient.com:2408 — но он НЕ должен победить.
+    final acc = await WarpClient(client: client).register(
+      endpoint: '188.114.97.6:988',
+      nowIso8601: '2026-06-14T00:00:00Z',
+    );
+
+    expect(acc.endpoint, '188.114.97.6:988');
+  });
+
+  test('§135 register: дефолтный endpoint → fallback на host из ответа',
+      () async {
+    final client = MockClient(
+        (req) async => http.Response(jsonEncode(regResponse()), 200));
+
+    // Юзер оставил дефолт → берём host из ответа Cloudflare (старое поведение).
+    final acc = await WarpClient(client: client).register(
+      endpoint: WarpAccount.defaultEndpoint,
+      nowIso8601: '2026-06-14T00:00:00Z',
+    );
+
+    expect(acc.endpoint, 'engage.cloudflareclient.com:2408');
+  });
+
   test('register: non-200 → WarpException с упоминанием версии', () async {
     final client = MockClient((req) async => http.Response('nope', 429));
-    expect(
-      () => WarpClient(client: client).register(nowIso8601: 'now'),
+    await expectLater(
+      WarpClient(client: client).register(nowIso8601: 'now'),
       throwsA(isA<WarpException>()),
     );
   });
 
   test('register: битый JSON → WarpException', () async {
     final client = MockClient((req) async => http.Response('<<not json', 200));
-    expect(
-      () => WarpClient(client: client).register(nowIso8601: 'now'),
+    await expectLater(
+      WarpClient(client: client).register(nowIso8601: 'now'),
       throwsA(isA<WarpException>()),
     );
   });
@@ -110,18 +139,29 @@ void main() {
     expect(acc.peerPub, 'PEER_PUB='); // регистрация всё равно прошла
   });
 
-  test('toWireguardUri несёт reserved и парсится; тег WARP/WARP+', () async {
+  test('toWireguardUri несёт reserved и парсится; §137 тег Cloudflare WARP',
+      () async {
     final client = MockClient(
         (req) async => http.Response(jsonEncode(regResponse()), 200));
     final acc =
         await WarpClient(client: client).register(nowIso8601: 'now');
     final uri = acc.toWireguardUri();
     expect(uri, startsWith('wireguard://'));
-    expect(uri, endsWith('#WARP'));
+    // §137 — тег с эмодзи (plain = облако), URL-энкодится во фрагменте.
+    final parsed = Uri.parse(uri);
+    expect(Uri.decodeComponent(parsed.fragment), '🔥☁️ WARP');
     // Запятые URL-энкодятся (%2C) — parser декодит обратно. Проверяем по
     // декодированному query, не по сырой строке.
-    final q = Uri.parse(uri.replaceFirst('#WARP', '')).queryParameters;
-    expect(q['reserved'], '12,34,56');
+    expect(parsed.queryParameters['reserved'], '12,34,56');
+  });
+
+  test('§137 nodeTag: облако/гроза, +, AWG-суффикс', () {
+    expect(WarpAccount.nodeTag(warpPlus: false, hasAwg: false), '🔥☁️ WARP');
+    expect(WarpAccount.nodeTag(warpPlus: true, hasAwg: false), '🔥☁️ WARP+');
+    expect(WarpAccount.nodeTag(warpPlus: false, hasAwg: true),
+        '🔥⛈️ WARP (AWG 1.5)');
+    expect(WarpAccount.nodeTag(warpPlus: true, hasAwg: true),
+        '🔥⛈️ WARP+ (AWG 1.5)');
   });
 
   test('WarpAccount.redacted маскирует priv_key/token/license', () {

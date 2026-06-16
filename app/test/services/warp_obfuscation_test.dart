@@ -26,10 +26,10 @@ void main() {
         awg: awg,
       );
 
-  group('WarpClient — 1.5 preset', () {
+  group('WarpClient — preset (§126/§136)', () {
     test('preset: s1=s2=0, h1..h4=1,2,3,4, jc=4 (handshake остаётся plain WG)',
         () {
-      final p = WarpClient.amnezia15Preset();
+      final p = WarpClient.amneziaPreset();
       expect(p['s1'], 0);
       expect(p['s2'], 0);
       expect(p['h1'], 1);
@@ -42,14 +42,41 @@ void main() {
       expect(p.containsKey('i1'), isFalse); // i1 генерится отдельно
     });
 
-    test('buildAmnezia15Awg: preset + i1 выбранного шаблона', () {
-      final awg = WarpClient.buildAmnezia15Awg(JunkTemplate.wgTraffic);
+    test('§136 preset с кастомными jc/jmin/jmax', () {
+      final p = WarpClient.amneziaPreset(jc: 120, jmin: 23, jmax: 911);
+      expect(p['jc'], 120);
+      expect(p['jmin'], 23);
+      expect(p['jmax'], 911);
+      expect(p['s1'], 0); // S/H не трогаются
+      expect(p['h1'], 1);
+    });
+
+    test('buildAmneziaAwg(quic): preset + QUIC i1 (<b>/<r>)', () {
+      final awg = WarpClient.buildAmneziaAwg(JunkTemplate.quic);
       expect(awg.fields['jc'], 4);
       expect(awg.fields['i1'], isA<String>());
-      expect((awg.fields['i1'] as String).startsWith('<b 0x'), isTrue);
+      final i1 = awg.fields['i1'] as String;
+      expect(i1.startsWith('<b 0x'), isTrue);
+      expect(i1.contains('<r '), isTrue); // QUIC = есть рандом-сегменты
       // Уникальность i1 между двумя сборками.
-      final awg2 = WarpClient.buildAmnezia15Awg(JunkTemplate.wgTraffic);
+      final awg2 = WarpClient.buildAmneziaAwg(JunkTemplate.quic);
       expect(awg.fields['i1'], isNot(awg2.fields['i1']));
+    });
+
+    test('buildAmneziaAwg(quic): QuicParams применяются (jc/jmin/jmax)', () {
+      final awg = WarpClient.buildAmneziaAwg(JunkTemplate.quic,
+          params: const QuicParams(
+              sni: 'a.io', level: 1, jc: 7, jmin: 10, jmax: 20));
+      expect(awg.fields['jc'], 7);
+      expect(awg.fields['jmin'], 10);
+      expect(awg.fields['jmax'], 20);
+    });
+
+    test('buildAmneziaAwg(sip): preset + SIP i1', () {
+      final awg = WarpClient.buildAmneziaAwg(JunkTemplate.sip);
+      final i1 = awg.fields['i1'] as String;
+      expect(i1.startsWith('<b 0x'), isTrue);
+      expect(i1.contains('<r '), isFalse); // SIP = сплошной <b>
     });
   });
 
@@ -65,7 +92,7 @@ void main() {
     });
 
     test('obfuscated: AWG-поля в [Interface], i1 присутствует', () {
-      final awg = WarpClient.buildAmnezia15Awg(JunkTemplate.wgTraffic);
+      final awg = WarpClient.buildAmneziaAwg(JunkTemplate.quic);
       final conf = account(awg: awg).toWireguardConf();
       expect(conf.contains('JC = 4'), isTrue);
       expect(conf.contains('H1 = 1'), isTrue);
@@ -75,7 +102,7 @@ void main() {
 
   group('.conf → parseWireguardIni round-trip', () {
     test('obfuscated: AWG + reserved доходят до WireguardSpec/endpoint-JSON', () {
-      final awg = WarpClient.buildAmnezia15Awg(JunkTemplate.sipTraffic);
+      final awg = WarpClient.buildAmneziaAwg(JunkTemplate.sip);
       final i1 = awg.fields['i1'] as String;
       final conf = account(awg: awg).toWireguardConf();
 
@@ -102,7 +129,7 @@ void main() {
 
   group('WarpAccount persist (storage JSON)', () {
     test('awg round-trips через toJson/fromJson', () {
-      final awg = WarpClient.buildAmnezia15Awg(JunkTemplate.wgTraffic);
+      final awg = WarpClient.buildAmneziaAwg(JunkTemplate.quic);
       final acc = account(awg: awg);
       final back = WarpAccount.fromJson(acc.toJson());
       expect(back, isNotNull);
@@ -118,7 +145,7 @@ void main() {
     });
 
     test('copyWith(clearAwg) снимает обфускацию', () {
-      final acc = account(awg: WarpClient.buildAmnezia15Awg(JunkTemplate.wgTraffic));
+      final acc = account(awg: WarpClient.buildAmneziaAwg(JunkTemplate.quic));
       expect(acc.awg, isNotNull);
       expect(acc.copyWith(clearAwg: true).awg, isNull);
     });

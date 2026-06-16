@@ -76,7 +76,7 @@
         <service
             android:name=".vpn.LxBoxTileService"
             android:label="L×Box"
-            android:icon="@mipmap/ic_launcher"
+            android:icon="@drawable/ic_lxbox_tile"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:exported="true">
             <intent-filter>

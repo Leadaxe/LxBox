@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Quick Settings tile icon. QS tiles render the icon as a tint-able
-  monochrome glyph (white on transparent — system applies tint based
-  on Active/Inactive state). Material `verified_user` / shield path
-  fits a VPN tile semantically.
+  Quick Settings tile icon — монохромный знак L×Box.
+  Буква «L» (вертикаль + низ) + «×» в центре + закрашенный наконечник ↗
+  в правом верхнем углу (outbound). Читается как «L×» + box-стрелка.
+
+  QS-плитка рендерит иконку как tint-able монохром: белый glyph на
+  прозрачном фоне, система красит его по состоянию (Active/Inactive).
+  Поэтому всё белым (`@android:color/white`) с tint `?colorControlNormal`.
+
+  Геометрия мотивирована `docs/design/icon/W1_pack/W1_master.svg`,
+  адаптирована под 24dp: линии — stroke c round-cap. Этот же drawable
+  стоит статичной иконкой TileService в манифесте — иначе редактор/превью
+  QS показывает лаунчер-лого как белый квадрат.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
@@ -11,7 +19,26 @@
     android:viewportWidth="24"
     android:viewportHeight="24"
     android:tint="?android:attr/colorControlNormal">
+
+    <!-- Буква L: вертикаль + низ -->
+    <path
+        android:strokeColor="@android:color/white"
+        android:strokeWidth="2.0"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M3.4,3.4 L3.4,20.6 M3.4,20.6 L11.5,20.6" />
+
+    <!-- × в центре: две диагонали -->
+    <path
+        android:strokeColor="@android:color/white"
+        android:strokeWidth="2.0"
+        android:strokeLineCap="round"
+        android:pathData="M8.8,9.8 L14.2,15.2 M8.8,15.2 L14.2,9.8" />
+
+    <!-- Закрашенный наконечник ↗ в правом верхнем углу (без линии-древка).
+         Угол при острие = 90° (прямоугольный треугольник) → «жирная»
+         стрелка наружу, а не узкая иголка. -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M12,1L3,5v6c0,5.55 3.84,10.74 9,12 5.16,-1.26 9,-6.45 9,-12V5l-9,-4zM12,11.99h7c-0.53,4.12 -3.28,7.79 -7,8.94V12H5V6.3l7,-3.11v8.8z" />
+        android:pathData="M20.7,3.3 L16.1,3.3 L20.7,7.9 Z" />
 </vector>

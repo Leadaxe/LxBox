@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
 import '../services/warp/awg_junk.dart';
 import '../services/warp/warp_account.dart';
+import '../services/warp/warp_endpoint_picker.dart';
 
 /// §025 — Full-screen визард «Get WARP». Открывается из overflow-меню
 /// Subscriptions. Один тап «Register» для free; license/endpoint опциональны
@@ -32,19 +34,111 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
   final _endpoint =
       TextEditingController(text: WarpAccount.defaultEndpoint);
 
+  // §136 — QUIC-параметры (Advanced). Пустой SNI → рандом из пула.
+  final _sni = TextEditingController();
+  List<String> _sniPool = const []; // подсказки для DropdownMenu
+  int _quicLevel = 0;
+  final _jc = TextEditingController(text: '4');
+  final _jmin = TextEditingController(text: '40');
+  final _jmax = TextEditingController(text: '70');
+
   bool _forceNew = false;
   bool _busy = false;
   WarpAccount? _result;
 
-  // §126 — AmneziaWG 1.5 обфускация (default off — обычный WARP).
+  // §126/§136 — AmneziaWG обфускация (default off — обычный WARP).
   bool _obfuscate = false;
-  JunkTemplate _template = JunkTemplate.wgTraffic;
+  JunkTemplate _template = JunkTemplate.quic;
+
+  WarpEndpointPicker? _picker; // §136 — для рандома endpoint/SNI
+  bool _endpointAutoFilled = false; // §136 — endpoint в поле = наш авто-рандом
+
+  @override
+  void initState() {
+    super.initState();
+    // §136 — подтягиваем picker (SNI-пул для dropdown + рандом endpoint/SNI).
+    WarpEndpointPicker.load().then((p) {
+      if (!mounted) return;
+      setState(() {
+        _picker = p;
+        _sniPool = p.sniPool;
+        // SNI при открытии — конкретный случайный домен (не «Random»); юзер
+        // может выбрать другой/вписать свой или рерольнуть кубиком.
+        if (_sni.text.trim().isEmpty) _sni.text = p.randomSni();
+      });
+      // Если юзер успел включить обфускацию до загрузки picker — заполняем.
+      if (_obfuscate && _endpointReplaceable) _fillRandomEndpoint();
+    });
+  }
+
+  /// §136 — генерирует рандомный endpoint в поле (при включении обфускации).
+  /// Помечает поле как авто-заполненное.
+  void _fillRandomEndpoint() {
+    final ep = _picker?.randomEndpoint();
+    if (ep != null) {
+      setState(() {
+        _endpoint.text = ep;
+        _endpointAutoFilled = true;
+      });
+    }
+  }
+
+  /// §136 — кубик 🎲 у SNI: подставляет случайный домен из пула в поле.
+  void _fillRandomSni() {
+    final sni = _picker?.randomSni();
+    if (sni != null && sni.isNotEmpty) {
+      setState(() => _sni.text = sni);
+    }
+  }
+
+  /// true если в поле endpoint — дефолт/пусто/наш авто-рандом (не вписан юзером
+  /// вручную → можно перезаписать).
+  bool get _endpointReplaceable {
+    final v = _endpoint.text.trim();
+    return v.isEmpty || v == WarpAccount.defaultEndpoint || _endpointAutoFilled;
+  }
+
+  /// §136 — снятие галки обфускации → все обфускация-поля в стандарт.
+  /// Endpoint возвращаем к дефолту только если он был НАШИМ авто-рандомом
+  /// (вписанный юзером свой IP:port не трогаем). QUIC-параметры (скрытые без
+  /// галки) сбрасываем к дефолтам, чтобы повторное включение стартовало чисто.
+  void _resetObfuscationFields() {
+    setState(() {
+      if (_endpointAutoFilled) {
+        _endpoint.text = WarpAccount.defaultEndpoint;
+        _endpointAutoFilled = false;
+      }
+      _template = JunkTemplate.quic;
+      _sni.text = _picker?.randomSni() ?? ''; // свежий случайный домен
+      _quicLevel = 0;
+      _jc.text = '4';
+      _jmin.text = '40';
+      _jmax.text = '70';
+    });
+  }
 
   @override
   void dispose() {
     _license.dispose();
     _endpoint.dispose();
+    _sni.dispose();
+    _jc.dispose();
+    _jmin.dispose();
+    _jmax.dispose();
     super.dispose();
+  }
+
+  /// Собирает [QuicParams] из Advanced-полей (с дефолтами при пустых/битых).
+  /// SNI-поле обычно содержит конкретный домен; пустое → register подставит
+  /// рандом из пула (fallback в контроллере).
+  QuicParams _buildQuicParams() {
+    return QuicParams(
+      sni: _sni.text.trim(),
+      level: _quicLevel,
+      jc: int.tryParse(_jc.text.trim()) ?? 4,
+      jmin: int.tryParse(_jmin.text.trim()) ?? 40,
+      jmax: int.tryParse(_jmax.text.trim()) ?? 70,
+    );
   }
 
   Future<void> _register() async {
@@ -62,6 +156,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
         forceNew: _forceNew,
         obfuscate: _obfuscate,
         template: _template,
+        quicParams: _buildQuicParams(),
       );
 
       if (!mounted) return;
@@ -140,8 +235,22 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                     value: _obfuscate,
                     onChanged: _busy
                         ? null
-                        : (v) => setState(() => _obfuscate = v ?? false),
-                    title: const Text('Add Amnezia 1.5 obfuscation'),
+                        : (v) {
+                            final on = v ?? false;
+                            setState(() => _obfuscate = on);
+                            if (on) {
+                              // Включение → сразу рандомный endpoint в поле
+                              // (если там дефолт/пусто/прошлый авто-рандом, но
+                              // НЕ вписанный юзером вручную).
+                              if (_endpointReplaceable) _fillRandomEndpoint();
+                            } else {
+                              // Выключение → всё в стандарт (без галки обфускация
+                              // не применяется, поля не должны вводить в
+                              // заблуждение).
+                              _resetObfuscationFields();
+                            }
+                          },
+                    title: const Text('Add Amnezia obfuscation'),
                     subtitle: const Text(
                         'Masks WireGuard from DPI by adding junk traffic. '
                         'Enable if WARP is blocked.'),
@@ -149,41 +258,40 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                   if (_obfuscate) ...[
                     const Divider(height: 1),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: _label('Junk template'),
-                      ),
-                    ),
-                    // Flutter 3.41: groupValue/onChanged переехали с RadioListTile
-                    // на обёртку RadioGroup; disabled-состояние — через
-                    // `enabled` каждого тайла (вместо onChanged: null).
-                    RadioGroup<JunkTemplate>(
-                      groupValue: _template,
-                      onChanged: (v) => setState(
-                          () => _template = v ?? JunkTemplate.wgTraffic),
-                      child: Column(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                      child: Row(
                         children: [
-                          RadioListTile<JunkTemplate>(
-                            dense: true,
-                            value: JunkTemplate.wgTraffic,
-                            enabled: !_busy,
-                            title: const Text('WG-traffic'),
-                            subtitle: const Text(
-                                'Junk mimics another WireGuard packet'),
-                          ),
-                          RadioListTile<JunkTemplate>(
-                            dense: true,
-                            value: JunkTemplate.sipTraffic,
-                            enabled: !_busy,
-                            title: const Text('SIP-traffic'),
-                            subtitle:
-                                const Text('Junk mimics a VoIP (SIP) call'),
+                          _label('Junk template'),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: DropdownButtonFormField<JunkTemplate>(
+                              initialValue: _template,
+                              isDense: true,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                border: OutlineInputBorder(),
+                                contentPadding:
+                                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: JunkTemplate.quic,
+                                  child: Text('QUIC (default)'),
+                                ),
+                                DropdownMenuItem(
+                                  value: JunkTemplate.sip,
+                                  child: Text('SIP'),
+                                ),
+                              ],
+                              onChanged: _busy
+                                  ? null
+                                  : (v) => setState(
+                                      () => _template = v ?? JunkTemplate.quic),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 4),
                   ],
                 ],
               ),
@@ -222,16 +330,119 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                         TextField(
                           controller: _endpoint,
                           enabled: !_busy,
-                          decoration: _input(WarpAccount.defaultEndpoint),
+                          // Ручная правка → больше не считаем поле авто-рандомом.
+                          onChanged: (_) {
+                            if (_endpointAutoFilled) {
+                              setState(() => _endpointAutoFilled = false);
+                            }
+                          },
+                          decoration: _input(WarpAccount.defaultEndpoint).copyWith(
+                            // §136 — кубик: реролл рандомного endpoint (только
+                            // его). Видна при обфускации.
+                            suffixIcon: _obfuscate
+                                ? IconButton(
+                                    icon: const Icon(Icons.casino_outlined),
+                                    tooltip: 'Pick another random IP:port',
+                                    onPressed:
+                                        _busy ? null : _fillRandomEndpoint,
+                                  )
+                                : null,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'host:port of the Cloudflare peer. Change only if the '
-                          'default is blocked (use a working IP:port).',
+                          'host:port of the Cloudflare peer. With obfuscation a '
+                          'random working IP:port is filled in — tap the dice to '
+                          'reroll, or type your own to pin a specific one.',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: cs.onSurfaceVariant,
                               ),
                         ),
+                        // §136 — QUIC-параметры (только при QUIC-обфускации).
+                        if (_obfuscate && _template == JunkTemplate.quic) ...[
+                          const SizedBox(height: 16),
+                          _label('QUIC SNI (masquerade domain)'),
+                          // combo-box (пункты из sni_pool + свободный ввод) +
+                          // свой кубик: реролл случайного домена из пула.
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: LayoutBuilder(
+                                  builder: (ctx, c) => DropdownMenu<String>(
+                                    controller: _sni,
+                                    enabled: !_busy,
+                                    width: c.maxWidth,
+                                    requestFocusOnTap: true,
+                                    menuHeight: 280,
+                                    dropdownMenuEntries: [
+                                      for (final s in _sniPool)
+                                        DropdownMenuEntry(value: s, label: s),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.casino_outlined),
+                                tooltip: 'Pick another random domain',
+                                onPressed: _busy ? null : _fillRandomSni,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Domain the junk QUIC packet pretends to reach. '
+                            'Pick one, type your own, or roll the dice.',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: cs.onSurfaceVariant),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              _label('QUIC level'),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: DropdownButtonFormField<int>(
+                                  initialValue: _quicLevel,
+                                  isDense: true,
+                                  decoration: const InputDecoration(
+                                    isDense: true,
+                                    border: OutlineInputBorder(),
+                                    contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                  ),
+                                  items: [
+                                    for (var i = 0; i <= 4; i++)
+                                      DropdownMenuItem(
+                                          value: i, child: Text('$i')),
+                                  ],
+                                  onChanged: _busy
+                                      ? null
+                                      : (v) =>
+                                          setState(() => _quicLevel = v ?? 0),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _numField(_jc, 'Jc'),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _numField(_jmin, 'Jmin'),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _numField(_jmax, 'Jmax'),
+                              ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         CheckboxListTile(
                           contentPadding: EdgeInsets.zero,
@@ -285,6 +496,21 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
         isDense: true,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      );
+
+  /// §136 — компактное числовое поле для Jc/Jmin/Jmax.
+  Widget _numField(TextEditingController c, String label) => TextField(
+        controller: c,
+        enabled: !_busy,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          isDense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        ),
       );
 }
 

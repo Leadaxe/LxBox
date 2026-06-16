@@ -113,10 +113,10 @@ class HomeControls extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          const Text('Channel', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
           Row(
             children: [
+              const Text('Channel', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(width: 12),
               Expanded(
                 child: Container(
                   height: 40,
