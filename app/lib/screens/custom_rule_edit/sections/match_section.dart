@@ -47,7 +47,7 @@ class MatchSection extends StatelessWidget {
         ItemsField(
           label: 'Domain suffix',
           controller: domainSuffixCtrl,
-          validator: v.isValidDomain,
+          validator: v.isValidDomainSuffix,
           normalize: (s) {
             var x = s.toLowerCase();
             if (x.startsWith('.')) x = x.substring(1);

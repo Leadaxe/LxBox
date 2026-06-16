@@ -19,6 +19,18 @@ final RegExp _domainRegex = RegExp(
 
 bool isValidDomain(String v) => _domainRegex.hasMatch(v);
 
+/// §144 — Domain suffix `ru` / `example.com` / `co.uk` / `xn--p1ai`.
+/// Слабее `isValidDomain`: sing-box `domain_suffix` — суффиксное сравнение
+/// хвоста хоста, поэтому голый TLD (`ru`, `com`) валиден, точка и буквенный
+/// TLD необязательны. Один+ валидный DNS-лейбл через точку. Регистр —
+/// only-lower: normalizer (match_section) делает toLowerCase + strip
+/// leading `.` ДО вызова.
+final RegExp _domainSuffixRegex = RegExp(
+  r'^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$',
+);
+
+bool isValidDomainSuffix(String v) => _domainSuffixRegex.hasMatch(v);
+
 /// Domain keyword — non-empty без whitespace. Sing-box matcher делает
 /// substring search, поэтому пробелы внутри ломают match.
 bool isValidKeyword(String v) => v.isNotEmpty && !v.contains(RegExp(r'\s'));

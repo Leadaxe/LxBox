@@ -35,6 +35,48 @@ void main() {
     });
   });
 
+  group('isValidDomainSuffix (§144)', () {
+    test('accepts bare TLD (отличие от isValidDomain)', () {
+      expect(isValidDomainSuffix('ru'), isTrue);
+      expect(isValidDomainSuffix('com'), isTrue);
+      expect(isValidDomainSuffix('a'), isTrue);
+    });
+    test('accepts multi-label suffix', () {
+      expect(isValidDomainSuffix('example.com'), isTrue);
+      expect(isValidDomainSuffix('co.uk'), isTrue);
+      expect(isValidDomainSuffix('sub.example.co.uk'), isTrue);
+    });
+    test('accepts punycode TLD (.рф)', () {
+      expect(isValidDomainSuffix('xn--p1ai'), isTrue);
+    });
+    test('accepts hyphenated + numeric labels', () {
+      expect(isValidDomainSuffix('a-b.c'), isTrue);
+      expect(isValidDomainSuffix('123.com'), isTrue);
+    });
+    // Caller (match_section) делает toLowerCase + strip leading '.' ДО вызова,
+    // поэтому валидатор видит already-normalized lower-case без ведущей точки.
+    test('rejects empty', () {
+      expect(isValidDomainSuffix(''), isFalse);
+    });
+    test('rejects scheme / slash / whitespace', () {
+      expect(isValidDomainSuffix('https://x.com'), isFalse);
+      expect(isValidDomainSuffix('a/b'), isFalse);
+      expect(isValidDomainSuffix('a b'), isFalse);
+    });
+    test('rejects double dot / trailing dot', () {
+      expect(isValidDomainSuffix('foo..bar'), isFalse);
+      expect(isValidDomainSuffix('foo.'), isFalse);
+    });
+    test('rejects label starting/ending with hyphen', () {
+      expect(isValidDomainSuffix('-foo.com'), isFalse);
+      expect(isValidDomainSuffix('foo-.com'), isFalse);
+    });
+    test('rejects label > 63 chars', () {
+      expect(isValidDomainSuffix('a' * 64), isFalse);
+      expect(isValidDomainSuffix('a' * 63), isTrue);
+    });
+  });
+
   group('isValidKeyword', () {
     test('accepts non-empty without whitespace', () {
       expect(isValidKeyword('tracker'), isTrue);
