@@ -54,7 +54,7 @@ class MatchSection extends StatelessWidget {
             if (x.startsWith('.')) x = x.substring(1);
             return domainToAscii(x);
           },
-          hint: 'google.com\n.ru\nпочта.рф',
+          hint: 'google.com\n.io\nco.uk',
         ),
         ItemsField(
           label: 'Domain keyword',

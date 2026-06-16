@@ -244,6 +244,21 @@ class SettingsStorage {
     await _save();
   }
 
+  // §143 — принудительно рвать активные соединения переключаемой группы при
+  // смене ноды. НЕ config-significant (поведение Clash-API клиента, не идёт в
+  // sing-box config) → без markConfigDirty. Default false (opt-in).
+  static Future<bool> getInterruptOnSwitch() async {
+    final c = await _load();
+    return c['interrupt_connections_on_switch'] == true;
+  }
+
+  static Future<void> setInterruptOnSwitch(bool value) async {
+    final c = await _load();
+    c['interrupt_connections_on_switch'] = value;
+    SettingsStorage._cache = c;
+    await _save();
+  }
+
   static Future<List<Map<String, dynamic>>> getDnsServers() => _getDnsServers();
 
   static Future<void> saveDnsServers(List<Map<String, dynamic>> servers,

@@ -560,6 +560,26 @@ class HomeController extends ChangeNotifier
     _emit(_state.copyWith(busy: true, highlightedNode: nodeTag));
     try {
       await clash.selectInGroup(group, nodeTag);
+      // §143 — `interrupt_exist_connections` рвёт только inbound; уже
+      // установленные upstream-сессии старой ноды доживают сами. По opt-in
+      // тугле точечно закрываем соединения переключаемой группы, чтобы трафик
+      // сразу ушёл на новую ноду. Best-effort: фейл одного DELETE не должен
+      // ронять переключение.
+      if (await SettingsStorage.getInterruptOnSwitch()) {
+        try {
+          final conns = await clash.fetchConnections();
+          final ids = ClashApiClient.connectionIdsInChain(conns, group);
+          for (final id in ids) {
+            try {
+              await clash.closeConnection(id);
+            } catch (_) {/* соединение уже закрылось — игнор */}
+          }
+          _addDebug(
+              DebugSource.app, 'Interrupted ${ids.length} conns in $group');
+        } catch (e) {
+          _addDebug(DebugSource.app, 'Interrupt-on-switch failed: $e');
+        }
+      }
       await reloadProxies();
       _addDebug(DebugSource.app, 'Node selected: $nodeTag');
     } catch (e) {

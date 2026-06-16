@@ -54,6 +54,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _keepOnExit = false;
   BackgroundMode _backgroundMode = BackgroundMode.never;
   bool _vpnLoaded = false;
+  // §143 — НЕ native/config-significant: чистая storage-настройка поведения
+  // Clash-API клиента при переключении ноды. Без Restart-баннера.
+  bool _interruptOnSwitch = false;
 
   @override
   void initState() {
@@ -97,14 +100,23 @@ class _SettingsScreenState extends State<SettingsScreen>
     final allowBypass = await _vpn.getAllowBypass();
     final keep = await _vpn.getKeepOnExit();
     final bgMode = await _vpn.getBackgroundMode();
+    final interruptOnSwitch = await SettingsStorage.getInterruptOnSwitch();
     setState(() {
       _template = template;
       _allowBypass = allowBypass;
       _keepOnExit = keep;
       _backgroundMode = bgMode;
+      _interruptOnSwitch = interruptOnSwitch;
       _vpnLoaded = true;
       _loading = false;
     });
+  }
+
+  // §143 — toggle persist'ится сразу в storage. НЕ config-significant → без
+  // `markConfigChangedNeedRestart` (в отличие от соседних native-туглов, §084 M14).
+  void _toggleInterruptOnSwitch(bool val) {
+    setState(() => _interruptOnSwitch = val);
+    unawaited(SettingsStorage.setInterruptOnSwitch(val));
   }
 
   Future<void> _toggleAllowBypass(bool enable) async {
@@ -228,6 +240,15 @@ class _SettingsScreenState extends State<SettingsScreen>
           secondary: const Icon(Icons.exit_to_app),
           value: _keepOnExit,
           onChanged: _vpnLoaded ? _toggleKeepOnExit : null,
+        ),
+        SwitchListTile(
+          title: const Text('Interrupt connections on switch'),
+          subtitle: const Text(
+              'Drop active connections when you switch nodes, so traffic '
+              'moves to the new node immediately'),
+          secondary: const Icon(Icons.swap_horiz),
+          value: _interruptOnSwitch,
+          onChanged: _toggleInterruptOnSwitch,
         ),
         const Divider(height: 32),
         Padding(

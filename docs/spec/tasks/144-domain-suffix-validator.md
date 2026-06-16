@@ -107,7 +107,9 @@ Dart-aware) + Punycode не-ASCII меток.
 | UI-бейдж (suffix) | `match_section.dart` | `normalize: …strip dot → domainToAscii(x)` |
 
 Save-path общий для обоих полей → punycode попадает в сохранённое правило →
-оттуда в конфиг sing-box. Hint суффикса дополнен примером `почта.рф`.
+оттуда в конфиг sing-box. Hint полей остаётся locale-neutral (ASCII-примеры
+форм: multi-label / голый TLD / двухуровневый TLD) — IDN-конверсия работает
+молча, демонстрировать её конкретной локалью не нужно.
 
 ### Проверка
 

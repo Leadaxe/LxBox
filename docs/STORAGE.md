@@ -100,6 +100,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 ├─ enabled_groups[]              list          включённые preset-группы (selector membership)
 ├─ last_global_update            ISO-8601      timestamp последнего auto-refresh
 ├─ presets_migrated              bool          one-shot guard (legacy enabled_rules+rule_outbounds → custom_rules)
+├─ interrupt_connections_on_switch  bool       §143 — рвать соединения переключаемой группы при смене ноды (default false, НЕ config-significant)
 │
 └─ (legacy)
     ├─ enabled_rules[]                          мигрируется → обнуляется
@@ -159,6 +160,7 @@ Android SharedPreferences:
   "enabled_groups":     [ … ],     // включённые preset-группы (selector membership)
   "last_global_update": "ISO-8601",// последняя auto-refresh подписок
   "presets_migrated":   true,      // one-shot guard (legacy → custom_rules)
+  "interrupt_connections_on_switch": false, // §143 — рвать conns группы при смене ноды (НЕ config-significant)
 
   // Legacy — мигрируются и обнуляются на первом чтении.
   "enabled_rules":      [],
