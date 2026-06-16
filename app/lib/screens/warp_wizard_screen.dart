@@ -56,20 +56,23 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
   @override
   void initState() {
     super.initState();
-    // §136 — подтягиваем picker (SNI-пул для dropdown + рандом endpoint).
+    // §136 — подтягиваем picker (SNI-пул для dropdown + рандом endpoint/SNI).
     WarpEndpointPicker.load().then((p) {
       if (!mounted) return;
       setState(() {
         _picker = p;
         _sniPool = p.sniPool;
+        // SNI при открытии — конкретный случайный домен (не «Random»); юзер
+        // может выбрать другой/вписать свой или рерольнуть кубиком.
+        if (_sni.text.trim().isEmpty) _sni.text = p.randomSni();
       });
       // Если юзер успел включить обфускацию до загрузки picker — заполняем.
       if (_obfuscate && _endpointReplaceable) _fillRandomEndpoint();
     });
   }
 
-  /// §136 — генерирует рандомный endpoint в поле (при включении обфускации /
-  /// по кнопке refresh). Помечает поле как авто-заполненное.
+  /// §136 — генерирует рандомный endpoint в поле (при включении обфускации).
+  /// Помечает поле как авто-заполненное.
   void _fillRandomEndpoint() {
     final ep = _picker?.randomEndpoint();
     if (ep != null) {
@@ -77,6 +80,14 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
         _endpoint.text = ep;
         _endpointAutoFilled = true;
       });
+    }
+  }
+
+  /// §136 — кубик 🎲 у SNI: подставляет случайный домен из пула в поле.
+  void _fillRandomSni() {
+    final sni = _picker?.randomSni();
+    if (sni != null && sni.isNotEmpty) {
+      setState(() => _sni.text = sni);
     }
   }
 
@@ -98,7 +109,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
         _endpointAutoFilled = false;
       }
       _template = JunkTemplate.quic;
-      _sni.clear();
+      _sni.text = _picker?.randomSni() ?? ''; // свежий случайный домен
       _quicLevel = 0;
       _jc.text = '4';
       _jmin.text = '40';
@@ -117,16 +128,12 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     super.dispose();
   }
 
-  /// Sentinel-метка «рандом» в SNI-combobox (= пустой SNI → рандом из пула).
-  static const _sniRandomLabel = 'Random (default)';
-
   /// Собирает [QuicParams] из Advanced-полей (с дефолтами при пустых/битых).
-  /// «Random (default)»-метку трактуем как пустой SNI (DropdownMenu пишет
-  /// label выбранного пункта в контроллер).
+  /// SNI-поле обычно содержит конкретный домен; пустое → register подставит
+  /// рандом из пула (fallback в контроллере).
   QuicParams _buildQuicParams() {
-    final sni = _sni.text.trim();
     return QuicParams(
-      sni: sni == _sniRandomLabel ? '' : sni,
+      sni: _sni.text.trim(),
       level: _quicLevel,
       jc: int.tryParse(_jc.text.trim()) ?? 4,
       jmin: int.tryParse(_jmin.text.trim()) ?? 40,
@@ -330,8 +337,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                             }
                           },
                           decoration: _input(WarpAccount.defaultEndpoint).copyWith(
-                            // §136 — кнопка перегенерации рандомного endpoint
-                            // (видна при обфускации).
+                            // §136 — кубик: реролл рандомного endpoint (только
+                            // его). Видна при обфускации.
                             suffixIcon: _obfuscate
                                 ? IconButton(
                                     icon: const Icon(Icons.casino_outlined),
@@ -355,32 +362,37 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                         if (_obfuscate && _template == JunkTemplate.quic) ...[
                           const SizedBox(height: 16),
                           _label('QUIC SNI (masquerade domain)'),
-                          // combo-box: пункты из sni_pool + «Random», и можно
-                          // вписать свой домен (editable). Пустой = рандом из пула.
-                          LayoutBuilder(
-                            builder: (ctx, c) => DropdownMenu<String>(
-                              controller: _sni,
-                              enabled: !_busy,
-                              width: c.maxWidth,
-                              hintText: _sniRandomLabel,
-                              requestFocusOnTap: true,
-                              menuHeight: 280,
-                              dropdownMenuEntries: [
-                                const DropdownMenuEntry(
-                                    value: '', label: _sniRandomLabel),
-                                for (final s in _sniPool)
-                                  DropdownMenuEntry(value: s, label: s),
-                              ],
-                              onSelected: (v) {
-                                // «Random» → очищаем поле (пусто = рандом).
-                                if (v == '') _sni.clear();
-                              },
-                            ),
+                          // combo-box (пункты из sni_pool + свободный ввод) +
+                          // свой кубик: реролл случайного домена из пула.
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: LayoutBuilder(
+                                  builder: (ctx, c) => DropdownMenu<String>(
+                                    controller: _sni,
+                                    enabled: !_busy,
+                                    width: c.maxWidth,
+                                    requestFocusOnTap: true,
+                                    menuHeight: 280,
+                                    dropdownMenuEntries: [
+                                      for (final s in _sniPool)
+                                        DropdownMenuEntry(value: s, label: s),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.casino_outlined),
+                                tooltip: 'Pick another random domain',
+                                onPressed: _busy ? null : _fillRandomSni,
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 6),
                           Text(
                             'Domain the junk QUIC packet pretends to reach. '
-                            'Pick one, type your own, or leave it on Random.',
+                            'Pick one, type your own, or roll the dice.',
                             style: Theme.of(context)
                                 .textTheme
                                 .bodySmall
