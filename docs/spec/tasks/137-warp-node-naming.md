@@ -12,10 +12,10 @@
 
 | Случай | Тег |
 |---|---|
-| plain WARP | `🔥☁️ Cloudflare WARP` |
-| plain WARP+ | `🔥☁️ Cloudflare WARP+` |
-| AWG-обфускация | `🔥⛈️ Cloudflare WARP (AWG 1.5)` |
-| AWG WARP+ | `🔥⛈️ Cloudflare WARP+ (AWG 1.5)` |
+| plain WARP | `🔥☁️ WARP` |
+| plain WARP+ | `🔥☁️ WARP+` |
+| AWG-обфускация | `🔥⛈️ WARP (AWG 1.5)` |
+| AWG WARP+ | `🔥⛈️ WARP+ (AWG 1.5)` |
 | коллизия (тег занят) | `… 2`, `… 3`, … (суффикс) |
 
 **Гроза ⛈️ вместо облака ☁️** при включённой AWG-обфускации — визуальный сигнал
@@ -43,8 +43,8 @@ Get WARP добавляет НОВЫЙ узел. Юзер сам удаляет 
 
 ## Acceptance
 
-- [ ] Plain WARP → тег `🔥☁️ Cloudflare WARP` (+ `+` для WARP+).
-- [ ] AWG → тег `🔥⛈️ Cloudflare WARP (AWG 1.5)` (гроза).
+- [ ] Plain WARP → тег `🔥☁️ WARP` (+ `+` для WARP+).
+- [ ] AWG → тег `🔥⛈️ WARP (AWG 1.5)` (гроза).
 - [ ] Повторный Get WARP НЕ удаляет прежние узлы (накопление).
 - [ ] Коллизия тега → суффикс ` 2`/` 3`.
 - [x] node_emoji не дублирует эмодзи (он уже в теге); старые `WARP`-узлы не теряют иконку (backward-compat матч сохранён).

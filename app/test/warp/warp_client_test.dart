@@ -149,21 +149,19 @@ void main() {
     expect(uri, startsWith('wireguard://'));
     // §137 — тег с эмодзи (plain = облако), URL-энкодится во фрагменте.
     final parsed = Uri.parse(uri);
-    expect(Uri.decodeComponent(parsed.fragment), '🔥☁️ Cloudflare WARP');
+    expect(Uri.decodeComponent(parsed.fragment), '🔥☁️ WARP');
     // Запятые URL-энкодятся (%2C) — parser декодит обратно. Проверяем по
     // декодированному query, не по сырой строке.
     expect(parsed.queryParameters['reserved'], '12,34,56');
   });
 
   test('§137 nodeTag: облако/гроза, +, AWG-суффикс', () {
-    expect(WarpAccount.nodeTag(warpPlus: false, hasAwg: false),
-        '🔥☁️ Cloudflare WARP');
-    expect(WarpAccount.nodeTag(warpPlus: true, hasAwg: false),
-        '🔥☁️ Cloudflare WARP+');
+    expect(WarpAccount.nodeTag(warpPlus: false, hasAwg: false), '🔥☁️ WARP');
+    expect(WarpAccount.nodeTag(warpPlus: true, hasAwg: false), '🔥☁️ WARP+');
     expect(WarpAccount.nodeTag(warpPlus: false, hasAwg: true),
-        '🔥⛈️ Cloudflare WARP (AWG 1.5)');
+        '🔥⛈️ WARP (AWG 1.5)');
     expect(WarpAccount.nodeTag(warpPlus: true, hasAwg: true),
-        '🔥⛈️ Cloudflare WARP+ (AWG 1.5)');
+        '🔥⛈️ WARP+ (AWG 1.5)');
   });
 
   test('WarpAccount.redacted маскирует priv_key/token/license', () {

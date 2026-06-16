@@ -71,9 +71,7 @@ class WarpAccount {
   /// Коллизия-суффикс (` 2`/` 3`) накидывает caller (контроллер знает соседей).
   static String nodeTag({required bool warpPlus, required bool hasAwg}) {
     final plus = warpPlus ? '+' : '';
-    return hasAwg
-        ? '🔥⛈️ Cloudflare WARP$plus (AWG 1.5)'
-        : '🔥☁️ Cloudflare WARP$plus';
+    return hasAwg ? '🔥⛈️ WARP$plus (AWG 1.5)' : '🔥☁️ WARP$plus';
   }
 
   /// `reserved` как 3 байта (из base64 client_id). null если client_id битый.
