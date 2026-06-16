@@ -17,17 +17,12 @@ void main() {
     return out;
   }
 
-  group('QUIC i1 — формат и нарезка', () {
-    // QUIC i1 = смесь <b 0xHEX> и <r N> сегментов.
-    final segRe = RegExp(r'<b 0x[0-9a-f]+>|<r \d+>');
-
-    test('состоит из валидных <b>/<r> сегментов, есть оба тега', () {
+  group('QUIC i1 — формат', () {
+    test('сплошной <b>, БЕЗ <r> (узел с <r> у Ильи НЕ работал)', () {
       final cps = generateQuicI1('www.google.com', level: 0);
-      // Вся строка = конкатенация сегментов (нет мусора между).
-      final joined = segRe.allMatches(cps).map((m) => m.group(0)).join();
-      expect(joined, cps, reason: 'не чистая CPS-строка: $cps');
-      expect(cps.contains('<b 0x'), isTrue, reason: 'нет <b>');
-      expect(cps.contains('<r '), isTrue, reason: 'нет <r> (рандом-сегмент)');
+      expect(RegExp(r'^<b 0x[0-9a-f]+>$').hasMatch(cps), isTrue,
+          reason: 'не один сплошной <b>: $cps');
+      expect(cps.contains('<r '), isFalse, reason: '<r> ломает i1');
     });
 
     test('первый сегмент <b> начинается с QUIC long-header (0xc0..0xcf)', () {

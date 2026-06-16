@@ -51,14 +51,16 @@ void main() {
       expect(p['h1'], 1);
     });
 
-    test('buildAmneziaAwg(quic): preset + QUIC i1 (<b>/<r>)', () {
+    test('buildAmneziaAwg(quic): preset + QUIC i1 (сплошной <b>, как рабочий)',
+        () {
       final awg = WarpClient.buildAmneziaAwg(JunkTemplate.quic);
       expect(awg.fields['jc'], 4);
       expect(awg.fields['i1'], isA<String>());
       final i1 = awg.fields['i1'] as String;
       expect(i1.startsWith('<b 0x'), isTrue);
-      expect(i1.contains('<r '), isTrue); // QUIC = есть рандом-сегменты
-      // Уникальность i1 между двумя сборками.
+      // §136 — сплошной <b>, БЕЗ <r> (узел с <r> у Ильи НЕ работал).
+      expect(i1.contains('<r '), isFalse);
+      // Уникальность i1 между двумя сборками (рандомный DCID/random).
       final awg2 = WarpClient.buildAmneziaAwg(JunkTemplate.quic);
       expect(awg.fields['i1'], isNot(awg2.fields['i1']));
     });
@@ -97,6 +99,17 @@ void main() {
       expect(conf.contains('JC = 4'), isTrue);
       expect(conf.contains('H1 = 1'), isTrue);
       expect(conf.contains('I1 = <b 0x'), isTrue);
+    });
+
+    test('§142 includeReserved=false → НЕТ Reserved (conf и uri)', () {
+      final acc = account();
+      expect(acc.toWireguardConf(includeReserved: false).contains('Reserved'),
+          isFalse);
+      expect(acc.toWireguardUri(includeReserved: false).contains('reserved'),
+          isFalse);
+      // дефолт (true) — reserved есть (backward-compat).
+      expect(acc.toWireguardConf().contains('Reserved = 1,2,3'), isTrue);
+      expect(acc.toWireguardUri().contains('reserved'), isTrue);
     });
   });
 
@@ -148,6 +161,20 @@ void main() {
       final acc = account(awg: WarpClient.buildAmneziaAwg(JunkTemplate.quic));
       expect(acc.awg, isNotNull);
       expect(acc.copyWith(clearAwg: true).awg, isNull);
+    });
+
+    test('§138 copyWith(endpoint) применяет новый endpoint к аккаунту', () {
+      // Корень бага: закешированный аккаунт с дефолтным endpoint; юзер выбрал
+      // свой в Advanced. Без применения endpoint в узел шёл старый из кеша.
+      final cached = account(); // endpoint = defaultEndpoint
+      expect(cached.endpoint, WarpAccount.defaultEndpoint);
+      final updated = cached.copyWith(endpoint: '188.114.97.6:988');
+      expect(updated.endpoint, '188.114.97.6:988');
+      // остальное (ключи) не теряется.
+      expect(updated.privKey, cached.privKey);
+      expect(updated.peerPub, cached.peerPub);
+      // и доходит до .conf/URI узла.
+      expect(updated.toWireguardUri(), contains('188.114.97.6:988'));
     });
   });
 }

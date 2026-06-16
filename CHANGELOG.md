@@ -8,6 +8,20 @@
 
 ## [Unreleased]
 
+## [2.3.3] — 2026-06-16
+
+Багфикс-релиз по field-report из региона с жёстким DPI (Крым): WARP-узел из приложения не подключался, хотя ручные конфиги от публичных генераторов работали. Серия фиксов по итогам пошаговой диагностики на устройстве.
+
+### Fixed
+
+- **§142 — WARP `reserved` (client_id) опционален; при обфускации выключен** ([warp_account.dart](app/lib/services/warp/warp_account.dart), [subscription_controller.dart](app/lib/controllers/subscription_controller.dart), [warp_wizard_screen.dart](app/lib/screens/warp_wizard_screen.dart), [task spec](docs/spec/tasks/142-warp-reserved-optional.md)). **Корень жалобы.** Декодирование показало: единственное отличие нашего (неработающего) узла от **всех** рабочих конфигов — поле `reserved` (Cloudflare `client_id`). Оно привязывает пакеты к нашей персональной регистрации устройства в WARP-аккаунте (не к MAC/IP), и эта привязка режется. Публичный ключ Cloudflare общий, поэтому подключение работает и без `reserved`. Теперь `reserved` — опция (чекбокс «Bind to this device» в Advanced); дефолт по галке обфускации: **обфускация вкл → reserved выкл** (обезличенное подключение, как рабочие конфиги), plain WARP → reserved вкл (своя регистрация, §025).
+- **§136 — WARP QUIC i1: полноразмерный сплошной `<b>` (1250б) вместо `<b>/<r>`-нарезки** ([quic_i1.dart](app/lib/services/warp/quic_i1.dart), [task spec](docs/spec/tasks/136-warp-quic-i1-generator.md)). Device-smoke выявил: узел с `<r>`-сегментами (рандомизация per-packet) **не подключался**, а полноразмерный (1250 байт, length-поле 1232, DCID=8) сплошной `<b>` QUIC Initial — **работал**, байт-в-байт по структуре с рабочими конфигами. Генератор переписан под доказанно рабочий формат: один сплошной `<b 0x…>` = валидный QUIC Initial (GCM-тег корректен, SNI внутри проверены расшифровкой против RFC 9001 / NIST-векторов). Уникальность сохранена — рандомный DCID / TLS-random на каждую генерацию. `<r>`-нарезка и параметр QUIC level убраны.
+- **§138 — WARP: выбранный в Advanced endpoint не терялся при кешированном аккаунте** ([subscription_controller.dart](app/lib/controllers/subscription_controller.dart), [task spec](docs/spec/tasks/138-warp-cached-account-ignores-endpoint.md)). При уже существующем (закешированном) WARP-аккаунте `register()` миновался, и выбранный/рандомный endpoint из Advanced игнорировался — в узел шёл старый дефолтный. Теперь endpoint резолвится до регистрации и применяется к аккаунту независимо от кеша.
+
+### Changed
+
+- **§142 — упрощение WARP-обфускации**: убран выбор шаблона QUIC/SIP (всегда QUIC — рабочий формат); в SNI-пул добавлены `ozon.ru` и `telemost.yandex.ru` (массовая мимикрия для РФ-региона), исключены `youtube`/`amazon` (замедляются/блокируются в РФ → плохая мимикрия).
+
 ## [2.3.2] — 2026-06-16
 
 ### Changed

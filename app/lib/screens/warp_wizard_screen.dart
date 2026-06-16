@@ -37,7 +37,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
   // §136 — QUIC-параметры (Advanced). Пустой SNI → рандом из пула.
   final _sni = TextEditingController();
   List<String> _sniPool = const []; // подсказки для DropdownMenu
-  int _quicLevel = 0;
   final _jc = TextEditingController(text: '4');
   final _jmin = TextEditingController(text: '40');
   final _jmax = TextEditingController(text: '70');
@@ -48,7 +47,11 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
 
   // §126/§136 — AmneziaWG обфускация (default off — обычный WARP).
   bool _obfuscate = false;
-  JunkTemplate _template = JunkTemplate.quic;
+  // §142 — шаблон всегда QUIC (выбор QUIC/SIP убран из UI).
+  static const _template = JunkTemplate.quic;
+  // §142 — reserved (client_id): null = дефолт по галке (обфускация → off).
+  // Юзер может переопределить чекбоксом в Advanced.
+  bool? _includeReserved;
 
   WarpEndpointPicker? _picker; // §136 — для рандома endpoint/SNI
   bool _endpointAutoFilled = false; // §136 — endpoint в поле = наш авто-рандом
@@ -108,9 +111,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
         _endpoint.text = WarpAccount.defaultEndpoint;
         _endpointAutoFilled = false;
       }
-      _template = JunkTemplate.quic;
+      _includeReserved = null; // §142 — вернуть к дефолту по галке
       _sni.text = _picker?.randomSni() ?? ''; // свежий случайный домен
-      _quicLevel = 0;
       _jc.text = '4';
       _jmin.text = '40';
       _jmax.text = '70';
@@ -134,7 +136,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
   QuicParams _buildQuicParams() {
     return QuicParams(
       sni: _sni.text.trim(),
-      level: _quicLevel,
       jc: int.tryParse(_jc.text.trim()) ?? 4,
       jmin: int.tryParse(_jmin.text.trim()) ?? 40,
       jmax: int.tryParse(_jmax.text.trim()) ?? 70,
@@ -157,6 +158,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
         obfuscate: _obfuscate,
         template: _template,
         quicParams: _buildQuicParams(),
+        includeReserved: _includeReserved,
       );
 
       if (!mounted) return;
@@ -255,44 +257,20 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                         'Masks WireGuard from DPI by adding junk traffic. '
                         'Enable if WARP is blocked.'),
                   ),
-                  if (_obfuscate) ...[
-                    const Divider(height: 1),
+                  // §142 — шаблон всегда QUIC (dropdown QUIC/SIP убран; рабочие
+                  // конфиги — QUIC, device-smoke прошёл QUIC). Параметры QUIC и
+                  // чекбокс reserved — в Advanced.
+                  if (_obfuscate)
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                      child: Row(
-                        children: [
-                          _label('Junk template'),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: DropdownButtonFormField<JunkTemplate>(
-                              initialValue: _template,
-                              isDense: true,
-                              decoration: const InputDecoration(
-                                isDense: true,
-                                border: OutlineInputBorder(),
-                                contentPadding:
-                                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: JunkTemplate.quic,
-                                  child: Text('QUIC (default)'),
-                                ),
-                                DropdownMenuItem(
-                                  value: JunkTemplate.sip,
-                                  child: Text('SIP'),
-                                ),
-                              ],
-                              onChanged: _busy
-                                  ? null
-                                  : (v) => setState(
-                                      () => _template = v ?? JunkTemplate.quic),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Text(
+                        'Junk traffic mimics QUIC to a chosen domain (SNI). '
+                        'Tune the domain and parameters in Advanced.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
                             ),
-                          ),
-                        ],
                       ),
                     ),
-                  ],
                 ],
               ),
             ),
@@ -358,8 +336,22 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                                 color: cs.onSurfaceVariant,
                               ),
                         ),
+                        // §142 — reserved (client_id) опция. Дефолт по галке:
+                        // обфускация → off (привязка к устройству режется).
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          value: _includeReserved ?? !_obfuscate,
+                          onChanged: _busy
+                              ? null
+                              : (v) =>
+                                  setState(() => _includeReserved = v),
+                          title: const Text('Bind to this device (reserved)'),
+                          subtitle: const Text(
+                              'Sends the Cloudflare client_id. Off for obfuscation '
+                              '(the device binding tends to get blocked).'),
+                        ),
                         // §136 — QUIC-параметры (только при QUIC-обфускации).
-                        if (_obfuscate && _template == JunkTemplate.quic) ...[
+                        if (_obfuscate) ...[
                           const SizedBox(height: 16),
                           _label('QUIC SNI (masquerade domain)'),
                           // combo-box (пункты из sni_pool + свободный ввод) +
@@ -397,34 +389,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                                 .textTheme
                                 .bodySmall
                                 ?.copyWith(color: cs.onSurfaceVariant),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              _label('QUIC level'),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: DropdownButtonFormField<int>(
-                                  initialValue: _quicLevel,
-                                  isDense: true,
-                                  decoration: const InputDecoration(
-                                    isDense: true,
-                                    border: OutlineInputBorder(),
-                                    contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 8),
-                                  ),
-                                  items: [
-                                    for (var i = 0; i <= 4; i++)
-                                      DropdownMenuItem(
-                                          value: i, child: Text('$i')),
-                                  ],
-                                  onChanged: _busy
-                                      ? null
-                                      : (v) =>
-                                          setState(() => _quicLevel = v ?? 0),
-                                ),
-                              ),
-                            ],
                           ),
                           const SizedBox(height: 12),
                           Row(

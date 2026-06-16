@@ -29,18 +29,35 @@ class QuicI1 {
     0x9a, 0xe6, 0xa4, 0xc8, 0x0c, 0xad, 0xcc, 0xbb, 0x7f, 0x0a,
   ];
 
-  /// Генерирует `i1` CPS-строку для заданного [sni] и [level] нарезки (0–4).
-  /// Каждый вызов уникален ([Random.secure]). Возвращает `<b 0x…><r N>…`.
+  /// Длина QUIC payload (CRYPTO+PADDING) до шифрования. Рабочий эталон
+  /// (🟡 QUIC-google, взлетел у Ильи): пакет=1250б, length-поле=1232,
+  /// т.е. payload+pad = length - pkn(1) - tag(16) = 1215. Берём ровно 1215 →
+  /// пакет 1250б, байт-в-байт по размеру с рабочим.
+  static const int _minPayloadLen = 1215;
+
+  /// Генерирует `i1` CPS-строку для заданного [sni]. Формат = ТОЧНО как
+  /// **доказанно рабочий** узел (🟡 QUIC-google, взлетел у Ильи 2026-06-16):
+  /// **1250-байтовый QUIC Initial, СПЛОШНОЙ `<b 0x…>`** (length-поле 1232,
+  /// DCID=8, БЕЗ `<r>`). Уникальность — через рандомные DCID / TLS random[32]
+  /// на каждый вызов (каждый i1 разный), как у рабочих конфигов.
+  ///
+  /// КРИТИЧНО — НЕ добавлять `<r>`-нарезку: узел с `<b><r><b><r>` (наш прежний
+  /// генератор) у Ильи НЕ работал; сплошной `<b>` 1250б — работал. [level]
+  /// оставлен для совместимости сигнатуры, не влияет.
   static String generate(String sni, {int level = 0}) {
     final ch = _clientHelloSniOnly(sni);
-    final dcid = _randomBytes(1); // как в quic.js — 1 байт
+    final dcid = _randomBytes(8); // 8 байт (как в рабочем i1)
     final pkn = [0]; // packet number = 0
-    final framed = _clientHelloToFrames(ch, level);
-    final payload = framed.payload;
+    // Один CRYPTO frame с ClientHello, затем PADDING (нули) до _minPayloadLen →
+    // пакет 1250б (length-поле 1232, как у рабочего). Всё шифруется в общий <b>.
+    final crypto = _cryptoFrame(ch, 0);
+    final padLen = crypto.length < _minPayloadLen
+        ? _minPayloadLen - crypto.length
+        : 0;
+    final payload = <int>[...crypto, ...List<int>.filled(padLen, 0)];
     final packet = _quicInitial(dcid, const [], const [], pkn, payload);
-    final cut = _fixCutSettings(
-        framed.cut, packet.length, pkn.length, payload.length);
-    return _toAwg(packet, cut);
+    // Весь пакет одним <b 0x…> — как quicToAWG(packet, null) в референсе.
+    return _toAwg(packet, null);
   }
 
   // ── ClientHello (голый, только SNI) ───────────────────────────────────────
@@ -88,37 +105,6 @@ class QuicI1 {
 
   // ── CRYPTO frame(s) + нарезка по уровню ───────────────────────────────────
 
-  static _Framed _clientHelloToFrames(List<int> ch, int level) {
-    if (level == 0) {
-      // legacy cut (quic.js level 0): один CRYPTO frame, дыры в середине.
-      final payload = _cryptoFrame(ch, 0);
-      final dataOffset = payload.length - ch.length;
-      // [b до random][r 32 = TLS random][b середина][r 16 = хвост]
-      final cut = <int>[dataOffset + 6, 32, ch.length - 38, 16];
-      return _Framed(payload, cut);
-    }
-    // level 1..4 — два CRYPTO frame с разными пресетами разреза (как quic.js).
-    final presets = <int, List<int>>{
-      1: [38, ch.length, 0, 38, 32],
-      2: [38, ch.length, 0, 38, 37],
-      3: [0, 1, 38, ch.length, 0],
-      4: [0, 1, 38, ch.length, 0],
-    };
-    final p = presets[level] ?? presets[1]!;
-    var p2s = p[2];
-    if (level == 4) {
-      while (p2s < ch.length && ch[p2s] == 0) {
-        p2s++;
-      }
-    }
-    final payload = <int>[
-      ..._cryptoFrame(ch.sublist(p[0], p[1].clamp(0, ch.length)), p[0]),
-      ..._cryptoFrame(ch.sublist(p2s, p[3].clamp(0, ch.length)), p2s),
-    ];
-    final dropTail = p[4];
-    final cut = <int>[payload.length - dropTail, 16 + dropTail];
-    return _Framed(payload, cut);
-  }
 
   /// CRYPTO frame: `06 | varint(offset) | varint(len) | data`.
   static List<int> _cryptoFrame(List<int> data, int offset) => <int>[
@@ -212,23 +198,8 @@ class QuicI1 {
 
   // ── CPS-сериализация (quicToAWG) ──────────────────────────────────────────
 
-  /// Чинит cutSettings под header protection и абсолютный offset (quic.js
-  /// `quicFixCutSettings`, padto=0).
-  static List<int> _fixCutSettings(
-      List<int> cut, int packetLen, int pknLen, int payloadLen) {
-    final c = List<int>.from(cut);
-    if (c[0] < 20 - pknLen) {
-      final toAdd = 20 - pknLen - c[0];
-      c[0] += toAdd;
-      c[1] -= toAdd;
-    }
-    // включаем заголовок в первый <b>-кусок.
-    c[0] += packetLen - payloadLen - 16;
-    return c;
-  }
-
-  /// Режет пакет на `<b 0x…>` (статика) / `<r N>` (ядро рандомит) по [parts].
-  /// Нечётные сегменты (index 1,3,…) → `<r N>`. quic.js `quicToAWG`.
+  /// Сериализует пакет в `<b 0x…>` (сплошной). [parts] оставлен из квик.js на
+  /// случай будущей `<r>`-нарезки, сейчас всегда null → один `<b>`.
   static String _toAwg(List<int> packet, List<int>? parts) {
     if (parts == null) return '<b 0x${_hex(packet)}>';
     final sb = StringBuffer();
@@ -295,12 +266,6 @@ class QuicI1 {
     }
     return sb.toString();
   }
-}
-
-class _Framed {
-  _Framed(this.payload, this.cut);
-  final List<int> payload;
-  final List<int> cut;
 }
 
 class _Lengths {

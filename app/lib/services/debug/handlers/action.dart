@@ -41,6 +41,8 @@ Future<DebugResponse> actionHandler(
     '/action/set-group' => _setGroup(req, ctx),
     '/action/start-vpn' => _startVpn(ctx),
     '/action/stop-vpn' => _stopVpn(ctx),
+    '/action/force-stop-vpn' => _forceStopVpn(ctx),
+    '/action/set-transient-timeout' => _setTransientTimeout(req, ctx),
     '/action/reset-network' => _resetNetwork(ctx),
     '/action/rebuild-config' => _rebuildConfig(ctx),
     '/action/refresh-subs' => _refreshSubs(req, ctx),
@@ -243,6 +245,65 @@ Future<DebugResponse> _stopVpn(DebugContext ctx) async {
   final home = ctx.requireHome();
   unawaited(home.stop());
   return _ok('stop-vpn');
+}
+
+/// `POST /action/force-stop-vpn` — §140, debug/diagnostics.
+///
+/// Напрямую дёргает native `forceStopVPN` (минуя transient-таймаут): тот же
+/// путь `doForceStop`, что и при зависшем ядре. Освобождает Clash-порт 63130
+/// (teardown ПЕРЕД `stopSelf`, §140), сервис убивается жёстко. В отличие от
+/// `stop-vpn` (кооперативный, ждёт Stopped от ядра) — fire-and-forget.
+///
+/// Назначение: on-device проверка `doForceStop`-пути и того, что повторный старт
+/// после force-stop НЕ падает с `bind: address already in use`.
+/// Возвращает `{"ok": true, "action": "force-stop-vpn", "native_ok": <bool>}`.
+Future<DebugResponse> _forceStopVpn(DebugContext ctx) async {
+  final home = ctx.requireHome();
+  final ok = await home.debugForceStopVpn();
+  return _ok('force-stop-vpn', {'native_ok': ok});
+}
+
+/// `POST /action/set-transient-timeout?connecting=<ms>&stopping=<ms>` — §140.
+///
+/// Переопределяет пороги transient-таймаута (`_armTransientTimeout`) в
+/// миллисекундах. Любой из параметров опционален — не переданный не меняется.
+/// Минимум хотя бы один параметр. Для on-device теста force-stop'а: поставить
+/// `connecting=500`, чтобы `_armTransientTimeout` сработал быстро, не дожидаясь
+/// реального зависона ядра (issue #2).
+///
+/// Возвращает текущие (применённые) значения:
+/// `{"ok": true, "action": "set-transient-timeout", "connecting_ms": N, "stopping_ms": N}`.
+Future<DebugResponse> _setTransientTimeout(
+  DebugRequest req,
+  DebugContext ctx,
+) async {
+  final home = ctx.requireHome();
+  final connectingRaw = req.q('connecting');
+  final stoppingRaw = req.q('stopping');
+  if (connectingRaw == null && stoppingRaw == null) {
+    throw const BadRequest(
+        'at least one of connecting/stopping (ms) required');
+  }
+  final connectingMs = _parsePositiveMs(connectingRaw, 'connecting');
+  final stoppingMs = _parsePositiveMs(stoppingRaw, 'stopping');
+  final applied = home.debugSetTransientTimeouts(
+    connectingMs: connectingMs,
+    stoppingMs: stoppingMs,
+  );
+  return _ok('set-transient-timeout', {
+    'connecting_ms': applied.connectingMs,
+    'stopping_ms': applied.stoppingMs,
+  });
+}
+
+/// Парсит положительный int (мс) из query. `null` raw → `null` (не менять).
+int? _parsePositiveMs(String? raw, String name) {
+  if (raw == null) return null;
+  final v = int.tryParse(raw);
+  if (v == null || v <= 0) {
+    throw BadRequest('$name must be a positive integer (ms), got "$raw"');
+  }
+  return v;
 }
 
 /// `POST /action/reset-network` — light recovery без recreate'а box runtime.
