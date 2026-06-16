@@ -22,18 +22,17 @@
     4177, 4198, 4233, 4500, 5279, 5956, 7103, 7152, 7156, 7281, 7559, 8319,
     8742, 8854, 8886
   ],
-  "_sni_comment": "§136 — SNI = домен, под который маскируется junk QUIC. DPI читает SNI в QUIC Initial (Initial-крипта публична) и режет по нему: cloudflare-* доказанно блокируется (device-smoke Iliya 2026-06-16, cloudflare-quic.com → нет соединения, www.google.com → работает). Поэтому в пуле ТОЛЬКО массовые легитимные домены (РФ-инфраструктура + крупные сайты), НЕ cloudflare/vpn-маркеры.",
+  "_sni_comment": "§136 — SNI = домен, под который маскируется junk QUIC. DPI читает SNI в QUIC Initial (Initial-крипта публична) и режет по нему: cloudflare-* доказанно блокируется (device-smoke Iliya 2026-06-16, cloudflare-quic.com → нет соединения, www.google.com → работает). Поэтому в пуле ТОЛЬКО массовые легитимные домены, НЕ cloudflare/vpn-маркеры. Аудитория международная — баланс глобальных доменов + пара РФ (яндекс/рутуб/госуслуги) для пользователей в РФ/Крыму.",
   "sni_pool": [
-    "apteka.ru",
-    "psbank.ru",
-    "lenta.ru",
-    "www.pochta.ru",
-    "rzd.ru",
-    "rutube.ru",
-    "gosuslugi.ru",
     "www.google.com",
-    "www.microsoft.com",
     "www.youtube.com",
-    "www.bing.com"
+    "www.microsoft.com",
+    "www.bing.com",
+    "www.apple.com",
+    "www.amazon.com",
+    "www.wikipedia.org",
+    "yandex.ru",
+    "rutube.ru",
+    "gosuslugi.ru"
   ]
 }
