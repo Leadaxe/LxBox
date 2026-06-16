@@ -51,14 +51,16 @@ void main() {
       expect(p['h1'], 1);
     });
 
-    test('buildAmneziaAwg(quic): preset + QUIC i1 (<b>/<r>)', () {
+    test('buildAmneziaAwg(quic): preset + QUIC i1 (сплошной <b>, как рабочий)',
+        () {
       final awg = WarpClient.buildAmneziaAwg(JunkTemplate.quic);
       expect(awg.fields['jc'], 4);
       expect(awg.fields['i1'], isA<String>());
       final i1 = awg.fields['i1'] as String;
       expect(i1.startsWith('<b 0x'), isTrue);
-      expect(i1.contains('<r '), isTrue); // QUIC = есть рандом-сегменты
-      // Уникальность i1 между двумя сборками.
+      // §136 — сплошной <b>, БЕЗ <r> (узел с <r> у Ильи НЕ работал).
+      expect(i1.contains('<r '), isFalse);
+      // Уникальность i1 между двумя сборками (рандомный DCID/random).
       final awg2 = WarpClient.buildAmneziaAwg(JunkTemplate.quic);
       expect(awg.fields['i1'], isNot(awg2.fields['i1']));
     });

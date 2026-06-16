@@ -91,58 +91,40 @@ void main() {
     });
   });
 
-  group('QuicI1.generate — структура и нарезка', () {
-    final segRe = RegExp(r'<b 0x[0-9a-f]+>|<r \d+>');
+  group('QuicI1.generate — как рабочий эталон (🟡 QUIC-google)', () {
+    List<int> hexBytes(String cps) {
+      final h = RegExp(r'^<b 0x([0-9a-f]+)>$').firstMatch(cps)!.group(1)!;
+      final out = <int>[];
+      for (var i = 0; i < h.length; i += 2) {
+        out.add(int.parse(h.substring(i, i + 2), radix: 16));
+      }
+      return out;
+    }
 
-    test('чистая CPS-строка из <b>/<r> сегментов, оба тега есть', () {
-      final cps = QuicI1.generate('www.google.com', level: 0);
-      expect(segRe.allMatches(cps).map((m) => m.group(0)).join(), cps);
-      expect(cps.contains('<b 0x'), isTrue);
-      expect(cps.contains('<r '), isTrue);
+    test('сплошной <b>, БЕЗ <r> (узел с <r> у Ильи НЕ работал)', () {
+      final cps = QuicI1.generate('www.google.com');
+      expect(cps.contains('<r '), isFalse, reason: '<r> ломает i1');
+      expect(RegExp(r'^<b 0x[0-9a-f]+>$').hasMatch(cps), isTrue,
+          reason: 'не один сплошной <b>');
     });
 
-    test('первый байт = QUIC long-header Initial (11xxxxxx, type 00)', () {
-      final cps = QuicI1.generate('rzd.ru', level: 0);
-      final b0 = int.parse(
-          RegExp(r'<b 0x([0-9a-f]{2})').firstMatch(cps)!.group(1)!,
-          radix: 16);
-      expect(b0 & 0xc0, 0xc0);
-      expect(b0 & 0x30, 0x00);
+    test('размер 1250б, length-поле 1232 (байт-в-байт с рабочим)', () {
+      final b = hexBytes(QuicI1.generate('www.google.com'));
+      expect(b.length, 1250);
+      // length varint @16 (2 байта)
+      expect(((b[16] & 0x3f) << 8) | b[17], 1232);
+    });
+
+    test('QUIC long-header Initial, version 1, DCID=8', () {
+      final b = hexBytes(QuicI1.generate('rzd.ru'));
+      expect(b[0] & 0xc0, 0xc0); // long header
+      expect(b[0] & 0x30, 0x00); // Initial type
+      expect(b.sublist(1, 5), [0, 0, 0, 1]); // version 1
+      expect(b[5], 8); // DCID len = 8 (как в рабочем)
     });
 
     test('уникальность между вызовами (Random.secure)', () {
       expect(QuicI1.generate('a.io'), isNot(QuicI1.generate('a.io')));
-    });
-
-    test('все level 0..4 валидны и непусты', () {
-      for (var l = 0; l <= 4; l++) {
-        final cps = QuicI1.generate('www.google.com', level: l);
-        expect(cps.startsWith('<b 0x'), isTrue, reason: 'level $l: $cps');
-        expect(segRe.allMatches(cps).map((m) => m.group(0)).join(), cps,
-            reason: 'level $l не чистый CPS');
-      }
-    });
-
-    test('§136fix — пакет ≥1200б (полноразмерный QUIC Initial, не 92б), <r> цел',
-        () {
-      // Рабочий i1 у юзера = 1250б; короткий (~92б, quic.js padto=0) DPI не
-      // примет за настоящий QUIC. Padding не должен убирать <r>-сегменты.
-      for (var l = 0; l <= 4; l++) {
-        final cps = QuicI1.generate('www.google.com', level: l);
-        var total = 0;
-        var hasR = false;
-        for (final m in segRe.allMatches(cps)) {
-          final s = m.group(0)!;
-          if (s.startsWith('<b 0x')) {
-            total += (s.length - 6) ~/ 2; // '<b 0x' + '>'
-          } else {
-            total += int.parse(RegExp(r'\d+').firstMatch(s)!.group(0)!);
-            hasR = true;
-          }
-        }
-        expect(total, greaterThanOrEqualTo(1200), reason: 'level $l короткий');
-        expect(hasR, isTrue, reason: 'level $l потерял <r> (beacon-защита)');
-      }
     });
   });
 }
