@@ -15,6 +15,10 @@ class _FakePathProvider extends PathProviderPlatform with MockPlatformInterfaceM
   Future<String?> getApplicationDocumentsPath() async => tempRoot;
 }
 
+/// Те же 2 ретрая что в проде, но без реального сна — иначе тест спал бы
+/// 1s+3s и в параллельном suite (§T3) сдвигался к таймауту → flaky.
+const _noBackoff = [Duration.zero, Duration.zero];
+
 void main() {
   late Directory tempDir;
 
@@ -22,6 +26,9 @@ void main() {
     TestWidgetsFlutterBinding.ensureInitialized();
     tempDir = await Directory.systemTemp.createTemp('rsd_test_');
     PathProviderPlatform.instance = _FakePathProvider(tempDir.path);
+    // _cacheDir переживает между тестами — без сброса download() пишет в
+    // директорию первого setUp (уже снесённую его tearDown). §T3.
+    RuleSetDownloader.resetCacheForTesting();
   });
 
   tearDown(() async {
@@ -37,8 +44,8 @@ void main() {
         return http.Response.bytes([1, 2, 3, 4], 200);
       });
       final id = 'test-id-${DateTime.now().microsecondsSinceEpoch}';
-      final path =
-          await RuleSetDownloader.download(id, 'http://x/r.srs', client: client);
+      final path = await RuleSetDownloader.download(id, 'http://x/r.srs',
+          client: client, backoffs: _noBackoff);
       expect(path, isNotNull);
       expect(attempts, 3);
       expect(await File(path!).readAsBytes(), [1, 2, 3, 4]);
@@ -51,8 +58,8 @@ void main() {
         return http.Response('gone', 404);
       });
       final id = 'test-id-${DateTime.now().microsecondsSinceEpoch}';
-      final path =
-          await RuleSetDownloader.download(id, 'http://x/r.srs', client: client);
+      final path = await RuleSetDownloader.download(id, 'http://x/r.srs',
+          client: client, backoffs: _noBackoff);
       expect(path, isNull);
       expect(attempts, 1, reason: '4xx is permanent — no retry');
     });
@@ -64,8 +71,8 @@ void main() {
         return http.Response('x', 503);
       });
       final id = 'test-id-${DateTime.now().microsecondsSinceEpoch}';
-      final path =
-          await RuleSetDownloader.download(id, 'http://x/r.srs', client: client);
+      final path = await RuleSetDownloader.download(id, 'http://x/r.srs',
+          client: client, backoffs: _noBackoff);
       expect(path, isNull);
       expect(attempts, 3);
     });
@@ -77,8 +84,8 @@ void main() {
         return http.Response.bytes([], 200);
       });
       final id = 'test-id-${DateTime.now().microsecondsSinceEpoch}';
-      final path =
-          await RuleSetDownloader.download(id, 'http://x/r.srs', client: client);
+      final path = await RuleSetDownloader.download(id, 'http://x/r.srs',
+          client: client, backoffs: _noBackoff);
       expect(path, isNull);
       expect(attempts, 3);
     });

@@ -9,6 +9,7 @@ import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/subscription/http_cache.dart';
+import 'package:lxbox/services/subscription/sources.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -49,9 +50,13 @@ void main() {
     await Directory('${tempDir.path}/support').create();
     PathProviderPlatform.instance = _FakePathProvider(tempDir.path);
     SettingsStorage.resetCacheForTesting();
+    // Ретраи fetch без реального сна 1s+3s — иначе HTTP 500-кейс занимал
+    // ~4s и в параллельном suite сдвигался к таймауту → flaky (§101).
+    fetchBackoffsForTesting = const [Duration.zero, Duration.zero];
   });
 
   tearDown(() async {
+    fetchBackoffsForTesting = null;
     // AppLog пишет persistent log async — может race'ить с recursive delete
     // (см. settings_storage_test). Каждый тест в своём createTemp.
     try {

@@ -18,8 +18,20 @@ class RuleSetDownloader {
 
   static Directory? _cacheDir;
 
+  /// Сбрасывает закэшированную директорию. Только для тестов: каждый
+  /// `setUp` ставит свой `PathProviderPlatform.instance` + временную папку;
+  /// без сброса `_dir()` продолжал бы писать в директорию первого теста
+  /// (уже снесённую его `tearDown`) — источник flaky при параллельном suite.
+  static void resetCacheForTesting() => _cacheDir = null;
+
   static Future<Directory> _dir() async {
-    if (_cacheDir != null) return _cacheDir!;
+    // Закэшированный путь мог исчезнуть (tearDown теста, очистка стораджа) —
+    // не доверяем закэшу слепо, гарантируем существование на каждом вызове.
+    final cached = _cacheDir;
+    if (cached != null) {
+      if (!await cached.exists()) await cached.create(recursive: true);
+      return cached;
+    }
     final appDir = await getApplicationDocumentsDirectory();
     final dir = Directory('${appDir.path}/$_dirName');
     if (!await dir.exists()) await dir.create(recursive: true);
@@ -60,13 +72,18 @@ class RuleSetDownloader {
   /// Retry только на transient (timeout/network/5xx); 4xx = permanent skip.
   ///
   /// `client` инжектится только в тестах (night T3-1); в проде `http.get`.
+  /// `backoffs` тоже только для тестов — нулевые задержки убирают реальный
+  /// сон 1s+3s, который в параллельном suite (§T3) делал тест flaky.
   /// Возвращает абсолютный путь при успехе, null при финальной ошибке.
+  static const _prodBackoffs = [Duration(seconds: 1), Duration(seconds: 3)];
+
   static Future<String?> download(
     String id,
     String url, {
     http.Client? client,
+    List<Duration>? backoffs,
   }) async {
-    const backoffs = [Duration(seconds: 1), Duration(seconds: 3)];
+    backoffs ??= _prodBackoffs;
     for (var attempt = 0; attempt < 3; attempt++) {
       try {
         final f = await _file(id);

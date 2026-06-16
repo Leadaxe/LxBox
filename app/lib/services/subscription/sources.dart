@@ -127,6 +127,17 @@ Map<String, String> _inlineHeaders(String body) {
   return out;
 }
 
+/// Backoff'ы между ретраями `_fetch`. Прод-значения; тесты подменяют на
+/// нулевые (`fetchBackoffsForTesting`), иначе каждый ретрай-кейс спал бы
+/// 1s+3s и в параллельном suite (§101) сдвигался к таймауту → flaky.
+const _prodFetchBackoffs = [Duration(seconds: 1), Duration(seconds: 3)];
+List<Duration>? _fetchBackoffsOverride;
+
+/// Только для тестов: подменить backoff'ы ретраев. `null` возвращает
+/// прод-поведение. Вызывать в `setUp`/`tearDown`.
+set fetchBackoffsForTesting(List<Duration>? value) =>
+    _fetchBackoffsOverride = value;
+
 /// Прямой HTTP GET без декода/парса. Для UI «Source» — показать живой
 /// ответ сервера как есть. Не пишет в кэш.
 Future<FetchResult> fetchRaw(SubscriptionSource source,
@@ -151,7 +162,7 @@ Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async 
       // после TCP-open, DDoS-guard challenge, 5xx). 4xx — permanent,
       // не ретраим (auth fail, removed subscription).
       Object? lastErr;
-      const backoffs = [Duration(seconds: 1), Duration(seconds: 3)];
+      final backoffs = _fetchBackoffsOverride ?? _prodFetchBackoffs;
       for (var attempt = 0; attempt < 3; attempt++) {
         try {
           final resp = await client
