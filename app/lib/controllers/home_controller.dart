@@ -63,12 +63,56 @@ class HomeController extends ChangeNotifier
   Timer? _autoPingTimer;
 
   /// Safety-timeout для transient-состояний (Starting/Stopping): если
-  /// native застрял дольше 10 сек — форсим disconnected в UI. Один
-  /// Timer на всю жизнь контроллера, cancel'им при любой смене статуса
-  /// (чтобы не срабатывал на уже разрешённом состоянии) и пересоздаём
-  /// при новой transient-фазе.
+  /// native застрял дольше порога — форсим disconnected в UI + force-stop
+  /// сервиса (§129). Один Timer на всю жизнь контроллера, cancel'им при любой
+  /// смене статуса (чтобы не срабатывал на уже разрешённом состоянии) и
+  /// пересоздаём при новой transient-фазе.
+  ///
+  /// §140 — пороги РАЗДЕЛЕНЫ по фазе. `stopping` завис на 10с → ядро реально не
+  /// отдаёт Stopped → force-stop оправдан. `connecting` дольше 15с — это чаще
+  /// просто медленный, но ЖИВОЙ старт (сотовая, WARP-gen/AWG handshake), а не
+  /// зависон; force-kill убивал бы рабочее подключение. Даём connecting больше.
+  ///
+  /// §140 — пороги ПЕРЕМЕННЫЕ (не `static const`): инициализируются из дефолтов
+  /// ниже, но Debug API (`POST /action/set-transient-timeout` с query
+  /// `connecting`/`stopping` в мс) может их переопределить для on-device теста
+  /// force-stop'а (например, connecting=500мс, чтобы не ждать реальный зависон ядра).
   Timer? _transientTimeoutTimer;
-  static const _transientTimeout = Duration(seconds: 10);
+  static const _defaultStoppingTimeout = Duration(seconds: 10);
+  static const _defaultConnectingTimeout = Duration(seconds: 15);
+  Duration _stoppingTimeout = _defaultStoppingTimeout;
+  Duration _connectingTimeout = _defaultConnectingTimeout;
+
+  /// §140 — debug-only: переопределить transient-пороги (в миллисекундах).
+  /// `null` аргумент = не трогать этот порог. Возвращает применённые значения.
+  /// Используется `POST /action/set-transient-timeout` для on-device теста.
+  ({int connectingMs, int stoppingMs}) debugSetTransientTimeouts({
+    int? connectingMs,
+    int? stoppingMs,
+  }) {
+    if (connectingMs != null) {
+      _connectingTimeout = Duration(milliseconds: connectingMs);
+    }
+    if (stoppingMs != null) {
+      _stoppingTimeout = Duration(milliseconds: stoppingMs);
+    }
+    _addDebug(DebugSource.app,
+        '[vpn] transient timeouts set: connecting=${_connectingTimeout.inMilliseconds}ms stopping=${_stoppingTimeout.inMilliseconds}ms');
+    return (
+      connectingMs: _connectingTimeout.inMilliseconds,
+      stoppingMs: _stoppingTimeout.inMilliseconds,
+    );
+  }
+
+  /// §140 — debug-only: текущие transient-пороги (мс), для `GET`-чтения.
+  ({int connectingMs, int stoppingMs}) get debugTransientTimeouts => (
+        connectingMs: _connectingTimeout.inMilliseconds,
+        stoppingMs: _stoppingTimeout.inMilliseconds,
+      );
+
+  /// §140 — debug-only: напрямую дёрнуть force-stop native-сервиса (минуя
+  /// transient-таймаут). Для on-device проверки `doForceStop`-пути (порт 63130).
+  Future<bool> debugForceStopVpn() => _vpn.forceStopVPN();
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -203,10 +247,14 @@ class HomeController extends ChangeNotifier
 
   /// Перезапускает safety-timer на transient-фазу. Cancel'ит предыдущий
   /// (защита от спама `Future.delayed` при множественных stopping/
-  /// connecting подряд) и стартует новый на 10 сек.
+  /// connecting подряд) и стартует новый. §140 — порог зависит от фазы:
+  /// `connecting` (медленный старт) — длиннее, `stopping` (реальный зависон) — 10с.
   void _armTransientTimeout(TunnelStatus expected) {
     _transientTimeoutTimer?.cancel();
-    _transientTimeoutTimer = Timer(_transientTimeout, () async {
+    final timeout = expected == TunnelStatus.connecting
+        ? _connectingTimeout
+        : _stoppingTimeout;
+    _transientTimeoutTimer = Timer(timeout, () async {
       if (_state.tunnel != expected) return;
       _addDebug(
           DebugSource.app, 'Timeout in ${expected.label}, forcing disconnect');

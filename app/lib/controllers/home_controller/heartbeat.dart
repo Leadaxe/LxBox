@@ -97,7 +97,12 @@ mixin _HeartbeatMixin on ChangeNotifier {
     _emit(
       _state.copyWith(
         tunnel: TunnelStatus.revoked,
-        lastError: 'VPN tunnel lost — another VPN may have taken over',
+        // §140 — НЕ «another VPN may have taken over»: heartbeat-таймаут НЕ значит
+        // перехват другим VPN (это синтез на стороне приложения, не системный
+        // onRevoke). Чаще — упал Clash API / ядро не отвечает. Прежний текст гнал
+        // ложные баг-репорты про «перехват». Реальный системный revoke пишет
+        // отдельный текст ("VPN revoked by another app", см. _handleStatusEvent).
+        lastError: 'Connection lost — VPN tunnel is not responding',
         proxiesJson: <String, dynamic>{},
         groups: <String>[],
         nodes: <String>[],

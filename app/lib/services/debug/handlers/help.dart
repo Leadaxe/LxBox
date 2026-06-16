@@ -334,6 +334,8 @@ const Map<String, dynamic> _capabilityJson = {
     // Actions
     {'method': 'POST', 'path': '/action/start-vpn', 'description': 'Start tunnel'},
     {'method': 'POST', 'path': '/action/stop-vpn', 'description': 'Stop tunnel'},
+    {'method': 'POST', 'path': '/action/force-stop-vpn', 'description': '§140 — hard force-stop (doForceStop path): teardown→stopSelf, frees Clash port 63130. fire-and-forget.'},
+    {'method': 'POST', 'path': '/action/set-transient-timeout', 'params': {'connecting': 'ms (optional)', 'stopping': 'ms (optional)'}, 'description': '§140 — override transient-timeout thresholds (ms) for on-device force-stop test. At least one param.'},
     {'method': 'POST', 'path': '/action/reset-network', 'description': 'Light recovery: closeAll + DNS flush + dialer rebind (spec 031). Requires tunnel up.'},
     {'method': 'POST', 'path': '/action/urltest', 'params': {'tag': 'node tag (single)', 'group': 'group tag (group urltest, URL-encode emoji)', 'all': 'true (mass urltest)'}, 'description': 'URLTest dispatch by query: one of tag/group/all'},
     {'method': 'POST', 'path': '/action/switch-node', 'params': {'tag': 'node tag'}, 'description': 'Selector switch via HomeController'},

@@ -59,9 +59,20 @@ class BoxService(
     /// Recreated on each start since cancel() is terminal for a scope.
     private var serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /// §140 — отдельный scope ТОЛЬКО для `doForceStop`-teardown'а. КРИТИЧНО, что
+    /// его НЕ отменяет `onDestroy`: `doForceStop` вызывает `stopSelf()` → onDestroy
+    /// → `serviceScope.cancel()`, и если teardown крутился бы на `serviceScope`, он
+    /// был бы отменён на полпути, не успев закрыть Clash-порт 63130 (`bind: address
+    /// already in use` на след. старте — см. §129 регресс, §140). Этот scope живёт
+    /// независимо: teardown сам делает `stopSelf()` ПОСЛЕ закрытия порта.
+    /// Пересоздаётся в `resetScope` вместе с `serviceScope`.
+    private var forceStopScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private fun resetScope() {
         serviceScope.cancel()
         serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        forceStopScope.cancel()
+        forceStopScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     }
 
     /// §049 F2 — `AtomicReference` вместо `@Volatile`. `getAndSet(null)?.close()`
@@ -360,17 +371,22 @@ class BoxService(
     /// `closeCommandServerAtomic`) и НЕ доходит до `stopSelf()`. Сервис остаётся
     /// жить и роутить вхолостую (tun0 поднят, 0 трафика).
     ///
-    /// Отличие от `doStop`:
-    ///   1. НЕТ guard'а на `Stopping` — force обязан пройти, даже когда `doStop`
+    /// §140 — порядок ИСПРАВЛЕН: раньше `stopSelf()` шёл ДО фонового teardown'а на
+    /// `serviceScope`. `stopSelf()` → `onDestroy` → `serviceScope.cancel()` отменял
+    /// teardown на полпути, не успев закрыть Clash-порт 63130 → след. старт падал с
+    /// `bind: address already in use` (см. `stopAndAlert`). Теперь:
+    ///   1. UI/нотификацию гасим синхронно на Main СРАЗУ (`unregisterReceiver`,
+    ///      `notification.stop()`, `setStatus(Stopped)`) — кнопка разблокируется
+    ///      немедленно, НЕ ждём ядро (замысел §129 сохранён).
+    ///   2. teardown ядра + `stopSelf()` — на `forceStopScope` (его `onDestroy` НЕ
+    ///      отменяет!). `stopSelf()` вызывается ПОСЛЕ `closeCommandServerAtomic`,
+    ///      как в `doStop`. Зависший Go-вызов отваливается по `withTimeout(2с)` и
+    ///      не блокирует ни `stopSelf()`, ни уже разблокированный UI.
+    ///   3. НЕТ guard'а на `Stopping` — force обязан пройти, даже когда `doStop`
     ///      уже застрял в `Stopping`.
-    ///   2. `stopSelf()` + `setStatus(Stopped)` — синхронно на Main, ГАРАНТИРОВАННО,
-    ///      НЕ зависит от завершения teardown'а ядра.
-    ///   3. Go-teardown (`closeFileDescriptor`/`closeCommandServerAtomic`) — в фоне
-    ///      best-effort с коротким deadline (`withTimeout`), чтобы зависший Go-вызов
-    ///      не блокировал убийство сервиса. НЕ пропускаем целиком: иначе Clash-порт
-    ///      63130 зависнет на след. старте (см. `stopAndAlert`).
     ///
-    /// Идемпотентно: если уже `Stopped` — no-op.
+    /// Идемпотентно: если уже `Stopped` — no-op. Teardown-функции тоже идемпотентны
+    /// (`AtomicReference.getAndSet(null)`), повторный вызов безопасен.
     private fun doForceStop() {
         Log.w(TAG, "[vpn] doForceStop ENTER status=${status.name} receiverRegistered=$receiverRegistered")
         if (status == VpnStatus.Stopped) {
@@ -378,20 +394,21 @@ class BoxService(
             return
         }
 
-        // 1. Безусловно убиваем сервис на Main — НЕ ждём ядро.
+        // 1. UI/нотификацию гасим синхронно на Main СРАЗУ — это дёшево и не виснет.
+        // Кнопка разблокируется немедленно, не дожидаясь teardown'а ядра.
         if (receiverRegistered) {
             runCatching { service.unregisterReceiver(receiver) }
             receiverRegistered = false
         }
         notification.stop()
         setStatus(VpnStatus.Stopped)
-        service.stopSelf()
-        Log.w(TAG, "[vpn] doForceStop — stopSelf() done, teardown в фоне (best-effort)")
+        Log.w(TAG, "[vpn] doForceStop — UI/notification stopped, teardown+stopSelf на forceStopScope")
 
-        // 2. Best-effort teardown ядра в фоне. Зависший Go-вызов отвалится по
-        // deadline и не помешает уже выполненному stopSelf(). serviceScope ещё
-        // жив (cancel будет в onDestroy) — запускаем на нём с таймаутом.
-        serviceScope.launch {
+        // 2. Teardown ядра, затем stopSelf() — на forceStopScope (onDestroy его НЕ
+        // отменяет). stopSelf() ПОСЛЕ закрытия Clash-порта 63130, иначе он зависнет
+        // на след. старте (§140 регресс-фикс; порядок как в doStop). Зависший
+        // Go-вызов отвалится по withTimeout и не заблокирует stopSelf().
+        forceStopScope.launch {
             runCatching {
                 withTimeout(2_000) { closeFileDescriptor() }
             }.onFailure { Log.w(TAG, "doForceStop: closeFileDescriptor timeout/fail: ${it.message}") }
@@ -401,7 +418,8 @@ class BoxService(
             runCatching {
                 withTimeout(2_000) { closeCommandServerAtomic("doForceStop") }
             }.onFailure { Log.w(TAG, "doForceStop: closeCommandServer timeout/fail: ${it.message}") }
-            Log.d(TAG, "[vpn] doForceStop — фоновый teardown завершён")
+            Log.d(TAG, "[vpn] doForceStop — teardown завершён → stopSelf()")
+            withContext(Dispatchers.Main) { service.stopSelf() }
         }
     }
 
