@@ -37,7 +37,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
   // §136 — QUIC-параметры (Advanced). Пустой SNI → рандом из пула.
   final _sni = TextEditingController();
   List<String> _sniPool = const []; // подсказки для DropdownMenu
-  int _quicLevel = 0;
   final _jc = TextEditingController(text: '4');
   final _jmin = TextEditingController(text: '40');
   final _jmax = TextEditingController(text: '70');
@@ -114,7 +113,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
       }
       _includeReserved = null; // §142 — вернуть к дефолту по галке
       _sni.text = _picker?.randomSni() ?? ''; // свежий случайный домен
-      _quicLevel = 0;
       _jc.text = '4';
       _jmin.text = '40';
       _jmax.text = '70';
@@ -138,7 +136,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
   QuicParams _buildQuicParams() {
     return QuicParams(
       sni: _sni.text.trim(),
-      level: _quicLevel,
       jc: int.tryParse(_jc.text.trim()) ?? 4,
       jmin: int.tryParse(_jmin.text.trim()) ?? 40,
       jmax: int.tryParse(_jmax.text.trim()) ?? 70,
@@ -392,34 +389,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                                 .textTheme
                                 .bodySmall
                                 ?.copyWith(color: cs.onSurfaceVariant),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              _label('QUIC level'),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: DropdownButtonFormField<int>(
-                                  initialValue: _quicLevel,
-                                  isDense: true,
-                                  decoration: const InputDecoration(
-                                    isDense: true,
-                                    border: OutlineInputBorder(),
-                                    contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 8),
-                                  ),
-                                  items: [
-                                    for (var i = 0; i <= 4; i++)
-                                      DropdownMenuItem(
-                                          value: i, child: Text('$i')),
-                                  ],
-                                  onChanged: _busy
-                                      ? null
-                                      : (v) =>
-                                          setState(() => _quicLevel = v ?? 0),
-                                ),
-                              ),
-                            ],
                           ),
                           const SizedBox(height: 12),
                           Row(
