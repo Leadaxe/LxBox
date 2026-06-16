@@ -24,6 +24,13 @@
 | **Best-effort** | 8.0–10 (API 26–29) | Compile OK, install OK, базовый VPN-функционал должен работать. Фичи требующие API 30+ (например, silent-kill detection через `getHistoricalProcessExitReasons`) деградируют к no-op. Не тестируется регулярно; жалобы принимаются, но fix'ы на best-effort основе. |
 | **Unsupported** | <8 (API <26) | Установка заблокирована `minSdk=26` |
 
+> **Рендерер (§131).** На `Build.VERSION.SDK_INT < 31` (Android ≤11) Flutter
+> принудительно переключается с Impeller на **Skia** (`getFlutterShellArgs` →
+> `--enable-impeller=false` в [`MainActivity`](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt)).
+> Impeller-шейдеры валят старые GPU-драйверы (Adreno 3xx → SIGSEGV в `libsc-a3xx.so`).
+> На Android 12+ Impeller сохранён. Гейт по версии ОС, не по GPU — у Flutter нет
+> чистого рантайм-детекта GPU. Подробности — [§131](spec/tasks/131-impeller-adreno-gpu-crash.md).
+
 ### Почему именно 26 как minSdk
 
 - **Исторически** в release notes 1.3.x и draft 1.4.0 заявлено «Android 8.0+» — не закрываем дверь пользователям которые видели эту декларацию.

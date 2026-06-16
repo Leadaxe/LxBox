@@ -224,7 +224,7 @@ class WarpAccount {
 
 ## Future extensions (вне этой итерации)
 
-- Встроенный сканер рабочих endpoint'ов (когда `engage.*:2408` заблокирован).
+- Встроенный сканер рабочих endpoint'ов (когда `engage.*:2408` заблокирован). **Research готов — [§132](../../tasks/132-warp-endpoint-scanner-research.md)** (диапазоны, порты, liveness-проба handshake'ом, AWG-нюанс).
 - «Route through proxy» — `detour` WARP-узла на выбранную proxy-подписку (§111).
 - Авто-ротация endpoint при падении хендшейка.
 - WARP как полноценная подписка с авто-апдейтом (перерегистрация по расписанию).

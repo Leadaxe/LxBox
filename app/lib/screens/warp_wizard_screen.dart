@@ -155,27 +155,33 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                         child: _label('Junk template'),
                       ),
                     ),
-                    RadioListTile<JunkTemplate>(
-                      dense: true,
-                      value: JunkTemplate.wgTraffic,
+                    // Flutter 3.41: groupValue/onChanged переехали с RadioListTile
+                    // на обёртку RadioGroup; disabled-состояние — через
+                    // `enabled` каждого тайла (вместо onChanged: null).
+                    RadioGroup<JunkTemplate>(
                       groupValue: _template,
-                      onChanged: _busy
-                          ? null
-                          : (v) => setState(
-                              () => _template = v ?? JunkTemplate.wgTraffic),
-                      title: const Text('WG-traffic'),
-                      subtitle: const Text('Junk mimics another WireGuard packet'),
-                    ),
-                    RadioListTile<JunkTemplate>(
-                      dense: true,
-                      value: JunkTemplate.sipTraffic,
-                      groupValue: _template,
-                      onChanged: _busy
-                          ? null
-                          : (v) => setState(
-                              () => _template = v ?? JunkTemplate.wgTraffic),
-                      title: const Text('SIP-traffic'),
-                      subtitle: const Text('Junk mimics a VoIP (SIP) call'),
+                      onChanged: (v) => setState(
+                          () => _template = v ?? JunkTemplate.wgTraffic),
+                      child: Column(
+                        children: [
+                          RadioListTile<JunkTemplate>(
+                            dense: true,
+                            value: JunkTemplate.wgTraffic,
+                            enabled: !_busy,
+                            title: const Text('WG-traffic'),
+                            subtitle: const Text(
+                                'Junk mimics another WireGuard packet'),
+                          ),
+                          RadioListTile<JunkTemplate>(
+                            dense: true,
+                            value: JunkTemplate.sipTraffic,
+                            enabled: !_busy,
+                            title: const Text('SIP-traffic'),
+                            subtitle:
+                                const Text('Junk mimics a VoIP (SIP) call'),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 4),
                   ],
