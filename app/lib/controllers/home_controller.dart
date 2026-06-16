@@ -569,11 +569,17 @@ class HomeController extends ChangeNotifier
         try {
           final conns = await clash.fetchConnections();
           final ids = ClashApiClient.connectionIdsInChain(conns, group);
-          for (final id in ids) {
-            try {
-              await clash.closeConnection(id);
-            } catch (_) {/* соединение уже закрылось — игнор */}
-          }
+          // Общий дедлайн на весь обрыв: на нормальном loopback DELETE'ы
+          // sub-ms, но если локальный clash-inbound подвиснет, серия из N
+          // запросов с 10s-таймаутом каждый держала бы busy=true слишком
+          // долго. 5s суммарно с запасом хватает на десятки соединений.
+          await Future(() async {
+            for (final id in ids) {
+              try {
+                await clash.closeConnection(id);
+              } catch (_) {/* соединение уже закрылось — игнор */}
+            }
+          }).timeout(const Duration(seconds: 5), onTimeout: () {});
           _addDebug(
               DebugSource.app, 'Interrupted ${ids.length} conns in $group');
         } catch (e) {

@@ -219,6 +219,11 @@ Future<void> switchNode(String nodeTag) async {
   (§078 dropdown — `selectorGroupTags`, urltest исключён), её тег и матчим в chains.
 - **Несколько групп:** рвём только переключаемую (`selectedGroup`), остальной
   трафик не трогаем — в отличие от close-all/resetNetwork.
+- **Зависший loopback clash-inbound:** серия из N×`closeConnection` с 10s-таймаутом
+  каждый теоретически держала бы `busy=true` слишком долго (кнопки Activate
+  заблокированы). → весь interrupt-блок обёрнут общим дедлайном `5s`
+  (`.timeout(..., onTimeout: () {})`); по нормальному loopback DELETE'ы sub-ms.
+  (Найдено адверсариальным ревью §143, severity nit — упрочнено превентивно.)
 
 ## 7. Тесты
 
