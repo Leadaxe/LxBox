@@ -64,16 +64,22 @@ class WarpClient {
     );
   }
 
-  /// §126 — AmneziaWG **1.5** preset (без `i1` — он генерится на устройстве).
+  /// §126/§136 — AmneziaWG preset (без `i1` — он генерится на устройстве).
   ///
   /// Только поля, которые НЕ ломают WG: `s1=s2=0` (handshake без magic-префикса)
   /// + `h1..h4=1,2,3,4` (стандартные WG message-types) → init/response пакеты
-  /// бит-в-бит как plain WireGuard, Cloudflare принимает. `jc=4`+`i1` (junk до
-  /// handshake) сбивают DPI-сигнатуру. См. [docs/spec/tasks/126].
-  static Map<String, Object> amnezia15Preset() => <String, Object>{
-        'jc': 4,
-        'jmin': 40,
-        'jmax': 70,
+  /// бит-в-бит как plain WireGuard, Cloudflare принимает. `jc`+`i1` (junk до
+  /// handshake) сбивают DPI-сигнатуру. [jc]/[jmin]/[jmax] — настраиваемые
+  /// (§136 Advanced), дефолт 4/40/70. См. [docs/spec/tasks/126], [136].
+  static Map<String, Object> amneziaPreset({
+    int jc = 4,
+    int jmin = 40,
+    int jmax = 70,
+  }) =>
+      <String, Object>{
+        'jc': jc,
+        'jmin': jmin,
+        'jmax': jmax,
         's1': 0,
         's2': 0,
         'h1': 1,
@@ -82,26 +88,45 @@ class WarpClient {
         'h4': 4,
       };
 
-  /// Собирает [Awg] для obfuscate-ветки: 1.5 preset + `i1` сгенерённый
-  /// выбранным [template] (на устройстве, уникальный).
-  static Awg buildAmnezia15Awg(JunkTemplate template) {
-    final fields = amnezia15Preset()..['i1'] = generateJunkI1(template);
-    return Awg(fields);
+  /// Собирает [Awg] для obfuscate-ветки: preset + `i1` сгенерённый выбранным
+  /// [template] (на устройстве, уникальный). §136:
+  /// - [JunkTemplate.quic] → QUIC Initial из [params] (sni/level; jc/jmin/jmax);
+  /// - [JunkTemplate.sip]  → SIP-INVITE (§126), preset с дефолтными jc/jmin/jmax.
+  static Awg buildAmneziaAwg(JunkTemplate template, {QuicParams? params}) {
+    switch (template) {
+      case JunkTemplate.quic:
+        final p = params ?? const QuicParams();
+        final sni = p.sni.trim();
+        final fields = amneziaPreset(jc: p.jc, jmin: p.jmin, jmax: p.jmax)
+          ..['i1'] = generateQuicI1(
+              sni.isEmpty ? 'www.google.com' : sni,
+              level: p.level);
+        return Awg(fields);
+      case JunkTemplate.sip:
+        final fields = amneziaPreset()..['i1'] = generateSipI1();
+        return Awg(fields);
+    }
   }
 
   /// Регистрирует устройство. Опциональный [licenseKey] — WARP+; если задан,
   /// после /reg делается PATCH account (ошибка PATCH НЕ роняет регистрацию —
   /// возвращается free-аккаунт с warpPlus=false).
   ///
-  /// §126 — если [obfuscate] true, в аккаунт кладётся [Awg] из 1.5 preset +
-  /// `i1` шаблона [template]. Сама регистрация в Cloudflare не меняется
-  /// (обфускация — чисто клиентский конфиг поверх обычного WG-узла).
+  /// §126/§136 — если [obfuscate] true, в аккаунт кладётся [Awg] из preset +
+  /// `i1` шаблона [template] ([quicParams] для QUIC). Сама регистрация в
+  /// Cloudflare не меняется (обфускация — чисто клиентский конфиг).
+  ///
+  /// §136 — [randomEndpoint] (если задан): когда obfuscate=true И [endpoint]
+  /// дефолтный, endpoint заменяется на рандомный `ip:port` из зашитых
+  /// Cloudflare-блоков (заблокированный `engage…:2408` обходится без скана).
   Future<WarpAccount> register({
     String? licenseKey,
     String endpoint = WarpAccount.defaultEndpoint,
     required String nowIso8601,
     bool obfuscate = false,
-    JunkTemplate template = JunkTemplate.wgTraffic,
+    JunkTemplate template = JunkTemplate.quic,
+    QuicParams? quicParams,
+    String? randomEndpoint,
   }) async {
     final kp = await genKeypair();
 
@@ -137,7 +162,18 @@ class WarpClient {
       throw WarpException('bad response: not JSON');
     }
 
-    var account = _parseReg(json, privKey: kp.priv, endpoint: endpoint,
+    // §136 — рандомный endpoint при обфускации + дефолтном endpoint. Юзер
+    // вписал свой (не дефолт) → уважаем его (§135), рандом не применяем.
+    var effectiveEndpoint = endpoint;
+    if (obfuscate &&
+        endpoint == WarpAccount.defaultEndpoint &&
+        randomEndpoint != null &&
+        randomEndpoint.isNotEmpty) {
+      effectiveEndpoint = randomEndpoint;
+      AppLog.I.info('WARP: random endpoint $randomEndpoint (§136)');
+    }
+
+    var account = _parseReg(json, privKey: kp.priv, endpoint: effectiveEndpoint,
         createdAt: nowIso8601);
     AppLog.I.info('WARP registered: ${account.redacted()}');
 
@@ -145,8 +181,9 @@ class WarpClient {
       account = await _applyLicenseSafe(account, licenseKey.trim());
     }
     if (obfuscate) {
-      account = account.copyWith(awg: buildAmnezia15Awg(template));
-      AppLog.I.info('WARP: Amnezia 1.5 obfuscation enabled ($template)');
+      account =
+          account.copyWith(awg: buildAmneziaAwg(template, params: quicParams));
+      AppLog.I.info('WARP: Amnezia obfuscation enabled ($template)');
     }
     return account;
   }

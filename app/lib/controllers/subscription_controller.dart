@@ -29,6 +29,7 @@ import '../services/subscription/sources.dart';
 import '../services/warp/awg_junk.dart';
 import '../services/warp/warp_account.dart';
 import '../services/warp/warp_client.dart';
+import '../services/warp/warp_endpoint_picker.dart';
 
 // Та же библиотека (`part`), поэтому library-private доступ
 // (`_replaceList`, `_formatAgo`) к/между основным файлом и part'ом доступен.
@@ -217,7 +218,8 @@ class SubscriptionController extends ChangeNotifier {
     bool reuse = true,
     bool forceNew = false,
     bool obfuscate = false,
-    JunkTemplate template = JunkTemplate.wgTraffic,
+    JunkTemplate template = JunkTemplate.quic,
+    QuicParams quicParams = const QuicParams(),
     WarpClient? client,
   }) async {
     _busy = true;
@@ -235,18 +237,32 @@ class SubscriptionController extends ChangeNotifier {
         account = null;
       }
 
+      // §136 — резолвим QUIC SNI (пустой → рандом из пула) и рандомный endpoint
+      // (только при обфускации + дефолтном endpoint). Списки в asset.
+      final picker = await WarpEndpointPicker.load();
+      final resolvedParams = (template == JunkTemplate.quic &&
+              quicParams.sni.trim().isEmpty &&
+              picker.randomSni().isNotEmpty)
+          ? quicParams.copyWith(sni: picker.randomSni())
+          : quicParams;
+      final randomEp = obfuscate && endpoint == WarpAccount.defaultEndpoint
+          ? picker.randomEndpoint()
+          : null;
+
       account ??= await warp.register(
         licenseKey: licenseKey,
         endpoint: endpoint,
         nowIso8601: DateTime.now().toUtc().toIso8601String(),
         obfuscate: obfuscate,
         template: template,
+        quicParams: resolvedParams,
+        randomEndpoint: randomEp,
       );
 
       // §126 — обфускация чисто клиентская (не требует ре-регистрации в
       // Cloudflare). Если переиспользуем кеш, но галка/шаблон сменились —
       // (пере)генерируем awg поверх существующего аккаунта; off → снимаем.
-      account = _syncWarpObfuscation(account, obfuscate, template);
+      account = _syncWarpObfuscation(account, obfuscate, template, resolvedParams);
 
       await SettingsStorage.setWarpAccount(account);
 
@@ -284,12 +300,13 @@ class SubscriptionController extends ChangeNotifier {
   /// `obfuscate` off → снимаем awg (если был); on → ставим, если его нет
   /// (свежий register уже проставил — тогда no-op; кешированный аккаунт без
   /// awg или с awg — перегенерируем, чтобы применить актуальный шаблон).
-  WarpAccount _syncWarpObfuscation(
-      WarpAccount account, bool obfuscate, JunkTemplate template) {
+  WarpAccount _syncWarpObfuscation(WarpAccount account, bool obfuscate,
+      JunkTemplate template, QuicParams quicParams) {
     if (!obfuscate) {
       return account.awg == null ? account : account.copyWith(clearAwg: true);
     }
-    return account.copyWith(awg: WarpClient.buildAmnezia15Awg(template));
+    return account.copyWith(
+        awg: WarpClient.buildAmneziaAwg(template, params: quicParams));
   }
 
   /// §126 — добавляет обфусцированный WARP-узел через `.conf`/[parseWireguardIni]

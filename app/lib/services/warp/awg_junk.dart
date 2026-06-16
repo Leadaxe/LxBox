@@ -1,41 +1,67 @@
 import 'dart:math';
 
 import '../util/pseudo_gen.dart';
+import 'quic_i1.dart';
 
-/// §126 — генератор junk-пакета `i1` для AmneziaWG 1.5 обфускации WARP.
+/// §126/§136 — генератор junk-пакета `i1` для AmneziaWG обфускации WARP.
 ///
 /// `i1` — это «лишний» пакет, который AmneziaWG шлёт ПЕРЕД настоящим WG
 /// handshake. Сервер (Cloudflare = обычный WG) его игнорирует, а DPI видит
 /// поток, начинающийся НЕ с ожидаемой WG-сигнатуры `01 00 00 00`+148b → не
-/// матчит шаблон. Цель — мимикрия под другой трафик + уникальность каждого
+/// матчит шаблон. Цель — мимикрия под живой протокол + уникальность каждого
 /// пакета (нет общей сигнатуры между юзерами).
 ///
-/// Формат — CPS-тег AmneziaWG `<b 0xHEX>` (байты пакета в hex). Совместим с
+/// Формат — CPS-теги AmneziaWG (`<b 0xHEX>`, `<r N>`). Совместим с
 /// `Awg.strKeys` / `parseWireguardUri` (i* как строки, регистр сохраняется).
 ///
-/// **Реверс `warp-generator.github.io` (2026-06-15):** их `i1` —
-/// захардкоженные константы (pseudo-WG `<b 0xce000000…>` и канонический
-/// RFC 3261 `INVITE sip:bob@biloxi.com`). Мы НЕ копируем константу: копия =
-/// общий DPI-маяк. Генерируем своё с рандомизацией.
+/// **§136 (реверс `warp-generator.github.io`, 2026-06-16):** слабый WG-traffic
+/// decoy УБРАН — эмпирически не пробивал DPI (field-report Iliya). Заменён на
+/// **QUIC** (настоящий QUIC Initial с `<r>`-нарезкой, см. [QuicI1]). SIP оставлен
+/// как второй вариант.
 enum JunkTemplate {
-  /// Маскирует junk под «ещё один WG-пакет»: fake type-байт + `00 00 00`
-  /// (как reserved в WG-заголовке) + случайное тело ~1250 байт.
-  wgTraffic,
+  /// Настоящий QUIC Initial (голый SNI-ClientHello) с CPS-нарезкой `<b>/<r>`.
+  /// Главный шаблон — мимикрия под HTTP/3 к популярному домену. См. [QuicI1].
+  quic,
 
   /// Маскирует junk под VoIP: валидный по RFC 3261 SIP-INVITE со ВСЕМИ
   /// рандомизированными полями (DPI обычно не режет телефонию).
-  sipTraffic,
+  sip,
 }
 
-/// Генерирует `i1` для выбранного шаблона. Возвращает CPS-тег `<b 0xHEX>`.
-/// Каждый вызов уникален ([Random.secure]).
-String generateJunkI1(JunkTemplate template) {
-  final bytes = switch (template) {
-    JunkTemplate.wgTraffic => _wgTrafficJunk(),
-    JunkTemplate.sipTraffic => _sipTrafficJunk(),
-  };
-  return _toCpsTag(bytes);
+/// Параметры QUIC-шаблона (Advanced). [sni] пустой → caller подставляет рандом
+/// из пула. [level] 0–4 — стратегия нарезки `<b>/<r>` (как `level` в quic.js).
+class QuicParams {
+  const QuicParams({
+    this.sni = '',
+    this.level = 0,
+    this.jc = 4,
+    this.jmin = 40,
+    this.jmax = 70,
+  });
+
+  final String sni;
+  final int level;
+  final int jc;
+  final int jmin;
+  final int jmax;
+
+  QuicParams copyWith({String? sni, int? level, int? jc, int? jmin, int? jmax}) =>
+      QuicParams(
+        sni: sni ?? this.sni,
+        level: level ?? this.level,
+        jc: jc ?? this.jc,
+        jmin: jmin ?? this.jmin,
+        jmax: jmax ?? this.jmax,
+      );
 }
+
+/// Генерирует `i1` для SIP-шаблона. Возвращает CPS-тег `<b 0xHEX>`.
+/// Каждый вызов уникален ([Random.secure]). Для QUIC см. [QuicI1.generate].
+String generateSipI1() => _toCpsTag(_sipTrafficJunk());
+
+/// Генерирует `i1` для QUIC-шаблона ([sni] не пустой). Делегат в [QuicI1].
+String generateQuicI1(String sni, {int level = 0}) =>
+    QuicI1.generate(sni, level: level);
 
 final Random _rng = Random.secure();
 
@@ -48,23 +74,7 @@ String _toCpsTag(List<int> bytes) {
   return '<b 0x$hex>';
 }
 
-/// Template A — WG-traffic.
-///
-/// `byte[0]` = fake type (НЕ 1/2/3/4 — иначе примут за валидный WG-тип),
-/// `byte[1..3]` = `00 00 00` (как reserved в WG), `byte[4..]` = случайные
-/// байты, общая длина ~1200–1400 (рандомизируем в диапазоне).
-List<int> _wgTrafficJunk() {
-  // fake type ∈ [5..255] (исключаем валидные WG message-types 1..4 и 0).
-  final fakeType = 5 + _rng.nextInt(251);
-  final bodyLen = 1200 + _rng.nextInt(201); // 1200..1400
-  final out = <int>[fakeType, 0, 0, 0];
-  for (var i = 0; i < bodyLen; i++) {
-    out.add(_rng.nextInt(256));
-  }
-  return out;
-}
-
-/// Template B — SIP-traffic. Валидный по RFC 3261 INVITE, но КАЖДОЕ поле
+/// SIP-traffic. Валидный по RFC 3261 INVITE, но КАЖДОЕ поле
 /// рандомизировано (user/host — [PseudoGen], branch/tag/Call-ID/CSeq/port —
 /// случайный hex/digits). Никаких узнаваемых констант (`bob@biloxi.com` и т.п.).
 List<int> _sipTrafficJunk() {

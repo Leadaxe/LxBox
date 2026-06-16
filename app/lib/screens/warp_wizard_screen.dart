@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
 import '../services/warp/awg_junk.dart';
@@ -32,20 +33,40 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
   final _endpoint =
       TextEditingController(text: WarpAccount.defaultEndpoint);
 
+  // §136 — QUIC-параметры (Advanced). Пустой SNI → рандом из пула.
+  final _sni = TextEditingController();
+  int _quicLevel = 0;
+  final _jc = TextEditingController(text: '4');
+  final _jmin = TextEditingController(text: '40');
+  final _jmax = TextEditingController(text: '70');
+
   bool _forceNew = false;
   bool _busy = false;
   WarpAccount? _result;
 
-  // §126 — AmneziaWG 1.5 обфускация (default off — обычный WARP).
+  // §126/§136 — AmneziaWG обфускация (default off — обычный WARP).
   bool _obfuscate = false;
-  JunkTemplate _template = JunkTemplate.wgTraffic;
+  JunkTemplate _template = JunkTemplate.quic;
 
   @override
   void dispose() {
     _license.dispose();
     _endpoint.dispose();
+    _sni.dispose();
+    _jc.dispose();
+    _jmin.dispose();
+    _jmax.dispose();
     super.dispose();
   }
+
+  /// Собирает [QuicParams] из Advanced-полей (с дефолтами при пустых/битых).
+  QuicParams _buildQuicParams() => QuicParams(
+        sni: _sni.text.trim(),
+        level: _quicLevel,
+        jc: int.tryParse(_jc.text.trim()) ?? 4,
+        jmin: int.tryParse(_jmin.text.trim()) ?? 40,
+        jmax: int.tryParse(_jmax.text.trim()) ?? 70,
+      );
 
   Future<void> _register() async {
     if (_busy) return;
@@ -62,6 +83,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
         forceNew: _forceNew,
         obfuscate: _obfuscate,
         template: _template,
+        quicParams: _buildQuicParams(),
       );
 
       if (!mounted) return;
@@ -141,7 +163,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                     onChanged: _busy
                         ? null
                         : (v) => setState(() => _obfuscate = v ?? false),
-                    title: const Text('Add Amnezia 1.5 obfuscation'),
+                    title: const Text('Add Amnezia obfuscation'),
                     subtitle: const Text(
                         'Masks WireGuard from DPI by adding junk traffic. '
                         'Enable if WARP is blocked.'),
@@ -149,41 +171,40 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                   if (_obfuscate) ...[
                     const Divider(height: 1),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: _label('Junk template'),
-                      ),
-                    ),
-                    // Flutter 3.41: groupValue/onChanged переехали с RadioListTile
-                    // на обёртку RadioGroup; disabled-состояние — через
-                    // `enabled` каждого тайла (вместо onChanged: null).
-                    RadioGroup<JunkTemplate>(
-                      groupValue: _template,
-                      onChanged: (v) => setState(
-                          () => _template = v ?? JunkTemplate.wgTraffic),
-                      child: Column(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                      child: Row(
                         children: [
-                          RadioListTile<JunkTemplate>(
-                            dense: true,
-                            value: JunkTemplate.wgTraffic,
-                            enabled: !_busy,
-                            title: const Text('WG-traffic'),
-                            subtitle: const Text(
-                                'Junk mimics another WireGuard packet'),
-                          ),
-                          RadioListTile<JunkTemplate>(
-                            dense: true,
-                            value: JunkTemplate.sipTraffic,
-                            enabled: !_busy,
-                            title: const Text('SIP-traffic'),
-                            subtitle:
-                                const Text('Junk mimics a VoIP (SIP) call'),
+                          _label('Junk template'),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: DropdownButtonFormField<JunkTemplate>(
+                              initialValue: _template,
+                              isDense: true,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                border: OutlineInputBorder(),
+                                contentPadding:
+                                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: JunkTemplate.quic,
+                                  child: Text('QUIC (default)'),
+                                ),
+                                DropdownMenuItem(
+                                  value: JunkTemplate.sip,
+                                  child: Text('SIP'),
+                                ),
+                              ],
+                              onChanged: _busy
+                                  ? null
+                                  : (v) => setState(
+                                      () => _template = v ?? JunkTemplate.quic),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 4),
                   ],
                 ],
               ),
@@ -226,12 +247,77 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'host:port of the Cloudflare peer. Change only if the '
-                          'default is blocked (use a working IP:port).',
+                          'host:port of the Cloudflare peer. With obfuscation a '
+                          'random working IP:port is picked automatically; set '
+                          'this only to pin a specific one.',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: cs.onSurfaceVariant,
                               ),
                         ),
+                        // §136 — QUIC-параметры (только при QUIC-обфускации).
+                        if (_obfuscate && _template == JunkTemplate.quic) ...[
+                          const SizedBox(height: 16),
+                          _label('QUIC SNI (masquerade domain)'),
+                          TextField(
+                            controller: _sni,
+                            enabled: !_busy,
+                            decoration:
+                                _input('random (apteka.ru / google.com / …)'),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Domain the junk QUIC packet pretends to reach. '
+                            'Leave empty for a random pick.',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: cs.onSurfaceVariant),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              _label('QUIC level'),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: DropdownButtonFormField<int>(
+                                  initialValue: _quicLevel,
+                                  isDense: true,
+                                  decoration: const InputDecoration(
+                                    isDense: true,
+                                    border: OutlineInputBorder(),
+                                    contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                  ),
+                                  items: [
+                                    for (var i = 0; i <= 4; i++)
+                                      DropdownMenuItem(
+                                          value: i, child: Text('$i')),
+                                  ],
+                                  onChanged: _busy
+                                      ? null
+                                      : (v) =>
+                                          setState(() => _quicLevel = v ?? 0),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _numField(_jc, 'Jc'),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _numField(_jmin, 'Jmin'),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _numField(_jmax, 'Jmax'),
+                              ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         CheckboxListTile(
                           contentPadding: EdgeInsets.zero,
@@ -285,6 +371,21 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
         isDense: true,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      );
+
+  /// §136 — компактное числовое поле для Jc/Jmin/Jmax.
+  Widget _numField(TextEditingController c, String label) => TextField(
+        controller: c,
+        enabled: !_busy,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          isDense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        ),
       );
 }
 
