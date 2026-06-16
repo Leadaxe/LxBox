@@ -2,7 +2,7 @@
 
 | Field | Value |
 |------|----------|
-| Status | Implemented (device-smoke pending) |
+| Status | Implemented + device-smoke ✅ (QUIC подтверждён) |
 | Started | 2026-06-16 |
 | Trigger | Field-report (Iliya, Крым): наш junk (WG-traffic / SIP) DPI провайдера НЕ пробивает, а конфиги с `warp-generator.github.io` — работают «из коробки, настройки по умолчанию, сервер стандартный». Реверс генератора (2026-06-16) показал: (1) i1 = **настоящий QUIC Initial** (голый SNI-ClientHello) с CPS-нарезкой `<b>/<r>`, тег `<r>` рандомит изменчивые байты на каждый пакет; (2) endpoint = **чистый рандом** IP:port из зашитых Cloudflare-блоков, без пробы/скана. Эмпирически: синтетический «шум под QUIC» (`0xc3…`+random payload) у Ильи НЕ сработал → нужен валидный QUIC Initial + `<r>`-нарезка. |
 | Related | [§126](126-warp-amneziawg-obfuscation.md) (наш i1-генератор — заменяем WG-traffic на QUIC); [§135](135-warp-custom-endpoint-not-overwritten.md) (custom endpoint — предпосылка рандома); [§132](132-warp-endpoint-scanner-research.md) (endpoint research — рандом вместо скана); [§133](133-warp-junk-generators-research.md) (junk research — QUIC = планка-2026); [§127](127-pseudo-name-domain-generator.md) (PseudoGen для SIP); [[reference_awg_cps_tags]] |
@@ -126,7 +126,27 @@ generateQuicI1(sni, level):
 - [ ] `assets/warp_endpoints.json` грузится; prefixes/ports/sni_pool как в генераторе + 3 межд. SNI.
 - [ ] Тесты: quic_i1 (структура Initial, нарезка, рандом), endpoint_picker (формат ip:port, диапазоны), preset из QuicParams, dropdown маппинг.
 - [x] `flutter analyze` чисто; `flutter test` зелёный (1131 тест).
-- [ ] Device-smoke (у Ильи): QUIC-узел через Get WARP даёт трафик. **PENDING.**
+- [x] Device-smoke (Iliya, Крым, 2026-06-16): **QUIC i1 с SNI `www.google.com` → РАБОТАЕТ.** Валидный самодельный QUIC Initial пробивает DPP. Подход (уровень 3) подтверждён.
+
+## Device-smoke результат (2026-06-16) — критичный
+
+Два узла, **одинаковая крипта/endpoint**, разный SNI внутри ClientHello:
+
+| SNI | Результат |
+|---|---|
+| `www.google.com` | ✅ **работает** |
+| `cloudflare-quic.com` | ❌ нет соединения |
+
+**Выводы:**
+1. **Самодельный валидный QUIC Initial (§136) пробивает DPI** — архитектура верна,
+   не нужен захваченный снимок (уровень 0/1) ни sing-box QUIC-стек (уровень 4).
+2. **DPI читает SNI внутри QUIC Initial** (Initial-крипта публична, расшифровывается)
+   и режет по нему. `cloudflare-*` = маркер маскировки под VPN-инфру → блок.
+   Массовый легитимный домен (google) → пропуск.
+3. **`cloudflare-quic.com` УБРАН из sni_pool** (был палевным). Пул = только массовые
+   легитимные домены (РФ-инфра + google/microsoft/youtube/bing). Fallback-дефолт в
+   коде = `www.google.com` (проверенно рабочий). См. `assets/warp_endpoints.json`
+   `_sni_comment` + регресс-тест.
 
 ## Implementation (2026-06-16)
 

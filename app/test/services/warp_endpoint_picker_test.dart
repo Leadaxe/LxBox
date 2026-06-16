@@ -62,4 +62,14 @@ void main() {
     expect(p.sniPool, contains('gosuslugi.ru'));
     expect(p.sniPool, contains('www.google.com'));
   });
+
+  test('§136 sni_pool НЕ содержит cloudflare-доменов (device-smoke: режутся)',
+      () async {
+    final p = await WarpEndpointPicker.load();
+    // Iliya 2026-06-16: cloudflare-quic.com → нет соединения (DPI читает SNI).
+    for (final s in p.sniPool) {
+      expect(s.contains('cloudflare'), isFalse,
+          reason: 'cloudflare-SNI палевен: $s');
+    }
+  });
 }
