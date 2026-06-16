@@ -75,6 +75,30 @@ void main() {
       expect(isValidDomainSuffix('a' * 64), isFalse);
       expect(isValidDomainSuffix('a' * 63), isTrue);
     });
+    // 20 реальных суффиксов как их вводят юзеры — прогон через тот же
+    // normalize (lower + strip leading '.'), что делает match_section.
+    test('accepts 20 real-world suffix samples', () {
+      String norm(String s) {
+        var x = s.toLowerCase();
+        if (x.startsWith('.')) x = x.substring(1);
+        return x;
+      }
+
+      const samples = <String>[
+        '.ru', '.com', '.org', 'net', 'co.uk',
+        'google.com', 'youtube.com', 'github.io', 'gov.uk', '.xn--p1ai',
+        'mail.ru', 'yandex.ru', 'cloudflare-dns.com', 't.me', 'discord.gg',
+        'amazonaws.com', 'edu.au', 'a.io', 'sub.example.co.uk', 'co.jp',
+      ];
+      for (final s in samples) {
+        expect(isValidDomainSuffix(norm(s)), isTrue, reason: 'suffix "$s"');
+      }
+    });
+    test('rejects raw (non-punycode) IDN — caller не делает punycode', () {
+      // sing-box хочет ASCII/punycode; юзер должен ввести .xn--p1ai.
+      expect(isValidDomainSuffix('рф'), isFalse);
+      expect(isValidDomainSuffix('мвд.рф'), isFalse);
+    });
   });
 
   group('isValidKeyword', () {
