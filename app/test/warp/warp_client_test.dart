@@ -65,6 +65,35 @@ void main() {
     expect(base64.decode(sentKey!).length, 32);
   });
 
+  test('§135 register: кастомный endpoint НЕ затирается ответом Cloudflare',
+      () async {
+    final client = MockClient(
+        (req) async => http.Response(jsonEncode(regResponse()), 200));
+
+    // Юзер вписал свой IP:port (Advanced). Ответ API несёт host
+    // engage.cloudflareclient.com:2408 — но он НЕ должен победить.
+    final acc = await WarpClient(client: client).register(
+      endpoint: '188.114.97.6:988',
+      nowIso8601: '2026-06-14T00:00:00Z',
+    );
+
+    expect(acc.endpoint, '188.114.97.6:988');
+  });
+
+  test('§135 register: дефолтный endpoint → fallback на host из ответа',
+      () async {
+    final client = MockClient(
+        (req) async => http.Response(jsonEncode(regResponse()), 200));
+
+    // Юзер оставил дефолт → берём host из ответа Cloudflare (старое поведение).
+    final acc = await WarpClient(client: client).register(
+      endpoint: WarpAccount.defaultEndpoint,
+      nowIso8601: '2026-06-14T00:00:00Z',
+    );
+
+    expect(acc.endpoint, 'engage.cloudflareclient.com:2408');
+  });
+
   test('register: non-200 → WarpException с упоминанием версии', () async {
     final client = MockClient((req) async => http.Response('nope', 429));
     expect(

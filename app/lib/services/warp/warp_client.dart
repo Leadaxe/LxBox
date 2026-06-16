@@ -169,6 +169,14 @@ class WarpClient {
     }
     final clientId = (config['client_id'] as String?) ?? '';
 
+    // §135 — кастомный endpoint из Advanced ПРИОРИТЕТНЕЕ ответа Cloudflare.
+    // Cloudflare всегда возвращает `peer.endpoint.host` = дефолтный
+    // `engage.cloudflareclient.com:2408`; раньше он безусловно затирал ввод
+    // юзера → Advanced-поле Endpoint было мёртвым (юзер вписывал
+    // `188.114.97.6:988`, в конфиг шёл дефолт). Теперь: юзер явно задал
+    // не-дефолтный endpoint → уважаем его, ответ API игнорируем. Оставил
+    // дефолт → берём `host` из ответа Cloudflare как fallback.
+    final userPickedEndpoint = endpoint != WarpAccount.defaultEndpoint;
     final peersRaw = config['peers'];
     String peerPub = '';
     String host = endpoint;
@@ -176,7 +184,7 @@ class WarpClient {
       final peer = peersRaw.first as Map;
       peerPub = (peer['public_key'] as String?) ?? '';
       final ep = peer['endpoint'];
-      if (ep is Map) {
+      if (ep is Map && !userPickedEndpoint) {
         final h = (ep['host'] as String?) ?? '';
         if (h.isNotEmpty) host = h;
       }
