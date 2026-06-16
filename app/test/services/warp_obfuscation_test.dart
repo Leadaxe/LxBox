@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/services/parser/ini_parser.dart';
-import 'package:lxbox/services/warp/awg_junk.dart';
+import 'package:lxbox/services/warp/masquerade_params.dart';
 import 'package:lxbox/services/warp/warp_account.dart';
 import 'package:lxbox/services/warp/warp_client.dart';
 
@@ -51,34 +51,33 @@ void main() {
       expect(p['h1'], 1);
     });
 
-    test('buildAmneziaAwg(quic): preset + QUIC i1 (сплошной <b>, как рабочий)',
-        () {
-      final awg = WarpClient.buildAmneziaAwg(JunkTemplate.quic);
+    test('§143 buildAmneziaAwg(quic): id/ip/ib, БЕЗ i1', () {
+      final awg = WarpClient.buildAmneziaAwg(
+          const QuicParams(sni: 'www.google.com', ip: 'quic', ib: 'firefox'));
       expect(awg.fields['jc'], 4);
-      expect(awg.fields['i1'], isA<String>());
-      final i1 = awg.fields['i1'] as String;
-      expect(i1.startsWith('<b 0x'), isTrue);
-      // §136 — сплошной <b>, БЕЗ <r> (узел с <r> у Ильи НЕ работал).
-      expect(i1.contains('<r '), isFalse);
-      // Уникальность i1 между двумя сборками (рандомный DCID/random).
-      final awg2 = WarpClient.buildAmneziaAwg(JunkTemplate.quic);
-      expect(awg.fields['i1'], isNot(awg2.fields['i1']));
+      expect(awg.fields['ip'], 'quic');
+      expect(awg.fields['id'], 'www.google.com');
+      expect(awg.fields['ib'], 'firefox');
+      // i1 НЕ пишем — взаимоисключение с id/ip/ib (ядро отвергло бы оба).
+      expect(awg.fields.containsKey('i1'), isFalse);
     });
 
-    test('buildAmneziaAwg(quic): QuicParams применяются (jc/jmin/jmax)', () {
-      final awg = WarpClient.buildAmneziaAwg(JunkTemplate.quic,
-          params: const QuicParams(
-              sni: 'a.io', level: 1, jc: 7, jmin: 10, jmax: 20));
+    test('§143 buildAmneziaAwg(dns): ip=dns, id; ib НЕ пишется', () {
+      final awg = WarpClient.buildAmneziaAwg(
+          const QuicParams(sni: 'ozon.ru', ip: 'dns'));
+      expect(awg.fields['ip'], 'dns');
+      expect(awg.fields['id'], 'ozon.ru');
+      expect(awg.fields.containsKey('ib'), isFalse); // ib только для quic
+      expect(awg.fields.containsKey('i1'), isFalse);
+    });
+
+    test('§143 buildAmneziaAwg: пустой id → дефолтный домен; jc/jmin/jmax', () {
+      final awg = WarpClient.buildAmneziaAwg(
+          const QuicParams(sni: '', ip: 'quic', jc: 7, jmin: 10, jmax: 20));
+      expect(awg.fields['id'], 'www.google.com'); // fallback
       expect(awg.fields['jc'], 7);
       expect(awg.fields['jmin'], 10);
       expect(awg.fields['jmax'], 20);
-    });
-
-    test('buildAmneziaAwg(sip): preset + SIP i1', () {
-      final awg = WarpClient.buildAmneziaAwg(JunkTemplate.sip);
-      final i1 = awg.fields['i1'] as String;
-      expect(i1.startsWith('<b 0x'), isTrue);
-      expect(i1.contains('<r '), isFalse); // SIP = сплошной <b>
     });
   });
 
@@ -93,12 +92,15 @@ void main() {
       expect(conf.contains('Jc'), isFalse);
     });
 
-    test('obfuscated: AWG-поля в [Interface], i1 присутствует', () {
-      final awg = WarpClient.buildAmneziaAwg(JunkTemplate.quic);
+    test('§143 obfuscated: AWG-поля + id/ip/ib в [Interface], БЕЗ I1', () {
+      final awg = WarpClient.buildAmneziaAwg(
+          const QuicParams(sni: 'ozon.ru', ip: 'quic'));
       final conf = account(awg: awg).toWireguardConf();
       expect(conf.contains('JC = 4'), isTrue);
       expect(conf.contains('H1 = 1'), isTrue);
-      expect(conf.contains('I1 = <b 0x'), isTrue);
+      expect(conf.contains('IP = quic'), isTrue);
+      expect(conf.contains('ID = ozon.ru'), isTrue);
+      expect(conf.contains('I1 ='), isFalse); // i1 не пишем (конфликт)
     });
 
     test('§142 includeReserved=false → НЕТ Reserved (conf и uri)', () {
@@ -114,19 +116,20 @@ void main() {
   });
 
   group('.conf → parseWireguardIni round-trip', () {
-    test('obfuscated: AWG + reserved доходят до WireguardSpec/endpoint-JSON', () {
-      final awg = WarpClient.buildAmneziaAwg(JunkTemplate.sip);
-      final i1 = awg.fields['i1'] as String;
+    test('§143 obfuscated: AWG + id/ip/ib + reserved доходят до spec', () {
+      final awg = WarpClient.buildAmneziaAwg(
+          const QuicParams(sni: 'ozon.ru', ip: 'dns'));
       final conf = account(awg: awg).toWireguardConf();
 
       final spec = parseWireguardIni(conf);
       expect(spec, isNotNull);
-      // AWG долетел.
+      // AWG + masquerade долетели.
       expect(spec!.awg, isNotNull);
       expect(spec.awg!.fields['jc'], 4);
       expect(spec.awg!.fields['s1'], 0);
       expect(spec.awg!.fields['h4'], 4);
-      expect(spec.awg!.fields['i1'], i1); // регистр/содержимое i1 не потеряны
+      expect(spec.awg!.fields['ip'], 'dns');
+      expect(spec.awg!.fields['id'], 'ozon.ru');
       // reserved (WARP client_id) долетел в peer.
       expect(spec.peers, isNotEmpty);
       expect(spec.peers.first.reserved, [1, 2, 3]);
@@ -141,14 +144,16 @@ void main() {
   });
 
   group('WarpAccount persist (storage JSON)', () {
-    test('awg round-trips через toJson/fromJson', () {
-      final awg = WarpClient.buildAmneziaAwg(JunkTemplate.quic);
+    test('awg round-trips через toJson/fromJson (§143 id/ip/ib)', () {
+      final awg = WarpClient.buildAmneziaAwg(
+          const QuicParams(sni: 'ozon.ru', ip: 'quic'));
       final acc = account(awg: awg);
       final back = WarpAccount.fromJson(acc.toJson());
       expect(back, isNotNull);
       expect(back!.awg, isNotNull);
       expect(back.awg!.fields['jc'], 4);
-      expect(back.awg!.fields['i1'], awg.fields['i1']);
+      expect(back.awg!.fields['ip'], 'quic');
+      expect(back.awg!.fields['id'], 'ozon.ru');
     });
 
     test('plain (awg==null): нет ключа awg, fromJson → null', () {
@@ -158,7 +163,7 @@ void main() {
     });
 
     test('copyWith(clearAwg) снимает обфускацию', () {
-      final acc = account(awg: WarpClient.buildAmneziaAwg(JunkTemplate.quic));
+      final acc = account(awg: WarpClient.buildAmneziaAwg(const QuicParams()));
       expect(acc.awg, isNotNull);
       expect(acc.copyWith(clearAwg: true).awg, isNull);
     });

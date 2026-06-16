@@ -8,6 +8,8 @@
 /// каждая функция документирует своё поведение.
 library;
 
+import 'punycode.dart';
+
 /// Split по `\n` и `,` — оба разделителя поддерживаются, чтобы юзер мог
 /// вставлять из clipboard любой формы. Trim'ит и отбрасывает empty.
 List<String> splitRaw(String text) => text
@@ -17,11 +19,13 @@ List<String> splitRaw(String text) => text
     .toList();
 
 /// Normalized domains:
-/// - lower-case
+/// - lower-case (Unicode-aware: `Ü`→`ü` до punycode)
 /// - strip `http://` / `https://` префикса (юзер мог скопировать URL)
 /// - strip trailing `/`
 /// - опционально strip leading `.` (для `domain_suffix` где `.ru` =
 ///   `ru` в sing-box terms)
+/// - §144 IDNA ToASCII: не-ASCII лейблы → punycode `xn--…` (юзер вводит
+///   `.рф` / `почта.рф`, sing-box получает ASCII `xn--p1ai`)
 List<String> normalizedDomains(
   String raw, {
   bool stripLeadingDot = false,
@@ -32,7 +36,7 @@ List<String> normalizedDomains(
       if (v.startsWith('https://')) v = v.substring(8);
       if (v.endsWith('/')) v = v.substring(0, v.length - 1);
       if (stripLeadingDot && v.startsWith('.')) v = v.substring(1);
-      return v;
+      return domainToAscii(v);
     }).where((s) => s.isNotEmpty).toList();
 
 /// Domain keywords — просто lower-case (substring match в sing-box

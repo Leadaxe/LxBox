@@ -4,6 +4,11 @@ import 'package:http/testing.dart';
 import 'package:lxbox/services/subscription/sources.dart';
 
 void main() {
+  // Нулевые backoff'ы — ретраи без реального сна 1s+3s (см. §101): иначе
+  // retry-кейсы спали бы ~4s каждый и flaky'или в параллельном suite.
+  setUp(() => fetchBackoffsForTesting = const [Duration.zero, Duration.zero]);
+  tearDown(() => fetchBackoffsForTesting = null);
+
   group('fetchRaw — retry/backoff (night T1-3)', () {
     test('3rd attempt succeeds after 2 transient 500s', () async {
       var attempts = 0;

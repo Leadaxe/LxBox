@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../punycode.dart';
 import '../validators.dart' as v;
 import '../widgets/items_field.dart';
 import '../widgets/section_header.dart';
@@ -41,19 +42,19 @@ class MatchSection extends StatelessWidget {
           label: 'Domain (exact)',
           controller: domainCtrl,
           validator: v.isValidDomain,
-          normalize: (s) => s.toLowerCase(),
+          normalize: (s) => domainToAscii(s.toLowerCase()),
           hint: 'example.com',
         ),
         ItemsField(
           label: 'Domain suffix',
           controller: domainSuffixCtrl,
-          validator: v.isValidDomain,
+          validator: v.isValidDomainSuffix,
           normalize: (s) {
             var x = s.toLowerCase();
             if (x.startsWith('.')) x = x.substring(1);
-            return x;
+            return domainToAscii(x);
           },
-          hint: 'google.com\n.ru',
+          hint: 'google.com\n.io\nco.uk',
         ),
         ItemsField(
           label: 'Domain keyword',

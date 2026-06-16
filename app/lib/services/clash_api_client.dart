@@ -82,6 +82,28 @@ class ClashApiClient {
     return v is Map<String, dynamic> ? v : null;
   }
 
+  /// §143 — id'ы соединений из ответа `/connections`, чья outbound-цепочка
+  /// (`chains`) содержит [groupTag]. Используется для точечного обрыва активных
+  /// сессий переключаемой группы (см. [closeConnection]).
+  ///
+  /// Проверено на устройстве: `chains` = `[<node-tag>, <group-tag>]`, тег группы
+  /// (`vpn-1`/…) присутствует у каждого соединения этой группы.
+  static List<String> connectionIdsInChain(
+      Map<String, dynamic> connectionsResponse, String groupTag) {
+    final conns = connectionsResponse['connections'];
+    if (conns is! List) return const [];
+    final ids = <String>[];
+    for (final c in conns) {
+      if (c is! Map<String, dynamic>) continue;
+      final id = c['id']?.toString();
+      if (id == null || id.isEmpty) continue;
+      final chains = c['chains'];
+      if (chains is! List) continue;
+      if (chains.any((e) => e.toString() == groupTag)) ids.add(id);
+    }
+    return ids;
+  }
+
   Future<void> selectInGroup(String groupTag, String outboundTag) async {
     final uri = _u('/proxies/${Uri.encodeComponent(groupTag)}');
     final r = await _http

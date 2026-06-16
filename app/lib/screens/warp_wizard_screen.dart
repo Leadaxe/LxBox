@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
-import '../services/warp/awg_junk.dart';
+import '../services/warp/masquerade_params.dart';
 import '../services/warp/warp_account.dart';
 import '../services/warp/warp_endpoint_picker.dart';
 
@@ -34,9 +34,12 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
   final _endpoint =
       TextEditingController(text: WarpAccount.defaultEndpoint);
 
-  // §136 — QUIC-параметры (Advanced). Пустой SNI → рандом из пула.
-  final _sni = TextEditingController();
+  // §136/§143 — masquerade-параметры (Advanced). Пустой SNI(=id) → рандом из пула.
+  final _sni = TextEditingController(); // id (домен маскировки)
   List<String> _sniPool = const []; // подсказки для DropdownMenu
+  // §143 — ip (протокол маскировки): quic/dns/stun/sip; ib (браузер) при quic.
+  String _masqIp = 'quic';
+  String _masqIb = 'chrome';
   final _jc = TextEditingController(text: '4');
   final _jmin = TextEditingController(text: '40');
   final _jmax = TextEditingController(text: '70');
@@ -47,8 +50,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
 
   // §126/§136 — AmneziaWG обфускация (default off — обычный WARP).
   bool _obfuscate = false;
-  // §142 — шаблон всегда QUIC (выбор QUIC/SIP убран из UI).
-  static const _template = JunkTemplate.quic;
   // §142 — reserved (client_id): null = дефолт по галке (обфускация → off).
   // Юзер может переопределить чекбоксом в Advanced.
   bool? _includeReserved;
@@ -113,6 +114,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
       }
       _includeReserved = null; // §142 — вернуть к дефолту по галке
       _sni.text = _picker?.randomSni() ?? ''; // свежий случайный домен
+      _masqIp = 'quic'; // §143
+      _masqIb = 'chrome';
       _jc.text = '4';
       _jmin.text = '40';
       _jmax.text = '70';
@@ -136,6 +139,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
   QuicParams _buildQuicParams() {
     return QuicParams(
       sni: _sni.text.trim(),
+      ip: _masqIp,
+      ib: _masqIb,
       jc: int.tryParse(_jc.text.trim()) ?? 4,
       jmin: int.tryParse(_jmin.text.trim()) ?? 40,
       jmax: int.tryParse(_jmax.text.trim()) ?? 70,
@@ -156,7 +161,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
         endpoint: endpoint,
         forceNew: _forceNew,
         obfuscate: _obfuscate,
-        template: _template,
         quicParams: _buildQuicParams(),
         includeReserved: _includeReserved,
       );
@@ -257,15 +261,14 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                         'Masks WireGuard from DPI by adding junk traffic. '
                         'Enable if WARP is blocked.'),
                   ),
-                  // §142 — шаблон всегда QUIC (dropdown QUIC/SIP убран; рабочие
-                  // конфиги — QUIC, device-smoke прошёл QUIC). Параметры QUIC и
-                  // чекбокс reserved — в Advanced.
+                  // §143 — masquerade под выбранный протокол (id/ip/ib, ядро
+                  // 009 генерит i1). Протокол/домен/браузер — в Advanced.
                   if (_obfuscate)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                       child: Text(
-                        'Junk traffic mimics QUIC to a chosen domain (SNI). '
-                        'Tune the domain and parameters in Advanced.',
+                        'Junk traffic masquerades as a real protocol. '
+                        'Pick protocol/domain in Advanced.',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: cs.onSurfaceVariant,
                             ),
@@ -350,10 +353,56 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                               'Sends the Cloudflare client_id. Off for obfuscation '
                               '(the device binding tends to get blocked).'),
                         ),
-                        // §136 — QUIC-параметры (только при QUIC-обфускации).
+                        // §143 — masquerade id/ip/ib (ядро 009 генерит i1).
                         if (_obfuscate) ...[
                           const SizedBox(height: 16),
-                          _label('QUIC SNI (masquerade domain)'),
+                          // ip — протокол маскировки.
+                          Row(
+                            children: [
+                              _label('Masquerade protocol'),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: _masqIp,
+                                  isDense: true,
+                                  decoration: const InputDecoration(
+                                    isDense: true,
+                                    border: OutlineInputBorder(),
+                                    contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(
+                                        value: 'quic', child: Text('QUIC')),
+                                    DropdownMenuItem(
+                                        value: 'dns', child: Text('DNS')),
+                                    DropdownMenuItem(
+                                        value: 'stun', child: Text('STUN')),
+                                    DropdownMenuItem(
+                                        value: 'sip', child: Text('SIP')),
+                                  ],
+                                  onChanged: _busy
+                                      ? null
+                                      : (v) => setState(
+                                          () => _masqIp = v ?? 'quic'),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _masqIp == 'dns' || _masqIp == 'sip'
+                                ? 'Domain (below) is visible on the wire as the '
+                                    '${_masqIp == 'dns' ? 'DNS QNAME' : 'SIP host'}.'
+                                : 'QUIC/STUN decoy carries no hostname — the domain '
+                                    'below is cosmetic for this protocol.',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: cs.onSurfaceVariant),
+                          ),
+                          const SizedBox(height: 12),
+                          _label('Masquerade domain (id)'),
                           // combo-box (пункты из sni_pool + свободный ввод) +
                           // свой кубик: реролл случайного домена из пула.
                           Row(
@@ -381,15 +430,41 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Domain the junk QUIC packet pretends to reach. '
-                            'Pick one, type your own, or roll the dice.',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: cs.onSurfaceVariant),
-                          ),
+                          // ib — браузер (только при quic).
+                          if (_masqIp == 'quic') ...[
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                _label('Browser (ib)'),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    initialValue: _masqIb,
+                                    isDense: true,
+                                    decoration: const InputDecoration(
+                                      isDense: true,
+                                      border: OutlineInputBorder(),
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 8),
+                                    ),
+                                    items: const [
+                                      DropdownMenuItem(
+                                          value: 'chrome', child: Text('Chrome')),
+                                      DropdownMenuItem(
+                                          value: 'firefox',
+                                          child: Text('Firefox')),
+                                      DropdownMenuItem(
+                                          value: 'curl', child: Text('cURL')),
+                                    ],
+                                    onChanged: _busy
+                                        ? null
+                                        : (v) => setState(
+                                            () => _masqIb = v ?? 'chrome'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                           const SizedBox(height: 12),
                           Row(
                             children: [

@@ -167,4 +167,54 @@ void main() {
       expect(AppStat.zero.totalBytes, 0);
     });
   });
+
+  // §143 — точечный обрыв соединений переключаемой группы.
+  group('ClashApiClient.connectionIdsInChain', () {
+    // Форма соответствует реальному /connections с устройства (CPH2411):
+    // chains = [<node-tag>, <group-tag>].
+    Map<String, dynamic> conns(List<Map<String, dynamic>> items) =>
+        {'connections': items};
+
+    test('matches connections whose chains contain the group tag', () {
+      final r = conns([
+        {'id': 'a', 'chains': ['L: 🇳🇱 NL', 'vpn-1']},
+        {'id': 'b', 'chains': ['L: 🇩🇪 DE', 'vpn-1']},
+        {'id': 'c', 'chains': ['L: 🇺🇸 US', 'vpn-2']},
+      ]);
+      expect(ClashApiClient.connectionIdsInChain(r, 'vpn-1'), ['a', 'b']);
+      expect(ClashApiClient.connectionIdsInChain(r, 'vpn-2'), ['c']);
+      expect(ClashApiClient.connectionIdsInChain(r, 'vpn-3'), isEmpty);
+    });
+
+    test('empty / missing connections → empty list', () {
+      expect(ClashApiClient.connectionIdsInChain(const {}, 'vpn-1'), isEmpty);
+      expect(ClashApiClient.connectionIdsInChain(conns([]), 'vpn-1'), isEmpty);
+    });
+
+    test('skips entries with missing/empty id', () {
+      final r = conns([
+        {'chains': ['n', 'vpn-1']}, // no id
+        {'id': '', 'chains': ['n', 'vpn-1']}, // empty id
+        {'id': 'ok', 'chains': ['n', 'vpn-1']},
+      ]);
+      expect(ClashApiClient.connectionIdsInChain(r, 'vpn-1'), ['ok']);
+    });
+
+    test('skips entries where chains is missing or not a list', () {
+      final r = conns([
+        {'id': 'a'}, // no chains
+        {'id': 'b', 'chains': 'vpn-1'}, // chains is a string, not a list
+        {'id': 'c', 'chains': ['n', 'vpn-1']},
+      ]);
+      expect(ClashApiClient.connectionIdsInChain(r, 'vpn-1'), ['c']);
+    });
+
+    test('exact tag match — group tag is not a substring match', () {
+      final r = conns([
+        {'id': 'a', 'chains': ['n', 'vpn-10']},
+        {'id': 'b', 'chains': ['n', 'vpn-1']},
+      ]);
+      expect(ClashApiClient.connectionIdsInChain(r, 'vpn-1'), ['b']);
+    });
+  });
 }

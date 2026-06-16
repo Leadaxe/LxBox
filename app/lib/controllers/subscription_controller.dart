@@ -26,7 +26,7 @@ import '../services/subscription/auto_updater.dart';
 import '../services/subscription/http_cache.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/subscription/sources.dart';
-import '../services/warp/awg_junk.dart';
+import '../services/warp/masquerade_params.dart';
 import '../services/warp/warp_account.dart';
 import '../services/warp/warp_client.dart';
 import '../services/warp/warp_endpoint_picker.dart';
@@ -218,7 +218,6 @@ class SubscriptionController extends ChangeNotifier {
     bool reuse = true,
     bool forceNew = false,
     bool obfuscate = false,
-    JunkTemplate template = JunkTemplate.quic,
     QuicParams quicParams = const QuicParams(),
     // §142 — класть ли reserved (client_id). null → дефолт по галке: обфускация
     // ВКЛ → false (привязка к устройству режется), ВЫКЛ → true (§025).
@@ -240,11 +239,10 @@ class SubscriptionController extends ChangeNotifier {
         account = null;
       }
 
-      // §136 — резолвим QUIC SNI (пустой → рандом из пула) и рандомный endpoint
-      // (только при обфускации + дефолтном endpoint). Списки в asset.
+      // §143 — резолвим masquerade-домен (пустой id → рандом из пула) и
+      // рандомный endpoint (только при обфускации + дефолтном endpoint).
       final picker = await WarpEndpointPicker.load();
-      final resolvedParams = (template == JunkTemplate.quic &&
-              quicParams.sni.trim().isEmpty &&
+      final resolvedParams = (quicParams.sni.trim().isEmpty &&
               picker.randomSni().isNotEmpty)
           ? quicParams.copyWith(sni: picker.randomSni())
           : quicParams;
@@ -260,7 +258,6 @@ class SubscriptionController extends ChangeNotifier {
         endpoint: resolvedEndpoint,
         nowIso8601: DateTime.now().toUtc().toIso8601String(),
         obfuscate: obfuscate,
-        template: template,
         quicParams: resolvedParams,
         // register сам не рандомит — endpoint уже резолвлен здесь (§138).
         randomEndpoint: null,
@@ -276,9 +273,9 @@ class SubscriptionController extends ChangeNotifier {
       }
 
       // §126 — обфускация чисто клиентская (не требует ре-регистрации в
-      // Cloudflare). Если переиспользуем кеш, но галка/шаблон сменились —
+      // Cloudflare). Если переиспользуем кеш, но галка/параметры сменились —
       // (пере)генерируем awg поверх существующего аккаунта; off → снимаем.
-      account = _syncWarpObfuscation(account, obfuscate, template, resolvedParams);
+      account = _syncWarpObfuscation(account, obfuscate, resolvedParams);
 
       await SettingsStorage.setWarpAccount(account);
 
@@ -317,13 +314,12 @@ class SubscriptionController extends ChangeNotifier {
   /// `obfuscate` off → снимаем awg (если был); on → ставим, если его нет
   /// (свежий register уже проставил — тогда no-op; кешированный аккаунт без
   /// awg или с awg — перегенерируем, чтобы применить актуальный шаблон).
-  WarpAccount _syncWarpObfuscation(WarpAccount account, bool obfuscate,
-      JunkTemplate template, QuicParams quicParams) {
+  WarpAccount _syncWarpObfuscation(
+      WarpAccount account, bool obfuscate, QuicParams quicParams) {
     if (!obfuscate) {
       return account.awg == null ? account : account.copyWith(clearAwg: true);
     }
-    return account.copyWith(
-        awg: WarpClient.buildAmneziaAwg(template, params: quicParams));
+    return account.copyWith(awg: WarpClient.buildAmneziaAwg(quicParams));
   }
 
   /// §137 — базовый [base]-тег + суффикс ` 2`/` 3`/… если уже занят среди
