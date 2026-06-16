@@ -27,6 +27,7 @@ captures/
 
 # Private research / competitor analysis — never commit
 research/
+docs/research/
 .private/
 docs/private/
 
