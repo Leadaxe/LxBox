@@ -450,7 +450,11 @@ class Awg {
   static const numKeys = <String>{
     'jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4', 'h1', 'h2', 'h3', 'h4',
   };
-  static const strKeys = <String>{'i1', 'i2', 'i3', 'i4', 'i5'};
+  // §143 — masquerade id/ip/ib (WireSock-style sugar над i1, ядро 009 само
+  // генерит i1). Строки, как i*. Взаимоисключающи с явным i1 (ядро отвергает оба).
+  static const strKeys = <String>{
+    'i1', 'i2', 'i3', 'i4', 'i5', 'id', 'ip', 'ib',
+  };
 
   /// §112 — magic headers: с AWG 2.0 значение бывает диапазоном `N-M`
   /// (ranged headers). Подмножество [numKeys] — consumers, проверяющие

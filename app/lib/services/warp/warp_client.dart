@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../../models/node_spec.dart' show Awg;
 import '../app_log.dart';
-import 'awg_junk.dart';
+import 'masquerade_params.dart';
 import 'warp_account.dart';
 
 /// §025 — клиент регистрации Cloudflare WARP.
@@ -88,33 +88,37 @@ class WarpClient {
         'h4': 4,
       };
 
-  /// Собирает [Awg] для obfuscate-ветки: preset + `i1` сгенерённый выбранным
-  /// [template] (на устройстве, уникальный). §136:
-  /// - [JunkTemplate.quic] → QUIC Initial из [params] (sni/level; jc/jmin/jmax);
-  /// - [JunkTemplate.sip]  → SIP-INVITE (§126), preset с дефолтными jc/jmin/jmax.
-  static Awg buildAmneziaAwg(JunkTemplate template, {QuicParams? params}) {
-    switch (template) {
-      case JunkTemplate.quic:
-        final p = params ?? const QuicParams();
-        final sni = p.sni.trim();
-        final fields = amneziaPreset(jc: p.jc, jmin: p.jmin, jmax: p.jmax)
-          ..['i1'] = generateQuicI1(
-              sni.isEmpty ? 'www.google.com' : sni,
-              level: p.level);
-        return Awg(fields);
-      case JunkTemplate.sip:
-        final fields = amneziaPreset()..['i1'] = generateSipI1();
-        return Awg(fields);
+  /// §143 — собирает [Awg] для obfuscate-ветки через masquerade `id/ip/ib`
+  /// (ядро 009 само разворачивает в `i1`; LxBox `i1` НЕ генерит).
+  ///
+  /// - `ip` = протокол ([QuicParams.ip]: quic/dns/stun/sip).
+  /// - `id` = домен ([QuicParams.sni], пустой → `www.google.com`); на провод идёт
+  ///   только для `dns` (QNAME) / `sip` (host), для quic/stun декоративен.
+  /// - `ib` = браузер ([QuicParams.ib]) — только при `ip=quic`.
+  ///
+  /// **Не пишем `i1`** — `id/ip/ib` взаимоисключающи с явным `i1` (ядро отвергает оба).
+  static Awg buildAmneziaAwg(QuicParams params) {
+    final sni = params.sni.trim();
+    final domain = sni.isEmpty ? 'www.google.com' : sni;
+    final ip = params.ip.trim().isEmpty ? 'quic' : params.ip.trim();
+
+    final fields = amneziaPreset(
+        jc: params.jc, jmin: params.jmin, jmax: params.jmax)
+      ..['ip'] = ip
+      ..['id'] = domain;
+    if (ip == 'quic') {
+      fields['ib'] = params.ib.trim().isEmpty ? 'chrome' : params.ib.trim();
     }
+    return Awg(fields);
   }
 
   /// Регистрирует устройство. Опциональный [licenseKey] — WARP+; если задан,
   /// после /reg делается PATCH account (ошибка PATCH НЕ роняет регистрацию —
   /// возвращается free-аккаунт с warpPlus=false).
   ///
-  /// §126/§136 — если [obfuscate] true, в аккаунт кладётся [Awg] из preset +
-  /// `i1` шаблона [template] ([quicParams] для QUIC). Сама регистрация в
-  /// Cloudflare не меняется (обфускация — чисто клиентский конфиг).
+  /// §126/§143 — если [obfuscate] true, в аккаунт кладётся [Awg] из preset +
+  /// masquerade `id/ip/ib` из [quicParams] (i1 генерит ядро). Сама регистрация
+  /// в Cloudflare не меняется (обфускация — чисто клиентский конфиг).
   ///
   /// §136 — [randomEndpoint] (если задан): когда obfuscate=true И [endpoint]
   /// дефолтный, endpoint заменяется на рандомный `ip:port` из зашитых
@@ -124,7 +128,6 @@ class WarpClient {
     String endpoint = WarpAccount.defaultEndpoint,
     required String nowIso8601,
     bool obfuscate = false,
-    JunkTemplate template = JunkTemplate.quic,
     QuicParams? quicParams,
     String? randomEndpoint,
   }) async {
@@ -182,8 +185,8 @@ class WarpClient {
     }
     if (obfuscate) {
       account =
-          account.copyWith(awg: buildAmneziaAwg(template, params: quicParams));
-      AppLog.I.info('WARP: Amnezia obfuscation enabled ($template)');
+          account.copyWith(awg: buildAmneziaAwg(quicParams ?? const QuicParams()));
+      AppLog.I.info('WARP: Amnezia obfuscation enabled (ip=${(quicParams ?? const QuicParams()).ip})');
     }
     return account;
   }

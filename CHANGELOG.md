@@ -8,6 +8,19 @@
 
 ## [Unreleased]
 
+## [2.3.4] — 2026-06-16
+
+Новый механизм WARP-обфускации: маскировка под протокол (`QUIC`/`DNS`/`STUN`/`SIP`) теперь генерируется ядром по декларативным полям `id/ip/ib` (WireSock-style). Требует ядра `v1.13.13-lx.11`.
+
+### Changed
+
+- **§143 — WARP-обфускация на core masquerade `id/ip/ib`** ([warp_client.dart](app/lib/services/warp/warp_client.dart), [node_spec.dart](app/lib/models/node_spec.dart), [warp_wizard_screen.dart](app/lib/screens/warp_wizard_screen.dart), [task](docs/spec/tasks/143-warp-masquerade-id-ip-ib.md)). Раньше LxBox генерировал junk-пакет `i1` сам в Dart (QUIC Initial). Теперь маскировка задаётся тремя полями — `ip` (протокол: QUIC/DNS/STUN/SIP), `id` (домен), `ib` (браузер: Chrome/Firefox/cURL при QUIC) — и сам пакет генерирует ядро `v1.13.13-lx.11`. В визарде (Advanced) — выбор протокола, домена и браузера. Для `DNS`/`SIP` домен виден на проводе (QNAME / SIP-host); для `QUIC`/`STUN` — нет (декоративен). Проверено на устройстве: туннель поднимается, трафик идёт.
+- **Ядро → `v1.13.13-lx.11`** ([libbox.version](app/android/libbox.version)) — поддержка `id/ip/ib` masquerade (downstream 009).
+
+### Removed
+
+- **§143 — выпилен Dart-генератор `i1`.** Удалены `quic_i1.dart`, `aes_min.dart` (самописный AES), `pseudo_gen.dart` (генератор имён для SIP-junk), `JunkTemplate`, выбор шаблона QUIC/SIP и параметр QUIC level — всё это заменено генерацией на стороне ядра.
+
 ## [2.3.3] — 2026-06-16
 
 Багфикс-релиз: WARP-обфускация (подключение через DPI), стабильность Stop/Start, упрощение настроек WARP.
