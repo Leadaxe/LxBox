@@ -266,21 +266,18 @@ class SubscriptionController extends ChangeNotifier {
 
       await SettingsStorage.setWarpAccount(account);
 
-      // Убираем прежние WARP-узлы (идемпотентность по тегу).
-      _entries.removeWhere((e) {
-        final l = e.list;
-        return l is UserServer &&
-            l.nodes.length == 1 &&
-            (l.nodes.first.tag == 'WARP' || l.nodes.first.tag == 'WARP+');
-      });
-      await _persist();
+      // §137 — НЕ удаляем прежние WARP-узлы: каждый Get WARP добавляет новый,
+      // юзер сам решает нужны ли дубли (разные endpoint/SNI/обфускация). Тег с
+      // коллизия-суффиксом (` 2`/` 3`), эмодзи внутри тега (☁️ plain / ⛈️ AWG).
+      final tag = _uniqueWarpTag(
+          WarpAccount.nodeTag(warpPlus: account.warpPlus, hasAwg: account.awg != null));
 
       // §126 — обфусцированный узел добавляем через `.conf` (i1 ~1700b удобнее
       // провести INI-путём); plain WARP — короткий URI как раньше.
       if (account.awg != null) {
-        await _addWarpObfuscated(account);
+        await _addWarpObfuscated(account, tag);
       } else {
-        await addFromInput(account.toWireguardUri());
+        await _addWarpPlain(account, tag);
       }
       if (_lastError.isNotEmpty) return null;
       return account;
@@ -309,16 +306,30 @@ class SubscriptionController extends ChangeNotifier {
         awg: WarpClient.buildAmneziaAwg(template, params: quicParams));
   }
 
-  /// §126 — добавляет обфусцированный WARP-узел через `.conf`/[parseWireguardIni]
-  /// (несёт AWG + reserved). Тег принудительно WARP/WARP+ (INI-путь иначе дал
-  /// бы `WireGuard` → сломалась бы идемпотентность по тегу и иконка 🔥☁️).
-  Future<void> _addWarpObfuscated(WarpAccount account) async {
+  /// §137 — базовый [base]-тег + суффикс ` 2`/` 3`/… если уже занят среди
+  /// активных узлов. Эмодзи уже в [base] (☁️/⛈️).
+  String _uniqueWarpTag(String base) {
+    final existing = <String>{
+      for (final e in _entries)
+        if (e.list is UserServer)
+          for (final n in (e.list as UserServer).nodes) n.tag,
+    };
+    if (!existing.contains(base)) return base;
+    for (var i = 2;; i++) {
+      final candidate = '$base $i';
+      if (!existing.contains(candidate)) return candidate;
+    }
+  }
+
+  /// §126/§137 — обфусцированный WARP-узел через `.conf`/[parseWireguardIni]
+  /// (несёт AWG + reserved). [tag] (с эмодзи ⛈️ + коллизия-суффикс) ставится
+  /// принудительно (INI-путь иначе дал бы `WireGuard`).
+  Future<void> _addWarpObfuscated(WarpAccount account, String tag) async {
     final spec = parseWireguardIni(account.toWireguardConf());
     if (spec == null) {
       _lastError = 'Invalid WARP config (obfuscated)';
       return;
     }
-    final tag = account.warpPlus ? 'WARP+' : 'WARP';
     final tagged = WireguardSpec(
       id: spec.id,
       tag: tag,
@@ -334,19 +345,60 @@ class SubscriptionController extends ChangeNotifier {
       awg: spec.awg,
       warnings: spec.warnings,
     );
-    final wgServer = _autoEmoji(UserServer(
-      id: newUuidV4(),
-      name: '',
-      enabled: true,
-      tagPrefix: '',
-      detourPolicy: DetourPolicy.defaults,
-      origin: UserSource.paste,
-      createdAt: DateTime.now(),
-      rawBody: tagged.rawUri,
-      nodes: [tagged],
+    // rawBody = toUri() (с тегом во фрагменте) → тег переживает reload/re-parse.
+    _entries.add(SubscriptionEntry(
+      list: UserServer(
+        id: newUuidV4(),
+        name: '',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        rawBody: tagged.toUri(),
+        nodes: [tagged],
+      ),
+      nodeCount: 1,
     ));
-    _entries.add(
-        SubscriptionEntry(list: wgServer, nodeCount: wgServer.nodes.length));
+    await _persist();
+  }
+
+  /// §137 — plain WARP-узел (без AWG) через короткий URI с заданным [tag].
+  Future<void> _addWarpPlain(WarpAccount account, String tag) async {
+    final spec = parseWireguardUri(account.toWireguardUri());
+    if (spec == null) {
+      _lastError = 'Invalid WARP config';
+      return;
+    }
+    final tagged = WireguardSpec(
+      id: spec.id,
+      tag: tag,
+      label: tag,
+      server: spec.server,
+      port: spec.port,
+      rawUri: spec.rawUri,
+      privateKey: spec.privateKey,
+      localAddresses: spec.localAddresses,
+      peers: spec.peers,
+      mtu: spec.mtu,
+      rawIni: spec.rawIni,
+      awg: spec.awg,
+      warnings: spec.warnings,
+    );
+    _entries.add(SubscriptionEntry(
+      list: UserServer(
+        id: newUuidV4(),
+        name: '',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        rawBody: tagged.toUri(),
+        nodes: [tagged],
+      ),
+      nodeCount: 1,
+    ));
     await _persist();
   }
 

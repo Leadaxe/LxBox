@@ -66,6 +66,16 @@ class WarpAccount {
 
   static const String defaultEndpoint = 'engage.cloudflareclient.com:2408';
 
+  /// §137 — тег WARP-узла с эмодзи внутри. Облако ☁️ для plain, гроза ⛈️ для
+  /// AWG-обфускации (визуальный сигнал «маскируется от DPI»). `+` для WARP+.
+  /// Коллизия-суффикс (` 2`/` 3`) накидывает caller (контроллер знает соседей).
+  static String nodeTag({required bool warpPlus, required bool hasAwg}) {
+    final plus = warpPlus ? '+' : '';
+    return hasAwg
+        ? '🔥⛈️ Cloudflare WARP$plus (AWG 1.5)'
+        : '🔥☁️ Cloudflare WARP$plus';
+  }
+
   /// `reserved` как 3 байта (из base64 client_id). null если client_id битый.
   List<int>? get reserved => parseReserved(clientId);
 
@@ -102,7 +112,8 @@ class WarpAccount {
   String toWireguardUri() {
     final res = reserved;
     final addrs = [clientV4, if (clientV6.isNotEmpty) clientV6].join(',');
-    final tag = warpPlus ? 'WARP+' : 'WARP';
+    // §137 — тег с эмодзи (plain = облако). Коллизию контроллер чинит ре-тегом.
+    final tag = nodeTag(warpPlus: warpPlus, hasAwg: false);
     final q = <String, String>{
       'publickey': peerPub,
       'address': addrs,
@@ -114,7 +125,7 @@ class WarpAccount {
         .map((e) =>
             '${e.key}=${Uri.encodeQueryComponent(e.value).replaceAll('+', '%20')}')
         .join('&');
-    return 'wireguard://${Uri.encodeQueryComponent(privKey)}@$endpoint?$qs#$tag';
+    return 'wireguard://${Uri.encodeQueryComponent(privKey)}@$endpoint?$qs#${Uri.encodeComponent(tag)}';
   }
 
   /// §126 — собирает `.conf` (WireGuard INI) для обфусцированного узла.
