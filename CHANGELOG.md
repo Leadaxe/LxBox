@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **§131 — Краш на старых GPU (Adreno 3xx, Android ≤10)** ([MainActivity.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/MainActivity.kt), [task spec](docs/spec/tasks/131-impeller-adreno-gpu-crash.md)). На старых устройствах (например HTC One M8, LineageOS 10, GPU Adreno 330) приложение открывалось, но любое действие в интерфейсе мгновенно роняло его. Причина — несовместимость GPU-рендерера Flutter **Impeller** со старым драйвером Adreno 3xx (`libsc-a3xx.so`): его GLES-шейдеры валят драйвер с SIGSEGV в потоке `1.raster` (подтверждено tombstone'ом с устройства: `Impeller validation: Could not link pipeline program`). На `Build.VERSION.SDK_INT < 31` (Android ≤11) рендерер откатывается на Skia через shell-флаг `--enable-impeller=false` (override `getFlutterShellArgs`); на Android 12+ Impeller сохранён без изменений. Гейт по версии Android, а не по GPU (чистого рантайм-детекта GPU у Flutter нет) — для простого UI разница Skia↔Impeller незначима. Проверено на тест-устройстве Android 13 (Impeller сохранён, app alive); финальное подтверждение на реальном Adreno 3xx — у жалобщика. Tombstone опроверг гипотезу §128 (JNI callback crash) как причину этой жалобы; §128-фикс остаётся валидным сам по себе.
+
 ## [2.3.1] — 2026-06-16
 
 ### Fixed
