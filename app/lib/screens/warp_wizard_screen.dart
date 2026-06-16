@@ -50,13 +50,41 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
   bool _obfuscate = false;
   JunkTemplate _template = JunkTemplate.quic;
 
+  WarpEndpointPicker? _picker; // §136 — для рандома endpoint/SNI
+  bool _endpointAutoFilled = false; // §136 — endpoint в поле = наш авто-рандом
+
   @override
   void initState() {
     super.initState();
-    // §136 — подтягиваем SNI-пул для dropdown-подсказок (не блокирует UI).
+    // §136 — подтягиваем picker (SNI-пул для dropdown + рандом endpoint).
     WarpEndpointPicker.load().then((p) {
-      if (mounted) setState(() => _sniPool = p.sniPool);
+      if (!mounted) return;
+      setState(() {
+        _picker = p;
+        _sniPool = p.sniPool;
+      });
+      // Если юзер успел включить обфускацию до загрузки picker — заполняем.
+      if (_obfuscate && _endpointReplaceable) _fillRandomEndpoint();
     });
+  }
+
+  /// §136 — генерирует рандомный endpoint в поле (при включении обфускации /
+  /// по кнопке refresh). Помечает поле как авто-заполненное.
+  void _fillRandomEndpoint() {
+    final ep = _picker?.randomEndpoint();
+    if (ep != null) {
+      setState(() {
+        _endpoint.text = ep;
+        _endpointAutoFilled = true;
+      });
+    }
+  }
+
+  /// true если в поле endpoint — дефолт/пусто/наш авто-рандом (не вписан юзером
+  /// вручную → можно перезаписать).
+  bool get _endpointReplaceable {
+    final v = _endpoint.text.trim();
+    return v.isEmpty || v == WarpAccount.defaultEndpoint || _endpointAutoFilled;
   }
 
   @override
@@ -181,7 +209,23 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                     value: _obfuscate,
                     onChanged: _busy
                         ? null
-                        : (v) => setState(() => _obfuscate = v ?? false),
+                        : (v) {
+                            final on = v ?? false;
+                            setState(() => _obfuscate = on);
+                            // §136 — при включении обфускации сразу подставляем
+                            // рандомный endpoint в поле (если там дефолт/пусто/
+                            // прошлый авто-рандом — но НЕ вписанный юзером вручную).
+                            // При выключении — возвращаем дефолт, если поле было
+                            // нашим авто-рандомом.
+                            if (on) {
+                              if (_endpointReplaceable) _fillRandomEndpoint();
+                            } else if (_endpointAutoFilled) {
+                              setState(() {
+                                _endpoint.text = WarpAccount.defaultEndpoint;
+                                _endpointAutoFilled = false;
+                              });
+                            }
+                          },
                     title: const Text('Add Amnezia obfuscation'),
                     subtitle: const Text(
                         'Masks WireGuard from DPI by adding junk traffic. '
@@ -262,13 +306,30 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                         TextField(
                           controller: _endpoint,
                           enabled: !_busy,
-                          decoration: _input(WarpAccount.defaultEndpoint),
+                          // Ручная правка → больше не считаем поле авто-рандомом.
+                          onChanged: (_) {
+                            if (_endpointAutoFilled) {
+                              setState(() => _endpointAutoFilled = false);
+                            }
+                          },
+                          decoration: _input(WarpAccount.defaultEndpoint).copyWith(
+                            // §136 — кнопка перегенерации рандомного endpoint
+                            // (видна при обфускации).
+                            suffixIcon: _obfuscate
+                                ? IconButton(
+                                    icon: const Icon(Icons.casino_outlined),
+                                    tooltip: 'Pick another random IP:port',
+                                    onPressed:
+                                        _busy ? null : _fillRandomEndpoint,
+                                  )
+                                : null,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           'host:port of the Cloudflare peer. With obfuscation a '
-                          'random working IP:port is picked automatically; set '
-                          'this only to pin a specific one.',
+                          'random working IP:port is filled in — tap the dice to '
+                          'reroll, or type your own to pin a specific one.',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: cs.onSurfaceVariant,
                               ),

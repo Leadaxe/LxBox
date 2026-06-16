@@ -159,6 +159,7 @@ generateQuicI1(sni, level):
 | Preset + ветка + рандом-ep | `warp_client.dart` — `amneziaPreset(jc/jmin/jmax)`, `buildAmneziaAwg(template,params)`, `register(quicParams,randomEndpoint)` |
 | Прокидка + sync | `subscription_controller.dart` — `addWarp(quicParams)`, резолв SNI/random-ep через picker |
 | UI dropdown + Advanced QUIC params | `screens/warp_wizard_screen.dart` — DropdownButtonFormField QUIC/SIP; Advanced: SNI = editable combo-box (`DropdownMenu`: «Random (default)» + пул из asset + свободный ввод), Level(0-4), Jc/Jmin/Jmax |
+| Endpoint виден в поле сразу | `warp_wizard_screen.dart` — при включении галки обфускации рандомный `IP:port` **сразу пишется в поле Endpoint** (`_fillRandomEndpoint`, флаг `_endpointAutoFilled`); кнопка-кубик (🎲 reroll); ручная правка → поле считается user-pinned; выключение галки → возврат дефолта (если поле было авто-рандомом). Юзер видит endpoint, не «молча при Register» |
 | Тесты | `quic_i1_test.dart` (крипта против RFC/NIST + структура), `warp_endpoint_picker_test.dart`, обновлены `awg_junk_test.dart`/`warp_obfuscation_test.dart` |
 
 **Крипта доказана:** AES-ECB = FIPS-197 B; AES-GCM = NIST TC3 (no AAD) + TC4 (AAD);
