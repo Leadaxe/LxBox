@@ -87,6 +87,25 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     return v.isEmpty || v == WarpAccount.defaultEndpoint || _endpointAutoFilled;
   }
 
+  /// §136 — снятие галки обфускации → все обфускация-поля в стандарт.
+  /// Endpoint возвращаем к дефолту только если он был НАШИМ авто-рандомом
+  /// (вписанный юзером свой IP:port не трогаем). QUIC-параметры (скрытые без
+  /// галки) сбрасываем к дефолтам, чтобы повторное включение стартовало чисто.
+  void _resetObfuscationFields() {
+    setState(() {
+      if (_endpointAutoFilled) {
+        _endpoint.text = WarpAccount.defaultEndpoint;
+        _endpointAutoFilled = false;
+      }
+      _template = JunkTemplate.quic;
+      _sni.clear();
+      _quicLevel = 0;
+      _jc.text = '4';
+      _jmin.text = '40';
+      _jmax.text = '70';
+    });
+  }
+
   @override
   void dispose() {
     _license.dispose();
@@ -212,18 +231,16 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                         : (v) {
                             final on = v ?? false;
                             setState(() => _obfuscate = on);
-                            // §136 — при включении обфускации сразу подставляем
-                            // рандомный endpoint в поле (если там дефолт/пусто/
-                            // прошлый авто-рандом — но НЕ вписанный юзером вручную).
-                            // При выключении — возвращаем дефолт, если поле было
-                            // нашим авто-рандомом.
                             if (on) {
+                              // Включение → сразу рандомный endpoint в поле
+                              // (если там дефолт/пусто/прошлый авто-рандом, но
+                              // НЕ вписанный юзером вручную).
                               if (_endpointReplaceable) _fillRandomEndpoint();
-                            } else if (_endpointAutoFilled) {
-                              setState(() {
-                                _endpoint.text = WarpAccount.defaultEndpoint;
-                                _endpointAutoFilled = false;
-                              });
+                            } else {
+                              // Выключение → всё в стандарт (без галки обфускация
+                              // не применяется, поля не должны вводить в
+                              // заблуждение).
+                              _resetObfuscationFields();
                             }
                           },
                     title: const Text('Add Amnezia obfuscation'),
