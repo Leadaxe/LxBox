@@ -107,8 +107,11 @@ class WarpAccount {
   ///
   /// Адреса: оба (v4 + v6); allowed_ips = весь трафик. MTU=1280 — рекомендация
   /// Cloudflare для WARP (избегает фрагментации). Тег `WARP`/`WARP+`.
-  String toWireguardUri() {
-    final res = reserved;
+  /// §142 — [includeReserved]: класть ли client_id в reserved. Plain WARP —
+  /// true (своя регистрация, §025). Обфускация — обычно false (привязка к
+  /// устройству режется; рабочие конфиги все БЕЗ reserved).
+  String toWireguardUri({bool includeReserved = true}) {
+    final res = includeReserved ? reserved : null;
     final addrs = [clientV4, if (clientV6.isNotEmpty) clientV6].join(',');
     // §137 — тег с эмодзи (plain = облако). Коллизию контроллер чинит ре-тегом.
     final tag = nodeTag(warpPlus: warpPlus, hasAwg: false);
@@ -134,8 +137,11 @@ class WarpAccount {
   /// эмитит генератор Amnezia 1.5. `reserved` (client_id) идёт в `[Peer]`.
   ///
   /// Для plain WARP (awg==null) используем короткий [toWireguardUri].
-  String toWireguardConf() {
-    final res = reserved;
+  ///
+  /// §142 — [includeReserved]: обфусцированный узел обычно БЕЗ reserved
+  /// (привязка к устройству режется, рабочие конфиги все без него).
+  String toWireguardConf({bool includeReserved = true}) {
+    final res = includeReserved ? reserved : null;
     final tag = warpPlus ? 'WARP+' : 'WARP';
     final addrs = [clientV4, if (clientV6.isNotEmpty) clientV6].join(', ');
     final b = StringBuffer()

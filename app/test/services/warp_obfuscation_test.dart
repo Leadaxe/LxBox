@@ -100,6 +100,17 @@ void main() {
       expect(conf.contains('H1 = 1'), isTrue);
       expect(conf.contains('I1 = <b 0x'), isTrue);
     });
+
+    test('§142 includeReserved=false → НЕТ Reserved (conf и uri)', () {
+      final acc = account();
+      expect(acc.toWireguardConf(includeReserved: false).contains('Reserved'),
+          isFalse);
+      expect(acc.toWireguardUri(includeReserved: false).contains('reserved'),
+          isFalse);
+      // дефолт (true) — reserved есть (backward-compat).
+      expect(acc.toWireguardConf().contains('Reserved = 1,2,3'), isTrue);
+      expect(acc.toWireguardUri().contains('reserved'), isTrue);
+    });
   });
 
   group('.conf → parseWireguardIni round-trip', () {

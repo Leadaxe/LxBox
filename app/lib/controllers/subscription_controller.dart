@@ -220,6 +220,9 @@ class SubscriptionController extends ChangeNotifier {
     bool obfuscate = false,
     JunkTemplate template = JunkTemplate.quic,
     QuicParams quicParams = const QuicParams(),
+    // §142 — класть ли reserved (client_id). null → дефолт по галке: обфускация
+    // ВКЛ → false (привязка к устройству режется), ВЫКЛ → true (§025).
+    bool? includeReserved,
     WarpClient? client,
   }) async {
     _busy = true;
@@ -285,12 +288,16 @@ class SubscriptionController extends ChangeNotifier {
       final tag = _uniqueWarpTag(
           WarpAccount.nodeTag(warpPlus: account.warpPlus, hasAwg: account.awg != null));
 
+      // §142 — reserved (client_id): дефолт по галке. Обфускация → false
+      // (привязка к устройству режется), plain → true (§025 своя регистрация).
+      final withReserved = includeReserved ?? !obfuscate;
+
       // §126 — обфусцированный узел добавляем через `.conf` (i1 ~1700b удобнее
       // провести INI-путём); plain WARP — короткий URI как раньше.
       if (account.awg != null) {
-        await _addWarpObfuscated(account, tag);
+        await _addWarpObfuscated(account, tag, withReserved);
       } else {
-        await _addWarpPlain(account, tag);
+        await _addWarpPlain(account, tag, withReserved);
       }
       if (_lastError.isNotEmpty) return null;
       return account;
@@ -334,11 +341,13 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
-  /// §126/§137 — обфусцированный WARP-узел через `.conf`/[parseWireguardIni]
-  /// (несёт AWG + reserved). [tag] (с эмодзи ⛈️ + коллизия-суффикс) ставится
-  /// принудительно (INI-путь иначе дал бы `WireGuard`).
-  Future<void> _addWarpObfuscated(WarpAccount account, String tag) async {
-    final spec = parseWireguardIni(account.toWireguardConf());
+  /// §126/§137/§142 — обфусцированный WARP-узел через `.conf`/[parseWireguardIni]
+  /// (несёт AWG; reserved по [includeReserved]). [tag] (с эмодзи ⛈️ +
+  /// коллизия-суффикс) ставится принудительно (INI-путь иначе дал бы `WireGuard`).
+  Future<void> _addWarpObfuscated(
+      WarpAccount account, String tag, bool includeReserved) async {
+    final spec =
+        parseWireguardIni(account.toWireguardConf(includeReserved: includeReserved));
     if (spec == null) {
       _lastError = 'Invalid WARP config (obfuscated)';
       return;
@@ -376,9 +385,12 @@ class SubscriptionController extends ChangeNotifier {
     await _persist();
   }
 
-  /// §137 — plain WARP-узел (без AWG) через короткий URI с заданным [tag].
-  Future<void> _addWarpPlain(WarpAccount account, String tag) async {
-    final spec = parseWireguardUri(account.toWireguardUri());
+  /// §137/§142 — plain WARP-узел (без AWG) через короткий URI с [tag].
+  /// reserved по [includeReserved].
+  Future<void> _addWarpPlain(
+      WarpAccount account, String tag, bool includeReserved) async {
+    final spec = parseWireguardUri(
+        account.toWireguardUri(includeReserved: includeReserved));
     if (spec == null) {
       _lastError = 'Invalid WARP config';
       return;
