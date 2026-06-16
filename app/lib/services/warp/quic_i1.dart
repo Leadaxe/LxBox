@@ -29,18 +29,44 @@ class QuicI1 {
     0x9a, 0xe6, 0xa4, 0xc8, 0x0c, 0xad, 0xcc, 0xbb, 0x7f, 0x0a,
   ];
 
+  /// Минимальная длина QUIC payload (CRYPTO+PADDING), чтобы итоговый пакет был
+  /// ~1232+ байт = настоящий QUIC Initial. RFC 9000 требует ≥1200; рабочий i1
+  /// у юзера = 1250б (length-поле 1232). Короткий «Initial» (~92б, как у
+  /// quic.js padto=0) — аномалия, DPI его НЕ примет за настоящий QUIC.
+  static const int _minPayloadLen = 1200;
+
   /// Генерирует `i1` CPS-строку для заданного [sni] и [level] нарезки (0–4).
   /// Каждый вызов уникален ([Random.secure]). Возвращает `<b 0x…><r N>…`.
   static String generate(String sni, {int level = 0}) {
     final ch = _clientHelloSniOnly(sni);
-    final dcid = _randomBytes(1); // как в quic.js — 1 байт
+    final dcid = _randomBytes(8); // 8 байт (как в рабочем i1; quic.js брал 1)
     final pkn = [0]; // packet number = 0
     final framed = _clientHelloToFrames(ch, level);
-    final payload = framed.payload;
+    // §136fix — паддим payload QUIC PADDING-фреймами (нули) до _minPayloadLen,
+    // чтобы пакет был полноразмерным Initial (~1232+). Нули = валидный PADDING,
+    // нарезка покрывает их в последнем <b>-сегменте (см. _padCut).
+    final basePayload = framed.payload;
+    final padLen = basePayload.length < _minPayloadLen
+        ? _minPayloadLen - basePayload.length
+        : 0;
+    final payload = <int>[...basePayload, ...List<int>.filled(padLen, 0)];
     final packet = _quicInitial(dcid, const [], const [], pkn, payload);
     final cut = _fixCutSettings(
-        framed.cut, packet.length, pkn.length, payload.length);
+        _padCut(framed.cut, padLen), packet.length, pkn.length, payload.length);
     return _toAwg(packet, cut);
+  }
+
+  /// §136fix — расширяет последний `<b>`-сегмент cut на [padLen] байт padding,
+  /// чтобы PADDING-нули попали в вывод (иначе выпали бы из AWG).
+  static List<int> _padCut(List<int> cut, int padLen) {
+    if (padLen == 0) return cut;
+    final c = List<int>.from(cut);
+    // cut = [b, r, b, r] (level 0) или [b, r] (1-4). Последний — <r>-хвост;
+    // padding кладём ПЕРЕД ним, расширяя предпоследний <b> (чётный индекс).
+    // Для [b,r,b,r] — индекс 2; для [b,r] — индекс 0.
+    final bIdx = c.length >= 4 ? 2 : 0;
+    c[bIdx] += padLen;
+    return c;
   }
 
   // ── ClientHello (голый, только SNI) ───────────────────────────────────────

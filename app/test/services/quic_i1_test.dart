@@ -122,5 +122,27 @@ void main() {
             reason: 'level $l не чистый CPS');
       }
     });
+
+    test('§136fix — пакет ≥1200б (полноразмерный QUIC Initial, не 92б), <r> цел',
+        () {
+      // Рабочий i1 у юзера = 1250б; короткий (~92б, quic.js padto=0) DPI не
+      // примет за настоящий QUIC. Padding не должен убирать <r>-сегменты.
+      for (var l = 0; l <= 4; l++) {
+        final cps = QuicI1.generate('www.google.com', level: l);
+        var total = 0;
+        var hasR = false;
+        for (final m in segRe.allMatches(cps)) {
+          final s = m.group(0)!;
+          if (s.startsWith('<b 0x')) {
+            total += (s.length - 6) ~/ 2; // '<b 0x' + '>'
+          } else {
+            total += int.parse(RegExp(r'\d+').firstMatch(s)!.group(0)!);
+            hasR = true;
+          }
+        }
+        expect(total, greaterThanOrEqualTo(1200), reason: 'level $l короткий');
+        expect(hasR, isTrue, reason: 'level $l потерял <r> (beacon-защита)');
+      }
+    });
   });
 }
