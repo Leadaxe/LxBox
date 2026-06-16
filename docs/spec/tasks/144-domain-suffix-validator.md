@@ -71,3 +71,52 @@ bool isValidDomainSuffix(String v) => _domainSuffixRegex.hasMatch(v);
   `foo-.com`, `.`, `foo.`, лейбл 64 символа
 
 → все приняты/отклонены как ожидалось.
+
+---
+
+## §144.1 — Punycode / IDNA ToASCII на вводе
+
+### Зачем
+
+После §144 валидатор суффикса корректно реджектил сырой кириллический IDN
+(`.рф`, `почта.рф`) — sing-box хочет ASCII/punycode. Но юзеру неудобно вручную
+вводить `xn--p1ai`. Решение: UI сам конвертит Unicode-домен → ASCII на
+нормализации, и для exact-домена, и для суффикса.
+
+### Реализация
+
+Новый файл `app/lib/screens/custom_rule_edit/punycode.dart` — чистый Dart,
+**без внешних зависимостей** (project rule):
+
+- `punycodeEncode(String)` — RFC 3492 §6.3 encode (Unicode → punycode без
+  `xn--`).
+- `domainToAscii(String)` — per-label IDNA ToASCII: split по `.`, каждый
+  не-ASCII лейбл → `xn--…`; pure-ASCII лейблы и весь pure-ASCII вход —
+  fast-path passthrough.
+
+**Что НЕ делаем:** полный UTS-46 nameprep (мапинг `ﬁ`→`fi`, `ß`→`ss`,
+bidi-checks). Для VPN-правил достаточно Unicode lower-case (`toLowerCase()`,
+Dart-aware) + Punycode не-ASCII меток.
+
+### Точки интеграции
+
+| Слой | Файл | Изменение |
+|---|---|---|
+| save-path (exact + suffix) | `normalizers.dart` `normalizedDomains` | финальный шаг `domainToAscii(v)` |
+| UI-бейдж (exact) | `match_section.dart` | `normalize: domainToAscii(s.toLowerCase())` |
+| UI-бейдж (suffix) | `match_section.dart` | `normalize: …strip dot → domainToAscii(x)` |
+
+Save-path общий для обоих полей → punycode попадает в сохранённое правило →
+оттуда в конфиг sing-box. Hint суффикса дополнен примером `почта.рф`.
+
+### Проверка
+
+- `punycode_test.dart` — RFC 3492 §7.1 reference vectors (arabic, chinese,
+  russian, münchen) + per-label (`.рф`→`xn--p1ai`, `мвд.рф`, `shop.рф`
+  mixed, CJK, ASCII passthrough).
+- `normalizers_test.dart` — `почта.рф`→`xn--80a1acny.xn--p1ai`, `МВД.РФ`
+  (upper→lower→puny), IDN-суффикс с strip leading dot, mixed-label.
+- Полный `flutter test`: целевой `custom_rule_edit/` 77 passed; builder
+  pipeline passed. (Flaky в `subscription/rehydrate_race` + `rule_set_downloader`
+  при параллельном прогоне — НЕ связаны: изолированно зелёные, мой код не
+  импортируют.)

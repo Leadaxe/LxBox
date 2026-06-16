@@ -51,6 +51,20 @@ void main() {
     test('drops empty after normalize', () {
       expect(normalizedDomains('https:///'), isEmpty);
     });
+    test('§144 IDN → punycode ToASCII', () {
+      expect(normalizedDomains('почта.рф'), ['xn--80a1acny.xn--p1ai']);
+      expect(normalizedDomains('МВД.РФ'), ['xn--b1aew.xn--p1ai']);
+      expect(normalizedDomains('münchen.de'), ['xn--mnchen-3ya.de']);
+    });
+    test('§144 IDN suffix (.рф) → punycode + strip leading dot', () {
+      expect(
+        normalizedDomains('.рф', stripLeadingDot: true),
+        ['xn--p1ai'],
+      );
+    });
+    test('§144 mixed ASCII + IDN labels: только не-ASCII → xn--', () {
+      expect(normalizedDomains('shop.рф'), ['shop.xn--p1ai']);
+    });
   });
 
   group('normalizedKeywords', () {
