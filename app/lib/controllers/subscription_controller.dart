@@ -245,19 +245,32 @@ class SubscriptionController extends ChangeNotifier {
               picker.randomSni().isNotEmpty)
           ? quicParams.copyWith(sni: picker.randomSni())
           : quicParams;
-      final randomEp = obfuscate && endpoint == WarpAccount.defaultEndpoint
-          ? picker.randomEndpoint()
-          : null;
+      // §138 — endpoint, который реально должен попасть в узел. Юзер вписал
+      // свой (не дефолт) → он; обфускация+дефолт → рандомный §136; иначе дефолт.
+      final userPicked = endpoint != WarpAccount.defaultEndpoint;
+      final resolvedEndpoint = userPicked
+          ? endpoint
+          : (obfuscate ? (picker.randomEndpoint() ?? endpoint) : endpoint);
 
       account ??= await warp.register(
         licenseKey: licenseKey,
-        endpoint: endpoint,
+        endpoint: resolvedEndpoint,
         nowIso8601: DateTime.now().toUtc().toIso8601String(),
         obfuscate: obfuscate,
         template: template,
         quicParams: resolvedParams,
-        randomEndpoint: randomEp,
+        // register сам не рандомит — endpoint уже резолвлен здесь (§138).
+        randomEndpoint: null,
       );
+
+      // §138 — ПРИМЕНЯЕМ резолвнутый endpoint к аккаунту независимо от того,
+      // свежий он или из кеша. Корень бага: при закешированном аккаунте
+      // register() минуется (account ??=), и выбранный в Advanced endpoint
+      // игнорировался → в узел шёл старый endpoint из кеша.
+      if (resolvedEndpoint != account.endpoint &&
+          (userPicked || obfuscate)) {
+        account = account.copyWith(endpoint: resolvedEndpoint);
+      }
 
       // §126 — обфускация чисто клиентская (не требует ре-регистрации в
       // Cloudflare). Если переиспользуем кеш, но галка/шаблон сменились —

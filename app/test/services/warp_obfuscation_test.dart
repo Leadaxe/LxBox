@@ -149,5 +149,19 @@ void main() {
       expect(acc.awg, isNotNull);
       expect(acc.copyWith(clearAwg: true).awg, isNull);
     });
+
+    test('§138 copyWith(endpoint) применяет новый endpoint к аккаунту', () {
+      // Корень бага: закешированный аккаунт с дефолтным endpoint; юзер выбрал
+      // свой в Advanced. Без применения endpoint в узел шёл старый из кеша.
+      final cached = account(); // endpoint = defaultEndpoint
+      expect(cached.endpoint, WarpAccount.defaultEndpoint);
+      final updated = cached.copyWith(endpoint: '188.114.97.6:988');
+      expect(updated.endpoint, '188.114.97.6:988');
+      // остальное (ключи) не теряется.
+      expect(updated.privKey, cached.privKey);
+      expect(updated.peerPub, cached.peerPub);
+      // и доходит до .conf/URI узла.
+      expect(updated.toWireguardUri(), contains('188.114.97.6:988'));
+    });
   });
 }
