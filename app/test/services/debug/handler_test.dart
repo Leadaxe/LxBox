@@ -171,8 +171,8 @@ void main() {
     });
 
     test('GET /logs/unknown → NotFound', () async {
-      expect(
-        () => logsHandler(
+      await expectLater(
+        logsHandler(
           DebugRequest.forTest(method: 'GET', path: '/logs/unknown'),
           _ctx(),
         ),

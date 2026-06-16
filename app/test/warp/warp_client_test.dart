@@ -96,16 +96,16 @@ void main() {
 
   test('register: non-200 → WarpException с упоминанием версии', () async {
     final client = MockClient((req) async => http.Response('nope', 429));
-    expect(
-      () => WarpClient(client: client).register(nowIso8601: 'now'),
+    await expectLater(
+      WarpClient(client: client).register(nowIso8601: 'now'),
       throwsA(isA<WarpException>()),
     );
   });
 
   test('register: битый JSON → WarpException', () async {
     final client = MockClient((req) async => http.Response('<<not json', 200));
-    expect(
-      () => WarpClient(client: client).register(nowIso8601: 'now'),
+    await expectLater(
+      WarpClient(client: client).register(nowIso8601: 'now'),
       throwsA(isA<WarpException>()),
     );
   });

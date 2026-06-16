@@ -56,8 +56,8 @@ void main() {
     });
 
     test('evil.com → InvalidHost', () async {
-      expect(
-        () => runPipeline(_req(host: 'evil.com'), _ctx(), [hostCheck], _okHandler),
+      await expectLater(
+        runPipeline(_req(host: 'evil.com'), _ctx(), [hostCheck], _okHandler),
         throwsA(isA<InvalidHost>()),
       );
     });
@@ -98,8 +98,8 @@ void main() {
     });
 
     test('неверный токен → Unauthorized', () async {
-      expect(
-        () => runPipeline(
+      await expectLater(
+        runPipeline(
           _req(auth: 'Bearer wrong'),
           _ctx(),
           [mw],
@@ -110,8 +110,8 @@ void main() {
     });
 
     test('нет header → Unauthorized', () async {
-      expect(
-        () => runPipeline(_req(), _ctx(), [mw], _okHandler),
+      await expectLater(
+        runPipeline(_req(), _ctx(), [mw], _okHandler),
         throwsA(isA<Unauthorized>()),
       );
     });
@@ -128,8 +128,8 @@ void main() {
 
     test('пустой token → Unauthorized даже с Bearer', () async {
       final emptyMw = auth(token: '');
-      expect(
-        () => runPipeline(
+      await expectLater(
+        runPipeline(
           _req(auth: 'Bearer '),
           _ctx(),
           [emptyMw],
@@ -141,8 +141,8 @@ void main() {
 
     test('схема должна быть именно `Bearer `, не `bearer`', () async {
       // HTTP-заголовки case-insensitive по имени, но не по значению.
-      expect(
-        () => runPipeline(
+      await expectLater(
+        runPipeline(
           _req(auth: 'bearer secret-token'),
           _ctx(),
           [mw],
