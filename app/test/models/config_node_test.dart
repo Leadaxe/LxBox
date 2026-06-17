@@ -208,11 +208,13 @@ void main() {
         },
       ],
       'endpoints': [
-        // §148 — i2–i5/s3/s4 → awg2; одиночный i1 → awg1.5; база → awg.
+        // §148 — версии AmneziaWG: 2.0 = ranged-H ("N-M") или s3/s4;
+        // 1.5 = signature-пакеты i1–i5; 1.0 = база (jc/s1/одиночные h).
+        {'tag': 'awg2h', 'type': 'wireguard', 'jc': 10, 'h1': '10-20'},
         {'tag': 'awg2s', 'type': 'wireguard', 'jc': 10, 's3': 60, 's4': 60},
-        {'tag': 'awg2i', 'type': 'wireguard', 'jc': 10, 'i2': '<b 0xff>'},
-        {'tag': 'awg15', 'type': 'wireguard', 'jc': 10, 'i1': '<r 24>'},
-        {'tag': 'awg15hi', 'type': 'wireguard', 'i1': '<r 24>', 'i3': '<c>'},
+        {'tag': 'awg15i1', 'type': 'wireguard', 'jc': 10, 'i1': '<r 24>'},
+        {'tag': 'awg15i2', 'type': 'wireguard', 'jc': 10, 'i2': '<b 0xff>'},
+        {'tag': 'awg2over', 'type': 'wireguard', 'i1': '<r 24>', 'h1': '10-20'},
         {'tag': 'awg1', 'type': 'wireguard', 'jc': 10, 's1': 20, 'h1': 1},
         {'tag': 'wg', 'type': 'wireguard'},
         // §148 — masquerade ip/id/ib → суффикс `+` поверх любой базы.
@@ -250,13 +252,14 @@ void main() {
       expect(pc['rlt']?.securityLabel, 'Reality');
     });
 
-    test('§148 security: awg2 (s3/s4/i2–i5) vs awg1.5 (i1) vs awg (база) vs WG',
+    test('§148 security: awg2 (ranged-H/s3/s4) vs awg1.5 (i1–i5) vs awg vs WG',
         () {
+      expect(pc['awg2h']?.securityLabel, 'awg2'); // ranged h1 "10-20"
       expect(pc['awg2s']?.securityLabel, 'awg2'); // s3/s4
-      expect(pc['awg2i']?.securityLabel, 'awg2'); // i2
-      expect(pc['awg15']?.securityLabel, 'awg1.5'); // одиночный i1
-      expect(pc['awg15hi']?.securityLabel, 'awg2'); // i1+i3 → старший выигрывает
-      expect(pc['awg1']?.securityLabel, 'awg'); // только база
+      expect(pc['awg15i1']?.securityLabel, 'awg1.5'); // i1
+      expect(pc['awg15i2']?.securityLabel, 'awg1.5'); // i2 — тоже 1.5
+      expect(pc['awg2over']?.securityLabel, 'awg2'); // i1+ranged-H → 2.0 старше
+      expect(pc['awg1']?.securityLabel, 'awg'); // база + одиночный h1=1
       expect(pc['wg']?.securityLabel, isNull); // plain WG
     });
 
