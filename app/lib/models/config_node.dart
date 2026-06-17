@@ -61,11 +61,14 @@ class ConfigNode {
   /// §103 — вычисляется один раз в [ParsedConfig.parse] (eager, не getter).
   final String? transportLabel;
 
-  /// §102 — security-слот subtitle. WireGuard — уровень обфускации:
-  /// `awg2` = есть transport-padding `s3`/`s4` и/или CPS-пакеты `i1`–`i5`;
+  /// §102 — security-слот subtitle. WireGuard — уровень обфускации (§148):
+  /// `awg2` = transport-padding `s3`/`s4` либо CPS-приманки `i2`–`i5`;
+  /// `awg1.5` = одиночный явный `i1` (и нет старших awg2-маркеров);
   /// `awg` (1.x) = только базовые поля (jc/jmin/jmax/s1/s2/h1–h4);
-  /// ни одного AWG-поля = plain WG (null). Остальные протоколы —
-  /// `Reality`/`TLS` (+`+Vision` при `flow=xtls-rprx-vision`) по конфигу.
+  /// ни одного AWG-поля = plain WG (null). Суффикс `+` (§143 masquerade
+  /// `ip`/`id`/`ib`) дописывается поверх любой базы → `awg+`/`awg1.5+`/`awg2+`.
+  /// Остальные протоколы — `Reality`/`TLS` (+`+Vision` при
+  /// `flow=xtls-rprx-vision`) по конфигу.
   /// §103 — вычисляется один раз в [ParsedConfig.parse] (eager, не getter).
   final String? securityLabel;
 
@@ -81,10 +84,23 @@ class ConfigNode {
 
   static String? _deriveSecurity(String type, Map<String, dynamic> raw) {
     if (type == 'wireguard') {
-      const awg2Keys = <String>{'s3', 's4', 'i1', 'i2', 'i3', 'i4', 'i5'};
-      if (awg2Keys.any(raw.containsKey)) return 'awg2';
-      if (Awg.numKeys.any(raw.containsKey)) return 'awg';
-      return null;
+      // §148 — уровень AWG по наличию полей (структурно, без явной версии).
+      // Приоритет старший→младший; ранний return на первом совпадении.
+      const awg2Keys = <String>{'s3', 's4', 'i2', 'i3', 'i4', 'i5'};
+      String? base;
+      if (awg2Keys.any(raw.containsKey)) {
+        base = 'awg2'; // transport-padding s3/s4 или CPS-приманки i2–i5
+      } else if (raw.containsKey('i1')) {
+        base = 'awg1.5'; // одиночный явный i1 (CPS-пакет init)
+      } else if (Awg.numKeys.any(raw.containsKey)) {
+        base = 'awg'; // только базовые 1.x-поля (jc/jmin/jmax/s1/s2/h1–h4)
+      }
+      if (base == null) return null;
+      // §148 — masquerade-sugar ip/id/ib (§143) → суффикс `+` поверх базы.
+      // Взаимоисключающи с явным i1 на уровне ядра, но лейбл считаем по сырому
+      // JSON до валидации, потому проверяем независимо от base.
+      const plusKeys = <String>{'ip', 'id', 'ib'};
+      return plusKeys.any(raw.containsKey) ? '$base+' : base;
     }
     final tls = raw['tls'];
     if (tls is Map && tls['enabled'] == true) {
