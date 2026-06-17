@@ -27,15 +27,21 @@
 
 ### Суффикс `+` (masquerade, §143)
 
-Если присутствует хоть одно из `ip` / `id` / `ib` — к базе дописывается `+`:
-`awg+` / `awg1.5+` / `awg2+`.
+Если присутствует хоть одно из `ip` / `id` / `ib` — ставится суффикс `+`. Ядро 009 разворачивает masquerade в CPS-пакет `i1`, т.е. **сам masquerade = версия 1.5** → `awg+` невозможен:
 
-> На уровне ядра (009) `ip/id/ib` **взаимоисключающи с явным `i1`** — ядро само разворачивает их в `i1` и отвергает оба сразу. Поэтому реальный конфиг `awg1.5+` (i1 + ip) ядро не примет. Но лейбл считается по сырому JSON до валидации, поэтому суффикс проверяется независимо от базы — корректность лейбла не зависит от того, дойдёт ли конфиг до ядра.
+| База (до суффикса) | + masquerade |
+|--------------------|--------------|
+| `awg2` (2.0) | `awg2+` |
+| `awg1.5` / `awg` / нет AWG-полей | `awg1.5+` |
+
+То есть masquerade всегда поднимает планку минимум до `awg1.5+`; только уже-2.0 даёт `awg2+`. masquerade без любых других AWG-полей → `awg1.5+` (а не `null`).
+
+> На уровне ядра (009) `ip/id/ib` **взаимоисключающи с явным `i1`** — ядро само разворачивает их в `i1` и отвергает оба сразу. Поэтому реальный конфиг `awg1.5` с *явным* `i1` + masquerade ядро не примет. Но лейбл считается по сырому JSON до валидации, поэтому суффикс проверяется независимо — корректность лейбла не зависит от того, дойдёт ли конфиг до ядра.
 
 ## Изменения
 
 ### `_deriveSecurity` ([config_node.dart](../../../app/lib/models/config_node.dart))
-Было: `awg2Keys = {s3,s4,i1..i5}` → `awg2`, иначе `numKeys` → `awg`. Стало три ветки: `awg2` = `_hasRangedHeader(raw)` (h1–h4 = String с `-`) или `s3`/`s4`; `awg1.5` = `_signatureKeys = {i1..i5}`; `awg` = `Awg.numKeys`. После выбора базы — проверка `{ip,id,ib}` → суффикс `+`. Добавлены хелперы `_hasRangedHeader` и константа `_signatureKeys` (подмножество `Awg.strKeys` без masquerade-sugar).
+Было: `awg2Keys = {s3,s4,i1..i5}` → `awg2`, иначе `numKeys` → `awg`. Стало три ветки: `awg2` = `_hasRangedHeader(raw)` (h1–h4 = String с `-`) или `s3`/`s4`; `awg1.5` = `_signatureKeys = {i1..i5}`; `awg` = `Awg.numKeys`. После выбора базы — проверка `{ip,id,ib}`: `awg2`→`awg2+`, всё прочее (1.5/1.0/нет базы)→`awg1.5+` (masquerade = i1 = 1.5, `awg+` невозможен). Добавлены хелперы `_hasRangedHeader` и константа `_signatureKeys` (подмножество `Awg.strKeys` без masquerade-sugar).
 
 ### `_variantOrder` / `_variantRank` ([node_list_presenter.dart](../../../app/lib/screens/home/node_list_presenter.dart))
 `_variantOrder` += `awg1.5` между `awg` и `awg2`. `_variantRank` отбрасывает trailing `+` и ранжирует по базе — `awgN` и `awgN+` стоят рядом, новые `+`-варианты не валятся в хвост.
@@ -44,4 +50,4 @@
 Subtitle ноды ([node_list.dart:243](../../../app/lib/screens/home/widgets/node_list.dart)) и variant-фильтр читают `securityLabel`/`variantsOfTag` напрямую — новые лейблы и суффикс прорастают автоматически.
 
 ## Тесты
-`config_node_test.dart` — endpoints дополнены кейсами: `awg2h`(ranged h1=`"10-20"`), `awg2s`(s3/s4), `awg15i1`(i1), `awg15i2`(i2→тоже 1.5), `awg2over`(i1+ranged-H→awg2), `awg1`(база+одиночный h1=1), `awgp`(ip→awg+), `awg15p`(i1+id→awg1.5+), `awg2p`(s3+ib→awg2+). Два теста: база-детекция и суффикс.
+`config_node_test.dart` — endpoints дополнены кейсами: `awg2h`(ranged h1=`"10-20"`), `awg2s`(s3/s4), `awg15i1`(i1), `awg15i2`(i2→тоже 1.5), `awg2over`(i1+ranged-H→awg2), `awg1`(база+одиночный h1=1), `awgp`(jc+ip→**awg1.5+**), `awg15p`(i1+id→awg1.5+), `awg2p`(s3+ib→awg2+), `awgponly`(только ip→awg1.5+). Два теста: база-детекция и суффикс (проверка «awg+ невозможен»).

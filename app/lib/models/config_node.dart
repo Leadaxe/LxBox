@@ -68,9 +68,10 @@ class ConfigNode {
   /// `awg1.5` = signature-пакеты (CPS) `i1`–`i5` (и нет awg2-маркеров);
   /// `awg` (1.0) = только базовые поля (jc/jmin/jmax/s1/s2 + одиночные h1–h4);
   /// ни одного AWG-поля = plain WG (null). Суффикс `+` (§143 masquerade
-  /// `ip`/`id`/`ib`) дописывается поверх любой базы → `awg+`/`awg1.5+`/`awg2+`.
-  /// Остальные протоколы — `Reality`/`TLS` (+`+Vision` при
-  /// `flow=xtls-rprx-vision`) по конфигу.
+  /// `ip`/`id`/`ib`) = ядро разворачивает их в CPS-пакет i1 → сам по себе 1.5:
+  /// поверх 2.0 даёт `awg2+`, во всех прочих случаях (1.5/1.0/нет базы) →
+  /// `awg1.5+`. `awg+` невозможен. Остальные протоколы — `Reality`/`TLS`
+  /// (+`+Vision` при `flow=xtls-rprx-vision`) по конфигу.
   /// §103 — вычисляется один раз в [ParsedConfig.parse] (eager, не getter).
   final String? securityLabel;
 
@@ -118,12 +119,16 @@ class ConfigNode {
       } else if (Awg.numKeys.any(raw.containsKey)) {
         base = 'awg'; // только базовые 1.0-поля
       }
-      if (base == null) return null;
-      // §148 — masquerade-sugar ip/id/ib (§143) → суффикс `+` поверх базы.
-      // Взаимоисключающи с явным i1 на уровне ядра, но лейбл считаем по сырому
-      // JSON до валидации, потому проверяем независимо от base.
+      // §148 — masquerade-sugar ip/id/ib (§143) → суффикс `+`. Ядро 009 само
+      // разворачивает их в CPS-пакет i1, т.е. masquerade сам по себе = версия
+      // 1.5. Поэтому `awg+` невозможен: поверх база/база-нет поднимается минимум
+      // до awg1.5+; только уже-2.0 остаётся awg2+. (i1 и ip/id/ib на уровне
+      // ядра взаимоисключающи, но лейбл считаем по сырому JSON до валидации.)
       const plusKeys = <String>{'ip', 'id', 'ib'};
-      return plusKeys.any(raw.containsKey) ? '$base+' : base;
+      if (plusKeys.any(raw.containsKey)) {
+        return base == 'awg2' ? 'awg2+' : 'awg1.5+';
+      }
+      return base;
     }
     final tls = raw['tls'];
     if (tls is Map && tls['enabled'] == true) {

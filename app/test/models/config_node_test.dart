@@ -217,10 +217,12 @@ void main() {
         {'tag': 'awg2over', 'type': 'wireguard', 'i1': '<r 24>', 'h1': '10-20'},
         {'tag': 'awg1', 'type': 'wireguard', 'jc': 10, 's1': 20, 'h1': 1},
         {'tag': 'wg', 'type': 'wireguard'},
-        // §148 — masquerade ip/id/ib → суффикс `+` поверх любой базы.
+        // §148 — masquerade ip/id/ib = ядро разворачивает в i1 ⇒ сам по себе
+        // 1.5. `awg+` невозможен: 1.0/нет-базы → awg1.5+, только 2.0 → awg2+.
         {'tag': 'awgp', 'type': 'wireguard', 'jc': 10, 'ip': '1.2.3.4'},
         {'tag': 'awg15p', 'type': 'wireguard', 'i1': '<r 24>', 'id': 'x'},
         {'tag': 'awg2p', 'type': 'wireguard', 's3': 60, 'ib': 'y'},
+        {'tag': 'awgponly', 'type': 'wireguard', 'ip': 'quic'},
       ],
     }));
 
@@ -263,10 +265,12 @@ void main() {
       expect(pc['wg']?.securityLabel, isNull); // plain WG
     });
 
-    test('§148 security: masquerade ip/id/ib → суффикс `+` поверх базы', () {
-      expect(pc['awgp']?.securityLabel, 'awg+'); // база + ip
+    test('§148 security: masquerade ip/id/ib — awg+ невозможен, мин. awg1.5+',
+        () {
+      expect(pc['awgp']?.securityLabel, 'awg1.5+'); // 1.0-база + ip → 1.5+
       expect(pc['awg15p']?.securityLabel, 'awg1.5+'); // i1 + id
-      expect(pc['awg2p']?.securityLabel, 'awg2+'); // s3 + ib
+      expect(pc['awg2p']?.securityLabel, 'awg2+'); // s3 + ib → только 2.0+
+      expect(pc['awgponly']?.securityLabel, 'awg1.5+'); // только ip, без базы
     });
   });
 

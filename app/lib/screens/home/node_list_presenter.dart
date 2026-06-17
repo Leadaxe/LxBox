@@ -93,7 +93,7 @@ class NodeListPresenter {
   ];
 
   static int _variantRank(String v) {
-    // §148 — masquerade-суффикс `+` (awg+/awg1.5+/awg2+) ранжируется по базе,
+    // §148 — masquerade-суффикс `+` (awg1.5+/awg2+) ранжируется по базе,
     // чтобы `awgN` и `awgN+` стояли рядом; trailing `+` отбрасываем.
     final base = v.endsWith('+') ? v.substring(0, v.length - 1) : v;
     final i = _variantOrder.indexOf(base);
