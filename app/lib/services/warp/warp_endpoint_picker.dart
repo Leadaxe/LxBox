@@ -8,8 +8,13 @@ import 'package:flutter/services.dart' show rootBundle;
 ///
 /// `prefix + rand(1..10) + ":" + pick(ports)`. Работает т.к. почти любой IP в
 /// этих /24-блоках на любом порту из списка = живой WARP anycast; DPI режет
-/// только дефолтный `engage.cloudflareclient.com:2408`. 8.x-блоки empirical
-/// (§132) — могут «уплыть», поэтому списки в asset (легко обновить).
+/// только дефолтный `engage.cloudflareclient.com:2408`.
+///
+/// Пулы prefixes/ports/sni_pool — в [_assetPath]
+/// (`assets/warp_endpoints.json`), единственный источник истины (легко
+/// обновить без пересборки логики). §148 — 8.x-блоки убраны из asset как
+/// дохлые/режимые на LTE-DPI; остались твёрдые anycast 162.159.192/195 +
+/// 188.114.96-98.
 class WarpEndpointPicker {
   WarpEndpointPicker._(this._prefixes, this._ports, this._sniPool);
 
