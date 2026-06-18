@@ -57,6 +57,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// pending rebuild», см. [_retryRebuildWhenIdle].
   VoidCallback? _idleRetryListener;
 
+  /// §141 P1.9f — one-shot update-check таймер (5с после старта). Хранится,
+  /// чтобы отменить в `dispose()`: `mounted`-guard в колбэке и так
+  /// нейтрализует поздний выстрел, но висящий таймер — лишний (гигиена).
+  Timer? _updateCheckTimer;
+
   // §085 R3 — весь node-filter state (§048 regex/protocols/subscriptions/
   // ping + show-detour/show-non-matching + §083 per-channel memory)
   // инкапсулирован в `NodeFilterViewModel`. home_screen подписывается на
@@ -155,7 +160,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // показывает SnackBar если есть newer + не dismissed.
     UpdateChecker.I.latest.addListener(_onLatestUpdateChanged);
     unawaited(UpdateChecker.I.hydrate(localVersion: VersionInfo.I.version));
-    Timer(const Duration(seconds: 5), () {
+    _updateCheckTimer = Timer(const Duration(seconds: 5), () {
       if (!mounted) return;
       unawaited(
         UpdateChecker.I.maybeCheck(localVersion: VersionInfo.I.version),
@@ -335,6 +340,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       _subController.removeListener(idleRetry);
       _idleRetryListener = null;
     }
+    _updateCheckTimer?.cancel(); // §141 P1.9f
     _filter.removeListener(_onFilterChanged);
     _filter.dispose();
     _controller.removeListener(_onControllerChange);
@@ -359,6 +365,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (state == AppLifecycleState.resumed) {
       _controller.onAppResumed();
       _maybeShowSupport();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      // §141 P0.2 — фон: гасим heartbeat-таймер (resident-drain). Resume вернёт
+      // его через onAppResumed. `inactive` НЕ трогаем — это короткие transient
+      // переходы (шторка, звонок, app-switcher preview), не настоящий фон.
+      _controller.onAppPaused();
     }
   }
 

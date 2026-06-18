@@ -238,5 +238,123 @@ void main() {
       });
       expect(r.isOk, true);
     });
+
+    // §141 P1.8a — detour cycle detection.
+
+    test('§141 — detour self-reference (A→A) → fatal DetourCycle', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'a', 'type': 'vless', 'detour': 'a'},
+        ],
+      });
+      expect(r.hasFatal, true);
+      expect(r.fatal.single, isA<DetourCycle>());
+    });
+
+    test('§141 — detour 2-cycle (A→B→A) → fatal DetourCycle', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'a', 'type': 'vless', 'detour': 'b'},
+          {'tag': 'b', 'type': 'vless', 'detour': 'a'},
+        ],
+      });
+      expect(r.hasFatal, true);
+      expect(r.fatal.whereType<DetourCycle>().length, 1);
+    });
+
+    test('§141 — detour 3-cycle через endpoint (A→B→C→A) → fatal', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'a', 'type': 'vless', 'detour': 'b'},
+          {'tag': 'b', 'type': 'vless', 'detour': 'c'},
+        ],
+        'endpoints': [
+          {'tag': 'c', 'type': 'wireguard', 'detour': 'a'},
+        ],
+      });
+      expect(r.fatal.whereType<DetourCycle>().length, 1);
+    });
+
+    test('§141 — линейная detour-цепочка (A→B→C) без цикла → ok', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'a', 'type': 'vless', 'detour': 'b'},
+          {'tag': 'b', 'type': 'vless', 'detour': 'c'},
+          {'tag': 'c', 'type': 'direct'},
+        ],
+      });
+      expect(r.isOk, true);
+    });
+
+    test('§141 — «хвост» входит в цикл (A→B→C→B), репортится один cycle', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'a', 'type': 'vless', 'detour': 'b'},
+          {'tag': 'b', 'type': 'vless', 'detour': 'c'},
+          {'tag': 'c', 'type': 'vless', 'detour': 'b'},
+        ],
+      });
+      expect(r.fatal.whereType<DetourCycle>().length, 1);
+    });
+
+    // §141 P1.8b — non-string selector default.
+
+    test('§141 — non-string selector default (число) → fatal InvalidDefault', () {
+      final r = validateConfig({
+        'outbounds': [
+          {
+            'tag': 'vpn-1',
+            'type': 'selector',
+            'outbounds': ['a'],
+            'default': 123, // не строка-тег
+          },
+          {'tag': 'a', 'type': 'direct'},
+        ],
+      });
+      expect(r.hasFatal, true);
+      expect(r.fatal.single, isA<InvalidDefault>());
+    });
+
+    test('§141 — валидный строковый default в опциях → ok', () {
+      final r = validateConfig({
+        'outbounds': [
+          {
+            'tag': 'vpn-1',
+            'type': 'selector',
+            'outbounds': ['a'],
+            'default': 'a',
+          },
+          {'tag': 'a', 'type': 'direct'},
+        ],
+      });
+      expect(r.isOk, true);
+    });
+  });
+
+  // §141 P0.1 — контракт FatalValidationException (бросается в
+  // SubscriptionController._generate при hasFatal; ловится generateConfig →
+  // humanizeError → _lastError; null возврат блокирует save).
+  group('FatalValidationException', () {
+    test('toString перечисляет сообщения issues, без "Exception:" префикса', () {
+      final e = FatalValidationException([
+        const DanglingOutboundRef('rules[0]', 'ghost'),
+        const EmptyUrltestGroup('auto'),
+      ]);
+      final s = e.toString();
+      // humanizeError обрезает ведущий "Exception:"/"Error:" — наш toString не
+      // должен начинаться с такого префикса, иначе смысл потеряется.
+      expect(s.startsWith('Exception'), isFalse);
+      expect(s.startsWith('Error'), isFalse);
+      expect(s, contains('2 issues'));
+      expect(s, contains('ghost'));
+      expect(s, contains('auto'));
+    });
+
+    test('toString для одного issue — единственное число', () {
+      final e = FatalValidationException(
+          [const InvalidDefault('vpn-1', 'missing')]);
+      expect(e.toString(), startsWith('Config invalid: '));
+      expect(e.toString(), isNot(contains('issues')));
+    });
   });
 }

@@ -72,28 +72,46 @@ object DefaultNetworkMonitor {
         if (listener != null) notifySync(defaultNetwork, listener)
     }
 
+    /// §141 P1.1b — JNI no-throw (§050/§128): `notifySync` вызывается из
+    /// `setListener`, который сам — JNI-колбэк от Go-ядра (`startDefault-
+    /// InterfaceMonitor`). Любой throw отсюда (`getLinkProperties` /
+    /// `getByName` / `updateDefaultInterface`) пролетел бы через JNI =
+    /// `Runtime::Abort` процесса. Всё тело обёрнуто во внешний runCatching;
+    /// на сбой — fail-safe «нет интерфейса» (тоже в runCatching, т.к. сам
+    /// updateDefaultInterface — JNI-вызов и тоже может бросить).
+    ///
+    /// `Thread.sleep` сохранён, но осознанно: метод синхронный (ядру нужен
+    /// первичный ifIndex немедленно при подписке), а интерфейс после смены сети
+    /// появляется в `NetworkInterface.getByName` с задержкой. Полный async-
+    /// рефакторинг (через scope, как в `checkUpdate`) меняет контракт первичной
+    /// нотификации → отдельная device-verified задача.
     private fun notifySync(network: Network?, listener: InterfaceUpdateListener) {
-        if (network == null) {
-            listener.updateDefaultInterface("", -1, false, false)
-            return
-        }
-        val linkProps = BoxApplication.connectivity.getLinkProperties(network)
-        val ifName = linkProps?.interfaceName ?: ""
-        if (ifName.isEmpty()) {
-            listener.updateDefaultInterface("", -1, false, false)
-            return
-        }
-        for (attempt in 0 until 10) {
-            try {
-                val ni = NetworkInterface.getByName(ifName) ?: continue
-                lastIfName = ifName  // §087 — baseline для детекта последующих смен
-                listener.updateDefaultInterface(ifName, ni.index, false, false)
-                return
-            } catch (_: Exception) {
-                Thread.sleep(50)
+        runCatching {
+            if (network == null) {
+                listener.updateDefaultInterface("", -1, false, false)
+                return@runCatching
             }
+            val linkProps = BoxApplication.connectivity.getLinkProperties(network)
+            val ifName = linkProps?.interfaceName ?: ""
+            if (ifName.isEmpty()) {
+                listener.updateDefaultInterface("", -1, false, false)
+                return@runCatching
+            }
+            for (attempt in 0 until 10) {
+                try {
+                    val ni = NetworkInterface.getByName(ifName) ?: continue
+                    lastIfName = ifName  // §087 — baseline для детекта последующих смен
+                    listener.updateDefaultInterface(ifName, ni.index, false, false)
+                    return@runCatching
+                } catch (_: Exception) {
+                    Thread.sleep(50)
+                }
+            }
+            listener.updateDefaultInterface("", -1, false, false)
+        }.onFailure { e ->
+            Log.e("LxBoxNet", "notifySync failed (fail-safe empty interface)", e)
+            runCatching { listener.updateDefaultInterface("", -1, false, false) }
         }
-        listener.updateDefaultInterface("", -1, false, false)
     }
 
     private fun checkUpdate(network: Network?) {

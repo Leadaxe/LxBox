@@ -54,13 +54,24 @@ mixin _HeartbeatMixin on ChangeNotifier {
       _heartbeatFailures = 0;
       // Заодно подтягиваем свежий proxies — urltest переключает ноду во
       // времени (`now` field), без refresh'а UI показывает stale selection.
-      // Clash на localhost — запрос дешёвый, не сеть.
+      // Clash на localhost — запрос дешёвый, но не бесплатный (2-й loopback-
+      // HTTP + парсинг каждые 20с). §141 P0.3 — нужен ТОЛЬКО когда активная
+      // группа — urltest (её `now` дрейфует сама). Для Selector выбор меняется
+      // лишь явным действием юзера (`applyGroup`/`switchNode` фетчат сами), так
+      // что в heartbeat 2-й запрос для не-urltest — лишний.
       Map<String, dynamic>? proxies;
-      try {
-        proxies = await clash.fetchProxies().timeout(_heartbeatTimeout);
-      } catch (_) {
-        // Non-fatal: traffic уже обновился, stale proxies переживём до next tick.
+      if (_activeGroupIsUrltest()) {
+        try {
+          proxies = await clash.fetchProxies().timeout(_heartbeatTimeout);
+        } catch (_) {
+          // Non-fatal: traffic уже обновился, stale proxies переживём до next tick.
+        }
       }
+      // §141 P1.2a — read-after-await: пока ждали traffic/proxies, туннель мог
+      // упасть (native-broadcast → _handleStatusEvent обнулил _clash, выставил
+      // TrafficSnapshot.zero). Без гейта мы перетёрли бы нулевой disconnected-
+      // traffic устаревшим ненулевым → UI на миг «оживает» после обрыва.
+      if (_clash != clash || !_state.tunnelUp) return;
       _emit(_state.copyWith(
         traffic: traffic,
         proxiesJson: proxies ?? _state.proxiesJson,
@@ -80,6 +91,23 @@ mixin _HeartbeatMixin on ChangeNotifier {
         _onTunnelDead();
       }
     }
+  }
+
+  /// §141 P0.3 — активная группа — urltest? Определяем по последнему снимку
+  /// `proxiesJson` (предыдущий heartbeat-тик / refresh после connect). Если
+  /// группа неизвестна или снимка ещё нет — возвращаем `true` (консервативно
+  /// сохраняем прежнее поведение: лучше лишний fetch, чем потерять `now`-дрейф,
+  /// пока тип группы не определён). Как только снимок есть и группа НЕ urltest —
+  /// `false`, и 2-й loopback-запрос пропускается.
+  bool _activeGroupIsUrltest() {
+    final group = _state.selectedGroup;
+    if (group == null || group.isEmpty) return true;
+    final proxies = _state.proxiesJson;
+    if (proxies.isEmpty) return true;
+    final entry = ClashApiClient.proxyEntry(proxies, group);
+    if (entry == null) return true; // тип ещё неизвестен — не рискуем
+    final type = (entry['type']?.toString() ?? '').toLowerCase();
+    return type.contains('urltest');
   }
 
   void _onTunnelDead() {

@@ -139,6 +139,20 @@ POST /action/preview-empty-state?on=true|false UI-only override: рендери�
                                                   "Check now" button. Uses primary api.github.com → fallback
                                                   raw.githubusercontent.com/.../docs/latest.json.
 
+=== WARP (§025/§143 — register Cloudflare WARP node) ===
+
+POST /warp[?rebuild=true]                      Регистрирует WARP-узел (тот же путь, что кнопка Get WARP).
+                                                  Приватник генерится на устройстве, регистрация в Cloudflare.
+                                                  Узел добавляется в подписки автоматически. Все поля body опц.:
+                                                  {"licenseKey":"...",       // null/пусто → free WARP
+                                                   "endpoint":"IP:port",     // дефолт engage.cloudflareclient.com:2408
+                                                   "obfuscate":true,         // §143 masquerade
+                                                   "forceNew":false,         // игнор кеша, регать заново
+                                                   "includeReserved":false,  // §142; null → дефолт по obfuscate
+                                                   "quicParams":{"sni":"www.google.com","ip":"quic",
+                                                                 "ib":"chrome","jc":4,"jmin":40,"jmax":70}}
+                                                  ?rebuild=true → regenerate config + reload ядра.
+
 === Rules CRUD (custom routing rules, spec 030) ===
 
 GET    /rules                                  alias /state/rules
@@ -347,6 +361,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/action/toast', 'params': {'msg': 'text', 'duration': 'short|long'}, 'description': 'Android toast (sanity-check)'},
     {'method': 'POST', 'path': '/action/emulate-error', 'params': {'kind': 'socket|timeout|http-401|http-404|http-410|http-429|http-503|format|fs|plain|all'}, 'description': 'Demo humanizeError in /logs'},
     {'method': 'POST', 'path': '/action/check-updates', 'description': 'Force update check (bypass cap + toggle); returns {kind,tag,html_url,...}'},
+    // WARP
+    {'method': 'POST', 'path': '/warp', 'params': {'rebuild': 'true|false'}, 'body': '{licenseKey?, endpoint?, obfuscate?, forceNew?, includeReserved?, quicParams?:{sni,ip,ib,jc,jmin,jmax}}', 'description': 'Register Cloudflare WARP node (same path as Get WARP wizard). All fields optional. obfuscate=true → §143 masquerade via quicParams. ?rebuild=true regenerates config.'},
     // Rules
     {'method': 'GET', 'path': '/rules', 'description': 'Alias /state/rules'},
     {'method': 'GET', 'path': '/rules/{id}', 'description': 'Single rule'},

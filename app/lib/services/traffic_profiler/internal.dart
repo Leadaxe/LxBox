@@ -12,10 +12,11 @@ class _ConnMeta {
 
 class _DnsAccumulator {
   _DnsAccumulator({required this.domain, required this.firstTs})
-      : lastTs = firstTs,
-        lastResolvedName = domain;
+      : lastTs = firstTs;
   final String domain;
-  String lastResolvedName;
+  // §141 P2.4c — поле `lastResolvedName` удалено: было write-only (set в ctor и
+  // в _handleDnsLine, но нигде не читалось). `ips`/`cnameChain`/`firstTs`
+  // оставлены — они реально используются (вопреки исходной находке аудита).
   final List<String> cnameChain = <String>[];
   final Set<String> ips = <String>{};
   DateTime firstTs;

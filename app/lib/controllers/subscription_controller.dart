@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/subscription_meta.dart';
+import '../models/validation.dart';
 import '../services/app_log.dart';
 import '../services/config_dirty_check.dart';
 import '../services/error_humanize.dart';
@@ -710,13 +711,21 @@ class SubscriptionController extends ChangeNotifier {
     final outs = (result.config['outbounds'] as List?)?.length ?? 0;
     final eps = (result.config['endpoints'] as List?)?.length ?? 0;
     AppLog.I.info('Config built: $outs outbounds + $eps endpoints, ${lists.length} lists');
-    if (result.validation.hasFatal) {
-      for (final issue in result.validation.fatal) {
-        AppLog.I.error('Validation: ${issue.message}');
-      }
-    }
     for (final w in result.emitWarnings) {
       AppLog.I.warning(w);
+    }
+    // §141 P0.1 — fatal-валидация теперь блокирующая (контракт `validation.dart`
+    // «Fatal → UI отказывается запускать VPN»). Раньше issues только логировались,
+    // а битый configJson всё равно возвращался → доезжал до save/ядра. Бросаем
+    // исключение ПОСЛЕ записи generatedVars (clash_api/secret уже персистнуты —
+    // безвредно), но ДО возврата json: `generateConfig`-catch выставит
+    // `_lastError` и вернёт null, все callsite сделают skip-save.
+    if (result.validation.hasFatal) {
+      final fatal = result.validation.fatal;
+      for (final issue in fatal) {
+        AppLog.I.error('Validation: ${issue.message}');
+      }
+      throw FatalValidationException(fatal);
     }
     return result.configJson;
   }

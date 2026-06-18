@@ -65,9 +65,13 @@ class TrafficProfiler extends ChangeNotifier {
   // §048 Принцип 5 — polling supplement, не discovery. 2s → 5s: меньше
   // CPU, log-stream всё равно ловит каждый conn.
   static const Duration _connPollInterval = Duration(seconds: 5);
-  // §048 Принцип 6 — time-bound TTL для conn-id correlation, GC каждые 5s.
+  // §048 Принцип 6 — time-bound TTL для conn-id correlation.
   static const Duration _connIdTtl = Duration(seconds: 30);
-  static const Duration _connIdGcInterval = Duration(seconds: 5);
+  // §141 P3.2b — GC-интервал 5s → 15s: TTL=30s, чистить втрое чаще TTL
+  // избыточно (entry переживёт максимум +15s до удаления, всё ещё внутри
+  // запаса). Втрое меньше пробуждений + разводит фазу с _connPollInterval
+  // (5s), которые раньше совпадали каждые 5s как два независимых wakeup'а.
+  static const Duration _connIdGcInterval = Duration(seconds: 15);
   static const Duration _processInferenceWindow = Duration(seconds: 10);
   // §048 Принцип 4 — global rolling buffer всегда работает, окно 60s,
   // hard cap 3000 events чтобы memory не убегало на busy device'ах.
@@ -134,6 +138,14 @@ class TrafficProfiler extends ChangeNotifier {
   VoidCallback? _appLogListener;
   Timer? _connTimer;
   Timer? _gcTimer;
+
+  // §141 P3.1a — leading-edge throttle для notifyListeners (≤60Hz), эталон
+  // AppLog._scheduleNotify. _appendEvent звался на КАЖДОМ traffic-event без
+  // троттла → на бёрсте (100+ ev/сек) UI ребилдился каждую мс. Stream-эмит
+  // (_emitSessionStream) остаётся per-event — он data-канал, не UI.
+  static const _notifyWindow = Duration(milliseconds: 16);
+  Timer? _notifyThrottleTimer;
+  bool _notifyPending = false;
   // Timestamp последнего обработанного core-log entry. Используется
   // вместо length-diff потому что AppLog имеет ring-buffer cap=500: при
   // overflow length стабилизируется на 500 и length-diff навечно =0,
@@ -536,10 +548,6 @@ class TrafficProfiler extends ChangeNotifier {
   static final _dnsFailRe = RegExp(
       r'\[(\d+)\s+\S+\]\s+dns: exchange failed(?: for (\S+?)\.?(?: IN (\S+))?)?:\s*(.+?)$');
 
-  // INFO[NNNN] [<conn_id> <Nms>] inbound/tun[tun-in]: inbound packet connection (from|to) <addr>:<port>
-  static final _tunPacketRe = RegExp(
-      r'\[(\d+)\s+\d+ms\]\s+inbound/tun\[[^\]]+\]: inbound packet connection (from|to)');
-
   void _processLogLine(String line, DateTime ts) {
     // 1) Package detection — пишем в conn-id map (всегда, независимо
     //    от active session'и: нужно для global rolling buffer и для
@@ -567,13 +575,9 @@ class TrafficProfiler extends ChangeNotifier {
       _handleDnsFailLine(line, ts, failM);
       return;
     }
-
-    // 4) tun packet — для process inference (no-op, оставляем для будущего).
-    final tunM = _tunPacketRe.firstMatch(line);
-    if (tunM != null) {
-      // no-op — обработка в /connections polling.
-      return;
-    }
+    // §141 P2.4b — была ветка 4 «tun packet» с _tunPacketRe: matched, но no-op
+    // (обработка пакетов tun делается в /connections polling). Удалена вместе с
+    // мёртвым regex — поведение не меняется.
   }
 
   void _handleDnsLine(String line, DateTime ts, RegExpMatch m) {
@@ -593,7 +597,7 @@ class TrafficProfiler extends ChangeNotifier {
       final target = answer.replaceAll(RegExp(r'\.$'), '');
       acc.cnameChain.add(target);
       acc.lastTs = ts;
-      acc.lastResolvedName = target;
+      // §141 P2.4c — `acc.lastResolvedName = target` удалён (write-only поле).
       // CNAME hops сами по себе не emit'ятся как отдельные events —
       // они аккумулируются в acc.cnameChain и появляются как поле в
       // финальном dnsResolve event'е (когда A/AAAA придёт).
@@ -1133,7 +1137,25 @@ class TrafficProfiler extends ChangeNotifier {
       'event': 'traffic_event',
       'data': ev.toJson(),
     });
+    _scheduleNotify(); // §141 P3.1a — throttled вместо прямого notifyListeners
+  }
+
+  /// §141 P3.1a — leading-edge 16ms-throttle (эталон AppLog._scheduleNotify):
+  /// первый вызов сразу notify, последующие в окне коалесятся в один notify в
+  /// конце окна.
+  void _scheduleNotify() {
+    if (_notifyThrottleTimer != null) {
+      _notifyPending = true;
+      return;
+    }
     notifyListeners();
+    _notifyThrottleTimer = Timer(_notifyWindow, () {
+      _notifyThrottleTimer = null;
+      if (_notifyPending) {
+        _notifyPending = false;
+        _scheduleNotify();
+      }
+    });
   }
 
   void _pruneOld(Session s) {

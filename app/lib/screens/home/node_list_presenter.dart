@@ -88,11 +88,15 @@ class NodeListPresenter {
   /// незнакомые теги — в конец по алфавиту (forward-compat).
   static const _variantOrder = <String>[
     'tcp', 'ws', 'grpc', 'h2', 'httpupgrade', 'quic', 'xhttp',
-    'TLS', 'TLS+Vision', 'Reality', 'Reality+Vision', 'awg', 'awg2',
+    'TLS', 'TLS+Vision', 'Reality', 'Reality+Vision',
+    'awg', 'awg1.5', 'awg2',
   ];
 
   static int _variantRank(String v) {
-    final i = _variantOrder.indexOf(v);
+    // §148 — masquerade-суффикс `+` (awg1.5+/awg2+) ранжируется по базе,
+    // чтобы `awgN` и `awgN+` стояли рядом; trailing `+` отбрасываем.
+    final base = v.endsWith('+') ? v.substring(0, v.length - 1) : v;
+    final i = _variantOrder.indexOf(base);
     return i >= 0 ? i : _variantOrder.length;
   }
 

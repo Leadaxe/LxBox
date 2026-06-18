@@ -38,6 +38,13 @@ class HomeController extends ChangeNotifier
   HomeState _state = HomeState();
   HomeState get state => _state;
 
+  /// §141 P1.9a — выставляется в `dispose()` (перед `super.dispose()`).
+  /// Async-колбэки, переживающие dispose (delayed cooldown в `reloadVpn`,
+  /// in-flight future'ы), проверяют флаг перед `notifyListeners()`, иначе
+  /// «Bad state: cannot notify listeners after dispose» на hot-reload /
+  /// быстрой навигации.
+  bool _disposed = false;
+
   /// UI-only override: при `true` `HomeScreen` рендерит empty-state как
   /// при чистой инсталляции, **не трогая** реальные данные `_state`.
   /// Управляется через Debug API `POST /action/preview-empty-state?on=...`.
@@ -133,6 +140,7 @@ class HomeController extends ChangeNotifier
 
   @override
   void dispose() {
+    _disposed = true; // §141 P1.9a — до super.dispose, гейтит async-колбэки
     _stopHeartbeat();
     _autoPingTimer?.cancel();
     _transientTimeoutTimer?.cancel();
@@ -192,6 +200,12 @@ class HomeController extends ChangeNotifier
     } else if (tunnel == TunnelStatus.disconnected ||
         tunnel == TunnelStatus.revoked) {
       _stopHeartbeat();
+      // §141 P1.2b — единый контракт «tunnel down»: отменяем in-flight mass-ping
+      // ПЕРЕД обнулением _clash (ниже), симметрично `_onTunnelDead` (heartbeat.dart).
+      // Иначе воркеры mass-ping'а, стартовавшие из _scheduleAutoPing/ручного
+      // запуска, дописывают stale-delay в мёртвую сессию (epoch-гейт их
+      // самоисцелит, но явная отмена — чище и не зависит от тайминга).
+      cancelMassPing();
       _autoPingTimer?.cancel();
       _autoPingTimer = null;
       // Clash endpoint прошлой сессии теперь невалиден — secret был у
@@ -418,14 +432,29 @@ class HomeController extends ChangeNotifier
   /// Tunnel дропается на ~3s, Android Service не убивается. См. spec 030.
   Future<void> reloadVpn() async {
     if (!canReload) return;
+    final prevReloadTap = _lastReloadTap;
     _lastReloadTap = DateTime.now();
     notifyListeners();
-    final ok = await _vpn.reloadVPN();
-    _addDebug(DebugSource.app, '[vpn] reload → ok=$ok');
+    // §141 P1.9b — раньше исключение из reloadVPN проглатывалось (uncaught
+    // async) → cooldown оставался занятым, юзер не видел ошибки. Теперь
+    // surface'им через _emit(lastError) и откатываем cooldown, чтобы повтор
+    // был доступен сразу.
+    try {
+      final ok = await _vpn.reloadVPN();
+      _addDebug(DebugSource.app, '[vpn] reload → ok=$ok');
+    } catch (e) {
+      _lastReloadTap = prevReloadTap; // откат cooldown
+      _addDebug(DebugSource.app, '[vpn] reload error: $e');
+      if (!_disposed) {
+        _emit(_state.copyWith(lastError: 'Reload failed: ${formatUserError(e)}'));
+      }
+      return;
+    }
     // Cooldown timer перерендерит canReload через 3s — назначаем future
     // notifyListeners (без heavy timer'а; achievable через delayed Future).
+    // §141 P1.9a — гейт `_disposed`: контроллер мог умереть за время cooldown.
     Future.delayed(_recoveryCooldown, () {
-      if (_lastReloadTap != null) notifyListeners();
+      if (!_disposed && _lastReloadTap != null) notifyListeners();
     });
   }
 
@@ -498,6 +527,12 @@ class HomeController extends ChangeNotifier
     try {
       await clash.pingVersion();
       final proxies = await clash.fetchProxies();
+      // §141 P1.2a — assign-after-await: пока ждали fetchProxies, туннель мог
+      // упасть (`_handleStatusEvent`/`_onTunnelDead` обнулили _clash и почистили
+      // state). Если _clash сменился или ушёл — не перетираем свежий
+      // disconnected-state устаревшим снимком (иначе transient UI-глитч:
+      // groups/nodes от мёртвой сессии поверх «tunnel down»).
+      if (_clash != clash || !_state.tunnelUp) return;
       final groups = ClashApiClient.selectorGroupTags(proxies)
           .where((name) => name != 'GLOBAL')
           .toList();
@@ -689,6 +724,20 @@ class HomeController extends ChangeNotifier
     unawaited(_resyncOnResume());
   }
 
+  /// §141 P0.2 — app ушёл в фон: останавливаем heartbeat-таймер. Это
+  /// единственный always-on resident-drain (Timer.periodic(20s) → 2 loopback-
+  /// HTTP + парсинг всего списка соединений на каждый тик). В фоне UI не виден,
+  /// stale-state не важен, а dead-tunnel в фоне поймает native-broadcast путь
+  /// (`onStatusChanged` → `_handleStatusEvent`), не heartbeat.
+  ///
+  /// Симметрично `onAppResumed`/`_resyncOnResume`: resume пере-синхронизирует
+  /// статус и (если tunnelUp) делает немедленный `_checkHeartbeat`, который сам
+  /// перезапускает таймер через первый успешный тик? Нет — `_checkHeartbeat`
+  /// таймер не создаёт. Поэтому на resume рестартуем явно (см. `_resyncOnResume`).
+  void onAppPaused() {
+    _stopHeartbeat();
+  }
+
   Future<void> _resyncOnResume() async {
     try {
       final native = await _vpn.getVpnStatus();
@@ -700,7 +749,13 @@ class HomeController extends ChangeNotifier
     } catch (e) {
       _addDebug(DebugSource.app, '[vpn] onAppResumed pull error: $e');
     }
+    // §141 P0.2 — heartbeat был остановлен на paused; если туннель всё ещё жив,
+    // перезапускаем таймер и делаем немедленный тик (подтянуть свежий traffic
+    // сразу, не ждать первые 20с). `_resyncOnResume` мог уже синхронизировать
+    // tunnel через native-pull выше — если он лёг, `_handleStatusEvent` сам
+    // не стартовал heartbeat (только connected-ветка стартует).
     if (_state.tunnelUp) {
+      _startHeartbeat();
       unawaited(_checkHeartbeat());
     }
   }

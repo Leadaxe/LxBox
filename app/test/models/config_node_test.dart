@@ -208,10 +208,21 @@ void main() {
         },
       ],
       'endpoints': [
-        {'tag': 'awg2', 'type': 'wireguard', 'jc': 10, 'i1': '<r 24>'},
+        // §148 — версии AmneziaWG: 2.0 = ranged-H ("N-M") или s3/s4;
+        // 1.5 = signature-пакеты i1–i5; 1.0 = база (jc/s1/одиночные h).
+        {'tag': 'awg2h', 'type': 'wireguard', 'jc': 10, 'h1': '10-20'},
         {'tag': 'awg2s', 'type': 'wireguard', 'jc': 10, 's3': 60, 's4': 60},
+        {'tag': 'awg15i1', 'type': 'wireguard', 'jc': 10, 'i1': '<r 24>'},
+        {'tag': 'awg15i2', 'type': 'wireguard', 'jc': 10, 'i2': '<b 0xff>'},
+        {'tag': 'awg2over', 'type': 'wireguard', 'i1': '<r 24>', 'h1': '10-20'},
         {'tag': 'awg1', 'type': 'wireguard', 'jc': 10, 's1': 20, 'h1': 1},
         {'tag': 'wg', 'type': 'wireguard'},
+        // §148 — masquerade ip/id/ib = ядро разворачивает в i1 ⇒ сам по себе
+        // 1.5. `awg+` невозможен: 1.0/нет-базы → awg1.5+, только 2.0 → awg2+.
+        {'tag': 'awgp', 'type': 'wireguard', 'jc': 10, 'ip': '1.2.3.4'},
+        {'tag': 'awg15p', 'type': 'wireguard', 'i1': '<r 24>', 'id': 'x'},
+        {'tag': 'awg2p', 'type': 'wireguard', 's3': 60, 'ib': 'y'},
+        {'tag': 'awgponly', 'type': 'wireguard', 'ip': 'quic'},
       ],
     }));
 
@@ -225,7 +236,7 @@ void main() {
     test('transport: протоколы со встроенным транспортом → null', () {
       expect(pc['hy2']?.transportLabel, isNull);
       expect(pc['wg']?.transportLabel, isNull);
-      expect(pc['awg2']?.transportLabel, isNull);
+      expect(pc['awg2s']?.transportLabel, isNull);
     });
 
     test('security: Reality > TLS; off/absent → null', () {
@@ -243,11 +254,23 @@ void main() {
       expect(pc['rlt']?.securityLabel, 'Reality');
     });
 
-    test('security: awg2 (s3/s4 и/или i*) vs awg 1.x (база) vs чистый WG', () {
-      expect(pc['awg2']?.securityLabel, 'awg2');
-      expect(pc['awg2s']?.securityLabel, 'awg2');
-      expect(pc['awg1']?.securityLabel, 'awg');
-      expect(pc['wg']?.securityLabel, isNull);
+    test('§148 security: awg2 (ranged-H/s3/s4) vs awg1.5 (i1–i5) vs awg vs WG',
+        () {
+      expect(pc['awg2h']?.securityLabel, 'awg2'); // ranged h1 "10-20"
+      expect(pc['awg2s']?.securityLabel, 'awg2'); // s3/s4
+      expect(pc['awg15i1']?.securityLabel, 'awg1.5'); // i1
+      expect(pc['awg15i2']?.securityLabel, 'awg1.5'); // i2 — тоже 1.5
+      expect(pc['awg2over']?.securityLabel, 'awg2'); // i1+ranged-H → 2.0 старше
+      expect(pc['awg1']?.securityLabel, 'awg'); // база + одиночный h1=1
+      expect(pc['wg']?.securityLabel, isNull); // plain WG
+    });
+
+    test('§148 security: masquerade ip/id/ib — awg+ невозможен, мин. awg1.5+',
+        () {
+      expect(pc['awgp']?.securityLabel, 'awg1.5+'); // 1.0-база + ip → 1.5+
+      expect(pc['awg15p']?.securityLabel, 'awg1.5+'); // i1 + id
+      expect(pc['awg2p']?.securityLabel, 'awg2+'); // s3 + ib → только 2.0+
+      expect(pc['awgponly']?.securityLabel, 'awg1.5+'); // только ip, без базы
     });
   });
 

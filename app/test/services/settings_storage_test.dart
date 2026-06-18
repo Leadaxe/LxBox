@@ -17,7 +17,17 @@ void main() {
 
   String mainPath() => '${tmp.path}/lxbox_settings.json';
   String bakPath() => '${tmp.path}/lxbox_settings.json.bak';
+  // §141 P1.5 — фиксированное legacy-имя (для эмуляции crashed save прошлых
+  // версий) + glob-счётчик новых seq-уникальных tmp.
   String tmpPath() => '${tmp.path}/lxbox_settings.json.tmp';
+  int orphanTmpCount() => tmp
+      .listSync()
+      .whereType<File>()
+      .where((f) {
+        final name = f.uri.pathSegments.last;
+        return name.startsWith('lxbox_settings.json.') && name.endsWith('.tmp');
+      })
+      .length;
 
   setUp(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -139,14 +149,45 @@ void main() {
     test('stale .tmp от прошлого crashed save → удаляется в _load()',
         () async {
       // Эмулируем что предыдущий save был убит после write tmp, до rename.
+      // Используем и legacy-имя (`.tmp`), и новое seq-имя — _sweep должен
+      // подобрать оба по маске.
       await File(mainPath()).writeAsString(jsonEncode({'vars': {'a': '1'}}));
       await File(tmpPath()).writeAsString('{"vars":{"a":"PARTIAL');
+      await File('${tmp.path}/lxbox_settings.json.7.tmp')
+          .writeAsString('{"vars":{"a":"PARTIAL2');
 
       SettingsStorage.resetCacheForTesting();
       expect(await SettingsStorage.getVar('a', 'def'), '1',
           reason: 'main валидный → читаем оттуда');
-      expect(File(tmpPath()).existsSync(), isFalse,
-          reason: '.tmp от прошлого crashed save удалён');
+      // §141 P1.5 — все осиротевшие .tmp (legacy + seq) удалены _sweep'ом.
+      expect(orphanTmpCount(), 0,
+          reason: '.tmp от прошлых crashed save удалены');
+    });
+
+    test('§141 P1.5 — конкурентные _save() не оставляют сирот и не бросают',
+        () async {
+      // Прогреваем кэш (в проде `_load` отрабатывает на старте app до любых
+      // конкурентных save — `subscription._persist` ↔ AutoUpdater ↔ UI). После
+      // прогрева `_load()` возвращает общий `_cache` синхронно, так что
+      // мутации видят друг друга.
+      await SettingsStorage.setVar('warm', '0');
+
+      // Гонка: три перекрывающихся save поверх прогретого кэша. Раньше они
+      // писали в ОДИН фиксированный .tmp и каждый rename'ил → второй/третий
+      // бросали PathNotFoundException (unhandled async). С seq-уникальными tmp
+      // все проходят чисто.
+      await Future.wait([
+        SettingsStorage.setVar('a', '1'),
+        SettingsStorage.setVar('b', '2'),
+        SettingsStorage.setVar('c', '3'),
+      ]);
+      // Все значения сохранены (общий прогретый `_cache`).
+      SettingsStorage.resetCacheForTesting();
+      expect(await SettingsStorage.getVar('a', 'def'), '1');
+      expect(await SettingsStorage.getVar('b', 'def'), '2');
+      expect(await SettingsStorage.getVar('c', 'def'), '3');
+      // Ни одного осиротевшего .tmp (все rename консумированы, без residual).
+      expect(orphanTmpCount(), 0, reason: 'нет residual .tmp после гонки');
     });
 
     test('.bak создаётся только из валидного main', () async {

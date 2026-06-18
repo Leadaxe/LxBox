@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 
+import 'platform_channels.dart';
 import 'settings_storage.dart';
 
 /// §051 Phase 3 — слушает MethodChannel `onWifiSeen` от native side
@@ -26,8 +27,8 @@ class WifiHistoryListener {
 
   static final WifiHistoryListener I = WifiHistoryListener._();
 
-  static const _channel = MethodChannel('com.leadaxe.lxbox/wifi_history');
-  static const _utilsChannel = MethodChannel('com.leadaxe.lxbox/utils');
+  static const _channel = MethodChannel(PlatformChannels.wifiHistory);
+  static const _utilsChannel = MethodChannel(PlatformChannels.utils);
 
   bool _initialized = false;
 

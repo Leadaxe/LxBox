@@ -16,29 +16,13 @@ import 'services/wifi_history_listener.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // VersionInfo загружает PackageInfo → sync доступ к версии для About /
-  // UpdateChecker (см. §066). Раньше версия дублировалась hardcoded const'ом
-  // в AboutScreen — поднимать вручную легко забыть (произошло на v1.8.0).
-  await VersionInfo.I.init();
-  // §118 — идентичность фетча подписок (UA override + HWID + device-meta).
-  // После VersionInfo (UA дефолт зависит от версии), до runApp — `_fetch`
-  // читает значения синхронно.
-  await SubscriptionIdentity.init();
-  // §038 — подгружаем persistent warning+error entries предыдущей сессии
-  // (из обоих файлов applog.txt + corelog.txt — §043) до runApp, чтобы
-  // Debug-экран сразу видел pre-crash JVM-events.
-  await AppLog.I.initPersistent();
-  // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в
-  // AppLog как DebugSource.core. Идемпотентно (повторный attach no-op).
-  ClashLogPump.I.attach();
-  // §051 Phase 3 — register handler для native `onWifiSeen` events.
-  // Если `auto_record_wifi_history` ON в storage — sync'нёт state с
-  // native observer'ом (start callback). Default OFF, no-op до toggle.
-  unawaited(WifiHistoryListener.I.init());
-  // Первый read `appStartedAt` фиксирует момент старта для /device и /ping.
-  // ignore: unused_local_variable
-  final _ = debug_bootstrap.appStartedAt;
 
+  // §141 P1.9b — error boundary ставим ПЕРВЫМ делом, до init-await'ов. Раньше
+  // он стоял после 4 await (VersionInfo/Identity/AppLog/...): брось любой из
+  // них — краш до установки boundary, ошибка нигде не залогирована. Теперь
+  // boundary активен с самого старта. AppLog.I пишет в in-memory ring и до
+  // initPersistent, так что логирование здесь безопасно.
+  //
   // Top-level error boundary (night T2-1). Любой uncaught Flutter-error
   // (build/layout/paint) и async error роутятся в AppLog как error-entry,
   // чтобы были видны на DebugScreen и в /logs endpoint'е. Red-screen
@@ -57,6 +41,37 @@ void main() async {
     return true;
   };
   ErrorWidget.builder = (details) => _FallbackErrorWidget(details: details);
+
+  // §141 P1.9b — init-await'ы обёрнуты: краш одного из них больше не валит
+  // запуск целиком. Логируем и продолжаем best-effort — UI поднимется и
+  // покажет диагностику (лучше частично-инициализированного app, чем чёрный
+  // экран). Порядок сохранён (зависимости: Identity ← VersionInfo).
+  try {
+    // VersionInfo загружает PackageInfo → sync доступ к версии для About /
+    // UpdateChecker (см. §066). Раньше версия дублировалась hardcoded const'ом
+    // в AboutScreen — поднимать вручную легко забыть (произошло на v1.8.0).
+    await VersionInfo.I.init();
+    // §118 — идентичность фетча подписок (UA override + HWID + device-meta).
+    // После VersionInfo (UA дефолт зависит от версии), до runApp — `_fetch`
+    // читает значения синхронно.
+    await SubscriptionIdentity.init();
+    // §038 — подгружаем persistent warning+error entries предыдущей сессии
+    // (из обоих файлов applog.txt + corelog.txt — §043) до runApp, чтобы
+    // Debug-экран сразу видел pre-crash JVM-events.
+    await AppLog.I.initPersistent();
+    // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в
+    // AppLog как DebugSource.core. Идемпотентно (повторный attach no-op).
+    ClashLogPump.I.attach();
+    // §051 Phase 3 — register handler для native `onWifiSeen` events.
+    // Если `auto_record_wifi_history` ON в storage — sync'нёт state с
+    // native observer'ом (start callback). Default OFF, no-op до toggle.
+    unawaited(WifiHistoryListener.I.init());
+    // Первый read `appStartedAt` фиксирует момент старта для /device и /ping.
+    // ignore: unused_local_variable
+    final _ = debug_bootstrap.appStartedAt;
+  } catch (e, st) {
+    AppLog.I.error('Startup init failed (continuing best-effort): $e\n$st');
+  }
 
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
