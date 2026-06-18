@@ -8,6 +8,31 @@
 
 ## [Unreleased]
 
+## [2.3.5] — 2026-06-18
+
+Лейблы уровня AWG (`awg` / `awg1.5` / `awg2`) с masquerade-суффиксом `+`, импорт серверов из файла, стабилизационные фиксы из глубокого аудита кода (§141). Ядро → `v1.13.13-lx.12`.
+
+### Added
+
+- **§148 — лейблы уровня AWG** ([validation.dart](app/lib/models/validation.dart), [task](docs/spec/tasks/148-awg-version-labels.md)). Нода показывает `awg` / `awg1.5` / `awg2` по официальной классификации AmneziaWG (структурно по сырому JSON, по старшему присутствующему маркеру). Masquerade (`ip`/`id`/`ib`) добавляет суффикс `+`.
+- **§149 — Servers «Import from file…»** ([servers_screen](app/lib/screens), [task](docs/spec/tasks/149-servers-import-from-file.md)). Новый пункт overflow-меню (⋮) для импорта конфига/подписки из локального файла.
+- **§147 — Debug API `POST /warp`** ([warp.dart](app/lib/services/debug/handlers/warp.dart), [task](docs/spec/tasks/147-debug-api-warp-endpoint.md)). Программная регистрация WARP-узла без UI (тот же путь, что кнопка Get WARP). Все поля опциональны; `obfuscate=true` → §143 masquerade; `?rebuild=true` регенерирует конфиг. Debug-only (bind 127.0.0.1, bearer-token).
+
+### Changed
+
+- **Ядро → `v1.13.13-lx.12`** ([libbox.version](app/android/libbox.version)) — обратно-совместимо с lx.11; добавляет основу для §146 fragmented-QUIC. Версия ядра нигде в коде не зашита — только в пине.
+- **§148 — `awg+` невозможен**: masquerade поднимает базу минимум до `awg1.5+`.
+- **§141 — централизация имён платформенных каналов** ([platform_channels.dart](app/lib/services/platform_channels.dart)). Строки `MethodChannel`/`EventChannel` дублировались в 6+ файлах → опечатка молча рвала канал. Сведены в один источник истины.
+- **§141 — magic-numbers debug-порта** → константы `SettingsStorage.debugPortMin`/`debugPortMax`.
+
+### Fixed
+
+- **§141 — JNI no-throw** ([BoxService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxService.kt), [task](docs/spec/tasks/141-deep-code-audit-hardening.md)). `serviceReload`/`getSystemProxyStatus`/`setSystemProxyEnabled` — внешнее тело в `runCatching` + fail-safe. Unchecked exception через JNI = `Runtime::Abort` всего процесса (крашило старые API).
+- **§141 — `cancelMassPing()` в disconnected/revoked-ветке** `_handleStatusEvent` ([home_controller.dart](app/lib/controllers/home_controller.dart)) — симметрия с `_onTunnelDead`.
+- **§141 — анти-зомби стрима**: `.handleError` на status-broadcast перед `asBroadcastStream` ([box_vpn_client.dart](app/lib/vpn/box_vpn_client.dart)).
+- **§141 — гонки read-after-await**: снимок `tunnelUp` снимается один раз после `await`.
+- **§148 — чистка WARP endpoint-пула** ([warp_endpoints.json](app/assets/warp_endpoints.json)): убраны дохлые/режущиеся на LTE-DPI 8.x-блоки; остались твёрдые anycast `162.159.192/195` + `188.114.96-98`.
+
 ## [2.3.4] — 2026-06-16
 
 Новый механизм WARP-обфускации: маскировка под протокол (`QUIC`/`DNS`/`STUN`/`SIP`) теперь генерируется ядром по декларативным полям `id/ip/ib` (WireSock-style). Требует ядра `v1.13.13-lx.11`.
