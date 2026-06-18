@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../config/consts.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
+import '../services/error_format.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/url_launcher.dart';
@@ -190,6 +193,50 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     }
   }
 
+  /// Импорт подписки/конфига из файла. Содержимое (URI-список, JSON-конфиг,
+  /// proxy-link) идёт в тот же `addFromInput`, что и paste/manual — парсер
+  /// сам определяет формат. file_picker уже используется на других экранах
+  /// (config_screen / backup) — паттерн чтения bytes/path идентичный.
+  Future<void> _importFromFile() async {
+    try {
+      final result = await FilePicker.pickFiles(withData: true, allowMultiple: false);
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.single;
+      String text;
+      if (file.bytes != null && file.bytes!.isNotEmpty) {
+        text = String.fromCharCodes(file.bytes!);
+      } else if (file.path != null) {
+        text = await File(file.path!).readAsString();
+      } else {
+        return;
+      }
+      text = text.trim();
+      if (text.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('File is empty')),
+          );
+        }
+        return;
+      }
+      if (!mounted) return;
+      await widget.subController.addFromInput(text);
+      if (widget.subController.lastError.isEmpty) {
+        await _regenerateAndSave();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(widget.subController.lastError)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${formatUserError(e)}')),
+        );
+      }
+    }
+  }
+
   Future<void> _updateAll() async {
     // Ручной force-refresh: сбрасываем session-cap (5 фейлов) и форсим через
     // AutoUpdater — так получаем `_running` guard от дубль-кликов и общий
@@ -254,6 +301,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     if (v == 'public') unawaited(_pickPublicTestServer());
                     if (v == 'paste') unawaited(_pasteFromClipboard());
                     if (v == 'qr') unawaited(_scanQrCode());
+                    if (v == 'file') unawaited(_importFromFile());
                     if (v == 'auto_update') unawaited(_toggleAutoUpdate());
                   },
                   itemBuilder: (_) => [
@@ -262,6 +310,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     const PopupMenuDivider(),
                     const PopupMenuItem(value: 'paste', child: Text('Paste from clipboard')),
                     const PopupMenuItem(value: 'qr', child: Text('Scan QR code')),
+                    const PopupMenuItem(value: 'file', child: Text('Import from file…')),
                     const PopupMenuDivider(),
                     const PopupMenuItem(value: 'public', child: Text('Get Public Test Servers')),
                     const PopupMenuDivider(),
