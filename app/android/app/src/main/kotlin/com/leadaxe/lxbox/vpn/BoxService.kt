@@ -482,24 +482,33 @@ class BoxService(
 
     /// §049 F4 — без status-flap (Started → Starting → Started) при reload.
     /// Match reference (`BoxService.kt:192-249 serviceReload0`).
+    ///
+    /// §141 P1.1a — JNI no-throw (§050/§128): этот метод зовётся Go-ядром через
+    /// `CommandServerHandler`. Раньше runCatching покрывал только
+    /// `cs.startOrReloadService`, а внешнее тело (`notification.stop()`,
+    /// `setStatus`, `ConfigManager.load`, `serviceScope.launch`) — нет: любой их
+    /// throw пролетел бы через JNI = `Runtime::Abort` всего процесса. Оборачиваем
+    /// всё тело внешним runCatching.
     override fun serviceReload() {
-        val cs = commandServer.get() ?: run {
-            Log.w(TAG, "serviceReload: commandServer == null, treating as fresh start")
-            notification.stop()
-            setStatus(VpnStatus.Starting)
-            serviceScope.launch { startSingbox() }
-            return
-        }
-        val config = ConfigManager.load()
-        if (config.isBlank() || config == "{}") {
-            Log.e(TAG, "serviceReload: empty config")
-            return
-        }
-        runCatching { cs.startOrReloadService(config, buildOverrideOptions(config)) }
-            .onFailure {
-                Log.e(TAG, "serviceReload failed", it)
-                runCatching { cs.setError("android: reload: ${it.message}") }
+        runCatching {
+            val cs = commandServer.get() ?: run {
+                Log.w(TAG, "serviceReload: commandServer == null, treating as fresh start")
+                notification.stop()
+                setStatus(VpnStatus.Starting)
+                serviceScope.launch { startSingbox() }
+                return@runCatching
             }
+            val config = ConfigManager.load()
+            if (config.isBlank() || config == "{}") {
+                Log.e(TAG, "serviceReload: empty config")
+                return@runCatching
+            }
+            runCatching { cs.startOrReloadService(config, buildOverrideOptions(config)) }
+                .onFailure {
+                    Log.e(TAG, "serviceReload failed", it)
+                    runCatching { cs.setError("android: reload: ${it.message}") }
+                }
+        }.onFailure { Log.e(TAG, "serviceReload: unexpected error (swallowed)", it) }
     }
 
     override fun serviceStop() { doStop() }
@@ -563,13 +572,23 @@ class BoxService(
     /// §049 F17 — реальный state HTTP-proxy для Clash dashboard.
     /// Match reference: cast service → VPNService и читаем флаги (у нас
     /// `BoxVpnService` хранит их как `@JvmField`-properties).
-    override fun getSystemProxyStatus(): SystemProxyStatus = SystemProxyStatus().apply {
-        if (service is BoxVpnService) {
-            available = service.systemProxyAvailable
-            enabled = service.systemProxyEnabled
+    ///
+    /// §141 P1.1a — JNI no-throw: геттер зовётся Go-ядром через
+    /// `CommandServerHandler`. На любой сбой возвращаем пустой `SystemProxyStatus()`
+    /// (available=false/enabled=false), а не даём исключению пролететь в JNI.
+    override fun getSystemProxyStatus(): SystemProxyStatus = runCatching {
+        SystemProxyStatus().apply {
+            if (service is BoxVpnService) {
+                available = service.systemProxyAvailable
+                enabled = service.systemProxyEnabled
+            }
         }
+    }.getOrElse {
+        Log.e(TAG, "getSystemProxyStatus failed (fail-safe empty)", it)
+        SystemProxyStatus()
     }
 
+    // §141 P1.1a — делегирует в serviceReload(), который теперь сам no-throw.
     override fun setSystemProxyEnabled(isEnabled: Boolean) { serviceReload() }
 
     /// §043: sing-box log lines проходят сюда независимо от `log.level`
@@ -590,9 +609,13 @@ class BoxService(
     /// - **Yield** каждые `DRAIN_BATCH_MAX = 200` строк: re-post Runnable если
     ///   queue ещё не пуст. Длинный burst не блочит main looper > одного frame.
     override fun writeDebugMessage(message: String) {
+        // §141 P3.2c — null-sink guard ПЕРВОЙ строкой: пока Flutter не подписан
+        // на coreLog (или отписался), нет смысла гонять два regex (ansi-strip +
+        // trace-фильтр) на каждой строке sing-box лога. Раньше оба regex
+        // выполнялись до этой проверки и работа выбрасывалась впустую.
+        if (BoxVpnService.coreLogSink == null) return
         val plain = ansiEscapeRe.replace(message, "")
         if (traceDebugRe.containsMatchIn(plain)) return
-        if (BoxVpnService.coreLogSink == null) return
         // Back-pressure: drop newest, не блокируем sing-box producer thread.
         if (coreLogQueue.size >= LOG_QUEUE_MAX) {
             coreLogDrops.incrementAndGet()

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../../models/custom_rule.dart';
 import '../../app_log.dart';
 import '../../error_humanize.dart';
+import '../../platform_channels.dart';
 import '../../rule_set_downloader.dart';
 import '../../settings_storage.dart';
 import '../../subscription/auto_updater.dart';
@@ -387,7 +388,7 @@ Future<DebugResponse> _clearSrs(DebugRequest req, DebugContext ctx) async {
 /// `com.leadaxe.lxbox/methods` (см. `VpnPlugin.kt`) методом `showToast`.
 /// Сообщение обрезается до 200 символов (Android Toast всё равно больше
 /// не показывает).
-const _methodChannel = MethodChannel('com.leadaxe.lxbox/methods');
+const _methodChannel = MethodChannel(PlatformChannels.methods);
 
 Future<DebugResponse> _toast(DebugRequest req, DebugContext ctx) async {
   final msg = req.requiredQuery('msg');

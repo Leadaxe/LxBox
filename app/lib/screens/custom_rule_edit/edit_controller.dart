@@ -527,13 +527,5 @@ class CustomRuleEditScope extends InheritedNotifier<CustomRuleEditController> {
     assert(scope != null, 'CustomRuleEditScope.of: no scope in context');
     return scope!.notifier!;
   }
-
-  /// Non-listening lookup — используй когда нужен только trigger
-  /// action (mutator) без подписки на изменения.
-  static CustomRuleEditController read(BuildContext context) {
-    final scope = context
-        .getInheritedWidgetOfExactType<CustomRuleEditScope>();
-    assert(scope != null, 'CustomRuleEditScope.read: no scope in context');
-    return scope!.notifier!;
-  }
+  // §141 P2.3i — `read()` (non-listening lookup) удалён: 0 call-sites.
 }

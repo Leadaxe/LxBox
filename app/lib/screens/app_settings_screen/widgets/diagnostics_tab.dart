@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/settings_storage.dart';
+
 /// Diagnostics tab для App Settings.
 ///
 /// Stateless — state-снимок и callback'и приходят от
@@ -211,7 +213,8 @@ class DiagnosticsTab extends StatelessWidget {
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: 'Port',
-                    helperText: 'Range 1024..49151',
+                    helperText:
+                        'Range ${SettingsStorage.debugPortMin}..${SettingsStorage.debugPortMax}',
                     errorText: debugPortError.isEmpty
                         ? null
                         : debugPortError,

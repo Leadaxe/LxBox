@@ -17,9 +17,40 @@ Future<File> _bakFile() async {
   return File('${dir.path}/${SettingsStorage._fileName}${SettingsStorage._bakSuffix}');
 }
 
+/// §141 P1.5 — уникальный tmp на каждый вызов `_save()`. Имя:
+/// `lxbox_settings.json.<seq>.tmp`. Префикс совпадает с `_orphanTmpPrefix`,
+/// чтобы `_sweepOrphanTmp` мог подобрать осиротевшие после kill.
 Future<File> _tmpFile() async {
   final dir = await getApplicationDocumentsDirectory();
-  return File('${dir.path}/${SettingsStorage._fileName}${SettingsStorage._tmpSuffix}');
+  final seq = SettingsStorage._tmpSeq++;
+  return File(
+      '${dir.path}/${SettingsStorage._fileName}.$seq${SettingsStorage._tmpSuffix}');
+}
+
+/// Префикс осиротевших tmp-файлов настроек (для glob-чистки в `_load`).
+const _orphanTmpPrefix = '${SettingsStorage._fileName}.';
+
+/// §141 P1.5 — удалить осиротевшие `lxbox_settings.json.<seq>.tmp` (kill между
+/// write и rename). Best-effort: фейл listing/delete не критичен. НЕ трогает
+/// main (`lxbox_settings.json`) и `.bak` (`...json.bak` не кончается на `.tmp`).
+Future<void> _sweepOrphanTmp() async {
+  try {
+    final dir = await getApplicationDocumentsDirectory();
+    await for (final entity in dir.list(followLinks: false)) {
+      if (entity is! File) continue;
+      final name = entity.uri.pathSegments.last;
+      if (name.startsWith(_orphanTmpPrefix) &&
+          name.endsWith(SettingsStorage._tmpSuffix)) {
+        try {
+          await entity.delete();
+        } catch (_) {
+          // ignore — не критично
+        }
+      }
+    }
+  } catch (_) {
+    // listing недоступен (path provider в тестах и т.п.) — пропускаем
+  }
 }
 
 /// §072 — попытаться прочитать файл как JSON Map. Возвращает `null` в
@@ -57,19 +88,14 @@ Future<Map<String, dynamic>> _load() async {
   try {
     final main = await _file();
     final bak = await _bakFile();
-    final tmp = await _tmpFile();
 
-    // Best-effort: убираем `.tmp` от прошлого оборванного `_save()`.
-    // Rename консумирует `.tmp` при success — наличие файла значит save
-    // был убит. Содержимое не консистентно (partial write), нельзя
-    // использовать для recovery.
-    if (await tmp.exists()) {
-      try {
-        await tmp.delete();
-      } catch (_) {
-        // ignore — не критично
-      }
-    }
+    // Best-effort: убираем осиротевшие `.tmp` от прошлых оборванных `_save()`.
+    // Rename консумирует `.tmp` при success — оставшийся файл значит save был
+    // убит. Содержимое не консистентно (partial write), нельзя использовать
+    // для recovery. §141 P1.5 — tmp теперь уникальны per-save
+    // (`lxbox_settings.json.<seq>.tmp`), поэтому чистим по маске, а не один
+    // фиксированный файл.
+    await _sweepOrphanTmp();
 
     // 1. Main отсутствует → fresh install.
     if (!await main.exists()) {

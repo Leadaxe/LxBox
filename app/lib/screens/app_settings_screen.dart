@@ -249,8 +249,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
 
   Future<void> _applyDebugPort(String raw) async {
     final port = int.tryParse(raw);
-    if (port == null || port < 1024 || port > 49151) {
-      setState(() => _debugPortError = 'port must be 1024..49151');
+    if (port == null ||
+        port < SettingsStorage.debugPortMin ||
+        port > SettingsStorage.debugPortMax) {
+      setState(() => _debugPortError =
+          'port must be ${SettingsStorage.debugPortMin}..${SettingsStorage.debugPortMax}');
       return;
     }
     if (port == _debugPort) {

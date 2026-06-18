@@ -18,9 +18,21 @@ Future<List<ServerList>> _getServerLists() async {
   final data = await _load();
   final v2 = data['server_lists'] as List<dynamic>?;
   if (v2 != null) {
+    // §141 P1.8c — per-entry try/catch: одна битая запись (unknown type,
+    // missing required field → FormatException в *.fromJson) раньше роняла
+    // ВЕСЬ список → app не загружал ни одной подписки. Теперь skip битой
+    // записи с логом, остальные подгружаются.
     return v2
         .whereType<Map<String, dynamic>>()
-        .map(ServerList.fromJson)
+        .map((m) {
+          try {
+            return ServerList.fromJson(m);
+          } catch (e) {
+            AppLog.I.warning('Skipping corrupt server_list entry: $e');
+            return null;
+          }
+        })
+        .whereType<ServerList>()
         .toList();
   }
   final v1 = data['proxy_sources'] as List<dynamic>?;

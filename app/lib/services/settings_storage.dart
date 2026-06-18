@@ -40,6 +40,13 @@ class SettingsStorage {
   static const _fileName = 'lxbox_settings.json';
   static const _bakSuffix = '.bak';
   static const _tmpSuffix = '.tmp';
+  // §141 P1.5 — монотонный суффикс tmp-файлов. Два перекрывающихся `_save()`
+  // раньше писали в ОДИН фиксированный `.tmp` и оба делали `tmp.rename(main)`;
+  // второй rename бросал `PathNotFoundException` (первый уже консумировал tmp)
+  // как unhandled async. Уникальный per-write tmp (эталон — HttpCache._tmpSeq)
+  // развязывает их: каждый save renamуется из своего файла. Last-writer-wins
+  // на main безвреден — оба пишут консистентный снимок общего `_cache`.
+  static int _tmpSeq = 0;
   static Map<String, dynamic>? _cache;
   static Future<void>? _pendingSave;
 
@@ -428,6 +435,12 @@ class SettingsStorage {
 
   static const int debugPortDefault = 9269;
 
+  /// §141 P2.4d — допустимый диапазон Debug API-порта. Раньше `1024`/`49151`
+  /// были захардкожены в 3 местах (этот валидатор, app_settings_screen,
+  /// diagnostics_tab helperText). Единый источник.
+  static const int debugPortMin = 1024;
+  static const int debugPortMax = 49151;
+
   static Future<bool> getDebugEnabled() async =>
       (await getVar('debug_enabled', 'false')) == 'true';
 
@@ -442,7 +455,7 @@ class SettingsStorage {
   static Future<int> getDebugPort() async {
     final raw = await getVar('debug_port', '$debugPortDefault');
     final parsed = int.tryParse(raw);
-    if (parsed == null || parsed < 1024 || parsed > 49151) {
+    if (parsed == null || parsed < debugPortMin || parsed > debugPortMax) {
       return debugPortDefault;
     }
     return parsed;

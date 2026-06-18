@@ -7,6 +7,7 @@ import '../models/app_info.dart';
 import '../models/background_mode.dart';
 import '../models/tunnel_status.dart';
 import '../services/app_log.dart';
+import '../services/platform_channels.dart';
 
 // Method-name + timeout константы вынесены `part`'ами (та же библиотека, тот же
 // приватный доступ к `_Methods` / `_Timeouts` из [BoxVpnClient]).
@@ -52,8 +53,9 @@ class BoxVpnClient {
   }) =>
       BoxVpnClient._(methods: methods, events: events);
 
-  static const _kMethodsChannel = 'com.leadaxe.lxbox/methods';
-  static const _kStatusChannel = 'com.leadaxe.lxbox/status_events';
+  // §141 P2.4e — алиасы на централизованные имена (`PlatformChannels`).
+  static const _kMethodsChannel = PlatformChannels.methods;
+  static const _kStatusChannel = PlatformChannels.statusEvents;
 
   final MethodChannel _methods;
   final EventChannel _events;
@@ -520,6 +522,14 @@ class BoxVpnClient {
       _events.receiveBroadcastStream().map((event) {
     if (event is Map) return TunnelStatusEvent.fromNative(event);
     return TunnelStatusEvent.unknownEmpty;
+  }).handleError((Object e) {
+    // §141 P1.9d — EventChannel может прислать error (PlatformException и т.п.).
+    // Без обработчика он распространился бы на ВСЕХ listener'ов как unhandled
+    // async error; `HomeController._statusSub` подписан без onError → зомби.
+    // Гасим (broadcast-подписка остаётся живой для следующих data-событий),
+    // логируем для диагностики. Не маппим в data-событие: ложный «disconnected»
+    // от транзиентной ошибки канала хуже, чем пропуск одного тика.
+    AppLog.I.error('[vpn] status stream error: $e');
   }).asBroadcastStream();
 
   Stream<TunnelStatusEvent> get onStatusChanged => _statusStream;

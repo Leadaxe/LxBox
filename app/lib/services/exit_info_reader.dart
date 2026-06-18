@@ -1,5 +1,7 @@
 import 'package:flutter/services.dart';
 
+import 'platform_channels.dart';
+
 /// §038 — `ActivityManager.getHistoricalProcessExitReasons`-обёртка.
 ///
 /// Lazy, зовётся только из `DumpBuilder.build()` — `traceInputStream`
@@ -7,7 +9,7 @@ import 'package:flutter/services.dart';
 ///
 /// API 30+ only; на младших и на любую ошибку — пустой список.
 class ExitInfoReader {
-  static const _channel = MethodChannel('com.leadaxe.lxbox/methods');
+  static const _channel = MethodChannel(PlatformChannels.methods);
 
   /// Список последних 5 exit'ов нашего пакета с метаданными системы.
   /// Поля каждой записи (как в `android.app.ApplicationExitInfo`):

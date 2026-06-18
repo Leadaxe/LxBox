@@ -420,7 +420,13 @@ List<Map<String, dynamic>> _buildPresetGroups({
     final options = deepCopyJson(preset.options);
     _substituteVars(options, vars);
     final def = options['default'];
-    if (def is String && !tags.contains(def)) options.remove('default');
+    // §141 P1.8b — раньше гейт был `def is String && !tags.contains(def)`:
+    // не-строковый `default` (число/bool из кривого template) проскакивал бы
+    // мимо и оба гейта (здесь + validator) его не ловили. Удаляем любой
+    // присутствующий default, который не является валидным tag'ом.
+    if (def != null && (def is! String || !tags.contains(def))) {
+      options.remove('default');
+    }
 
     result.add({
       'tag': preset.tag,

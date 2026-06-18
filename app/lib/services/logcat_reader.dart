@@ -1,5 +1,7 @@
 import 'package:flutter/services.dart';
 
+import 'platform_channels.dart';
+
 /// §038 — обёртка над `logcat -d -t N *:<level>` через native
 /// `ProcessBuilder`. Lazy, только из `DumpBuilder.build()`.
 ///
@@ -11,7 +13,7 @@ import 'package:flutter/services.dart';
 /// AEI — ActivityManager. Полезен когда AEI не приложил trace (Samsung
 /// One UI quirk на REASON_CRASH) и на API <30 где AEI отсутствует.
 class LogcatReader {
-  static const _channel = MethodChannel('com.leadaxe.lxbox/methods');
+  static const _channel = MethodChannel(PlatformChannels.methods);
 
   /// Последние [count] строк logcat (clamp 50..5000) с уровнем
   /// [level] и выше: `V`/`D`/`I`/`W`/`E`/`F`. Default — `E` (Error+Fatal).

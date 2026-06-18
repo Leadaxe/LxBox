@@ -40,11 +40,29 @@ ValidationResult validateConfig(Map<String, dynamic> config) {
   }
 
   // §084 H1 — detour references (outbounds + endpoints) → existing tag.
+  // §141 P1.8a — заодно собираем рёбра detour-графа (tag → detour) для
+  // последующей проверки на циклы. В граф кладём только рёбра на СУЩЕСТВУЮЩИЙ
+  // tag — dangling уже зарепорчен отдельно, и цикл может состоять лишь из
+  // живых узлов.
+  final detourEdge = <String, String>{};
   for (final o in [...outbounds, ...endpoints]) {
     final detour = o['detour'];
-    if (detour is String && detour.isNotEmpty && !allTags.contains(detour)) {
-      issues.add(DanglingDetourRef(o['tag'] as String? ?? '', detour));
+    if (detour is! String || detour.isEmpty) continue;
+    final owner = o['tag'] as String? ?? '';
+    if (!allTags.contains(detour)) {
+      issues.add(DanglingDetourRef(owner, detour));
+    } else if (owner.isNotEmpty) {
+      detourEdge[owner] = detour;
     }
+  }
+
+  // §141 P1.8a — цикл в detour-графе (3-цветный DFS). Каждый узел имеет ≤1
+  // исходящего detour-ребра, так что граф — набор цепочек/деревьев; цикл =
+  // ребро обратно в текущий путь обхода (gray). Первый найденный цикл —
+  // достаточный сигнал fatal (один битый detour ломает старт ядра).
+  final cycle = _findDetourCycle(detourEdge);
+  if (cycle != null) {
+    issues.add(DetourCycle(cycle));
   }
 
   // §121 — DNS resolver refs → existing dns.servers tag.
@@ -80,11 +98,46 @@ ValidationResult validateConfig(Map<String, dynamic> config) {
     }
     if (type == 'selector') {
       final def = o['default'];
-      if (def is String && !opts.contains(def)) {
-        issues.add(InvalidDefault(tag, def));
+      // §141 P1.8b — ловим и не-строковый `default` (sing-box ждёт строку-тег;
+      // число/bool ⇒ фейл-старт ядра). Симметрично гейту в build_config.
+      if (def != null && (def is! String || !opts.contains(def))) {
+        issues.add(InvalidDefault(tag, def.toString()));
       }
     }
   }
 
   return ValidationResult(issues);
+}
+
+/// §141 P1.8a — поиск первого цикла в detour-графе. `edges`: tag → его detour
+/// (ровно одно исходящее ребро на узел). Возвращает список тегов цикла в
+/// порядке обхода (последний замыкает на первый) либо `null`, если циклов нет.
+///
+/// 3-цветный обход: `done` — узлы, из которых цикл точно недостижим (уже
+/// раскрученная цепочка); `path` — узлы текущего следования по ребрам. Встретив
+/// узел из `path`, отрезаем хвост от него — это и есть цикл (ловит и self-ref
+/// `A→A`, где `start == detour`).
+List<String>? _findDetourCycle(Map<String, String> edges) {
+  final done = <String>{};
+  for (final start in edges.keys) {
+    if (done.contains(start)) continue;
+    final path = <String>[];
+    final seenInPath = <String>{};
+    var node = start;
+    while (true) {
+      if (done.contains(node)) break; // уперлись в безопасную раскрутку
+      if (seenInPath.contains(node)) {
+        // Нашли цикл — вернуть его, отрезав возможный «хвост-подход».
+        final from = path.indexOf(node);
+        return path.sublist(from);
+      }
+      seenInPath.add(node);
+      path.add(node);
+      final next = edges[node];
+      if (next == null) break; // конец цепочки — циклов на этом пути нет
+      node = next;
+    }
+    done.addAll(path); // вся пройденная цепочка цикла не содержит
+  }
+  return null;
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/clash_api_client.dart';
+import '../services/format_utils.dart';
 
 /// Embeddable view: toolbar + список соединений. Без Scaffold, без AppBar —
 /// сидит во вкладке StatsScreen.
@@ -278,7 +279,9 @@ class _ConnectionsViewState extends State<ConnectionsView>
                 ),
               ),
               Text(
-                '↑${_formatBytes(upload)} ↓${_formatBytes(download)}',
+                // §141 P2.4a — общий канон `formatBytes` (B/KB/MB/GB) вместо
+                // локального `_formatBytes` (B/K/M, без GB-разряда).
+                '↑${formatBytes(upload)} ↓${formatBytes(download)}',
                 style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
               ),
               const SizedBox(width: 4),
@@ -328,12 +331,6 @@ class _ConnectionsViewState extends State<ConnectionsView>
       ),
       ),
     );
-  }
-
-  static String _formatBytes(int bytes) {
-    if (bytes < 1024) return '${bytes}B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}K';
-    return '${(bytes / 1024 / 1024).toStringAsFixed(1)}M';
   }
 
   static String _formatDuration(Duration d) {

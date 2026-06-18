@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../models/debug_entry.dart';
 import 'app_log.dart';
+import 'platform_channels.dart';
 
 /// §043: Pump для sing-box logs из Kotlin'а в наш [AppLog].
 ///
@@ -28,7 +29,7 @@ class ClashLogPump {
   ClashLogPump._();
   static final ClashLogPump I = ClashLogPump._();
 
-  static const _channel = EventChannel('lxbox/coreLog');
+  static const _channel = EventChannel(PlatformChannels.coreLog);
   StreamSubscription? _sub;
 
   /// Подписывается на EventChannel. Идемпотентно: повторный вызов no-op.

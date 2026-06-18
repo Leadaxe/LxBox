@@ -151,6 +151,12 @@ mixin _PingMixin on ChangeNotifier {
     final enabled =
         await SettingsStorage.getVar('auto_ping_on_start', 'true');
     if (enabled != 'true') return;
+    // §141 P1.2c — read-after-await: туннель мог упасть, пока ждали getVar
+    // (disconnect-ветка `_handleStatusEvent` уже отменила старый таймер и
+    // обнулила _autoPingTimer). Без этого гейта мы пере-создаём таймер на
+    // мёртвую сессию — callback его потом отбросит по tunnelUp-проверке, но
+    // лишний висящий Timer чище не создавать вовсе.
+    if (!_state.tunnelUp) return;
     _autoPingTimer = Timer(_autoPingDelay, () {
       if (!_state.tunnelUp || _state.nodes.isEmpty) return;
       unawaited(runMassUrltest());
