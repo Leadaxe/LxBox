@@ -21,6 +21,7 @@ import '../handlers/rules.dart';
 import '../handlers/settings.dart';
 import '../handlers/state.dart';
 import '../handlers/subs.dart';
+import '../handlers/warp.dart';
 import '../handlers/wifi_history.dart';
 import 'config.dart';
 import 'middleware/access_log.dart';
@@ -175,6 +176,7 @@ class DebugServer {
       ..mount('/backup', backupHandler)
       ..mount('/rules', rulesHandler)
       ..mount('/subs', subsHandler)
+      ..mount('/warp', warpHandler)
       ..mount('/settings', settingsHandler)
       ..mount('/wifi_history', wifiHistoryHandler)
       ..mount('/profiler', profilerHandler);
