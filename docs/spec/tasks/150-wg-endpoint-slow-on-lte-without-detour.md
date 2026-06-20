@@ -2,7 +2,7 @@
 
 | Field | Value |
 |------|----------|
-| Status | **Investigating** — корень сужен по коду, не подтверждён на устройстве; фикс не делается до замера |
+| Status | **Investigating** — корень доказан по коду (split-brain UDP_GRO/runtime-GOOS на Android); остаётся пакетное подтверждение + девайс-замер; фикс не делается до репро |
 | Started | 2026-06-20 |
 | Trigger | Field report (CoolMask / Иван, 4PDA, 2026-06-15). WireGuard-**endpoint** на мобильном интернете (LTE, МТС) даёт download **0,44 Mbps**; тот же конфиг с `"detour": "direct"` на endpoint'е — **150 Mbps**. На Wi-Fi обе версии работают. Воспроизводится на нескольких версиях подряд; в форке `shtorm-7/sing-box-extended` бага нет. |
 | Repro | Speedtest, один телефон (Samsung SM-A736B, Android 16 / OneUI 8), одна сота МТС, разница только в `detour`: **без** — 0,44↓ / 19,4↑ / ping 140; **с** `detour: direct` — 150↓ / 53,3↑ / ping 144. Конфиги — в приложении к таске (ниже). |
@@ -13,17 +13,33 @@
 
 ## TL;DR
 
-> No-detour WG-endpoint на Android поднимает UDP-сокет к peer через **`StdNetBind`**
-> (высокопроизводительный путь wireguard-go с **GSO/GRO** offload). С `detour: direct`
-> тот же UDP идёт через **`ClientBind`**, у которого GSO/GRO **нет**. Привязка к
-> активному интерфейсу (то, на что грешили раньше) у обоих путей на Android
-> **идентична** — значит дело не в выборе интерфейса. Текущий главный подозреваемый —
-> **UDP-offload (GSO/GRO) в `StdNetBind`**, который на части LTE-сетей/железа бьёт
-> приёмный поток (асимметрия: download убит, upload жив). **Не подтверждено на
-> устройстве. Фикс не делается до измерения.**
+> No-detour WG-endpoint на Android поднимает UDP-сокет к peer через **`StdNetBind`**.
+> На сокете **включается `UDP_GRO`** (`controlfns_linux.go:64` — файл компилируется на
+> Android, т.к. имя `*_linux.go` без `!android`), и `rxOffload` читается **true**
+> (`features_linux.go:21`). НО приёмный разбор GRO-блоба (`splitCoalescedMessages`)
+> гейтится на **`runtime.GOOS == "linux"`** (`bind_std.go:272`), а на Android
+> `GOOS == "android"` → берётся **else**-ветка с голым `ReadMsgUDP` (`bind_std.go:289`),
+> которая отдаёт **склеенный GRO-«суперпакет» как один пакет**. `device/receive.go`
+> парсит только первый WG-заголовок → хвост ломает AEAD → **download рушится**.
+>
+> **Корень = split-brain между build-constraint и runtime-GOOS**: `UDP_GRO` включён
+> (build-tag-семейство linux включает android), но split-путь не исполняется
+> (`runtime.GOOS=="android" != "linux"`), а настоящий cmsg-парсер выключен
+> (`control_linux.go` = `//go:build linux && !android`). Это **детерминированный
+> структурный баг**, не «LTE портит сегменты» — LTE лишь чаще триггерит коалесинг
+> бёрстами (выше hit-rate). `detour: direct` лечит, уводя сокет на `ClientBind`, где
+> offload-кода нет вообще.
+>
+> **Не подтверждено пакетным замером на устройстве. Фикс не делается до репро.**
 
-Эта таска — журнал расследования, чтобы не пройти по уже отвергнутым следам в третий
-раз. Две гипотезы ниже **опровергнуты по коду** — они зафиксированы намеренно.
+> ⚠️ **Правка от 2026-06-20 (вторая итерация ревью).** Прежняя версия этой спеки винила
+> «отсутствие RX self-disable в GRO» (`splitCoalescedMessages` без fallback). Это
+> **неверно**: на Android та ветка — мёртвый код (`GOOS != "linux"`), и предложенный
+> «RX self-disable» был бы **no-op**. Реальный механизм — split-brain выше. Подробности
+> и две дополнительно вскрытые дыры — в разделах ниже.
+
+Эта таска — журнал расследования, чтобы не пройти по уже отвергнутым следам.
+Гипотезы в разделе «Опровергнутые» отвергнуты по коду намеренно.
 
 ---
 
@@ -56,7 +72,7 @@ if isWgListener {
 
 ---
 
-## Опровергнутые гипотезы (по коду — не повторять)
+## Гипотезы — статус (отвергнутые помечены, не повторять)
 
 ### ❌ Гипотеза 1 — «MTU / фрагментация»
 
@@ -83,45 +99,110 @@ download убит (150→0,44), upload жив (53→19), ping не меняет�
   не даёт дополнительной интерфейс-привязки сверх платформенного вызова. **Разница
   150 vs 0,44 — не в выборе интерфейса.**
 
-### ❌ Под-гипотеза — «сокет застрял на старом интерфейсе после хэндовера»
+### ⚠️ Под-гипотеза «застрявший сокет после хэндовера» — НЕ опровергнута (была закрыта неправомерно)
 
-Опровергнута: `onPauseUpdated` (`transport/wireguard/endpoint.go:316`) на
-`EventNetworkPause/Wake` зовёт `device.Down()/Up()` → `BindUpdate()`
-(`wireguard-go device.go:478`) **закрывает и переоткрывает** UDP-сокет и сбрасывает
-кэш source-адресов (`markEndpointSrcForClearing`). Re-bind при смене сети **есть** и
-общий для обоих путей.
+Прежде помечалась refuted: «`onPauseUpdated` → `device.Up()` → `BindUpdate()`
+(`wireguard-go device.go:478`) переоткрывает сокет, значит re-bind есть».
+
+**Это верно только для смены *интерфейса*, не для смены IP внутри интерфейса.**
+`BindUpdate` действительно пересоздаёт сокет — но вызывается только по событию
+`NetworkWake`, а оно эмитится из `notifyInterfaceUpdate`, который **дедуплицирует по
+`Name + Index`** (`experimental/libbox/monitor.go:95-98`):
+
+```go
+if oldInterface != nil &&
+   oldInterface.Name == m.defaultInterface.Name &&
+   oldInterface.Index == m.defaultInterface.Index {
+    return   // ← событие подавлено; Addresses НЕ сравниваются
+}
+```
+
+Тихий хэндовер соты (тот же интерфейс `rmnet`, **новый IP**) → дедуп подавляет событие
+→ нет `NetworkWake` → нет `BindUpdate` → re-bind **не происходит**, сокет остаётся на
+устаревшем source-IP. Это **живой независимый кандидат**, не опровергнут. Менее
+вероятен как *первичный* корень (хуже объясняет чистую асимметрию download/upload, чем
+GRO split-brain), но проверять — если GRO-эксперимент не починит.
 
 ---
 
-## Текущий главный подозреваемый — UDP-offload (GSO/GRO) в StdNetBind
+## Главный корень — split-brain build-constraint vs runtime-GOOS (UDP_GRO на Android)
 
-Установлено по коду (`conn/bind_std.go:209,220`):
+Ключ: **на Android `runtime.GOOS == "android"`, а НЕ `"linux"`** — при том, что в
+системе build-тегов Android входит в семейство linux. Отсюда расхождение.
 
+### Сторона build-тега: UDP_GRO включается на Android
+
+Файлы с **именем** `*_linux.go` без явного `&& !android` компилируются на Android:
+
+- `controlfns_linux.go:64` (name-based constraint) — на каждом открываемом сокете:
+  ```go
+  _ = unix.SetsockoptInt(int(fd), unix.IPPROTO_UDP, socketOptionUDPGRO, 1)  // UDP_GRO=1
+  ```
+- `features_linux.go:21` (name-based) — `supportsUDPOffload` читает обратно:
+  ```go
+  opt, _ := unix.GetsockoptInt(fd, IPPROTO_UDP, socketOptionUDPGRO)
+  rxOffload = opt == 1   // ← true на Android
+  ```
+- `bind_std.go:220` → `s.ipv4RxOffload = true`, передаётся в `makeReceiveIPv4`.
+
+### Сторона runtime-GOOS: разбор GRO-блоба НЕ исполняется на Android
+
+`receiveIP` (`bind_std.go:272`):
 ```go
-s.ipv4TxOffload, s.ipv4RxOffload = supportsUDPOffload(v4conn)   // runtime-детект на сокете
-...
-fns = append(fns, s.makeReceiveIPv4(v4pc, v4conn, s.ipv4RxOffload))
+if runtime.GOOS == "linux" {        // ← на Android FALSE
+    if rxOffload {
+        br.ReadBatch(...)
+        splitCoalescedMessages(...) // ← разбор GRO-«суперпакета» на сегменты
+    } ...
+} else {                            // ← Android идёт СЮДА
+    msg.N, _, _, msg.Addr, _ = conn.ReadMsgUDP(...)  // голый recv, OOB не разбирается
+    numMsgs = 1
+}
 ```
 
-- `StdNetBind` при `Open()` **рантайм-детектит** поддержку UDP GSO (TX) / GRO (RX) на
-  самом сокете и включает offload. Детект работает и на Android (Linux-ядро).
-- `ClientBind` (detour-путь, `transport/wireguard/client_bind.go`) — простой
-  `ListenPacket` / `wireConn`, **GSO/GRO-кода нет вообще**: пакет-в-пакет.
+- `splitCoalescedMessages` (`bind_std.go:548`) — **мёртвый код на Android** (достижим
+  только из `:279`, под `GOOS=="linux"`).
+- Настоящий cmsg-парсер `getGSOSize` живёт в `control_linux.go`
+  (`//go:build linux && !android`) → на Android берётся **stub** `control_default.go`
+  (`!(linux && !android)`). Размер GRO-сегмента негде взять, даже если бы хотели.
 
-Почему это лучший кандидат:
+### Следствие — детерминированный обвал download
 
-1. **Объясняет асимметрию.** GRO/GSO собирает/разбирает крупные UDP-«суперпакеты» на
-   приёме. Если LTE-сеть или железо дропают/портят offload-сегменты на приём — рушится
-   именно **download**, а upload (другой offload-путь и часто меньше трафика) выживает.
-   Ровно картина Ивана.
-2. **Объясняет «MTU не помог».** Offload — про сегментацию на уровне сокета (UDP_GRO /
-   UDP_SEGMENT), а не про MTU WG-туннеля. Понижение MTU туннеля offload не отключает.
-3. **Объясняет, почему detour лечит.** `ClientBind` без offload = пакет-в-пакет =
-   проблемный путь обходится.
-4. **Объясняет форк `shtorm-7`** — вероятно собран с другим conn/offload-поведением
-   (требует проверки, не факт).
+`UDP_GRO=1` заставляет ядро коалесить несколько WG-транспорт-пакетов в один recv
+(до ~64КБ). Android-ветка `ReadMsgUDP` возвращает этот блоб как **один** пакет
+(`numMsgs=1`, `msg.N` = весь блоб). `device/receive.go` парсит только **первый**
+WG-заголовок; хвост блоба идёт как мусор → AEAD-decrypt падает → пакеты дропаются →
+**download рушится**. Это не «LTE портит сегменты»: баг структурный и постоянный, LTE
+лишь повышает частоту коалесинга бёрстами → выше hit-rate, оттого ярче на сотовой.
 
-Это **гипотеза**, не доказанный корень. Код сказал максимум; дальше — измерение.
+### Почему upload выживает (исправлено — прежнее объяснение было шатким)
+
+Upload защищён **двумя независимыми причинами**, и ни одна — не «GSO самоотключается»:
+
+1. **TX-коалесинг гейтится тем же `GOOS=="linux"`** (`bind_std.go:463`): на Android
+   `send` идёт в else-ветку (`:470` `WriteMsgUDP` по одному) — коалесинга на отправке
+   **нет вообще**.
+2. **`BatchSize == 1`** для tun-режима Ивана: без `system`-флага → `newStackDevice`
+   (`transport/wireguard/device.go:40`) → `stackDevice.BatchSize()==1`
+   (`device_stack.go:268`) → `device/send.go:223` `batchSize=1` → буфер отправки на
+   один пакет, склеивать нечего.
+
+То есть проблема **односторонняя по построению**: коалесинг бьёт только приём.
+
+### Почему `detour: direct` лечит
+
+С detour сокет идёт через `ClientBind` (`transport/wireguard/client_bind.go`) — простой
+`DialContext`/`ListenPacket`, **offload-кода нет вообще** (ни `UDP_GRO`, ни split).
+Пакет-в-пакет → проблемный путь обходится целиком.
+
+### `shtorm-7` без бага
+
+Вероятно собран с conn-веткой, где либо `UDP_GRO` не ставится на android, либо split
+гейтится не по `GOOS`. Требует проверки исходника форка (не блокер для фикса).
+
+**Статус корня:** доказан по коду как структурный механизм; остаётся подтвердить
+**пакетным замером**, что `recvmsg` на этом сокете реально отдаёт >MTU датаграммы
+(снимает остаточное «а коалесит ли GRO вообще»).
 
 ---
 
@@ -138,16 +219,25 @@ DF-бит). Если у endpoint-сокета DF выставлен иначе, 
 
 ## План проверки (эксперимент, не релиз)
 
-Решающий, дешёвый эксперимент — различает кандидат №1 за один замер:
+**Дискриминирующий эксперимент** — изолирует именно RX/GRO (TX не трогаем):
 
-1. Собрать ядро с **принудительным отключением UDP-offload** в `StdNetBind`
-   (форсить `ipv4TxOffload/RxOffload = false` и v6, либо короткий gate по
-   `runtime.GOOS == "android"`).
+1. Запатчить `controlfns_linux.go` — **пропускать** `setsockopt(UDP_GRO)` при
+   `runtime.GOOS == "android"` (TX/GSO не трогать). Это самый чистый разрез: если корень
+   — GRO, отключение ровно его покажет, не меняя ничего на отправке.
+   - Эквивалент: гейтить `rxOffload` за `!android` в `features_linux.go` / при передаче
+     в `makeReceiveIPv4/6`.
 2. Дать Ивану тот же **no-detour** конфиг (приложение ниже).
 3. Замер Speedtest на той же LTE-соте:
-   - download починился без `detour` → **корень = GSO/GRO**, фикс = отключать offload
-     для WG-endpoint на Android (или гейтить);
-   - не починился → переходим к DF/UDPFragment-кандидату.
+   - **download починился при живом upload** → корень = GRO-на-android **подтверждён**,
+     и минимальный правильный фикс найден тем же шагом (гейт `UDP_GRO`+`rxOffload` за
+     `!android`);
+   - **не починился** → следующий подозреваемый — тихий хэндовер соты (см. под-гипотезу
+     выше), затем DF/UDPFragment.
+
+**Параллельно — пакетное подтверждение** (снимает остаточное сомнение «коалесит ли GRO
+вообще»): на том же сокете убедиться, что `recvmsg` отдаёт датаграммы **> MTU** (один
+recv > 1392 байт). Если да — коалесинг реально происходит; это прямое доказательство
+механизма, независимое от Speedtest.
 
 NB: эксперимент через прод-релиз **не выкатывать**. Память
 `feedback_releases_only_ci_built` — артефакт CI; для девайс-теста — отдельная сборка,
@@ -161,14 +251,26 @@ NB: эксперимент через прод-релиз **не выкатыв�
 того, как замер на устройстве Ивана подтвердит конкретный кандидат. Не объявлять
 публично «решением» до репро (ровно как с MTU-гипотезой, которую юзер опроверг).
 
+## Минимальный правильный фикс (когда корень подтверждён замером)
+
+Гейтить UDP-GRO/rxOffload за `!android`, чтобы build-tag и runtime-GOOS перестали
+расходиться. Точечно: пропускать `setsockopt(UDP_GRO)` (`controlfns_linux.go:64`) и/или
+форсить `rxOffload=false` (`features_linux.go`) при `runtime.GOOS=="android"`. **TX не
+трогать** — на Android он и так не коалесит (GOOS-гейт + BatchSize=1).
+
+> ❗ НЕ «добавить RX self-disable в split-путь» — на Android этот путь не исполняется,
+> фикс был бы no-op. Чинить надо включение GRO, не его (несуществующий) разбор.
+
 ## Acceptance (для будущего фикса, когда корень подтверждён)
 
+- [ ] Пакетно подтверждено: до фикса `recvmsg` отдаёт >MTU блобы, после — нет.
 - [ ] No-detour WG-endpoint на LTE даёт download, сопоставимый с `detour: direct`,
       на устройстве Ивана (или эквивалентном LTE-репро).
-- [ ] Фикс не ломает multi-peer / Wi-Fi / производительность на стабильной сети
-      (StdNetBind-offload вводился апстримом ради throughput — отключать аккуратно,
-      желательно гейтом, а не глобально).
+- [ ] Фикс не ломает multi-peer / Wi-Fi / производительность на стабильной сети.
 - [ ] Регресс-проверка plain WG **и** AmneziaWG endpoint'ов.
+- [ ] Перепроверить под-гипотезу хэндовера (`monitor.go:95-98` дедуп по Name+Index):
+      если останется остаточная деградация при тихой смене соты — отдельный фикс
+      (учитывать Addresses в дедупе или re-bind по смене source-IP).
 
 ## Приложение — конфиги репро (от Ивана, ключи — тестового юзера на его VPS)
 
@@ -183,11 +285,27 @@ wg mtu 1392, direct-outbound с `connect_timeout: 5s`.
 
 ## Источники (всё проверено по живому коду 2026-06-20)
 
-- `transport/wireguard/endpoint.go:200-215` — развилка StdNetBind vs ClientBind.
+**Развилка путей:**
+- `transport/wireguard/endpoint.go:200-215` — StdNetBind (no-detour) vs ClientBind (detour).
 - `common/dialer/wireguard.go` — `WireGuardListener`; реализует только `DefaultDialer`.
-- `common/dialer/default.go:97-119, 374` — Control-функция, `WireGuardControl()`.
-- `route/network.go:340, 368` — `ProtectFunc == AutoDetectInterfaceFunc` на Android.
-- `conn/bind_std.go:139, 209, 220` (wireguard-go) — externalControl + `supportsUDPOffload`.
-- `transport/wireguard/client_bind.go:89` — detour-путь, без offload.
-- `wireguard-go device.go:316/478` ← `transport/wireguard/endpoint.go:316`
-  `onPauseUpdated` → `BindUpdate` (re-bind при смене сети).
+- `common/Cast` (`sing@v0.8.10/common/upstream.go:13`) — рекурсивна по `Upstream()`;
+  `DetourDialer.Upstream()` (`common/dialer/detour.go:82`) → direct `*Outbound`, который
+  `WireGuardListener` НЕ реализует → каст проваливается → `ClientBind`.
+- single-peer Ивана → `isConnect=true` (`endpoint.go:208`) → `client_bind.go:79`
+  `DialContext` (НЕ `ListenPacket`).
+
+**Корень (split-brain GRO):**
+- `conn/controlfns_linux.go:64` (name-based `*_linux.go`) — `setsockopt(UDP_GRO,1)` на Android.
+- `conn/features_linux.go:21` (name-based) — `supportsUDPOffload` → `rxOffload=true` на Android.
+- `conn/bind_std.go:272` — RX-разбор под `runtime.GOOS=="linux"`; else `:289` `ReadMsgUDP`.
+- `conn/bind_std.go:548` `splitCoalescedMessages` — мёртвый код на Android.
+- `conn/control_linux.go` `//go:build linux && !android` → stub `control_default.go` на Android.
+- `conn/bind_std.go:463/470` — TX-коалесинг тоже под `GOOS=="linux"` (на Android off).
+- `transport/wireguard/device.go:40` → `stackDevice.BatchSize()==1` (`device_stack.go:268`)
+  → `device/send.go:223` (upload: нечего коалесить).
+- `transport/wireguard/client_bind.go` — detour-путь, offload-кода нет вовсе.
+
+**Под-гипотеза хэндовера (не опровергнута):**
+- `experimental/libbox/monitor.go:95-98` — дедуп по `Name+Index`, Addresses игнорируются.
+- `wireguard-go device.go:478` `BindUpdate` ← `endpoint.go:316` `onPauseUpdated` —
+  re-bind есть, но только по `NetworkWake` (смена интерфейса), не по смене source-IP.
