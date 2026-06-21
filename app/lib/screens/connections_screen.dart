@@ -6,6 +6,32 @@ import '../services/clash_api_client.dart';
 import '../services/format_utils.dart';
 import 'connections_screen/connection_detail_sheet.dart';
 
+/// §153 — «однобокое» (зависшее) соединение: TCP, прожившее ≥
+/// [oneWayMinAge], где трафик идёт строго в одну сторону (up>0/down=0 или
+/// up=0/down>0). Сигнатура зависшего потока (напр. WhatsApp ↑517 ↓0 —
+/// ClientHello ушёл, ответа нет). Порог по возрасту отсекает свежие conns
+/// в процессе handshake. Закрытые соединения не маркируются.
+///
+/// Чистая функция (без BuildContext) — покрыта юнит-тестом на живой
+/// фикстуре. [now] инъектируется для детерминизма в тестах.
+const Duration oneWayMinAge = Duration(seconds: 3);
+
+bool isOneWayStuck({
+  required String network,
+  required int upload,
+  required int download,
+  required DateTime? startTime,
+  required bool closed,
+  DateTime? now,
+}) {
+  if (closed) return false;
+  if (network != 'tcp') return false;
+  if (startTime == null) return false;
+  final age = (now ?? DateTime.now()).difference(startTime);
+  if (age < oneWayMinAge) return false;
+  return (upload > 0 && download == 0) || (upload == 0 && download > 0);
+}
+
 /// Embeddable view: toolbar + список соединений. Без Scaffold, без AppBar —
 /// сидит во вкладке StatsScreen.
 class ConnectionsView extends StatefulWidget {
@@ -251,17 +277,32 @@ class _ConnectionsViewState extends State<ConnectionsView>
     final endTime = closed ? (_closedAt[id] ?? DateTime.now()) : DateTime.now();
     final duration = startTime != null ? endTime.difference(startTime) : null;
 
+    final oneWay = isOneWayStuck(
+      network: network,
+      upload: upload,
+      download: download,
+      startTime: startTime,
+      closed: closed,
+    );
+
     final cs = Theme.of(context).colorScheme;
     final rule = conn['rule']?.toString() ?? '';
     final rulePayload = conn['rulePayload']?.toString() ?? '';
     final ruleText = rulePayload.isNotEmpty ? '$rule ($rulePayload)' : rule;
 
-    return Opacity(
+    return Container(
+      // §153 — розовый фон у однобоких (зависших) TCP-соединений.
+      color: oneWay
+          ? Color.alphaBlend(
+              Colors.pink.withValues(alpha: 0.16), cs.surface)
+          : null,
+      child: Opacity(
       opacity: closed ? 0.45 : 1.0,
       child: InkWell(
         onTap: () => unawaited(showConnectionDetailSheet(
           context,
           conn,
+          oneWay: oneWay,
           closed: closed,
           onClose: (cid) => unawaited(_closeConnection(cid)),
         )),
@@ -332,6 +373,7 @@ class _ConnectionsViewState extends State<ConnectionsView>
             ),
           ),
         ],
+      ),
       ),
       ),
       ),

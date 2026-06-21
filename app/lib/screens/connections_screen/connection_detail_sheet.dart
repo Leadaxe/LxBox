@@ -18,6 +18,7 @@ Future<void> showConnectionDetailSheet(
   BuildContext context,
   Map<String, dynamic> conn, {
   required bool closed,
+  bool oneWay = false,
   required void Function(String id) onClose,
 }) {
   return showModalBottomSheet<void>(
@@ -26,6 +27,7 @@ Future<void> showConnectionDetailSheet(
     builder: (ctx) => _ConnectionDetailSheet(
       conn: conn,
       closed: closed,
+      oneWay: oneWay,
       onClose: onClose,
     ),
   );
@@ -35,11 +37,13 @@ class _ConnectionDetailSheet extends StatelessWidget {
   const _ConnectionDetailSheet({
     required this.conn,
     required this.closed,
+    required this.oneWay,
     required this.onClose,
   });
 
   final Map<String, dynamic> conn;
   final bool closed;
+  final bool oneWay;
   final void Function(String id) onClose;
 
   Map<String, dynamic> get _meta =>
@@ -92,6 +96,20 @@ class _ConnectionDetailSheet extends StatelessWidget {
                     softWrap: true,
                   ),
                 ),
+                if (oneWay)
+                  Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Color.alphaBlend(
+                          Colors.pink.withValues(alpha: 0.22), cs.surface),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text('One-way',
+                        style: TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w600)),
+                  ),
                 if (closed)
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -112,7 +130,10 @@ class _ConnectionDetailSheet extends StatelessWidget {
             child: ListView(
               controller: scrollController,
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              children: _sections(context),
+              children: [
+                if (oneWay) _oneWayBanner(context),
+                ..._sections(context),
+              ],
             ),
           ),
           _footer(context, id),
@@ -206,6 +227,46 @@ class _ConnectionDetailSheet extends StatelessWidget {
     ]));
 
     return out;
+  }
+
+  /// Плашка-пояснение для однобокого (зависшего) соединения.
+  Widget _oneWayBanner(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final upload = conn['upload'] as int? ?? 0;
+    final download = conn['download'] as int? ?? 0;
+    final detail = upload > 0 && download == 0
+        ? 'Данные ушли (↑), ответа нет (↓0) — поток, похоже, завис.'
+        : 'Данные приходят (↓), исходящих нет (↑0) — поток, похоже, завис.';
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+            Colors.pink.withValues(alpha: 0.14), cs.surface),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, size: 18, color: cs.error),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('One-way traffic',
+                    style: TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(detail,
+                    style: TextStyle(
+                        fontSize: 12, color: cs.onSurfaceVariant)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Возвращает заголовок + непустые строки группы, либо `[]` если все
