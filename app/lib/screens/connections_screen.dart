@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../services/clash_api_client.dart';
 import '../services/format_utils.dart';
+import 'connections_screen/connection_detail_sheet.dart';
 
 /// Embeddable view: toolbar + список соединений. Без Scaffold, без AppBar —
 /// сидит во вкладке StatsScreen.
@@ -257,20 +258,23 @@ class _ConnectionsViewState extends State<ConnectionsView>
 
     return Opacity(
       opacity: closed ? 0.45 : 1.0,
-      child: Padding(
+      child: InkWell(
+        onTap: () => unawaited(showConnectionDetailSheet(
+          context,
+          conn,
+          closed: closed,
+          onClose: (cid) => unawaited(_closeConnection(cid)),
+        )),
+        child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Row 1: host:port + traffic + close button
+          // §152 — иконка-стрелка (→/⇄ для tcp/udp) убрана: тип соединения
+          // дублируется в Row 4 (`network/type`) и неочевиден без подписи.
           Row(
             children: [
-              Icon(
-                network == 'udp' ? Icons.swap_horiz : Icons.arrow_forward,
-                size: 14,
-                color: cs.onSurfaceVariant,
-              ),
-              const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   display,
@@ -328,6 +332,7 @@ class _ConnectionsViewState extends State<ConnectionsView>
             ),
           ),
         ],
+      ),
       ),
       ),
     );
