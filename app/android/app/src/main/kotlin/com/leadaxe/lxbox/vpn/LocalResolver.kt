@@ -31,12 +31,27 @@ import kotlin.coroutines.suspendCoroutine
 object LocalResolver : LocalDNSTransport {
     private const val RCODE_NXDOMAIN = 3
 
+    /// §151 F3 — DNS RCODE SERVFAIL (RFC 1035 §4.1.1). Отдаём ядру при
+    /// отсутствии underlying-сети (`defaultNetwork == null`) вместо throw.
+    private const val RCODE_SERVFAIL = 2
+
     override fun raw(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
 
     @RequiresApi(Build.VERSION_CODES.Q)
     override fun exchange(ctx: ExchangeContext, message: ByteArray) {
-        val defaultNetwork = DefaultNetworkMonitor.defaultNetwork
-            ?: error("missing default interface")
+        // §151 F3 — `defaultNetwork` штатно null в окне смены/потери сети, а
+        // exchange() зовётся на каждый DNS-запрос. Раньше `error(...)` бросал
+        // IllegalStateException (ловится gomobile — Go-метод возвращает error —
+        // но даёт шумный Go-error на каждый резолв). Чище — вернуть ядру
+        // корректный SERVFAIL через ctx. Явный non-null тип нужен, чтобы
+        // вложенные замыкания callback'а захватили `defaultNetwork` как
+        // `Network`, а не nullable (иначе smart-cast не пробрасывается).
+        val dn = DefaultNetworkMonitor.defaultNetwork
+        if (dn == null) {
+            ctx.errorCode(RCODE_SERVFAIL)
+            return
+        }
+        val defaultNetwork: android.net.Network = dn
         return runBlocking {
             suspendCoroutine { continuation ->
                 val signal = CancellationSignal()
@@ -75,8 +90,14 @@ object LocalResolver : LocalDNSTransport {
     }
 
     override fun lookup(ctx: ExchangeContext, network: String, domain: String) {
-        val defaultNetwork = DefaultNetworkMonitor.defaultNetwork
-            ?: error("missing default interface")
+        // §151 F3 — см. exchange(): null defaultNetwork → SERVFAIL ядру, не throw.
+        // Явный non-null тип, чтобы вложенные замыкания захватили корректно.
+        val dn = DefaultNetworkMonitor.defaultNetwork
+        if (dn == null) {
+            ctx.errorCode(RCODE_SERVFAIL)
+            return
+        }
+        val defaultNetwork: android.net.Network = dn
         return runBlocking {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 suspendCoroutine { continuation ->

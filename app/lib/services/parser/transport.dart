@@ -162,8 +162,7 @@ TlsSpec parseVmessTls(Map<String, dynamic> cfg, String server, String net) {
     serverName: sni,
     fingerprint: fp.isEmpty ? null : fp,
     insecure: cfg['insecure'] == '1' || cfg['insecure'] == true,
-    alpn:
-        alpn.isEmpty ? const [] : alpn.split(',').map((e) => e.trim()).toList(),
+    alpn: _normalizeAlpn(alpn), // §151 F2 — единый нормализатор ALPN
   );
 }
 
@@ -174,9 +173,41 @@ bool _truthy(String? v) {
 }
 
 List<String> _alpnFromQuery(Map<String, String> q) {
-  final raw = q['alpn'] ?? '';
+  return _normalizeAlpn(q['alpn'] ?? '');
+}
+
+/// §151 F2 — нормализация ALPN-списка из сырого query/JSON значения.
+///
+/// Корень бага: некоторые подписки-агрегаторы шлют `alpn=http%252F1.1`
+/// (двойное percent-кодирование). `Uri.queryParameters` декодит ровно один
+/// раз → остаётся `http%2F1.1`, и этот мусор уходил в `tls.alpn` ядра
+/// дословно (валидный ALPN-id = `http/1.1`/`h2`/`h3`). Здесь: split по
+/// запятой, повторный decode пока остаётся `%XX`, и drop значений, которые
+/// после де-кода всё ещё содержат `%` / пробелы / управляющие символы
+/// (не валидный protocol-id). Корректные `h2`/`http/1.1`/`h3` не меняются.
+final _percentSeq = RegExp(r'%[0-9A-Fa-f]{2}');
+final _badAlpnChar = RegExp(r'[%\s\x00-\x1f]');
+
+List<String> _normalizeAlpn(String raw) {
   if (raw.isEmpty) return const [];
-  return raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+  final out = <String>[];
+  for (var e in raw.split(',')) {
+    e = e.trim();
+    if (e.isEmpty) continue;
+    // Снять остаточное percent-кодирование (defensive: до 2 проходов хватает
+    // на двойное кодирование; больше — почти наверняка мусор, не раскручиваем).
+    var guard = 0;
+    while (_percentSeq.hasMatch(e) && guard < 2) {
+      final decoded = Uri.tryParse('x://x?a=$e')?.queryParameters['a'];
+      if (decoded == null || decoded == e) break;
+      e = decoded.trim();
+      guard++;
+    }
+    // Drop значения, не похожие на валидный ALPN-id.
+    if (_badAlpnChar.hasMatch(e)) continue;
+    out.add(e);
+  }
+  return out;
 }
 
 /// Emit TransportSpec → строка query для `toUri()`. Возвращает пары

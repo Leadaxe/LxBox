@@ -563,7 +563,11 @@ class BoxService(
             private var consumed = false
             override fun len(): Int = 1
             override fun hasNext(): Boolean = !consumed
+            // §151 F1 — JNI no-throw: `StringIterator.Next()` — Go-метод БЕЗ
+            // `error`, throw = `Runtime::Abort`. За концом отдаём "", не бросаем
+            // (хотя текущая реализация и не бросала — фиксируем инвариант явно).
             override fun next(): String {
+                if (consumed) return ""
                 consumed = true
                 return value
             }

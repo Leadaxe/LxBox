@@ -143,7 +143,12 @@ interface PlatformInterfaceWrapper : PlatformInterface {
     private fun emptyInterfaceIterator(): NetworkInterfaceIterator =
         object : NetworkInterfaceIterator {
             override fun hasNext() = false
-            override fun next(): LibboxNetworkInterface = throw NoSuchElementException()
+            // §151 F1 — JNI no-throw: `NetworkInterfaceIterator.Next()` —
+            // Go-метод БЕЗ `error`, поэтому throw отсюда НЕ ловится gomobile →
+            // `Runtime::Abort` процесса (в отличие от error-возвращающих
+            // callback'ов). Контракт — звать `Next()` лишь после `HasNext()==true`,
+            // но если ядро нарушит — отдаём пустой интерфейс, а не бросаем.
+            override fun next(): LibboxNetworkInterface = LibboxNetworkInterface()
         }
 
     override fun underNetworkExtension(): Boolean = false
@@ -220,7 +225,9 @@ interface PlatformInterfaceWrapper : PlatformInterface {
 
     private class StringArray(private val iter: Iterator<String>) : StringIterator {
         override fun hasNext() = iter.hasNext()
-        override fun next() = iter.next()
+        // §151 F1 — JNI no-throw: `StringIterator.Next()` — Go-метод БЕЗ `error`,
+        // throw отсюда = `Runtime::Abort`. За концом отдаём "", не бросаем.
+        override fun next(): String = if (iter.hasNext()) iter.next() else ""
         override fun len(): Int = 0
     }
 }

@@ -30,6 +30,23 @@ void main() {
       expect(b.tls.serverName, a.tls.serverName);
     });
 
+    test('§151 F2 — Trojan ALPN double-encoded (http%252F1.1) → чистый http/1.1', () {
+      // Нода из реальной подписки-агрегатора: alpn=http%252F1.1 (двойное
+      // percent-кодирование). Uri.queryParameters декодит один раз → 'http%2F1.1';
+      // _normalizeAlpn снимает остаточный %2F → 'http/1.1'.
+      final a = parseTrojan(
+        'trojan://p@h.example:443?type=ws&security=tls&alpn=http%252F1.1&sni=h.example#N',
+      )!;
+      expect(a.tls.alpn, ['http/1.1']);
+    });
+
+    test('§151 F2 — Trojan ALPN список h2,http/1.1 не ломается', () {
+      final a = parseTrojan(
+        'trojan://p@h.example:443?type=ws&security=tls&alpn=h2,http/1.1&sni=h.example#N',
+      )!;
+      expect(a.tls.alpn, ['h2', 'http/1.1']);
+    });
+
     test('Shadowsocks: method + password preserved across base64', () {
       final a = parseShadowsocks(
         'ss://YWVzLTI1Ni1nY206dGVzdHBhc3Mx@srv:8388#SS',
