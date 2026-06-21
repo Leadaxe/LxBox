@@ -425,17 +425,30 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
                 result.success(true)
             }
-            // §047 Шаг 2 — зеркалим активную ноду/группу в native-кеш, чтобы
-            // LocaleConditionReceiver мог ответить на QUERY_CONDITION синхронно
-            // (Flutter-engine может спать).
+            // §047 Шаг 2 — зеркалим активную ноду/группу + списки нод/групп в
+            // native-кеш. Активное состояние нужно LocaleConditionReceiver
+            // (синхронный ответ на QUERY_CONDITION); списки — edit-Activity
+            // плагина (Spinner выбора ноды/группы вместо ручного ввода).
+            // Flutter-engine при чтении может спать, потому именно prefs.
             "setAutomationActiveState" -> {
                 val node = call.argument<String>("node")
                 val group = call.argument<String>("group")
-                context.getSharedPreferences("lxbox_automation", Context.MODE_PRIVATE)
+                val nodes = call.argument<List<String>>("nodes")
+                val groups = call.argument<List<String>>("groups")
+                val edit = context
+                    .getSharedPreferences("lxbox_automation", Context.MODE_PRIVATE)
                     .edit()
                     .putString("active_node", node)
                     .putString("active_group", group)
-                    .apply()
+                // Списки сериализуем как JSON-массив строк. null → не трогаем
+                // (caller мог обновить только активное состояние).
+                if (nodes != null) {
+                    edit.putString("all_nodes", org.json.JSONArray(nodes).toString())
+                }
+                if (groups != null) {
+                    edit.putString("all_groups", org.json.JSONArray(groups).toString())
+                }
+                edit.apply()
                 result.success(true)
             }
             "getApplicationExitInfo" -> result.success(readApplicationExitInfo())

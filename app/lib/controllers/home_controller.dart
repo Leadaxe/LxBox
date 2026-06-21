@@ -599,9 +599,15 @@ class HomeController extends ChangeNotifier
         highlightedNode: now,
       ),
     );
-    // §047 Шаг 2 — mirror активной ноды/группы для Locale condition-плагина
-    // (покрывает авто-выбор URLTest, не только явный switchNode).
-    BoxVpnClient.I.setAutomationActiveState(node: now, group: tag);
+    // §047 Шаг 2 — mirror в native-кеш: активная нода/группа (для condition-
+    // плагина) + списки нод текущей группы и всех групп (для Spinner'а выбора
+    // в edit-Activity setting-плагина). Покрывает авто-выбор URLTest.
+    BoxVpnClient.I.setAutomationActiveState(
+      node: now,
+      group: tag,
+      nodes: nodes,
+      groups: _state.groups,
+    );
     // §123 — activeInGroup стал известен → обновить подтекст шторки.
     await _pushNotificationLabels();
   }

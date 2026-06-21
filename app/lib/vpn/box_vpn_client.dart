@@ -594,14 +594,27 @@ class BoxVpnClient {
     );
   }
 
-  /// §047 Шаг 2 — зеркалит активную ноду/группу в native-кеш, чтобы
-  /// `LocaleConditionReceiver` отвечал на `QUERY_CONDITION` синхронно (Flutter
-  /// может спать). Fire-and-forget. Зовётся из HomeController при смене
-  /// ноды/группы.
-  void setAutomationActiveState({String? node, String? group}) {
+  /// §047 Шаг 2 — зеркалит в native-кеш активную ноду/группу (для
+  /// `LocaleConditionReceiver` — синхронный ответ на `QUERY_CONDITION`) и
+  /// списки нод/групп (для Spinner'а выбора в edit-Activity плагина вместо
+  /// ручного ввода). [nodes]/[groups] = null → не обновлять список (когда
+  /// меняется только активное состояние). Fire-and-forget.
+  void setAutomationActiveState({
+    String? node,
+    String? group,
+    List<String>? nodes,
+    List<String>? groups,
+  }) {
     unawaited(_invoke<void>(
       _Methods.setAutomationActiveState,
-      args: {'node': node, 'group': group},
+      args: <String, dynamic>{
+        'node': node,
+        'group': group,
+        // null-aware element: ключ пропускается когда список null (native по
+        // отсутствию ключа не трогает кеш — обновляем только активное состояние).
+        'nodes': ?nodes,
+        'groups': ?groups,
+      },
       timeout: _Timeouts.settings,
       onTimeoutValue: null,
     ).catchError((Object e) {

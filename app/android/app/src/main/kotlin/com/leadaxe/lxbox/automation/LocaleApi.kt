@@ -1,6 +1,8 @@
 package com.leadaxe.lxbox.automation
 
+import android.content.Context
 import android.os.Bundle
+import org.json.JSONArray
 import org.json.JSONObject
 
 /// §047 Шаг 2 — Locale / Tasker plugin-стандарт (twofortyfouram).
@@ -71,6 +73,29 @@ object LocaleApi {
             .put("check", check)
         if (equals != null) json.put("equals", equals)
         return Bundle().apply { putString(KEY_CONFIG, json.toString()) }
+    }
+
+    // ─── Cached node/group lists (для Spinner'а в edit-Activity) ─────────────────
+
+    private const val PREFS = "lxbox_automation"
+
+    /// Список нод активной группы из native-кеша (зеркалится app'ом через
+    /// `setAutomationActiveState`). Пустой если app ни разу не открывался /
+    /// конфиг пуст → edit-Activity делает fallback на ручной ввод.
+    fun cachedNodes(ctx: Context): List<String> =
+        readStringArray(ctx, "all_nodes")
+
+    /// Список всех групп из native-кеша.
+    fun cachedGroups(ctx: Context): List<String> =
+        readStringArray(ctx, "all_groups")
+
+    private fun readStringArray(ctx: Context, key: String): List<String> {
+        val raw = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(key, null) ?: return emptyList()
+        return runCatching {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { arr.getString(it) }
+        }.getOrDefault(emptyList())
     }
 
     /// Парсит condition-bundle. Возвращает (check, equals?) или null.

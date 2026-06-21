@@ -6,27 +6,27 @@ import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.Spinner
+import android.widget.RadioButton
+import android.widget.RadioGroup
+import android.widget.ScrollView
 import android.widget.TextView
 
 /// §047 Шаг 2 — edit-экран condition-плагина («State → Plugin → L×Box»).
-/// Spinner: что проверять (VPN включён / Активная нода = / Активная группа =).
+/// Список проверок сразу (RadioGroup): VPN up / Active node = / Active group =.
 /// Для node/group показывается поле значения. Save → bundle + blurb.
 class LocaleConditionEditActivity : Activity() {
 
-    /// (check, человекочитаемая подпись, нужно ли значение).
+    /// (check, label, needs value).
     private val checks = listOf(
-        Triple("vpn-up", "VPN включён", false),
-        Triple("active-node", "Активная нода =", true),
-        Triple("active-group", "Активная группа =", true),
+        Triple("vpn-up", "VPN is up", false),
+        Triple("active-node", "Active node =", true),
+        Triple("active-group", "Active group =", true),
     )
 
-    private lateinit var spinner: Spinner
+    private lateinit var radioGroup: RadioGroup
     private lateinit var valueInput: EditText
     private lateinit var valueLabel: TextView
 
@@ -35,72 +35,75 @@ class LocaleConditionEditActivity : Activity() {
         title = "L×Box"
 
         val pad = (16 * resources.displayMetrics.density).toInt()
-        val root = LinearLayout(this).apply {
+        val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
         }
 
-        root.addView(TextView(this).apply { text = "Условие L×Box:" })
-        spinner = Spinner(this).apply {
-            adapter = ArrayAdapter(
-                this@LocaleConditionEditActivity,
-                android.R.layout.simple_spinner_dropdown_item,
-                checks.map { it.second },
-            )
+        content.addView(TextView(this).apply {
+            text = "L×Box condition:"
+            setPadding(0, 0, 0, pad / 2)
+        })
+
+        radioGroup = RadioGroup(this)
+        checks.forEachIndexed { idx, (_, label, _) ->
+            radioGroup.addView(RadioButton(this).apply {
+                id = idx
+                text = label
+                setPadding(0, pad / 3, 0, pad / 3)
+            })
         }
-        root.addView(spinner)
+        radioGroup.setOnCheckedChangeListener { _, checkedId ->
+            val needsValue = checks.getOrNull(checkedId)?.third ?: false
+            val vis = if (needsValue) View.VISIBLE else View.GONE
+            valueLabel.visibility = vis
+            valueInput.visibility = vis
+        }
+        content.addView(radioGroup)
 
         valueLabel = TextView(this).apply {
-            text = "Значение:"
+            text = "Value:"
             setPadding(0, pad, 0, 0)
             visibility = View.GONE
         }
-        root.addView(valueLabel)
+        content.addView(valueLabel)
         valueInput = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_TEXT
             visibility = View.GONE
         }
-        root.addView(valueInput)
-
-        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
-                val needsValue = checks[pos].third
-                val vis = if (needsValue) View.VISIBLE else View.GONE
-                valueLabel.visibility = vis
-                valueInput.visibility = vis
-            }
-            override fun onNothingSelected(p: AdapterView<*>?) {}
-        }
+        content.addView(valueInput)
 
         val save = Button(this).apply {
-            text = "Сохранить"
+            text = "Save"
             gravity = Gravity.CENTER
             setOnClickListener { onSave() }
         }
-        root.addView(save, LinearLayout.LayoutParams(
+        content.addView(save, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = pad })
 
-        prefill()
-        setContentView(root)
+        if (!prefill()) radioGroup.check(0)
+
+        setContentView(ScrollView(this).apply { addView(content) })
     }
 
-    private fun prefill() {
+    private fun prefill(): Boolean {
         val parsed = LocaleApi.parseCondition(
             intent.getBundleExtra(LocaleApi.EXTRA_BUNDLE),
-        ) ?: return
+        ) ?: return false
         val (check, equals) = parsed
         val idx = checks.indexOfFirst { it.first == check }
-        if (idx >= 0) {
-            spinner.setSelection(idx)
-            if (checks[idx].third) valueInput.setText(equals ?: "")
-        }
+        if (idx < 0) return false
+        radioGroup.check(idx)
+        if (checks[idx].third) valueInput.setText(equals ?: "")
+        return true
     }
 
     private fun onSave() {
-        val pos = spinner.selectedItemPosition
-        val (check, blurbLabel, needsValue) = checks[pos]
+        val checkedId = radioGroup.checkedRadioButtonId
+        val idx = if (checkedId in checks.indices) checkedId else 0
+        val (check, blurbLabel, needsValue) = checks[idx]
         val value = if (needsValue) valueInput.text.toString().trim() else null
         val blurb = if (needsValue && !value.isNullOrEmpty()) {
             "$blurbLabel $value"
