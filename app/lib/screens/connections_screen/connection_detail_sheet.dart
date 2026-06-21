@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../services/app_info_cache.dart';
 import '../../services/format_utils.dart';
+import '../connections_screen.dart' show packageNameFromProcess;
 
 /// §152 — детальный bottom sheet по одному соединению.
 ///
@@ -89,7 +90,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Row(
               children: [
-                _appIcon(context, _str(meta, 'processPath')),
+                _appIcon(context, packageNameFromProcess(_str(meta, 'processPath'))),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(

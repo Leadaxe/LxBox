@@ -14,7 +14,15 @@
 
 Слева от host\:port (на месте убранной §152 стрелки) — launcher-иконка
 приложения, к которому относится соединение. Package берётся из
-`metadata.processPath` (для Android = package name, напр. `com.whatsapp`).
+`metadata.processPath`.
+
+**Важно (фикс после первой итерации):** ядро отдаёт `processPath` НЕ как
+голый package, а форматированным — `com.whatsapp (com.whatsapp)` или
+`com.app (u0_a123)` (см. sing-box `tracker.go`: `processPath + " (" +
+userName/userId + ")"`). Передача этой строки в `getAppInfo` → not-found →
+плейсхолдер «9 точек» (`Icons.apps`). Поэтому добавлен
+`packageNameFromProcess()` — берёт часть до первого пробела и отсеивает
+абсолютные пути / не-package строки. Иконку резолвим уже по чистому pkg.
 
 Переиспользован готовый механизм `AppInfoCache` (тот же, что в «Top apps»
 [overview_tab.dart](../../../app/lib/screens/stats_screen/overview_tab.dart)):

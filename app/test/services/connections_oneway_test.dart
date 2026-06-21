@@ -163,4 +163,53 @@ void main() {
       expect(pink.first['download'], 0);
     });
   });
+
+  // §154 — извлечение чистого package name для резолва иконки.
+  group('packageNameFromProcess', () {
+    test('ядро-формат "pkg (pkg)" → чистый pkg', () {
+      expect(
+        packageNameFromProcess('com.google.android.youtube (com.google.android.youtube)'),
+        'com.google.android.youtube',
+      );
+    });
+
+    test('"pkg (user)" → pkg', () {
+      expect(packageNameFromProcess('com.whatsapp (u0_a123)'), 'com.whatsapp');
+    });
+
+    test('голый pkg → как есть', () {
+      expect(packageNameFromProcess('org.telegram.messenger'),
+          'org.telegram.messenger');
+    });
+
+    test('абсолютный путь → "" (не Android pkg)', () {
+      expect(packageNameFromProcess('/usr/bin/curl'), '');
+    });
+
+    test('без точки → "" (не package)', () {
+      expect(packageNameFromProcess('sshd'), '');
+    });
+
+    test('пусто → ""', () {
+      expect(packageNameFromProcess(''), '');
+      expect(packageNameFromProcess('   '), '');
+    });
+
+    test('живая фикстура: все processPath дают валидный pkg', () {
+      final raw = File(
+              'test/fixtures/clash_api/connections_oneway_live.json')
+          .readAsStringSync();
+      final conns = ((jsonDecode(raw) as Map)['connections'] as List)
+          .cast<Map<String, dynamic>>();
+      for (final c in conns) {
+        final m = c['metadata'] as Map<String, dynamic>? ?? {};
+        final pp = m['processPath']?.toString() ?? '';
+        if (pp.isEmpty) continue;
+        final pkg = packageNameFromProcess(pp);
+        expect(pkg, isNotEmpty, reason: 'processPath="$pp"');
+        expect(pkg.contains(' '), isFalse);
+        expect(pkg.contains('('), isFalse);
+      }
+    });
+  });
 }

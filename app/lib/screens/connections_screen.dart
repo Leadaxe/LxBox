@@ -7,6 +7,20 @@ import '../services/clash_api_client.dart';
 import '../services/format_utils.dart';
 import 'connections_screen/connection_detail_sheet.dart';
 
+/// §154 — чистый package name из `metadata.processPath`. Ядро форматирует
+/// его как `com.app (com.app)` либо `com.app (user)` / `com.app (1000)`
+/// (см. sing-box `tracker.go`: `processPath + " (" + userName/userId + ")"`).
+/// Для резолва иконки нужен голый package — берём часть до первого пробела.
+/// Возвращает '' если пусто или похоже на абсолютный путь (не Android-pkg).
+String packageNameFromProcess(String raw) {
+  final s = raw.trim();
+  if (s.isEmpty) return '';
+  final pkg = s.split(' ').first.trim();
+  // Android package = `a.b.c`, без слешей. Путь вида /usr/bin/foo — не pkg.
+  if (pkg.contains('/') || !pkg.contains('.')) return '';
+  return pkg;
+}
+
 /// §153 — «однобокое» (зависшее) соединение: TCP, прожившее ≥
 /// [oneWayMinAge], где трафик идёт строго в одну сторону (up>0/down=0 или
 /// up=0/down>0). Сигнатура зависшего потока (напр. WhatsApp ↑517 ↓0 —
@@ -317,7 +331,7 @@ class _ConnectionsViewState extends State<ConnectionsView>
           // месте launcher-иконка приложения (по processPath = package).
           Row(
             children: [
-              _appIcon(process),
+              _appIcon(packageNameFromProcess(process)),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
