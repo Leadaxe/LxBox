@@ -1,7 +1,12 @@
 # L×Box Automation API
 
-Управление L×Box из **Tasker / Macrodroid / Llama / Automate** и shell-скриптов
-(`am broadcast`) через Android **broadcast intents** (§047 Public Intent API).
+Управление L×Box из **Tasker / MacroDroid / Llama / Automate** (§047 Public
+Intent API) — двумя способами:
+
+- **Plugin** (рекомендуется) — L×Box виден в списке плагинов host'а, выбираешь
+  команду мышкой (Locale/Tasker-стандарт);
+- **Raw broadcast intents** — `am broadcast` / Send Intent с нашей action-строкой
+  (для shell / ADB / не-plugin приложений).
 
 Фича **opt-in**: по умолчанию приём команд выключен, события наружу не шлются.
 Включается в **App Settings → Automation**.
@@ -18,8 +23,10 @@
    кнопкой копирования.
 3. Включить нужные **Emit**-категории, если хотите получать события L×Box
    наружу (Lifecycle / State / Subscription / Health).
-4. В Tasker: **Send Intent** → Action = одна из команд ниже, Target =
-   **Broadcast Receiver**.
+4. В host-приложении выбрать L×Box:
+   - **Plugin** (проще): Action / State → **Plugin → L×Box** → выбрать команду;
+   - **Raw**: **Send Intent** → Action = одна из команд ниже, Target =
+     **Broadcast Receiver**.
 
 ---
 
@@ -27,27 +34,63 @@
 
 L×Box поддерживает **оба** механизма — выбирайте по удобству:
 
-| | Tasker Plugin (рекомендуется) | Raw broadcast intents |
+| | Plugin (рекомендуется) | Raw broadcast intents |
 |---|---|---|
-| Как | Tasker → **Action → Plugin → L×Box** (нативный экран) | руками Send Intent + строка action |
-| Кому | большинству — кликаешь в списке плагинов | shell `am broadcast`, ADB, не-Tasker apps |
-| Настройка | Spinner команды + поле значения | вписать action и extras вручную |
+| Как | Host → **Action / State → Plugin → L×Box** | руками Send Intent + строка action |
+| Кому | большинству — кликаешь в списке плагинов | shell `am broadcast`, ADB, не-plugin apps |
+| Настройка | выбор из списка + селектор ноды/группы | вписать action и extras вручную |
 
 Оба требуют включённого мастер-toggle в **App Settings → Automation**. Plugin-способ описан сразу ниже; raw-actions — в таблицах далее.
 
-### Tasker Plugin (Locale-стандарт)
+### Хосты
 
-**Действие (Setting):**
-1. Tasker → Task → **+** → **Plugin → L×Box**.
-2. Откроется наш экран: выбери команду в Spinner (например «Сменить ноду»), впиши значение (тег ноды), **Сохранить**.
-3. Готово — Tasker покажет blurb вида `Сменить ноду → 🇷🇺Россия`.
+Plugin-стандарт (`twofortyfouram` Locale) понимают:
 
-**Условие (State):**
-1. Tasker → Profile → **State → Plugin → L×Box**.
-2. Выбери что проверять: `VPN включён` / `Активная нода =` / `Активная группа =` (+ значение).
-3. Profile активируется, пока условие истинно.
+| Хост | Цена | Plugin-блок |
+|---|---|---|
+| **MacroDroid** | бесплатно | ✅ доступен (проверено) |
+| **Tasker** | ~€3.5 разово | ✅ |
+| **Llama** | бесплатно | ✅ |
+| **Automate** (LlamaLab) | бесплатно | ⚠️ plugin-блок за premium; raw-actions через «Broadcast send» бесплатны |
 
-> Под капотом plugin использует стандарт `com.twofortyfouram.locale.intent.action.FIRE_SETTING` / `QUERY_CONDITION` и те же команды, что raw-actions ниже.
+Raw-actions (Шаг 1) работают **откуда угодно** — Termux / shell / ADB через `am broadcast`, без host-приложения.
+
+### Plugin — действия (Setting)
+
+В списке плагинов host'а L×Box даёт **4 строки**:
+
+| Строка плагина | Что делает |
+|---|---|
+| **L×Box: Start VPN** | one-tap — выбрал, готово, без экрана |
+| **L×Box: Stop VPN** | one-tap |
+| **L×Box: Toggle VPN** | one-tap |
+| **L×Box: Custom…** | открывает экран выбора остальных команд |
+
+«Custom…» — список команд (Switch node · Set group · URL-test group · Refresh
+subscriptions · Rebuild config · Reset network). Для **Switch node** показывается
+**выпадающий список реальных нод** активной группы; для **Set group** /
+**URL-test group** — список реальных групп (подтягиваются из приложения — нужно
+один раз открыть L×Box после установки/смены подписки, чтобы список закешировался;
+иначе — ручной ввод тега).
+
+Пример (MacroDroid): Action → **Плагин Tasker/Locale** → **L×Box: Custom…** →
+выбрать «Switch node» → в Value выбрать ноду из списка → **Save**.
+
+### Plugin — условия (State)
+
+Host → State / Condition → Plugin → **L×Box** → выбрать проверку:
+
+| Условие | Значение |
+|---|---|
+| **VPN is up** | — |
+| **Active node =** | выбрать ноду |
+| **Active group =** | выбрать группу |
+
+Profile активируется, пока условие истинно. Host опрашивает периодически.
+
+> Под капотом plugin использует стандарт
+> `com.twofortyfouram.locale.intent.action.FIRE_SETTING` / `QUERY_CONDITION` и
+> те же команды, что raw-actions ниже. UI плагина — на английском.
 
 ---
 
@@ -174,6 +217,8 @@ Task "Switch to Russia with confirmation":
 | Команда не доходит | Мастер-toggle OFF | Включить в App Settings → Automation |
 | Тоже, но toggle ON | «Требовать пропуск» ON, а Tasker не declare'ил permission | Выключить галку **или** добавить `com.leadaxe.lxbox.permission.AUTOMATION` в permissions Tasker |
 | `SWITCH_NODE` не выбирает ноду | tag не существует / typo | Проверить log filter `automation` |
+| В плагине «Custom…» вместо списка нод/групп — поле ввода | Кеш пуст (L×Box не открывался после установки/смены подписки) | Открыть L×Box, зайти в группу (список закешируется), переоткрыть плагин |
+| L×Box не виден в списке плагинов host'а | Host без plugin-блока (напр. бесплатный Automate) | Использовать MacroDroid (бесплатно) или raw `am broadcast` |
 | `START_VPN` не работает первый раз | VPN consent не давали | Один раз нажать Connect в app |
 | На MIUI / ColorOS receiver мёртв | OEM auto-start restriction | Добавить L×Box в «Автозапуск» системных настроек |
 
@@ -184,3 +229,4 @@ Task "Switch to Russia with confirmation":
 - [§047 — Public Intent API spec](spec/features/047%20public%20intent%20api/spec.md)
 - [Android BroadcastReceiver guide](https://developer.android.com/develop/background-work/background-tasks/broadcasts)
 - [Tasker — Send Intent](https://tasker.joaoapps.com/userguide/en/help/ah_send_intent.html)
+- [Locale plugin API (twofortyfouram)](https://github.com/twofortyfouram/android-plugin-api-for-locale) — стандарт plugin-способа (FIRE_SETTING / QUERY_CONDITION)
