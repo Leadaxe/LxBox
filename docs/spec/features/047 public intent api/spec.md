@@ -2,8 +2,8 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **Implemented** (2026-06-21) — receiver + emitter + bridge + рефактор хендлеров + вкладка Automation + [`docs/AUTOMATION.md`](../../../AUTOMATION.md). Health-события — future (§042). |
-| Дата | 2026-05-10 (обновлено 2026-06-21 — реализация) |
+| Статус | **Implemented** (2026-06-21) — **Шаг 1** raw broadcast actions + emitter + bridge + вкладка Automation; **Шаг 2** Locale/Tasker plugin (`FIRE_SETTING` + `QUERY_CONDITION`) — L×Box виден в Tasker как Plugin (Action + State). Docs: [`docs/AUTOMATION.md`](../../../AUTOMATION.md). Health-события — future (§042). |
+| Дата | 2026-05-10 (обновлено 2026-06-21 — Шаги 1 и 2 реализованы) |
 | Зависимости | [`031 debug api`](../031%20debug%20api/spec.md) (action handlers переиспользуются) |
 | Связано | [`032 quick connect`](../032%20quick%20connect/spec.md) (та же семантика toggle/switch, разные источники) |
 | Issue | [#12 «Add ON and OFF actions in addition to toggle»](https://github.com/Leadaxe/LxBox/issues/12) — `START_VPN`/`STOP_VPN` покрывают запрос |
@@ -809,6 +809,178 @@ Estimated work: **~3 дня** (manifest + receiver + bridge + emitter + 5 contro
 
 ---
 
+## Шаг 2 — Locale / Tasker plugin-стандарт (`FIRE_SETTING` + `QUERY_CONDITION`)
+
+> **Статус:** Implemented (2026-06-21) — `LocaleApi` + setting/condition receiver'ы + 2 нативных edit-Activity + manifest (2 activity + 2 receiver, enabled=false) + active-state mirror в native-кеш. Добавлено **поверх** Шага 1, ничего не выкидывая.
+
+### Зачем — чего не хватает Шагу 1
+
+Шаг 1 даёт **raw broadcast actions** (`com.leadaxe.lxbox.START_VPN` и т.д.). Их минус: юзер должен руками настроить «Send Intent» и знать строку action. L×Box **не появляется** в списке плагинов Tasker/Macrodroid.
+
+Locale plugin-стандарт ([twofortyfouram](https://github.com/twofortyfouram/android-plugin-api-for-locale)) — де-факто протокол, который Tasker / Macrodroid / Llama понимают из коробки. Реализовав его, L×Box попадает в **Tasker → Action → Plugin → L×Box** (для действий) и **Profile → State → Plugin → L×Box** (для условий) с **нативным экраном выбора** — массовый юзер кликает, а не пишет интенты руками.
+
+**Сосуществование (важно):** оба пути живут параллельно.
+
+| | Шаг 1 — raw actions | Шаг 2 — Locale plugin |
+|---|---|---|
+| Транспорт | `com.leadaxe.lxbox.START_VPN` broadcast | `…FIRE_SETTING` + `EXTRA_BUNDLE` |
+| Настройка | руками Send Intent | UI плагина в Tasker (Spinner) |
+| Видимость в Tasker | нет (raw) | да (список плагинов) |
+| Для кого | `am broadcast`, shell, ADB, не-Locale-apps | массовый юзер через UI |
+| Бизнес-логика | **общий** `services/automation/handlers.dart` | **тот же** слой |
+
+Один бизнес-слой, теперь **четыре** транспорта: Debug API, raw broadcast (Шаг 1), Locale setting (Шаг 2a), Locale condition (Шаг 2b).
+
+### Стандарт — точный контракт (из spec twofortyfouram)
+
+**Setting plugin (действие):**
+- **Edit Activity** — `intent-filter` `com.twofortyfouram.locale.intent.action.EDIT_SETTING`, `exported=true`, label+icon. На Save возвращает `RESULT_OK` + `EXTRA_BUNDLE` (стейт плагина, <**25 KB** base-10) + `EXTRA_STRING_BLURB` (короткая человекочитаемая строка, напр. `"Switch node → 🇷🇺Россия"`).
+- **Fire Receiver** — `intent-filter` `com.twofortyfouram.locale.intent.action.FIRE_SETTING`, `exported=true`, **БЕЗ** `android:permission` (хост сам проверяет, что вправе слать). Получает `EXTRA_BUNDLE` → исполняет команду. Result code ordered-broadcast'а **не используется** (зарезервирован стандартом).
+
+**Condition plugin (состояние):**
+- **Edit Activity** — `…action.EDIT_CONDITION`, аналогично setting'у (выбор: «что проверять» — VPN up/down, активная нода/группа).
+- **Query Receiver** — `…action.QUERY_CONDITION`, `exported=true`. Получает `EXTRA_BUNDLE`, отвечает **через ordered-broadcast result code**: `RESULT_CONDITION_SATISFIED` (16) / `RESULT_CONDITION_UNSATISFIED` (17) / `RESULT_CONDITION_UNKNOWN` (18). Хост опрашивает периодически.
+
+**Bundle-конвенция:** один ключ-String внутри `EXTRA_BUNDLE` с валидным JSON (наш формат — см. ниже). Бандл должен переживать сериализацию хостом и быть версионируемым.
+
+### Константы стандарта (Kotlin)
+
+```kotlin
+object LocaleApi {
+    const val ACTION_EDIT_SETTING = "com.twofortyfouram.locale.intent.action.EDIT_SETTING"
+    const val ACTION_FIRE_SETTING = "com.twofortyfouram.locale.intent.action.FIRE_SETTING"
+    const val ACTION_EDIT_CONDITION = "com.twofortyfouram.locale.intent.action.EDIT_CONDITION"
+    const val ACTION_QUERY_CONDITION = "com.twofortyfouram.locale.intent.action.QUERY_CONDITION"
+
+    const val EXTRA_BUNDLE = "com.twofortyfouram.locale.intent.extra.BUNDLE"
+    const val EXTRA_STRING_BLURB = "com.twofortyfouram.locale.intent.extra.BLURB"
+
+    const val RESULT_CONDITION_SATISFIED = 16
+    const val RESULT_CONDITION_UNSATISFIED = 17
+    const val RESULT_CONDITION_UNKNOWN = 18
+
+    const val BUNDLE_MAX_BYTES = 25_000   // base-10, по стандарту
+}
+```
+
+### Формат нашего bundle
+
+`EXTRA_BUNDLE` содержит один ключ `com.leadaxe.lxbox.plugin.CONFIG` (String) с JSON:
+
+**Setting:**
+```json
+{ "v": 1, "cmd": "switch-node", "args": { "tag": "🇷🇺Россия" } }
+```
+`cmd` — одно из имён shared-handlers (`start-vpn`, `stop-vpn`, `toggle-vpn`, `switch-node`, `set-group`, `rebuild-config`, `refresh-subs`, `reset-network`, `urltest-group`). `args` — extras команды.
+
+**Condition:**
+```json
+{ "v": 1, "check": "vpn-up" }
+{ "v": 1, "check": "active-node", "equals": "🇷🇺Россия" }
+{ "v": 1, "check": "active-group", "equals": "vpn-1" }
+```
+
+`v` — версия bundle (миграции при будущих изменениях формата). Невалидный/неизвестный bundle: setting → no-op + лог; condition → `RESULT_CONDITION_UNKNOWN`.
+
+### Архитектура
+
+```
+[Tasker] ── EDIT_SETTING ──▶ [LocaleSettingEditActivity (Kotlin)]
+                                   Spinner(команда) + EditText(extra) + Save
+                                   └─ setResult(OK, EXTRA_BUNDLE=json, EXTRA_STRING_BLURB)
+[Tasker] ── FIRE_SETTING (bundle) ──▶ [LocaleSettingReceiver]
+                                   parse bundle → VpnPlugin.handleAutomationAction(cmd, args)
+                                   └─ (тот же путь, что raw SWITCH_NODE) → shared handlers
+
+[Tasker] ── EDIT_CONDITION ──▶ [LocaleConditionEditActivity]
+                                   Spinner(что проверять) + (опц.) EditText(значение)
+[Tasker] ── QUERY_CONDITION (bundle) ──▶ [LocaleConditionReceiver]
+                                   читает BoxVpnService.currentStatus / активную ноду
+                                   └─ setResultCode(SATISFIED | UNSATISFIED | UNKNOWN)
+```
+
+- **Fire/setting** переиспользует `VpnPlugin.handleAutomationAction` (Шаг 1 bridge) → `services/automation/handlers.dart`. Никакой новой бизнес-логики.
+- **Query/condition** читается синхронно из native (`BoxVpnService.currentStatus`) — VPN up/down доступно без Flutter-engine. Активная нода/группа — из native-кеша (новый mirror в `lxbox_automation` prefs, который Dart обновляет при смене ноды; QUERY обязан ответить синхронно, Flutter может спать).
+- **Gating:** plugin-receiver'ы (как и raw-receiver Шага 1) включаются тем же мастер-toggle «Принимать команды автоматизации». Они exported по стандарту (permission нельзя — хост проверяет сам), но компонент `enabled=false` пока toggle OFF.
+
+### Native-кеш активного состояния (для QUERY_CONDITION)
+
+QUERY должен ответить синхронно. VPN up/down — `BoxVpnService.currentStatus` (уже есть). Активная нода/группа живут в Dart (`HomeController`), Flutter может быть не запущен → зеркалим в `lxbox_automation` prefs:
+- ключи `active_node`, `active_group` (String, обновляются из `HomeController.switchNode`/`applyGroup`/`setSelectedGroup` через новый MethodChannel `setAutomationActiveState`).
+- `LocaleConditionReceiver` читает их синхронно.
+
+### UI edit-Activity (нативный Kotlin)
+
+Минимальный Android-экран (не Flutter — изоляция от движка, быстрый cold-start из Tasker):
+- **Setting:** `Spinner` со списком 9 команд → при выборе команды с extra (`switch-node`/`set-group`/`urltest-group`/`refresh-subs`) показывается `EditText` для значения; кнопка Save.
+- **Condition:** `Spinner` (`VPN включён`, `Активная нода =`, `Активная группа =`) → условный `EditText`; Save.
+- Тема — наследует app theme (`@style/LaunchTheme`), label «L×Box».
+- Save → собирает JSON, кладёт в bundle, формирует blurb, `setResult`.
+
+### Manifest (добавочно к Шагу 1)
+
+```xml
+<!-- Setting plugin -->
+<activity android:name=".automation.LocaleSettingEditActivity"
+    android:exported="true" android:label="L×Box" android:icon="@mipmap/ic_launcher"
+    android:theme="@style/LaunchTheme">
+  <intent-filter><action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING"/></intent-filter>
+</activity>
+<receiver android:name=".automation.LocaleSettingReceiver"
+    android:exported="true" android:enabled="false">
+  <intent-filter><action android:name="com.twofortyfouram.locale.intent.action.FIRE_SETTING"/></intent-filter>
+</receiver>
+
+<!-- Condition plugin -->
+<activity android:name=".automation.LocaleConditionEditActivity"
+    android:exported="true" android:label="L×Box" android:icon="@mipmap/ic_launcher"
+    android:theme="@style/LaunchTheme">
+  <intent-filter><action android:name="com.twofortyfouram.locale.intent.action.EDIT_CONDITION"/></intent-filter>
+</activity>
+<receiver android:name=".automation.LocaleConditionReceiver"
+    android:exported="true" android:enabled="false">
+  <intent-filter><action android:name="com.twofortyfouram.locale.intent.action.QUERY_CONDITION"/></intent-filter>
+</receiver>
+```
+
+> **NB:** на receiver'ах `android:permission` НЕ ставим — стандарт это запрещает (хост проверяет права сам). Поэтому галка «Требовать пропуск» Шага 1 на Locale-путь **не распространяется**: gating — только мастер-toggle (компонент `enabled=false`). Это документируем как осознанный trade-off (стандарт-совместимость > строгий режим для plugin-пути; кто хочет строгий режим — использует raw-actions Шага 1).
+
+### Файлы (Шаг 2)
+
+| Файл | Что |
+|------|-----|
+| `app/android/app/src/main/kotlin/com/leadaxe/lxbox/automation/LocaleApi.kt` | **Новый** — константы стандарта + JSON bundle (de)serialize helpers |
+| `…/automation/LocaleSettingReceiver.kt` | **Новый** — FIRE_SETTING → parse → `VpnPlugin.handleAutomationAction` |
+| `…/automation/LocaleSettingEditActivity.kt` | **Новый** — Spinner команд + extra + Save → bundle/blurb |
+| `…/automation/LocaleConditionReceiver.kt` | **Новый** — QUERY_CONDITION → currentStatus/active-кеш → setResultCode |
+| `…/automation/LocaleConditionEditActivity.kt` | **Новый** — Spinner проверок + значение + Save |
+| `app/android/app/src/main/res/layout/locale_edit_*.xml` | **Новые** — простые layout'ы edit-Activity |
+| `AndroidManifest.xml` | +2 activity +2 receiver (enabled=false) |
+| `VpnPlugin.kt` | +MethodChannel `setAutomationActiveState` (Dart→native mirror ноды/группы) + `setEnabled` расширить на Locale-компоненты |
+| `LxBoxIntentReceiver.kt` (Шаг 1) | `setEnabled` уже есть — добавить enable/disable Locale-компонентов в той же транзакции |
+| `app/lib/vpn/box_vpn_client.dart` | `setAutomationActiveState(node, group)` |
+| `app/lib/controllers/home_controller.dart` | вызвать mirror при switchNode/applyGroup/setSelectedGroup |
+| `docs/AUTOMATION.md` | секция «Tasker plugin (рекомендуемый способ)» + скриншоты flow |
+
+### Тесты (Шаг 2)
+
+- **Unit (Kotlin)** — `LocaleApi` bundle round-trip (serialize→deserialize, версия, невалидный JSON).
+- **Integration (Kotlin)** — `LocaleSettingReceiver`: подаём FIRE_SETTING с bundle → проверяем вызов `handleAutomationAction(cmd, args)`. `LocaleConditionReceiver`: статус Started + check=vpn-up → `setResultCode(SATISFIED)`; пустой active-кеш + active-node → `UNKNOWN`.
+- **Manual (on-device)** — добавить L×Box как Plugin-action в Tasker: выбрать `switch-node tag=…` через наш экран → fire → нода меняется. Добавить Plugin-condition `vpn-up` → profile активируется при connect.
+
+### Критерии приёмки (Шаг 2)
+
+- [ ] L×Box виден в Tasker: **Action → Plugin → L×Box** и **State → Plugin → L×Box**.
+- [ ] Setting edit-Activity: Spinner 9 команд, условный extra-input, Save формирует bundle + non-empty blurb.
+- [ ] FIRE_SETTING исполняет команду через **те же** shared handlers (switch-node реально меняет ноду).
+- [ ] Condition edit-Activity: выбор vpn-up / active-node= / active-group=.
+- [ ] QUERY_CONDITION отвечает корректным result code (SATISFIED/UNSATISFIED/UNKNOWN), profile в Tasker реагирует.
+- [ ] Bundle round-trip переживает host-сериализацию; версия `v` присутствует.
+- [ ] Plugin-receiver'ы включаются мастер-toggle'ом (enabled=false пока OFF); галка «Требовать пропуск» к ним не применяется (документировано).
+- [ ] `docs/AUTOMATION.md` описывает plugin-flow как рекомендуемый для не-технических юзеров.
+
+---
+
 ## Будущие расширения (вне §047)
 
 - **Package whitelist** — UI list "Allow only these apps to control VPN: [+]" вместо "open to all who claim permission". Granular control. Реализуемо через `intent.package` check в receiver и `setPackage` на outgoing broadcasts.
@@ -817,7 +989,6 @@ Estimated work: **~3 дня** (manifest + receiver + bridge + emitter + 5 contro
 - **Action: EXCLUDE_NODE / INCLUDE_NODE** — toggle exclusion из auto-pool без UI, по tag.
 - **Action: OPEN_PROFILER** — запустить per-app trace (§044) для package extra. "Когда падает банк-app → start profiler для post-mortem".
 - **Action: APPLY_PROFILE** — если когда-нибудь будут multi-profile (см. ARCHITECTURE → Reusable layers → potential idea), automation сможет переключать профили.
-- **Tasker plugin** — отдельный official Tasker plugin app, который declare'ит permission + предоставляет UI dropdown'ы для action/extras + Tasker-native event subscriber UI. Полировка UX, но maintenance overhead.
 
 ---
 
@@ -826,5 +997,7 @@ Estimated work: **~3 дня** (manifest + receiver + bridge + emitter + 5 contro
 - [Android BroadcastReceiver guide](https://developer.android.com/develop/background-work/background-tasks/broadcasts)
 - [Custom permissions documentation](https://developer.android.com/guide/topics/permissions/defining)
 - [Tasker — Send Intent action](https://tasker.joaoapps.com/userguide/en/help/ah_send_intent.html)
+- [Locale plugin API for Android](https://github.com/twofortyfouram/android-plugin-api-for-locale) — стандарт `FIRE_SETTING` / `QUERY_CONDITION` (Шаг 2)
+- [Plug-in API Specification](https://github.com/twofortyfouram/android-monorepo/blob/master/docs/Plug-in%20API%20Specification.md) — точный контракт edit-Activity / fire-receiver / bundle 25 KB
 - [§031 — Debug API](../031%20debug%20api/spec.md) — action handlers переиспользуются
 - [§032 — Quick Connect](../032%20quick%20connect/spec.md) — same actions, разные транспорты (tile/shortcut vs broadcast)

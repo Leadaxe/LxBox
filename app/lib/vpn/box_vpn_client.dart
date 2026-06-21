@@ -594,6 +594,21 @@ class BoxVpnClient {
     );
   }
 
+  /// §047 Шаг 2 — зеркалит активную ноду/группу в native-кеш, чтобы
+  /// `LocaleConditionReceiver` отвечал на `QUERY_CONDITION` синхронно (Flutter
+  /// может спать). Fire-and-forget. Зовётся из HomeController при смене
+  /// ноды/группы.
+  void setAutomationActiveState({String? node, String? group}) {
+    unawaited(_invoke<void>(
+      _Methods.setAutomationActiveState,
+      args: {'node': node, 'group': group},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: null,
+    ).catchError((Object e) {
+      AppLog.I.error('[automation] setAutomationActiveState failed: $e');
+    }));
+  }
+
   /// Outgoing emit: отправить automation-broadcast наружу. Native сам решает,
   /// слать ли с permission (по галке «Требовать пропуск» в native-кеше).
   /// Fire-and-forget — не ждём подтверждения (broadcast асинхронен).

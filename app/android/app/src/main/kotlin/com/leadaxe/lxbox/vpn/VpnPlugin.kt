@@ -425,6 +425,19 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
                 result.success(true)
             }
+            // §047 Шаг 2 — зеркалим активную ноду/группу в native-кеш, чтобы
+            // LocaleConditionReceiver мог ответить на QUERY_CONDITION синхронно
+            // (Flutter-engine может спать).
+            "setAutomationActiveState" -> {
+                val node = call.argument<String>("node")
+                val group = call.argument<String>("group")
+                context.getSharedPreferences("lxbox_automation", Context.MODE_PRIVATE)
+                    .edit()
+                    .putString("active_node", node)
+                    .putString("active_group", group)
+                    .apply()
+                result.success(true)
+            }
             "getApplicationExitInfo" -> result.success(readApplicationExitInfo())
             "getLogcatTail" -> {
                 val count = (call.argument<Int>("count") ?: 1000).coerceIn(50, 5000)

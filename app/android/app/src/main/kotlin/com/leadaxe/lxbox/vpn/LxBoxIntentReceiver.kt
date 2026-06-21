@@ -67,18 +67,27 @@ class LxBoxIntentReceiver : BroadcastReceiver() {
             Log.d(TAG, "require-permission set to $value")
         }
 
-        /// Включает/выключает компонент-receiver. Мастер-toggle «Принимать
+        /// Включает/выключает все automation-receiver'ы (raw Шаг 1 +
+        /// Locale-плагины Шаг 2) одной транзакцией. Мастер-toggle «Принимать
         /// команды автоматизации» (Flutter `setAutomationEnabled`).
+        ///
+        /// Edit-Activity Locale-плагинов НЕ гейтятся (всегда exported) — без
+        /// receiver'а они безвредны (юзер настроит плагин, но fire/query не
+        /// дойдёт пока компонент disabled).
         fun setEnabled(ctx: Context, enabled: Boolean) {
             val pm = ctx.packageManager
-            val component = ComponentName(ctx, LxBoxIntentReceiver::class.java)
-            pm.setComponentEnabledSetting(
-                component,
-                if (enabled) PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                PackageManager.DONT_KILL_APP,
+            val state = if (enabled) PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            else PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+            // §047 Шаг 2 — Locale-receiver'ы по FQN (другой пакет `automation`).
+            val components = listOf(
+                ComponentName(ctx, LxBoxIntentReceiver::class.java),
+                ComponentName(ctx, "com.leadaxe.lxbox.automation.LocaleSettingReceiver"),
+                ComponentName(ctx, "com.leadaxe.lxbox.automation.LocaleConditionReceiver"),
             )
-            Log.d(TAG, "automation receiver ${if (enabled) "enabled" else "disabled"}")
+            for (c in components) {
+                pm.setComponentEnabledSetting(c, state, PackageManager.DONT_KILL_APP)
+            }
+            Log.d(TAG, "automation receivers ${if (enabled) "enabled" else "disabled"} (raw + Locale)")
         }
     }
 

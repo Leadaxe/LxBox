@@ -23,6 +23,34 @@
 
 ---
 
+## Два способа интеграции
+
+L×Box поддерживает **оба** механизма — выбирайте по удобству:
+
+| | Tasker Plugin (рекомендуется) | Raw broadcast intents |
+|---|---|---|
+| Как | Tasker → **Action → Plugin → L×Box** (нативный экран) | руками Send Intent + строка action |
+| Кому | большинству — кликаешь в списке плагинов | shell `am broadcast`, ADB, не-Tasker apps |
+| Настройка | Spinner команды + поле значения | вписать action и extras вручную |
+
+Оба требуют включённого мастер-toggle в **App Settings → Automation**. Plugin-способ описан сразу ниже; raw-actions — в таблицах далее.
+
+### Tasker Plugin (Locale-стандарт)
+
+**Действие (Setting):**
+1. Tasker → Task → **+** → **Plugin → L×Box**.
+2. Откроется наш экран: выбери команду в Spinner (например «Сменить ноду»), впиши значение (тег ноды), **Сохранить**.
+3. Готово — Tasker покажет blurb вида `Сменить ноду → 🇷🇺Россия`.
+
+**Условие (State):**
+1. Tasker → Profile → **State → Plugin → L×Box**.
+2. Выбери что проверять: `VPN включён` / `Активная нода =` / `Активная группа =` (+ значение).
+3. Profile активируется, пока условие истинно.
+
+> Под капотом plugin использует стандарт `com.twofortyfouram.locale.intent.action.FIRE_SETTING` / `QUERY_CONDITION` и те же команды, что raw-actions ниже.
+
+---
+
 ## Incoming actions (команды → L×Box)
 
 Все — broadcast intents. Префикс `com.leadaxe.lxbox.`.

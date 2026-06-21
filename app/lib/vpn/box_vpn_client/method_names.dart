@@ -73,6 +73,8 @@ class _Methods {
   static const setAutomationRequirePermission =
       'setAutomationRequirePermission';
   static const sendAutomationBroadcast = 'sendAutomationBroadcast';
+  // §047 Шаг 2 — mirror активной ноды/группы для Locale condition-плагина.
+  static const setAutomationActiveState = 'setAutomationActiveState';
 
   // §047 — native → Dart incoming intent dispatch (handled on this same
   // MethodChannel via setMethodCallHandler).
