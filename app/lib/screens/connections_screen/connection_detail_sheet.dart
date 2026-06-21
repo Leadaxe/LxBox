@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../services/app_info_cache.dart';
 import '../../services/format_utils.dart';
 
 /// §152 — детальный bottom sheet по одному соединению.
@@ -88,6 +89,8 @@ class _ConnectionDetailSheet extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Row(
               children: [
+                _appIcon(context, _str(meta, 'processPath')),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     title.isNotEmpty ? title : '(connection)',
@@ -229,14 +232,35 @@ class _ConnectionDetailSheet extends StatelessWidget {
     return out;
   }
 
+  /// §154 — launcher-иконка приложения по package (`processPath`), 20×20.
+  Widget _appIcon(BuildContext context, String pkg) {
+    const double size = 20;
+    final cs = Theme.of(context).colorScheme;
+    final placeholder = Icon(Icons.apps, size: size, color: cs.onSurfaceVariant);
+    if (pkg.isEmpty) return placeholder;
+    AppInfoCache.ensure(pkg);
+    return AnimatedBuilder(
+      animation: AppInfoCache.revision,
+      builder: (context, _) {
+        final icon = AppInfoCache.of(pkg)?.icon;
+        if (icon == null) return placeholder;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(5),
+          child: Image.memory(icon,
+              width: size, height: size, gaplessPlayback: true),
+        );
+      },
+    );
+  }
+
   /// Плашка-пояснение для однобокого (зависшего) соединения.
   Widget _oneWayBanner(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final upload = conn['upload'] as int? ?? 0;
     final download = conn['download'] as int? ?? 0;
     final detail = upload > 0 && download == 0
-        ? 'Данные ушли (↑), ответа нет (↓0) — поток, похоже, завис.'
-        : 'Данные приходят (↓), исходящих нет (↑0) — поток, похоже, завис.';
+        ? 'Data sent (↑), no reply (↓0) — the stream looks stuck.'
+        : 'Data received (↓), nothing sent (↑0) — the stream looks stuck.';
     return Container(
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(10),

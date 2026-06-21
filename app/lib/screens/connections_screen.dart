@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../services/app_info_cache.dart';
 import '../services/clash_api_client.dart';
 import '../services/format_utils.dart';
 import 'connections_screen/connection_detail_sheet.dart';
@@ -311,11 +312,13 @@ class _ConnectionsViewState extends State<ConnectionsView>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row 1: host:port + traffic + close button
-          // §152 — иконка-стрелка (→/⇄ для tcp/udp) убрана: тип соединения
-          // дублируется в Row 4 (`network/type`) и неочевиден без подписи.
+          // Row 1: app icon + host:port + traffic + close button
+          // §152 — иконка-стрелка (→/⇄ для tcp/udp) убрана; §154 — на её
+          // месте launcher-иконка приложения (по processPath = package).
           Row(
             children: [
+              _appIcon(process),
+              const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   display,
@@ -377,6 +380,30 @@ class _ConnectionsViewState extends State<ConnectionsView>
       ),
       ),
       ),
+    );
+  }
+
+  /// §154 — launcher-иконка приложения по package name (`processPath`).
+  /// 16×16, перерисовывается через `AppInfoCache.revision` когда иконка
+  /// дотянулась из native асинхронно. Fallback пока нет иконки/нет pkg —
+  /// нейтральный placeholder того же размера (layout не прыгает).
+  Widget _appIcon(String pkg) {
+    const double size = 16;
+    final cs = Theme.of(context).colorScheme;
+    final placeholder = Icon(Icons.apps, size: size, color: cs.onSurfaceVariant);
+    if (pkg.isEmpty) return placeholder;
+    AppInfoCache.ensure(pkg);
+    return AnimatedBuilder(
+      animation: AppInfoCache.revision,
+      builder: (context, _) {
+        final icon = AppInfoCache.of(pkg)?.icon;
+        if (icon == null) return placeholder;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Image.memory(icon,
+              width: size, height: size, gaplessPlayback: true),
+        );
+      },
     );
   }
 
