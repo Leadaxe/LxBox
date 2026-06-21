@@ -1,0 +1,333 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../../services/automation/event_emitter.dart';
+import '../../../services/settings_storage.dart';
+import '../../../services/url_launcher.dart' as ul;
+import '../../../vpn/box_vpn_client.dart';
+
+/// §047 Public Intent API — вкладка App Settings → Automation.
+///
+/// Самодостаточный StatefulWidget: грузит/сохраняет свои настройки сам (через
+/// [SettingsStorage]) и синкает в native ([BoxVpnClient]) — не раздувает
+/// родительский `_AppSettingsScreenState`.
+///
+/// Состав:
+///   - мастер-toggle «Принимать команды автоматизации» (включает receiver);
+///   - галка «Требовать пропуск» (+ условная строка permission с copy);
+///   - список intent-строк команд с кнопкой копирования;
+///   - 4 emit-категории (Lifecycle / State / Subscription / Health);
+///   - explainer-диалог при первом включении emit-категории;
+///   - ссылка на docs.
+class AutomationTab extends StatefulWidget {
+  const AutomationTab({super.key, required this.padding});
+
+  final EdgeInsets padding;
+
+  @override
+  State<AutomationTab> createState() => _AutomationTabState();
+}
+
+class _AutomationTabState extends State<AutomationTab> {
+  static const _permission = 'com.leadaxe.lxbox.permission.AUTOMATION';
+  static const _docsUrl =
+      'https://github.com/Leadaxe/LxBox/blob/main/docs/AUTOMATION.md';
+
+  /// (action-строка, подпись с extras) для UI-списка команд.
+  static const _commands = <(String, String)>[
+    ('com.leadaxe.lxbox.START_VPN', ''),
+    ('com.leadaxe.lxbox.STOP_VPN', ''),
+    ('com.leadaxe.lxbox.TOGGLE_VPN', ''),
+    ('com.leadaxe.lxbox.SWITCH_NODE', 'extra: tag'),
+    ('com.leadaxe.lxbox.SET_GROUP', 'extra: group'),
+    ('com.leadaxe.lxbox.REBUILD_CONFIG', ''),
+    ('com.leadaxe.lxbox.REFRESH_SUBS', 'extra: force'),
+    ('com.leadaxe.lxbox.RESET_NETWORK', ''),
+    ('com.leadaxe.lxbox.URLTEST_GROUP', 'extra: group'),
+  ];
+
+  bool _loaded = false;
+  bool _receiveEnabled = false;
+  bool _requirePermission = false;
+  bool _emitLifecycle = false;
+  bool _emitState = false;
+  bool _emitSubs = false;
+  bool _emitHealth = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final receive = await SettingsStorage.getAutomationReceiveEnabled();
+    final require = await SettingsStorage.getAutomationRequirePermission();
+    final lifecycle = await SettingsStorage.getAutomationEmitLifecycle();
+    final state = await SettingsStorage.getAutomationEmitState();
+    final subs = await SettingsStorage.getAutomationEmitSubs();
+    final health = await SettingsStorage.getAutomationEmitHealth();
+    if (!mounted) return;
+    setState(() {
+      _receiveEnabled = receive;
+      _requirePermission = require;
+      _emitLifecycle = lifecycle;
+      _emitState = state;
+      _emitSubs = subs;
+      _emitHealth = health;
+      _loaded = true;
+    });
+  }
+
+  // ─── Master toggle ──────────────────────────────────────────────────────────
+
+  Future<void> _onReceiveChanged(bool value) async {
+    if (value) {
+      final ok = await _confirmEnableReceiver();
+      if (ok != true) return;
+    }
+    setState(() => _receiveEnabled = value);
+    await SettingsStorage.setAutomationReceiveEnabled(value);
+    await BoxVpnClient.I.setAutomationEnabled(value);
+  }
+
+  Future<bool?> _confirmEnableReceiver() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Включить приём команд?'),
+        content: const Text(
+          'Любое приложение сможет управлять VPN через broadcast-команды '
+          '(если не включена галка «Требовать пропуск»). Включайте только если '
+          'используете Tasker / Macrodroid и понимаете последствия.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Включить'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _onRequireChanged(bool value) async {
+    setState(() => _requirePermission = value);
+    await SettingsStorage.setAutomationRequirePermission(value);
+    await BoxVpnClient.I.setAutomationRequirePermission(value);
+  }
+
+  // ─── Emit categories ─────────────────────────────────────────────────────────
+
+  Future<void> _onEmitChanged(
+    bool value,
+    Future<void> Function(bool) persist,
+    void Function(bool) apply,
+  ) async {
+    if (value && !await SettingsStorage.getAutomationExplainerShown()) {
+      final ok = await _showEmitExplainer();
+      if (ok != true) return;
+      await SettingsStorage.setAutomationExplainerShown(true);
+    }
+    setState(() => apply(value));
+    await persist(value);
+    await AutomationEventEmitter.I.reload();
+  }
+
+  Future<bool?> _showEmitExplainer() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Отправка событий наружу'),
+        content: const Text(
+          'Включение этой категории позволит другим приложениям получать '
+          'события L×Box (при включённой галке «Требовать пропуск» — только '
+          'приложениям с пропуском).\n\n'
+          'События НЕ содержат секретов подписок / config — только лейблы '
+          '(теги нод, имена групп, статус).',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Продолжить'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Clipboard ───────────────────────────────────────────────────────────────
+
+  Future<void> _copy(String text, String label) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label скопировано'), duration: const Duration(seconds: 1)),
+    );
+  }
+
+  // ─── Build ───────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = TextStyle(
+      fontSize: 12,
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+
+    return ListView(
+      padding: widget.padding,
+      children: [
+        Text('Automation API', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text(
+          'Управление L×Box из Tasker / Macrodroid / Llama и других '
+          'automation-приложений через Android broadcast intents.',
+          style: muted,
+        ),
+        const Divider(height: 28),
+
+        // ─── Master ───
+        Text('Приём команд', style: theme.textTheme.titleSmall),
+        SwitchListTile(
+          title: const Text('Принимать команды автоматизации'),
+          subtitle: const Text(
+            'Start / Stop / Toggle / Switch / Refresh / … (default OFF)',
+          ),
+          secondary: const Icon(Icons.settings_remote),
+          value: _receiveEnabled,
+          onChanged: _loaded ? _onReceiveChanged : null,
+        ),
+        SwitchListTile(
+          title: const Text('Требовать пропуск'),
+          subtitle: const Text(
+            'Команды и события только от приложений с пропуском (рекомендуется)',
+          ),
+          secondary: const Icon(Icons.verified_user_outlined),
+          value: _requirePermission,
+          onChanged: _loaded ? _onRequireChanged : null,
+        ),
+        if (_requirePermission)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Впишите этот пропуск в permissions вашего Tasker:',
+                    style: muted),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SelectableText(
+                        _permission,
+                        style: const TextStyle(
+                            fontFamily: 'monospace', fontSize: 12),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Copy',
+                      icon: const Icon(Icons.copy, size: 18),
+                      onPressed: () => _copy(_permission, 'Пропуск'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+        const Divider(height: 28),
+
+        // ─── Commands ───
+        Text('Команды (intent actions)', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 2),
+        Text(
+          'Скопируйте в «Send Intent» вашего automation-приложения. '
+          'Target: Broadcast Receiver.',
+          style: muted,
+        ),
+        const SizedBox(height: 4),
+        for (final (action, extra) in _commands)
+          ListTile(
+            dense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            title: Text(
+              action,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+            subtitle: extra.isEmpty ? null : Text(extra, style: muted),
+            trailing: IconButton(
+              tooltip: 'Copy',
+              icon: const Icon(Icons.copy, size: 18),
+              onPressed: () => _copy(action, 'Команда'),
+            ),
+          ),
+
+        const Divider(height: 28),
+
+        // ─── Emit categories ───
+        Text('События наружу (emit)', style: theme.textTheme.titleSmall),
+        SwitchListTile(
+          title: const Text('Lifecycle'),
+          subtitle: const Text(
+            'VPN_CONNECTED · DISCONNECTED · ERROR · REVOKED · '
+            'UPDATE_AVAILABLE · PERMISSION_NEEDED',
+          ),
+          value: _emitLifecycle,
+          onChanged: _loaded
+              ? (v) => _onEmitChanged(v,
+                  SettingsStorage.setAutomationEmitLifecycle,
+                  (x) => _emitLifecycle = x)
+              : null,
+        ),
+        SwitchListTile(
+          title: const Text('State'),
+          subtitle: const Text('ACTIVE_NODE_CHANGED · ACTIVE_GROUP_CHANGED'),
+          value: _emitState,
+          onChanged: _loaded
+              ? (v) => _onEmitChanged(v,
+                  SettingsStorage.setAutomationEmitState, (x) => _emitState = x)
+              : null,
+        ),
+        SwitchListTile(
+          title: const Text('Subscription'),
+          subtitle: const Text('SUB_REFRESHED · SUB_REFRESH_FAILED'),
+          value: _emitSubs,
+          onChanged: _loaded
+              ? (v) => _onEmitChanged(v,
+                  SettingsStorage.setAutomationEmitSubs, (x) => _emitSubs = x)
+              : null,
+        ),
+        SwitchListTile(
+          title: const Text('Health'),
+          subtitle: const Text(
+            'HEARTBEAT_FAILED · LATENCY_DEGRADED (доступно с §042)',
+          ),
+          value: _emitHealth,
+          onChanged: _loaded
+              ? (v) => _onEmitChanged(v,
+                  SettingsStorage.setAutomationEmitHealth,
+                  (x) => _emitHealth = x)
+              : null,
+        ),
+
+        const Divider(height: 28),
+        OutlinedButton.icon(
+          onPressed: () => ul.UrlLauncher.open(_docsUrl),
+          icon: const Icon(Icons.menu_book_outlined, size: 18),
+          label: const Text('Документация и Tasker-рецепты'),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+}

@@ -5,14 +5,13 @@ import 'package:flutter/services.dart';
 
 import '../../../models/custom_rule.dart';
 import '../../app_log.dart';
+import '../../automation/handlers.dart' as automation;
 import '../../error_humanize.dart';
 import '../../platform_channels.dart';
 import '../../rule_set_downloader.dart';
 import '../../settings_storage.dart';
-import '../../subscription/auto_updater.dart';
 import '../../update_checker.dart';
 import '../../version_info.dart';
-import '../../../vpn/box_vpn_client.dart';
 import '../context.dart';
 import '../contract/errors.dart';
 import '../transport/request.dart';
@@ -219,32 +218,24 @@ Future<DebugResponse> _urltest(DebugRequest req, DebugContext ctx) async {
 }
 
 Future<DebugResponse> _switchNode(DebugRequest req, DebugContext ctx) async {
-  final home = ctx.requireHome();
   final tag = req.requiredQuery('tag');
-  if (home.state.selectedGroup == null) {
-    throw const Conflict('no group selected — use /action/set-group first');
-  }
-  unawaited(home.switchNode(tag));
+  await automation.actionSwitchNode(tag, ctx);
   return _ok('switch-node', {'tag': tag});
 }
 
 Future<DebugResponse> _setGroup(DebugRequest req, DebugContext ctx) async {
-  final home = ctx.requireHome();
   final group = req.requiredQuery('group');
-  home.setSelectedGroup(group);
-  unawaited(home.applyGroup(group));
+  await automation.actionSetGroup(group, ctx);
   return _ok('set-group', {'group': group});
 }
 
 Future<DebugResponse> _startVpn(DebugContext ctx) async {
-  final home = ctx.requireHome();
-  unawaited(home.start());
+  await automation.actionStartVpn(ctx);
   return _ok('start-vpn');
 }
 
 Future<DebugResponse> _stopVpn(DebugContext ctx) async {
-  final home = ctx.requireHome();
-  unawaited(home.stop());
+  await automation.actionStopVpn(ctx);
   return _ok('stop-vpn');
 }
 
@@ -321,43 +312,20 @@ int? _parsePositiveMs(String? raw, String name) {
 /// эффект асинхронен и наблюдается через `/clash/connections` (counter
 /// связей упадёт до ~0 моментально, потом начнёт заполняться заново).
 Future<DebugResponse> _resetNetwork(DebugContext ctx) async {
-  final home = ctx.requireHome();
-  if (!home.state.tunnelUp) {
-    throw const Conflict('tunnel not up — resetNetwork is no-op');
-  }
-  final ok = await BoxVpnClient().resetNetwork();
+  final ok = await automation.actionResetNetwork(ctx);
   return _ok('reset-network', {'native_ok': ok});
 }
 
 Future<DebugResponse> _rebuildConfig(DebugContext ctx) async {
-  // §037: явный 409 если lock включён — иначе UpstreamError с пустым
-  // sub.lastError (скрыт причину), и юзер не понимает почему не сработало.
-  if (await SettingsStorage.getConfigLockedForDebug()) {
-    throw const Conflict(
-      'config_locked_for_debug=true — rebuild blocked. '
-      'PUT /settings/config_locked {"locked":false} to unlock first.',
-    );
-  }
-  final sub = ctx.requireSub();
-  final home = ctx.requireHome();
-  final json = await sub.generateConfig();
-  if (json == null) {
-    throw UpstreamError('generate failed: ${sub.lastError}');
-  }
-  final saved = await home.saveParsedConfig(json);
-  if (!saved) {
-    throw const UpstreamError('saveParsedConfig returned false');
-  }
-  return _ok('rebuild-config', {'bytes': json.length});
+  // §037: явный 409 если lock включён — обрабатывается внутри
+  // automation.actionRebuildConfig (общий путь с Automation API).
+  final bytes = await automation.actionRebuildConfig(ctx);
+  return _ok('rebuild-config', {'bytes': bytes});
 }
 
 Future<DebugResponse> _refreshSubs(DebugRequest req, DebugContext ctx) async {
-  final updater = ctx.autoUpdater;
-  if (updater == null) {
-    throw const Conflict('auto updater not ready');
-  }
   final force = req.qBool('force');
-  unawaited(updater.maybeUpdateAll(UpdateTrigger.manual, force: force));
+  await automation.actionRefreshSubs(force, ctx);
   return _ok('refresh-subs', {'force': force});
 }
 

@@ -32,6 +32,20 @@
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
         android:usesPermissionFlags="neverForLocation" />
 
+    <!-- §047 Public Intent API — custom permission для строгого режима
+         («Требовать пропуск»). Объявляется всегда (нужна когда юзер включил
+         галку), но к receiver статически НЕ привязана через
+         `android:permission` — манифест-атрибут нельзя переключить рантаймом,
+         а защита опциональна. Enforcement — в коде (`LxBoxIntentReceiver.
+         onReceive`). protectionLevel="normal": барьер «знать имя + declare»,
+         не криптозащита; для сильной модели — package whitelist (future v2).
+         `uses-permission` на себя — чтобы наши же outgoing-broadcast'ы в
+         строгом режиме доходили до собственных тест-подписчиков. -->
+    <permission
+        android:name="com.leadaxe.lxbox.permission.AUTOMATION"
+        android:protectionLevel="normal" />
+    <uses-permission android:name="com.leadaxe.lxbox.permission.AUTOMATION" />
+
     <application
         android:label="L×Box"
         android:name=".vpn.BoxApplication"
@@ -89,6 +103,30 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- §047 Public Intent API — приём automation-команд (Tasker /
+             Macrodroid). `enabled="false"` по умолчанию: компонент включается
+             рантаймом через PackageManager.setComponentEnabledSetting когда
+             юзер поднимает мастер-toggle «Принимать команды автоматизации».
+             `android:permission` НЕ задан — защита пропуском опциональна
+             (галка «Требовать пропуск»), а манифест-атрибут статичен;
+             enforcement делается в коде (`onReceive`). -->
+        <receiver
+            android:name=".vpn.LxBoxIntentReceiver"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="com.leadaxe.lxbox.START_VPN" />
+                <action android:name="com.leadaxe.lxbox.STOP_VPN" />
+                <action android:name="com.leadaxe.lxbox.TOGGLE_VPN" />
+                <action android:name="com.leadaxe.lxbox.SWITCH_NODE" />
+                <action android:name="com.leadaxe.lxbox.SET_GROUP" />
+                <action android:name="com.leadaxe.lxbox.REBUILD_CONFIG" />
+                <action android:name="com.leadaxe.lxbox.REFRESH_SUBS" />
+                <action android:name="com.leadaxe.lxbox.RESET_NETWORK" />
+                <action android:name="com.leadaxe.lxbox.URLTEST_GROUP" />
             </intent-filter>
         </receiver>
 

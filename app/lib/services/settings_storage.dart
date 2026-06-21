@@ -465,6 +465,68 @@ class SettingsStorage {
       setVar('debug_port', port.toString());
 
   // ---------------------------------------------------------------------------
+  // Automation API (§047) — public broadcast intents (Tasker / Macrodroid).
+  //
+  // Все ключи default false — фича opt-in, по умолчанию receiver disabled и
+  // эмиттер молчит. `automation_require_permission` дополнительно зеркалится в
+  // native-кеш (`lxbox_automation` SharedPreferences) через
+  // `LxBoxIntentReceiver.setRequirePermission`, т.к. `onReceive` обязан читать
+  // флаг синхронно (Flutter-engine может быть не запущен).
+  // ---------------------------------------------------------------------------
+
+  /// Мастер-toggle приёма команд автоматизации. При смене вызывается
+  /// `setComponentEnabledSetting` на native — receiver включается/выключается.
+  static Future<bool> getAutomationReceiveEnabled() async =>
+      (await getVar('automation_receive_enabled', 'false')) == 'true';
+
+  static Future<void> setAutomationReceiveEnabled(bool enabled) =>
+      setVar('automation_receive_enabled', enabled ? 'true' : 'false');
+
+  /// Галка «Требовать пропуск». При ON команды/события идут только от/к
+  /// приложениям с granted `com.leadaxe.lxbox.permission.AUTOMATION`.
+  static Future<bool> getAutomationRequirePermission() async =>
+      (await getVar('automation_require_permission', 'false')) == 'true';
+
+  static Future<void> setAutomationRequirePermission(bool enabled) =>
+      setVar('automation_require_permission', enabled ? 'true' : 'false');
+
+  /// Emit-категория: lifecycle (VPN_CONNECTED/DISCONNECTED/ERROR/REVOKED +
+  /// UPDATE_AVAILABLE/PERMISSION_NEEDED).
+  static Future<bool> getAutomationEmitLifecycle() async =>
+      (await getVar('automation_emit_lifecycle', 'false')) == 'true';
+
+  static Future<void> setAutomationEmitLifecycle(bool enabled) =>
+      setVar('automation_emit_lifecycle', enabled ? 'true' : 'false');
+
+  /// Emit-категория: state (ACTIVE_NODE_CHANGED / ACTIVE_GROUP_CHANGED).
+  static Future<bool> getAutomationEmitState() async =>
+      (await getVar('automation_emit_state', 'false')) == 'true';
+
+  static Future<void> setAutomationEmitState(bool enabled) =>
+      setVar('automation_emit_state', enabled ? 'true' : 'false');
+
+  /// Emit-категория: subscription (SUB_REFRESHED / SUB_REFRESH_FAILED).
+  static Future<bool> getAutomationEmitSubs() async =>
+      (await getVar('automation_emit_subs', 'false')) == 'true';
+
+  static Future<void> setAutomationEmitSubs(bool enabled) =>
+      setVar('automation_emit_subs', enabled ? 'true' : 'false');
+
+  /// Emit-категория: health (зарезервирована под §042 watchdog).
+  static Future<bool> getAutomationEmitHealth() async =>
+      (await getVar('automation_emit_health', 'false')) == 'true';
+
+  static Future<void> setAutomationEmitHealth(bool enabled) =>
+      setVar('automation_emit_health', enabled ? 'true' : 'false');
+
+  /// Флаг «explainer-диалог при первом включении emit-категории уже показан».
+  static Future<bool> getAutomationExplainerShown() async =>
+      (await getVar('automation_explainer_shown_v1', 'false')) == 'true';
+
+  static Future<void> setAutomationExplainerShown(bool shown) =>
+      setVar('automation_explainer_shown_v1', shown ? 'true' : 'false');
+
+  // ---------------------------------------------------------------------------
   // Backup snapshot (§031) — dump/export/replace всего `lxbox_settings.json`.
   // ---------------------------------------------------------------------------
 

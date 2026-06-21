@@ -15,6 +15,7 @@ import '../services/wifi_history_listener.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import '../vpn/box_vpn_client.dart';
 import 'app_settings_screen/app_settings_dialogs.dart';
+import 'app_settings_screen/widgets/automation_tab.dart';
 import 'app_settings_screen/widgets/diagnostics_tab.dart';
 import 'app_settings_screen/widgets/general_tab.dart';
 import 'app_settings_screen/widgets/subscriptions_tab.dart';
@@ -419,16 +420,18 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       animation: themeNotifier,
       builder: (context, _) {
         return DefaultTabController(
-          length: 3,
-          initialIndex: widget.initialTab.clamp(0, 2),
+          length: 4,
+          initialIndex: widget.initialTab.clamp(0, 3),
           child: Scaffold(
             appBar: AppBar(
               title: const Text('App Settings'),
               bottom: const TabBar(
+                isScrollable: true,
                 tabs: [
                   Tab(text: 'General'),
                   Tab(text: 'Subscriptions'),
                   Tab(text: 'Diagnostics'),
+                  Tab(text: 'Automation'),
                 ],
               ),
             ),
@@ -437,6 +440,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
                 _buildGeneralTab(context),
                 _buildSubscriptionsTab(context),
                 _buildDiagnosticsTab(context),
+                AutomationTab(padding: _tabPadding(context)),
               ],
             ),
           ),

@@ -2,8 +2,8 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **Draft** — spec only, не реализовано |
-| Дата | 2026-05-10 (обновлено 2026-06-21 — опциональный custom permission под галкой) |
+| Статус | **Implemented** (2026-06-21) — receiver + emitter + bridge + рефактор хендлеров + вкладка Automation + [`docs/AUTOMATION.md`](../../../AUTOMATION.md). Health-события — future (§042). |
+| Дата | 2026-05-10 (обновлено 2026-06-21 — реализация) |
 | Зависимости | [`031 debug api`](../031%20debug%20api/spec.md) (action handlers переиспользуются) |
 | Связано | [`032 quick connect`](../032%20quick%20connect/spec.md) (та же семантика toggle/switch, разные источники) |
 | Issue | [#12 «Add ON and OFF actions in addition to toggle»](https://github.com/Leadaxe/LxBox/issues/12) — `START_VPN`/`STOP_VPN` покрывают запрос |

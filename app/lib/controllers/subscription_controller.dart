@@ -9,6 +9,7 @@ import '../models/server_list.dart';
 import '../models/subscription_meta.dart';
 import '../models/validation.dart';
 import '../services/app_log.dart';
+import '../services/automation/event_emitter.dart';
 import '../services/config_dirty_check.dart';
 import '../services/error_humanize.dart';
 import '../services/parse_hints.dart';
@@ -810,6 +811,9 @@ class SubscriptionController extends ChangeNotifier {
               'Persist failed after empty fetch: ${humanizeError(e)}');
         }
         if (trigger == UpdateTrigger.manual) HapticService.I.onFetchError();
+        // §047 — outgoing subscription event (gated, default OFF, throttled).
+        AutomationEventEmitter.I
+            .emitSubRefreshFailed(shortUrl, '0 nodes parsed');
         notifyListeners();
         return;
       }
@@ -848,6 +852,14 @@ class SubscriptionController extends ChangeNotifier {
       await _persist();
       // Haptic только на user-инициированные fetch'и — auto/periodic тихие.
       if (trigger == UpdateTrigger.manual) HapticService.I.onFetchSuccess();
+      // §047 — outgoing subscription event (gated, default OFF). delta =
+      // прирост нод относительно прошлого успешного fetch'а. sub_id = masked
+      // host (стабильный, не утекает токен).
+      AutomationEventEmitter.I.emitSubRefreshed(
+        shortUrl,
+        result.nodes.length,
+        result.nodes.length - current.lastNodeCount,
+      );
     } catch (e) {
       AppLog.I.error('Fetch failed for $shortUrl: $e');
       entry.status = entry.nodeCount > 0
@@ -866,6 +878,10 @@ class SubscriptionController extends ChangeNotifier {
         await _persist();
       }
       if (trigger == UpdateTrigger.manual) HapticService.I.onFetchError();
+      // §047 — outgoing subscription event (gated, default OFF; throttled
+      // 1/min на sub_id в эмиттере, чтобы network-outage не заспамил Tasker).
+      AutomationEventEmitter.I
+          .emitSubRefreshFailed(shortUrl, humanizeError(e));
     }
     notifyListeners();
   }

@@ -32,6 +32,66 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val STATUS_CHANNEL = "com.leadaxe.lxbox/status_events"
         private const val CORE_LOG_CHANNEL = "lxbox/coreLog"   // §043
         private const val VPN_REQUEST_CODE = 24
+
+        // §047 — статические ссылки для bridge'а из LxBoxIntentReceiver (он
+        // живёт вне Flutter-плагина). Заполняются в onAttachedToEngine,
+        // обнуляются в onDetachedFromEngine. null = Flutter-engine не активен.
+        @Volatile
+        private var bridgeChannel: MethodChannel? = null
+        @Volatile
+        private var appContext: Context? = null
+        private val bridgeHandler =
+            android.os.Handler(android.os.Looper.getMainLooper())
+
+        /// §047 incoming bridge: LxBoxIntentReceiver форвардит intent-action +
+        /// extras → Dart (`box_vpn_client` `automationAction` handler) → shared
+        /// action-handlers. Если engine не запущен — silently skip.
+        fun handleAutomationAction(name: String, args: Map<String, Any?>) {
+            val channel = bridgeChannel
+            if (channel == null) {
+                Log.w(TAG, "[automation] handleAutomationAction($name) — no Flutter engine, skip")
+                return
+            }
+            bridgeHandler.post {
+                runCatching {
+                    channel.invokeMethod(
+                        "automationAction",
+                        mapOf("name" to name, "args" to args),
+                    )
+                }.onFailure {
+                    Log.e(TAG, "[automation] invokeMethod(automationAction) failed", it)
+                }
+            }
+        }
+
+        /// §047 outgoing emit: Dart (`AutomationEventEmitter`) шлёт событие
+        /// наружу. action — короткое имя (`VPN_CONNECTED`), namespace'ится в
+        /// `com.leadaxe.lxbox.event.<action>`. Permission-gated по native-кешу
+        /// галки «Требовать пропуск» (симметрично incoming).
+        fun sendAutomationBroadcast(action: String, extras: Map<String, Any?>) {
+            val ctx = appContext ?: return
+            val intent = Intent("com.leadaxe.lxbox.event.$action")
+            for ((k, v) in extras) {
+                when (v) {
+                    null -> {}
+                    is String -> intent.putExtra(k, v)
+                    is Boolean -> intent.putExtra(k, v)
+                    is Int -> intent.putExtra(k, v)
+                    is Long -> intent.putExtra(k, v)
+                    is Double -> intent.putExtra(k, v)
+                    else -> intent.putExtra(k, v.toString())
+                }
+            }
+            // setPackage намеренно не выставляем — broadcast открыт всем
+            // подписчикам (или only-permission-holders в строгом режиме).
+            val requirePerm = LxBoxIntentReceiver.requirePermission(ctx)
+            if (requirePerm) {
+                ctx.sendBroadcast(intent, LxBoxIntentReceiver.PERMISSION_AUTOMATION)
+            } else {
+                ctx.sendBroadcast(intent)
+            }
+            Log.d(TAG, "[automation] emit $action (${extras.size} extras, perm=$requirePerm)")
+        }
     }
 
     private lateinit var methodChannel: MethodChannel
@@ -73,6 +133,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
 
         methodChannel = MethodChannel(binding.binaryMessenger, METHOD_CHANNEL)
         methodChannel.setMethodCallHandler(this)
+        // §047 — статические bridge-ссылки для LxBoxIntentReceiver.
+        bridgeChannel = methodChannel
+        appContext = context
 
         statusEventChannel = EventChannel(binding.binaryMessenger, STATUS_CHANNEL)
         statusEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
@@ -116,6 +179,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         coreLogEventChannel.setStreamHandler(null)
         statusSink = null
         BoxVpnService.coreLogSink = null
+        // §047 — обнуляем bridge-ссылки (engine detached).
+        bridgeChannel = null
+        appContext = null
         runCatching { context.unregisterReceiver(statusReceiver) }
         pluginScope.cancel()
     }
@@ -337,6 +403,27 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // На API < 33 возвращаем "unsupported" — Dart-сторона покажет
                 // текстовую инструкцию вместо кнопки.
                 requestAddQuickSettingsTile(result)
+            }
+            // §047 Automation API — Dart → native control + outgoing emit.
+            "setAutomationEnabled" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                LxBoxIntentReceiver.setEnabled(context, enabled)
+                result.success(true)
+            }
+            "setAutomationRequirePermission" -> {
+                val require = call.argument<Boolean>("require") ?: false
+                LxBoxIntentReceiver.setRequirePermission(context, require)
+                result.success(true)
+            }
+            "sendAutomationBroadcast" -> {
+                val action = call.argument<String>("action") ?: ""
+                @Suppress("UNCHECKED_CAST")
+                val extras = (call.argument<Map<String, Any?>>("extras")
+                    ?: emptyMap())
+                if (action.isNotEmpty()) {
+                    sendAutomationBroadcast(action, extras)
+                }
+                result.success(true)
             }
             "getApplicationExitInfo" -> result.success(readApplicationExitInfo())
             "getLogcatTail" -> {

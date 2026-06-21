@@ -11,6 +11,7 @@ import '../vpn/box_vpn_client.dart';
 import '../config/config_parse.dart';
 import '../models/home_state.dart';
 import '../services/app_log.dart';
+import '../services/automation/event_emitter.dart';
 import '../services/clash_api_client.dart';
 import '../services/error_format.dart';
 import '../services/settings_storage.dart';
@@ -197,6 +198,8 @@ class HomeController extends ChangeNotifier
       // AutoUpdater триггер #2: через 2 мин после connected.
       _autoUpdater?.onVpnConnected();
       unawaited(_scheduleAutoPing());
+      // §047 — outgoing lifecycle event (gated, default OFF).
+      AutomationEventEmitter.I.emitVpnConnected();
     } else if (tunnel == TunnelStatus.disconnected ||
         tunnel == TunnelStatus.revoked) {
       _stopHeartbeat();
@@ -243,6 +246,18 @@ class HomeController extends ChangeNotifier
       }
       if (reason.isNotEmpty) {
         _addDebug(DebugSource.core, reason);
+      }
+      // §047 — outgoing lifecycle events (gated, default OFF). revoked → своё
+      // событие; ошибочный stop (errorReason present) → VPN_ERROR + DISCONNECTED;
+      // чистый user-stop → DISCONNECTED reason=user.
+      if (tunnel == TunnelStatus.revoked) {
+        AutomationEventEmitter.I.emitVpnRevoked();
+        AutomationEventEmitter.I.emitVpnDisconnected('revoked');
+      } else if (event.errorReason != null) {
+        AutomationEventEmitter.I.emitVpnError('tunnel_error', event.errorReason!);
+        AutomationEventEmitter.I.emitVpnDisconnected('error');
+      } else {
+        AutomationEventEmitter.I.emitVpnDisconnected('user');
       }
     } else if (tunnel == TunnelStatus.stopping || tunnel == TunnelStatus.connecting) {
       _stopHeartbeat();
@@ -592,6 +607,7 @@ class HomeController extends ChangeNotifier
     final group = _state.selectedGroup;
     final clash = _clash;
     if (group == null || clash == null) return;
+    final prevNode = _state.activeInGroup;
     _emit(_state.copyWith(busy: true, highlightedNode: nodeTag));
     try {
       await clash.selectInGroup(group, nodeTag);
@@ -623,6 +639,10 @@ class HomeController extends ChangeNotifier
       }
       await reloadProxies();
       _addDebug(DebugSource.app, 'Node selected: $nodeTag');
+      // §047 — outgoing state event (gated, default OFF). reason=user: явный
+      // выбор ноды (через UI или automation SWITCH_NODE — оба идут сюда).
+      AutomationEventEmitter.I
+          .emitNodeChanged(prevNode, nodeTag, group, 'user');
     } catch (e) {
       _emit(_state.copyWith(
           lastError: 'Switch failed: ${formatUserError(e)}'));
@@ -642,11 +662,17 @@ class HomeController extends ChangeNotifier
   // ---------------------------------------------------------------------------
 
   void setSelectedGroup(String? group) {
+    final prevGroup = _state.selectedGroup;
     // §070: bump cache gen — group switch = новый pool, sort заново.
     _emit(_state.copyWith(
       selectedGroup: group,
       pingBatchGen: _state.pingBatchGen + 1,
     ));
+    // §047 — outgoing state event (gated, default OFF). Эмитим только на
+    // реальную смену группы (не повторный select той же).
+    if (group != null && group != prevGroup) {
+      AutomationEventEmitter.I.emitGroupChanged(prevGroup, group, 'user');
+    }
   }
 
   void setHighlightedNode(String nodeTag) {
