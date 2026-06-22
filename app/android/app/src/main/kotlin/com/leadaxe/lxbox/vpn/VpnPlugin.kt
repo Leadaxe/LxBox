@@ -66,8 +66,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
 
         /// §047 outgoing emit: Dart (`AutomationEventEmitter`) шлёт событие
         /// наружу. action — короткое имя (`VPN_CONNECTED`), namespace'ится в
-        /// `com.leadaxe.lxbox.event.<action>`. Permission-gated по native-кешу
-        /// галки «Требовать пропуск» (симметрично incoming).
+        /// `com.leadaxe.lxbox.event.<action>`. Открыт всем подписчикам — события
+        /// не содержат секретов (только лейблы: теги нод, группы, статус); см.
+        /// §157 (permission-фильтр удалён вместе с нерабочей галкой).
         fun sendAutomationBroadcast(action: String, extras: Map<String, Any?>) {
             val ctx = appContext ?: return
             val intent = Intent("com.leadaxe.lxbox.event.$action")
@@ -83,14 +84,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             // setPackage намеренно не выставляем — broadcast открыт всем
-            // подписчикам (или only-permission-holders в строгом режиме).
-            val requirePerm = LxBoxIntentReceiver.requirePermission(ctx)
-            if (requirePerm) {
-                ctx.sendBroadcast(intent, LxBoxIntentReceiver.PERMISSION_AUTOMATION)
-            } else {
-                ctx.sendBroadcast(intent)
-            }
-            Log.d(TAG, "[automation] emit $action (${extras.size} extras, perm=$requirePerm)")
+            // подписчикам (события без секретов, только лейблы).
+            ctx.sendBroadcast(intent)
+            Log.d(TAG, "[automation] emit $action (${extras.size} extras)")
         }
     }
 
@@ -420,11 +416,6 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "setAutomationEnabled" -> {
                 val enabled = call.argument<Boolean>("enabled") ?: false
                 LxBoxIntentReceiver.setEnabled(context, enabled)
-                result.success(true)
-            }
-            "setAutomationRequirePermission" -> {
-                val require = call.argument<Boolean>("require") ?: false
-                LxBoxIntentReceiver.setRequirePermission(context, require)
                 result.success(true)
             }
             "sendAutomationBroadcast" -> {

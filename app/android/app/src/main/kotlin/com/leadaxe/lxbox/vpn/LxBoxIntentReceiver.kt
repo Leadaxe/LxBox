@@ -14,11 +14,10 @@ import com.leadaxe.lxbox.MainActivity
 /// `enabled="false"`; включается рантаймом ([setEnabled]) когда юзер поднимает
 /// мастер-toggle «Принимать команды автоматизации».
 ///
-/// **Опциональный пропуск.** Галка «Требовать пропуск» (default OFF) зеркалится
-/// из Flutter в native-кеш (`lxbox_automation` SharedPreferences). Если ON —
-/// [onReceive] проверяет, что отправитель держит [PERMISSION_AUTOMATION], иначе
-/// тихо игнорит. Если OFF — принимаем от любого caller'а (gate здесь — сам
-/// мастер-toggle: без него receiver disabled).
+/// **Барьер — сам мастер-toggle.** Пока он OFF, receiver `enabled=false` и не
+/// существует для системы; ON — принимаем от любого caller'а. Отдельного
+/// per-app пропуска нет: см. §157 (нерабочая permission-галка удалена —
+/// `checkCallingPermission` в broadcast-`onReceive` недетерминирован).
 ///
 /// **Маршрутизация.** Прямые lifecycle-команды (START/STOP/TOGGLE) идут на
 /// [BoxVpnService] напрямую (быстро, без Flutter-engine). Остальные
@@ -43,29 +42,6 @@ class LxBoxIntentReceiver : BroadcastReceiver() {
         const val EXTRA_TAG = "tag"
         const val EXTRA_GROUP = "group"
         const val EXTRA_FORCE = "force"
-
-        const val PERMISSION_AUTOMATION = "com.leadaxe.lxbox.permission.AUTOMATION"
-
-        /// Native-кеш галки «Требовать пропуск». Зеркало storage-key
-        /// `automation_require_permission`, синкается из Flutter
-        /// ([setRequirePermission]). Читаем из prefs, а не через MethodChannel:
-        /// onReceive обязан решить про permission синхронно, Flutter-engine
-        /// может быть не запущен.
-        private const val PREFS = "lxbox_automation"
-        private const val KEY_REQUIRE_PERMISSION = "require_permission"
-
-        fun requirePermission(ctx: Context): Boolean =
-            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getBoolean(KEY_REQUIRE_PERMISSION, false)
-
-        /// Вызывается из Flutter (`setAutomationRequirePermission`) при смене
-        /// галки — пишет в native-кеш, который синхронно читают receiver и
-        /// emitter (`VpnPlugin.sendAutomationBroadcast`).
-        fun setRequirePermission(ctx: Context, value: Boolean) {
-            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putBoolean(KEY_REQUIRE_PERMISSION, value).apply()
-            Log.d(TAG, "require-permission set to $value")
-        }
 
         /// Включает/выключает все automation-receiver'ы (raw Шаг 1 +
         /// Locale-плагины Шаг 2) одной транзакцией. Мастер-toggle «Принимать
@@ -104,20 +80,11 @@ class LxBoxIntentReceiver : BroadcastReceiver() {
 
     private fun dispatch(context: Context, intent: Intent) {
         val action = intent.action ?: return
+        // intent.package — поле адресации, выставляемое самим отправителем;
+        // не доказывает личность (broadcast не несёт caller-identity), только
+        // для лога. Барьер приёма — мастер-toggle (receiver enabled=false).
         val callerPkg = intent.`package` ?: "<unknown>"
         Log.d(TAG, "received $action from $callerPkg")
-
-        // Опциональный пропуск (галка «Требовать пропуск», default OFF).
-        // checkCallingPermission в receiver-контексте возвращает гранты
-        // отправителя broadcast'а; legacy-send без permission → DENIED.
-        if (requirePermission(context)) {
-            val granted = context.checkCallingPermission(PERMISSION_AUTOMATION) ==
-                PackageManager.PERMISSION_GRANTED
-            if (!granted) {
-                Log.w(TAG, "rejected $action from $callerPkg — permission required but not granted")
-                return
-            }
-        }
 
         when (action) {
             ACTION_START_VPN -> BoxVpnService.start(context)

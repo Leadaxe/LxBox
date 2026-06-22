@@ -468,10 +468,8 @@ class SettingsStorage {
   // Automation API (§047) — public broadcast intents (Tasker / Macrodroid).
   //
   // Все ключи default false — фича opt-in, по умолчанию receiver disabled и
-  // эмиттер молчит. `automation_require_permission` дополнительно зеркалится в
-  // native-кеш (`lxbox_automation` SharedPreferences) через
-  // `LxBoxIntentReceiver.setRequirePermission`, т.к. `onReceive` обязан читать
-  // флаг синхронно (Flutter-engine может быть не запущен).
+  // эмиттер молчит. Барьер приёма — мастер-toggle (receiver enabled=false).
+  // Per-app пропуск удалён (§157 — permission-чек в broadcast недетерминирован).
   // ---------------------------------------------------------------------------
 
   /// Мастер-toggle приёма команд автоматизации. При смене вызывается
@@ -481,14 +479,6 @@ class SettingsStorage {
 
   static Future<void> setAutomationReceiveEnabled(bool enabled) =>
       setVar('automation_receive_enabled', enabled ? 'true' : 'false');
-
-  /// Галка «Требовать пропуск». При ON команды/события идут только от/к
-  /// приложениям с granted `com.leadaxe.lxbox.permission.AUTOMATION`.
-  static Future<bool> getAutomationRequirePermission() async =>
-      (await getVar('automation_require_permission', 'false')) == 'true';
-
-  static Future<void> setAutomationRequirePermission(bool enabled) =>
-      setVar('automation_require_permission', enabled ? 'true' : 'false');
 
   /// Emit-категория: lifecycle (VPN_CONNECTED/DISCONNECTED/ERROR/REVOKED +
   /// UPDATE_AVAILABLE/PERMISSION_NEEDED).

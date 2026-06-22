@@ -14,7 +14,6 @@ import '../../../vpn/box_vpn_client.dart';
 ///
 /// Состав:
 ///   - мастер-toggle «Принимать команды автоматизации» (включает receiver);
-///   - галка «Требовать пропуск» (+ условная строка permission с copy);
 ///   - список intent-строк команд с кнопкой копирования;
 ///   - 4 emit-категории (Lifecycle / State / Subscription / Health);
 ///   - explainer-диалог при первом включении emit-категории;
@@ -29,7 +28,6 @@ class AutomationTab extends StatefulWidget {
 }
 
 class _AutomationTabState extends State<AutomationTab> {
-  static const _permission = 'com.leadaxe.lxbox.permission.AUTOMATION';
   static const _docsUrl =
       'https://github.com/Leadaxe/LxBox/blob/main/docs/AUTOMATION.md';
 
@@ -48,7 +46,6 @@ class _AutomationTabState extends State<AutomationTab> {
 
   bool _loaded = false;
   bool _receiveEnabled = false;
-  bool _requirePermission = false;
   bool _emitLifecycle = false;
   bool _emitState = false;
   bool _emitSubs = false;
@@ -62,7 +59,6 @@ class _AutomationTabState extends State<AutomationTab> {
 
   Future<void> _load() async {
     final receive = await SettingsStorage.getAutomationReceiveEnabled();
-    final require = await SettingsStorage.getAutomationRequirePermission();
     final lifecycle = await SettingsStorage.getAutomationEmitLifecycle();
     final state = await SettingsStorage.getAutomationEmitState();
     final subs = await SettingsStorage.getAutomationEmitSubs();
@@ -70,7 +66,6 @@ class _AutomationTabState extends State<AutomationTab> {
     if (!mounted) return;
     setState(() {
       _receiveEnabled = receive;
-      _requirePermission = require;
       _emitLifecycle = lifecycle;
       _emitState = state;
       _emitSubs = subs;
@@ -97,9 +92,9 @@ class _AutomationTabState extends State<AutomationTab> {
       builder: (ctx) => AlertDialog(
         title: const Text('Enable command receiver?'),
         content: const Text(
-          'Any app will be able to control the VPN via broadcast commands '
-          '(unless "Require permission" is enabled). Only turn this on if you '
-          'use Tasker / Macrodroid and understand the implications.',
+          'Any app on this device will be able to control the VPN via '
+          'broadcast commands while this is on. Only turn it on if you use '
+          'Tasker / Macrodroid and understand the implications.',
         ),
         actions: [
           TextButton(
@@ -113,12 +108,6 @@ class _AutomationTabState extends State<AutomationTab> {
         ],
       ),
     );
-  }
-
-  Future<void> _onRequireChanged(bool value) async {
-    setState(() => _requirePermission = value);
-    await SettingsStorage.setAutomationRequirePermission(value);
-    await BoxVpnClient.I.setAutomationRequirePermission(value);
   }
 
   // ─── Emit categories ─────────────────────────────────────────────────────────
@@ -144,8 +133,7 @@ class _AutomationTabState extends State<AutomationTab> {
       builder: (ctx) => AlertDialog(
         title: const Text('Emitting events outward'),
         content: const Text(
-          'Enabling this category lets other apps receive L×Box events '
-          '(with "Require permission" on — only apps that hold the permission).\n\n'
+          'Enabling this category lets other apps receive L×Box events.\n\n'
           'Events do NOT contain subscription / config secrets — only labels '
           '(node tags, group names, status).',
         ),
@@ -206,43 +194,6 @@ class _AutomationTabState extends State<AutomationTab> {
           value: _receiveEnabled,
           onChanged: _loaded ? _onReceiveChanged : null,
         ),
-        SwitchListTile(
-          title: const Text('Require permission'),
-          subtitle: const Text(
-            'Commands and events only from apps that hold the permission (recommended)',
-          ),
-          secondary: const Icon(Icons.verified_user_outlined),
-          value: _requirePermission,
-          onChanged: _loaded ? _onRequireChanged : null,
-        ),
-        if (_requirePermission)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Add this permission to your Tasker permissions:',
-                    style: muted),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SelectableText(
-                        _permission,
-                        style: const TextStyle(
-                            fontFamily: 'monospace', fontSize: 12),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Copy',
-                      icon: const Icon(Icons.copy, size: 18),
-                      onPressed: () => _copy(_permission, 'Permission'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
 
         const Divider(height: 28),
 

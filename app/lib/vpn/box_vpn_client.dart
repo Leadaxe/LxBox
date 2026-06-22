@@ -583,17 +583,6 @@ class BoxVpnClient {
     );
   }
 
-  /// Синхронизировать галку «Требовать пропуск» в native-кеш (`lxbox_automation`
-  /// SharedPreferences). Receiver и emitter читают его синхронно.
-  Future<void> setAutomationRequirePermission(bool require) async {
-    await _invoke<void>(
-      _Methods.setAutomationRequirePermission,
-      args: {'require': require},
-      timeout: _Timeouts.settings,
-      onTimeoutValue: null,
-    );
-  }
-
   /// §047 Шаг 2 — зеркалит в native-кеш активную ноду/группу (для
   /// `LocaleConditionReceiver` — синхронный ответ на `QUERY_CONDITION`) и
   /// списки нод/групп (для Spinner'а выбора в edit-Activity плагина вместо
@@ -622,8 +611,8 @@ class BoxVpnClient {
     }));
   }
 
-  /// Outgoing emit: отправить automation-broadcast наружу. Native сам решает,
-  /// слать ли с permission (по галке «Требовать пропуск» в native-кеше).
+  /// Outgoing emit: отправить automation-broadcast наружу. Открыт всем
+  /// подписчикам (события без секретов; per-app фильтр удалён, см. §157).
   /// Fire-and-forget — не ждём подтверждения (broadcast асинхронен).
   void sendAutomationBroadcast(String action, Map<String, Object?> extras) {
     // Не await'им: emit вызывается из синхронных state-mutation точек

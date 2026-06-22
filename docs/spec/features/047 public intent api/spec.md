@@ -7,7 +7,16 @@
 | Зависимости | [`031 debug api`](../031%20debug%20api/spec.md) (action handlers переиспользуются) |
 | Связано | [`032 quick connect`](../032%20quick%20connect/spec.md) (та же семантика toggle/switch, разные источники) |
 | Issue | [#12 «Add ON and OFF actions in addition to toggle»](https://github.com/Leadaxe/LxBox/issues/12) — `START_VPN`/`STOP_VPN` покрывают запрос |
-| Реализация | Native (Kotlin BroadcastReceiver) + Flutter UI-блок в App Settings (toggle приёма, галка «Требовать пропуск», галки emit-категорий, интент-строки с копированием) + `docs/AUTOMATION.md` |
+| Реализация | Native (Kotlin BroadcastReceiver) + Flutter UI-блок в App Settings (toggle приёма, галки emit-категорий, интент-строки с копированием) + `docs/AUTOMATION.md` |
+
+> ⚠️ **Изменение (§157, 2026-06-22):** галка «Требовать пропуск»
+> (`automation_require_permission`) и custom-permission
+> `com.leadaxe.lxbox.permission.AUTOMATION` **удалены** — `checkCallingPermission`
+> в broadcast-`onReceive` недетерминирован (broadcast не несёт caller-identity),
+> реальной защиты не давал. Единственный барьер приёма — мастер-toggle (receiver
+> `enabled=false` по умолчанию); outgoing-события идут открытым `sendBroadcast`.
+> Разделы ниже с упоминанием «Требовать пропуск» / permission-gate описывают
+> **прежнее** состояние — см. [`tasks/157`](../../tasks/157-automation-drop-require-permission.md).
 
 ---
 

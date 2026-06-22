@@ -16,14 +16,12 @@ Intent API) — двумя способами:
 ## Быстрый старт
 
 1. **L×Box → App Settings → Automation** → включить «Принимать команды
-   автоматизации» (подтвердить explainer).
-2. (Опционально, рекомендуется) включить «Требовать пропуск» — тогда команды
-   принимаются только от приложений с пропуском
-   `com.leadaxe.lxbox.permission.AUTOMATION`. Строка пропуска показывается с
-   кнопкой копирования.
-3. Включить нужные **Emit**-категории, если хотите получать события L×Box
+   автоматизации» (подтвердить explainer). Пока этот toggle OFF, receiver'ы
+   `enabled=false` — команды не принимаются вообще. Это и есть барьер приёма
+   (отдельного per-app пропуска нет — см. §157).
+2. Включить нужные **Emit**-категории, если хотите получать события L×Box
    наружу (Lifecycle / State / Subscription / Health).
-4. В host-приложении выбрать L×Box:
+3. В host-приложении выбрать L×Box:
    - **Plugin** (проще): Action / State → **Plugin → L×Box** → выбрать команду;
    - **Raw**: **Send Intent** → Action = одна из команд ниже, Target =
      **Broadcast Receiver**.
@@ -164,12 +162,15 @@ Task "Switch to Russia with confirmation":
 ## Безопасность
 
 - **Default OFF.** Без мастер-toggle receiver disabled — никакая app не может
-  слать команды.
-- **«Требовать пропуск».** При ON — команды и события только от/к приложениям
-  с granted `com.leadaxe.lxbox.permission.AUTOMATION` (`protectionLevel
-  normal`: барьер «знать имя + declare», не криптозащита).
+  слать команды. **Это единственный барьер приёма.** Когда toggle ON, команды
+  принимаются от любого приложения на устройстве.
+- **Per-app пропуска нет** (§157). Прежняя галка «Требовать пропуск» удалена:
+  `checkCallingPermission` в broadcast-`onReceive` недетерминирован (broadcast
+  не несёт caller-identity), поэтому никакой реальной защиты не давал. Если
+  нужна модель «только доверенным приложениям» — это отдельная задача
+  (shared-secret токен / UID-allowlist на Android 14+).
 - **События не содержат секретов** подписок / config — только лейблы (теги,
-  имена групп, статус).
+  имена групп, статус); outgoing-broadcast открыт всем подписчикам.
 - **Логи.** Весь обмен виден в App Settings → Diagnostics → log filter
   `automation` (`[automation] received …` / `[automation] emit …`).
 
@@ -215,7 +216,7 @@ Task "Switch to Russia with confirmation":
 | Симптом | Причина | Решение |
 |---|---|---|
 | Команда не доходит | Мастер-toggle OFF | Включить в App Settings → Automation |
-| Тоже, но toggle ON | «Требовать пропуск» ON, а Tasker не declare'ил permission | Выключить галку **или** добавить `com.leadaxe.lxbox.permission.AUTOMATION` в permissions Tasker |
+| Тоже, но toggle ON | Неверный action / target не Broadcast Receiver / опечатка в `com.leadaxe.lxbox.…` | Сверить со списком команд; проверить log filter `automation` (`received …`) |
 | `SWITCH_NODE` не выбирает ноду | tag не существует / typo | Проверить log filter `automation` |
 | В плагине «Custom…» вместо списка нод/групп — поле ввода | Кеш пуст (L×Box не открывался после установки/смены подписки) | Открыть L×Box, зайти в группу (список закешируется), переоткрыть плагин |
 | L×Box не виден в списке плагинов host'а | Host без plugin-блока (напр. бесплатный Automate) | Использовать MacroDroid (бесплатно) или raw `am broadcast` |

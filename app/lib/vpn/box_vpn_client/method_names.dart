@@ -70,8 +70,6 @@ class _Methods {
 
   // §047 Automation API — Dart → native control + outgoing emit.
   static const setAutomationEnabled = 'setAutomationEnabled';
-  static const setAutomationRequirePermission =
-      'setAutomationRequirePermission';
   static const sendAutomationBroadcast = 'sendAutomationBroadcast';
   // §047 Шаг 2 — mirror активной ноды/группы для Locale condition-плагина.
   static const setAutomationActiveState = 'setAutomationActiveState';

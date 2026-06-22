@@ -14,11 +14,10 @@ import '../settings_storage.dart';
 /// `emit*` молча no-op'ит. Состояние gates подгружается через [reload] из
 /// [SettingsStorage] (зовётся на старте и при смене любого toggle в UI).
 ///
-/// **Permission-gated send** делается на native стороне ([BoxVpnClient.
-/// sendAutomationBroadcast] → `VpnPlugin.sendAutomationBroadcast`): если галка
-/// «Требовать пропуск» ON, broadcast уходит с `permission` — получат только
-/// apps с granted `com.leadaxe.lxbox.permission.AUTOMATION`. Эмиттер про это
-/// не знает — читает native-кеш сам native.
+/// **Send** делается на native стороне ([BoxVpnClient.sendAutomationBroadcast]
+/// → `VpnPlugin.sendAutomationBroadcast`): broadcast открыт всем подписчикам.
+/// События не содержат секретов — только лейблы (теги нод, группы, статус).
+/// Per-app фильтр удалён (§157 — нерабочая permission-галка).
 ///
 /// **Throttle.** Часть событий капится per-key (см. [_throttleWindows]), чтобы
 /// при network-outage не заспамить подписчика (например `SUB_REFRESH_FAILED`).
