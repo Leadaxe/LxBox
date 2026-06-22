@@ -686,7 +686,7 @@
     },
     {
       "preset_id": "block_unknown",
-      "label": "Block unknown traffic",
+      "label": "Unknown traffic",
       "description": "Reject traffic in the tunnel not attributed to any installed app (background/foreign processes). Send it direct to bypass VPN instead.",
       "default": false,
       "vars": [
