@@ -79,6 +79,22 @@ Sing-box-router внутри даёт нам уникальный data-source �
 
 ## UX flow
 
+> **§160 update (2026-06-22)**: UI свёрнут с **4 саб-табов** (Live /
+> Domains / IPs / Connections) до **тогла `Live / Aggregated`**
+> (`SegmentedButton`) + **общий фильтр** сверху (поиск + чипы типа
+> события). Connections удалён (роль = Live + чип TCP/UDP + детали по
+> тапу). Domains+IPs слиты в Aggregated с вторичной осью by Domain / by
+> IP. Добавлен **drill-down по тапу**: Live строка → детали события
+> (`stats_screen/traffic_event_detail_sheet.dart`); Aggregated строка →
+> свод + список соединений (`stats_screen/aggregate_detail_sheet.dart`)
+> → conn → детали события. Sheet'ы рассчитаны на переиспользование в
+> Stats→Live. Старая focus-навигация `_navigateToDomain`/«View in
+> Domains →» заменена кликом по полю в детальном sheet. Файлы
+> `widgets/{domains,ips,connections}_view.dart` удалены, добавлены
+> `widgets/{aggregated_view,aggregate_axis}.dart`. Разделы UI ниже
+> описывают **исходные** 4 таба; текущая реализация = код + спека
+> [`tasks/160-perapp-trace-live-aggregated-redesign.md`](../../tasks/160-perapp-trace-live-aggregated-redesign.md).
+
 ### Где живёт
 
 Третий tab в **`StatsScreen`** (рядом с Overview / Connections). Имя: **«Per-app»** или **«App trace»**.

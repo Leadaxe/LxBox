@@ -39,6 +39,7 @@ class _ConnSnapshot {
     required this.matchedVia,
     required this.rule,
     required this.rulePayload,
+    required this.inSession,
   });
   final String id;
   final String host;
@@ -54,4 +55,10 @@ class _ConnSnapshot {
   final String? matchedVia;
   final String rule;
   final String rulePayload;
+
+  /// §160 — попало ли это соединение в active session при открытии
+  /// (`_resolveForSession` вернул не-null). Атрибуция фиксируется на open
+  /// и наследуется close'ом: иначе close чужого conn'а (open которого был
+  /// отброшен) ошибочно писался в session как verified-чужой.
+  final bool inSession;
 }

@@ -1,19 +1,18 @@
-// §044 — Per-app trace tab. Третий tab в `StatsScreen`. Показывает
-// recording state, target picker, sub-tabs Live / Domains / IPs / Connections,
+// §044 / §160 — Per-app trace tab. Третий tab в `StatsScreen`. Показывает
+// recording state, target picker, тогл Live / Aggregated + общий фильтр,
 // overflow menu (verbose toggle / wipe / share / help), in-tab banner для
 // verbose-active state.
 //
-// Дизайн-решения:
-// - **4 sub-tab'а**: Live (streaming) / Domains (по domain'у) / IPs (по IP)
-//   / Connections (per-conn timeline). Domains и IPs дают симметричные
-//   точки входа: «куда app ходит» и «какие IP» — оба полезны для разных
-//   диагностических кейсов (IP-аудит, hostless conn'ы без SNI).
-// - **Inline expand на Connections** + jump-to-Domains даёт двухуровневый
-//   drill-down: timeline → конкретный conn → детальный domain breakdown,
-//   без потери контекста внутри tab'а.
-// - **Search-by-IP в Domains tab**: cross-domain CDN-аудит (один IP =
-//   много доменов) + удобный «обратный lookup» когда есть подозрительный
-//   IP из внешнего источника.
+// §160 дизайн-решения (свернули 4 саб-таба → 2 режима):
+// - **Тогл `Live / Aggregated`** (SegmentedButton) вместо TabBar(4).
+//   Connections удалён — его роль = Live + чип TCP/UDP + детали по тапу.
+//   Domains+IPs слиты в Aggregated с вторичной осью by Domain / by IP.
+// - **Общий фильтр** сверху (поиск + чипы типа события) — один на оба
+//   режима; чипы типа активны только в Live (в Aggregated событий нет).
+// - **Drill-down по тапу**: Live строка → детали события; Aggregated
+//   строка → свод + список соединений → conn → детали события. Sheet'ы
+//   общие (`stats_screen/{traffic_event,aggregate}_detail_sheet.dart`),
+//   рассчитаны на переиспользование в Stats→Live (будущий шаг).
 
 import 'dart:async';
 import 'dart:convert';
@@ -27,14 +26,11 @@ import '../services/traffic_profiler.dart';
 import '../services/format_utils.dart';
 import '../widgets/core_logs_hint_banner.dart';
 import 'app_picker_screen.dart';
+import 'stats_screen/trace_explorer.dart';
 import 'per_app_trace_tab/session_json.dart';
 import 'per_app_trace_tab/single_app_picker_screen.dart';
 import 'per_app_trace_tab/trace_dialogs.dart';
 import 'per_app_trace_tab/trace_sections.dart';
-import 'per_app_trace_tab/widgets/connections_view.dart';
-import 'per_app_trace_tab/widgets/domains_view.dart';
-import 'per_app_trace_tab/widgets/ips_view.dart';
-import 'per_app_trace_tab/widgets/live_view.dart';
 
 class PerAppTraceTab extends StatefulWidget {
   const PerAppTraceTab({super.key, required this.clash});
@@ -45,8 +41,7 @@ class PerAppTraceTab extends StatefulWidget {
   State<PerAppTraceTab> createState() => _PerAppTraceTabState();
 }
 
-class _PerAppTraceTabState extends State<PerAppTraceTab>
-    with SingleTickerProviderStateMixin {
+class _PerAppTraceTabState extends State<PerAppTraceTab> {
   String? _pendingTarget; // выбран но ещё не started
   bool _verbose = false;
   bool _verboseActiveInSession = false;
@@ -55,18 +50,9 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
   final Set<String> _pendingSecondaryPackages = <String>{};
   Timer? _ticker; // для refresh «Recording 02:34» каждую секунду
 
-  late TabController _subTabs;
-
-  /// Целевой домен для авто-фокуса в Domains tab'е после нажатия
-  /// «View in Domains →» на Connections row. После того как _DomainsView
-  /// применил focus (заполнил search + expand'нул row), parent сбрасывает
-  /// в null через [_consumeFocusDomain].
-  String? _focusDomain;
-
   @override
   void initState() {
     super.initState();
-    _subTabs = TabController(length: 4, vsync: this);
     TrafficProfiler.I.addListener(_onProfilerChanged);
     // Runtime fetcher уже забинден в HomeScreen.initState — не дублируем
     // (closure там читает свежий clashClient на каждом poll'е).
@@ -91,23 +77,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
   void dispose() {
     TrafficProfiler.I.removeListener(_onProfilerChanged);
     _ticker?.cancel();
-    _subTabs.dispose();
     super.dispose();
-  }
-
-  /// Триггерится из «View in Domains →» в Connections row. Переключает
-  /// sub-tab на Domains (index 1) и устанавливает [_focusDomain]; внутри
-  /// `_DomainsView` это auto-fill'ит search и expand'ит соответствующую
-  /// строку. После применения focus consumer'ится через [_consumeFocusDomain].
-  void _navigateToDomain(String domain) {
-    setState(() => _focusDomain = domain);
-    _subTabs.animateTo(1);
-  }
-
-  void _consumeFocusDomain() {
-    if (_focusDomain != null) {
-      setState(() => _focusDomain = null);
-    }
   }
 
   Future<void> _pickApp() async {
@@ -204,40 +174,18 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
         if (session != null) _statsRow(context, session),
         if (session != null) _secondaryPackagesRow(context, session),
         const SizedBox(height: 4),
-        TabBar(
-          controller: _subTabs,
-          isScrollable: true,
-          tabs: const [
-            Tab(text: 'Live'),
-            Tab(text: 'Domains'),
-            Tab(text: 'IPs'),
-            Tab(text: 'Connections'),
-          ],
-        ),
         const CoreLogsHintBanner(),
+        // §160 — общий движок Live/Aggregated+фильтр+детали. Источник —
+        // события активной сессии (per-app trace).
         Expanded(
-          child: TabBarView(
-            controller: _subTabs,
-            children: [
-              LiveView(
-                session: session,
-                onViewInDomains: _navigateToDomain,
-              ),
-              DomainsView(
-                session: session,
-                focusDomain: _focusDomain,
-                onFocusConsumed: _consumeFocusDomain,
-                onViewInDomains: _navigateToDomain,
-              ),
-              IpsView(
-                session: session,
-                onViewInDomains: _navigateToDomain,
-              ),
-              ConnectionsView(
-                session: session,
-                onViewInDomains: _navigateToDomain,
-              ),
-            ],
+          child: TraceExplorer(
+            events: session?.events ?? const [],
+            unattributed: session == null
+                ? const []
+                : TrafficProfiler.I.globalUnattributedEvents
+                    .where((e) => !e.ts.isBefore(session.startedAt))
+                    .toList(),
+            recording: profiler.isRecording,
           ),
         ),
         if (session == null && profiler.completed.isNotEmpty)
@@ -292,7 +240,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab>
           const SizedBox(width: 8),
           FilledButton.icon(
             onPressed: canRecord ? _toggleRecording : null,
-            icon: Icon(isRecording ? Icons.stop : Icons.fiber_manual_record,
+            icon: Icon(isRecording ? Icons.stop : Icons.play_arrow,
                 size: 18),
             label: Text(isRecording ? 'STOP' : 'START'),
             style: FilledButton.styleFrom(

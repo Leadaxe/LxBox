@@ -1,20 +1,18 @@
-// §048 Принцип 7 — Live system-wide tab.
+// §048 / §160 — Live system-wide tab.
 //
 // 4-й tab в `StatsScreen`. Показывает все TrafficEvent'ы со всех apps в
 // real-time, без выбора target. Решает discovery-кейс: «не знаю какой app
 // виноват, что вообще происходит на устройстве». Использует тот же
-// `_globalRollingBuffer` что Per-app session backfill (§048 Принцип 4) —
-// без дополнительной memory cost.
+// `_globalRollingBuffer` что Per-app session backfill.
 //
-// Фильтры (chips):
-//   - app multi-select  — фильтр по package name (auto-collected из feed'а)
-//   - event type        — DNS / TCP / UDP / Failed / Unattributed
-//   - search            — substring match по domain / IP / process
-//   - Live / Frozen     — pause/resume для статичного просмотра (юзер
-//                         хочет внимательно прочитать что происходит)
-//
-// Tap row → option «Open in Per-app session» — старт session с этим
-// package как target. Quick-discovery flow.
+// §160 — тело (тогл Live/Aggregated + общий фильтр + детали + пауза)
+// делегировано общему [TraceExplorer] (тот же движок, что в per-app trace,
+// без дубля кода). Здесь остаётся только специфика system-wide:
+//   - SSE-подписка на globalLiveStream → локальный snapshot `_events`;
+//   - recording START/STOP (globalRecording);
+//   - app multi-select pre-фильтр (по package, auto-collected из feed'а) —
+//     уникален для system-wide (в per-app trace процесс один);
+//   - unattributed banner.
 
 import 'dart:async';
 
@@ -22,9 +20,9 @@ import 'package:flutter/material.dart';
 
 import '../services/traffic_profiler.dart';
 import '../widgets/core_logs_hint_banner.dart';
-import 'live_events_tab/event_tile.dart';
 import 'live_events_tab/recording_header.dart';
 import 'live_events_tab/unattributed_banner.dart';
+import 'stats_screen/trace_explorer.dart';
 
 class LiveEventsTab extends StatefulWidget {
   const LiveEventsTab({super.key});
@@ -38,25 +36,18 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
   // Локальный snapshot — приходит из global rolling buffer'а на init,
   // потом обновляется через SSE feed. Live-снимок == _events newest-last.
   final List<TrafficEvent> _events = [];
-  bool _paused = false;
   Timer? _ticker; // для refresh «Recording 02:34» каждую секунду
 
-  // Filter state.
-  final TextEditingController _searchCtrl = TextEditingController();
-  String _search = '';
+  // System-wide app pre-фильтр (мульти-выбор пакетов). TraceExplorer о нём
+  // не знает — применяем здесь до передачи событий.
   final Set<String> _appFilter = {}; // empty = no filter
-  final Set<TrafficEventKind> _kindFilter = {}; // empty = no filter
-  bool _onlyUnattributed = false;
-
-  // Cache of seen apps для chip selection.
   final Set<String> _seenApps = {};
 
   @override
   void initState() {
     super.initState();
-    // §048 — recording state управляется explicit через [TrafficProfiler.I.startGlobalRecording]
-    // (юзер тапает ▶ START в Live tab). Tab subscribes к stream, но это
-    // не запускает recording — listener attached только если recording active.
+    // §048 — recording state управляется explicit через
+    // [TrafficProfiler.I.startGlobalRecording] (юзер тапает ▶ START).
     final snapshot = TrafficProfiler.I.globalSnapshot(seconds: 60);
     _events.addAll(snapshot);
     for (final e in snapshot) {
@@ -72,13 +63,8 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
   void _onProfilerChanged() {
     if (!mounted) return;
     setState(() {
-      // На STOP recording'а — фиксируем последний snapshot из buffer'а
-      // (он уже не растёт), на START — clear (TrafficProfiler уже это
-      // сделал в startGlobalRecording).
-      if (!TrafficProfiler.I.isGlobalRecording) {
-        // Buffer заморожен. _events остаётся как есть.
-        return;
-      }
+      // STOP — буфер заморожен, _events остаётся; START — clear.
+      if (!TrafficProfiler.I.isGlobalRecording) return;
       _events.clear();
       _seenApps.clear();
     });
@@ -93,18 +79,17 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
   }
 
   void _trackApp(TrafficEvent e) {
-    final p = e.process?.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty);
+    final p =
+        e.process?.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty);
     if (p != null) _seenApps.addAll(p);
   }
 
   void _onEvent(Map<String, Object?> msg) {
-    if (_paused) return;
     if (msg['event'] != 'traffic_event') return;
     final data = msg['data'];
     if (data is! Map) return;
-    // Emitted event — нам нужен сам TrafficEvent объект, но через SSE
-    // приходит JSON. Проще пересчитывать snapshot из global buffer'а
-    // на каждый tick: это O(N) и N <= 3000.
+    // Через SSE приходит JSON; проще пересчитать snapshot из global buffer'а
+    // на каждый tick (O(N), N ≤ 3000). Пауза отображения — в TraceExplorer.
     setState(() {
       final fresh = TrafficProfiler.I.globalRollingBuffer;
       _events
@@ -121,189 +106,66 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
     _sub?.cancel();
     TrafficProfiler.I.removeListener(_onProfilerChanged);
     _ticker?.cancel();
-    _searchCtrl.dispose();
     super.dispose();
   }
 
-  List<TrafficEvent> get _filtered {
-    var list = _events;
-    if (_appFilter.isNotEmpty) {
-      list = list.where((e) {
-        final pkgs = e.process
-                ?.split(',')
-                .map((s) => s.trim())
-                .toSet() ??
-            const <String>{};
-        return pkgs.any(_appFilter.contains);
-      }).toList();
-    }
-    if (_kindFilter.isNotEmpty) {
-      list = list.where((e) => _kindFilter.contains(e.kind)).toList();
-    }
-    if (_onlyUnattributed) {
-      list = list
-          .where((e) => e.confidence == ConfidenceLevel.unattributed)
-          .toList();
-    }
-    if (_search.isNotEmpty) {
-      final lq = _search.toLowerCase();
-      list = list.where((e) {
-        return (e.domain?.toLowerCase().contains(lq) ?? false) ||
-            (e.ip?.contains(_search) ?? false) ||
-            (e.process?.toLowerCase().contains(lq) ?? false);
-      }).toList();
-    }
-    return list.reversed.toList(growable: false);
+  /// События после system-wide app pre-фильтра.
+  List<TrafficEvent> get _appFiltered {
+    if (_appFilter.isEmpty) return _events;
+    return _events.where((e) {
+      final pkgs = e.process
+              ?.split(',')
+              .map((s) => s.trim())
+              .toSet() ??
+          const <String>{};
+      return pkgs.any(_appFilter.contains);
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final filtered = _filtered;
     return Column(
       children: [
         LiveRecordingHeader(
           eventCount: _events.length,
           onToggle: _toggleRecording,
         ),
-        _filterBar(context),
+        _appFilterBar(context),
         const Divider(height: 1),
         const CoreLogsHintBanner(),
         if (TrafficProfiler.I.unattributedBannerActive)
           const UnattributedBanner(),
         Expanded(
-          child: filtered.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      _events.isEmpty
-                          ? (TrafficProfiler.I.isGlobalRecording
-                              ? 'Waiting for events… '
-                                  '(events appear when traffic flows)'
-                              : 'Tap ▶ START above to begin capture.')
-                          : 'No matches.',
-                      style: TextStyle(color: cs.onSurfaceVariant),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: filtered.length,
-                  itemBuilder: (_, i) => LiveEventTile(
-                    event: filtered[i],
-                    onSearchKey: _applySearchKey,
-                  ),
-                ),
+          child: TraceExplorer(
+            // System-wide: unattributed события уже внутри globalRollingBuffer
+            // как обычные строки (с confidence=unattributed). Отдельной
+            // «no owner» секции (как в per-app) тут нет → unattributed=[].
+            events: _appFiltered,
+            unattributed: const [],
+            recording: TrafficProfiler.I.isGlobalRecording,
+          ),
         ),
       ],
     );
   }
 
-  Widget _filterBar(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+  /// System-wide app multi-select (уникален для Live; в per-app процесс один).
+  Widget _appFilterBar(BuildContext context) {
+    if (_seenApps.isEmpty) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchCtrl,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Search domain / IP / app…',
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    suffixIcon: _search.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.close, size: 18),
-                            onPressed: () {
-                              _searchCtrl.clear();
-                              setState(() => _search = '');
-                            },
-                          ),
-                    isDense: true,
-                    border: const OutlineInputBorder(),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
-                  ),
-                  onChanged: (v) => setState(() => _search = v),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: _paused ? 'Resume' : 'Pause',
-                icon: Icon(
-                    _paused ? Icons.play_arrow : Icons.pause, size: 22),
-                onPressed: () => setState(() => _paused = !_paused),
-                color: _paused ? cs.error : cs.primary,
-              ),
-            ],
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: _showAppFilterSheet,
+          icon: const Icon(Icons.android, size: 16),
+          label: Text(
+            _appFilter.isEmpty ? 'All apps' : '${_appFilter.length} app(s)',
+            style: const TextStyle(fontSize: 12),
           ),
-          const SizedBox(height: 4),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                ..._kindChips(),
-                const SizedBox(width: 8),
-                FilterChip(
-                  label: const Text('Unattributed only',
-                      style: TextStyle(fontSize: 11)),
-                  selected: _onlyUnattributed,
-                  visualDensity: VisualDensity.compact,
-                  onSelected: (v) =>
-                      setState(() => _onlyUnattributed = v),
-                ),
-                const SizedBox(width: 8),
-                if (_seenApps.isNotEmpty)
-                  TextButton.icon(
-                    onPressed: _showAppFilterSheet,
-                    icon: const Icon(Icons.android, size: 16),
-                    label: Text(
-                      _appFilter.isEmpty
-                          ? 'All apps'
-                          : '${_appFilter.length} app(s)',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
-  }
-
-  List<Widget> _kindChips() {
-    Widget chip(String label, TrafficEventKind kind) {
-      final selected = _kindFilter.contains(kind);
-      return Padding(
-        padding: const EdgeInsets.only(right: 4),
-        child: FilterChip(
-          label: Text(label, style: const TextStyle(fontSize: 11)),
-          selected: selected,
-          visualDensity: VisualDensity.compact,
-          onSelected: (v) => setState(() {
-            if (v) {
-              _kindFilter.add(kind);
-            } else {
-              _kindFilter.remove(kind);
-            }
-          }),
-        ),
-      );
-    }
-
-    return [
-      chip('DNS', TrafficEventKind.dnsResolve),
-      chip('DNS×', TrafficEventKind.dnsFail),
-      chip('TCP', TrafficEventKind.tcpOpen),
-      chip('TCP·', TrafficEventKind.tcpClose),
-      chip('UDP', TrafficEventKind.udpOpen),
-    ];
   }
 
   void _showAppFilterSheet() {
@@ -350,22 +212,5 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
         );
       },
     );
-  }
-
-  /// Кладём `key` в существующий search field, фильтруя список по нему.
-  /// Повторный tap на том же значении (уже выставленном) — clear (escape
-  /// hatch без отдельной кнопки).
-  void _applySearchKey(String key) {
-    final clean = key.trim();
-    if (clean.isEmpty) return;
-    if (_search == clean) {
-      _searchCtrl.clear();
-      setState(() => _search = '');
-      return;
-    }
-    _searchCtrl.text = clean;
-    _searchCtrl.selection =
-        TextSelection.collapsed(offset: clean.length);
-    setState(() => _search = clean);
   }
 }

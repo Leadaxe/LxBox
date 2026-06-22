@@ -991,6 +991,10 @@ class TrafficProfiler extends ChangeNotifier {
         var snapProcess = '';
         var snapConfidence = ConfidenceLevel.unattributed;
         String? snapMatchedVia;
+        // §160 — попало ли соединение в session при открытии. Решение
+        // фиксируется здесь и наследуется close'ом (см. closed-detection
+        // ниже): иначе close чужого conn'а ошибочно писался в session.
+        var snapInSession = false;
 
         if (s != null) {
           // Session resolution.
@@ -1000,6 +1004,7 @@ class TrafficProfiler extends ChangeNotifier {
             snapProcess = resolved.process ?? '';
             snapConfidence = resolved.confidence;
             snapMatchedVia = resolved.matchedVia;
+            snapInSession = true;
           } else {
             // не related к target — в session не пишем, но snapshot
             // нужен для global-only closed detection.
@@ -1028,6 +1033,7 @@ class TrafficProfiler extends ChangeNotifier {
           matchedVia: snapMatchedVia,
           rule: rule,
           rulePayload: rulePayload,
+          inSession: snapInSession,
         );
       } else {
         // Update bytes — снапшот latest values, не emit'им event.
@@ -1069,8 +1075,11 @@ class TrafficProfiler extends ChangeNotifier {
       // коду; теперь поведение соответствует.
       _appendToGlobalRollingBuffer(closeEv);
       _emitGlobalStream({'event': 'traffic_event', 'data': closeEv.toJson()});
-      // Session — только если active.
-      if (s != null) {
+      // §160 — Session только если соединение БЫЛО атрибутировано к target
+      // при открытии (`snap.inSession`). Раньше close писался безусловно →
+      // close чужого conn'а (youtube/imo и т.п.) попадал в session Telegram
+      // как verified-чужой, хотя его open был отброшен `_resolveForSession`.
+      if (s != null && snap.inSession) {
         _appendEvent(s, closeEv);
       }
     }
