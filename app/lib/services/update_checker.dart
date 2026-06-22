@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'app_log.dart';
+import 'automation/event_emitter.dart';
 import 'settings_storage.dart';
 
 /// Light-weight GitHub Releases polling. Pings `/releases/latest` once a day
@@ -121,6 +122,8 @@ class UpdateChecker {
 
       final dismissed = await SettingsStorage.getDismissedUpdateVersion();
       latest.value = info;
+      // §047 — outgoing lifecycle event (gated, default OFF).
+      AutomationEventEmitter.I.emitUpdateAvailable(info.tag, info.htmlUrl);
       return UpdateCheckResult.newer(info, dismissed: dismissed == info.tag);
     } finally {
       _inFlight = false;

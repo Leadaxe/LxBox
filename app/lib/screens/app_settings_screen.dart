@@ -15,6 +15,7 @@ import '../services/wifi_history_listener.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import '../vpn/box_vpn_client.dart';
 import 'app_settings_screen/app_settings_dialogs.dart';
+import 'app_settings_screen/widgets/automation_tab.dart';
 import 'app_settings_screen/widgets/diagnostics_tab.dart';
 import 'app_settings_screen/widgets/general_tab.dart';
 import 'app_settings_screen/widgets/subscriptions_tab.dart';
@@ -419,16 +420,17 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       animation: themeNotifier,
       builder: (context, _) {
         return DefaultTabController(
-          length: 3,
-          initialIndex: widget.initialTab.clamp(0, 2),
+          length: 4,
+          initialIndex: widget.initialTab.clamp(0, 3),
           child: Scaffold(
             appBar: AppBar(
               title: const Text('App Settings'),
-              bottom: const TabBar(
+              bottom: const _FadingTabBar(
                 tabs: [
                   Tab(text: 'General'),
                   Tab(text: 'Subscriptions'),
                   Tab(text: 'Diagnostics'),
+                  Tab(text: 'Automation'),
                 ],
               ),
             ),
@@ -437,6 +439,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
                 _buildGeneralTab(context),
                 _buildSubscriptionsTab(context),
                 _buildDiagnosticsTab(context),
+                AutomationTab(padding: _tabPadding(context)),
               ],
             ),
           ),
@@ -687,6 +690,48 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         content: Text(enabled
             ? 'Auto-record on. Networks added after 5 min of stay.'
             : 'Auto-record off. Existing history kept.'),
+      ),
+    );
+  }
+}
+
+/// Centered scrollable [TabBar] whose left & right edges fade to transparent,
+/// so a tab clipped by the screen edge dissolves instead of being cut off —
+/// a soft hint that the bar scrolls. The fade is a fixed-width edge gradient
+/// (no scroll-metrics tracking) so it always renders on the first frame.
+class _FadingTabBar extends StatelessWidget implements PreferredSizeWidget {
+  const _FadingTabBar({required this.tabs});
+
+  final List<Widget> tabs;
+
+  // Width of each edge fade, in px.
+  static const double _fadeWidth = 32;
+
+  @override
+  Size get preferredSize => const TabBar(tabs: []).preferredSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (rect) {
+        final stop = (_fadeWidth / rect.width).clamp(0.0, 0.5);
+        return LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: const [
+            Colors.transparent,
+            Colors.white,
+            Colors.white,
+            Colors.transparent,
+          ],
+          stops: [0.0, stop, 1.0 - stop, 1.0],
+        ).createShader(rect);
+      },
+      child: TabBar(
+        isScrollable: true,
+        tabAlignment: TabAlignment.center,
+        tabs: tabs,
       ),
     );
   }

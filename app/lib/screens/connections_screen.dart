@@ -2,8 +2,50 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../services/app_info_cache.dart';
 import '../services/clash_api_client.dart';
 import '../services/format_utils.dart';
+import 'connections_screen/connection_detail_sheet.dart';
+
+/// §154 — чистый package name из `metadata.processPath`. Ядро форматирует
+/// его как `com.app (com.app)` либо `com.app (user)` / `com.app (1000)`
+/// (см. sing-box `tracker.go`: `processPath + " (" + userName/userId + ")"`).
+/// Для резолва иконки нужен голый package — берём часть до первого пробела.
+/// Возвращает '' если пусто или похоже на абсолютный путь (не Android-pkg).
+String packageNameFromProcess(String raw) {
+  final s = raw.trim();
+  if (s.isEmpty) return '';
+  final pkg = s.split(' ').first.trim();
+  // Android package = `a.b.c`, без слешей. Путь вида /usr/bin/foo — не pkg.
+  if (pkg.contains('/') || !pkg.contains('.')) return '';
+  return pkg;
+}
+
+/// §153 — «однобокое» (зависшее) соединение: TCP, прожившее ≥
+/// [oneWayMinAge], где трафик идёт строго в одну сторону (up>0/down=0 или
+/// up=0/down>0). Сигнатура зависшего потока (напр. WhatsApp ↑517 ↓0 —
+/// ClientHello ушёл, ответа нет). Порог по возрасту отсекает свежие conns
+/// в процессе handshake. Закрытые соединения не маркируются.
+///
+/// Чистая функция (без BuildContext) — покрыта юнит-тестом на живой
+/// фикстуре. [now] инъектируется для детерминизма в тестах.
+const Duration oneWayMinAge = Duration(seconds: 3);
+
+bool isOneWayStuck({
+  required String network,
+  required int upload,
+  required int download,
+  required DateTime? startTime,
+  required bool closed,
+  DateTime? now,
+}) {
+  if (closed) return false;
+  if (network != 'tcp') return false;
+  if (startTime == null) return false;
+  final age = (now ?? DateTime.now()).difference(startTime);
+  if (age < oneWayMinAge) return false;
+  return (upload > 0 && download == 0) || (upload == 0 && download > 0);
+}
 
 /// Embeddable view: toolbar + список соединений. Без Scaffold, без AppBar —
 /// сидит во вкладке StatsScreen.
@@ -250,26 +292,46 @@ class _ConnectionsViewState extends State<ConnectionsView>
     final endTime = closed ? (_closedAt[id] ?? DateTime.now()) : DateTime.now();
     final duration = startTime != null ? endTime.difference(startTime) : null;
 
+    final oneWay = isOneWayStuck(
+      network: network,
+      upload: upload,
+      download: download,
+      startTime: startTime,
+      closed: closed,
+    );
+
     final cs = Theme.of(context).colorScheme;
     final rule = conn['rule']?.toString() ?? '';
     final rulePayload = conn['rulePayload']?.toString() ?? '';
     final ruleText = rulePayload.isNotEmpty ? '$rule ($rulePayload)' : rule;
 
-    return Opacity(
+    return Container(
+      // §153 — розовый фон у однобоких (зависших) TCP-соединений.
+      color: oneWay
+          ? Color.alphaBlend(
+              Colors.pink.withValues(alpha: 0.16), cs.surface)
+          : null,
+      child: Opacity(
       opacity: closed ? 0.45 : 1.0,
-      child: Padding(
+      child: InkWell(
+        onTap: () => unawaited(showConnectionDetailSheet(
+          context,
+          conn,
+          oneWay: oneWay,
+          closed: closed,
+          onClose: (cid) => unawaited(_closeConnection(cid)),
+        )),
+        child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row 1: host:port + traffic + close button
+          // Row 1: app icon + host:port + traffic + close button
+          // §152 — иконка-стрелка (→/⇄ для tcp/udp) убрана; §154 — на её
+          // месте launcher-иконка приложения (по processPath = package).
           Row(
             children: [
-              Icon(
-                network == 'udp' ? Icons.swap_horiz : Icons.arrow_forward,
-                size: 14,
-                color: cs.onSurfaceVariant,
-              ),
+              _appIcon(packageNameFromProcess(process)),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -330,6 +392,32 @@ class _ConnectionsViewState extends State<ConnectionsView>
         ],
       ),
       ),
+      ),
+      ),
+    );
+  }
+
+  /// §154 — launcher-иконка приложения по package name (`processPath`).
+  /// 16×16, перерисовывается через `AppInfoCache.revision` когда иконка
+  /// дотянулась из native асинхронно. Fallback пока нет иконки/нет pkg —
+  /// нейтральный placeholder того же размера (layout не прыгает).
+  Widget _appIcon(String pkg) {
+    const double size = 16;
+    final cs = Theme.of(context).colorScheme;
+    final placeholder = Icon(Icons.apps, size: size, color: cs.onSurfaceVariant);
+    if (pkg.isEmpty) return placeholder;
+    AppInfoCache.ensure(pkg);
+    return AnimatedBuilder(
+      animation: AppInfoCache.revision,
+      builder: (context, _) {
+        final icon = AppInfoCache.of(pkg)?.icon;
+        if (icon == null) return placeholder;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Image.memory(icon,
+              width: size, height: size, gaplessPlayback: true),
+        );
+      },
     );
   }
 

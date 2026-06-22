@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../controllers/subscription_controller.dart';
+import '../../services/app_log.dart';
 import '../../services/backup_service.dart';
 import '../../services/error_format.dart';
 import '../../services/subscription/auto_updater.dart';
@@ -34,7 +35,9 @@ Future<void> restoreFromBackup(
     if (file.bytes != null) {
       try {
         raw = const Utf8Decoder(allowMalformed: false).convert(file.bytes!);
-      } catch (_) {}
+      } catch (e) {
+        AppLog.I.warning('[restore] backup bytes not valid UTF-8: $e');
+      }
     } else if (file.path != null) {
       raw = await File(file.path!).readAsString();
     }
@@ -100,13 +103,17 @@ Future<void> restoreFromBackup(
     if (apply.vpnSettingsApplied > 0) {
       parts.add('${apply.vpnSettingsApplied} VPN settings');
     }
-    final summary = parts.isEmpty
+    final summary = StringBuffer(parts.isEmpty
         ? 'Imported nothing'
-        : 'Imported: ${parts.join(', ')} · fetching subscriptions…';
+        : 'Imported: ${parts.join(', ')} · fetching subscriptions…');
+    // §159 — allowlist отбросил неизвестные/чужеродные ключи.
+    if (apply.droppedKeys.isNotEmpty) {
+      summary.write(' · ${apply.droppedKeys.length} unknown keys skipped');
+    }
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(summary),
+        content: Text(summary.toString()),
         duration: const Duration(seconds: 6),
       ),
     );

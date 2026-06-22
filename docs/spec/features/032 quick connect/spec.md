@@ -5,7 +5,7 @@
 | Статус | **Done (v1.6.0)** — обе части (QS tile + dynamic app shortcut) shipped. UI кнопка "Add to Quick Settings" в App Settings → Quick connect. См. [task 014](../../tasks/014-quick-connect-tile-shortcut.md). |
 | Дата | 2026-04-20 (Draft) → 2026-04-28 (реализация) → 2026-05-10 (audit + spec sync) |
 | Зависимости | `BoxVpnService` / `BoxApplication` / `MainActivity` / `AndroidManifest` |
-| Что **не** реализовано | Per-group shortcut'ы / homescreen widget / Wear OS / Tasker intents — см. [Out of scope / future](#out-of-scope--future) |
+| Что **не** реализовано | Per-group shortcut'ы / homescreen widget / Wear OS — см. [Out of scope / future](#out-of-scope--future). Tasker / automation — реализовано отдельно в [`047`](../047%20public%20intent%20api/spec.md), см. [`docs/AUTOMATION.md`](../../../AUTOMATION.md) |
 
 ## Цель
 
@@ -327,5 +327,5 @@ Shortcut'ы на home screen Android создаёт юзер сам (long-press 
 
 - **Per-group shortcut'ы** — "Connect to vpn-1", "Connect to vpn-2" — динамические shortcut'ы с extras `{action: connect, group: vpn-2}`. Требует UI для выбора какие группы выставлять. Не в работе.
 - **Homescreen widget** с трафик-графиком + selector группы. Отдельный спек, не в работе.
-- **Tasker / automation broadcast intents** — `com.leadaxe.lxbox.{START_VPN, STOP_VPN, TOGGLE_VPN, SWITCH_NODE, SET_GROUP}` для Tasker / Macrodroid / Llama. Естественно расширяет §032 — те же самые actions через broadcast вместо tile/shortcut. Будет вынесено в **отдельный spec** (см. ARCHITECTURE → Reusable layers / extension targets), сейчас можно делать через Debug API но это нестандартно для automation tools. Связан с [`031 debug api`](../031%20debug%20api/spec.md) action handler'ами — реализация будет переиспользовать ту же логику.
+- **Tasker / automation broadcast intents** — ✅ **реализовано** в [`047 public intent api`](../047%20public%20intent%20api/spec.md): `com.leadaxe.lxbox.{START_VPN, STOP_VPN, TOGGLE_VPN, SWITCH_NODE, SET_GROUP, …}` + Locale/Tasker plugin. Те же actions через broadcast вместо tile/shortcut, общий бизнес-слой с [`031 debug api`](../031%20debug%20api/spec.md). Setup и рецепты — [`docs/AUTOMATION.md`](../../../AUTOMATION.md).
 - **Wear OS companion** — отдельная история, не в работе.

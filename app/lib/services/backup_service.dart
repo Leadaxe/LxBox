@@ -6,6 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../models/background_mode.dart';
 import '../models/server_list.dart';
 import '../vpn/box_vpn_client.dart';
+import 'app_log.dart';
 import 'json_clone.dart';
 import 'settings_storage.dart';
 
@@ -23,20 +24,23 @@ enum BackupCategory {
 const _topLevelRoutingKeys = {
   'custom_rules',
   'route_final',
-  'rule_outbounds',
-  'enabled_rules',
   'enabled_groups',
   'tun_apps',
+  'vpn_mode',
   'excluded_nodes',
   'dns_options',
 };
 
 /// Top-level storage keys относящиеся к App settings (служебные timestamps,
-/// миграционные флаги, ping options).
+/// UI-предпочтения, ping options, WARP-аккаунт).
 const _topLevelAppKeys = {
   'ping_options',
   'last_global_update',
   'presets_migrated',
+  'warp_account',
+  'interrupt_connections_on_switch',
+  'node_sort_mode',
+  'node_manual_order',
 };
 
 /// Sub-keys внутри `vars` относящиеся к Debug API category.
@@ -174,6 +178,7 @@ class BackupApplyResult {
     this.appSettingsApplied = 0,
     this.debugConfigApplied = 0,
     this.vpnSettingsApplied = 0,
+    this.droppedKeys = const [],
     this.errors = const [],
   });
 
@@ -182,6 +187,12 @@ class BackupApplyResult {
   final int appSettingsApplied;
   final int debugConfigApplied;
   final int vpnSettingsApplied;
+
+  /// §159 — ключи, отброшенные allowlist'ом при импорте (неизвестные top-level
+  /// или `vars.<key>`). Пусто для «чистого» нашего бэкапа; непусто для
+  /// чужеродного/устаревшего файла. UI показывает count исчезающим снэкбаром.
+  final List<String> droppedKeys;
+
   final List<String> errors;
 
   bool get hasErrors => errors.isNotEmpty;
@@ -296,6 +307,7 @@ class BackupService {
     required Set<BackupCategory> include,
   }) async {
     final errors = <String>[];
+    final droppedKeys = <String>[];
     var serverLists = 0;
     var routing = 0;
     var appS = 0;
@@ -338,7 +350,16 @@ class BackupService {
       }
 
       try {
-        await SettingsStorage.replaceRaw(filtered, merge: merge);
+        // §159 — replaceRaw применяет allowlist (default-deny) и возвращает
+        // отброшенные ключи. Для нашего бэкапа пусто; для чужого/устаревшего —
+        // непусто (логируем + покажем юзеру).
+        final dropped = await SettingsStorage.replaceRaw(filtered, merge: merge);
+        droppedKeys.addAll(dropped);
+        if (dropped.isNotEmpty) {
+          AppLog.I.warning(
+              'Backup import dropped ${dropped.length} unknown key(s): '
+              '${dropped.join(', ')}');
+        }
       } catch (e) {
         errors.add('Storage: $e');
       }
@@ -362,6 +383,7 @@ class BackupService {
       appSettingsApplied: appS,
       debugConfigApplied: debug,
       vpnSettingsApplied: vpn,
+      droppedKeys: droppedKeys,
       errors: errors,
     );
   }
@@ -434,9 +456,15 @@ class BackupService {
     return _filterStorageForImport(raw, include: include);
   }
 
-  /// Раздельный filter для top-level + vars subkeys по category-toggles.
-  /// Used both at export-time (filter what to write) and at import-time
-  /// (filter what to apply if user deselected categories in preview).
+  /// Категорийный filter для top-level + vars subkeys по category-toggles
+  /// (Server lists / Routing / App / Debug). Это UX-выбор юзера («что
+  /// выгрузить / что применить»), НЕ защита от мусора.
+  ///
+  /// Используется на export-time (что записать в файл) и на import-time (что
+  /// применить, если юзер снял галочки в preview). §159 — строгая чистка
+  /// чужеродных/«мёртвых» ключей делается отдельно на ВХОДЕ в
+  /// `SettingsStorage.replaceRaw` (allowlist default-deny); здесь else-ветки
+  /// «unknown → куда-нибудь» нет.
   static Map<String, dynamic> _filterStorageForImport(
     Map<String, dynamic> raw, {
     required Set<BackupCategory> include,
@@ -470,10 +498,13 @@ class BackupService {
         if (wantRouting) out[key] = deepCloneJson(value);
       } else if (_topLevelAppKeys.contains(key)) {
         if (wantApp) out[key] = deepCloneJson(value);
-      } else {
-        // Unknown / future key — graceful default: bundle into App settings.
-        if (wantApp) out[key] = deepCloneJson(value);
       }
+      // §159 — НЕТ else-ветки «unknown → App settings». Категорийный фильтр
+      // работает только по известным ключам; чистка чужеродного/«мёртвого»
+      // мусора — строгий allowlist на ВХОДЕ (`SettingsStorage.replaceRaw`), а
+      // не здесь. Все валидные top-level ключи перечислены в категориях выше
+      // (route/app); новый ключ — добавить в нужную категорию + в
+      // [SettingsStorage.allowedTopLevelKeys].
     }
     return out;
   }

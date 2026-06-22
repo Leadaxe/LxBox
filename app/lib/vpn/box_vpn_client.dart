@@ -535,6 +535,99 @@ class BoxVpnClient {
   Stream<TunnelStatusEvent> get onStatusChanged => _statusStream;
 
   // ---------------------------------------------------------------------------
+  // Automation API (§047) — public broadcast intents (Tasker / Macrodroid)
+  // ---------------------------------------------------------------------------
+
+  /// Incoming-dispatcher: native (`LxBoxIntentReceiver` → `VpnPlugin.
+  /// handleAutomationAction`) зовёт нас через `automationAction` method-call на
+  /// `_methods`. Устанавливается лениво один раз. Set извне в bootstrap (после
+  /// того как `DebugRegistry` забиндил контроллеры) — см. `main()`.
+  void Function(String name, Map<String, dynamic> args)? _onAutomationAction;
+
+  /// Регистрирует обработчик incoming automation-интентов. [handler] получает
+  /// (`name`, `args`) и роутит на shared action-handlers. Идемпотентно —
+  /// повторный вызов перезаписывает handler.
+  void registerAutomationActionHandler(
+      void Function(String name, Map<String, dynamic> args) handler) {
+    _onAutomationAction = handler;
+    _methods.setMethodCallHandler(_handleNativeCall);
+  }
+
+  Future<dynamic> _handleNativeCall(MethodCall call) async {
+    if (call.method == _Methods.automationAction) {
+      final handler = _onAutomationAction;
+      if (handler == null) return null;
+      try {
+        final raw = (call.arguments as Map?) ?? const {};
+        final name = raw['name'] as String? ?? '';
+        final args = raw['args'] is Map
+            ? Map<String, dynamic>.from(raw['args'] as Map)
+            : <String, dynamic>{};
+        if (name.isNotEmpty) handler(name, args);
+      } catch (e) {
+        AppLog.I.error('[automation] native call dispatch failed: $e');
+      }
+      return null;
+    }
+    return null;
+  }
+
+  /// Включить/выключить receiver автоматизации (мастер-toggle). Native дёргает
+  /// `PackageManager.setComponentEnabledSetting`.
+  Future<void> setAutomationEnabled(bool enabled) async {
+    await _invoke<void>(
+      _Methods.setAutomationEnabled,
+      args: {'enabled': enabled},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: null,
+    );
+  }
+
+  /// §047 Шаг 2 — зеркалит в native-кеш активную ноду/группу (для
+  /// `LocaleConditionReceiver` — синхронный ответ на `QUERY_CONDITION`) и
+  /// списки нод/групп (для Spinner'а выбора в edit-Activity плагина вместо
+  /// ручного ввода). [nodes]/[groups] = null → не обновлять список (когда
+  /// меняется только активное состояние). Fire-and-forget.
+  void setAutomationActiveState({
+    String? node,
+    String? group,
+    List<String>? nodes,
+    List<String>? groups,
+  }) {
+    unawaited(_invoke<void>(
+      _Methods.setAutomationActiveState,
+      args: <String, dynamic>{
+        'node': node,
+        'group': group,
+        // null-aware element: ключ пропускается когда список null (native по
+        // отсутствию ключа не трогает кеш — обновляем только активное состояние).
+        'nodes': ?nodes,
+        'groups': ?groups,
+      },
+      timeout: _Timeouts.settings,
+      onTimeoutValue: null,
+    ).catchError((Object e) {
+      AppLog.I.error('[automation] setAutomationActiveState failed: $e');
+    }));
+  }
+
+  /// Outgoing emit: отправить automation-broadcast наружу. Открыт всем
+  /// подписчикам (события без секретов; per-app фильтр удалён, см. §157).
+  /// Fire-and-forget — не ждём подтверждения (broadcast асинхронен).
+  void sendAutomationBroadcast(String action, Map<String, Object?> extras) {
+    // Не await'им: emit вызывается из синхронных state-mutation точек
+    // (контроллеры), блокировать их нельзя. Ошибки гасим в логах.
+    unawaited(_invoke<void>(
+      _Methods.sendAutomationBroadcast,
+      args: {'action': action, 'extras': extras},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: null,
+    ).catchError((Object e) {
+      AppLog.I.error('[automation] sendAutomationBroadcast($action) failed: $e');
+    }));
+  }
+
+  // ---------------------------------------------------------------------------
   // Internal — invoke helper (timeout + error logging)
   // ---------------------------------------------------------------------------
 

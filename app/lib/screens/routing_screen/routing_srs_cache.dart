@@ -53,7 +53,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     // remote rule_set'ами (task 011).
     _template = template;
 
-    await _migrateLegacyPresets(template);
+    await _seedDefaultPresets(template);
     await _refreshSrsCache();
 
     setState(() {
@@ -139,39 +139,21 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     if (changed) _markDirty();
   }
 
-  /// One-shot переход на единую модель: legacy `enabled_rules` +
-  /// `rule_outbounds` → `custom_rules`. Для fresh-install'а (legacy ключей
-  /// нет) seed'им `template.selectableRules` с `default: true`.
-  /// Повторно не запускается — защищаемся флагом `presets_migrated`.
-  Future<void> _migrateLegacyPresets(WizardTemplate template) async {
-    if (await SettingsStorage.hasPresetsMigrated()) return;
+  /// Fresh-install seed: засеять `_customRules` из `template.selectableRules`
+  /// с `default: true`. One-shot — защищаемся флагом `defaultsSeeded` (тот же
+  /// storage-ключ `presets_migrated`: §159 удалил legacy-миграцию
+  /// `enabled_rules`/`rule_outbounds`, но флаг переиспользуем, чтобы юзеры,
+  /// которые ранее уже мигрировали/засеялись, НЕ получили повторный seed).
+  Future<void> _seedDefaultPresets(WizardTemplate template) async {
+    if (await SettingsStorage.hasDefaultsSeeded()) return;
 
-    final legacyEnabled = await SettingsStorage.getEnabledRules();
-    final legacyOutbounds = await SettingsStorage.getRuleOutbounds();
-
-    final labels = legacyEnabled.isNotEmpty
-        ? legacyEnabled
-        : <String>{
-            for (final r in template.selectableRules)
-              if (r.defaultEnabled) r.label,
-          };
-
-    for (final label in labels) {
-      final sr = template.selectableRules
-          .firstWhere((r) => r.label == label, orElse: () => kEmptySelectable);
-      if (sr.label.isEmpty) continue;
-      final cr = selectableRuleToCustom(
-        sr,
-        template,
-        overrideOutbound: legacyOutbounds[label],
-      );
-      _customRules.add(cr);
+    for (final sr in template.selectableRules) {
+      if (!sr.defaultEnabled) continue;
+      _customRules.add(selectableRuleToCustom(sr, template));
     }
 
     await SettingsStorage.saveCustomRules(_customRules);
-    await SettingsStorage.saveEnabledRules(<String>{});
-    await SettingsStorage.saveRuleOutbounds(<String, String>{});
-    await SettingsStorage.markPresetsMigrated();
+    await SettingsStorage.markDefaultsSeeded();
   }
 
   /// Качает SRS и при успехе включает правило. Вызывается из Switch'а

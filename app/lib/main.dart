@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/home_screen.dart';
 import 'services/app_log.dart';
+import 'services/automation/automation_dispatcher.dart';
+import 'services/automation/event_emitter.dart';
 import 'services/clash_log_pump.dart';
 import 'services/subscription/subscription_identity.dart';
 import 'services/debug/bootstrap.dart' as debug_bootstrap;
@@ -66,6 +68,11 @@ void main() async {
     // Если `auto_record_wifi_history` ON в storage — sync'нёт state с
     // native observer'ом (start callback). Default OFF, no-op до toggle.
     unawaited(WifiHistoryListener.I.init());
+    // §047 — register incoming automation-intent dispatcher (native
+    // LxBoxIntentReceiver → этот handler → shared action-handlers). Пассивен
+    // пока receiver disabled. Подгружаем emit-gates из storage (default OFF).
+    registerAutomationBridge();
+    unawaited(AutomationEventEmitter.I.reload());
     // Первый read `appStartedAt` фиксирует момент старта для /device и /ping.
     // ignore: unused_local_variable
     final _ = debug_bootstrap.appStartedAt;

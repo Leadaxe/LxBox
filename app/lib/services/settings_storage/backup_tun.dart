@@ -11,18 +11,63 @@ Future<Map<String, dynamic>> _dumpCache() async {
   return jsonDecode(jsonEncode(data)) as Map<String, dynamic>;
 }
 
-Future<void> _replaceRaw(
+/// §159 — применить snapshot при импорте. Фильтр default-deny на ВХОДЕ:
+/// top-level ∈ [SettingsStorage.allowedTopLevelKeys], подключи `vars` ∈
+/// (app-флаги ∪ vars текущего template). Всё прочее отбрасывается и
+/// возвращается в списке отброшенных (`dropped`) — caller логирует/показывает.
+///
+/// Закрывает оба входа в storage: UI-импорт бэкапа и Debug API
+/// `POST /backup/import` (оба сходятся здесь). Экспорт (`_dumpCache`) НЕ
+/// фильтруется — чистим только на входе.
+///
+/// `merge=false` (default) — replace целиком; `merge=true` — top-level upsert
+/// (присутствующие ключи overwrite, отсутствующие keep), `vars` мерджится
+/// per-subkey. Фильтр применяется к обоим путям.
+Future<List<String>> _replaceRaw(
   Map<String, dynamic> snapshot, {
   bool merge = false,
 }) async {
   final clean = jsonDecode(jsonEncode(snapshot)) as Map<String, dynamic>;
-  if (!merge) {
-    SettingsStorage._cache = clean;
-    await _save();
-    return;
-  }
-  final current = await _load();
+
+  // Allowlist для vars: кодовые флаги ∪ имена vars из локального template
+  // (template в бэкап не входит — резолвим против зашитого в APK, §159).
+  final template = await TemplateLoader.load();
+  final allowedVars =
+      SettingsStorage.allowedVarKeys(template.vars.map((v) => v.name));
+
+  final dropped = <String>[];
+  final filtered = <String, dynamic>{};
   for (final entry in clean.entries) {
+    final key = entry.key;
+    final value = entry.value;
+    if (!SettingsStorage.allowedTopLevelKeys.contains(key)) {
+      dropped.add(key);
+      continue;
+    }
+    if (key == 'vars' && value is Map) {
+      final outVars = <String, dynamic>{};
+      for (final v in value.entries) {
+        final vk = v.key.toString();
+        if (allowedVars.contains(vk)) {
+          outVars[vk] = v.value;
+        } else {
+          dropped.add('vars.$vk');
+        }
+      }
+      filtered[key] = outVars;
+    } else {
+      filtered[key] = value;
+    }
+  }
+
+  if (!merge) {
+    SettingsStorage._cache = filtered;
+    await _save();
+    return dropped;
+  }
+
+  final current = await _load();
+  for (final entry in filtered.entries) {
     final key = entry.key;
     final value = entry.value;
     if (key == 'vars' && value is Map<String, dynamic>) {
@@ -37,6 +82,7 @@ Future<void> _replaceRaw(
   }
   SettingsStorage._cache = current;
   await _save();
+  return dropped;
 }
 
 Future<TunAppsConfig> _getTunApps() async {

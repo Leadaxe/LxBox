@@ -9,69 +9,41 @@ part of '../settings_storage.dart';
 // ---------------------------------------------------------------------------
 // Server lists (v2). Ключ на диске: `server_lists`.
 //
-// Миграция с v1 (`proxy_sources`): при первом чтении, если старый ключ
-// есть и новый пустой — конвертируем через `migrateProxySources`, пишем
-// в новый ключ, старый удаляем. Необратимо.
+// §159 — legacy-миграция v1 (`proxy_sources` → `server_lists`) удалена. Старый
+// ключ (если ещё лежит у кого-то на диске) безвреден и отбросится при первом
+// импорте бэкапа allowlist'ом.
 // ---------------------------------------------------------------------------
 
 Future<List<ServerList>> _getServerLists() async {
   final data = await _load();
   final v2 = data['server_lists'] as List<dynamic>?;
-  if (v2 != null) {
-    // §141 P1.8c — per-entry try/catch: одна битая запись (unknown type,
-    // missing required field → FormatException в *.fromJson) раньше роняла
-    // ВЕСЬ список → app не загружал ни одной подписки. Теперь skip битой
-    // записи с логом, остальные подгружаются.
-    return v2
-        .whereType<Map<String, dynamic>>()
-        .map((m) {
-          try {
-            return ServerList.fromJson(m);
-          } catch (e) {
-            AppLog.I.warning('Skipping corrupt server_list entry: $e');
-            return null;
-          }
-        })
-        .whereType<ServerList>()
-        .toList();
-  }
-  final v1 = data['proxy_sources'] as List<dynamic>?;
-  if (v1 == null || v1.isEmpty) return const [];
-  final migrated = migrateProxySources(
-    v1.whereType<Map<String, dynamic>>().toList(),
-  );
-  data['server_lists'] = migrated.map((e) => e.toJson()).toList();
-  data.remove('proxy_sources');
-  SettingsStorage._cache = data;
-  await _save();
-  return migrated;
+  if (v2 == null) return const [];
+  // §141 P1.8c — per-entry try/catch: одна битая запись (unknown type,
+  // missing required field → FormatException в *.fromJson) раньше роняла
+  // ВЕСЬ список → app не загружал ни одной подписки. Теперь skip битой
+  // записи с логом, остальные подгружаются.
+  return v2
+      .whereType<Map<String, dynamic>>()
+      .map((m) {
+        try {
+          return ServerList.fromJson(m);
+        } catch (e) {
+          AppLog.I.warning('Skipping corrupt server_list entry: $e');
+          return null;
+        }
+      })
+      .whereType<ServerList>()
+      .toList();
 }
 
 Future<void> _saveServerLists(List<ServerList> lists) async {
   final data = await _load();
   data['server_lists'] = lists.map((e) => e.toJson()).toList();
-  data.remove('proxy_sources');
   SettingsStorage._cache = data;
   await _save();
 }
 
-// ---------------------------------------------------------------------------
-// Enabled selectable rules
-// ---------------------------------------------------------------------------
-
-Future<Set<String>> _getEnabledRules() async {
-  final data = await _load();
-  final list = data['enabled_rules'] as List<dynamic>? ?? [];
-  return list.map((e) => e.toString()).toSet();
-}
-
-Future<void> _saveEnabledRules(Set<String> rules) async {
-  final data = await _load();
-  data['enabled_rules'] = rules.toList();
-  SettingsStorage._cache = data;
-  SettingsStorage.markConfigDirty(); // §113
-  await _save();
-}
+// §159 — `enabled_rules` API удалён (legacy-миграция в `custom_rules` снята).
 
 // ---------------------------------------------------------------------------
 // Enabled preset groups
@@ -132,23 +104,7 @@ Future<bool> _shouldRefreshSubscriptions(String reloadInterval) async {
   return DateTime.now().difference(lastUpdate) >= interval;
 }
 
-// ---------------------------------------------------------------------------
-// Rule outbounds: Map<ruleLabel, outboundTag>
-// ---------------------------------------------------------------------------
-
-Future<Map<String, String>> _getRuleOutbounds() async {
-  final data = await _load();
-  final map = data['rule_outbounds'] as Map<String, dynamic>? ?? {};
-  return map.map((k, v) => MapEntry(k, v.toString()));
-}
-
-Future<void> _saveRuleOutbounds(Map<String, String> outbounds) async {
-  final data = await _load();
-  data['rule_outbounds'] = outbounds;
-  SettingsStorage._cache = data;
-  SettingsStorage.markConfigDirty(); // §113
-  await _save();
-}
+// §159 — `rule_outbounds` API удалён (legacy-миграция в `custom_rules` снята).
 
 // ---------------------------------------------------------------------------
 // Custom rules (§030) — единая модель для domain/IP/port/package/protocol/srs.
@@ -157,46 +113,12 @@ Future<void> _saveRuleOutbounds(Map<String, String> outbounds) async {
 
 Future<List<CustomRule>> _getCustomRules() async {
   final data = await _load();
-  await _absorbLegacyAppRules(data);
+  // §159 — legacy `app_rules` → `custom_rules` миграция удалена.
   final list = data['custom_rules'] as List<dynamic>? ?? [];
   return list
       .whereType<Map<String, dynamic>>()
       .map(CustomRule.fromJson)
       .toList();
-}
-
-/// One-shot: legacy `app_rules` (отдельная таба до v1.3.2) → `custom_rules`
-/// с полем `packages`. Запускается один раз — после конверсии ключ удаляется.
-/// Оставлен внутри getter'а чтобы автоматически подхватиться при первом
-/// открытии Rules-таба после апдейта.
-Future<void> _absorbLegacyAppRules(Map<String, dynamic> data) async {
-  final legacy = data['app_rules'] as List<dynamic>?;
-  if (legacy == null || legacy.isEmpty) return;
-  final existing = (data['custom_rules'] as List<dynamic>?)
-          ?.whereType<Map<String, dynamic>>()
-          .toList() ??
-      <Map<String, dynamic>>[];
-  for (final e in legacy.whereType<Map<String, dynamic>>()) {
-    final packages = (e['packages'] as List<dynamic>?)
-            ?.map((p) => p.toString())
-            .toList() ??
-        const <String>[];
-    if (packages.isEmpty) continue;
-    final migrated = CustomRuleInline(
-      id: (e['id'] as String?)?.trim().isNotEmpty == true
-          ? e['id'] as String
-          : null,
-      name: (e['name'] as String?) ?? 'App group',
-      enabled: (e['enabled'] as bool?) ?? true,
-      packages: packages,
-      outbound: (e['outbound'] as String?) ?? 'direct-out',
-    );
-    existing.add(migrated.toJson());
-  }
-  data['custom_rules'] = existing;
-  data.remove('app_rules');
-  SettingsStorage._cache = data;
-  await _save();
 }
 
 Future<void> _saveCustomRules(List<CustomRule> rules,
@@ -208,12 +130,15 @@ Future<void> _saveCustomRules(List<CustomRule> rules,
   if (flush) await _save();
 }
 
-Future<bool> _hasPresetsMigrated() async {
+/// §159 — флаг «дефолтные пресеты уже засеяны» (fresh-install seed). Хранится
+/// в том же storage-ключе `presets_migrated`, что и снятая legacy-миграция —
+/// чтобы юзеры, уже прошедшие миграцию, НЕ получили повторный seed дефолтов.
+Future<bool> _hasDefaultsSeeded() async {
   final data = await _load();
   return data['presets_migrated'] == true;
 }
 
-Future<void> _markPresetsMigrated() async {
+Future<void> _markDefaultsSeeded() async {
   final data = await _load();
   data['presets_migrated'] = true;
   SettingsStorage._cache = data;

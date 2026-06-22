@@ -32,6 +32,62 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val STATUS_CHANNEL = "com.leadaxe.lxbox/status_events"
         private const val CORE_LOG_CHANNEL = "lxbox/coreLog"   // §043
         private const val VPN_REQUEST_CODE = 24
+
+        // §047 — статические ссылки для bridge'а из LxBoxIntentReceiver (он
+        // живёт вне Flutter-плагина). Заполняются в onAttachedToEngine,
+        // обнуляются в onDetachedFromEngine. null = Flutter-engine не активен.
+        @Volatile
+        private var bridgeChannel: MethodChannel? = null
+        @Volatile
+        private var appContext: Context? = null
+        private val bridgeHandler =
+            android.os.Handler(android.os.Looper.getMainLooper())
+
+        /// §047 incoming bridge: LxBoxIntentReceiver форвардит intent-action +
+        /// extras → Dart (`box_vpn_client` `automationAction` handler) → shared
+        /// action-handlers. Если engine не запущен — silently skip.
+        fun handleAutomationAction(name: String, args: Map<String, Any?>) {
+            val channel = bridgeChannel
+            if (channel == null) {
+                Log.w(TAG, "[automation] handleAutomationAction($name) — no Flutter engine, skip")
+                return
+            }
+            bridgeHandler.post {
+                runCatching {
+                    channel.invokeMethod(
+                        "automationAction",
+                        mapOf("name" to name, "args" to args),
+                    )
+                }.onFailure {
+                    Log.e(TAG, "[automation] invokeMethod(automationAction) failed", it)
+                }
+            }
+        }
+
+        /// §047 outgoing emit: Dart (`AutomationEventEmitter`) шлёт событие
+        /// наружу. action — короткое имя (`VPN_CONNECTED`), namespace'ится в
+        /// `com.leadaxe.lxbox.event.<action>`. Открыт всем подписчикам — события
+        /// не содержат секретов (только лейблы: теги нод, группы, статус); см.
+        /// §157 (permission-фильтр удалён вместе с нерабочей галкой).
+        fun sendAutomationBroadcast(action: String, extras: Map<String, Any?>) {
+            val ctx = appContext ?: return
+            val intent = Intent("com.leadaxe.lxbox.event.$action")
+            for ((k, v) in extras) {
+                when (v) {
+                    null -> {}
+                    is String -> intent.putExtra(k, v)
+                    is Boolean -> intent.putExtra(k, v)
+                    is Int -> intent.putExtra(k, v)
+                    is Long -> intent.putExtra(k, v)
+                    is Double -> intent.putExtra(k, v)
+                    else -> intent.putExtra(k, v.toString())
+                }
+            }
+            // setPackage намеренно не выставляем — broadcast открыт всем
+            // подписчикам (события без секретов, только лейблы).
+            ctx.sendBroadcast(intent)
+            Log.d(TAG, "[automation] emit $action (${extras.size} extras)")
+        }
     }
 
     private lateinit var methodChannel: MethodChannel
@@ -57,7 +113,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             mainHandler.post {
                 val event = mutableMapOf<String, Any>("status" to name)
                 if (error != null) event["error"] = error
-                statusSink?.success(event)
+                // §155 — sink может указывать на мёртвый Dart-engine (process
+                // killed / engine detached между post и доставкой). success()
+                // тогда бросает DeadObjectException на main thread → краш всего
+                // приложения. Глотаем: статус всё равно пере-эмитится при
+                // следующем onListen после реконнекта.
+                runCatching { statusSink?.success(event) }
+                    .onFailure { Log.w(TAG, "[vpn] statusSink.success failed: $it") }
             }
         }
     }
@@ -73,6 +135,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
 
         methodChannel = MethodChannel(binding.binaryMessenger, METHOD_CHANNEL)
         methodChannel.setMethodCallHandler(this)
+        // §047 — статические bridge-ссылки для LxBoxIntentReceiver.
+        bridgeChannel = methodChannel
+        appContext = context
 
         statusEventChannel = EventChannel(binding.binaryMessenger, STATUS_CHANNEL)
         statusEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
@@ -102,11 +167,17 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         })
 
         Log.d(TAG, "[vpn] onAttachedToEngine: registerReceiver(statusReceiver)")
-        context.registerReceiver(
-            statusReceiver,
-            IntentFilter(BoxVpnService.BROADCAST_STATUS),
-            Context.RECEIVER_NOT_EXPORTED
-        )
+        // §155 — на отдельных OEM-прошивках registerReceiver может бросить
+        // (например при гонке с фоновыми ограничениями) → краш прямо в
+        // onAttachedToEngine, до того как плагин готов. Симметрично к
+        // runCatching на unregisterReceiver в onDetachedFromEngine.
+        runCatching {
+            context.registerReceiver(
+                statusReceiver,
+                IntentFilter(BoxVpnService.BROADCAST_STATUS),
+                Context.RECEIVER_NOT_EXPORTED
+            )
+        }.onFailure { Log.e(TAG, "[vpn] registerReceiver(statusReceiver) failed: $it") }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -116,6 +187,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         coreLogEventChannel.setStreamHandler(null)
         statusSink = null
         BoxVpnService.coreLogSink = null
+        // §047 — обнуляем bridge-ссылки (engine detached).
+        bridgeChannel = null
+        appContext = null
         runCatching { context.unregisterReceiver(statusReceiver) }
         pluginScope.cancel()
     }
@@ -337,6 +411,48 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // На API < 33 возвращаем "unsupported" — Dart-сторона покажет
                 // текстовую инструкцию вместо кнопки.
                 requestAddQuickSettingsTile(result)
+            }
+            // §047 Automation API — Dart → native control + outgoing emit.
+            "setAutomationEnabled" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                LxBoxIntentReceiver.setEnabled(context, enabled)
+                result.success(true)
+            }
+            "sendAutomationBroadcast" -> {
+                val action = call.argument<String>("action") ?: ""
+                @Suppress("UNCHECKED_CAST")
+                val extras = (call.argument<Map<String, Any?>>("extras")
+                    ?: emptyMap())
+                if (action.isNotEmpty()) {
+                    sendAutomationBroadcast(action, extras)
+                }
+                result.success(true)
+            }
+            // §047 Шаг 2 — зеркалим активную ноду/группу + списки нод/групп в
+            // native-кеш. Активное состояние нужно LocaleConditionReceiver
+            // (синхронный ответ на QUERY_CONDITION); списки — edit-Activity
+            // плагина (Spinner выбора ноды/группы вместо ручного ввода).
+            // Flutter-engine при чтении может спать, потому именно prefs.
+            "setAutomationActiveState" -> {
+                val node = call.argument<String>("node")
+                val group = call.argument<String>("group")
+                val nodes = call.argument<List<String>>("nodes")
+                val groups = call.argument<List<String>>("groups")
+                val edit = context
+                    .getSharedPreferences("lxbox_automation", Context.MODE_PRIVATE)
+                    .edit()
+                    .putString("active_node", node)
+                    .putString("active_group", group)
+                // Списки сериализуем как JSON-массив строк. null → не трогаем
+                // (caller мог обновить только активное состояние).
+                if (nodes != null) {
+                    edit.putString("all_nodes", org.json.JSONArray(nodes).toString())
+                }
+                if (groups != null) {
+                    edit.putString("all_groups", org.json.JSONArray(groups).toString())
+                }
+                edit.apply()
+                result.success(true)
             }
             "getApplicationExitInfo" -> result.success(readApplicationExitInfo())
             "getLogcatTail" -> {
@@ -608,7 +724,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
                 true
             } catch (e: TimeoutCancellationException) {
-                Log.w(TAG, "[vpn] stopVPN: 5s timeout — native не отдал Stopped")
+                Log.w(TAG, "[vpn] stopVPN: 5s timeout — native did not report Stopped")
                 false
             } catch (e: Exception) {
                 Log.e(TAG, "[vpn] stopVPN: exception $e")

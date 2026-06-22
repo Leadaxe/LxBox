@@ -1,5 +1,9 @@
 # §128 — JNI callback crash на Android 10 (F12.3 generalization)
 
+> ⚠️ **Коллизия номера §128** (параллельные сессии). Это «§128-jni». Второй файл под тем же
+> номером — [`128-force-direct-out-detour.md`](128-force-direct-out-detour.md) («§128-detour», won't-fix).
+> Не перенумеровано намеренно — см. [README §«Известные коллизии»](README.md#известные-коллизии-номеров).
+
 | Поле | Значение |
 |------|----------|
 | Статус | **In Progress** |

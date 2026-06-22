@@ -12,6 +12,25 @@ docs/spec/tasks/NNN-short-kebab-title.md
 
 Номера монотонные, не переиспользуются. Если задача переросла в фичу — `spec.md` в `features/` появляется дополнительно, task остаётся как летопись.
 
+## Известные коллизии номеров
+
+Параллельные сессии иногда занимают один и тот же номер до коммита. Где это уже
+вошло в историю (ссылки в коммитах/коде/памяти зафиксированы) — номер **не**
+перенумеровывается, а пара разводится суффиксом-алиасом в шапке каждого файла:
+
+| № | Файл | Алиас | Суть |
+|---|------|-------|------|
+| 128 | [`128-force-direct-out-detour.md`](128-force-direct-out-detour.md) | §128-detour | `detour: direct-out` — won't-fix |
+| 128 | [`128-jni-callback-crash-android10.md`](128-jni-callback-crash-android10.md) | §128-jni | defensive try/catch на JNI callbacks (Android 10) |
+| 143 | [`143-interrupt-connections-on-node-switch.md`](143-interrupt-connections-on-node-switch.md) | §143-interrupt | обрыв соединений при смене ноды |
+| 143 | [`143-warp-masquerade-id-ip-ib.md`](143-warp-masquerade-id-ip-ib.md) | §143-warp | WARP core-masquerade `id/ip/ib` |
+
+> §146 — **не** коллизия: `146-warp-quic-initial-fragmented-i1.md` + `146-test-vectors/`
+> относятся к одной таске (директория — hex-векторы к ней).
+
+**Профилактика:** перед коммитом новой таски — `git status` + взять реально
+свободный номер (gap-поиск в `tasks/`), а не «следующий по порядку».
+
 ## Секции в отчёте
 
 ```markdown

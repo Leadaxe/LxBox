@@ -67,4 +67,14 @@ class _Methods {
   // Recovery actions (specs 030, 031)
   static const reloadVPN = 'reloadVPN';
   static const resetNetwork = 'resetNetwork';
+
+  // §047 Automation API — Dart → native control + outgoing emit.
+  static const setAutomationEnabled = 'setAutomationEnabled';
+  static const sendAutomationBroadcast = 'sendAutomationBroadcast';
+  // §047 Шаг 2 — mirror активной ноды/группы для Locale condition-плагина.
+  static const setAutomationActiveState = 'setAutomationActiveState';
+
+  // §047 — native → Dart incoming intent dispatch (handled on this same
+  // MethodChannel via setMethodCallHandler).
+  static const automationAction = 'automationAction';
 }

@@ -32,6 +32,7 @@
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
         android:usesPermissionFlags="neverForLocation" />
 
+
     <application
         android:label="L×Box"
         android:name=".vpn.BoxApplication"
@@ -89,6 +90,114 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- §047 Public Intent API — приём automation-команд (Tasker /
+             Macrodroid). `enabled="false"` по умолчанию: компонент включается
+             рантаймом через PackageManager.setComponentEnabledSetting когда
+             юзер поднимает мастер-toggle «Принимать команды автоматизации» —
+             это и есть единственный барьер приёма. `android:permission` НЕ
+             задан намеренно: per-app пропуск удалён (§157 —
+             `checkCallingPermission` в broadcast-onReceive недетерминирован). -->
+        <receiver
+            android:name=".vpn.LxBoxIntentReceiver"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="com.leadaxe.lxbox.START_VPN" />
+                <action android:name="com.leadaxe.lxbox.STOP_VPN" />
+                <action android:name="com.leadaxe.lxbox.TOGGLE_VPN" />
+                <action android:name="com.leadaxe.lxbox.SWITCH_NODE" />
+                <action android:name="com.leadaxe.lxbox.SET_GROUP" />
+                <action android:name="com.leadaxe.lxbox.REBUILD_CONFIG" />
+                <action android:name="com.leadaxe.lxbox.REFRESH_SUBS" />
+                <action android:name="com.leadaxe.lxbox.RESET_NETWORK" />
+                <action android:name="com.leadaxe.lxbox.URLTEST_GROUP" />
+            </intent-filter>
+        </receiver>
+
+        <!-- §047 Шаг 2 — Locale / Tasker plugin-стандарт (twofortyfouram).
+             L×Box виден в Tasker как Plugin (Action + State). Edit-Activity
+             exported (хост открывает их). Fire/Query receiver'ы БЕЗ
+             `android:permission` (стандарт запрещает — хост проверяет права
+             сам); `enabled="false"` — включаются мастер-toggle'ом
+             «Принимать команды автоматизации» вместе с raw-receiver Шага 1. -->
+        <!-- «Custom…» — экран выбора остальных команд (switch-node, set-group,
+             url-test, refresh, rebuild, reset) + значение extra. -->
+        <activity
+            android:name=".automation.LocaleSettingEditActivity"
+            android:exported="true"
+            android:label="L×Box: Custom…"
+            android:icon="@mipmap/ic_launcher"
+            android:theme="@style/LaunchTheme">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
+            </intent-filter>
+        </activity>
+
+        <!-- Частые команды — отдельными one-tap строками в списке плагинов
+             (как у VPN Hotspot). Host открывает alias по EDIT_SETTING, activity
+             headless'ом сразу отдаёт готовый bundle и finish (UI не рисует). -->
+        <activity
+            android:name=".automation.LocaleQuickActionActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay" />
+        <activity-alias
+            android:name=".automation.LocaleStartAlias"
+            android:targetActivity=".automation.LocaleQuickActionActivity"
+            android:exported="true"
+            android:label="L×Box: Start VPN"
+            android:icon="@mipmap/ic_launcher">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".automation.LocaleStopAlias"
+            android:targetActivity=".automation.LocaleQuickActionActivity"
+            android:exported="true"
+            android:label="L×Box: Stop VPN"
+            android:icon="@mipmap/ic_launcher">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".automation.LocaleToggleAlias"
+            android:targetActivity=".automation.LocaleQuickActionActivity"
+            android:exported="true"
+            android:label="L×Box: Toggle VPN"
+            android:icon="@mipmap/ic_launcher">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
+            </intent-filter>
+        </activity-alias>
+        <receiver
+            android:name=".automation.LocaleSettingReceiver"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.FIRE_SETTING" />
+            </intent-filter>
+        </receiver>
+
+        <activity
+            android:name=".automation.LocaleConditionEditActivity"
+            android:exported="true"
+            android:label="L×Box"
+            android:icon="@mipmap/ic_launcher"
+            android:theme="@style/LaunchTheme">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_CONDITION" />
+            </intent-filter>
+        </activity>
+        <receiver
+            android:name=".automation.LocaleConditionReceiver"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.QUERY_CONDITION" />
             </intent-filter>
         </receiver>
 

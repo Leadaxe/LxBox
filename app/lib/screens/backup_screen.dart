@@ -182,6 +182,10 @@ class _BackupScreenState extends State<BackupScreen> {
       if (apply.hasErrors) {
         summary.write(' (${apply.errors.length} errors)');
       }
+      // §159 — allowlist отбросил неизвестные/чужеродные ключи.
+      if (apply.droppedKeys.isNotEmpty) {
+        summary.write(' · ${apply.droppedKeys.length} unknown keys skipped');
+      }
       // applyImport пишет в SettingsStorage, но controllers (Subscription /
       // Home / Routing screen state) держат in-memory snapshot — UI остаётся
       // stale. Restart-кнопка вызывает quitApp(); юзер сам тапает иконку,

@@ -348,7 +348,15 @@ Future<DebugResponse> _putPingOptions(
   if (body.containsKey('groups') && body['groups'] is! Map) {
     throw const BadRequest('field "groups" must be object if present');
   }
-  await SettingsStorage.savePingOptions(Map<String, dynamic>.from(body));
+  // §159 — strip unknown subkeys: пишем только известные поля ping_options
+  // (url/timeout_ms/presets/groups), чтобы произвольный ключ тела не замусоривал
+  // storage. Это вход данных → default-deny, как в backup-import allowlist.
+  const allowedPingKeys = {'url', 'timeout_ms', 'presets', 'groups'};
+  final clean = <String, dynamic>{
+    for (final e in body.entries)
+      if (allowedPingKeys.contains(e.key)) e.key: e.value,
+  };
+  await SettingsStorage.savePingOptions(clean);
   await _reloadHomePingOptions(ctx);
   return JsonResponse({
     'ok': true,

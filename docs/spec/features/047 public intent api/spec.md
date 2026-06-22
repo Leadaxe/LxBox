@@ -2,11 +2,21 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **Draft** — spec only, не реализовано |
-| Дата | 2026-05-10 |
+| Статус | **Implemented** (2026-06-21) — **Шаг 1** raw broadcast actions + emitter + bridge + вкладка Automation; **Шаг 2** Locale/Tasker plugin (`FIRE_SETTING` + `QUERY_CONDITION`) — L×Box виден в Tasker как Plugin (Action + State). Docs: [`docs/AUTOMATION.md`](../../../AUTOMATION.md). Health-события — future (§042). |
+| Дата | 2026-05-10 (обновлено 2026-06-21 — Шаги 1 и 2 реализованы) |
 | Зависимости | [`031 debug api`](../031%20debug%20api/spec.md) (action handlers переиспользуются) |
 | Связано | [`032 quick connect`](../032%20quick%20connect/spec.md) (та же семантика toggle/switch, разные источники) |
-| Реализация | Native (Kotlin BroadcastReceiver), без Flutter UI кроме docs/help страницы |
+| Issue | [#12 «Add ON and OFF actions in addition to toggle»](https://github.com/Leadaxe/LxBox/issues/12) — `START_VPN`/`STOP_VPN` покрывают запрос |
+| Реализация | Native (Kotlin BroadcastReceiver) + Flutter UI-блок в App Settings (toggle приёма, галки emit-категорий, интент-строки с копированием) + `docs/AUTOMATION.md` |
+
+> ⚠️ **Изменение (§157, 2026-06-22):** галка «Требовать пропуск»
+> (`automation_require_permission`) и custom-permission
+> `com.leadaxe.lxbox.permission.AUTOMATION` **удалены** — `checkCallingPermission`
+> в broadcast-`onReceive` недетерминирован (broadcast не несёт caller-identity),
+> реальной защиты не давал. Единственный барьер приёма — мастер-toggle (receiver
+> `enabled=false` по умолчанию); outgoing-события идут открытым `sendBroadcast`.
+> Разделы ниже с упоминанием «Требовать пропуск» / permission-gate описывают
+> **прежнее** состояние — см. [`tasks/157`](../../tasks/157-automation-drop-require-permission.md).
 
 ---
 
@@ -25,7 +35,7 @@ Tasker и аналогичные приложения умеют отправл�
 - **Outgoing events** — broadcasts от L×Box во внешний мир: `VPN_CONNECTED`, `VPN_DISCONNECTED` (extra: `reason`), `VPN_ERROR` (extras: `code`, `message`), `VPN_REVOKED`, `ACTIVE_NODE_CHANGED` (extras: `old_tag`, `new_tag`, `reason`), `ACTIVE_GROUP_CHANGED`, `SUB_REFRESH_FAILED` (extras: `sub_id`, `error`), плюс health-events когда §042 watchdog будет готов.
 - **Symmetric request-response pattern** — Tasker может wait'ать на исходящий event как ответ на свой request (например `SWITCH_NODE` → `ACTIVE_NODE_CHANGED` или `VPN_ERROR`).
 - Реализация переиспользует существующие action handlers из [`debug/handlers/action.dart`](../../../app/lib/services/debug/handlers/action.dart) (тот же business logic, разные транспорты).
-- Documentation страница в App Settings → Diagnostics → "Automation API" с примерами Tasker setup.
+- Documentation страница в App Settings → Automation API с примерами Tasker setup.
 - **Granular opt-in toggles** — receiver и emitter управляются отдельно, по категориям событий. Default — все OFF. Юзер выбирает что разрешить.
 
 **Не в скопе:**
@@ -70,7 +80,7 @@ Tasker умеет тригериться от десятков event'ов: Wi-Fi
 
 Любая установленная app может отправить `Intent("com.leadaxe.lxbox.STOP_VPN")` через `sendBroadcast`. Если receiver `exported=true` всегда listening — потенциально malicious app может выключать VPN без юзера. Mitigation:
 
-1. **Toggle в App Settings → Diagnostics → "Automation API"** (default OFF). Receiver регистрируется только когда toggle ON.
+1. **Toggle в App Settings → Automation API** (default OFF). Receiver регистрируется только когда toggle ON.
 2. **Юзер видит при включении** explainer dialog с warning "Любая app сможет управлять VPN. Включайте только если используете Tasker/Macrodroid".
 3. Optionally — **package whitelist** в advanced settings (UI: "Allow only these apps to control VPN: [+]"). Для v2.
 
@@ -116,8 +126,7 @@ Tasker умеет тригериться от десятков event'ов: Wi-Fi
   <receiver
     android:name=".vpn.LxBoxIntentReceiver"
     android:exported="true"
-    android:enabled="false"           <!-- runtime-toggled -->
-    android:permission="com.leadaxe.lxbox.permission.AUTOMATION">
+    android:enabled="false">          <!-- runtime-toggled -->
     <intent-filter>
       <!-- Incoming control actions -->
       <action android:name="com.leadaxe.lxbox.START_VPN" />
@@ -132,24 +141,21 @@ Tasker умеет тригериться от десятков event'ов: Wi-Fi
     </intent-filter>
   </receiver>
 
-  <!-- Custom permission, **opt-in для caller'а**: Tasker должен явно
-       declare'ить <uses-permission> чтобы intent дошёл. Применяется
-       и к receiver (incoming), и к outgoing broadcasts (через
-       `sendBroadcast(intent, RECEIVE_PERMISSION)`). -->
+  <!-- Custom permission объявляется всегда (нужна когда юзер включил
+       строгий режим), но к receiver статически НЕ привязана через
+       `android:permission` — манифест-атрибут нельзя переключить
+       рантаймом, а защита у нас опциональна (галка). Enforcement —
+       в коде (`onReceive`), см. ниже. -->
   <permission
     android:name="com.leadaxe.lxbox.permission.AUTOMATION"
     android:protectionLevel="normal" />
-
-  <!-- Outgoing events не нуждаются в `<receiver>` declaration —
-       мы отправляем `sendBroadcast(intent, "<permission>")`,
-       потребитель просто регистрирует свой receiver на наши actions. -->
 </application>
 ```
 
 **Notes:**
-- `android:enabled="false"` — receiver выключен в манифесте по умолчанию. Включается через `PackageManager.setComponentEnabledSetting(...)` runtime когда юзер toggle'ит "Allow incoming control commands".
-- `android:permission="com.leadaxe.lxbox.permission.AUTOMATION"` — кастомная Android-permission. Для Tasker это означает ровно одну строку в его манифесте (он умеет declare'ить arbitrary permissions через UI). Для случайной malicious app — небольшой барьер (нужно знать имя permission и declare'ить).
-- **Та же permission защищает outgoing** — `sendBroadcast(intent, AUTOMATION)` означает что только apps с granted permission получат event. Симметрично incoming.
+- `android:enabled="false"` — receiver выключен в манифесте по умолчанию. Включается через `PackageManager.setComponentEnabledSetting(...)` runtime когда юзер toggle'ит "Принимать команды автоматизации".
+- **Permission НЕ задаётся через `android:permission` на receiver.** Защита пропуском — опциональна (галка «Требовать пропуск», default OFF), а манифест-атрибут статичен и рантаймом не переключается. Поэтому enforcement делается **в коде**: если галка включена, `onReceive` сам проверяет, что отправитель держит `com.leadaxe.lxbox.permission.AUTOMATION`, и иначе игнорит intent. Когда галка выключена — принимаем от любого caller'а (gate здесь — сам мастер-toggle, без него receiver вообще disabled).
+- **Outgoing events** отправляются `sendBroadcast(intent, permission?)`: в строгом режиме — с `com.leadaxe.lxbox.permission.AUTOMATION` (получат только apps с granted permission), иначе — без permission (получит любой подписчик). Симметрично incoming-галке.
 
 ### LxBoxIntentReceiver.kt
 
@@ -172,6 +178,24 @@ class LxBoxIntentReceiver : BroadcastReceiver() {
         const val EXTRA_GROUP = "group"
         const val EXTRA_FORCE = "force"
 
+        const val PERMISSION_AUTOMATION = "com.leadaxe.lxbox.permission.AUTOMATION"
+
+        /// Прокси к native-кешу галки «Требовать пропуск». Кеш —
+        /// SharedPreferences-зеркало storage-key `automation_require_permission`
+        /// (default false), синкается из Flutter в `setRequirePermission`.
+        /// Читаем именно из prefs, а не через MethodChannel — onReceive обязан
+        /// решить про permission синхронно, Flutter-engine может быть не запущен.
+        private fun requirePermission(ctx: Context): Boolean =
+            ctx.getSharedPreferences("lxbox_automation", Context.MODE_PRIVATE)
+                .getBoolean("require_permission", false)
+
+        /// Вызывается из Flutter при смене галки — пишет в native-кеш.
+        fun setRequirePermission(ctx: Context, value: Boolean) {
+            ctx.getSharedPreferences("lxbox_automation", Context.MODE_PRIVATE)
+                .edit().putBoolean("require_permission", value).apply()
+            Log.d(TAG, "require-permission set to $value")
+        }
+
         fun setEnabled(ctx: Context, enabled: Boolean) {
             val pm = ctx.packageManager
             val component = ComponentName(ctx, LxBoxIntentReceiver::class.java)
@@ -188,6 +212,22 @@ class LxBoxIntentReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val callerPkg = sentFromPackage(intent)  // best-effort attribution
         Log.d(TAG, "received ${intent.action} from $callerPkg")
+
+        // Опциональный пропуск (галка «Требовать пропуск», default OFF).
+        // Флаг читается синхронно из быстрого native-кеша (SharedPreferences
+        // mirror, синкается из Flutter при смене галки). Если строгий режим
+        // ON и caller не держит permission — тихо игнорим (логируем).
+        // checkCallingPermission в receiver-контексте возвращает гранты
+        // отправителя broadcast'а; для legacy-send без permission → DENIED.
+        if (requirePermission(context)) {
+            val granted = context.checkCallingPermission(PERMISSION_AUTOMATION) ==
+                PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                Log.w(TAG, "rejected ${intent.action} from $callerPkg — permission required but not granted")
+                // AppLog: [automation] rejected <action> from <pkg> → no permission
+                return
+            }
+        }
 
         when (intent.action) {
             ACTION_START_VPN -> BoxVpnService.start(context)
@@ -411,11 +451,21 @@ fun sendAutomationBroadcast(ctx: Context, action: String, extras: Bundle) {
     val intent = Intent("com.leadaxe.lxbox.event.$action").apply {
         putExtras(extras)
         // setPackage намеренно не выставляем — broadcast открыт всем
-        // подписчикам с granted permission. Если юзер задал whitelist
-        // (future v2) — фильтрация на уровне sendBroadcast'а.
+        // подписчикам. Если юзер задал whitelist (future v2) —
+        // фильтрация на уровне sendBroadcast'а.
     }
-    ctx.sendBroadcast(intent, "com.leadaxe.lxbox.permission.AUTOMATION")
-    Log.d(TAG, "emit $action with ${extras.size()} extras")
+    // Permission-gated send симметричен incoming-галке: если «Требовать
+    // пропуск» ON — событие получат только apps с granted permission;
+    // иначе шлём без permission (любой подписчик). Читаем тот же
+    // native-кеш, что и receiver.
+    val requirePerm = ctx.getSharedPreferences("lxbox_automation", Context.MODE_PRIVATE)
+        .getBoolean("require_permission", false)
+    if (requirePerm) {
+        ctx.sendBroadcast(intent, LxBoxIntentReceiver.PERMISSION_AUTOMATION)
+    } else {
+        ctx.sendBroadcast(intent)
+    }
+    Log.d(TAG, "emit $action with ${extras.size()} extras (perm=$requirePerm)")
 }
 ```
 
@@ -461,7 +511,7 @@ Throttle implementation — простой `Map<String, DateTime> _lastEmitAt` p
 
 Dev может фильтровать `q=automation` и видеть полную картину "Tasker послал → реакция наша → emit обратно".
 
-### UI — App Settings → Diagnostics → Automation API
+### UI — App Settings → Automation API
 
 Granular toggles — каждая категория управляется отдельно. Default — **все OFF**:
 
@@ -473,15 +523,35 @@ Granular toggles — каждая категория управляется от
 │  Llama and other automation apps via Android│
 │  broadcast intents.                         │
 │                                             │
-│  Caller must declare custom permission      │
-│  com.leadaxe.lxbox.permission.AUTOMATION    │
-│  in its manifest.                           │
+│  ── Master ─────────────────────────────    │
+│  [○] Принимать команды автоматизации        │
+│      (Start/Stop/Toggle/Switch/Refresh/...) │
+│      ▸ default OFF. Включает receiver        │
+│        (setComponentEnabledSetting).         │
 │                                             │
-│  ── Receive ────────────────────────────    │
-│  [○] Allow incoming control commands        │
-│      (Start/Stop/Switch/Refresh/Reset/...)  │
+│  [○] Требовать пропуск (рекоменд. для         │
+│      безопасности)                          │
+│      ▸ default OFF. Команды/события только   │
+│        от приложений с пропуском.            │
+│      ┌── виден только когда галка ON ──┐     │
+│      │ com.leadaxe.lxbox.permission.    │ 📋  │
+│      │ AUTOMATION                       │     │
+│      │ Впишите этот пропуск в           │     │
+│      │ permissions вашего Tasker.       │     │
+│      └─────────────────────────────────┘     │
 │                                             │
-│  ── Emit ───────────────────────────────    │
+│  ── Команды (intent actions) ───────────    │
+│  Скопируйте в «Send Intent» вашего          │
+│  automation-приложения. Target: Broadcast.  │
+│   • com.leadaxe.lxbox.START_VPN        📋   │
+│   • com.leadaxe.lxbox.STOP_VPN         📋   │
+│   • com.leadaxe.lxbox.TOGGLE_VPN       📋   │
+│   • …SWITCH_NODE (extra tag)           📋   │
+│   • …SET_GROUP (extra group)          📋   │
+│   • …REBUILD_CONFIG · REFRESH_SUBS ·  📋   │
+│     RESET_NETWORK · URLTEST_GROUP          │
+│                                             │
+│  ── Emit (события наружу) ───────────────    │
 │  [○] Lifecycle events                       │
 │      VPN_CONNECTED · DISCONNECTED ·         │
 │      ERROR · REVOKED · UPDATE_AVAILABLE ·   │
@@ -503,9 +573,15 @@ Granular toggles — каждая категория управляется от
 └─────────────────────────────────────────────┘
 ```
 
+**Поведение галки «Требовать пропуск»:**
+- **OFF (default)** — receiver принимает команды от любого приложения; события emit'ятся без permission. Gate здесь — сам мастер-toggle (без него receiver disabled). Работает «из коробки», ничего настраивать в Tasker не нужно.
+- **ON** — `onReceive` проверяет, что отправитель держит `com.leadaxe.lxbox.permission.AUTOMATION`, иначе игнорит (лог `[automation] rejected … no permission`). Outgoing-события шлются permission-gated. Юзеру нужно один раз вписать строку пропуска (показана с кнопкой 📋) в permissions своего Tasker/Macrodroid.
+- Переключение галки вызывает `LxBoxIntentReceiver.setRequirePermission(ctx, value)` → пишет в native-кеш (`lxbox_automation` SharedPreferences), который синхронно читают и receiver, и emitter.
+- Строка пропуска и кнопка 📋 видны только когда галка ON (когда OFF — пропуск не нужен, не путаем юзера).
+
 **Explainer dialog при включении любой категории** (показывается один раз на категорию, помечается флагом `automation_explainer_shown_v1`):
 
-> ⚠️ Включение этой категории позволит другим приложениям с granted permission получать события L×Box. Включайте только если вы используете Tasker / Macrodroid и понимаете последствия.
+> ⚠️ Включение этой категории позволит другим приложениям получать события L×Box (при включённой галке «Требовать пропуск» — только приложениям с пропуском). Включайте только если вы используете Tasker / Macrodroid и понимаете последствия.
 >
 > События НЕ содержат секретных данных подписок / config'а — только лейблы (tags / group names / status).
 >
@@ -528,7 +604,7 @@ Granular toggles — каждая категория управляется от
 ## Setup (Tasker example)
 1. Tasker → Properties → Permissions → Add → declare
    `com.leadaxe.lxbox.permission.AUTOMATION`
-2. L×Box → App Settings → Diagnostics → Automation API → enable
+2. L×Box → App Settings → Automation API → enable
    нужные категории (incoming + emit)
 3. Restart Tasker (некоторые версии cache permissions)
 4. Verify: send test broadcast через Tasker → check L×Box debug log
@@ -581,7 +657,7 @@ Task: Notify Wear "❌ VPN: %code — %message"
 ### Setup flow (юзер)
 
 ```
-1. App Settings → Diagnostics → Automation API
+1. App Settings → Automation API
 2. Toggle ON → explainer dialog warning о security
 3. Юзер confirms → setEnabled(ctx, true) активирует receiver
 4. Открывает Tasker → Configure permission + Add intent action
@@ -616,7 +692,7 @@ Task: Notify Wear "❌ VPN: %code — %message"
 | Симптом | Причина | Что делать |
 |---|---|---|
 | Tasker action sent но ничего не происходит | Automation API toggle OFF | Включить в App Settings |
-| Тоже но toggle ON | Tasker не declare'ил permission | Add `com.leadaxe.lxbox.permission.AUTOMATION` в Tasker permissions |
+| Тоже но toggle ON | Галка «Требовать пропуск» ON, а Tasker не declare'ил permission | Либо выключить галку, либо добавить `com.leadaxe.lxbox.permission.AUTOMATION` в permissions Tasker (лог: `[automation] rejected … no permission`) |
 | `SWITCH_NODE` отрабатывает, но другая нода не выбирается | Tag не существует или typo | Check log в App Settings → Diagnostics → log filter "automation" |
 | `START_VPN` не работает первый раз | VPN consent ещё не давали | Юзер должен один раз запустить из app, дальше automation работает |
 
@@ -642,7 +718,8 @@ Task: Notify Wear "❌ VPN: %code — %message"
 - **Unit (Dart) — outgoing**: `AutomationEventEmitter` — gate-toggles работают (lifecycle/state/subs/health), throttle policy не пропускает события чаще лимита, log entries формируются.
 - **Unit (Dart) — symmetric**: `actionSwitchNode` → triggers `emitNodeChanged` → AutomationEventEmitter mock получает correct extras.
 - **Integration (Kotlin) — incoming**: `LxBoxIntentReceiver` тест через `Robolectric`/instrumentation: подаём `Intent`, проверяем что `BoxVpnService.start` вызвался / `VpnPlugin.handleAutomationAction` cached call.
-- **Integration (Kotlin) — outgoing**: `VpnPlugin.sendAutomationBroadcast` — проверяем что `Context.sendBroadcast(intent, permission)` вызывается с правильным action + extras.
+- **Integration (Kotlin) — permission gate**: при `require_permission=true` в native-кеше и caller'е без granted permission `onReceive` НЕ дёргает action (раннее `return`, лог `rejected`); при `false` — дёргает независимо от permission.
+- **Integration (Kotlin) — outgoing**: `VpnPlugin.sendAutomationBroadcast` — при `require_permission=true` вызывается `sendBroadcast(intent, PERMISSION_AUTOMATION)`, при `false` — `sendBroadcast(intent)` без permission. Правильный action + extras в обоих случаях.
 - **Manual (on-device)** — все 7 Tasker recipes из `docs/AUTOMATION.md`:
   - Recipe 1-2: Wi-Fi auto-toggle (incoming)
   - Recipe 3: Symmetric SWITCH_NODE + wait ACTIVE_NODE_CHANGED
@@ -659,11 +736,11 @@ Task: Notify Wear "❌ VPN: %code — %message"
 
 | # | Риск | Mitigation |
 |---|---|---|
-| 1 | Malicious app угадает permission name + declare'ит → сможет управлять VPN | (a) Default OFF toggle; (b) explainer dialog при включении; (c) future v2: package whitelist |
-| 2 | Receiver `exported=true` уязвимость поверхностная — broadcast не auth-ed | Custom permission снижает поверхность. Юзеры читают warning перед enable. Acceptable для opt-in feature. |
+| 1 | При выключенной галке «Требовать пропуск» любое приложение может слать команды, пока мастер-toggle ON | (a) Мастер-toggle default OFF — без явного включения receiver disabled; (b) explainer dialog при включении; (c) галка «Требовать пропуск» закрывает дыру для тех, кому важно; (d) future v2: package whitelist |
+| 2 | Malicious app угадает permission name + declare'ит → в строгом режиме сможет управлять VPN | protectionLevel `normal` — пропуск даёт только барьер «знать имя + declare», не криптозащиту. Для сильной модели — package whitelist (future v2). Acceptable для opt-in feature. |
 | 3 | `SWITCH_NODE` с несуществующим tag → silent ignore | Логируется в AppLog с `[automation]` префиксом. Юзер может проверить. Не throw'аем — иначе Tasker может зависнуть на retry'ах. |
 | 4 | Action names — public API; rename ломает чужие automation rules | Document'ом фиксируем как stable. **Никогда не переименовывать**, deprecate'ить + alias на год минимум. |
-| 5 | Tasker (free) ограничен в количестве permissions — может не declare наш permission | Workaround: уменьшить protectionLevel до "normal" (так и сделано). Tasker умеет normal-level permissions. |
+| 5 | Юзер включил «Требовать пропуск», но не вписал permission в Tasker → команды молча не доходят | UI показывает строку пропуска с 📋 ровно когда галка ON; docs описывают setup; лог `[automation] rejected … no permission` диагностирует. Default галки OFF — большинство не столкнётся. |
 | 6 | На некоторых OEM (MIUI / ColorOS) auto-start restrictions блокируют receivers даже в `exported=true` | Документируем — юзеру нужно дать L×Box в "Auto-start" список в системных settings того OEM. То же что для §032. |
 | 7 | `START_VPN` без consent dialog → fail. Tasker не сможет first-time enable | Документируем. Юзер должен один раз нажать Connect в app, дальше automation работает без UI. |
 
@@ -673,9 +750,9 @@ Task: Notify Wear "❌ VPN: %code — %message"
 
 | Файл | Что |
 |------|-----|
-| `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/LxBoxIntentReceiver.kt` | **Новый** — receiver класс с onReceive switch (9 incoming actions) + setEnabled helper |
-| `app/android/app/src/main/AndroidManifest.xml` | `<receiver>` declaration с 9 actions + custom `<permission>` |
-| `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt` | `handleAutomationAction` companion-метод (incoming bridge) + `sendAutomationBroadcast` (outgoing emitter, MethodChannel handler `sendAutomationBroadcast`) + cached MethodChannel ref |
+| `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/LxBoxIntentReceiver.kt` | **Новый** — receiver класс с onReceive switch (9 incoming actions) + setEnabled helper + опциональная permission-проверка (`requirePermission`/`setRequirePermission`, native-кеш `lxbox_automation` prefs) |
+| `app/android/app/src/main/AndroidManifest.xml` | `<receiver>` declaration с 9 actions (БЕЗ `android:permission` — enforcement в коде) + custom `<permission>` declaration |
+| `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt` | `handleAutomationAction` companion-метод (incoming bridge) + `sendAutomationBroadcast` (outgoing emitter, permission-gated условно по галке) + MethodChannel handlers `setAutomationEnabled` / `setAutomationRequirePermission` (синк галок в native) + cached MethodChannel ref |
 | `app/lib/vpn/box_vpn_client.dart` | MethodChannel handler `automationAction` (incoming) + `sendAutomationBroadcast(action, extras)` API (outgoing) |
 | `app/lib/services/automation/handlers.dart` | **Новый** — extracted pure-business handlers: `actionSwitchNode`, `actionSetGroup`, `actionRebuildConfig`, `actionRefreshSubs`, `actionResetNetwork`, `actionUrltestGroup` |
 | `app/lib/services/automation/event_emitter.dart` | **Новый** — `AutomationEventEmitter` singleton с granular gates + throttle policy + log entries |
@@ -683,8 +760,9 @@ Task: Notify Wear "❌ VPN: %code — %message"
 | `app/lib/controllers/home_controller.dart` | Hook'и в `_handleStatusEvent` / `switchNode` / `setActiveGroup` → `AutomationEventEmitter.I.emit*` |
 | `app/lib/controllers/subscription_controller.dart` | Hook'и в `refreshEntry` (success/failure) → emit |
 | `app/lib/services/update_checker.dart` | Hook на новую версию → emit `UPDATE_AVAILABLE` |
-| `app/lib/screens/app_settings_screen.dart` | UI блок "Automation API" с granular toggles (Receive + 4 Emit categories) + explainer dialog + docs link |
-| `app/lib/services/settings_storage.dart` | New keys: `automation_receive_enabled`, `automation_emit_lifecycle`, `automation_emit_state`, `automation_emit_subs`, `automation_emit_health` (все default false) + getters/setters + `automation_explainer_shown_v1` flag |
+| `app/lib/screens/app_settings_screen/widgets/automation_tab.dart` | **Новый** — вкладка "Automation": мастер-toggle приёма + галка «Требовать пропуск» (с условной строкой permission + copy) + 4 Emit-категории + интент-строки команд с кнопкой копирования + explainer dialog + docs link |
+| `app/lib/screens/app_settings_screen.dart` | Регистрация 4-й вкладки `Automation` рядом с General/Subscriptions/Diagnostics (`DefaultTabController(length: 4)`, `Tab(text: 'Automation')`, `_buildAutomationTab`, `initialIndex.clamp(0, 3)`) |
+| `app/lib/services/settings_storage.dart` | New keys: `automation_receive_enabled`, `automation_require_permission`, `automation_emit_lifecycle`, `automation_emit_state`, `automation_emit_subs`, `automation_emit_health` (все default false) + getters/setters + `automation_explainer_shown_v1` flag. Смена `automation_require_permission` синкается в native-кеш через `LxBoxIntentReceiver.setRequirePermission` (читается receiver'ом/emitter'ом синхронно). |
 | `docs/AUTOMATION.md` | **Новый** — user-facing docs: incoming actions table + outgoing events table + setup guide + 7 recipes с XML import'ами |
 | `app/lib/CLAUDE.md` / `docs/ARCHITECTURE.md` | Linkов на AUTOMATION.md |
 | `test/services/automation/handlers_test.dart` | Unit для extracted incoming handlers |
@@ -698,8 +776,12 @@ Estimated work: **~3 дня** (manifest + receiver + bridge + emitter + 5 contro
 
 ### Incoming (9 actions)
 
-- [ ] App Settings → Diagnostics → "Automation API" блок: toggle "Allow incoming control commands" (default OFF) + explainer.
-- [ ] Включение toggle активирует receiver через `PackageManager.setComponentEnabledSetting`. Выключение — обратно.
+- [ ] App Settings → Automation API блок: мастер-toggle "Принимать команды автоматизации" (default OFF) + explainer.
+- [ ] Включение мастер-toggle активирует receiver через `PackageManager.setComponentEnabledSetting`. Выключение — обратно.
+- [ ] Галка "Требовать пропуск" (default OFF) под мастер-toggle. При ON показывается строка `com.leadaxe.lxbox.permission.AUTOMATION` с кнопкой копирования; при OFF — скрыта.
+- [ ] При галке OFF — команды принимаются от любого caller'а (gate = мастер-toggle).
+- [ ] При галке ON — caller без granted `com.leadaxe.lxbox.permission.AUTOMATION` отклоняется в `onReceive` (лог `[automation] rejected … no permission`), action не выполняется.
+- [ ] Смена галки синкается в native-кеш (`LxBoxIntentReceiver.setRequirePermission`); receiver и emitter читают его синхронно.
 - [ ] Tasker (или `am broadcast` через ADB) с правильным action → VPN реагирует:
   - [ ] `START_VPN` → VPN connect (если не already up)
   - [ ] `STOP_VPN` → VPN disconnect
@@ -711,17 +793,16 @@ Estimated work: **~3 дня** (manifest + receiver + bridge + emitter + 5 contro
   - [ ] `RESET_NETWORK` → closeAll + DNS flush + dialer rebind
   - [ ] `URLTEST_GROUP` extra `group` → urltest группы запускается
 - [ ] Полученные intents логируются в AppLog с префиксом `[automation] received` + caller package.
-- [ ] При выключенной toggle automation intents игнорируются (`receiver disabled`).
-- [ ] Caller без `com.leadaxe.lxbox.permission.AUTOMATION` получает SecurityException на `sendBroadcast` (Android system enforce'ит).
+- [ ] При выключенном мастер-toggle automation intents игнорируются (`receiver disabled`).
 
 ### Outgoing (10 events MVP)
 
-- [ ] App Settings → Diagnostics → "Automation API" блок: 4 toggle категории (Lifecycle / State / Subscription / Health) — default все OFF.
+- [ ] App Settings → Automation API блок: 4 toggle категории (Lifecycle / State / Subscription / Health) — default все OFF.
 - [ ] Включение каждой категории первый раз → explainer dialog с warning о data leak (потом запоминается через `automation_explainer_shown_v1`).
 - [ ] Lifecycle ON → emit'ятся `VPN_CONNECTED`, `VPN_DISCONNECTED` (с reason), `VPN_ERROR` (с code/message), `VPN_REVOKED`, `UPDATE_AVAILABLE`, `PERMISSION_NEEDED`.
 - [ ] State ON → emit'ятся `ACTIVE_NODE_CHANGED` (с old/new/reason), `ACTIVE_GROUP_CHANGED`.
 - [ ] Subscription ON → emit'ятся `SUB_REFRESHED` (с counts), `SUB_REFRESH_FAILED` (с throttle 1/min на sub_id).
-- [ ] Outgoing broadcasts защищены `com.leadaxe.lxbox.permission.AUTOMATION` — caller без permission не получает.
+- [ ] При галке "Требовать пропуск" ON — outgoing broadcasts отправляются permission-gated (`sendBroadcast(intent, PERMISSION_AUTOMATION)`), подписчик без permission не получает; при OFF — без permission, получает любой подписчик.
 - [ ] Emit'ed events логируются в AppLog с префиксом `[automation] emit` + extras.
 - [ ] Throttle policy работает — лог показывает `→ throttled` когда event пришёл быстрее лимита.
 
@@ -737,6 +818,178 @@ Estimated work: **~3 дня** (manifest + receiver + bridge + emitter + 5 contro
 
 ---
 
+## Шаг 2 — Locale / Tasker plugin-стандарт (`FIRE_SETTING` + `QUERY_CONDITION`)
+
+> **Статус:** Implemented (2026-06-21) — `LocaleApi` + setting/condition receiver'ы + 2 нативных edit-Activity + manifest (2 activity + 2 receiver, enabled=false) + active-state mirror в native-кеш. Добавлено **поверх** Шага 1, ничего не выкидывая.
+
+### Зачем — чего не хватает Шагу 1
+
+Шаг 1 даёт **raw broadcast actions** (`com.leadaxe.lxbox.START_VPN` и т.д.). Их минус: юзер должен руками настроить «Send Intent» и знать строку action. L×Box **не появляется** в списке плагинов Tasker/Macrodroid.
+
+Locale plugin-стандарт ([twofortyfouram](https://github.com/twofortyfouram/android-plugin-api-for-locale)) — де-факто протокол, который Tasker / Macrodroid / Llama понимают из коробки. Реализовав его, L×Box попадает в **Tasker → Action → Plugin → L×Box** (для действий) и **Profile → State → Plugin → L×Box** (для условий) с **нативным экраном выбора** — массовый юзер кликает, а не пишет интенты руками.
+
+**Сосуществование (важно):** оба пути живут параллельно.
+
+| | Шаг 1 — raw actions | Шаг 2 — Locale plugin |
+|---|---|---|
+| Транспорт | `com.leadaxe.lxbox.START_VPN` broadcast | `…FIRE_SETTING` + `EXTRA_BUNDLE` |
+| Настройка | руками Send Intent | UI плагина в Tasker (Spinner) |
+| Видимость в Tasker | нет (raw) | да (список плагинов) |
+| Для кого | `am broadcast`, shell, ADB, не-Locale-apps | массовый юзер через UI |
+| Бизнес-логика | **общий** `services/automation/handlers.dart` | **тот же** слой |
+
+Один бизнес-слой, теперь **четыре** транспорта: Debug API, raw broadcast (Шаг 1), Locale setting (Шаг 2a), Locale condition (Шаг 2b).
+
+### Стандарт — точный контракт (из spec twofortyfouram)
+
+**Setting plugin (действие):**
+- **Edit Activity** — `intent-filter` `com.twofortyfouram.locale.intent.action.EDIT_SETTING`, `exported=true`, label+icon. На Save возвращает `RESULT_OK` + `EXTRA_BUNDLE` (стейт плагина, <**25 KB** base-10) + `EXTRA_STRING_BLURB` (короткая человекочитаемая строка, напр. `"Switch node → 🇷🇺Россия"`).
+- **Fire Receiver** — `intent-filter` `com.twofortyfouram.locale.intent.action.FIRE_SETTING`, `exported=true`, **БЕЗ** `android:permission` (хост сам проверяет, что вправе слать). Получает `EXTRA_BUNDLE` → исполняет команду. Result code ordered-broadcast'а **не используется** (зарезервирован стандартом).
+
+**Condition plugin (состояние):**
+- **Edit Activity** — `…action.EDIT_CONDITION`, аналогично setting'у (выбор: «что проверять» — VPN up/down, активная нода/группа).
+- **Query Receiver** — `…action.QUERY_CONDITION`, `exported=true`. Получает `EXTRA_BUNDLE`, отвечает **через ordered-broadcast result code**: `RESULT_CONDITION_SATISFIED` (16) / `RESULT_CONDITION_UNSATISFIED` (17) / `RESULT_CONDITION_UNKNOWN` (18). Хост опрашивает периодически.
+
+**Bundle-конвенция:** один ключ-String внутри `EXTRA_BUNDLE` с валидным JSON (наш формат — см. ниже). Бандл должен переживать сериализацию хостом и быть версионируемым.
+
+### Константы стандарта (Kotlin)
+
+```kotlin
+object LocaleApi {
+    const val ACTION_EDIT_SETTING = "com.twofortyfouram.locale.intent.action.EDIT_SETTING"
+    const val ACTION_FIRE_SETTING = "com.twofortyfouram.locale.intent.action.FIRE_SETTING"
+    const val ACTION_EDIT_CONDITION = "com.twofortyfouram.locale.intent.action.EDIT_CONDITION"
+    const val ACTION_QUERY_CONDITION = "com.twofortyfouram.locale.intent.action.QUERY_CONDITION"
+
+    const val EXTRA_BUNDLE = "com.twofortyfouram.locale.intent.extra.BUNDLE"
+    const val EXTRA_STRING_BLURB = "com.twofortyfouram.locale.intent.extra.BLURB"
+
+    const val RESULT_CONDITION_SATISFIED = 16
+    const val RESULT_CONDITION_UNSATISFIED = 17
+    const val RESULT_CONDITION_UNKNOWN = 18
+
+    const val BUNDLE_MAX_BYTES = 25_000   // base-10, по стандарту
+}
+```
+
+### Формат нашего bundle
+
+`EXTRA_BUNDLE` содержит один ключ `com.leadaxe.lxbox.plugin.CONFIG` (String) с JSON:
+
+**Setting:**
+```json
+{ "v": 1, "cmd": "switch-node", "args": { "tag": "🇷🇺Россия" } }
+```
+`cmd` — одно из имён shared-handlers (`start-vpn`, `stop-vpn`, `toggle-vpn`, `switch-node`, `set-group`, `rebuild-config`, `refresh-subs`, `reset-network`, `urltest-group`). `args` — extras команды.
+
+**Condition:**
+```json
+{ "v": 1, "check": "vpn-up" }
+{ "v": 1, "check": "active-node", "equals": "🇷🇺Россия" }
+{ "v": 1, "check": "active-group", "equals": "vpn-1" }
+```
+
+`v` — версия bundle (миграции при будущих изменениях формата). Невалидный/неизвестный bundle: setting → no-op + лог; condition → `RESULT_CONDITION_UNKNOWN`.
+
+### Архитектура
+
+```
+[Tasker] ── EDIT_SETTING ──▶ [LocaleSettingEditActivity (Kotlin)]
+                                   Spinner(команда) + EditText(extra) + Save
+                                   └─ setResult(OK, EXTRA_BUNDLE=json, EXTRA_STRING_BLURB)
+[Tasker] ── FIRE_SETTING (bundle) ──▶ [LocaleSettingReceiver]
+                                   parse bundle → VpnPlugin.handleAutomationAction(cmd, args)
+                                   └─ (тот же путь, что raw SWITCH_NODE) → shared handlers
+
+[Tasker] ── EDIT_CONDITION ──▶ [LocaleConditionEditActivity]
+                                   Spinner(что проверять) + (опц.) EditText(значение)
+[Tasker] ── QUERY_CONDITION (bundle) ──▶ [LocaleConditionReceiver]
+                                   читает BoxVpnService.currentStatus / активную ноду
+                                   └─ setResultCode(SATISFIED | UNSATISFIED | UNKNOWN)
+```
+
+- **Fire/setting** переиспользует `VpnPlugin.handleAutomationAction` (Шаг 1 bridge) → `services/automation/handlers.dart`. Никакой новой бизнес-логики.
+- **Query/condition** читается синхронно из native (`BoxVpnService.currentStatus`) — VPN up/down доступно без Flutter-engine. Активная нода/группа — из native-кеша (новый mirror в `lxbox_automation` prefs, который Dart обновляет при смене ноды; QUERY обязан ответить синхронно, Flutter может спать).
+- **Gating:** plugin-receiver'ы (как и raw-receiver Шага 1) включаются тем же мастер-toggle «Принимать команды автоматизации». Они exported по стандарту (permission нельзя — хост проверяет сам), но компонент `enabled=false` пока toggle OFF.
+
+### Native-кеш активного состояния (для QUERY_CONDITION)
+
+QUERY должен ответить синхронно. VPN up/down — `BoxVpnService.currentStatus` (уже есть). Активная нода/группа живут в Dart (`HomeController`), Flutter может быть не запущен → зеркалим в `lxbox_automation` prefs:
+- ключи `active_node`, `active_group` (String, обновляются из `HomeController.switchNode`/`applyGroup`/`setSelectedGroup` через новый MethodChannel `setAutomationActiveState`).
+- `LocaleConditionReceiver` читает их синхронно.
+
+### UI edit-Activity (нативный Kotlin)
+
+Минимальный Android-экран (не Flutter — изоляция от движка, быстрый cold-start из Tasker):
+- **Setting:** `Spinner` со списком 9 команд → при выборе команды с extra (`switch-node`/`set-group`/`urltest-group`/`refresh-subs`) показывается `EditText` для значения; кнопка Save.
+- **Condition:** `Spinner` (`VPN включён`, `Активная нода =`, `Активная группа =`) → условный `EditText`; Save.
+- Тема — наследует app theme (`@style/LaunchTheme`), label «L×Box».
+- Save → собирает JSON, кладёт в bundle, формирует blurb, `setResult`.
+
+### Manifest (добавочно к Шагу 1)
+
+```xml
+<!-- Setting plugin -->
+<activity android:name=".automation.LocaleSettingEditActivity"
+    android:exported="true" android:label="L×Box" android:icon="@mipmap/ic_launcher"
+    android:theme="@style/LaunchTheme">
+  <intent-filter><action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING"/></intent-filter>
+</activity>
+<receiver android:name=".automation.LocaleSettingReceiver"
+    android:exported="true" android:enabled="false">
+  <intent-filter><action android:name="com.twofortyfouram.locale.intent.action.FIRE_SETTING"/></intent-filter>
+</receiver>
+
+<!-- Condition plugin -->
+<activity android:name=".automation.LocaleConditionEditActivity"
+    android:exported="true" android:label="L×Box" android:icon="@mipmap/ic_launcher"
+    android:theme="@style/LaunchTheme">
+  <intent-filter><action android:name="com.twofortyfouram.locale.intent.action.EDIT_CONDITION"/></intent-filter>
+</activity>
+<receiver android:name=".automation.LocaleConditionReceiver"
+    android:exported="true" android:enabled="false">
+  <intent-filter><action android:name="com.twofortyfouram.locale.intent.action.QUERY_CONDITION"/></intent-filter>
+</receiver>
+```
+
+> **NB:** на receiver'ах `android:permission` НЕ ставим — стандарт это запрещает (хост проверяет права сам). Поэтому галка «Требовать пропуск» Шага 1 на Locale-путь **не распространяется**: gating — только мастер-toggle (компонент `enabled=false`). Это документируем как осознанный trade-off (стандарт-совместимость > строгий режим для plugin-пути; кто хочет строгий режим — использует raw-actions Шага 1).
+
+### Файлы (Шаг 2)
+
+| Файл | Что |
+|------|-----|
+| `app/android/app/src/main/kotlin/com/leadaxe/lxbox/automation/LocaleApi.kt` | **Новый** — константы стандарта + JSON bundle (de)serialize helpers |
+| `…/automation/LocaleSettingReceiver.kt` | **Новый** — FIRE_SETTING → parse → `VpnPlugin.handleAutomationAction` |
+| `…/automation/LocaleSettingEditActivity.kt` | **Новый** — Spinner команд + extra + Save → bundle/blurb |
+| `…/automation/LocaleConditionReceiver.kt` | **Новый** — QUERY_CONDITION → currentStatus/active-кеш → setResultCode |
+| `…/automation/LocaleConditionEditActivity.kt` | **Новый** — Spinner проверок + значение + Save |
+| `app/android/app/src/main/res/layout/locale_edit_*.xml` | **Новые** — простые layout'ы edit-Activity |
+| `AndroidManifest.xml` | +2 activity +2 receiver (enabled=false) |
+| `VpnPlugin.kt` | +MethodChannel `setAutomationActiveState` (Dart→native mirror ноды/группы) + `setEnabled` расширить на Locale-компоненты |
+| `LxBoxIntentReceiver.kt` (Шаг 1) | `setEnabled` уже есть — добавить enable/disable Locale-компонентов в той же транзакции |
+| `app/lib/vpn/box_vpn_client.dart` | `setAutomationActiveState(node, group)` |
+| `app/lib/controllers/home_controller.dart` | вызвать mirror при switchNode/applyGroup/setSelectedGroup |
+| `docs/AUTOMATION.md` | секция «Tasker plugin (рекомендуемый способ)» + скриншоты flow |
+
+### Тесты (Шаг 2)
+
+- **Unit (Kotlin)** — `LocaleApi` bundle round-trip (serialize→deserialize, версия, невалидный JSON).
+- **Integration (Kotlin)** — `LocaleSettingReceiver`: подаём FIRE_SETTING с bundle → проверяем вызов `handleAutomationAction(cmd, args)`. `LocaleConditionReceiver`: статус Started + check=vpn-up → `setResultCode(SATISFIED)`; пустой active-кеш + active-node → `UNKNOWN`.
+- **Manual (on-device)** — добавить L×Box как Plugin-action в Tasker: выбрать `switch-node tag=…` через наш экран → fire → нода меняется. Добавить Plugin-condition `vpn-up` → profile активируется при connect.
+
+### Критерии приёмки (Шаг 2)
+
+- [ ] L×Box виден в Tasker: **Action → Plugin → L×Box** и **State → Plugin → L×Box**.
+- [ ] Setting edit-Activity: Spinner 9 команд, условный extra-input, Save формирует bundle + non-empty blurb.
+- [ ] FIRE_SETTING исполняет команду через **те же** shared handlers (switch-node реально меняет ноду).
+- [ ] Condition edit-Activity: выбор vpn-up / active-node= / active-group=.
+- [ ] QUERY_CONDITION отвечает корректным result code (SATISFIED/UNSATISFIED/UNKNOWN), profile в Tasker реагирует.
+- [ ] Bundle round-trip переживает host-сериализацию; версия `v` присутствует.
+- [ ] Plugin-receiver'ы включаются мастер-toggle'ом (enabled=false пока OFF); галка «Требовать пропуск» к ним не применяется (документировано).
+- [ ] `docs/AUTOMATION.md` описывает plugin-flow как рекомендуемый для не-технических юзеров.
+
+---
+
 ## Будущие расширения (вне §047)
 
 - **Package whitelist** — UI list "Allow only these apps to control VPN: [+]" вместо "open to all who claim permission". Granular control. Реализуемо через `intent.package` check в receiver и `setPackage` на outgoing broadcasts.
@@ -745,7 +998,6 @@ Estimated work: **~3 дня** (manifest + receiver + bridge + emitter + 5 contro
 - **Action: EXCLUDE_NODE / INCLUDE_NODE** — toggle exclusion из auto-pool без UI, по tag.
 - **Action: OPEN_PROFILER** — запустить per-app trace (§044) для package extra. "Когда падает банк-app → start profiler для post-mortem".
 - **Action: APPLY_PROFILE** — если когда-нибудь будут multi-profile (см. ARCHITECTURE → Reusable layers → potential idea), automation сможет переключать профили.
-- **Tasker plugin** — отдельный official Tasker plugin app, который declare'ит permission + предоставляет UI dropdown'ы для action/extras + Tasker-native event subscriber UI. Полировка UX, но maintenance overhead.
 
 ---
 
@@ -754,5 +1006,7 @@ Estimated work: **~3 дня** (manifest + receiver + bridge + emitter + 5 contro
 - [Android BroadcastReceiver guide](https://developer.android.com/develop/background-work/background-tasks/broadcasts)
 - [Custom permissions documentation](https://developer.android.com/guide/topics/permissions/defining)
 - [Tasker — Send Intent action](https://tasker.joaoapps.com/userguide/en/help/ah_send_intent.html)
+- [Locale plugin API for Android](https://github.com/twofortyfouram/android-plugin-api-for-locale) — стандарт `FIRE_SETTING` / `QUERY_CONDITION` (Шаг 2)
+- [Plug-in API Specification](https://github.com/twofortyfouram/android-monorepo/blob/master/docs/Plug-in%20API%20Specification.md) — точный контракт edit-Activity / fire-receiver / bundle 25 KB
 - [§031 — Debug API](../031%20debug%20api/spec.md) — action handlers переиспользуются
 - [§032 — Quick Connect](../032%20quick%20connect/spec.md) — same actions, разные транспорты (tile/shortcut vs broadcast)

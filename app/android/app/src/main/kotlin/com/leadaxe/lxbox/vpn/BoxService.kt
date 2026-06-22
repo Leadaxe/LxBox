@@ -83,6 +83,11 @@ class BoxService(
 
     /// §049 F2/F3 — same atomic CAS pattern для commandServer.
     private val commandServer = AtomicReference<CommandServer?>(null)
+    /// §155 — `@Volatile`: читается/пишется из binder-потока (`receiver.onReceive`)
+    /// и из service main thread (`onStartCommand`/`onDestroy`/`doStop`/`doForceStop`).
+    /// Без барьера видимости поток может прочитать устаревшее значение и дважды
+    /// (un)register'нуть receiver.
+    @Volatile
     private var receiverRegistered = false
     private var status = VpnStatus.Stopped
 
@@ -402,7 +407,7 @@ class BoxService(
         }
         notification.stop()
         setStatus(VpnStatus.Stopped)
-        Log.w(TAG, "[vpn] doForceStop — UI/notification stopped, teardown+stopSelf на forceStopScope")
+        Log.w(TAG, "[vpn] doForceStop — UI/notification stopped, teardown+stopSelf on forceStopScope")
 
         // 2. Teardown ядра, затем stopSelf() — на forceStopScope (onDestroy его НЕ
         // отменяет). stopSelf() ПОСЛЕ закрытия Clash-порта 63130, иначе он зависнет
@@ -418,7 +423,7 @@ class BoxService(
             runCatching {
                 withTimeout(2_000) { closeCommandServerAtomic("doForceStop") }
             }.onFailure { Log.w(TAG, "doForceStop: closeCommandServer timeout/fail: ${it.message}") }
-            Log.d(TAG, "[vpn] doForceStop — teardown завершён → stopSelf()")
+            Log.d(TAG, "[vpn] doForceStop — teardown done → stopSelf()")
             withContext(Dispatchers.Main) { service.stopSelf() }
         }
     }
@@ -563,7 +568,11 @@ class BoxService(
             private var consumed = false
             override fun len(): Int = 1
             override fun hasNext(): Boolean = !consumed
+            // §151 F1 — JNI no-throw: `StringIterator.Next()` — Go-метод БЕЗ
+            // `error`, throw = `Runtime::Abort`. За концом отдаём "", не бросаем
+            // (хотя текущая реализация и не бросала — фиксируем инвариант явно).
             override fun next(): String {
+                if (consumed) return ""
                 consumed = true
                 return value
             }

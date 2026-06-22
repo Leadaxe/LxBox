@@ -65,10 +65,10 @@ Future<DebugResponse> _put(DebugRequest req, DebugContext ctx) async {
     'action': 'config-put',
     'bytes': text.length,
     'tunnel_up_when_saved': home.state.tunnelUp,
-    'note': 'override is temporary — POST /action/rebuild-config (или любое '
-        'UI-действие триггерящее rebuild) сотрёт его, сгенерив конфиг заново '
-        'из settings. Чтобы pin постоянно — PUT /settings/config_locked '
-        '{"locked": true} (см. §037).',
+    'note': 'override is temporary — POST /action/rebuild-config (or any '
+        'UI action that triggers a rebuild) wipes it, regenerating the config '
+        'from settings. To pin it permanently — PUT /settings/config_locked '
+        '{"locked": true} (see §037).',
   });
 }
 
@@ -91,7 +91,7 @@ Future<DebugResponse> _path() async {
   return JsonResponse({
     'app_documents_dir': dir.path,
     'note':
-        'sing-box core сохраняет конфиг в internal files dir '
-        '(/data/data/<pkg>/files/) через native side; путь выше — для справки.',
+        'sing-box core saves the config in the internal files dir '
+        '(/data/data/<pkg>/files/) via the native side; the path above is for reference.',
   });
 }

@@ -234,10 +234,10 @@ void main() {
     });
   });
 
-  group('§072 — миграция совместимость', () {
-    test('старый формат proxy_sources читается и мигрирует', () async {
-      // Симулируем pre-§030 файл с `proxy_sources` без `server_lists`.
-      // migrateProxySources возвращает migrated list.
+  group('§159 — legacy proxy_sources больше не мигрирует', () {
+    test('proxy_sources игнорируется (миграция удалена)', () async {
+      // Pre-§030 файл с `proxy_sources` без `server_lists`. §159 удалил
+      // legacy-миграцию → ключ игнорируется, server_lists остаётся пустым.
       final legacy = {
         'proxy_sources': [
           {
@@ -251,8 +251,8 @@ void main() {
 
       SettingsStorage.resetCacheForTesting();
       final lists = await SettingsStorage.getServerLists();
-      expect(lists, isNotEmpty,
-          reason: 'миграция proxy_sources → server_lists должна отработать');
+      expect(lists, isEmpty,
+          reason: 'миграция proxy_sources удалена (§159) — legacy игнорируется');
     });
   });
 }
