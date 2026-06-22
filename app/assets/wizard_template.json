@@ -422,9 +422,9 @@
       ]
     },
     {
-      "name": "_vpn_mode_internal",
+      "name": "VPN Mode",
       "chapter": "core",
-      "description": "§119/§120 — VPN-mode driven inbounds (hidden; values injected from VpnModeConfig at build time, type metadata only)",
+      "description": "Local proxy inbound vars (hidden — values come from VpnModeConfig)",
       "vars": [
         {
           "name": "vpn_mode",
