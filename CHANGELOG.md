@@ -8,6 +8,20 @@
 
 ## [Unreleased]
 
+## [2.4.1] — 2026-06-22
+
+Per-app trace переделан (§160): 4 саб-таба → тогл Live/Aggregated с общим фильтром и drill-down деталями; общий движок `TraceExplorer` теперь питает и Stats→Live. Закрыт баг атрибуции — чужие приложения больше не протекают в сессию профайлера. Ядро без изменений — `v1.13.13-lx.14`.
+
+### Changed
+
+- **§160 — per-app trace redesign** ([task](docs/spec/tasks/160-perapp-trace-live-aggregated-redesign.md), [feature spec](docs/spec/features/044%20per-app%20traffic%20profiler/spec.md)). 4 саб-таба Live/Domains/IPs/Connections → тогл **Live / Aggregated** (`SegmentedButton`) + ось by Domain/by IP. Connections удалён (дубль Live), Domains+IPs слиты в `AggregatedView`. Общий фильтр сверху (поиск + чипы типа события) на оба режима + пауза Live. **Drill-down по тапу** в обоих режимах: `traffic_event_detail_sheet` (событие) и `aggregate_detail_sheet` (свод + список соединений → событие); host/IP/process внутри sheet кликабельны → в общий поиск.
+- **§160 — единый движок `TraceExplorer`** ([trace_explorer.dart](app/lib/screens/stats_screen/trace_explorer.dart)) — тогл/фильтр/детали/пауза вынесены в общий виджет; per-app trace и Stats→Live — тонкие обёртки над ним (без дубля логики). `computeTraceAggregates` вынесен из `Session._recompute`; sheet'ы и `AggregatedView` развязаны от `Session`. Live получил Aggregated+детали+паузу «бесплатно».
+- **§160 — счётчик соединений в агрегате = активные/всего** (`0/5 conns`), активные = `max(0, open − close)` по ключу. (`15da916`)
+
+### Fixed
+
+- **§160 — чужие приложения протекали в сессию профайлера** ([traffic_profiler.dart](app/lib/services/traffic_profiler.dart)). Атрибуция считалась на `open` (чужие отбрасывались), но `tcpClose` писался в сессию безусловно → `verified`-события посторонних приложений (youtube/imo/gsf/heytap) в сессии цели (по Debug API — 14/54 чужих `tcpClose` в сессии Telegram). Фикс: атрибуция фиксируется на `open` (`_ConnSnapshot.inSession`) и наследуется `close`'ом — чужие close уходят, target + unattributed остаются. Регрессия `traffic_profiler_test.dart` «non-target connection close also ignored». (`15da916`)
+
 ## [2.4.0] — 2026-06-22
 
 Public Intent API (§047) — управление L×Box из Tasker/MacroDroid/Llama/Automate. Детальный разбор соединений (Stats→Conns: bottom sheet, подсветка зависших, иконки приложений), вычистка интерфейса до English-only, строгий allowlist на импорте настроек, hardening границы JNI. Ядро → `v1.13.13-lx.14`.
