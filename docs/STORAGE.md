@@ -99,16 +99,16 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 ├─ excluded_nodes[]              list          node tags выкинутые юзером из group resolve / mass-ping
 ├─ enabled_groups[]              list          включённые preset-группы (selector membership)
 ├─ last_global_update            ISO-8601      timestamp последнего auto-refresh
-├─ presets_migrated              bool          one-shot guard (legacy enabled_rules+rule_outbounds → custom_rules)
+├─ presets_migrated              bool          §159 — guard «дефолтные пресеты засеяны» (fresh-install seed)
 ├─ interrupt_connections_on_switch  bool       §143 — рвать соединения переключаемой группы при смене ноды (default false, НЕ config-significant)
-│
-└─ (legacy)
-    ├─ enabled_rules[]                          мигрируется → обнуляется
-    ├─ rule_outbounds            object           мигрируется → обнуляется
-    ├─ proxy_sources[]                          (v1) → server_lists (v2), one-shot, удаляется
-    ├─ app_rules[]                              (до v1.3.2) → custom_rules.kind=inline, удаляется
-    ├─ node_overrides                           удаляется на каждом _save()
-    └─ show_detour_servers                      удаляется на каждом _save()
+├─ node_sort_mode                string        §100 — выбранный режим сортировки нод ('' = template-default)
+└─ node_manual_order[]           list          §100 — ручной порядок node tags (для mode=manual)
+
+# §159 — все legacy-ключи (proxy_sources / app_rules / enabled_rules /
+# rule_outbounds / node_overrides / show_detour_servers / vars.auto_rebuild)
+# больше НЕ обрабатываются: миграции и DENY-`.remove()` удалены. Если такой
+# ключ ещё лежит на диске — он безвреден (никем не читается) и будет отброшен
+# allowlist'ом при первом импорте бэкапа.
 ```
 
 Каждый ключ описан подробно в разделах ниже.
@@ -159,16 +159,14 @@ Android SharedPreferences:
   "excluded_nodes":     [ … ],     // tags выкинутые юзером из mass-ping
   "enabled_groups":     [ … ],     // включённые preset-группы (selector membership)
   "last_global_update": "ISO-8601",// последняя auto-refresh подписок
-  "presets_migrated":   true,      // one-shot guard (legacy → custom_rules)
+  "presets_migrated":   true,      // §159 — guard «дефолты засеяны» (fresh-install seed)
   "interrupt_connections_on_switch": false, // §143 — рвать conns группы при смене ноды (НЕ config-significant)
-
-  // Legacy — мигрируются и обнуляются на первом чтении.
-  "enabled_rules":      [],
-  "rule_outbounds":     {}
+  "node_sort_mode":     "",        // §100
+  "node_manual_order":  [ … ]      // §100
 }
 ```
 
-Кэш в памяти: `SettingsStorage._cache` (lazy-loaded). Запись atomic'ом через `JsonEncoder.withIndent('  ')`. На каждом `_save()` удаляются легаси-ключи `node_overrides` и `show_detour_servers`.
+Кэш в памяти: `SettingsStorage._cache` (lazy-loaded). Запись atomic'ом через `JsonEncoder.withIndent('  ')`. §159 — на `_save()` ключи больше НЕ чистятся (DENY-`.remove()` удалён); единственная чистка мусора — allowlist на входе (`replaceRaw`).
 
 Per-key спеки и shape — в разделах ниже.
 
@@ -202,7 +200,7 @@ Per-key спеки и shape — в разделах ниже.
 
 ## `server_lists` — [§033] (v2)
 
-Список источников нод. Был `proxy_sources` (v1) — мигрирует one-shot через `migrateProxySources` при первом чтении.
+Список источников нод. Был `proxy_sources` (v1) — §159 удалил миграцию; legacy-ключ игнорируется.
 
 Sealed по полю `type`:
 
@@ -349,7 +347,7 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 
 - Поле `target` (до v1.4.1) → `outbound`. Читается обоими названиями.
 - `kind` отсутствует → `inline` (read-path).
-- Отдельный legacy-ключ `app_rules` (отдельная таба до v1.3.2) → one-shot absorb в `custom_rules` с `packages` через `_absorbLegacyAppRules`. Старый ключ удаляется.
+- Legacy-ключ `app_rules` (отдельная таба до v1.3.2) — §159 удалил миграцию `_absorbLegacyAppRules`; ключ игнорируется (отбрасывается allowlist'ом на импорте).
 
 ---
 
@@ -575,21 +573,34 @@ CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHist
 | `excluded_nodes` | `List<String>` | Node tags выкинутые юзером — пропускаются в group resolve и mass-ping. |
 | `enabled_groups` | `List<String>` | Включённые preset-группы (selector membership). |
 | `last_global_update` | `String` (ISO-8601) | Timestamp последнего успешного auto-refresh всех подписок. |
-| `presets_migrated` | `bool` | One-shot guard для legacy-миграции `enabled_rules + rule_outbounds → custom_rules`. После одного прохода `RoutingScreen._load` ставит true. |
+| `presets_migrated` | `bool` | §159 — guard «дефолтные пресеты засеяны» (fresh-install seed). Имя ключа историческое (бывшая legacy-миграция); переиспользован, чтобы ранее мигрировавшие юзеры не получили повторный seed. `RoutingScreen._seedDefaultPresets` ставит true. |
+| `interrupt_connections_on_switch` | `bool` | §143 — рвать активные соединения переключаемой группы при смене ноды (default `false`, НЕ config-significant). См. `getInterruptOnSwitch`/`setInterruptOnSwitch`. |
+| `node_sort_mode` | `String` | §100 — выбранный режим сортировки нод. `''` = template-default. CRUD: `getNodeSort`/`setNodeSort` (пишутся парой с `node_manual_order`). |
+| `node_manual_order` | `List<String>` | §100 — ручной порядок node tags (актуален для режима manual). Пишется вместе с `node_sort_mode`. |
+
+> Отдельные структурные ключи описаны в собственных разделах выше: [`tun_apps`](#tun_apps--046), [`vpn_mode`](#vpn_mode--119), [`warp_account`](#warp_account--025). Это исчерпывающий список актуальных top-level ключей `lxbox_settings.json` (см. также §159 — реестр для allowlist-фильтра бэкапа: `SettingsStorage.allowedTopLevelKeys`).
 
 ---
 
 ## Legacy / удалённые ключи
 
-| Ключ | Жил | Замена | Migration |
+> **§159 — все миграции и DENY-`.remove()` удалены.** Ни один из перечисленных
+> ниже ключей больше не конвертируется и не вычищается на `_save()`. Если ключ
+> ещё лежит на диске у старого юзера — он безвреден (никем не читается) и будет
+> отброшен строгим allowlist'ом (`SettingsStorage.replaceRaw`) при первом
+> импорте бэкапа. Кто застрял на доисторической версии без миграции — перенесёт
+> настройки через экспорт/импорт или заново проставит галки.
+
+| Ключ | Жил | Замена | Статус (§159) |
 |---|---|---|---|
-| `proxy_sources` | до v1.3.x | `server_lists` ([§033]) | `migrateProxySources` — one-shot, удаляется после конверсии. |
-| `app_rules` | до v1.3.2 | `custom_rules` (kind=inline, c `packages`) — [§030] | `_absorbLegacyAppRules` — one-shot, удаляется. |
-| `enabled_rules` | до [§030] | `custom_rules` | One-shot в `RoutingScreen._load`, обнуляется (`saveEnabledRules({})`). Гард: `presets_migrated`. |
-| `rule_outbounds` | до v1.3.2 | `custom_rules.outbound` (или `varsValues.outbound` для preset) | См. выше, обнуляется (`saveRuleOutbounds({})`). |
-| `dns_options.rules_json` | [§061] (intermediate) | `dns_options.rules[]` | Поле остаётся для downgrade-friendliness, builder/UI больше не читают. |
-| `node_overrides` | удалённое | — | Удаляется на каждом `_save()`. |
-| `show_detour_servers` | удалённое | — | Удаляется на каждом `_save()`. |
+| `proxy_sources` | до v1.3.x | `server_lists` ([§033]) | миграция удалена, ключ игнорируется. |
+| `app_rules` | до v1.3.2 | `custom_rules` (kind=inline, c `packages`) — [§030] | миграция удалена, ключ игнорируется. |
+| `enabled_rules` | до [§030] | `custom_rules` | миграция + API удалены, ключ игнорируется. |
+| `rule_outbounds` | до v1.3.2 | `custom_rules.outbound` (или `varsValues.outbound` для preset) | миграция + API удалены, ключ игнорируется. |
+| `dns_options.rules_json` | [§061] (intermediate) | `dns_options.rules[]` | поле остаётся для downgrade-friendliness, builder/UI не читают. |
+| `node_overrides` | удалённое | — | DENY-очистка удалена; игнорируется/отбрасывается на импорте. |
+| `show_detour_servers` | удалённое | — | DENY-очистка удалена; игнорируется/отбрасывается на импорте. |
+| `vars.auto_rebuild` | до §107 | — (rebuild всегда авто) | DENY-очистка удалена; отбрасывается на импорте. |
 
 ---
 
@@ -597,10 +608,14 @@ CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHist
 
 Не часть `lxbox_settings.json`. Используется для двух категорий: **pre-Flutter boot flags** (читаются в `BoxApplication.initialize()` до того, как Flutter engine стартует) и **UI prefs** через `shared_preferences`-плагин.
 
+> **Примечание (§159):** `haptic_enabled` ранее ошибочно числился здесь — по
+> факту он живёт в `vars` (`lxbox_settings.json`), читается/пишется через
+> `SettingsStorage.getVar/setVar` (см. `HapticService.prefsKey`). В разделе
+> [`vars`](#vars--template-vars--app-flags) он учтён как app feature-flag.
+
 | Ключ | Тип | Источник | Спека | Назначение |
 |---|---|---|---|---|
 | `app_theme_mode` | `"system"` / `"light"` / `"dark"` | Flutter | — | UI theme. |
-| `haptic_enabled` | `"true"` / `"false"` | Flutter | [§029] | Haptic feedback toggle. |
 | `boxvpn_boot.auto_start_vpn` | `Boolean` | Kotlin | — | Auto-start VPN на boot (если разрешено). |
 | `boxvpn_boot.keep_vpn_on_exit` | `Boolean` | Kotlin | — | Не глушить tun при swipe-kill app. |
 | `boxvpn_boot.background_mode` | `String` | Kotlin | — | Foreground-service режим. |
@@ -617,6 +632,19 @@ CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHist
 - `meta.support_url` / `meta.web_page_url`
 
 См. конкретный allow-list в `serializers/storage.dart`. Любое новое sensitive-поле — добавлять в фильтр.
+
+> **§159 — две РАЗНЫЕ модели фильтрации, не путать (намеренно):**
+> - **выход** (`GET /state/storage`, `serializers/storage.dart`) — **denylist**
+>   со scrubber'ом: всё видно разработчику, прячем только секреты. Новый ключ
+>   виден автоматически.
+> - **вход** (импорт бэкапа + Debug API `POST /backup/import`, через
+>   `SettingsStorage.replaceRaw`) — **allowlist** default-deny: пишем только
+>   известные ключи ([`allowedTopLevelKeys`] + app-флаги ∪ template-vars),
+>   чужеродное отбрасывается. То же на `PUT /settings/ping_options` (strip
+>   неизвестных subkeys).
+>
+> Разные задачи (показать всё vs не пустить чужое) → разные модели. НЕ
+> «унифицировать» по ошибке.
 
 `PUT /settings/dns_options/servers` принимает три исторических формата (legacy pre-[§043][043-dns], [§043][043-dns] и [§044]) — миграция происходит на следующий `resolveDnsServersList`. См. [`api/debug-api-reference.md`](./api/debug-api-reference.md).
 

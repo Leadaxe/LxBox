@@ -7,7 +7,7 @@ import '../models/custom_rule.dart';
 import '../models/server_list.dart';
 import 'app_log.dart';
 import 'config_dirty_check.dart';
-import 'migration/proxy_source_migration.dart';
+import 'template_loader.dart';
 import 'warp/warp_account.dart';
 
 part 'settings_storage/io.dart';
@@ -88,6 +88,81 @@ class SettingsStorage {
     'tun_strict_route',
   };
 
+  // ---------------------------------------------------------------------------
+  // §159 — Import allowlist (default-deny). Фильтр на ВХОДЕ данных в storage
+  // (`replaceRaw` — UI-импорт бэкапа + Debug API `POST /backup/import`): всё, что
+  // не в allowlist, отбрасывается. Экспорт НЕ фильтруется — «что записали, то и
+  // отдаём». Единственная машинерия чистки мусора/«мёртвых» ключей: legacy
+  // DENY-`.remove()` и one-shot миграции удалены (см. spec/tasks/159).
+  // ---------------------------------------------------------------------------
+
+  /// Валидные top-level ключи `lxbox_settings.json`. Полный закрытый список —
+  /// все имена известны. `vars` — контейнер, его содержимое фильтруется
+  /// отдельно через [allowedVarKeys]. Источник правды: STORAGE.md.
+  static const allowedTopLevelKeys = <String>{
+    'vars',
+    'server_lists',
+    'custom_rules',
+    'dns_options',
+    'ping_options',
+    'route_final',
+    'excluded_nodes',
+    'enabled_groups',
+    'tun_apps',
+    'vpn_mode',
+    'warp_account',
+    'last_global_update',
+    'presets_migrated', // §159 — переиспользуется как «дефолты засеяны» (seed guard)
+    'interrupt_connections_on_switch',
+    'node_sort_mode',
+    'node_manual_order',
+  };
+
+  /// Var-ключи, которые живут ТОЛЬКО в коде (app feature-flags), а НЕ в
+  /// `wizard_template.json`. Полный allowlist для `vars` = это множество ∪
+  /// `template.vars` (см. [allowedVarKeys]). Template-vars не хардкодим — их
+  /// источник правды сам template (зашит в APK, см. §159).
+  static const _appFeatureFlagVars = <String>{
+    // Подписки (§027)
+    'auto_update_subs',
+    // Обновления приложения (§036)
+    'auto_check_updates',
+    'last_update_check_at',
+    'last_known_version',
+    'dismissed_update_version',
+    // Debug API / config-lock (§031, §037)
+    'config_locked_for_debug',
+    'debug_enabled',
+    'debug_token',
+    'debug_port',
+    // Wi-Fi history (§051)
+    'wifi_history',
+    'auto_record_wifi_history',
+    // Automation API (§047)
+    'automation_receive_enabled',
+    'automation_emit_lifecycle',
+    'automation_emit_state',
+    'automation_emit_subs',
+    'automation_emit_health',
+    'automation_explainer_shown_v1',
+    // Subscription identity headers
+    'subscription_user_agent',
+    'subscription_send_hwid',
+    'subscription_hwid',
+    'subscription_device_os',
+    'subscription_ver_os',
+    'subscription_device_model',
+    // Прочие UI/one-shot флаги
+    'haptic_enabled', // §029 — НЕ в SharedPreferences (вопреки старому STORAGE.md)
+    'notif_perm_prompted_v1', // §128 — promt уведомлений показан
+  };
+
+  /// Полный allowlist для подключей `vars` при импорте: кодовые флаги ∪ все
+  /// имена vars из текущего (локального) template. Template в бэкап не входит —
+  /// резолвим против зашитого в APK (§159).
+  static Set<String> allowedVarKeys(Iterable<String> templateVarNames) =>
+      {..._appFeatureFlagVars, ...templateVarNames};
+
   /// §072 — sticky флаг что main файл был повреждён и .bak не помог.
   /// Используется чтобы:
   ///   (а) логировать факт повреждения ровно один раз за сессию (см.
@@ -158,14 +233,7 @@ class SettingsStorage {
   static Future<void> saveServerLists(List<ServerList> lists) =>
       _saveServerLists(lists);
 
-  // ---------------------------------------------------------------------------
-  // Enabled selectable rules
-  // ---------------------------------------------------------------------------
-
-  static Future<Set<String>> getEnabledRules() => _getEnabledRules();
-
-  static Future<void> saveEnabledRules(Set<String> rules) =>
-      _saveEnabledRules(rules);
+  // §159 — getEnabledRules/saveEnabledRules удалены (legacy-миграция снята).
 
   // ---------------------------------------------------------------------------
   // Enabled preset groups
@@ -194,14 +262,7 @@ class SettingsStorage {
   static Future<bool> shouldRefreshSubscriptions(String reloadInterval) =>
       _shouldRefreshSubscriptions(reloadInterval);
 
-  // ---------------------------------------------------------------------------
-  // Rule outbounds: Map<ruleLabel, outboundTag>
-  // ---------------------------------------------------------------------------
-
-  static Future<Map<String, String>> getRuleOutbounds() => _getRuleOutbounds();
-
-  static Future<void> saveRuleOutbounds(Map<String, String> outbounds) =>
-      _saveRuleOutbounds(outbounds);
+  // §159 — getRuleOutbounds/saveRuleOutbounds удалены (legacy-миграция снята).
 
   // ---------------------------------------------------------------------------
   // Custom rules (§030) — единая модель для domain/IP/port/package/protocol/srs.
@@ -214,11 +275,11 @@ class SettingsStorage {
           {bool flush = true}) =>
       _saveCustomRules(rules, flush: flush);
 
-  /// Флаг one-shot миграции `enabled_rules` + `rule_outbounds` → `custom_rules`.
-  /// Выставляется после первого прохода миграции в `RoutingScreen._load`.
-  static Future<bool> hasPresetsMigrated() => _hasPresetsMigrated();
+  /// §159 — флаг «дефолтные пресеты засеяны» (fresh-install seed). Хранится в
+  /// том же ключе `presets_migrated` (см. `_hasDefaultsSeeded`).
+  static Future<bool> hasDefaultsSeeded() => _hasDefaultsSeeded();
 
-  static Future<void> markPresetsMigrated() => _markPresetsMigrated();
+  static Future<void> markDefaultsSeeded() => _markDefaultsSeeded();
 
   // ---------------------------------------------------------------------------
   // Route final outbound
@@ -530,11 +591,15 @@ class SettingsStorage {
   /// семантики на call-site.
   static Future<Map<String, dynamic>> exportRaw() => dumpCache();
 
-  /// Backup: применить snapshot целиком. `merge=false` (default) — replace
-  /// (overwrite cache + flush на disk), `merge=true` — top-level merge:
-  /// присутствующие в [snapshot] ключи overwrite, отсутствующие — keep.
-  /// `vars` мерджится recursively (subkey-level upsert) при `merge=true`.
-  static Future<void> replaceRaw(
+  /// Backup: применить snapshot. `merge=false` (default) — replace (overwrite
+  /// cache + flush на disk), `merge=true` — top-level merge: присутствующие в
+  /// [snapshot] ключи overwrite, отсутствующие — keep. `vars` мерджится
+  /// recursively (subkey-level upsert) при `merge=true`.
+  ///
+  /// §159 — применяет default-deny allowlist (см. [allowedTopLevelKeys] /
+  /// [allowedVarKeys]). Возвращает список **отброшенных** ключей (top-level имена
+  /// + `vars.<key>` для подключей) — caller логирует в applog и показывает юзеру.
+  static Future<List<String>> replaceRaw(
     Map<String, dynamic> snapshot, {
     bool merge = false,
   }) =>

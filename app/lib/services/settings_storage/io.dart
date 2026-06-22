@@ -157,11 +157,11 @@ Future<Map<String, dynamic>> _load() async {
 ///     потеряны, но старые сохранены. Acceptable.
 ///   • во время rename — это atomic syscall, либо main old либо main new.
 Future<void> _save() async {
-  // Clean up removed keys (legacy schema cruft).
-  SettingsStorage._cache?.remove('node_overrides');
-  SettingsStorage._cache?.remove('show_detour_servers');
-  // §107: настройка auto_rebuild удалена (rebuild всегда автоматический).
-  (SettingsStorage._cache?['vars'] as Map?)?.remove('auto_rebuild');
+  // §159 — хардкод-очистка «мёртвых» ключей (node_overrides /
+  // show_detour_servers / vars.auto_rebuild) удалена. Единственная машинерия
+  // чистки мусора — allowlist на ВХОДЕ (`replaceRaw`): неизвестный ключ туда не
+  // попадает. Уже лежащий на диске мусор безвреден (никем не читается) и уйдёт
+  // при первом же импорте бэкапа.
   final data = Map<String, dynamic>.from(SettingsStorage._cache ?? {});
 
   final main = await _file();

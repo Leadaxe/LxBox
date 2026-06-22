@@ -103,13 +103,17 @@ Future<void> restoreFromBackup(
     if (apply.vpnSettingsApplied > 0) {
       parts.add('${apply.vpnSettingsApplied} VPN settings');
     }
-    final summary = parts.isEmpty
+    final summary = StringBuffer(parts.isEmpty
         ? 'Imported nothing'
-        : 'Imported: ${parts.join(', ')} · fetching subscriptions…';
+        : 'Imported: ${parts.join(', ')} · fetching subscriptions…');
+    // §159 — allowlist отбросил неизвестные/чужеродные ключи.
+    if (apply.droppedKeys.isNotEmpty) {
+      summary.write(' · ${apply.droppedKeys.length} unknown keys skipped');
+    }
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(summary),
+        content: Text(summary.toString()),
         duration: const Duration(seconds: 6),
       ),
     );

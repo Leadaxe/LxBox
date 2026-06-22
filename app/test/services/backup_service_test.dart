@@ -279,6 +279,101 @@ void main() {
     expect((restored['server_lists'] as List).length, 1);
   });
 
+  group('§159 — allowlist (default-deny) на импорте', () {
+    test('replaceRaw отбрасывает чужеродный top-level ключ', () async {
+      final dropped = await SettingsStorage.replaceRaw({
+        'vars': {'log_level': 'info'},
+        'custom_rules': [],
+        'totally_random_field_12345': {'nested': 'garbage'},
+        'another_alien_key': 'x',
+      });
+      expect(dropped, containsAll(['totally_random_field_12345', 'another_alien_key']));
+      final raw = await SettingsStorage.exportRaw();
+      expect(raw.containsKey('totally_random_field_12345'), isFalse,
+          reason: 'чужеродный top-level ключ не должен попасть в storage');
+      expect(raw.containsKey('another_alien_key'), isFalse);
+      // Валидные ключи остаются.
+      expect((raw['vars'] as Map)['log_level'], 'info');
+    });
+
+    test('replaceRaw отбрасывает чужой vars-подключ, оставляет известные',
+        () async {
+      final dropped = await SettingsStorage.replaceRaw({
+        'vars': {
+          'log_level': 'debug', // template-var → ok
+          'auto_update_subs': 'false', // app-флаг → ok
+          'haptic_enabled': 'false', // app-флаг (был не в STORAGE.md) → ok
+          'alien_var_xyz': 'should_be_dropped', // чужой → drop
+        },
+      });
+      expect(dropped, contains('vars.alien_var_xyz'));
+      final raw = await SettingsStorage.exportRaw();
+      final vars = raw['vars'] as Map;
+      expect(vars['log_level'], 'debug');
+      expect(vars['auto_update_subs'], 'false');
+      expect(vars['haptic_enabled'], 'false');
+      expect(vars.containsKey('alien_var_xyz'), isFalse,
+          reason: 'неизвестный var отбрасывается allowlist\'ом');
+    });
+
+    test('merge=true тоже фильтрует чужие ключи', () async {
+      await seedStorage({
+        'vars': {'log_level': 'warn'},
+      });
+      final dropped = await SettingsStorage.replaceRaw(
+        {
+          'vars': {'alien_var': 'x', 'auto_check_updates': 'false'},
+          'bogus_top': 1,
+        },
+        merge: true,
+      );
+      expect(dropped, containsAll(['vars.alien_var', 'bogus_top']));
+      final raw = await SettingsStorage.exportRaw();
+      expect((raw['vars'] as Map)['log_level'], 'warn',
+          reason: 'merge сохраняет существующее');
+      expect((raw['vars'] as Map)['auto_check_updates'], 'false');
+      expect((raw['vars'] as Map).containsKey('alien_var'), isFalse);
+      expect(raw.containsKey('bogus_top'), isFalse);
+    });
+
+    test('чистый бэкап (наш) ничего не отбрасывает', () async {
+      final dropped = await SettingsStorage.replaceRaw(sampleSnapshot());
+      expect(dropped, isEmpty,
+          reason: 'все ключи sampleSnapshot валидны → drop пуст');
+    });
+
+    test('legacy top-level ключи отбрасываются (миграции удалены §159)',
+        () async {
+      final dropped = await SettingsStorage.replaceRaw({
+        'vars': {'log_level': 'info'},
+        'proxy_sources': [{'url': 'x'}],
+        'app_rules': [{'packages': ['a']}],
+        'enabled_rules': ['r1'],
+        'rule_outbounds': {'r1': 'vpn-1'},
+        'node_overrides': {'x': 1},
+      });
+      expect(
+          dropped,
+          containsAll([
+            'proxy_sources',
+            'app_rules',
+            'enabled_rules',
+            'rule_outbounds',
+            'node_overrides',
+          ]));
+      final raw = await SettingsStorage.exportRaw();
+      for (final k in [
+        'proxy_sources',
+        'app_rules',
+        'enabled_rules',
+        'rule_outbounds',
+        'node_overrides'
+      ]) {
+        expect(raw.containsKey(k), isFalse, reason: '$k должен быть отброшен');
+      }
+    });
+  });
+
   test(
       'partial restore: routing-only keeps existing app vars + adds custom_rules',
       () async {

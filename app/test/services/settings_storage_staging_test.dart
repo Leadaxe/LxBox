@@ -114,18 +114,21 @@ void main() {
     });
   });
 
-  group('§107 — cleanup удалённого ключа auto_rebuild', () {
-    test('vars.auto_rebuild выбрасывается на первом save', () async {
+  group('§159 — DENY-очистка в _save() удалена', () {
+    test('stale vars.auto_rebuild НЕ чистится на save (только на импорте)',
+        () async {
+      // §159 — хардкод-очистка «мёртвых» ключей в _save() удалена. Уже лежащий
+      // на диске мусор безвреден (никем не читается) и переживает обычный save;
+      // чистится только allowlist'ом на ВХОДЕ (replaceRaw), см. backup-тесты.
       await File(mainPath()).writeAsString(jsonEncode({
         'vars': {'auto_rebuild': 'false', 'alpha': '1'},
       }));
-      // Прогружаем кэш с диска, затем любой save.
       expect(await SettingsStorage.getVar('alpha', 'def'), '1');
       await SettingsStorage.setVar('beta', '2');
 
       final disk = await readDisk();
-      expect((disk['vars'] as Map).containsKey('auto_rebuild'), isFalse,
-          reason: 'stale-ключ чистится в _save() по образцу node_overrides');
+      expect((disk['vars'] as Map).containsKey('auto_rebuild'), isTrue,
+          reason: '_save() больше не чистит stale-ключи (§159)');
       expect((disk['vars'] as Map)['alpha'], '1');
       expect((disk['vars'] as Map)['beta'], '2');
     });

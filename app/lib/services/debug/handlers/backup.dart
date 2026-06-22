@@ -80,8 +80,11 @@ Future<DebugResponse> _import(DebugRequest req, DebugContext ctx) async {
 
   final storage = body['storage'];
   if (storage is Map<String, dynamic>) {
-    await SettingsStorage.replaceRaw(storage, merge: merge);
+    // §159 — replaceRaw применяет allowlist (default-deny). Отброшенные
+    // неизвестные/чужеродные ключи возвращаются и отдаются в ответе.
+    final dropped = await SettingsStorage.replaceRaw(storage, merge: merge);
     applied['storage_keys'] = storage.length;
+    if (dropped.isNotEmpty) applied['dropped_keys'] = dropped;
   } else if (storage != null) {
     throw const BadRequest('storage must be a JSON object');
   }
