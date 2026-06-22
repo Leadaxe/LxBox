@@ -388,7 +388,7 @@
         },
         {
           "name": "tun_mtu",
-          "type": "text",
+          "type": "int",
           "default_value": "1492",
           "wizard_ui": "edit",
           "title": "MTU",
@@ -418,6 +418,56 @@
           "wizard_ui": "edit",
           "title": "Stack",
           "tooltip": "system (default), gvisor (userspace), mixed"
+        }
+      ]
+    },
+    {
+      "name": "_vpn_mode_internal",
+      "chapter": "core",
+      "description": "§119/§120 — VPN-mode driven inbounds (hidden; values injected from VpnModeConfig at build time, type metadata only)",
+      "vars": [
+        {
+          "name": "vpn_mode",
+          "type": "enum",
+          "default_value": "vpn",
+          "options": ["vpn", "proxy", "vpn_proxy"],
+          "wizard_ui": "hidden"
+        },
+        {
+          "name": "proxy_type",
+          "type": "text",
+          "default_value": "mixed",
+          "wizard_ui": "hidden"
+        },
+        {
+          "name": "proxy_listen",
+          "type": "text",
+          "default_value": "127.0.0.1",
+          "wizard_ui": "hidden"
+        },
+        {
+          "name": "proxy_port",
+          "type": "int",
+          "default_value": "2080",
+          "wizard_ui": "hidden"
+        },
+        {
+          "name": "proxy_user",
+          "type": "text",
+          "default_value": "user",
+          "wizard_ui": "hidden"
+        },
+        {
+          "name": "proxy_pass",
+          "type": "secret",
+          "default_value": "",
+          "wizard_ui": "hidden"
+        },
+        {
+          "name": "proxy_auth",
+          "type": "bool",
+          "default_value": "false",
+          "wizard_ui": "hidden"
         }
       ]
     },
@@ -474,7 +524,7 @@
       "strategy": "@dns_strategy"
     },
     "inbounds": [
-      {
+      {"#if": {"and": [{"@vpn_mode": {"#in": ["vpn", "vpn_proxy"]}}], "value": {
         "type": "tun",
         "tag": "tun-in",
         "interface_name": "@tun_name",
@@ -483,7 +533,16 @@
         "auto_route": "@tun_auto_route",
         "strict_route": "@tun_strict_route",
         "stack": "@tun_stack"
-      }
+      }}},
+      {"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": {
+        "type": "@proxy_type",
+        "tag": "mixed-in",
+        "listen": "@proxy_listen",
+        "listen_port": "@proxy_port",
+        "#if": {"and": ["@proxy_auth"], "value": {
+          "users": [{"username": "@proxy_user", "password": "@proxy_pass"}]
+        }}
+      }}}
     ],
     "endpoints": [],
     "outbounds": [
@@ -493,8 +552,20 @@
       "find_process": true,
       "default_domain_resolver": "@dns_default_domain_resolver",
       "rules": [
-        { "action": "resolve", "inbound": "tun-in", "strategy": "@resolve_strategy" },
-        { "action": "sniff", "inbound": "tun-in", "timeout": "1s" },
+        { "action": "resolve",
+          "inbound": [
+            {"#if": {"and": [{"@vpn_mode": {"#in": ["vpn", "vpn_proxy"]}}],   "value": "tun-in"}},
+            {"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": "mixed-in"}}
+          ],
+          "strategy": "@resolve_strategy" },
+        {"#if": {"and": ["@sniff_enabled"], "value": {
+          "action": "sniff",
+          "inbound": [
+            {"#if": {"and": [{"@vpn_mode": {"#in": ["vpn", "vpn_proxy"]}}],   "value": "tun-in"}},
+            {"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": "mixed-in"}}
+          ],
+          "timeout": "1s"
+        }}},
         { "protocol": "dns", "action": "hijack-dns" }
       ],
       "final": "vpn-1",

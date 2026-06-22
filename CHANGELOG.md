@@ -8,6 +8,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **§120 — typed template engine + `#if`** ([feature spec](docs/spec/features/120%20template-engine-typed-vars-and-if/spec.md)). Подстановка `@var` теперь коэрсит значение **строго по объявленному `WizardVar.type`**, а не угадыванием по содержимому: `bool`/`int` — типизируются, `secret`/`text`/`enum`/`outbound`/`dns_servers` — остаются строкой (пароль `1234` больше не становится int). Введён явный тип `int`; `tun_mtu` переведён `text`→`int`. Общее ядро подстановки и условных конструкций — новый `app/lib/services/builder/if_engine.dart` (`coerceVarValue`/`walk`/predicates/`Dropped`/RegExp-кэш), используется обоими движками (`build_config._substituteVars` + `preset_expand.substituteVars`).
+- **§120 — `#if`-конструкт в шаблоне** (map-spread + array-element; предикаты `and`/`or`/`#in`/`#notIn`/`#notEmpty`/`#isEmpty`/`#matches`/`#not`). Декларативная условность прямо в `config`/preset-телах; поглощает прежний `enabled:"@var"`-гейт (§045). Дизайн заимствован у десктопного лаунчера (SPEC 067), без `params[]` и `@runtime.*`.
+- **§120/§119 — VPN-mode стал декларативным; `applyVpnMode` удалён.** `tun-in`/`mixed-in` в `inbounds[]` и `inbound` в route-rules собираются `#if`-walker'ом по `@vpn_mode` (`vpn`/`proxy`/`vpn_proxy`); `users` внутри `mixed-in` — map-spread `#if` по `@proxy_auth`. Локальный socks/http прокси (mixed-in) теперь живёт в `wizard_template.json`, а не строится императивно в коде. `inbound` в route-rules — `Listable[string]`-массив (тождественно скаляру для sing-box). Защита от broken-auth сохранена: пустой пароль при включённом auth (в т.ч. форс на `0.0.0.0`) → `users` отсутствует, не `[{"":""}]`.
+- **§120 — template-load валидация `#if`** ([if_engine.dart](app/lib/services/builder/if_engine.dart) `validateIfConstructs`). Кривой `#if` в шаблоне (оба `and`+`or`, нет `value`, предикат на необъявленную var, type-mismatch, неизвестный оператор, битый regexp) → `TemplateIfError` на загрузке, а не молча битый конфиг.
+
 ## [2.4.1] — 2026-06-22
 
 Per-app trace переделан (§160): 4 саб-таба → тогл Live/Aggregated с общим фильтром и drill-down деталями; общий движок `TraceExplorer` теперь питает и Stats→Live. Закрыт баг атрибуции — чужие приложения больше не протекают в сессию профайлера. Ядро без изменений — `v1.13.13-lx.14`.

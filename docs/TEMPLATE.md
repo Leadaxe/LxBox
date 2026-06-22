@@ -400,16 +400,19 @@ Storage override: `enabled_groups` в `lxbox_settings.json` контролиру
 
 Заметил в template'е:
 
-| Type | Что | UI-control |
+| Type | Coerce в config (§120) | UI-control |
 |---|---|---|
-| `text` | произвольная строка | TextField |
-| `bool` | true/false | Switch |
-| `enum` | выбор из `options[]` | Dropdown |
-| `secret` | password / token | TextField (masked) |
-| `outbound` | tag из доступных outbound'ов (selector/node tag) | Dropdown заполняется runtime |
-| `dns_servers` | tag из `dns_options.servers` | Dropdown заполняется runtime |
+| `text` | **строка дословно** | TextField |
+| `int` | `int.tryParse` (не-число → строка) | TextField |
+| `bool` | `'true'`→true, иначе false | Switch |
+| `enum` | **строка** (∈ `options[]` — advisory) | Dropdown |
+| `secret` | **строка дословно** (никогда не коэрсить) | TextField (masked) |
+| `outbound` | **строка** (tag selector/node) | Dropdown заполняется runtime |
+| `dns_servers` | **строка** (tag из `dns_options.servers`) | Dropdown заполняется runtime |
 
-При расширении (добавляешь новый type) — обновлять Wizard UI рендерер в `app/lib/screens/settings_screen.dart`.
+> **§120 — coerce по объявленному типу, НЕ по содержимому.** `if_engine.dart::coerceVarValue` коэрсит **только** `bool`/`int`, и только по `node.type`. Все строковые типы (`text`/`secret`/`enum`/`outbound`/`dns_servers`) остаются строкой, даже если значение выглядит как `123`/`true` — критично для паролей/секретов (`1234` не должен стать int). Var без объявленной ноды (legacy `clash_secret`, build-time `proxy_*`) → coerce как `text`.
+
+При расширении (добавляешь новый type) — обновлять Wizard UI рендерер в `app/lib/screens/settings_screen.dart` и (если коэрсящийся) `coerceVarValue` в `app/lib/services/builder/if_engine.dart`.
 
 ---
 
@@ -460,7 +463,7 @@ Storage override: `enabled_groups` в `lxbox_settings.json` контролиру
 - `config.dns.rules[+]` ← `dns_options.rules[*]` ([§061]) + `selectable_rules[*].dns_rule`
 - `config.route.rules[+]` ← `selectable_rules[*].rule` (после `selectable_rules[*]` enabled-проверки) + `custom_rules[*]` user routing rules
 - `config.route.rule_set[+]` ← `selectable_rules[*].rule_set[*]` (см. § ниже)
-- `config.inbounds[*]` ← трансформируется `applyVpnMode` ([§119]) под `vpn_mode` storage: `proxy` убирает `tun-in` и добавляет `mixed-in`; `vpn_proxy` добавляет `mixed-in` к `tun-in`. **`mixed-in` строится императивно из `VpnModeConfig`, НЕ через `@var`** — `users:[{username,password}]` не плоская строка, а пароль через substitution словил бы type-coercion (`_resolveVar`).
+- `config.inbounds[*]` + route-rules `inbound` ← **декларативны через `#if`** ([§120]): `tun-in` и `mixed-in` — array-element `#if` по `@vpn_mode` (`vpn`/`proxy`/`vpn_proxy`); `users` внутри `mixed-in` — map-spread `#if` по `@proxy_auth`. `applyVpnMode` удалён. Значения (`@proxy_type`/`@proxy_port`/`@proxy_pass`/…) пробрасываются в `vars` из `VpnModeConfig` на этапе сборки. Раньше `mixed-in` строился императивно, т.к. подстановка коэрсила тип по содержимому (пароль `1234`→int); §120 ввёл coerce **по объявленному `node.type`** (`secret`/`text` — всегда строка), что и сделало `mixed-in`-в-шаблоне безопасным. `inbound` в route-rules теперь `Listable[string]`-массив (`["tun-in"]`/`["mixed-in"]`/`["tun-in","mixed-in"]`) — тождественно скаляру для sing-box.
 
 `config.route.rule_set[]` в template **сам по себе пуст** — все rule-set'ы регистрируются через preset'ы. Если бы хотелось всем юзерам всегда одно rule-set'а — пишем сюда.
 
@@ -561,7 +564,38 @@ Vars, объявленные в preset'е, **видны только когда 
 - `"@auto_proxy_tag"` — подставится `✨auto`
 - `"server": "@dns_ip"` (внутри ru-direct preset) — подставится IP выбранный в dropdown'е
 
-См. реализацию в `app/lib/services/builder/build_config.dart` + `expand_preset.dart`.
+См. реализацию в `app/lib/services/builder/build_config.dart` + `expand_preset.dart`. Общее ядро подстановки и `#if` — `app/lib/services/builder/if_engine.dart` (§120), используется обоими движками.
+
+## `#if`-конструкт (§120)
+
+Декларативная условность прямо в `config`/preset-телах. Резолвится в substitution-фазе (до post-steps). Дизайн заимствован у десктопного лаунчера (SPEC 067), подмножество v1.
+
+```jsonc
+"#if": {
+  "and":   [<predicate>, ...],   // взаимоисключающе с or; все true
+  "or":    [<predicate>, ...],   // хотя бы один true
+  "value": <any JSON>,           // then-ветка (обязательно)
+  "else":  <any JSON>            // else-ветка (опционально)
+}
+```
+
+**Два режима:**
+- **map-spread** — `#if` как ключ объекта: true → поля `value` (объект) мерджатся в родителя; false+else → поля `else`; false без else → ничего. Ключ `#if` снимается.
+- **array-element** — `#if` как единственный ключ элемента массива: true → элемент = `value`; false+else → `else`; false без else → элемент выпадает.
+
+**Предикаты:** `"@var"` (bool), `{"@var":"literal"}` (equality), `{"@var":"#notEmpty"/"#isEmpty"}`, `{"@var":{"#in":[...]}}` / `{"#notIn":[...]}` / `{"#matches":"re"}`, `{"#not":predicate}`.
+
+**Naming:** `#` — конструкт/предикат; `@` — var-ref; bare — inner-ключи тела `#if`. Неизвестный `#*`-сиблинг → drop+warn (forward-compat); неизвестный inner-ключ/предикат-оператор → ошибка (валидация на template-load).
+
+Пример (§119 inbounds, см. `wizard_template.json`):
+```jsonc
+{"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": {
+  "type": "@proxy_type", "tag": "mixed-in", "listen_port": "@proxy_port",
+  "#if": {"and": ["@proxy_auth"], "value": {
+    "users": [{"username": "@proxy_user", "password": "@proxy_pass"}]
+  }}
+}}}
+```
 
 ---
 
