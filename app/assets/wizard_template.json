@@ -656,6 +656,34 @@
       "label": "Private IPs direct",
       "description": "Route private IP ranges (LAN) directly.",
       "rule": { "ip_is_private": true, "outbound": "direct-out" }
+    },
+    {
+      "preset_id": "block_unknown",
+      "label": "Block unknown traffic",
+      "description": "Reject traffic in the tunnel not attributed to any installed app (background/foreign processes). Send it direct to bypass VPN instead.",
+      "default": false,
+      "vars": [
+        {
+          "name": "outbound",
+          "type": "outbound",
+          "default_value": "reject",
+          "title": "outbound",
+          "tooltip": "Reject = drop. Or pick Direct to send it outside the VPN."
+        }
+      ],
+      "rule_set": [
+        {
+          "tag": "unknown-apps",
+          "type": "inline",
+          "rules": [
+            { "invert": true, "package_name_regex": "^" }
+          ]
+        }
+      ],
+      "rule": {
+        "rule_set": ["unknown-apps"],
+        "outbound": "@outbound"
+      }
     }
   ]
 }
