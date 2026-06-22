@@ -27,7 +27,7 @@ class UnattributedBanner extends StatelessWidget {
           Expanded(
             child: Text(
               '${TrafficProfiler.I.recentUnattributedCount} unattributed events / 30s — '
-              'sing-box не смог детектить owner package для части DNS/TCP traffic\'а',
+              'sing-box could not detect the owner package for some DNS/TCP traffic',
               style: TextStyle(
                   fontSize: 12, color: cs.onErrorContainer),
             ),

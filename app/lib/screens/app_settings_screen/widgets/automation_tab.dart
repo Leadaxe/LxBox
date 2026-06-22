@@ -95,20 +95,20 @@ class _AutomationTabState extends State<AutomationTab> {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Включить приём команд?'),
+        title: const Text('Enable command receiver?'),
         content: const Text(
-          'Любое приложение сможет управлять VPN через broadcast-команды '
-          '(если не включена галка «Требовать пропуск»). Включайте только если '
-          'используете Tasker / Macrodroid и понимаете последствия.',
+          'Any app will be able to control the VPN via broadcast commands '
+          '(unless "Require permission" is enabled). Only turn this on if you '
+          'use Tasker / Macrodroid and understand the implications.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Отмена'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Включить'),
+            child: const Text('Enable'),
           ),
         ],
       ),
@@ -142,22 +142,21 @@ class _AutomationTabState extends State<AutomationTab> {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Отправка событий наружу'),
+        title: const Text('Emitting events outward'),
         content: const Text(
-          'Включение этой категории позволит другим приложениям получать '
-          'события L×Box (при включённой галке «Требовать пропуск» — только '
-          'приложениям с пропуском).\n\n'
-          'События НЕ содержат секретов подписок / config — только лейблы '
-          '(теги нод, имена групп, статус).',
+          'Enabling this category lets other apps receive L×Box events '
+          '(with "Require permission" on — only apps that hold the permission).\n\n'
+          'Events do NOT contain subscription / config secrets — only labels '
+          '(node tags, group names, status).',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Отмена'),
+            child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Продолжить'),
+            child: const Text('Continue'),
           ),
         ],
       ),
@@ -170,7 +169,7 @@ class _AutomationTabState extends State<AutomationTab> {
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label скопировано'), duration: const Duration(seconds: 1)),
+      SnackBar(content: Text('$label copied'), duration: const Duration(seconds: 1)),
     );
   }
 
@@ -190,16 +189,16 @@ class _AutomationTabState extends State<AutomationTab> {
         Text('Automation API', style: theme.textTheme.titleMedium),
         const SizedBox(height: 4),
         Text(
-          'Управление L×Box из Tasker / Macrodroid / Llama и других '
-          'automation-приложений через Android broadcast intents.',
+          'Control L×Box from Tasker / Macrodroid / Llama and other '
+          'automation apps via Android broadcast intents.',
           style: muted,
         ),
         const Divider(height: 28),
 
         // ─── Master ───
-        Text('Приём команд', style: theme.textTheme.titleSmall),
+        Text('Command receiver', style: theme.textTheme.titleSmall),
         SwitchListTile(
-          title: const Text('Принимать команды автоматизации'),
+          title: const Text('Accept automation commands'),
           subtitle: const Text(
             'Start / Stop / Toggle / Switch / Refresh / … (default OFF)',
           ),
@@ -208,9 +207,9 @@ class _AutomationTabState extends State<AutomationTab> {
           onChanged: _loaded ? _onReceiveChanged : null,
         ),
         SwitchListTile(
-          title: const Text('Требовать пропуск'),
+          title: const Text('Require permission'),
           subtitle: const Text(
-            'Команды и события только от приложений с пропуском (рекомендуется)',
+            'Commands and events only from apps that hold the permission (recommended)',
           ),
           secondary: const Icon(Icons.verified_user_outlined),
           value: _requirePermission,
@@ -222,7 +221,7 @@ class _AutomationTabState extends State<AutomationTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Впишите этот пропуск в permissions вашего Tasker:',
+                Text('Add this permission to your Tasker permissions:',
                     style: muted),
                 const SizedBox(height: 4),
                 Row(
@@ -237,7 +236,7 @@ class _AutomationTabState extends State<AutomationTab> {
                     IconButton(
                       tooltip: 'Copy',
                       icon: const Icon(Icons.copy, size: 18),
-                      onPressed: () => _copy(_permission, 'Пропуск'),
+                      onPressed: () => _copy(_permission, 'Permission'),
                     ),
                   ],
                 ),
@@ -248,10 +247,10 @@ class _AutomationTabState extends State<AutomationTab> {
         const Divider(height: 28),
 
         // ─── Commands ───
-        Text('Команды (intent actions)', style: theme.textTheme.titleSmall),
+        Text('Commands (intent actions)', style: theme.textTheme.titleSmall),
         const SizedBox(height: 2),
         Text(
-          'Скопируйте в «Send Intent» вашего automation-приложения. '
+          'Paste into the "Send Intent" of your automation app. '
           'Target: Broadcast Receiver.',
           style: muted,
         ),
@@ -268,14 +267,14 @@ class _AutomationTabState extends State<AutomationTab> {
             trailing: IconButton(
               tooltip: 'Copy',
               icon: const Icon(Icons.copy, size: 18),
-              onPressed: () => _copy(action, 'Команда'),
+              onPressed: () => _copy(action, 'Command'),
             ),
           ),
 
         const Divider(height: 28),
 
         // ─── Emit categories ───
-        Text('События наружу (emit)', style: theme.textTheme.titleSmall),
+        Text('Outbound events (emit)', style: theme.textTheme.titleSmall),
         SwitchListTile(
           title: const Text('Lifecycle'),
           subtitle: const Text(
@@ -310,7 +309,7 @@ class _AutomationTabState extends State<AutomationTab> {
         SwitchListTile(
           title: const Text('Health'),
           subtitle: const Text(
-            'HEARTBEAT_FAILED · LATENCY_DEGRADED (доступно с §042)',
+            'HEARTBEAT_FAILED · LATENCY_DEGRADED (available since §042)',
           ),
           value: _emitHealth,
           onChanged: _loaded
@@ -324,7 +323,7 @@ class _AutomationTabState extends State<AutomationTab> {
         OutlinedButton.icon(
           onPressed: () => ul.UrlLauncher.open(_docsUrl),
           icon: const Icon(Icons.menu_book_outlined, size: 18),
-          label: const Text('Документация и Tasker-рецепты'),
+          label: const Text('Documentation and Tasker recipes'),
         ),
         const SizedBox(height: 12),
       ],

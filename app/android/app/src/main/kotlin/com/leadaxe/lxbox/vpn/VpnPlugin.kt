@@ -733,7 +733,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
                 true
             } catch (e: TimeoutCancellationException) {
-                Log.w(TAG, "[vpn] stopVPN: 5s timeout — native не отдал Stopped")
+                Log.w(TAG, "[vpn] stopVPN: 5s timeout — native did not report Stopped")
                 false
             } catch (e: Exception) {
                 Log.e(TAG, "[vpn] stopVPN: exception $e")

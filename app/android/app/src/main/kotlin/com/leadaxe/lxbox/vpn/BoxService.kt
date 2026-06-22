@@ -407,7 +407,7 @@ class BoxService(
         }
         notification.stop()
         setStatus(VpnStatus.Stopped)
-        Log.w(TAG, "[vpn] doForceStop — UI/notification stopped, teardown+stopSelf на forceStopScope")
+        Log.w(TAG, "[vpn] doForceStop — UI/notification stopped, teardown+stopSelf on forceStopScope")
 
         // 2. Teardown ядра, затем stopSelf() — на forceStopScope (onDestroy его НЕ
         // отменяет). stopSelf() ПОСЛЕ закрытия Clash-порта 63130, иначе он зависнет
@@ -423,7 +423,7 @@ class BoxService(
             runCatching {
                 withTimeout(2_000) { closeCommandServerAtomic("doForceStop") }
             }.onFailure { Log.w(TAG, "doForceStop: closeCommandServer timeout/fail: ${it.message}") }
-            Log.d(TAG, "[vpn] doForceStop — teardown завершён → stopSelf()")
+            Log.d(TAG, "[vpn] doForceStop — teardown done → stopSelf()")
             withContext(Dispatchers.Main) { service.stopSelf() }
         }
     }

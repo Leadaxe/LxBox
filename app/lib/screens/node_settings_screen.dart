@@ -131,8 +131,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   /// §130 — лог сброса невалидного AWG→WireGuard detour при открытии редактора.
   void _logResetDetour(String removed) {
     AppLog.I.info(
-        '§130: AWG-узел "$_originalTag" — сброшен невалидный detour "$removed" '
-        '(AWG не может идти через WireGuard, вешает ядро на Android)');
+        '§130: AWG node "$_originalTag" — cleared invalid detour "$removed" '
+        '(AWG cannot run through WireGuard, hangs the core on Android)');
   }
 
   /// §090 G2b — вставка эмодзи из пикера в позицию курсора поля Tag.
@@ -289,8 +289,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    'AmneziaWG-узлы не могут идти через WireGuard — такие цели '
-                    'скрыты. Используйте non-wireguard detour (например, vless).',
+                    'AmneziaWG nodes cannot run through WireGuard — such targets '
+                    'are hidden. Use a non-wireguard detour (e.g. vless).',
                     style: theme.textTheme.bodySmall
                         ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),

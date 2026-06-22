@@ -175,7 +175,7 @@ class _DebugScreenState extends State<DebugScreen> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : const Icon(Icons.ios_share),
-        tooltip: 'Отправить дамп (config + vars + subs + log)',
+        tooltip: 'Share dump (config + vars + subs + log)',
         onPressed: _buildingDump ? null : _shareDump,
       ),
       PopupMenuButton<_DebugAction>(

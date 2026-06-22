@@ -44,30 +44,30 @@ Future<DebugResponse> helpHandler(DebugRequest req, DebugContext ctx) async {
 const _capabilityText = '''
 === L×Box Debug API ===
 
-Localhost HTTP сервер для dev-introspection и control. Запущен в Flutter-app'е,
-если в App Settings → Developer включён "Debug API toggle". Bind на 127.0.0.1,
-порт по умолчанию 9269. Auth: `Authorization: Bearer <token>` (token виден
-в App Settings → Developer; копируется через UI кнопку Copy).
+Localhost HTTP server for dev introspection and control. Runs inside the
+Flutter app when "Debug API toggle" is enabled in App Settings → Developer.
+Binds to 127.0.0.1, default port 9269. Auth: `Authorization: Bearer <token>`
+(token is shown in App Settings → Developer; copy it via the UI Copy button).
 
-Доступ с хоста: `adb forward tcp:9269 tcp:9269`, далее curl на 127.0.0.1:9269.
+Access from host: `adb forward tcp:9269 tcp:9269`, then curl 127.0.0.1:9269.
 
-Спека: docs/spec/features/031 debug api/spec.md
-Clash API нюансы: docs/api/clash-api-reference.md
+Spec: docs/spec/features/031 debug api/spec.md
+Clash API notes: docs/api/clash-api-reference.md
 
 === Health ===
 
-GET /ping                           Health-check. Без auth. → {"pong":true,"server":"lxbox-debug","uptime_seconds":N}
-GET /help[?format=text|json]        Эта карта. Без auth. text (default) — markdown; json — structured.
+GET /ping                           Health-check. No auth. → {"pong":true,"server":"lxbox-debug","uptime_seconds":N}
+GET /help[?format=text|json]        This map. No auth. text (default) — markdown; json — structured.
 
 === State (read-only) ===
 
 GET /state                          HomeState dump (tunnel, groups, nodes_count, last_delay, traffic, busy)
-GET /state/clash                    Clash endpoint info (secret замаскирован)
-GET /state/subs[?reveal=true]       Подписки. URL masked default; reveal=true — full URL
-GET /state/rules                    CustomRule[] — sealed: inline | srs | preset (с per-kind полями)
-GET /state/storage                  Raw SettingsStorage._cache JSON (для отладки)
+GET /state/clash                    Clash endpoint info (secret masked)
+GET /state/subs[?reveal=true]       Subscriptions. URL masked default; reveal=true — full URL
+GET /state/rules                    CustomRule[] — sealed: inline | srs | preset (with per-kind fields)
+GET /state/storage                  Raw SettingsStorage._cache JSON (for debugging)
 GET /state/vpn                      { auto_start, keep_on_exit, allow_bypass, background_mode, is_ignoring_battery_optimizations }
-GET /state/config_locked            { "locked": bool } — состояние §037 lock'а auto-rebuild
+GET /state/config_locked            { "locked": bool } — §037 auto-rebuild lock state
 
 === Device ===
 
@@ -76,15 +76,15 @@ GET /device                         Android version / SDK / model / ABI / app ve
 === Config ===
 
 GET /config                         Saved sing-box JSON (raw bytes, no re-encode)
-PUT /config                         Перезаписать config.json + reload sing-box. Body: raw
-                                      sing-box JSON (Map). Sing-box валидирует на reload —
-                                      ошибки прилетают через status events / /logs?source=core.
-                                      ВАЖНО: этот override временный — следующий
-                                      rebuild-config (или любое UI-действие) сотрёт его.
-                                      Чтобы pin'нуть постоянно — PUT /settings/config_locked
-                                      {"locked": true} перед write. См. §037.
-GET /config/pretty                  То же с indent
-GET /config/path                    Абсолютный путь к файлу на устройстве
+PUT /config                         Overwrite config.json + reload sing-box. Body: raw
+                                      sing-box JSON (Map). Sing-box validates on reload —
+                                      errors arrive via status events / /logs?source=core.
+                                      IMPORTANT: this override is temporary — the next
+                                      rebuild-config (or any UI action) wipes it.
+                                      To pin it permanently — PUT /settings/config_locked
+                                      {"locked": true} before the write. See §037.
+GET /config/pretty                  Same with indent
+GET /config/path                    Absolute on-device file path
 
 === Logs ===
 
@@ -92,77 +92,77 @@ GET /logs?limit=N&source=app|core&q=substr&level=error,warning,info,debug
                                     AppLog entries (§043 per-source quotas:
                                       app=300, core=500 in-memory).
                                       limit  — default 200, max 1000
-                                      source — фильтр по источнику
-                                      q      — substring search в message
+                                      source — filter by source
+                                      q      — substring search in message
                                       level  — multi-filter, comma-separated
-GET /logs/app                       Alias для /logs?source=app. Те же query params.
-GET /logs/core                      Alias для /logs?source=core. Те же query params.
-POST /logs/clear[?source=app|core]  Очистить AppLog. Без source — всё; иначе только указанный.
+GET /logs/app                       Alias for /logs?source=app. Same query params.
+GET /logs/core                      Alias for /logs?source=core. Same query params.
+POST /logs/clear[?source=app|core]  Clear AppLog. No source — everything; otherwise only the given one.
 
 === Clash API (transparent proxy with auto-auth) ===
 
 GET    /clash/version                          sing-box version + meta flags
-GET    /clash/proxies                          Все proxies + groups + chains
-GET    /clash/proxies/{tag}                    Single proxy/group. emoji-tag URL-encode'ить (или python urllib).
+GET    /clash/proxies                          All proxies + groups + chains
+GET    /clash/proxies/{tag}                    Single proxy/group. URL-encode the emoji tag (or use python urllib).
 PUT    /clash/proxies/{tag}                    Selector switch. Body: {"name":"<child-tag>"}
 GET    /clash/proxies/{tag}/delay?url=&timeout=  Single delay test (ms)
-GET    /clash/group/{tag}/delay?url=&timeout=    Force URLTest на группе. ВАЖНО: .now не обновляется
-                                                 от этого вызова — sing-box quirk (только первый
-                                                 urltest_interval tick меняет .now).
+GET    /clash/group/{tag}/delay?url=&timeout=    Force URLTest on a group. NOTE: .now is not updated
+                                                 by this call — sing-box quirk (only the first
+                                                 urltest_interval tick changes .now).
 GET    /clash/connections                      { uploadTotal, downloadTotal, memory, connections[] }
-DELETE /clash/connections                      Закрыть все
-DELETE /clash/connections/{id}                 Закрыть одно
-GET    /clash/traffic                          Streaming traffic (curl получает первый фрейм)
+DELETE /clash/connections                      Close all
+DELETE /clash/connections/{id}                 Close one
+GET    /clash/traffic                          Streaming traffic (curl gets the first frame)
 
 === Actions (mutating, POST) ===
 
-POST /action/start-vpn                         Запустить туннель → {"ok":true,"action":"start-vpn"}
-POST /action/stop-vpn                          Остановить
+POST /action/start-vpn                         Start the tunnel → {"ok":true,"action":"start-vpn"}
+POST /action/stop-vpn                          Stop it
 POST /action/reset-network                     Light recovery: closeAllConnections + DNS flush + dialer
-                                                  rebind. БЕЗ recreate'а box/Service/TUN. Spec 031.
-                                                  Требует tunnel up. → {"ok":true,"action":"reset-network","native_ok":<bool>}
+                                                  rebind. WITHOUT recreating box/Service/TUN. Spec 031.
+                                                  Requires tunnel up. → {"ok":true,"action":"reset-network","native_ok":<bool>}
 POST /action/urltest?tag=<node>                Single-node URLTest (clash /proxies/<tag>/delay)
-POST /action/urltest?group=<group>             Group URLTest (clash /group/<group>/delay, требует tunnel)
-POST /action/urltest?all=true                  Mass URLTest всех нод активной группы (concurrency 10)
+POST /action/urltest?group=<group>             Group URLTest (clash /group/<group>/delay, requires tunnel)
+POST /action/urltest?all=true                  Mass URLTest of all nodes in the active group (concurrency 10)
 POST /action/switch-node?tag=<tag>             HomeController.switchNode
-POST /action/set-group?group=<tag>             Сменить активную группу
+POST /action/set-group?group=<tag>             Change the active group
 POST /action/rebuild-config                    SubscriptionController.generateConfig + saveParsedConfig
-POST /action/refresh-subs?force=true|false     Manual sub-refresh (через AutoUpdater, force обходит cap'ы)
-POST /action/download-srs?ruleId=<id>          Скачать SRS для правила
-POST /action/clear-srs?ruleId=<id>             Удалить cached SRS
-POST /action/toast?msg=<text>&duration=short|long  Android Toast (sanity-check "это моё устройство")
-POST /action/emulate-error?kind=<k>            Демо humanizeError в /logs. kind: socket|timeout|http-401|
+POST /action/refresh-subs?force=true|false     Manual sub-refresh (via AutoUpdater, force bypasses caps)
+POST /action/download-srs?ruleId=<id>          Download SRS for a rule
+POST /action/clear-srs?ruleId=<id>             Delete cached SRS
+POST /action/toast?msg=<text>&duration=short|long  Android Toast (sanity-check "this is my device")
+POST /action/emulate-error?kind=<k>            Demo humanizeError in /logs. kind: socket|timeout|http-401|
                                                   http-404|http-410|http-429|http-503|format|fs|plain|all
 POST /action/check-updates                     Force update check (bypass 24h cap + auto_check_updates toggle).
-POST /action/preview-empty-state?on=true|false UI-only override: рендерить empty-state без потери данных. Полезно для скриншотов/демо/regression UX.
+POST /action/preview-empty-state?on=true|false UI-only override: render the empty-state without losing data. Useful for screenshots/demos/UX regression.
                                                   Returns {kind, tag, html_url, published_at, ...}. Mirrors UI
                                                   "Check now" button. Uses primary api.github.com → fallback
                                                   raw.githubusercontent.com/.../docs/latest.json.
 
 === WARP (§025/§143 — register Cloudflare WARP node) ===
 
-POST /warp[?rebuild=true]                      Регистрирует WARP-узел (тот же путь, что кнопка Get WARP).
-                                                  Приватник генерится на устройстве, регистрация в Cloudflare.
-                                                  Узел добавляется в подписки автоматически. Все поля body опц.:
-                                                  {"licenseKey":"...",       // null/пусто → free WARP
-                                                   "endpoint":"IP:port",     // дефолт engage.cloudflareclient.com:2408
+POST /warp[?rebuild=true]                      Registers a WARP node (same path as the Get WARP button).
+                                                  Private key is generated on-device, registration with Cloudflare.
+                                                  Node is added to subscriptions automatically. All body fields optional:
+                                                  {"licenseKey":"...",       // null/empty → free WARP
+                                                   "endpoint":"IP:port",     // default engage.cloudflareclient.com:2408
                                                    "obfuscate":true,         // §143 masquerade
-                                                   "forceNew":false,         // игнор кеша, регать заново
-                                                   "includeReserved":false,  // §142; null → дефолт по obfuscate
+                                                   "forceNew":false,         // ignore cache, re-register
+                                                   "includeReserved":false,  // §142; null → default by obfuscate
                                                    "quicParams":{"sni":"www.google.com","ip":"quic",
                                                                  "ib":"chrome","jc":4,"jmin":40,"jmax":70}}
-                                                  ?rebuild=true → regenerate config + reload ядра.
+                                                  ?rebuild=true → regenerate config + reload core.
 
 === Rules CRUD (custom routing rules, spec 030) ===
 
 GET    /rules                                  alias /state/rules
-GET    /rules/{id}                             Одно правило
-POST   /rules[?rebuild=true]                   Создать. Body: CustomRule JSON, kind=inline|srs|preset
-PATCH  /rules/{id}[?rebuild=true]              Partial update (любое подмножество полей)
-DELETE /rules/{id}[?rebuild=true]              Удалить
-POST   /rules/reorder                          Body: {"order":[id1,id2,...]} — все id обязательны
+GET    /rules/{id}                             Single rule
+POST   /rules[?rebuild=true]                   Create. Body: CustomRule JSON, kind=inline|srs|preset
+PATCH  /rules/{id}[?rebuild=true]              Partial update (any subset of fields)
+DELETE /rules/{id}[?rebuild=true]              Delete
+POST   /rules/reorder                          Body: {"order":[id1,id2,...]} — all ids required
 
-`?rebuild=true` на любом write-методе → автоматически вызывает rebuild-config.
+`?rebuild=true` on any write method → automatically triggers rebuild-config.
 
 === Wi-Fi history (§051 Phase 3 — saved networks for routing rule editor) ===
 
@@ -171,72 +171,72 @@ POST   /wifi_history                           upsert. body {"ssid": "...", "bss
 DELETE /wifi_history                           remove specific. body {"ssid": "...", "bssid": "..."}
 DELETE /wifi_history/all                       clear all
 
-Cap 50 entries (LRU evict by last_seen). BSSID нормализуется к lower-case.
+Cap 50 entries (LRU evict by last_seen). BSSID is normalized to lower-case.
 
 === Files (read-only) ===
 
 GET /files/srs/list                            Cached SRS files: [{rule_id, size, mtime}]
 GET /files/srs?ruleId=<id>                     Binary SRS dump (octet-stream)
-GET /files/local?name=<n>                      Whitelisted internal-storage файлы (cache.db, stderr.log). `/files/external` — legacy alias.
+GET /files/local?name=<n>                      Whitelisted internal-storage files (cache.db, stderr.log). `/files/external` — legacy alias.
 
 === Traffic Profiler (§044 per-app + §048 system-wide) ===
 
-Per-app session (в один момент только одна active):
+Per-app session (only one active at a time):
 POST   /profiler/start                         Body: {"package":"<pkg>", "verbose":false, "secondary_packages":["<pkg>",...]}.
-                                                 verbose=true → log_level toggle на debug; secondary_packages →
-                                                 события related apps идут с confidence=secondary.
-                                                 409 если уже active (с current id).
-POST   /profiler/stop                          Stop active session. 404 если nothing active.
-GET    /profiler/active                        Current session metadata. 404 если nothing.
+                                                 verbose=true → log_level toggle to debug; secondary_packages →
+                                                 events from related apps arrive with confidence=secondary.
+                                                 409 if already active (with current id).
+POST   /profiler/stop                          Stop active session. 404 if nothing active.
+GET    /profiler/active                        Current session metadata. 404 if nothing.
 GET    /profiler/sessions                      Last 5 completed sessions (FIFO ring).
 DELETE /profiler/sessions                      Clear all completed.
 GET    /profiler/session/{id}?include=events,domains,ips
                                                  events — full event log; domains — by-domain agg;
-                                                 ips — by-IP agg. Без include — только meta.
-DELETE /profiler/session/{id}                  Удалить одну session.
-GET    /profiler/stream                        SSE per-session live stream (требует active session).
-PATCH  /profiler/secondary-packages            Body: {"secondary_packages":[...]}; обновляет live на active.
-                                                 Возвращает 404 если нет active.
+                                                 ips — by-IP agg. Without include — meta only.
+DELETE /profiler/session/{id}                  Delete one session.
+GET    /profiler/stream                        SSE per-session live stream (requires active session).
+PATCH  /profiler/secondary-packages            Body: {"secondary_packages":[...]}; updates live on active.
+                                                 Returns 404 if no active session.
 
-System-wide (§048 inclusive observer — Live tab в Statistics):
-POST   /profiler/live/start                    startGlobalRecording — подписывает на core logs +
-                                                 запускает _pollConnections (5s). Idempotent.
+System-wide (§048 inclusive observer — Live tab in Statistics):
+POST   /profiler/live/start                    startGlobalRecording — subscribes to core logs +
+                                                 starts _pollConnections (5s). Idempotent.
 POST   /profiler/live/stop                     stopGlobalRecording. Idempotent.
 GET    /profiler/live/state                    {recording, started_at, buffer_count, unattributed_count, banner_active}.
-GET    /profiler/live?seconds=60               Snapshot global rolling buffer за окно (default 60s).
+GET    /profiler/live?seconds=60               Snapshot of the global rolling buffer for the window (default 60s).
                                                  Returns {window_seconds, count, events:[...]}.
-GET    /profiler/live/stream                   SSE — все system-wide events live (DNS resolves +
-                                                 TCP/UDP open/close по всем packages).
-GET    /profiler/live/unattributed             Recent unattributed ring (DNS-fail без owner / TCP без
-                                                 process attribution). Используется для banner detection.
+GET    /profiler/live/stream                   SSE — all system-wide events live (DNS resolves +
+                                                 TCP/UDP open/close across all packages).
+GET    /profiler/live/unattributed             Recent unattributed ring (DNS-fail without owner / TCP without
+                                                 process attribution). Used for banner detection.
 
 === Diagnostics (§038) ===
 
-GET /diag/dump                                 Полный JSON-pack от DumpBuilder.build (config + vars + subs + log + stderr + exit_info + logcat).
-GET /diag/exit-info                            ApplicationExitInfo (последние 5 экзитов от системы); пустой массив на API <30.
-GET /diag/logcat?count=N&level=L               Logcat tail нашего процесса (N=50..5000, default 1000; level=V|D|I|W|E|F, default E).
-GET /diag/stderr                               Содержимое filesDir/stderr.log (Go panic-stacktrace libbox).
-GET /diag/applog?prev=true|false|all           AppLog entries; `prev` фильтрует по fromPreviousSession (default `all`).
+GET /diag/dump                                 Full JSON pack from DumpBuilder.build (config + vars + subs + log + stderr + exit_info + logcat).
+GET /diag/exit-info                            ApplicationExitInfo (last 5 system exits); empty array on API <30.
+GET /diag/logcat?count=N&level=L               Logcat tail of our process (N=50..5000, default 1000; level=V|D|I|W|E|F, default E).
+GET /diag/stderr                               filesDir/stderr.log content (Go panic stacktrace from libbox).
+GET /diag/applog?prev=true|false|all           AppLog entries; `prev` filters by fromPreviousSession (default `all`).
 
 === Settings (scoped writes) ===
 
 PUT    /settings/route_final                   body {"outbound":"..."}
 PUT    /settings/excluded_nodes                body {"nodes":["tag",...]}
 PUT    /settings/vars/{key}                    body {"value":"..."}; blocklist: debug_token/debug_enabled/debug_port
-DELETE /settings/vars/{key}                    Удалить var
+DELETE /settings/vars/{key}                    Delete var
 PUT    /settings/dns_options/servers           body {"servers":[...]}
 PUT    /settings/dns_options/rules             body {"rules":"<json-string>"}
 PUT    /settings/config_locked                 §037 toggle auto-rebuild lock. body {"locked":true|false}.
-                                                 true → SubscriptionController.generateConfig возвращает null
-                                                 silently, custom config через PUT /config не перетирается
-                                                 UI-действиями. Default false (обычный flow).
-GET    /settings/core_logs_enabled              §043 текущее состояние forwarding sing-box logs в /logs/core.
+                                                 true → SubscriptionController.generateConfig returns null
+                                                 silently, the custom config from PUT /config is not overwritten
+                                                 by UI actions. Default false (normal flow).
+GET    /settings/core_logs_enabled              §043 current state of forwarding sing-box logs into /logs/core.
                                                  → {"enabled": bool}
-PUT    /settings/core_logs_enabled              body {"enabled":true|false}. Default false. Применяется
-                                                 ТОЛЬКО при рестарте процесса — Libbox.setup one-shot. Stop/
-                                                 start VPN НЕ помогает (service пересоздаётся, Application
-                                                 живёт). Force-stop приложения + relaunch, либо UI-кнопка
-                                                 «Quit & reopen app» в App Settings → Diagnostics или
+PUT    /settings/core_logs_enabled              body {"enabled":true|false}. Default false. Takes effect
+                                                 ONLY on a process restart — Libbox.setup is one-shot. Stop/
+                                                 start VPN does NOT help (the service is recreated, the Application
+                                                 stays alive). Force-stop the app + relaunch, or use the UI button
+                                                 "Quit & reopen app" in App Settings → Diagnostics or
                                                  Debug screen → Log tab.
 GET|PUT /settings/vpn/allow_bypass              §052 VpnService.Builder.allowBypass(). body {"enabled":bool}.
                                                  Effect at next establish() — reload VPN.
@@ -249,14 +249,14 @@ POST   /settings/rebuild-config                Alias /action/rebuild-config
 
 === Backup ===
 
-GET  /backup/export?include=config,vars,subs   Pure-data snapshot для restore (без diag-шума). `include` опц.; default — все три.
-POST /backup/import?merge=false&rebuild=false  Принимает то же что отдаёт export (плюс /diag/dump — diag-поля игнорятся).
-                                                 `merge=true` — append/upsert; `rebuild=true` — auto-rebuild config после restore.
+GET  /backup/export?include=config,vars,subs   Pure-data snapshot for restore (no diag noise). `include` optional; default — all three.
+POST /backup/import?merge=false&rebuild=false  Accepts the same shape export returns (plus /diag/dump — diag fields ignored).
+                                                 `merge=true` — append/upsert; `rebuild=true` — auto-rebuild config after restore.
 
 === Errors ===
 
-Все error responses: {"error": {"code": "...", "message": "...", "details": {...}}}
-HTTP status коды: 400 BadRequest, 401 Unauthorized (no/wrong token), 403 Forbidden (Host check),
+All error responses: {"error": {"code": "...", "message": "...", "details": {...}}}
+HTTP status codes: 400 BadRequest, 401 Unauthorized (no/wrong token), 403 Forbidden (Host check),
 404 NotFound, 409 Conflict (state precondition fail), 500 Internal.
 
 === Quick Examples ===
@@ -274,26 +274,26 @@ curl -H "Authorization: Bearer \$TOKEN" http://127.0.0.1:9269/state | jq '.tunne
 # Connect
 curl -H "Authorization: Bearer \$TOKEN" -X POST http://127.0.0.1:9269/action/start-vpn
 
-# URLTest на ✨auto (emoji URL-encode'ится)
+# URLTest on ✨auto (emoji gets URL-encoded)
 TAG=\$(python3 -c "import urllib.parse; print(urllib.parse.quote('✨auto'))")
 curl -H "Authorization: Bearer \$TOKEN" -X POST "http://127.0.0.1:9269/action/urltest?group=\$TAG"
 
-# Создать inline-правило + rebuild config
+# Create an inline rule + rebuild config
 curl -H "Authorization: Bearer \$TOKEN" -H "Content-Type: application/json" \\
   -d '{"name":"Block ads","kind":"inline","domain_suffixes":["ads.example.com"],"outbound":"reject"}' \\
   http://127.0.0.1:9269/rules?rebuild=true
 
-# Логи с фильтром
+# Logs with a filter
 curl -H "Authorization: Bearer \$TOKEN" 'http://127.0.0.1:9269/logs?level=error,warn&q=fetch&limit=20'
 
 === Notes ===
 
-- emoji в URL path (✨auto и пр.) — обязательно URL-encode. curl сам не делает.
-- Subscription URLs masked default (`scheme://host/***`); ?reveal=true для full.
-- /rules CRUD принимает snake_case (domain_suffixes, ip_cidrs, preset_id, vars_values,
-  dns: {enabled, server_tag} — §117), возвращает snake_case.
-- Все timestamps в ISO-8601 UTC.
-- Token stable пока не Regenerate'ut в UI — стабильно для curl-сессий.
+- emoji in URL path (✨auto etc.) — must be URL-encoded. curl does not do it for you.
+- Subscription URLs masked default (`scheme://host/***`); ?reveal=true for full.
+- /rules CRUD accepts snake_case (domain_suffixes, ip_cidrs, preset_id, vars_values,
+  dns: {enabled, server_tag} — §117) and returns snake_case.
+- All timestamps are ISO-8601 UTC.
+- Token stays stable until you Regenerate it in the UI — stable for curl sessions.
 ''';
 
 const Map<String, dynamic> _capabilityJson = {
@@ -394,7 +394,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/profiler/live/state', 'description': '{recording,started_at,buffer_count,unattributed_count,banner_active}'},
     {'method': 'GET', 'path': '/profiler/live', 'params': {'seconds': 'window (default 60)'}, 'description': '§048 global rolling buffer snapshot — TCP/UDP open/close + DNS resolves of all packages.'},
     {'method': 'GET', 'path': '/profiler/live/stream', 'description': '§048 SSE — system-wide events live.'},
-    {'method': 'GET', 'path': '/profiler/live/unattributed', 'description': '§048 recent unattributed ring (DNS-fail / TCP без attribution).'},
+    {'method': 'GET', 'path': '/profiler/live/unattributed', 'description': '§048 recent unattributed ring (DNS-fail / TCP without attribution).'},
     // Diagnostics (§038)
     {'method': 'GET', 'path': '/diag/dump', 'description': 'Full DumpBuilder JSON-pack'},
     {'method': 'GET', 'path': '/diag/exit-info', 'description': 'ApplicationExitInfo entries (API 30+; empty on lower)'},
@@ -433,10 +433,10 @@ const Map<String, dynamic> _capabilityJson = {
     },
   },
   'notes': [
-    'Emoji в URL path (✨auto и пр.) — обязательно URL-encode',
-    'Subscription URLs masked default; ?reveal=true для full URL',
-    '/rules CRUD: snake_case в обе стороны (domain_suffixes, preset_id, vars_values, dns.server_tag)',
+    'Emoji in URL path (✨auto etc.) — must be URL-encoded',
+    'Subscription URLs masked default; ?reveal=true for full URL',
+    '/rules CRUD: snake_case both ways (domain_suffixes, preset_id, vars_values, dns.server_tag)',
     'Timestamps — ISO-8601 UTC',
-    '`?rebuild=true` на /rules write → автоматически rebuild-config',
+    '`?rebuild=true` on /rules write → automatically rebuild-config',
   ],
 };

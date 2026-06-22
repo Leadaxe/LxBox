@@ -110,7 +110,7 @@ class _FilterPanelState extends State<FilterPanel>
     // фильтр (вернуть «показать всё»).
     if (f.detourActive) {
       chips.add(InputChip(
-        tooltip: f.detourHide ? 'Detour скрыт' : 'Только detour',
+        tooltip: f.detourHide ? 'Detour hidden' : 'Detour only',
         label: f.detourHide
             ? _gearOffIcon()
             : const Icon(Icons.settings, size: 18),
@@ -208,7 +208,7 @@ class _FilterPanelState extends State<FilterPanel>
         );
       case 1: // Protocol + §103 transport/security строкой ниже
         return widget.availableProtocols.isEmpty
-            ? _hint('Нет протоколов')
+            ? _hint('No protocols')
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -238,7 +238,7 @@ class _FilterPanelState extends State<FilterPanel>
               );
       case 2: // Subscribes
         return widget.subOptions.isEmpty
-            ? _hint('Нет подписок')
+            ? _hint('No subscriptions')
             : MultiSelectChipsRow(
                 options: widget.subOptions,
                 enabled: f.enabledSubscriptions,
@@ -281,7 +281,7 @@ class _FilterPanelState extends State<FilterPanel>
                     // при выкл-фильтре (две ортогональные оси, как в спеке).
                     active: f.detourHide,
                     onToggle: f.toggleDetourHide,
-                    tooltip: 'Скрыть detour (вкл) / только detour (выкл)',
+                    tooltip: 'Hide detour (on) / detour only (off)',
                   ),
                   const SizedBox(width: 4),
                   Expanded(

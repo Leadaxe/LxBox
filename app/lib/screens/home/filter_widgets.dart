@@ -79,7 +79,7 @@ class RegexFilterField extends StatelessWidget {
           child: NegateToggle(
             active: invert,
             onToggle: onInvertToggle,
-            tooltip: 'Показать НЕ совпадающие',
+            tooltip: 'Show NON-matching',
           ),
         ),
         const SizedBox(width: 4),
@@ -210,7 +210,7 @@ class MultiSelectChipsRow extends StatelessWidget {
         NegateToggle(
           active: invert,
           onToggle: onInvertToggle,
-          tooltip: 'Показать НЕ выбранные',
+          tooltip: 'Show NON-selected',
         ),
         const SizedBox(width: 4),
         Expanded(

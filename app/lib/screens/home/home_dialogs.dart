@@ -290,14 +290,14 @@ Future<void> showSupportDialog(BuildContext context, SupportMessage m) async {
             Navigator.of(ctx).pop();
             await SupportMessageService.I.dismissForever(m);
           },
-          child: const Text('Не показывать'),
+          child: const Text("Don't show again"),
         ),
         FilledButton(
           onPressed: () async {
             Navigator.of(ctx).pop();
             await SupportMessageService.I.snooze(m);
           },
-          child: const Text('Позже'),
+          child: const Text('Later'),
         ),
       ],
     ),
