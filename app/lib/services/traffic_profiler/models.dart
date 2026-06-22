@@ -50,6 +50,60 @@ class ConnectionIssue {
       };
 }
 
+/// §160 — чистый аггрегатор событий в `byDomain` / `byIp`. Вынесен из
+/// `Session._recompute` чтобы переиспользоваться и для session.events
+/// (per-app trace), и для globalRollingBuffer (Stats→Live) одним кодом —
+/// без дубля и расхождения логики (TraceExplorer считает агрегаты сам из
+/// переданного списка событий, не завязываясь на Session).
+///
+/// Unattributed-события пропускаются (как и раньше): чтобы «nearby» events
+/// без owner'а не пачкали Domains/IPs картинку. В Live-ленте они видны.
+({Map<String, DomainStats> byDomain, Map<String, IpStats> byIp})
+    computeTraceAggregates(List<TrafficEvent> events) {
+  final byDomain = <String, DomainStats>{};
+  final byIp = <String, IpStats>{};
+  for (final e in events) {
+    if (e.confidence == ConfidenceLevel.unattributed) continue;
+    if (e.domain != null && e.domain!.isNotEmpty) {
+      final d = byDomain.putIfAbsent(e.domain!, () => DomainStats(e.domain!));
+      d.firstSeen ??= e.ts;
+      d.lastSeen = e.ts;
+      if (e.ip != null) d.ips.add(e.ip!);
+      for (final c in e.cnameChain) {
+        d.cnameTargets.add(c);
+      }
+      for (final o in e.outboundChain) {
+        d.outbounds.add(o);
+      }
+      if (e.kind == TrafficEventKind.tcpOpen ||
+          e.kind == TrafficEventKind.udpOpen) {
+        d.connections++;
+      }
+      if (e.upBytes != null) d.upBytes += e.upBytes!;
+      if (e.downBytes != null) d.downBytes += e.downBytes!;
+      for (final a in e.issues) {
+        if (!d.issues.any((x) => x.kind == a.kind)) d.issues.add(a);
+      }
+    }
+    if (e.ip != null && e.ip!.isNotEmpty) {
+      final ip = byIp.putIfAbsent(e.ip!, () => IpStats(e.ip!));
+      ip.firstSeen ??= e.ts;
+      ip.lastSeen = e.ts;
+      if (e.port != null) ip.ports.add(e.port!);
+      for (final o in e.outboundChain) {
+        ip.outbounds.add(o);
+      }
+      if (e.kind == TrafficEventKind.tcpOpen ||
+          e.kind == TrafficEventKind.udpOpen) {
+        ip.connections++;
+      }
+      if (e.upBytes != null) ip.upBytes += e.upBytes!;
+      if (e.downBytes != null) ip.downBytes += e.downBytes!;
+    }
+  }
+  return (byDomain: byDomain, byIp: byIp);
+}
+
 class TrafficEvent {
   TrafficEvent({
     required this.ts,
@@ -278,50 +332,9 @@ class Session {
   void _markDirty() => _aggregatesDirty = true;
 
   void _recompute() {
-    _byDomain = <String, DomainStats>{};
-    _byIp = <String, IpStats>{};
-    for (final e in events) {
-      // Aggregates считаются только по verified+secondary+inferred — чтобы
-      // unattributed «nearby» events не пачкали Domains/IPs картинку.
-      // В Live секции они всё равно видны.
-      if (e.confidence == ConfidenceLevel.unattributed) continue;
-      if (e.domain != null && e.domain!.isNotEmpty) {
-        final d = _byDomain.putIfAbsent(e.domain!, () => DomainStats(e.domain!));
-        d.firstSeen ??= e.ts;
-        d.lastSeen = e.ts;
-        if (e.ip != null) d.ips.add(e.ip!);
-        for (final c in e.cnameChain) {
-          d.cnameTargets.add(c);
-        }
-        for (final o in e.outboundChain) {
-          d.outbounds.add(o);
-        }
-        if (e.kind == TrafficEventKind.tcpOpen ||
-            e.kind == TrafficEventKind.udpOpen) {
-          d.connections++;
-        }
-        if (e.upBytes != null) d.upBytes += e.upBytes!;
-        if (e.downBytes != null) d.downBytes += e.downBytes!;
-        for (final a in e.issues) {
-          if (!d.issues.any((x) => x.kind == a.kind)) d.issues.add(a);
-        }
-      }
-      if (e.ip != null && e.ip!.isNotEmpty) {
-        final ip = _byIp.putIfAbsent(e.ip!, () => IpStats(e.ip!));
-        ip.firstSeen ??= e.ts;
-        ip.lastSeen = e.ts;
-        if (e.port != null) ip.ports.add(e.port!);
-        for (final o in e.outboundChain) {
-          ip.outbounds.add(o);
-        }
-        if (e.kind == TrafficEventKind.tcpOpen ||
-            e.kind == TrafficEventKind.udpOpen) {
-          ip.connections++;
-        }
-        if (e.upBytes != null) ip.upBytes += e.upBytes!;
-        if (e.downBytes != null) ip.downBytes += e.downBytes!;
-      }
-    }
+    final agg = computeTraceAggregates(events);
+    _byDomain = agg.byDomain;
+    _byIp = agg.byIp;
     _aggregatesDirty = false;
   }
 

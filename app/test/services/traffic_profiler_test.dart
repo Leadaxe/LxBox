@@ -173,6 +173,41 @@ void main() {
       expect(TrafficProfiler.I.active!.events, isEmpty);
     });
 
+    test('non-target connection close also ignored (§160 — open/close '
+        'attribution symmetry)', () async {
+      // Регрессия: close чужого conn'а раньше писался в session безусловно
+      // (open отбрасывался _resolveForSession, а close — нет) → в сессии
+      // Telegram появлялись verified-tcpClose от youtube/imo и т.п.
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      var snapshot = {
+        'connections': [
+          {
+            'id': 'foreign1',
+            'metadata': {
+              'process': 'com.google.android.youtube',
+              'host': 'rr3.googlevideo.com',
+              'destinationIP': '74.125.108.232',
+              'destinationPort': '443',
+              'network': 'tcp',
+            },
+            'chains': ['direct'],
+            'upload': 10,
+            'download': 20,
+          }
+        ],
+      };
+      TrafficProfiler.I.bindRuntime(connections: () async => snapshot);
+      await TrafficProfiler.I.pollOnceForTest();
+      // open чужого — в сессию не попал.
+      expect(TrafficProfiler.I.active!.events, isEmpty);
+      // Закрываем его.
+      snapshot = {'connections': []};
+      await TrafficProfiler.I.pollOnceForTest();
+      // close тоже НЕ должен попасть (наследует inSession=false).
+      expect(TrafficProfiler.I.active!.events, isEmpty,
+          reason: 'close чужого conn не должен писаться в session');
+    });
+
     test('closed connection emits tcpClose with duration', () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
       var snapshot = {
