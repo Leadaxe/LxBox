@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **Done** (2026-06-22) — галка/логика удалены (Dart+native+manifest+docs); `flutter analyze` чисто, Kotlin compile подтверждён release-сборкой arm64, grep 0 остаточных ссылок в коде. On-device toggle не проверялся (телефон не подключён). |
+| Статус | **Done** (2026-06-22) — галка/логика удалены (Dart+native+manifest+docs); `flutter analyze` чисто, Kotlin compile подтверждён release-сборкой arm64, grep 0 остаточных ссылок в коде. On-device проверено: вкладка Automation открывается, мастер-toggle включает/выключает приём команд. Вошло в v2.4.0. |
 | Дата | 2026-06-22 |
 | Тип | cleanup (удаление нерабочего механизма защиты) |
 | Повод | Галка «Require permission» в Settings → Automation по факту не защищает |
@@ -101,5 +101,5 @@ Permission-фильтр и так действовал только при ON-г
 - [x] grep подтверждает 0 упоминаний `requirePermission` / `RequirePermission` /
       `PERMISSION_AUTOMATION` / `permission.AUTOMATION` / `require_permission` в
       коде `app/` (остались только спека §157 и §047 — с пометкой об изменении)
-- [ ] вкладка Automation открывается, мастер-toggle включает/выключает приём
-      (on-device — телефон не подключён, не проверялось)
+- [x] вкладка Automation открывается, мастер-toggle включает/выключает приём
+      (on-device — проверено)
