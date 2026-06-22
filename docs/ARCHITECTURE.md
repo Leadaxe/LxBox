@@ -541,9 +541,18 @@ vpn/VpnStatus.kt             # enum Stopped/Starting/Started/Stopping (native-с
 vpn/BootReceiver.kt          # BOOT_COMPLETED auto-start + SharedPreferences native-тогглов
 vpn/LxBoxTileService.kt      # QS-tile toggle (§032) с оптимистичным рендером
 vpn/QuickShortcuts.kt        # dynamic launcher shortcuts (Connect/Disconnect)
+vpn/LxBoxIntentReceiver.kt   # §047 raw broadcast API: 9 incoming actions, опц. permission-gate, setEnabled
 vpn/WifiInfoReader.kt        # §051 единый источник Wi-Fi SSID/BSSID (permission preflight, sealed Result)
 vpn/WifiNetworkObserver.kt   # §051 auto-record: NetworkCallback → WifiHistoryBridge → Dart onWifiSeen
 vpn/PermissionUtils.kt · Extensions.kt  # SDK-gated permission check; мелкие Kotlin-расширения
+
+automation/                  # §047 Locale/Tasker plugin (FIRE_SETTING/QUERY_CONDITION) — см. ../docs/AUTOMATION.md
+automation/LocaleApi.kt              #   константы стандарта twofortyfouram + JSON bundle (de)serialize + cachedNodes/Groups
+automation/LocaleSettingReceiver.kt  #   FIRE_SETTING → shared action-handlers (start/stop/toggle напрямую, остальное → VpnPlugin.handleAutomationAction)
+automation/LocaleConditionReceiver.kt#   QUERY_CONDITION → currentStatus/active-кеш → result code (SATISFIED/UNSATISFIED/UNKNOWN)
+automation/LocaleQuickActionActivity.kt # one-tap Start/Stop/Toggle (Theme.NoDisplay, headless setResult+finish; команда по alias)
+automation/LocaleSettingEditActivity.kt # «Custom…» edit-экран: RadioGroup команд + селектор нод/групп из native-кеша
+automation/LocaleConditionEditActivity.kt # edit-экран условия (VPN up / active node= / active group=)
 ```
 
 ---
