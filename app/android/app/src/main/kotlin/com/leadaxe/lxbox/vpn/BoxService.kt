@@ -83,6 +83,11 @@ class BoxService(
 
     /// §049 F2/F3 — same atomic CAS pattern для commandServer.
     private val commandServer = AtomicReference<CommandServer?>(null)
+    /// §155 — `@Volatile`: читается/пишется из binder-потока (`receiver.onReceive`)
+    /// и из service main thread (`onStartCommand`/`onDestroy`/`doStop`/`doForceStop`).
+    /// Без барьера видимости поток может прочитать устаревшее значение и дважды
+    /// (un)register'нуть receiver.
+    @Volatile
     private var receiverRegistered = false
     private var status = VpnStatus.Stopped
 

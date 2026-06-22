@@ -101,11 +101,15 @@ class LxBoxTileService : TileService() {
         // его не вызвать — открываем MainActivity, она дёргает prepare()
         // штатным путём и стартует сервис после RESULT_OK. Toast объясняет
         // юзеру почему app внезапно открылся.
-        Toast.makeText(
-            applicationContext,
-            R.string.qc_first_open,
-            Toast.LENGTH_SHORT,
-        ).show()
+        // §155 — TileService.onClick не гарантирует main thread, а Toast
+        // обязан показываться с looper-потока. Постим на mainHandler.
+        mainHandler.post {
+            Toast.makeText(
+                applicationContext,
+                R.string.qc_first_open,
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
         val intent = Intent(applicationContext, MainActivity::class.java).apply {
             putExtra("action", "connect")
             addFlags(

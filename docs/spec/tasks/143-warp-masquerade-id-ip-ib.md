@@ -1,5 +1,9 @@
 # 143 — WARP-обфускация на core masquerade `id/ip/ib` (ядро 009), выпил Dart-генератора i1
 
+> ⚠️ **Коллизия номера §143** (параллельные сессии). Это «§143-warp». Второй файл под тем же
+> номером — [`143-interrupt-connections-on-node-switch.md`](143-interrupt-connections-on-node-switch.md) («§143-interrupt»).
+> Не перенумеровано намеренно — см. [README §«Известные коллизии»](README.md#известные-коллизии-номеров).
+
 | Field | Value |
 |------|----------|
 | Status | Implemented (device-smoke ✅) |

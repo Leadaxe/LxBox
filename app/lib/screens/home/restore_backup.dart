@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../controllers/subscription_controller.dart';
+import '../../services/app_log.dart';
 import '../../services/backup_service.dart';
 import '../../services/error_format.dart';
 import '../../services/subscription/auto_updater.dart';
@@ -34,7 +35,9 @@ Future<void> restoreFromBackup(
     if (file.bytes != null) {
       try {
         raw = const Utf8Decoder(allowMalformed: false).convert(file.bytes!);
-      } catch (_) {}
+      } catch (e) {
+        AppLog.I.warning('[restore] backup bytes not valid UTF-8: $e');
+      }
     } else if (file.path != null) {
       raw = await File(file.path!).readAsString();
     }

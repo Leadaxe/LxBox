@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../controllers/home_controller.dart';
+import '../services/app_log.dart';
 import '../services/error_format.dart';
 import '../services/template_loader.dart';
 
@@ -163,7 +164,9 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
         if (response.statusCode < 400) {
           times.add(sw.elapsedMilliseconds);
         }
-      } catch (_) {}
+      } catch (e) {
+        AppLog.I.debug('[speedtest] ping attempt $i failed: $e');
+      }
     }
 
     if (times.isEmpty) return -1;
@@ -188,7 +191,9 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
       try {
         final result = await _multiStreamDownload(url, _streams);
         if (result > 0) return result;
-      } catch (_) {}
+      } catch (e) {
+        AppLog.I.debug('[speedtest] download (primary) failed: $e');
+      }
     }
     // Fallback to other servers
     for (var i = 0; i < _servers.length; i++) {
@@ -198,7 +203,9 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
       try {
         final result = await _multiStreamDownload(fallbackUrl, _streams);
         if (result > 0) return result;
-      } catch (_) {}
+      } catch (e) {
+        AppLog.I.debug('[speedtest] download (fallback server $i) failed: $e');
+      }
     }
     return 0;
   }
@@ -251,7 +258,9 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
       await for (final chunk in response.stream) {
         _dlBytesTotal += chunk.length;
       }
-    } catch (_) {}
+    } catch (e) {
+      AppLog.I.debug('[speedtest] download stream aborted: $e');
+    }
   }
 
   Future<double> _testUpload() async {

@@ -2,8 +2,9 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft |
+| Статус | Released (v1.5.0) |
 | Дата | 2026-04-23 |
+| Коммиты | `135037f` (GitHub Releases polling + SnackBar/About UI) → `3df01f0` (v1.5.0 friendly errors + bilingual notes) → `ddaf050` (own-manifest fallback при VPN-rate-limited GitHub API). Реализация — [`services/update_checker.dart`](../../../../app/lib/services/update_checker.dart); подключена в `main.dart`, About-экране, home-диалогах. §047 эмитит `UPDATE_AVAILABLE` поверх этого чекера. |
 | Зависимости | [`022 app settings`](../022%20app%20settings/spec.md), [`027 subscription auto update`](../027%20subscription%20auto%20update/spec.md) (паттерны spam-gate) |
 | Лэндинг | v1.5.0 |
 

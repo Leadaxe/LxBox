@@ -117,7 +117,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             mainHandler.post {
                 val event = mutableMapOf<String, Any>("status" to name)
                 if (error != null) event["error"] = error
-                statusSink?.success(event)
+                // §155 — sink может указывать на мёртвый Dart-engine (process
+                // killed / engine detached между post и доставкой). success()
+                // тогда бросает DeadObjectException на main thread → краш всего
+                // приложения. Глотаем: статус всё равно пере-эмитится при
+                // следующем onListen после реконнекта.
+                runCatching { statusSink?.success(event) }
+                    .onFailure { Log.w(TAG, "[vpn] statusSink.success failed: $it") }
             }
         }
     }
@@ -165,11 +171,17 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         })
 
         Log.d(TAG, "[vpn] onAttachedToEngine: registerReceiver(statusReceiver)")
-        context.registerReceiver(
-            statusReceiver,
-            IntentFilter(BoxVpnService.BROADCAST_STATUS),
-            Context.RECEIVER_NOT_EXPORTED
-        )
+        // §155 — на отдельных OEM-прошивках registerReceiver может бросить
+        // (например при гонке с фоновыми ограничениями) → краш прямо в
+        // onAttachedToEngine, до того как плагин готов. Симметрично к
+        // runCatching на unregisterReceiver в onDetachedFromEngine.
+        runCatching {
+            context.registerReceiver(
+                statusReceiver,
+                IntentFilter(BoxVpnService.BROADCAST_STATUS),
+                Context.RECEIVER_NOT_EXPORTED
+            )
+        }.onFailure { Log.e(TAG, "[vpn] registerReceiver(statusReceiver) failed: $it") }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
