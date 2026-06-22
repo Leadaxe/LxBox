@@ -187,6 +187,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             VpnModeTab(
               homeController: widget.homeController,
               subController: widget.subController,
+              template: template,
             ),
           ],
         ),
