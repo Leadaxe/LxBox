@@ -8,6 +8,31 @@
 
 ## [Unreleased]
 
+## [2.4.0] — 2026-06-22
+
+Public Intent API (§047) — управление L×Box из Tasker/MacroDroid/Llama/Automate. Детальный разбор соединений (Stats→Conns: bottom sheet, подсветка зависших, иконки приложений), вычистка интерфейса до English-only, строгий allowlist на импорте настроек, hardening границы JNI. Ядро → `v1.13.13-lx.14`.
+
+### Added
+
+- **§047 — Public Intent API (automation)** ([docs/AUTOMATION.md](docs/AUTOMATION.md), [feature spec](docs/spec/features/047%20public%20intent%20api/spec.md)). Управление L×Box из автоматизаторов двумя способами: **Plugin** (L×Box виден в Tasker/Locale как Action + State, команда выбирается мышкой через нативный экран) и **raw broadcast** (`am broadcast` с action-строкой для shell/ADB/не-plugin). 9 actions (`START_VPN`/`STOP_VPN`/`TOGGLE_VPN`, `SWITCH_NODE`, `SET_GROUP`, `URLTEST_GROUP`, `REFRESH_SUBS`, `REBUILD_CONFIG`, `RESET_NETWORK`), исходящие события (`VPN_CONNECTED`/`DISCONNECTED`/`ERROR`/`REVOKED`, `ACTIVE_NODE`/`GROUP_CHANGED`, `SUB_REFRESHED`/`FAILED`, `UPDATE_AVAILABLE`, `PERMISSION_NEEDED`). Opt-in: по умолчанию выключено, включается в App Settings → Automation. (`77fd71a`, `8b4b410`, `544ef40`)
+- **§152 — Conns: детальный bottom sheet по тапу** ([connection_detail_sheet.dart](app/lib/screens/connections_screen/connection_detail_sheet.dart), [task](docs/spec/tasks/152-conn-detail-sheet.md)). Тайл соединения tappable → полная инфа (host, chain, process, rule, byte-счётчики, длительность) без обрезки `ellipsis`.
+- **§153 — Conns: подсветка зависших однобоких TCP** ([connections_screen.dart](app/lib/screens/connections_screen.dart), [task](docs/spec/tasks/153-oneway-conn-highlight.md)). Соединения с сигнатурой залипания (напр. `↑517 ↓0`) подсвечиваются розовым.
+- **§154 — Conns: иконка приложения в строке** ([task](docs/spec/tasks/154-conn-app-icon-and-i18n.md)). Launcher-иконка приложения-владельца соединения рядом с `processPath`.
+
+### Changed
+
+- **Ядро → `v1.13.13-lx.14`** ([libbox.version](app/android/libbox.version)) — фикс GRO split-brain на WG-endpoint (медленный download на LTE без detour; `UDP_GRO` гейтился за `runtime.GOOS==linux` → склеенный recv ломал AEAD на download). (`8fef581`)
+- **§156 — UI English-only** ([task](docs/spec/tasks/156-ui-english-only-cyrillic-cleanup.md)) — вычистка кириллицы из интерфейса и Debug API.
+- **§158 — App Settings: вкладки центрированы** (`TabAlignment.center`) + двусторонний edge-fade `ShaderMask` ([task](docs/spec/tasks/158-settings-tabs-center-alignment.md)).
+- **§157 — убрана нерабочая галка «Require permission»** из automation (Dart+native+manifest+docs) ([task](docs/spec/tasks/157-automation-drop-require-permission.md)).
+- **§155 — аудит проекта (июнь 2026) + быстрые победы** ([task](docs/spec/tasks/155-audit-2026-06-quick-wins.md)) — native crash-safety, catch-логи, актуализация docs-статусов, disambiguation.
+
+### Fixed
+
+- **§151 — JNI-iterator no-throw + ALPN double-decode + LocalResolver SERVFAIL** ([task](docs/spec/tasks/151-jni-iterator-throw-and-alpn-double-decode.md)). Разобран механизм abort через JNI: throw из Kotlin-callback роняет процесс (`Runtime::Abort`) только если Go-метод возвращает `void`/value без `error`. **F1** — итераторы `StringIterator`/`NetworkInterfaceIterator` не бросают `NoSuchElementException` за концом, а возвращают пустой элемент (единственный подтверждённый abort-класс). **F2** — `alpn=http%252F1.1` не уходит мусором в ядро (повторный decode + валидация в парсере). **F3** — LocalResolver возвращает `ctx.errorCode(SERVFAIL)` вместо шумного `error()` при потере сети. (`80ea81b`)
+- **§159 — строгий allowlist (default-deny) на импорте настроек** ([task](docs/spec/tasks/159-backup-allowlist-strict-filter.md)). Импорт фильтруется по белому списку ключей; экспорт расфильтрован симметрично; отброшенные ключи → applog + снэкбар; `ping_options` strip; распутан seed. (`63c601c`)
+- **§154 — чистка package name из `processPath`** перед резолвом иконки (формат ядра `pkg (pkg)` / `pkg (user)` → чистый pkg). (`ab875ce`)
+
 ## [2.3.5] — 2026-06-18
 
 Лейблы уровня AWG (`awg` / `awg1.5` / `awg2`) с masquerade-суффиксом `+`, импорт серверов из файла, стабилизационные фиксы из глубокого аудита кода (§141). Ядро → `v1.13.13-lx.12`.
