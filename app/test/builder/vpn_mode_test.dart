@@ -405,6 +405,54 @@ void main() {
       expect(off.effectiveAuth, false);
     });
 
+    test('произвольный LAN-IP (192.168.1.5) → isPublicListen, форсит auth', () {
+      const lan = VpnModeConfig(
+        mode: 'proxy',
+        proxyProtocol: 'mixed',
+        proxyPort: 2080,
+        proxyListen: '192.168.1.5',
+        proxyAuthEnabled: false, // снято — но не-loopback форсит
+        proxyUsername: 'user',
+        proxyPassword: 'x',
+      );
+      expect(lan.isPublicListen, true);
+      expect(lan.effectiveAuth, true);
+    });
+
+    test('произвольный loopback (127.10.20.5) → auth уважает authEnabled', () {
+      const lo = VpnModeConfig(
+        mode: 'proxy',
+        proxyProtocol: 'mixed',
+        proxyPort: 2080,
+        proxyListen: '127.10.20.5',
+        proxyAuthEnabled: false,
+        proxyUsername: 'user',
+        proxyPassword: 'x',
+      );
+      expect(lo.isPublicListen, false);
+      expect(lo.effectiveAuth, false);
+    });
+
+    test('isValidListenAddr — IPv4 валидация', () {
+      expect(VpnModeConfig.isValidListenAddr('127.0.0.1'), true);
+      expect(VpnModeConfig.isValidListenAddr('0.0.0.0'), true);
+      expect(VpnModeConfig.isValidListenAddr('192.168.1.5'), true);
+      expect(VpnModeConfig.isValidListenAddr('255.255.255.255'), true);
+      expect(VpnModeConfig.isValidListenAddr('256.0.0.1'), false); // октет > 255
+      expect(VpnModeConfig.isValidListenAddr('1.2.3'), false); // мало октетов
+      expect(VpnModeConfig.isValidListenAddr('1.2.3.4.5'), false); // много
+      expect(VpnModeConfig.isValidListenAddr('abc'), false);
+      expect(VpnModeConfig.isValidListenAddr(''), false);
+      expect(VpnModeConfig.isValidListenAddr('1.2.3.'), false); // пустой октет
+    });
+
+    test('isLoopback — 127.x', () {
+      expect(VpnModeConfig.isLoopback('127.0.0.1'), true);
+      expect(VpnModeConfig.isLoopback('127.10.20.5'), true);
+      expect(VpnModeConfig.isLoopback('0.0.0.0'), false);
+      expect(VpnModeConfig.isLoopback('192.168.1.5'), false);
+    });
+
     test('toJson round-trip keys', () {
       final json = _proxyAuth.toJson();
       expect(json['mode'], 'proxy');

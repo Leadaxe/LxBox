@@ -33,8 +33,9 @@ Future<VpnModeConfig> _getVpnMode() async {
             ? proto as String
             : VpnModeConfig.protoMixed,
         proxyPort: (port is int) ? port : VpnModeConfig.defaultPort,
-        proxyListen: (listen == VpnModeConfig.listenPublic)
-            ? VpnModeConfig.listenPublic
+        // Любой валидный IPv4 (UI валидирует ввод). Невалид/пусто → loopback.
+        proxyListen: (listen is String && VpnModeConfig.isValidListenAddr(listen))
+            ? listen
             : VpnModeConfig.listenLocal,
         proxyAuthEnabled: raw['proxy_auth_enabled'] != false,
         proxyUsername:
@@ -89,6 +90,22 @@ class VpnModeConfig {
   static const String listenPublic = '0.0.0.0';
   static const String defaultUsername = 'user';
 
+  /// Валиден ли адрес для `listen` (IPv4: 4 октета 0..255). UI/storage
+  /// отвергают всё остальное — sing-box иначе упадёт на reload.
+  static bool isValidListenAddr(String addr) {
+    final parts = addr.split('.');
+    if (parts.length != 4) return false;
+    for (final p in parts) {
+      if (p.isEmpty || p.length > 3) return false;
+      final n = int.tryParse(p);
+      if (n == null || n < 0 || n > 255) return false;
+    }
+    return true;
+  }
+
+  /// Loopback (127.x.x.x) — виден только на самом устройстве, auth не форсится.
+  static bool isLoopback(String addr) => addr.startsWith('127.');
+
   /// Тип локального inbound (= sing-box inbound `type`). У всех трёх одинаковая
   /// auth-структура `users:[{username,password}]`; http не поддерживает UDP.
   static const String protoMixed = 'mixed'; // HTTP + SOCKS5 на одном порту
@@ -102,7 +119,8 @@ class VpnModeConfig {
   final String proxyProtocol;
   final int proxyPort;
 
-  /// `"127.0.0.1"` (только это устройство) | `"0.0.0.0"` (LAN).
+  /// IPv4 listen-адрес. `127.x` — только это устройство; всё прочее
+  /// (`0.0.0.0`, конкретный LAN-IP) — потенциально видно извне.
   final String proxyListen;
   final bool proxyAuthEnabled;
   final String proxyUsername;
@@ -118,10 +136,11 @@ class VpnModeConfig {
   /// proxy + vpn_proxy → mixed-inbound присутствует.
   bool get hasMixed => mode != 'vpn';
 
-  /// LAN-exposed listen — публичный порт, требует auth безусловно.
-  bool get isPublicListen => proxyListen == listenPublic;
+  /// Потенциально доступен извне устройства — всё, что НЕ loopback (127.x).
+  /// `0.0.0.0` и любой конкретный LAN-IP → требует auth безусловно.
+  bool get isPublicListen => !isLoopback(proxyListen);
 
-  /// Эффективная авторизация: 0.0.0.0 форсит auth on (снять нельзя).
+  /// Эффективная авторизация: не-loopback listen форсит auth on (снять нельзя).
   bool get effectiveAuth => isPublicListen ? true : proxyAuthEnabled;
 
   VpnModeConfig copyWith({

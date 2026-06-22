@@ -42,7 +42,9 @@ class _VpnModeTabState extends State<VpnModeTab>
   late final TextEditingController _portCtl;
   late final TextEditingController _userCtl;
   late final TextEditingController _passCtl;
+  late final TextEditingController _listenCtl;
   String _portError = '';
+  String _listenError = '';
 
   @override
   SubscriptionController get lazyController => widget.subController;
@@ -53,6 +55,7 @@ class _VpnModeTabState extends State<VpnModeTab>
     _portCtl = TextEditingController();
     _userCtl = TextEditingController();
     _passCtl = TextEditingController();
+    _listenCtl = TextEditingController();
     unawaited(_load());
   }
 
@@ -61,6 +64,7 @@ class _VpnModeTabState extends State<VpnModeTab>
     _portCtl.dispose();
     _userCtl.dispose();
     _passCtl.dispose();
+    _listenCtl.dispose();
     super.dispose();
   }
 
@@ -72,6 +76,7 @@ class _VpnModeTabState extends State<VpnModeTab>
       _portCtl.text = cfg.proxyPort.toString();
       _userCtl.text = cfg.proxyUsername;
       _passCtl.text = cfg.proxyPassword;
+      _listenCtl.text = cfg.proxyListen;
       _loading = false;
     });
   }
@@ -107,16 +112,36 @@ class _VpnModeTabState extends State<VpnModeTab>
     _commit();
   }
 
-  void _setListen(String listen) {
-    var next = _cfg.copyWith(proxyListen: listen);
-    // 0.0.0.0 форсит auth on → пустой пароль надо сгенерить.
+  /// Применить введённый/выбранный listen-адрес. Невалидный IPv4 → errorText,
+  /// не сохраняем. Не-loopback форсит auth on → генерим пароль если пуст.
+  void _applyListen(String raw) {
+    final addr = raw.trim();
+    if (!VpnModeConfig.isValidListenAddr(addr)) {
+      setState(() => _listenError = 'Enter a valid IPv4 (e.g. 127.0.0.1)');
+      return;
+    }
+    if (addr == _cfg.proxyListen) {
+      setState(() => _listenError = '');
+      return;
+    }
+    var next = _cfg.copyWith(proxyListen: addr);
+    // Не-loopback форсит auth on → пустой пароль надо сгенерить.
     if (next.effectiveAuth && next.proxyPassword.isEmpty) {
       final pass = generateProxyPassword();
       next = next.copyWith(proxyPassword: pass);
       _passCtl.text = pass;
     }
-    setState(() => _cfg = next);
+    setState(() {
+      _listenError = '';
+      _cfg = next;
+    });
     _commit();
+  }
+
+  /// Чип-подсказка: пишет адрес в поле и применяет.
+  void _pickListen(String addr) {
+    _listenCtl.text = addr;
+    _applyListen(addr);
   }
 
   void _toggleAuth(bool enable) {
@@ -261,19 +286,31 @@ class _VpnModeTabState extends State<VpnModeTab>
           // ─── Listen address ───
           Text('Listen on', style: tt.bodyMedium),
           const SizedBox(height: 6),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(
-                value: '127.0.0.1',
-                label: Text('127.0.0.1'),
+          TextField(
+            controller: _listenCtl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: 'Listen address (IPv4)',
+              helperText: '127.0.0.1 = this device · 0.0.0.0 / LAN-IP = network',
+              errorText: _listenError.isEmpty ? null : _listenError,
+              isDense: true,
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: _applyListen,
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              ActionChip(
+                label: const Text('127.0.0.1'),
+                onPressed: () => _pickListen(VpnModeConfig.listenLocal),
               ),
-              ButtonSegment(
-                value: '0.0.0.0',
-                label: Text('0.0.0.0 (LAN)'),
+              ActionChip(
+                label: const Text('0.0.0.0 (LAN)'),
+                onPressed: () => _pickListen(VpnModeConfig.listenPublic),
               ),
             ],
-            selected: {_cfg.proxyListen},
-            onSelectionChanged: (s) => _setListen(s.first),
           ),
           const SizedBox(height: 4),
           Text(
