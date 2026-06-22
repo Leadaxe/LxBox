@@ -430,44 +430,71 @@
           "name": "vpn_mode",
           "type": "enum",
           "default_value": "vpn",
-          "options": ["vpn", "proxy", "vpn_proxy"],
-          "wizard_ui": "hidden"
+          "options": [
+            {"title": "VPN — system-wide tunnel", "value": "vpn"},
+            {"title": "Proxy — local port only, no TUN", "value": "proxy"},
+            {"title": "VPN + Proxy — both", "value": "vpn_proxy"}
+          ],
+          "wizard_ui": "hidden",
+          "title": "VPN mode",
+          "tooltip": "How the core captures traffic. Set from VPN Settings → Mode."
         },
         {
           "name": "proxy_type",
-          "type": "text",
+          "type": "enum",
           "default_value": "mixed",
-          "wizard_ui": "hidden"
+          "options": [
+            {"title": "Mixed — HTTP + SOCKS5 on one port", "value": "mixed"},
+            {"title": "HTTP only", "value": "http"},
+            {"title": "SOCKS5 only", "value": "socks"}
+          ],
+          "wizard_ui": "hidden",
+          "title": "Local proxy protocol",
+          "tooltip": "Inbound type for the local proxy port."
         },
         {
           "name": "proxy_listen",
           "type": "text",
           "default_value": "127.0.0.1",
-          "wizard_ui": "hidden"
+          "options": [
+            {"title": "127.0.0.1 — this device only", "value": "127.0.0.1"},
+            {"title": "0.0.0.0 — all interfaces (LAN)", "value": "0.0.0.0"}
+          ],
+          "wizard_ui": "hidden",
+          "title": "Listen address",
+          "tooltip": "IPv4 the local proxy binds to. Suggestions above; any valid IPv4 is allowed (e.g. a specific LAN IP). Anything other than 127.x is reachable from the network and forces auth on."
         },
         {
           "name": "proxy_port",
           "type": "int",
           "default_value": "2080",
-          "wizard_ui": "hidden"
+          "wizard_ui": "hidden",
+          "title": "Listen port",
+          "tooltip": "Local proxy port (1024..65535)."
         },
         {
           "name": "proxy_user",
           "type": "text",
           "default_value": "user",
-          "wizard_ui": "hidden"
+          "wizard_ui": "hidden",
+          "title": "Proxy username",
+          "tooltip": "Username for proxy auth (when auth is on)."
         },
         {
           "name": "proxy_pass",
           "type": "secret",
           "default_value": "",
-          "wizard_ui": "hidden"
+          "wizard_ui": "hidden",
+          "title": "Proxy password",
+          "tooltip": "Password for proxy auth. Auto-generated when auth turns on."
         },
         {
           "name": "proxy_auth",
           "type": "bool",
           "default_value": "false",
-          "wizard_ui": "hidden"
+          "wizard_ui": "hidden",
+          "title": "Require auth",
+          "tooltip": "Whether the local proxy requires username/password. Forced on for non-loopback listen."
         }
       ]
     },
