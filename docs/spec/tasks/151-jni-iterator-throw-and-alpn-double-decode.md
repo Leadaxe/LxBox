@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **In progress** |
+| Статус | **Done** (2026-06-22) — F1/F2/F3 реализованы и в `develop` (`80ea81b`); Dart round-trip + ALPN double-decode тесты зелёные; Kotlin-compile подтверждён release-сборкой arm64. Закрыто как hardening signature-инварианта (НЕ воспроизведённый краш — см. «Честная граница»). Вошло в v2.4.0. |
 | Дата | 2026-06-21 |
 | Тип | bug-fix (native / JNI boundary) + parser hardening |
 | Повод | Жалоба Yuri (20.06.2026): trojan-подписка → краш «Aborted» при старте туннеля |
@@ -162,7 +162,7 @@ PID неизменен, crash-буфер logcat пуст, exit-info без abort
 
 ## Verification
 
-- [ ] Kotlin compile чисто (`flutter build apk --release` arm64)
-- [ ] Dart: unit-тест `_alpnFromQuery` на `http%252F1.1` → `http/1.1` (или drop)
-- [ ] Round-trip парсера не сломан (`flutter test test/parser/`)
-- [ ] (по команде юзера) установка + connect на полной подписке — pid alive
+- [x] Kotlin compile чисто (`flutter build apk --release` arm64) — подтверждено release-сборкой v2.4.0
+- [x] Dart: unit-тест `_alpnFromQuery` на `http%252F1.1` → `http/1.1` (или drop) — `round_trip_test.dart` зелёный
+- [x] Round-trip парсера не сломан (`flutter test test/parser/`) — все кейсы pass
+- [x] установка + connect на полной подписке — pid alive (Android 15, подписка 82 ноды, см. «Оговорка»)
