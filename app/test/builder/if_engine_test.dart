@@ -486,5 +486,22 @@ void main() {
         returnsNormally,
       );
     });
+
+    test('urltest_tolerance подставляется числом, а не строкой', () {
+      // Регрессия: ядро sing-box требует URLTest.tolerance как uint16. Если
+      // нода объявлена `text`, в конфиг попадёт "30" → "cannot unmarshal string
+      // into Go struct field URLTestOutboundOptions.tolerance of type uint16".
+      // Нода обязана быть `int`, тогда coerceVarValue вернёт число.
+      final raw = File('assets/wizard_template.json').readAsStringSync();
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      final template = WizardTemplate.fromJson(json);
+      final tol = template.vars.firstWhere((v) => v.name == 'urltest_tolerance');
+      expect(tol.type, 'int',
+          reason: 'tolerance в uint16-поле — нода должна коэрситься в int');
+
+      final resolved = coerceVarValue(tol.defaultValue, tol.type);
+      expect(resolved, isA<int>());
+      expect(resolved, 30);
+    });
   });
 }

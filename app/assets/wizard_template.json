@@ -318,7 +318,7 @@
         },
         {
           "name": "urltest_tolerance",
-          "type": "text",
+          "type": "int",
           "default_value": "30",
           "options": [
             "10",
