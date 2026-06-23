@@ -23,6 +23,11 @@ class Dropped {
   static const instance = Dropped._();
 }
 
+/// Верхняя граница `int`-var: sing-box принимает числовые поля (port,
+/// tolerance) как `uint16`; значение вне диапазона роняет ядро на decode
+/// (§161). MTU тоже укладывается (legal max ~9000 < 65535).
+const int _intMax = 65535;
+
 /// Коэрсит строковое значение переменной в типизированное по `type`.
 ///
 /// `bool`/`int` — единственные коэрсящиеся типы, и только по ОБЪЯВЛЕННОМУ типу.
@@ -34,7 +39,12 @@ dynamic coerceVarValue(String raw, String type) {
     case 'bool':
       return raw == 'true'; // строго; 'false'/прочее → false
     case 'int':
-      return int.tryParse(raw) ?? raw; // не-число → строка (advisory; валидатор ловит)
+      // §161 backstop: clamp в uint16 [0, 65535]. Источник значения любой
+      // (ручной ввод, импорт бэкапа, legacy) — конфиг никогда не получит int,
+      // который ядро отвергнет как `uint16`. Не-число → строка (advisory).
+      final n = int.tryParse(raw);
+      if (n == null) return raw;
+      return n.clamp(0, _intMax);
     default:
       return raw; // text/secret/enum/outbound/dns_servers + неизвестный тип
   }

@@ -30,6 +30,14 @@ void main() {
       expect(coerceVarValue('abc', 'int'), 'abc');
     });
 
+    test('int: clamp в uint16 [0, 65535] (§161 backstop)', () {
+      expect(coerceVarValue('65535', 'int'), 65535); // граница
+      expect(coerceVarValue('65536', 'int'), 65535); // выше → clamp
+      expect(coerceVarValue('99999', 'int'), 65535);
+      expect(coerceVarValue('-5', 'int'), 0); // ниже → clamp
+      expect(coerceVarValue('30', 'int'), 30); // в диапазоне — без изменений
+    });
+
     test('secret/text: НЕ коэрсятся даже если выглядят как число/bool', () {
       expect(coerceVarValue('1234', 'secret'), '1234');
       expect(coerceVarValue('1234', 'secret'), isA<String>());
