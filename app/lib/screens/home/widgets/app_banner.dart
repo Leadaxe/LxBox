@@ -227,6 +227,15 @@ class _BannerStackState extends State<BannerStack> {
       ),
     );
     if (b.onTap == null) return content;
-    return GestureDetector(onTap: b.onTap, child: content);
+    // §163 — `behavior: opaque`: ловить тап по ВСЕЙ площади плашки, включая
+    // padding и пустую зону справа от короткого текста. Дефолтный
+    // `deferToChild` регистрирует тап лишь при попадании точно в непрозрачный
+    // child (иконку/текст), из-за чего «tap to rebuild config» не реагировал
+    // на нажатие по большей части ширины (жалобы юзеров).
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: b.onTap,
+      child: content,
+    );
   }
 }

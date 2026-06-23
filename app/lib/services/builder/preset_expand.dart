@@ -211,6 +211,30 @@ PresetFragments expandPreset(
         }
       }
 
+      // ⚠ reject→action normalization — БЕЗУСЛОВНЫЙ backstop, НЕ удалять.
+      //
+      // `reject` в sing-box — это `action`, а НЕ outbound-tag. Правило
+      // `{outbound: "reject"}` валидатор реджектит как dangling ref
+      // (`DanglingOutboundRef`, validator.dart) → fatal → ядро не стартует.
+      //
+      // Override-ветка выше конвертит reject только когда юзер ЯВНО выбрал
+      // его в OutboundPicker (`varsValues['outbound']` проставлен). Но `reject`
+      // может прийти и template-дефолтом: пресет `block_unknown` имеет
+      // `rule.outbound: "@outbound"` + var.default_value: "reject". Если юзер
+      // просто включил пресет и не трогал пикер — ключа в `varsValues` нет,
+      // override == null, ветка выше пропускается, а substitute уже подставил
+      // `@outbound` → "reject" в `result['outbound']`. Без этого backstop'а
+      // литерал `outbound: "reject"` уезжал в route.rules → fatal у юзеров
+      // (см. §033 block_unknown). Поэтому нормализуем ФИНАЛЬНЫЙ результат
+      // независимо от того, override это или дефолт.
+      //
+      // Это инвариант билдера (контракт sing-box reject=action), а НЕ забота
+      // автора шаблона — поэтому фикс здесь, а не `#if` в wizard_template.json.
+      if (result['outbound'] == 'reject') {
+        result.remove('outbound');
+        result['action'] = 'reject';
+      }
+
       // Dangling-rule_set guard (§011 + §045): если ссылка на tag, которого
       // нет в expandedRuleSets — drop правила целиком (или выкинуть его из
       // массива). Иначе sing-box упадёт: `rule-set not found: <tag>`.

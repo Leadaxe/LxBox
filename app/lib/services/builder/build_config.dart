@@ -94,7 +94,16 @@ Future<BuildResult> buildConfig({
   // coerce по node.type.
   final byName = <String, WizardVar>{};
   for (final v in template.vars) {
-    vars[v.name] = settings.userVars[v.name] ?? v.defaultValue;
+    final raw = settings.userVars[v.name] ?? v.defaultValue;
+    // §161 backstop: пустое required-поле с непустым default → default. Ловит
+    // источники в обход UI (импорт бэкапа/пресета, legacy-state с пустым
+    // значением — напр. стёртый tolerance). ДО _substituteVars, не трогает
+    // #if-логику. secret/optional (required:false) исключены — для них пусто
+    // легитимно.
+    vars[v.name] =
+        (raw.isEmpty && v.required && v.defaultValue.isNotEmpty && v.type != 'secret')
+            ? v.defaultValue
+            : raw;
     byName[v.name] = v;
   }
   // Также пропускаем user-override'ы, которые могут прийти вне template.vars

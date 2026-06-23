@@ -2,9 +2,9 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **Done** (2026-06-23) — `urltest_tolerance` переведён `type:text`→`type:int` + clamp всех `int`-var в uint16 `[0,65535]` (coerce-backstop + UI digits-only). `flutter analyze` чисто, 1238 тестов прошли. Вошло в v2.4.3. |
+| Статус | **Done** — три части: (1) `urltest_tolerance` `type:text`→`int` + clamp uint16 (вошло в **v2.4.3**); (2) пустое required-поле → подстановка `default_value`: «UI сам чинит» при загрузке + backstop в build_config + блок persist пустого с errorText (**после v2.4.3, в develop**). `flutter analyze` чисто, 1246 тестов. |
 | Дата | 2026-06-23 |
-| Тип | task (data-fix в `wizard_template.json`) + регресс-тест |
+| Тип | task (data-fix `wizard_template.json` + UI/builder fallback пустых required-var) + тесты |
 | Повод | Жалобы 4PDA: «последняя версия не взлетела, ни при обновлении поверх, ни при установке заново». Скриншоты: `Stopped: Failed to start service: decode config: outbounds[N].tolerance: json: cannot unmarshal string into Go struct field URLTestOutboundOptions.tolerance of type uint16`. |
 | Связано | [[project_two_substitution_engines]] (§120 `if_engine.coerceVarValue`), §104 (ядро sing-box-lx 1.13.13-база), 39ca0bd (регрессия — литерал заменён на var) |
 
@@ -88,6 +88,43 @@ decode ещё до старта туннеля.
 Все три текущие `int`-ноды укладываются: `tolerance`/`proxy_port` — ровно
 uint16, `tun_mtu` (legal max ~9000) — внутри диапазона.
 
+### Пустое required-поле → `default_value` (часть 2)
+
+Связанная боль: пустое значение в **required**-поле так же ломает ядро, как
+вне-диапазонное. Стёртый `tolerance` (в UI или в legacy-state) → `""` →
+`coerceVarValue("","int")` = `int.tryParse("")` = null → возвращается `""` →
+в конфиг `"tolerance": ""` → ядро падает. Наблюдалось на железе в этой сессии
+(до `rebuild-config` конфиг нёс `tolerance: ''`).
+
+Правило (предикат): `value.isEmpty && v.required && v.defaultValue.isNotEmpty
+&& v.type != 'secret'` → подставить `v.defaultValue`. `required` (default
+`true`) отсекает optional-vars §033, где пусто **легитимно** (поле выпадает
+через `Dropped`); `secret` исключён, чтобы намеренно стёртый пароль не
+«воскресал».
+
+Реализовано на трёх точках:
+
+1. **«UI сам чинит» — точка чтения** ([`template_var_list.dart`](../../../app/lib/widgets/template_var_list.dart)
+   `initState`). При загрузке значений виджет применяет предикат: пустое
+   required → `default`, и **персистит самочинение** через `onChanged` в
+   `addPostFrameCallback`. Накопившиеся у юзеров битые значения исправляются
+   при первом открытии экрана с этим полем. Единая точка для всех экранов
+   (routing/settings/dns), использующих виджет.
+2. **build_config backstop** ([`build_config.dart`](../../../app/lib/services/builder/build_config.dart)
+   merge vars, стр. ~96). Тот же предикат при слиянии `userVars` + дефолтов —
+   **ДО** `_substituteVars`, не трогает `#if`-логику. Ловит источники в обход
+   UI-виджета: импорт бэкапа/пресета, legacy-state. Конфиг физически не
+   получит пустое required-поле.
+3. **Блок persist пустого + errorText** ([`template_var_list.dart`](../../../app/lib/widgets/template_var_list.dart)
+   `_update`). Если юзер стирает required-поле в процессе правки — `onChanged`
+   **не вызывается** (значение в storage не меняется), под полем — `errorText:
+   "Required"`. Юзер видит, что поле обязательно, а не получает молча
+   вернувшийся default. Ошибка снимается при вводе непустого значения.
+
+> Почему НЕ внутри substitution / `#if`: подмена пустого на default там
+> сломала бы условную логику (напр. `#if {@v: "#isEmpty"}` ожидает увидеть
+> пустоту). Нормализация делается раньше — в плоской карте `vars` до walk'а.
+
 ### Будущая работа (не в scope)
 
 Сейчас диапазон `[0,65535]` зашит как единый для всех `int`. Для `tun_mtu`
@@ -103,3 +140,11 @@ coerce и UI. Отдельной таской.
   строкой.
 - Детерминированная демонстрация до/после: `type:text → {"tolerance":"30"}`
   (String) против `type:int → {"tolerance":30}` (int).
+- `if_engine_test.dart` — clamp int в uint16 `[0,65535]` (65536→65535, -5→0).
+- `build_config_test.dart` (часть 2) — backstop: пустой required int userVar →
+  default-число в конфиге; непустой → как есть; optional (`required:false`)
+  пустой → НЕ подставляется (§033 не сломан).
+- `widgets/template_var_list_test.dart` (часть 2) — UI: пустое required с
+  default → самочинится + персистится; optional/secret пустые → НЕ чинятся;
+  стирание required → `onChanged` не зовётся + errorText «Required»; ввод
+  валидного → персист + ошибка снята.

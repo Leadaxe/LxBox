@@ -402,6 +402,49 @@ void main() {
       expect(f.routingRule, {'rule_set': 'ads', 'action': 'reject'});
     });
 
+    // §162 регресс — `@outbound`-форма + var.default_value: "reject".
+    // block_unknown (§033) задаёт `rule.outbound: "@outbound"` и дефолт
+    // "reject". Если юзер ВКЛЮЧИЛ пресет, но не открывал OutboundPicker,
+    // ключа в varsValues нет → override-ветка пропускается, а substitute уже
+    // подставил @outbound → "reject" в поле `outbound`. До фикса литерал
+    // `outbound: "reject"` уезжал в route.rules → fatal (DanglingOutboundRef).
+    // Backstop в expandPreset нормализует reject→action независимо от того,
+    // пришло оно override'ом или дефолтом.
+    test('§162 default_value=="reject" в @outbound (пикер не трогали) → '
+        'action:reject, НЕ outbound:reject', () {
+      final preset = SelectableRule(
+        label: 'Unknown traffic',
+        presetId: 'block_unknown',
+        vars: [
+          WizardVar(
+            name: 'outbound',
+            type: 'outbound',
+            defaultValue: 'reject', // дефолт = drop
+          ),
+        ],
+        ruleSets: [
+          {
+            'tag': 'unknown-apps',
+            'type': 'inline',
+            'rules': [
+              {'invert': true, 'package_name_regex': '^'},
+            ],
+          },
+        ],
+        rule: const {'rule_set': 'unknown-apps', 'outbound': '@outbound'},
+      );
+      final rule = CustomRulePreset(
+        name: 'Unknown traffic',
+        presetId: 'block_unknown',
+        varsValues: {}, // ВКЛючён, но пикер не открывали → ключа outbound нет
+      );
+
+      final f = expandPreset(rule, preset);
+      expect(f.routingRule, {'rule_set': 'unknown-apps', 'action': 'reject'});
+      expect(f.routingRule!.containsKey('outbound'), isFalse,
+          reason: 'sing-box не принимает outbound:"reject" — это action');
+    });
+
     test('unknown @name (не объявлен в vars) → остаётся как литерал', () {
       // Legacy / typo: шаблон ссылается на @foo, в `vars` такого нет.
       // _substitute должен вернуть строку как есть (не крашить).

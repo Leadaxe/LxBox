@@ -187,4 +187,66 @@ void main() {
       expect(result.emitWarnings, isEmpty);
     });
   });
+
+  group('buildConfig — §161 empty required-var → default backstop', () {
+    // Template с required int-var `tol` (default "30"), плейсхолдер в config.
+    WizardTemplate templateWithTol() => WizardTemplate(
+          parserConfig: ParserConfigBlock(),
+          presetGroups: const [],
+          vars: [
+            WizardVar(name: 'tol', type: 'int', defaultValue: '30'),
+            WizardVar(
+                name: 'opt',
+                type: 'text',
+                defaultValue: 'fallback',
+                required: false),
+          ],
+          varSections: const [],
+          config: {
+            'experimental': {'tolerance': '@tol', 'opt': '@opt'},
+            'outbounds': [
+              {'tag': 'direct-out', 'type': 'direct'},
+            ],
+            'route': {'rules': []},
+          },
+          selectableRules: const [],
+          dnsOptions: const {},
+          pingOptions: const {},
+          speedTestOptions: const {},
+        );
+
+    test('пустой userVar для required int → default (число, не "")', () async {
+      final result = await buildConfig(
+        lists: const [],
+        template: templateWithTol(),
+        settings: const BuildSettings(userVars: {'tol': ''}), // пусто в state
+      );
+      final exp = result.config['experimental'] as Map<String, dynamic>;
+      expect(exp['tolerance'], 30); // backstop подставил default, coerce → int
+      expect(exp['tolerance'], isA<int>());
+    });
+
+    test('непустой userVar для required int → используется как есть', () async {
+      final result = await buildConfig(
+        lists: const [],
+        template: templateWithTol(),
+        settings: const BuildSettings(userVars: {'tol': '50'}),
+      );
+      final exp = result.config['experimental'] as Map<String, dynamic>;
+      expect(exp['tolerance'], 50);
+    });
+
+    test('optional (required:false) пустой → НЕ подставляет default (§033)',
+        () async {
+      final result = await buildConfig(
+        lists: const [],
+        template: templateWithTol(),
+        settings: const BuildSettings(userVars: {'tol': '30', 'opt': ''}),
+      );
+      final exp = result.config['experimental'] as Map<String, dynamic>;
+      // opt — optional: пусто → "" остаётся, default НЕ навязывается. coerce
+      // text → пустая строка (не Dropped: это build_config-движок, не preset).
+      expect(exp['opt'], '');
+    });
+  });
 }
