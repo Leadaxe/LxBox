@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../models/parser_config.dart';
+import 'builder/if_engine.dart' show validateIfConstructs;
 
 /// Загрузка `wizard_template.json` — асинхронный синглтон. Вынесено из
 /// v1 `ConfigBuilder.loadTemplate` чтобы экраны не зависели от legacy-сборщика.
@@ -25,7 +26,17 @@ class TemplateLoader {
       _substituteInPlace(json['preset_groups'], hidden);
     }
 
-    _cached = WizardTemplate.fromJson(json);
+    final template = WizardTemplate.fromJson(json);
+
+    // §120: валидация #if-конструкций против объявленных var-нод. Кривой #if
+    // в bundled-шаблоне = баг разработчика → бросаем на load (не молча битый
+    // конфиг). byName собирается из template.vars (метаданные/типы).
+    final byName = <String, WizardVar>{
+      for (final v in template.vars) v.name: v,
+    };
+    validateIfConstructs(template.config, byName);
+
+    _cached = template;
     return _cached!;
   }
 

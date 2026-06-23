@@ -388,7 +388,7 @@
         },
         {
           "name": "tun_mtu",
-          "type": "text",
+          "type": "int",
           "default_value": "1492",
           "wizard_ui": "edit",
           "title": "MTU",
@@ -418,6 +418,83 @@
           "wizard_ui": "edit",
           "title": "Stack",
           "tooltip": "system (default), gvisor (userspace), mixed"
+        }
+      ]
+    },
+    {
+      "name": "VPN Mode",
+      "chapter": "core",
+      "description": "Local proxy inbound vars (hidden — values come from VpnModeConfig)",
+      "vars": [
+        {
+          "name": "vpn_mode",
+          "type": "enum",
+          "default_value": "vpn",
+          "options": [
+            {"title": "VPN — system-wide tunnel", "value": "vpn"},
+            {"title": "Proxy — local port only, no TUN", "value": "proxy"},
+            {"title": "VPN + Proxy — both", "value": "vpn_proxy"}
+          ],
+          "wizard_ui": "hidden",
+          "title": "VPN mode",
+          "tooltip": "How the core captures traffic. Set from VPN Settings → Mode."
+        },
+        {
+          "name": "proxy_type",
+          "type": "enum",
+          "default_value": "mixed",
+          "options": [
+            {"title": "Mixed — HTTP + SOCKS5 on one port", "value": "mixed"},
+            {"title": "HTTP only", "value": "http"},
+            {"title": "SOCKS5 only", "value": "socks"}
+          ],
+          "wizard_ui": "hidden",
+          "title": "Local proxy protocol",
+          "tooltip": "Inbound type for the local proxy port."
+        },
+        {
+          "name": "proxy_listen",
+          "type": "text",
+          "default_value": "127.0.0.1",
+          "options": [
+            {"title": "127.0.0.1 — this device only", "value": "127.0.0.1"},
+            {"title": "0.0.0.0 — all interfaces (LAN)", "value": "0.0.0.0"}
+          ],
+          "wizard_ui": "hidden",
+          "title": "Listen address",
+          "tooltip": "IPv4 the local proxy binds to. Suggestions above; any valid IPv4 is allowed (e.g. a specific LAN IP). Anything other than 127.x is reachable from the network and forces auth on."
+        },
+        {
+          "name": "proxy_port",
+          "type": "int",
+          "default_value": "2080",
+          "wizard_ui": "hidden",
+          "title": "Listen port",
+          "tooltip": "Local proxy port (1024..65535)."
+        },
+        {
+          "name": "proxy_user",
+          "type": "text",
+          "default_value": "user",
+          "wizard_ui": "hidden",
+          "title": "Proxy username",
+          "tooltip": "Username for proxy auth (when auth is on)."
+        },
+        {
+          "name": "proxy_pass",
+          "type": "secret",
+          "default_value": "",
+          "wizard_ui": "hidden",
+          "title": "Proxy password",
+          "tooltip": "Password for proxy auth. Auto-generated when auth turns on."
+        },
+        {
+          "name": "proxy_auth",
+          "type": "bool",
+          "default_value": "false",
+          "wizard_ui": "hidden",
+          "title": "Require auth",
+          "tooltip": "Whether the local proxy requires username/password. Forced on for non-loopback listen."
         }
       ]
     },
@@ -474,7 +551,7 @@
       "strategy": "@dns_strategy"
     },
     "inbounds": [
-      {
+      {"#if": {"and": [{"@vpn_mode": {"#in": ["vpn", "vpn_proxy"]}}], "value": {
         "type": "tun",
         "tag": "tun-in",
         "interface_name": "@tun_name",
@@ -483,7 +560,16 @@
         "auto_route": "@tun_auto_route",
         "strict_route": "@tun_strict_route",
         "stack": "@tun_stack"
-      }
+      }}},
+      {"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": {
+        "type": "@proxy_type",
+        "tag": "mixed-in",
+        "listen": "@proxy_listen",
+        "listen_port": "@proxy_port",
+        "#if": {"and": ["@proxy_auth"], "value": {
+          "users": [{"username": "@proxy_user", "password": "@proxy_pass"}]
+        }}
+      }}}
     ],
     "endpoints": [],
     "outbounds": [
@@ -493,8 +579,20 @@
       "find_process": true,
       "default_domain_resolver": "@dns_default_domain_resolver",
       "rules": [
-        { "action": "resolve", "inbound": "tun-in", "strategy": "@resolve_strategy" },
-        { "action": "sniff", "inbound": "tun-in", "timeout": "1s" },
+        { "action": "resolve",
+          "inbound": [
+            {"#if": {"and": [{"@vpn_mode": {"#in": ["vpn", "vpn_proxy"]}}],   "value": "tun-in"}},
+            {"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": "mixed-in"}}
+          ],
+          "strategy": "@resolve_strategy" },
+        {"#if": {"and": ["@sniff_enabled"], "value": {
+          "action": "sniff",
+          "inbound": [
+            {"#if": {"and": [{"@vpn_mode": {"#in": ["vpn", "vpn_proxy"]}}],   "value": "tun-in"}},
+            {"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": "mixed-in"}}
+          ],
+          "timeout": "1s"
+        }}},
         { "protocol": "dns", "action": "hijack-dns" }
       ],
       "final": "vpn-1",
@@ -585,6 +683,34 @@
       "label": "Private IPs direct",
       "description": "Route private IP ranges (LAN) directly.",
       "rule": { "ip_is_private": true, "outbound": "direct-out" }
+    },
+    {
+      "preset_id": "block_unknown",
+      "label": "Unknown traffic",
+      "description": "Reject traffic in the tunnel not attributed to any installed app (background/foreign processes). Send it direct to bypass VPN instead.",
+      "default": false,
+      "vars": [
+        {
+          "name": "outbound",
+          "type": "outbound",
+          "default_value": "reject",
+          "title": "outbound",
+          "tooltip": "Reject = drop. Or pick Direct to send it outside the VPN."
+        }
+      ],
+      "rule_set": [
+        {
+          "tag": "unknown-apps",
+          "type": "inline",
+          "rules": [
+            { "invert": true, "package_name_regex": "^" }
+          ]
+        }
+      ],
+      "rule": {
+        "rule_set": ["unknown-apps"],
+        "outbound": "@outbound"
+      }
     }
   ]
 }

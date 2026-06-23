@@ -6,6 +6,14 @@
 // UI для `vpn_mode` storage shape. Builder applyVpnMode() трансформирует это
 // в config.inbounds. Смена режима меняет inbounds → требует FULL VPN restart
 // (наследуется от config-dirty машинерии: home banner Apply/Restart).
+//
+// Data-driven рендер: presentational metadata (title/tooltip/options/type)
+// читается из семи `wizard_ui: hidden` нод секции "VPN Mode" в
+// wizard_template.json (vpn_mode/proxy_type/proxy_listen/proxy_port/
+// proxy_user/proxy_pass/proxy_auth). ЗНАЧЕНИЯ при этом маппятся в
+// типизированный VpnModeConfig (copyWith), НЕ в varsValues — ноды дают только
+// метаданные. Ноды резолвятся по имени из `template.vars` (не `varsFor('core')`
+// — тот фильтрует hidden).
 
 import 'dart:async';
 
@@ -14,6 +22,7 @@ import 'package:flutter/services.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
+import '../models/parser_config.dart' show WizardTemplate, WizardVar;
 import '../services/settings_storage.dart' show SettingsStorage, VpnModeConfig;
 import '../services/subscription/subscription_identity.dart'
     show generateProxyPassword;
@@ -24,10 +33,15 @@ class VpnModeTab extends StatefulWidget {
     super.key,
     required this.homeController,
     required this.subController,
+    required this.template,
   });
 
   final HomeController homeController;
   final SubscriptionController subController;
+
+  /// Загруженный wizard-template. Семь `vpn_mode`/`proxy_*` нод (все
+  /// `wizard_ui: hidden`) поставляют title/tooltip/options/type для рендера.
+  final WizardTemplate template;
 
   @override
   State<VpnModeTab> createState() => _VpnModeTabState();
@@ -42,7 +56,25 @@ class _VpnModeTabState extends State<VpnModeTab>
   late final TextEditingController _portCtl;
   late final TextEditingController _userCtl;
   late final TextEditingController _passCtl;
+  late final TextEditingController _listenCtl;
   String _portError = '';
+  String _listenError = '';
+
+  // ─── Ноды-метаданные (резолв по имени из полного template.vars) ───
+  // `varsFor('core')` НЕ годится: он отфильтровывает wizard_ui == 'hidden',
+  // а все семь нод именно hidden. Поэтому читаем из template.vars напрямую.
+  late final WizardVar _vpnModeNode = _node('vpn_mode');
+  late final WizardVar _proxyTypeNode = _node('proxy_type');
+  late final WizardVar _listenNode = _node('proxy_listen');
+  late final WizardVar _portNode = _node('proxy_port');
+  late final WizardVar _userNode = _node('proxy_user');
+  late final WizardVar _passNode = _node('proxy_pass');
+  late final WizardVar _authNode = _node('proxy_auth');
+
+  /// firstWhere без orElse — отсутствующая нода = баг bundled-темплейта
+  /// (fail-fast, как TemplateLoader.validateIfConstructs).
+  WizardVar _node(String name) =>
+      widget.template.vars.firstWhere((v) => v.name == name);
 
   @override
   SubscriptionController get lazyController => widget.subController;
@@ -53,6 +85,7 @@ class _VpnModeTabState extends State<VpnModeTab>
     _portCtl = TextEditingController();
     _userCtl = TextEditingController();
     _passCtl = TextEditingController();
+    _listenCtl = TextEditingController();
     unawaited(_load());
   }
 
@@ -61,6 +94,7 @@ class _VpnModeTabState extends State<VpnModeTab>
     _portCtl.dispose();
     _userCtl.dispose();
     _passCtl.dispose();
+    _listenCtl.dispose();
     super.dispose();
   }
 
@@ -72,6 +106,7 @@ class _VpnModeTabState extends State<VpnModeTab>
       _portCtl.text = cfg.proxyPort.toString();
       _userCtl.text = cfg.proxyUsername;
       _passCtl.text = cfg.proxyPassword;
+      _listenCtl.text = cfg.proxyListen;
       _loading = false;
     });
   }
@@ -107,15 +142,30 @@ class _VpnModeTabState extends State<VpnModeTab>
     _commit();
   }
 
-  void _setListen(String listen) {
-    var next = _cfg.copyWith(proxyListen: listen);
-    // 0.0.0.0 форсит auth on → пустой пароль надо сгенерить.
+  /// Применить введённый/выбранный listen-адрес. Невалидный IPv4 → errorText,
+  /// не сохраняем. Не-loopback форсит auth on → генерим пароль если пуст.
+  /// Свободно введённый IPv4 (например 127.10.20.5) идёт ПО ЭТОМУ ЖЕ пути.
+  void _applyListen(String raw) {
+    final addr = raw.trim();
+    if (!VpnModeConfig.isValidListenAddr(addr)) {
+      setState(() => _listenError = 'Enter a valid IPv4 (e.g. 127.0.0.1)');
+      return;
+    }
+    if (addr == _cfg.proxyListen) {
+      setState(() => _listenError = '');
+      return;
+    }
+    var next = _cfg.copyWith(proxyListen: addr);
+    // Не-loopback форсит auth on → пустой пароль надо сгенерить.
     if (next.effectiveAuth && next.proxyPassword.isEmpty) {
       final pass = generateProxyPassword();
       next = next.copyWith(proxyPassword: pass);
       _passCtl.text = pass;
     }
-    setState(() => _cfg = next);
+    setState(() {
+      _listenError = '';
+      _cfg = next;
+    });
     _commit();
   }
 
@@ -169,6 +219,99 @@ class _VpnModeTabState extends State<VpnModeTab>
     _commit();
   }
 
+  // ─────────────────────────── render helpers ───────────────────────────
+
+  /// Заголовок-строка `title` + info-иконка с tooltip ноды.
+  Widget _labelRow(WizardVar node, TextStyle? style, {double iconSize = 18}) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Flexible(child: Text(node.title, style: style)),
+        if (node.tooltip.isNotEmpty) ...[
+          const SizedBox(width: 4),
+          Tooltip(
+            message: node.tooltip,
+            triggerMode: TooltipTriggerMode.tap,
+            child: Icon(Icons.info_outline,
+                size: iconSize, color: cs.onSurfaceVariant),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Короткий лейбл для SegmentedButton: ведущий токен до ` — ` («VPN —
+  /// system-wide tunnel» → «VPN»), чтобы сегменты не переполнялись.
+  String _shortLabel(String title) {
+    final i = title.indexOf(' — ');
+    return i >= 0 ? title.substring(0, i) : title;
+  }
+
+  /// MODE (vpn_mode): SegmentedButton — явное исключение из «enum→dropdown»
+  /// (решение юзера). Сегменты из node.options, короткие лейблы.
+  Widget _buildModeSegments() {
+    return SegmentedButton<String>(
+      segments: _vpnModeNode.options
+          .map((o) => ButtonSegment(
+                value: o.value,
+                label: Text(_shortLabel(o.title)),
+              ))
+          .toList(),
+      selected: {_cfg.mode},
+      onSelectionChanged: (s) => _setMode(s.first),
+    );
+  }
+
+  /// PROTOCOL (proxy_type, enum+options): non-editable DropdownMenu.
+  Widget _buildEnumDropdown(
+    WizardVar node, {
+    required String current,
+    required ValueChanged<String> onSelected,
+  }) {
+    return DropdownMenu<String>(
+      initialSelection: current,
+      label: Text(node.title),
+      expandedInsets: EdgeInsets.zero,
+      dropdownMenuEntries: node.options
+          .map((o) => DropdownMenuEntry(value: o.value, label: o.title))
+          .toList(),
+      onSelected: (v) {
+        if (v != null) onSelected(v);
+      },
+    );
+  }
+
+  /// LISTEN (proxy_listen, text+options): EDITABLE combobox. requestFocusOnTap
+  /// делает поле редактируемым → можно ввести произвольный IPv4 (не из
+  /// options). onSelected ловит тап по подсказке; свободный ввод коммитится
+  /// при потере фокуса (Focus.onFocusChange) через _applyListen — тот же
+  /// валидирующий путь.
+  Widget _buildListenCombobox() {
+    return Focus(
+      onFocusChange: (has) {
+        if (!has) _applyListen(_listenCtl.text);
+      },
+      child: DropdownMenu<String>(
+        controller: _listenCtl,
+        requestFocusOnTap: true,
+        enableFilter: false,
+        label: Text(_listenNode.title),
+        expandedInsets: EdgeInsets.zero,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        errorText: _listenError.isEmpty ? null : _listenError,
+        dropdownMenuEntries: _listenNode.options
+            .map((o) => DropdownMenuEntry(value: o.value, label: o.title))
+            .toList(),
+        onSelected: (v) {
+          if (v != null) {
+            _listenCtl.text = v;
+            _applyListen(v);
+          }
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -181,33 +324,10 @@ class _VpnModeTabState extends State<VpnModeTab>
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPad),
       children: [
-        Row(
-          children: [
-            Text('Mode', style: tt.titleMedium),
-            const SizedBox(width: 4),
-            Tooltip(
-              message:
-                  'How the core captures traffic.\n\n'
-                  '• VPN — system-wide tunnel (current behaviour).\n'
-                  '• Proxy — local HTTP+SOCKS port only, no TUN. Apps must be '
-                  'pointed at it manually.\n'
-                  '• VPN+Proxy — both at once.\n\n'
-                  'Changing the mode requires a full VPN restart.',
-              triggerMode: TooltipTriggerMode.tap,
-              child: Icon(Icons.info_outline, size: 18, color: cs.onSurfaceVariant),
-            ),
-          ],
-        ),
+        // ─── MODE (vpn_mode → SegmentedButton) ───
+        _labelRow(_vpnModeNode, tt.titleMedium),
         const SizedBox(height: 8),
-        SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'vpn', label: Text('VPN')),
-            ButtonSegment(value: 'proxy', label: Text('Proxy')),
-            ButtonSegment(value: 'vpn_proxy', label: Text('VPN+Proxy')),
-          ],
-          selected: {_cfg.mode},
-          onSelectionChanged: (s) => _setMode(s.first),
-        ),
+        _buildModeSegments(),
         const SizedBox(height: 8),
         Text(
           _modeDescription(_cfg.mode),
@@ -221,60 +341,20 @@ class _VpnModeTabState extends State<VpnModeTab>
           Text('Local proxy', style: tt.titleMedium),
           const SizedBox(height: 12),
 
-          // ─── Protocol ───
-          Row(
-            children: [
-              Text('Protocol', style: tt.bodyMedium),
-              const SizedBox(width: 4),
-              Tooltip(
-                message:
-                    'Mixed — one port accepts both HTTP and SOCKS5.\n'
-                    'HTTP — HTTP proxy only (no UDP).\n'
-                    'SOCKS5 — SOCKS5 only (supports UDP).',
-                triggerMode: TooltipTriggerMode.tap,
-                child: Icon(Icons.info_outline,
-                    size: 16, color: cs.onSurfaceVariant),
-              ),
-            ],
-          ),
+          // ─── PROTOCOL (proxy_type → dropdown) ───
+          _labelRow(_proxyTypeNode, tt.bodyMedium, iconSize: 16),
           const SizedBox(height: 6),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(
-                value: VpnModeConfig.protoMixed,
-                label: Text('Mixed'),
-              ),
-              ButtonSegment(
-                value: VpnModeConfig.protoHttp,
-                label: Text('HTTP'),
-              ),
-              ButtonSegment(
-                value: VpnModeConfig.protoSocks,
-                label: Text('SOCKS5'),
-              ),
-            ],
-            selected: {_cfg.proxyProtocol},
-            onSelectionChanged: (s) => _setProtocol(s.first),
+          _buildEnumDropdown(
+            _proxyTypeNode,
+            current: _cfg.proxyProtocol,
+            onSelected: _setProtocol,
           ),
           const SizedBox(height: 16),
 
-          // ─── Listen address ───
-          Text('Listen on', style: tt.bodyMedium),
+          // ─── LISTEN (proxy_listen → editable combobox) ───
+          _labelRow(_listenNode, tt.bodyMedium, iconSize: 16),
           const SizedBox(height: 6),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(
-                value: '127.0.0.1',
-                label: Text('127.0.0.1'),
-              ),
-              ButtonSegment(
-                value: '0.0.0.0',
-                label: Text('0.0.0.0 (LAN)'),
-              ),
-            ],
-            selected: {_cfg.proxyListen},
-            onSelectionChanged: (s) => _setListen(s.first),
-          ),
+          _buildListenCombobox(),
           const SizedBox(height: 4),
           Text(
             _cfg.isPublicListen
@@ -284,13 +364,13 @@ class _VpnModeTabState extends State<VpnModeTab>
           ),
           const SizedBox(height: 16),
 
-          // ─── Port ───
+          // ─── PORT (proxy_port → numeric field) ───
           TextField(
             controller: _portCtl,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: InputDecoration(
-              labelText: 'Port',
+              labelText: _portNode.title,
               helperText: 'Range 1024..65535',
               errorText: _portError.isEmpty ? null : _portError,
               isDense: true,
@@ -300,10 +380,10 @@ class _VpnModeTabState extends State<VpnModeTab>
           ),
           const SizedBox(height: 16),
 
-          // ─── Auth toggle ───
+          // ─── AUTH (proxy_auth → switch; forced-on for non-loopback) ───
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Require authentication'),
+            title: Text(_authNode.title),
             subtitle: Text(
               _cfg.isPublicListen
                   ? 'Required for LAN-exposed proxy (cannot be disabled).'
@@ -316,21 +396,23 @@ class _VpnModeTabState extends State<VpnModeTab>
 
           if (_cfg.effectiveAuth) ...[
             const SizedBox(height: 8),
+            // ─── USER (proxy_user → text field) ───
             TextField(
               controller: _userCtl,
-              decoration: const InputDecoration(
-                labelText: 'Username',
+              decoration: InputDecoration(
+                labelText: _userNode.title,
                 isDense: true,
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
               ),
               onChanged: _applyUsername,
             ),
             const SizedBox(height: 12),
+            // ─── PASS (proxy_pass → masked + show/hide + regenerate) ───
             TextField(
               controller: _passCtl,
               obscureText: !_showPassword,
               decoration: InputDecoration(
-                labelText: 'Password',
+                labelText: _passNode.title,
                 isDense: true,
                 border: const OutlineInputBorder(),
                 suffixIcon: Row(

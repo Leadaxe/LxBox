@@ -1,23 +1,180 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:lxbox/services/builder/post_steps.dart';
+import 'package:lxbox/models/parser_config.dart';
+import 'package:lxbox/services/builder/if_engine.dart';
 import 'package:lxbox/services/settings_storage.dart' show VpnModeConfig;
 
-/// Конфиг как в шаблоне (§119): один tun-inbound + route.rules с привязкой
-/// resolve/sniff к "tun-in" + hijack-dns без inbound.
+/// §119/§120 — VPN-mode теперь декларативен: tun-in/mixed-in/route-rules
+/// собираются `#if`-walker'ом в substitution-фазе по `@vpn_mode`/`@proxy_*`.
+/// `applyVpnMode` удалён. Эти тесты гоняют тот же шаблонный фрагмент
+/// (inbounds + route.rules) через [walk] с разными `VpnModeConfig` и проверяют
+/// семантику (вместо вызова удалённого императивного шага).
+
+/// Фрагмент шаблона §120: inbounds + route.rules с `#if`. Соответствует
+/// `wizard_template.json` (tun-in / mixed-in / resolve / sniff / hijack-dns).
 Map<String, dynamic> _templateConfig() => {
-      'inbounds': <Map<String, dynamic>>[
-        {'type': 'tun', 'tag': 'tun-in', 'auto_route': true, 'mtu': 1492},
+      'inbounds': <dynamic>[
+        {
+          '#if': {
+            'and': [
+              {
+                '@vpn_mode': {
+                  '#in': ['vpn', 'vpn_proxy'],
+                },
+              },
+            ],
+            'value': {
+              'type': 'tun',
+              'tag': 'tun-in',
+              'mtu': '@tun_mtu',
+              'auto_route': '@tun_auto_route',
+            },
+          },
+        },
+        {
+          '#if': {
+            'and': [
+              {
+                '@vpn_mode': {
+                  '#in': ['proxy', 'vpn_proxy'],
+                },
+              },
+            ],
+            'value': {
+              'type': '@proxy_type',
+              'tag': 'mixed-in',
+              'listen': '@proxy_listen',
+              'listen_port': '@proxy_port',
+              '#if': {
+                'and': ['@proxy_auth'],
+                'value': {
+                  'users': [
+                    {'username': '@proxy_user', 'password': '@proxy_pass'},
+                  ],
+                },
+              },
+            },
+          },
+        },
       ],
       'route': <String, dynamic>{
-        'rules': <Map<String, dynamic>>[
-          {'action': 'resolve', 'inbound': 'tun-in', 'strategy': 'prefer_ipv4'},
-          {'action': 'sniff', 'inbound': 'tun-in', 'timeout': '1s'},
+        'rules': <dynamic>[
+          {
+            'action': 'resolve',
+            'inbound': <dynamic>[
+              {
+                '#if': {
+                  'and': [
+                    {
+                      '@vpn_mode': {
+                        '#in': ['vpn', 'vpn_proxy'],
+                      },
+                    },
+                  ],
+                  'value': 'tun-in',
+                },
+              },
+              {
+                '#if': {
+                  'and': [
+                    {
+                      '@vpn_mode': {
+                        '#in': ['proxy', 'vpn_proxy'],
+                      },
+                    },
+                  ],
+                  'value': 'mixed-in',
+                },
+              },
+            ],
+            'strategy': '@resolve_strategy',
+          },
+          {
+            '#if': {
+              'and': ['@sniff_enabled'],
+              'value': {
+                'action': 'sniff',
+                'inbound': <dynamic>[
+                  {
+                    '#if': {
+                      'and': [
+                        {
+                          '@vpn_mode': {
+                            '#in': ['vpn', 'vpn_proxy'],
+                          },
+                        },
+                      ],
+                      'value': 'tun-in',
+                    },
+                  },
+                  {
+                    '#if': {
+                      'and': [
+                        {
+                          '@vpn_mode': {
+                            '#in': ['proxy', 'vpn_proxy'],
+                          },
+                        },
+                      ],
+                      'value': 'mixed-in',
+                    },
+                  },
+                ],
+                'timeout': '1s',
+              },
+            },
+          },
           {'protocol': 'dns', 'action': 'hijack-dns'},
         ],
         'final': 'vpn-1',
       },
     };
+
+/// Ноды переменных §120 (type metadata, как в шаблоне).
+final _nodes = <String, WizardVar>{
+  'vpn_mode': WizardVar(name: 'vpn_mode', type: 'enum', defaultValue: 'vpn'),
+  'proxy_type': WizardVar(name: 'proxy_type', type: 'text', defaultValue: 'mixed'),
+  'proxy_listen':
+      WizardVar(name: 'proxy_listen', type: 'text', defaultValue: '127.0.0.1'),
+  'proxy_port': WizardVar(name: 'proxy_port', type: 'int', defaultValue: '2080'),
+  'proxy_user': WizardVar(name: 'proxy_user', type: 'text', defaultValue: 'user'),
+  'proxy_pass': WizardVar(name: 'proxy_pass', type: 'secret', defaultValue: ''),
+  'proxy_auth': WizardVar(name: 'proxy_auth', type: 'bool', defaultValue: 'false'),
+  'tun_mtu': WizardVar(name: 'tun_mtu', type: 'int', defaultValue: '1492'),
+  'tun_auto_route':
+      WizardVar(name: 'tun_auto_route', type: 'bool', defaultValue: 'true'),
+  'sniff_enabled':
+      WizardVar(name: 'sniff_enabled', type: 'bool', defaultValue: 'true'),
+  'resolve_strategy': WizardVar(
+      name: 'resolve_strategy', type: 'enum', defaultValue: 'prefer_ipv4'),
+};
+
+/// Прогоняет шаблон через walk, повторяя проброс §120 из build_config:
+/// прямое присваивание vpn_mode/proxy_* из VpnModeConfig в плоский vars,
+/// proxy_auth = effectiveAuth && непустой пароль.
+Map<String, dynamic> _build(VpnModeConfig? cfg, {bool sniff = true}) {
+  final config = _templateConfig();
+  final vars = <String, String>{
+    'tun_mtu': '1492',
+    'tun_auto_route': 'true',
+    'resolve_strategy': 'prefer_ipv4',
+    'sniff_enabled': sniff ? 'true' : 'false',
+  };
+  if (cfg != null) {
+    vars['vpn_mode'] = cfg.mode;
+    vars['proxy_type'] = cfg.proxyProtocol;
+    vars['proxy_listen'] = cfg.proxyListen;
+    vars['proxy_port'] = '${cfg.proxyPort}';
+    vars['proxy_user'] = cfg.proxyUsername;
+    vars['proxy_pass'] = cfg.proxyPassword;
+    vars['proxy_auth'] =
+        (cfg.effectiveAuth && cfg.proxyPassword.isNotEmpty) ? 'true' : 'false';
+  } else {
+    vars['vpn_mode'] = 'vpn';
+  }
+  walk(config, makeResolver(vars, _nodes));
+  return config;
+}
 
 List<Map<String, dynamic>> _inbounds(Map<String, dynamic> cfg) =>
     (cfg['inbounds'] as List).cast<Map<String, dynamic>>();
@@ -32,6 +189,13 @@ Map<String, dynamic>? _firstWhere(
           orElse: () => null,
         );
 
+/// inbound теперь Listable[string] (array). Хелпер: содержит ли rule тег.
+bool _ruleHasInbound(Map r, String tag) {
+  final inb = r['inbound'];
+  if (inb is List) return inb.contains(tag);
+  return inb == tag;
+}
+
 const _proxyAuth = VpnModeConfig(
   mode: 'proxy',
   proxyProtocol: 'mixed',
@@ -43,189 +207,156 @@ const _proxyAuth = VpnModeConfig(
 );
 
 void main() {
-  group('applyVpnMode (§119)', () {
-    test('mode=vpn → config не изменён', () {
-      final cfg = _templateConfig();
-      const m = VpnModeConfig.defaults();
-      applyVpnMode(cfg, m, sniffEnabled: true);
+  group('VPN-mode declarative #if (§119/§120)', () {
+    test('mode=vpn → только tun-in, нет mixed', () {
+      final cfg = _build(const VpnModeConfig.defaults());
       final inb = _inbounds(cfg);
       expect(inb.length, 1);
       expect(inb.first['type'], 'tun');
-      expect(_firstWhere(_inbounds(cfg), (i) => i['type'] == 'mixed'), isNull);
-      // rules не тронуты — tun-in остаётся.
-      expect(_rules(cfg).any((r) => r['inbound'] == 'tun-in'), true);
+      expect(_firstWhere(inb, (i) => i['tag'] == 'mixed-in'), isNull);
+      // resolve inbound = [tun-in].
+      final resolve = _firstWhere(_rules(cfg), (r) => r['action'] == 'resolve')!;
+      expect(_ruleHasInbound(resolve, 'tun-in'), true);
+      expect(_ruleHasInbound(resolve, 'mixed-in'), false);
+    });
+
+    test('mode=vpn → tun_mtu коэрсится в int (Часть 1)', () {
+      final cfg = _build(const VpnModeConfig.defaults());
+      final tun = _inbounds(cfg).first;
+      expect(tun['mtu'], 1492);
+      expect(tun['mtu'], isA<int>());
+      expect(tun['auto_route'], true);
+      expect(tun['auto_route'], isA<bool>());
     });
 
     test('mode=proxy → tun удалён, mixed добавлен', () {
-      final cfg = _templateConfig();
-      applyVpnMode(cfg, _proxyAuth, sniffEnabled: true);
+      final cfg = _build(_proxyAuth);
       final inb = _inbounds(cfg);
       expect(_firstWhere(inb, (i) => i['type'] == 'tun'), isNull);
-      final mixed = _firstWhere(inb, (i) => i['type'] == 'mixed');
-      expect(mixed, isNotNull);
-      expect(mixed!['tag'], 'mixed-in');
+      final mixed = _firstWhere(inb, (i) => i['tag'] == 'mixed-in')!;
+      expect(mixed['type'], 'mixed');
       expect(mixed['listen'], '127.0.0.1');
       expect(mixed['listen_port'], 2080);
       expect(mixed['listen_port'], isA<int>());
     });
 
-    test('mode=proxy → tun-in resolve/sniff re-tag на mixed-in, нет dangling',
-        () {
-      final cfg = _templateConfig();
-      applyVpnMode(cfg, _proxyAuth, sniffEnabled: true);
+    test('mode=proxy → нет dangling tun-in в rules', () {
+      final cfg = _build(_proxyAuth);
       final rules = _rules(cfg);
-      // Нет ни одного правила с inbound:tun-in.
-      expect(rules.any((r) => r['inbound'] == 'tun-in'), false);
-      // resolve и sniff теперь на mixed-in.
-      expect(
-          rules.any((r) => r['action'] == 'resolve' && r['inbound'] == 'mixed-in'),
-          true);
-      expect(
-          rules.any((r) => r['action'] == 'sniff' && r['inbound'] == 'mixed-in'),
-          true);
+      expect(rules.any((r) => _ruleHasInbound(r, 'tun-in')), false);
+      final resolve = _firstWhere(rules, (r) => r['action'] == 'resolve')!;
+      expect(_ruleHasInbound(resolve, 'mixed-in'), true);
+      final sniff = _firstWhere(rules, (r) => r['action'] == 'sniff')!;
+      expect(_ruleHasInbound(sniff, 'mixed-in'), true);
     });
 
-    test('mode=proxy → hijack-dns нетронут', () {
-      final cfg = _templateConfig();
-      applyVpnMode(cfg, _proxyAuth, sniffEnabled: true);
-      final hijack =
-          _firstWhere(_rules(cfg), (r) => r['action'] == 'hijack-dns');
+    test('mode=proxy → hijack-dns нетронут (без inbound)', () {
+      final cfg = _build(_proxyAuth);
+      final hijack = _firstWhere(_rules(cfg), (r) => r['action'] == 'hijack-dns');
       expect(hijack, isNotNull);
       expect(hijack!.containsKey('inbound'), false);
     });
 
     test('mode=vpn_proxy → оба inbound (tun первый)', () {
-      final cfg = _templateConfig();
-      applyVpnMode(cfg, _proxyAuth.copyWith(mode: 'vpn_proxy'),
-          sniffEnabled: true);
+      final cfg = _build(_proxyAuth.copyWith(mode: 'vpn_proxy'));
       final inb = _inbounds(cfg);
       expect(inb.length, 2);
-      expect(inb.first['type'], 'tun'); // tun остаётся первым (для applyTunPackages)
-      expect(_firstWhere(inb, (i) => i['type'] == 'mixed'), isNotNull);
+      expect(inb.first['type'], 'tun'); // tun первый → applyTunPackages находит
+      expect(_firstWhere(inb, (i) => i['tag'] == 'mixed-in'), isNotNull);
     });
 
-    test('mode=vpn_proxy → mixed-in resolve+sniff добавлены, tun-in сохранены',
-        () {
-      final cfg = _templateConfig();
-      applyVpnMode(cfg, _proxyAuth.copyWith(mode: 'vpn_proxy'),
-          sniffEnabled: true);
-      final rules = _rules(cfg);
-      expect(rules.any((r) => r['inbound'] == 'tun-in'), true);
-      expect(
-          rules.any((r) => r['action'] == 'resolve' && r['inbound'] == 'mixed-in'),
-          true);
-      expect(
-          rules.any((r) => r['action'] == 'sniff' && r['inbound'] == 'mixed-in'),
-          true);
+    test('mode=vpn_proxy → resolve/sniff inbound = [tun-in, mixed-in]', () {
+      final cfg = _build(_proxyAuth.copyWith(mode: 'vpn_proxy'));
+      final resolve = _firstWhere(_rules(cfg), (r) => r['action'] == 'resolve')!;
+      expect(_ruleHasInbound(resolve, 'tun-in'), true);
+      expect(_ruleHasInbound(resolve, 'mixed-in'), true);
+      final sniff = _firstWhere(_rules(cfg), (r) => r['action'] == 'sniff')!;
+      expect(_ruleHasInbound(sniff, 'tun-in'), true);
+      expect(_ruleHasInbound(sniff, 'mixed-in'), true);
     });
 
-    test('mode=vpn_proxy + sniffEnabled=false → mixed sniff НЕ добавлен, resolve добавлен',
-        () {
-      final cfg = _templateConfig();
-      applyVpnMode(cfg, _proxyAuth.copyWith(mode: 'vpn_proxy'),
-          sniffEnabled: false);
+    test('sniffEnabled=false → sniff-rule отсутствует целиком', () {
+      final cfg = _build(_proxyAuth.copyWith(mode: 'vpn_proxy'), sniff: false);
       final rules = _rules(cfg);
-      expect(
-          rules.any((r) => r['action'] == 'sniff' && r['inbound'] == 'mixed-in'),
-          false);
-      expect(
-          rules.any((r) => r['action'] == 'resolve' && r['inbound'] == 'mixed-in'),
-          true);
+      expect(rules.any((r) => r['action'] == 'sniff'), false);
+      expect(rules.any((r) => r['action'] == 'resolve'), true);
     });
 
     test('auth: непустой пароль → users присутствует', () {
-      final cfg = _templateConfig();
-      applyVpnMode(cfg, _proxyAuth, sniffEnabled: true);
-      final mixed = _firstWhere(_inbounds(cfg), (i) => i['type'] == 'mixed')!;
+      final cfg = _build(_proxyAuth);
+      final mixed = _firstWhere(_inbounds(cfg), (i) => i['tag'] == 'mixed-in')!;
       final users = mixed['users'] as List;
       expect(users.length, 1);
       expect((users.first as Map)['username'], 'user');
       expect((users.first as Map)['password'], 'deadbeef');
     });
 
-    test('protocol=mixed (default) → inbound type=mixed', () {
-      final cfg = _templateConfig();
-      applyVpnMode(cfg, _proxyAuth, sniffEnabled: true);
-      final inb = _firstWhere(_inbounds(cfg), (i) => i['tag'] == 'mixed-in')!;
-      expect(inb['type'], 'mixed');
+    test('proxy_pass числовой → остаётся строкой (secret, Часть 1)', () {
+      final cfg = _build(_proxyAuth.copyWith(proxyPassword: '1234'));
+      final mixed = _firstWhere(_inbounds(cfg), (i) => i['tag'] == 'mixed-in')!;
+      final pass = (mixed['users'] as List).first as Map;
+      expect(pass['password'], '1234');
+      expect(pass['password'], isA<String>());
     });
 
-    test('protocol=http → inbound type=http (tag остаётся mixed-in)', () {
-      final cfg = _templateConfig();
-      applyVpnMode(cfg, _proxyAuth.copyWith(proxyProtocol: 'http'),
-          sniffEnabled: true);
+    test('protocol=http → type=http (tag остаётся mixed-in)', () {
+      final cfg = _build(_proxyAuth.copyWith(proxyProtocol: 'http'));
       final inb = _firstWhere(_inbounds(cfg), (i) => i['tag'] == 'mixed-in')!;
       expect(inb['type'], 'http');
-      // auth-структура та же.
-      expect((inb['users'] as List).first, {
-        'username': 'user',
-        'password': 'deadbeef',
-      });
+      expect((inb['users'] as List).first,
+          {'username': 'user', 'password': 'deadbeef'});
     });
 
-    test('protocol=socks → inbound type=socks', () {
-      final cfg = _templateConfig();
-      applyVpnMode(cfg, _proxyAuth.copyWith(proxyProtocol: 'socks'),
-          sniffEnabled: true);
+    test('protocol=socks → type=socks', () {
+      final cfg = _build(_proxyAuth.copyWith(proxyProtocol: 'socks'));
       final inb = _firstWhere(_inbounds(cfg), (i) => i['tag'] == 'mixed-in')!;
       expect(inb['type'], 'socks');
     });
 
-    test('protocol в vpn_proxy → mixed-in type меняется, tun-in нетронут', () {
-      final cfg = _templateConfig();
-      applyVpnMode(
-          cfg, _proxyAuth.copyWith(mode: 'vpn_proxy', proxyProtocol: 'socks'),
-          sniffEnabled: true);
-      final tun = _firstWhere(_inbounds(cfg), (i) => i['type'] == 'tun');
-      expect(tun, isNotNull);
-      expect(tun!['tag'], 'tun-in');
-      final proxy = _firstWhere(_inbounds(cfg), (i) => i['tag'] == 'mixed-in')!;
-      expect(proxy['type'], 'socks');
-    });
-
     test('auth off (127.0.0.1) → users отсутствует', () {
-      final cfg = _templateConfig();
-      applyVpnMode(cfg, _proxyAuth.copyWith(proxyAuthEnabled: false),
-          sniffEnabled: true);
-      final mixed = _firstWhere(_inbounds(cfg), (i) => i['type'] == 'mixed')!;
+      final cfg = _build(_proxyAuth.copyWith(proxyAuthEnabled: false));
+      final mixed = _firstWhere(_inbounds(cfg), (i) => i['tag'] == 'mixed-in')!;
       expect(mixed.containsKey('users'), false);
     });
 
-    test('listen 0.0.0.0 → effectiveAuth форсится, users есть даже при authEnabled=false',
-        () {
-      final cfg = _templateConfig();
+    test('listen 0.0.0.0 → effectiveAuth форсится, users есть', () {
       final m = _proxyAuth.copyWith(
         proxyListen: '0.0.0.0',
-        proxyAuthEnabled: false, // снято — но 0.0.0.0 форсит
+        proxyAuthEnabled: false,
       );
       expect(m.effectiveAuth, true);
-      applyVpnMode(cfg, m, sniffEnabled: true);
-      final mixed = _firstWhere(_inbounds(cfg), (i) => i['type'] == 'mixed')!;
+      final cfg = _build(m);
+      final mixed = _firstWhere(_inbounds(cfg), (i) => i['tag'] == 'mixed-in')!;
       expect(mixed.containsKey('users'), true);
       expect(mixed['listen'], '0.0.0.0');
     });
 
-    test('пустой пароль при auth → users отсутствует (defensive)', () {
-      final cfg = _templateConfig();
-      applyVpnMode(cfg, _proxyAuth.copyWith(proxyPassword: ''),
-          sniffEnabled: true);
-      final mixed = _firstWhere(_inbounds(cfg), (i) => i['type'] == 'mixed')!;
+    test('пустой пароль при auth → users отсутствует (защита 067)', () {
+      final cfg = _build(_proxyAuth.copyWith(proxyPassword: ''));
+      final mixed = _firstWhere(_inbounds(cfg), (i) => i['tag'] == 'mixed-in')!;
       expect(mixed.containsKey('users'), false);
     });
 
-    test('interaction: proxy + applyTunPackages → no-op (tun уже удалён)', () {
-      final cfg = _templateConfig();
-      applyVpnMode(cfg, _proxyAuth, sniffEnabled: true);
-      // applyTunPackages должен no-op'нуть — tun-inbound нет.
-      expect(_firstWhere(_inbounds(cfg), (i) => i['type'] == 'tun'), isNull);
+    test('пустой пароль + 0.0.0.0 (effectiveAuth форсится) → всё равно нет users',
+        () {
+      final m = _proxyAuth.copyWith(
+        proxyListen: '0.0.0.0',
+        proxyAuthEnabled: false,
+        proxyPassword: '',
+      );
+      expect(m.effectiveAuth, true); // 0.0.0.0 форсит
+      final cfg = _build(m);
+      final mixed = _firstWhere(_inbounds(cfg), (i) => i['tag'] == 'mixed-in')!;
+      // НЕ должно быть users:[{...,password:""}] — защита от broken auth.
+      expect(mixed.containsKey('users'), false);
     });
 
-    test('inbounds key missing → silent no-op (no throw)', () {
-      final cfg = <String, dynamic>{};
-      expect(
-        () => applyVpnMode(cfg, _proxyAuth, sniffEnabled: true),
-        returnsNormally,
-      );
+    test('settings.vpnMode == null → degrade к tun-only', () {
+      final cfg = _build(null);
+      final inb = _inbounds(cfg);
+      expect(inb.length, 1);
+      expect(inb.first['type'], 'tun');
+      expect(_firstWhere(inb, (i) => i['tag'] == 'mixed-in'), isNull);
     });
   });
 
@@ -272,6 +403,54 @@ void main() {
         proxyPassword: 'x',
       );
       expect(off.effectiveAuth, false);
+    });
+
+    test('произвольный LAN-IP (192.168.1.5) → isPublicListen, форсит auth', () {
+      const lan = VpnModeConfig(
+        mode: 'proxy',
+        proxyProtocol: 'mixed',
+        proxyPort: 2080,
+        proxyListen: '192.168.1.5',
+        proxyAuthEnabled: false, // снято — но не-loopback форсит
+        proxyUsername: 'user',
+        proxyPassword: 'x',
+      );
+      expect(lan.isPublicListen, true);
+      expect(lan.effectiveAuth, true);
+    });
+
+    test('произвольный loopback (127.10.20.5) → auth уважает authEnabled', () {
+      const lo = VpnModeConfig(
+        mode: 'proxy',
+        proxyProtocol: 'mixed',
+        proxyPort: 2080,
+        proxyListen: '127.10.20.5',
+        proxyAuthEnabled: false,
+        proxyUsername: 'user',
+        proxyPassword: 'x',
+      );
+      expect(lo.isPublicListen, false);
+      expect(lo.effectiveAuth, false);
+    });
+
+    test('isValidListenAddr — IPv4 валидация', () {
+      expect(VpnModeConfig.isValidListenAddr('127.0.0.1'), true);
+      expect(VpnModeConfig.isValidListenAddr('0.0.0.0'), true);
+      expect(VpnModeConfig.isValidListenAddr('192.168.1.5'), true);
+      expect(VpnModeConfig.isValidListenAddr('255.255.255.255'), true);
+      expect(VpnModeConfig.isValidListenAddr('256.0.0.1'), false); // октет > 255
+      expect(VpnModeConfig.isValidListenAddr('1.2.3'), false); // мало октетов
+      expect(VpnModeConfig.isValidListenAddr('1.2.3.4.5'), false); // много
+      expect(VpnModeConfig.isValidListenAddr('abc'), false);
+      expect(VpnModeConfig.isValidListenAddr(''), false);
+      expect(VpnModeConfig.isValidListenAddr('1.2.3.'), false); // пустой октет
+    });
+
+    test('isLoopback — 127.x', () {
+      expect(VpnModeConfig.isLoopback('127.0.0.1'), true);
+      expect(VpnModeConfig.isLoopback('127.10.20.5'), true);
+      expect(VpnModeConfig.isLoopback('0.0.0.0'), false);
+      expect(VpnModeConfig.isLoopback('192.168.1.5'), false);
     });
 
     test('toJson round-trip keys', () {

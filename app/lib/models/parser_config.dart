@@ -182,7 +182,10 @@ class WizardVar {
   });
 
   final String name;
-  final String type; // bool, text, enum, secret, outbound, dns_servers (spec §033)
+  // §120: typed template engine. bool/int коэрсятся по типу; остальные —
+  // дословная строка (НЕ угадывание по содержимому). text/enum/secret/outbound/
+  // dns_servers — все строковые. §033 добавил outbound/dns_servers.
+  final String type; // bool, int, text, enum, secret, outbound, dns_servers
   final String defaultValue;
   final String wizardUI; // edit, fix, hidden
   final List<WizardOption> options; // for enum / text-with-suggestions

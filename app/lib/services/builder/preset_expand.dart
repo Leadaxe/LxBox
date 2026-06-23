@@ -1,6 +1,7 @@
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
 import '../json_clone.dart';
+import 'if_engine.dart';
 
 /// Результат expansion одного `CustomRule(kind: preset)` через его
 /// `SelectableRule`-определение в шаблоне (spec §033).
@@ -356,62 +357,25 @@ void normalizeDnsDetour(
   }
 }
 
-/// Sentinel: ключ/элемент был `@optional_var`, резолв дал `null` →
-/// родитель должен удалить этот ключ/элемент.
-class _Dropped {
-  const _Dropped._();
-  static const instance = _Dropped._();
-}
-
-/// Рекурсивная подстановка `@var` в JSON-фрагменте.
+/// Рекурсивная подстановка `@var` + `#if` в JSON-фрагменте пресета.
 ///
-/// Правила:
-/// - Строка `"@name"` (целиком) — заменяется на `vars[name]`. Если
-///   `vars[name] == null` → возвращает sentinel «dropped» (родитель
-///   удаляет ключ / элемент списка; для Map/List input наружу не утекает).
-/// - Строка не `@`-prefix'нутая — возвращается как есть.
-/// - Unknown `@name` (ключа нет в varsMap) — возвращается как есть
-///   (могли оставить legacy-плейсхолдер или имя глобальной section-var).
-/// - Map / List — обход in-place, удаление dropped-ключей/элементов.
+/// §120: делегирует общему [walk]-движку ([if_engine.dart]) — тот же `#if`,
+/// что и в config (единый механизм, не два параллельных). Контракт preset-нод
+/// (отличается от build_config): значения в `vars` уже типизированы (приходят
+/// из `WizardVar`-резолва пресета выше), а `null` для known-имени = optional-var
+/// §033 → ключ/элемент выпадает.
+///
+/// Правила резолвера:
+/// - `@name`, имя в `vars`, значение non-null → подставить значение;
+/// - `@name`, имя в `vars`, значение null → [Dropped] (родитель удаляет);
+/// - `@name`, имени нет в `vars` → оставить плейсхолдер (legacy/section-var);
+/// - не-`@` строка → как есть.
 dynamic substituteVars(dynamic obj, Map<String, dynamic> vars) {
-  if (obj is String) {
-    if (!obj.startsWith('@')) return obj;
-    final name = obj.substring(1);
-    if (!vars.containsKey(name)) return obj;
+  return walk(obj, (name) {
+    if (!vars.containsKey(name)) return null; // unknown → keep placeholder
     final v = vars[name];
-    if (v == null) return _Dropped.instance;
+    if (v == null) return Dropped.instance; // optional-var §033 → drop
     return v;
-  }
-
-  if (obj is Map<String, dynamic>) {
-    final toRemove = <String>[];
-    for (final k in obj.keys.toList()) {
-      final replaced = substituteVars(obj[k], vars);
-      if (identical(replaced, _Dropped.instance)) {
-        toRemove.add(k);
-      } else {
-        obj[k] = replaced;
-      }
-    }
-    for (final k in toRemove) {
-      obj.remove(k);
-    }
-    return obj;
-  }
-
-  if (obj is List) {
-    final compact = <dynamic>[];
-    for (final e in obj) {
-      final replaced = substituteVars(e, vars);
-      if (identical(replaced, _Dropped.instance)) continue;
-      compact.add(replaced);
-    }
-    obj
-      ..clear()
-      ..addAll(compact);
-    return obj;
-  }
-
-  return obj;
+  });
 }
 

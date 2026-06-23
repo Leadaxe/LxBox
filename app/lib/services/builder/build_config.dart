@@ -13,6 +13,7 @@ import '../json_clone.dart';
 import '../rule_set_downloader.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
+import 'if_engine.dart';
 import 'post_steps.dart';
 import 'rule_set_registry.dart';
 import 'server_list_build.dart';
@@ -88,8 +89,13 @@ Future<BuildResult> buildConfig({
 
   // Merge template defaults + user overrides.
   final vars = <String, String>{};
+  // §120: ноды переменных (метаданные: type) — из шаблона, единственный источник
+  // правды о типе. Значение — из state (ниже). byName нужен резолверу для
+  // coerce по node.type.
+  final byName = <String, WizardVar>{};
   for (final v in template.vars) {
     vars[v.name] = settings.userVars[v.name] ?? v.defaultValue;
+    byName[v.name] = v;
   }
   // Также пропускаем user-override'ы, которые могут прийти вне template.vars
   // (например, clash_api/secret, сохранённые раньше).
@@ -100,15 +106,36 @@ Future<BuildResult> buildConfig({
   final generatedVars = <String, String>{};
   _ensureClashApiDefaults(vars, generatedVars);
 
-  final config = deepCopyJson(template.config);
-  _substituteVars(config, vars);
-
-  // Remove sniff rule if disabled
-  if (vars['sniff_enabled'] == 'false') {
-    final route = config['route'] as Map<String, dynamic>?;
-    final rules = route?['rules'] as List<dynamic>?;
-    rules?.removeWhere((r) => r is Map && r['action'] == 'sniff');
+  // §120/§119: проброс VPN-mode в плоский vars ПРЯМЫМ присваиванием (live
+  // VpnModeConfig побеждает любой залежавшийся flat-userVar — НЕ putIfAbsent).
+  // Делается ПОСЛЕ _ensureClashApiDefaults и ДО _substituteVars, т.к. #if в
+  // шаблоне (tun-in/mixed-in/route-rules) гейтится по @vpn_mode/@proxy_*.
+  // applyVpnMode удалён — вся структура теперь декларативна в шаблоне.
+  final vpnMode = settings.vpnMode;
+  if (vpnMode != null) {
+    vars['vpn_mode'] = vpnMode.mode;
+    vars['proxy_type'] = vpnMode.proxyProtocol;
+    vars['proxy_listen'] = vpnMode.proxyListen;
+    vars['proxy_port'] = '${vpnMode.proxyPort}';
+    vars['proxy_user'] = vpnMode.proxyUsername;
+    vars['proxy_pass'] = vpnMode.proxyPassword;
+    // proxy_auth несёт ЭФФЕКТИВНЫЙ флаг: effectiveAuth (0.0.0.0 форсит) И
+    // непустой пароль — иначе users отсутствует (защита 067 от [{"":""}]).
+    vars['proxy_auth'] =
+        (vpnMode.effectiveAuth && vpnMode.proxyPassword.isNotEmpty)
+            ? 'true'
+            : 'false';
+  } else {
+    vars['vpn_mode'] = 'vpn'; // degrade к tun-only (иначе пустой inbounds[])
   }
+
+  final resolve = makeResolver(vars, byName);
+
+  final config = deepCopyJson(template.config);
+  _substituteVars(config, resolve);
+
+  // §120: sniff-rule теперь обёрнут #if @sniff_enabled в шаблоне — отдельный
+  // removal-шаг не нужен (walker дропает array-element при false).
 
   final tvars = TemplateVars(
     tlsFragment: vars['tls_fragment'] == 'true',
@@ -155,7 +182,7 @@ Future<BuildResult> buildConfig({
     selectorTags: selectorTags,
     autoTags: autoTags,
     excludedNodes: settings.excludedNodes,
-    vars: vars,
+    resolve: resolve,
   );
 
   final baseOutbounds = config['outbounds'] as List<dynamic>? ?? const [];
@@ -284,16 +311,10 @@ Future<BuildResult> buildConfig({
     dnsMirrors: unifiedApply.dnsMirrors,
   );
 
-  // §119: VPN-mode transform inbounds. ДО applyTunPackages — в proxy-режиме
-  // удаляет tun-inbound (тогда applyTunPackages корректно no-op'ит); в
-  // vpn_proxy tun остаётся первым и applyTunPackages его находит.
-  if (settings.vpnMode != null) {
-    applyVpnMode(
-      config,
-      settings.vpnMode!,
-      sniffEnabled: vars['sniff_enabled'] != 'false',
-    );
-  }
+  // §119/§120: VPN-mode (tun-in/mixed-in/route-rules) теперь декларативен —
+  // резолвится #if-walker'ом в substitution-фазе (выше, по @vpn_mode/@proxy_*).
+  // applyVpnMode удалён. К этому моменту inbounds[] уже финальный: в proxy
+  // tun-in физически отсутствует → applyTunPackages (по type=='tun') no-op'ит.
 
   // §046: OS-level split-tunneling. Должен быть **последним** post-step'ом —
   // финальный transform tun-inbound, после всего остального.
@@ -372,7 +393,7 @@ List<Map<String, dynamic>> _buildPresetGroups({
   required List<String> selectorTags,
   required List<String> autoTags,
   required Set<String> excludedNodes,
-  required Map<String, String> vars,
+  required VarResolver resolve,
 }) {
   final activePresets = presets.where((p) {
     if (p.tag == 'vpn-1') return true;
@@ -418,7 +439,7 @@ List<Map<String, dynamic>> _buildPresetGroups({
     }
 
     final options = deepCopyJson(preset.options);
-    _substituteVars(options, vars);
+    _substituteVars(options, resolve);
     final def = options['default'];
     // §141 P1.8b — раньше гейт был `def is String && !tags.contains(def)`:
     // не-строковый `default` (число/bool из кривого template) проскакивал бы
@@ -456,34 +477,11 @@ void _ensureClashApiDefaults(Map<String, String> vars, Map<String, String> gener
   }
 }
 
-void _substituteVars(dynamic obj, Map<String, String> vars) {
-  if (obj is Map<String, dynamic>) {
-    for (final key in obj.keys.toList()) {
-      final resolved = _resolveVar(obj[key], vars);
-      if (resolved != null) {
-        obj[key] = resolved;
-      } else {
-        _substituteVars(obj[key], vars);
-      }
-    }
-  } else if (obj is List) {
-    for (var i = 0; i < obj.length; i++) {
-      final resolved = _resolveVar(obj[i], vars);
-      if (resolved != null) {
-        obj[i] = resolved;
-      } else {
-        _substituteVars(obj[i], vars);
-      }
-    }
-  }
-}
-
-dynamic _resolveVar(dynamic value, Map<String, String> vars) {
-  if (value is! String || !value.startsWith('@')) return null;
-  final name = value.substring(1);
-  if (!vars.containsKey(name)) return null;
-  final v = vars[name]!;
-  if (v == 'true') return true;
-  if (v == 'false') return false;
-  return int.tryParse(v) ?? v;
+/// §120 — typed substitution + `#if`. Тонкая обёртка над общим [walk]-движком
+/// ([if_engine.dart]). `obj` мутируется на месте. Coerce — по `node.type`
+/// (через [resolve]), `#if` — резолвится здесь же (substitution-фаза, до
+/// post-steps). Заменяет старые `_substituteVars`/`_resolveVar`, которые гадали
+/// тип по содержимому строки.
+void _substituteVars(dynamic obj, VarResolver resolve) {
+  walk(obj, resolve);
 }
