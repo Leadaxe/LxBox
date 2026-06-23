@@ -8,12 +8,23 @@
 
 ## [Unreleased]
 
+## [2.4.2] — 2026-06-23
+
+Движок шаблона переписан на типизированную подстановку с декларативными `#if` (§120): VPN-mode больше не собирается императивным кодом, а описан прямо в `wizard_template.json`. Вкладка VPN Mode стала data-driven — контролы рендерятся из template-нод, а listen-адрес прокси теперь произвольный IPv4 (комбобокс с подсказками `127.0.0.1`/`0.0.0.0`). Новый пресет «Block unknown traffic» режет неатрибутированный трафик в туннеле. Ядро → `v1.13.13-lx.15`.
+
+### Added
+
+- **§033 — preset «Block unknown traffic» (`block_unknown`)** ([wizard_template.json](app/assets/wizard_template.json)). Reject/direct трафика в туннеле без атрибуции к установленному приложению (фоновые/чужие процессы). Inline `rule_set {invert:true, package_name_regex:"^"}` матчит соединения с пустым `AndroidPackageNames` (на ядре `lx.15` подтверждено: `invert` флипает «есть пакет»→no-match, «нет пакета»→match). Outbound-var `reject|direct` (default `reject` → `action:reject`). UI-label — «Unknown traffic». ⚠ Caveat: ловит **всю** неатрибутированную атрибуцию (system/root UID, egress туннеля, сбой `find_process`), не только foreign-процессы.
+
 ### Changed
 
 - **§120 — typed template engine + `#if`** ([feature spec](docs/spec/features/120%20template-engine-typed-vars-and-if/spec.md)). Подстановка `@var` теперь коэрсит значение **строго по объявленному `WizardVar.type`**, а не угадыванием по содержимому: `bool`/`int` — типизируются, `secret`/`text`/`enum`/`outbound`/`dns_servers` — остаются строкой (пароль `1234` больше не становится int). Введён явный тип `int`; `tun_mtu` переведён `text`→`int`. Общее ядро подстановки и условных конструкций — новый `app/lib/services/builder/if_engine.dart` (`coerceVarValue`/`walk`/predicates/`Dropped`/RegExp-кэш), используется обоими движками (`build_config._substituteVars` + `preset_expand.substituteVars`).
 - **§120 — `#if`-конструкт в шаблоне** (map-spread + array-element; предикаты `and`/`or`/`#in`/`#notIn`/`#notEmpty`/`#isEmpty`/`#matches`/`#not`). Декларативная условность прямо в `config`/preset-телах; поглощает прежний `enabled:"@var"`-гейт (§045). Дизайн заимствован у десктопного лаунчера (SPEC 067), без `params[]` и `@runtime.*`.
 - **§120/§119 — VPN-mode стал декларативным; `applyVpnMode` удалён.** `tun-in`/`mixed-in` в `inbounds[]` и `inbound` в route-rules собираются `#if`-walker'ом по `@vpn_mode` (`vpn`/`proxy`/`vpn_proxy`); `users` внутри `mixed-in` — map-spread `#if` по `@proxy_auth`. Локальный socks/http прокси (mixed-in) теперь живёт в `wizard_template.json`, а не строится императивно в коде. `inbound` в route-rules — `Listable[string]`-массив (тождественно скаляру для sing-box). Защита от broken-auth сохранена: пустой пароль при включённом auth (в т.ч. форс на `0.0.0.0`) → `users` отсутствует, не `[{"":""}]`.
 - **§120 — template-load валидация `#if`** ([if_engine.dart](app/lib/services/builder/if_engine.dart) `validateIfConstructs`). Кривой `#if` в шаблоне (оба `and`+`or`, нет `value`, предикат на необъявленную var, type-mismatch, неизвестный оператор, битый regexp) → `TemplateIfError` на загрузке, а не молча битый конфиг.
+- **§119 — VPN Mode tab data-driven из template-нод** ([vpn_mode_tab.dart](app/lib/screens/vpn_mode_tab.dart)). Контролы вкладки рендерятся по `WizardVar`-нодам секции «VPN Mode» (`title`/`tooltip`/`options` читаются из шаблона), значения мапятся в типизированный `VpnModeConfig`, а не в `userVars`. Метаданные UI вынесены в `wizard_template.json` (`proxy_*` получили `title`/`tooltip`/`options`); vars остаются hidden, реальный UI — в VPN Settings → Mode.
+- **§119 — proxy listen: произвольный IPv4 вместо двух фиксированных значений** ([vpn_mode_tab.dart](app/lib/screens/vpn_mode_tab.dart), [vpn_mode.dart](app/lib/services/settings_storage/vpn_mode.dart)). `SegmentedButton` (`127.0.0.1`/`0.0.0.0`) → редактируемый комбобокс с IPv4-валидацией: можно выбрать подсказку или вписать любой адрес (`127.10.20.5`, LAN-IP). Свободный ввод коммитится на focus-loss. `isPublicListen` теперь `= !loopback`, а не строго `== 0.0.0.0`: auth форсится на **любой** не-loopback адрес (конкретный LAN-IP так же виден извне, как `0.0.0.0` → пароль обязателен). Добавлены `isValidListenAddr`/`isLoopback`.
+- **§104 — ядро sing-box-lx → `v1.13.13-lx.15`** ([libbox.version](app/android/libbox.version)). `lx.14` → `lx.15` (нужен §033: `invert` + `package_name_regex` для match по пустому `AndroidPackageNames`).
 
 ## [2.4.1] — 2026-06-22
 
