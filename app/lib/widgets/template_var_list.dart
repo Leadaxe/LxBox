@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/parser_config.dart';
 import 'outbound_picker.dart';
@@ -238,17 +239,31 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
   }
 
   /// text: если есть options — добавляется combo-popup ▾ с пресетами.
+  /// int (§161): только цифры + clamp в uint16 [0, 65535] — ядро принимает
+  /// числовые поля (port/tolerance) как uint16, значение вне диапазона роняет
+  /// его на decode. Backstop тот же в `coerceVarValue`.
   Widget _buildTextField(WizardVar v) {
     final hasSuggestions = v.options.isNotEmpty;
+    final isInt = v.type == 'int';
     return _VarTextField(
       key: ValueKey('text-${v.name}'),
       value: _values[v.name] ?? '',
       width: hasSuggestions ? 220 : 180,
       label: v.title.isNotEmpty ? v.title : v.name,
       tooltip: v.tooltip,
+      numeric: isInt,
       suggestions: v.options.map((o) => o.value).toList(),
-      onChanged: (val) => _update(v.name, val),
+      onChanged: (val) => _update(v.name, isInt ? _clampUint16(val) : val),
     );
+  }
+
+  /// §161: нормализует int-ввод в uint16. Пусто — оставляем как есть (юзер
+  /// стирает поле; clamp на пустой строке дал бы внезапный «0»).
+  static String _clampUint16(String raw) {
+    if (raw.isEmpty) return raw;
+    final n = int.tryParse(raw);
+    if (n == null) return raw; // formatter уже отсёк не-цифры; defensive
+    return n.clamp(0, 65535).toString();
   }
 }
 
@@ -272,6 +287,7 @@ class _VarTextField extends StatefulWidget {
     this.width = 180,
     this.trailing,
     this.suggestions = const [],
+    this.numeric = false,
   });
 
   final String value;
@@ -282,6 +298,9 @@ class _VarTextField extends StatefulWidget {
   final double width;
   final Widget? trailing;
   final List<String> suggestions;
+
+  /// §161: цифровая клавиатура + digits-only formatter (для `type: int`).
+  final bool numeric;
 
   @override
   State<_VarTextField> createState() => _VarTextFieldState();
@@ -368,6 +387,10 @@ class _VarTextFieldState extends State<_VarTextField> {
     final field = TextField(
       controller: _ctrl,
       obscureText: _obscured,
+      keyboardType: widget.numeric ? TextInputType.number : null,
+      inputFormatters: widget.numeric
+          ? [FilteringTextInputFormatter.digitsOnly]
+          : null,
       style: const TextStyle(fontSize: 13),
       decoration: InputDecoration(
         isDense: true,
