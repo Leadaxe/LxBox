@@ -12,7 +12,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import java.io.File
 import java.util.Locale
 
 /**
@@ -38,7 +37,21 @@ class BoxApplication : Application() {
 
         // setLocale обязательно ДО Libbox.setup'а — иначе sing-box error
         // messages не локализованы. Формат `xx_YY` (с подчёркиванием).
-        Libbox.setLocale(Locale.getDefault().toLanguageTag().replace("-", "_"))
+        //
+        // libbox 1.14: setLocale стал СТРОГИМ — golang.org/x/text/language
+        // бросает `unsupported locale` на нераспознанной комбинации язык+регион
+        // (напр. `ru_IL` = русский на устройстве с регионом Израиль). В 1.13.13
+        // это глоталось. Без catch → краш в onCreate ДО старта ядра, приложение
+        // не запускается вовсе. Локаль влияет лишь на язык error-строк ядра —
+        // fail-safe: при отказе пробуем голый язык (`ru`), затем молча
+        // пропускаем (ядро возьмёт дефолтную локаль).
+        runCatching {
+            Libbox.setLocale(Locale.getDefault().toLanguageTag().replace("-", "_"))
+        }.recoverCatching {
+            Libbox.setLocale(Locale.getDefault().language)
+        }.onFailure {
+            android.util.Log.w(TAG, "setLocale failed, using core default: ${it.message}")
+        }
 
         runCatching { QuickShortcuts.refresh(this) }
             .onFailure { android.util.Log.w(TAG, "QuickShortcuts.refresh failed: ${it.message}") }
@@ -85,10 +98,10 @@ class BoxApplication : Application() {
             debug = BootReceiver.isCoreLogsEnabled(context)
         }
         Libbox.setup(opts)
-        // redirectStderr — best-effort: старые libbox или SELinux OEM могут
-        // блокировать.
-        runCatching { Libbox.redirectStderr(File(workingDir, "stderr.log").path) }
-            .onFailure { android.util.Log.w(TAG, "redirectStderr failed: ${it.message}") }
+        // libbox 1.14: `Libbox.redirectStderr` удалён из API. Crash/stderr-канал
+        // теперь конфигурится декларативно через SetupOptions.crashReportSource.
+        // §038 stderr-viewer на 1.14 опирается на core-log forwarding (debug=...),
+        // отдельный redirect больше не нужен.
     }
 
     companion object {
@@ -99,7 +112,7 @@ class BoxApplication : Application() {
         @Volatile
         internal lateinit var instance: BoxApplication
 
-        /** Готовность `Libbox.setup` + `Libbox.redirectStderr`. */
+        /** Готовность `Libbox.setup` (libbox 1.14: redirectStderr убран из API). */
         val libboxReady: CompletableDeferred<Unit> = CompletableDeferred()
 
         /** §051 Phase 3 — singleton WifiNetworkObserver. Toggled через

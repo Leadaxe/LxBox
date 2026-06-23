@@ -197,7 +197,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         while (inet6.hasNext()) { val a = inet6.next(); builder.addAddress(a.address(), a.prefix()) }
 
         if (options.autoRoute) {
-            builder.addDnsServer(options.dnsServerAddress.value)
+            // libbox 1.14: dnsServerAddress стал StringIterator (раньше — одиночный
+            // OptionalString с .value). Добавляем все объявленные ядром DNS-сервера.
+            val dnsServers = options.dnsServerAddress
+            while (dnsServers.hasNext()) {
+                val dns = dnsServers.next()
+                if (dns.isNotEmpty()) builder.addDnsServer(dns)
+            }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val r4 = options.inet4RouteAddress

@@ -264,7 +264,9 @@ class BoxService(
             runCatching { commandServer.get()?.resetNetwork() }
                 .onFailure { Log.e(TAG, "auto resetNetwork failed", it) }
         }
-        Libbox.setMemoryLimit(true)
+        // libbox 1.14: `Libbox.setMemoryLimit` удалён — управление OOM killer'ом
+        // переехало в SetupOptions (oomKillerEnabled / oomMemoryLimit), задаётся
+        // один раз в BoxApplication.setupLibbox.
 
         val cs = commandServer.get() ?: run {
             stopAndAlert("CommandServer not initialized")
@@ -599,6 +601,18 @@ class BoxService(
 
     // §141 P1.1a — делегирует в serviceReload(), который теперь сам no-throw.
     override fun setSystemProxyEnabled(isEnabled: Boolean) { serviceReload() }
+
+    // ─── libbox 1.14: новые методы CommandServerHandler ──────────────────
+    // sing-box 1.14 влил SSH-агент и debug-хук намеренного краша. Для Android
+    // VPN-клиента не используем.
+
+    /** SSH-agent forwarding не поддерживаем на Android. Error-метод — gomobile
+     *  ловит исключение, до JNI Runtime::Abort не доходит. */
+    override fun connectSSHAgent(): Int =
+        throw UnsupportedOperationException("SSH agent not supported on Android")
+
+    /** Debug-хук намеренного краша ядра — нам не нужен, no-op. */
+    override fun triggerNativeCrash() {}
 
     /// §043: sing-box log lines проходят сюда независимо от `log.level`
     /// в конфиге. INFO+ пушим в Flutter через EventChannel "lxbox/coreLog".

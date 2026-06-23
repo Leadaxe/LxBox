@@ -223,6 +223,42 @@ interface PlatformInterfaceWrapper : PlatformInterface {
         return StringArray(certs.iterator())
     }
 
+    // ─── libbox 1.14: новые методы PlatformInterface ────────────────────
+    // sing-box 1.14 влил Tailscale/SSH-сервер. Для Android VPN-клиента этот
+    // функционал не нужен — отдаём безопасные заглушки. Контракт §050/§151:
+    // методы БЕЗ `throws Exception` (registerMyInterface, *NeighborMonitor,
+    // usePlatformShell) бросать НЕЛЬЗЯ → no-op; error-возвращающие — пустые
+    // значения, чтобы ядро деградировало gracefully, а не валилось.
+
+    /** Tailscale identity hook — на Android не используем. */
+    override fun registerMyInterface(name: String) {}
+
+    override fun usePlatformShell(): Boolean = false
+
+    override fun checkPlatformShell() {}
+
+    override fun lookupUser(username: String): io.nekohasekai.libbox.PlatformUser =
+        io.nekohasekai.libbox.PlatformUser()
+
+    override fun lookupSFTPServer(): String = ""
+
+    override fun readSystemSSHHostKey(): String = ""
+
+    override fun tailscaleHostname(): String = ""
+
+    override fun openShellSession(
+        user: io.nekohasekai.libbox.PlatformUser,
+        command: String,
+        env: StringIterator,
+        termType: String,
+        width: Int,
+        height: Int
+    ): io.nekohasekai.libbox.ShellSession = throw UnsupportedOperationException("shell not supported on Android")
+
+    override fun startNeighborMonitor(listener: io.nekohasekai.libbox.NeighborUpdateListener) {}
+
+    override fun closeNeighborMonitor(listener: io.nekohasekai.libbox.NeighborUpdateListener) {}
+
     private class StringArray(private val iter: Iterator<String>) : StringIterator {
         override fun hasNext() = iter.hasNext()
         // §151 F1 — JNI no-throw: `StringIterator.Next()` — Go-метод БЕЗ `error`,
