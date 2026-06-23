@@ -4,6 +4,7 @@
 |---|---|
 | Статус | Draft |
 | Дата | 2026-06-24 |
+| Целевое ядро | `sing-box-lx v1.14.0-lx.1-rc.1` (base **v1.13.13** + with_awg/with_xhttp; AAR `libbox-1.14.0-lx.1-rc.1.aar`). **Проверено декомпиляцией:** CommandClient + команды 0–5 + closed-история (`Connection.getClosedAt`, `ConnectionEventClosed=2`, `ConnectionStateClosed=2`, `Connections.applyEvents/filterState`) присутствуют в ЭТОМ AAR. Обе фазы реализуемы на одном ядре — версионного разрыва нет. |
 | Связанные spec'ы | §012 (native vpn service), §121 (libbox-1.14-adoption — родитель), §016 (statistics & connections), §044 (per-app profiler), §048 (home-node-filters), §042 (health watchdog — data-source переезжает сюда), §031 (debug api), §043/§010 (core-log — НЕ затрагивается) |
 | Память | [[project_libbox_114_migration_api_breaks]], [[project_jni_callbacks_must_not_throw]], [[project_dns_routing_king]], [[feedback_no_destructive_diagnostics]] |
 | Затронутые файлы | `app/lib/services/clash_api_client.dart`, `app/lib/config/clash_endpoint.dart`, `app/lib/controllers/home_controller.dart` (+`heartbeat.dart`/`ping_orchestration.dart`/`config_io.dart`), `app/lib/screens/{connections_screen,stats_screen}.dart`, `app/lib/services/traffic_profiler.dart`, `app/lib/screens/home_screen.dart`, `app/lib/services/debug/handlers/{clash,action,state,profiler,help}.dart`, `app/lib/services/builder/build_config.dart`, `app/assets/wizard_template.json`, Kotlin `BoxService.kt`/`VpnPlugin.kt`/`BoxApplication.kt`, `scripts/lxbox-diag.sh`, `docs/{ARCHITECTURE,STORAGE,DIAGNOSTICS}.md` |
@@ -26,7 +27,7 @@
 
 1. **Безопасность.** `experimental.clash_api.external_controller` заставляет ядро открыть **слушающий TCP-порт на 127.0.0.1** (рандомизируется в 49152–65535, `build_config.dart:471-487`; на устройстве ~63130). На Android `127.0.0.1` доступен **любому** приложению в системе — secret (`Authorization: Bearer`) единственная защита, и он лежит в конфиге на диске. CommandClient ходит через приватный unix-socket `command.sock` в `filesDir` (права процесса-владельца) — поверхность атаки исчезает. `BoxService.kt:436-437` уже фиксирует, что «CommandServer держал binding на Clash API port (63130)» — порт реально живёт.
 2. **Нативность.** CommandClient — штатный канал libbox для GUI-клиентов (SagerNet/SFA через него и работают). Мы уже держим `CommandServer(this, platformInterface)` in-process (`BoxService.kt:342`), но потребляем данные кружным путём через HTTP-петлю. CommandClient — прямой потребитель того же сервера.
-3. **Потенциал (недостижим через Clash).** `StatusMessage` отдаёт **готовую скорость от ядра** (`getUplink()/getDownlink()`, байт/с) — сейчас `fetchTraffic()` (`clash_api_client.dart:203`) считает дельту сам поверх `/connections`-агрегации. Сверх того доступны: `getDeprecatedNotes()` (предупреждения о deprecated-опциях конфига), `ConnectionEvent`-дельты (точные open/close без diff'а снапшотов), `getClosedAt()`/`ConnectionStateClosed` (closed-история alpha.33, есть в нашем AAR), `startNetworkQualityTest`/`startSTUNTest`. Ничего из этого Clash REST не даёт.
+3. **Потенциал (недостижим через Clash).** `StatusMessage` отдаёт **готовую скорость от ядра** (`getUplink()/getDownlink()`, байт/с) — сейчас `fetchTraffic()` (`clash_api_client.dart:203`) считает дельту сам поверх `/connections`-агрегации. Сверх того доступны: `getDeprecatedNotes()` (предупреждения о deprecated-опциях конфига), `ConnectionEvent`-дельты (точные open/close без diff'а снапшотов), `getClosedAt()`/`ConnectionStateClosed` (closed-история — присутствует в целевом AAR `1.14.0-lx.1-rc.1`, см. шапку; хоть база и v1.13.13, наш форк её несёт), `startNetworkQualityTest`/`startSTUNTest`. Ничего из этого Clash REST не даёт.
 
 ---
 
@@ -156,7 +157,7 @@ CommandServer уже стартует в `onStartCommand`-корутине (`Box
 | 4.2 | HIGH | Backpressure: push 1/с × N conn заливает UI; `getReset()`-снапшот огромен. | Дросселирование на native (эмит не чаще X), батч + cap по образцу `coreLog` (`BoxService.kt:676-696`, `LOG_QUEUE_MAX=4096`, `DRAIN_BATCH_MAX=200`). |
 | 4.3 | MED | Dead-tunnel detection (§141, 20с — нецель удлинять). Liveness меняет семантику: было «N HTTP-фейлов», станет `disconnected()`/«нет StatusMessage > таймаут». | Native: `disconnected` → dead-tunnel broadcast. Dart heartbeat → watchdog «давно не было StatusMessage». `_maxHeartbeatFailures` переосмыслить. |
 | 4.4 | HIGH | `TrafficProfiler` (~1000 строк, `bindRuntime`+`_pollConnections`) завязан на pull-diff. | Сигнатура `bindRuntime` → подписка на `Stream<ConnectionEvent>`; diff-логика → нативные `ConnectionEventNew/Closed`. **Самый большой объём переписывания.** |
-| **4.5** | **BLOCKER-кандидат** | **Нет single-node delay в CommandClient.** Есть только `urlTest(groupTag)`. §048 ping-фильтр (Released v1.9.0) читает per-node `state.lastDelay[tag]`; mass-ping (`ping_orchestration.dart:234`, concurrency=10 через `delay(tag)`) и single-node (`ping_orchestration.dart:30`) **теряют аналог**. `cancelDelays()` (`:292`) тоже не выразим. | **Проверить на железе:** триггерит ли `urlTest(group)` на **селектор**-группе (не urltest) тест всех детей с заполнением `OutboundGroupItem.getURLTestDelay()`. Если ДА — §048 переезжает на `writeGroups`-delays. Если НЕТ — оставить single-node delay через read-only Clash HTTP (см. §5/§6) ИЛИ принять регресс per-node ping для селекторов. **Решение блокирует фазу 1.** |
+| **4.5** | **BLOCKER-кандидат** | **Нет single-node delay в CommandClient.** Есть только `urlTest(groupTag)`. §048 ping-фильтр (Released v1.9.0) читает per-node `state.lastDelay[tag]`; mass-ping (`ping_orchestration.dart:234`, concurrency=10 через `delay(tag)`) и single-node (`ping_orchestration.dart:30`) **теряют аналог**. `cancelDelays()` (`:292`) тоже не выразим. | **Проверить на железе:** триггерит ли `urlTest(group)` на **селектор**-группе (не urltest) тест всех детей с заполнением `OutboundGroupItem.getURLTestDelay()`. Если ДА — §048 переезжает на `writeGroups`-delays. Если НЕТ — (а) принять регресс per-node ping для селекторов ИЛИ (б) реализовать ping в обвязке иначе (отдельная outbound-проба). Возврат Clash HTTP ради ping'а — крайний фолбэк (§6). **Решение блокирует фазу 1.** |
 
 ---
 
@@ -196,13 +197,18 @@ CommandServer уже стартует в `onStartCommand`-корутине (`Box
 
 Это **главный инструмент проекта** ([[feedback_no_destructive_diagnostics]]: «первое действие при любом баге = `lxbox-diag.sh`»). `/connections` (chains+rule per conn) — единственный способ понять «куда идёт TCP», этих данных нет в info-логах sing-box (`DIAGNOSTICS.md`).
 
-**Решение (Final, см. §6 #2): гибрид — оставить Clash HTTP-listener как ОПЦИОНАЛЬНЫЙ read-only диагностический канал под debug-флагом, management полностью на CommandClient.** Обоснование:
-- `/rules`-снапшот (`lxbox-diag.sh:108`) CommandClient **вообще не экспонирует** (команды 0–5 = Log/Status/Group/ClashMode/Connections/Outbounds, rules нет) — невосстановимая потеря интроспекции routing-таблицы без HTTP.
-- Single-node delay (§4.5) может потребовать HTTP, если `urlTest(group)` не покрывает селекторы.
+**Решение (Final): ПОЛНЫЙ отказ — ноль Clash HTTP-listener'а, и в release, и под debug-флагом.** Разбор по каждому артефакту `lxbox-diag.sh`:
 
-**Реализация гибрида:** `experimental.clash_api` инжектится в конфиг **только** когда включён существующий debug-флаг core-logs (`setCoreLogsEnabled`, `BootReceiver`, `VpnPlugin.kt:274-281`) ИЛИ отдельный «diagnostics»-флаг; в обычном (release) режиме блок не добавляется → порт не открывается. Dart-клиент `ClashApiClient` удаляется в любом случае — HTTP остаётся **только** для adb/curl-диагностики, не для UI. `debug/handlers/clash.dart` `/clash/*` proxy переписать поверх MethodChannel→CommandClient (живёт всегда), `/rules` — fallback на HTTP когда флаг включён, иначе документированный `501 Not Available`. `lxbox-diag.sh` + `DIAGNOSTICS.md` обновить: connections/proxies через Debug-API-over-CommandClient, rules только под флагом.
+| Артефакт diag | Чем заменяется без Clash HTTP |
+|---|---|
+| `clash_rules.json` (`:108`) | **Конфигом, а не ядром.** Правила роутинга — НАШ артефакт: мы их генерируем в builder из `wizard_template.json`, итог лежит на диске (последний собранный конфиг). Спрашивать `/rules` у ядра по HTTP, чтобы прочитать то, что мы сами туда положили — лишний крюк. Диагностика читает `route.rules` из собранного конфига напрямую (Debug API `/config` или файл). **`/rules` из ядра НЕ нужен.** |
+| `clash_connections.json` (`:106`) | Debug API `/clash/connections`, переписанный поверх CommandClient (native-аккумулятор → snapshot). chains+rule per conn сохраняются (`Connection.chain()`/`getRule()`). |
+| `clash_proxies.json` (`:107`) | Debug API `/clash/proxies` поверх `writeGroups`/`writeOutbounds`. |
+| `clash_version.json` (`:109`) | `Libbox.version()` через MethodChannel (`getCoreVersion`). |
 
-**Альтернатива (если выбран полный отказ):** вся интроспекция connections/groups через наш Debug API (`/clash/*` переписан поверх CommandClient), `/rules` теряется насовсем (acceptable loss, задокументировать). Спека **обязана выбрать одно** — рекомендация: гибрид (read-only HTTP под флагом), т.к. дешевле и не теряет rules.
+Итог: вся диагностика, что раньше шла `curl`'ом к Clash-порту, переезжает на **наш Debug API поверх CommandClient** (connections/proxies) либо на **чтение собранного конфига** (rules). HTTP-listener ядра не поднимается никогда. `ClashApiClient` удаляется. `debug/handlers/clash.dart` `/clash/*` proxy переписывается поверх MethodChannel→CommandClient. `lxbox-diag.sh` + `DIAGNOSTICS.md` обновляются: connections/proxies через Debug-over-CommandClient, rules через `/config`.
+
+**Единственная оговорка — §4.5 (single-node delay).** Если железная проверка покажет, что `urlTest(group)` НЕ покрывает per-node delays селекторов, и иного пути в CommandClient нет — это узкий вопрос про ping-фильтр §048, НЕ про диагностику. Тогда варианты: (а) принять регресс per-node ping для селекторов; (б) реализовать ping в обвязке иначе (напр. отдельная outbound-проба). Возврат Clash HTTP ради одного только ping'а — крайний и нежелательный фолбэк; решать после §4.5-проверки, не закладывать в дизайн заранее.
 
 ---
 
@@ -232,8 +238,8 @@ CommandServer уже стартует в `onStartCommand`-корутине (`Box
 | # | Вопрос | Рекомендация |
 |---|---|---|
 | 1 | Где CommandClient — `BoxService` (A) или `VpnPlugin` (B)? | Поднять рядом с CommandServer в `BoxService` (A, переиспользует scope/teardown), НО эмиттер sink — через `VpnPlugin.binaryMessenger` (main-процесс). Зафиксировать инвариант «эмиттер в Flutter-процессе» комментарием+тестом, чтобы будущий `:bg` не порвал EventChannel. |
-| 2 | Полный отказ или гибрид (read-only HTTP под флагом)? | **Гибрид** — оставить HTTP-listener под debug-флагом ради `/rules` и потенциального single-node delay; UI-клиент `ClashApiClient` удалить в любом случае (см. §6). |
-| 3 | §4.5: `urlTest(group)` покрывает per-node delay селекторов? | **Проверить на железе ДО фазы 1** (блокирует §048). Если нет — single-node ping через read-only HTTP (гибрид §6) или принять регресс для селекторов. |
+| 2 | Полный отказ или гибрид? | **РЕШЕНО: полный отказ** — ноль Clash HTTP-listener'а. Правила берутся из собранного конфига (наш артефакт), не из ядра; connections/proxies — через Debug API поверх CommandClient. `/rules` из ядра не нужен (см. §6). |
+| 3 | §4.5: `urlTest(group)` покрывает per-node delay селекторов? | **Проверить на железе ДО фазы 1** (блокирует §048). Если нет — принять регресс per-node ping для селекторов ИЛИ ping иначе в обвязке; возврат HTTP — крайний фолбэк. |
 | 4 | `rulePayload` есть в `getRule()`? | Проверить на железе (by-rule агрегация Stats `stats_screen.dart`, `clash_api_client.dart` `byRule`). Если склеен — адаптер сплитит; если нет — by-rule теряет payload-гранулярность. |
 | 5 | `activeConnections` = `ConnectionsIn+Out` или `len(connections)`? | Проверить семантику StatusMessage на железе; сейчас = длина списка (`connections_screen`/`traffic_bar`). |
 | 6 | Rate-limit push-частоты? | Да: `setStatusInterval≈1s` + native-дросселирование снапшота connections (§4.2), батч по образцу `coreLog`-drainer. |
@@ -249,24 +255,24 @@ CommandServer уже стартует в `onStartCommand`-корутине (`Box
 | 0 | Концептуальная путаница CommandServer⟂ClashAPI — «тот же транспорт» | BLOCKER | §0/§3: замена контракта данных, единый адаптер Connection, дельты вместо снапшота. |
 | 2.1 | CommandClient в `:bg`-процессе → EventChannel рвётся | BLOCKER | §2.1: эмиттер обязан жить в Flutter-процессе; инвариант + тест процессной модели. |
 | 3.2 | Connections только дельтами, нет pull | BLOCKER | native `Connections.applyEvents`-аккумулятор, эмит снапшота. |
-| 4.5 | Нет single-node delay → §048/mass-ping регресс | BLOCKER-кандидат | Проверка на железе (Q3); fallback read-only HTTP. |
-| 1.1 | Debug `/clash/*` proxy (8+ роутов) умрёт | HIGH | Переписать поверх CommandClient (MethodChannel) ИЛИ read-only HTTP (§6). |
+| 4.5 | Нет single-node delay → §048/mass-ping регресс | BLOCKER-кандидат | Проверка на железе (Q3); регресс per-node ping ИЛИ ping иначе; HTTP — крайний фолбэк. |
+| 1.1 | Debug `/clash/*` proxy (8+ роутов) умрёт | HIGH | Переписать поверх CommandClient (MethodChannel); rules — из собранного конфига (§6). |
 | 1.2 | Debug actions (`action.dart` switch/urltest/reset) | HIGH | Едут следом за HomeController; тест-план покрывает. |
 | 2.2/2.3 | EventChannel процессность + CommandClient lifecycle/реконнект | HIGH | §2.1/Фаза 0: connect после `libboxReady`+`Started`, retry-backoff, реконнект на `disconnected`. |
 | 3.1 | Имена полей Connection другие; `rulePayload` потеря | HIGH | Единый адаптер; Q4 проверка `getRule()`. |
 | 3.3/4.3 | `/version` ping исчезает; dead-tunnel семантика | HIGH/MED | Liveness = `connected/disconnected`; heartbeat→watchdog. |
 | 4.1/4.2 | 3 Timer→1 push-поток; backpressure | HIGH | Один подписчик, StreamBuilder, дросселирование по `coreLog`-паттерну. |
 | 4.4 | TrafficProfiler ~1000 строк pull-diff | HIGH | `bindRuntime`→Stream of ConnectionEvent; нативные open/close. |
-| 5.1 | `lxbox-diag.sh` теряет 3 артефакта + curl-playbook | HIGH | §6 гибрид: connections/proxies через Debug-over-CommandClient; rules под флагом. |
+| 5.1 | `lxbox-diag.sh` теряет 4 артефакта + curl-playbook | HIGH | §6: connections/proxies через Debug-over-CommandClient; rules из собранного конфига; version через `Libbox.version()`. |
 | 7.1 | Импортированные конфиги приносят чужой `clash_api` | HIGH | Builder/validator **вырезает** блок из импорта, не только не добавляет. |
 | 7.6 | 11 новых JNI-колбэков = Runtime::Abort без try/catch | MED | Каждый handler-метод в try/catch fail-safe ([[project_jni_callbacks_must_not_throw]]); null-sink guard как `coreLogSink`. |
 | 6.2 | Closed-история = неограниченный рост памяти | MED | default `filterState(Active)`; closed с TTL/cap только при открытом экране. |
 | 7.7 | `setStatusInterval` наносекунды (Go Duration) | MED | Явная константа + комментарий + ассерт/unit-тест. |
-| 2.5 | Двойной канал (HTTP+socket) если гибрид | MED | Осознанно: ядро держит оба, ресурсно ОК; `clash_api` в конфиге только под debug-флагом. |
+| 2.5 | ~~Двойной канал (HTTP+socket) если гибрид~~ | — | Снято: полный отказ, единственный канал — command.sock. |
 | 7.2 | Бэкапы с `clash_api`/`secret` в vars молча отбрасываются | MED | Migration note + тест импорта старого бэкапа. |
 | 7.5 | `ClashHttpException` гуманизация ошибок | MED | Новый `CommandClientException`/`PlatformException`-ветка в `error_format.dart:41`. |
 | 7.10 | §042 Health Watchdog (Draft) спроектирован под `clash.fetchTraffic/delay` | MED | Cross-ref §122→§042: переписать data-source на `StatusMessage`/`Groups` ДО реализации. |
-| 1.6 | `/rules` не экспонируется CommandClient | LOW/MED | Read-only HTTP под флагом (§6) ИЛИ acceptable loss задокументировать. |
+| 1.6 | `/rules` не экспонируется CommandClient | LOW | Не нужен: правила берутся из собранного конфига (наш артефакт), не из ядра (§6). |
 | 7.4/7.11 | `generatedVars` осиротеет; `PerAppTraceTab.clash` мёртв | LOW | Cleanup (опц.). |
 | 7.8 | `routeFinalTag` в `clash_endpoint.dart` | LOW | Перенести при удалении файла. |
 
@@ -280,7 +286,7 @@ CommandServer уже стартует в `onStartCommand`-корутине (`Box
 
 ## 11. Docs to update
 
-`docs/ARCHITECTURE.md` (стр.49 «управление через Clash API»; брокеры событий 108–111 push vs poll; раздел Clash API client 1126–1179; design decisions 1242–1244; extraction roadmap 1403 — снять `clash_api_dart`), `docs/STORAGE.md:144` (формулировка core-log), `docs/DIAGNOSTICS.md` (новый источник connections/proxies/rules), `scripts/lxbox-diag.sh`, `docs/api/debug-api-reference.md` + `docs/api/clash-api-reference.md` (переписать/удалить), `docs/spec/features/042 health watchdog/spec.md` (data-source TBD на CommandClient), `CHANGELOG.md` (Unreleased). Имплементация не завершена пока docs не обновлены.
+`docs/ARCHITECTURE.md` (стр.49 «управление через Clash API»; брокеры событий 108–111 push vs poll; раздел Clash API client 1126–1179; design decisions 1242–1244; extraction roadmap 1403 — снять `clash_api_dart`), `docs/STORAGE.md:144` (формулировка core-log), `docs/DIAGNOSTICS.md` (новый источник: connections/proxies через Debug-over-CommandClient, rules из собранного конфига), `scripts/lxbox-diag.sh`, `docs/api/debug-api-reference.md` + `docs/api/clash-api-reference.md` (переписать/удалить), `docs/spec/features/042 health watchdog/spec.md` (data-source TBD на CommandClient), `CHANGELOG.md` (Unreleased). Имплементация не завершена пока docs не обновлены.
 
 ## 12. Acceptance criteria
 
@@ -289,7 +295,7 @@ CommandServer уже стартует в `onStartCommand`-корутине (`Box
 - [ ] Скорость/трафик, группы/узлы, connections, выбор узла, close, §143 interrupt, profiler, dead-tunnel — работают через CommandClient (E2E пройдены).
 - [ ] §048 ping-фильтр функционирует (Q3 разрешён); если регресс — задокументирован.
 - [ ] Все 11 JNI-колбэков fail-safe; краш-тест на старом Android не валит процесс.
-- [ ] Диагностика (`lxbox-diag.sh` + `/clash/*` Debug) работает по новому пути; `/rules` доступен под флагом или потеря задокументирована.
+- [ ] Диагностика (`lxbox-diag.sh` + `/clash/*` Debug) работает по новому пути: connections/proxies через Debug-over-CommandClient, rules из собранного конфига, version через `Libbox.version()`. Ни в release, ни в debug Clash HTTP-порт не открывается.
 - [ ] `ClashApiClient`/`ClashEndpoint.fromConfigJson` удалены; `routeFinalTag` перенесён; тесты зелёные.
 - [ ] Docs (§11) обновлены.
 
