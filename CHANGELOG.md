@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **§161 (часть 2) — пустое required-поле → подстановка `default_value`** ([template_var_list.dart](app/lib/widgets/template_var_list.dart), [build_config.dart](app/lib/services/builder/build_config.dart), [task spec](docs/spec/tasks/161-urltest-tolerance-uint16.md)). Стёртое required-поле (`tolerance` и т.п.) уходило в конфиг как `""` → ядро падало на decode так же, как и от вне-диапазонного значения. Правило `value.isEmpty && v.required && v.defaultValue.isNotEmpty && type!='secret' → default` применяется на трёх точках: (1) «UI сам чинит» — `TemplateVarListView.initState` подставляет default при загрузке и персистит, исправляя накопившиеся битые значения у юзеров при открытии экрана; (2) build_config backstop при merge vars (ДО substitution, не трогает `#if`) — ловит импорт бэкапа/пресета и legacy-state; (3) блок persist пустого required в UI + `errorText: "Required"`. optional-vars (§033 `required:false`) и `secret` исключены — для них пусто легитимно. Подмена НЕ делается внутри `#if`/substitution (сломала бы `#isEmpty`-предикаты). +8 тестов.
+
 ## [2.4.3] — 2026-06-23
 
 Hotfix: с включённым Auto Proxy ядро не стартовало — `decode config: outbounds[N].tolerance: cannot unmarshal string into ... uint16`. Затрагивало всех, у кого в канале активен Auto Proxy.

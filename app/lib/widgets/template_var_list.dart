@@ -69,18 +69,66 @@ class TemplateVarListView extends StatefulWidget {
 
 class _TemplateVarListViewState extends State<TemplateVarListView> {
   late final Map<String, String> _values;
+  late final Map<String, WizardVar> _byName;
+
+  /// §161: имена required-полей, которые сейчас пусты — для errorText. Persist
+  /// для них заблокирован (см. [_update]), сборка конфига backstop'ом подставит
+  /// default — но юзер видит, что поле обязательно.
+  final Set<String> _emptyRequired = {};
 
   @override
   void initState() {
     super.initState();
+    _byName = {for (final v in widget.vars) v.name: v};
+    // §161 «UI сам чинит»: при загрузке пустое required-поле с непустым
+    // default → подставляем default прямо в точке чтения. Накопившиеся битые
+    // значения (напр. стёртый раньше tolerance) исправляются при открытии
+    // экрана. optional-vars (§033, required:false) НЕ трогаем — для них пусто
+    // легитимно (поле выпадает из конфига через Dropped).
+    final repaired = <String, String>{};
     _values = {
       for (final v in widget.vars)
-        v.name: widget.initialValues[v.name] ?? v.defaultValue,
+        v.name: () {
+          final raw = widget.initialValues[v.name] ?? v.defaultValue;
+          if (raw.isEmpty && _backfillDefaultOnEmpty(v)) {
+            repaired[v.name] = v.defaultValue;
+            return v.defaultValue;
+          }
+          return raw;
+        }(),
     };
+    // Персистим самочинение в storage ПОСЛЕ первого кадра — onChanged в
+    // initState небезопасен (parent ещё не смонтирован для колбэка).
+    if (repaired.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        repaired.forEach(widget.onChanged);
+      });
+    }
   }
 
+  /// §161: правило «пусто → default». Только required-vars с непустым default;
+  /// secret исключён (намеренно стёртый пароль не воскрешаем). optional §033
+  /// (required:false) и vars без default — не трогаются.
+  bool _backfillDefaultOnEmpty(WizardVar v) =>
+      v.required && v.defaultValue.isNotEmpty && v.type != 'secret';
+
   void _update(String name, String value) {
-    setState(() => _values[name] = value);
+    final v = _byName[name];
+    // §161: пустое required-поле — НЕ персистим (значение в storage не
+    // меняется), подсвечиваем errorText. Backstop в build_config подставит
+    // default при сборке; здесь же не даём «сохранить пустоту».
+    if (value.isEmpty && v != null && v.required && v.type != 'secret') {
+      setState(() {
+        _values[name] = value;
+        _emptyRequired.add(name);
+      });
+      return; // onChanged НЕ вызываем — persist заблокирован
+    }
+    setState(() {
+      _values[name] = value;
+      _emptyRequired.remove(name);
+    });
     widget.onChanged(name, value);
   }
 
@@ -252,6 +300,7 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
       label: v.title.isNotEmpty ? v.title : v.name,
       tooltip: v.tooltip,
       numeric: isInt,
+      errorText: _emptyRequired.contains(v.name) ? 'Required' : null,
       suggestions: v.options.map((o) => o.value).toList(),
       onChanged: (val) => _update(v.name, isInt ? _clampUint16(val) : val),
     );
@@ -288,6 +337,7 @@ class _VarTextField extends StatefulWidget {
     this.trailing,
     this.suggestions = const [],
     this.numeric = false,
+    this.errorText,
   });
 
   final String value;
@@ -301,6 +351,10 @@ class _VarTextField extends StatefulWidget {
 
   /// §161: цифровая клавиатура + digits-only formatter (для `type: int`).
   final bool numeric;
+
+  /// §161: текст ошибки под полем (напр. «Required» для пустого
+  /// обязательного поля). null — поле валидно.
+  final String? errorText;
 
   @override
   State<_VarTextField> createState() => _VarTextFieldState();
@@ -397,6 +451,8 @@ class _VarTextFieldState extends State<_VarTextField> {
         border: const OutlineInputBorder(),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        errorText: widget.errorText, // §161: «Required» для пустого обяз. поля
+        errorStyle: const TextStyle(fontSize: 11),
         suffixIcon: _buildSuffix(),
         suffixIconConstraints: const BoxConstraints(
           minWidth: 32,
