@@ -68,6 +68,8 @@
 Это **реальная причина** идти на 1.14 для anti-DPI проекта. Полный дизайн ниже.
 
 - **Hysteria2 gecko obfs + BBR profile + port-hopping** (P0) — §NNN task, extend §037.
+- **Hysteria2 Realm / NAT traversal через STUN** (P1) — для юзеров за CGNAT; реальная
+  фича (аудит её ошибочно опроверг, исправлено ниже).
 - **TLS spoof** (P0 по changelog, но **под вопросом на Android** — см. ниже; нужна
   device-проверка до реализации) — отдельная feature-спека если подтвердится.
 
@@ -126,6 +128,31 @@ HopIntervalMax Duration `json:"hop_interval_max,omitempty"`
 | Parse URI | `uri_parsers/hysteria2_parser.dart` + `toUriHysteria2` (`node_spec.dart:275`) | query-параметры port-hopping/obfs/bbr |
 | UI | hysteria2 node-editor | поля obfs-type (salamander/gecko), congestion, port-range |
 | Template | `wizard_template.json` | если hysteria2-пресеты — новые vars |
+
+### Hysteria2 Realm / NAT traversal (P1) — ⚠️ ПОПРАВКА к аудиту
+
+**Аудит ОШИБОЧНО опроверг** «NAT traversal + Hysteria Realm» как «таких полей нет».
+По коду ядра — фича **реальная и работает в outbound** (`protocol/hysteria2/outbound.go:87-102`).
+Это **одна** фича, не две: NAT traversal реализован через realm-механизм + STUN.
+
+Поле `realm` в `Hysteria2OutboundOptions` (`option/hysteria2.go:185`):
+```go
+type Hysteria2Realm struct {
+    ServerURL   string   `json:"server_url"`           // realm-координатор
+    Token       string   `json:"token,omitempty"`
+    RealmID     string   `json:"realm_id"`
+    STUNServers Listable[string] `json:"stun_servers"` // ← NAT traversal через STUN hole-punching
+    HTTPClient  *HTTPClientOptions `json:"http_client,omitempty"`
+}
+```
+
+**Польза для нас:** STUN hole-punching сквозь NAT — потенциально ценно для юзеров за
+**strict NAT / CGNAT** (массово у мобильных операторов!). Raw-socket НЕ требуется
+(STUN/QUIC) → работает на Android. Приоритет P1: требует realm-сервер на стороне
+узла, поэтому полезно только тем, у кого он настроен — ниша, но реальная.
+
+**Изменения:** `Hysteria2Spec` + nested `Hysteria2RealmSpec` (server_url/token/
+realm_id/stun_servers/http_client) → emit `realm:{...}` → parse round-trip → UI.
 
 **Платформо-безопасно:** gecko = QUIC obfs-padding, port-hopping = UDP, BBR =
 congestion-алгоритм. Raw-socket НЕ требуется → работает на Android.
