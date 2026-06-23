@@ -8,6 +8,14 @@
 
 ## [Unreleased]
 
+## [2.4.3] — 2026-06-23
+
+Hotfix: с включённым Auto Proxy ядро не стартовало — `decode config: outbounds[N].tolerance: cannot unmarshal string into ... uint16`. Затрагивало всех, у кого в канале активен Auto Proxy.
+
+### Fixed
+
+- **§161 — `urltest_tolerance` уходило строкой в uint16-поле ядра** ([task spec](docs/spec/tasks/161-urltest-tolerance-uint16.md), [wizard_template.json](app/assets/wizard_template.json)). Нода была объявлена `type:text` → `coerceVarValue` оставлял `"30"` строкой → в `config.outbounds[].tolerance` уходила строка → ядро (база sing-box 1.13.13, где `URLTest.tolerance` — строгий `uint16`) падало на decode до старта туннеля. Срабатывало у каждого с активным Auto Proxy (urltest-группа `@auto_proxy_tag`); регрессия с 39ca0bd, где литерал `"tolerance": 100` заменили на переменную. Фикс: `type:text`→`type:int` → `coerceVarValue("30","int")` → число `30`. UI поля не меняется (тот же combobox-edit с пресетами `10/30/50/100/200`). Регресс-тест на реальном bundled-шаблоне в `if_engine_test.dart`.
+
 ## [2.4.2] — 2026-06-23
 
 Движок шаблона переписан на типизированную подстановку с декларативными `#if` (§120): VPN-mode больше не собирается императивным кодом, а описан прямо в `wizard_template.json`. Вкладка VPN Mode стала data-driven — контролы рендерятся из template-нод, а listen-адрес прокси теперь произвольный IPv4 (комбобокс с подсказками `127.0.0.1`/`0.0.0.0`). Новый пресет «Block unknown traffic» режет неатрибутированный трафик в туннеле. Ядро → `v1.13.13-lx.15`.
