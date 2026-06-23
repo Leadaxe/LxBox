@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | **Done** (2026-06-23) — `urltest_tolerance` переведён `type:text`→`type:int`. `flutter analyze` чисто, builder+e2e тесты прошли, добавлен регресс-тест. Вошло в v2.4.3. |
+| Статус | **Done** (2026-06-23) — `urltest_tolerance` переведён `type:text`→`type:int` + clamp всех `int`-var в uint16 `[0,65535]` (coerce-backstop + UI digits-only). `flutter analyze` чисто, 1238 тестов прошли. Вошло в v2.4.3. |
 | Дата | 2026-06-23 |
 | Тип | task (data-fix в `wizard_template.json`) + регресс-тест |
 | Повод | Жалобы 4PDA: «последняя версия не взлетела, ни при обновлении поверх, ни при установке заново». Скриншоты: `Stopped: Failed to start service: decode config: outbounds[N].tolerance: json: cannot unmarshal string into Go struct field URLTestOutboundOptions.tolerance of type uint16`. |
@@ -70,11 +70,30 @@ decode ещё до старта туннеля.
 - **Builder.** `coerceVarValue("30","int")` → `30` (int). Мусорный ввод →
   `int.tryParse` вернёт строку (advisory; валидатор ловит отдельно).
 
-### Известное ограничение (не в scope)
+### Защита от вне-диапазонных значений (clamp в uint16)
 
-Ядро ждёт `uint16` (0..65535). Пресет предлагает `200`, ручной ввод не
-ограничен. Значение > 65535 пройдёт `int.tryParse`, но ядро снова отвергнет
-на decode. Клампинг/валидация диапазона для `int`-нод — отдельной таской.
+Ядро ждёт `uint16` (0..65535) для числовых полей (`port`, `tolerance`).
+Ручной ввод/импорт мог дать `99999` или `-5` → ядро снова падает на decode.
+Закрыто на двух слоях:
+
+- **coerce-backstop** ([`if_engine.dart`](../../../app/lib/services/builder/if_engine.dart)):
+  `coerceVarValue` для `type:int` делает `n.clamp(0, 65535)`. Ловит **любой**
+  источник (ручной ввод, импорт бэкапа, legacy) — конфиг физически не может
+  получить int вне uint16.
+- **UI** ([`template_var_list.dart`](../../../app/lib/widgets/template_var_list.dart)):
+  int-поле — `keyboardType: number` + `FilteringTextInputFormatter.digitsOnly`
+  (буквы/минус не вводятся) + clamp в `onChanged` (значение > 65535
+  поджимается на лету).
+
+Все три текущие `int`-ноды укладываются: `tolerance`/`proxy_port` — ровно
+uint16, `tun_mtu` (legal max ~9000) — внутри диапазона.
+
+### Будущая работа (не в scope)
+
+Сейчас диапазон `[0,65535]` зашит как единый для всех `int`. Для `tun_mtu`
+верхняя граница технически шире смысла (MTU ≤ ~9000). Точные min/max **per
+node** — через новые поля шаблона (`"min"`/`"max"` в var-ноде), применяемые в
+coerce и UI. Отдельной таской.
 
 ## Тесты
 
