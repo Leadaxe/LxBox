@@ -162,7 +162,43 @@ CommandServer уже стартует в `onStartCommand`-корутине (`Box
 | 4.2 | HIGH | Backpressure: push 1/с × N conn заливает UI; `getReset()`-снапшот огромен. | Дросселирование на native (эмит не чаще X), батч + cap по образцу `coreLog` (`BoxService.kt:676-696`, `LOG_QUEUE_MAX=4096`, `DRAIN_BATCH_MAX=200`). |
 | 4.3 | MED | Dead-tunnel detection (§141, 20с — нецель удлинять). Liveness меняет семантику: было «N HTTP-фейлов», станет `disconnected()`/«нет StatusMessage > таймаут». | Native: `disconnected` → dead-tunnel broadcast. Dart heartbeat → watchdog «давно не было StatusMessage». `_maxHeartbeatFailures` переосмыслить. |
 | 4.4 | HIGH | `TrafficProfiler` (~1000 строк, `bindRuntime`+`_pollConnections`) завязан на pull-diff. | Сигнатура `bindRuntime` → подписка на `Stream<ConnectionEvent>`; diff-логика → нативные `ConnectionEventNew/Closed`. **Самый большой объём переписывания.** |
-| **4.5** | **HIGH** (был BLOCKER-кандидат; down-grade обоснован) | **Нет single-node delay в CommandClient.** Есть только `urlTest(groupTag)`. §048 ping-фильтр читает per-node `state.lastDelay[tag]`; mass-ping (`ping_orchestration.dart:234`, concurrency=10 через `delay(tag)`) и single-node (`ping_orchestration.dart:30`) **теряют аналог**. `cancelDelays()` (`:292`) тоже не выразим. **Почему НЕ блокер:** §048-фильтр **fail-open** (`node_filter.dart:124-128`: untested-ноды `delay==null` проходят безусловно, locked decision #11); фильтр — чисто **визуальный** predicate (`matches:bool`→opacity 0.4), не гейтит маршрутизацию/безопасность/pool. Пустой `lastDelay` → фильтр и latency-sort (`home_state.dart:162-170`) молча деградируют до no-op для Selector, узлы остаются функциональны и выбираемы вручную. | **Risk-валидация (НЕ gate, провести до фазы 1):** заполняет ли `urlTest(group)` на **Selector**-группе per-child `getURLTestDelay()`. Если ДА — §048 переезжает на `writeGroups`-delays. Если НЕТ — (а) принять регресс (фильтр graceful-off для селекторов) ИЛИ (б) ping отдельной outbound-пробой в обвязке. Возврат Clash HTTP — крайний фолбэк (§6). **Фазу 1 НЕ блокирует.** |
+| **4.5** | **HIGH** (был BLOCKER-кандидат; down-grade обоснован) | **Нет single-node delay в CommandClient.** Есть только `urlTest(groupTag)`. §048 ping-фильтр читает per-node `state.lastDelay[tag]`; mass-ping (`ping_orchestration.dart:234`, concurrency=10 через `delay(tag)`) и single-node (`ping_orchestration.dart:30`) **теряют аналог**. `cancelDelays()` (`:292`) тоже не выразим. **Почему НЕ блокер:** §048-фильтр **fail-open** (`node_filter.dart:124-128`: untested-ноды `delay==null` проходят безусловно, locked decision #11); фильтр — чисто **визуальный** predicate (`matches:bool`→opacity 0.4), не гейтит маршрутизацию/безопасность/pool. Пустой `lastDelay` → фильтр и latency-sort (`home_state.dart:162-170`) молча деградируют до no-op для Selector, узлы остаются функциональны и выбираемы вручную. | **Risk-валидация (НЕ gate, провести до фазы 1):** заполняет ли `urlTest(group)` на **Selector**-группе per-child `getURLTestDelay()`. Если ДА — §048 переезжает на `writeGroups`-delays. Если НЕТ — (а) принять регресс (фильтр graceful-off для селекторов) ИЛИ (б) ping отдельной outbound-пробой в обвязке. Возврат Clash HTTP — крайний фолбэк (§6). **Фазу 1 НЕ блокирует.** Полная матрица доработки ping/urltest — **§4a.** |
+
+---
+
+## 4a. Доработка URLTest / ping (выделено явно — собственный объём работ)
+
+«URLTest» в LxBox — это **три разные операции**, и переход на CommandClient бьёт по ним по-разному. Раздел собирает воедино то, что иначе размазано по §4.5 и таблице §2.3.
+
+### 4a.1 Матрица операций
+
+| Операция | Файл:строка | Сейчас (Clash) | На CommandClient | Объём |
+|---|---|---|---|---|
+| **Group URLTest** (`runGroupUrltest`) | `ping_orchestration.dart:169` | `GET /group/{tag}/delay` → `groupDelay()` (`clash_api_client.dart:143`) → `reloadProxies()` пересчитывает `now` | `urlTest(groupTag)` → результат через `writeGroups`→`OutboundGroupItem.getURLTestDelay()` | 🟢 **паритет**, перенос 1:1 |
+| **Auto-urltest группа** (`✨auto`, `@auto_proxy_tag`) | `wizard_template.json:156-169` (`type:urltest`, `url`/`interval`/`tolerance`) | ядро само пингует по `interval`, app read-only (`now` дрейфует) | то же — ядро делает само, app не вмешивается | 🟢 **не трогаем** |
+| **Single-node ping** (тап «Ping» на одном узле) | `runNodeUrltest` `ping_orchestration.dart:21`; UI `node_list.dart:272` | `GET /proxies/{tag}/delay` → `delay(tag)` (`clash_api_client.dart:117`) | **аналога НЕТ** | 🔴 **доработка** (см. 4a.3) |
+| **Mass-ping** (кнопка Ping, concurrency=10) | `runMassUrltest` `ping_orchestration.dart:198`; авто-пинг `:149` | параллельные per-node `delay(tag)`, отдельный `_delayHttp`-клиент для `cancelMassPing()` (`:284`) | один `urlTest(group)` — ядро само тестирует членов | 🟡 **перепроектирование оркестрации** (см. 4a.4) |
+
+### 4a.2 Что НЕ меняется (структуры состояния)
+
+`lastDelay: Map<tag,ms>` (`home_state.dart:85`), `pingBusy: Map<tag,str>` (`:86`), `pingBatchGen` (`:99`), per-group url/timeout (`ping_options.groups` в Storage) — **остаются как есть**, меняется только источник, который их наполняет. Читатели delay не трогаем: node_row ms-label/цвет (`node_row.dart:42-56`), §048 фильтр `maxPingMs` (`node_filter.dart:84,124`), latency-sort `_compareLatency` (`home_state.dart:161-171`).
+
+### 4a.3 Single-node ping — развилка (зависит от §4.5-проверки)
+
+CommandClient не пингует один узел. Варианты (выбор после железной проверки §4.5):
+- **(а) групповой пинг под капотом:** тап на узел → `urlTest(его_группа)`, в UI показать ms только тапнутого. Минус: тестирует всю группу ради одного (расточительно на больших группах), и работает только если §4.5-проверка положительна для типа этой группы.
+- **(б) убрать single-node из UI:** оставить только mass/group-ping. Регресс UX (long-press «Ping» исчезает).
+- **(в) доработать ядро `sing-box-lx`:** добавить single-node delay-команду поверх того, что менеджер outbound'ов уже умеет. Форк-специфично, но точно и без расточительности. Симметрично варианту B для rules (§6) — но в отличие от rules, **здесь потребитель реально есть** (long-press Ping + per-node ms в UI), так что это не балласт.
+
+**Рекомендация:** (в) если §4.5 покажет, что иначе теряется per-node ms у селекторов; (а) если `urlTest(group)` селекторы покрывает. Не решать до проверки.
+
+### 4a.4 Mass-ping — перепроектирование
+
+Сейчас: параллельные `delay(tag)` по узлам (concurrency=10, порядок = display-list `node_list_presenter.dart:174`), `cancelMassPing()` рвёт in-flight. На CommandClient: один `urlTest(group)` на активную группу, ядро тестирует членов **эффективнее нашего параллелизма** (это апсайд, не регресс). Переписывается: оркестрация (`pingBusy`/`pingBatchGen` bump по завершении group-test, а не по каждому узлу), `cancelMassPing` (`urlTest` fire-and-forget — отменять нечего, см. §2.3 `cancelDelays`). Авто-пинг (`_scheduleAutoPing` Timer(5s) после connect, `:149`) → вызывает `urlTest(selectedGroup)` вместо `runMassUrltest()`.
+
+### 4a.5 Блокирующая зависимость
+
+Весь объём 4a.3/4a.4 для **Selector-групп** упирается в §4.5-проверку: **заполняет ли `urlTest(group)` на Selector-группе per-child `getURLTestDelay()`?** (Для URLTest-групп — да заведомо.) Селекторы — основной тип в dropdown (`selectorGroupTags` пускает только `Selector`, `clash_api_client.dart:51`), поэтому ответ определяет, клиентская это доработка или клиент+ядро. **Сделать эту проверку первой** (E2E пункт 3, §10).
 
 ---
 
@@ -228,7 +264,7 @@ CommandServer уже стартует в `onStartCommand`-корутине (`Box
 > Команды 1–5 и императивы `selectOutbound`/`urlTest`/`closeConnection`/`closeConnections` доступны и в 1.13-линейке; closed-история — нет, поэтому она в фазе 2.
 
 **Файлы:** `home_controller.dart`/`heartbeat.dart`/`ping_orchestration.dart`/`config_io.dart`, `stats_screen.dart`, `connections_screen.dart`, `traffic_profiler.dart`, `home_screen.dart`, `node_list*.dart`, `error_format.dart`, `debug/handlers/{clash,state,action,profiler,help}.dart`, `wizard_template.json`, `build_config.dart`, тесты.
-**Работа:** writeStatus→скорость/трафик (heartbeat→watchdog); writeGroups→группы/узлы (`selectorGroupTags`→`getSelectable`); selectOutbound/urlTest; writeConnectionEvents→native-аккумулятор→StreamBuilder (3 экрана + profiler); связать §143 interrupt-on-switch с аккумулятором; выпил `_ensureClashApiDefaults` + блока из шаблона (с учётом §5.2 — вырезать из импорта); решить §4.5.
+**Работа:** writeStatus→скорость/трафик (heartbeat→watchdog); writeGroups→группы/узлы (`selectorGroupTags`→`getSelectable`); selectOutbound; доработка URLTest/ping по **§4a** (group-urltest 1:1, mass-ping → `urlTest(group)`, single-node — по развилке §4a.3); writeConnectionEvents→native-аккумулятор→StreamBuilder (3 экрана + profiler); связать §143 interrupt-on-switch с аккумулятором; выпил `_ensureClashApiDefaults` + блока из шаблона (с учётом §5.2 — вырезать из импорта).
 **Риск:** §4.5 (single-node delay), §3.1 (`rulePayload` потеря), backpressure. **Откат:** фича-флаг из фазы 0 — вернуть HTTP-путь.
 
 ### Фаза 2 — closed-история + опц. NQ/STUN (1.14, отдельно)
