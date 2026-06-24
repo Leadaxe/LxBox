@@ -42,6 +42,12 @@ class _StatsScreenState extends State<StatsScreen> {
   Map<String, int> _byRule = const {};
   bool _loading = true;
 
+  /// §122 — память ядра (goroutine GC) скачет каждый status-тик (1с) и мельтешит.
+  /// Обновляем редко (раз в [_memoryRefresh]) — для медленной метрики этого
+  /// достаточно, а UI не дёргается. Totals/conns остаются живыми (1с).
+  static const _memoryRefresh = Duration(seconds: 3);
+  DateTime? _memoryUpdatedAt;
+
   final _cc = CcChannel.instance;
   StreamSubscription<CcStatus>? _statusSub;
   StreamSubscription<List<CcConnection>>? _connSub;
@@ -79,10 +85,18 @@ class _StatsScreenState extends State<StatsScreen> {
 
   void _onStatus(CcStatus s) {
     if (!mounted) return;
+    final now = DateTime.now();
+    // Память обновляем не чаще _memoryRefresh — иначе число мельтешит каждую
+    // секунду (GC дёргает RAM туда-сюда). Totals — каждый тик.
+    final refreshMem = _memoryUpdatedAt == null ||
+        now.difference(_memoryUpdatedAt!) >= _memoryRefresh;
     setState(() {
       _totalUp = s.uplinkTotal;
       _totalDown = s.downlinkTotal;
-      _memory = s.memory;
+      if (refreshMem) {
+        _memory = s.memory;
+        _memoryUpdatedAt = now;
+      }
     });
   }
 

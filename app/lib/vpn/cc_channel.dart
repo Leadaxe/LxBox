@@ -323,6 +323,8 @@ class CcConnection {
     this.outbound = '',
     this.outboundType = '',
     this.protocol = '',
+    this.packageName = '',
+    this.processPath = '',
     required this.createdAt,
     required this.closedAt,
   });
@@ -346,6 +348,10 @@ class CcConnection {
   final String outboundType;
   final String protocol;
 
+  /// App-attribution из `getProcessInfo()`: package (для иконки) + путь процесса.
+  final String packageName;
+  final String processPath;
+
   final int createdAt;
   final int closedAt;
 
@@ -364,6 +370,8 @@ class CcConnection {
         outbound: m['outbound']?.toString() ?? '',
         outboundType: m['outboundType']?.toString() ?? '',
         protocol: m['protocol']?.toString() ?? '',
+        packageName: m['packageName']?.toString() ?? '',
+        processPath: m['processPath']?.toString() ?? '',
         createdAt: _int(m['createdAt']),
         closedAt: _int(m['closedAt']),
       );

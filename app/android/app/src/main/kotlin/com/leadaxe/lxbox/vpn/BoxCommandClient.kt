@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicReference
 ///
 /// **Три клиента (§2.8)** — разный lifecycle под реальные нужды (разведано: что
 /// работает в фоне vs гасится с экраном):
-///  - `statusClient`   — `CommandStatus` + `setStatusInterval(1000)` мс. **always-on**
+///  - `statusClient`   — `CommandStatus` + `setStatusInterval(1e9 нс=1с)`. **always-on**
 ///    пока туннель up. Питает dead-tunnel watchdog + скорость на главном.
 ///  - `screenClient`   — `CommandOutbounds`+`CommandGroup`+`CommandConnections`.
 ///    connect/disconnect по сигналу из Dart (открытие/закрытие экрана узлов/stats/conn).
@@ -49,9 +49,13 @@ class BoxCommandClient {
     companion object {
         private const val TAG = "BoxCommandClient"
 
-        /// §2.3 — `setStatusInterval` принимает МИЛЛИСЕКУНДЫ (int64), НЕ наносекунды.
-        /// 1000 = 1s. (`1_000_000_000` дал бы ≈11.5 суток → стрим не тикает.)
-        private const val STATUS_INTERVAL_MS = 1000L
+        /// §2.3 ИСПРАВЛЕНО — `setStatusInterval` = НАНОСЕКУНДЫ, НЕ миллисекунды.
+        /// Сервер ядра: `time.Duration(request.Interval)` + `time.NewTicker`
+        /// (daemon/started_service.go:374) — Go `time.Duration` это int64 НС.
+        /// Прежнее `1000L` ⇒ `time.Duration(1000)` = 1000нс = 1мкс → стрим
+        /// эмитил статус/connections максимально часто → память на Stats
+        /// «прыгала» каждый тик, лишняя нагрузка. 1с = 1e9 нс.
+        private const val STATUS_INTERVAL_NS = 1_000_000_000L
 
         /// Cap очереди эмиттера — drop-newest при переполнении (producer не блокируется).
         /// Эмиттер coalesce'ит до последнего снапшота, так что cap — страховка.
@@ -130,7 +134,7 @@ class BoxCommandClient {
         runCatching {
             val options = CommandClientOptions().apply {
                 addCommand(Libbox.CommandStatus)
-                setStatusInterval(STATUS_INTERVAL_MS) // мс!
+                setStatusInterval(STATUS_INTERVAL_NS) // НАНОСЕКУНДЫ (1с)
             }
             val client = CommandClient(StatusHandler(gen), options)
             client.connect()
@@ -390,13 +394,22 @@ class BoxCommandClient {
             val it = acc.iterator()
             while (it.hasNext()) {
                 val c = it.next()
+                // §122 — ProcessInfo (app-attribution): package для иконки +
+                // processPath. getProcessInfo() может быть null/кинуть — best-effort.
+                var pkg = ""
+                var processPath = ""
+                runCatching {
+                    val pi = c.getProcessInfo()
+                    if (pi != null) {
+                        processPath = pi.getProcessPath() ?: ""
+                        val pkgIt = pi.packageNames()
+                        if (pkgIt != null && pkgIt.hasNext()) pkg = pkgIt.next() ?: ""
+                    }
+                }
                 // getID() — аббревиатура ЗАГЛАВНАЯ (снято с rc.2 AAR); явные геттеры.
-                // §122 — uplink/downlink (getUplink/getDownlink) = ДЕЛЬТА за тик
-                // (B/s), у idle-соединений = 0. Для отображения «сколько всего
-                // передано» нужны getUplinkTotal/getDownlinkTotal (накопленный
-                // итог за соединение). Раньше показывали дельту → массовые 0/0.
-                // outbound/outboundType — цепочка (chain-инфо есть в Connection,
-                // в отличие от того что считалось ядровым gap'ом).
+                // §122 — uplink/downlink = НАКОПЛЕННЫЙ итог (getUplinkTotal/Total),
+                // не дельта за тик (getUplink — у idle 0 → массовые 0/0).
+                // outbound/outboundType — цепочка (chain-инфо есть в Connection).
                 list.add(mapOf(
                     "id" to c.getID(),
                     "network" to c.getNetwork(),
@@ -410,6 +423,8 @@ class BoxCommandClient {
                     "outbound" to c.getOutbound(),
                     "outboundType" to c.getOutboundType(),
                     "protocol" to c.getProtocol(),
+                    "packageName" to pkg,
+                    "processPath" to processPath,
                     "createdAt" to c.getCreatedAt(),
                     "closedAt" to c.getClosedAt(),
                 ))

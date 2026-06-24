@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../services/app_info_cache.dart';
 import '../services/format_utils.dart';
 import '../vpn/cc_channel.dart';
 import 'connections_screen/connection_detail_sheet.dart';
@@ -272,19 +273,12 @@ class _ConnectionsViewState extends State<ConnectionsView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Row 1: net-arrow + host:port + traffic + close.
-                // §122 — app-иконка убрана (CommandClient не отдаёт processPath).
+                // Row 1: app-иконка (по getProcessInfo.package) + host:port +
+                // traffic + close. §122 — иконка вернулась (ProcessInfo есть в
+                // Connection); fallback на стрелку tcp/udp если pkg нет.
                 Row(
                   children: [
-                    Icon(
-                      closed
-                          ? Icons.check_circle_outline
-                          : (network == 'udp'
-                              ? Icons.swap_horiz
-                              : Icons.arrow_forward),
-                      size: 16,
-                      color: closed ? cs.primary : cs.onSurfaceVariant,
-                    ),
+                    _appIcon(conn.packageName, network: network, closed: closed),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -313,23 +307,21 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                     ),
                   ],
                 ),
-                // Row 2: outbound (нода/цепочка). §122 — getOutbound вместо
-                // Clash chains (process/иконка по-прежнему gap — нет в feed'е).
-                if (conn.outbound.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 22, top: 2),
-                    child: Text(
-                      conn.outbound,
-                      style: TextStyle(fontSize: 11, color: cs.primary),
-                      overflow: TextOverflow.ellipsis,
+                // Row 2: outbound (нода/цепочка) — getOutbound, ОБЯЗАТЕЛЬНО.
+                Padding(
+                  padding: const EdgeInsets.only(left: 22, top: 2),
+                  child: Text(
+                    conn.outbound.isNotEmpty ? conn.outbound : '—',
+                    style: TextStyle(fontSize: 11, color: cs.primary),
+                    overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                // Row 3: protocol · rule · duration.
+                // Row 3: protocol · rule · duration. rule ОБЯЗАТЕЛЬНО (getRule).
                 Padding(
                   padding: const EdgeInsets.only(left: 22, top: 2),
                   child: Text(
                     '${network.toUpperCase()}'
-                    '${rule.isNotEmpty ? '  ·  $rule' : ''}'
+                    '  ·  ${rule.isNotEmpty ? rule : '—'}'
                     '${closed ? '  ·  closed' : ''}'
                     '${duration != null ? '  ·  ${_formatDuration(duration)}' : ''}',
                     style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
@@ -341,6 +333,36 @@ class _ConnectionsViewState extends State<ConnectionsView> {
           ),
         ),
       ),
+    );
+  }
+
+  /// §154/§122 — launcher-иконка приложения по package name (из `getProcessInfo`).
+  /// 16×16, перерисовывается через `AppInfoCache.revision` когда иконка
+  /// дотянулась из native асинхронно. Fallback (нет pkg/иконки) — стрелка
+  /// tcp/udp (как до §154), а для закрытых — галочка.
+  Widget _appIcon(String pkg, {required String network, required bool closed}) {
+    const double size = 16;
+    final cs = Theme.of(context).colorScheme;
+    final fallback = Icon(
+      closed
+          ? Icons.check_circle_outline
+          : (network == 'udp' ? Icons.swap_horiz : Icons.arrow_forward),
+      size: size,
+      color: closed ? cs.primary : cs.onSurfaceVariant,
+    );
+    if (pkg.isEmpty) return fallback;
+    AppInfoCache.ensure(pkg);
+    return AnimatedBuilder(
+      animation: AppInfoCache.revision,
+      builder: (context, _) {
+        final icon = AppInfoCache.of(pkg)?.icon;
+        if (icon == null) return fallback;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Image.memory(icon,
+              width: size, height: size, gaplessPlayback: true),
+        );
+      },
     );
   }
 
