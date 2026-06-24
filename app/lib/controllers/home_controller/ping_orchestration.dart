@@ -8,30 +8,38 @@ part of '../home_controller.dart';
 mixin _PingMixin on ChangeNotifier {
   // --- surface, предоставляемая HomeController / другими частями ---
   HomeState get _state;
-  ClashApiClient? get _clash;
+  CcChannel get _cc;
   Timer? get _autoPingTimer;
   set _autoPingTimer(Timer? value);
   void _emit(HomeState next);
   void _addDebug(DebugSource source, String message);
   Future<void> reloadProxies();
 
-  /// Single-node URLTest через clash `/proxies/<tag>/delay`. Симметричен
-  /// `runGroupUrltest(groupTag)` для group'ы. Использует per-group resolved
-  /// url/timeout (§040) — контекст ноды = `state.selectedGroup`.
+  /// Single-node URLTest через CommandClient `urlTestOutbound` (§122, unary RPC).
+  /// Использует per-group resolved url/timeout (§040) — контекст = `selectedGroup`.
+  /// ИНВАРИАНТ результата (§4.6): `error` — единственный признак провала;
+  /// `delay==0 && error==''` = успех 0мс (`CcDelayResult.lastDelayValue`).
   Future<void> runNodeUrltest(String nodeTag) async {
-    final clash = _clash;
-    if (clash == null) return;
+    if (!_state.tunnelUp) return;
     final pingBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '…';
     _emit(_state.copyWith(pingBusy: pingBusy));
     final group = _state.selectedGroup;
     final url = pingUrlFor(group);
     final timeoutMs = pingTimeoutFor(group);
     try {
-      final ms = await clash.delay(nodeTag, timeoutMs: timeoutMs, url: url);
+      final r = await _cc.urlTestOutbound(nodeTag, link: url, timeoutMs: timeoutMs);
+      final ms = r.lastDelayValue; // ok → delay (вкл. 0мс); fail → -1
       final nextDelay = Map<String, int>.from(_state.lastDelay)..[nodeTag] = ms;
       final nextBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '';
-      _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
-      _addDebug(DebugSource.app, 'URLTest $nodeTag → $url: ${ms}ms');
+      if (r.ok) {
+        _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
+        _addDebug(DebugSource.app, 'URLTest $nodeTag → $url: ${ms}ms');
+      } else {
+        final msg = '${_routeLabel(nodeTag, url)} — ${r.error}';
+        _emit(_state.copyWith(
+            lastDelay: nextDelay, pingBusy: nextBusy, lastError: msg));
+        _addDebug(DebugSource.app, msg);
+      }
     } catch (e) {
       final nextDelay = Map<String, int>.from(_state.lastDelay)..[nodeTag] = -1;
       final nextBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '';
@@ -163,16 +171,17 @@ mixin _PingMixin on ChangeNotifier {
     });
   }
 
-  /// Форсит sing-box URLTest на группе (`/group/<tag>/delay`) с per-group
-  /// resolved url/timeout (§040). После теста sing-box обновит `now` у
-  /// URLTest-группы; мы пулим свежий proxies чтобы UI увидел выбор.
+  /// Форсит URLTest на группе через CommandClient `urlTestOutbound(groupTag)`
+  /// (§122). Для URLTest-аутбаунда ядро само перебирает членов и обновляет
+  /// `selected`; groups-стрим приедет с новым выбором. Per-group resolved
+  /// url/timeout (§040).
   Future<void> runGroupUrltest(String groupTag) async {
-    final clash = _clash;
-    if (clash == null || !_state.tunnelUp) return;
+    if (!_state.tunnelUp) return;
     final url = pingUrlFor(groupTag);
     try {
-      await clash.groupDelay(groupTag,
-          timeoutMs: pingTimeoutFor(groupTag), url: url);
+      final r = await _cc.urlTestOutbound(groupTag,
+          link: url, timeoutMs: pingTimeoutFor(groupTag));
+      if (!r.ok) throw FormatException(r.error);
       _addDebug(DebugSource.app, 'Group URLTest done: $groupTag → $url');
       await reloadProxies();
       // §070: bump cache gen — re-sort после group URLtest (latency мог
@@ -196,8 +205,7 @@ mixin _PingMixin on ChangeNotifier {
   /// отображения (sort + manual + pinned + filter уже применены caller'ом),
   /// что юзер ожидает визуально.
   Future<void> runMassUrltest({List<String>? order}) async {
-    final clash = _clash;
-    if (clash == null) return;
+    if (!_state.tunnelUp) return;
 
     if (_massPingRunning) {
       cancelMassPing();
@@ -231,9 +239,12 @@ mixin _PingMixin on ChangeNotifier {
         if (!_massPingRunning || _massPingEpoch != epoch || !_state.tunnelUp) break;
         final tag = nodes[i];
         try {
-          final ms = await clash.delay(tag, timeoutMs: massPingTimeout, url: massPingUrl);
+          final r = await _cc.urlTestOutbound(tag,
+              link: massPingUrl, timeoutMs: massPingTimeout);
           if (_massPingEpoch != epoch) break;
-          final nextDelay = Map<String, int>.from(_state.lastDelay)..[tag] = ms;
+          // §4.6 — ok → delay (вкл. 0мс); fail (error непустой) → -1.
+          final nextDelay = Map<String, int>.from(_state.lastDelay)
+            ..[tag] = r.lastDelayValue;
           final nextBusy = Map<String, String>.from(_state.pingBusy)..[tag] = '';
           _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
         } catch (_) {
@@ -285,15 +296,12 @@ mixin _PingMixin on ChangeNotifier {
     if (!_massPingRunning) return;
     _massPingRunning = false;
     _massPingEpoch++;
-    // Прерываем in-flight delay/groupDelay HTTP-запросы — клиент закрывается,
-    // workers получают exception и завершаются (и пути для direct/auto где
-    // sing-box reusing connection pool не оставляются висеть). Без этого
-    // mass ping продолжал реально пинговать пока все timeout'ы не истекут.
-    _clash?.cancelDelays();
-    // Очищаем все pingBusy — workers которые ждут in-flight clash.delay
-    // ответ break'нутся по epoch-mismatch БЕЗ финального cleanup'а своих
-    // тегов (см. runMassUrltest worker). Без этой очистки у нод которые не
-    // успели ответить остаётся "…" indicator до следующего ping'а.
+    // §122 — у CommandClient `urlTestOutbound` нет отмены in-flight (unary RPC
+    // ждёт свой timeout). Epoch-bump гарантирует, что результаты уже стартовавших
+    // воркеров отбросятся по epoch-mismatch (см. runMassUrltest worker). Новые
+    // итерации воркеров тоже прервутся проверкой epoch на входе цикла.
+    // Очищаем все pingBusy — иначе у нод, не успевших ответить, остаётся "…"
+    // indicator до следующего ping'а.
     _emit(_state.copyWith(pingBusy: const {}));
     _addDebug(DebugSource.app, 'Mass ping cancelled');
   }

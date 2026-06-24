@@ -21,6 +21,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
@@ -532,28 +533,52 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "ccDisconnectProfiler" -> {
                 BoxService.commandClient?.disconnectProfiler(); result.success(true)
             }
+            // §122 — unary CommandClient-RPC БЛОКИРУЮТ (gRPC ждёт ответ ядра до
+            // timeout). Вызов прямо в handleMethodCall = на platform main thread →
+            // mass-ping (worker-pool=10 блокирующих urlTestOutbound) подвешивал
+            // приложение в ANR. Выносим на Dispatchers.IO; result.success обратно
+            // на main (pluginScope = Dispatchers.Main).
             "ccUrlTestOutbound" -> {
                 val cc = BoxService.commandClient
                 if (cc == null) { result.success(mapOf("delay" to 0, "error" to "not connected")); return }
                 val tag = call.argument<String>("tag") ?: ""
                 val link = call.argument<String>("link") ?: ""
                 val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
-                result.success(cc.urlTestOutbound(tag, link, timeoutMs))
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) { cc.urlTestOutbound(tag, link, timeoutMs) }
+                    result.success(r)
+                }
             }
             "ccGetRules" -> {
-                result.success(BoxService.commandClient?.getRules() ?: emptyList<Map<String, Any>>())
+                val cc = BoxService.commandClient
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) { cc?.getRules() ?: emptyList<Map<String, Any>>() }
+                    result.success(r)
+                }
             }
             "ccSelectOutbound" -> {
+                val cc = BoxService.commandClient
                 val group = call.argument<String>("group") ?: ""
                 val tag = call.argument<String>("tag") ?: ""
-                result.success(BoxService.commandClient?.selectOutbound(group, tag) ?: false)
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) { cc?.selectOutbound(group, tag) ?: false }
+                    result.success(r)
+                }
             }
             "ccCloseConnection" -> {
+                val cc = BoxService.commandClient
                 val id = call.argument<String>("id") ?: ""
-                result.success(BoxService.commandClient?.closeConnection(id) ?: false)
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) { cc?.closeConnection(id) ?: false }
+                    result.success(r)
+                }
             }
             "ccCloseConnections" -> {
-                result.success(BoxService.commandClient?.closeConnections() ?: false)
+                val cc = BoxService.commandClient
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) { cc?.closeConnections() ?: false }
+                    result.success(r)
+                }
             }
 
             else -> result.notImplemented()

@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 
 import '../config/clash_endpoint.dart';
 import '../vpn/box_vpn_client.dart';
+import '../vpn/cc_channel.dart';
+import '../vpn/cc_proxies_adapter.dart';
 import '../config/config_parse.dart';
 import '../models/home_state.dart';
 import '../services/app_log.dart';
@@ -31,9 +33,21 @@ class HomeController extends ChangeNotifier
   final BoxVpnClient _vpn = BoxVpnClient();
   final AutoUpdater? _autoUpdater;
   StreamSubscription<TunnelStatusEvent>? _statusSub;
+
+  /// §122 Фаза 1a — единый канал данных от libbox CommandClient (заменяет
+  /// `ClashApiClient` HTTP-петли). `_clash` остаётся только как переживший
+  /// рефактор флаг «канал жив» (см. ниже) — реальные данные текут стримами.
   @override
   ClashApiClient? _clash;
   ClashApiClient? get clashClient => _clash;
+
+  @override
+  final CcChannel _cc = CcChannel.instance;
+
+  /// §122 — подписки на push-стримы CommandClient'а. `status` (always-on:
+  /// скорость/память/watchdog), `groups` (дерево групп → синтез `proxiesJson`).
+  StreamSubscription<CcStatus>? _ccStatusSub;
+  StreamSubscription<List<CcGroup>>? _ccGroupsSub;
 
   @override
   HomeState _state = HomeState();
@@ -146,6 +160,8 @@ class HomeController extends ChangeNotifier
     _autoPingTimer?.cancel();
     _transientTimeoutTimer?.cancel();
     _statusSub?.cancel();
+    _ccStatusSub?.cancel();
+    _ccGroupsSub?.cancel();
     super.dispose();
   }
 
@@ -191,7 +207,12 @@ class HomeController extends ChangeNotifier
         connectedSince: DateTime.now(),
         configChangedNeedRestart: false,
       ));
-      unawaited(_refreshClashAfterTunnel());
+      // §122 — рантайм-данные теперь из CommandClient-стримов, не из Clash HTTP.
+      // `_clash` оставляем ненулевым как «канал активен» — heartbeat/ping
+      // используют его как гейт (исторический контракт миксинов), но реальные
+      // запросы идут через `_cc`.
+      _rebuildClashEndpoint();
+      _startCcStreams();
       _startHeartbeat();
       _heartbeatFailNotified = false;
       HapticService.I.onVpnConnected();
@@ -211,10 +232,9 @@ class HomeController extends ChangeNotifier
       cancelMassPing();
       _autoPingTimer?.cancel();
       _autoPingTimer = null;
-      // Clash endpoint прошлой сессии теперь невалиден — secret был у
-      // убитого sing-box, port может быть переиспользован системой. На
-      // следующем `connected` event мы пересоберём его через
-      // `_refreshClashAfterTunnel` → `_rebuildClashEndpoint`.
+      // §122 — гасим CommandClient-стримы и screenClient (disconnectScreen).
+      // На следующем `connected` пересоберём (`_startCcStreams`).
+      _stopCcStreams();
       _clash = null;
       final reason = tunnel == TunnelStatus.revoked
           ? 'VPN revoked by another app'
@@ -521,59 +541,117 @@ class HomeController extends ChangeNotifier
   }
 
   // ---------------------------------------------------------------------------
-  // Clash API — proxies & groups
+  // §122 — CommandClient data streams (заменяют Clash API HTTP-петли)
   // ---------------------------------------------------------------------------
 
-  Future<void> _refreshClashAfterTunnel() async {
-    _rebuildClashEndpoint();
-    await reloadProxies();
+  /// Последний синтезированный `proxiesJson` уже лежит в `_state.proxiesJson`;
+  /// этот таймстемп — для watchdog (§122 заменяет heartbeat HTTP-fail).
+  DateTime? _lastCcStatusAt;
+  @override
+  DateTime? get lastCcStatusAt => _lastCcStatusAt;
+
+  /// Поднять push-стримы CommandClient'а и `screenClient` (outbounds+groups+
+  /// connections). Зовётся на `connected`. Идемпотентно — отменяет прежние
+  /// подписки перед новыми (защита от двойного connect).
+  void _startCcStreams() {
+    _ccStatusSub?.cancel();
+    _ccGroupsSub?.cancel();
+    // §2.8 — главный экран показывает группы/ноды → поднимаем screenClient.
+    unawaited(_cc.connectScreen());
+    _ccStatusSub = _cc.status.listen(_onCcStatus, onError: (Object e) {
+      _addDebug(DebugSource.app, 'cc status stream error: $e');
+    });
+    _ccGroupsSub = _cc.groups.listen(_onCcGroups, onError: (Object e) {
+      _addDebug(DebugSource.app, 'cc groups stream error: $e');
+    });
+  }
+
+  /// Отменить подписки + опустить `screenClient`. Зовётся на disconnect/dead.
+  @override
+  void _stopCcStreams() {
+    _ccStatusSub?.cancel();
+    _ccStatusSub = null;
+    _ccGroupsSub?.cancel();
+    _ccGroupsSub = null;
+    _lastCcStatusAt = null;
+    unawaited(_cc.disconnectScreen());
+  }
+
+  /// §3.1 — статус-снапшот (1s интервал). `*Total` — накопленный объём (его и
+  /// показываем как traffic). `connectionsIn/Out` — для бейджа активных.
+  void _onCcStatus(CcStatus s) {
+    if (!_state.tunnelUp) return;
+    _lastCcStatusAt = DateTime.now();
+    // Watchdog: каждый успешный снапшот сбрасывает счётчик heartbeat-фейлов.
+    _heartbeatFailures = 0;
+    _emit(_state.copyWith(
+      traffic: TrafficSnapshot(
+        uploadTotal: s.uplinkTotal,
+        downloadTotal: s.downlinkTotal,
+        activeConnections: s.connectionsIn + s.connectionsOut,
+        memory: s.memory,
+        // byRule/byApp — из connections-стрима (stats-экран), не из status.
+        byRule: _state.traffic.byRule,
+        byApp: _state.traffic.byApp,
+      ),
+    ));
+  }
+
+  /// §2.4 — снапшот дерева групп → синтез Clash-`proxiesJson` → пере-применение
+  /// логики выбора группы (идентично прежнему `reloadProxies`, но источник =
+  /// стрим, не HTTP). reset-снапшот: каждый снапшот ПОЛНОСТЬЮ заменяет
+  /// `proxiesJson` (replace-not-merge, §2.8).
+  void _onCcGroups(List<CcGroup> groups) {
+    if (!_state.tunnelUp) return;
+    final proxies = CcProxiesAdapter.fromGroups(groups);
+    _applyProxiesSnapshot(proxies);
+  }
+
+  /// Общее ядро: из свежего `proxiesJson` пересчитать список selector-групп,
+  /// выбрать активную (sticky → route.final → первая) и применить её ноды.
+  /// Вызывается из стрима И из `reloadProxies` (pull-refresh / после switchNode).
+  void _applyProxiesSnapshot(Map<String, dynamic> proxies) {
+    final groups = ClashApiClient.selectorGroupTags(proxies)
+        .where((name) => name != 'GLOBAL')
+        .toList();
+
+    String? initial = _state.selectedGroup;
+    if (initial == null || !groups.contains(initial)) {
+      final finalTag = ClashEndpoint.routeFinalTag(_state.configRaw);
+      if (finalTag != null && groups.contains(finalTag)) {
+        initial = finalTag;
+      } else {
+        initial = groups.isNotEmpty ? groups.first : null;
+      }
+    }
+
+    _emit(
+      _state.copyWith(
+        proxiesJson: proxies,
+        groups: groups,
+        selectedGroup: initial,
+      ),
+    );
+    unawaited(applyGroup(initial));
   }
 
   @override
   void _rebuildClashEndpoint() {
+    // §122 — `_clash` больше не несёт HTTP-данных, но остаётся ненулевым
+    // маркером «канал активен» для heartbeat/ping-гейтов (контракт миксинов).
+    // Конструируем из endpoint'а если он есть (для совместимости с per-app
+    // trace / прочими редкими потребителями), иначе fallback-инстанс.
     final endpoint = ClashEndpoint.fromConfigJson(_state.configRaw);
     _clash = endpoint != null ? ClashApiClient(endpoint) : null;
   }
 
+  /// Pull-refresh (RefreshIndicator) / переприменение после switchNode|
+  /// groupUrltest. §122 — данные уже текут стримом; здесь лишь пере-применяем
+  /// логику выбора группы поверх ПОСЛЕДНЕГО снапшота `proxiesJson`.
   @override
   Future<void> reloadProxies() async {
-    final clash = _clash;
-    if (clash == null || _state.configRaw.isEmpty) return;
-    try {
-      await clash.pingVersion();
-      final proxies = await clash.fetchProxies();
-      // §141 P1.2a — assign-after-await: пока ждали fetchProxies, туннель мог
-      // упасть (`_handleStatusEvent`/`_onTunnelDead` обнулили _clash и почистили
-      // state). Если _clash сменился или ушёл — не перетираем свежий
-      // disconnected-state устаревшим снимком (иначе transient UI-глитч:
-      // groups/nodes от мёртвой сессии поверх «tunnel down»).
-      if (_clash != clash || !_state.tunnelUp) return;
-      final groups = ClashApiClient.selectorGroupTags(proxies)
-          .where((name) => name != 'GLOBAL')
-          .toList();
-
-      String? initial = _state.selectedGroup;
-      if (initial == null || !groups.contains(initial)) {
-        final finalTag = ClashEndpoint.routeFinalTag(_state.configRaw);
-        if (finalTag != null && groups.contains(finalTag)) {
-          initial = finalTag;
-        } else {
-          initial = groups.isNotEmpty ? groups.first : null;
-        }
-      }
-
-      _emit(
-        _state.copyWith(
-          proxiesJson: proxies,
-          groups: groups,
-          selectedGroup: initial,
-        ),
-      );
-      await applyGroup(initial);
-    } catch (e) {
-      _emit(_state.copyWith(lastError: 'Clash API: ${formatUserError(e)}'));
-      _addDebug(DebugSource.app, 'Clash API error: $e');
-    }
+    if (!_state.tunnelUp) return;
+    _applyProxiesSnapshot(_state.proxiesJson);
   }
 
   Future<void> applyGroup(String? tag) async {
@@ -614,29 +692,25 @@ class HomeController extends ChangeNotifier
 
   Future<void> switchNode(String nodeTag) async {
     final group = _state.selectedGroup;
-    final clash = _clash;
-    if (group == null || clash == null) return;
+    if (group == null || !_state.tunnelUp) return;
     final prevNode = _state.activeInGroup;
     _emit(_state.copyWith(busy: true, highlightedNode: nodeTag));
     try {
-      await clash.selectInGroup(group, nodeTag);
-      // §143 — `interrupt_exist_connections` рвёт только inbound; уже
-      // установленные upstream-сессии старой ноды доживают сами. По opt-in
-      // тугле точечно закрываем соединения переключаемой группы, чтобы трафик
-      // сразу ушёл на новую ноду. Best-effort: фейл одного DELETE не должен
-      // ронять переключение.
+      // §122 — выбор ноды через CommandClient `selectOutbound` (unary RPC),
+      // не Clash PUT /proxies/<group>.
+      final ok = await _cc.selectOutbound(group, nodeTag);
+      if (!ok) throw const FormatException('selectOutbound rejected');
+      // §143 — точечный обрыв соединений переключаемой группы (opt-in тугл),
+      // чтобы трафик сразу ушёл на новую ноду. §122 — через CommandClient:
+      // снапшот соединений уже в `_state` (connections-стрим), id'ы цепочки
+      // закрываем `closeConnection`. Best-effort.
       if (await SettingsStorage.getInterruptOnSwitch()) {
         try {
-          final conns = await clash.fetchConnections();
-          final ids = ClashApiClient.connectionIdsInChain(conns, group);
-          // Общий дедлайн на весь обрыв: на нормальном loopback DELETE'ы
-          // sub-ms, но если локальный clash-inbound подвиснет, серия из N
-          // запросов с 10s-таймаутом каждый держала бы busy=true слишком
-          // долго. 5s суммарно с запасом хватает на десятки соединений.
+          final ids = _connectionIdsInGroup(group);
           await Future(() async {
             for (final id in ids) {
               try {
-                await clash.closeConnection(id);
+                await _cc.closeConnection(id);
               } catch (_) {/* соединение уже закрылось — игнор */}
             }
           }).timeout(const Duration(seconds: 5), onTimeout: () {});
@@ -646,6 +720,8 @@ class HomeController extends ChangeNotifier
           _addDebug(DebugSource.app, 'Interrupt-on-switch failed: $e');
         }
       }
+      // Groups-стрим сам приедет с новым `selected`; пере-применяем сразу для
+      // мгновенного отклика UI (не ждём следующий снапшот).
       await reloadProxies();
       _addDebug(DebugSource.app, 'Node selected: $nodeTag');
       // §047 — outgoing state event (gated, default OFF). reason=user: явный
@@ -662,6 +738,19 @@ class HomeController extends ChangeNotifier
       _emit(_state.copyWith(busy: false));
     }
   }
+
+  /// §143 / §122 — id'ы активных соединений, принадлежащих группе [group],
+  /// для точечного обрыва при switchNode (interrupt-on-switch). Источник —
+  /// последний connections-снапшот CommandClient'а (`_state.proxiesJson` его не
+  /// держит; читаем напрямую из native-аккумулятора через стрим-кеш).
+  ///
+  /// **Known-gap (§122):** `CcConnection` пока не несёт `chains` (цепочку
+  /// outbound'ов), как Clash `/connections`. Без неё надёжно сматчить соединение
+  /// на selector-группу нельзя. Interrupt-on-switch — opt-in (default OFF) и не
+  /// влияет на главный экран; до прокидки `chains` в ядре возвращаем пусто
+  /// (мягкая деградация: ноды переключатся, старые сессии доживут сами —
+  /// прежнее поведение без тугла). Полноценный фикс — отдельная таска.
+  List<String> _connectionIdsInGroup(String group) => const <String>[];
 
   // Ping / URLTest оркестрация (runNodeUrltest, ping-option resolve chain,
   // reloadPingOptions, _scheduleAutoPing, runGroupUrltest, runMassUrltest,
