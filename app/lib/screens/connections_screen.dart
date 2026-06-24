@@ -32,6 +32,28 @@ bool isOneWayStuck({
   return (upload > 0 && download == 0) || (upload == 0 && download > 0);
 }
 
+/// §122 — чистое «название правила» из полной `rule.String()` ядра.
+/// `getRule()` склеивает тип+значение, напр.:
+///   `rule_set=[ru-domains ru-services geoip-ru]` → `ru-domains` (первый тег)
+///   `domain_suffix=google.com`                   → `google.com`
+///   `ip_cidr=[10.0.0.0/8]`                        → `10.0.0.0/8`
+/// Берём значение после первого `=`; если оно в `[...]` — первый элемент.
+/// Без `=` (или пусто) — строка как есть. Top-level — общая для Conns + Stats.
+String ruleName(String rule) {
+  final r = rule.trim();
+  if (r.isEmpty) return r;
+  final eq = r.indexOf('=');
+  if (eq < 0) return r;
+  var val = r.substring(eq + 1).trim();
+  if (val.startsWith('[') && val.endsWith(']')) {
+    val = val.substring(1, val.length - 1).trim();
+  }
+  if (val.isEmpty) return r.substring(0, eq); // пустое значение → тип
+  // Набор из нескольких тегов (через пробел/запятую) — берём первый.
+  final firstSep = val.indexOf(RegExp(r'[\s,]'));
+  return firstSep < 0 ? val : val.substring(0, firstSep);
+}
+
 /// Embeddable view: toolbar + список соединений. Без Scaffold, без AppBar —
 /// сидит во вкладке StatsScreen.
 ///
@@ -217,7 +239,7 @@ class _ConnectionsViewState extends State<ConnectionsView> {
     );
 
     final cs = Theme.of(context).colorScheme;
-    final rule = conn.rule;
+    final rule = ruleName(conn.rule);
 
     return Container(
       // §153 — розовый фон у однобоких (зависших) TCP; закрытые — без подсветки.

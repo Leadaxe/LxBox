@@ -213,4 +213,35 @@ void main() {
       }
     });
   });
+
+  group('ruleName — чистое имя правила (§122)', () {
+    test('rule_set=[...] → первый тег набора', () {
+      expect(ruleName('rule_set=[ru-domains ru-services geoip-ru]'),
+          'ru-domains');
+      expect(ruleName('rule_set=[geosite-google]'), 'geosite-google');
+    });
+
+    test('type=value → значение', () {
+      expect(ruleName('domain_suffix=google.com'), 'google.com');
+      expect(ruleName('ip_cidr=[10.0.0.0/8]'), '10.0.0.0/8');
+    });
+
+    test('без `=` → строка как есть', () {
+      expect(ruleName('direct'), 'direct');
+      expect(ruleName('final'), 'final');
+    });
+
+    test('пустое значение после `=` → тип', () {
+      expect(ruleName('protocol='), 'protocol');
+    });
+
+    test('пустая строка → пустая', () {
+      expect(ruleName(''), '');
+      expect(ruleName('   '), '');
+    });
+
+    test('запятая-разделитель в наборе → первый', () {
+      expect(ruleName('rule_set=[a, b, c]'), 'a');
+    });
+  });
 }

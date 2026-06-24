@@ -95,8 +95,9 @@ class _StatsScreenState extends State<StatsScreen> {
     final byRule = <String, int>{};
     final perRule = <String, OutboundGroup>{};
     for (final c in conns) {
-      // Группировка по rule (chains в CommandClient нет). Пустой rule → 'direct'.
-      final rule = c.rule.isNotEmpty ? c.rule : 'direct';
+      // Группировка по чистому имени правила (rule_set→первый тег, иначе
+      // значение после `=`). Пустой rule → 'direct'.
+      final rule = c.rule.isNotEmpty ? ruleName(c.rule) : 'direct';
       byRule[rule] = (byRule[rule] ?? 0) + 1;
 
       // destination = "host:port" — порт = часть после последнего ':'.
