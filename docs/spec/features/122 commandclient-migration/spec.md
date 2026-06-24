@@ -492,7 +492,7 @@ message Rule { string type; string payload; string action; bool isDNS; }
 
 Все три фазы реализуемы на одном ядре `v1.14.0-lx.1-rc.2` — версионного разрыва нет (декомпиляция AAR подтвердила команды 0-5 и closed-историю).
 
-**Фаза 0 — нативный канал (Kotlin/JNI, без UI-изменений).**
+**Фаза 0 — нативный канал (Kotlin/JNI, без UI-изменений). ✅ РЕАЛИЗОВАНА, КОМПИЛИРУЕТСЯ** (коммит `8a34aa4`, `:app:compileReleaseKotlin` BUILD SUCCESSFUL против rc.2 AAR; JNI-сигнатуры выверены декомпиляцией). Фундамент Фазы 1a — `app/lib/vpn/cc_channel.dart` Dart-клиент — готов (`4239f98`, `flutter analyze` чист). **Остаётся device-smoke (Q5/Q6/Q8 — телефон не подключён).**
 - Новый `BoxCommandClient.kt`; правки `VpnPlugin.kt` (EventChannel'ы + MethodChannel-проброс императивов), `BoxService.kt` (`statusClient.connect` после `startCommandServer`, рядом с `CommandServer` на `BoxService.kt:179`).
 - **Три клиента (§2.8):** `statusClient` (always-on, `Status`+`setStatusInterval` 1s), `screenClient` (`Outbounds`+`Groups`+`Connections`, lifecycle по экрану), `profilerClient` (`Connections`, lifecycle по recording). Каждый — свой `CommandClientHandler`, эмитит в свой набор EventChannel-sink'ов.
 - `CommandClientHandler`-колбэки — **КАЖДЫЙ** в `try/catch` fail-safe (JNI-no-throw; unchecked exception через JNI = `Runtime::Abort` всего процесса — см. память `project_jni_callbacks_must_not_throw`). Неиспользуемые клиентом колбэки — no-op (но всё равно в try/catch).
