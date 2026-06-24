@@ -69,6 +69,17 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         @Volatile
         var coreLogSink: io.flutter.plugin.common.EventChannel.EventSink? = null
 
+        /// §122 Фаза 0 — sink'и нового CommandClient-канала (`BoxCommandClient`).
+        /// Инвариант §2.1: эмиттер живёт во Flutter-процессе (как `coreLogSink`).
+        @Volatile
+        var ccStatusSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+        @Volatile
+        var ccOutboundsSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+        @Volatile
+        var ccGroupsSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+        @Volatile
+        var ccConnectionsSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+
         fun start(context: Context) {
             Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${currentStatus.name}")
             val intent = Intent(context, BoxVpnService::class.java).apply { action = ACTION_START }

@@ -31,6 +31,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val METHOD_CHANNEL = "com.leadaxe.lxbox/methods"
         private const val STATUS_CHANNEL = "com.leadaxe.lxbox/status_events"
         private const val CORE_LOG_CHANNEL = "lxbox/coreLog"   // §043
+        // §122 Фаза 0 — каналы CommandClient.
+        private const val CC_STATUS_CHANNEL = "lxbox/cc/status"
+        private const val CC_OUTBOUNDS_CHANNEL = "lxbox/cc/outbounds"
+        private const val CC_GROUPS_CHANNEL = "lxbox/cc/groups"
+        private const val CC_CONNECTIONS_CHANNEL = "lxbox/cc/connections"
         private const val VPN_REQUEST_CODE = 24
 
         // §047 — статические ссылки для bridge'а из LxBoxIntentReceiver (он
@@ -93,6 +98,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     private lateinit var methodChannel: MethodChannel
     private lateinit var statusEventChannel: EventChannel
     private lateinit var coreLogEventChannel: EventChannel
+    /// §122 Фаза 0 — EventChannel'ы нового CommandClient-канала.
+    private lateinit var ccStatusEventChannel: EventChannel
+    private lateinit var ccOutboundsEventChannel: EventChannel
+    private lateinit var ccGroupsEventChannel: EventChannel
+    private lateinit var ccConnectionsEventChannel: EventChannel
     private lateinit var context: Context
     private var activity: Activity? = null
     private var statusSink: EventChannel.EventSink? = null
@@ -166,6 +176,29 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
         })
 
+        // §122 Фаза 0 — 4 канала CommandClient (status/outbounds/groups/connections).
+        // BoxCommandClient.handler пушит снапшоты в BoxVpnService.cc*Sink → сюда → Dart.
+        ccStatusEventChannel = EventChannel(binding.binaryMessenger, CC_STATUS_CHANNEL)
+        ccStatusEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccStatusSink = sink }
+            override fun onCancel(args: Any?) { BoxVpnService.ccStatusSink = null }
+        })
+        ccOutboundsEventChannel = EventChannel(binding.binaryMessenger, CC_OUTBOUNDS_CHANNEL)
+        ccOutboundsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccOutboundsSink = sink }
+            override fun onCancel(args: Any?) { BoxVpnService.ccOutboundsSink = null }
+        })
+        ccGroupsEventChannel = EventChannel(binding.binaryMessenger, CC_GROUPS_CHANNEL)
+        ccGroupsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccGroupsSink = sink }
+            override fun onCancel(args: Any?) { BoxVpnService.ccGroupsSink = null }
+        })
+        ccConnectionsEventChannel = EventChannel(binding.binaryMessenger, CC_CONNECTIONS_CHANNEL)
+        ccConnectionsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccConnectionsSink = sink }
+            override fun onCancel(args: Any?) { BoxVpnService.ccConnectionsSink = null }
+        })
+
         Log.d(TAG, "[vpn] onAttachedToEngine: registerReceiver(statusReceiver)")
         // §155 — на отдельных OEM-прошивках registerReceiver может бросить
         // (например при гонке с фоновыми ограничениями) → краш прямо в
@@ -185,8 +218,16 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         methodChannel.setMethodCallHandler(null)
         statusEventChannel.setStreamHandler(null)
         coreLogEventChannel.setStreamHandler(null)
+        ccStatusEventChannel.setStreamHandler(null)
+        ccOutboundsEventChannel.setStreamHandler(null)
+        ccGroupsEventChannel.setStreamHandler(null)
+        ccConnectionsEventChannel.setStreamHandler(null)
         statusSink = null
         BoxVpnService.coreLogSink = null
+        BoxVpnService.ccStatusSink = null
+        BoxVpnService.ccOutboundsSink = null
+        BoxVpnService.ccGroupsSink = null
+        BoxVpnService.ccConnectionsSink = null
         // §047 — обнуляем bridge-ссылки (engine detached).
         bridgeChannel = null
         appContext = null
@@ -477,6 +518,44 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
                 result.success(true)
             }
+
+            // ───── §122 Фаза 0 — CommandClient lifecycle + императивы ─────
+            "ccConnectScreen" -> {
+                BoxService.commandClient?.connectScreen(); result.success(true)
+            }
+            "ccDisconnectScreen" -> {
+                BoxService.commandClient?.disconnectScreen(); result.success(true)
+            }
+            "ccConnectProfiler" -> {
+                BoxService.commandClient?.connectProfiler(); result.success(true)
+            }
+            "ccDisconnectProfiler" -> {
+                BoxService.commandClient?.disconnectProfiler(); result.success(true)
+            }
+            "ccUrlTestOutbound" -> {
+                val cc = BoxService.commandClient
+                if (cc == null) { result.success(mapOf("delay" to 0, "error" to "not connected")); return }
+                val tag = call.argument<String>("tag") ?: ""
+                val link = call.argument<String>("link") ?: ""
+                val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
+                result.success(cc.urlTestOutbound(tag, link, timeoutMs))
+            }
+            "ccGetRules" -> {
+                result.success(BoxService.commandClient?.getRules() ?: emptyList<Map<String, Any>>())
+            }
+            "ccSelectOutbound" -> {
+                val group = call.argument<String>("group") ?: ""
+                val tag = call.argument<String>("tag") ?: ""
+                result.success(BoxService.commandClient?.selectOutbound(group, tag) ?: false)
+            }
+            "ccCloseConnection" -> {
+                val id = call.argument<String>("id") ?: ""
+                result.success(BoxService.commandClient?.closeConnection(id) ?: false)
+            }
+            "ccCloseConnections" -> {
+                result.success(BoxService.commandClient?.closeConnections() ?: false)
+            }
+
             else -> result.notImplemented()
         }
     }

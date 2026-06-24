@@ -30,4 +30,13 @@ class PlatformChannels {
   /// EventChannel для forward'а sing-box core-логов в AppLog (§043).
   /// Отдельный (короткий) неймспейс — зеркало `BoxService.coreLog`.
   static const coreLog = 'lxbox/coreLog';
+
+  /// §122 Фаза 0 — EventChannel'ы нативного CommandClient-канала.
+  /// Зеркало `VpnPlugin.CC_*_CHANNEL` + `BoxVpnService.cc*Sink`.
+  /// status: скорость/память/трафик (always-on). outbounds: плоский node-list +
+  /// delay. groups: дерево групп. connections: снапшот соединений (дельты→аккумулятор).
+  static const ccStatus = 'lxbox/cc/status';
+  static const ccOutbounds = 'lxbox/cc/outbounds';
+  static const ccGroups = 'lxbox/cc/groups';
+  static const ccConnections = 'lxbox/cc/connections';
 }

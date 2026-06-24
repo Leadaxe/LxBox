@@ -53,6 +53,14 @@ class BoxService(
 
     companion object {
         private const val TAG = "BoxService"
+
+        /// §122 Фаза 0 — статическая ссылка на активный `BoxCommandClient`, чтобы
+        /// `VpnPlugin` (Flutter-процесс) дёргал императивы (urlTestOutbound/getRules/
+        /// selectOutbound/closeConnection) и lifecycle (screen/profiler connect/disconnect).
+        /// @Volatile: пишется из service-потока, читается из Flutter MethodChannel-потока.
+        @Volatile
+        var commandClient: BoxCommandClient? = null
+            private set
     }
 
     /// Scoped to service lifetime — all child coroutines are cancelled in onDestroy / doStop.
@@ -233,6 +241,11 @@ class BoxService(
     }
 
     private fun closeCommandServerAtomic(reason: String) {
+        // §122 Фаза 0 — сначала закрыть CommandClient-канал (его сокет-соединения к
+        // CommandServer), потом сам сервер. Идемпотентно (getAndSet-паттерн внутри).
+        runCatching { commandClient?.shutdownAll() }
+            .onFailure { Log.w(TAG, "closeCommandServerAtomic($reason): commandClient shutdown failed: ${it.message}") }
+        commandClient = null
         val cs = commandServer.getAndSet(null) ?: return
         runCatching { cs.closeService() }.onFailure {
             Log.e(TAG, "closeCommandServerAtomic($reason): closeService failed", it)
@@ -325,6 +338,15 @@ class BoxService(
         }
 
         setStatus(VpnStatus.Started)
+
+        // §122 Фаза 0 — поднять CommandClient-канал. ПОСЛЕ startCommandServer (:179)
+        // и Started: command.sock существует только когда сервер запущен. statusClient
+        // always-on (watchdog + скорость); screen/profiler — по сигналам из Dart.
+        runCatching {
+            val cc = BoxCommandClient()
+            commandClient = cc
+            cc.startStatus()
+        }.onFailure { Log.w(TAG, "BoxCommandClient.startStatus failed: ${it.message}") }
 
         withContext(Dispatchers.Main) {
             // §123 — подтекст = тег активной ноды / route.final (из Dart через
