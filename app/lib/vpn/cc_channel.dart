@@ -33,29 +33,77 @@ class CcChannel {
       EventChannel(PlatformChannels.ccConnections);
 
   // ─────────────────────────── Streams ───────────────────────────
+  //
+  // §122 КРИТИЧНО: каждый EventChannel держит РОВНО ОДИН native sink
+  // (`BoxVpnService.cc*Sink`). Если разные потребители (главный экран +
+  // StatsScreen + ConnectionsView) делают независимый `EventChannel
+  // .receiveBroadcastStream().listen()`, их cancel'ы (dispose Stats) шлют
+  // `onCancel` → native обнуляет sink → стрим главного экрана умирает →
+  // watchdog видит «тишину» → ложный dead-tunnel/revoke. Симптом: «при заходе
+  // в Statistics слетает VPN».
+  //
+  // Решение: ОДИН внутренний listen на EventChannel, фан-аут через
+  // `StreamController.broadcast`. Native sink ставится при появлении первого
+  // Dart-подписчика и снимается, только когда ушёл ПОСЛЕДНИЙ (onListen/onCancel
+  // контроллера). Несколько потребителей больше не воюют за sink.
 
-  /// Статус-снапшот (always-on, §2.8): скорость (дельта/интервал, B/s при 1s),
-  /// объём, память, число соединений. Источник watchdog + traffic_bar.
-  Stream<CcStatus> get status => _statusChannel
-      .receiveBroadcastStream()
-      .map((e) => CcStatus.fromMap(_asMap(e)));
+  late final Stream<CcStatus> _statusStream = _sharedStream<CcStatus>(
+    _statusChannel,
+    (e) => CcStatus.fromMap(_asMap(e)),
+  );
+  late final Stream<List<CcOutbound>> _outboundsStream =
+      _sharedStream<List<CcOutbound>>(
+    _outboundsChannel,
+    (e) => _asList(e).map((m) => CcOutbound.fromMap(_asMap(m))).toList(),
+  );
+  late final Stream<List<CcGroup>> _groupsStream = _sharedStream<List<CcGroup>>(
+    _groupsChannel,
+    (e) => _asList(e).map((m) => CcGroup.fromMap(_asMap(m))).toList(),
+  );
+  late final Stream<List<CcConnection>> _connectionsStream =
+      _sharedStream<List<CcConnection>>(
+    _connectionsChannel,
+    (e) => _asList(e).map((m) => CcConnection.fromMap(_asMap(m))).toList(),
+  );
+
+  /// Статус-снапшот (always-on, §2.8): скорость, объём, память, число
+  /// соединений. Shared — главный экран (watchdog/traffic_bar) + StatsScreen.
+  Stream<CcStatus> get status => _statusStream;
 
   /// Плоский список ВСЕХ узлов (outbound + endpoint, §2.4): tag/type/delay.
-  /// `urlTestOutbound` течёт сюда обратно (источник истины per-node delay).
-  Stream<List<CcOutbound>> get outbounds => _outboundsChannel
-      .receiveBroadcastStream()
-      .map((e) => _asList(e).map((m) => CcOutbound.fromMap(_asMap(m))).toList());
+  Stream<List<CcOutbound>> get outbounds => _outboundsStream;
 
   /// Дерево групп (§2.4): группа → items, selectable/selected.
-  Stream<List<CcGroup>> get groups => _groupsChannel
-      .receiveBroadcastStream()
-      .map((e) => _asList(e).map((m) => CcGroup.fromMap(_asMap(m))).toList());
+  Stream<List<CcGroup>> get groups => _groupsStream;
 
   /// Снапшот активных соединений (дельты → native-аккумулятор → снапшот, §3.2).
-  Stream<List<CcConnection>> get connections => _connectionsChannel
-      .receiveBroadcastStream()
-      .map((e) =>
-          _asList(e).map((m) => CcConnection.fromMap(_asMap(m))).toList());
+  /// Shared — StatsScreen + ConnectionsView одновременно.
+  Stream<List<CcConnection>> get connections => _connectionsStream;
+
+  /// Один EventChannel-listen, фан-аут через broadcast-контроллер. Подписка на
+  /// EventChannel держится, пока есть хоть один Dart-подписчик контроллера.
+  Stream<T> _sharedStream<T>(EventChannel channel, T Function(Object?) decode) {
+    StreamSubscription<dynamic>? upstream;
+    late final StreamController<T> controller;
+    controller = StreamController<T>.broadcast(
+      onListen: () {
+        upstream = channel.receiveBroadcastStream().listen(
+          (e) {
+            if (!controller.isClosed) controller.add(decode(e));
+          },
+          onError: (Object err, StackTrace st) {
+            if (!controller.isClosed) controller.addError(err, st);
+          },
+        );
+      },
+      onCancel: () {
+        // Снимаем native sink, только когда ушёл последний подписчик.
+        upstream?.cancel();
+        upstream = null;
+      },
+    );
+    return controller.stream;
+  }
 
   // ─────────────────────── Lifecycle signals ───────────────────────
   // §2.8 — screen/profiler клиенты поднимаются/гасятся по сигналу из Dart.
