@@ -314,6 +314,7 @@ Spec-driven development — 30 feature specifications document every capability.
 
 | Document | Description |
 |----------|-------------|
+| [Security](docs/SECURITY.md) | Threat model — traffic-leak protection (Unknown traffic / kill-switch), local attack surface, on-device secrets |
 | [Protocol Reference](docs/PROTOCOLS.md) | URI formats, parameters, sing-box mapping |
 | [Architecture](docs/ARCHITECTURE.md) | 3-layer pipeline, data flows, native bridge |
 | [Build](docs/BUILD.md) | Build instructions, CI, APK signing, local-build marker |
