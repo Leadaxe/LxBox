@@ -360,16 +360,32 @@ class BoxCommandClient {
     }
 
     /// §3.2 — применить дельты к аккумулятору, эмитить снапшот. getReset()=replace.
+    ///
+    /// КРИТИЧНО (§122): `ConnectionEvents` — это ДЕЛЬТА между вызовами. Аккумулятор
+    /// ОБЯЗАН применять КАЖДОЕ событие по порядку, иначе рассинхрон навсегда.
+    /// Раньше тут стоял ранний `if (ccConnectionsSink == null) return` — он
+    /// отбрасывал дельты, пока никто в Dart не слушал `connections` (главный
+    /// экран слушает только status+groups, НЕ connections). Симптом: главный
+    /// видит N соединений (из status), а Stats при открытии — 0/мало, потому что
+    /// все «created»-дельты до подписки были потеряны и аккумулятор пуст.
+    /// Фикс: накапливать ВСЕГДА (пока screenClient жив), эмитить — только если
+    /// есть Dart-подписчик (sink). Тогда Stats при подписке получит ПОЛНЫЙ снапшот.
     private fun applyConnectionEvents(message: ConnectionEvents?, genRef: AtomicInteger, gen: Int) {
         runCatching {
             if (gen != genRef.get()) return
             val events = message ?: return
-            if (BoxVpnService.ccConnectionsSink == null) return
             val acc = connectionsAccumulator.get() ?: run { ensureAccumulator(); connectionsAccumulator.get() } ?: return
-            // applyEvents учитывает getReset() внутри (replace при reset).
+            // applyEvents учитывает getReset() внутри (replace при reset). ВСЕГДА —
+            // даже без Dart-подписчика, иначе пропуск дельты ломает аккумулятор.
             acc.applyEvents(events)
-            // ConnectionStateActive — long (1L), filterState принимает int → каст.
+            // filterState(Active) держит аккумулятор компактным (только живые
+            // соединения) — closed-историю ведёт Dart-сторона (ConnectionsView
+            // `_accumulate`/`_closed*`), чтобы не копить закрытые бесконечно в
+            // native. ConnectionStateActive — long (1L), filterState принимает int.
             acc.filterState(Libbox.ConnectionStateActive.toInt())
+            // Эмиссия в Dart — только если кто-то слушает. Накопление выше уже
+            // случилось, так что первый же подписчик получит полный снапшот.
+            if (BoxVpnService.ccConnectionsSink == null) return
             val list = ArrayList<Map<String, Any>>()
             val it = acc.iterator()
             while (it.hasNext()) {

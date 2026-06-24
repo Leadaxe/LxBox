@@ -36,9 +36,9 @@ bool isOneWayStuck({
 /// сидит во вкладке StatsScreen.
 ///
 /// §122 — источник = `CcChannel.instance.connections` (libbox CommandClient
-/// push-стрим), а не Clash HTTP-pull. Native-аккумулятор сам ведёт
-/// closed-историю (`CcConnection.closedAt`); локальный pull-таймер/режим
-/// «accumulate» больше не нужны.
+/// push-стрим), а не Clash HTTP-pull. Native-аккумулятор отдаёт АКТИВНЫЕ
+/// соединения; closed-историю (режим «закрытые не исчезают») ведёт ЭТОТ виджет
+/// (`_accumulate`/`_closedIds`/`_closedAt`) — точно как раньше с Clash-pull.
 class ConnectionsView extends StatefulWidget {
   const ConnectionsView({super.key});
 
@@ -49,7 +49,13 @@ class ConnectionsView extends StatefulWidget {
 class _ConnectionsViewState extends State<ConnectionsView> {
   final _cc = CcChannel.instance;
   StreamSubscription<List<CcConnection>>? _sub;
-  List<CcConnection> _connections = [];
+
+  /// Последний снапшот живых соединений (id → conn), плюс — в режиме accumulate
+  /// — недавно закрытые (помечены через [_closedIds]).
+  final Map<String, CcConnection> _byId = {};
+  final Set<String> _closedIds = {};
+  final Map<String, DateTime> _closedAt = {};
+  bool _accumulate = false;
   bool _loading = true;
 
   @override
@@ -60,13 +66,35 @@ class _ConnectionsViewState extends State<ConnectionsView> {
 
   void _onConnections(List<CcConnection> conns) {
     if (!mounted) return;
-    final next = conns.toList()
-      // newest first — по createdAt (epoch ms).
+    final liveIds = conns.map((c) => c.id).where((id) => id.isNotEmpty).toSet();
+
+    if (_accumulate) {
+      // Соединения, пропавшие из живого снапшота → закрыты (помечаем + timestamp).
+      for (final id in _byId.keys) {
+        if (id.isNotEmpty && !liveIds.contains(id) && _closedIds.add(id)) {
+          _closedAt[id] = DateTime.now();
+        }
+      }
+      // Свежие данные поверх (живые перетирают, закрытые остаются как были).
+      for (final c in conns) {
+        if (c.id.isNotEmpty) _byId[c.id] = c;
+      }
+    } else {
+      _byId
+        ..clear()
+        ..addEntries(conns.where((c) => c.id.isNotEmpty).map((c) => MapEntry(c.id, c)));
+      _closedIds.clear();
+      _closedAt.clear();
+    }
+
+    setState(() => _loading = false);
+  }
+
+  /// Отсортированный список: новейшие сверху (по createdAt epoch ms).
+  List<CcConnection> get _sorted {
+    final list = _byId.values.toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    setState(() {
-      _connections = next;
-      _loading = false;
-    });
+    return list;
   }
 
   @override
@@ -87,6 +115,7 @@ class _ConnectionsViewState extends State<ConnectionsView> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final list = _sorted;
     return Column(
       children: [
         Container(
@@ -97,13 +126,30 @@ class _ConnectionsViewState extends State<ConnectionsView> {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(
             children: [
-              const SizedBox(width: 4),
-              Icon(Icons.link, size: 18, color: cs.onSurfaceVariant),
+              // Toggle: Live (закрытые исчезают) ↔ Accumulate (закрытые серым остаются).
+              IconButton(
+                tooltip: _accumulate
+                    ? 'Accumulating closed (tap to clear)'
+                    : 'Live (tap to keep closed)',
+                icon: Icon(
+                  _accumulate ? Icons.history_toggle_off : Icons.history,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _accumulate = !_accumulate;
+                    if (!_accumulate) {
+                      // Выключили accumulate → убираем закрытые из набора.
+                      _byId.removeWhere((id, _) => _closedIds.contains(id));
+                      _closedIds.clear();
+                      _closedAt.clear();
+                    }
+                  });
+                },
+              ),
               const Spacer(),
-              Text('${_connections.length}',
-                  style: TextStyle(
-                      fontSize: 12, color: cs.onSurfaceVariant)),
-              if (_connections.isNotEmpty)
+              Text('${list.length}',
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              if (list.isNotEmpty)
                 IconButton(
                   tooltip: 'Close all',
                   icon: const Icon(Icons.close_rounded),
@@ -115,12 +161,12 @@ class _ConnectionsViewState extends State<ConnectionsView> {
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
-              : _connections.isEmpty
+              : list.isEmpty
                   ? const Center(child: Text('No active connections'))
                   : ListView.separated(
-                      itemCount: _connections.length,
+                      itemCount: list.length,
                       separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, i) => _buildTile(_connections[i]),
+                      itemBuilder: (context, i) => _buildTile(list[i]),
                     ),
         ),
       ],
@@ -134,27 +180,31 @@ class _ConnectionsViewState extends State<ConnectionsView> {
     return destination.substring(i + 1);
   }
 
-  Widget _buildTile(CcConnection conn) {
-    final host = conn.domain;
-    final destPort = _portOf(conn.destination);
-    final network = conn.network;
+  /// Host из "host:port" — часть до последнего ':'.
+  static String _hostOf(String destination) {
+    final i = destination.lastIndexOf(':');
+    return i < 0 ? destination : destination.substring(0, i);
+  }
 
-    // domain пуст → показываем raw destination ("host:port").
-    final destination = host.isNotEmpty ? host : conn.destination;
-    final display = (host.isNotEmpty && destPort.isNotEmpty)
-        ? '$destination:$destPort'
-        : destination;
+  Widget _buildTile(CcConnection conn) {
+    final network = conn.network;
+    final destPort = _portOf(conn.destination);
+    // host: domain, иначе host-часть destination (IP-соединения без домена).
+    final host = conn.domain.isNotEmpty ? conn.domain : _hostOf(conn.destination);
+    final display = destPort.isNotEmpty ? '$host:$destPort' : host;
 
     final upload = conn.uplink;
     final download = conn.downlink;
     final id = conn.id;
-    final closed = conn.isClosed;
+    final closed = conn.isClosed || _closedIds.contains(id);
 
     final startTime = conn.createdAt > 0
         ? DateTime.fromMillisecondsSinceEpoch(conn.createdAt)
         : null;
-    final endTime = closed && conn.closedAt > 0
-        ? DateTime.fromMillisecondsSinceEpoch(conn.closedAt)
+    final endTime = closed
+        ? (conn.closedAt > 0
+            ? DateTime.fromMillisecondsSinceEpoch(conn.closedAt)
+            : (_closedAt[id] ?? DateTime.now()))
         : DateTime.now();
     final duration = startTime != null ? endTime.difference(startTime) : null;
 
@@ -170,75 +220,83 @@ class _ConnectionsViewState extends State<ConnectionsView> {
     final rule = conn.rule;
 
     return Container(
-      // §153 — розовый фон у однобоких (зависших) TCP-соединений.
-      color: oneWay
-          ? Color.alphaBlend(
-              Colors.pink.withValues(alpha: 0.16), cs.surface)
+      // §153 — розовый фон у однобоких (зависших) TCP; закрытые — без подсветки.
+      color: oneWay && !closed
+          ? Color.alphaBlend(Colors.pink.withValues(alpha: 0.16), cs.surface)
           : null,
       child: Opacity(
-      opacity: closed ? 0.45 : 1.0,
-      child: InkWell(
-        onTap: () => unawaited(showConnectionDetailSheet(
-          context,
-          conn,
-          oneWay: oneWay,
-          closed: closed,
-          onClose: (cid) => unawaited(_closeConnection(cid)),
-        )),
-        child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Row 1: net-arrow + host:port + traffic + close button.
-          // §122 — app-иконка убрана: CommandClient не отдаёт processPath.
-          Row(
-            children: [
-              Icon(
-                network == 'udp' ? Icons.swap_horiz : Icons.arrow_forward,
-                size: 16,
-                color: cs.onSurfaceVariant,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  display,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                  overflow: TextOverflow.ellipsis,
+        opacity: closed ? 0.5 : 1.0,
+        child: InkWell(
+          onTap: () => unawaited(showConnectionDetailSheet(
+            context,
+            conn,
+            oneWay: oneWay,
+            closed: closed,
+            onClose: (cid) => unawaited(_closeConnection(cid)),
+          )),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Row 1: net-arrow + host:port + traffic + close.
+                // §122 — app-иконка убрана (CommandClient не отдаёт processPath).
+                Row(
+                  children: [
+                    Icon(
+                      closed
+                          ? Icons.check_circle_outline
+                          : (network == 'udp'
+                              ? Icons.swap_horiz
+                              : Icons.arrow_forward),
+                      size: 16,
+                      color: closed ? cs.primary : cs.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        display,
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w500),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      '↑${formatBytes(upload)} ↓${formatBytes(download)}',
+                      style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                    ),
+                    const SizedBox(width: 4),
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: IconButton(
+                        icon: const Icon(Icons.close, size: 14),
+                        padding: EdgeInsets.zero,
+                        tooltip: 'Close',
+                        onPressed: (closed || id.isEmpty)
+                            ? null
+                            : () => _closeConnection(id),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              Text(
-                '↑${formatBytes(upload)} ↓${formatBytes(download)}',
-                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-              ),
-              const SizedBox(width: 4),
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: IconButton(
-                  icon: const Icon(Icons.close, size: 14),
-                  padding: EdgeInsets.zero,
-                  tooltip: 'Close',
-                  onPressed: (closed || id.isEmpty) ? null : () => _closeConnection(id),
+                // Row 2: protocol · rule · duration. (chain/process нет в
+                // CommandClient — §122 ядровый gap.)
+                Padding(
+                  padding: const EdgeInsets.only(left: 22, top: 2),
+                  child: Text(
+                    '${network.toUpperCase()}'
+                    '${rule.isNotEmpty ? '  ·  $rule' : ''}'
+                    '${closed ? '  ·  closed' : ''}'
+                    '${duration != null ? '  ·  ${_formatDuration(duration)}' : ''}',
+                    style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          // Row 2: protocol + rule + duration.
-          Padding(
-            padding: const EdgeInsets.only(left: 22, top: 2),
-            child: Text(
-              '${network.toUpperCase()}'
-              '${rule.isNotEmpty ? '  ·  $rule' : ''}'
-              '${duration != null ? '  ·  ${_formatDuration(duration)}' : ''}',
-              style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
-              overflow: TextOverflow.ellipsis,
+              ],
             ),
           ),
-        ],
-      ),
-      ),
-      ),
+        ),
       ),
     );
   }

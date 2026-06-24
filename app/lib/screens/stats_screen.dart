@@ -57,10 +57,13 @@ class _StatsScreenState extends State<StatsScreen> {
   @override
   void initState() {
     super.initState();
-    // §2.8 — поднимаем screen-клиент ядра на время видимости экрана.
-    unawaited(_cc.connectScreen());
+    // §122 ПОРЯДОК: сперва подписки (ставят native sink через EventChannel
+    // .onListen), ПОТОМ connectScreen() — иначе разовый снапшот может уйти до
+    // установки sink. См. home_controller._startCcStreams.
     _statusSub = _cc.status.listen(_onStatus);
     _connSub = _cc.connections.listen(_onConnections);
+    // §2.8 — поднимаем screen-клиент ядра на время видимости экрана.
+    unawaited(_cc.connectScreen());
     unawaited(_refreshAllowBypass());
   }
 
