@@ -544,14 +544,20 @@ class HomeController extends ChangeNotifier
   void _startCcStreams() {
     _ccStatusSub?.cancel();
     _ccGroupsSub?.cancel();
-    // §2.8 — главный экран показывает группы/ноды → поднимаем screenClient.
-    unawaited(_cc.connectScreen());
+    // §122 КРИТИЧНО — ПОРЯДОК: сперва навешиваем Dart-подписки (это
+    // инициализирует ленивые `late final` стримы CcChannel → ставит native
+    // sink'и через EventChannel.onListen), и ТОЛЬКО ПОТОМ connectScreen().
+    // Иначе race: connectScreen() поднимает screenClient, ядро эмитит РАЗОВЫЙ
+    // снапшот groups до того как Dart-подписка успела встать → снапшот
+    // отбрасывается (sink ещё null) → «главный экран пустой при старте».
     _ccStatusSub = _cc.status.listen(_onCcStatus, onError: (Object e) {
       _addDebug(DebugSource.app, 'cc status stream error: $e');
     });
     _ccGroupsSub = _cc.groups.listen(_onCcGroups, onError: (Object e) {
       _addDebug(DebugSource.app, 'cc groups stream error: $e');
     });
+    // §2.8 — теперь sink'и стоят → поднимаем screenClient (groups/connections).
+    unawaited(_cc.connectScreen());
   }
 
   /// Отменить подписки + опустить `screenClient`. Зовётся на disconnect/dead.
@@ -562,6 +568,9 @@ class HomeController extends ChangeNotifier
     _ccGroupsSub?.cancel();
     _ccGroupsSub = null;
     _lastCcStatusAt = null;
+    // §122 — сбросить replay-кэши, чтобы при следующем connect новый подписчик
+    // не получил устаревший снапшот прошлой сессии (мигание старых групп/нод).
+    _cc.resetCaches();
     unawaited(_cc.disconnectScreen());
   }
 

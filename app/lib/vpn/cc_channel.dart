@@ -80,29 +80,68 @@ class CcChannel {
   /// Shared — StatsScreen + ConnectionsView одновременно.
   Stream<List<CcConnection>> get connections => _connectionsStream;
 
-  /// Один EventChannel-listen, фан-аут через broadcast-контроллер. Подписка на
-  /// EventChannel держится, пока есть хоть один Dart-подписчик контроллера.
+  /// §122 — shared-стрим с КЭШЕМ последнего снапшота.
+  ///
+  /// Два требования, которые наивный `broadcast` ломал → «при старте главный
+  /// экран пустой»:
+  ///  1. **Постоянный** upstream-listen (НЕ ленивый): EventChannel слушается
+  ///     один раз на всю жизнь процесса. Иначе uptream снимался при уходе
+  ///     последнего подписчика (rebuild/навигация) и РАЗОВЫЙ снапшот `groups`
+  ///     (ядро шлёт его один раз при подключении screenClient) терялся, пока
+  ///     никто не слушал.
+  ///  2. **Replay последнего значения** новому подписчику: `groups`/`status`
+  ///     приходят редко/периодично; подписчик, вставший ПОСЛЕ снапшота, иначе
+  ///     ждал бы следующего. Кэшируем last и отдаём его сразу в onListen.
+  ///
+  /// Native sink (`BoxVpnService.cc*Sink`) держится один раз — несколько
+  /// потребителей (главный + Stats + Conns) больше не воюют за него.
+  /// Колбэки очистки кэшей `_sharedStream` — зовутся из [resetCaches] на
+  /// disconnect, чтобы новый подписчик после reconnect НЕ получил replay'ем
+  /// устаревший снапшот прошлой сессии (старые группы/соединения мигнули бы до
+  /// прихода свежих).
+  final List<void Function()> _cacheResetters = [];
+
+  /// §122 — сбросить replay-кэши групп/нод/соединений. Зовётся из
+  /// `_stopCcStreams` (disconnect). `status`-кэш тоже чистится — свежий статус
+  /// придёт следующим тиком (1s), а устаревшая скорость мёртвой сессии не нужна.
+  void resetCaches() {
+    for (final reset in _cacheResetters) {
+      reset();
+    }
+  }
+
   Stream<T> _sharedStream<T>(EventChannel channel, T Function(Object?) decode) {
-    StreamSubscription<dynamic>? upstream;
-    late final StreamController<T> controller;
-    controller = StreamController<T>.broadcast(
-      onListen: () {
-        upstream = channel.receiveBroadcastStream().listen(
-          (e) {
-            if (!controller.isClosed) controller.add(decode(e));
-          },
-          onError: (Object err, StackTrace st) {
-            if (!controller.isClosed) controller.addError(err, st);
-          },
-        );
+    T? last;
+    var hasLast = false;
+    final controller = StreamController<T>.broadcast(
+      onListen: () {}, // upstream уже активен (поднят ниже, постоянно)
+    );
+    _cacheResetters.add(() {
+      last = null;
+      hasLast = false;
+    });
+    // Постоянная подписка на EventChannel — поднимается сразу, не снимается.
+    channel.receiveBroadcastStream().listen(
+      (e) {
+        last = decode(e);
+        hasLast = true;
+        if (!controller.isClosed) controller.add(last as T);
       },
-      onCancel: () {
-        // Снимаем native sink, только когда ушёл последний подписчик.
-        upstream?.cancel();
-        upstream = null;
+      onError: (Object err, StackTrace st) {
+        if (!controller.isClosed) controller.addError(err, st);
       },
     );
-    return controller.stream;
+    // Каждому новому подписчику — немедленно последний кэшированный снапшот,
+    // затем живой поток из broadcast-контроллера.
+    return Stream<T>.multi((sub) {
+      if (hasLast) sub.add(last as T);
+      final inner = controller.stream.listen(
+        sub.add,
+        onError: sub.addError,
+        onDone: sub.close,
+      );
+      sub.onCancel = inner.cancel;
+    });
   }
 
   // ─────────────────────── Lifecycle signals ───────────────────────
