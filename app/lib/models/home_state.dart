@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../config/consts.dart';
-import '../services/clash_api_client.dart';
+import '../vpn/cc_channel.dart';
 import 'config_node.dart';
 import 'debug_entry.dart';
+import 'traffic_snapshot.dart';
 import 'tunnel_status.dart';
 
 export 'config_node.dart';
+export 'traffic_snapshot.dart';
 
 export 'debug_entry.dart';
 export 'tunnel_status.dart';
@@ -40,7 +42,7 @@ class HomeState {
     this.tunnel = TunnelStatus.disconnected,
     this.lastError = '',
     this.busy = false,
-    this.proxiesJson = const <String, dynamic>{},
+    this.ccGroups = const <CcGroup>[],
     this.groups = const <String>[],
     this.selectedGroup,
     this.nodes = const <String>[],
@@ -76,7 +78,10 @@ class HomeState {
   final TunnelStatus tunnel;
   final String lastError;
   final bool busy;
-  final Map<String, dynamic> proxiesJson;
+
+  /// §122 — снапшот дерева групп из libbox CommandClient (`CcChannel.groups`).
+  /// Источник истины для групп/нод/active-выбора (заменил Clash `proxiesJson`).
+  final List<CcGroup> ccGroups;
   final List<String> groups;
   final String? selectedGroup;
   final List<String> nodes;
@@ -117,6 +122,50 @@ class HomeState {
   final bool configLoadError;
 
   bool get tunnelUp => tunnel.isUp;
+
+  // ─────────────── §122 — типизированный доступ к ccGroups ───────────────
+  // Чистые методы на нативных CommandClient-моделях (заменили статические
+  // хелперы `ClashApiClient.selectorGroupTags`/`urltestNow`/`proxyEntry`).
+
+  /// Группа по тегу (`null` если нет). Группа-аутбаунд = selector/urltest.
+  CcGroup? groupOf(String tag) {
+    for (final g in ccGroups) {
+      if (g.tag == tag) return g;
+    }
+    return null;
+  }
+
+  bool _isUrltest(String type) => type.toLowerCase().contains('urltest');
+  bool _isSelector(String type) => type.toLowerCase().contains('selector');
+
+  /// Теги selector-групп (для dropdown'а выбора). URLTest-группы НЕ включаются
+  /// (выбор в них автоматический). `selectable` от ядра = ровно selector'ы.
+  List<String> get selectorGroupTags => [
+        for (final g in ccGroups)
+          if (g.selectable && _isSelector(g.type)) g.tag,
+      ];
+
+  /// Для urltest-группы — её авто-выбранный член (`selected`). Для не-urltest
+  /// или отсутствующей — `null`. Заменяет `ClashApiClient.urltestNow`.
+  String? urltestNowOf(String tag) {
+    final g = groupOf(tag);
+    if (g == null || !_isUrltest(g.type)) return null;
+    return g.selected.isEmpty ? null : g.selected;
+  }
+
+  /// §078 — control-outbound (selector/urltest/direct/block/dns), не payload-нода.
+  /// Caller'ы короткозамыкают такие теги в matching (всегда видны) и исключают
+  /// из 'Custom'-chip detection. Источник: дерево групп (selector/urltest) +
+  /// `ConfigNode.isControl` из распарсенного конфига (direct/block/dns).
+  bool isControlTag(String tag) {
+    final g = groupOf(tag);
+    if (g != null && (_isSelector(g.type) || _isUrltest(g.type))) return true;
+    return configModel[tag]?.isControl ?? false;
+  }
+
+  /// Все urltest-группы (для форс-URLTest после mass-ping, §070).
+  Iterable<CcGroup> get urltestGroups =>
+      ccGroups.where((g) => _isUrltest(g.type));
 
   /// Memoized sort — вычисляется один раз на жизнь этого `HomeState`
   /// инстанса. Новый `copyWith` создаёт новый state → новый late-кэш;
@@ -175,7 +224,7 @@ class HomeState {
     TunnelStatus? tunnel,
     String? lastError,
     bool? busy,
-    Map<String, dynamic>? proxiesJson,
+    List<CcGroup>? ccGroups,
     List<String>? groups,
     Object? selectedGroup = _unset,
     List<String>? nodes,
@@ -205,7 +254,7 @@ class HomeState {
       tunnel: tunnel ?? this.tunnel,
       lastError: lastError ?? this.lastError,
       busy: busy ?? this.busy,
-      proxiesJson: proxiesJson ?? this.proxiesJson,
+      ccGroups: ccGroups ?? this.ccGroups,
       groups: groups ?? this.groups,
       selectedGroup: identical(selectedGroup, _unset)
           ? this.selectedGroup

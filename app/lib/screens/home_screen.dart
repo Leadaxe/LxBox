@@ -120,16 +120,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     DebugRegistry.I.home = _controller;
     DebugRegistry.I.sub = _subController;
     DebugRegistry.I.autoUpdater = _autoUpdater;
-    // §044: profiler нужен runtime data-source `/connections`. Биндим один
-    // раз тут (singleton-controller singleton-fetcher), чтобы и Debug API
-    // /profiler/start (без открытого UI), и StatsScreen.PerAppTraceTab
-    // оба видели актуальный fetcher. Closure читает свежий clashClient
-    // на каждом poll'е — переподключение Clash API не требует rebind.
-    TrafficProfiler.I.bindRuntime(connections: () async {
-      final c = _controller.clashClient;
-      if (c == null) return const <String, dynamic>{'connections': []};
-      return c.fetchConnections();
-    });
+    // §044/§122 — profiler питался Clash `/connections` (с metadata.processPath
+    // для per-app атрибуции). CommandClient `CcConnection` processPath НЕ несёт
+    // → источник временно пуст. Per-app trace/Live деградируют до прокидки
+    // processPath в ядро (отдельная таска). Биндим пустой fetcher, чтобы
+    // профайлер не падал и Debug API /profiler/* отвечали корректно.
+    TrafficProfiler.I.bindRuntime(
+      connections: () async => const <String, dynamic>{'connections': []},
+    );
     unawaited(applyDebugApiSettings());
     _controllerInit = _controller.init();
     unawaited(_controllerInit);

@@ -1,4 +1,3 @@
-import '../../../config/clash_endpoint.dart';
 import '../../../vpn/box_vpn_client.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
@@ -15,7 +14,6 @@ import '../transport/response.dart';
 Future<DebugResponse> stateHandler(DebugRequest req, DebugContext ctx) async {
   return switch (req.path) {
     '/state' => _root(req, ctx),
-    '/state/clash' => _clash(req, ctx),
     '/state/subs' => _subs(req, ctx),
     '/state/rules' => _rules(req, ctx),
     '/state/storage' => _storage(req, ctx),
@@ -40,29 +38,6 @@ Future<DebugResponse> _root(DebugRequest req, DebugContext ctx) async {
   // не в HomeState). Computed read-only для диагностики lazy rebuild flow.
   json['config_dirty'] = ctx.requireSub().configDirty;
   return JsonResponse(json);
-}
-
-Future<DebugResponse> _clash(DebugRequest req, DebugContext ctx) async {
-  final home = ctx.requireHome();
-  final reveal = req.qBool('reveal');
-  final endpoint = ClashEndpoint.fromConfigJson(home.state.configRaw);
-  var apiOk = false;
-  if (home.clashClient != null) {
-    try {
-      await home.clashClient!.pingVersion();
-      apiOk = true;
-    } catch (_) {
-      apiOk = false;
-    }
-  }
-  return JsonResponse({
-    'available': endpoint != null,
-    'base_uri': endpoint?.baseUri.toString(),
-    'secret': endpoint == null
-        ? null
-        : (reveal ? endpoint.secret : (endpoint.secret.isEmpty ? '' : '***')),
-    'api_ok': apiOk,
-  });
 }
 
 Future<DebugResponse> _subs(DebugRequest req, DebugContext ctx) async {

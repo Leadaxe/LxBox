@@ -99,21 +99,6 @@ GET /logs/app                       Alias for /logs?source=app. Same query param
 GET /logs/core                      Alias for /logs?source=core. Same query params.
 POST /logs/clear[?source=app|core]  Clear AppLog. No source — everything; otherwise only the given one.
 
-=== Clash API (transparent proxy with auto-auth) ===
-
-GET    /clash/version                          sing-box version + meta flags
-GET    /clash/proxies                          All proxies + groups + chains
-GET    /clash/proxies/{tag}                    Single proxy/group. URL-encode the emoji tag (or use python urllib).
-PUT    /clash/proxies/{tag}                    Selector switch. Body: {"name":"<child-tag>"}
-GET    /clash/proxies/{tag}/delay?url=&timeout=  Single delay test (ms)
-GET    /clash/group/{tag}/delay?url=&timeout=    Force URLTest on a group. NOTE: .now is not updated
-                                                 by this call — sing-box quirk (only the first
-                                                 urltest_interval tick changes .now).
-GET    /clash/connections                      { uploadTotal, downloadTotal, memory, connections[] }
-DELETE /clash/connections                      Close all
-DELETE /clash/connections/{id}                 Close one
-GET    /clash/traffic                          Streaming traffic (curl gets the first frame)
-
 === Actions (mutating, POST) ===
 
 POST /action/start-vpn                         Start the tunnel → {"ok":true,"action":"start-vpn"}
@@ -334,17 +319,6 @@ const Map<String, dynamic> _capabilityJson = {
     // Logs
     {'method': 'GET', 'path': '/logs', 'params': {'limit': 'N (default 200)', 'source': 'app|core', 'q': 'substring search', 'level': 'comma-separated: error,warn,info,debug'}, 'description': 'AppLog entries'},
     {'method': 'POST', 'path': '/logs/clear', 'description': 'Clear AppLog'},
-    // Clash proxy
-    {'method': 'GET', 'path': '/clash/version', 'description': 'sing-box version + meta flags'},
-    {'method': 'GET', 'path': '/clash/proxies', 'description': 'All proxies + groups + chains'},
-    {'method': 'GET', 'path': '/clash/proxies/{tag}', 'description': 'Single proxy/group (URL-encode emoji)'},
-    {'method': 'PUT', 'path': '/clash/proxies/{tag}', 'body': '{"name":"<child>"}', 'description': 'Selector switch'},
-    {'method': 'GET', 'path': '/clash/proxies/{tag}/delay', 'params': {'url': 'test URL', 'timeout': 'ms'}, 'description': 'Single delay test'},
-    {'method': 'GET', 'path': '/clash/group/{tag}/delay', 'params': {'url': '...', 'timeout': 'ms'}, 'description': 'Force URLTest on group. NOTE: .now not persisted by this call (sing-box quirk).'},
-    {'method': 'GET', 'path': '/clash/connections', 'description': '{uploadTotal,downloadTotal,memory,connections[]}'},
-    {'method': 'DELETE', 'path': '/clash/connections', 'description': 'Close all'},
-    {'method': 'DELETE', 'path': '/clash/connections/{id}', 'description': 'Close one'},
-    {'method': 'GET', 'path': '/clash/traffic', 'description': 'Streaming traffic (curl gets first frame)'},
     // Actions
     {'method': 'POST', 'path': '/action/start-vpn', 'description': 'Start tunnel'},
     {'method': 'POST', 'path': '/action/stop-vpn', 'description': 'Stop tunnel'},

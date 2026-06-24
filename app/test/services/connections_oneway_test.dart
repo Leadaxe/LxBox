@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/screens/connections_screen.dart';
+import 'package:lxbox/services/process_name.dart';
 
 /// §153 — тесты эвристики `isOneWayStuck` (подсветка зависших соединений).
 ///

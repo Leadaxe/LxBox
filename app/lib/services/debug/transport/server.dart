@@ -8,7 +8,6 @@ import '../context.dart';
 import '../contract/errors.dart';
 import '../handlers/action.dart';
 import '../handlers/backup.dart';
-import '../handlers/clash.dart';
 import '../handlers/config.dart';
 import '../handlers/device.dart';
 import '../handlers/diag.dart';
@@ -169,7 +168,6 @@ class DebugServer {
       ..mount('/device', deviceHandler)
       ..mount('/config', configHandler)
       ..mount('/logs', logsHandler)
-      ..mount('/clash', clashHandler)
       ..mount('/action', actionHandler)
       ..mount('/files', filesHandler)
       ..mount('/diag', diagHandler)

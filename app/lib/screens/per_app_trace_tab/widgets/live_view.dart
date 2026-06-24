@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../services/app_info_cache.dart';
 import '../../../services/traffic_profiler.dart';
 import '../../../services/format_utils.dart';
-import '../../connections_screen.dart' show packageNameFromProcess;
+import '../../../services/process_name.dart';
 import 'empty_view.dart';
 
 /// §160 — Live-режим per-app trace. «Тупой» рендер уже отфильтрованного

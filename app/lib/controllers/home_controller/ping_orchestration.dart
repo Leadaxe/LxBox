@@ -277,18 +277,15 @@ mixin _PingMixin on ChangeNotifier {
   }
 
   Future<void> _runAllUrltestGroups(int epoch) async {
-    final pmap = _state.proxiesJson['proxies'];
-    if (pmap is! Map<String, dynamic>) return;
-    for (final entry in pmap.entries) {
+    // §122 — snapshot тегов до цикла: state.ccGroups может смениться стримом
+    // во время await'ов, а нам нужен стабильный список urltest-групп.
+    final tags = _state.urltestGroups.map((g) => g.tag).toList();
+    for (final tag in tags) {
       // Bug 2 fix: проверяем epoch на каждой итерации — если юзер нажал
       // cancel пока крутятся urltest-группы, прерываемся (auto-группа была
       // основным источником "ping продолжается" после Stop).
       if (_massPingEpoch != epoch) return;
-      final v = entry.value;
-      if (v is! Map<String, dynamic>) continue;
-      final type = v['type']?.toString().toLowerCase() ?? '';
-      if (!type.contains('urltest')) continue;
-      await runGroupUrltest(entry.key);
+      await runGroupUrltest(tag);
     }
   }
 

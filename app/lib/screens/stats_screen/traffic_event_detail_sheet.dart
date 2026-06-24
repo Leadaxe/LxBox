@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import '../../services/app_info_cache.dart';
 import '../../services/format_utils.dart';
 import '../../services/traffic_profiler.dart';
-import '../connections_screen.dart' show packageNameFromProcess;
+import '../../services/process_name.dart';
 
 /// §160 — детальный bottom-sheet по одному [TrafficEvent] (Live-лента
 /// per-app trace, в перспективе — и Stats→Live).

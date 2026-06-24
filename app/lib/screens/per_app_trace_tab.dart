@@ -21,7 +21,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../services/clash_api_client.dart';
 import '../services/traffic_profiler.dart';
 import '../services/format_utils.dart';
 import '../widgets/core_logs_hint_banner.dart';
@@ -33,9 +32,7 @@ import 'per_app_trace_tab/trace_dialogs.dart';
 import 'per_app_trace_tab/trace_sections.dart';
 
 class PerAppTraceTab extends StatefulWidget {
-  const PerAppTraceTab({super.key, required this.clash});
-
-  final ClashApiClient clash;
+  const PerAppTraceTab({super.key});
 
   @override
   State<PerAppTraceTab> createState() => _PerAppTraceTabState();

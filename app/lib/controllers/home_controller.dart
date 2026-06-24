@@ -6,15 +6,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import '../config/clash_endpoint.dart';
+import '../config/route_config.dart';
 import '../vpn/box_vpn_client.dart';
 import '../vpn/cc_channel.dart';
-import '../vpn/cc_proxies_adapter.dart';
 import '../config/config_parse.dart';
 import '../models/home_state.dart';
 import '../services/app_log.dart';
 import '../services/automation/event_emitter.dart';
-import '../services/clash_api_client.dart';
 import '../services/error_format.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
@@ -34,13 +32,8 @@ class HomeController extends ChangeNotifier
   final AutoUpdater? _autoUpdater;
   StreamSubscription<TunnelStatusEvent>? _statusSub;
 
-  /// §122 Фаза 1a — единый канал данных от libbox CommandClient (заменяет
-  /// `ClashApiClient` HTTP-петли). `_clash` остаётся только как переживший
-  /// рефактор флаг «канал жив» (см. ниже) — реальные данные текут стримами.
-  @override
-  ClashApiClient? _clash;
-  ClashApiClient? get clashClient => _clash;
-
+  /// §122 — единый канал данных от libbox CommandClient (заменил `ClashApiClient`
+  /// HTTP-петли). Данные текут push-стримами `status`/`groups`.
   @override
   final CcChannel _cc = CcChannel.instance;
 
@@ -207,11 +200,7 @@ class HomeController extends ChangeNotifier
         connectedSince: DateTime.now(),
         configChangedNeedRestart: false,
       ));
-      // §122 — рантайм-данные теперь из CommandClient-стримов, не из Clash HTTP.
-      // `_clash` оставляем ненулевым как «канал активен» — heartbeat/ping
-      // используют его как гейт (исторический контракт миксинов), но реальные
-      // запросы идут через `_cc`.
-      _rebuildClashEndpoint();
+      // §122 — рантайм-данные текут из CommandClient-стримов (status/groups).
       _startCcStreams();
       _startHeartbeat();
       _heartbeatFailNotified = false;
@@ -225,7 +214,7 @@ class HomeController extends ChangeNotifier
         tunnel == TunnelStatus.revoked) {
       _stopHeartbeat();
       // §141 P1.2b — единый контракт «tunnel down»: отменяем in-flight mass-ping
-      // ПЕРЕД обнулением _clash (ниже), симметрично `_onTunnelDead` (heartbeat.dart).
+      // ПЕРЕД гашением канала, симметрично `_onTunnelDead` (heartbeat.dart).
       // Иначе воркеры mass-ping'а, стартовавшие из _scheduleAutoPing/ручного
       // запуска, дописывают stale-delay в мёртвую сессию (epoch-гейт их
       // самоисцелит, но явная отмена — чище и не зависит от тайминга).
@@ -235,7 +224,6 @@ class HomeController extends ChangeNotifier
       // §122 — гасим CommandClient-стримы и screenClient (disconnectScreen).
       // На следующем `connected` пересоберём (`_startCcStreams`).
       _stopCcStreams();
-      _clash = null;
       final reason = tunnel == TunnelStatus.revoked
           ? 'VPN revoked by another app'
           : (event.errorReason != null ? 'Stopped: ${event.errorReason}' : '');
@@ -243,7 +231,7 @@ class HomeController extends ChangeNotifier
         _state.copyWith(
           tunnel: tunnel,
           lastError: reason.isNotEmpty ? reason : _state.lastError,
-          proxiesJson: <String, dynamic>{},
+          ccGroups: const <CcGroup>[],
           groups: <String>[],
           nodes: <String>[],
           highlightedNode: null,
@@ -320,7 +308,7 @@ class HomeController extends ChangeNotifier
       _emit(_state.copyWith(
         tunnel: TunnelStatus.disconnected,
         lastError: 'Connection timed out',
-        proxiesJson: <String, dynamic>{},
+        ccGroups: const <CcGroup>[],
         groups: <String>[],
         nodes: <String>[],
         traffic: TrafficSnapshot.zero,
@@ -337,7 +325,7 @@ class HomeController extends ChangeNotifier
   // Config persistence + import (clipboard / file) вынесены в
   // `home_controller/config_io.dart` (`_ConfigIoMixin`): _loadSavedConfig /
   // saveParsedConfig / saveConfigRaw / readFromClipboard / readFromFile.
-  // `_rebuildClashEndpoint` остался здесь (общий с Clash-секцией).
+  // §122 — Clash endpoint rebuild выпилен (данные текут CommandClient-стримами).
 
   // ---------------------------------------------------------------------------
   // VPN tunnel control
@@ -391,7 +379,7 @@ class HomeController extends ChangeNotifier
   ///           статусный fallback "Connected").
   /// Dart владеет обеими строками — native при своих show(...) не затирает их.
   Future<void> _pushNotificationLabels() async {
-    final routeFinal = ClashEndpoint.routeFinalTag(_state.configRaw);
+    final routeFinal = RouteConfig.finalTag(_state.configRaw);
     final title = (routeFinal == null || routeFinal.isEmpty)
         ? 'L×Box'
         : 'L×Box [final = $routeFinal]';
@@ -544,8 +532,8 @@ class HomeController extends ChangeNotifier
   // §122 — CommandClient data streams (заменяют Clash API HTTP-петли)
   // ---------------------------------------------------------------------------
 
-  /// Последний синтезированный `proxiesJson` уже лежит в `_state.proxiesJson`;
-  /// этот таймстемп — для watchdog (§122 заменяет heartbeat HTTP-fail).
+  /// Таймстемп последнего status-снапшота — для watchdog (§122 заменяет
+  /// heartbeat HTTP-fail: «тишина» стрима = ядро не отвечает).
   DateTime? _lastCcStatusAt;
   @override
   DateTime? get lastCcStatusAt => _lastCcStatusAt;
@@ -597,27 +585,29 @@ class HomeController extends ChangeNotifier
     ));
   }
 
-  /// §2.4 — снапшот дерева групп → синтез Clash-`proxiesJson` → пере-применение
-  /// логики выбора группы (идентично прежнему `reloadProxies`, но источник =
-  /// стрим, не HTTP). reset-снапшот: каждый снапшот ПОЛНОСТЬЮ заменяет
-  /// `proxiesJson` (replace-not-merge, §2.8).
+  /// §2.4 — снапшот дерева групп из CommandClient. Кладём в `state.ccGroups`
+  /// (источник истины) и пере-применяем логику выбора группы. reset-снапшот:
+  /// каждый снапшот ПОЛНОСТЬЮ заменяет `ccGroups` (replace-not-merge, §2.8).
   void _onCcGroups(List<CcGroup> groups) {
     if (!_state.tunnelUp) return;
-    final proxies = CcProxiesAdapter.fromGroups(groups);
-    _applyProxiesSnapshot(proxies);
+    _applyGroups(groups);
   }
 
-  /// Общее ядро: из свежего `proxiesJson` пересчитать список selector-групп,
+  /// Общее ядро: из свежего снапшота групп пересчитать список selector-групп,
   /// выбрать активную (sticky → route.final → первая) и применить её ноды.
   /// Вызывается из стрима И из `reloadProxies` (pull-refresh / после switchNode).
-  void _applyProxiesSnapshot(Map<String, dynamic> proxies) {
-    final groups = ClashApiClient.selectorGroupTags(proxies)
+  void _applyGroups(List<CcGroup> ccGroups) {
+    // Сначала фиксируем свежий снапшот в state, чтобы производные геттеры
+    // (`selectorGroupTags`/`groupOf`) считали по новым данным.
+    var next = _state.copyWith(ccGroups: ccGroups);
+
+    final groups = next.selectorGroupTags
         .where((name) => name != 'GLOBAL')
         .toList();
 
-    String? initial = _state.selectedGroup;
+    String? initial = next.selectedGroup;
     if (initial == null || !groups.contains(initial)) {
-      final finalTag = ClashEndpoint.routeFinalTag(_state.configRaw);
+      final finalTag = RouteConfig.finalTag(next.configRaw);
       if (finalTag != null && groups.contains(finalTag)) {
         initial = finalTag;
       } else {
@@ -625,33 +615,17 @@ class HomeController extends ChangeNotifier
       }
     }
 
-    _emit(
-      _state.copyWith(
-        proxiesJson: proxies,
-        groups: groups,
-        selectedGroup: initial,
-      ),
-    );
+    _emit(next.copyWith(groups: groups, selectedGroup: initial));
     unawaited(applyGroup(initial));
-  }
-
-  @override
-  void _rebuildClashEndpoint() {
-    // §122 — `_clash` больше не несёт HTTP-данных, но остаётся ненулевым
-    // маркером «канал активен» для heartbeat/ping-гейтов (контракт миксинов).
-    // Конструируем из endpoint'а если он есть (для совместимости с per-app
-    // trace / прочими редкими потребителями), иначе fallback-инстанс.
-    final endpoint = ClashEndpoint.fromConfigJson(_state.configRaw);
-    _clash = endpoint != null ? ClashApiClient(endpoint) : null;
   }
 
   /// Pull-refresh (RefreshIndicator) / переприменение после switchNode|
   /// groupUrltest. §122 — данные уже текут стримом; здесь лишь пере-применяем
-  /// логику выбора группы поверх ПОСЛЕДНЕГО снапшота `proxiesJson`.
+  /// логику выбора группы поверх ПОСЛЕДНЕГО снапшота групп.
   @override
   Future<void> reloadProxies() async {
     if (!_state.tunnelUp) return;
-    _applyProxiesSnapshot(_state.proxiesJson);
+    _applyGroups(_state.ccGroups);
   }
 
   Future<void> applyGroup(String? tag) async {
@@ -665,11 +639,10 @@ class HomeController extends ChangeNotifier
       );
       return;
     }
-    final entry = ClashApiClient.proxyEntry(_state.proxiesJson, tag);
-    if (entry == null) return;
-    final all = entry['all'];
-    final now = entry['now']?.toString();
-    final nodes = all is List ? all.map((e) => e.toString()).toList() : <String>[];
+    final group = _state.groupOf(tag);
+    if (group == null) return;
+    final nodes = group.items.map((e) => e.tag).toList();
+    final now = group.selected.isEmpty ? null : group.selected;
     _emit(
       _state.copyWith(
         nodes: nodes,
@@ -739,17 +712,14 @@ class HomeController extends ChangeNotifier
     }
   }
 
-  /// §143 / §122 — id'ы активных соединений, принадлежащих группе [group],
-  /// для точечного обрыва при switchNode (interrupt-on-switch). Источник —
-  /// последний connections-снапшот CommandClient'а (`_state.proxiesJson` его не
-  /// держит; читаем напрямую из native-аккумулятора через стрим-кеш).
+  /// §143 / §122 — id'ы активных соединений группы [group] для точечного обрыва
+  /// при switchNode (interrupt-on-switch).
   ///
-  /// **Known-gap (§122):** `CcConnection` пока не несёт `chains` (цепочку
-  /// outbound'ов), как Clash `/connections`. Без неё надёжно сматчить соединение
-  /// на selector-группу нельзя. Interrupt-on-switch — opt-in (default OFF) и не
-  /// влияет на главный экран; до прокидки `chains` в ядре возвращаем пусто
-  /// (мягкая деградация: ноды переключатся, старые сессии доживут сами —
-  /// прежнее поведение без тугла). Полноценный фикс — отдельная таска.
+  /// **Known-gap (§122):** `CcConnection` не несёт `chains` (цепочку outbound'ов),
+  /// как Clash `/connections` — надёжно сматчить соединение на selector-группу
+  /// нельзя. Interrupt-on-switch opt-in (default OFF) и не влияет на главный
+  /// экран; до прокидки `chains` в ядре возвращаем пусто (мягкая деградация:
+  /// ноды переключаются, старые сессии доживают сами). Фикс — отдельная таска.
   List<String> _connectionIdsInGroup(String group) => const <String>[];
 
   // Ping / URLTest оркестрация (runNodeUrltest, ping-option resolve chain,

@@ -9,7 +9,6 @@ mixin _HeartbeatMixin on ChangeNotifier {
   // --- surface, предоставляемая HomeController / другими частями ---
   HomeState get _state;
   BoxVpnClient get _vpn;
-  set _clash(ClashApiClient? value);
   Timer? get _autoPingTimer;
   set _autoPingTimer(Timer? value);
   void _emit(HomeState next);
@@ -90,23 +89,21 @@ mixin _HeartbeatMixin on ChangeNotifier {
     _autoPingTimer?.cancel();
     _autoPingTimer = null;
     // Полный cleanup как в `_handleStatusEvent` revoked/disconnected ветке —
-    // включая _clash=null (старый endpoint с невалидным secret'ом), traffic
-    // reset, connectedSince=null, configChangedNeedRestart=false. Единый
+    // traffic reset, connectedSince=null, configChangedNeedRestart=false. Единый
     // контракт очистки: через какой бы путь ни попали в «tunnel down»
     // (broadcast от native или heartbeat-timeout) — state в одинаковом
     // финальном виде.
     _stopCcStreams(); // §122 — гасим стримы + screenClient
-    _clash = null;
     _emit(
       _state.copyWith(
         tunnel: TunnelStatus.revoked,
         // §140 — НЕ «another VPN may have taken over»: heartbeat-таймаут НЕ значит
         // перехват другим VPN (это синтез на стороне приложения, не системный
-        // onRevoke). Чаще — упал Clash API / ядро не отвечает. Прежний текст гнал
-        // ложные баг-репорты про «перехват». Реальный системный revoke пишет
+        // onRevoke). Чаще — ядро не отвечает. Прежний текст гнал ложные
+        // баг-репорты про «перехват». Реальный системный revoke пишет
         // отдельный текст ("VPN revoked by another app", см. _handleStatusEvent).
         lastError: 'Connection lost — VPN tunnel is not responding',
-        proxiesJson: <String, dynamic>{},
+        ccGroups: const <CcGroup>[],
         groups: <String>[],
         nodes: <String>[],
         highlightedNode: null,

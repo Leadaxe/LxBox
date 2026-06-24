@@ -2,24 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../services/app_info_cache.dart';
-import '../services/clash_api_client.dart';
 import '../services/format_utils.dart';
+import '../vpn/cc_channel.dart';
 import 'connections_screen/connection_detail_sheet.dart';
-
-/// §154 — чистый package name из `metadata.processPath`. Ядро форматирует
-/// его как `com.app (com.app)` либо `com.app (user)` / `com.app (1000)`
-/// (см. sing-box `tracker.go`: `processPath + " (" + userName/userId + ")"`).
-/// Для резолва иконки нужен голый package — берём часть до первого пробела.
-/// Возвращает '' если пусто или похоже на абсолютный путь (не Android-pkg).
-String packageNameFromProcess(String raw) {
-  final s = raw.trim();
-  if (s.isEmpty) return '';
-  final pkg = s.split(' ').first.trim();
-  // Android package = `a.b.c`, без слешей. Путь вида /usr/bin/foo — не pkg.
-  if (pkg.contains('/') || !pkg.contains('.')) return '';
-  return pkg;
-}
 
 /// §153 — «однобокое» (зависшее) соединение: TCP, прожившее ≥
 /// [oneWayMinAge], где трафик идёт строго в одну сторону (up>0/down=0 или
@@ -49,138 +34,54 @@ bool isOneWayStuck({
 
 /// Embeddable view: toolbar + список соединений. Без Scaffold, без AppBar —
 /// сидит во вкладке StatsScreen.
+///
+/// §122 — источник = `CcChannel.instance.connections` (libbox CommandClient
+/// push-стрим), а не Clash HTTP-pull. Native-аккумулятор сам ведёт
+/// closed-историю (`CcConnection.closedAt`); локальный pull-таймер/режим
+/// «accumulate» больше не нужны.
 class ConnectionsView extends StatefulWidget {
-  const ConnectionsView({super.key, required this.clash});
-
-  final ClashApiClient clash;
+  const ConnectionsView({super.key});
 
   @override
   State<ConnectionsView> createState() => _ConnectionsViewState();
 }
 
-class _ConnectionsViewState extends State<ConnectionsView>
-    with WidgetsBindingObserver {
-  static const _intervals = [500, 1000, 2000, 3000, 5000, 10000, 0]; // ms, 0 = off
-  List<Map<String, dynamic>> _connections = [];
-  final Set<String> _closedIds = {};
-  final Map<String, DateTime> _closedAt = {};
+class _ConnectionsViewState extends State<ConnectionsView> {
+  final _cc = CcChannel.instance;
+  StreamSubscription<List<CcConnection>>? _sub;
+  List<CcConnection> _connections = [];
   bool _loading = true;
-  bool _accumulate = false;
-  Timer? _timer;
-  int _intervalMs = 2000;
-  bool _backgrounded = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    unawaited(_refresh());
-    _startTimer();
+    _sub = _cc.connections.listen(_onConnections);
   }
 
-  void _startTimer() {
-    _timer?.cancel();
-    if (_intervalMs <= 0) return;
-    if (_backgrounded) return;  // Не запускаем таймер в background.
-    _timer = Timer.periodic(Duration(milliseconds: _intervalMs), (_) => _refresh());
-  }
-
-  void _setInterval(int ms) {
-    setState(() => _intervalMs = ms);
-    _startTimer();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Connections view опрашивает Clash API каждые 500мс–10с. В background
-    // это бесполезный трафик и батарея — юзер экран не видит. Pause/resume
-    // по lifecycle-эвенту.
-    switch (state) {
-      case AppLifecycleState.paused:
-      case AppLifecycleState.hidden:
-      case AppLifecycleState.detached:
-      case AppLifecycleState.inactive:
-        _backgrounded = true;
-        _timer?.cancel();
-        _timer = null;
-      case AppLifecycleState.resumed:
-        _backgrounded = false;
-        if (_timer == null && _intervalMs > 0) {
-          unawaited(_refresh());
-          _startTimer();
-        }
-    }
-  }
-
-  String _intervalLabel(int ms) {
-    if (ms == 0) return 'Off';
-    if (ms < 1000) return '${(ms / 1000).toStringAsFixed(1)}s';
-    return '${ms ~/ 1000}s';
+  void _onConnections(List<CcConnection> conns) {
+    if (!mounted) return;
+    final next = conns.toList()
+      // newest first — по createdAt (epoch ms).
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    setState(() {
+      _connections = next;
+      _loading = false;
+    });
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _timer?.cancel();
+    _sub?.cancel();
     super.dispose();
   }
 
-  Future<void> _refresh() async {
-    try {
-      final data = await widget.clash.fetchConnections();
-      if (!mounted) return;
-      final conns = (data['connections'] as List<dynamic>? ?? [])
-          .whereType<Map<String, dynamic>>()
-          .toList();
-      List<Map<String, dynamic>> next;
-      if (_accumulate) {
-        final liveIds = conns.map((c) => c['id']?.toString() ?? '').toSet();
-        final byId = <String, Map<String, dynamic>>{};
-        for (final c in _connections) {
-          final id = c['id']?.toString() ?? '';
-          if (id.isEmpty) continue;
-          byId[id] = c;
-          if (!liveIds.contains(id)) {
-            if (_closedIds.add(id)) _closedAt[id] = DateTime.now();
-          }
-        }
-        for (final c in conns) {
-          final id = c['id']?.toString() ?? '';
-          if (id.isEmpty) continue;
-          byId[id] = c;
-        }
-        next = byId.values.toList();
-      } else {
-        _closedIds.clear();
-        _closedAt.clear();
-        next = conns;
-      }
-      next.sort((a, b) {
-        final aStart = a['start']?.toString() ?? '';
-        final bStart = b['start']?.toString() ?? '';
-        return bStart.compareTo(aStart); // newest first
-      });
-      setState(() {
-        _connections = next;
-        _loading = false;
-      });
-    } catch (_) {
-      if (mounted && _loading) setState(() => _loading = false);
-    }
-  }
-
   Future<void> _closeConnection(String id) async {
-    try {
-      await widget.clash.closeConnection(id);
-      unawaited(_refresh());
-    } catch (_) {}
+    if (id.isEmpty) return;
+    await _cc.closeConnection(id);
   }
 
   Future<void> _closeAll() async {
-    try {
-      await widget.clash.closeAllConnections();
-      unawaited(_refresh());
-    } catch (_) {}
+    await _cc.closeConnections();
   }
 
   @override
@@ -196,49 +97,8 @@ class _ConnectionsViewState extends State<ConnectionsView>
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(
             children: [
-              IconButton(
-                tooltip: 'Refresh now',
-                icon: const Icon(Icons.refresh),
-                onPressed: () => unawaited(_refresh()),
-              ),
-              IconButton(
-                tooltip: _accumulate ? 'Accumulating (tap to clear)' : 'Live (tap to keep closed)',
-                icon: Icon(_accumulate ? Icons.history_toggle_off : Icons.history),
-                onPressed: () {
-                  setState(() {
-                    _accumulate = !_accumulate;
-                    if (!_accumulate) {
-                      _closedIds.clear();
-                      _closedAt.clear();
-                    }
-                  });
-                },
-              ),
-              PopupMenuButton<int>(
-                tooltip: 'Auto-refresh',
-                initialValue: _intervalMs,
-                onSelected: _setInterval,
-                itemBuilder: (_) => [
-                  for (final ms in _intervals)
-                    CheckedPopupMenuItem<int>(
-                      value: ms,
-                      checked: _intervalMs == ms,
-                      child: Text(_intervalLabel(ms)),
-                    ),
-                ],
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.timer_outlined, size: 20),
-                      const SizedBox(width: 4),
-                      Text(_intervalLabel(_intervalMs),
-                          style: const TextStyle(fontSize: 12)),
-                    ],
-                  ),
-                ),
-              ),
+              const SizedBox(width: 4),
+              Icon(Icons.link, size: 18, color: cs.onSurfaceVariant),
               const Spacer(),
               Text('${_connections.length}',
                   style: TextStyle(
@@ -267,29 +127,35 @@ class _ConnectionsViewState extends State<ConnectionsView>
     );
   }
 
-  Widget _buildTile(Map<String, dynamic> conn) {
-    final meta = conn['metadata'] as Map<String, dynamic>? ?? {};
-    final host = meta['host']?.toString() ?? '';
-    final destIp = meta['destinationIP']?.toString() ?? '';
-    final destPort = meta['destinationPort']?.toString() ?? '';
-    final network = meta['network']?.toString() ?? '';
-    final connType = meta['type']?.toString() ?? '';
-    final process = meta['process']?.toString() ?? meta['processPath']?.toString() ?? '';
+  /// Порт из "host:port" — часть после последнего ':'.
+  static String _portOf(String destination) {
+    final i = destination.lastIndexOf(':');
+    if (i < 0 || i == destination.length - 1) return '';
+    return destination.substring(i + 1);
+  }
 
-    final destination = host.isNotEmpty ? host : destIp;
-    final display = destPort.isNotEmpty ? '$destination:$destPort' : destination;
+  Widget _buildTile(CcConnection conn) {
+    final host = conn.domain;
+    final destPort = _portOf(conn.destination);
+    final network = conn.network;
 
-    final chains = (conn['chains'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
-    final chain = chains.isNotEmpty ? chains.join(' → ') : '?';
+    // domain пуст → показываем raw destination ("host:port").
+    final destination = host.isNotEmpty ? host : conn.destination;
+    final display = (host.isNotEmpty && destPort.isNotEmpty)
+        ? '$destination:$destPort'
+        : destination;
 
-    final upload = conn['upload'] as int? ?? 0;
-    final download = conn['download'] as int? ?? 0;
-    final id = conn['id']?.toString() ?? '';
-    final closed = _closedIds.contains(id);
+    final upload = conn.uplink;
+    final download = conn.downlink;
+    final id = conn.id;
+    final closed = conn.isClosed;
 
-    final start = conn['start']?.toString() ?? '';
-    final startTime = DateTime.tryParse(start);
-    final endTime = closed ? (_closedAt[id] ?? DateTime.now()) : DateTime.now();
+    final startTime = conn.createdAt > 0
+        ? DateTime.fromMillisecondsSinceEpoch(conn.createdAt)
+        : null;
+    final endTime = closed && conn.closedAt > 0
+        ? DateTime.fromMillisecondsSinceEpoch(conn.closedAt)
+        : DateTime.now();
     final duration = startTime != null ? endTime.difference(startTime) : null;
 
     final oneWay = isOneWayStuck(
@@ -301,9 +167,7 @@ class _ConnectionsViewState extends State<ConnectionsView>
     );
 
     final cs = Theme.of(context).colorScheme;
-    final rule = conn['rule']?.toString() ?? '';
-    final rulePayload = conn['rulePayload']?.toString() ?? '';
-    final ruleText = rulePayload.isNotEmpty ? '$rule ($rulePayload)' : rule;
+    final rule = conn.rule;
 
     return Container(
       // §153 — розовый фон у однобоких (зависших) TCP-соединений.
@@ -326,12 +190,15 @@ class _ConnectionsViewState extends State<ConnectionsView>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row 1: app icon + host:port + traffic + close button
-          // §152 — иконка-стрелка (→/⇄ для tcp/udp) убрана; §154 — на её
-          // месте launcher-иконка приложения (по processPath = package).
+          // Row 1: net-arrow + host:port + traffic + close button.
+          // §122 — app-иконка убрана: CommandClient не отдаёт processPath.
           Row(
             children: [
-              _appIcon(packageNameFromProcess(process)),
+              Icon(
+                network == 'udp' ? Icons.swap_horiz : Icons.arrow_forward,
+                size: 16,
+                color: cs.onSurfaceVariant,
+              ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -341,8 +208,6 @@ class _ConnectionsViewState extends State<ConnectionsView>
                 ),
               ),
               Text(
-                // §141 P2.4a — общий канон `formatBytes` (B/KB/MB/GB) вместо
-                // локального `_formatBytes` (B/K/M, без GB-разряда).
                 '↑${formatBytes(upload)} ↓${formatBytes(download)}',
                 style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
               ),
@@ -359,31 +224,12 @@ class _ConnectionsViewState extends State<ConnectionsView>
               ),
             ],
           ),
-          // Row 2: process (app name)
-          if (process.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: 20, top: 2),
-              child: Text(
-                process,
-                style: TextStyle(fontSize: 11, color: cs.primary),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          // Row 3: chain
+          // Row 2: protocol + rule + duration.
           Padding(
-            padding: const EdgeInsets.only(left: 20, top: 2),
+            padding: const EdgeInsets.only(left: 22, top: 2),
             child: Text(
-              chain,
-              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          // Row 4: protocol + rule + duration
-          Padding(
-            padding: const EdgeInsets.only(left: 20, top: 2),
-            child: Text(
-              '$network/$connType'
-              '${ruleText.isNotEmpty ? '  ·  $ruleText' : ''}'
+              '${network.toUpperCase()}'
+              '${rule.isNotEmpty ? '  ·  $rule' : ''}'
               '${duration != null ? '  ·  ${_formatDuration(duration)}' : ''}',
               style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
               overflow: TextOverflow.ellipsis,
@@ -394,30 +240,6 @@ class _ConnectionsViewState extends State<ConnectionsView>
       ),
       ),
       ),
-    );
-  }
-
-  /// §154 — launcher-иконка приложения по package name (`processPath`).
-  /// 16×16, перерисовывается через `AppInfoCache.revision` когда иконка
-  /// дотянулась из native асинхронно. Fallback пока нет иконки/нет pkg —
-  /// нейтральный placeholder того же размера (layout не прыгает).
-  Widget _appIcon(String pkg) {
-    const double size = 16;
-    final cs = Theme.of(context).colorScheme;
-    final placeholder = Icon(Icons.apps, size: size, color: cs.onSurfaceVariant);
-    if (pkg.isEmpty) return placeholder;
-    AppInfoCache.ensure(pkg);
-    return AnimatedBuilder(
-      animation: AppInfoCache.revision,
-      builder: (context, _) {
-        final icon = AppInfoCache.of(pkg)?.icon;
-        if (icon == null) return placeholder;
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: Image.memory(icon,
-              width: size, height: size, gaplessPlayback: true),
-        );
-      },
     );
   }
 

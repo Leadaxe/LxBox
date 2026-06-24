@@ -6,7 +6,6 @@ import '../../../config/consts.dart';
 import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/home_state.dart';
-import '../../../services/clash_api_client.dart';
 import '../../../services/haptic_service.dart';
 import '../../../services/subscription/auto_updater.dart';
 import '../../../widgets/node_row.dart';
@@ -224,12 +223,10 @@ class HomeNodeList extends StatelessWidget {
       },
       itemBuilder: (ctx, i) {
         final tag = displayList[i];
-        final urltestNow =
-            ClashApiClient.urltestNow(state.proxiesJson, tag);
-        final proxyEntry = ClashApiClient.proxyEntry(state.proxiesJson, tag);
-        final isUrltestGroup = proxyEntry != null &&
-            (proxyEntry['type']?.toString().toLowerCase() ?? '')
-                .contains('urltest');
+        final urltestNow = state.urltestNowOf(tag);
+        final group = state.groupOf(tag);
+        final isUrltestGroup =
+            group != null && group.type.toLowerCase().contains('urltest');
         // §102 — протокол и variant (transport/awg) берём с ОДНОГО узла:
         // сам tag, либо текущий выбор urltest-группы (§048 fallback).
         final protoSrc = cache.protocolOf(tag) != null
