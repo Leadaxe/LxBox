@@ -89,13 +89,14 @@ CommandServer уже стартует в `onStartCommand`-корутине (`Box
 | Текущий Clash-вызов | Файл:строка | CommandClient-эквивалент |
 |---|---|---|
 | `fetchTraffic()` → `TrafficSnapshot` | `heartbeat.dart:53` | `writeStatus` → `StatusMessage.getUplink/Downlink/UplinkTotal/DownlinkTotal/Memory/ConnectionsIn/Out` |
-| `fetchProxies()` | `home_controller.dart:544`, `heartbeat.dart:65` | `writeGroups(OutboundGroupIterator)` (subscribe `CommandGroup=2`) |
+| `fetchProxies()` — **плоский** node-list + per-node delay | `home_controller.dart:544`, `node_list*.dart` | **`writeOutbounds(OutboundGroupItemIterator)`** (`SubscribeOutbounds`) — все outbound'ы+endpoint'ы, `getURLTestTime()/getURLTestDelay()` per-node. **Сюда садится node-list и масс-пинг** |
+| `fetchProxies()` — **дерево** групп/селекторов | `home_controller.dart:544`, `heartbeat.dart:65` | `writeGroups(OutboundGroupIterator)` (`SubscribeGroups`) — группа→items, delay узлов-в-группах |
 | `selectorGroupTags()` (`type=='Selector'`) | `home_controller.dart:551` | `OutboundGroup.getSelectable()` (семантика, не type-строка) |
 | `proxyEntry()` / `urltestNow()` | `home_controller.dart:590`, `node_list.dart:228-232`, `node_list_presenter.dart:62,74` | `OutboundGroup.getSelected()` + `getItems()` |
 | `selectInGroup(group, tag)` | `home_controller.dart:622` | `selectOutbound(groupTag, outboundTag)` — **двухаргументный** |
-| `delay(tag)` single-node | `ping_orchestration.dart:30,234` | **НЕТ прямого аналога** — см. §4.5 |
-| `groupDelay(group)` | `ping_orchestration.dart:174` | `urlTest(groupTag)` → результат через `writeGroups`→`OutboundGroupItem.getURLTestDelay()` |
-| `cancelDelays()` | `ping_orchestration.dart:292` | нет аналога (`urlTest` fire-and-forget) — см. §4.5 |
+| `delay(tag)` single-node | `ping_orchestration.dart:30,234` | **`URLTestOutbound(tag, link, timeout)`** (SPEC 014, §4a.6) — outbound ИЛИ endpoint; результат течёт в UI через `writeOutbounds`-стрим |
+| `groupDelay(group)` | `ping_orchestration.dart:174` | `urlTest(groupTag)` (групповой, паритет) → результат через `writeGroups`/`writeOutbounds`→`getURLTestDelay()` |
+| `cancelDelays()` | `ping_orchestration.dart:292` | отмена = `disconnect()`/разрыв conn → серверный `ctx.Done()` (§2.4) ИЛИ клиентский флаг в worker-pool (§4a.4) |
 | `fetchConnections()` | `home_controller.dart:630`, `stats_screen.dart:115`, `connections_screen.dart:130`, `traffic_profiler` | `writeConnectionEvents` + native `Connections.applyEvents()` аккумулятор |
 | `connectionIdsInChain(conns, group)` | `home_controller.dart:631` | native-аккумулятор: фильтр по `Connection.chain().contains(group)` |
 | `closeConnection(id)` | `home_controller.dart:639`, `connections_screen.dart:174` | `closeConnection(id)` (паритет) |
@@ -123,7 +124,24 @@ CommandServer уже стартует в `onStartCommand`-корутине (`Box
 **Следствия для спеки:**
 - `write*`-колбэки в §2.2/§2.3/§3.2 = подписки `Subscribe*`, инициируемые `addCommand(...)` в `CommandClientOptions`. НЕ устаревший int-dispatch (pre-1.13), а gomobile-обёртка gRPC-стрима.
 - **Отмена через закрытие conn** (§4a.4 «клиентский флаг» для mass-ping) и `server.Context().Done()` в ядре — **один механизм**: `CommandClient.disconnect()`/разрыв conn → серверный `ctx` отменяется → in-flight стримы и unary-вызовы падают. Это же = старый `cancelDelays`.
-- **Связка URLTest→Groups:** `URLTestOutbound` (unary) триггерит замер; для узлов-в-группах результат **прилетает обратно** через `writeGroups`-стрим (`SubscribeGroups`) в `OutboundGroupItem.getURLTestDelay()` (SPEC 014 §3.2 `StoreURLTestHistory`). Для одиночных узлов (не в группе) — синхронный ответ команды.
+- **Связка URLTest→стрим (главный паттерн масс-пинга):** `URLTestOutbound` (unary) **триггерит** замер; результат `delay` **прилетает обратно через стрим**, а не только синхронным ответом. Цикл: `URLTestOutbound(tag)` → ядро `StoreURLTestHistory` → `SubscribeOutbounds` (и `SubscribeGroups` для узлов-в-группах) пушит обновлённый `getURLTestDelay()` → UI перерисовка. Синхронный `{delay,error}` ответа команды используем для немедленного per-node feedback (`pingBusy`→ms), стрим — как source of truth состояния. **Отдельный history-RPC НЕ нужен:** `SubscribeOutbounds` уже отдаёт `UrlTestTime/UrlTestDelay` per-node (вкл. endpoint'ы и узлы вне групп) через `LoadURLTestHistory`.
+
+### 2.5 Карта каналов по экранам UI
+
+Состояние читается из `Subscribe*`-стримов (держать подписку, пока экран жив), действия — императивные вызовы по событию. Адаптировано под наши экраны/файлы:
+
+| Экран LxBox | Стрим (подписка) | Действия |
+|---|---|---|
+| **Список узлов** (плоский+пинги) — `node_list*.dart` | `SubscribeOutbounds`→`writeOutbounds` (ВСЕ outbound+endpoint, `{Tag,Type,UrlTestTime,UrlTestDelay}`) | масс-пинг = worker-pool=10 × `URLTestOutbound(tag)` (concurrency в клиенте, `ping_orchestration.dart`); `selectOutbound(group,tag)` |
+| **Группы/селекторы** — dropdown, `home_controller` | `SubscribeGroups`→`writeGroups` (дерево группа→items) | `selectOutbound`; `urlTest(groupTag)` групповой; `setGroupExpand(tag,bool)` |
+| **Соединения** — `connections_screen.dart` | `SubscribeConnections`→`writeConnectionEvents` (new/update/closed; closed-история §3.3) | `closeConnection(id)`; `closeConnections()` |
+| **Логи** — §043, `clash_log_pump.dart` | `SubscribeLog`→`writeLogs` | `clearLogs()` |
+| **Статус/traffic_bar** — `heartbeat.dart` | `SubscribeStatus`→`writeStatus` (память/трафик/up-down) | — |
+| **Правила** (диагностика, не UI-экран в §122) | — (снапшот) | `GetRules()` ⭐SPEC014 → route+DNS |
+| **Stats** — `stats_screen.dart` | `SubscribeOutbounds`+`SubscribeConnections`+`SubscribeStatus` | — |
+| **Инструменты** (опц. фаза 2) | `startNetworkQualityTest`/`startSTUNTest` (стрим-прогресс) | — |
+
+⭐ = SPEC 014 (`with_lx_command`). Существующий групповой `urlTest` — НЕ трогать (нулевой дифф в ядре).
 
 ---
 
@@ -238,11 +256,11 @@ message URLTestOutboundResponse {
 
 **ИНВАРИАНТ (критично для клиента):** источник истины провала — поле `error`, НЕ `delay`. `delay` валиден ⟺ `error == ""`. Случай `delay==0 && error==""` = **успех 0 мс** (целочисленное `time.Since/time.Millisecond` для <1мс ответа, `urltest.go:133`), НЕ ошибка. Клиент НЕ должен трактовать `delay==0` как фейл — иначе ложный ERR на быстром узле.
 
-**Клиентский маппинг** (`ping_orchestration.dart`):
-- `error == ""` → `lastDelay[tag] = delay`.
-- `error != ""` → `lastDelay[tag] = -1` (сохраняет UI-контракт ERR/<0, `node_row.dart:42-56`) + текст `error` в debug-лог (замена `_formatProbeError`, который опирался на исчезающие HTTP-exception'ы).
+**Клиентский маппинг** (`ping_orchestration.dart`) — **двойной путь** (см. §2.4 связка):
+- **Синхронный ответ команды** = немедленный per-node feedback: `error==""` → `lastDelay[tag]=delay` (включая 0мс); `error!=""` → `lastDelay[tag]=-1` (UI-контракт ERR/<0, `node_row.dart:42-56`) + текст `error` в debug-лог (замена `_formatProbeError`).
+- **`SubscribeOutbounds`-стрим = source of truth:** ядро после замера делает `StoreURLTestHistory`, стрим пушит обновлённый `getURLTestDelay()`/`getURLTestTime()` per-node → `lastDelay` синхронизируется со стримом. Так delay переживает и узлы, померенные не нами (групповой `urlTest`, авто-urltest группы).
 
-Per-group `link`/`timeout` (§040, `pingUrlFor`/`pingTimeoutFor`) шлются как `link`/`timeout` команды без изменений resolve-chain. История delay — stateless в команде, хранит клиент (`lastDelay`); для узлов-в-группах ядро дополнительно течёт delay в `OutboundGroupItem` через `StoreURLTestHistory` (SPEC 014 §3.2).
+Per-group `link`/`timeout` (§040, `pingUrlFor`/`pingTimeoutFor`) шлются в команду без изменений resolve-chain. **История delay живёт в ядре** (`HistoryStorage`, `LoadURLTestHistory`) и течёт клиенту через `SubscribeOutbounds`/`SubscribeGroups` — **отдельный history-RPC не нужен** (SPEC 014 §3.2/§5).
 
 **Конвенция (важно при реализации):** `URLTestOutbound` и `GetRules` — **unary-read** RPC (request→response), а НЕ подписки. Им **не заводится `Command*`-константа** (`addCommand(int)`/`setStatusInterval` — только для стримовых `CommandStatus`/`CommandConnections`/…). Это прямые методы `CommandClient`, как `getDeprecatedNotes()`/`getSystemProxyStatus()`. Клиентская обёртка в Dart — `urlTestOutbound(...)` / `rules()` (зеркало ядра), без `Command`-префикса. «Команды 0–5» (счётчик подписок) НЕ меняется — эти два RPC в него не входят.
 
