@@ -104,6 +104,27 @@ CommandServer уже стартует в `onStartCommand`-корутине (`Box
 | `/clash/*` Debug proxy | `debug/handlers/clash.dart:19` | переписать поверх MethodChannel→CommandClient (см. §5) |
 | `/state/clash → api_ok` | `debug/handlers/state.dart:48-52` | `api_ok` = «CommandClient connected: bool» |
 
+### 2.4 Два уровня канала: gRPC (ядро) ↔ gomobile-фасад (наша обвязка)
+
+**Проверено декомпиляцией AAR + строками `.so`.** Command-канал в 1.13+ — это **gRPC** (`StartedService`-сервис поверх `command.sock`), но libbox-AAR оборачивает его в **gomobile-фасад** `CommandClient`. Реализатор Kotlin-обвязки работает с фасадом, НЕ пишет gRPC-стримы напрямую. **Весь этот раздел и `write*`-словарь ниже — это gomobile-уровень**; парный SPEC 014 описывает gRPC-уровень ядра. Соответствие:
+
+| Go-ядро (gRPC, SPEC 014 / `.so`) | gomobile-фасад (наш Kotlin/Java AAR) | Тип |
+|---|---|---|
+| `SubscribeStatus(...) returns (stream Status)` | `CommandClientOptions.addCommand(CommandStatus=1)` + `setStatusInterval` → колбэк `handler.writeStatus(StatusMessage)` | server-stream |
+| `SubscribeGroups returns (stream Groups)` | `addCommand(CommandGroup=2)` → `handler.writeGroups(OutboundGroupIterator)` | server-stream |
+| `SubscribeConnections returns (stream ConnectionEvents)` | `addCommand(CommandConnections=4)` → `handler.writeConnectionEvents(ConnectionEvents)` | server-stream |
+| `SubscribeLog returns (stream ...)` | `addCommand(CommandLog=0)` → `handler.writeLogs(LogIterator)` | server-stream |
+| `SubscribeClashMode` / `SubscribeOutbounds` | `addCommand(CommandClashMode=3 / CommandOutbounds=5)` → `writeOutbounds`/`updateClashMode` | server-stream |
+| `server.Send()` в цикле | один вызов колбэка `write*` | — |
+| `server.Context().Done()` (клиент отвалился) | `CommandClient.disconnect()` / разрыв conn | — |
+| unary `URLTest`/`SelectOutbound`/`CloseConnection` | прямые методы `CommandClient.urlTest()`/`selectOutbound()`/`closeConnection()` | unary |
+| unary `URLTestOutbound`/`GetRules` (SPEC 014) | прямые методы (§4a.6 конвенция, без `Command*`-константы) | unary |
+
+**Следствия для спеки:**
+- `write*`-колбэки в §2.2/§2.3/§3.2 = подписки `Subscribe*`, инициируемые `addCommand(...)` в `CommandClientOptions`. НЕ устаревший int-dispatch (pre-1.13), а gomobile-обёртка gRPC-стрима.
+- **Отмена через закрытие conn** (§4a.4 «клиентский флаг» для mass-ping) и `server.Context().Done()` в ядре — **один механизм**: `CommandClient.disconnect()`/разрыв conn → серверный `ctx` отменяется → in-flight стримы и unary-вызовы падают. Это же = старый `cancelDelays`.
+- **Связка URLTest→Groups:** `URLTestOutbound` (unary) триггерит замер; для узлов-в-группах результат **прилетает обратно** через `writeGroups`-стрим (`SubscribeGroups`) в `OutboundGroupItem.getURLTestDelay()` (SPEC 014 §3.2 `StoreURLTestHistory`). Для одиночных узлов (не в группе) — синхронный ответ команды.
+
 ---
 
 ## 3. Модель данных
