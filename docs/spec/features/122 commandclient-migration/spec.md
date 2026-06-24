@@ -134,6 +134,13 @@ Command-канал в 1.13+ — это **gRPC** (`StartedService` поверх `
 
 **Тонкость единиц (MED).** `setStatusInterval` принимает Go `Duration` на gomobile-уровне — это **наносекунды**, тогда как `URLTestOutbound.timeout` — **миллисекунды** (нормативно — §4.6). Не перепутать.
 
+**Нормативные требования к реализации handler'а (консультация команды ядра, rc.2):**
+- **Не хардкодить числа `addCommand(5)` — использовать именованные константы `Libbox.CommandOutbounds`/`CommandStatus`/`CommandGroup`/`CommandConnections`.** Если upstream вставит команду в середину iota-блока на ребейзе, числа поедут, имена — нет.
+- **Типы итераторов в колбэках РАЗНЫЕ, легко спутать:** `writeGroups(OutboundGroupIterator)` (дерево групп) vs `writeOutbounds(OutboundGroupItemIterator)` (плоский список). Это разные типы — `OutboundGroup` (с `getItems()`) против `OutboundGroupItem` (лист).
+- **Цепочка на Go-стороне (для понимания):** `addCommand(CommandOutbounds)` → `dispatchCommands` → `handleOutboundsStream()` → gRPC `client.SubscribeOutbounds(...)` → на каждый `stream.Recv()` дёргает `handler.WriteOutbounds(...)`. То есть колбэк `writeOutbounds` = «пришёл апдейт `SubscribeOutbounds`-стрима».
+- **delay endpoint'ов (WG/AWG) виден ТОЛЬКО через `CommandOutbounds`→`writeOutbounds`** — `writeGroups` итерирует лишь членов `OutboundGroup` и endpoint'ы не покажет (§4.3, SPEC 014 §3.2).
+- **`setStatusInterval` — период ТОЛЬКО для `CommandStatus`**; стримы групп/outbounds пушатся по событию `urlTestObserver`, не по таймеру → интервал на них не влияет, ставить только на `statusClient` (§2.8).
+
 ### §2.4. Два стрима узлов
 
 Узлы приходят **двумя** разными стримами; их нельзя смешивать.
@@ -189,9 +196,9 @@ Command-канал в 1.13+ — это **gRPC** (`StartedService` поверх `
 
 | Клиент | Команды (`addCommand`) | Lifecycle | Потребитель | Обоснование |
 |---|---|---|---|---|
-| **`statusClient`** | `CommandStatus=1` + `setStatusInterval` 1s | **always-on** пока туннель up | dead-tunnel watchdog (§2.2) + скорость на главном (`traffic_bar`) | Лёгкий (1 msg/s). Watchdog обязан жить в фоне — ловит обрыв. Апгрейд: push-1s вместо poll-20s. |
-| **`screenClient`** | `CommandOutbounds=5` + `CommandGroup=2` + `CommandConnections=4` | поднимается при открытии экрана узлов/stats/connections, `disconnect` при уходе (`didChangeAppLifecycleState` paused/hidden) | node-list, группы, таблица соединений | Сейчас эти поллеры **гасятся в фоне** (heartbeat §141 P0.2, stats/connections `_stopTimer`). Сохраняем 1:1 — никакого нового resident-drain. |
-| **`profilerClient`** | `CommandConnections=4` | поднимается при `startGlobalRecording`, `disconnect` при `stopGlobalRecording` (`traffic_profiler.dart`) | TrafficProfiler §048 (per-app live) | Recording — **opt-in пользователем** (нажал START), может жить в фоне. НЕ always-on по умолчанию. Отдельный клиент — чтобы recording не зависел от того, открыт ли экран. |
+| **`statusClient`** | `addCommand(Libbox.CommandStatus)` + `setStatusInterval(1s)` | **always-on** пока туннель up | dead-tunnel watchdog (§2.2) + скорость на главном (`traffic_bar`) | Лёгкий (1 msg/s). Watchdog обязан жить в фоне — ловит обрыв. Апгрейд: push-1s вместо poll-20s. **Единственный клиент с `setStatusInterval`** — на остальных бессмысленно (стримы пушатся по `urlTestObserver`, не по таймеру, §2.3). |
+| **`screenClient`** | `addCommand(Libbox.CommandOutbounds)` + `addCommand(Libbox.CommandGroup)` + `addCommand(Libbox.CommandConnections)` | поднимается при открытии экрана узлов/stats/connections, `disconnect` при уходе (`didChangeAppLifecycleState` paused/hidden) | node-list, группы, таблица соединений | Сейчас эти поллеры **гасятся в фоне** (heartbeat §141 P0.2, stats/connections `_stopTimer`). Сохраняем 1:1 — никакого нового resident-drain. Без `setStatusInterval`. |
+| **`profilerClient`** | `addCommand(Libbox.CommandConnections)` | поднимается при `startGlobalRecording`, `disconnect` при `stopGlobalRecording` (`traffic_profiler.dart`) | TrafficProfiler §048 (per-app live) | Recording — **opt-in пользователем** (нажал START), может жить в фоне. НЕ always-on по умолчанию. Отдельный клиент — чтобы recording не зависел от того, открыт ли экран. |
 
 **Почему не один always-on клиент со всеми командами:** `Connections`/`Outbounds`-стримы тяжёлые (все соединения/узлы); держать их always-on = лить в фоне впустую = тот самый resident-drain, который §141 P0.2 вычищал. Разведка кода подтвердила: в фоне нужен **только** `Status` (для watchdog), остальное гасится с экраном. Нотификация/tile статичны (up/down + нода, не скорость); automation §047 — событийная (broadcast, без статистики трафика) — фоновых стримов не требуют.
 
