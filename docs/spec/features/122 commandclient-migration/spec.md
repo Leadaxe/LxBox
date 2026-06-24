@@ -5,6 +5,7 @@
 | Статус | Draft |
 | Дата | 2026-06-24 |
 | Целевое ядро | `sing-box-lx v1.14.0-lx.1-rc.1` (base **v1.13.13** + with_awg/with_xhttp; AAR `libbox-1.14.0-lx.1-rc.1.aar`). **Проверено декомпиляцией:** CommandClient + команды 0–5 + closed-история (`Connection.getClosedAt`, `ConnectionEventClosed=2`, `ConnectionStateClosed=2`, `Connections.applyEvents/filterState`) присутствуют в ЭТОМ AAR. Обе фазы реализуемы на одном ядре — версионного разрыва нет. |
+| Ядровая спека | **`sing-box-lx` SPEC 014** (LIBBOX_COMMAND_URLTEST_RULES) — добавляет в CommandClient два RPC за build-tag `with_lx_command`: `URLTestOutbound` (per-node delay, §4a.6) и `GetRules` (route+DNS таблица, §6). Реализуется в форке ядра, НЕ в этом репо. §122 — клиентская сторона. |
 | Связанные spec'ы | §012 (native vpn service), §121 (libbox-1.14-adoption — родитель), §016 (statistics & connections), §044 (per-app profiler), §048 (home-node-filters), §042 (health watchdog — data-source переезжает сюда), §031 (debug api), §043/§010 (core-log — НЕ затрагивается) |
 | Память | [[project_libbox_114_migration_api_breaks]], [[project_jni_callbacks_must_not_throw]], [[project_dns_routing_king]], [[feedback_no_destructive_diagnostics]] |
 | Затронутые файлы | `app/lib/services/clash_api_client.dart`, `app/lib/config/clash_endpoint.dart`, `app/lib/controllers/home_controller.dart` (+`heartbeat.dart`/`ping_orchestration.dart`/`config_io.dart`), `app/lib/screens/{connections_screen,stats_screen}.dart`, `app/lib/services/traffic_profiler.dart`, `app/lib/screens/home_screen.dart`, `app/lib/services/debug/handlers/{clash,action,state,profiler,help}.dart`, `app/lib/services/builder/build_config.dart`, `app/assets/wizard_template.json`, Kotlin `BoxService.kt`/`VpnPlugin.kt`/`BoxApplication.kt`, `scripts/lxbox-diag.sh`, `docs/{ARCHITECTURE,STORAGE,DIAGNOSTICS}.md` |
@@ -162,7 +163,7 @@ CommandServer уже стартует в `onStartCommand`-корутине (`Box
 | 4.2 | HIGH | Backpressure: push 1/с × N conn заливает UI; `getReset()`-снапшот огромен. | Дросселирование на native (эмит не чаще X), батч + cap по образцу `coreLog` (`BoxService.kt:676-696`, `LOG_QUEUE_MAX=4096`, `DRAIN_BATCH_MAX=200`). |
 | 4.3 | MED | Dead-tunnel detection (§141, 20с — нецель удлинять). Liveness меняет семантику: было «N HTTP-фейлов», станет `disconnected()`/«нет StatusMessage > таймаут». | Native: `disconnected` → dead-tunnel broadcast. Dart heartbeat → watchdog «давно не было StatusMessage». `_maxHeartbeatFailures` переосмыслить. |
 | 4.4 | HIGH | `TrafficProfiler` (~1000 строк, `bindRuntime`+`_pollConnections`) завязан на pull-diff. | Сигнатура `bindRuntime` → подписка на `Stream<ConnectionEvent>`; diff-логика → нативные `ConnectionEventNew/Closed`. **Самый большой объём переписывания.** |
-| **4.5** | **HIGH** (был BLOCKER-кандидат; down-grade обоснован) | **Нет single-node delay в CommandClient.** Есть только `urlTest(groupTag)`. §048 ping-фильтр читает per-node `state.lastDelay[tag]`; mass-ping (`ping_orchestration.dart:234`, concurrency=10 через `delay(tag)`) и single-node (`ping_orchestration.dart:30`) **теряют аналог**. `cancelDelays()` (`:292`) тоже не выразим. **Почему НЕ блокер:** §048-фильтр **fail-open** (`node_filter.dart:124-128`: untested-ноды `delay==null` проходят безусловно, locked decision #11); фильтр — чисто **визуальный** predicate (`matches:bool`→opacity 0.4), не гейтит маршрутизацию/безопасность/pool. Пустой `lastDelay` → фильтр и latency-sort (`home_state.dart:162-170`) молча деградируют до no-op для Selector, узлы остаются функциональны и выбираемы вручную. | **Risk-валидация (НЕ gate, провести до фазы 1):** заполняет ли `urlTest(group)` на **Selector**-группе per-child `getURLTestDelay()`. Если ДА — §048 переезжает на `writeGroups`-delays. Если НЕТ — (а) принять регресс (фильтр graceful-off для селекторов) ИЛИ (б) ping отдельной outbound-пробой в обвязке. Возврат Clash HTTP — крайний фолбэк (§6). **Фазу 1 НЕ блокирует.** Полная матрица доработки ping/urltest — **§4a.** |
+| **4.5** | **РЕШЕНО** (был BLOCKER-кандидат → HIGH → закрыт) | **Нет single-node delay в штатном CommandClient.** Есть только `urlTest(groupTag)`. §048 ping-фильтр читает per-node `state.lastDelay[tag]`; mass-ping (`ping_orchestration.dart:234`) и single-node (`ping_orchestration.dart:30`) теряли бы аналог. | **РЕШЕНИЕ: новая команда ядра `URLTestOutbound(outboundTag)` в форке `sing-box-lx`** (§4a.6). Даёт точный per-node delay по тегу (outbound ИЛИ endpoint). Зависимость от «покрывает ли штатный `urlTest` селекторы» **снята** — мы её больше не используем. §048-фильтр и latency-sort работают как раньше, источник = `URLTestOutbound` вместо Clash `delay(tag)`. Полная матрица — **§4a**, контракт команды — **§4a.6**. |
 
 ---
 
@@ -176,29 +177,57 @@ CommandServer уже стартует в `onStartCommand`-корутине (`Box
 |---|---|---|---|---|
 | **Group URLTest** (`runGroupUrltest`) | `ping_orchestration.dart:169` | `GET /group/{tag}/delay` → `groupDelay()` (`clash_api_client.dart:143`) → `reloadProxies()` пересчитывает `now` | `urlTest(groupTag)` → результат через `writeGroups`→`OutboundGroupItem.getURLTestDelay()` | 🟢 **паритет**, перенос 1:1 |
 | **Auto-urltest группа** (`✨auto`, `@auto_proxy_tag`) | `wizard_template.json:156-169` (`type:urltest`, `url`/`interval`/`tolerance`) | ядро само пингует по `interval`, app read-only (`now` дрейфует) | то же — ядро делает само, app не вмешивается | 🟢 **не трогаем** |
-| **Single-node ping** (тап «Ping» на одном узле) | `runNodeUrltest` `ping_orchestration.dart:21`; UI `node_list.dart:272` | `GET /proxies/{tag}/delay` → `delay(tag)` (`clash_api_client.dart:117`) | **аналога НЕТ** | 🔴 **доработка** (см. 4a.3) |
-| **Mass-ping** (кнопка Ping, concurrency=10) | `runMassUrltest` `ping_orchestration.dart:198`; авто-пинг `:149` | параллельные per-node `delay(tag)`, отдельный `_delayHttp`-клиент для `cancelMassPing()` (`:284`) | один `urlTest(group)` — ядро само тестирует членов | 🟡 **перепроектирование оркестрации** (см. 4a.4) |
+| **Single-node ping** (тап «Ping» на одном узле) | `runNodeUrltest` `ping_orchestration.dart:21`; UI `node_list.dart:272` | `GET /proxies/{tag}/delay` → `delay(tag)` (`clash_api_client.dart:117`) | **`URLTestOutbound(tag, link, timeout)`** (SPEC 014) — паритет, outbound ИЛИ endpoint | 🟢 **перенос на команду** (см. 4a.3/4a.6) |
+| **Mass-ping** (кнопка Ping, concurrency=10) | `runMassUrltest` `ping_orchestration.dart:198`; авто-пинг `:149` | параллельные per-node `delay(tag)`, отдельный `_delayHttp`-клиент для `cancelMassPing()` (`:284`) | worker-pool в клиенте, цикл `URLTestOutbound(tag)` concurrency=10; отмена = клиентский флаг | 🟡 **перепроектирование оркестрации** (см. 4a.4) |
 
 ### 4a.2 Что НЕ меняется (структуры состояния)
 
 `lastDelay: Map<tag,ms>` (`home_state.dart:85`), `pingBusy: Map<tag,str>` (`:86`), `pingBatchGen` (`:99`), per-group url/timeout (`ping_options.groups` в Storage) — **остаются как есть**, меняется только источник, который их наполняет. Читатели delay не трогаем: node_row ms-label/цвет (`node_row.dart:42-56`), §048 фильтр `maxPingMs` (`node_filter.dart:84,124`), latency-sort `_compareLatency` (`home_state.dart:161-171`).
 
-### 4a.3 Single-node ping — развилка (зависит от §4.5-проверки)
+### 4a.3 Single-node ping — РЕШЕНО командой ядра `URLTestOutbound` (SPEC 014)
 
-CommandClient не пингует один узел. Варианты (выбор после железной проверки §4.5):
-- **(а) групповой пинг под капотом:** тап на узел → `urlTest(его_группа)`, в UI показать ms только тапнутого. Минус: тестирует всю группу ради одного (расточительно на больших группах), и работает только если §4.5-проверка положительна для типа этой группы.
-- **(б) убрать single-node из UI:** оставить только mass/group-ping. Регресс UX (long-press «Ping» исчезает).
-- **(в) доработать ядро `sing-box-lx`:** добавить single-node delay-команду поверх того, что менеджер outbound'ов уже умеет. Форк-специфично, но точно и без расточительности. Симметрично варианту B для rules (§6) — но в отличие от rules, **здесь потребитель реально есть** (long-press Ping + per-node ms в UI), так что это не балласт.
+Развилка закрыта: ядро `sing-box-lx` получает новую команду **`URLTestOutbound`** (ядровая спека `sing-box-lx/SPECS/014-LIBBOX_COMMAND_URLTEST_RULES/SPEC.md`, build-tag `with_lx_command`), дающую точный per-node delay по тегу (outbound **ИЛИ** endpoint — резолв в обоих менеджерах, для WG/AWG/Tailscale-эндпоинтов тоже работает). Это паритет со старым Clash `delay(tag)`, без расточительного «пинговать всю группу ради одного». Контракт — §4a.6. `runNodeUrltest` (`ping_orchestration.dart:21`) меняет `clash.delay(tag,…)` на команду `URLTestOutbound`, логика UI (`pingBusy`/ms-label) не трогается.
 
-**Рекомендация:** (в) если §4.5 покажет, что иначе теряется per-node ms у селекторов; (а) если `urlTest(group)` селекторы покрывает. Не решать до проверки.
+### 4a.4 Mass-ping — синхронный per-node, отмена клиентская
 
-### 4a.4 Mass-ping — перепроектирование
+Сейчас: параллельные `delay(tag)` по узлам (concurrency=10, порядок = display-list `node_list_presenter.dart:174`), `cancelMassPing()` рвёт `_delayHttp`-клиент. На `URLTestOutbound`: тот же worker-pool **остаётся в клиенте** (ядро меряет один узел синхронно, stateless — SPEC 014 §3.2), цикл `await URLTestOutbound(tag)` по узлам с concurrency=10. **Отмена — чисто клиентская:** флаг отмены в Dart-воркере, между итерациями перестаём слать следующие; текущий in-flight замер короткий (≤timeout) досинхронно завершается. `_delayHttp`-клиент и его разрыв **удаляются** — синхронная команда на сокете их не требует. Авто-пинг (`_scheduleAutoPing` Timer(5s) после connect, `:149`) → тот же mass-`URLTestOutbound`.
 
-Сейчас: параллельные `delay(tag)` по узлам (concurrency=10, порядок = display-list `node_list_presenter.dart:174`), `cancelMassPing()` рвёт in-flight. На CommandClient: один `urlTest(group)` на активную группу, ядро тестирует членов **эффективнее нашего параллелизма** (это апсайд, не регресс). Переписывается: оркестрация (`pingBusy`/`pingBatchGen` bump по завершении group-test, а не по каждому узлу), `cancelMassPing` (`urlTest` fire-and-forget — отменять нечего, см. §2.3 `cancelDelays`). Авто-пинг (`_scheduleAutoPing` Timer(5s) после connect, `:149`) → вызывает `urlTest(selectedGroup)` вместо `runMassUrltest()`.
+### 4a.5 Group URLTest и auto-группа
 
-### 4a.5 Блокирующая зависимость
+`runGroupUrltest` (`ping_orchestration.dart:169`) → штатный `urlTest(groupTag)` CommandClient (паритет 1:1, §2.3). Auto-urltest группа `✨auto` — ядро пингует само, не трогаем (§4a.1). Зависимость «покрывает ли `urlTest` селекторы» (бывший §4.5-gate) **снята**: для per-node delay используем `URLTestOutbound`, а не штатный групповой `urlTest`.
 
-Весь объём 4a.3/4a.4 для **Selector-групп** упирается в §4.5-проверку: **заполняет ли `urlTest(group)` на Selector-группе per-child `getURLTestDelay()`?** (Для URLTest-групп — да заведомо.) Селекторы — основной тип в dropdown (`selectorGroupTags` пускает только `Selector`, `clash_api_client.dart:51`), поэтому ответ определяет, клиентская это доработка или клиент+ядро. **Сделать эту проверку первой** (E2E пункт 3, §10).
+### 4a.6 Контракт `URLTestOutbound` (реализуется ядром по SPEC 014)
+
+Команда — в форке `sing-box-lx` (НЕ в этом репо), за build-tag `with_lx_command`. Здесь — для справки и клиентского маппинга; источник истины proto — SPEC 014 §3.2.
+
+```proto
+// lx:begin lx_command
+rpc URLTestOutbound(URLTestOutboundRequest) returns (URLTestOutboundResponse) {}
+message URLTestOutboundRequest {
+  string outboundTag = 1;   // тег outbound ИЛИ endpoint (НЕ группы)
+  string link        = 2;   // пусто → https://www.gstatic.com/generate_204
+  uint32 timeout     = 3;   // 0 → дефолт ядра; иначе миллисекунды
+}
+message URLTestOutboundResponse {
+  uint32 delay = 1;         // латентность, мс (движок uint16 → uint32)
+  string error = 2;         // "" = ок; иначе причина (not-found/timeout/dial/bad-status)
+}
+// lx:end lx_command
+```
+
+**ИНВАРИАНТ (критично для клиента):** источник истины провала — поле `error`, НЕ `delay`. `delay` валиден ⟺ `error == ""`. Случай `delay==0 && error==""` = **успех 0 мс** (целочисленное `time.Since/time.Millisecond` для <1мс ответа, `urltest.go:133`), НЕ ошибка. Клиент НЕ должен трактовать `delay==0` как фейл — иначе ложный ERR на быстром узле.
+
+**Клиентский маппинг** (`ping_orchestration.dart`):
+- `error == ""` → `lastDelay[tag] = delay`.
+- `error != ""` → `lastDelay[tag] = -1` (сохраняет UI-контракт ERR/<0, `node_row.dart:42-56`) + текст `error` в debug-лог (замена `_formatProbeError`, который опирался на исчезающие HTTP-exception'ы).
+
+Per-group `link`/`timeout` (§040, `pingUrlFor`/`pingTimeoutFor`) шлются как `link`/`timeout` команды без изменений resolve-chain. История delay — stateless в команде, хранит клиент (`lastDelay`); для узлов-в-группах ядро дополнительно течёт delay в `OutboundGroupItem` через `StoreURLTestHistory` (SPEC 014 §3.2).
+
+### 4a.7 Known-issue: коллизия ключа `lastDelay` между группами (НЕ в скоупе §122)
+
+`lastDelay: Map<tag,ms>` ключуется **только тегом узла** (`home_state.dart:85`), без группы. Но узел входит **во все** selector-группы (`build_config.dart:416-444` суёт `selectorTags` в каждый selector), а группы имеют **разные** ping-настройки (§040: G1→`ya.ru`, G2→`gstatic`). Замер из G2 затирает `lastDelay[node]`, UI в G1 показывает число, померенное чужим endpoint'ом → устаревшее/неверное; фильтр §048 и latency-sort в G1 работают по G2-числам. `setSelectedGroup` (`home_controller.dart:675`) не сбрасывает `lastDelay`; composite-ключа нет.
+
+**Важно:** баг **существует уже сейчас на Clash API**, миграция его не создаёт — но `URLTestOutbound` делает его явным (per-group `link`/`timeout` теперь шлём мы). **Out of scope §122** (это bug-fix существующего поведения, не часть миграции). Выносится в **отдельную таску** `docs/spec/tasks/NNN` — выбор ключевания (composite `group:node` / сброс при смене группы / per-group cache) решается там.
 
 ---
 
@@ -242,7 +271,7 @@ CommandClient не пингует один узел. Варианты (выбо�
 
 | Артефакт diag | Чем заменяется без Clash HTTP |
 |---|---|
-| `clash_rules.json` (`:108`) | **Не нужен ни UI, ни как отдельная команда.** Проверено: `ClashApiClient` `/rules` **никогда не вызывает**; by-rule агрегация (`clash_api_client.dart:281-285` `byRule`, `_byRule` в Stats) строится из **per-connection** поля `c['rule']`/`c['rulePayload']` каждого соединения (`CommandConnections` → `Connection.rule`/`rulePayload`), а не из статической таблицы. Совпадения `/rules` в `debug/` — это НАШ Debug API (CRUD §030 по custom-rules из своего хранилища), не запрос к ядру. Для diag статика берётся из собранного конфига (наш артефакт, Debug API `/config`). **Вариант A: 7-я команда `CommandRules` поверх `router.Rules()` НЕ требуется — остаётся 6 команд.** |
+| `clash_rules.json` (`:108`) | **Через `GetRules` (SPEC 014), только для Debug API/диагностики — UI-экран Rules out of scope.** Ядро `sing-box-lx` получает RPC **`GetRules`** (ядровая спека SPEC 014 §3.3, build-tag `with_lx_command`): снапшот **route + DNS** правил из рантайм-роутера (`router.Rules()` + новый DNS-геттер), поля `{type, payload, action, isDNS}`. **Богаче Clash** — Clash DNS-правила не отдавал. Клиент использует `GetRules` **узко**: только для диагностики (`lxbox-diag.sh` / Debug `/clash/rules`-over-CommandClient), полноценный UI-экран «Rules» в §122 **не строим**. by-rule агрегация в Stats остаётся **per-connection** (`Connection.rule`/`rulePayload` из `CommandConnections`), к `GetRules` не привязана. Совпадения `/rules` в `debug/` — НАШ Debug API (CRUD §030 по custom-rules), не путать. |
 | `clash_connections.json` (`:106`) | Debug API `/clash/connections`, переписанный поверх CommandClient (native-аккумулятор → snapshot). chains+rule per conn сохраняются (`Connection.chain()`/`getRule()`). |
 | `clash_proxies.json` (`:107`) | Debug API `/clash/proxies` поверх `writeGroups`/`writeOutbounds`. |
 | `clash_version.json` (`:109`) | `Libbox.version()` через MethodChannel (`getCoreVersion`). |
@@ -323,7 +352,7 @@ CommandClient не пингует один узел. Варианты (выбо�
 
 - **Unit:** адаптер `Connection(libbox)→AppConnection` (все поля, StringIterator-итерация); `StatusMessage→TrafficSnapshot`; `setStatusInterval` наносекунды (ассерт порядка величины); native-аккумулятор `applyEvents` (New/Update/Closed/Reset). Удалить/переписать `build_config_test`, `clash_endpoint_test`, `config_dirty_flag_test:95`, `pipeline_e2e_test`, `detour_append_replace_test`.
 - **Widget:** `stats_screen`/`connections_screen` на mock `Stream` (вместо mock HTTP); close-кнопки → `closeConnection`/`closeConnections`.
-- **E2E on-device (`CE8XX48PCI79U4XG`):** (1) скорость/трафик в traffic_bar из writeStatus; (2) выбор узла `selectOutbound` + §143 interrupt; (3) **Q3: `urlTest` на селектор-группе → заполняются ли per-node delays** (блокирующая проверка §048); (4) Q4: `getRule()` содержит payload; (5) Q5: `activeConnections` семантика; (6) profiler Live/Aggregated на нативных событиях; (7) dead-tunnel через `disconnected`; (8) реконнект при рестарте ядра; (9) JNI-краш-тест на старом Android (колбэки не валят процесс); (10) Debug `/clash/*`-over-CommandClient + `lxbox-diag.sh` новый путь; (11) импорт чужого конфига с `clash_api` → блок вырезан, порт не открыт.
+- **E2E on-device (`CE8XX48PCI79U4XG`):** (1) скорость/трафик в traffic_bar из writeStatus; (2) выбор узла `selectOutbound` + §143 interrupt; (3) **`URLTestOutbound` (SPEC 014): per-node delay на outbound И endpoint (WG/AWG), кастомные link/timeout, `error`-семантика, `delay==0&&error==""`=успех**; (4) Q4: `getRule()` содержит payload; (5) Q5: `activeConnections` семантика; (6) profiler Live/Aggregated на нативных событиях; (7) dead-tunnel через `disconnected`; (8) реконнект при рестарте ядра; (9) JNI-краш-тест на старом Android (колбэки не валят процесс); (10) Debug `/clash/*`-over-CommandClient + `lxbox-diag.sh` новый путь; (11) импорт чужого конфига с `clash_api` → блок вырезан, порт не открыт.
 
 ## 11. Docs to update
 
