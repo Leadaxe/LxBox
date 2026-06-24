@@ -111,7 +111,7 @@ Future<BuildResult> buildConfig({
     vars.putIfAbsent(e.key, () => e.value);
   }
 
-  // §122 Фаза 1b — clash_api БОЛЬШЕ НЕ инжектится: ядро rc.2 собрано без
+  // §122 Фаза 1b — clash_api БОЛЬШЕ НЕ инжектится: ядро rc.3 собрано без
   // with_clash_api (server вырезан, §1a), и блок experimental.clash_api в конфиге
   // даёт ФАТАЛЬНЫЙ отказ старта ("clash api is not included in this build").
   // Управление — через CommandClient (§122). `_ensureClashApiDefaults` удалён.
@@ -471,7 +471,7 @@ List<Map<String, dynamic>> _buildPresetGroups({
 }
 
 // §122 Фаза 1b — `_ensureClashApiDefaults` удалён: clash_api больше не инжектится
-// (ядро rc.2 без with_clash_api → блок даёт фатальный отказ старта). Управление
+// (ядро rc.3 без with_clash_api → блок даёт фатальный отказ старта). Управление
 // через CommandClient (§122). Рандомизация порта/secret больше не нужна.
 
 /// §120 — typed substitution + `#if`. Тонкая обёртка над общим [walk]-движком
