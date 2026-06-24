@@ -574,13 +574,27 @@ class HomeController extends ChangeNotifier
     unawaited(_cc.disconnectScreen());
   }
 
-  /// §3.1 — статус-снапшот (1s интервал). `*Total` — накопленный объём (его и
-  /// показываем как traffic). `connectionsIn/Out` — для бейджа активных.
+  /// §122 — status-стрим тикает часто (0.1с). На главном экране скорость в
+  /// шапке не нужна с такой частотой, а `_emit` ребилдит весь HomeScreen
+  /// (node-list 95 нод) → 10 ребилдов/сек = лаги/батарея. Эмитим traffic не
+  /// чаще [_trafficEmitThrottle]; Stats/Conns берут полный 0.1с-поток напрямую.
+  static const _trafficEmitThrottle = Duration(seconds: 1);
+  DateTime? _lastTrafficEmitAt;
+
+  /// §3.1 — статус-снапшот. `*Total` — накопленный объём (traffic).
+  /// `connectionsIn/Out` — для бейджа активных.
   void _onCcStatus(CcStatus s) {
     if (!_state.tunnelUp) return;
-    _lastCcStatusAt = DateTime.now();
-    // Watchdog: каждый успешный снапшот сбрасывает счётчик heartbeat-фейлов.
+    final now = DateTime.now();
+    // Watchdog обновляем на КАЖДЫЙ тик (дёшево, без emit) — он гейтит dead-tunnel.
+    _lastCcStatusAt = now;
     _heartbeatFailures = 0;
+    // Throttle тяжёлого _emit (ребилд node-list): не чаще 1с.
+    if (_lastTrafficEmitAt != null &&
+        now.difference(_lastTrafficEmitAt!) < _trafficEmitThrottle) {
+      return;
+    }
+    _lastTrafficEmitAt = now;
     _emit(_state.copyWith(
       traffic: TrafficSnapshot(
         uploadTotal: s.uplinkTotal,

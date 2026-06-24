@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicReference
 ///
 /// **Три клиента (§2.8)** — разный lifecycle под реальные нужды (разведано: что
 /// работает в фоне vs гасится с экраном):
-///  - `statusClient`   — `CommandStatus` + `setStatusInterval(1e9 нс=1с)`. **always-on**
+///  - `statusClient`   — `CommandStatus` + `setStatusInterval(1e8 нс=0.1с)`. **always-on**
 ///    пока туннель up. Питает dead-tunnel watchdog + скорость на главном.
 ///  - `screenClient`   — `CommandOutbounds`+`CommandGroup`+`CommandConnections`.
 ///    connect/disconnect по сигналу из Dart (открытие/закрытие экрана узлов/stats/conn).
@@ -53,9 +53,10 @@ class BoxCommandClient {
         /// Сервер ядра: `time.Duration(request.Interval)` + `time.NewTicker`
         /// (daemon/started_service.go:374) — Go `time.Duration` это int64 НС.
         /// Прежнее `1000L` ⇒ `time.Duration(1000)` = 1000нс = 1мкс → стрим
-        /// эмитил статус/connections максимально часто → память на Stats
-        /// «прыгала» каждый тик, лишняя нагрузка. 1с = 1e9 нс.
-        private const val STATUS_INTERVAL_NS = 1_000_000_000L
+        /// эмитил статус/connections максимально часто → память «прыгала»,
+        /// лишняя нагрузка. 100мс = живой UI скорости/соединений; память на
+        /// Stats отдельно троттлится в UI (медленная метрика). 0.1с = 1e8 нс.
+        private const val STATUS_INTERVAL_NS = 100_000_000L
 
         /// Cap очереди эмиттера — drop-newest при переполнении (producer не блокируется).
         /// Эмиттер coalesce'ит до последнего снапшота, так что cap — страховка.
@@ -134,7 +135,7 @@ class BoxCommandClient {
         runCatching {
             val options = CommandClientOptions().apply {
                 addCommand(Libbox.CommandStatus)
-                setStatusInterval(STATUS_INTERVAL_NS) // НАНОСЕКУНДЫ (1с)
+                setStatusInterval(STATUS_INTERVAL_NS) // НАНОСЕКУНДЫ (0.1с)
             }
             val client = CommandClient(StatusHandler(gen), options)
             client.connect()
