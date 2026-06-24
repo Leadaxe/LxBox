@@ -93,8 +93,21 @@ class BoxCommandClient {
     }
 
     /// §2.8 — `screenClient` поднимается при открытии экрана узлов/stats/connections.
-    fun connectScreen() = connectScreenClient()
-    fun disconnectScreen() = disconnectClient(screenClient, "disconnectScreen")
+    /// §122 — REF-COUNTED: и главный экран (groups-стрим), и StatsScreen/Connections
+    /// — независимые потребители. connectScreen поднимает клиент при ПЕРВОМ
+    /// потребителе; disconnectScreen гасит при ПОСЛЕДНЕМ. Без refcount закрытие
+    /// StatsScreen гасило бы screenClient, нужный главному экрану.
+    private val screenRefs = AtomicInteger(0)
+
+    fun connectScreen() {
+        if (screenRefs.getAndIncrement() == 0) connectScreenClient()
+    }
+
+    fun disconnectScreen() {
+        // decrementAndGet с полом 0 (defensive против лишних disconnect).
+        val n = screenRefs.updateAndGet { if (it > 0) it - 1 else 0 }
+        if (n == 0) disconnectClient(screenClient, "disconnectScreen")
+    }
 
     /// §2.8 — `profilerClient` поднимается при `startGlobalRecording` (§048).
     fun connectProfiler() = connectProfilerClient()
@@ -103,6 +116,7 @@ class BoxCommandClient {
     /// Полный teardown — из `BoxService.doStop`/`closeCommandServerAtomic`.
     fun shutdownAll() {
         tunnelAlive = false
+        screenRefs.set(0) // §122 — туннель умер, все экраны логически отвалились
         disconnectClient(statusClient, "shutdownAll")
         disconnectClient(screenClient, "shutdownAll")
         disconnectClient(profilerClient, "shutdownAll")

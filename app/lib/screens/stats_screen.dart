@@ -97,10 +97,13 @@ class _StatsScreenState extends State<StatsScreen> {
       byRule[rule] = (byRule[rule] ?? 0) + 1;
 
       // destination = "host:port" — порт = часть после последнего ':'.
+      // host: domain (если есть), иначе host-часть destination (IP-соединения
+      // без resolved-домена приходят с пустым domain).
       final destPort = _portOf(c.destination);
+      final host = c.domain.isNotEmpty ? c.domain : _hostOf(c.destination);
 
       final conn = Connection(
-        host: c.domain,
+        host: host,
         destPort: destPort,
         network: c.network,
         rule: c.rule,
@@ -137,6 +140,12 @@ class _StatsScreenState extends State<StatsScreen> {
     final i = destination.lastIndexOf(':');
     if (i < 0 || i == destination.length - 1) return '';
     return destination.substring(i + 1);
+  }
+
+  /// Host из "host:port" — часть до последнего ':'. Если ':' нет — вся строка.
+  static String _hostOf(String destination) {
+    final i = destination.lastIndexOf(':');
+    return i < 0 ? destination : destination.substring(0, i);
   }
 
   Future<void> _refreshAllowBypass() async {
