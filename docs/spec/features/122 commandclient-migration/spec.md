@@ -132,7 +132,7 @@ Command-канал в 1.13+ — это **gRPC** (`StartedService` поверх `
 
 **Единый механизм отмены.** `server.Send()` в цикле = вызов соответствующего `write*`-колбэка. `server.Context().Done()` (клиент отвалился) = `disconnect()`/разрыв conn = бывший `cancelDelays` Clash-канала. Отмена — **один** механизм на двух концах (детально по масс-пингу — §4.3).
 
-**Тонкость единиц (MED).** `setStatusInterval` принимает Go `Duration` на gomobile-уровне — это **наносекунды**, тогда как `URLTestOutbound.timeout` — **миллисекунды** (нормативно — §4.6). Не перепутать.
+**Единицы интервалов — ОБА в миллисекундах (исправлено по консультации команды ядра, rc.2).** `setStatusInterval` = `int64` **миллисекунды** (`CommandClientOptions.StatusInterval`, `command_client.go:40` → `SubscribeStatusRequest.Interval` :418 БЕЗ конвертации в Duration; интерпретируется как мс, как `SubscribeConnectionsRequest.Interval`). `URLTestOutbound.timeout` — тоже **миллисекунды** (§4.6). Для 1с статус-интервала → `setStatusInterval(1000L)`. **НЕ наносекунды** — `1_000_000_000L` дал бы интервал ≈11.5 суток (стрим не тикает, watchdog слепнет).
 
 **Нормативные требования к реализации handler'а (консультация команды ядра, rc.2):**
 - **Не хардкодить числа `addCommand(5)` — использовать именованные константы `Libbox.CommandOutbounds`/`CommandStatus`/`CommandGroup`/`CommandConnections`.** Если upstream вставит команду в середину iota-блока на ребейзе, числа поедут, имена — нет.
@@ -196,7 +196,7 @@ Command-канал в 1.13+ — это **gRPC** (`StartedService` поверх `
 
 | Клиент | Команды (`addCommand`) | Lifecycle | Потребитель | Обоснование |
 |---|---|---|---|---|
-| **`statusClient`** | `addCommand(Libbox.CommandStatus)` + `setStatusInterval(1s)` | **always-on** пока туннель up | dead-tunnel watchdog (§2.2) + скорость на главном (`traffic_bar`) | Лёгкий (1 msg/s). Watchdog обязан жить в фоне — ловит обрыв. Апгрейд: push-1s вместо poll-20s. **Единственный клиент с `setStatusInterval`** — на остальных бессмысленно (стримы пушатся по `urlTestObserver`, не по таймеру, §2.3). |
+| **`statusClient`** | `addCommand(Libbox.CommandStatus)` + `setStatusInterval(1000L)` /* мс = 1s */ | **always-on** пока туннель up | dead-tunnel watchdog (§2.2) + скорость на главном (`traffic_bar`) | Лёгкий (1 msg/s). Watchdog обязан жить в фоне — ловит обрыв. Апгрейд: push-1s вместо poll-20s. **Единственный клиент с `setStatusInterval`** — на остальных бессмысленно (стримы пушатся по `urlTestObserver`, не по таймеру, §2.3). |
 | **`screenClient`** | `addCommand(Libbox.CommandOutbounds)` + `addCommand(Libbox.CommandGroup)` + `addCommand(Libbox.CommandConnections)` | поднимается при открытии экрана узлов/stats/connections, `disconnect` при уходе (`didChangeAppLifecycleState` paused/hidden) | node-list, группы, таблица соединений | Сейчас эти поллеры **гасятся в фоне** (heartbeat §141 P0.2, stats/connections `_stopTimer`). Сохраняем 1:1 — никакого нового resident-drain. Без `setStatusInterval`. |
 | **`profilerClient`** | `addCommand(Libbox.CommandConnections)` | поднимается при `startGlobalRecording`, `disconnect` при `stopGlobalRecording` (`traffic_profiler.dart`) | TrafficProfiler §048 (per-app live) | Recording — **opt-in пользователем** (нажал START), может жить в фоне. НЕ always-on по умолчанию. Отдельный клиент — чтобы recording не зависел от того, открыт ли экран. |
 
@@ -364,7 +364,7 @@ Go-`error` возврата = **только транспортный сбой**
 - **Анти-мигание (P1):** синхронный ответ — **якорь** на короткое окно (debounce ~N сек по образцу `pingBatchGen`-freeze, `home_state.dart:94`). В течение окна `SubscribeOutbounds`-стрим **не перезатирает** только что показанное per-node значение, лишь **дополняет** непомеренные узлы — иначе пользователь увидит «прыжок» (сначала из ответа, потом из стрима). После окна стрим — единственный source of truth.
 - **`SubscribeOutbounds`-стрим:** дотягивает `getURLTestDelay()`/`getURLTestTime()` per-node как source of truth.
 
-Per-group `link`/`timeout` (§040: `pingUrlFor`/`pingTimeoutFor`, `ping_options.groups`) шлются в команду без изменений resolve-chain. **Внимание на единицы:** `timeout` здесь — **миллисекунды** (в отличие от `setStatusInterval`, который на gomobile-уровне принимает **наносекунды** Go-`Duration`).
+Per-group `link`/`timeout` (§040: `pingUrlFor`/`pingTimeoutFor`, `ping_options.groups`) шлются в команду без изменений resolve-chain. **Единицы:** `timeout` — **миллисекунды**; `setStatusInterval` — тоже миллисекунды (§2.3). Оба в мс, путать нечего.
 
 ### §4.7. Контракт `GetRules` (SPEC 014 §3.3) — только диагностика
 
@@ -379,7 +379,7 @@ message Rule { string type; string payload; string action; bool isDNS; }
 
 ### §4.8. Конвенция: unary-read без `Command*`-константы
 
-`URLTestOutbound` и `GetRules` — **unary-read** RPC (request→response), **не** подписки. Им **не заводится `Command*`-константа** (подписки конфигурируются полем `CommandClientOptions.StatusInterval` (int64, **наносекунды** — Go `Duration`) + `addCommand(int32)` — только для стримовых `CommandStatus`/`CommandConnections`/…). Это прямые методы `CommandClient`, как штатные `getDeprecatedNotes()`/`getSystemProxyStatus()`/`selectOutbound()`. Dart/gomobile-обёртки — `urlTestOutbound(...)→*URLTestOutboundResult{Delay int32, Error string}` (на gomobile-границе `delay` — `int32`/Kotlin `int`, не uint), `rules()→RuleIterator`; **без `Command`-префикса**. «Команды 0–5» (счётчик стримовых подписок, §2.4) **не меняется** — эти два RPC в него не входят.
+`URLTestOutbound` и `GetRules` — **unary-read** RPC (request→response), **не** подписки. Им **не заводится `Command*`-константа** (подписки конфигурируются полем `CommandClientOptions.StatusInterval` (int64, **миллисекунды**) + `addCommand(int32)` — только для стримовых `CommandStatus`/`CommandConnections`/…). Это прямые методы `CommandClient`, как штатные `getDeprecatedNotes()`/`getSystemProxyStatus()`/`selectOutbound()`. Dart/gomobile-обёртки — `urlTestOutbound(...)→*URLTestOutboundResult{Delay int32, Error string}` (на gomobile-границе `delay` — `int32`/Kotlin `int`, не uint), `rules()→RuleIterator`; **без `Command`-префикса**. «Команды 0–5» (счётчик стримовых подписок, §2.4) **не меняется** — эти два RPC в него не входят.
 
 ### §4.9. §048 ping-фильтр — РЕШЕНО командой `URLTestOutbound`
 
@@ -496,7 +496,7 @@ message Rule { string type; string payload; string action; bool isDNS; }
 - Новый `BoxCommandClient.kt`; правки `VpnPlugin.kt` (EventChannel'ы + MethodChannel-проброс императивов), `BoxService.kt` (`statusClient.connect` после `startCommandServer`, рядом с `CommandServer` на `BoxService.kt:179`).
 - **Три клиента (§2.8):** `statusClient` (always-on, `Status`+`setStatusInterval` 1s), `screenClient` (`Outbounds`+`Groups`+`Connections`, lifecycle по экрану), `profilerClient` (`Connections`, lifecycle по recording). Каждый — свой `CommandClientHandler`, эмитит в свой набор EventChannel-sink'ов.
 - `CommandClientHandler`-колбэки — **КАЖДЫЙ** в `try/catch` fail-safe (JNI-no-throw; unchecked exception через JNI = `Runtime::Abort` всего процесса — см. память `project_jni_callbacks_must_not_throw`). Неиспользуемые клиентом колбэки — no-op (но всё равно в try/catch).
-- `addCommand(...)` per-клиент (не все 0-5 на одном) + `setStatusInterval` на statusClient (**НАНОсекунды** Go `Duration` = `1_000_000_000L` для 1s; НЕ путать с `URLTestOutbound.timeout` который мс).
+- `addCommand(...)` per-клиент (не все 0-5 на одном) + `setStatusInterval(1000L)` на statusClient (**МИЛЛИСЕКУНДЫ** — 1000 = 1s; `URLTestOutbound.timeout` тоже мс).
 - Lifecycle: `statusClient.connect` только на статус `Starting`/`Started` (сокет существует лишь после старта сервера); реконнект+backoff на `disconnected`. `screenClient`/`profilerClient` — connect/disconnect по сигналам из Dart (MethodChannel: открытие экрана / start-stop recording).
 - Нативный аккумулятор `Connections` (под `screenClient`+`profilerClient`, refcount) + дросселированный эмиттер (батч по образцу core-log drainer `BoxService.kt:676`, `LOG_QUEUE_MAX=4096`, `DRAIN_BATCH_MAX=200`).
 - **Без фича-флага** (решение: CommandClient сразу основной). Откат — через git/ветку, не рантайм-переключатель. Весь Фаза-0-код на ветке `feat/libbox-1.14-migration`, рабочий HTTP-путь не трогается до Фазы 1.
@@ -566,7 +566,7 @@ message Rule { string type; string payload; string action; bool isDNS; }
 | HIGH | Dead-tunnel ложные срабатывания на РФ-LTE (радио-джиттер/хэндовер БС) | watchdog-таймаут **8–10с** (≥5–6 пропущенных тиков), «один haptic на серию» (`_heartbeatFailNotified`); НЕ агрессивнее — иначе ложные «соединение потеряно» бьют в боль форума (§2.2) |
 | MED | 11 JNI-колбэков должны быть fail-safe | Каждый в `try/catch` (память JNI-no-throw) |
 | MED | Closed-история рост памяти | TTL/cap, дефолт `filterState(Active)` (Фаза 2, §3.3) |
-| MED | `setStatusInterval` в наносекундах (легко ошибиться) | Явный комментарий; не путать с `URLTestOutbound.timeout` (мс, §4.6) |
+| LOW | `setStatusInterval` единицы | Оба интервала (status + urltest timeout) в **миллисекундах** (§2.3); ранняя версия спеки ошибочно писала наносекунды — исправлено |
 | MED | Бэкапы `clash_api` молча отброшены | Документировать (§6.2) + тест |
 | MED | `ClashHttpException`-гуманизация (`error_format.dart:41`) | Переезд на `PlatformException` |
 | MED | §042 health watchdog (Draft) спроектирован под `clash.fetchTraffic` | Переписать data-source на `StatusMessage` |
