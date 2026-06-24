@@ -4,8 +4,9 @@
 |---|---|
 | **Статус** | Approved with required edits (прошла ролевую экспертизу: ядро/код/UX/архитектор; P0+P1 внесены; железные Q5–Q9 — на устройстве) |
 | **Дата** | 2026-06-24 |
-| **Целевое ядро** | sing-box-lx `v1.14.0-lx.1-rc.2` (мажор-связка `v1.14.0-lx.1`; base sing-box v1.13.13 + `with_awg`/`with_xhttp`; AAR `libbox-1.14.0-lx.1-rc.2.aar`). Парная SPEC 014 реализована на rc.2 (статус A) |
-| **Ядровая спека** | SPEC 014 — `sing-box-lx/SPECS/014-LIBBOX_COMMAND_URLTEST_RULES` (парная, обязательна к согласованию) |
+| **Целевое ядро** | sing-box-lx `v1.14.0-lx.1-rc.2` (мажор-связка `v1.14.0-lx.1`; base sing-box v1.13.13 + `with_awg`/`with_xhttp`/`with_lx_command`). Релиз: [github.com/Leadaxe/sing-box-lx/releases/tag/v1.14.0-lx.1-rc.2](https://github.com/Leadaxe/sing-box-lx/releases/tag/v1.14.0-lx.1-rc.2). **Два AAR:** `libbox-1.14.0-lx.1-rc.2.aar` (основной, **SDK23+**) и `libbox-legacy-1.14.0-lx.1-rc.2.aar` (**SDK21**). `Libbox.version()` → `1.14.0-lx.1`. Тег `-rc` — пререлиз, НЕ device-verified по §010; для command-API (client-only, data-path не затронут) — не помеха. SPEC 014: статус A (реализовано). |
+| **Ядровая спека** | SPEC 014 — `sing-box-lx/SPECS/014-LIBBOX_COMMAND_URLTEST_RULES/SPEC.md` (закреплена за тегом rc.2, парная, обязательна к согласованию) |
+| **Интеграция (Фаза 0)** | Обновить `libbox.version` → `1.14.0-lx.1-rc.2`, подложить оба AAR (SDK23 + legacy SDK21). Новые методы: `URLTestOutbound(tag, link, timeout int32)→*URLTestOutboundResult{Delay int32, Error string}` (Вариант B: истина в `Error`; Go-error = только транспортный сбой); `GetRules()→RuleIterator` (`Rule{Type,Payload,Action,IsDNS}`). Масс-пинг — worker-pool в клиенте, отмена = реконнект conn. |
 | **Связанные спеки** | §012 (native vpn service), §121 (libbox-1.14-adoption — родитель), §016 (stats), §040 (per-group ping), §044 (profiler), §048 (node-filters), §042 (health watchdog — data-source переезжает), §030 (custom-rules Debug API), §031 (debug api), §043/§010 (core-log — НЕ затрагивается), §159 (import allowlist), §143 (interrupt-on-switch) |
 | **Память** | `[[project_122_commandclient_migration]]`, `[[project_libbox_114_migration_api_breaks]]`, `[[project_jni_callbacks_must_not_throw]]`, `[[project_dns_routing_king]]`, `[[feedback_no_destructive_diagnostics]]` |
 | **Затронутые файлы** | `clash_api_client.dart`, `clash_endpoint.dart`, `build_config.dart`, `home_controller.dart`, `home_state.dart`, `node_filter.dart`, `node_row.dart`, `node_list*.dart`, `ping_orchestration.dart`, `stats_screen`, `connections_screen`, `error_format.dart`, `wizard_template.json`; native: `BoxService.kt`, `BoxVpnService.kt`, `VpnPlugin.kt`, новый `BoxCommandClient.kt`; диагностика: `scripts/lxbox-diag.sh`, Debug API `/clash/*`; тест-фикстуры (`build_config_test`, `clash_endpoint_test`, `config_dirty_flag_test`, `pipeline_e2e_test`, `detour_append_replace_test`) |
@@ -166,7 +167,7 @@ Command-канал в 1.13+ — это **gRPC** (`StartedService` поверх `
 | `GET /proxies` (узлы + delay) | `clash_api_client.dart` | `writeOutbounds` (плоский) + `writeGroups` (дерево) | server-stream cmd 5 / cmd 2 |
 | `PUT /proxies/{group}` (выбор) | `static proxyEntry` (`clash_api_client.dart`) | `selectOutbound(group, tag)` | императив |
 | `GET /proxies/{name}/delay` (ping) | `static urltestNow` (`clash_api_client.dart`) | `URLTestOutbound(tag, link, timeoutMs)` — **unary**; `urlTest(groupTag)` (групповой) — **императив** | unary (SPEC 014) / императив |
-| `GET /rules` | `lxbox-diag.sh:108`; `state/rules` :95 | `GetRules()` → `RuleList` (route+DNS) | unary (SPEC 014) |
+| `GET /rules` | `lxbox-diag.sh:108`; `state/rules` :95 | `GetRules()` → `RuleIterator` (route+DNS, элемент `Rule{Type,Payload,Action,IsDNS}`) | unary (SPEC 014) |
 | `GET /version` | `lxbox-diag.sh:109` | `Libbox.version()` | нативный вызов (не command-канал) |
 | `route.final` чтение | `ClashEndpoint.routeFinalTag` (`clash_endpoint.dart:36`); вызовы `home_controller.dart:374,557` | **перенести** в адаптер (читает конфиг, не Clash-канал) | — (не канал) |
 | endpoint-парсинг конфига | `ClashEndpoint.fromConfigJson` (`clash_endpoint.dart:13`); `_rebuildClashEndpoint`/`_clash`/`clashClient` (`home_controller.dart`) | **удалить** (канал на сокете, не на URI) | — |
@@ -259,7 +260,7 @@ CommandClient заменяет **контракт данных**, а не тра
 
 | Операция | Файл:строка | Сейчас (Clash) | На CommandClient | Объём |
 |---|---|---|---|---|
-| **Group URLTest** (`runGroupUrltest`) | `ping_orchestration.dart:169` | `GET /group/{tag}/delay` → `groupDelay()` (`clash_api_client.dart:143`) | штатный `urlTest(groupTag)` (императив); результат через `writeGroups`→`getURLTestDelay()` | паритет 1:1 (нулевой дифф в ядре — не трогать) |
+| **Group URLTest** (`runGroupUrltest`) | `ping_orchestration.dart:169` | `GET /group/{tag}/delay` → `groupDelay()` (`clash_api_client.dart:143`) | штатный `urlTest(groupTag)` (императив); результат для членов группы через `writeGroups`, для node-list — через `writeOutbounds` (плоский, §4.3) | паритет 1:1 (нулевой дифф в ядре — не трогать) |
 | **Auto-urltest группа** (`auto`) | `wizard_template.json:156-169` (`type:urltest`) | ядро пингует по `interval`, app read-only | то же — ядро делает само | не трогаем |
 | **Single-node ping** (тап «Ping» на узле) | `runNodeUrltest` `ping_orchestration.dart:21`; UI `node_list.dart:272` | `GET /proxies/{tag}/delay` → `delay(tag)` (`clash_api_client.dart:117`) | **`URLTestOutbound(tag, link, timeout)`** (SPEC 014) — outbound ИЛИ endpoint | перенос на unary-команду (§4.4) |
 | **Mass-ping** (кнопка Ping, concurrency=10) | `runMassUrltest` `ping_orchestration.dart:198`; авто-пинг `:149` | параллельные `delay(tag)`; отмена через отдельный `_delayHttp`-клиент (`clash_api_client.dart:20`, разрыв в `cancelDelays()` :218-219), точка входа `cancelMassPing()` (`ping_orchestration.dart:~291`) | worker-pool в **клиенте**, цикл `URLTestOutbound(tag)` concurrency=10; отмена клиентская | перепроектирование оркестрации (§4.5) |
@@ -286,7 +287,10 @@ worker-pool=10 живёт **в клиенте** (`ping_orchestration.dart:142`, 
 - **Worker-pool=10** — на клиенте (`ping_orchestration.dart:142`, `_pingConcurrency`). Ядро параллелизмом не управляет.
 - **Синхронный `{delay,error}`-ответ** = немедленный per-node feedback (`pingBusy`→ms на `node_row.dart:42-56`), пока стрим не доехал.
 - **`SubscribeOutbounds`-стрим = source of truth:** после замера ядро делает `StoreURLTestHistory`, стрим пушит обновлённый `getURLTestDelay()` → `lastDelay` синхронизируется. Так delay переживает и узлы, померенные **не нами** (групповой `urlTest`, авто-urltest группы).
-- **Отдельный history-RPC НЕ нужен:** история delay живёт в ядре (`HistoryStorage`/`LoadURLTestHistory`) и течёт через `SubscribeOutbounds`/`SubscribeGroups` (вкл. endpoint'ы и узлы вне групп).
+- **Отдельный history-RPC НЕ нужен:** история delay живёт в ядре (`HistoryStorage`/`LoadURLTestHistory`), `StoreURLTestHistory` будит общий `urlTestObserver` → оба групповых стрима. **Карта каналов (SPEC 014 §3.2, проверено `started_service.go:1028-1084`):**
+  - **Синхронный ответ RPC** — delay **любого** узла (outbound И endpoint), немедленно. Для ручного пинга одного узла — брать отсюда, не ждать стрим.
+  - **`SubscribeOutbounds`** — все outbound'ы (`outboundManager.Outbounds()`) **И все endpoint'ы** (`endpointManager.Endpoints()`, WG/AWG/Tailscale), плоско. **Единственный стрим, где delay endpoint'а вообще появляется.** Живой node-list подписывается СЮДА.
+  - **`SubscribeGroups`** — **только** узлы внутри `OutboundGroup`. Одиночные outbound вне групп и **любые endpoint'ы сюда НЕ попадают** — для них стрим групп бесполезен. Обновляется сам для членов групп, отдельной синхронизации не нужно.
 - **Отмена масс-пинга** = клиентский флаг в worker-pool ИЛИ `disconnect`/реконнект conn → серверный `ctx.Done()` → in-flight замеры падают (единый механизм §2.3).
 
 ### §4.4. Single-node ping — перенос на `URLTestOutbound`
@@ -318,6 +322,14 @@ message URLTestOutboundResponse {
 // lx:end lx_command
 ```
 
+**Клиентская gomobile-обёртка (SPEC 014 §3.2 — НЕ дословно из proto):** gomobile не биндит ни три возврата, ни `uint16`/`uint32`, поэтому AAR отдаёт struct-обёртку с геттерами (как `SystemProxyStatus`):
+```go
+URLTestOutbound(outboundTag, link string, timeout int32) (*URLTestOutboundResult, error)
+type URLTestOutboundResult struct { Delay int32; Error string }  // геттеры getDelay()/getError() в Kotlin
+```
+Go-`error` возврата = **только транспортный сбой** (соединение/gRPC); прикладной исход — в `Result.Error` (Вариант B). `timeout` — `int32`, мс (0→дефолт). На Kotlin: `result.delay` (int), `result.error` (String).
+```
+
 **ИНВАРИАНТ КЛИЕНТА (критично):** источник истины провала — поле `error`, **не** `delay`. `delay` валиден ⟺ `error == ""`. Случай `delay==0 && error==""` = **успех 0 мс** (целочисленное `time.Since/time.Millisecond` для ответа <1мс, `urltest.go:133`), **не** ошибка. Клиент **не должен** трактовать `delay==0` как фейл — иначе ложный ERR на быстром узле. Все ошибки приходят в payload, `status.Error` не используется; not-found → `error="outbound or endpoint not found"`.
 
 **Клиентский маппинг** (`ping_orchestration.dart`) — **двойной путь** (см. §4.3):
@@ -332,7 +344,7 @@ Per-group `link`/`timeout` (§040: `pingUrlFor`/`pingTimeoutFor`, `ping_options.
 unary-read RPC, второй в SPEC 014:
 
 ```proto
-rpc GetRules(Empty) returns (RuleList) {}        // RuleList { repeated Rule }
+rpc GetRules(Empty) returns (RuleList) {}        // proto: RuleList{repeated Rule}; клиент-обёртка: RuleIterator
 message Rule { string type; string payload; string action; bool isDNS; }
 ```
 
