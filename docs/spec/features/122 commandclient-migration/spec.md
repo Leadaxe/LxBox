@@ -81,10 +81,11 @@
    │   ┌─────────────┴───────────────── BoxService (foreground) ───────────┐   │
    │   │  CommandServer (CSH)  ◄──── BoxService.kt:179 startCommandServer() │   │
    │   │                                                                    │   │
-   │   │  BoxCommandClient (НОВЫЙ)                                          │   │
-   │   │    addCommand(0..5) + setStatusInterval                            │   │
-   │   │    handler: 11 колбэков (КАЖДЫЙ try/catch fail-safe)               │   │
-   │   │    Connections-аккумулятор (applyEvents/filterState/sort)          │   │
+   │   │  BoxCommandClient (НОВЫЙ) — ТРИ клиента (§2.8):                    │   │
+   │   │    statusClient   : Status(1)+interval 1s   [always-on]           │   │
+   │   │    screenClient   : Outbounds(5)+Group(2)+Conn(4) [по экрану]     │   │
+   │   │    profilerClient : Conn(4)                 [по recording]        │   │
+   │   │    колбэки try/catch fail-safe; Conn-аккумулятор (refcount)       │   │
    │   │    lifecycle connect/disconnect + backoff                          │   │
    │   └───────────────┬────────────────────────────────────────────────────┘  │
    │                   │  статические sink'и в BoxVpnService                   │
@@ -181,6 +182,20 @@ Command-канал в 1.13+ — это **gRPC** (`StartedService` поверх `
 ### §2.7. Связка масс-пинга (обзор)
 
 Масс-пинг — контур, где **клиент** держит worker-pool=10 (`ping_orchestration.dart:142`, `_pingConcurrency`), а **ядро** меряет один узел синхронно и stateless. Синхронный `{delay, error}`-ответ `URLTestOutbound` даёт немедленный per-node feedback (`pingBusy`→ms), а `SubscribeOutbounds`-стрим (cmd 5, `getURLTestDelay`) — source of truth. Детальный контур (диаграмма, инварианты, отмена) — **§4.3/§4.6**. Существующий **групповой** `urlTest(groupTag)` — **не трогаем** (нулевой дифф в ядре).
+
+### §2.8. Lifecycle подписок: ТРИ `CommandClient`'а, не один
+
+В gomobile-фасаде подписки конфигурируются через `CommandClientOptions.addCommand(int)` + колбэки `handler.write*` (НЕ прямые `subscribe*`-методы — их в AAR нет, см. §2.3). Один `CommandClient` = одно соединение с фиксированным набором команд, поднятым на `connect()`. Чтобы lifecycle подписок совпадал с реальными потребностями (разведано по коду — что работает в фоне, что гасится с экраном), заводим **три отдельных клиента** с разными жизненными циклами:
+
+| Клиент | Команды (`addCommand`) | Lifecycle | Потребитель | Обоснование |
+|---|---|---|---|---|
+| **`statusClient`** | `CommandStatus=1` + `setStatusInterval` 1s | **always-on** пока туннель up | dead-tunnel watchdog (§2.2) + скорость на главном (`traffic_bar`) | Лёгкий (1 msg/s). Watchdog обязан жить в фоне — ловит обрыв. Апгрейд: push-1s вместо poll-20s. |
+| **`screenClient`** | `CommandOutbounds=5` + `CommandGroup=2` + `CommandConnections=4` | поднимается при открытии экрана узлов/stats/connections, `disconnect` при уходе (`didChangeAppLifecycleState` paused/hidden) | node-list, группы, таблица соединений | Сейчас эти поллеры **гасятся в фоне** (heartbeat §141 P0.2, stats/connections `_stopTimer`). Сохраняем 1:1 — никакого нового resident-drain. |
+| **`profilerClient`** | `CommandConnections=4` | поднимается при `startGlobalRecording`, `disconnect` при `stopGlobalRecording` (`traffic_profiler.dart`) | TrafficProfiler §048 (per-app live) | Recording — **opt-in пользователем** (нажал START), может жить в фоне. НЕ always-on по умолчанию. Отдельный клиент — чтобы recording не зависел от того, открыт ли экран. |
+
+**Почему не один always-on клиент со всеми командами:** `Connections`/`Outbounds`-стримы тяжёлые (все соединения/узлы); держать их always-on = лить в фоне впустую = тот самый resident-drain, который §141 P0.2 вычищал. Разведка кода подтвердила: в фоне нужен **только** `Status` (для watchdog), остальное гасится с экраном. Нотификация/tile статичны (up/down + нода, не скорость); automation §047 — событийная (broadcast, без статистики трафика) — фоновых стримов не требуют.
+
+**Native-аккумулятор `Connections`** живёт под `screenClient`+`profilerClient` (оба на cmd 4). Если оба активны одновременно (экран connections открыт И recording on) — **один** аккумулятор, refcount: первый потребитель поднимает клиента, последний гасит. closed-история (`filterState`) — только пока есть подписчик, с TTL/cap (§3.3).
 
 ---
 
@@ -466,12 +481,13 @@ message Rule { string type; string payload; string action; bool isDNS; }
 Все три фазы реализуемы на одном ядре `v1.14.0-lx.1-rc.2` — версионного разрыва нет (декомпиляция AAR подтвердила команды 0-5 и closed-историю).
 
 **Фаза 0 — нативный канал (Kotlin/JNI, без UI-изменений).**
-- Новый `BoxCommandClient.kt`; правки `VpnPlugin.kt` (EventChannel'ы), `BoxService.kt` (`connect` после `startCommandServer`, рядом с `CommandServer` на `BoxService.kt:179`).
-- `CommandClientHandler` — 11 колбэков, **КАЖДЫЙ** в `try/catch` fail-safe (JNI-no-throw; unchecked exception через JNI = `Runtime::Abort` всего процесса — см. память `project_jni_callbacks_must_not_throw`).
-- `addCommand(0..5)` + `setStatusInterval` (**НАНОсекунды** на gomobile-уровне — Go `Duration`; в отличие от `URLTestOutbound.timeout`, который мс).
-- Lifecycle: коннект только на статус `Starting`/`Started` (сокет существует лишь после старта сервера); реконнект+backoff на `disconnected`.
-- Нативный аккумулятор `Connections` + дросселированный эмиттер (батч по образцу core-log drainer `BoxService.kt:676`, `LOG_QUEUE_MAX=4096`, `DRAIN_BATCH_MAX=200`).
-- Фича-флаг: HTTP-петля и `CommandClient` сосуществуют — путь отката.
+- Новый `BoxCommandClient.kt`; правки `VpnPlugin.kt` (EventChannel'ы + MethodChannel-проброс императивов), `BoxService.kt` (`statusClient.connect` после `startCommandServer`, рядом с `CommandServer` на `BoxService.kt:179`).
+- **Три клиента (§2.8):** `statusClient` (always-on, `Status`+`setStatusInterval` 1s), `screenClient` (`Outbounds`+`Groups`+`Connections`, lifecycle по экрану), `profilerClient` (`Connections`, lifecycle по recording). Каждый — свой `CommandClientHandler`, эмитит в свой набор EventChannel-sink'ов.
+- `CommandClientHandler`-колбэки — **КАЖДЫЙ** в `try/catch` fail-safe (JNI-no-throw; unchecked exception через JNI = `Runtime::Abort` всего процесса — см. память `project_jni_callbacks_must_not_throw`). Неиспользуемые клиентом колбэки — no-op (но всё равно в try/catch).
+- `addCommand(...)` per-клиент (не все 0-5 на одном) + `setStatusInterval` на statusClient (**НАНОсекунды** Go `Duration` = `1_000_000_000L` для 1s; НЕ путать с `URLTestOutbound.timeout` который мс).
+- Lifecycle: `statusClient.connect` только на статус `Starting`/`Started` (сокет существует лишь после старта сервера); реконнект+backoff на `disconnected`. `screenClient`/`profilerClient` — connect/disconnect по сигналам из Dart (MethodChannel: открытие экрана / start-stop recording).
+- Нативный аккумулятор `Connections` (под `screenClient`+`profilerClient`, refcount) + дросселированный эмиттер (батч по образцу core-log drainer `BoxService.kt:676`, `LOG_QUEUE_MAX=4096`, `DRAIN_BATCH_MAX=200`).
+- **Без фича-флага** (решение: CommandClient сразу основной). Откат — через git/ветку, не рантайм-переключатель. Весь Фаза-0-код на ветке `feat/libbox-1.14-migration`, рабочий HTTP-путь не трогается до Фазы 1.
 
 **Фаза 1 расщеплена на 1a (миграция, обратимо) и 1b (выпил, необратимо)** — чтобы железные проверки шли при ещё живом Clash за флагом, а удаление кода — только после того как 1a отъездила на устройстве. Фича-флаг (Фаза 0) **атомарен на весь control-channel** — не поэкранный, иначе гибридный UX (один экран push-1с, другой по-старому).
 
