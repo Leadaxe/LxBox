@@ -1,0 +1,298 @@
+import 'dart:async';
+
+import 'package:flutter/services.dart';
+
+import '../services/platform_channels.dart';
+
+/// §122 Фаза 1a — Dart-клиент нативного libbox `CommandClient`-канала
+/// (`BoxCommandClient.kt`, Фаза 0). Замена `ClashApiClient` (HTTP-петли).
+///
+/// **Модель** (§2.2): не pull-снапшоты по таймеру, а **push-стримы** —
+/// ядро эмитит изменения, UI подписывается. Императивы (`urlTestOutbound`,
+/// `selectOutbound`, …) — через MethodChannel.
+///
+/// **Lifecycle стримов** управляется на native (§2.8: status always-on,
+/// screen/profiler — по сигналу). Тут — broadcast-стримы поверх EventChannel:
+/// подписчик получает последний снапшот, когда канал активен.
+///
+/// Singleton: один набор каналов на процесс.
+class CcChannel {
+  CcChannel._();
+
+  static final CcChannel instance = CcChannel._();
+
+  static const MethodChannel _methods = MethodChannel(PlatformChannels.methods);
+
+  static const EventChannel _statusChannel =
+      EventChannel(PlatformChannels.ccStatus);
+  static const EventChannel _outboundsChannel =
+      EventChannel(PlatformChannels.ccOutbounds);
+  static const EventChannel _groupsChannel =
+      EventChannel(PlatformChannels.ccGroups);
+  static const EventChannel _connectionsChannel =
+      EventChannel(PlatformChannels.ccConnections);
+
+  // ─────────────────────────── Streams ───────────────────────────
+
+  /// Статус-снапшот (always-on, §2.8): скорость (дельта/интервал, B/s при 1s),
+  /// объём, память, число соединений. Источник watchdog + traffic_bar.
+  Stream<CcStatus> get status => _statusChannel
+      .receiveBroadcastStream()
+      .map((e) => CcStatus.fromMap(_asMap(e)));
+
+  /// Плоский список ВСЕХ узлов (outbound + endpoint, §2.4): tag/type/delay.
+  /// `urlTestOutbound` течёт сюда обратно (источник истины per-node delay).
+  Stream<List<CcOutbound>> get outbounds => _outboundsChannel
+      .receiveBroadcastStream()
+      .map((e) => _asList(e).map((m) => CcOutbound.fromMap(_asMap(m))).toList());
+
+  /// Дерево групп (§2.4): группа → items, selectable/selected.
+  Stream<List<CcGroup>> get groups => _groupsChannel
+      .receiveBroadcastStream()
+      .map((e) => _asList(e).map((m) => CcGroup.fromMap(_asMap(m))).toList());
+
+  /// Снапшот активных соединений (дельты → native-аккумулятор → снапшот, §3.2).
+  Stream<List<CcConnection>> get connections => _connectionsChannel
+      .receiveBroadcastStream()
+      .map((e) =>
+          _asList(e).map((m) => CcConnection.fromMap(_asMap(m))).toList());
+
+  // ─────────────────────── Lifecycle signals ───────────────────────
+  // §2.8 — screen/profiler клиенты поднимаются/гасятся по сигналу из Dart.
+
+  Future<void> connectScreen() => _invoke('ccConnectScreen');
+  Future<void> disconnectScreen() => _invoke('ccDisconnectScreen');
+  Future<void> connectProfiler() => _invoke('ccConnectProfiler');
+  Future<void> disconnectProfiler() => _invoke('ccDisconnectProfiler');
+
+  // ─────────────────────────── Imperatives ───────────────────────────
+
+  /// §4.6 — per-node delay. Возвращает `(delay, error)`. ИНВАРИАНТ: `error` —
+  /// единственный признак провала; `delay==0 && error==''` = успех 0мс.
+  /// `timeoutMs` — миллисекунды (0 → дефолт ядра).
+  Future<CcDelayResult> urlTestOutbound(
+    String tag, {
+    String link = '',
+    int timeoutMs = 0,
+  }) async {
+    final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
+      'ccUrlTestOutbound',
+      {'tag': tag, 'link': link, 'timeoutMs': timeoutMs},
+    );
+    return CcDelayResult.fromMap(_asMap(r ?? const {}));
+  }
+
+  /// §4.7 — снапшот route+DNS правил (диагностика).
+  Future<List<CcRule>> getRules() async {
+    final r = await _methods.invokeMethod<List<dynamic>>('ccGetRules');
+    return (r ?? const []).map((m) => CcRule.fromMap(_asMap(m))).toList();
+  }
+
+  Future<bool> selectOutbound(String group, String tag) async =>
+      await _methods.invokeMethod<bool>(
+          'ccSelectOutbound', {'group': group, 'tag': tag}) ??
+      false;
+
+  Future<bool> closeConnection(String id) async =>
+      await _methods.invokeMethod<bool>('ccCloseConnection', {'id': id}) ??
+      false;
+
+  Future<bool> closeConnections() async =>
+      await _methods.invokeMethod<bool>('ccCloseConnections') ?? false;
+
+  Future<void> _invoke(String method) async {
+    try {
+      await _methods.invokeMethod<void>(method);
+    } on PlatformException {
+      // Канал недоступен (туннель down / сервис не поднят) — не фатально.
+    }
+  }
+
+  static Map<String, dynamic> _asMap(Object? e) {
+    if (e is Map) {
+      return e.map((k, v) => MapEntry(k.toString(), v));
+    }
+    return const {};
+  }
+
+  static List<dynamic> _asList(Object? e) => e is List ? e : const [];
+}
+
+// ═══════════════════════════ Models ═══════════════════════════
+
+/// §3.1 — статус от `writeStatus`. `uplink`/`downlink` — байтовая дельта за
+/// интервал (B/s при interval=1s); `*Total` — накопленный объём.
+class CcStatus {
+  const CcStatus({
+    this.uplink = 0,
+    this.downlink = 0,
+    this.uplinkTotal = 0,
+    this.downlinkTotal = 0,
+    this.memory = 0,
+    this.goroutines = 0,
+    this.connectionsIn = 0,
+    this.connectionsOut = 0,
+  });
+
+  final int uplink;
+  final int downlink;
+  final int uplinkTotal;
+  final int downlinkTotal;
+  final int memory;
+  final int goroutines;
+  final int connectionsIn;
+  final int connectionsOut;
+
+  /// §3.1 — НЕ сумма in+out вслепую (могут двоить); для бейджа активных
+  /// предпочтительнее длина connections-снапшота. Здесь — справочно.
+  int get connectionsTotal => connectionsIn + connectionsOut;
+
+  factory CcStatus.fromMap(Map<String, dynamic> m) => CcStatus(
+        uplink: _int(m['uplink']),
+        downlink: _int(m['downlink']),
+        uplinkTotal: _int(m['uplinkTotal']),
+        downlinkTotal: _int(m['downlinkTotal']),
+        memory: _int(m['memory']),
+        goroutines: _int(m['goroutines']),
+        connectionsIn: _int(m['connectionsIn']),
+        connectionsOut: _int(m['connectionsOut']),
+      );
+}
+
+/// §2.4 — плоский узел из `writeOutbounds` (outbound ИЛИ endpoint).
+class CcOutbound {
+  const CcOutbound({
+    required this.tag,
+    required this.type,
+    required this.urlTestDelay,
+    required this.urlTestTime,
+  });
+
+  final String tag;
+  final String type;
+
+  /// Задержка в мс. 0 = не тестирован / не ответил — различать по `urlTestTime`.
+  final int urlTestDelay;
+
+  /// Unix-время последнего теста (0 = не тестирован).
+  final int urlTestTime;
+
+  factory CcOutbound.fromMap(Map<String, dynamic> m) => CcOutbound(
+        tag: m['tag']?.toString() ?? '',
+        type: m['type']?.toString() ?? '',
+        urlTestDelay: _int(m['urlTestDelay']),
+        urlTestTime: _int(m['urlTestTime']),
+      );
+}
+
+/// §2.4 — группа из `writeGroups` (дерево). `selectable` заменяет `type=='Selector'`,
+/// `selected` заменяет clash-поле `now`.
+class CcGroup {
+  const CcGroup({
+    required this.tag,
+    required this.type,
+    required this.selectable,
+    required this.selected,
+    required this.isExpand,
+    required this.items,
+  });
+
+  final String tag;
+  final String type;
+  final bool selectable;
+  final String selected;
+  final bool isExpand;
+  final List<CcOutbound> items;
+
+  factory CcGroup.fromMap(Map<String, dynamic> m) => CcGroup(
+        tag: m['tag']?.toString() ?? '',
+        type: m['type']?.toString() ?? '',
+        selectable: m['selectable'] == true,
+        selected: m['selected']?.toString() ?? '',
+        isExpand: m['isExpand'] == true,
+        items: (m['items'] is List ? m['items'] as List : const [])
+            .map((e) => CcOutbound.fromMap(CcChannel._asMap(e)))
+            .toList(),
+      );
+}
+
+/// §3.1/§3.2 — соединение из аккумулятора. `closedAt`>0 = закрытое (closed-история).
+class CcConnection {
+  const CcConnection({
+    required this.id,
+    required this.network,
+    required this.domain,
+    required this.destination,
+    required this.rule,
+    required this.uplink,
+    required this.downlink,
+    required this.createdAt,
+    required this.closedAt,
+  });
+
+  final String id;
+  final String network;
+  final String domain;
+  final String destination;
+  final String rule;
+  final int uplink;
+  final int downlink;
+  final int createdAt;
+  final int closedAt;
+
+  bool get isClosed => closedAt > 0;
+
+  factory CcConnection.fromMap(Map<String, dynamic> m) => CcConnection(
+        id: m['id']?.toString() ?? '',
+        network: m['network']?.toString() ?? '',
+        domain: m['domain']?.toString() ?? '',
+        destination: m['destination']?.toString() ?? '',
+        rule: m['rule']?.toString() ?? '',
+        uplink: _int(m['uplink']),
+        downlink: _int(m['downlink']),
+        createdAt: _int(m['createdAt']),
+        closedAt: _int(m['closedAt']),
+      );
+}
+
+/// §4.6 — результат `urlTestOutbound`. Источник истины провала — `error`.
+class CcDelayResult {
+  const CcDelayResult({required this.delay, required this.error});
+
+  final int delay;
+  final String error;
+
+  bool get ok => error.isEmpty;
+
+  /// Маппинг в UI-контракт `lastDelay` (§4.6): ok → delay (вкл. 0мс); fail → -1.
+  int get lastDelayValue => ok ? delay : -1;
+
+  factory CcDelayResult.fromMap(Map<String, dynamic> m) => CcDelayResult(
+        delay: _int(m['delay']),
+        error: m['error']?.toString() ?? '',
+      );
+}
+
+/// §4.7 — правило из `getRules` (route+DNS).
+class CcRule {
+  const CcRule({
+    required this.type,
+    required this.payload,
+    required this.action,
+    required this.isDNS,
+  });
+
+  final String type;
+  final String payload;
+  final String action;
+  final bool isDNS;
+
+  factory CcRule.fromMap(Map<String, dynamic> m) => CcRule(
+        type: m['type']?.toString() ?? '',
+        payload: m['payload']?.toString() ?? '',
+        action: m['action']?.toString() ?? '',
+        isDNS: m['isDNS'] == true,
+      );
+}
+
+int _int(Object? v) => v is int ? v : (v is num ? v.toInt() : 0);
