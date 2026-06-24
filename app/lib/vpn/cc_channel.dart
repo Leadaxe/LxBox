@@ -304,6 +304,11 @@ class CcGroup {
 }
 
 /// §3.1/§3.2 — соединение из аккумулятора. `closedAt`>0 = закрытое (closed-история).
+///
+/// §122 — `uplink`/`downlink` = НАКОПЛЕННЫЙ итог (`getUplinkTotal/DownlinkTotal`),
+/// сколько ВСЕГО передано за соединение. `uplinkDelta`/`downlinkDelta` = байт за
+/// последний тик статуса (мгновенная скорость; у idle = 0). `outbound`/
+/// `outboundType` — нода/тип цепочки (замена Clash `chains`).
 class CcConnection {
   const CcConnection({
     required this.id,
@@ -313,6 +318,11 @@ class CcConnection {
     required this.rule,
     required this.uplink,
     required this.downlink,
+    this.uplinkDelta = 0,
+    this.downlinkDelta = 0,
+    this.outbound = '',
+    this.outboundType = '',
+    this.protocol = '',
     required this.createdAt,
     required this.closedAt,
   });
@@ -322,8 +332,20 @@ class CcConnection {
   final String domain;
   final String destination;
   final String rule;
+
+  /// Накопленный итог за соединение (всего передано). `getUplinkTotal`.
   final int uplink;
   final int downlink;
+
+  /// Байт за последний тик (мгновенная скорость). `getUplink`. 0 у idle.
+  final int uplinkDelta;
+  final int downlinkDelta;
+
+  /// Выбранная нода/тип цепочки (libbox `getOutbound`/`getOutboundType`).
+  final String outbound;
+  final String outboundType;
+  final String protocol;
+
   final int createdAt;
   final int closedAt;
 
@@ -337,6 +359,11 @@ class CcConnection {
         rule: m['rule']?.toString() ?? '',
         uplink: _int(m['uplink']),
         downlink: _int(m['downlink']),
+        uplinkDelta: _int(m['uplinkDelta']),
+        downlinkDelta: _int(m['downlinkDelta']),
+        outbound: m['outbound']?.toString() ?? '',
+        outboundType: m['outboundType']?.toString() ?? '',
+        protocol: m['protocol']?.toString() ?? '',
         createdAt: _int(m['createdAt']),
         closedAt: _int(m['closedAt']),
       );

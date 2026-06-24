@@ -80,6 +80,11 @@ class _ConnectionsViewState extends State<ConnectionsView> {
   bool _accumulate = false;
   bool _loading = true;
 
+  /// §122 — закрытые соединения держим [_closedWindow] (видно недавнюю историю,
+  /// иначе при закрытии всё мгновенно исчезает и «ничего не ясно»). В режиме
+  /// accumulate — без срока (до ручной очистки toggle'ом).
+  static const _closedWindow = Duration(seconds: 30);
+
   @override
   void initState() {
     super.initState();
@@ -89,24 +94,30 @@ class _ConnectionsViewState extends State<ConnectionsView> {
   void _onConnections(List<CcConnection> conns) {
     if (!mounted) return;
     final liveIds = conns.map((c) => c.id).where((id) => id.isNotEmpty).toSet();
+    final now = DateTime.now();
 
-    if (_accumulate) {
-      // Соединения, пропавшие из живого снапшота → закрыты (помечаем + timestamp).
-      for (final id in _byId.keys) {
-        if (id.isNotEmpty && !liveIds.contains(id) && _closedIds.add(id)) {
-          _closedAt[id] = DateTime.now();
+    // Соединения, пропавшие из живого снапшота → закрыты (метим + timestamp).
+    for (final id in _byId.keys.toList()) {
+      if (id.isNotEmpty && !liveIds.contains(id) && _closedIds.add(id)) {
+        _closedAt[id] = now;
+      }
+    }
+    // Свежие данные поверх (живые перетирают; закрытые остаются с прежними
+    // байтами — у CcConnection.closedAt>0 они и так помечены).
+    for (final c in conns) {
+      if (c.id.isNotEmpty) _byId[c.id] = c;
+    }
+    // Истечение закрытых: в обычном режиме — старше окна; в accumulate — никогда.
+    if (!_accumulate) {
+      _closedIds.removeWhere((id) {
+        final at = _closedAt[id];
+        final expired = at == null || now.difference(at) > _closedWindow;
+        if (expired) {
+          _byId.remove(id);
+          _closedAt.remove(id);
         }
-      }
-      // Свежие данные поверх (живые перетирают, закрытые остаются как были).
-      for (final c in conns) {
-        if (c.id.isNotEmpty) _byId[c.id] = c;
-      }
-    } else {
-      _byId
-        ..clear()
-        ..addEntries(conns.where((c) => c.id.isNotEmpty).map((c) => MapEntry(c.id, c)));
-      _closedIds.clear();
-      _closedAt.clear();
+        return expired;
+      });
     }
 
     setState(() => _loading = false);
@@ -148,11 +159,11 @@ class _ConnectionsViewState extends State<ConnectionsView> {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(
             children: [
-              // Toggle: Live (закрытые исчезают) ↔ Accumulate (закрытые серым остаются).
+              // Toggle: 30s-история (закрытые серым ~30с) ↔ Accumulate (навсегда).
               IconButton(
                 tooltip: _accumulate
-                    ? 'Accumulating closed (tap to clear)'
-                    : 'Live (tap to keep closed)',
+                    ? 'Keeping all closed (tap for 30s window)'
+                    : 'Closed kept 30s (tap to keep all)',
                 icon: Icon(
                   _accumulate ? Icons.history_toggle_off : Icons.history,
                 ),
@@ -302,8 +313,18 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                     ),
                   ],
                 ),
-                // Row 2: protocol · rule · duration. (chain/process нет в
-                // CommandClient — §122 ядровый gap.)
+                // Row 2: outbound (нода/цепочка). §122 — getOutbound вместо
+                // Clash chains (process/иконка по-прежнему gap — нет в feed'е).
+                if (conn.outbound.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 22, top: 2),
+                    child: Text(
+                      conn.outbound,
+                      style: TextStyle(fontSize: 11, color: cs.primary),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                // Row 3: protocol · rule · duration.
                 Padding(
                   padding: const EdgeInsets.only(left: 22, top: 2),
                   child: Text(

@@ -391,14 +391,25 @@ class BoxCommandClient {
             while (it.hasNext()) {
                 val c = it.next()
                 // getID() — аббревиатура ЗАГЛАВНАЯ (снято с rc.2 AAR); явные геттеры.
+                // §122 — uplink/downlink (getUplink/getDownlink) = ДЕЛЬТА за тик
+                // (B/s), у idle-соединений = 0. Для отображения «сколько всего
+                // передано» нужны getUplinkTotal/getDownlinkTotal (накопленный
+                // итог за соединение). Раньше показывали дельту → массовые 0/0.
+                // outbound/outboundType — цепочка (chain-инфо есть в Connection,
+                // в отличие от того что считалось ядровым gap'ом).
                 list.add(mapOf(
                     "id" to c.getID(),
                     "network" to c.getNetwork(),
                     "domain" to c.getDomain(),
                     "destination" to c.getDestination(),
                     "rule" to c.getRule(),
-                    "uplink" to c.getUplink(),
-                    "downlink" to c.getDownlink(),
+                    "uplink" to c.getUplinkTotal(),
+                    "downlink" to c.getDownlinkTotal(),
+                    "uplinkDelta" to c.getUplink(),
+                    "downlinkDelta" to c.getDownlink(),
+                    "outbound" to c.getOutbound(),
+                    "outboundType" to c.getOutboundType(),
+                    "protocol" to c.getProtocol(),
                     "createdAt" to c.getCreatedAt(),
                     "closedAt" to c.getClosedAt(),
                 ))
