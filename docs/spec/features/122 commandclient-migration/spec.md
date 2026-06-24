@@ -223,6 +223,8 @@ message URLTestOutboundResponse {
 
 Per-group `link`/`timeout` (§040, `pingUrlFor`/`pingTimeoutFor`) шлются как `link`/`timeout` команды без изменений resolve-chain. История delay — stateless в команде, хранит клиент (`lastDelay`); для узлов-в-группах ядро дополнительно течёт delay в `OutboundGroupItem` через `StoreURLTestHistory` (SPEC 014 §3.2).
 
+**Конвенция (важно при реализации):** `URLTestOutbound` и `GetRules` — **unary-read** RPC (request→response), а НЕ подписки. Им **не заводится `Command*`-константа** (`addCommand(int)`/`setStatusInterval` — только для стримовых `CommandStatus`/`CommandConnections`/…). Это прямые методы `CommandClient`, как `getDeprecatedNotes()`/`getSystemProxyStatus()`. Клиентская обёртка в Dart — `urlTestOutbound(...)` / `rules()` (зеркало ядра), без `Command`-префикса. «Команды 0–5» (счётчик подписок) НЕ меняется — эти два RPC в него не входят.
+
 ### 4a.7 Known-issue: коллизия ключа `lastDelay` между группами (НЕ в скоупе §122)
 
 `lastDelay: Map<tag,ms>` ключуется **только тегом узла** (`home_state.dart:85`), без группы. Но узел входит **во все** selector-группы (`build_config.dart:416-444` суёт `selectorTags` в каждый selector), а группы имеют **разные** ping-настройки (§040: G1→`ya.ru`, G2→`gstatic`). Замер из G2 затирает `lastDelay[node]`, UI в G1 показывает число, померенное чужим endpoint'ом → устаревшее/неверное; фильтр §048 и latency-sort в G1 работают по G2-числам. `setSelectedGroup` (`home_controller.dart:675`) не сбрасывает `lastDelay`; composite-ключа нет.
