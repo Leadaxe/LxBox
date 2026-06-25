@@ -333,6 +333,17 @@ Future<BuildResult> buildConfig({
     applyTunPackages(config, settings.tunApps!);
   }
 
+  // §172 — деградация битых detour-ссылок ПЕРЕД валидацией: detour на
+  // несуществующий outbound (напр. отключённый WARP-target из подписки) →
+  // снимаем поле, нода работает напрямую, а не роняет весь конфиг (как §169
+  // с REALITY). Снятые detour'ы добавляем в emitWarnings (видно юзеру).
+  final healedDetours = healDanglingDetours(config);
+  for (final h in healedDetours) {
+    emitWarnings.add(
+        'Detour убран: outbound "${h.owner}" ссылался на отсутствующий '
+        '"${h.target}" — нода работает напрямую.');
+  }
+
   final validation = validateConfig(config);
   return BuildResult(
     configJson: jsonEncode(config),

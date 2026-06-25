@@ -240,8 +240,8 @@ void main() {
           reason: 'целевой outbound эмитится как prefixed-form "Home WG"');
     });
 
-    test('bare-form override (старый баг) → detour ссылается на '
-        'несуществующий outbound', () async {
+    test('bare-form override (старый баг) → detour деградирует, конфиг валиден '
+        '(§172)', () async {
       final consumer = UserServer(
         id: 'consumer-bad',
         name: 'Consumer',
@@ -267,13 +267,18 @@ void main() {
       final outs = (result.config['outbounds'] as List).cast<Map>();
       final main = outs.firstWhere((o) => o['tag'] == 'Main');
       final tags = outs.map((o) => o['tag']).toSet();
-      // main.detour == 'WG', но такого outbound нет (есть только 'Home WG').
-      expect(main['detour'], 'WG');
+      // §172 — detour 'WG' указывал на несуществующий outbound (есть только
+      // 'Home WG') → healDanglingDetours СНЯЛ его. Нода 'Main' осталась,
+      // работает напрямую. Конфиг валиден (раньше был fatal DanglingDetourRef).
+      expect(main.containsKey('detour'), false,
+          reason: '§172 снял битый detour "WG"');
+      expect(tags.contains('Main'), true, reason: 'нода не выброшена');
       expect(tags.contains('WG'), false,
           reason: 'bare "WG" не эмитится — это и есть §080 баг');
-      // §084 H1 — validator теперь ловит этот dangling detour как fatal.
-      expect(result.validation.hasFatal, true,
-          reason: 'dangling detour "WG" → DanglingDetourRef');
+      expect(result.validation.hasFatal, false,
+          reason: '§172 — битый detour деградировал, не fatal');
+      // warning о снятом detour присутствует.
+      expect(result.emitWarnings.any((w) => w.contains('Detour убран')), true);
     });
 
     test('empty tagPrefix target: display-form == bare (regression-free)',
