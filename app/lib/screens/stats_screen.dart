@@ -42,6 +42,13 @@ class _StatsScreenState extends State<StatsScreen> {
   Map<String, int> _byRule = const {};
   bool _loading = true;
 
+  // §166 — троттл тяжёлого пересчёта connections (byRule/perRule + ruleName в
+  // цикле + setState всего дерева). Снапшоты идут на FAST 0.1с = 10/сек → без
+  // троттла Stats ВИСЛА (10 полных пересборок/ребилдов в секунду на N conns).
+  // 700мс — плавно глазу, но не захлёбывается.
+  static const _connRecalc = Duration(milliseconds: 700);
+  DateTime? _connRecalcAt;
+
   final _cc = CcChannel.instance;
   StreamSubscription<CcStatus>? _statusSub;
   StreamSubscription<List<CcConnection>>? _connSub;
@@ -95,6 +102,16 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   void _onConnections(List<CcConnection> conns) {
+    // §166 — троттл: тяжёлый пересчёт не чаще _connRecalc. Первый снапшот
+    // (_loading) пропускаем сразу (иначе экран пуст при открытии).
+    final now = DateTime.now();
+    if (!_loading &&
+        _connRecalcAt != null &&
+        now.difference(_connRecalcAt!) < _connRecalc) {
+      return;
+    }
+    _connRecalcAt = now;
+
     // §069 — bypass warning обновляем на каждом снапшоте (без отдельного таймера).
     unawaited(_refreshAllowBypass());
 

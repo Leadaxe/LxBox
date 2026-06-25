@@ -33,26 +33,69 @@ bool isOneWayStuck({
   return (upload > 0 && download == 0) || (upload == 0 && download > 0);
 }
 
-/// §122 — чистое «название правила» из полной `rule.String()` ядра.
-/// `getRule()` склеивает тип+значение, напр.:
-///   `rule_set=[ru-domains ru-services geoip-ru]` → `ru-domains` (первый тег)
-///   `domain_suffix=google.com`                   → `google.com`
-///   `ip_cidr=[10.0.0.0/8]`                        → `10.0.0.0/8`
-/// Берём значение после первого `=`; если оно в `[...]` — первый элемент.
-/// Без `=` (или пусто) — строка как есть. Top-level — общая для Conns + Stats.
+/// §166 — человекочитаемое имя правила для Conns/Stats из `rule.String()` ядра.
+///
+/// КЛЮЧЕВОЙ ФАКТ: наш билдер зашивает имя правила (`custom_rules[].name`) как
+/// **тег rule_set'а** (`custom_rules.dart`: `tag: cr.name`). Поэтому ядро в
+/// `connection.rule` отдаёт его как `rule_set=<имя>` — наш title УЖЕ там.
+///
+/// Приоритет:
+///   1. `rule_set=Home wifi`  → `Home wifi` (имя ЦЕЛИКОМ, с пробелами — это title)
+///   2. `rule_set=[ru-domains ru-services]` → `ru-domains` (НАБОР srs → первый тег)
+///   3. `rule=<name>` (если ядро дублирует имя отдельным полем) → целиком
+///   4. одиночное условие `domain_suffix=google.com` → `google.com`
+///   5. без `=` (`final`/`direct`) → строка как есть
+/// Хвост действия `=> route(...)` отрезается. Top-level — общая для Conns+Stats.
 String ruleName(String rule) {
-  final r = rule.trim();
+  var r = rule.trim();
   if (r.isEmpty) return r;
-  final eq = r.indexOf('=');
-  if (eq < 0) return r;
-  var val = r.substring(eq + 1).trim();
-  if (val.startsWith('[') && val.endsWith(']')) {
-    val = val.substring(1, val.length - 1).trim();
+  // Отрезаем хвост действия `=> route(...)` (не часть имени).
+  final arrow = r.indexOf('=>');
+  if (arrow >= 0) r = r.substring(0, arrow).trim();
+  // 1-2. rule_set= несёт наш title-тег (приоритет — он осмысленнее условий).
+  final rs = _kvValue(r, 'rule_set=');
+  if (rs != null && rs.isNotEmpty) {
+    if (rs.startsWith('[')) {
+      var v = rs.substring(1);
+      if (v.endsWith(']')) v = v.substring(0, v.length - 1);
+      return _firstToken(v.trim()); // набор srs → первый тег
+    }
+    return rs; // одно имя rule_set'а целиком (с пробелами)
   }
-  if (val.isEmpty) return r.substring(0, eq); // пустое значение → тип
-  // Набор из нескольких тегов (через пробел/запятую) — берём первый.
-  final firstSep = val.indexOf(RegExp(r'[\s,]'));
-  return firstSep < 0 ? val : val.substring(0, firstSep);
+  // 3. rule=<name> — запасной канал имени.
+  final name = _kvValue(r, 'rule=');
+  if (name != null && name.isNotEmpty) return name;
+  // 4-5. Одиночное условие type=value / строка как есть.
+  final eq = r.indexOf('=');
+  if (eq < 0) return _firstToken(r);
+  var val = r.substring(eq + 1).trim();
+  if (val.startsWith('[')) val = val.substring(1).trim();
+  if (val.endsWith(']')) val = val.substring(0, val.length - 1).trim();
+  if (val.isEmpty) return r.substring(0, eq);
+  return _firstToken(val);
+}
+
+// §166 — regex'ы СТАТИЧЕСКИЕ (компиляция один раз). ruleName вызывается в
+// цикле по всем connections на КАЖДЫЙ снапшот (0.1с на Stats) → компиляция
+// regex на каждый вызов давала фриз UI.
+final _kvBoundary = RegExp(r'\s+\w+=');
+final _tokenSep = RegExp(r'[\s,]');
+
+/// Значение `<key>...` до следующего ` <слово>=` (границы k=v-пары) или конца.
+/// `rule=Home wifi` → `Home wifi` (имя с пробелами сохраняется целиком).
+String? _kvValue(String s, String key) {
+  final i = s.indexOf(key);
+  if (i < 0) return null;
+  final rest = s.substring(i + key.length);
+  // Следующая k=v-пара начинается с ` <ident>=` — обрезаем по ней.
+  final next = rest.indexOf(_kvBoundary);
+  return (next < 0 ? rest : rest.substring(0, next)).trim();
+}
+
+/// Первый токен набора (через пробел/запятую) — `[a b c]` → `a`.
+String _firstToken(String s) {
+  final sep = s.indexOf(_tokenSep);
+  return sep < 0 ? s : s.substring(0, sep);
 }
 
 /// Embeddable view: toolbar + список соединений. Без Scaffold, без AppBar —
@@ -121,8 +164,21 @@ class _ConnectionsViewState extends State<ConnectionsView> {
       });
     }
 
+    // §166 — аккумуляция (closed-tracking выше) идёт КАЖДЫЙ тик (иначе пропустим
+    // закрытие), но ребилд (setState + ruleName/_appIcon по всему списку) —
+    // троттлим: снапшоты на FAST 0.1с=10/сек, без троттла вкладка ВИСЛА.
+    if (!_loading &&
+        _rebuildAt != null &&
+        now.difference(_rebuildAt!) < _rebuildThrottle) {
+      return;
+    }
+    _rebuildAt = now;
     setState(() => _loading = false);
   }
+
+  // §166 — троттл ребилда (см. _onConnections).
+  static const _rebuildThrottle = Duration(milliseconds: 700);
+  DateTime? _rebuildAt;
 
   /// Отсортированный список: новейшие сверху (по createdAt epoch ms).
   List<CcConnection> get _sorted {

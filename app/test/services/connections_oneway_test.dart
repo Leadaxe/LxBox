@@ -243,5 +243,26 @@ void main() {
     test('запятая-разделитель в наборе → первый', () {
       expect(ruleName('rule_set=[a, b, c]'), 'a');
     });
+
+    test('§166 — составное правило → rule_set-имя ЦЕЛИКОМ (наш title)', () {
+      // Наш билдер зашивает name правила как тег rule_set'а → `rule_set=Home wifi`
+      // в строке ядра = title `Home wifi` (с пробелом!). Раньше брал
+      // wifi_ssid=[LexRouteRich2G... → `[LexRouteRich2G`.
+      expect(
+        ruleName(
+            'wifi_ssid=[LexRouteRich2G LexRouteRich5G] wifi_bssid=[24:0f:5e:01:82:de 24:0f:5e:01:82:df] rule_set=Home wifi => route(vpn-3)'),
+        'Home wifi',
+      );
+      expect(ruleName('rule_set=Warp => route(vpn-3)'), 'Warp');
+      expect(ruleName('rule_set=Block Ads => reject'), 'Block Ads');
+    });
+
+    test('§166 — хвост действия `=> route(...)` отрезается', () {
+      expect(ruleName('domain_suffix=google.com => route(direct)'), 'google.com');
+    });
+
+    test('§166 — обрезанная ядром строка (только ведущая `[`)', () {
+      expect(ruleName('rule_set=[LexRouteRich2G LexRouteRich5G'), 'LexRouteRich2G');
+    });
   });
 }
