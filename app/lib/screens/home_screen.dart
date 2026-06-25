@@ -26,7 +26,6 @@ import '../services/debug/bootstrap.dart';
 import '../services/debug/debug_registry.dart';
 import '../services/haptic_service.dart';
 import '../services/nav/home_return_observer.dart';
-import '../services/traffic_profiler.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/update_checker.dart';
 import '../vpn/box_vpn_client.dart';
@@ -120,14 +119,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     DebugRegistry.I.home = _controller;
     DebugRegistry.I.sub = _subController;
     DebugRegistry.I.autoUpdater = _autoUpdater;
-    // §044/§122 — profiler питался Clash `/connections` (с metadata.processPath
-    // для per-app атрибуции). CommandClient `CcConnection` processPath НЕ несёт
-    // → источник временно пуст. Per-app trace/Live деградируют до прокидки
-    // processPath в ядро (отдельная таска). Биндим пустой fetcher, чтобы
-    // профайлер не падал и Debug API /profiler/* отвечали корректно.
-    TrafficProfiler.I.bindRuntime(
-      connections: () async => const <String, dynamic>{'connections': []},
-    );
+    // §168 — profiler берёт connections из CommandClient-стрима напрямую
+    // (CcChannel.connections + profilerClient), источник внутренний. bindRuntime
+    // удалён: пустой Clash-fetcher §122 давал buffer_count=0 (профайлер слеп).
     unawaited(applyDebugApiSettings());
     _controllerInit = _controller.init();
     unawaited(_controllerInit);

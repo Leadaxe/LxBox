@@ -18,9 +18,13 @@
 //      DNS resolves (с CNAME chain'ом), package detection (`router: found
 //      package name: X`) и связку `[conn_id Nms]`. **Primary source** —
 //      каждый `inbound packet connection` log line == event в session'е.
-//   2. Clash API `/connections` polling (5s): supplement для **stats**
-//      (current bytes, duration, active state). Не для discovery новых
-//      events — это закрывает Gap 9 (short-lived TCP).
+//   2. §168 — CommandClient `connections` push-стрим (`CcChannel.connections`):
+//      tcp/udp open/close + per-app атрибуция (`packageName`/`processPath` из
+//      libbox `getProcessInfo()`) + stats (bytes, duration). Подключается через
+//      profilerClient (`connectProfiler()`), который §164-энергомодель НЕ паузит
+//      в фоне → recording живёт при свёрнутом app. Раньше тут был Clash API
+//      `/connections` polling (5s) — выпилен в §122, профайлер остался на
+//      пустом fetcher'е (buffer_count=0), §168 перевёл на CommandClient.
 //
 // Спарка — через conn_id для DNS, через `metadata.process` для конн'ов.
 // DNS resolves строятся в `_DnsAccumulator` по conn_id.
@@ -42,6 +46,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import '../models/debug_entry.dart';
+import '../vpn/cc_channel.dart';
 import 'app_log.dart';
 import 'settings_storage.dart';
 
@@ -52,8 +57,6 @@ part 'traffic_profiler/internal.dart';
 // TrafficProfiler singleton
 // ─────────────────────────────────────────────────────────────────────────
 
-typedef ConnectionsFetcher = Future<Map<String, dynamic>> Function();
-
 class TrafficProfiler extends ChangeNotifier {
   TrafficProfiler._();
   static final TrafficProfiler I = TrafficProfiler._();
@@ -62,9 +65,6 @@ class TrafficProfiler extends ChangeNotifier {
   static const int _maxCompleted = 5;
   static const int _maxEventsPerSession = 50000;
   static const Duration _slidingWindow = Duration(hours: 3);
-  // §048 Принцип 5 — polling supplement, не discovery. 2s → 5s: меньше
-  // CPU, log-stream всё равно ловит каждый conn.
-  static const Duration _connPollInterval = Duration(seconds: 5);
   // §048 Принцип 6 — time-bound TTL для conn-id correlation.
   static const Duration _connIdTtl = Duration(seconds: 30);
   // §141 P3.2b — GC-интервал 5s → 15s: TTL=30s, чистить втрое чаще TTL
@@ -81,16 +81,11 @@ class TrafficProfiler extends ChangeNotifier {
   static const int _unattributedBannerThreshold = 5;
   static const Duration _unattributedBannerWindow = Duration(seconds: 30);
 
-  // ─── Live wiring ──────────────────────────────────────────────────────
-  ConnectionsFetcher? _connectionsFetcher;
-
-  /// Bind the runtime data sources. Should be called once during app
-  /// bootstrap (HomeScreen init) so the profiler знает откуда брать
-  /// /connections snapshot. Без этого `start()` работает но connections
-  /// не собираются (только DNS из логов).
-  void bindRuntime({required ConnectionsFetcher connections}) {
-    _connectionsFetcher = connections;
-  }
+  // ─── Live wiring (§168) ───────────────────────────────────────────────
+  // Источник connection-событий — CommandClient push-стрим. Подписка живёт
+  // пока есть active session ИЛИ global recording; снимается когда оба off.
+  final CcChannel _cc = CcChannel.instance;
+  StreamSubscription<List<CcConnection>>? _ccConnSub;
 
   // ─── State ────────────────────────────────────────────────────────────
   Session? _active;
@@ -136,7 +131,6 @@ class TrafficProfiler extends ChangeNotifier {
   // на global stream / запрос snapshot'а). Detach — когда нет ни active
   // session'а, ни global subscribers'ов.
   VoidCallback? _appLogListener;
-  Timer? _connTimer;
   Timer? _gcTimer;
 
   // §141 P3.1a — leading-edge throttle для notifyListeners (≤60Hz), эталон
@@ -193,10 +187,10 @@ class TrafficProfiler extends ChangeNotifier {
     _globalUnattributedEvents.clear();
     _ensureLogListenerAttached();
     _ensureGcTimerStarted();
-    // System-wide recording тоже опрашивает Clash /connections — без этого
-    // в Live видны только DNS lines из core logs, а TCP/UDP open/close
-    // приходят только через connection poll.
-    _startConnectionPoll();
+    // §168 — system-wide recording слушает CommandClient connections-стрим
+    // (open/close + per-app). Без этого в Live видны только DNS-строки из
+    // core-логов, а tcp/udp open/close приходят только из connections.
+    _attachCcConnections();
     AppLog.I.info('TrafficProfiler: global recording started');
     notifyListeners();
   }
@@ -212,7 +206,7 @@ class TrafficProfiler extends ChangeNotifier {
     _globalRecordingStartedAt = null;
     _maybeDetachLogListener();
     _maybeStopGcTimer();
-    _maybeStopConnectionPoll();
+    _maybeDetachCcConnections();
     AppLog.I.info('TrafficProfiler: global recording stopped');
     notifyListeners();
   }
@@ -269,8 +263,9 @@ class TrafficProfiler extends ChangeNotifier {
     _ensureLogListenerAttached();
     // Стартуем GC timer (no-op если уже запущен).
     _ensureGcTimerStarted();
-    // Стартуем connection poll timer.
-    _startConnectionPoll();
+    // §168 — подписка на CommandClient connections (no-op если уже подписаны
+    // через global recording).
+    _attachCcConnections();
 
     // §048 Принцип 4 — backfill из global rolling buffer.
     _backfillFromGlobalRollingBuffer(session);
@@ -295,9 +290,9 @@ class TrafficProfiler extends ChangeNotifier {
     if (s == null) return null;
     s.finishedAt = DateTime.now();
 
-    // Stop session-specific data sources. Log listener / connection poll /
+    // Stop session-specific data sources. Log listener / CC connections /
     // GC timer остаются running если есть global recording — иначе detach.
-    _maybeStopConnectionPoll();
+    _maybeDetachCcConnections();
     _maybeDetachLogListener();
     _maybeStopGcTimer();
 
@@ -885,70 +880,77 @@ class TrafficProfiler extends ChangeNotifier {
         .toSet();
   }
 
-  // ─── Connections poll (supplement, not discovery) ────────────────────
+  // ─── CommandClient connections (§168) ────────────────────────────────
+  //
+  // Источник tcp/udp open/close + per-app атрибуции — push-стрим
+  // `CcChannel.connections` через profilerClient. profilerClient §164-
+  // энергомодель НЕ паузит в фоне → recording живёт при свёрнутом app.
 
-  void _startConnectionPoll() {
-    _stopConnectionPoll();
-    _connTimer = Timer.periodic(_connPollInterval, (_) => _pollConnections());
-    // Immediate первый прогон чтобы не ждать 5с.
-    Future.microtask(_pollConnections);
+  /// Подписка на CC connections + подъём profilerClient. Идемпотентна
+  /// (active session ИЛИ global recording могут вызвать обе).
+  void _attachCcConnections() {
+    if (_ccConnSub != null) return;
+    // Поднимаем независимый profilerClient (фоновый, §164). Шлёт первый
+    // снапшот сразу + далее push'ом — _ingestCcConnections их обработает.
+    unawaited(_cc.connectProfiler());
+    _ccConnSub = _cc.connections.listen(
+      _ingestCcConnections,
+      // Ошибка стрима (канал недоступен / native не готов) — не валим
+      // recording, следующий снапшот придёт следующим тиком.
+      onError: (Object e, StackTrace _) =>
+          AppLog.I.warning('TrafficProfiler: cc connections stream error: $e'),
+    );
   }
 
-  void _stopConnectionPoll() {
-    _connTimer?.cancel();
-    _connTimer = null;
-  }
-
-  /// Останавливает poll только если ни active session, ни global recording
-  /// — иначе оставляем running. Симметрично `_maybeDetachLogListener`.
-  void _maybeStopConnectionPoll() {
+  /// Снимает подписку + гасит profilerClient — только если ни active
+  /// session, ни global recording. Симметрично `_maybeDetachLogListener`.
+  void _maybeDetachCcConnections() {
     if (_active != null) return;
     if (_globalRecordingActive) return;
-    _stopConnectionPoll();
+    _detachCcConnections();
   }
 
-  Future<void> _pollConnections() async {
+  void _detachCcConnections() {
+    _ccConnSub?.cancel();
+    _ccConnSub = null;
+    unawaited(_cc.disconnectProfiler());
+  }
+
+  /// §168 — обработка снапшота CommandClient connections: эмит tcp/udp
+  /// open для новых conn'ов, close для исчезнувших (closed-detection через
+  /// `_connSnapshots` diff, как раньше делал Clash-poll). Per-app атрибуция
+  /// через `CcConnection.packageName/processPath`.
+  void _ingestCcConnections(List<CcConnection> conns) {
     final s = _active;
-    // Poll работает если есть session ИЛИ global recording. Без обоих
-    // не зачем дёргать Clash API.
+    // Обрабатываем если есть session ИЛИ global recording.
     if (s == null && !_globalRecordingActive) return;
-    final fetcher = _connectionsFetcher;
-    if (fetcher == null) return;
-    Map<String, dynamic> data;
-    try {
-      data = await fetcher();
-    } catch (_) {
-      return; // не падаем — следующий tick попробует снова
-    }
     final now = DateTime.now();
-    final conns = (data['connections'] as List<dynamic>? ?? [])
-        .whereType<Map<String, dynamic>>();
 
     final seenIds = <String>{};
     for (final c in conns) {
-      final id = c['id']?.toString() ?? '';
+      final id = c.id;
       if (id.isEmpty) continue;
+      // §168 — closed-снапшот ядра (closedAt>0) трактуем как «пропал»:
+      // не добавляем в seenIds → попадёт в closed-detection ниже.
+      if (c.isClosed) continue;
       seenIds.add(id);
-      final meta = c['metadata'] as Map<String, dynamic>? ?? {};
-      // Sing-box `find_process: true` возвращает в `metadata.process`/
-      // `processPath` строки вида `"ru.tinkoff.investing (10999)"`.
-      final process = meta['process']?.toString() ?? '';
-      final processPath = meta['processPath']?.toString() ?? '';
+      // CcConnection несёт packageName (для иконки) + processPath (из
+      // libbox getProcessInfo). Для атрибуции берём packageName, иначе путь.
+      final process = c.packageName;
+      final processPath = c.processPath;
       final rawProcess = process.isNotEmpty ? process : processPath;
 
-      final host = meta['host']?.toString() ?? '';
-      final destIp = meta['destinationIP']?.toString() ?? '';
-      final destPort =
-          int.tryParse(meta['destinationPort']?.toString() ?? '') ?? 0;
-      final network = meta['network']?.toString() ?? '';
-      final chains = (c['chains'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          [];
-      final up = (c['upload'] as num?)?.toInt() ?? 0;
-      final down = (c['download'] as num?)?.toInt() ?? 0;
-      final rule = c['rule']?.toString() ?? '';
-      final rulePayload = c['rulePayload']?.toString() ?? '';
+      // destination = "host:port" → host-часть + port-часть.
+      final host = c.domain;
+      final destIp = _ccHostOf(c.destination);
+      final destPort = _ccPortOf(c.destination);
+      final network = c.network;
+      // CC даёт один outbound (не цепочку) — оборачиваем в список chains.
+      final chains = c.outbound.isNotEmpty ? <String>[c.outbound] : <String>[];
+      final up = c.uplink;
+      final down = c.downlink;
+      final rule = c.rule;
+      const rulePayload = ''; // CcConnection не несёт rulePayload.
 
       final prev = _connSnapshots[id];
       if (prev == null) {
@@ -1083,6 +1085,20 @@ class TrafficProfiler extends ChangeNotifier {
         _appendEvent(s, closeEv);
       }
     }
+  }
+
+  /// §168 — host-часть `destination` ("host:port"). IPv6-safe: режем по
+  /// последнему ':'. Без ':' — вся строка.
+  static String _ccHostOf(String destination) {
+    final i = destination.lastIndexOf(':');
+    return i < 0 ? destination : destination.substring(0, i);
+  }
+
+  /// §168 — port из `destination` ("host:port") как int (0 если нет).
+  static int _ccPortOf(String destination) {
+    final i = destination.lastIndexOf(':');
+    if (i < 0 || i == destination.length - 1) return 0;
+    return int.tryParse(destination.substring(i + 1)) ?? 0;
   }
 
   /// Поиск process owner'а по recent DNS resolved IP в окне
@@ -1222,8 +1238,8 @@ class TrafficProfiler extends ChangeNotifier {
     _globalUnattributedEvents.clear();
     _globalRecordingActive = false;
     _globalRecordingStartedAt = null;
-    _connTimer?.cancel();
-    _connTimer = null;
+    _ccConnSub?.cancel();
+    _ccConnSub = null;
     _gcTimer?.cancel();
     _gcTimer = null;
     if (_appLogListener != null) {
@@ -1236,7 +1252,6 @@ class TrafficProfiler extends ChangeNotifier {
     }
     _sessionStreamSinks.clear();
     _globalStreamSinks.clear();
-    _connectionsFetcher = null;
   }
 
   @visibleForTesting
@@ -1244,8 +1259,9 @@ class TrafficProfiler extends ChangeNotifier {
     _processLogLine(line, ts ?? DateTime.now());
   }
 
+  /// §168 — прогнать снапшот CC connections (заменяет pollOnceForTest).
   @visibleForTesting
-  Future<void> pollOnceForTest() => _pollConnections();
+  void ingestForTest(List<CcConnection> conns) => _ingestCcConnections(conns);
 
   @visibleForTesting
   void gcOnceForTest() => _gcStaleConnIds();

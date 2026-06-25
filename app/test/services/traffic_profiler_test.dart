@@ -3,6 +3,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/services/traffic_profiler.dart';
+import 'package:lxbox/vpn/cc_channel.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -115,36 +116,32 @@ void main() {
     });
   });
 
-  group('TrafficProfiler — connection polling', () {
+  group('TrafficProfiler — connection ingest (§168 CommandClient)', () {
     test('new tcp conn for target → tcpOpen event (no issue on open)',
         () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
-      TrafficProfiler.I.bindRuntime(connections: () async => {
-            'connections': [
-              {
-                'id': 'c1',
-                'metadata': {
-                  'process': 'ru.tinkoff.investing',
-                  'host': 'certs.t-bank-app.ru',
-                  'destinationIP': '81.222.127.186',
-                  'destinationPort': '443',
-                  'network': 'tcp',
-                },
-                'chains': ['vless-server', '🇫🇮Финляндия (vpn-1)'],
-                'upload': 0,
-                'download': 0,
-                'rule': 'default',
-                'rulePayload': '',
-              }
-            ],
-          });
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'c1',
+          network: 'tcp',
+          domain: 'certs.t-bank-app.ru',
+          destination: '81.222.127.186:443',
+          rule: 'default',
+          uplink: 0,
+          downlink: 0,
+          outbound: '🇫🇮Финляндия (vpn-1)',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
       final s = TrafficProfiler.I.active!;
       expect(s.events.length, 1);
       final ev = s.events.first;
       expect(ev.kind, TrafficEventKind.tcpOpen);
       expect(ev.domain, 'certs.t-bank-app.ru');
       expect(ev.ip, '81.222.127.186');
+      expect(ev.port, 443);
       // На open issues не вычисляем — оба текущих типа (dnsTimeout,
       // tcpReset) релевантны close/dns-fail event'ам.
       expect(ev.issues, isEmpty);
@@ -152,24 +149,21 @@ void main() {
 
     test('non-target connection ignored', () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
-      TrafficProfiler.I.bindRuntime(connections: () async => {
-            'connections': [
-              {
-                'id': 'c2',
-                'metadata': {
-                  'process': 'org.telegram.messenger',
-                  'host': 'tg.example',
-                  'destinationIP': '5.5.5.5',
-                  'destinationPort': '443',
-                  'network': 'tcp',
-                },
-                'chains': ['direct'],
-                'upload': 0,
-                'download': 0,
-              }
-            ],
-          });
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'c2',
+          network: 'tcp',
+          domain: 'tg.example',
+          destination: '5.5.5.5:443',
+          rule: '',
+          uplink: 0,
+          downlink: 0,
+          outbound: 'direct',
+          packageName: 'org.telegram.messenger',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
       expect(TrafficProfiler.I.active!.events, isEmpty);
     });
 
@@ -179,30 +173,25 @@ void main() {
       // (open отбрасывался _resolveForSession, а close — нет) → в сессии
       // Telegram появлялись verified-tcpClose от youtube/imo и т.п.
       await TrafficProfiler.I.start('ru.tinkoff.investing');
-      var snapshot = {
-        'connections': [
-          {
-            'id': 'foreign1',
-            'metadata': {
-              'process': 'com.google.android.youtube',
-              'host': 'rr3.googlevideo.com',
-              'destinationIP': '74.125.108.232',
-              'destinationPort': '443',
-              'network': 'tcp',
-            },
-            'chains': ['direct'],
-            'upload': 10,
-            'download': 20,
-          }
-        ],
-      };
-      TrafficProfiler.I.bindRuntime(connections: () async => snapshot);
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'foreign1',
+          network: 'tcp',
+          domain: 'rr3.googlevideo.com',
+          destination: '74.125.108.232:443',
+          rule: '',
+          uplink: 10,
+          downlink: 20,
+          outbound: 'direct',
+          packageName: 'com.google.android.youtube',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
       // open чужого — в сессию не попал.
       expect(TrafficProfiler.I.active!.events, isEmpty);
-      // Закрываем его.
-      snapshot = {'connections': []};
-      await TrafficProfiler.I.pollOnceForTest();
+      // Закрываем его (пустой снапшот = conn пропал).
+      TrafficProfiler.I.ingestForTest([]);
       // close тоже НЕ должен попасть (наследует inSession=false).
       expect(TrafficProfiler.I.active!.events, isEmpty,
           reason: 'close чужого conn не должен писаться в session');
@@ -210,58 +199,87 @@ void main() {
 
     test('closed connection emits tcpClose with duration', () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
-      var snapshot = {
-        'connections': [
-          {
-            'id': 'c3',
-            'metadata': {
-              'process': 'ru.tinkoff.investing',
-              'host': 'cdn.t-bank-app.ru',
-              'destinationIP': '193.17.93.194',
-              'destinationPort': '443',
-              'network': 'tcp',
-            },
-            'chains': ['direct-out'],
-            'upload': 100,
-            'download': 200,
-          }
-        ],
-      };
-      TrafficProfiler.I.bindRuntime(connections: () async => snapshot);
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'c3',
+          network: 'tcp',
+          domain: 'cdn.t-bank-app.ru',
+          destination: '193.17.93.194:443',
+          rule: '',
+          uplink: 100,
+          downlink: 200,
+          outbound: 'direct-out',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
       // Now drop it.
-      snapshot = {'connections': []};
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestForTest([]);
       final s = TrafficProfiler.I.active!;
       expect(s.events.length, 2);
       expect(s.events.last.kind, TrafficEventKind.tcpClose);
       expect(s.events.last.duration, isNotNull);
     });
 
+    test('closed connection via closedAt>0 emits tcpClose (§168)', () async {
+      // CC может прислать тот же conn с closedAt>0 (вместо пропадания) —
+      // ingest трактует isClosed как «пропал» → закрываем.
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'c4',
+          network: 'tcp',
+          domain: 'api.t-bank-app.ru',
+          destination: '193.17.93.195:443',
+          rule: '',
+          uplink: 100,
+          downlink: 200,
+          outbound: 'direct-out',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
+      // Тот же conn, но closedAt>0 → ingest НЕ кладёт в seenIds → close.
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'c4',
+          network: 'tcp',
+          domain: 'api.t-bank-app.ru',
+          destination: '193.17.93.195:443',
+          rule: '',
+          uplink: 100,
+          downlink: 200,
+          outbound: 'direct-out',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 1,
+        ),
+      ]);
+      final s = TrafficProfiler.I.active!;
+      expect(s.events.last.kind, TrafficEventKind.tcpClose);
+    });
+
     test('TCP RST early flagged on close (closed <1s, 0 bytes)', () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
-      var snapshot = {
-        'connections': [
-          {
-            'id': 'rst',
-            'metadata': {
-              'process': 'ru.tinkoff.investing',
-              'host': 'blocked.example',
-              'destinationIP': '1.2.3.4',
-              'destinationPort': '443',
-              'network': 'tcp',
-            },
-            'chains': ['direct-out'],
-            'upload': 0,
-            'download': 0,
-          }
-        ],
-      };
-      TrafficProfiler.I.bindRuntime(connections: () async => snapshot);
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'rst',
+          network: 'tcp',
+          domain: 'blocked.example',
+          destination: '1.2.3.4:443',
+          rule: '',
+          uplink: 0,
+          downlink: 0,
+          outbound: 'direct-out',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
       // Close immediately (within 1s, 0 bytes).
-      snapshot = {'connections': []};
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestForTest([]);
       final s = TrafficProfiler.I.active!;
       final closeEvent = s.events.last;
       expect(closeEvent.kind, TrafficEventKind.tcpClose);
@@ -277,24 +295,21 @@ void main() {
           'INFO[0970] [111 0ms] router: found package name: ru.tinkoff.investing');
       TrafficProfiler.I.feedLogLineForTest(
           'INFO[0970] [111 5ms] dns: exchanged A api.tinkoff.ru. 60 IN A 1.1.1.1');
-      TrafficProfiler.I.bindRuntime(connections: () async => {
-            'connections': [
-              {
-                'id': 'c5',
-                'metadata': {
-                  'process': 'ru.tinkoff.investing',
-                  'host': 'api.tinkoff.ru',
-                  'destinationIP': '1.1.1.1',
-                  'destinationPort': '443',
-                  'network': 'tcp',
-                },
-                'chains': ['direct-out'],
-                'upload': 1000,
-                'download': 5000,
-              }
-            ],
-          });
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'c5',
+          network: 'tcp',
+          domain: 'api.tinkoff.ru',
+          destination: '1.1.1.1:443',
+          rule: '',
+          uplink: 1000,
+          downlink: 5000,
+          outbound: 'direct-out',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
       final s = TrafficProfiler.I.active!;
       final d = s.byDomain['api.tinkoff.ru']!;
       expect(d.connections, 1);
@@ -428,25 +443,22 @@ void main() {
 
     test('UID-suffixed package name (com.x (10999)) matches target', () async {
       await TrafficProfiler.I.start('com.android.chrome');
-      // /connections возвращает process с UID в скобках.
-      TrafficProfiler.I.bindRuntime(connections: () async => {
-            'connections': [
-              {
-                'id': 'c1',
-                'metadata': {
-                  'process': 'com.android.chrome (10999)',
-                  'host': 'www.google.com',
-                  'destinationIP': '1.2.3.4',
-                  'destinationPort': '443',
-                  'network': 'tcp',
-                },
-                'chains': ['direct'],
-                'upload': 0,
-                'download': 0,
-              }
-            ],
-          });
-      await TrafficProfiler.I.pollOnceForTest();
+      // CcConnection.packageName может нести UID в скобках (getProcessInfo).
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'c1',
+          network: 'tcp',
+          domain: 'www.google.com',
+          destination: '1.2.3.4:443',
+          rule: '',
+          uplink: 0,
+          downlink: 0,
+          outbound: 'direct',
+          packageName: 'com.android.chrome (10999)',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
       final s = TrafficProfiler.I.active!;
       expect(s.events, isNotEmpty);
       expect(s.events.first.kind, TrafficEventKind.tcpOpen);

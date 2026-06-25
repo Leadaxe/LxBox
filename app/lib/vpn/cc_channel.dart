@@ -221,6 +221,8 @@ class CcChannel {
       await _methods.invokeMethod<void>(method);
     } on PlatformException {
       // Канал недоступен (туннель down / сервис не поднят) — не фатально.
+    } on MissingPluginException {
+      // Плагин не зарегистрирован (юнит-тест / native не готов) — не фатально.
     }
   }
 
