@@ -149,6 +149,12 @@ class CcChannel {
 
   Future<void> connectScreen() => _invoke('ccConnectScreen');
   Future<void> disconnectScreen() => _invoke('ccDisconnectScreen');
+
+  /// §122 — пересоздать screenClient (лечит гонку ядрового `waitForStarted`:
+  /// group-стрим при подключении в фазе STARTING мог пропустить событие STARTED
+  /// → groups:[] «иногда»). Зовётся из watchdog, если после connected groups
+  /// не пришли.
+  Future<void> refreshScreen() => _invoke('ccRefreshScreen');
   Future<void> connectProfiler() => _invoke('ccConnectProfiler');
   Future<void> disconnectProfiler() => _invoke('ccDisconnectProfiler');
 

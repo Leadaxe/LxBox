@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicReference
 ///
 /// **Три клиента (§2.8)** — разный lifecycle под реальные нужды (разведано: что
 /// работает в фоне vs гасится с экраном):
-///  - `statusClient`   — `CommandStatus` + `setStatusInterval(1e8 нс=0.1с)`. **always-on**
+///  - `statusClient`   — `CommandStatus` + `setStatusInterval(1e8=0.1с)`. **always-on**
 ///    пока туннель up. Питает dead-tunnel watchdog + скорость на главном.
 ///  - `screenClient`   — `CommandOutbounds`+`CommandGroup`+`CommandConnections`.
 ///    connect/disconnect по сигналу из Dart (открытие/закрытие экрана узлов/stats/conn).
@@ -49,14 +49,16 @@ class BoxCommandClient {
     companion object {
         private const val TAG = "BoxCommandClient"
 
-        /// §2.3 ИСПРАВЛЕНО — `setStatusInterval` = НАНОСЕКУНДЫ, НЕ миллисекунды.
-        /// Сервер ядра: `time.Duration(request.Interval)` + `time.NewTicker`
-        /// (daemon/started_service.go:374) — Go `time.Duration` это int64 НС.
-        /// Прежнее `1000L` ⇒ `time.Duration(1000)` = 1000нс = 1мкс → стрим
-        /// эмитил статус/connections максимально часто → память «прыгала»,
-        /// лишняя нагрузка. 100мс = живой UI скорости/соединений; память на
-        /// Stats отдельно троттлится в UI (медленная метрика). 0.1с = 1e8 нс.
-        private const val STATUS_INTERVAL_NS = 100_000_000L
+        /// §2.3 — интервал status-стрима (наносекунды: `time.Duration(Interval)`
+        /// на сервере). 1e8 = 0.1с — целевая частота обновления (юзер просил 0.1с).
+        /// Раньше 1e8 «ломал» groups, но КОРЕНЬ groups:[] оказался НЕ в интервале,
+        /// а в опоздавшем `setStatus(Stopped)` при reconnect (перетирал live-state) —
+        /// закрыт native-dedup (BoxService.setStatus) + Dart stale-terminal guard
+        /// (§14.1). Возвращаем 1e8 и проверяем на железе, что регрессии больше нет.
+        /// Остаточная гонка ядрового `waitForStarted` (SubscribeGroups) — отдельно,
+        /// её ловит groups-watchdog (`refreshScreen`, ≤2 ретрая) + pull-to-refresh.
+        /// Мельтешение памяти Stats — UI-throttle (3с), не интервал.
+        private const val STATUS_INTERVAL = 100_000_000L // 1e8 нс = 0.1с
 
         /// Cap очереди эмиттера — drop-newest при переполнении (producer не блокируется).
         /// Эмиттер coalesce'ит до последнего снапшота, так что cap — страховка.
@@ -135,7 +137,7 @@ class BoxCommandClient {
         runCatching {
             val options = CommandClientOptions().apply {
                 addCommand(Libbox.CommandStatus)
-                setStatusInterval(STATUS_INTERVAL_NS) // НАНОСЕКУНДЫ (0.1с)
+                setStatusInterval(STATUS_INTERVAL) // 1e8 нс = 0.1с (§14.1 — проверяем на железе)
             }
             val client = CommandClient(StatusHandler(gen), options)
             client.connect()
@@ -159,6 +161,20 @@ class BoxCommandClient {
             client.connect()
             screenClient.getAndSet(client)?.runCatching { disconnect() }
         }.onFailure { Log.w(TAG, "connectScreen failed (gen=$gen): ${it.message}") }
+    }
+
+    /// §122 — ПЕРЕсоздать screenClient (disconnect+connect), не трогая refcount.
+    /// Лечит гонку в ядровом `waitForStarted` (SubscribeGroups): group-стрим при
+    /// подключении в фазе STARTING может пропустить событие STARTED
+    /// (lost-wakeup: статус читается ДО подписки на serviceStatusObserver) →
+    /// `waitForStarted` висит, группы не шлются (groups:[] «иногда»). Повторный
+    /// connect КОГДА сервис уже STARTED → `waitForStarted` возвращается сразу
+    /// (case STARTED, до подписки) → группы гарантированно приходят.
+    /// Вызывается из Dart, если после connected groups не пришли (watchdog).
+    fun refreshScreen() {
+        // Только если есть активные потребители экрана (refcount>0) — иначе
+        // поднимать screenClient незачем.
+        if (screenRefs.get() > 0) connectScreenClient()
     }
 
     private fun connectProfilerClient() {
@@ -397,6 +413,9 @@ class BoxCommandClient {
                 val c = it.next()
                 // §122 — ProcessInfo (app-attribution): package для иконки +
                 // processPath. getProcessInfo() может быть null/кинуть — best-effort.
+                // (Проверено: ProcessInfo НЕ виноват в groups-регрессии. Корень был
+                // НЕ в интервале и НЕ тут, а в опоздавшем setStatus(Stopped) при
+                // reconnect — закрыт native-dedup + Dart guard, §14.1.)
                 var pkg = ""
                 var processPath = ""
                 runCatching {
@@ -407,10 +426,7 @@ class BoxCommandClient {
                         if (pkgIt != null && pkgIt.hasNext()) pkg = pkgIt.next() ?: ""
                     }
                 }
-                // getID() — аббревиатура ЗАГЛАВНАЯ (снято с rc.2 AAR); явные геттеры.
-                // §122 — uplink/downlink = НАКОПЛЕННЫЙ итог (getUplinkTotal/Total),
-                // не дельта за тик (getUplink — у idle 0 → массовые 0/0).
-                // outbound/outboundType — цепочка (chain-инфо есть в Connection).
+                // uplink/downlink = НАКОПЛЕННЫЙ итог (Total), не дельта за тик.
                 list.add(mapOf(
                     "id" to c.getID(),
                     "network" to c.getNetwork(),

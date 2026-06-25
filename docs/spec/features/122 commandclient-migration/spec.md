@@ -633,6 +633,40 @@ message Rule { string type; string payload; string action; bool isDNS; }
 
 ---
 
+## §14. Пострелизные device-фиксы (после Фазы 1b)
+
+### §14.1 Пустые группы «иногда» после 3-5 реконнектов — КОРЕНЬ
+
+**Симптом:** главный экран изредка пустой (groups/nodes=0) после нескольких stop/start. Снапшот групп **долетает** в Dart (`_onCcGroups`) с корректными данными, но `nodes=0` — значит баг не в данных/фильтре (юнит-тест на реальных данных устройства проходит), а в **перетирании state**.
+
+**Две независимые причины:**
+
+1. **Дребезг `setStatus(Stopped)` (главная).** `BoxService.setStatus` вызывался из нескольких teardown-путей (`doStop`/`doForceStop`/`onRevoke`/exit) **без дедупликации**. При быстром reconnect запоздалый `Stopped` из cleanup'а старой сессии долетал **после** нового `Started`. В Dart он маппится в `disconnected` и проваливался в disconnect-ветку `_handleStatusEvent`, которая **безусловно** обнуляла `ccGroups/groups/nodes` и рвала CC-стримы (`_stopCcStreams` → `resetCaches` + `disconnectScreen`). Восстановления не было: groups-watchdog гейтится `tunnelUp`, а после stale-`disconnected` `tunnelUp==false` → watchdog молча выходил.
+
+2. **Медленный STARTED-wakeup в ядровом `SubscribeGroups` (вторичная).** `waitForStarted()` TOCTOU: подписка в фазе STARTING могла пропустить событие STARTED → разовый снапшот групп не приходил. Это лечится groups-watchdog'ом (`refreshScreen`, ≤2 авто-ретрая) и ручным pull-to-refresh — но **только** если watchdog не убит причиной №1.
+
+**Фикс (две линии):**
+- **Native dedup** в `BoxService.setStatus`: если `status == newStatus && error == null` — no-op (не шлём broadcast, не дёргаем плитку/shortcuts). Убивает дребезг `Stopped→Stopped`/`Started→Started` в корне; заодно снимает лишние refresh TileService/QuickShortcuts.
+- **Dart stale-terminal guard** в disconnect-ветке `_handleStatusEvent`: если `prevTunnel` уже терминальный (`disconnected`/`revoked`), повторный терминал не рвёт стримы/не обнуляет state (обновляется лишь tunnel-поле при `disconnected→revoked`). Defense-in-depth на случай error-несущего повтора, который native-dedup пропускает.
+
+После фикса причина №1 устранена, и watchdog снова живёт полные 2 ретрая при `connected` → причина №2 надёжно покрыта.
+
+**Отвергнуто:** `urlTestObserver` (нездоровый ход — пользователь); debounce терминала по времени (эвристика, «обезьянье тыканье»).
+
+**УТОЧНЕНИЕ по device-логам (00:53-00:54, свежий APK):** корней оказалось ДВА, и они разные:
+- **(A) дребезг `setStatus(Stopped)`** — закрыт native-dedup + Dart-guard (выше). На устройстве подтверждён: реконнект-последовательность `Stopping→Stopped→Starting→Started` чистая, без второго `Stopped`. Держит.
+- **(B) пустой push-снапшот поверх живого (ОСНОВНОЙ).** Ядро (гонка `waitForStarted`/`SubscribeGroups`) изредка эмитит `groups:[]` поверх уже наполненного дерева. `_onCcGroups([])` принимал его → `_applyGroups([])` → `selectorGroupTags=[]` → `groups/nodes` обнулялись, хотя `selected_group=vpn-1` и `active_in_group=нода` оставались (доказательство: `applyGroup` уже отработал на непустом снапшоте, затем пустой push затёр `ccGroups`). На устройстве видно как `nodes` мелькают `95→0`; watchdog видел `[]` и сдавался после 2 ретраев.
+
+**Фикс (B), клиентский, до прихода `getGroups`:** guard в `_onCcGroups` — игнорировать пустой push, если `_state.ccGroups` уже непустой (пустых selector-групп при `connected` с живым трафиком не бывает — это шум гонки, не «групп не стало»). Первый легитимный пустой снапшот (старт, `ccGroups` ещё пуст) проходит. Это корректная защита и сама по себе; ядровой `getGroups`-pull сделает наполнение детерминированным.
+
+Отвергнуто как промежуточный вывод: «снапшот ВСЕГДА доходит корректно» — оказалось неверно, ядро шлёт и пустые снапшоты (корень B).
+
+### §14.2 `setStatusInterval` возвращён на 1e8 (0.1с) — проверка гипотезы
+
+Ранее `1e8` (0.1с) считался причиной groups:[] и был откачен на `1000` (1мкс). Но §14.1 показал: корень — опоздавший `Stopped`, **не** интервал. Поэтому `STATUS_INTERVAL` возвращён на `1e8` (целевая частота 0.1с, как просил юзер) под проверку на железе, что регрессии больше нет. UI-нагрузка от частого тика поглощается троттлами (главный экран `_trafficEmitThrottle`=1с; память Stats `_memoryRefresh`=3с; Stats/Conns берут полный 0.1с-поток). **Статус: ждёт device-подтверждения** (`CE8XX48PCI79U4XG`): прогнать 5+ реконнектов — группы не должны пустеть.
+
+---
+
 > **Железные проверки отложены.** Телефон `CE8XX48PCI79U4XG` сейчас НЕ подключён — все пункты Q1–Q8 (§9) разрешаются на устройстве до закрытия соответствующих фаз; до этого момента статус спеки остаётся Draft.
 >
 > **Сопутствующий обязательный шаг.** Синхронизировать проектный AAR (`app/android/app/libs/libbox.aar`) с релизным `v1.14.0-lx.1-rc.1` (server-less): убедиться, что в `.so` отсутствуют рантайм-символы `(*Server).Start`/`setupMetaAPI`/`clashapi.NewServer` (§1a, AC §12.11). Не блокер миграции, но без него довод мотивации №1 остаётся в conditional-состоянии.

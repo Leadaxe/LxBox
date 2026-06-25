@@ -152,8 +152,18 @@ class _ConnectionDetailSheet extends StatelessWidget {
     final out = <Widget>[];
 
     // Поля по контракту libbox CommandClient (`CcConnection`):
-    // domain/destination/network/rule/uplink/downlink/createdAt/closedAt.
-    // chains/source/processPath/dnsMode ядро по CommandClient не отдаёт.
+    // domain/destination/network/rule/uplink/downlink/createdAt/closedAt +
+    // §122 ProcessInfo (process/package) + outbound/outboundType/protocol.
+
+    // App (§122 — из getProcessInfo). Показываем только если есть данные.
+    if (conn.processPath.isNotEmpty || conn.packageName.isNotEmpty) {
+      out.addAll(_group(context, 'App', [
+        if (conn.processPath.isNotEmpty)
+          _row(context, 'Process', conn.processPath),
+        if (conn.packageName.isNotEmpty)
+          _row(context, 'Package', conn.packageName),
+      ]));
+    }
 
     // Destination
     out.addAll(_group(context, 'Destination', [
@@ -165,11 +175,15 @@ class _ConnectionDetailSheet extends StatelessWidget {
     // Network
     out.addAll(_group(context, 'Network', [
       _row(context, 'Network', conn.network),
+      if (conn.protocol.isNotEmpty) _row(context, 'Protocol', conn.protocol),
     ]));
 
     // Routing
     out.addAll(_group(context, 'Routing', [
       _row(context, 'Rule', conn.rule),
+      if (conn.outbound.isNotEmpty) _row(context, 'Outbound', conn.outbound),
+      if (conn.outboundType.isNotEmpty)
+        _row(context, 'Outbound type', conn.outboundType),
     ]));
 
     // Traffic

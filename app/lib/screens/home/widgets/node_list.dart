@@ -145,7 +145,7 @@ class HomeNodeList extends StatelessWidget {
             ),
           Expanded(
             child: RefreshIndicator(
-              onRefresh: controller.reloadProxies,
+              onRefresh: controller.pullToRefresh,
               // §071: ReorderableListView вместо ListView.separated.
               // - buildDefaultDragHandles: false — мы провайдим свои через
               //   transparent strip на левом 5% края каждого non-pinned ряда.

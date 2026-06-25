@@ -527,6 +527,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "ccDisconnectScreen" -> {
                 BoxService.commandClient?.disconnectScreen(); result.success(true)
             }
+            "ccRefreshScreen" -> {
+                BoxService.commandClient?.refreshScreen(); result.success(true)
+            }
             "ccConnectProfiler" -> {
                 BoxService.commandClient?.connectProfiler(); result.success(true)
             }

@@ -155,6 +155,7 @@ class HomeController extends ChangeNotifier
     _statusSub?.cancel();
     _ccStatusSub?.cancel();
     _ccGroupsSub?.cancel();
+    _groupsWatchdogTimer?.cancel();
     super.dispose();
   }
 
@@ -212,6 +213,23 @@ class HomeController extends ChangeNotifier
       AutomationEventEmitter.I.emitVpnConnected();
     } else if (tunnel == TunnelStatus.disconnected ||
         tunnel == TunnelStatus.revoked) {
+      // §122 — guard от stale-терминала. Если мы УЖЕ в терминальном состоянии
+      // (disconnected/revoked), повторный `Stopped` — это дребезг teardown'а
+      // (несколько setStatus(Stopped)-путей в native) и НЕ должен повторно рвать
+      // CC-стримы/обнулять state. Главный фикс дребезга — native dedup в
+      // BoxService.setStatus; это вторая линия (defense-in-depth) на случай
+      // error-несущего повтора, который native пропускает.
+      if (prevTunnel == TunnelStatus.disconnected ||
+          prevTunnel == TunnelStatus.revoked) {
+        _addDebug(DebugSource.app,
+            '[vpn] stale terminal ignored (tunnel=${tunnel.name} prev=${prevTunnel.name})');
+        // Обновим только tunnel-статус (revoked поверх disconnected — важно для
+        // haptic/UI), но НЕ трогаем groups/nodes/streams.
+        if (tunnel != prevTunnel) _emit(_state.copyWith(tunnel: tunnel));
+        _transientTimeoutTimer?.cancel();
+        _transientTimeoutTimer = null;
+        return;
+      }
       _stopHeartbeat();
       // §141 P1.2b — единый контракт «tunnel down»: отменяем in-flight mass-ping
       // ПЕРЕД гашением канала, симметрично `_onTunnelDead` (heartbeat.dart).
@@ -558,6 +576,45 @@ class HomeController extends ChangeNotifier
     });
     // §2.8 — теперь sink'и стоят → поднимаем screenClient (groups/connections).
     unawaited(_cc.connectScreen());
+    // §122 — groups-watchdog против гонки ядрового `waitForStarted`
+    // (SubscribeGroups): group-стрим при подключении в фазе STARTING может
+    // пропустить событие STARTED (lost-wakeup) → groups:[] «иногда». Если через
+    // паузу группы не пришли — пересоздаём screenClient (тогда сервис уже
+    // STARTED, гонки нет). Несколько попыток с нарастающей задержкой.
+    _startGroupsWatchdog();
+  }
+
+  Timer? _groupsWatchdogTimer;
+  int _groupsRetries = 0;
+  // §122 — максимум 2 авто-ретрая (не висеть). Дальше юзер тянет pull-to-refresh.
+  static const _maxGroupsRetries = 2;
+
+  void _startGroupsWatchdog() {
+    _groupsWatchdogTimer?.cancel();
+    _groupsRetries = 0;
+    _scheduleGroupsCheck();
+  }
+
+  void _scheduleGroupsCheck() {
+    _groupsWatchdogTimer?.cancel();
+    // Задержка: 1.2s, затем 1.8s. Даём ядру встать (STARTED), потом сдаёмся —
+    // дальше ручной pull-to-refresh (надёжнее любого числа авто-попыток).
+    final delay = Duration(milliseconds: 1200 + _groupsRetries * 600);
+    _groupsWatchdogTimer = Timer(delay, () {
+      if (!_state.tunnelUp) return;
+      // Группы уже есть — гонка не сработала, watchdog не нужен.
+      if (_state.ccGroups.isNotEmpty) return;
+      if (_groupsRetries >= _maxGroupsRetries) {
+        _addDebug(DebugSource.app,
+            '[cc] groups empty after $_maxGroupsRetries retries — pull to refresh');
+        return; // не висим: сдаёмся, ждём ручной refresh
+      }
+      _groupsRetries++;
+      _addDebug(DebugSource.app,
+          '[cc] groups empty → refreshScreen (retry $_groupsRetries/$_maxGroupsRetries)');
+      unawaited(_cc.refreshScreen());
+      _scheduleGroupsCheck();
+    });
   }
 
   /// Отменить подписки + опустить `screenClient`. Зовётся на disconnect/dead.
@@ -567,6 +624,8 @@ class HomeController extends ChangeNotifier
     _ccStatusSub = null;
     _ccGroupsSub?.cancel();
     _ccGroupsSub = null;
+    _groupsWatchdogTimer?.cancel();
+    _groupsWatchdogTimer = null;
     _lastCcStatusAt = null;
     // §122 — сбросить replay-кэши, чтобы при следующем connect новый подписчик
     // не получил устаревший снапшот прошлой сессии (мигание старых групп/нод).
@@ -613,6 +672,21 @@ class HomeController extends ChangeNotifier
   /// каждый снапшот ПОЛНОСТЬЮ заменяет `ccGroups` (replace-not-merge, §2.8).
   void _onCcGroups(List<CcGroup> groups) {
     if (!_state.tunnelUp) return;
+    // §122 КОРЕНЬ пустых групп — стабилизация push'а. Ядро (гонка
+    // waitForStarted/SubscribeGroups) ИЗРЕДКА шлёт пустой снапшот groups поверх
+    // уже наполненного дерева — это шум, а НЕ «групп больше нет»: при поднятом
+    // туннеле с живым трафиком selector-группа в конфиге есть всегда. Принять
+    // пустой снапшот = перетереть live `ccGroups/groups/nodes` пустотой
+    // (device-факт: groups мелькают 95→0). Игнорируем пустой push, если уже есть
+    // непустой снапшот. Первый легитимный пустой (старт, ccGroups ещё пуст)
+    // проходит. Детерминированный фикс — ядровой getGroups-pull (ждём релиз);
+    // этот guard — корректная защита и без него (не «обезьянье тыканье»: пустых
+    // групп при connected не бывает).
+    if (groups.isEmpty && _state.ccGroups.isNotEmpty) {
+      _addDebug(DebugSource.app,
+          '[cc] empty groups push ignored (have ${_state.ccGroups.length} live)');
+      return;
+    }
     _applyGroups(groups);
   }
 
@@ -642,12 +716,26 @@ class HomeController extends ChangeNotifier
     unawaited(applyGroup(initial));
   }
 
-  /// Pull-refresh (RefreshIndicator) / переприменение после switchNode|
-  /// groupUrltest. §122 — данные уже текут стримом; здесь лишь пере-применяем
-  /// логику выбора группы поверх ПОСЛЕДНЕГО снапшота групп.
+  /// Переприменение после switchNode|groupUrltest. §122 — данные текут стримом;
+  /// здесь лишь пере-применяем логику выбора группы поверх ПОСЛЕДНЕГО снапшота.
   @override
   Future<void> reloadProxies() async {
     if (!_state.tunnelUp) return;
+    _applyGroups(_state.ccGroups);
+  }
+
+  /// §122 — ручной pull-to-refresh (свайп вниз на списке нод). ПРИНУДИТЕЛЬНО
+  /// пересоздаёт screenClient (`refreshScreen`) — это лечит гонку ядрового
+  /// `waitForStarted` (groups:[] «иногда»): на повторном подключении сервис уже
+  /// STARTED, группы гарантированно придут. Надёжнее любого числа авто-ретраев.
+  Future<void> pullToRefresh() async {
+    if (!_state.tunnelUp) {
+      _applyGroups(_state.ccGroups);
+      return;
+    }
+    await _cc.refreshScreen();
+    // Дать ядру переслать снапшот groups; стрим обновит state сам.
+    await Future<void>.delayed(const Duration(milliseconds: 600));
     _applyGroups(_state.ccGroups);
   }
 

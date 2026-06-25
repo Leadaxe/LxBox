@@ -479,6 +479,17 @@ class BoxService(
     }
 
     private fun setStatus(newStatus: VpnStatus, error: String? = null) {
+        // §122 — дедупликация. Несколько teardown-путей (doStop/doForceStop/
+        // onRevoke/exit) могут выстрелить `setStatus(Stopped)` повторно, в т.ч.
+        // запоздалый `Stopped` ПОСЛЕ нового `Started` при быстром reconnect.
+        // Без guard'а такой stale-broadcast долетал в Dart как `disconnected` и
+        // обнулял live-state (groups/nodes пустели «иногда»). Идемпотентный
+        // повтор того же статуса без error — no-op (не шлём broadcast, не дёргаем
+        // плитку/shortcuts). error-несущий повтор пропускаем (важно для UI).
+        if (status == newStatus && error == null) {
+            Log.d(TAG, "[vpn] setStatus(${newStatus.name}) — same status, dedup (no broadcast)")
+            return
+        }
         Log.d(TAG, "[vpn] setStatus(${newStatus.name})${if (error != null) " error=$error" else ""} — sendBroadcast")
         status = newStatus
         BoxVpnService.setCurrentStatus(newStatus)
