@@ -38,6 +38,18 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
   final List<TrafficEvent> _events = [];
   Timer? _ticker; // для refresh «Recording 02:34» каждую секунду
 
+  // §170 — троттл тяжёлой пересборки списка из global buffer (clear+addAll до
+  // 3000 + _trackApp в цикле + setState). SSE-события на FAST-стриме идут
+  // десятками/сек → без троттла сотни полных ребилдов/сек = фриз и краш
+  // (watchdog/память). Окно мерим от КОНЦА отработанной пересборки, не от
+  // старта: иначе на медленном пересчёте следующий тик наслаивался бы. Буфер
+  // копится в профайлере и без UI-пересборки — события не теряются, отстаёт
+  // только отрисовка (≤700мс). Тот же приём что в stats_screen (§166/§170).
+  static const _rebuildThrottle = Duration(milliseconds: 700);
+  DateTime? _rebuiltAt;
+  bool _pendingRebuild = false;
+  Timer? _rebuildTimer;
+
   // System-wide app pre-фильтр (мульти-выбор пакетов). TraceExplorer о нём
   // не знает — применяем здесь до передачи событий.
   final Set<String> _appFilter = {}; // empty = no filter
@@ -88,8 +100,33 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
     if (msg['event'] != 'traffic_event') return;
     final data = msg['data'];
     if (data is! Map) return;
-    // Через SSE приходит JSON; проще пересчитать snapshot из global buffer'а
-    // на каждый tick (O(N), N ≤ 3000). Пауза отображения — в TraceExplorer.
+    // §170 — троттл: пересборка не чаще _rebuildThrottle, окно от КОНЦА прошлой
+    // (метка ставится после _rebuildFromBuffer), не от старта. На FAST-стриме
+    // события идут десятками/сек; пересборка списка (clear+addAll ≤3000 +
+    // _trackApp + setState) на каждое = захлёбывание. Буфер копится в профайлере
+    // и без UI-пересборки — событие не теряется, отстаёт ≤_rebuildThrottle.
+    final now = DateTime.now();
+    if (_rebuiltAt != null &&
+        now.difference(_rebuiltAt!) < _rebuildThrottle) {
+      // В окне — отложим один trailing-ребилд, чтобы последнее событие дошло.
+      if (!_pendingRebuild) {
+        _pendingRebuild = true;
+        final wait = _rebuildThrottle - now.difference(_rebuiltAt!);
+        _rebuildTimer = Timer(wait, () {
+          _pendingRebuild = false;
+          if (mounted) _rebuildFromBuffer();
+        });
+      }
+      return;
+    }
+    _rebuildFromBuffer();
+  }
+
+  /// Пересобрать локальный снимок из global rolling buffer'а профайлера.
+  /// Метка _rebuiltAt ставится В КОНЦЕ — окно троттла отсчитывается от
+  /// завершения работы, не от старта.
+  void _rebuildFromBuffer() {
+    if (!mounted) return;
     setState(() {
       final fresh = TrafficProfiler.I.globalRollingBuffer;
       _events
@@ -99,6 +136,7 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
         _trackApp(e);
       }
     });
+    _rebuiltAt = DateTime.now();
   }
 
   @override
@@ -106,6 +144,7 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
     _sub?.cancel();
     TrafficProfiler.I.removeListener(_onProfilerChanged);
     _ticker?.cancel();
+    _rebuildTimer?.cancel();
     super.dispose();
   }
 

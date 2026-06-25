@@ -102,15 +102,17 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   void _onConnections(List<CcConnection> conns) {
-    // §166 — троттл: тяжёлый пересчёт не чаще _connRecalc. Первый снапшот
-    // (_loading) пропускаем сразу (иначе экран пуст при открытии).
+    // §166/§170 — троттл: тяжёлый пересчёт не чаще _connRecalc. Окно мерим от
+    // КОНЦА отработанного пересчёта (метка ставится после setState), НЕ от
+    // старта — иначе на медленном железе, где сам пересчёт длится дольше
+    // _connRecalc, следующий тик видел бы «окно истекло» сразу и наслаивал
+    // пересчёты, не разгребая очередь. Первый снапшот (_loading) — сразу.
     final now = DateTime.now();
     if (!_loading &&
         _connRecalcAt != null &&
         now.difference(_connRecalcAt!) < _connRecalc) {
       return;
     }
-    _connRecalcAt = now;
 
     // §069 — bypass warning обновляем на каждом снапшоте (без отдельного таймера).
     unawaited(_refreshAllowBypass());
@@ -162,6 +164,9 @@ class _StatsScreenState extends State<StatsScreen> {
       _groups = perRule;
       _loading = false;
     });
+    // §170 — метка ставится ПОСЛЕ пересчёта: следующее окно _connRecalc
+    // отсчитывается от конца этой работы, а не от старта.
+    _connRecalcAt = DateTime.now();
   }
 
   /// Порт из "host:port" — часть после последнего ':' (IPv6-safe: берём хвост).

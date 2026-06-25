@@ -192,7 +192,8 @@ class BoxCommandClient {
         disconnectClient(statusClient, "shutdownAll")
         disconnectClient(screenClient, "shutdownAll")
         disconnectClient(profilerClient, "shutdownAll")
-        connectionsAccumulator.set(null)
+        screenAccumulator.set(null)
+        profilerAccumulator.set(null)
     }
 
     // ═══════════════════════ connect helpers ═══════════════════════
@@ -216,7 +217,7 @@ class BoxCommandClient {
 
     private fun connectScreenClient() {
         val gen = screenGen.incrementAndGet()
-        ensureAccumulator()
+        ensureAccumulator(screenAccumulator)
         runCatching {
             val options = CommandClientOptions().apply {
                 addCommand(Libbox.CommandOutbounds)
@@ -231,7 +232,7 @@ class BoxCommandClient {
 
     private fun connectProfilerClient() {
         val gen = profilerGen.incrementAndGet()
-        ensureAccumulator()
+        ensureAccumulator(profilerAccumulator)
         runCatching {
             val options = CommandClientOptions().apply {
                 addCommand(Libbox.CommandConnections)
@@ -349,16 +350,25 @@ class BoxCommandClient {
         runCatching { anyClient()?.closeConnections(); true }
             .getOrElse { Log.w(TAG, "closeConnections failed: ${it.message}"); false }
 
-    // ═══════════════════════ Native Connections accumulator ═══════════════════════
+    // ═══════════════════════ Native Connections accumulators ═══════════════════════
     // §3.2 — connections приходят ДЕЛЬТАМИ (writeConnectionEvents), не снапшотом.
-    // Аккумулятор держится в Kotlin, эмитит в Dart полный снапшот. refcount под
-    // screenClient+profilerClient (оба на CommandConnections).
+    // Аккумулятор держится в Kotlin, эмитит в Dart полный снапшот.
+    //
+    // §170 — ОТДЕЛЬНЫЙ Connections на КАЖДЫЙ клиент (screen / profiler). Раньше
+    // был ОДИН общий → screenClient и profilerClient (оба на CommandConnections)
+    // дёргали `applyEvents`/`filterState`/`iterator` одного `Connections` из ДВУХ
+    // независимых gRPC-горутин ядра → ядро падало `fatal error: concurrent map
+    // iteration and map write` (libbox command_types.go:170, ApplyEvents по
+    // connectionMap без мьютекса) → SIGABRT, весь процесс. Два аккумулятора =
+    // две независимые map = горутины не пересекаются, гонки нет. Оба эмитят в
+    // один ccConnectionsSink (Dart broadcast, SnapshotEmitter coalesce'ит дубль
+    // когда Stats+Live открыты разом — безвредно).
+    private val screenAccumulator = AtomicReference<Connections?>(null)
+    private val profilerAccumulator = AtomicReference<Connections?>(null)
 
-    private val connectionsAccumulator = AtomicReference<Connections?>(null)
-
-    private fun ensureAccumulator() {
-        if (connectionsAccumulator.get() == null) {
-            runCatching { connectionsAccumulator.compareAndSet(null, Connections()) }
+    private fun ensureAccumulator(ref: AtomicReference<Connections?>) {
+        if (ref.get() == null) {
+            runCatching { ref.compareAndSet(null, Connections()) }
                 .onFailure { Log.w(TAG, "ensureAccumulator failed: ${it.message}") }
         }
     }
@@ -446,14 +456,14 @@ class BoxCommandClient {
         }
 
         override fun writeConnectionEvents(message: ConnectionEvents?) {
-            applyConnectionEvents(message, screenGen, gen)
+            applyConnectionEvents(message, screenGen, gen, screenAccumulator)
         }
     }
 
     /// profilerClient — только connections (для §048 per-app live).
     private inner class ProfilerHandler(gen: Int) : BaseHandler(gen) {
         override fun writeConnectionEvents(message: ConnectionEvents?) {
-            applyConnectionEvents(message, profilerGen, gen)
+            applyConnectionEvents(message, profilerGen, gen, profilerAccumulator)
         }
     }
 
@@ -468,11 +478,16 @@ class BoxCommandClient {
     /// все «created»-дельты до подписки были потеряны и аккумулятор пуст.
     /// Фикс: накапливать ВСЕГДА (пока screenClient жив), эмитить — только если
     /// есть Dart-подписчик (sink). Тогда Stats при подписке получит ПОЛНЫЙ снапшот.
-    private fun applyConnectionEvents(message: ConnectionEvents?, genRef: AtomicInteger, gen: Int) {
+    private fun applyConnectionEvents(
+        message: ConnectionEvents?,
+        genRef: AtomicInteger,
+        gen: Int,
+        accRef: AtomicReference<Connections?>,
+    ) {
         runCatching {
             if (gen != genRef.get()) return
             val events = message ?: return
-            val acc = connectionsAccumulator.get() ?: run { ensureAccumulator(); connectionsAccumulator.get() } ?: return
+            val acc = accRef.get() ?: run { ensureAccumulator(accRef); accRef.get() } ?: return
             // applyEvents учитывает getReset() внутри (replace при reset). ВСЕГДА —
             // даже без Dart-подписчика, иначе пропуск дельты ломает аккумулятор.
             acc.applyEvents(events)
