@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/screens/connections_screen.dart';
 import 'package:lxbox/services/process_name.dart';
+import 'package:lxbox/services/rule_name_resolver.dart';
 
 /// §153 — тесты эвристики `isOneWayStuck` (подсветка зависших соединений).
 ///
@@ -214,55 +216,70 @@ void main() {
     });
   });
 
-  group('ruleName — чистое имя правила (§122)', () {
-    test('rule_set=[...] → первый тег набора', () {
-      expect(ruleName('rule_set=[ru-domains ru-services geoip-ru]'),
-          'ru-domains');
-      expect(ruleName('rule_set=[geosite-google]'), 'geosite-google');
-    });
+  group('§165 RuleNameResolver — справочник c.rule → title', () {
+    setUp(() => RuleNameResolver.I.clear());
+    tearDown(() => RuleNameResolver.I.clear());
 
-    test('type=value → значение', () {
-      expect(ruleName('domain_suffix=google.com'), 'google.com');
-      expect(ruleName('ip_cidr=[10.0.0.0/8]'), '10.0.0.0/8');
-    });
+    CustomRuleInline rule(String name, {
+      List<String> suffixes = const [],
+      List<String> domains = const [],
+      List<String> ssids = const [],
+      List<String> bssids = const [],
+    }) =>
+        CustomRuleInline(
+          name: name,
+          enabled: true,
+          domains: domains,
+          domainSuffixes: suffixes,
+          wifiSsids: ssids,
+          wifiBssids: bssids,
+          outbound: 'vpn-1',
+        );
 
-    test('без `=` → строка как есть', () {
-      expect(ruleName('direct'), 'direct');
-      expect(ruleName('final'), 'final');
-    });
-
-    test('пустое значение после `=` → тип', () {
-      expect(ruleName('protocol='), 'protocol');
-    });
-
-    test('пустая строка → пустая', () {
-      expect(ruleName(''), '');
-      expect(ruleName('   '), '');
-    });
-
-    test('запятая-разделитель в наборе → первый', () {
-      expect(ruleName('rule_set=[a, b, c]'), 'a');
-    });
-
-    test('§166 — составное правило → rule_set-имя ЦЕЛИКОМ (наш title)', () {
-      // Наш билдер зашивает name правила как тег rule_set'а → `rule_set=Home wifi`
-      // в строке ядра = title `Home wifi` (с пробелом!). Раньше брал
-      // wifi_ssid=[LexRouteRich2G... → `[LexRouteRich2G`.
+    test('матч по условиям → title (даже при обрезке списка ядром)', () {
+      RuleNameResolver.I.setRules([
+        rule('Home wifi',
+            suffixes: ['a.com', 'b.com', 'c.com', 'd.com', 'e.com'],
+            ssids: ['LexRouteRich2G', 'LexRouteRich5G']),
+      ]);
+      // Ядро обрезало suffix-список до 3+`...` — но префикс совпадает.
       expect(
         ruleName(
-            'wifi_ssid=[LexRouteRich2G LexRouteRich5G] wifi_bssid=[24:0f:5e:01:82:de 24:0f:5e:01:82:df] rule_set=Home wifi => route(vpn-3)'),
+            'domain_suffix=[a.com b.com c.com...] wifi_ssid=[LexRouteRich2G LexRouteRich5G] => route(vpn-1)'),
         'Home wifi',
       );
-      expect(ruleName('rule_set=Warp => route(vpn-3)'), 'Warp');
-      expect(ruleName('rule_set=Block Ads => reject'), 'Block Ads');
     });
 
-    test('§166 — хвост действия `=> route(...)` отрезается', () {
-      expect(ruleName('domain_suffix=google.com => route(direct)'), 'google.com');
+    test('нормализация: лишние пробелы/переносы не ломают матч', () {
+      RuleNameResolver.I.setRules([
+        rule('Block Ads', suffixes: ['ads.com', 'track.com']),
+      ]);
+      expect(
+        ruleName('domain_suffix=[ads.com   track.com]\n => reject'),
+        'Block Ads',
+      );
     });
 
-    test('§166 — обрезанная ядром строка (только ведущая `[`)', () {
-      expect(ruleName('rule_set=[LexRouteRich2G LexRouteRich5G'), 'LexRouteRich2G');
+    test('правило не найдено → fallback final', () {
+      RuleNameResolver.I.setRules([rule('Home wifi', suffixes: ['a.com'])]);
+      expect(ruleName('domain=[unknown.xyz]'), isNot('Home wifi'));
+      expect(ruleName('final'), 'final');
+      expect(ruleName(''), 'final');
+    });
+
+    test('кэш: повторный c.rule → тот же результат (быстрый путь)', () {
+      RuleNameResolver.I.setRules([rule('Warp', suffixes: ['warp.test'])]);
+      const s = 'domain_suffix=warp.test => route(vpn-1)';
+      final first = ruleName(s);
+      final second = ruleName(s);
+      expect(first, 'Warp');
+      expect(second, 'Warp');
+    });
+
+    test('fallback rule_set=<tag> когда справочник пуст', () {
+      // setRules не вызван (пустой справочник) → fallback на rule_set-тег.
+      expect(ruleName('rule_set=SomeTag => route(vpn-1)'), 'SomeTag');
+      expect(ruleName('rule_set=[ru-domains ru-services]'), 'ru-domains');
     });
   });
 }

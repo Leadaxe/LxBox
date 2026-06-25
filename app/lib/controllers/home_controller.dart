@@ -14,6 +14,7 @@ import '../models/home_state.dart';
 import '../services/app_log.dart';
 import '../services/automation/event_emitter.dart';
 import '../services/error_format.dart';
+import '../services/rule_name_resolver.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
 import '../services/haptic_service.dart';
@@ -203,6 +204,11 @@ class HomeController extends ChangeNotifier
       ));
       // §122 — рантайм-данные текут из CommandClient-стримов (status/groups).
       _startCcStreams();
+      // §165 — наполнить резолвер имён правил из custom_rules (для Stats/Conns
+      // «Traffic by Rule»: c.rule ядра → title правила). Конфиг уже актуален
+      // (раз connected) → правила те же, что зашиты в running-конфиг.
+      unawaited(SettingsStorage.getCustomRules()
+          .then((r) => RuleNameResolver.I.setRules(r)));
       _startHeartbeat();
       _heartbeatFailNotified = false;
       HapticService.I.onVpnConnected();
@@ -242,6 +248,8 @@ class HomeController extends ChangeNotifier
       // §122 — гасим CommandClient-стримы и screenClient (disconnectScreen).
       // На следующем `connected` пересоберём (`_startCcStreams`).
       _stopCcStreams();
+      // §165 — сброс кэша имён правил (правила могут смениться к след. запуску).
+      RuleNameResolver.I.clear();
       final reason = tunnel == TunnelStatus.revoked
           ? 'VPN revoked by another app'
           : (event.errorReason != null ? 'Stopped: ${event.errorReason}' : '');
