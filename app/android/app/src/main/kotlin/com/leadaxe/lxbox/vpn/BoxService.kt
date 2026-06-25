@@ -683,7 +683,15 @@ class BoxService(
         }
     }
 
-    private val ansiEscapeRe = Regex("\\[[0-9;]*[A-Za-z]")
+    // §171 — ANSI-strip. Sing-box оборачивает уровень и conn_id в ГОЛЫЕ
+    // ESC-байты (`<ESC>`), НЕ в классические CSI-цвета: реальная строка =
+    // `<ESC>INFO<ESC>[0617] [<ESC>759645927<ESC> 20ms] dns: exchanged ...`.
+    // Старый паттерн `\[[0-9;]*[A-Za-z]` искал `[…<letter>` — голый ESC не ловил
+    // вообще, и `<ESC>` доезжали до Dart, ломая DNS-regex профайлера
+    // (`\[(\d+)` не матчит `[` + ESC). Теперь срезаем: полные CSI-последователь-
+    // ности (`ESC[…m`) И любые одиночные ESC-байты. Скобки `[0617]`/`[connId ms]`
+    // (НЕ ANSI, нужны парсеру) сохраняются.
+    private val ansiEscapeRe = Regex("\\u001B\\[[0-9;]*[A-Za-z]|\\u001B")
     private val traceDebugRe = Regex("\\b(TRACE|DEBUG)\\b")
 
     /// Cap размера очереди — `4096 * ~80 chars ≈ 320KB` worst case в queue.
