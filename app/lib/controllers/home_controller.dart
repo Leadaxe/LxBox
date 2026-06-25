@@ -964,6 +964,10 @@ class HomeController extends ChangeNotifier
   /// таймер не создаёт. Поэтому на resume рестартуем явно (см. `_resyncOnResume`).
   void onAppPaused() {
     _stopHeartbeat();
+    // §164 — энергомодель: в фоне UI не виден → гасим status+screen CC-клиенты
+    // (0 тиков/0 drain). profilerClient НЕ трогаем (recording живёт в фоне).
+    // Выключение VPN в фоне ловит нативный broadcast (не CC) → не слепнем.
+    if (_state.tunnelUp) unawaited(_cc.pauseClients());
   }
 
   Future<void> _resyncOnResume() async {
@@ -977,6 +981,10 @@ class HomeController extends ChangeNotifier
     } catch (e) {
       _addDebug(DebugSource.app, '[vpn] onAppResumed pull error: $e');
     }
+    // §164 — возврат из фона: поднимаем status(NORMAL)+screen(если потребители
+    // живы). Делаем ПОСЛЕ resync статуса — если туннель за время фона лёг,
+    // _handleStatusEvent уже погасил CC через _stopCcStreams, и resume не нужен.
+    if (_state.tunnelUp) unawaited(_cc.resumeClients());
     // §141 P0.2 — heartbeat был остановлен на paused; если туннель всё ещё жив,
     // перезапускаем таймер и делаем немедленный тик (подтянуть свежий traffic
     // сразу, не ждать первые 20с). `_resyncOnResume` мог уже синхронизировать

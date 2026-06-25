@@ -28,11 +28,13 @@ import java.util.concurrent.atomic.AtomicReference
 ///
 /// **Три клиента (§2.8)** — разный lifecycle под реальные нужды (разведано: что
 /// работает в фоне vs гасится с экраном):
-///  - `statusClient`   — `CommandStatus` + `setStatusInterval(1e8=0.1с)`. **always-on**
-///    пока туннель up. Питает dead-tunnel watchdog + скорость на главном.
+///  - `statusClient`   — `CommandStatus` + `setStatusInterval`. Foreground пока
+///    туннель up; §164 спит в фоне (pauseStatus). NORMAL 0.5с (главный) / FAST
+///    0.1с (Stats). Питает скорость в шапке + Stats-счётчики.
 ///  - `screenClient`   — `CommandOutbounds`+`CommandGroup`+`CommandConnections`.
-///    connect/disconnect по сигналу из Dart (открытие/закрытие экрана узлов/stats/conn).
-///  - `profilerClient` — `CommandConnections`. connect/disconnect по recording (§048).
+///    refcount по открытию экрана узлов/stats/conn; §164 спит в фоне (pauseScreen).
+///  - `profilerClient` — `CommandConnections`. connect/disconnect по recording
+///    (§048). ЕДИНСТВЕННЫЙ живёт в фоне (запись не прерывать). См. feature 123.
 ///
 /// **Подписка в gomobile-фасаде** = `CommandClientOptions.addCommand(int)` + колбэки
 /// `CommandClientHandler.write*` (НЕ прямые `subscribe*`-методы — их в AAR нет).
@@ -50,14 +52,15 @@ class BoxCommandClient {
     companion object {
         private const val TAG = "BoxCommandClient"
 
-        /// §2.3 — интервал status-стрима (наносекунды: `time.Duration(Interval)`
-        /// на сервере). 1e8 = 0.1с — целевая частота обновления (юзер просил 0.1с).
-        /// КОРЕНЬ groups:[] был НЕ в интервале: (1) опоздавший `setStatus(Stopped)`
-        /// при reconnect (перетирал live-state) — закрыт native-dedup + Dart
-        /// stale-guard; (2) потерянный/пустой стартовый push групп — закрыт
-        /// детерминированным unary `getGroups`-pull (SPEC015, см. `getGroups()`).
-        /// Мельтешение памяти Stats — UI-throttle (3с), не интервал.
-        private const val STATUS_INTERVAL = 100_000_000L // 1e8 нс = 0.1с
+        /// §163 — интервал status-стрима (наносекунды: `time.Duration(Interval)`
+        /// на сервере). ДВЕ частоты + пауза (энергосбережение):
+        ///  - FAST (0.1с) — когда открыт Stats-экран (плавная статистика).
+        ///  - NORMAL (0.5с) — главный экран (цифра скорости в шапке; 0.5с глазу
+        ///    достаточно, в 5× меньше gRPC+IPC+EventChannel-marshal тиков).
+        ///  - пауза — в фоне (onAppPaused): statusClient гасится, 0 тиков, 0 drain.
+        /// Корень groups:[] был НЕ в интервале (закрыт dedup+stale-guard+getGroups-pull).
+        private const val STATUS_INTERVAL_FAST = 100_000_000L   // 1e8 нс = 0.1с
+        private const val STATUS_INTERVAL_NORMAL = 500_000_000L  // 5e8 нс = 0.5с
 
         /// Cap очереди эмиттера — drop-newest при переполнении (producer не блокируется).
         /// Эмиттер coalesce'ит до последнего снапшота, так что cap — страховка.
@@ -86,16 +89,51 @@ class BoxCommandClient {
 
     // ═══════════════════════ Public lifecycle API ═══════════════════════
 
-    /// Поднять always-on `statusClient`. Вызывать ПОСЛЕ `BoxService.startCommandServer()`
+    /// §163 — текущий интервал status-стрима (для reconnect-backoff восстановить
+    /// ту же частоту). По умолчанию NORMAL (0.5с) — главный экран. @Volatile:
+    /// читается/пишется из разных потоков (lifecycle / reconnect).
+    @Volatile private var statusIntervalNs = STATUS_INTERVAL_NORMAL
+
+    /// §163 — флаг паузы: в фоне statusClient гашен, реконнект-петля не поднимает.
+    @Volatile private var statusPaused = false
+
+    /// Поднять `statusClient`. Вызывать ПОСЛЕ `BoxService.startCommandServer()`
     /// и когда сервис в статусе `Started` (сокет существует только после старта сервера).
     fun startStatus() {
         tunnelAlive = true
+        statusPaused = false
         connectStatus()
     }
 
     fun stopStatus() {
         tunnelAlive = false
         disconnectClient(statusClient, "stopStatus")
+    }
+
+    /// §163 — переключить частоту status-стрима (пересоздаёт statusClient с новым
+    /// интервалом; gRPC-reconnect дешёвый). FAST=0.1с (Stats открыт), NORMAL=0.5с.
+    /// No-op если интервал не изменился или туннель не жив.
+    fun setStatusFast(fast: Boolean) {
+        val want = if (fast) STATUS_INTERVAL_FAST else STATUS_INTERVAL_NORMAL
+        if (statusIntervalNs == want) return
+        statusIntervalNs = want
+        if (tunnelAlive && !statusPaused) connectStatus()
+    }
+
+    /// §163 — пауза в фоне (onAppPaused): гасим statusClient, 0 тиков/0 drain.
+    /// Реконнект-петля не поднимает (гейт statusPaused). Идемпотентно.
+    fun pauseStatus() {
+        if (statusPaused) return
+        statusPaused = true
+        disconnectClient(statusClient, "pauseStatus")
+    }
+
+    /// §163 — возобновить из фона (onAppResumed): поднять statusClient с текущим
+    /// интервалом. Идемпотентно. tunnelAlive-гейт: не поднимаем после stop.
+    fun resumeStatus() {
+        if (!statusPaused) return
+        statusPaused = false
+        if (tunnelAlive) connectStatus()
     }
 
     /// §2.8 — `screenClient` поднимается при открытии экрана узлов/stats/connections.
@@ -106,13 +144,39 @@ class BoxCommandClient {
     private val screenRefs = AtomicInteger(0)
 
     fun connectScreen() {
-        if (screenRefs.getAndIncrement() == 0) connectScreenClient()
+        // §164 — в фоне (screenPaused) только считаем потребителя; клиент поднимет
+        // resumeScreen на onAppResumed. Иначе подняли бы клиент в фоне зря.
+        val wasZero = screenRefs.getAndIncrement() == 0
+        if (wasZero && !screenPaused) connectScreenClient()
     }
 
     fun disconnectScreen() {
         // decrementAndGet с полом 0 (defensive против лишних disconnect).
         val n = screenRefs.updateAndGet { if (it > 0) it - 1 else 0 }
         if (n == 0) disconnectClient(screenClient, "disconnectScreen")
+    }
+
+    /// §164 — флаг lifecycle-паузы screenClient (фон). Отличается от refcount=0:
+    /// refcount=0 = «потребителей нет» (экран закрыт), pause = «потребитель есть,
+    /// но UI в фоне». connectScreen в паузе НЕ поднимает клиент (только refcount++).
+    @Volatile private var screenPaused = false
+
+    /// §164 — усыпить screenClient в фоне (onAppPaused). Гасит клиента, НО НЕ
+    /// трогает `screenRefs` — экран-потребитель формально жив (открыт, не виден),
+    /// при resume восстановим. Идемпотентно.
+    fun pauseScreen() {
+        if (screenPaused) return
+        screenPaused = true
+        disconnectClient(screenClient, "pauseScreen")
+    }
+
+    /// §164 — возобновить из фона (onAppResumed): поднять screenClient ТОЛЬКО если
+    /// есть живые потребители (`screenRefs>0`). Если все экраны закрылись пока были
+    /// в фоне — не поднимаем. Идемпотентно.
+    fun resumeScreen() {
+        if (!screenPaused) return
+        screenPaused = false
+        if (tunnelAlive && screenRefs.get() > 0) connectScreenClient()
     }
 
     /// §2.8 — `profilerClient` поднимается при `startGlobalRecording` (§048).
@@ -123,6 +187,8 @@ class BoxCommandClient {
     fun shutdownAll() {
         tunnelAlive = false
         screenRefs.set(0) // §122 — туннель умер, все экраны логически отвалились
+        screenPaused = false // §164 — сброс lifecycle-флагов на teardown
+        statusPaused = false
         disconnectClient(statusClient, "shutdownAll")
         disconnectClient(screenClient, "shutdownAll")
         disconnectClient(profilerClient, "shutdownAll")
@@ -132,18 +198,19 @@ class BoxCommandClient {
     // ═══════════════════════ connect helpers ═══════════════════════
 
     private fun connectStatus() {
+        if (statusPaused) return // §163 — в фоне не поднимаем
         val gen = statusGen.incrementAndGet()
         runCatching {
             val options = CommandClientOptions().apply {
                 addCommand(Libbox.CommandStatus)
-                setStatusInterval(STATUS_INTERVAL) // 1e8 нс = 0.1с (§14.1 — проверяем на железе)
+                setStatusInterval(statusIntervalNs) // §163 — NORMAL 0.5с / FAST 0.1с
             }
             val client = CommandClient(StatusHandler(gen), options)
             client.connect()
             statusClient.getAndSet(client)?.runCatching { disconnect() }
         }.onFailure {
             Log.w(TAG, "connectStatus failed (gen=$gen): ${it.message}")
-            scheduleReconnect(RECONNECT_BACKOFF_START_MS) { if (tunnelAlive) connectStatus() }
+            scheduleReconnect(RECONNECT_BACKOFF_START_MS) { if (tunnelAlive && !statusPaused) connectStatus() }
         }
     }
 

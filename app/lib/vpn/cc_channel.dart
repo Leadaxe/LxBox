@@ -152,6 +152,23 @@ class CcChannel {
   Future<void> connectProfiler() => _invoke('ccConnectProfiler');
   Future<void> disconnectProfiler() => _invoke('ccDisconnectProfiler');
 
+  // §164 — энергомодель CC-клиентов.
+  /// FAST (0.1с) — Stats открыт (плавность); NORMAL (0.5с) — главный экран.
+  /// Пересоздаёт statusClient с новым интервалом (см. feature 123 §3).
+  Future<void> setStatusFast(bool fast) async {
+    try {
+      await _methods.invokeMethod<void>('ccSetStatusFast', {'fast': fast});
+    } catch (_) {/* native не готов — игнор, не критично */}
+  }
+
+  /// Фон (onAppPaused): гасим status+screen клиенты (0 тиков/0 drain).
+  /// profilerClient НЕ трогаем — recording живёт в фоне. Выключение VPN ловит
+  /// нативный broadcast, не CC (feature 123 §1.1/§4).
+  Future<void> pauseClients() => _invoke('ccPauseClients');
+
+  /// Возврат из фона (onAppResumed): поднимаем status(NORMAL)+screen(если refs>0).
+  Future<void> resumeClients() => _invoke('ccResumeClients');
+
   // ─────────────────────────── Imperatives ───────────────────────────
 
   /// §4.6 — per-node delay. Возвращает `(delay, error)`. ИНВАРИАНТ: `error` —

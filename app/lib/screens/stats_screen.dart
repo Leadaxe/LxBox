@@ -70,6 +70,9 @@ class _StatsScreenState extends State<StatsScreen> {
     _connSub = _cc.connections.listen(_onConnections);
     // §2.8 — поднимаем screen-клиент ядра на время видимости экрана.
     unawaited(_cc.connectScreen());
+    // §164 — Stats открыт → статистика на FAST 0.1с (плавные счётчики).
+    // dispose вернёт NORMAL 0.5с (главному экрану 0.1с не нужна).
+    unawaited(_cc.setStatusFast(true));
     unawaited(_refreshAllowBypass());
   }
 
@@ -80,6 +83,8 @@ class _StatsScreenState extends State<StatsScreen> {
     _statusSub?.cancel();
     _connSub?.cancel();
     unawaited(_cc.disconnectScreen());
+    // §164 — Stats закрыт → возвращаем status-стрим на NORMAL 0.5с.
+    unawaited(_cc.setStatusFast(false));
     super.dispose();
   }
 

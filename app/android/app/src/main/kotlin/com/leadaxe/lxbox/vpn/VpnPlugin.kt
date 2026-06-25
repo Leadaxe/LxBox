@@ -533,6 +533,22 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "ccDisconnectProfiler" -> {
                 BoxService.commandClient?.disconnectProfiler(); result.success(true)
             }
+            // §164 — энергомодель. ccSetStatusFast: FAST 0.1с (Stats открыт) /
+            // NORMAL 0.5с (главный). ccPauseClients: фон — гасим status+screen
+            // (profilerClient НЕ трогаем, recording живёт в фоне). ccResumeClients:
+            // возврат из фона — поднимаем status(NORMAL)+screen(если refs>0).
+            "ccSetStatusFast" -> {
+                val fast = call.argument<Boolean>("fast") ?: false
+                BoxService.commandClient?.setStatusFast(fast); result.success(true)
+            }
+            "ccPauseClients" -> {
+                BoxService.commandClient?.apply { pauseStatus(); pauseScreen() }
+                result.success(true)
+            }
+            "ccResumeClients" -> {
+                BoxService.commandClient?.apply { resumeStatus(); resumeScreen() }
+                result.success(true)
+            }
             // §122 — unary CommandClient-RPC БЛОКИРУЮТ (gRPC ждёт ответ ядра до
             // timeout). Вызов прямо в handleMethodCall = на platform main thread →
             // mass-ping (worker-pool=10 блокирующих urlTestOutbound) подвешивал
