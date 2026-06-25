@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft (PR-1 частично: Kotlin-обвязка готова в ветке `feat/libbox-1.14-migration`, коммит `8a23251`) |
+| Статус | Реализовано (ветка `feat/libbox-1.14-migration`; Kotlin-обвязка под libbox 1.14, ядро `v1.14.0-lx.1`) |
 | Дата старта | 2026-06-23 |
 | Прообраз | upstream sing-box 1.14 changelog + migration-гайд; форк-база lx уже смержена до `1.14.0-alpha.33` |
 | AAR | CI-run `27991734294` (Leadaxe/sing-box-lx, ветка `lx-1.14`, артефакт `android-aar-lx-1.14`); НЕ GitHub Release — пин пока не бампается |

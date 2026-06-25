@@ -1,8 +1,10 @@
 # Clash API reference — sing-box 1.12.12 as seen from L×Box
 
+> **DEPRECATED (§122).** Clash API из L×Box выпилен: Debug API `/clash/*` proxy и роут `GET /state/clash` удалены (commit `2711f5b`), UI/runtime-контроль переехали на libbox **CommandClient**. Запрос на `/clash/*` теперь вернёт `404`. Документ сохранён как историческая справка по поведению sing-box clash-api — для актуальных роутов см. [`debug-api-reference.md`](debug-api-reference.md).
+
 | Поле | Значение |
 |------|----------|
-| Статус | Reference |
+| Статус | Deprecated (§122 — Clash API dropped) |
 | Дата | 2026-04-20 |
 | Версия sing-box | 1.12.12 (libbox, JitPack) |
 | Источник | live-разведка через [`031 debug api`](../spec/features/031%20debug%20api/spec.md) + чтение [`sing-box/experimental/clashapi`](https://github.com/SagerNet/sing-box/tree/v1.12.12/experimental/clashapi) |

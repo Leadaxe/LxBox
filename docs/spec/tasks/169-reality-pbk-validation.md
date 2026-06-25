@@ -1,7 +1,7 @@
 # §169 — REALITY включать по валидному X25519, а не по «pbk непустой»
 
 **Тип:** bug-fix (critical — одна нода роняет весь VPN)
-**Статус:** In progress
+**Статус:** Реализовано (device-verified)
 **Связано:** парсер VLESS/Xray/sing-box JSON; референс ядра
 `node_parser_transport.go:220-298` (sing-box-lx, launcher v1.1.7 had same bug)
 

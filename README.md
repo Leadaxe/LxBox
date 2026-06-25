@@ -298,7 +298,7 @@ buildConfig(lists, settings)  ← template + post-steps (DPI, DNS, rules)
 sing-box JSON
 ```
 
-- **Bundled core** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **1.13.13-lx.5**: sing-box 1.13.13 fork built with `with_awg` / `with_xhttp` tags; version pinned in `app/android/libbox.version`, AAR fetched from the fork's GitHub Releases by `scripts/fetch-libbox.sh` with SHA256 verification
+- **Bundled core** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **1.14.0-lx.1**: sing-box 1.14 fork built with `with_awg` / `with_xhttp` / `with_lx_command` tags; the control channel runs over libbox `CommandClient` (no Clash API). Version pinned in `app/android/libbox.version`, AAR fetched from the fork's GitHub Releases by `scripts/fetch-libbox.sh` with SHA256 verification
 - **Sealed `NodeSpec`** — 9 protocols, polymorphic `emit(vars)` / `toUri()` (round-trip invariant)
 - **`EmitContext`** — passes template vars into per-node emit
 - **`NodeEntries{main, detours[]}`** — named struct for chain results

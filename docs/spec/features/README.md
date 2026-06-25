@@ -53,6 +53,20 @@
 | 045 | [`045 tls ech/`](045%20tls%20ech/) | TLS ECH (Encrypted Client Hello) | Спека |
 | 046 | [`046 tunnel apps split-tunneling/`](046%20tunnel%20apps%20split-tunneling/) | Tunnel apps: OS-level split-tunneling | Реализовано (v1.7.1) |
 | 047 | [`047 public intent api/`](047%20public%20intent%20api/) | Public Intent API (Tasker / automation) | Спека |
+| 048 | [`048 home-node-filters/`](048%20home-node-filters/) | Фильтры узлов на главном экране (`NodeFilter`) | Реализовано |
+| 070 | [`070 sort-options/`](070%20sort-options/) | Опции сортировки узлов | Реализовано |
+| 071 | [`071 manual-node-reorder/`](071%20manual-node-reorder/) | Ручной порядок узлов (drag-reorder) | Реализовано |
+| 074 | [`074 add-server-wizard/`](074%20add-server-wizard/) | Мастер добавления сервера | Реализовано |
+| 076 | [`076 settings-and-config-lifecycle/`](076%20settings-and-config-lifecycle/) | Жизненный цикл настроек и сборки конфига | Реализовано |
+| 097 | [`097 awg2-amneziawg2/`](097%20awg2-amneziawg2/) | AmneziaWG / AWG2 + XHTTP (core-swap на sing-box-lx) | Реализовано (v2.0.0) |
+| 105 | [`105 support-message/`](105%20support-message/) | Сообщение поддержки | Реализовано (v2.0.0) |
+| 117 | [`117 dns-rework/`](117%20dns-rework/) | DNS-rework под sing-box 1.14 | Реализовано (v2.0.6) |
+| 118 | [`118 subscription-fetch-identity/`](118%20subscription-fetch-identity/) | Идентичность fetch'а подписок (User-Agent и пр.) | Реализовано (v2.0.6) |
+| 119 | [`119 vpn-mode/`](119%20vpn-mode/) | VPN Mode (vpn / proxy / vpn_proxy), data-driven вкладка | Реализовано |
+| 120 | [`120 template-engine-typed-vars-and-if/`](120%20template-engine-typed-vars-and-if/) | Типизированный движок шаблона + декларативный `#if` | Реализовано |
+| 121 | [`121 libbox-1.14-adoption/`](121%20libbox-1.14-adoption/) | Адаптация на ядро sing-box 1.14 (libbox 1.14 API) | Реализовано |
+| 122 | [`122 commandclient-migration/`](122%20commandclient-migration/) | Переход управляющего канала на libbox CommandClient (отказ от Clash API) | Реализовано |
+| 123 | [`123 subscription-model/`](123%20subscription-model/) | Модель подписок BoxService / CommandClient (три клиента, энергомодель) | Реализовано |
 
 ## Демотированные / superseded (теперь в `../tasks/`)
 

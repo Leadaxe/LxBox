@@ -5,7 +5,7 @@
 | Статус | Reference |
 | Дата | 2026-04-20 |
 | Версия API | совместим со [`spec 031`](../spec/features/031%20debug%20api/spec.md) |
-| Парный doc | [`clash-api-reference.md`](clash-api-reference.md) — всё что под `/clash/*` |
+| Парный doc | [`clash-api-reference.md`](clash-api-reference.md) — **deprecated**: `/clash/*` proxy выпилен в §122 (Clash API dropped, переход на CommandClient) |
 
 Compact curl-ready reference для **Debug API** — HTTP-сервера L×Box на `127.0.0.1:9269`, который пробрасывается через `adb forward`. Полные объяснения полей/middleware/архитектуры — в [spec 031](../spec/features/031%20debug%20api/spec.md); здесь — «что послать чтобы получить нужное».
 
@@ -46,7 +46,6 @@ curl -s "$BASE/ping"
 - [Wi-Fi history — `/wifi_history`](#wi-fi-history--wifi_history)
 - [Files](#files)
 - [Profiler — `/profiler/*`](#profiler--profiler)
-- [Clash API proxy — `/clash/*`](#clash-api-proxy--clash)
 - [Common errors](#common-errors)
 
 ---
@@ -57,7 +56,6 @@ curl -s "$BASE/ping"
 |---|---|
 | `GET /ping` | `{pong,server,uptime_seconds}` — **без auth** |
 | `GET /state` | full HomeState: tunnel/busy/config_length/active_in_group/selected_group/last_delay/ping_busy/traffic/… |
-| `GET /state/clash` | `{available,base_uri,secret:"***",api_ok}` — `?reveal=true` снимает маску secret'а |
 | `GET /state/subs` | массив подписок, `?reveal=true` показывает clear URLs |
 | `GET /state/rules` | массив custom rules с `srs_cached/srs_mtime` |
 | `GET /state/storage` | весь `SettingsStorage._cache` со scrubber'ом (token/URL/nodes маскируются) |
@@ -175,13 +173,15 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 
 | Endpoint | Query | Что делает |
 |---|---|---|
-| `POST /action/ping-all` | — | toggle mass-ping (запущен → cancel, не запущен → start) |
-| `POST /action/ping-node` | `tag=<tag>` | одиночный ping |
-| `POST /action/run-urltest` | `group=<tag>` | `/group/<tag>/delay` + reload proxies. 409 если tunnel down |
+| `POST /action/urltest` | `tag=<node>` \| `group=<tag>` \| `all=true` \| `cancel=1` | единый URLTest-диспатч (ровно один scope): `tag` — single-node; `group` — group-delay (409 если tunnel down); `all` — mass-ping всех нод активной группы (concurrency 10); `cancel=1` — отмена in-flight mass-ping (§163, epoch-bump). → `{ok,action,scope,...}` |
 | `POST /action/switch-node` | `tag=<tag>` | selector switch на node. 409 если не выбрана группа |
 | `POST /action/set-group` | `group=<tag>` | смена активной группы |
-| `POST /action/start-vpn` | — | `home.start()` (с VpnService.prepare dance) |
-| `POST /action/stop-vpn` | — | `BoxVpnService.stop()` |
+| `POST /action/start-vpn` | — | `home.start()` (через Activity, с VpnService.prepare dance — может показать consent-диалог) |
+| `POST /action/start-vpn-headless` | — | §165 — старт VPN **без** Activity/consent, прямо через `BoxVpnService.start()`. Работает только если VPN-разрешение уже выдано (`VpnService.prepare()==null`). Для self-test/automation. → `{"ok":true,"action":"start-vpn-headless","started":<bool>,"needs_consent":<bool>}` |
+| `POST /action/stop-vpn` | — | `BoxVpnService.stop()` (кооперативный, ждёт Stopped от ядра) |
+| `POST /action/reconnect` | — | §163 — Stop→Start одной командой под общим busy-wrap. Если туннель down — делегирует в `start()`. → `{"ok":true,"action":"reconnect"}` |
+| `POST /action/reload-vpn` | — | §163 — in-place reload sing-box runtime **без** убийства Android-сервиса (cooldown-gated через `canReload`; туннель дропается ~3с). `applied:false` если reload недоступен (не connected / в cooldown). → `{"ok":true,"action":"reload-vpn","applied":<bool>}` |
+| `POST /action/clear-error` | — | сброс `lastError`-баннера программно (после того как automation обработала/спровоцировала ошибку). → `{"ok":true,"action":"clear-error"}` |
 | `POST /action/reset-network` | — | §031 light recovery: closeAllConnections + DNS cache flush + dialer rebind. БЕЗ recreate'а box/Service/TUN. Требует tunnel up (409 если down). → `{"ok":true,"action":"reset-network","native_ok":<bool>}` |
 | `POST /action/rebuild-config` | — | `SubscriptionController.generateConfig()` + save |
 | `POST /action/refresh-subs` | `force=true\|false` | триггер AutoUpdater |
@@ -195,7 +195,7 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 # Типичный flow диагностики
 curl -X POST -H "$HDR" "$BASE/action/refresh-subs?force=true"
 curl -X POST -H "$HDR" "$BASE/action/rebuild-config"
-curl -X POST -H "$HDR" "$BASE/action/run-urltest?group=✨auto"
+curl -X POST -H "$HDR" "$BASE/action/urltest?group=✨auto"
 curl -s -H "$HDR" "$BASE/state" | jq '{active:.active_in_group,err:.last_error}'
 
 # Sanity что трогаешь правильный девайс
@@ -293,7 +293,7 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 | `/subs` | GET | `?reveal=true` — clear URLs |
 | `/subs` | POST | `{"input":"<url\|URI\|WG-ini\|JSON-outbound>"}` |
 | `/subs/{id}` | GET | — |
-| `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/url |
+| `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url |
 | `/subs/{id}` | DELETE | — |
 | `/subs/{id}/refresh` | POST | trigger fetch. 409 для UserServer |
 | `/subs/reorder` | POST | `{"order":[id1,...]}` |
@@ -351,6 +351,7 @@ curl -s -H "$HDR" "$BASE/state/subs" | jq '.[] | select(.id=="<id>") | {title, n
 
 **Quirks:**
 - `PATCH /subs/{id}` с `url` на UserServer молча игнорируется (у inline-серверов нет URL).
+- `replace_detour_chain` (§073) — bool detour-флаг, ранее пропущенный в PATCH-маппинге (асимметрия с соседними `register_detour_*`); теперь маппится. Config-significant → `?rebuild=true` чтобы применить.
 - `POST /subs/{id}/refresh` на UserServer → 409 `conflict` (нечего фетчить).
 - `POST /subs` с `?rebuild=true` **не ждёт fetch'а** — fetch асинхронный, rebuild'ит с текущими nodes (которых ещё нет → config без этих outbound'ов). Делай последовательно: `POST /subs` → `POST /subs/{id}/refresh` → wait → `POST /action/rebuild-config`.
 
@@ -364,6 +365,14 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 |---|---|---|
 | `/settings/route_final` | PUT | `{"outbound":"<tag>"}` (пустая строка = дефолт) |
 | `/settings/excluded_nodes` | PUT | `{"nodes":["tag1","tag2"]}` (replace set) |
+| `/settings/interrupt_on_switch` | GET | →`{"ok":true,"enabled":bool}` — §163 тугл «рвать активные соединения при switchNode». **НЕ** config-significant. |
+| `/settings/interrupt_on_switch` | PUT | `{"enabled": true\|false}`. → `{ok, action:"settings-interrupt-on-switch", enabled}`. |
+| `/settings/node_sort` | GET | →`{"ok":true,"mode":"<str>","order":["tag",...]}` — режим сортировки списка нод + ручной порядок. |
+| `/settings/node_sort` | PUT | `{"mode": "<str>", "order"?: ["tag",...]}`. `mode` = `""`/`latency`/`manual`; `order` опц. (для manual). UI-only (не config-significant). → `{ok, action:"settings-node-sort", mode, order_count}`. |
+| `/settings/enabled_groups` | GET | →`{"ok":true,"groups":["tag",...]}` — членство preset-групп в selector'е. |
+| `/settings/enabled_groups` | PUT | `{"groups": ["tag",...]}`. **Config-significant** → `?rebuild=true` пересобирает конфиг. → `{ok, action:"settings-enabled-groups", count, ...rebuild-extras}`. |
+| `/settings/vpn_mode` | GET | →`{"ok":true,"vpn_mode":{...}}` — текущий `VpnModeConfig`. |
+| `/settings/vpn_mode` | PUT | частичное обновление (copyWith поверх текущего): `mode`/`proxy_protocol`/`proxy_port`/`proxy_listen`/`proxy_auth`/`proxy_user`/`proxy_pass`. `proxy_listen` валидируется как IPv4 (иначе 400). **Config-significant** (меняет inbounds) → `?rebuild=true`. → `{ok, action:"settings-vpn-mode", vpn_mode, ...rebuild-extras}`. |
 | `/settings/vars/{key}` | PUT | `{"value":"<str>"}` |
 | `/settings/vars/{key}` | DELETE | — (удаляет ключ; не пишет пустую строку) |
 | `/settings/dns_options/servers` | PUT | §043 + §044: kind-refs `[{enabled, kind: 'inline'\|'preset'\|'template', tag, description?, body?}]`. Для `kind: inline` обязателен `body` (partial sing-box shape **без** `tag`/`description`/`enabled` — они на ref-level). Legacy full-body snapshot и §043 inline (с tag/description в body) тоже принимаются — auto-migrate на ближайший resolver. |
@@ -638,7 +647,7 @@ curl -s -H "$HDR" "$BASE/diag/applog?prev=true" | jq
 
 ## Profiler — `/profiler/*`
 
-Traffic profiler — **per-app** session (§044, один active в любой момент) или **system-wide** rolling buffer (§048, Live tab в Statistics). Оба источника событий: parser sing-box core logs + 5s polling Clash `/connections`.
+Traffic profiler — **per-app** session (§044, один active в любой момент) или **system-wide** rolling buffer (§048, Live tab в Statistics). Источник событий (§168): parser sing-box core logs + connections-push от libbox **CommandClient** (`CcChannel.connections` через фоновый `profilerClient`, `connectProfiler()`). Clash `/connections` polling выпилен (§122 — Clash API dropped).
 
 ### Per-app session
 
@@ -678,11 +687,11 @@ curl -X POST -H "$HDR" "$BASE/profiler/stop"
 
 ### System-wide (§048 Live tab)
 
-Idempotent toggle для recording, подключающего тот же `_pollConnections` без active session. **Idle profiler ничего не делает** — recording on только при явном start.
+Idempotent toggle для recording, подключающего тот же connections-источник без active session. **Idle profiler ничего не делает** — recording on только при явном start.
 
 | Endpoint | Метод | Что |
 |---|---|---|
-| `/profiler/live/start` | POST | `startGlobalRecording` — attach AppLog listener + start 5s connection poll |
+| `/profiler/live/start` | POST | `startGlobalRecording` — attach AppLog listener + subscribe на CommandClient connections-push (§168) |
 | `/profiler/live/stop` | POST | `stopGlobalRecording` — detach (если нет per-app session) |
 | `/profiler/live/state` | GET | `{recording, started_at, buffer_count, unattributed_count, banner_active}` |
 | `/profiler/live` | GET | `{window_seconds, count, events}` — global rolling buffer snapshot, `?seconds=60` (default) |
@@ -713,28 +722,14 @@ curl -X POST -H "$HDR" "$BASE/profiler/live/stop"
 
 ---
 
-## Clash API proxy — `/clash/*`
+## Clash API proxy — `/clash/*` (removed in §122)
 
-Полный reference — в [`clash-api-reference.md`](clash-api-reference.md). Кратко:
+**Удалено.** `/clash/*` proxy и роут `GET /state/clash` выпилены в §122 (commit `2711f5b` — выпил Clash-моста). UI и весь runtime-контроль (proxies, group-delay, connections snapshot) переехали на libbox **CommandClient**:
 
-```bash
-# Список proxies
-curl -s -H "$HDR" "$BASE/clash/proxies" | jq '.proxies | keys | length'
+- proxies / switch selector / group urltest → CommandClient unary-RPC + `/action/urltest` / `/action/switch-node` / `/action/set-group`.
+- connections snapshot / live → CommandClient connections-push, см. [Profiler](#profiler--profiler) (`/profiler/live*`).
 
-# Switch Selector
-curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
-  -d '{"name":"BL: 🇫🇷 France, Paris | [BL]"}' \
-  "$BASE/clash/proxies/vpn-1"
-
-# URLTest группы
-curl -s -H "$HDR" "$BASE/clash/group/vpn-1/delay?url=https%3A%2F%2Fcp.cloudflare.com%2Fgenerate_204&timeout=3000"
-
-# Connections snapshot
-curl -s -H "$HDR" "$BASE/clash/connections" | \
-  jq '{total:(.connections|length), mem:.memory}'
-```
-
-⚠️ Streaming endpoints (`/clash/traffic`, `/clash/memory`, `/clash/logs`) через proxy **не работают** — `stream.toBytes()` buffering. Детали и workaround в clash-api-reference.md.
+Старый `clash-api-reference.md` сохранён как историческая справка по поведению sing-box clash-api, но соответствующих роутов в Debug API больше **нет** — запрос на `/clash/*` или `/state/clash` вернёт `404 not_found`.
 
 ---
 
@@ -809,13 +804,13 @@ done
 ```bash
 enc() { python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$1"; }
 
+# Теги нод/групп передаются query-параметром — энкодим значение
 TAG="BL: 🇫🇷 France, Paris | [BL]"
-curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
-  -d "{\"name\":\"$TAG\"}" \
-  "$BASE/clash/proxies/vpn-1"
-# /clash/proxies/vpn-1 — vpn-1 без кириллицы/эмодзи, encoder не нужен
-# а вот так если нужен путь с эмодзи:
-curl -H "$HDR" "$BASE/clash/proxies/$(enc "$TAG")"
+curl -X POST -H "$HDR" "$BASE/action/switch-node?tag=$(enc "$TAG")"
+
+# URLTest группы с эмодзи в имени
+GROUP="✨auto"
+curl -X POST -H "$HDR" "$BASE/action/urltest?group=$(enc "$GROUP")"
 ```
 
 ### Snapshot before dangerous write

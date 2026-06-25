@@ -1,7 +1,7 @@
 # §168 — Профайлер: источник connections = CommandClient (вместо мёртвого Clash-fetcher)
 
 **Тип:** bug-fix
-**Статус:** In progress
+**Статус:** Реализовано (device-verified)
 **Связано:** [`features/044 traffic-profiler`], §048 (Live/per-app), §122 (CommandClient-миграция), [`164-cc-clients-energy-model`]
 
 ## Симптом (device-факт)

@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Тип | Task (UX + perf: человекочитаемое имя правила в статистике) |
-| Статус | In progress |
+| Статус | Реализовано |
 | Связано | §122 (CommandClient connections), §062/§030 (custom_rules), §166 (фриз Stats) |
 
 На вкладках **Stats → Traffic by Rule** и **Conns** для каждого соединения показывать **человекочитаемое имя правила** (`Home wifi`, `Block Ads`, `Warp` — `custom_rules[].name`), а не обрезок сырых условий (`[LexRouteRich2G`).
