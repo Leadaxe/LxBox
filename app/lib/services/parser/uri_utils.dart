@@ -214,6 +214,24 @@ String? queryParamCI(Map<String, String> q, String key) {
   return null;
 }
 
+/// §169 — валидный ли REALITY public key (X25519, ровно 32 байта).
+///
+/// КОРЕНЬ БАГА: битые публичные подписки вешают на `security=tls` ноды мусор
+/// `pbk=enabled` / `pbk=true`. Если строить REALITY-блок по «pbk непустой»,
+/// мусор уходит в `reality.public_key` → sing-box видит не-X25519 ключ и
+/// отвергает ВЕСЬ config.json (а не одну ноду) → VPN не поднимается вообще.
+///
+/// Правило: X25519 public key = 32 байта. После trim строка должна
+/// декодироваться как base64url/base64 (любой из 4 вариантов pad/url) ровно
+/// в 32 байта. `enabled`(7)/`true`(4)/`PK`(2)/пустота(0) отсекаются длиной.
+/// Невалидный pbk → REALITY не создаём, нода деградирует до plain TLS.
+bool isValidRealityPublicKey(String pbk) {
+  final s = pbk.trim();
+  if (s.isEmpty) return false;
+  final bytes = decodeBase64Safe(s);
+  return bytes != null && bytes.length == 32;
+}
+
 /// Reality short-id canonical form: hex-чар (0-9a-f), max 16.
 String normalizeRealityShortId(String s) {
   final buf = StringBuffer();

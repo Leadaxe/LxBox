@@ -163,14 +163,19 @@ TlsSpec _xrayTlsFromStream(Map stream, String server) {
 
   if (security == 'reality') {
     final r = stream['realitySettings'] as Map? ?? const {};
+    final pbk = r['publicKey']?.toString() ?? '';
+    // §169 — REALITY только при валидном X25519-ключе. Битый publicKey →
+    // деградируем до plain TLS (нода рабочая), а не отравляем config.json.
     return TlsSpec(
       enabled: true,
       serverName: r['serverName']?.toString() ?? server,
       fingerprint: r['fingerprint']?.toString() ?? 'random',
-      reality: RealitySpec(
-        publicKey: r['publicKey']?.toString() ?? '',
-        shortId: (r['shortId']?.toString() ?? '').toLowerCase(),
-      ),
+      reality: isValidRealityPublicKey(pbk)
+          ? RealitySpec(
+              publicKey: pbk,
+              shortId: normalizeRealityShortId(r['shortId']?.toString() ?? ''),
+            )
+          : null,
     );
   }
 
@@ -432,11 +437,16 @@ TlsSpec _tlsFromSingbox(dynamic raw, String server) {
     alpn: (raw['alpn'] as List?)?.map((e) => e.toString()).toList() ?? const [],
     insecure: raw['insecure'] == true,
     fingerprint: utls?['fingerprint']?.toString(),
-    reality: reality == null || reality['enabled'] != true
+    // §169 — REALITY только при enabled И валидном X25519 public_key. Битый
+    // ключ → reality=null (нода остаётся plain TLS), а не отравляет config.
+    reality: reality == null ||
+            reality['enabled'] != true ||
+            !isValidRealityPublicKey(reality['public_key']?.toString() ?? '')
         ? null
         : RealitySpec(
-            publicKey: reality['public_key']?.toString() ?? '',
-            shortId: reality['short_id']?.toString() ?? '',
+            publicKey: reality['public_key']!.toString(),
+            shortId:
+                normalizeRealityShortId(reality['short_id']?.toString() ?? ''),
           ),
   );
 }
