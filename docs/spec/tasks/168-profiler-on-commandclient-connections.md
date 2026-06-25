@@ -110,3 +110,14 @@ stop→disconnect), а не на всю жизнь процесса — в пр�
 `traffic_profiler` юнит-тест: `ingestForTest([CcConnection...])` →
 проверить эмит `tcpOpen` в global buffer, затем повторный вызов без conn'а →
 `tcpClose`. (Заменяет `pollOnceForTest`.)
+
+## Результат (device CE8XX48PCI79U4XG, 2026-06-26, vc 2817)
+
+✅ ПОДТВЕРЖДЁН. `/profiler/live/start` → `/profiler/live/state` дал
+`buffer_count: 9` (было **0**). Дамп `/profiler/live`:
+- tcpOpen-события приходят с domain/ip/port/outbound_chain/bytes;
+- **per-app атрибуция работает**: `process: "com.google.android.gsf"`,
+  `"com.android.chrome"`, `confidence: "verified"`,
+  `matched_via: "connections_meta"` (= через `CcConnection.packageName`);
+- `/profiler/live/stop` → `recording:false` (профайлер отписывается чисто).
+Юнит-тесты: 33 зелёных. analyze: clean.
