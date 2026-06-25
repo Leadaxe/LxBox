@@ -41,6 +41,9 @@ Future<DebugResponse> actionHandler(
     '/action/set-group' => _setGroup(req, ctx),
     '/action/start-vpn' => _startVpn(ctx),
     '/action/stop-vpn' => _stopVpn(ctx),
+    '/action/reconnect' => _reconnect(ctx),
+    '/action/reload-vpn' => _reloadVpn(ctx),
+    '/action/clear-error' => _clearError(ctx),
     '/action/force-stop-vpn' => _forceStopVpn(ctx),
     '/action/set-transient-timeout' => _setTransientTimeout(req, ctx),
     '/action/reset-network' => _resetNetwork(ctx),
@@ -185,6 +188,12 @@ JsonResponse _ok(String action, [Map<String, Object?> extras = const {}]) {
 /// - `?all=true`    — mass URLTest всех нод активной группы (concurrency 10)
 Future<DebugResponse> _urltest(DebugRequest req, DebugContext ctx) async {
   final home = ctx.requireHome();
+  // §163 — `?cancel=1` отменяет in-flight mass-ping (epoch-bump). Раньше из
+  // Debug API можно было только запустить mass-тест (?all), но не остановить.
+  if (req.query['cancel'] != null) {
+    home.cancelMassPing();
+    return _ok('urltest', {'scope': 'cancel'});
+  }
   final tag = req.query['tag'];
   final group = req.query['group'];
   final all = req.query['all'];
@@ -253,6 +262,36 @@ Future<DebugResponse> _forceStopVpn(DebugContext ctx) async {
   final home = ctx.requireHome();
   final ok = await home.debugForceStopVpn();
   return _ok('force-stop-vpn', {'native_ok': ok});
+}
+
+/// `POST /action/reconnect` — §047/§163. Stop→Start одной командой (под общим
+/// busy-wrap). Если туннель не up — делегирует в start(). Базовый automation-
+/// глагол «починить соединение» — раньше требовал двух вызовов (stop-vpn +
+/// start-vpn) с гонкой transient-таймаута.
+Future<DebugResponse> _reconnect(DebugContext ctx) async {
+  final home = ctx.requireHome();
+  await home.reconnect();
+  return _ok('reconnect');
+}
+
+/// `POST /action/reload-vpn` — in-place reload sing-box runtime БЕЗ убийства
+/// Android-сервиса (cooldown-gated через canReload). Чистый примитив «применить
+/// изменение конфига/настроек» — туннель дропается на ~3с, сервис жив. Если
+/// reload недоступен (не connected / в cooldown) — возвращает applied:false.
+Future<DebugResponse> _reloadVpn(DebugContext ctx) async {
+  final home = ctx.requireHome();
+  final canReload = home.canReload;
+  if (canReload) await home.reloadVpn();
+  return _ok('reload-vpn', {'applied': canReload});
+}
+
+/// `POST /action/clear-error` — сбросить lastError-баннер программно (после того
+/// как automation обработала/спровоцировала ошибку). Раньше баннер сбрасывался
+/// только тапом юзера или успешной операцией.
+Future<DebugResponse> _clearError(DebugContext ctx) async {
+  final home = ctx.requireHome();
+  home.clearError();
+  return _ok('clear-error');
 }
 
 /// `POST /action/set-transient-timeout?connecting=<ms>&stopping=<ms>` — §140.

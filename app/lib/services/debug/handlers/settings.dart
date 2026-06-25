@@ -37,6 +37,26 @@ Future<DebugResponse> settingsHandler(DebugRequest req, DebugContext ctx) async 
       if (req.method != 'PUT') throw _methodNotAllowed(req.method, path);
       return _putRouteFinal(req, ctx);
 
+    case '/settings/interrupt_on_switch':
+      if (req.method == 'GET') return _getInterruptOnSwitch();
+      if (req.method == 'PUT') return _putInterruptOnSwitch(req);
+      throw _methodNotAllowed(req.method, path);
+
+    case '/settings/node_sort':
+      if (req.method == 'GET') return _getNodeSort();
+      if (req.method == 'PUT') return _putNodeSort(req);
+      throw _methodNotAllowed(req.method, path);
+
+    case '/settings/enabled_groups':
+      if (req.method == 'GET') return _getEnabledGroups();
+      if (req.method == 'PUT') return _putEnabledGroups(req, ctx);
+      throw _methodNotAllowed(req.method, path);
+
+    case '/settings/vpn_mode':
+      if (req.method == 'GET') return _getVpnMode();
+      if (req.method == 'PUT') return _putVpnMode(req, ctx);
+      throw _methodNotAllowed(req.method, path);
+
     case '/settings/excluded_nodes':
       if (req.method != 'PUT') throw _methodNotAllowed(req.method, path);
       return _putExcludedNodes(req, ctx);
@@ -160,6 +180,91 @@ Future<DebugResponse> _putExcludedNodes(DebugRequest req, DebugContext ctx) asyn
     'count': nodes.length,
     ...extras,
   });
+}
+
+// ---------------------------------------------------------------------------
+// §163/§047 — top-level настройки без vars-доступа (нужен типизированный роут).
+// ---------------------------------------------------------------------------
+
+/// `GET /settings/interrupt_on_switch` → `{"enabled": bool}`.
+Future<DebugResponse> _getInterruptOnSwitch() async {
+  final v = await SettingsStorage.getInterruptOnSwitch();
+  return JsonResponse({'ok': true, 'enabled': v});
+}
+
+/// `PUT /settings/interrupt_on_switch` body `{"enabled": bool}`. Тугл рвёт
+/// активные соединения переключаемой группы при switchNode. НЕ config-significant.
+Future<DebugResponse> _putInterruptOnSwitch(DebugRequest req) async {
+  final body = req.jsonBodyAsMap();
+  final enabled = fieldBool(body, 'enabled');
+  if (enabled == null) throw const BadRequest('field "enabled" (bool) required');
+  await SettingsStorage.setInterruptOnSwitch(enabled);
+  return JsonResponse({'ok': true, 'action': 'settings-interrupt-on-switch', 'enabled': enabled});
+}
+
+/// `GET /settings/node_sort` → `{"mode": str, "order": [str]}`.
+Future<DebugResponse> _getNodeSort() async {
+  final s = await SettingsStorage.getNodeSort();
+  return JsonResponse({'ok': true, 'mode': s.mode, 'order': s.order});
+}
+
+/// `PUT /settings/node_sort` body `{"mode": str, "order"?: [str]}`. Режим
+/// сортировки нод (`""`/`latency`/`manual`) + ручной порядок (для manual).
+/// UI-only (не config-significant).
+Future<DebugResponse> _putNodeSort(DebugRequest req) async {
+  final body = req.jsonBodyAsMap();
+  final mode = fieldString(body, 'mode');
+  if (mode == null) throw const BadRequest('field "mode" (string) required');
+  final order = fieldStringList(body, 'order') ?? const <String>[];
+  await SettingsStorage.setNodeSort(mode, order);
+  return JsonResponse({'ok': true, 'action': 'settings-node-sort', 'mode': mode, 'order_count': order.length});
+}
+
+/// `GET /settings/enabled_groups` → `{"groups": [str]}`.
+Future<DebugResponse> _getEnabledGroups() async {
+  final g = await SettingsStorage.getEnabledGroups();
+  return JsonResponse({'ok': true, 'groups': g.toList()});
+}
+
+/// `PUT /settings/enabled_groups` body `{"groups": [str]}`. Членство preset-групп
+/// в selector'е. Config-significant → `?rebuild=true` пересобирает конфиг.
+Future<DebugResponse> _putEnabledGroups(DebugRequest req, DebugContext ctx) async {
+  final body = req.jsonBodyAsMap();
+  final groups = fieldStringList(body, 'groups');
+  if (groups == null) throw const BadRequest('field "groups" (string array) required');
+  await SettingsStorage.saveEnabledGroups(groups.toSet());
+  final extras = await maybeRebuild(req, ctx);
+  return JsonResponse({'ok': true, 'action': 'settings-enabled-groups', 'count': groups.length, ...extras});
+}
+
+/// `GET /settings/vpn_mode` → текущий VpnModeConfig.
+Future<DebugResponse> _getVpnMode() async {
+  final m = await SettingsStorage.getVpnMode();
+  return JsonResponse({'ok': true, 'vpn_mode': m.toJson()});
+}
+
+/// `PUT /settings/vpn_mode` body — частичное обновление (copyWith поверх
+/// текущего): `mode`/`proxy_protocol`/`proxy_port`/`proxy_listen`/`proxy_auth`/
+/// `proxy_user`/`proxy_pass`. Config-significant (меняет inbounds) → `?rebuild=true`.
+Future<DebugResponse> _putVpnMode(DebugRequest req, DebugContext ctx) async {
+  final body = req.jsonBodyAsMap();
+  final cur = await SettingsStorage.getVpnMode();
+  final listen = fieldString(body, 'proxy_listen');
+  if (listen != null && !VpnModeConfig.isValidListenAddr(listen)) {
+    throw BadRequest('invalid "proxy_listen" (IPv4 required): $listen');
+  }
+  final next = cur.copyWith(
+    mode: fieldString(body, 'mode'),
+    proxyProtocol: fieldString(body, 'proxy_protocol'),
+    proxyPort: fieldInt(body, 'proxy_port'),
+    proxyListen: listen,
+    proxyAuthEnabled: fieldBool(body, 'proxy_auth'),
+    proxyUsername: fieldString(body, 'proxy_user'),
+    proxyPassword: fieldString(body, 'proxy_pass'),
+  );
+  await SettingsStorage.setVpnMode(next);
+  final extras = await maybeRebuild(req, ctx);
+  return JsonResponse({'ok': true, 'action': 'settings-vpn-mode', 'vpn_mode': next.toJson(), ...extras});
 }
 
 // ---------------------------------------------------------------------------
