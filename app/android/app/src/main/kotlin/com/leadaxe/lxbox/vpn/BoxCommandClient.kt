@@ -11,6 +11,7 @@ import io.nekohasekai.libbox.ConnectionEvents
 import io.nekohasekai.libbox.Connections
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.LogIterator
+import io.nekohasekai.libbox.OutboundGroup
 import io.nekohasekai.libbox.OutboundGroupIterator
 import io.nekohasekai.libbox.OutboundGroupItemIterator
 import io.nekohasekai.libbox.RuleIterator
@@ -51,12 +52,10 @@ class BoxCommandClient {
 
         /// §2.3 — интервал status-стрима (наносекунды: `time.Duration(Interval)`
         /// на сервере). 1e8 = 0.1с — целевая частота обновления (юзер просил 0.1с).
-        /// Раньше 1e8 «ломал» groups, но КОРЕНЬ groups:[] оказался НЕ в интервале,
-        /// а в опоздавшем `setStatus(Stopped)` при reconnect (перетирал live-state) —
-        /// закрыт native-dedup (BoxService.setStatus) + Dart stale-terminal guard
-        /// (§14.1). Возвращаем 1e8 и проверяем на железе, что регрессии больше нет.
-        /// Остаточная гонка ядрового `waitForStarted` (SubscribeGroups) — отдельно,
-        /// её ловит groups-watchdog (`refreshScreen`, ≤2 ретрая) + pull-to-refresh.
+        /// КОРЕНЬ groups:[] был НЕ в интервале: (1) опоздавший `setStatus(Stopped)`
+        /// при reconnect (перетирал live-state) — закрыт native-dedup + Dart
+        /// stale-guard; (2) потерянный/пустой стартовый push групп — закрыт
+        /// детерминированным unary `getGroups`-pull (SPEC015, см. `getGroups()`).
         /// Мельтешение памяти Stats — UI-throttle (3с), не интервал.
         private const val STATUS_INTERVAL = 100_000_000L // 1e8 нс = 0.1с
 
@@ -163,20 +162,6 @@ class BoxCommandClient {
         }.onFailure { Log.w(TAG, "connectScreen failed (gen=$gen): ${it.message}") }
     }
 
-    /// §122 — ПЕРЕсоздать screenClient (disconnect+connect), не трогая refcount.
-    /// Лечит гонку в ядровом `waitForStarted` (SubscribeGroups): group-стрим при
-    /// подключении в фазе STARTING может пропустить событие STARTED
-    /// (lost-wakeup: статус читается ДО подписки на serviceStatusObserver) →
-    /// `waitForStarted` висит, группы не шлются (groups:[] «иногда»). Повторный
-    /// connect КОГДА сервис уже STARTED → `waitForStarted` возвращается сразу
-    /// (case STARTED, до подписки) → группы гарантированно приходят.
-    /// Вызывается из Dart, если после connected groups не пришли (watchdog).
-    fun refreshScreen() {
-        // Только если есть активные потребители экрана (refcount>0) — иначе
-        // поднимать screenClient незачем.
-        if (screenRefs.get() > 0) connectScreenClient()
-    }
-
     private fun connectProfilerClient() {
         val gen = profilerGen.incrementAndGet()
         ensureAccumulator()
@@ -237,6 +222,52 @@ class BoxCommandClient {
             Log.w(TAG, "getRules failed: ${it.message}")
             emptyList()
         }
+    }
+
+    /// §122/SPEC015 — unary pull-снапшот групп. Закрывает дыру pull-vs-push:
+    /// если стартовый `SubscribeGroups`-push не доехал (гонка waitForStarted —
+    /// сервис не STARTED в момент подписки) или порвался, перечитать дерево групп
+    /// больше нечем (push-only). `getGroups()` читает то же `readGroups()` ядра
+    /// синхронно, не пересоздавая screenClient. Формат Map ИДЕНТИЧЕН writeGroups
+    /// (общий `serializeGroup`) → Dart-парсер один. Бросает при не-STARTED
+    /// (status.Error) — ловим, возвращаем null (вызвать позже/по pull). null ≠
+    /// пустой список: null = «не смогли прочитать», []=«групп нет» (не трогаем state).
+    fun getGroups(): List<Map<String, Any>>? {
+        val client = anyClient() ?: return null
+        return runCatching {
+            val out = ArrayList<Map<String, Any>>()
+            val it: OutboundGroupIterator = client.getGroups()
+            while (it.hasNext()) out.add(serializeGroup(it.next()))
+            out
+        }.getOrElse {
+            // не-STARTED / транспорт — НЕ ошибка приложения, просто пока нет данных.
+            Log.d(TAG, "getGroups unavailable: ${it.message}")
+            null
+        }
+    }
+
+    /// Сериализация одной группы в Map — единый формат для push (writeGroups) и
+    /// pull (getGroups). Менять формат — только здесь.
+    private fun serializeGroup(g: OutboundGroup): Map<String, Any> {
+        val items = ArrayList<Map<String, Any>>()
+        val gi = g.getItems()
+        while (gi.hasNext()) {
+            val item = gi.next()
+            items.add(mapOf(
+                "tag" to item.tag,
+                "type" to item.type,
+                "urlTestDelay" to item.urlTestDelay,
+                "urlTestTime" to item.urlTestTime,
+            ))
+        }
+        return mapOf(
+            "tag" to g.getTag(),
+            "type" to g.getType(),
+            "selectable" to g.getSelectable(),
+            "selected" to g.getSelected(),
+            "isExpand" to g.getIsExpand(),
+            "items" to items,
+        )
     }
 
     fun selectOutbound(group: String, tag: String): Boolean =
@@ -342,28 +373,7 @@ class BoxCommandClient {
                 val it = groups ?: return
                 if (BoxVpnService.ccGroupsSink == null) return
                 val list = ArrayList<Map<String, Any>>()
-                while (it.hasNext()) {
-                    val g = it.next()
-                    val items = ArrayList<Map<String, Any>>()
-                    val gi = g.getItems()
-                    while (gi.hasNext()) {
-                        val item = gi.next()
-                        items.add(mapOf(
-                            "tag" to item.tag,
-                            "type" to item.type,
-                            "urlTestDelay" to item.urlTestDelay,
-                            "urlTestTime" to item.urlTestTime,
-                        ))
-                    }
-                    list.add(mapOf(
-                        "tag" to g.getTag(),
-                        "type" to g.getType(),
-                        "selectable" to g.getSelectable(),
-                        "selected" to g.getSelected(),
-                        "isExpand" to g.getIsExpand(),
-                        "items" to items,
-                    ))
-                }
+                while (it.hasNext()) list.add(serializeGroup(it.next()))
                 groupsEmitter.offer(list)
             }.onFailure { Log.w(TAG, "writeGroups failed: ${it.message}") }
         }

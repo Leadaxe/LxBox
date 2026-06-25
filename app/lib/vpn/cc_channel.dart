@@ -149,12 +149,6 @@ class CcChannel {
 
   Future<void> connectScreen() => _invoke('ccConnectScreen');
   Future<void> disconnectScreen() => _invoke('ccDisconnectScreen');
-
-  /// §122 — пересоздать screenClient (лечит гонку ядрового `waitForStarted`:
-  /// group-стрим при подключении в фазе STARTING мог пропустить событие STARTED
-  /// → groups:[] «иногда»). Зовётся из watchdog, если после connected groups
-  /// не пришли.
-  Future<void> refreshScreen() => _invoke('ccRefreshScreen');
   Future<void> connectProfiler() => _invoke('ccConnectProfiler');
   Future<void> disconnectProfiler() => _invoke('ccDisconnectProfiler');
 
@@ -179,6 +173,18 @@ class CcChannel {
   Future<List<CcRule>> getRules() async {
     final r = await _methods.invokeMethod<List<dynamic>>('ccGetRules');
     return (r ?? const []).map((m) => CcRule.fromMap(_asMap(m))).toList();
+  }
+
+  /// §122/SPEC015 — unary pull-снапшот групп. Закрывает дыру pull-vs-push:
+  /// если стартовый `SubscribeGroups`-push потерялся (гонка waitForStarted), тут
+  /// перечитываем дерево групп синхронно, не пересоздавая screenClient. `null` =
+  /// ядро не смогло отдать (не-STARTED/нет клиента) — отличаем от `[]` (групп
+  /// нет): на null caller НЕ трогает state, на [] — тоже (пустых при connected
+  /// не бывает, см. _onCcGroups). Формат Map идентичен groups-стриму → CcGroup.fromMap.
+  Future<List<CcGroup>?> getGroups() async {
+    final r = await _methods.invokeMethod<List<dynamic>>('ccGetGroups');
+    if (r == null) return null;
+    return r.map((m) => CcGroup.fromMap(_asMap(m))).toList();
   }
 
   Future<bool> selectOutbound(String group, String tag) async =>

@@ -155,7 +155,7 @@ class HomeController extends ChangeNotifier
     _statusSub?.cancel();
     _ccStatusSub?.cancel();
     _ccGroupsSub?.cancel();
-    _groupsWatchdogTimer?.cancel();
+    _groupsPullTimer?.cancel();
     super.dispose();
   }
 
@@ -576,44 +576,50 @@ class HomeController extends ChangeNotifier
     });
     // §2.8 — теперь sink'и стоят → поднимаем screenClient (groups/connections).
     unawaited(_cc.connectScreen());
-    // §122 — groups-watchdog против гонки ядрового `waitForStarted`
-    // (SubscribeGroups): group-стрим при подключении в фазе STARTING может
-    // пропустить событие STARTED (lost-wakeup) → groups:[] «иногда». Если через
-    // паузу группы не пришли — пересоздаём screenClient (тогда сервис уже
-    // STARTED, гонки нет). Несколько попыток с нарастающей задержкой.
-    _startGroupsWatchdog();
+    // §122/SPEC015 — детерминированный pull стартового снапшота групп. Раньше
+    // тут был watchdog, пересоздававший весь screenClient (`refreshScreen`) —
+    // он НЕ заставлял ядро переслать снапшот (device-факт: 2 ретрая впустую).
+    // Теперь честный unary `getGroups`: читает дерево групп напрямую, минуя
+    // гонку стартового push'а (`waitForStarted`/SubscribeGroups). Push-стрим
+    // остаётся для live-обновлений; pull — гарантия что экран не пуст.
+    _startGroupsPull();
   }
 
-  Timer? _groupsWatchdogTimer;
-  int _groupsRetries = 0;
-  // §122 — максимум 2 авто-ретрая (не висеть). Дальше юзер тянет pull-to-refresh.
-  static const _maxGroupsRetries = 2;
+  Timer? _groupsPullTimer;
+  // getGroups бросает (status.Error), пока сервис не STARTED — ретраим короткими
+  // шагами, ПОКА не получим снапшот. Не «N попыток и сдаёмся»: pull дешёвый и
+  // детерминированный, тянем до успеха либо до ухода из connected.
+  static const _groupsPullStep = Duration(milliseconds: 400);
+  static const _groupsPullMaxAttempts = 12; // ~5с суммарно — щедрый STARTED- window
 
-  void _startGroupsWatchdog() {
-    _groupsWatchdogTimer?.cancel();
-    _groupsRetries = 0;
-    _scheduleGroupsCheck();
-  }
-
-  void _scheduleGroupsCheck() {
-    _groupsWatchdogTimer?.cancel();
-    // Задержка: 1.2s, затем 1.8s. Даём ядру встать (STARTED), потом сдаёмся —
-    // дальше ручной pull-to-refresh (надёжнее любого числа авто-попыток).
-    final delay = Duration(milliseconds: 1200 + _groupsRetries * 600);
-    _groupsWatchdogTimer = Timer(delay, () {
-      if (!_state.tunnelUp) return;
-      // Группы уже есть — гонка не сработала, watchdog не нужен.
+  void _startGroupsPull([int attempt = 0]) {
+    _groupsPullTimer?.cancel();
+    _groupsPullTimer = Timer(_groupsPullStep, () async {
+      if (!_state.tunnelUp) return; // ушли из connected — pull неактуален
+      // Группы уже наполнены (push доехал) — pull не нужен.
       if (_state.ccGroups.isNotEmpty) return;
-      if (_groupsRetries >= _maxGroupsRetries) {
-        _addDebug(DebugSource.app,
-            '[cc] groups empty after $_maxGroupsRetries retries — pull to refresh');
-        return; // не висим: сдаёмся, ждём ручной refresh
+      final groups = await _cc.getGroups();
+      if (!_state.tunnelUp) return; // могли уйти за await
+      if (groups == null) {
+        // Ядро ещё не STARTED (getGroups бросил) — ретраим.
+        if (attempt + 1 < _groupsPullMaxAttempts) {
+          _startGroupsPull(attempt + 1);
+        } else {
+          _addDebug(DebugSource.app,
+              '[cc] getGroups still unavailable after $_groupsPullMaxAttempts attempts');
+        }
+        return;
       }
-      _groupsRetries++;
+      if (groups.isEmpty) {
+        // STARTED, но групп реально нет (конфиг без selector'ов) — применим как
+        // есть (один раз), повторно не тянем.
+        _addDebug(DebugSource.app, '[cc] getGroups → empty (no selector groups)');
+        _applyGroups(groups);
+        return;
+      }
       _addDebug(DebugSource.app,
-          '[cc] groups empty → refreshScreen (retry $_groupsRetries/$_maxGroupsRetries)');
-      unawaited(_cc.refreshScreen());
-      _scheduleGroupsCheck();
+          '[cc] getGroups pull → ${groups.length} groups');
+      _applyGroups(groups);
     });
   }
 
@@ -624,8 +630,8 @@ class HomeController extends ChangeNotifier
     _ccStatusSub = null;
     _ccGroupsSub?.cancel();
     _ccGroupsSub = null;
-    _groupsWatchdogTimer?.cancel();
-    _groupsWatchdogTimer = null;
+    _groupsPullTimer?.cancel();
+    _groupsPullTimer = null;
     _lastCcStatusAt = null;
     // §122 — сбросить replay-кэши, чтобы при следующем connect новый подписчик
     // не получил устаревший снапшот прошлой сессии (мигание старых групп/нод).
@@ -679,9 +685,10 @@ class HomeController extends ChangeNotifier
     // пустой снапшот = перетереть live `ccGroups/groups/nodes` пустотой
     // (device-факт: groups мелькают 95→0). Игнорируем пустой push, если уже есть
     // непустой снапшот. Первый легитимный пустой (старт, ccGroups ещё пуст)
-    // проходит. Детерминированный фикс — ядровой getGroups-pull (ждём релиз);
-    // этот guard — корректная защита и без него (не «обезьянье тыканье»: пустых
-    // групп при connected не бывает).
+    // проходит. Детерминированное наполнение — unary `getGroups`-pull
+    // (`_startGroupsPull`, SPEC015); этот guard — защита live-данных от пустых
+    // push'ей и при наличии pull (не «обезьянье тыканье»: пустых групп при
+    // connected не бывает).
     if (groups.isEmpty && _state.ccGroups.isNotEmpty) {
       _addDebug(DebugSource.app,
           '[cc] empty groups push ignored (have ${_state.ccGroups.length} live)');
@@ -724,19 +731,22 @@ class HomeController extends ChangeNotifier
     _applyGroups(_state.ccGroups);
   }
 
-  /// §122 — ручной pull-to-refresh (свайп вниз на списке нод). ПРИНУДИТЕЛЬНО
-  /// пересоздаёт screenClient (`refreshScreen`) — это лечит гонку ядрового
-  /// `waitForStarted` (groups:[] «иногда»): на повторном подключении сервис уже
-  /// STARTED, группы гарантированно придут. Надёжнее любого числа авто-ретраев.
+  /// §122/SPEC015 — ручной pull-to-refresh (свайп вниз на списке нод). Тянет
+  /// свежий снапшот групп через unary `getGroups` (детерминированно, не
+  /// пересоздавая screenClient как раньше). `null` (ядро не STARTED) → оставляем
+  /// текущее; непустой → применяем. Закрывает остаточную гонку push'а.
   Future<void> pullToRefresh() async {
     if (!_state.tunnelUp) {
       _applyGroups(_state.ccGroups);
       return;
     }
-    await _cc.refreshScreen();
-    // Дать ядру переслать снапшот groups; стрим обновит state сам.
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    _applyGroups(_state.ccGroups);
+    final groups = await _cc.getGroups();
+    if (!_state.tunnelUp) return;
+    if (groups != null) {
+      _applyGroups(groups);
+    } else {
+      _applyGroups(_state.ccGroups);
+    }
   }
 
   Future<void> applyGroup(String? tag) async {

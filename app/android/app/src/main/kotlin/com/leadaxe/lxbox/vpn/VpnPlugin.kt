@@ -527,9 +527,6 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "ccDisconnectScreen" -> {
                 BoxService.commandClient?.disconnectScreen(); result.success(true)
             }
-            "ccRefreshScreen" -> {
-                BoxService.commandClient?.refreshScreen(); result.success(true)
-            }
             "ccConnectProfiler" -> {
                 BoxService.commandClient?.connectProfiler(); result.success(true)
             }
@@ -556,6 +553,16 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val cc = BoxService.commandClient
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.getRules() ?: emptyList<Map<String, Any>>() }
+                    result.success(r)
+                }
+            }
+            // §122/SPEC015 — unary pull-снапшот групп. null = не смогли прочитать
+            // (не-STARTED/нет клиента) → Dart различает от пустого списка и не
+            // трогает state. Закрывает потерянный стартовый push (pull-vs-push).
+            "ccGetGroups" -> {
+                val cc = BoxService.commandClient
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) { cc?.getGroups() }
                     result.success(r)
                 }
             }

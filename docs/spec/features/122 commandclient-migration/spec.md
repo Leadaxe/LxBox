@@ -665,6 +665,22 @@ message Rule { string type; string payload; string action; bool isDNS; }
 
 Ранее `1e8` (0.1с) считался причиной groups:[] и был откачен на `1000` (1мкс). Но §14.1 показал: корень — опоздавший `Stopped`, **не** интервал. Поэтому `STATUS_INTERVAL` возвращён на `1e8` (целевая частота 0.1с, как просил юзер) под проверку на железе, что регрессии больше нет. UI-нагрузка от частого тика поглощается троттлами (главный экран `_trafficEmitThrottle`=1с; память Stats `_memoryRefresh`=3с; Stats/Conns берут полный 0.1с-поток). **Статус: ждёт device-подтверждения** (`CE8XX48PCI79U4XG`): прогнать 5+ реконнектов — группы не должны пустеть.
 
+### §14.3 `getGroups`-pull — детерминированный фикс (ядро rc.4 / SPEC 015)
+
+Корень (B) §14.1 (пустой/потерянный стартовый push групп из-за гонки `waitForStarted`/`SubscribeGroups`) закрыт **детерминированно** ядром: `v1.14.0-lx.1-rc.4` добавил unary `getGroups`/`getOutbounds` pull-RPC (за `with_lx_command`) + фикс `readGroups() len<2` ([ядровой SPEC 015](../../../../sing-box-lx/SPECS/015-COMMAND_PROTOCOL_RPC_EXTENSIONS/SPEC.md)). Push-only стрим больше не единственный источник — снапшот групп можно перечитать в любой момент при `STARTED`.
+
+**Клиентская интеграция (без костылей):**
+- `libbox.version` → `v1.14.0-lx.1-rc.4`.
+- `BoxCommandClient.getGroups(): List<Map>?` — `null`=не-STARTED/нет клиента, `[]`=групп нет; общий сериализатор `serializeGroup` для push (`writeGroups`) и pull (одинаковый Map → один Dart-парсер `CcGroup.fromMap`).
+- `VpnPlugin` case `ccGetGroups` на `Dispatchers.IO` (как `ccUrlTestOutbound`/`ccGetRules` — не блокировать main).
+- `CcChannel.getGroups(): List<CcGroup>?`.
+- `HomeController._startGroupsPull` — при `connected` тянет `getGroups` (ретрай 400мс×12, пока ядро не `STARTED` — `getGroups` бросает до `STARTED`); первый непустой → `_applyGroups`. `pullToRefresh` тоже на `getGroups`.
+- **Выпилены костыли:** groups-watchdog (`_startGroupsWatchdog`/`_scheduleGroupsCheck`/ретраи) и `refreshScreen` целиком (Dart `CcChannel.refreshScreen` + `ccRefreshScreen` case + native `refreshScreen()`) — `refreshScreen` НЕ перечитывал группы (device-факт §14.1: 2 ретрая впустую), pull его заменяет.
+- empty-push-guard (§14.1-B) **оставлен** — защищает live-данные от пустых push'ей и при наличии pull.
+- Клиентского зеркального `len<2` у нас нет — фикс ядра проявляется без правок геттеров.
+
+`getOutbounds` пока не используется (нужен только для плоского списка с endpoint'ами/одиночными outbound'ами — у нас node-list строится из групп; зарезервирован).
+
 ---
 
 > **Железные проверки отложены.** Телефон `CE8XX48PCI79U4XG` сейчас НЕ подключён — все пункты Q1–Q8 (§9) разрешаются на устройстве до закрытия соответствующих фаз; до этого момента статус спеки остаётся Draft.
