@@ -814,9 +814,20 @@ class HomeController extends ChangeNotifier
           _addDebug(DebugSource.app, 'Interrupt-on-switch failed: $e');
         }
       }
-      // Groups-стрим сам приедет с новым `selected`; пере-применяем сразу для
-      // мгновенного отклика UI (не ждём следующий снапшот).
-      await reloadProxies();
+      // §122/SPEC015 — после selectOutbound ТЯНЕМ свежий снапшот через
+      // getGroups-pull, а не reloadProxies() поверх СТАРОГО `_state.ccGroups`
+      // (там `selected` ещё прежний → горела старая нода до ручного свайпа).
+      // Раньше выручал groups-push с новым `selected`, но он приходит не сразу/
+      // не всегда — pull детерминирован. Оптимистично сразу подсветим выбранную
+      // (highlightedNode уже = nodeTag), затем pull подтвердит `activeInGroup`.
+      final fresh = await _cc.getGroups();
+      if (fresh != null) {
+        _applyGroups(fresh);
+      } else {
+        // ядро не отдало (редко) — пере-применим что есть + оптимистично выбор.
+        _applyGroups(_state.ccGroups);
+        _emit(_state.copyWith(activeInGroup: nodeTag));
+      }
       _addDebug(DebugSource.app, 'Node selected: $nodeTag');
       // §047 — outgoing state event (gated, default OFF). reason=user: явный
       // выбор ноды (через UI или automation SWITCH_NODE — оба идут сюда).

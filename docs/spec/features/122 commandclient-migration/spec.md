@@ -681,6 +681,20 @@ message Rule { string type; string payload; string action; bool isDNS; }
 
 `getOutbounds` пока не используется (нужен только для плоского списка с endpoint'ами/одиночными outbound'ами — у нас node-list строится из групп; зарезервирован).
 
+### §14.4 Три канала статуса/данных — финальная архитектура (гибрид, НЕ инверсия)
+
+После разбора (юзер + ядровая сторона) зафиксированы **три раздельных канала**, каждый по природе данных. Это лекарство от спутывания, из которого росли баги пустых групп и дребезга.
+
+| Канал | Источник | Транспорт | Природа | Решение |
+|---|---|---|---|---|
+| **VPN-статус** (connected/disconnected/connecting/error) | нативный `BoxService.setStatus()` | Android `BROADCAST_STATUS` → EventChannel → `_handleStatusEvent` | **событие** | **оставить как есть** |
+| **CC-groups** (дерево групп / выбор ноды / urlTestDelay) | ядро `SubscribeGroups` (push) + `getGroups` (pull, rc.4) | CommandClient gRPC | **состояние** | **гибрид push+pull** |
+| **CC-stats** (скорость/память/conns-бейдж) | ядро `CommandStatus` | CommandClient gRPC | **поток** | **push** |
+
+**VPN-статус — НЕ подключать `SubscribeServiceStatus`.** Он идёт через CommandClient, а тот сам подключается/отваливается: если соединение CommandClient оборвётся, а ядро живёт — `SubscribeServiceStatus`-стрим умрёт, UI решит что VPN упал, хотя он работает. Нативный `BoxService.setStatus`→broadcast не зависит от жизни CommandClient — ближе к источнику истины (самому VpnService), надёжнее для «туннель up/down». Наш `setStatus` уже шлёт все фазы (Starting/Started/Stopping/Stopped/revoked + errorMessage) → connecting/error-причина покрыты нативно, `SubscribeServiceStatus` дублировал бы их через более хрупкий канал. (Примечание: в AAR rc.4 `CommandServiceStatus` и так нет — только `CommandStatus=1`/`CommandGroup=2`/`CommandClashMode=3`.)
+
+**CC-groups — гибрид, НЕ чистый pull.** Push (`_cc.groups.listen`/`_onCcGroups`) остаётся: несёт **live-обновления** — авто-переключение urltest-группы (ядро само сменило `selected`) и `urlTestDelay` внутри групп (будится `urlTestObserver`). Убрать push = потерять эти обновления (UI покажет старый urltest-выбор до ручного действия). Pull (`getGroups`) добавлен как **lifeline** там, где push ненадёжен: старт (потерянный снапшот, `_startGroupsPull`) + после `switchNode` (мгновенный новый `selected`, не ждём push). Delay одиночных узлов (`lastDelay`) идёт **синхронно из `URLTestOutbound`-RPC**, НЕ из groups-push — этот путь закрыт §122 (mass-ping пишет `_state.lastDelay` напрямую).
+
 ---
 
 > **Железные проверки отложены.** Телефон `CE8XX48PCI79U4XG` сейчас НЕ подключён — все пункты Q1–Q8 (§9) разрешаются на устройстве до закрытия соответствующих фаз; до этого момента статус спеки остаётся Draft.
