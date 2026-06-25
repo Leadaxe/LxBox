@@ -99,16 +99,10 @@ List<AppBanner> activeBanners(
       onTap: a.onConfirmStop,
     ));
   }
-  if (s.lastError.isNotEmpty) {
-    out.add(AppBanner(
-      key: 'last_error',
-      message: s.lastError,
-      icon: Icons.error_outline,
-      palette: BannerPalette.error,
-      autoDismiss: const Duration(seconds: 15),
-      onDismiss: a.onClearError,
-    ));
-  }
+  // §166 — lastError больше НЕ показывается верхним баннером: ошибки идут
+  // всплывашкой СНИЗУ (SnackBar в home_screen._onControllerChange). Баннер
+  // сверху перекрывал контент и был навязчив. config_load_error (выше) —
+  // отдельный actionable-баннер (рестарт), остаётся.
   return out;
 }
 

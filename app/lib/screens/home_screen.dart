@@ -231,8 +231,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         _permissionDialogShowing = false;
       });
     }
-    // §116 — auto-dismiss таймер lastError переехал в BannerStack
-    // (централизованная banner-машинерия). Здесь больше не управляем.
+    // §166 — обычные ошибки показываем ВСПЛЫВАШКОЙ СНИЗУ (SnackBar), не красным
+    // баннером сверху. Новая lastError (не location-alert, тот обработан выше) →
+    // snackbar + clearError, чтобы верхний banner не зажёгся. Location-alert и
+    // config_load_error идут своими путями (dialog / отдельный banner-ключ).
+    if (nowError != _prevError &&
+        nowError.isNotEmpty &&
+        !nowError.contains('alert:permission_location:')) {
+      final msg = nowError;
+      _controller.clearError();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: Text(msg),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+          ));
+      });
+    }
 
     // §083 — per-channel match-filter memory. Канал сменился → save старого
     // + restore нового. ViewModel сам guard'ит no-op и notify'ит только при
@@ -520,14 +538,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     await _rebuildConfig();
     if (!mounted) return;
     await _controller.start();
-    if (mounted && _controller.state.lastError.isNotEmpty && !_controller.state.tunnelUp) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_controller.state.lastError),
-          duration: const Duration(seconds: 5),
-        ),
-      );
-    }
+    // §166 — snackbar ошибки теперь централизован в _onControllerChange
+    // (любой источник lastError → всплывашка снизу). Здесь дубль убран.
   }
 
   Future<void> _startWithAutoRefresh() async {
