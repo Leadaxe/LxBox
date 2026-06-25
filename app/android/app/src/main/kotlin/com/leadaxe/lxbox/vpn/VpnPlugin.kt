@@ -249,6 +249,19 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
             "getConfig" -> result.success(ConfigManager.load())
             "startVPN" -> startVpn(result)
+            // §165 — headless-старт (Debug API / automation): без Activity, БЕЗ
+            // consent-диалога. Работает ТОЛЬКО если VPN-разрешение уже выдано
+            // (prepare==null). Тот же путь, что §047 LxBoxIntentReceiver/Tile.
+            // Возвращает {"started":bool, "needs_consent":bool}.
+            "startVpnHeadless" -> {
+                val needConsent = VpnService.prepare(context.applicationContext) != null
+                if (needConsent) {
+                    result.success(mapOf("started" to false, "needs_consent" to true))
+                } else {
+                    BoxVpnService.start(context)
+                    result.success(mapOf("started" to true, "needs_consent" to false))
+                }
+            }
             "stopVPN" -> stopVpn(result)
             "forceStopVPN" -> {
                 // §129 — жёсткая остановка при зависшем-вхолостую ядре. Fire-and-

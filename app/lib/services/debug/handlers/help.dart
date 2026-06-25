@@ -101,7 +101,9 @@ POST /logs/clear[?source=app|core]  Clear AppLog. No source — everything; othe
 
 === Actions (mutating, POST) ===
 
-POST /action/start-vpn                         Start the tunnel → {"ok":true,"action":"start-vpn"}
+POST /action/start-vpn                         Start the tunnel (via Activity, may show consent) → {"ok":true}
+POST /action/start-vpn-headless                Start WITHOUT Activity/consent (needs permission already granted)
+                                                  → {"started":bool,"needs_consent":bool}. For automation/self-test.
 POST /action/stop-vpn                          Stop it
 POST /action/reconnect                         Stop→Start under one busy-wrap (delegates to start if down)
 POST /action/reload-vpn                        In-place sing-box reload (no service kill). → {"applied":<bool>}
@@ -328,7 +330,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/logs', 'params': {'limit': 'N (default 200)', 'source': 'app|core', 'q': 'substring search', 'level': 'comma-separated: error,warn,info,debug'}, 'description': 'AppLog entries'},
     {'method': 'POST', 'path': '/logs/clear', 'description': 'Clear AppLog'},
     // Actions
-    {'method': 'POST', 'path': '/action/start-vpn', 'description': 'Start tunnel'},
+    {'method': 'POST', 'path': '/action/start-vpn', 'description': 'Start tunnel (via Activity, may show consent)'},
+    {'method': 'POST', 'path': '/action/start-vpn-headless', 'description': 'Start without Activity/consent (needs permission granted) → {started,needs_consent}'},
     {'method': 'POST', 'path': '/action/stop-vpn', 'description': 'Stop tunnel'},
     {'method': 'POST', 'path': '/action/reconnect', 'description': 'Stop→Start under one busy-wrap (start if down)'},
     {'method': 'POST', 'path': '/action/reload-vpn', 'description': 'In-place sing-box reload (no service kill) → {applied}'},

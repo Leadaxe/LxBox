@@ -8,6 +8,7 @@ import '../../app_log.dart';
 import '../../automation/handlers.dart' as automation;
 import '../../error_humanize.dart';
 import '../../platform_channels.dart';
+import '../../../vpn/box_vpn_client.dart';
 import '../../rule_set_downloader.dart';
 import '../../settings_storage.dart';
 import '../../update_checker.dart';
@@ -40,6 +41,7 @@ Future<DebugResponse> actionHandler(
     '/action/switch-node' => _switchNode(req, ctx),
     '/action/set-group' => _setGroup(req, ctx),
     '/action/start-vpn' => _startVpn(ctx),
+    '/action/start-vpn-headless' => _startVpnHeadless(),
     '/action/stop-vpn' => _stopVpn(ctx),
     '/action/reconnect' => _reconnect(ctx),
     '/action/reload-vpn' => _reloadVpn(ctx),
@@ -246,6 +248,21 @@ Future<DebugResponse> _startVpn(DebugContext ctx) async {
 Future<DebugResponse> _stopVpn(DebugContext ctx) async {
   await automation.actionStopVpn(ctx);
   return _ok('stop-vpn');
+}
+
+/// `POST /action/start-vpn-headless` — §165. Поднять VPN БЕЗ Activity/consent —
+/// для автономного тестирования/automation. Работает только если VPN-разрешение
+/// уже выдано юзером ранее (тот же путь, что §047 Tasker-старт). Если разрешения
+/// нет — `needs_consent:true`, нужен ручной старт из UI. В отличие от `start-vpn`
+/// (идёт через Activity и может показать consent-диалог), этот стартует прямо
+/// через `BoxVpnService.start()`. Debug API живёт в Flutter-процессе (не привязан
+/// к VPN), поэтому роут доступен при опущенном туннеле.
+Future<DebugResponse> _startVpnHeadless() async {
+  final r = await BoxVpnClient().startVpnHeadless();
+  return _ok('start-vpn-headless', {
+    'started': r.started,
+    'needs_consent': r.needsConsent,
+  });
 }
 
 /// `POST /action/force-stop-vpn` — §140, debug/diagnostics.
