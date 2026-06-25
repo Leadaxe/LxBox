@@ -180,7 +180,8 @@ class _ConnectionDetailSheet extends StatelessWidget {
 
     // Routing
     out.addAll(_group(context, 'Routing', [
-      _row(context, 'Rule', conn.rule),
+      // Пустой rule = route.final (default-маршрут без явного правила) → `final`.
+      _row(context, 'Rule', conn.rule.isNotEmpty ? conn.rule : 'final'),
       if (conn.outbound.isNotEmpty) _row(context, 'Outbound', conn.outbound),
       if (conn.outboundType.isNotEmpty)
         _row(context, 'Outbound type', conn.outboundType),

@@ -193,7 +193,7 @@ class _OverviewTabState extends State<OverviewTab> {
           Padding(
             padding: const EdgeInsets.only(left: 20, top: 2),
             child: Text(
-              '${c.network.toUpperCase()} · ${c.rule} · $duration',
+              '${c.network.toUpperCase()} · ${c.rule.isNotEmpty ? c.rule : 'final'} · $duration',
               style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
             ),
           ),

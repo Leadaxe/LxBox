@@ -316,12 +316,14 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                     overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                // Row 3: protocol · rule · duration. rule ОБЯЗАТЕЛЬНО (getRule).
+                // Row 3: protocol · rule · duration. Пустой rule = соединение
+                // пошло по route.final (default-маршрут, без явного правила) —
+                // пишем `final`, как Clash (а не `—`).
                 Padding(
                   padding: const EdgeInsets.only(left: 22, top: 2),
                   child: Text(
                     '${network.toUpperCase()}'
-                    '  ·  ${rule.isNotEmpty ? rule : '—'}'
+                    '  ·  ${rule.isNotEmpty ? rule : 'final'}'
                     '${closed ? '  ·  closed' : ''}'
                     '${duration != null ? '  ·  ${_formatDuration(duration)}' : ''}',
                     style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
