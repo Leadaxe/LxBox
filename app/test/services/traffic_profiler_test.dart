@@ -106,6 +106,35 @@ void main() {
       expect(session.byDomain.containsKey('cdn.t-bank-app.ru'), true);
     });
 
+    test('§180-fix — ядро шлёт rdata ПОЛНОЙ RR-строкой → берём значение', () async {
+      // device dev.72: DnsAnswer.rdata = "name TTL IN TYPE value" (НЕ голое
+      // значение). ip = последнее поле A-записи; cname target — без trailing dot.
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'google.com',
+          queryType: 1,
+          rcode: 0,
+          packageName: 'ru.tinkoff.investing',
+          answers: [
+            CcDnsAnswer(
+                name: 'yt3.ggpht.com',
+                type: 5,
+                rdata: 'yt3.ggpht.com. 204 IN CNAME wide-youtube.l.google.com.'),
+            CcDnsAnswer(
+                name: 'google.com',
+                type: 1,
+                rdata: 'google.com. 29 IN A 64.233.165.139'),
+          ],
+        ),
+      ]);
+      final ev = TrafficProfiler.I.active!.events
+          .firstWhere((e) => e.kind == TrafficEventKind.dnsResolve);
+      expect(ev.ip, '64.233.165.139', reason: 'A: последнее поле, не вся строка');
+      expect(ev.cnameChain, ['wide-youtube.l.google.com'],
+          reason: 'CNAME: target без trailing dot');
+    });
+
     test('non-target package events are ignored', () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
       // §180 — packageName приходит ИЗ ЯДРА прямо в CcDnsQuery; чужой пакет

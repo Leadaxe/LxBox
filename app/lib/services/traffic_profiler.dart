@@ -618,6 +618,18 @@ class TrafficProfiler extends ChangeNotifier {
     }
   }
 
+  /// §180-fix (device dev.72) — ядро отдаёт `DnsAnswer.rdata` ПОЛНОЙ RR-строкой
+  /// "name TTL IN TYPE value" (а не голым значением). Значение записи = последнее
+  /// поле: для A/AAAA это IP, для CNAME — target-домен (с trailing dot, срезаем).
+  /// Если строка без пробелов (ядро уже дало чистое значение) — отдаём как есть.
+  static String _rdataValue(String rdata) {
+    final s = rdata.trim();
+    if (s.isEmpty) return s;
+    final lastSpace = s.lastIndexOf(' ');
+    final value = lastSpace >= 0 ? s.substring(lastSpace + 1) : s;
+    return value.endsWith('.') ? value.substring(0, value.length - 1) : value;
+  }
+
   /// §180 — батч DNS-событий из ядра (SPEC 018 `subscribeDNSQueries`). Заменяет
   /// текстовый `_handleDnsLine`/`_handleDnsFailLine`. Атрибуция к приложению —
   /// `q.packageName` ИЗ ЯДРА (processInfo), не connId-сшивка (корень §177-баннера).
@@ -665,10 +677,17 @@ class TrafficProfiler extends ChangeNotifier {
     // Q3 (SPEC 018): cnameChain = CNAME-hops из answers; ip = первый A/AAAA.
     // Аттрибуция на ОРИГИНАЛЬНЫЙ домен (q.domain), не на финальный target —
     // как в текстовом пути (юзер видит что app запрашивал, CNAME chain отдельно).
-    final cnameChain =
-        q.answers.where((a) => a.isCname).map((a) => a.rdata).toList();
-    final addresses =
-        q.answers.where((a) => a.isAddress).map((a) => a.rdata).toList();
+    // §180-fix (device dev.72): ядро в DnsAnswer.rdata кладёт ПОЛНУЮ RR-строку
+    // "name TTL IN TYPE value" (напр. "google.com. 29 IN A 64.233.165.139"),
+    // НЕ голое значение → берём последнее поле (_rdataValue).
+    final cnameChain = q.answers
+        .where((a) => a.isCname)
+        .map((a) => _rdataValue(a.rdata))
+        .toList();
+    final addresses = q.answers
+        .where((a) => a.isAddress)
+        .map((a) => _rdataValue(a.rdata))
+        .toList();
     final ip = addresses.isNotEmpty ? addresses.first : null;
 
     _routeEvent(TrafficEvent(
@@ -685,7 +704,7 @@ class TrafficProfiler extends ChangeNotifier {
       // не-адресные типы (HTTPS/SVCB/SOA…): rdata первого answer в extra (было
       // `extra: {'answer': ...}`), чтобы Live показывал что app сделал такой query.
       extra: (ip == null && q.answers.isNotEmpty)
-          ? {'answer': q.answers.first.rdata}
+          ? {'answer': _rdataValue(q.answers.first.rdata)}
           : null,
     ));
   }

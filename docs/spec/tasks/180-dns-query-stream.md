@@ -1,15 +1,19 @@
 # §180 — DNS на структурный стрим `subscribeDNSQueries` (ядро SPEC 018)
 
 **Тип:** feature (выпил текстового DNS-парсинга → структурный live-поток с атрибуцией из ядра)
-**Статус:** Клиент РЕАЛИЗОВАН (Dart 39 тестов зелёных, analyze чист, APK rc.7
-собран). **БЛОКЕР ЯДРА (device dev.71, rc.7):** ядро отдаёт `rpc error: code =
-Unimplemented desc = DNS query tracking not available`. RPC `SubscribeDNSQueries`
-объявлен в proto/биндинге (javap классы видит), НО серверная реализация в AAR
-rc.7 НЕ активна. Наша сторона дошла штатно: `connectProfiler → connected gen=2`,
-`subscribeDNSQueries` вызван, `DnsHandler.onError` поймал Unimplemented, профайлер
-не упал, TCP/UDP идут. Ждём ядро с активированным DNS-tracking. ВАЖНО: до фикса
-ядра DNS в Live ПУСТ (вариант A — старого текстового пути нет, новый не отвечает).
-Решения: §180.5 = вариант A; §177-баннер не трогаем. Биндинг rc.7 сверен javap:
+**Статус:** Клиент РЕАЛИЗОВАН (Dart 40 тестов зелёных, analyze чист). **DNS-СТРИМ
+РАБОТАЕТ на rc.8** (device dev.72): 119 DNS/60с, cnameChain, dnsFail структурны.
+- rc.7 отдавал `Unimplemented` (service-registry key mismatch) → **ядро починило
+  в rc.8** (FEEDBACK-1).
+- rc.8 device выявил ДВА:
+  1. **Наш баг (ПОФИКСЕН):** ядро отдаёт `DnsAnswer.RData` ПОЛНОЙ RR-строкой
+     (`"google.com. 29 IN A 64.233.165.139"`), не голым значением → `_rdataValue`
+     извлекает последнее поле (ip/cname-target). Device-verified: `ip=154.91...`.
+  2. **БЛОКЕР ЯДРА (FEEDBACK-2):** `DnsQuery.ProcessInfo` ПУСТ у 119/119 → DNS не
+     атрибутируется (всё unattributed), хотя router package определяет
+     (core-log). Тайминг ядра: ProcessInfo не заполнен в ctx эмита. Клиент читает
+     корректно (тот же код, что для connections). Ждём ядро.
+Решения: §180.5 = вариант A; §177-баннер не трогаем. Биндинг rc.8 как rc.7, javap:
 `subscribeDNSQueries(bool, DnsQueryHandler)→DnsQuerySubscription`,
 `DnsQuery{getDomain/getQueryType/getRcode/getTTL/getSource/getFailed/getError/
 getProcessInfo, answers()}`, `DnsQueryHandler{onQuery, onError}`.
