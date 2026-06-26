@@ -103,9 +103,12 @@ class LiveView extends StatelessWidget {
   ///             chain · rule · duration  (+ CNAME / DNS-record / маркеры)
   Widget _eventTileInner(
       BuildContext context, ColorScheme cs, String ts, TrafficEvent e) {
+    // §177 — DNS = один бейдж (как TCP): успех/сбой различаются ЦВЕТОМ, не
+    // текстом. dnsResolve — обычный (tertiary), dnsFail — красный (error).
+    // Эталон — TCP: tcpOpen синий / tcpClose серый, метка одна.
     final (Color kindColor, String kindLabel) = switch (e.kind) {
       TrafficEventKind.dnsResolve => (cs.tertiary, 'DNS'),
-      TrafficEventKind.dnsFail => (cs.error, 'DNS×'),
+      TrafficEventKind.dnsFail => (cs.error, 'DNS'),
       TrafficEventKind.tcpOpen => (cs.primary, 'TCP'),
       TrafficEventKind.tcpClose => (cs.outline, 'TCP·'),
       TrafficEventKind.udpOpen => (cs.secondary, 'UDP'),

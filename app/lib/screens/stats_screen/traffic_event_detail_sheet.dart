@@ -183,13 +183,14 @@ class _TrafficEventDetailSheet extends StatelessWidget {
     return out;
   }
 
-  /// §160 — kind-badge (цвет как в live_view: DNS tertiary / DNS× error /
-  /// TCP primary / TCP· outline / UDP secondary).
+  /// §160/§177 — kind-badge (цвет как в live_view: DNS tertiary / DNS-fail
+  /// error / TCP primary / TCP· outline / UDP secondary). §177 — DNS = один
+  /// бейдж, успех/сбой различаются ЦВЕТОМ (как TCP open/close).
   Widget _kindBadge(BuildContext context, TrafficEvent e) {
     final cs = Theme.of(context).colorScheme;
     final (Color color, String label) = switch (e.kind) {
       TrafficEventKind.dnsResolve => (cs.tertiary, 'DNS'),
-      TrafficEventKind.dnsFail => (cs.error, 'DNS×'),
+      TrafficEventKind.dnsFail => (cs.error, 'DNS'),
       TrafficEventKind.tcpOpen => (cs.primary, 'TCP'),
       TrafficEventKind.tcpClose => (cs.outline, 'TCP·'),
       TrafficEventKind.udpOpen => (cs.secondary, 'UDP'),

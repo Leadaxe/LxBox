@@ -251,11 +251,12 @@ class _TraceExplorerState extends State<TraceExplorer> {
             }),
           ),
         );
+    // §177 — фильтр по СЕМЕЙСТВУ, не по фазе: чип DNS ловит resolve+fail,
+    // TCP — open+close. Фазные чипы (DNS×/TCP·) убраны — фаза видна в бейдже
+    // (цвет) и деталях, отдельный фильтр по ней избыточен.
     return [
       chip('DNS', TrafficEventKind.dnsResolve),
-      chip('DNS×', TrafficEventKind.dnsFail),
       chip('TCP', TrafficEventKind.tcpOpen),
-      chip('TCP·', TrafficEventKind.tcpClose),
       chip('UDP', TrafficEventKind.udpOpen),
     ];
   }
@@ -295,7 +296,10 @@ class _TraceExplorerState extends State<TraceExplorer> {
   Iterable<TrafficEvent> _applyFilter(Iterable<TrafficEvent> src) {
     var list = src;
     if (_kindFilter.isNotEmpty) {
-      list = list.where((e) => _kindFilter.contains(e.kind));
+      // §177 — фильтр по семейству: dnsFail матчит выбранный DNS, tcpClose —
+      // выбранный TCP. _kindFilter держит представителя семейства (dnsResolve
+      // / tcpOpen / udpOpen — те, что в _kindChips).
+      list = list.where((e) => _kindFilter.contains(_kindFamily(e.kind)));
     }
     if (_onlyUnattributed) {
       list =
@@ -310,4 +314,13 @@ class _TraceExplorerState extends State<TraceExplorer> {
     }
     return list;
   }
+
+  /// §177 — представитель семейства для kind-фильтра: фазные виды (dnsFail,
+  /// tcpClose) сводятся к базовому чипу (dnsResolve, tcpOpen), чтобы один чип
+  /// ловил обе фазы. udpOpen — сам себе семейство.
+  static TrafficEventKind _kindFamily(TrafficEventKind k) => switch (k) {
+        TrafficEventKind.dnsFail => TrafficEventKind.dnsResolve,
+        TrafficEventKind.tcpClose => TrafficEventKind.tcpOpen,
+        _ => k,
+      };
 }
