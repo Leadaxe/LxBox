@@ -9,19 +9,24 @@ mixin _HeartbeatMixin on ChangeNotifier {
   // --- surface, предоставляемая HomeController / другими частями ---
   HomeState get _state;
   BoxVpnClient get _vpn;
-  ClashApiClient? get _clash;
-  set _clash(ClashApiClient? value);
   Timer? get _autoPingTimer;
   set _autoPingTimer(Timer? value);
   void _emit(HomeState next);
   void _addDebug(DebugSource source, String message);
   void cancelMassPing();
 
+  /// §122 — таймстемп последнего status-снапшота CommandClient'а (стрим тикает
+  /// 1s). Watchdog считает туннель мёртвым, если снапшотов нет дольше порога.
+  DateTime? get lastCcStatusAt;
+  void _stopCcStreams();
+
   Timer? _heartbeat;
   int _heartbeatFailures = 0;
 
-  static const _heartbeatInterval = Duration(seconds: 20);
-  static const _heartbeatTimeout = Duration(seconds: 4);
+  /// §122 — watchdog тикает чаще (status-стрим 1s): проверяем «тишину» канала,
+  /// а не делаем дорогой HTTP-запрос. 5s интервал, мёртв если 8s+ без снапшота.
+  static const _heartbeatInterval = Duration(seconds: 5);
+  static const _heartbeatTimeout = Duration(seconds: 8);
   static const _maxHeartbeatFailures = 2;
 
   /// Сторожок: heartbeat fail haptic стреляет один раз на серию,
@@ -41,73 +46,41 @@ mixin _HeartbeatMixin on ChangeNotifier {
     _heartbeatFailures = 0;
   }
 
+  /// §122 — watchdog поверх status-стрима. Не делает HTTP: проверяет, как давно
+  /// приходил последний status-снапшот (`lastCcStatusAt`). Стрим тикает 1s пока
+  /// ядро живо; затяжная тишина (> [_heartbeatTimeout]) = ядро не отвечает →
+  /// dead-tunnel recovery. traffic/proxies обновляют сами стримы (`_onCcStatus`/
+  /// `_onCcGroups`), heartbeat их больше не тянет.
   Future<void> _checkHeartbeat() async {
     if (!_state.tunnelUp) {
       _stopHeartbeat();
       return;
     }
-    final clash = _clash;
-    if (clash == null) return;
+    final last = lastCcStatusAt;
+    // Снапшота ещё не было (только-только connected) — даём каналу подняться,
+    // не штрафуем. Первый снапшот придёт в пределах ~1s.
+    if (last == null) return;
 
-    try {
-      final traffic = await clash.fetchTraffic().timeout(_heartbeatTimeout);
+    final silence = DateTime.now().difference(last);
+    if (silence <= _heartbeatTimeout) {
       _heartbeatFailures = 0;
-      // Заодно подтягиваем свежий proxies — urltest переключает ноду во
-      // времени (`now` field), без refresh'а UI показывает stale selection.
-      // Clash на localhost — запрос дешёвый, но не бесплатный (2-й loopback-
-      // HTTP + парсинг каждые 20с). §141 P0.3 — нужен ТОЛЬКО когда активная
-      // группа — urltest (её `now` дрейфует сама). Для Selector выбор меняется
-      // лишь явным действием юзера (`applyGroup`/`switchNode` фетчат сами), так
-      // что в heartbeat 2-й запрос для не-urltest — лишний.
-      Map<String, dynamic>? proxies;
-      if (_activeGroupIsUrltest()) {
-        try {
-          proxies = await clash.fetchProxies().timeout(_heartbeatTimeout);
-        } catch (_) {
-          // Non-fatal: traffic уже обновился, stale proxies переживём до next tick.
-        }
-      }
-      // §141 P1.2a — read-after-await: пока ждали traffic/proxies, туннель мог
-      // упасть (native-broadcast → _handleStatusEvent обнулил _clash, выставил
-      // TrafficSnapshot.zero). Без гейта мы перетёрли бы нулевой disconnected-
-      // traffic устаревшим ненулевым → UI на миг «оживает» после обрыва.
-      if (_clash != clash || !_state.tunnelUp) return;
-      _emit(_state.copyWith(
-        traffic: traffic,
-        proxiesJson: proxies ?? _state.proxiesJson,
-      ));
-    } catch (_) {
-      _heartbeatFailures++;
-      _addDebug(
-        DebugSource.app,
-        'Heartbeat failed ($_heartbeatFailures/$_maxHeartbeatFailures)',
-      );
-      if (_heartbeatFailures >= _maxHeartbeatFailures) {
-        _stopHeartbeat();
-        if (!_heartbeatFailNotified) {
-          HapticService.I.onHeartbeatFail();
-          _heartbeatFailNotified = true;
-        }
-        _onTunnelDead();
-      }
+      return;
     }
-  }
 
-  /// §141 P0.3 — активная группа — urltest? Определяем по последнему снимку
-  /// `proxiesJson` (предыдущий heartbeat-тик / refresh после connect). Если
-  /// группа неизвестна или снимка ещё нет — возвращаем `true` (консервативно
-  /// сохраняем прежнее поведение: лучше лишний fetch, чем потерять `now`-дрейф,
-  /// пока тип группы не определён). Как только снимок есть и группа НЕ urltest —
-  /// `false`, и 2-й loopback-запрос пропускается.
-  bool _activeGroupIsUrltest() {
-    final group = _state.selectedGroup;
-    if (group == null || group.isEmpty) return true;
-    final proxies = _state.proxiesJson;
-    if (proxies.isEmpty) return true;
-    final entry = ClashApiClient.proxyEntry(proxies, group);
-    if (entry == null) return true; // тип ещё неизвестен — не рискуем
-    final type = (entry['type']?.toString() ?? '').toLowerCase();
-    return type.contains('urltest');
+    _heartbeatFailures++;
+    _addDebug(
+      DebugSource.app,
+      'Heartbeat: cc status silent ${silence.inSeconds}s '
+      '($_heartbeatFailures/$_maxHeartbeatFailures)',
+    );
+    if (_heartbeatFailures >= _maxHeartbeatFailures) {
+      _stopHeartbeat();
+      if (!_heartbeatFailNotified) {
+        HapticService.I.onHeartbeatFail();
+        _heartbeatFailNotified = true;
+      }
+      _onTunnelDead();
+    }
   }
 
   void _onTunnelDead() {
@@ -116,22 +89,21 @@ mixin _HeartbeatMixin on ChangeNotifier {
     _autoPingTimer?.cancel();
     _autoPingTimer = null;
     // Полный cleanup как в `_handleStatusEvent` revoked/disconnected ветке —
-    // включая _clash=null (старый endpoint с невалидным secret'ом), traffic
-    // reset, connectedSince=null, configChangedNeedRestart=false. Единый
+    // traffic reset, connectedSince=null, configChangedNeedRestart=false. Единый
     // контракт очистки: через какой бы путь ни попали в «tunnel down»
     // (broadcast от native или heartbeat-timeout) — state в одинаковом
     // финальном виде.
-    _clash = null;
+    _stopCcStreams(); // §122 — гасим стримы + screenClient
     _emit(
       _state.copyWith(
         tunnel: TunnelStatus.revoked,
         // §140 — НЕ «another VPN may have taken over»: heartbeat-таймаут НЕ значит
         // перехват другим VPN (это синтез на стороне приложения, не системный
-        // onRevoke). Чаще — упал Clash API / ядро не отвечает. Прежний текст гнал
-        // ложные баг-репорты про «перехват». Реальный системный revoke пишет
+        // onRevoke). Чаще — ядро не отвечает. Прежний текст гнал ложные
+        // баг-репорты про «перехват». Реальный системный revoke пишет
         // отдельный текст ("VPN revoked by another app", см. _handleStatusEvent).
         lastError: 'Connection lost — VPN tunnel is not responding',
-        proxiesJson: <String, dynamic>{},
+        ccGroups: const <CcGroup>[],
         groups: <String>[],
         nodes: <String>[],
         highlightedNode: null,

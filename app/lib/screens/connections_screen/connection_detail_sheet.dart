@@ -3,22 +3,25 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../services/app_info_cache.dart';
 import '../../services/format_utils.dart';
-import '../connections_screen.dart' show packageNameFromProcess;
+import '../../vpn/cc_channel.dart';
 
 /// §152 — детальный bottom sheet по одному соединению.
 ///
-/// Тайл в [ConnectionsView] обрезает host/chain/process/rule ellipsis'ом —
-/// здесь показываем полный снимок `conn` (статичный, на момент тапа):
-/// сгруппированные `label : value`, только непустые поля, без ellipsis.
-/// Тап по строке копирует значение; footer — Copy JSON + Close.
+/// Тайл в [ConnectionsView] обрезает host/rule ellipsis'ом — здесь показываем
+/// полный снимок `conn` (статичный, на момент тапа): сгруппированные
+/// `label : value`, только непустые поля, без ellipsis. Тап по строке копирует
+/// значение; footer — Copy JSON + Close.
+///
+/// §122 — источник = `CcConnection` (libbox CommandClient). Доступные поля:
+/// id/network/domain/destination/rule/uplink/downlink/createdAt/closedAt.
+/// Нет chains/source/processPath/dnsMode (CommandClient их не отдаёт).
 ///
 /// [onClose] переиспользует `_ConnectionsViewState._closeConnection`
-/// (close через Clash API + рефреш списка).
+/// (close через CommandClient + аккумулятор сам обновит снапшот).
 Future<void> showConnectionDetailSheet(
   BuildContext context,
-  Map<String, dynamic> conn, {
+  CcConnection conn, {
   required bool closed,
   bool oneWay = false,
   required void Function(String id) onClose,
@@ -43,30 +46,29 @@ class _ConnectionDetailSheet extends StatelessWidget {
     required this.onClose,
   });
 
-  final Map<String, dynamic> conn;
+  final CcConnection conn;
   final bool closed;
   final bool oneWay;
   final void Function(String id) onClose;
 
-  Map<String, dynamic> get _meta =>
-      conn['metadata'] as Map<String, dynamic>? ?? const {};
-
-  String _str(Map<String, dynamic> m, String key) =>
-      m[key]?.toString().trim() ?? '';
+  /// Порт из "host:port" (часть после последнего ':').
+  String get _destPort {
+    final d = conn.destination;
+    final i = d.lastIndexOf(':');
+    if (i < 0 || i == d.length - 1) return '';
+    return d.substring(i + 1);
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final meta = _meta;
 
-    final host = _str(meta, 'host');
-    final destIp = _str(meta, 'destinationIP');
-    final destPort = _str(meta, 'destinationPort');
-    final id = conn['id']?.toString() ?? '';
-
-    final destination = host.isNotEmpty ? host : destIp;
-    final title =
-        destPort.isNotEmpty ? '$destination:$destPort' : destination;
+    final destination =
+        conn.domain.isNotEmpty ? conn.domain : conn.destination;
+    final port = _destPort;
+    final title = (conn.domain.isNotEmpty && port.isNotEmpty)
+        ? '$destination:$port'
+        : destination;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.6,
@@ -90,7 +92,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Row(
               children: [
-                _appIcon(context, packageNameFromProcess(_str(meta, 'processPath'))),
+                Icon(Icons.link, size: 20, color: cs.onSurfaceVariant),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -140,85 +142,75 @@ class _ConnectionDetailSheet extends StatelessWidget {
               ],
             ),
           ),
-          _footer(context, id),
+          _footer(context, conn.id),
         ],
       ),
     );
   }
 
   List<Widget> _sections(BuildContext context) {
-    final meta = _meta;
     final out = <Widget>[];
 
-    // Поля строго по контракту ядра sing-box-lx
-    // (clashapi/trafficontrol/tracker.go → TrackerMetadata.MarshalJSON):
-    // metadata = {network,type,sourceIP,destinationIP,sourcePort,
-    //             destinationPort,host,dnsMode,processPath}
-    // top = {id,upload,download,start,chains,rule,rulePayload}.
-    // sniffHost/GeoIP/ASN/uid/inboundName/process апстрим-Clash наш форк
-    // не сериализует — не показываем (иначе пустые секции / код-мусор).
+    // Поля по контракту libbox CommandClient (`CcConnection`):
+    // domain/destination/network/rule/uplink/downlink/createdAt/closedAt +
+    // §122 ProcessInfo (process/package) + outbound/outboundType/protocol.
+
+    // App (§122 — из getProcessInfo). Показываем только если есть данные.
+    if (conn.processPath.isNotEmpty || conn.packageName.isNotEmpty) {
+      out.addAll(_group(context, 'App', [
+        if (conn.processPath.isNotEmpty)
+          _row(context, 'Process', conn.processPath),
+        if (conn.packageName.isNotEmpty)
+          _row(context, 'Package', conn.packageName),
+      ]));
+    }
 
     // Destination
     out.addAll(_group(context, 'Destination', [
-      _row(context, 'Host', _str(meta, 'host')),
-      _row(context, 'Dest IP', _str(meta, 'destinationIP')),
-      _row(context, 'Dest port', _str(meta, 'destinationPort')),
-    ]));
-
-    // Source
-    out.addAll(_group(context, 'Source', [
-      _row(context, 'Source IP', _str(meta, 'sourceIP')),
-      _row(context, 'Source port', _str(meta, 'sourcePort')),
+      _row(context, 'Host', conn.domain),
+      _row(context, 'Destination', conn.destination),
+      _row(context, 'Dest port', _destPort),
     ]));
 
     // Network
     out.addAll(_group(context, 'Network', [
-      _row(context, 'Network', _str(meta, 'network')),
-      _row(context, 'Inbound', _str(meta, 'type')),
-      _row(context, 'DNS mode', _str(meta, 'dnsMode')),
+      _row(context, 'Network', conn.network),
+      if (conn.protocol.isNotEmpty) _row(context, 'Protocol', conn.protocol),
     ]));
 
-    // Process — ядро шлёт только processPath (для Android = package name +
-    // опц. uid/user в скобках); поле `process` всегда пустое, оставляем
-    // фолбэк на случай иной версии ядра.
-    final processPath = _str(meta, 'processPath');
-    final process = _str(meta, 'process');
-    out.addAll(_group(context, 'Process', [
-      _row(context, 'Path', processPath.isNotEmpty ? processPath : process),
-    ]));
-
-    // Routing — rulePayload в нашем форке всегда "" (не показываем).
-    final chains = (conn['chains'] as List<dynamic>?)
-            ?.map((e) => e.toString())
-            .where((e) => e.isNotEmpty)
-            .toList() ??
-        const [];
+    // Routing
     out.addAll(_group(context, 'Routing', [
-      if (chains.isNotEmpty)
-        _row(context, 'Chain', chains.join('\n')),
-      _row(context, 'Rule', conn['rule']?.toString() ?? ''),
+      // Пустой rule = route.final (default-маршрут без явного правила) → `final`.
+      _row(context, 'Rule', conn.rule.isNotEmpty ? conn.rule : 'final'),
+      if (conn.outbound.isNotEmpty) _row(context, 'Outbound', conn.outbound),
+      if (conn.outboundType.isNotEmpty)
+        _row(context, 'Outbound type', conn.outboundType),
     ]));
 
     // Traffic
-    final upload = conn['upload'] as int? ?? 0;
-    final download = conn['download'] as int? ?? 0;
     out.addAll(_group(context, 'Traffic', [
-      _row(context, 'Upload', '${formatBytes(upload)} ($upload B)'),
-      _row(context, 'Download', '${formatBytes(download)} ($download B)'),
+      _row(context, 'Upload', '${formatBytes(conn.uplink)} (${conn.uplink} B)'),
+      _row(context, 'Download',
+          '${formatBytes(conn.downlink)} (${conn.downlink} B)'),
     ]));
 
     // Timing
-    final start = conn['start']?.toString() ?? '';
-    final startTime = DateTime.tryParse(start);
     String timingStart = '';
     String timingDuration = '';
-    if (startTime != null) {
+    if (conn.createdAt > 0) {
+      final startTime =
+          DateTime.fromMillisecondsSinceEpoch(conn.createdAt);
       final local = startTime.toLocal();
       timingStart =
           '${local.year}-${_pad2(local.month)}-${_pad2(local.day)} '
           '${formatTime(local)}';
-      timingDuration =
-          formatDuration(DateTime.now().difference(startTime), daysRollup: true);
+      final end = closed && conn.closedAt > 0
+          ? DateTime.fromMillisecondsSinceEpoch(conn.closedAt)
+          : DateTime.now();
+      final diff = end.difference(startTime);
+      if (!diff.isNegative) {
+        timingDuration = formatDuration(diff, daysRollup: true);
+      }
     }
     out.addAll(_group(context, 'Timing', [
       _row(context, 'Started', timingStart),
@@ -227,39 +219,16 @@ class _ConnectionDetailSheet extends StatelessWidget {
 
     // ID
     out.addAll(_group(context, 'ID', [
-      _row(context, 'ID', conn['id']?.toString() ?? ''),
+      _row(context, 'ID', conn.id),
     ]));
 
     return out;
   }
 
-  /// §154 — launcher-иконка приложения по package (`processPath`), 20×20.
-  Widget _appIcon(BuildContext context, String pkg) {
-    const double size = 20;
-    final cs = Theme.of(context).colorScheme;
-    final placeholder = Icon(Icons.apps, size: size, color: cs.onSurfaceVariant);
-    if (pkg.isEmpty) return placeholder;
-    AppInfoCache.ensure(pkg);
-    return AnimatedBuilder(
-      animation: AppInfoCache.revision,
-      builder: (context, _) {
-        final icon = AppInfoCache.of(pkg)?.icon;
-        if (icon == null) return placeholder;
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(5),
-          child: Image.memory(icon,
-              width: size, height: size, gaplessPlayback: true),
-        );
-      },
-    );
-  }
-
   /// Плашка-пояснение для однобокого (зависшего) соединения.
   Widget _oneWayBanner(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final upload = conn['upload'] as int? ?? 0;
-    final download = conn['download'] as int? ?? 0;
-    final detail = upload > 0 && download == 0
+    final detail = conn.uplink > 0 && conn.downlink == 0
         ? 'Data sent (↑), no reply (↓0) — the stream looks stuck.'
         : 'Data received (↓), nothing sent (↑0) — the stream looks stuck.';
     return Container(
@@ -371,7 +340,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
               label: const Text('Copy JSON'),
               onPressed: () => _copy(
                 context,
-                const JsonEncoder.withIndent('  ').convert(conn),
+                const JsonEncoder.withIndent('  ').convert(_toJson()),
                 message: 'JSON copied',
               ),
             ),
@@ -393,6 +362,18 @@ class _ConnectionDetailSheet extends StatelessWidget {
       ),
     );
   }
+
+  Map<String, dynamic> _toJson() => {
+        'id': conn.id,
+        'network': conn.network,
+        'domain': conn.domain,
+        'destination': conn.destination,
+        'rule': conn.rule,
+        'uplink': conn.uplink,
+        'downlink': conn.downlink,
+        'createdAt': conn.createdAt,
+        'closedAt': conn.closedAt,
+      };
 
   void _copy(BuildContext context, String value, {String message = 'Copied'}) {
     Clipboard.setData(ClipboardData(text: value));

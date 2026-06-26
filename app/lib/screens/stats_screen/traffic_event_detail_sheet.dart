@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import '../../services/app_info_cache.dart';
 import '../../services/format_utils.dart';
 import '../../services/traffic_profiler.dart';
-import '../connections_screen.dart' show packageNameFromProcess;
+import '../../services/process_name.dart';
 
 /// §160 — детальный bottom-sheet по одному [TrafficEvent] (Live-лента
 /// per-app trace, в перспективе — и Stats→Live).
@@ -112,9 +112,19 @@ class _TrafficEventDetailSheet extends StatelessWidget {
     ]));
 
     // DNS
+    // rc.10 — DNS-сервер (какой сервер резолвил) + тип (udp/tls/https/…).
+    final dnsServer = e.extra?['dns_server']?.toString() ?? '';
+    final dnsServerType = e.extra?['dns_server_type']?.toString() ?? '';
+    final dnsServerLabel = dnsServer.isEmpty
+        ? ''
+        : (dnsServerType.isEmpty ? dnsServer : '$dnsServer ($dnsServerType)');
     out.addAll(_group(context, 'DNS', [
       _copyRow(context, 'Record', e.dnsRecordType ?? ''),
       _copyRow(context, 'CNAME', e.cnameChain.join(' → ')),
+      // rc.10 — какой DNS-сервер обработал запрос (на всех путях вкл. провалы).
+      _copyRow(context, 'DNS server', dnsServerLabel),
+      // источник ответа: exchanged (сетевой запрос) / cached (из кэша) / …
+      _copyRow(context, 'Source', e.extra?['source']?.toString() ?? ''),
     ]));
 
     // Network
@@ -123,24 +133,29 @@ class _TrafficEventDetailSheet extends StatelessWidget {
       _copyRow(context, 'Kind', e.kind.name),
     ]));
 
-    // Process — кликабельно → поиск; confidence красится по уровню.
-    out.addAll(_group(context, 'Process', [
-      _searchRow(context, 'Process', e.process ?? ''),
+    // §044 — App: иконка + имя приложения + package, плюс атрибуция.
+    // (бывш. Process — теперь с человекочитаемым именем и иконкой).
+    out.addAll(_group(context, 'App', [
+      _appRow(context, e.process ?? ''),
       _confidenceRow(context, e),
       _copyRow(context, 'Matched via', e.matchedVia ?? ''),
       _copyRow(context, 'Shown because', e.shownBecause ?? ''),
     ]));
 
-    // Routing
+    // Routing (§181) — единая цепочка решения + сырые оси для копирования.
     out.addAll(_group(context, 'Routing', [
-      _copyRow(context, 'Outbound', e.outboundChain.join('\n')),
-      _copyRow(
-        context,
-        'Rule',
-        (e.rulePayload != null && e.rulePayload!.isNotEmpty)
-            ? '${e.rule ?? ''} (${e.rulePayload})'
-            : (e.rule ?? ''),
-      ),
+      // Главная трассировка: [net] proc ⇒ rule ⇒ группы : node → detour → domain.
+      _copyRow(context, 'Route', e.routingLine),
+      // §044 — явная строка Rule: правило, через которое попало (или «final»
+      // если ядро rule не отдало — дефолт-маршрут; для DNS rule пуст всегда).
+      _copyRow(context, 'Rule',
+          (e.rule != null && e.rule!.isNotEmpty) ? e.rule! : 'final'),
+      // Сырой маршрут (chains как от ядра) — точные теги для копирования.
+      if (e.outboundChain.isNotEmpty)
+        _copyRow(context, 'Chain', e.outboundChain.join(' / ')),
+      // Detour-ось (транспорт) — только если есть.
+      if (e.detourChain.isNotEmpty)
+        _copyRow(context, 'Detour', e.detourChain.join(' → ')),
     ]));
 
     // Traffic — показываем только если есть байты.
@@ -183,13 +198,14 @@ class _TrafficEventDetailSheet extends StatelessWidget {
     return out;
   }
 
-  /// §160 — kind-badge (цвет как в live_view: DNS tertiary / DNS× error /
-  /// TCP primary / TCP· outline / UDP secondary).
+  /// §160/§177 — kind-badge (цвет как в live_view: DNS tertiary / DNS-fail
+  /// error / TCP primary / TCP· outline / UDP secondary). §177 — DNS = один
+  /// бейдж, успех/сбой различаются ЦВЕТОМ (как TCP open/close).
   Widget _kindBadge(BuildContext context, TrafficEvent e) {
     final cs = Theme.of(context).colorScheme;
     final (Color color, String label) = switch (e.kind) {
       TrafficEventKind.dnsResolve => (cs.tertiary, 'DNS'),
-      TrafficEventKind.dnsFail => (cs.error, 'DNS×'),
+      TrafficEventKind.dnsFail => (cs.error, 'DNS'),
       TrafficEventKind.tcpOpen => (cs.primary, 'TCP'),
       TrafficEventKind.tcpClose => (cs.outline, 'TCP·'),
       TrafficEventKind.udpOpen => (cs.secondary, 'UDP'),
@@ -227,6 +243,56 @@ class _TrafficEventDetailSheet extends StatelessWidget {
               width: size, height: size, gaplessPlayback: true),
         );
       },
+    );
+  }
+
+  /// §044 — строка App: иконка приложения + человекочитаемое имя (из
+  /// AppInfoCache) + package мелким моноширинным. Тап → поиск по package.
+  /// `null` если package пуст.
+  Widget? _appRow(BuildContext context, String pkg) {
+    if (pkg.isEmpty) return null;
+    final cs = Theme.of(context).colorScheme;
+    AppInfoCache.ensure(pkg);
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).pop();
+        onSearchKey(pkg);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: AnimatedBuilder(
+          animation: AppInfoCache.revision,
+          builder: (context, _) {
+            final info = AppInfoCache.of(pkg);
+            final name = (info?.appName.isNotEmpty ?? false)
+                ? info!.appName
+                : pkg.split('.').last;
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _appIcon(context, pkg),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name,
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
+                      Text(pkg,
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              color: cs.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.search, size: 16, color: cs.onSurfaceVariant),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 

@@ -1,4 +1,6 @@
-/// Модели overview-таба StatsScreen.
+/// Модели overview-таба StatsScreen. §122 — упрощены под `CcConnection`
+/// (libbox CommandClient): нет chains/rulePayload/process; группировка по
+/// `rule`. `start` — epoch ms (`createdAt`), не ISO-строка.
 class OutboundGroup {
   OutboundGroup({required this.name, this.upload = 0, this.download = 0, required this.connections});
   final String name;
@@ -12,23 +14,22 @@ class Connection {
     required this.host,
     this.destPort = '',
     this.network = '',
-    this.chains = const [],
     this.rule = '',
-    this.rulePayload = '',
     this.upload = 0,
     this.download = 0,
-    this.start = '',
-    this.process = '',
+    this.start = 0,
   });
 
+  /// ≈ `CcConnection.domain`.
   final String host;
+
+  /// Порт из `CcConnection.destination` (часть после последнего ':').
   final String destPort;
   final String network;
-  final List<String> chains;
   final String rule;
-  final String rulePayload;
   final int upload;
   final int download;
-  final String start;
-  final String process;
+
+  /// Epoch ms (`CcConnection.createdAt`). 0 = неизвестно.
+  final int start;
 }

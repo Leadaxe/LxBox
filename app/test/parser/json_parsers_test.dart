@@ -88,13 +88,67 @@ void main() {
             'streamSettings': {
               'network': 'tcp',
               'security': 'reality',
-              'realitySettings': {'publicKey': 'PK', 'shortId': 'abcd'},
+              // §169 — валидный X25519 (43-симв base64url). `PK` (2 симв)
+              // теперь невалиден и дал бы plain TLS без reality.
+              'realitySettings': {
+                'publicKey': 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw',
+                'shortId': 'abcd',
+              },
             },
           }
         ],
       }) as VlessSpec;
       expect(spec.flow, '', reason: 'REALITY+tcp без flow → не vision');
       expect(spec.tls.reality?.publicKey, isNotEmpty);
+    });
+
+    test('§169: Xray reality + битый publicKey → plain TLS, без reality', () {
+      final spec = parseXrayOutbound({
+        'outbounds': [
+          {
+            'tag': 'proxy',
+            'protocol': 'vless',
+            'settings': {
+              'vnext': [
+                {
+                  'address': 'h.example',
+                  'port': 443,
+                  'users': [
+                    {'id': '11111111-2222-3333-4444-555555555555'}
+                  ],
+                }
+              ],
+            },
+            'streamSettings': {
+              'network': 'tcp',
+              'security': 'reality',
+              'realitySettings': {'publicKey': 'enabled', 'shortId': 'abcd'},
+            },
+          }
+        ],
+      }) as VlessSpec;
+      expect(spec.tls.enabled, isTrue, reason: 'нода рабочая (plain TLS)');
+      expect(spec.tls.reality, isNull, reason: 'мусорный publicKey → нет reality');
+    });
+  });
+
+  group('§169 _tlsFromSingbox pbk validation', () {
+    test('sing-box reality + битый public_key → plain TLS, без reality', () {
+      final spec = parseSingboxEntry({
+        'type': 'vless',
+        'tag': 't',
+        'server': 'h.example',
+        'server_port': 443,
+        'uuid': '11111111-2222-3333-4444-555555555555',
+        'tls': {
+          'enabled': true,
+          'server_name': 'w.example',
+          'reality': {'enabled': true, 'public_key': 'true', 'short_id': 'ab'},
+        },
+      }) as VlessSpec;
+      expect(spec.tls.enabled, isTrue);
+      expect(spec.tls.reality, isNull, reason: 'битый public_key → нет reality');
+      expect(spec.tls.serverName, 'w.example');
     });
   });
 }

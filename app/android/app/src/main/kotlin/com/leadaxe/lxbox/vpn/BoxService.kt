@@ -53,6 +53,14 @@ class BoxService(
 
     companion object {
         private const val TAG = "BoxService"
+
+        /// §122 Фаза 0 — статическая ссылка на активный `BoxCommandClient`, чтобы
+        /// `VpnPlugin` (Flutter-процесс) дёргал императивы (urlTestOutbound/getRules/
+        /// selectOutbound/closeConnection) и lifecycle (screen/profiler connect/disconnect).
+        /// @Volatile: пишется из service-потока, читается из Flutter MethodChannel-потока.
+        @Volatile
+        var commandClient: BoxCommandClient? = null
+            private set
     }
 
     /// Scoped to service lifetime — all child coroutines are cancelled in onDestroy / doStop.
@@ -99,6 +107,13 @@ class BoxService(
             when (intent.action) {
                 BoxVpnService.ACTION_STOP -> doStop()
                 BoxVpnService.ACTION_FORCE_STOP -> doForceStop()
+                BoxVpnService.ACTION_RECONNECT -> {
+                    // §182 — кнопка Reconnect в уведомлении. Через companion (а не
+                    // локальный метод): reconnect переживает stopSelf этого инстанса.
+                    Log.d(TAG, "[vpn] receiver: ACTION_RECONNECT → BoxVpnService.reconnect()")
+                    runCatching { BoxVpnService.reconnect(service.applicationContext) }
+                        .onFailure { Log.e(TAG, "ACTION_RECONNECT failed", it) }
+                }
                 BoxVpnService.ACTION_RELOAD -> {
                     Log.d(TAG, "[vpn] receiver: ACTION_RELOAD → serviceReload()")
                     runCatching { serviceReload() }
@@ -156,6 +171,7 @@ class BoxService(
             ContextCompat.registerReceiver(service, receiver, IntentFilter().apply {
                 addAction(BoxVpnService.ACTION_STOP)
                 addAction(BoxVpnService.ACTION_FORCE_STOP)
+                addAction(BoxVpnService.ACTION_RECONNECT)   // §182
                 addAction(BoxVpnService.ACTION_RELOAD)
                 addAction(BoxVpnService.ACTION_RESET_NETWORK)
                 when (mode) {
@@ -233,6 +249,11 @@ class BoxService(
     }
 
     private fun closeCommandServerAtomic(reason: String) {
+        // §122 Фаза 0 — сначала закрыть CommandClient-канал (его сокет-соединения к
+        // CommandServer), потом сам сервер. Идемпотентно (getAndSet-паттерн внутри).
+        runCatching { commandClient?.shutdownAll() }
+            .onFailure { Log.w(TAG, "closeCommandServerAtomic($reason): commandClient shutdown failed: ${it.message}") }
+        commandClient = null
         val cs = commandServer.getAndSet(null) ?: return
         runCatching { cs.closeService() }.onFailure {
             Log.e(TAG, "closeCommandServerAtomic($reason): closeService failed", it)
@@ -264,7 +285,9 @@ class BoxService(
             runCatching { commandServer.get()?.resetNetwork() }
                 .onFailure { Log.e(TAG, "auto resetNetwork failed", it) }
         }
-        Libbox.setMemoryLimit(true)
+        // libbox 1.14: `Libbox.setMemoryLimit` удалён — управление OOM killer'ом
+        // переехало в SetupOptions (oomKillerEnabled / oomMemoryLimit), задаётся
+        // один раз в BoxApplication.setupLibbox.
 
         val cs = commandServer.get() ?: run {
             stopAndAlert("CommandServer not initialized")
@@ -323,6 +346,15 @@ class BoxService(
         }
 
         setStatus(VpnStatus.Started)
+
+        // §122 Фаза 0 — поднять CommandClient-канал. ПОСЛЕ startCommandServer (:179)
+        // и Started: command.sock существует только когда сервер запущен. statusClient
+        // always-on (watchdog + скорость); screen/profiler — по сигналам из Dart.
+        runCatching {
+            val cc = BoxCommandClient()
+            commandClient = cc
+            cc.startStatus()
+        }.onFailure { Log.w(TAG, "BoxCommandClient.startStatus failed: ${it.message}") }
 
         withContext(Dispatchers.Main) {
             // §123 — подтекст = тег активной ноды / route.final (из Dart через
@@ -455,6 +487,17 @@ class BoxService(
     }
 
     private fun setStatus(newStatus: VpnStatus, error: String? = null) {
+        // §122 — дедупликация. Несколько teardown-путей (doStop/doForceStop/
+        // onRevoke/exit) могут выстрелить `setStatus(Stopped)` повторно, в т.ч.
+        // запоздалый `Stopped` ПОСЛЕ нового `Started` при быстром reconnect.
+        // Без guard'а такой stale-broadcast долетал в Dart как `disconnected` и
+        // обнулял live-state (groups/nodes пустели «иногда»). Идемпотентный
+        // повтор того же статуса без error — no-op (не шлём broadcast, не дёргаем
+        // плитку/shortcuts). error-несущий повтор пропускаем (важно для UI).
+        if (status == newStatus && error == null) {
+            Log.d(TAG, "[vpn] setStatus(${newStatus.name}) — same status, dedup (no broadcast)")
+            return
+        }
         Log.d(TAG, "[vpn] setStatus(${newStatus.name})${if (error != null) " error=$error" else ""} — sendBroadcast")
         status = newStatus
         BoxVpnService.setCurrentStatus(newStatus)
@@ -600,6 +643,18 @@ class BoxService(
     // §141 P1.1a — делегирует в serviceReload(), который теперь сам no-throw.
     override fun setSystemProxyEnabled(isEnabled: Boolean) { serviceReload() }
 
+    // ─── libbox 1.14: новые методы CommandServerHandler ──────────────────
+    // sing-box 1.14 влил SSH-агент и debug-хук намеренного краша. Для Android
+    // VPN-клиента не используем.
+
+    /** SSH-agent forwarding не поддерживаем на Android. Error-метод — gomobile
+     *  ловит исключение, до JNI Runtime::Abort не доходит. */
+    override fun connectSSHAgent(): Int =
+        throw UnsupportedOperationException("SSH agent not supported on Android")
+
+    /** Debug-хук намеренного краша ядра — нам не нужен, no-op. */
+    override fun triggerNativeCrash() {}
+
     /// §043: sing-box log lines проходят сюда независимо от `log.level`
     /// в конфиге. INFO+ пушим в Flutter через EventChannel "lxbox/coreLog".
     ///
@@ -636,7 +691,15 @@ class BoxService(
         }
     }
 
-    private val ansiEscapeRe = Regex("\\[[0-9;]*[A-Za-z]")
+    // §171 — ANSI-strip. Sing-box оборачивает уровень и conn_id в ГОЛЫЕ
+    // ESC-байты (`<ESC>`), НЕ в классические CSI-цвета: реальная строка =
+    // `<ESC>INFO<ESC>[0617] [<ESC>759645927<ESC> 20ms] dns: exchanged ...`.
+    // Старый паттерн `\[[0-9;]*[A-Za-z]` искал `[…<letter>` — голый ESC не ловил
+    // вообще, и `<ESC>` доезжали до Dart, ломая DNS-regex профайлера
+    // (`\[(\d+)` не матчит `[` + ESC). Теперь срезаем: полные CSI-последователь-
+    // ности (`ESC[…m`) И любые одиночные ESC-байты. Скобки `[0617]`/`[connId ms]`
+    // (НЕ ANSI, нужны парсеру) сохраняются.
+    private val ansiEscapeRe = Regex("\\u001B\\[[0-9;]*[A-Za-z]|\\u001B")
     private val traceDebugRe = Regex("\\b(TRACE|DEBUG)\\b")
 
     /// Cap размера очереди — `4096 * ~80 chars ≈ 320KB` worst case в queue.

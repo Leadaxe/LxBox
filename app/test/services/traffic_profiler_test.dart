@@ -3,6 +3,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/services/traffic_profiler.dart';
+import 'package:lxbox/vpn/cc_channel.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -67,16 +68,27 @@ void main() {
   });
 
   group('TrafficProfiler — log parsing', () {
-    test('package detection populates conn-id map and DNS chain attribution',
+    test('DNS chain attribution: CNAME-hops в answers, ip = финальный A',
         () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
-      // Pkg first, then CNAME, then A.
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[0970] [3389974477 0ms] router: found package name: ru.tinkoff.investing');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[0970] [3389974477 16ms] dns: exchanged CNAME cdn.t-bank-app.ru. 17 IN CNAME cl-ead2c819.edgecdn.ru.');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[0970] [3389974477 17ms] dns: exchanged A cl-ead2c819.edgecdn.ru. 17 IN A 193.17.93.194');
+      // §180 — CNAME-цепочка приходит целиком в answers (type==5 hops + A),
+      // packageName атрибутируется ИЗ ЯДРА (не connId-сшивка).
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'cdn.t-bank-app.ru',
+          queryType: 1, // A
+          rcode: 0,
+          packageName: 'ru.tinkoff.investing',
+          answers: [
+            CcDnsAnswer(
+                name: 'cdn.t-bank-app.ru',
+                type: 5,
+                rdata: 'cl-ead2c819.edgecdn.ru'),
+            CcDnsAnswer(
+                name: 'cl-ead2c819.edgecdn.ru', type: 1, rdata: '193.17.93.194'),
+          ],
+        ),
+      ]);
       final session = TrafficProfiler.I.active!;
       // 1 dnsResolve event for the A record.
       final resolves = session.events
@@ -84,8 +96,8 @@ void main() {
           .toList();
       expect(resolves, hasLength(1));
       // event.domain атрибутируется на **исходный** запрошенный домен
-      // (acc.domain — первое имя в conn-id accumulator), не на финальный
-      // CNAME-target. CNAME hops собраны в cnameChain.
+      // (q.domain), не на финальный CNAME-target. CNAME hops собраны в
+      // cnameChain (answers с type==5).
       expect(resolves.first.domain, 'cdn.t-bank-app.ru');
       expect(resolves.first.ip, '193.17.93.194');
       expect(resolves.first.cnameChain, ['cl-ead2c819.edgecdn.ru']);
@@ -94,57 +106,143 @@ void main() {
       expect(session.byDomain.containsKey('cdn.t-bank-app.ru'), true);
     });
 
+    test('§180-fix — ядро шлёт rdata ПОЛНОЙ RR-строкой → берём значение', () async {
+      // device dev.72: DnsAnswer.rdata = "name TTL IN TYPE value" (НЕ голое
+      // значение). ip = последнее поле A-записи; cname target — без trailing dot.
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'google.com',
+          queryType: 1,
+          rcode: 0,
+          packageName: 'ru.tinkoff.investing',
+          answers: [
+            CcDnsAnswer(
+                name: 'yt3.ggpht.com',
+                type: 5,
+                rdata: 'yt3.ggpht.com. 204 IN CNAME wide-youtube.l.google.com.'),
+            CcDnsAnswer(
+                name: 'google.com',
+                type: 1,
+                rdata: 'google.com. 29 IN A 64.233.165.139'),
+          ],
+        ),
+      ]);
+      final ev = TrafficProfiler.I.active!.events
+          .firstWhere((e) => e.kind == TrafficEventKind.dnsResolve);
+      expect(ev.ip, '64.233.165.139', reason: 'A: последнее поле, не вся строка');
+      expect(ev.cnameChain, ['wide-youtube.l.google.com'],
+          reason: 'CNAME: target без trailing dot');
+    });
+
     test('non-target package events are ignored', () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[0970] [123 0ms] router: found package name: org.telegram.messenger');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[0970] [123 5ms] dns: exchanged A telegram.org. 60 IN A 1.2.3.4');
+      // §180 — packageName приходит ИЗ ЯДРА прямо в CcDnsQuery; чужой пакет
+      // (verified non-target) дропается из session (_resolveForSession).
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'telegram.org',
+          queryType: 1,
+          rcode: 0,
+          packageName: 'org.telegram.messenger',
+          answers: [
+            CcDnsAnswer(name: 'telegram.org', type: 1, rdata: '1.2.3.4'),
+          ],
+        ),
+      ]);
       expect(TrafficProfiler.I.active!.events, isEmpty);
     });
 
     test('DNS fail produces dnsTimeout issue', () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[0970] [777 0ms] router: found package name: ru.tinkoff.investing');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[0970] [777 5000ms] dns: exchange failed for some.host: context deadline exceeded');
+      // §180 — провал приходит как failed:true / rcode:-1 (нет ответа).
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'some.host',
+          queryType: 1,
+          rcode: -1,
+          failed: true,
+          error: 'context deadline exceeded',
+          packageName: 'ru.tinkoff.investing',
+        ),
+      ]);
       final ev = TrafficProfiler.I.active!.events.last;
       expect(ev.kind, TrafficEventKind.dnsFail);
       expect(ev.issues.first.kind, ConnectionIssueKind.dnsTimeout);
     });
+
+    test('rc.10 — dnsServer/dnsServerType/outbound пробрасываются', () async {
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'github.com',
+          queryType: 1,
+          rcode: 0,
+          packageName: 'ru.tinkoff.investing',
+          dnsServer: 'https://1.1.1.1/dns-query',
+          dnsServerType: 'https',
+          outbound: ['🇫🇮Финляндия (vpn-1)'],
+          answers: [
+            CcDnsAnswer(name: 'github.com', type: 1, rdata: '140.82.121.3'),
+          ],
+        ),
+      ]);
+      final ev = TrafficProfiler.I.active!.events
+          .firstWhere((e) => e.kind == TrafficEventKind.dnsResolve);
+      // outbound → outboundChain (для routingLine «через какой сервер»).
+      expect(ev.outboundChain, ['🇫🇮Финляндия (vpn-1)']);
+      // dnsServer/тип → extra (для detail-sheet).
+      expect(ev.extra?['dns_server'], 'https://1.1.1.1/dns-query');
+      expect(ev.extra?['dns_server_type'], 'https');
+    });
+
+    test('rc.10 — cached (пустой outbound) → outboundChain пуст', () async {
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'cached.example',
+          queryType: 1,
+          rcode: 0,
+          source: 'cached',
+          packageName: 'ru.tinkoff.investing',
+          // outbound пуст на cache-hit (нет сетевого пути).
+          answers: [
+            CcDnsAnswer(name: 'cached.example', type: 1, rdata: '1.2.3.4'),
+          ],
+        ),
+      ]);
+      final ev = TrafficProfiler.I.active!.events
+          .firstWhere((e) => e.kind == TrafficEventKind.dnsResolve);
+      expect(ev.outboundChain, isEmpty);
+    });
   });
 
-  group('TrafficProfiler — connection polling', () {
+  group('TrafficProfiler — connection ingest (§168 CommandClient)', () {
     test('new tcp conn for target → tcpOpen event (no issue on open)',
         () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
-      TrafficProfiler.I.bindRuntime(connections: () async => {
-            'connections': [
-              {
-                'id': 'c1',
-                'metadata': {
-                  'process': 'ru.tinkoff.investing',
-                  'host': 'certs.t-bank-app.ru',
-                  'destinationIP': '81.222.127.186',
-                  'destinationPort': '443',
-                  'network': 'tcp',
-                },
-                'chains': ['vless-server', '🇫🇮Финляндия (vpn-1)'],
-                'upload': 0,
-                'download': 0,
-                'rule': 'default',
-                'rulePayload': '',
-              }
-            ],
-          });
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'c1',
+          network: 'tcp',
+          domain: 'certs.t-bank-app.ru',
+          destination: '81.222.127.186:443',
+          rule: 'default',
+          uplink: 0,
+          downlink: 0,
+          outbound: '🇫🇮Финляндия (vpn-1)',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
       final s = TrafficProfiler.I.active!;
       expect(s.events.length, 1);
       final ev = s.events.first;
       expect(ev.kind, TrafficEventKind.tcpOpen);
       expect(ev.domain, 'certs.t-bank-app.ru');
       expect(ev.ip, '81.222.127.186');
+      expect(ev.port, 443);
       // На open issues не вычисляем — оба текущих типа (dnsTimeout,
       // tcpReset) релевантны close/dns-fail event'ам.
       expect(ev.issues, isEmpty);
@@ -152,24 +250,21 @@ void main() {
 
     test('non-target connection ignored', () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
-      TrafficProfiler.I.bindRuntime(connections: () async => {
-            'connections': [
-              {
-                'id': 'c2',
-                'metadata': {
-                  'process': 'org.telegram.messenger',
-                  'host': 'tg.example',
-                  'destinationIP': '5.5.5.5',
-                  'destinationPort': '443',
-                  'network': 'tcp',
-                },
-                'chains': ['direct'],
-                'upload': 0,
-                'download': 0,
-              }
-            ],
-          });
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'c2',
+          network: 'tcp',
+          domain: 'tg.example',
+          destination: '5.5.5.5:443',
+          rule: '',
+          uplink: 0,
+          downlink: 0,
+          outbound: 'direct',
+          packageName: 'org.telegram.messenger',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
       expect(TrafficProfiler.I.active!.events, isEmpty);
     });
 
@@ -179,30 +274,25 @@ void main() {
       // (open отбрасывался _resolveForSession, а close — нет) → в сессии
       // Telegram появлялись verified-tcpClose от youtube/imo и т.п.
       await TrafficProfiler.I.start('ru.tinkoff.investing');
-      var snapshot = {
-        'connections': [
-          {
-            'id': 'foreign1',
-            'metadata': {
-              'process': 'com.google.android.youtube',
-              'host': 'rr3.googlevideo.com',
-              'destinationIP': '74.125.108.232',
-              'destinationPort': '443',
-              'network': 'tcp',
-            },
-            'chains': ['direct'],
-            'upload': 10,
-            'download': 20,
-          }
-        ],
-      };
-      TrafficProfiler.I.bindRuntime(connections: () async => snapshot);
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'foreign1',
+          network: 'tcp',
+          domain: 'rr3.googlevideo.com',
+          destination: '74.125.108.232:443',
+          rule: '',
+          uplink: 10,
+          downlink: 20,
+          outbound: 'direct',
+          packageName: 'com.google.android.youtube',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
       // open чужого — в сессию не попал.
       expect(TrafficProfiler.I.active!.events, isEmpty);
-      // Закрываем его.
-      snapshot = {'connections': []};
-      await TrafficProfiler.I.pollOnceForTest();
+      // Закрываем его (пустой снапшот = conn пропал).
+      TrafficProfiler.I.ingestForTest([]);
       // close тоже НЕ должен попасть (наследует inSession=false).
       expect(TrafficProfiler.I.active!.events, isEmpty,
           reason: 'close чужого conn не должен писаться в session');
@@ -210,58 +300,142 @@ void main() {
 
     test('closed connection emits tcpClose with duration', () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
-      var snapshot = {
-        'connections': [
-          {
-            'id': 'c3',
-            'metadata': {
-              'process': 'ru.tinkoff.investing',
-              'host': 'cdn.t-bank-app.ru',
-              'destinationIP': '193.17.93.194',
-              'destinationPort': '443',
-              'network': 'tcp',
-            },
-            'chains': ['direct-out'],
-            'upload': 100,
-            'download': 200,
-          }
-        ],
-      };
-      TrafficProfiler.I.bindRuntime(connections: () async => snapshot);
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'c3',
+          network: 'tcp',
+          domain: 'cdn.t-bank-app.ru',
+          destination: '193.17.93.194:443',
+          rule: '',
+          uplink: 100,
+          downlink: 200,
+          outbound: 'direct-out',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
       // Now drop it.
-      snapshot = {'connections': []};
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestForTest([]);
       final s = TrafficProfiler.I.active!;
       expect(s.events.length, 2);
       expect(s.events.last.kind, TrafficEventKind.tcpClose);
       expect(s.events.last.duration, isNotNull);
     });
 
+    test('closed connection via closedAt>0 emits tcpClose (§168)', () async {
+      // CC может прислать тот же conn с closedAt>0 (вместо пропадания) —
+      // ingest трактует isClosed как «пропал» → закрываем.
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'c4',
+          network: 'tcp',
+          domain: 'api.t-bank-app.ru',
+          destination: '193.17.93.195:443',
+          rule: '',
+          uplink: 100,
+          downlink: 200,
+          outbound: 'direct-out',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
+      // Тот же conn, но closedAt>0 → ingest НЕ кладёт в seenIds → close.
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'c4',
+          network: 'tcp',
+          domain: 'api.t-bank-app.ru',
+          destination: '193.17.93.195:443',
+          rule: '',
+          uplink: 100,
+          downlink: 200,
+          outbound: 'direct-out',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 1,
+        ),
+      ]);
+      final s = TrafficProfiler.I.active!;
+      expect(s.events.last.kind, TrafficEventKind.tcpClose);
+    });
+
+    test('§176 — короткий conn сразу closedAt>0 → обе фазы (open+close)',
+        () async {
+      // FilterState(All): коротко-живущий conn может прийти СРАЗУ закрытым
+      // (open проскочил между тиками). Раньше (`if isClosed continue`) терялся
+      // целиком. Теперь профайлер видит и tcpOpen, и tcpClose.
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'short1',
+          network: 'tcp',
+          domain: 'short.example',
+          destination: '5.6.7.8:443',
+          rule: '',
+          uplink: 50,
+          downlink: 80,
+          outbound: 'direct-out',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 1, // пришёл сразу закрытым
+        ),
+      ]);
+      final s = TrafficProfiler.I.active!;
+      final kinds = s.events.map((e) => e.kind).toList();
+      expect(kinds, contains(TrafficEventKind.tcpOpen),
+          reason: 'open не потерян');
+      expect(kinds, contains(TrafficEventKind.tcpClose),
+          reason: 'close эмитнут');
+    });
+
+    test('§176 — тот же closed conn 2 тика → ОДИН close (анти-дубль)', () async {
+      // Ядро держит closed в FilterState(All) до 5 мин → приходит каждый тик.
+      // Guard _closedHandled обрабатывает РОВНО раз.
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      const closedConn = CcConnection(
+        id: 'dup1',
+        network: 'tcp',
+        domain: 'dup.example',
+        destination: '9.9.9.9:443',
+        rule: '',
+        uplink: 10,
+        downlink: 20,
+        outbound: 'direct-out',
+        packageName: 'ru.tinkoff.investing',
+        createdAt: 0,
+        closedAt: 1,
+      );
+      TrafficProfiler.I.ingestForTest([closedConn]);
+      TrafficProfiler.I.ingestForTest([closedConn]); // повтор (ядро держит 5мин)
+      TrafficProfiler.I.ingestForTest([closedConn]); // ещё раз
+      final s = TrafficProfiler.I.active!;
+      final closes =
+          s.events.where((e) => e.kind == TrafficEventKind.tcpClose).length;
+      expect(closes, 1, reason: 'closed обработан ровно раз, не дублируется');
+    });
+
     test('TCP RST early flagged on close (closed <1s, 0 bytes)', () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
-      var snapshot = {
-        'connections': [
-          {
-            'id': 'rst',
-            'metadata': {
-              'process': 'ru.tinkoff.investing',
-              'host': 'blocked.example',
-              'destinationIP': '1.2.3.4',
-              'destinationPort': '443',
-              'network': 'tcp',
-            },
-            'chains': ['direct-out'],
-            'upload': 0,
-            'download': 0,
-          }
-        ],
-      };
-      TrafficProfiler.I.bindRuntime(connections: () async => snapshot);
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'rst',
+          network: 'tcp',
+          domain: 'blocked.example',
+          destination: '1.2.3.4:443',
+          rule: '',
+          uplink: 0,
+          downlink: 0,
+          outbound: 'direct-out',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
       // Close immediately (within 1s, 0 bytes).
-      snapshot = {'connections': []};
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestForTest([]);
       final s = TrafficProfiler.I.active!;
       final closeEvent = s.events.last;
       expect(closeEvent.kind, TrafficEventKind.tcpClose);
@@ -273,28 +447,32 @@ void main() {
   group('TrafficProfiler — aggregates', () {
     test('byDomain sums bytes and counts connections', () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[0970] [111 0ms] router: found package name: ru.tinkoff.investing');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[0970] [111 5ms] dns: exchanged A api.tinkoff.ru. 60 IN A 1.1.1.1');
-      TrafficProfiler.I.bindRuntime(connections: () async => {
-            'connections': [
-              {
-                'id': 'c5',
-                'metadata': {
-                  'process': 'ru.tinkoff.investing',
-                  'host': 'api.tinkoff.ru',
-                  'destinationIP': '1.1.1.1',
-                  'destinationPort': '443',
-                  'network': 'tcp',
-                },
-                'chains': ['direct-out'],
-                'upload': 1000,
-                'download': 5000,
-              }
-            ],
-          });
-      await TrafficProfiler.I.pollOnceForTest();
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'api.tinkoff.ru',
+          queryType: 1,
+          rcode: 0,
+          packageName: 'ru.tinkoff.investing',
+          answers: [
+            CcDnsAnswer(name: 'api.tinkoff.ru', type: 1, rdata: '1.1.1.1'),
+          ],
+        ),
+      ]);
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'c5',
+          network: 'tcp',
+          domain: 'api.tinkoff.ru',
+          destination: '1.1.1.1:443',
+          rule: '',
+          uplink: 1000,
+          downlink: 5000,
+          outbound: 'direct-out',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
       final s = TrafficProfiler.I.active!;
       final d = s.byDomain['api.tinkoff.ru']!;
       expect(d.connections, 1);
@@ -319,14 +497,22 @@ void main() {
 
   // ───── §048 regression: defensive parsing ─────────────────────────────
 
-  group('TrafficProfiler — §048 defensive DNS regex', () {
-    test('HTTPS record DNS resolve does not crash and is parsed', () async {
+  group('TrafficProfiler — §048 DNS record-type semantics', () {
+    test('HTTPS record DNS resolve is parsed with record_type=HTTPS', () async {
       await TrafficProfiler.I.start('com.android.chrome');
-      // HTTPS record (HTTP/3 alt-svc discovery).
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [42 0ms] router: found package name: com.android.chrome');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [42 12ms] dns: exchanged HTTPS example.com. 60 IN HTTPS 1 . alpn=h2,h3');
+      // HTTPS record (HTTP/3 alt-svc discovery). queryType 65 → 'HTTPS'.
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'example.com',
+          queryType: 65, // HTTPS
+          rcode: 0,
+          packageName: 'com.android.chrome',
+          answers: [
+            CcDnsAnswer(
+                name: 'example.com', type: 65, rdata: '1 . alpn=h2,h3'),
+          ],
+        ),
+      ]);
       final s = TrafficProfiler.I.active!;
       // Парсится с record_type=HTTPS.
       final dnsEvents =
@@ -338,10 +524,18 @@ void main() {
 
     test('SVCB record DNS resolve is parsed', () async {
       await TrafficProfiler.I.start('com.android.chrome');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [99 0ms] router: found package name: com.android.chrome');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [99 8ms] dns: exchanged SVCB _dns.example.com. 60 IN SVCB 1 . alpn=h2');
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: '_dns.example.com',
+          queryType: 64, // SVCB
+          rcode: 0,
+          packageName: 'com.android.chrome',
+          answers: [
+            CcDnsAnswer(
+                name: '_dns.example.com', type: 64, rdata: '1 . alpn=h2'),
+          ],
+        ),
+      ]);
       final s = TrafficProfiler.I.active!;
       final ev = s.events.firstWhere(
           (e) => e.kind == TrafficEventKind.dnsResolve);
@@ -350,10 +544,20 @@ void main() {
 
     test('SOA record (NXDOMAIN) is parsed without IP', () async {
       await TrafficProfiler.I.start('com.android.chrome');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [55 0ms] router: found package name: com.android.chrome');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [55 1ms] dns: cached SOA missing.example. 653 IN SOA ns1.example.com. ...');
+      // SOA-ответ (NXDOMAIN): queryType 6 → 'SOA', rcode 3, answer не A/AAAA.
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'missing.example',
+          queryType: 6, // SOA
+          rcode: 3, // NXDOMAIN
+          source: 'cached',
+          packageName: 'com.android.chrome',
+          answers: [
+            CcDnsAnswer(
+                name: 'missing.example', type: 6, rdata: 'ns1.example.com.'),
+          ],
+        ),
+      ]);
       final s = TrafficProfiler.I.active!;
       final ev = s.events.firstWhere(
           (e) => e.kind == TrafficEventKind.dnsResolve);
@@ -362,12 +566,19 @@ void main() {
       expect(ev.ip, isNull);
     });
 
-    test('DNS fail with HTTPS record type — parsed and unattributed if no owner', () async {
+    test('DNS fail with HTTPS record type — unattributed if no owner', () async {
       await TrafficProfiler.I.start('com.android.chrome');
-      // НЕТ предшествующего `router: found package` для conn-id 945640198.
-      // Sing-box просто эмитит ERROR.
-      TrafficProfiler.I.feedLogLineForTest(
-          'ERROR[16646] [945640198 10.0s] dns: exchange failed for 2ip.io. IN HTTPS: context deadline exceeded');
+      // packageName пуст → unattributed (нет атрибуции из ядра).
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: '2ip.io',
+          queryType: 65, // HTTPS
+          rcode: -1,
+          failed: true,
+          error: 'context deadline exceeded',
+          // packageName: '' → unattributed
+        ),
+      ]);
       // Должно попасть в global unattributed events ring (не в session).
       expect(TrafficProfiler.I.globalUnattributedEvents, isNotEmpty);
       final ev = TrafficProfiler.I.globalUnattributedEvents.first;
@@ -378,12 +589,20 @@ void main() {
       expect(ev.shownBecause, isNotNull);
     });
 
-    test('DNS fail in session with `s` time format (10.0s) is parsed', () async {
+    test('DNS fail in session (attributed) → verified dnsFail with record type',
+        () async {
       await TrafficProfiler.I.start('com.android.chrome');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [42 0ms] router: found package name: com.android.chrome');
-      TrafficProfiler.I.feedLogLineForTest(
-          'ERROR[1] [42 10.0s] dns: exchange failed for example.com. IN A: context deadline exceeded');
+      // packageName из ядра → verified; queryType 1 → 'A'.
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'example.com',
+          queryType: 1, // A
+          rcode: -1,
+          failed: true,
+          error: 'context deadline exceeded',
+          packageName: 'com.android.chrome',
+        ),
+      ]);
       final s = TrafficProfiler.I.active!;
       final fail = s.events.firstWhere(
           (e) => e.kind == TrafficEventKind.dnsFail);
@@ -399,10 +618,19 @@ void main() {
     test('multi-package UID `com.x.y, com.x.z` matches if ANY == target',
         () async {
       await TrafficProfiler.I.start('com.google.android.gms');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [10 0ms] router: found package name: com.google.android.gms, com.google.android.gsf');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [10 5ms] dns: exchanged A play.google.com. 60 IN A 1.2.3.4');
+      // §180 — ядро может отдать несколько пакетов одного UID через запятую
+      // прямо в packageName; _splitPackageNames матчит если ЛЮБОЙ == target.
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'play.google.com',
+          queryType: 1,
+          rcode: 0,
+          packageName: 'com.google.android.gms, com.google.android.gsf',
+          answers: [
+            CcDnsAnswer(name: 'play.google.com', type: 1, rdata: '1.2.3.4'),
+          ],
+        ),
+      ]);
       final s = TrafficProfiler.I.active!;
       final dns = s.events.firstWhere(
           (e) => e.kind == TrafficEventKind.dnsResolve);
@@ -415,10 +643,17 @@ void main() {
         'ru.tinkoff.investing',
         secondaryPackages: {'com.google.android.webview'},
       );
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [20 0ms] router: found package name: com.google.android.webview');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [20 5ms] dns: exchanged A cdn.t-bank-app.ru. 60 IN A 5.6.7.8');
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'cdn.t-bank-app.ru',
+          queryType: 1,
+          rcode: 0,
+          packageName: 'com.google.android.webview',
+          answers: [
+            CcDnsAnswer(name: 'cdn.t-bank-app.ru', type: 1, rdata: '5.6.7.8'),
+          ],
+        ),
+      ]);
       final s = TrafficProfiler.I.active!;
       final dns = s.events.firstWhere(
           (e) => e.kind == TrafficEventKind.dnsResolve);
@@ -428,25 +663,22 @@ void main() {
 
     test('UID-suffixed package name (com.x (10999)) matches target', () async {
       await TrafficProfiler.I.start('com.android.chrome');
-      // /connections возвращает process с UID в скобках.
-      TrafficProfiler.I.bindRuntime(connections: () async => {
-            'connections': [
-              {
-                'id': 'c1',
-                'metadata': {
-                  'process': 'com.android.chrome (10999)',
-                  'host': 'www.google.com',
-                  'destinationIP': '1.2.3.4',
-                  'destinationPort': '443',
-                  'network': 'tcp',
-                },
-                'chains': ['direct'],
-                'upload': 0,
-                'download': 0,
-              }
-            ],
-          });
-      await TrafficProfiler.I.pollOnceForTest();
+      // CcConnection.packageName может нести UID в скобках (getProcessInfo).
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'c1',
+          network: 'tcp',
+          domain: 'www.google.com',
+          destination: '1.2.3.4:443',
+          rule: '',
+          uplink: 0,
+          downlink: 0,
+          outbound: 'direct',
+          packageName: 'com.android.chrome (10999)',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
       final s = TrafficProfiler.I.active!;
       expect(s.events, isNotEmpty);
       expect(s.events.first.kind, TrafficEventKind.tcpOpen);
@@ -459,10 +691,17 @@ void main() {
         'ru.tinkoff.investing',
         secondaryPackages: {'com.google.android.webview'},
       );
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [99 0ms] router: found package name: org.telegram.messenger');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [99 5ms] dns: exchanged A telegram.org. 60 IN A 7.7.7.7');
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'telegram.org',
+          queryType: 1,
+          rcode: 0,
+          packageName: 'org.telegram.messenger',
+          answers: [
+            CcDnsAnswer(name: 'telegram.org', type: 1, rdata: '7.7.7.7'),
+          ],
+        ),
+      ]);
       // session.events empty (Telegram не target и не secondary).
       expect(TrafficProfiler.I.active!.events, isEmpty);
       // Но в global rolling buffer'е — есть.
@@ -484,18 +723,23 @@ void main() {
   group('TrafficProfiler — §048 pre-session backfill', () {
     test('events 30s before start are backfilled into new session', () async {
       // Сначала эмулируем events системы БЕЗ active session — они должны
-      // попасть в global rolling buffer.
-      // Подключаем log listener через globalLiveStream (или через start).
-      // Используем start+stop как trick чтобы log listener работал.
-      // В тесте напрямую feed'им log lines — но _processLogLine no-op'ит
-      // если нет ни active session'и ни global subscribers. Проверим.
-      // Subscribe to global stream, чтобы listener подключился.
+      // попасть в global rolling buffer. §180 — DNS-стрим обрабатывается
+      // только при active session ИЛИ global recording; включаем последнее.
       final sub = TrafficProfiler.I.globalLiveStream().listen((_) {});
+      TrafficProfiler.I.startGlobalRecording();
 
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [42 0ms] router: found package name: ru.tinkoff.investing');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [42 5ms] dns: exchanged A api.tinkoff.ru. 60 IN A 1.1.1.1');
+      // §180 — DNS приходит структурным событием; атрибуция packageName ИЗ ЯДРА.
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'api.tinkoff.ru',
+          queryType: 1,
+          rcode: 0,
+          packageName: 'ru.tinkoff.investing',
+          answers: [
+            CcDnsAnswer(name: 'api.tinkoff.ru', type: 1, rdata: '1.1.1.1'),
+          ],
+        ),
+      ]);
 
       // Теперь стартуем session — backfill должен подобрать прошлый event.
       await TrafficProfiler.I.start('ru.tinkoff.investing');
@@ -505,6 +749,7 @@ void main() {
       expect(backfilled.first.domain, 'api.tinkoff.ru');
       expect(backfilled.first.confidence, ConfidenceLevel.verified);
 
+      TrafficProfiler.I.stopGlobalRecording();
       await sub.cancel();
     });
   });
@@ -517,10 +762,17 @@ void main() {
         'ru.tinkoff.investing',
         secondaryPackages: {'com.google.android.webview'},
       );
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [33 0ms] router: found package name: com.google.android.webview');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [33 5ms] dns: exchanged A cdn.example.com. 60 IN A 9.9.9.9');
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'cdn.example.com',
+          queryType: 1,
+          rcode: 0,
+          packageName: 'com.google.android.webview',
+          answers: [
+            CcDnsAnswer(name: 'cdn.example.com', type: 1, rdata: '9.9.9.9'),
+          ],
+        ),
+      ]);
       final s = TrafficProfiler.I.active!;
       final ev = s.events
           .firstWhere((e) => e.kind == TrafficEventKind.dnsResolve);
@@ -530,14 +782,24 @@ void main() {
     });
 
     test('unattributed event has shown_because explanation', () async {
-      // Subscribe to global to enable log listener.
+      // §180 — DNS-стрим обрабатывается при global recording (нет session).
       final sub = TrafficProfiler.I.globalLiveStream().listen((_) {});
-      TrafficProfiler.I.feedLogLineForTest(
-          'ERROR[1] [99999 10.0s] dns: exchange failed for orphan.example. IN HTTPS: timeout');
+      TrafficProfiler.I.startGlobalRecording();
+      // packageName пуст → unattributed; failed → dnsFail.
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'orphan.example',
+          queryType: 65, // HTTPS
+          rcode: -1,
+          failed: true,
+          error: 'timeout',
+        ),
+      ]);
       final ev = TrafficProfiler.I.globalUnattributedEvents.first;
       final j = ev.toJson();
       expect(j['confidence'], 'unattributed');
       expect(j['shown_because'], isNotNull);
+      TrafficProfiler.I.stopGlobalRecording();
       await sub.cancel();
     });
   });
@@ -547,14 +809,24 @@ void main() {
   group('TrafficProfiler — §048 Live system-wide buffer', () {
     test('globalSnapshot returns events for all apps', () async {
       final sub = TrafficProfiler.I.globalLiveStream().listen((_) {});
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [1 0ms] router: found package name: com.app.a');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [1 5ms] dns: exchanged A a.example. 60 IN A 1.1.1.1');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [2 0ms] router: found package name: com.app.b');
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [2 5ms] dns: exchanged A b.example. 60 IN A 2.2.2.2');
+      TrafficProfiler.I.startGlobalRecording();
+      // §180 — атрибуция packageName ИЗ ЯДРА прямо в CcDnsQuery.
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'a.example',
+          queryType: 1,
+          rcode: 0,
+          packageName: 'com.app.a',
+          answers: [CcDnsAnswer(name: 'a.example', type: 1, rdata: '1.1.1.1')],
+        ),
+        const CcDnsQuery(
+          domain: 'b.example',
+          queryType: 1,
+          rcode: 0,
+          packageName: 'com.app.b',
+          answers: [CcDnsAnswer(name: 'b.example', type: 1, rdata: '2.2.2.2')],
+        ),
+      ]);
       final snap = TrafficProfiler.I.globalSnapshot();
       // Хотя бы по одному event на app в global buffer'е.
       final apps = snap
@@ -563,38 +835,172 @@ void main() {
           .toSet();
       expect(apps.contains('com.app.a'), true);
       expect(apps.contains('com.app.b'), true);
+      TrafficProfiler.I.stopGlobalRecording();
       await sub.cancel();
     });
 
     test('unattributedBannerActive flips when many unattributed events arrive',
         () async {
       final sub = TrafficProfiler.I.globalLiveStream().listen((_) {});
-      // Эмулируем 10 unattributed DNS fail'ов за короткое время.
-      for (var i = 0; i < 10; i++) {
-        TrafficProfiler.I.feedLogLineForTest(
-            'ERROR[1] [${1000 + i} 10.0s] dns: exchange failed for x$i.test. IN A: timeout');
-      }
+      TrafficProfiler.I.startGlobalRecording();
+      // Эмулируем 10 unattributed DNS fail'ов за короткое время
+      // (packageName пуст → unattributed, failed → dnsFail = признак сбоя).
+      TrafficProfiler.I.ingestDnsForTest([
+        for (var i = 0; i < 10; i++)
+          CcDnsQuery(
+            domain: 'x$i.test',
+            queryType: 1,
+            rcode: -1,
+            failed: true,
+            error: 'timeout',
+          ),
+      ]);
       expect(TrafficProfiler.I.recentUnattributedCount, greaterThanOrEqualTo(6));
       expect(TrafficProfiler.I.unattributedBannerActive, true);
+      TrafficProfiler.I.stopGlobalRecording();
+      await sub.cancel();
+    });
+
+    test('§177-A successful unattributed DNS resolves do NOT light the banner',
+        () async {
+      final sub = TrafficProfiler.I.globalLiveStream().listen((_) {});
+      TrafficProfiler.I.startGlobalRecording();
+      // 12 УСПЕШНЫХ резолвов без владельца (packageName пуст) — это норма,
+      // НЕ сбой. Баннер не должен гореть (§177-A: считаем только признаки сбоя).
+      TrafficProfiler.I.ingestDnsForTest([
+        for (var i = 0; i < 12; i++)
+          CcDnsQuery(
+            domain: 'x$i.test',
+            queryType: 1,
+            rcode: 0,
+            answers: [CcDnsAnswer(name: 'x$i.test', type: 1, rdata: '1.2.3.4')],
+          ),
+      ]);
+      expect(TrafficProfiler.I.recentUnattributedCount, 0,
+          reason: 'успешные dnsResolve без владельца — не признак сбоя');
+      expect(TrafficProfiler.I.unattributedBannerActive, false);
+      TrafficProfiler.I.stopGlobalRecording();
       await sub.cancel();
     });
   });
 
-  // ───── §048 regression: time-based GC ─────────────────────────────────
+  // §044 — §180-cleanup: тест «gc cleans stale conn-id entries» удалён вместе
+  // с лог-питателем (_processLogLine/feedLogLineForTest/_connIdToMeta). Он
+  // тестировал мёртвый механизм (TCP-атрибуция из router-лога) и его assertion
+  // был тавтологией (`isNotEmpty || true`). GC rolling-buffer'ов покрыт другими.
 
-  group('TrafficProfiler — §048 time-based GC', () {
-    test('gc cleans stale conn-id entries by age, not count', () async {
-      final sub = TrafficProfiler.I.globalLiveStream().listen((_) {});
-      // Inject very old conn-id meta — feed log line then wait... но в
-      // тестах we can't actually wait. Instead, we manually call gc and
-      // verify behavior: feed package detection, then gc (entries
-      // младше TTL остаются).
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [42 0ms] router: found package name: com.fresh.app');
-      TrafficProfiler.I.gcOnceForTest();
-      // Свежие entries должны остаться.
-      expect(TrafficProfiler.I.globalRollingBuffer.isNotEmpty || true, true);
-      await sub.cancel();
+  // ───── §181: оси РАЗДЕЛЬНО (outboundChain=маршрут, detourChain=транспорт) ──
+
+  group('TrafficProfiler — §181 routing axes + routingLine', () {
+    test('chains и detours несутся РАЗДЕЛЬНО (не склеены как §178)', () async {
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'd181a',
+          network: 'tcp',
+          domain: 'www.google.com',
+          destination: '1.2.3.4:443',
+          rule: 'final',
+          uplink: 10,
+          downlink: 20,
+          outbound: 'BL: [BL]-3',
+          chains: ['BL: [BL]-3', 'vpn-1'], // [node, selector] из ядра
+          detours: ['WARP'], // detour-ось — ОТДЕЛЬНО
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
+      final ev = TrafficProfiler.I.active!.events.first;
+      expect(ev.outboundChain, ['BL: [BL]-3', 'vpn-1'],
+          reason: '§181 — outboundChain = только маршрут (БЕЗ detour)');
+      expect(ev.detourChain, ['WARP'],
+          reason: '§181 — detour в своей оси');
+    });
+
+    test('routingLine: полная трассировка [net] proc ⇒ rule ⇒ группа : node → detour → domain',
+        () async {
+      await TrafficProfiler.I.start('com.android.vending');
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'd181b',
+          network: 'tcp',
+          domain: 'play-fe.googleapis.com',
+          destination: '74.125.131.102:443',
+          rule: '', // пусто → "final"
+          uplink: 10,
+          downlink: 0,
+          outbound: 'Венгрия',
+          // [node, под-группа, верхняя-группа] — auto между vpn-1 и нодой
+          chains: ['🇭🇺Венгрия', '✨auto', 'vpn-1'],
+          detours: ['WARP'],
+          packageName: 'com.android.vending',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
+      final ev = TrafficProfiler.I.active!.events.first;
+      // [tcp] proc ⇒ final ⇒ vpn-1 ⇒ ✨auto : 🇭🇺Венгрия → WARP → domain
+      expect(
+        ev.routingLine,
+        '[tcp] com.android.vending ⇒ final ⇒ vpn-1 ⇒ ✨auto : 🇭🇺Венгрия → WARP → play-fe.googleapis.com',
+      );
+      // compact (live-список): без префикса [net] process ⇒ (он дублирует
+      // строку процесса + бейдж типа). Начинается с rule.
+      expect(
+        ev.routingLineOf(compact: true),
+        'final ⇒ vpn-1 ⇒ ✨auto : 🇭🇺Венгрия → WARP → play-fe.googleapis.com',
+      );
+    });
+
+    test('routingLine: с явным rule (не final)', () async {
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'd181c',
+          network: 'tcp',
+          domain: 'site.ru',
+          destination: '5.6.7.8:443',
+          rule: 'rule_set=ru-domains',
+          uplink: 1,
+          downlink: 1,
+          outbound: 'direct-out',
+          chains: ['direct-out'], // прямой, без групп
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
+      final ev = TrafficProfiler.I.active!.events.first;
+      // нет групп (chains длины 1), нет detour: proc ⇒ rule : node → domain
+      expect(
+        ev.routingLine,
+        '[tcp] ru.tinkoff.investing ⇒ rule_set=ru-domains : direct-out → site.ru',
+      );
+    });
+
+    test('прямой conn (chains пуст) → fallback [outbound], detour пуст', () async {
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'd181d',
+          network: 'tcp',
+          domain: 'direct.example',
+          destination: '9.9.9.9:443',
+          rule: '',
+          uplink: 5,
+          downlink: 5,
+          outbound: 'direct-out',
+          // chains/detours пусты
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
+      final ev = TrafficProfiler.I.active!.events.first;
+      expect(ev.outboundChain, ['direct-out'],
+          reason: 'fallback на [outbound]');
+      expect(ev.detourChain, isEmpty);
     });
   });
 }

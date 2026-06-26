@@ -100,6 +100,22 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// §165 — headless-старт без Activity/consent (Debug API / automation).
+  /// Работает ТОЛЬКО если VPN-разрешение уже выдано. Возвращает
+  /// `(started, needsConsent)`: started=false+needsConsent=true → разрешения
+  /// нет, нужен ручной старт из UI.
+  Future<({bool started, bool needsConsent})> startVpnHeadless() async {
+    final r = await _invoke<Map<dynamic, dynamic>>(
+      _Methods.startVpnHeadless,
+      timeout: _Timeouts.startVpn,
+      onTimeoutValue: const {'started': false, 'needs_consent': false},
+    );
+    return (
+      started: r?['started'] == true,
+      needsConsent: r?['needs_consent'] == true,
+    );
+  }
+
   /// Request VPN stop. **Блокирующий** на native до `setStatus(Stopped)` —
   /// cleanup libbox + broadcast Stopped. Возвращает true on success, false
   /// on таймаут. Позволяет caller'у безопасно делать `await stopVPN()` →

@@ -353,9 +353,12 @@ void main() {
     });
   });
 
-  // §051 — wifi_ssid / wifi_bssid в CustomRuleInline + Srs.
-  group('§051 wifi conditions', () {
-    test('inline wifi-only → routing rule с wifi_ssid, без rule_set', () {
+  // §051 / §030 new_fields — wifi_ssid / wifi_bssid.
+  //
+  // ⚠ С sing-box 1.14 wifi_* эмитятся в **headless rule_set** (раньше под 1.12
+  // были на routing-rule level). Эти тесты обновлены под 1.14-форму.
+  group('§051 wifi conditions (1.14: headless)', () {
+    test('inline wifi-only → headless rule_set с wifi_ssid', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
         CustomRuleInline(
@@ -364,17 +367,20 @@ void main() {
           outbound: 'direct-out',
         ),
       ]);
-      // Никакого rule_set'а не нужно — wifi-only фильтрует на routing-уровне.
-      expect(reg.getRuleSets(), isEmpty);
+      // §030/new_fields: wifi теперь внутри headless rule_set (1.14).
+      expect(reg.getRuleSets(), hasLength(1));
+      expect(reg.getRuleSets().first['rules'], [
+        {'wifi_ssid': ['lexRouter']},
+      ]);
       expect(reg.getRules(), [
         {
-          'wifi_ssid': ['lexRouter'],
+          'rule_set': 'Home wifi → direct',
           'outbound': 'direct-out',
         },
       ]);
     });
 
-    test('inline wifi_ssid + wifi_bssid эмитятся вместе', () {
+    test('inline wifi_ssid + wifi_bssid в headless rule_set вместе', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
         CustomRuleInline(
@@ -384,16 +390,21 @@ void main() {
           outbound: 'direct-out',
         ),
       ]);
-      expect(reg.getRules(), [
+      expect(reg.getRuleSets().first['rules'], [
         {
           'wifi_ssid': ['lexRouter'],
           'wifi_bssid': ['38:2c:4a:cf:6d:5c'],
+        },
+      ]);
+      expect(reg.getRules(), [
+        {
+          'rule_set': 'Home',
           'outbound': 'direct-out',
         },
       ]);
     });
 
-    test('inline domain + wifi: оба в правиле, AND-семантика', () {
+    test('inline domain + wifi: оба в headless rule_set, AND-семантика', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
         CustomRuleInline(
@@ -403,15 +414,17 @@ void main() {
           outbound: 'direct-out',
         ),
       ]);
-      // Domain заходит в headless rule_set, wifi — на routing-rule level.
+      // §030/new_fields: domain И wifi заходят в headless rule_set (AND).
       expect(reg.getRuleSets(), hasLength(1));
       expect(reg.getRuleSets().first['rules'], [
-        {'domain': ['bank.com']},
+        {
+          'domain': ['bank.com'],
+          'wifi_ssid': ['lexRouter'],
+        },
       ]);
       expect(reg.getRules(), [
         {
           'rule_set': 'Banking on home wifi',
-          'wifi_ssid': ['lexRouter'],
           'outbound': 'direct-out',
         },
       ]);
@@ -478,6 +491,169 @@ void main() {
       final rule = reg.getRules().first;
       expect(rule.containsKey('wifi_ssid'), isFalse);
       expect(rule.containsKey('wifi_bssid'), isFalse);
+    });
+  });
+
+  // §030/new_fields — source_ip_cidr / source_ip_is_private / inbound.
+  group('§030 new_fields source + inbound', () {
+    test('inline source_ip_cidr → headless rule_set', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'LAN clients',
+          sourceIpCidrs: ['192.168.1.0/24'],
+          outbound: 'direct-out',
+        ),
+      ]);
+      // source_ip_cidr принимается headless rule_set (sing-box 1.14).
+      expect(reg.getRuleSets(), hasLength(1));
+      expect(reg.getRuleSets().first['rules'], [
+        {'source_ip_cidr': ['192.168.1.0/24']},
+      ]);
+      expect(reg.getRules(), [
+        {'rule_set': 'LAN clients', 'outbound': 'direct-out'},
+      ]);
+    });
+
+    test('inline domain + source_ip_cidr — оба в headless (AND)', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'r',
+          domains: ['bank.com'],
+          sourceIpCidrs: ['10.0.0.0/8'],
+          outbound: 'vpn-1',
+        ),
+      ]);
+      expect(reg.getRuleSets().first['rules'], [
+        {
+          'domain': ['bank.com'],
+          'source_ip_cidr': ['10.0.0.0/8'],
+        },
+      ]);
+    });
+
+    test('inline source_ip_is_private → routing-rule level (не headless)', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'priv-src',
+          sourceIpIsPrivate: true,
+          outbound: 'direct-out',
+        ),
+      ]);
+      // headless его не принимает → пустой match → нет rule_set, route-rule.
+      expect(reg.getRuleSets(), isEmpty);
+      expect(reg.getRules(), [
+        {'source_ip_is_private': true, 'outbound': 'direct-out'},
+      ]);
+    });
+
+    test('inline inbound-only → routing-rule level без rule_set', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'proxy clients',
+          inbounds: ['mixed-in'],
+          outbound: 'direct-out',
+        ),
+      ]);
+      // inbound в headless нет → route-rule без rule_set (НЕ skip — гейт).
+      expect(reg.getRuleSets(), isEmpty);
+      expect(reg.getRules(), [
+        {'inbound': ['mixed-in'], 'outbound': 'direct-out'},
+      ]);
+    });
+
+    test('inline domain + inbound: rule_set + inbound на route-level', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'r',
+          domains: ['ya.ru'],
+          inbounds: ['tun-in', 'mixed-in'],
+          outbound: 'vpn-1',
+        ),
+      ]);
+      expect(reg.getRuleSets().first['rules'], [
+        {'domain': ['ya.ru']},
+      ]);
+      expect(reg.getRules(), [
+        {
+          'rule_set': 'r',
+          'inbound': ['tun-in', 'mixed-in'],
+          'outbound': 'vpn-1',
+        },
+      ]);
+    });
+
+    test('srs: source_ip_cidr/inbound → routing-rule level (нет headless)', () {
+      final reg = RuleSetRegistry();
+      final srs = CustomRuleSrs(
+        id: 'srs-1',
+        name: 'GeoSite',
+        srsUrl: 'https://example.com/geo.srs',
+        sourceIpCidrs: ['192.168.0.0/16'],
+        sourceIpIsPrivate: true,
+        inbounds: ['mixed-in'],
+        outbound: 'direct-out',
+      );
+      applyCustomRules(reg, [srs], srsPaths: {'srs-1': '/cache/geo.srs'});
+      expect(reg.getRules(), [
+        {
+          'rule_set': 'GeoSite',
+          'source_ip_cidr': ['192.168.0.0/16'],
+          'source_ip_is_private': true,
+          'inbound': ['mixed-in'],
+          'outbound': 'direct-out',
+        },
+      ]);
+    });
+
+    test('empty source/inbound — поля не появляются в JSON', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(name: 'r', domains: ['ya.ru'], outbound: 'direct-out'),
+      ]);
+      final rs = reg.getRuleSets().first['rules'] as List;
+      expect((rs.first as Map).containsKey('source_ip_cidr'), isFalse);
+      final rule = reg.getRules().first;
+      expect(rule.containsKey('source_ip_is_private'), isFalse);
+      expect(rule.containsKey('inbound'), isFalse);
+    });
+
+    test('JSON round-trip + backward-compat', () {
+      final r = CustomRuleInline(
+        id: 'id-1',
+        name: 'r',
+        sourceIpCidrs: ['10.0.0.0/8'],
+        sourceIpIsPrivate: true,
+        inbounds: ['mixed-in'],
+      );
+      final json = r.toJson();
+      expect(json['sourceIpCidrs'], ['10.0.0.0/8']);
+      expect(json['sourceIpIsPrivate'], true);
+      expect(json['inbounds'], ['mixed-in']);
+      final restored = CustomRule.fromJson(json) as CustomRuleInline;
+      expect(restored.sourceIpCidrs, ['10.0.0.0/8']);
+      expect(restored.sourceIpIsPrivate, isTrue);
+      expect(restored.inbounds, ['mixed-in']);
+
+      // Старый JSON без новых ключей → пустые/false.
+      final legacy = CustomRule.fromJson({
+        'kind': 'inline',
+        'name': 'Legacy',
+        'domains': ['ya.ru'],
+      }) as CustomRuleInline;
+      expect(legacy.sourceIpCidrs, isEmpty);
+      expect(legacy.sourceIpIsPrivate, isFalse);
+      expect(legacy.inbounds, isEmpty);
+
+      // toJson не пишет пустые.
+      final emptyJson = legacy.toJson();
+      expect(emptyJson.containsKey('sourceIpCidrs'), isFalse);
+      expect(emptyJson.containsKey('sourceIpIsPrivate'), isFalse);
+      expect(emptyJson.containsKey('inbounds'), isFalse);
     });
   });
 

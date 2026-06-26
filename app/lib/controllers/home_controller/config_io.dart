@@ -11,8 +11,6 @@ mixin _ConfigIoMixin on ChangeNotifier {
   BoxVpnClient get _vpn;
   void _emit(HomeState next);
   void _addDebug(DebugSource source, String message);
-  // `_rebuildClashEndpoint` живёт в HomeController (общий с clash-секцией).
-  void _rebuildClashEndpoint();
 
   Future<void> _loadSavedConfig() async {
     try {
@@ -20,7 +18,6 @@ mixin _ConfigIoMixin on ChangeNotifier {
       if (config.isNotEmpty && config != '{}') {
         // §116 — успешная загрузка снимает аномалию (config_load_error).
         _emit(_state.copyWith(configRaw: config, configLoadError: false));
-        _rebuildClashEndpoint();
       }
     } catch (e) {
       _addDebug(DebugSource.app, 'Load config: $e');
@@ -100,7 +97,6 @@ mixin _ConfigIoMixin on ChangeNotifier {
       pingBatchGen:
           changed ? _state.pingBatchGen + 1 : _state.pingBatchGen,
     ));
-    _rebuildClashEndpoint();
     _addDebug(DebugSource.app, 'Config saved (${canonicalJson.length} bytes)');
     return true;
   }

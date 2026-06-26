@@ -18,6 +18,8 @@ class _Methods {
 
   // VPN lifecycle
   static const startVPN = 'startVPN';
+  // §165 — headless-старт (Debug API/automation, без Activity/consent).
+  static const startVpnHeadless = 'startVpnHeadless';
   static const stopVPN = 'stopVPN';
   // §129 — force-stop при зависшем-вхолостую ядре (fire-and-forget).
   static const forceStopVPN = 'forceStopVPN';

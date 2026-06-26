@@ -95,6 +95,24 @@ Sing-box-router внутри даёт нам уникальный data-source �
 > описывают **исходные** 4 таба; текущая реализация = код + спека
 > [`tasks/160-perapp-trace-live-aggregated-redesign.md`](../../tasks/160-perapp-trace-live-aggregated-redesign.md).
 
+> **§044/new-profiler update (v2.5.0, 2026-06-27)** — редизайн профайлера, полная
+> спека [`new-profiler.md`](new-profiler.md). Live-вкладка → **Profiler**. Управление
+> `TraceExplorer` свёрнуто в **одну control-строку** (пауза · окно хранения · меню
+> группировки · фильтр-окно). Запись и export — в хедере Profiler. **Фильтр вынесен
+> в окно** `ProfilerFilterSheet` (паттерн `home/widgets/filter_panel.dart`): две оси —
+> **Protocol** (DNS/TCP/UDP) и **App** (мульти-выбор замеченных пакетов + «потеряшки»/
+> unattributed + кнопка полного пикера); единая модель `ProfilerFilter` (ChangeNotifier).
+> **Live retention настраиваемо** (было жёстко 60s): `SettingsStorage.profiler_retention_sec`,
+> опции 1m/10m/1h, default 10мин, hard cap буфера 3000→20000. Export видимого списка
+> событий (`eventsToJson`). detail-sheet: §181 `routingLine` (читаемая трассировка
+> `процесс ⇒ rule ⇒ группа : нода → detour → домен`) + APP-раздел (иконка+имя) +
+> DNS-сервер/Source (rc.10) + cached-бейдж в live-строке. **Выпил DNS-legacy** (§044
+> cleanup, [`tasks/183-cleanup-stale-dns-attribution.md`](../../tasks/183-cleanup-stale-dns-attribution.md)):
+> лог-листенер + write-only `_connIdToMeta` + inferred-эвристика удалены — профайлер
+> больше НЕ парсит core-лог (DNS из §180-стрима, TCP из §168-ядра). Файлы:
+> `screens/stats_screen/{trace_explorer,profiler_filter,profiler_filter_sheet}.dart`,
+> `per_app_trace_tab/app_multi_picker.dart`.
+
 ### Где живёт
 
 Третий tab в **`StatsScreen`** (рядом с Overview / Connections). Имя: **«Per-app»** или **«App trace»**.

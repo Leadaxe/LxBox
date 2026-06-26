@@ -8,30 +8,38 @@ part of '../home_controller.dart';
 mixin _PingMixin on ChangeNotifier {
   // --- surface, предоставляемая HomeController / другими частями ---
   HomeState get _state;
-  ClashApiClient? get _clash;
+  CcChannel get _cc;
   Timer? get _autoPingTimer;
   set _autoPingTimer(Timer? value);
   void _emit(HomeState next);
   void _addDebug(DebugSource source, String message);
   Future<void> reloadProxies();
 
-  /// Single-node URLTest через clash `/proxies/<tag>/delay`. Симметричен
-  /// `runGroupUrltest(groupTag)` для group'ы. Использует per-group resolved
-  /// url/timeout (§040) — контекст ноды = `state.selectedGroup`.
+  /// Single-node URLTest через CommandClient `urlTestOutbound` (§122, unary RPC).
+  /// Использует per-group resolved url/timeout (§040) — контекст = `selectedGroup`.
+  /// ИНВАРИАНТ результата (§4.6): `error` — единственный признак провала;
+  /// `delay==0 && error==''` = успех 0мс (`CcDelayResult.lastDelayValue`).
   Future<void> runNodeUrltest(String nodeTag) async {
-    final clash = _clash;
-    if (clash == null) return;
+    if (!_state.tunnelUp) return;
     final pingBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '…';
     _emit(_state.copyWith(pingBusy: pingBusy));
     final group = _state.selectedGroup;
     final url = pingUrlFor(group);
     final timeoutMs = pingTimeoutFor(group);
     try {
-      final ms = await clash.delay(nodeTag, timeoutMs: timeoutMs, url: url);
+      final r = await _cc.urlTestOutbound(nodeTag, link: url, timeoutMs: timeoutMs);
+      final ms = r.lastDelayValue; // ok → delay (вкл. 0мс); fail → -1
       final nextDelay = Map<String, int>.from(_state.lastDelay)..[nodeTag] = ms;
       final nextBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '';
-      _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
-      _addDebug(DebugSource.app, 'URLTest $nodeTag → $url: ${ms}ms');
+      if (r.ok) {
+        _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
+        _addDebug(DebugSource.app, 'URLTest $nodeTag → $url: ${ms}ms');
+      } else {
+        final msg = '${_routeLabel(nodeTag, url)} — ${r.error}';
+        _emit(_state.copyWith(
+            lastDelay: nextDelay, pingBusy: nextBusy, lastError: msg));
+        _addDebug(DebugSource.app, msg);
+      }
     } catch (e) {
       final nextDelay = Map<String, int>.from(_state.lastDelay)..[nodeTag] = -1;
       final nextBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '';
@@ -163,16 +171,17 @@ mixin _PingMixin on ChangeNotifier {
     });
   }
 
-  /// Форсит sing-box URLTest на группе (`/group/<tag>/delay`) с per-group
-  /// resolved url/timeout (§040). После теста sing-box обновит `now` у
-  /// URLTest-группы; мы пулим свежий proxies чтобы UI увидел выбор.
+  /// Форсит URLTest на группе через CommandClient `urlTestOutbound(groupTag)`
+  /// (§122). Для URLTest-аутбаунда ядро само перебирает членов и обновляет
+  /// `selected`; groups-стрим приедет с новым выбором. Per-group resolved
+  /// url/timeout (§040).
   Future<void> runGroupUrltest(String groupTag) async {
-    final clash = _clash;
-    if (clash == null || !_state.tunnelUp) return;
+    if (!_state.tunnelUp) return;
     final url = pingUrlFor(groupTag);
     try {
-      await clash.groupDelay(groupTag,
-          timeoutMs: pingTimeoutFor(groupTag), url: url);
+      final r = await _cc.urlTestOutbound(groupTag,
+          link: url, timeoutMs: pingTimeoutFor(groupTag));
+      if (!r.ok) throw FormatException(r.error);
       _addDebug(DebugSource.app, 'Group URLTest done: $groupTag → $url');
       await reloadProxies();
       // §070: bump cache gen — re-sort после group URLtest (latency мог
@@ -196,8 +205,7 @@ mixin _PingMixin on ChangeNotifier {
   /// отображения (sort + manual + pinned + filter уже применены caller'ом),
   /// что юзер ожидает визуально.
   Future<void> runMassUrltest({List<String>? order}) async {
-    final clash = _clash;
-    if (clash == null) return;
+    if (!_state.tunnelUp) return;
 
     if (_massPingRunning) {
       cancelMassPing();
@@ -231,9 +239,12 @@ mixin _PingMixin on ChangeNotifier {
         if (!_massPingRunning || _massPingEpoch != epoch || !_state.tunnelUp) break;
         final tag = nodes[i];
         try {
-          final ms = await clash.delay(tag, timeoutMs: massPingTimeout, url: massPingUrl);
+          final r = await _cc.urlTestOutbound(tag,
+              link: massPingUrl, timeoutMs: massPingTimeout);
           if (_massPingEpoch != epoch) break;
-          final nextDelay = Map<String, int>.from(_state.lastDelay)..[tag] = ms;
+          // §4.6 — ok → delay (вкл. 0мс); fail (error непустой) → -1.
+          final nextDelay = Map<String, int>.from(_state.lastDelay)
+            ..[tag] = r.lastDelayValue;
           final nextBusy = Map<String, String>.from(_state.pingBusy)..[tag] = '';
           _emit(_state.copyWith(lastDelay: nextDelay, pingBusy: nextBusy));
         } catch (_) {
@@ -266,34 +277,35 @@ mixin _PingMixin on ChangeNotifier {
   }
 
   Future<void> _runAllUrltestGroups(int epoch) async {
-    final pmap = _state.proxiesJson['proxies'];
-    if (pmap is! Map<String, dynamic>) return;
-    for (final entry in pmap.entries) {
+    // §122 — snapshot тегов до цикла: state.ccGroups может смениться стримом
+    // во время await'ов, а нам нужен стабильный список urltest-групп.
+    final tags = _state.urltestGroups.map((g) => g.tag).toList();
+    for (final tag in tags) {
       // Bug 2 fix: проверяем epoch на каждой итерации — если юзер нажал
       // cancel пока крутятся urltest-группы, прерываемся (auto-группа была
       // основным источником "ping продолжается" после Stop).
       if (_massPingEpoch != epoch) return;
-      final v = entry.value;
-      if (v is! Map<String, dynamic>) continue;
-      final type = v['type']?.toString().toLowerCase() ?? '';
-      if (!type.contains('urltest')) continue;
-      await runGroupUrltest(entry.key);
+      await runGroupUrltest(tag);
     }
+    // §175 — весь пинг-прогон (ноды + urltest-группы) завершён → освобождаем
+    // pingClient (lazy lifecycle: short-lived conn на прогон). Следующий прогон
+    // поднимет свежий. При cancel — disconnect уже сделан в cancelMassPing.
+    if (_massPingEpoch == epoch) unawaited(_cc.cancelPing());
   }
 
   void cancelMassPing() {
     if (!_massPingRunning) return;
     _massPingRunning = false;
     _massPingEpoch++;
-    // Прерываем in-flight delay/groupDelay HTTP-запросы — клиент закрывается,
-    // workers получают exception и завершаются (и пути для direct/auto где
-    // sing-box reusing connection pool не оставляются висеть). Без этого
-    // mass ping продолжал реально пинговать пока все timeout'ы не истекут.
-    _clash?.cancelDelays();
-    // Очищаем все pingBusy — workers которые ждут in-flight clash.delay
-    // ответ break'нутся по epoch-mismatch БЕЗ финального cleanup'а своих
-    // тегов (см. runMassUrltest worker). Без этой очистки у нод которые не
-    // успели ответить остаётся "…" indicator до следующего ping'а.
+    // §175 — РЕАЛЬНАЯ отмена in-flight тестов в ядре: disconnect pingClient
+    // (отдельный CC-клиент) рвёт per-call ctx уже-ушедших в dial URLTest'ов
+    // (ядро SPEC 015 §3.6), не дожидаясь TCPTimeout. Раньше (§122) отмены не
+    // было — unary RPC дотухал сам, до ~10 «зомби»-тестов держались до timeout.
+    // Epoch-bump (ниже) остаётся: мгновенно гасит ПРИМЕНЕНИЕ результатов в UI;
+    // disconnect гасит сами dial'ы в ядре. Не трогает status/screen/profiler.
+    unawaited(_cc.cancelPing());
+    // Очищаем все pingBusy — иначе у нод, не успевших ответить, остаётся "…"
+    // indicator до следующего ping'а.
     _emit(_state.copyWith(pingBusy: const {}));
     _addDebug(DebugSource.app, 'Mass ping cancelled');
   }

@@ -12,7 +12,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import java.io.File
 import java.util.Locale
 
 /**
@@ -38,7 +37,21 @@ class BoxApplication : Application() {
 
         // setLocale обязательно ДО Libbox.setup'а — иначе sing-box error
         // messages не локализованы. Формат `xx_YY` (с подчёркиванием).
-        Libbox.setLocale(Locale.getDefault().toLanguageTag().replace("-", "_"))
+        //
+        // libbox 1.14: setLocale стал СТРОГИМ — golang.org/x/text/language
+        // бросает `unsupported locale` на нераспознанной комбинации язык+регион
+        // (напр. `ru_IL` = русский на устройстве с регионом Израиль). В 1.13.13
+        // это глоталось. Без catch → краш в onCreate ДО старта ядра, приложение
+        // не запускается вовсе. Локаль влияет лишь на язык error-строк ядра —
+        // fail-safe: при отказе пробуем голый язык (`ru`), затем молча
+        // пропускаем (ядро возьмёт дефолтную локаль).
+        runCatching {
+            Libbox.setLocale(Locale.getDefault().toLanguageTag().replace("-", "_"))
+        }.recoverCatching {
+            Libbox.setLocale(Locale.getDefault().language)
+        }.onFailure {
+            android.util.Log.w(TAG, "setLocale failed, using core default: ${it.message}")
+        }
 
         runCatching { QuickShortcuts.refresh(this) }
             .onFailure { android.util.Log.w(TAG, "QuickShortcuts.refresh failed: ${it.message}") }
@@ -83,12 +96,23 @@ class BoxApplication : Application() {
             // §043: forwarding sing-box логов в `writeDebugMessage`.
             // `daemon/started_service.go:1048-1050` gates за `if s.debug`.
             debug = BootReceiver.isCoreLogsEnabled(context)
+            // §173 — OOM-killer: замена удалённому в 1.14 `Libbox.setMemoryLimit`.
+            // libbox 1.14 конфигурит память декларативно через SetupOptions.
+            // ВАЖНО (setup.go:85-91): на Android `oomKillerEnabled=true` БЕЗ
+            // явного `oomMemoryLimit` = НЕТ лимита (`SetMemoryLimit(MaxInt64)`;
+            // дефолт есть только у iOS NetEx). Поэтому задаём лимит явно —
+            // ядро ставит Go soft-limit = limit*3/4 (~150MB), GC агрессивнее →
+            // меньше шансов попасть под Android lowmemorykiller на слабых
+            // устройствах. Раньше (до 1.14) это делал `setMemoryLimit(true)`.
+            oomKillerEnabled = true
+            oomMemoryLimit = 200L * 1024 * 1024 // 200 MB → soft-limit ~150 MB
+            // §038/§173 — crash/stderr-канал: замена удалённому `redirectStderr`.
+            // Непустой source → ядро редиректит stderr в
+            // `workingPath/CrashReport-lxbox.log` (setup.go:102) — восстанавливает
+            // stderr-диагностику §038, потерянную с удалением redirectStderr в 1.14.
+            crashReportSource = "lxbox"
         }
         Libbox.setup(opts)
-        // redirectStderr — best-effort: старые libbox или SELinux OEM могут
-        // блокировать.
-        runCatching { Libbox.redirectStderr(File(workingDir, "stderr.log").path) }
-            .onFailure { android.util.Log.w(TAG, "redirectStderr failed: ${it.message}") }
     }
 
     companion object {
@@ -99,7 +123,7 @@ class BoxApplication : Application() {
         @Volatile
         internal lateinit var instance: BoxApplication
 
-        /** Готовность `Libbox.setup` + `Libbox.redirectStderr`. */
+        /** Готовность `Libbox.setup` (libbox 1.14: redirectStderr убран из API). */
         val libboxReady: CompletableDeferred<Unit> = CompletableDeferred()
 
         /** §051 Phase 3 — singleton WifiNetworkObserver. Toggled через

@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/config_node.dart';
-import '../services/clash_api_client.dart';
 import '../services/traffic_profiler.dart';
 import '../vpn/box_vpn_client.dart';
+import '../vpn/cc_channel.dart';
 import 'connections_screen.dart';
 import 'live_events_tab.dart';
 import 'per_app_trace_tab.dart';
@@ -16,15 +16,16 @@ import 'stats_screen/overview_tab.dart';
 /// `Navigator.push(StatsScreen(initialTab: StatsTab.perApp))`.
 enum StatsTab { overview, connections, perApp, live }
 
+/// §122 — Statistics-экран на libbox `CommandClient` (push-стримы), а не
+/// Clash HTTP-pull. `CcChannel.instance` даёт status/connections-стримы;
+/// `connectScreen()`/`disconnectScreen()` управляют screen-клиентом ядра.
 class StatsScreen extends StatefulWidget {
   const StatsScreen({
     super.key,
-    required this.clash,
     this.configRaw = '',
     this.initialTab = StatsTab.overview,
   });
 
-  final ClashApiClient clash;
   final String configRaw;
   final StatsTab initialTab;
 
@@ -32,19 +33,27 @@ class StatsScreen extends StatefulWidget {
   State<StatsScreen> createState() => _StatsScreenState();
 }
 
-class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
+class _StatsScreenState extends State<StatsScreen> {
   Map<String, OutboundGroup> _groups = {};
   int _totalUp = 0;
   int _totalDown = 0;
   int _totalConns = 0;
   int _memory = 0;
   Map<String, int> _byRule = const {};
-  Map<String, AppStat> _byApp = const {};
   bool _loading = true;
-  Timer? _timer;
-  // §091 — структурные запросы к конфигу через ParsedConfig (был локальный
-  // _detourMap + _parseDetourMap + _detourChain дубль; до §091 —
-  // ConfigIntrospection).
+
+  // §166 — троттл тяжёлого пересчёта connections (byRule/perRule + ruleName в
+  // цикле + setState всего дерева). Снапшоты идут на FAST 0.1с = 10/сек → без
+  // троттла Stats ВИСЛА (10 полных пересборок/ребилдов в секунду на N conns).
+  // 700мс — плавно глазу, но не захлёбывается.
+  static const _connRecalc = Duration(milliseconds: 700);
+  DateTime? _connRecalcAt;
+
+  final _cc = CcChannel.instance;
+  StreamSubscription<CcStatus>? _statusSub;
+  StreamSubscription<List<CcConnection>>? _connSub;
+
+  // §091 — структурные запросы к конфигу через ParsedConfig.
   late final ParsedConfig _intro = ParsedConfig.parse(widget.configRaw);
 
   /// §069 — runtime applied значение `allowBypass()` от последнего
@@ -52,52 +61,130 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
   bool _currentSessionAllowBypass = false;
   final _vpn = BoxVpnClient();
 
-  static const _refreshInterval = Duration(seconds: 3);
-
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    unawaited(_refresh());
-    _startTimer();
-  }
-
-  void _startTimer() {
-    _timer?.cancel();
-    _timer = Timer.periodic(_refreshInterval, (_) => _refresh());
-  }
-
-  void _stopTimer() {
-    _timer?.cancel();
-    _timer = null;
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Battery-friendly: stop'имся когда app уходит в background. 3-секундный
-    // polling Clash API не имеет смысла когда юзер даже не видит экран.
-    // На resume — immediate refresh + перезапуск таймера.
-    switch (state) {
-      case AppLifecycleState.paused:
-      case AppLifecycleState.hidden:
-      case AppLifecycleState.detached:
-      case AppLifecycleState.inactive:
-        _stopTimer();
-      case AppLifecycleState.resumed:
-        if (_timer == null) {
-          unawaited(_refresh());
-          _startTimer();
-        }
-    }
+    // §122 ПОРЯДОК: сперва подписки (ставят native sink через EventChannel
+    // .onListen), ПОТОМ connectScreen() — иначе разовый снапшот может уйти до
+    // установки sink. См. home_controller._startCcStreams.
+    _statusSub = _cc.status.listen(_onStatus);
+    _connSub = _cc.connections.listen(_onConnections);
+    // §2.8 — поднимаем screen-клиент ядра на время видимости экрана.
+    unawaited(_cc.connectScreen());
+    // §164 — Stats открыт → статистика на FAST 0.1с (плавные счётчики).
+    // dispose вернёт NORMAL 0.5с (главному экрану 0.1с не нужна).
+    unawaited(_cc.setStatusFast(true));
+    unawaited(_refreshAllowBypass());
   }
 
   List<String> _detourChain(String tag) => _intro.detourChain(tag);
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _timer?.cancel();
+    _statusSub?.cancel();
+    _connSub?.cancel();
+    unawaited(_cc.disconnectScreen());
+    // §164 — Stats закрыт → возвращаем status-стрим на NORMAL 0.5с.
+    unawaited(_cc.setStatusFast(false));
     super.dispose();
+  }
+
+  void _onStatus(CcStatus s) {
+    if (!mounted) return;
+    // §164 — память обновляем КАЖДЫЙ тик (как totals). Троттл 3с убран — пусть
+    // идёт с частотой стрима (FAST 0.1с на Stats), чтобы частота тика была видна
+    // визуально (память мельтешит от GC — это и есть индикатор живого стрима).
+    setState(() {
+      _totalUp = s.uplinkTotal;
+      _totalDown = s.downlinkTotal;
+      _memory = s.memory;
+    });
+  }
+
+  void _onConnections(List<CcConnection> conns) {
+    // §166/§170 — троттл: тяжёлый пересчёт не чаще _connRecalc. Окно мерим от
+    // КОНЦА отработанного пересчёта (метка ставится после setState), НЕ от
+    // старта — иначе на медленном железе, где сам пересчёт длится дольше
+    // _connRecalc, следующий тик видел бы «окно истекло» сразу и наслаивал
+    // пересчёты, не разгребая очередь. Первый снапшот (_loading) — сразу.
+    final now = DateTime.now();
+    if (!_loading &&
+        _connRecalcAt != null &&
+        now.difference(_connRecalcAt!) < _connRecalc) {
+      return;
+    }
+
+    // §069 — bypass warning обновляем на каждом снапшоте (без отдельного таймера).
+    unawaited(_refreshAllowBypass());
+
+    // §176 — Stats = срез АКТИВНЫХ. Ядро теперь отдаёт FilterState(All) (живые +
+    // closed до 5 мин) — closed нужны Conns/профайлеру, но не статистике.
+    // Фильтруем closedAt>0, иначе _totalConns и byRule/perRule раздулись бы
+    // закрытыми строками.
+    final live = conns.where((c) => c.closedAt == 0).toList();
+    _totalConns = live.length;
+
+    final byRule = <String, int>{};
+    final perRule = <String, OutboundGroup>{};
+    for (final c in live) {
+      // §165 — имя правила через резолвер (справочник из custom_rules + кэш).
+      // Пустой/ненайденный rule → 'final' (резолвер сам). Кэш снимает фриз.
+      final rule = ruleName(c.rule);
+      byRule[rule] = (byRule[rule] ?? 0) + 1;
+
+      // destination = "host:port" — порт = часть после последнего ':'.
+      // host: domain (если есть), иначе host-часть destination (IP-соединения
+      // без resolved-домена приходят с пустым domain).
+      final destPort = _portOf(c.destination);
+      final host = c.domain.isNotEmpty ? c.domain : _hostOf(c.destination);
+
+      final conn = Connection(
+        host: host,
+        destPort: destPort,
+        network: c.network,
+        rule: c.rule,
+        upload: c.uplink,
+        download: c.downlink,
+        start: c.createdAt,
+      );
+
+      final existing = perRule[rule];
+      if (existing != null) {
+        existing.upload += c.uplink;
+        existing.download += c.downlink;
+        existing.connections.add(conn);
+      } else {
+        perRule[rule] = OutboundGroup(
+          name: rule,
+          upload: c.uplink,
+          download: c.downlink,
+          connections: [conn],
+        );
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _byRule = byRule;
+      _groups = perRule;
+      _loading = false;
+    });
+    // §170 — метка ставится ПОСЛЕ пересчёта: следующее окно _connRecalc
+    // отсчитывается от конца этой работы, а не от старта.
+    _connRecalcAt = DateTime.now();
+  }
+
+  /// Порт из "host:port" — часть после последнего ':' (IPv6-safe: берём хвост).
+  static String _portOf(String destination) {
+    final i = destination.lastIndexOf(':');
+    if (i < 0 || i == destination.length - 1) return '';
+    return destination.substring(i + 1);
+  }
+
+  /// Host из "host:port" — часть до последнего ':'. Если ':' нет — вся строка.
+  static String _hostOf(String destination) {
+    final i = destination.lastIndexOf(':');
+    return i < 0 ? destination : destination.substring(0, i);
   }
 
   Future<void> _refreshAllowBypass() async {
@@ -105,81 +192,6 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     if (v != _currentSessionAllowBypass) {
       setState(() => _currentSessionAllowBypass = v);
-    }
-  }
-
-  Future<void> _refresh() async {
-    // §069: piggyback на 3-сек polling — bypass warning виден без отдельного таймера.
-    unawaited(_refreshAllowBypass());
-    try {
-      final data = await widget.clash.fetchConnections();
-      final conns = (data['connections'] as List<dynamic>? ?? [])
-          .whereType<Map<String, dynamic>>()
-          .toList();
-
-      _totalUp = (data['uploadTotal'] as num?)?.toInt() ?? 0;
-      _totalDown = (data['downloadTotal'] as num?)?.toInt() ?? 0;
-      _totalConns = conns.length;
-
-      // Breakdown-агрегации (memory, byRule, byDnsMode, byApp) — парсим
-      // тот же response'ом через TrafficSnapshot, чтобы не дублировать логику.
-      final snap = TrafficSnapshot.fromConnectionsJson(data);
-      _memory = snap.memory;
-      _byRule = snap.byRule;
-      _byApp = snap.byApp;
-
-      final perChain = <String, OutboundGroup>{};
-      for (final c in conns) {
-        final meta = c['metadata'] as Map<String, dynamic>? ?? {};
-        final host = meta['host']?.toString() ?? meta['destinationIP']?.toString() ?? '?';
-        final destPort = meta['destinationPort']?.toString() ?? '';
-        final network = meta['network']?.toString() ?? '';
-        final chains = (c['chains'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
-        final chain = chains.isNotEmpty ? chains.first : 'direct';
-        final rule = c['rule']?.toString() ?? '';
-        final rulePayload = c['rulePayload']?.toString() ?? '';
-        final up = (c['upload'] as num?)?.toInt() ?? 0;
-        final down = (c['download'] as num?)?.toInt() ?? 0;
-        final start = c['start']?.toString() ?? '';
-
-        final process = meta['process']?.toString() ?? meta['processPath']?.toString() ?? '';
-
-        final conn = Connection(
-          host: host,
-          destPort: destPort,
-          network: network,
-          chains: chains,
-          rule: rule,
-          rulePayload: rulePayload,
-          upload: up,
-          download: down,
-          start: start,
-          process: process,
-        );
-
-        final existing = perChain[chain];
-        if (existing != null) {
-          existing.upload += up;
-          existing.download += down;
-          existing.connections.add(conn);
-        } else {
-          perChain[chain] = OutboundGroup(
-            name: chain,
-            upload: up,
-            download: down,
-            connections: [conn],
-          );
-        }
-      }
-
-      if (mounted) {
-        setState(() {
-          _groups = perChain;
-          _loading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted && _loading) setState(() => _loading = false);
     }
   }
 
@@ -253,7 +265,7 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text('Live'),
+                        const Text('Profiler'),
                         if (TrafficProfiler.I.unattributedBannerActive) ...[
                           const SizedBox(width: 4),
                           Icon(
@@ -279,11 +291,10 @@ class _StatsScreenState extends State<StatsScreen> with WidgetsBindingObserver {
                 totalConns: _totalConns,
                 memory: _memory,
                 byRule: _byRule,
-                byApp: _byApp,
                 detourChain: _detourChain,
               ),
-              ConnectionsView(clash: widget.clash),
-              PerAppTraceTab(clash: widget.clash),
+              const ConnectionsView(),
+              const PerAppTraceTab(),
               const LiveEventsTab(),
             ],
           ),

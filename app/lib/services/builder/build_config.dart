@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math';
 
 import '../../models/custom_rule.dart';
 import '../../models/emit_context.dart';
@@ -72,7 +71,7 @@ class BuildSettings {
 ///
 /// Шаги (все inline):
 /// 1. Load wizard template.
-/// 2. Merge template defaults + user overrides → vars; randomize clash_api.
+/// 2. Merge template defaults + user overrides → vars (§122: clash_api удалён).
 /// 3. Deep-copy template.config, substitute vars.
 /// 4. Пройти по `lists` → `nodes`, применить `DetourPolicy`, дедуп тегов с
 ///    учётом `tagPrefix`, emit() → разложить по outbounds/endpoints.
@@ -112,12 +111,15 @@ Future<BuildResult> buildConfig({
     vars.putIfAbsent(e.key, () => e.value);
   }
 
+  // §122 Фаза 1b — clash_api БОЛЬШЕ НЕ инжектится: ядро rc.3 собрано без
+  // with_clash_api (server вырезан, §1a), и блок experimental.clash_api в конфиге
+  // даёт ФАТАЛЬНЫЙ отказ старта ("clash api is not included in this build").
+  // Управление — через CommandClient (§122). `_ensureClashApiDefaults` удалён.
   final generatedVars = <String, String>{};
-  _ensureClashApiDefaults(vars, generatedVars);
 
   // §120/§119: проброс VPN-mode в плоский vars ПРЯМЫМ присваиванием (live
   // VpnModeConfig побеждает любой залежавшийся flat-userVar — НЕ putIfAbsent).
-  // Делается ПОСЛЕ _ensureClashApiDefaults и ДО _substituteVars, т.к. #if в
+  // Делается ДО _substituteVars, т.к. #if в
   // шаблоне (tun-in/mixed-in/route-rules) гейтится по @vpn_mode/@proxy_*.
   // applyVpnMode удалён — вся структура теперь декларативна в шаблоне.
   final vpnMode = settings.vpnMode;
@@ -331,6 +333,17 @@ Future<BuildResult> buildConfig({
     applyTunPackages(config, settings.tunApps!);
   }
 
+  // §172 — деградация битых detour-ссылок ПЕРЕД валидацией: detour на
+  // несуществующий outbound (напр. отключённый WARP-target из подписки) →
+  // снимаем поле, нода работает напрямую, а не роняет весь конфиг (как §169
+  // с REALITY). Снятые detour'ы добавляем в emitWarnings (видно юзеру).
+  final healedDetours = healDanglingDetours(config);
+  for (final h in healedDetours) {
+    emitWarnings.add(
+        'Detour убран: outbound "${h.owner}" ссылался на отсутствующий '
+        '"${h.target}" — нода работает напрямую.');
+  }
+
   final validation = validateConfig(config);
   return BuildResult(
     configJson: jsonEncode(config),
@@ -393,7 +406,7 @@ class _BuildCtx implements EmitContext {
   void addToAutoList(SingboxEntry entry) => autoEntries.add(entry);
 }
 
-/// Собирает preset-группы (vpn-1/vpn-2/vpn-3/auto). Приватный
+/// Собирает preset-группы (vpn-1/vpn-2/vpn-3/vpn-4/auto). Приватный
 /// helper `buildConfig` — специфичен для одного вызова, выделение в
 /// отдельный файл/модуль не даёт пользы (YAGNI, решение §Принципы #4).
 List<Map<String, dynamic>> _buildPresetGroups({
@@ -468,23 +481,9 @@ List<Map<String, dynamic>> _buildPresetGroups({
   return result;
 }
 
-void _ensureClashApiDefaults(Map<String, String> vars, Map<String, String> generated) {
-  final rng = Random.secure();
-
-  final api = vars['clash_api'] ?? '127.0.0.1:9090';
-  if (api == '127.0.0.1:9090' || api.endsWith(':9090')) {
-    final port = 49152 + rng.nextInt(65535 - 49152);
-    vars['clash_api'] = '127.0.0.1:$port';
-    generated['clash_api'] = vars['clash_api']!;
-  }
-  final secret = vars['clash_secret'] ?? '';
-  if (secret.isEmpty) {
-    final bytes = List.generate(16, (_) => rng.nextInt(256));
-    vars['clash_secret'] =
-        bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-    generated['clash_secret'] = vars['clash_secret']!;
-  }
-}
+// §122 Фаза 1b — `_ensureClashApiDefaults` удалён: clash_api больше не инжектится
+// (ядро rc.3 без with_clash_api → блок даёт фатальный отказ старта). Управление
+// через CommandClient (§122). Рандомизация порта/secret больше не нужна.
 
 /// §120 — typed substitution + `#if`. Тонкая обёртка над общим [walk]-движком
 /// ([if_engine.dart]). `obj` мутируется на месте. Coerce — по `node.type`

@@ -4,24 +4,10 @@ part of '../traffic_profiler.dart';
 // Internal helpers
 // ─────────────────────────────────────────────────────────────────────────
 
-class _ConnMeta {
-  _ConnMeta(this.process, this.firstSeen);
-  final String process;
-  final DateTime firstSeen;
-}
-
-class _DnsAccumulator {
-  _DnsAccumulator({required this.domain, required this.firstTs})
-      : lastTs = firstTs;
-  final String domain;
-  // §141 P2.4c — поле `lastResolvedName` удалено: было write-only (set в ctor и
-  // в _handleDnsLine, но нигде не читалось). `ips`/`cnameChain`/`firstTs`
-  // оставлены — они реально используются (вопреки исходной находке аудита).
-  final List<String> cnameChain = <String>[];
-  final Set<String> ips = <String>{};
-  DateTime firstTs;
-  DateTime lastTs;
-}
+// §044 — `_ConnMeta` (conn-id → package, TCP-атрибуция из router-лога) выпилен
+// вместе с лог-питателем: TCP-owner идёт из ядра (CcConnection.packageName).
+// §180 — `_DnsAccumulator` выпилен: cnameChain приходит целиком в
+// `CcDnsQuery.answers` (ядро SPEC 018), ручная аккумуляция по connId не нужна.
 
 class _ConnSnapshot {
   _ConnSnapshot({
@@ -31,6 +17,7 @@ class _ConnSnapshot {
     required this.port,
     required this.network,
     required this.chains,
+    required this.detours, // §181
     required this.upBytes,
     required this.downBytes,
     required this.startedAt,
@@ -46,7 +33,8 @@ class _ConnSnapshot {
   final String ip;
   final int port;
   final String network;
-  final List<String> chains;
+  final List<String> chains; // §174 — маршрут [node, …selectors]
+  final List<String> detours; // §181 — detour-ось [detour, …наружу]
   int upBytes;
   int downBytes;
   final DateTime startedAt;

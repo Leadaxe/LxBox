@@ -14,10 +14,15 @@ class LiveRecordingHeader extends StatelessWidget {
     super.key,
     required this.eventCount,
     required this.onToggle,
+    this.onExport,
   });
 
   final int eventCount;
   final VoidCallback onToggle;
+
+  /// §044 — экспорт записанных событий. Кнопка справа от START/STOP; null =
+  /// скрыта (нечего экспортировать).
+  final VoidCallback? onExport;
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +75,13 @@ class LiveRecordingHeader extends StatelessWidget {
               foregroundColor: isRec ? cs.onError : cs.onPrimary,
             ),
           ),
+          // §044 — экспорт записанного, справа от большой кнопки.
+          if (onExport != null)
+            IconButton(
+              tooltip: 'Export events',
+              icon: const Icon(Icons.download, size: 22),
+              onPressed: eventCount == 0 ? null : onExport,
+            ),
         ],
       ),
     );

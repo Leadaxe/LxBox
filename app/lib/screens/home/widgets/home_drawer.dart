@@ -110,18 +110,10 @@ class HomeDrawer extends StatelessWidget {
               title: const Text('Statistics'),
               subtitle: const Text('Traffic by outbound'),
               enabled: controller.state.tunnelUp,
-              onTap: () {
-                final clash = controller.clashClient;
-                if (clash != null) {
-                  _go(
-                    context,
-                    StatsScreen(
-                      clash: clash,
-                      configRaw: controller.state.configRaw,
-                    ),
-                  );
-                }
-              },
+              onTap: () => _go(
+                context,
+                StatsScreen(configRaw: controller.state.configRaw),
+              ),
             ),
             ListTile(
               leading: const Icon(Icons.description_outlined),

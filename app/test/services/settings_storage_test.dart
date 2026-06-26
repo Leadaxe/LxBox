@@ -69,6 +69,17 @@ void main() {
       SettingsStorage.resetCacheForTesting();
       expect(await SettingsStorage.getVar('alpha', 'def'), '1');
     });
+
+    test('§044 profiler retention — default + round-trip + персист', () async {
+      // Дефолт без записи = 600s (10 мин).
+      expect(await SettingsStorage.getProfilerRetentionSec(),
+          SettingsStorage.profilerRetentionDefaultSec);
+      await SettingsStorage.setProfilerRetentionSec(3600);
+      expect(await SettingsStorage.getProfilerRetentionSec(), 3600);
+      // Переживает reset (ключ в allowedTopLevelKeys, не отфильтрован _save).
+      SettingsStorage.resetCacheForTesting();
+      expect(await SettingsStorage.getProfilerRetentionSec(), 3600);
+    });
   });
 
   group('§072 — corruption recovery', () {

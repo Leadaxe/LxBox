@@ -2,7 +2,6 @@ import '../../controllers/home_controller.dart';
 import '../../controllers/subscription_controller.dart';
 import '../../models/home_state.dart';
 import '../../models/server_list.dart';
-import '../../services/clash_api_client.dart';
 import 'node_filter.dart';
 import 'node_filter_view_model.dart';
 import 'subscription_lookup.dart';
@@ -59,7 +58,7 @@ class NodeListPresenter {
   /// «Protocol detection»). Возвращает null если cache miss и urltest нет.
   String? protocolOfTag(String tag, HomeState state) {
     final model = state.configModel;
-    final urltestNow = ClashApiClient.urltestNow(state.proxiesJson, tag);
+    final urltestNow = state.urltestNowOf(tag);
     return model.protocolOf(tag) ??
         (urltestNow != null ? model.protocolOf(urltestNow) : null);
   }
@@ -71,7 +70,7 @@ class NodeListPresenter {
     final model = state.configModel;
     var n = model[tag];
     if (n == null || n.isControl || n.type.isEmpty) {
-      final urltestNow = ClashApiClient.urltestNow(state.proxiesJson, tag);
+      final urltestNow = state.urltestNowOf(tag);
       n = urltestNow != null ? model[urltestNow] : null;
       // Паритет с protocolOfTag: fallback-цель тоже должна быть payload-узлом
       // (control с tls/transport-полями дал бы лейблы при protocol == null).
@@ -105,26 +104,6 @@ class NodeListPresenter {
   Set<String> subscriptionsOfTag_(String tag) =>
       subscriptionsOfTag(tag, subController.entries);
 
-  /// §078 — True если outbound с этим tag'ом — control (selector / urltest
-  /// / direct / block / dns), не payload-нода. Source-of-truth =
-  /// `state.proxiesJson` (Clash API знает типы outbound'ов лучше нас).
-  ///
-  /// Caller использует чтобы (a) короткозамкнуть filter passing — control
-  /// ноды **всегда** matching независимо от фильтров, (b) исключить из
-  /// 'Custom' chip detection — empty `subscriptionsOf` у control'ов не
-  /// должен триггерить 'Custom' chip когда у юзера нет UserServer'ов.
-  static const _controlProxyTypes = <String>{
-    'selector', 'urltest', 'direct', 'block', 'dns',
-  };
-
-  bool isControlTag(String tag, HomeState state) {
-    final pmap = state.proxiesJson['proxies'];
-    if (pmap is! Map<String, dynamic>) return false;
-    final entry = pmap[tag];
-    if (entry is! Map<String, dynamic>) return false;
-    final type = (entry['type'] as String?)?.toLowerCase() ?? '';
-    return _controlProxyTypes.contains(type);
-  }
 
   /// §085 R3 — единый `NodeFilter` из view-model + state-зависимых lookup'ов.
   /// Используется и `computeDisplayList`, и node-list (был дубль §078).
@@ -155,14 +134,14 @@ class NodeListPresenter {
       List<String> sortedNodes, HomeState state) {
     final pool = sortedNodes
         .where((t) =>
-            isControlTag(t, state) ||
+            state.isControlTag(t) ||
             filter.detourPoolPasses(state.configModel[t]?.isDetour ?? false))
         .toList();
     final f = buildNodeFilter(state);
     final matching = <String>[];
     final nonMatching = <String>[];
     for (final tag in pool) {
-      if (isControlTag(tag, state) || f.passes(tag)) {
+      if (state.isControlTag(tag) || f.passes(tag)) {
         matching.add(tag);
       } else {
         nonMatching.add(tag);
@@ -222,7 +201,7 @@ class NodeListPresenter {
     final allTags = viewSortedNodes(state);
     final pool = allTags
         .where((t) =>
-            isControlTag(t, state) ||
+            state.isControlTag(t) ||
             filter.detourPoolPasses(state.configModel[t]?.isDetour ?? false))
         .toList();
 

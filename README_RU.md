@@ -169,7 +169,7 @@ Multi-hop цепочки: трафик идёт через промежуточ�
 
 **Настройки ядра** — конфигурация маршрутизации
 
-Организованы по секциям: General, Clash API, Network, Include Auto, DNS, TUN, Connection Resilience. URLTest параметры для авто-подбора прокси. Все изменения автосохраняются.
+Организованы по секциям: General, Network, Include Auto, DNS, TUN, Connection Resilience. URLTest параметры для авто-подбора прокси. Все изменения автосохраняются.
 
 
 
@@ -236,7 +236,7 @@ buildConfig(lists, settings)  ← template + post-steps (resilience, DNS, rules)
 sing-box JSON
 ```
 
-- **Bundled-ядро** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **1.13.13-lx.5**: форк sing-box 1.13.13, собранный с тегами `with_awg` / `with_xhttp`; версия пинится в `app/android/libbox.version`, AAR скачивается из GitHub Releases форка скриптом `scripts/fetch-libbox.sh` с проверкой SHA256
+- **Bundled-ядро** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **1.14.0-lx.1**: форк sing-box 1.14, собранный с тегами `with_awg` / `with_xhttp` / `with_lx_command`; управляющий канал — libbox `CommandClient` (без Clash API). Версия пинится в `app/android/libbox.version`, AAR скачивается из GitHub Releases форка скриптом `scripts/fetch-libbox.sh` с проверкой SHA256
 - **Sealed `NodeSpec`** — 9 протоколов, полиморфный `emit(vars)` / `toUri()` (round-trip инвариант)
 - `**EmitContext**` — пробрасывает шаблонные vars в per-node emit
 - `**NodeEntries{main, detours[]}**` — именованный struct для chain-результатов
@@ -253,6 +253,7 @@ Spec-driven development — 30 спецификаций фич в [docs/spec/fea
 
 | Документ                                     | Описание                                                  |
 | -------------------------------------------- | --------------------------------------------------------- |
+| [Безопасность](docs/SECURITY.md)             | Модель угроз — защита от утечек (Unknown traffic / kill-switch), локальная поверхность атаки, секреты на устройстве |
 | [Документация протоколов](docs/PROTOCOLS.md) | URI форматы, параметры, маппинг в sing-box                |
 | [Архитектура](docs/ARCHITECTURE.md)          | 3-слойный pipeline, потоки данных, нативный bridge        |
 | [Сборка](docs/BUILD.md)                      | Инструкции по сборке, CI, подпись APK, local-build marker |
@@ -274,10 +275,9 @@ Spec-driven development — 30 спецификаций фич в [docs/spec/fea
 ## Безопасность
 
 - **Только TUN inbound** — нет SOCKS5/HTTP прокси на localhost (защита от утечки IP)
-- **Clash API** на рандомном порту с обязательным секретом
+- **Управляющий канал** — libbox `CommandClient` внутри процесса (без сетевого Clash API, без открытого порта/секрета)
 - **VPN Service** не экспортирован (`android:exported="false"`)
 - **Геомаршрутизация**: российские домены → direct (не через прокси)
-- Secret генерируется криптографически безопасным ГПСЧ
 
 ---
 

@@ -156,6 +156,9 @@ Future<DebugResponse> _update(
   if (regDetourInAuto != null) entry.registerDetourInAuto = regDetourInAuto;
   final useDetour = fieldBool(body, 'use_detour_servers');
   if (useDetour != null) entry.useDetourServers = useDetour;
+  // §073 — был пропущен (асимметрия: соседние detour-поля маппились, это нет).
+  final replaceDetour = fieldBool(body, 'replace_detour_chain');
+  if (replaceDetour != null) entry.replaceDetourChain = replaceDetour;
 
   // URL — только для SubscriptionServers. Для UserServer молча игнорируем
   // (как и в UI: URL у inline-сервера просто нет).

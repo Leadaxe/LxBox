@@ -5,6 +5,7 @@ import '../../../widgets/outbound_picker.dart';
 import '../edit_controller.dart';
 import '../sections/apps_section.dart';
 import '../sections/dns_section.dart';
+import '../sections/inbound_section.dart';
 import '../sections/match_section.dart';
 import '../sections/port_section.dart';
 import '../sections/protocol_section.dart';
@@ -120,6 +121,9 @@ class ParamsTab extends StatelessWidget {
             ipCidrCtrl: c.ipCidrCtrl,
             ipIsPrivate: c.ipIsPrivate,
             onIpIsPrivateChanged: c.setIpIsPrivate,
+            sourceIpCidrCtrl: c.sourceIpCidrCtrl,
+            sourceIpIsPrivate: c.sourceIpIsPrivate,
+            onSourceIpIsPrivateChanged: c.setSourceIpIsPrivate,
           ),
         if (c.kind == CustomRuleKind.srs)
           SrsSection(
@@ -146,6 +150,14 @@ class ParamsTab extends StatelessWidget {
             onPickSaved: actions.onPickSavedWifi,
             onManual: actions.onManualAddWifi,
             onTapPermissionsHint: actions.onOpenWifiPermissions,
+          ),
+        // §030/new_fields — INBOUND фильтр (tun-in / mixed-in). inline + srs.
+        if (c.kind == CustomRuleKind.inline ||
+            c.kind == CustomRuleKind.srs)
+          InboundSection(
+            selected: c.inbounds,
+            choices: c.inboundChoices,
+            onToggle: c.toggleInbound,
           ),
         // §117 задача 3 — DNS follows the rule (только inline/srs).
         DnsSection(

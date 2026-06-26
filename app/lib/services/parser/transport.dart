@@ -92,7 +92,11 @@ TlsSpec parseVlessTls(Map<String, String> q, String server, int port) {
   var fp = (q['fp'] ?? q['fingerprint'] ?? '').toLowerCase().trim();
   if (fp.isEmpty) fp = 'random';
 
-  if (pbk.isNotEmpty) {
+  // §169 — REALITY только при ВАЛИДНОМ X25519-ключе, не «pbk непустой».
+  // Мусор (pbk=enabled/true из битых подписок) → проваливаемся ниже в plain
+  // TLS, а не отравляем reality.public_key и весь config.json. См.
+  // isValidRealityPublicKey.
+  if (isValidRealityPublicKey(pbk)) {
     return TlsSpec(
       enabled: true,
       serverName: sni,

@@ -52,7 +52,6 @@ Binds to 127.0.0.1, default port 9269. Auth: `Authorization: Bearer <token>`
 Access from host: `adb forward tcp:9269 tcp:9269`, then curl 127.0.0.1:9269.
 
 Spec: docs/spec/features/031 debug api/spec.md
-Clash API notes: docs/api/clash-api-reference.md
 
 === Health ===
 
@@ -62,7 +61,6 @@ GET /help[?format=text|json]        This map. No auth. text (default) — markdo
 === State (read-only) ===
 
 GET /state                          HomeState dump (tunnel, groups, nodes_count, last_delay, traffic, busy)
-GET /state/clash                    Clash endpoint info (secret masked)
 GET /state/subs[?reveal=true]       Subscriptions. URL masked default; reveal=true — full URL
 GET /state/rules                    CustomRule[] — sealed: inline | srs | preset (with per-kind fields)
 GET /state/storage                  Raw SettingsStorage._cache JSON (for debugging)
@@ -99,31 +97,22 @@ GET /logs/app                       Alias for /logs?source=app. Same query param
 GET /logs/core                      Alias for /logs?source=core. Same query params.
 POST /logs/clear[?source=app|core]  Clear AppLog. No source — everything; otherwise only the given one.
 
-=== Clash API (transparent proxy with auto-auth) ===
-
-GET    /clash/version                          sing-box version + meta flags
-GET    /clash/proxies                          All proxies + groups + chains
-GET    /clash/proxies/{tag}                    Single proxy/group. URL-encode the emoji tag (or use python urllib).
-PUT    /clash/proxies/{tag}                    Selector switch. Body: {"name":"<child-tag>"}
-GET    /clash/proxies/{tag}/delay?url=&timeout=  Single delay test (ms)
-GET    /clash/group/{tag}/delay?url=&timeout=    Force URLTest on a group. NOTE: .now is not updated
-                                                 by this call — sing-box quirk (only the first
-                                                 urltest_interval tick changes .now).
-GET    /clash/connections                      { uploadTotal, downloadTotal, memory, connections[] }
-DELETE /clash/connections                      Close all
-DELETE /clash/connections/{id}                 Close one
-GET    /clash/traffic                          Streaming traffic (curl gets the first frame)
-
 === Actions (mutating, POST) ===
 
-POST /action/start-vpn                         Start the tunnel → {"ok":true,"action":"start-vpn"}
+POST /action/start-vpn                         Start the tunnel (via Activity, may show consent) → {"ok":true}
+POST /action/start-vpn-headless                Start WITHOUT Activity/consent (needs permission already granted)
+                                                  → {"started":bool,"needs_consent":bool}. For automation/self-test.
 POST /action/stop-vpn                          Stop it
+POST /action/reconnect                         Stop→Start under one busy-wrap (delegates to start if down)
+POST /action/reload-vpn                        In-place sing-box reload (no service kill). → {"applied":<bool>}
+POST /action/clear-error                       Dismiss the lastError banner
 POST /action/reset-network                     Light recovery: closeAllConnections + DNS flush + dialer
                                                   rebind. WITHOUT recreating box/Service/TUN. Spec 031.
                                                   Requires tunnel up. → {"ok":true,"action":"reset-network","native_ok":<bool>}
-POST /action/urltest?tag=<node>                Single-node URLTest (clash /proxies/<tag>/delay)
-POST /action/urltest?group=<group>             Group URLTest (clash /group/<group>/delay, requires tunnel)
+POST /action/urltest?tag=<node>                Single-node URLTest (CommandClient urlTestOutbound)
+POST /action/urltest?group=<group>             Group URLTest (CommandClient, requires tunnel)
 POST /action/urltest?all=true                  Mass URLTest of all nodes in the active group (concurrency 10)
+POST /action/urltest?cancel=1                  Cancel in-flight mass URLTest (epoch-bump)
 POST /action/switch-node?tag=<tag>             HomeController.switchNode
 POST /action/set-group?group=<tag>             Change the active group
 POST /action/rebuild-config                    SubscriptionController.generateConfig + saveParsedConfig
@@ -222,6 +211,10 @@ GET /diag/applog?prev=true|false|all           AppLog entries; `prev` filters by
 
 PUT    /settings/route_final                   body {"outbound":"..."}
 PUT    /settings/excluded_nodes                body {"nodes":["tag",...]}
+GET|PUT /settings/interrupt_on_switch          body {"enabled":bool} — рвать conns при switchNode
+GET|PUT /settings/node_sort                    body {"mode":"latency|manual|", "order"?:["tag",...]}
+GET|PUT /settings/enabled_groups               body {"groups":["tag",...]} (config-significant, ?rebuild)
+GET|PUT /settings/vpn_mode                     body partial {mode,proxy_protocol,proxy_port,proxy_listen,proxy_auth,proxy_user,proxy_pass} (?rebuild)
 PUT    /settings/vars/{key}                    body {"value":"..."}; blocklist: debug_token/debug_enabled/debug_port
 DELETE /settings/vars/{key}                    Delete var
 PUT    /settings/dns_options/servers           body {"servers":[...]}
@@ -300,7 +293,6 @@ const Map<String, dynamic> _capabilityJson = {
   'server': 'lxbox-debug',
   'docs': {
     'spec': 'docs/spec/features/031 debug api/spec.md',
-    'clash_reference': 'docs/api/clash-api-reference.md',
   },
   'auth': {
     'header': 'Authorization: Bearer <token>',
@@ -318,7 +310,6 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/help', 'auth': false, 'description': 'This capability map', 'params': {'format': 'text|json (default text)'}},
     // State
     {'method': 'GET', 'path': '/state', 'description': 'HomeState dump (tunnel, groups, nodes, traffic)'},
-    {'method': 'GET', 'path': '/state/clash', 'description': 'Clash endpoint info (secret masked)'},
     {'method': 'GET', 'path': '/state/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Subscriptions list'},
     {'method': 'GET', 'path': '/state/rules', 'description': 'CustomRule[] sealed (inline|srs|preset)'},
     {'method': 'GET', 'path': '/state/storage', 'description': 'Raw SettingsStorage._cache JSON'},
@@ -334,24 +325,17 @@ const Map<String, dynamic> _capabilityJson = {
     // Logs
     {'method': 'GET', 'path': '/logs', 'params': {'limit': 'N (default 200)', 'source': 'app|core', 'q': 'substring search', 'level': 'comma-separated: error,warn,info,debug'}, 'description': 'AppLog entries'},
     {'method': 'POST', 'path': '/logs/clear', 'description': 'Clear AppLog'},
-    // Clash proxy
-    {'method': 'GET', 'path': '/clash/version', 'description': 'sing-box version + meta flags'},
-    {'method': 'GET', 'path': '/clash/proxies', 'description': 'All proxies + groups + chains'},
-    {'method': 'GET', 'path': '/clash/proxies/{tag}', 'description': 'Single proxy/group (URL-encode emoji)'},
-    {'method': 'PUT', 'path': '/clash/proxies/{tag}', 'body': '{"name":"<child>"}', 'description': 'Selector switch'},
-    {'method': 'GET', 'path': '/clash/proxies/{tag}/delay', 'params': {'url': 'test URL', 'timeout': 'ms'}, 'description': 'Single delay test'},
-    {'method': 'GET', 'path': '/clash/group/{tag}/delay', 'params': {'url': '...', 'timeout': 'ms'}, 'description': 'Force URLTest on group. NOTE: .now not persisted by this call (sing-box quirk).'},
-    {'method': 'GET', 'path': '/clash/connections', 'description': '{uploadTotal,downloadTotal,memory,connections[]}'},
-    {'method': 'DELETE', 'path': '/clash/connections', 'description': 'Close all'},
-    {'method': 'DELETE', 'path': '/clash/connections/{id}', 'description': 'Close one'},
-    {'method': 'GET', 'path': '/clash/traffic', 'description': 'Streaming traffic (curl gets first frame)'},
     // Actions
-    {'method': 'POST', 'path': '/action/start-vpn', 'description': 'Start tunnel'},
+    {'method': 'POST', 'path': '/action/start-vpn', 'description': 'Start tunnel (via Activity, may show consent)'},
+    {'method': 'POST', 'path': '/action/start-vpn-headless', 'description': 'Start without Activity/consent (needs permission granted) → {started,needs_consent}'},
     {'method': 'POST', 'path': '/action/stop-vpn', 'description': 'Stop tunnel'},
-    {'method': 'POST', 'path': '/action/force-stop-vpn', 'description': '§140 — hard force-stop (doForceStop path): teardown→stopSelf, frees Clash port 63130. fire-and-forget.'},
+    {'method': 'POST', 'path': '/action/reconnect', 'description': 'Stop→Start under one busy-wrap (start if down)'},
+    {'method': 'POST', 'path': '/action/reload-vpn', 'description': 'In-place sing-box reload (no service kill) → {applied}'},
+    {'method': 'POST', 'path': '/action/clear-error', 'description': 'Dismiss lastError banner'},
+    {'method': 'POST', 'path': '/action/force-stop-vpn', 'description': '§140 — hard force-stop (doForceStop path): teardown→stopSelf, frees CommandServer port 63130. fire-and-forget.'},
     {'method': 'POST', 'path': '/action/set-transient-timeout', 'params': {'connecting': 'ms (optional)', 'stopping': 'ms (optional)'}, 'description': '§140 — override transient-timeout thresholds (ms) for on-device force-stop test. At least one param.'},
     {'method': 'POST', 'path': '/action/reset-network', 'description': 'Light recovery: closeAll + DNS flush + dialer rebind (spec 031). Requires tunnel up.'},
-    {'method': 'POST', 'path': '/action/urltest', 'params': {'tag': 'node tag (single)', 'group': 'group tag (group urltest, URL-encode emoji)', 'all': 'true (mass urltest)'}, 'description': 'URLTest dispatch by query: one of tag/group/all'},
+    {'method': 'POST', 'path': '/action/urltest', 'params': {'tag': 'node tag (single)', 'group': 'group tag (group urltest, URL-encode emoji)', 'all': 'true (mass urltest)', 'cancel': '1 (abort in-flight mass urltest)'}, 'description': 'URLTest dispatch by query: one of tag/group/all/cancel'},
     {'method': 'POST', 'path': '/action/switch-node', 'params': {'tag': 'node tag'}, 'description': 'Selector switch via HomeController'},
     {'method': 'POST', 'path': '/action/set-group', 'params': {'group': 'group tag'}, 'description': 'Change active group'},
     {'method': 'POST', 'path': '/action/rebuild-config', 'description': 'Regenerate sing-box config'},
@@ -404,6 +388,10 @@ const Map<String, dynamic> _capabilityJson = {
     // Settings (scoped writes — §037 etc)
     {'method': 'PUT', 'path': '/settings/route_final', 'body': '{"outbound":"..."}', 'description': 'Set route.final outbound'},
     {'method': 'PUT', 'path': '/settings/excluded_nodes', 'body': '{"nodes":["tag",...]}', 'description': 'Set hidden-from-auto nodes'},
+    {'method': 'GET|PUT', 'path': '/settings/interrupt_on_switch', 'body': '{"enabled":bool}', 'description': 'Toggle interrupt connections on node switch'},
+    {'method': 'GET|PUT', 'path': '/settings/node_sort', 'body': '{"mode":"latency|manual|","order"?:[...]}', 'description': 'Node-list sort mode + manual order'},
+    {'method': 'GET|PUT', 'path': '/settings/enabled_groups', 'body': '{"groups":[...]}', 'description': 'Preset selector membership (config-significant, ?rebuild)'},
+    {'method': 'GET|PUT', 'path': '/settings/vpn_mode', 'body': 'partial {mode,proxy_protocol,proxy_port,proxy_listen,proxy_auth,proxy_user,proxy_pass}', 'description': 'VPN/proxy mode (config-significant, ?rebuild)'},
     {'method': 'PUT', 'path': '/settings/vars/{key}', 'body': '{"value":"..."}', 'description': 'Set var (blocklist: debug_token/debug_enabled/debug_port)'},
     {'method': 'DELETE', 'path': '/settings/vars/{key}', 'description': 'Delete var'},
     {'method': 'PUT', 'path': '/settings/dns_options/servers', 'body': '{"servers":[...]}', 'description': 'Set DNS servers list'},

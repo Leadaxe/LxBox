@@ -21,11 +21,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../services/clash_api_client.dart';
 import '../services/traffic_profiler.dart';
 import '../services/format_utils.dart';
 import '../widgets/core_logs_hint_banner.dart';
 import 'app_picker_screen.dart';
+import 'stats_screen/profiler_filter.dart';
 import 'stats_screen/trace_explorer.dart';
 import 'per_app_trace_tab/session_json.dart';
 import 'per_app_trace_tab/single_app_picker_screen.dart';
@@ -33,9 +33,7 @@ import 'per_app_trace_tab/trace_dialogs.dart';
 import 'per_app_trace_tab/trace_sections.dart';
 
 class PerAppTraceTab extends StatefulWidget {
-  const PerAppTraceTab({super.key, required this.clash});
-
-  final ClashApiClient clash;
+  const PerAppTraceTab({super.key});
 
   @override
   State<PerAppTraceTab> createState() => _PerAppTraceTabState();
@@ -49,6 +47,10 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
   // На время active session — Live setter через TrafficProfiler.updateSecondaryPackages.
   final Set<String> _pendingSecondaryPackages = <String>{};
   Timer? _ticker; // для refresh «Recording 02:34» каждую секунду
+
+  // §044/new-profiler — фильтр (типы + поиск); app-ось скрыта (target фиксирован
+  // сессией). Общая модель, редактируется фильтр-окном через TraceExplorer.
+  final ProfilerFilter _filter = ProfilerFilter();
 
   @override
   void initState() {
@@ -77,6 +79,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
   void dispose() {
     TrafficProfiler.I.removeListener(_onProfilerChanged);
     _ticker?.cancel();
+    _filter.dispose();
     super.dispose();
   }
 
@@ -186,6 +189,11 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
                     .where((e) => !e.ts.isBefore(session.startedAt))
                     .toList(),
             recording: profiler.isRecording,
+            filter: _filter,
+            // App-вкладка: target зафиксирован сессией → app-таб/ось не нужны;
+            // запись через START/STOP сессии в хедере (не record-кнопкой).
+            showAppTab: false,
+            includeAppsFilter: false,
           ),
         ),
         if (session == null && profiler.completed.isNotEmpty)

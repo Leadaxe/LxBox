@@ -199,6 +199,17 @@
         "interrupt_exist_connections": true
       },
       "add_outbounds": ["direct-out", "@auto_proxy_tag"]
+    },
+    {
+      "tag": "vpn-4",
+      "type": "selector",
+      "label": "VPN ④",
+      "default_enabled": false,
+      "options": {
+        "default": "direct-out",
+        "interrupt_exist_connections": true
+      },
+      "add_outbounds": ["direct-out", "@auto_proxy_tag"]
     }
   ],
 
@@ -599,10 +610,6 @@
       "auto_detect_interface": "@auto_detect_interface"
     },
     "experimental": {
-      "clash_api": {
-        "external_controller": "@clash_api",
-        "secret": "@clash_secret"
-      },
       "cache_file": {
         "enabled": true,
         "path": "cache.db"

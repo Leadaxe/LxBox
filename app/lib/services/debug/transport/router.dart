@@ -12,7 +12,7 @@ typedef Handler = Future<DebugResponse> Function(
 
 /// Префикс-based маршрутизатор. Endpoint регистрируется по префиксу
 /// (`/state`), handler получает запрос и сам диспатчит внутри по
-/// `/state/subs`, `/state/clash` и т.д. Это проще и меньше магии чем
+/// `/state/subs`, `/state/rules` и т.д. Это проще и меньше магии чем
 /// pattern-matching на path-параметры, а handler-файлы уже группируют
 /// близкие endpoints.
 ///
