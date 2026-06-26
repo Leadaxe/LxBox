@@ -4,6 +4,16 @@
 **От:** LxBox-клиент, §180
 **Дата:** 2026-06-26, ядро `v1.14.0-lx.1-rc.8`, устройство dev.72 (OnePlus CPH2411, Android 15)
 
+> ✅ **ПРИНЯТО ЯДРОМ — фикс едет в rc.9.** Команда обновила SPEC 018 (раздел
+> «Пункт 3 — ProcessInfo (ИСПРАВЛЕНО в rc.9)»). Корень подтверждён и углублён:
+> DNS на TUN хайджекается на FAST-PATH (`route.go:91-94/226-228`), который
+> `return` ДО `matchRule`; `searchProcessInfo` живёт ВНУТРИ `matchRule` → fast-path
+> DNS (большинство на VPN, особенно UDP) эмитится с `ProcessInfo==nil`.
+> Детерминированно (два code-path), не гонка. Важно: `found package name` в логе —
+> часто от TCP-коннекта того же app, НЕ от DNS-запроса (вот почему я видел package,
+> но DNS был unattributed). Фикс rc.9: `searchProcessInfo` ПЕРЕД fast-path hijack
+> (идемпотентно+кэш). Клиент правок не требует — device-verify на rc.9.
+
 ## Контекст
 
 rc.8 починил `Unimplemented` (service-registry key mismatch) — **DNS-стрим теперь
