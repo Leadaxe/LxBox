@@ -67,6 +67,7 @@
 | 121 | [`121 libbox-1.14-adoption/`](121%20libbox-1.14-adoption/) | Адаптация на ядро sing-box 1.14 (libbox 1.14 API) | Реализовано |
 | 122 | [`122 commandclient-migration/`](122%20commandclient-migration/) | Переход управляющего канала на libbox CommandClient (отказ от Clash API) | Реализовано |
 | 123 | [`123 subscription-model/`](123%20subscription-model/) | Модель подписок BoxService / CommandClient (три клиента, энергомодель) | Реализовано |
+| 124 | [`124 background-mode-tunnel-sleep/`](124%20background-mode-tunnel-sleep/) | Tunnel sleep mode (`never`/`lazy`/`always`): pause/wake туннеля ради батареи; инвариант «нет утечки на паузе» | Реализовано |
 
 ## Демотированные / superseded (теперь в `../tasks/`)
 
