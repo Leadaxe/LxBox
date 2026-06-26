@@ -157,7 +157,40 @@ class _ConnectionsViewState extends State<ConnectionsView> {
   }
 
   Future<void> _closeAll() async {
-    await _cc.closeConnections();
+    // Число живых ДО закрытия (closedAt==0) — для snackbar и мгновенной пометки.
+    final liveNow = _byId.values
+        .where((c) => c.closedAt == 0 && c.id.isNotEmpty)
+        .map((c) => c.id)
+        .toList();
+    final ok = await _cc.closeConnections();
+    if (!mounted) return;
+    if (ok) {
+      // §044 — мгновенный отклик: помечаем живые как закрытые локально, не ждём
+      // снапшота (иначе «старые висят» до 700мс-троттла + тика стрима). Следующий
+      // снапшот от ядра подтвердит (closedAt>0). В обычном режиме закрытые
+      // доживут _closedWindow и уйдут; в accumulate — останутся серыми.
+      final now = DateTime.now();
+      setState(() {
+        for (final id in liveNow) {
+          if (_closedIds.add(id)) _closedAt[id] = now;
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 2),
+          content: Text(liveNow.isEmpty
+              ? 'No active connections to close'
+              : 'Closed ${liveNow.length} connection${liveNow.length == 1 ? "" : "s"}'),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(seconds: 2),
+          content: Text('Failed to close connections (tunnel down?)'),
+        ),
+      );
+    }
   }
 
   @override
