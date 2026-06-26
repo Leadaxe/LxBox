@@ -101,7 +101,7 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
       if (allTags.isEmpty) return _ParseResult([], {});
 
       // Remove group references — keep only real nodes
-      final groupTags = <String>{'vpn-1', 'vpn-2', 'vpn-3', kAutoOutboundTag, 'direct-out'};
+      final groupTags = <String>{'vpn-1', 'vpn-2', 'vpn-3', 'vpn-4', kAutoOutboundTag, 'direct-out'};
 
       final nodes = <_NodeInfo>[];
       for (final ob in outbounds) {

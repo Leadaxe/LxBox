@@ -406,7 +406,7 @@ class _BuildCtx implements EmitContext {
   void addToAutoList(SingboxEntry entry) => autoEntries.add(entry);
 }
 
-/// Собирает preset-группы (vpn-1/vpn-2/vpn-3/auto). Приватный
+/// Собирает preset-группы (vpn-1/vpn-2/vpn-3/vpn-4/auto). Приватный
 /// helper `buildConfig` — специфичен для одного вызова, выделение в
 /// отдельный файл/модуль не даёт пользы (YAGNI, решение §Принципы #4).
 List<Map<String, dynamic>> _buildPresetGroups({

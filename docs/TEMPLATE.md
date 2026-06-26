@@ -61,7 +61,7 @@ wizard_template.json
 │   ├─ stream_options              list[3]       parallel-streams choices (e.g. [1,4,10])
 │   └─ default_streams             int           default 4
 │
-├─ preset_groups[]                 list[4]       selector/urltest группы → config.outbounds[]
+├─ preset_groups[]                 list[5]       selector/urltest группы → config.outbounds[]
 │   └─ <PresetGroup>               object
 │       ├─ tag                     string|@var   sing-box outbound tag (e.g. "vpn-1", "@auto_proxy_tag")
 │       ├─ type                    "selector"|"urltest"
@@ -337,7 +337,8 @@ Catalog of routing-groups: какие selector'ы/urltest'ы создавать 
     "add_outbounds": [ "direct-out", "@auto_proxy_tag" ]    // что показать в selector UI помимо node tags
   },
   {"tag": "vpn-2", "type": "selector", "label": "VPN ②", "default_enabled": false, … },
-  {"tag": "vpn-3", "type": "selector", "label": "VPN ③", "default_enabled": false, … }
+  {"tag": "vpn-3", "type": "selector", "label": "VPN ③", "default_enabled": false, … },
+  {"tag": "vpn-4", "type": "selector", "label": "VPN ④", "default_enabled": false, … }
 ]
 ```
 
