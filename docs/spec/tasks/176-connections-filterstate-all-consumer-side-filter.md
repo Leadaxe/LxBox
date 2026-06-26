@@ -1,7 +1,7 @@
 # §176 — Connections-канал как честный источник: FilterState(All), фильтрация в потребителях
 
 **Тип:** bug-fix + архитектура
-**Статус:** Реализовано (device-verify впереди)
+**Статус:** Реализовано (device-verified, vc2828/rc.5)
 **Связано:** §168 (профайлер на CC), §170 (per-client accumulator), §166
 (троттл ребилда), §122 (sink-война), §174 (chains)
 
@@ -85,9 +85,14 @@ liveIds и «пропал-из-снапшота»-детект его не за�
 тот же closed 2 тика → ОДИН close (guard анти-дубль). Профайлер-сьют 35 зелёных,
 analyze чист.
 
-## Проверка (device)
+## Проверка (device) — ✅ ПОДТВЕРЖДЕНО (vc2828, ядро rc.5, 2026-06-26)
 
-`curl --interface tun0`... нет (ownerless, режется block_unknown — другой слой,
-[[project_tun0_bind_ownerless_invisible]]). Нужен ОБЫЧНЫЙ короткий conn (curl
-без --interface): Live должен показать tcpOpen+tcpClose. Conns — closed-строки
-30с. Stats — счётчик только живых.
+Юзер на устройстве: `curl --interface tun0 2ip.io` (короткий ownerless conn,
+который РАНЬШЕ профайлер терял — видел только DNS) → **теперь Live ловит TCP**.
+Закрывает кейс со скриншота Termux (раньше: только DNS-строки, TCP невидим).
+Подтверждает всю цепочку: native FilterState(All) → снятая глушилка
+`if isClosed continue` → guard `_closedHandled` без дублей.
+
+Примечание: ownerless tun0-bind РЕЖЕТСЯ block_unknown на route-слое
+([[project_tun0_bind_ownerless_invisible]]) — но как СОБЫТИЕ (короткий
+open+close) профайлер его теперь видит, что и требовалось.
