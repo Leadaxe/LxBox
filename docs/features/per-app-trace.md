@@ -2,142 +2,146 @@
 
 Инструмент диагностики «куда конкретное приложение ходит и как роутится». Решает задачи вида: «X не открывается через VPN», «куда стучит этот фитнес-трекер», «через какой outbound реально идёт трафик банка». Без packet capture, без root, без ручного matching'а conn_id'ов между логами.
 
-С v1.8.0 (§048) — **inclusive observer with confidence**: profiler не drop'ает события, каждое попадает в UI с одним из 4 уровней уверенности (`verified` / `secondary` / `inferred` / `unattributed`). Юзер видит **всё что произошло**, и видит **что точно его app, а что возможно**.
+**Inclusive observer with confidence** (§048): profiler не drop'ает события, каждое попадает в UI с уровнем уверенности (`verified` / `secondary` / `unattributed`). Юзер видит **всё что произошло**, и видит **что точно его app, а что возможно**.
+
+Атрибуция приходит **готовой из ядра** (§168/§180, sing-box-lx): TCP/UDP-владелец — `CcConnection.packageName` из libbox `getProcessInfo()`, DNS-владелец — структурный DNS-стрим (`CcChannel.dnsQueries`, SPEC 018). Профайлер больше **не парсит core-логи** regex'ами и не сшивает события по conn_id.
 
 | | |
 |---|---|
-| Где живёт | `Statistics → Per-app` (3-й tab) и `Statistics → Live` (4-й tab, system-wide) |
+| Где живёт | `Statistics → App` (3-я вкладка, per-app trace) и `Statistics → Profiler` (4-я вкладка, system-wide). Обе используют общий движок `TraceExplorer`. |
 | Spec | [`docs/spec/features/044 per-app traffic profiler/spec.md`](../spec/features/044%20per-app%20traffic%20profiler/spec.md) + [`docs/spec/tasks/048-perapp-trace-attribution-gaps.md`](../spec/tasks/048-perapp-trace-attribution-gaps.md) |
-| Реализация в | v1.7.0 (базовая фича); v1.8.0 (§048 inclusive observer + Live tab) |
+| Реализация в | v1.7.0 (базовая фича); §048 inclusive observer + Profiler-вкладка; §160 единый `TraceExplorer` (Live / Aggregated); §180 структурный DNS-стрим из ядра. Текущее поведение — v2.5.0. |
 | State | In-memory only (на kill app'а / force-stop sessions стираются) |
 | Battery cost | Низкий в normal mode; средний при включённом verbose toggle |
 
 ## TL;DR — basic flow
 
-1. Открыть `Statistics → Per-app` (или с HomeScreen tap по traffic bar'у когда recording active)
+1. Открыть `Statistics → App` (или с HomeScreen tap по traffic bar'у когда recording active)
 2. **Pick app** → выбрать приложение из picker'а
 3. **▶ START** — recording пошёл
 4. Походить по приложению, дать трафик пройти
 5. **⏹ STOP** — финализирует session (сохраняется в ring-buffer'е последних 5)
-6. Смотреть: **Live** (стрим events), **Domains** (агрегаты по домену), **IPs**, **Connections** (timeline)
-7. ⚠ icon отмечает connection issues (DNS timeout, TCP RST early)
+6. Смотреть через тогл группировки: **Event stream** (поток событий newest-first) или **Aggregated** (свод **by Domain** / **by IP**)
+7. ⚠ icon отмечает connection issues (DNS timeout, TCP RST early); тап по строке → детали события (route, DNS-сервер, app)
 
 ## UI tour
 
-### Header
+`App`-вкладка = заголовок сессии (picker + START/STOP + overflow) над общим движком `TraceExplorer` (control-строка + список). `TraceExplorer` тот же, что в `Profiler`-вкладке (system-wide) — отличие в источнике событий (события сессии vs глобальный буфер) и в том, что в `App`-вкладке target фиксирован сессией, поэтому app-ось фильтра скрыта.
+
+### Header (App-вкладка)
 
 ```
-┌─ Per-app traffic profiler ──────────────────⋮──┐
+┌─ App ───────────────────────────────────────⋮──┐
 │ ⚡ Verbose core logs active — battery/CPU       │  ← banner если verbose ON
 │   impact while session runs                    │
 │                                                 │
 │  Target: [ru.tinkoff.investing ▼]   [⏹ STOP]   │
 │  ⏺ Recording · 02:34 · 47 doms · 53 ips · 287 ev│
+│  🔗 No secondary packages      [+ Edit secondary]│
 └─────────────────────────────────────────────────┘
 ```
 
 - **Target dropdown** — открывает single-pick app picker. Заблокирован пока recording active (юзер не может сменить target mid-session — нужно сначала STOP).
-- **▶ START / ⏹ STOP** — primary green / red button. Нет «pause» — phrasing явный, чтобы юзер не путался.
+- **▶ START / ⏹ STOP** — primary green / red button. Нет «pause»-записи — phrasing явный, чтобы юзер не путался (пауза есть, но только для *отображения* Live-списка, не для записи — см. control-строку).
 - **⋮ Overflow menu** — Verbose toggle, Copy session JSON, Share session, Clear all sessions, Help.
+
+### Control-строка (TraceExplorer)
+
+Под заголовком — одна строка управления просмотром:
+
+- **⏸ Pause / ▶ Resume** (только в режиме Event stream) — замораживает *отображение* списка для вдумчивого чтения. Запись продолжается в фоне, на resume — свежее состояние.
+- **Grouping-меню** — переключает режим: **Event stream** (поток newest-first) / **Group by Domain** / **Group by IP** (последние два = Aggregated).
+- **Filter** — открывает фильтр-окно (см. ниже). Жёлтая точка + счётчик `(N)` показывают сколько фильтров активно.
+- **Retention** (окно хранения Live, `1m / 10m / 1h`) — присутствует только в `Profiler`-вкладке; в `App`-вкладке журнал = события сессии, окно не настраивается.
 
 ### Verbose toggle
 
 Включает sing-box `log_level=debug` через `setVar('log_level', 'debug') + reload`. На stop'е — revert к предыдущему значению. Banner внутри tab'а напоминает что verbose ON; глобального banner'а нет.
 
-**Когда нужен**: для глубокой диагностики DNS-уровня — без debug'а sing-box не пишет некоторые подробности типа cache state или router's внутренние решения. Для типичного «X не работает» — обычно не нужен. Battery/CPU impact ощутимый при busy traffic.
+**Когда нужен**: для глубокой диагностики на уровне core-логов (cache state, внутренние решения router'а) — это пишется в общий журнал приложения, не в профайлер (профайлер берёт DNS из структурного стрима независимо от log_level). Для типичного «X не работает» — обычно не нужен. Battery/CPU impact ощутимый при busy traffic.
 
-### Sub-tabs
+### Режимы просмотра: Event stream / Aggregated
 
-#### Live
+`TraceExplorer` показывает события одним из двух режимов (переключается Grouping-меню). Раньше это были четыре отдельных саб-таба (Live / Domains / IPs / Connections); §160 свернул их в один движок: Domains+IPs стали осями Aggregated, а Connections растворился в Event stream (та же лента + чип TCP/UDP + детали по тапу).
+
+#### Event stream (Live)
 
 Streaming list events newest-first. Каждый event — одна строка:
 
 ```
-10:42:15  DNS  cdn.t-bank-app.ru → 193.17.93.194 ↗
+10:42:15  DNS  cdn.t-bank-app.ru → 193.17.93.194
               ↳ CNAME cl-ead2c819.edgecdn.ru
 10:42:15  TCP  cdn.t-bank-app.ru:443
-              ↳ via direct-out
-10:42:14  DNS  certs.t-bank-app.ru → 81.222.127.186 ↗      ⚠
-              ↳ CNAME eq09pc7nbi.a.trbcdn.net
-10:42:14  TCP  certs.t-bank-app.ru:443                      ⚠
-              ↳ via vpn-1 → 🇫🇮Финляндия
+              final ⇒ direct-out
+10:42:14  DNS  certs.t-bank-app.ru → 81.222.127.186      ⚠
+              ↳ CNAME eq09pc7nbi.a.trbcdn.net      cached
+10:42:14  TCP  certs.t-bank-app.ru:443                    ⚠
+              final ⇒ vpn-1 : 🇫🇮fi-node → WARP
 ```
 
 - **Цветные kind-метки**: `DNS` (tertiary), `DNS×` (error — fail), `TCP` (primary), `TCP·` (closed, dimmed), `UDP` (secondary)
-- **`↳ CNAME chain`** — промежуточные CNAME-таргеты (если резолв шёл через CNAME-цепочку)
-- **`↳ via outbound`** — какой outbound выбрал router
-- **⚠** — connection issue mark, hover/tap → tooltip с описанием
-- **↗** — рядом с IP — переход на Domains tab с автоподстановкой этого IP в search
+- **`↳ CNAME chain`** — промежуточные CNAME-таргеты (приходят целиком в одном DNS-событии из ядра)
+- **routingLine** — читаемая трассировка маршрута (см. ниже): `процесс ⇒ rule ⇒ группа : нода → detour → домен`
+- **cached-бейдж** — когда DNS-ответ пришёл из кэша ядра (без сетевого запроса)
+- **⚠** — connection issue mark, tap по строке → детали с описанием
+- **тап по строке** → bottom-sheet с деталями события (route, DNS-сервер, app, IP/CNAME, issues)
 
-Если выводить много данных — auto-scroll работает natively (newest-first, добавляются в начало). Manual scroll вверх не сбивает.
+Newest-first, новые добавляются в начало. **⏸ Pause** замораживает отображение (запись идёт дальше).
 
-#### Domains
+#### Aggregated (by Domain / by IP)
 
-Aggregated unique domains, sorted by total bytes (top apps). Search-поле сверху матчит:
-- по domain name (`tbank` → все `*.tbank.ru` и `*.tbank-app.ru`)
-- по IP (`193.17` → все домены, что резолвились на `193.17.x.x`)
-- по CNAME target (`trbcdn` → все домены, чей CNAME лидит на `*.trbcdn.net`)
+Свод уникальных доменов или IP, отсортированный по объёму. Ось переключается в Grouping-меню (`Group by Domain` / `Group by IP`). Search-поле фильтра матчит по domain / IP / process.
 
-Это **cross-domain IP-аудит** — folded роль из IPs tab'а: имея подозрительный IP, видишь сразу полный список доменов, которые на него резолвились.
+- **by Domain** — каждая строка = домен (conns, ↑/↓ bytes, outbound). Тап → свод + список соединений → тап по соединению → детали события.
+- **by IP** — симметричный взгляд: уникальные destination-IP. Полезен для **hostless conn'ов** (TCP без SNI — нет домена, но есть IP), **glance view** топ-потребителей и **suspect IP debugging** (пришёл IP из threat-feed — ходит ли туда app).
 
 ```
-▼ cdn.t-bank-app.ru                  1 conn  ↑458B  ↓2.1KB
-    CNAME    cl-ead2c819.edgecdn.ru
-    IPs      193.17.93.194 ↗
-    Outbound direct-out
-    First    10:42:14
-    Last     10:42:14
 ▼ certs.t-bank-app.ru               1 conn  ↑458B  ↓2.1KB  ⚠
     CNAME    eq09pc7nbi.a.trbcdn.net
-    IPs      81.222.127.186 ↗
-    Outbound vpn-1 / 🇫🇮Финляндия (vpn-1)
-    ⚠ Russian domain routed via foreign outbound (vpn-1 → 🇫🇮Финляндия)
+    IPs      81.222.127.186
+    Outbound vpn-1 / 🇫🇮Финляндия
+    First    10:42:14
+    Last     10:42:14
 ```
 
-Тап на row — раскрывает. ↗ рядом с IP — переход на тот же tab с подстановкой IP в search (см. cross-domain выше).
+Из деталей агрегата есть `View in Aggregated` — переключает на ось by Domain + автоподстановка ключа в search (cross-domain IP-аудит: по подозрительному IP сразу видно полный список доменов, которые на него резолвились).
 
-#### IPs
+### routingLine — трассировка маршрута (§181)
 
-Симметричный Domains tab взгляд — aggregated unique destination IPs sorted by bytes. Полезен для:
-- **Hostless conn'ов** — TCP без SNI sniffing (e.g. raw protocol, не HTTPS); они не появляются в Domains tab'е, но видны в IPs
-- **Glance view** — топ-N куда ушло больше трафика
-- **Suspect IP debugging** — пришёл IP из threat-feed / провайдерских логов, надо понять, ходит ли туда наш app
-
-Каждая строка — `IP ↗`, ports, conns count, bytes, outbound. ↗ переходит на Domains с подстановкой IP (показывает, какие домены этот IP «обслуживал»).
-
-#### Connections
-
-Per-connection timeline (TCP/UDP open/close events). Tap на row — inline expand:
+В деталях каждого conn/DNS-события строка **Route** показывает полный путь пакета слева направо. Разделители кодируют тип перехода:
 
 ```
-10:42:15  certs.t-bank-app.ru:443  ↑458B  ↓2.1KB  ⚠  ▽
-              via vpn-1 → 🇫🇮Финляндия
-              duration 3247ms
-              ─────────────────────────────
-              CNAME    eq09pc7nbi.a.trbcdn.net
-              All IPs  81.222.127.186 ↗
-              Rule     domain_suffix (t-bank-app.ru)
-              ⚠ Russian domain routed via foreign outbound
-              [↗ View in Domains]
+[tcp] ru.tinkoff.investing ⇒ final ⇒ vpn-1 : fi-node → WARP → certs.t-bank-app.ru
+       └─ процесс          └ rule  └ группа └ нода  └ detour └ домен
 ```
 
-- **Click target — только header** (timestamp + host:port + bytes + chevron). Развёрнутая секция не схлопывается на тап — можно жать кнопку View in Domains, копировать текст CNAME без потери expand-state.
-- **All IPs** — все IP, в которые резолвился этот domain (не только destinationIP конкретного conn'а)
-- **[View in Domains]** — переключает на Domains tab + autofill search этим domain'ом + auto-expand row
-- **Hostless conn** (нет SNI) — отображается как `[<ip>]:port`. Кнопка View in Domains скрыта (нет domain'а для перехода).
+- **`⇒`** — внутренние переходы (источник + роутинг: процесс → rule → группы-селекторы)
+- **`:`** — выход во внешний мир (группа выбрала конкретный сервер/ноду)
+- **`→`** — снаружи (detour-цепочка транспорта + конечный домен)
+
+В live-списке показывается компактная форма (без префикса `[network] процесс ⇒`); полная — в detail-sheet.
+
+### Детали DNS-события (rc.10, §180)
+
+Для DNS-событий bottom-sheet показывает дополнительно:
+- **DNS server** — какой сервер ответил (`+ тип`: udp/tls/https/…). На проксированном DNS-пути.
+- **Source** — `exchanged` (сетевой запрос), `cached` (из кэша), `optimistic`, `refreshed`.
+- **App** — иконка + человекочитаемое имя приложения + package (атрибуция из ядра).
+- **Route** — routingLine (через какой outbound пошёл DNS).
 
 ### Confidence levels (§048)
 
-С v1.8.0 каждое event имеет confidence — насколько точно мы уверены что это traffic нашего target app'а:
+Каждое event имеет confidence — насколько точно мы уверены что это traffic нашего target app'а. Атрибуция приходит из ядра (§168/§180), поэтому фактические уровни:
 
 | Уровень | UI marker | Когда |
 |---|---|---|
-| `verified` | (no marker, default) | `router: found package name: <target>` явный match |
+| `verified` | (no marker, default) | владелец из ядра совпал с target (`CcConnection.packageName` / DNS-стрим) |
 | `secondary` | 🔗 sec | match через `secondary packages` (WebView etc) |
-| `inferred` | 〽 | match через recent DNS resolved IP (10s window) |
-| `unattributed` | ? (red) | никакая strategy не сработала, событие показано как nearby |
+| `unattributed` | ? (red) | ядро не определило владельца — событие показано как nearby/system-wide |
 
-Tooltip над badge'ом показывает `matched_via` (как сработала atribution) и `shown_because` (для unattributed — почему всё-таки показано).
+Tooltip над badge'ом показывает `matched_via` (как сработала атрибуция) и `shown_because` (для unattributed — почему всё-таки показано).
+
+> Уровень `inferred` (process-inference по recent DNS-IP, маркер 〽) **выпилен** в §044: после §168/§180 владелец TCP/DNS приходит готовым из ядра, эвристика «безымянный TCP принадлежит target по DNS-IP» больше не нужна. Безымянный TCP теперь → `unattributed` (деградация точности, не поломка). Значение `inferred` осталось в enum dormant для совместимости старых session-JSON, но не выставляется.
 
 ### Secondary packages
 
@@ -145,13 +149,13 @@ Tooltip над badge'ом показывает `matched_via` (как срабо�
 
 ### System-wide events section
 
-В Live sub-tab внизу появляется секция «System-wide events (no owner detected) — N» когда в `_globalRollingBuffer` есть unattributed events (e.g. DNS fail без `router: found package`). Они dimmed (62% opacity), помечены `?`-badge'ом, видны в JSON session'и с `confidence: unattributed` + `shown_because`.
+В `App`-вкладке внизу Live-режима появляется секция «System-wide events (no owner detected) — N» когда есть unattributed events (e.g. DNS fail без определённого ядром владельца). Они dimmed, помечены `?`-badge'ом, видны в JSON session'и с `confidence: unattributed` + `shown_because`.
 
-Если detected >5 unattributed за 30s — вверху появляется красный banner «N unattributed events / 30s — attribution gaps detected». Сигнал что sing-box не детектит owner для значимой части traffic'а.
+Если detected >5 событий-сбоев за 30s — вверху появляется красный banner «N unattributed events / 30s — attribution gaps detected». В счёт идут **только признаки сбоя** (§177-A): DNS-fail и безымянный TCP/UDP open. Успешный DNS без владельца — норма (DNS плохо атрибутируется), не тревога. Этот же banner подсвечивает иконку на самой вкладке `Profiler`.
 
 ### Pre-session backfill
 
-`TrafficProfiler` всегда держит rolling buffer 60s × ~3000 events (все apps). На `▶ START` — события за last 60s, которые match target / secondary, попадают в session.events с marker `〽 backfilled from pre-recording`. Решает «юзер ставит recording после того как заметил проблему — теряет первые 60s».
+`TrafficProfiler` держит global rolling buffer (окно настраивается: 1/10/60 мин, default 10 мин) всех событий всех apps. На `▶ START` — события за окно, которые match target / secondary, попадают в session.events с marker `backfilled from pre-recording`. Решает «юзер ставит recording после того как заметил проблему — теряет первый контекст». Работает только если global recording (`Profiler`-вкладка) был включён.
 
 ### Connection issues (⚠ маркеры)
 
@@ -159,7 +163,7 @@ Tooltip над badge'ом показывает `matched_via` (как срабо�
 
 | Issue | Условие | Use case |
 |---|---|---|
-| **DNS timeout** | sing-box лог `dns: exchange failed ...` (context deadline exceeded и пр.) — прямой engine-сигнал, не heuristic | Network-уровневая проблема, DNS server недоступен |
+| **DNS timeout** | структурный DNS-fail из ядра (SPEC 018, `q.failed`) — прямой engine-сигнал с причиной (rcode / no response / error), не heuristic | Network-уровневая проблема, DNS server недоступен |
 | **TCP RST early** | conn closed в течение 1с, ↑0 ↓0 байт — heuristic | Block / RST injection / TLS handshake fail / firewall reject |
 
 В JSON session'а лежат как `events[i].issues: [{kind, description}]` и `by_domain[i].issues: [...]`. В UI отрисовываются как ⚠ icon на event row + tooltip с описанием.
@@ -169,21 +173,19 @@ Tooltip над badge'ом показывает `matched_via` (как срабо�
 ### Saved sessions
 
 Когда session active нет — в нижней части показываются последние 5 завершённых sessions:
-- Tap → открыть session в read-only режиме (sub-tab'ы те же)
+- Tap → открыть session в read-only режиме (тот же `TraceExplorer`: Event stream / Aggregated)
 - Иконка share — экспорт session JSON через `share_plus` (отправить себе в Telegram, сохранить в файл итд)
 - Иконка delete — удалить session
 
 После 5 sessions старые автоматически evict'ятся (FIFO). Force-stop приложения = все sessions стираются (in-memory only).
 
-## Live system-wide tab (§048)
+## Profiler system-wide tab (§048)
 
-Параллельная вкладка `Statistics → Live` (4-я). Discovery-mode без выбора target заранее: видно все apps' DNS / TCP / UDP события системы в real-time.
+Параллельная вкладка `Statistics → Profiler` (4-я). Discovery-mode без выбора target заранее: видно все apps' DNS / TCP / UDP события системы в real-time. Использует тот же `TraceExplorer`, что и `App`-вкладка, плюс свою специфику: большая START/STOP-кнопка записи (`globalRecording`) + export в хедере, retention-меню в control-строке, app-ось фильтра (в per-app trace процесс один, тут — все).
 
 ```
-┌─ Live ──────────────────────────────── ⏸ Pause ─┐
-│ [Search]                                         │
-│ [DNS] [DNS×] [TCP] [TCP·] [UDP]  [Unattributed]  │
-│ [Filter by app: 12 app(s)]                        │
+┌─ Profiler ────────────────── [⏹ STOP] [⇪ Export] ─┐
+│ ⏸  10m ▾   Stream ▾                    Filter (3) ●│  ← control-строка
 │ ─────────────────────────────────────────────── │
 │ 12:34:01 DNS  cdn.example.com → 1.2.3.4          │
 │           com.android.chrome                      │
@@ -195,17 +197,18 @@ Tooltip над badge'ом показывает `matched_via` (как срабо�
 └──────────────────────────────────────────────────┘
 ```
 
-**Filter chips:**
-- Kind toggles — DNS / DNS× (failed) / TCP / TCP· (closed) / UDP (multi-select).
-- `Unattributed only` — показать только события без detected owner (e.g. DNS fails Chrome's HTTPS queries).
-- `Filter by app` — bottom sheet с checkbox'ом для каждого замеченного process'а.
-- Search — substring match по domain / IP / process name.
+**Фильтр-окно (§044/§177)** — bottom-sheet с двумя независимыми осями:
+- **Protocol** — DNS / TCP / UDP (по семейству, один чип ловит обе фазы: dnsResolve+dnsFail, tcpOpen+tcpClose).
+- **App** — мульти-выбор замеченных в feed'е приложений + пункт «потеряшки» (unattributed/no-owner). App-ось работает в OR: событие проходит, если process ∈ выбранных ЛИБО это потеряшка и потеряшки включены.
+- Плюс кросс-осевой **Search** — substring match по domain / IP / process.
 
-**Pause / resume** — статичный snapshot для вдумчивого чтения. Buffer продолжает заполняться в background, на resume — fresh state.
+Активные фильтры отмечены счётчиком `(N)` + жёлтой точкой на кнопке Filter.
 
-**Long-press на event row** → bottom sheet с действием «Open in Per-app session for <pkg>». Auto-stop active session + start с этим package как target. Quick-discovery flow.
+**Retention** (`1m / 10m / 1h`) — окно хранения global rolling buffer'а, меняется на лету (старые события подрежутся следующим GC-проходом). Только в этой вкладке.
 
-**Banner** наверху Live tab'а появляется когда `recentUnattributedCount > 5` — то же что в Per-app sub-tab.
+**Pause / resume** — статичный snapshot для вдумчивого чтения. Запись продолжается в background, на resume — fresh state.
+
+**Banner** наверху появляется когда счёт событий-сбоев за 30s превышает порог — то же что в `App`-вкладке.
 
 ## Recording indicators
 
@@ -217,13 +220,14 @@ HomeScreen (recording):
   ↑ 0.2 KB/s   ↓ 1.4 KB/s   🔗 23   ⚡ ru.tinkoff  1h 12m
                                        ↑
                             новый chip — short pkg name
-                            tap всей строки → Stats.perApp
+                            tap всей строки → Stats → App
 
 Stats TabBar (idle):
-  [ Overview · Connections · Per-app ]
+  [ Stats · Conns · App · Profiler ]
 
 Stats TabBar (recording):
-  [ Overview · Connections · Per-app ⚡ ]
+  [ Stats · Conns · App ⚡ · Profiler ]
+                       ↑ recording-болт на App; ⚠ на Profiler = unattributed banner
 ```
 
 Recording **продолжается независимо от UI**: можно уйти на HomeScreen, в другие настройки, свернуть приложение — singleton service пишет события дальше. Останавливается только:
@@ -236,11 +240,11 @@ Recording **продолжается независимо от UI**: можно 
 
 ### 1. «Tinkoff не открывается через VPN» (§045 incident)
 
-1. Tinkoff → Per-app traffic profiler → ru.tinkoff.investing → ▶
+1. `Stats → App` → ru.tinkoff.investing → ▶
 2. Открыть Tinkoff Investments, дать ему сделать запросы
 3. ⏹ STOP
-4. **Domains** tab → видим список `*.t-bank-app.ru`
-5. Строки с ⚠ → раскрыть → видим: domain `certs.t-bank-app.ru`, CNAME `*.trbcdn.net`, outbound `vpn-1 → 🇫🇮Финляндия`
+4. Grouping → **by Domain** → видим список `*.t-bank-app.ru`
+5. Строки с ⚠ → раскрыть → видим: domain `certs.t-bank-app.ru`, CNAME `*.trbcdn.net`, routingLine `… ⇒ vpn-1 : 🇫🇮fi-node`
 6. Корень: CNAME-target на `.net` TLD не попадает в `ru-domains` rule_set, sing-box роутит через bypass-VPN
 7. Решение: добавить `*.trbcdn.net` в `ru-direct` preset (или включить geoip-fallback из §045)
 
@@ -248,29 +252,29 @@ Recording **продолжается независимо от UI**: можно 
 
 ### 2. Privacy audit фитнес-трекера
 
-1. Открыть фитнес-трекер → Per-app traffic profiler → выбрать его → ▶
+1. Открыть фитнес-трекер → `Stats → App` → выбрать его → ▶
 2. Походить по экранам где собираются данные (workout, профиль)
 3. ⏹ STOP
-4. **Domains** tab — список доменов, отсортированный по объёму трафика
-5. Заметили что-то незнакомое типа `analytics.tracker.com`? Skim'ните CNAME chain + outbound — куда это ушло?
-6. Если решили блокировать — кнопка `[Add domain rule]` (post-MVP) → создаст inline rule с `domain_suffix + package_name + action: reject`
+4. Grouping → **by Domain** — список доменов, отсортированный по объёму трафика
+5. Заметили что-то незнакомое типа `analytics.tracker.com`? Тап → детали: CNAME chain + routingLine — куда это ушло?
+6. Если решили блокировать — `[Add domain rule]` (post-MVP) → создаст inline rule с `domain_suffix + package_name + action: reject`
 
 ### 3. Debug медленного приложения
 
-1. Per-app trace → app → ▶
+1. `Stats → App` → app → ▶
 2. Воспроизвести «медленный» сценарий
 3. ⏹ STOP
-4. **Domains** sorted by bytes — топ потребителей трафика
-5. **IPs** — какие IP отвечают; ↗ → Domains → cross-reference с CDN
+4. Grouping → **by Domain** (sorted by bytes) — топ потребителей трафика
+5. Grouping → **by IP** — какие IP отвечают; `View in Aggregated` → cross-reference с CDN
 6. Anomalies (⚠ DNS timeout / RST early) — network-уровневые проблемы
 
 ### 4. Catalog для preset'ов RU-сервисов
 
-Записать сессии «Сбер», «ВТБ», «Госуслуги», экспортировать каждый в JSON через Share. Из набора доменов в Domains tab → составить расширенный preset для ru-direct или новый bank-specific preset.
+Записать сессии «Сбер», «ВТБ», «Госуслуги», экспортировать каждый в JSON через Share. Из набора доменов в Aggregated (by Domain) → составить расширенный preset для ru-direct или новый bank-specific preset.
 
 ### 5. Dogfooding разработки L×Box
 
-Когда сам L×Box себя ведёт странно — Per-app traffic profiler на `com.leadaxe.lxbox`. Видим, какие подписки fetch'аются, через какой outbound, есть ли DNS retry'и. Ускоряет TDD на VPN-flow'ах.
+Когда сам L×Box себя ведёт странно — `Stats → App` на `com.leadaxe.lxbox`. Видим, какие подписки fetch'аются, через какой outbound, есть ли DNS retry'и. Ускоряет TDD на VPN-flow'ах.
 
 ## Debug API
 
@@ -325,11 +329,10 @@ SSE формат: `event: traffic_event\ndata: {...}\n\n`. Fire-and-forget — �
 | Случай | Поведение |
 |---|---|
 | `find_process: false` в config'е | UI показывает «Process detection disabled in template». Юзеру нужно поправить `template`/`vars`. |
-| Process detection миссит (webview/system process) | Profiler пытается inferred-attribution через prior DNS resolved IPs (10s window). Помечается `〽 inferred from prior DNS` в Live и Connections expanded. |
+| Process detection миссит (webview/system process) | Ядро не вернуло владельца → событие → `unattributed` (показано как nearby/system-wide). Для WebView-сценария — добавить subprocess в secondary packages. |
 | Verbose toggle включается / выключается mid-session | Sing-box reload, active connections рвутся. UI warning при toggle — юзер решает. |
 | Session events overflow (>50000 ev или >3h) | Drop oldest, counter `events_dropped` в meta JSON виден в UI footer (`· N dropped`). |
 | Memory pressure | Max 6 sessions concurrent (1 active + 5 completed). Old auto-evict'ятся. |
-| Sing-box reload mid-session | Auto-finalize partial DNS chains, session continues с новым conn-id space. |
 | App force-stop / device reboot | Все in-memory sessions стираются. Persist принципиально не делается — экспортируйте через Share/Copy если нужно сохранить. |
 
 ## Что **не** делает (текущая версия)
