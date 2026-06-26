@@ -165,7 +165,11 @@ class SubscriptionSettingsTab extends StatelessWidget {
             title: const Text('Detour server'),
             subtitle: Text(entry.overrideDetour.isEmpty
                 ? 'None — nodes connect directly'
-                : 'Nodes → ${entry.overrideDetour} → Internet'),
+                // detour — ВХОДНОЙ (трафик идёт через него ПЕРВЫМ, потом в
+                // ноды подписки, потом наружу). Порядок как в node_settings:
+                // источник → detour → нода → Internet. БАГ был «Nodes → detour
+                // → Internet» (detour выглядел выходным — неверно).
+                : 'Phone → ${entry.overrideDetour} → Nodes → Internet'),
             trailing: const Icon(Icons.chevron_right),
             onTap: onShowOverrideDetourPicker,
           ),
