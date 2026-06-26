@@ -1,11 +1,6 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../services/traffic_profiler.dart';
-import '../per_app_trace_tab/session_json.dart';
 import '../per_app_trace_tab/widgets/aggregate_axis.dart';
 import '../per_app_trace_tab/widgets/aggregated_view.dart';
 import '../per_app_trace_tab/widgets/live_view.dart';
@@ -13,11 +8,6 @@ import 'aggregate_detail_sheet.dart';
 import 'profiler_filter.dart';
 import 'profiler_filter_sheet.dart';
 import 'traffic_event_detail_sheet.dart';
-
-/// §044/new-profiler — режим записи: persistent (пишем всегда, в фоне тоже) vs
-/// tab-scoped (пишем только пока вкладка открыта). Управляет родитель —
-/// explorer лишь рисует кнопку и зовёт колбэк.
-enum RecordingScope { persistent, tabScoped }
 
 /// §160 / §044-new-profiler — общий explorer трафика. Единый движок Profiler
 /// (Stats→Live) и per-app trace, без дубля кода.
@@ -44,10 +34,7 @@ class TraceExplorer extends StatefulWidget {
     required this.filter,
     this.showAppTab = true,
     this.includeAppsFilter = true,
-    this.recordScope,
-    this.onToggleRecordScope,
-    this.isRecording,
-    this.onToggleRecording,
+    this.showRetention = false,
   });
 
   final List<TrafficEvent> events;
@@ -63,11 +50,9 @@ class TraceExplorer extends StatefulWidget {
   /// Применять ли app-ось к списку (App-вкладка: target фиксирован → нет).
   final bool includeAppsFilter;
 
-  // ── Record-управление (опционально; Profiler даёт, App-вкладка — нет) ──
-  final RecordingScope? recordScope;
-  final void Function(RecordingScope)? onToggleRecordScope;
-  final bool? isRecording;
-  final VoidCallback? onToggleRecording;
+  /// §044 — показывать кнопку retention (окно хранения Live). Только Profiler;
+  /// в App-вкладке журнал = события сессии, окно не настраивается.
+  final bool showRetention;
 
   @override
   State<TraceExplorer> createState() => _TraceExplorerState();
@@ -144,44 +129,6 @@ class _TraceExplorerState extends State<TraceExplorer> {
     });
   }
 
-  Future<void> _export(List<TrafficEvent> visible) async {
-    final json = const JsonEncoder.withIndent('  ').convert(
-      eventsToJson(visible),
-    );
-    if (!mounted) return;
-    // Лист: Share / Copy. Делаем просто — Share с fallback на clipboard.
-    await showModalBottomSheet<void>(
-      context: context,
-      builder: (sheetCtx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.share),
-              title: Text('Share ${visible.length} events (JSON)'),
-              onTap: () {
-                Navigator.pop(sheetCtx);
-                Share.share(json, subject: 'LxBox profiler export');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.copy),
-              title: const Text('Copy JSON to clipboard'),
-              onTap: () async {
-                Navigator.pop(sheetCtx);
-                await Clipboard.setData(ClipboardData(text: json));
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Export JSON copied')),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     // Источник: на паузе — снимок, иначе живые списки родителя.
@@ -191,16 +138,15 @@ class _TraceExplorerState extends State<TraceExplorer> {
 
     return Column(
       children: [
-        _controlBar(context, srcEvents),
+        _controlBar(context),
         Expanded(child: _body(context, srcEvents, srcUnattr)),
       ],
     );
   }
 
-  /// §044/new-profiler — одна строка управления (5 affordance).
-  Widget _controlBar(BuildContext context, List<TrafficEvent> srcEvents) {
+  /// §044/new-profiler — control-строка: pause · retention · aggregate · filter.
+  Widget _controlBar(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final visible = _applyFilter(srcEvents).toList();
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
       child: Row(
@@ -213,22 +159,14 @@ class _TraceExplorerState extends State<TraceExplorer> {
               color: _paused ? cs.error : cs.primary,
               onPressed: _togglePause,
             ),
-          // 2 — Record (старт/стоп записи).
-          if (widget.onToggleRecording != null) _recordButton(context),
-          // 3 — Export — сразу справа от старт/стоп (просьба юзера).
-          IconButton(
-            tooltip: 'Export visible events',
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.download, size: 22),
-            onPressed:
-                visible.isEmpty ? null : () => _export(visible.toList()),
-          ),
-          // 4 — Retention (окно хранения Live) — только в Profiler.
-          if (widget.onToggleRecording != null) _retentionButton(context),
-          // 5 — Aggregate-меню.
+          // Record + Export убраны из строки — они в хедере (большая кнопка
+          // START/STOP + export справа). Дубль не нужен (просьба юзера).
+          // Retention (окно хранения Live) — только в Profiler.
+          if (widget.showRetention) _retentionButton(context),
+          // Aggregate-меню.
           _aggregateButton(context),
           const Spacer(),
-          // 6 — Filter-окно (+ бейдж активных).
+          // Filter-окно (+ жёлтая точка-бейдж активных).
           _filterButton(context),
         ],
       ),
@@ -285,44 +223,6 @@ class _TraceExplorerState extends State<TraceExplorer> {
           ],
         ),
       ),
-    );
-  }
-
-  /// Record: tap = старт/стоп записи; long-press = тогл scope persistent↔tab.
-  Widget _recordButton(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final on = widget.isRecording ?? false;
-    final scope = widget.recordScope ?? RecordingScope.persistent;
-    final persistent = scope == RecordingScope.persistent;
-    return IconButton(
-      tooltip: on
-          ? 'Recording (${persistent ? "persistent" : "tab-scoped"}) — tap to stop, long-press: scope'
-          : 'Start recording (${persistent ? "persistent" : "tab-scoped"}) — long-press: scope',
-      icon: Icon(
-        on ? Icons.fiber_manual_record : Icons.radio_button_unchecked,
-        size: 22,
-        color: on
-            ? cs.error
-            : (persistent ? cs.onSurfaceVariant : cs.outline),
-      ),
-      onPressed: widget.onToggleRecording,
-      onLongPress: widget.onToggleRecordScope == null
-          ? null
-          : () {
-              widget.onToggleRecordScope!(
-                persistent
-                    ? RecordingScope.tabScoped
-                    : RecordingScope.persistent,
-              );
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  duration: const Duration(seconds: 2),
-                  content: Text(persistent
-                      ? 'Recording scope: tab-scoped (stops when you leave)'
-                      : 'Recording scope: persistent (keeps recording in background)'),
-                ),
-              );
-            },
     );
   }
 
@@ -444,12 +344,37 @@ class _TraceExplorerState extends State<TraceExplorer> {
         ? _filter.activeCount
         : _filter.activeCountNoApps;
     final active = n > 0;
-    return TextButton.icon(
-      icon: Icon(Icons.filter_list,
-          size: 20, color: active ? cs.primary : null),
-      label: Text(active ? 'Filter ($n)' : 'Filter',
-          style: TextStyle(fontSize: 12, color: active ? cs.primary : null)),
-      onPressed: () => _openFilterSheet(context),
+    // §044 — жёлтый круг-бейдж «фильтр выбран» (возвращён по просьбе юзера) +
+    // счётчик (N) в лейбле.
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        TextButton.icon(
+          icon: Icon(Icons.filter_list,
+              size: 20, color: active ? cs.primary : null),
+          label: Text(active ? 'Filter ($n)' : 'Filter',
+              style:
+                  TextStyle(fontSize: 12, color: active ? cs.primary : null)),
+          onPressed: () => _openFilterSheet(context),
+        ),
+        if (active)
+          const Positioned(
+            right: 6,
+            top: 4,
+            child: IgnorePointer(
+              child: SizedBox(
+                width: 9,
+                height: 9,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.amber,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

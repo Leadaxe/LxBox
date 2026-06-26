@@ -15,13 +15,17 @@
 //   - unattributed banner.
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../services/traffic_profiler.dart';
 import '../widgets/core_logs_hint_banner.dart';
 import 'live_events_tab/recording_header.dart';
 import 'live_events_tab/unattributed_banner.dart';
+import 'per_app_trace_tab/session_json.dart';
 import 'stats_screen/profiler_filter.dart';
 import 'stats_screen/trace_explorer.dart';
 
@@ -56,18 +60,12 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
   // _appFilter/_seenApps удалён — app-выбор живёт в _filter.apps.
   final ProfilerFilter _filter = ProfilerFilter();
 
-  // §044/new-profiler — режим записи: persistent (фон тоже) vs tab-scoped
-  // (старт при входе на вкладку, стоп при уходе). Дефолт persistent =
-  // прежнее поведение startGlobalRecording.
-  RecordingScope _recordScope = RecordingScope.persistent;
-  TabController? _tabController;
-  int? _myTabIndex; // индекс вкладки Profiler в StatsScreen
-
   @override
   void initState() {
     super.initState();
     // §048 — recording state управляется explicit через
-    // [TrafficProfiler.I.startGlobalRecording] (юзер тапает ▶ START).
+    // [TrafficProfiler.I.startGlobalRecording] (юзер тапает ▶ START в хедере).
+    // Запись persistent (продолжается при уходе с вкладки) — прежнее поведение.
     final snapshot = TrafficProfiler.I.globalSnapshot(seconds: 60);
     _events.addAll(snapshot);
     _sub = TrafficProfiler.I.globalLiveStream().listen(_onEvent);
@@ -75,38 +73,6 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && TrafficProfiler.I.isGlobalRecording) setState(() {});
     });
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // §044/new-profiler — подписка на TabController для tab-scoped записи:
-    // запоминаем свой индекс (по текущему, если мы видимы) и слушаем смену.
-    final ctrl = DefaultTabController.maybeOf(context);
-    if (ctrl != _tabController) {
-      _tabController?.removeListener(_onTabChanged);
-      _tabController = ctrl;
-      _myTabIndex ??= ctrl?.index;
-      _tabController?.addListener(_onTabChanged);
-    }
-  }
-
-  /// §044/new-profiler — tab-scoped: при уходе с вкладки стоп записи, при
-  /// возврате — старт (только если scope == tabScoped).
-  void _onTabChanged() {
-    final ctrl = _tabController;
-    if (ctrl == null || _myTabIndex == null) return;
-    if (_recordScope != RecordingScope.tabScoped) return;
-    final onMyTab = ctrl.index == _myTabIndex && !ctrl.indexIsChanging;
-    if (onMyTab) {
-      if (!TrafficProfiler.I.isGlobalRecording) {
-        TrafficProfiler.I.startGlobalRecording();
-      }
-    } else {
-      if (TrafficProfiler.I.isGlobalRecording) {
-        TrafficProfiler.I.stopGlobalRecording();
-      }
-    }
   }
 
   void _onProfilerChanged() {
@@ -124,6 +90,44 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
     } else {
       TrafficProfiler.I.startGlobalRecording();
     }
+  }
+
+  /// §044 — экспорт записанных событий (весь буфер). Share / Copy JSON.
+  Future<void> _exportEvents() async {
+    if (_events.isEmpty) return;
+    final json =
+        const JsonEncoder.withIndent('  ').convert(eventsToJson(_events));
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.share),
+              title: Text('Share ${_events.length} events (JSON)'),
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                Share.share(json, subject: 'LxBox profiler export');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('Copy JSON to clipboard'),
+              onTap: () async {
+                Navigator.pop(sheetCtx);
+                await Clipboard.setData(ClipboardData(text: json));
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Export JSON copied')),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _onEvent(Map<String, Object?> msg) {
@@ -170,7 +174,6 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
   void dispose() {
     _sub?.cancel();
     TrafficProfiler.I.removeListener(_onProfilerChanged);
-    _tabController?.removeListener(_onTabChanged);
     _filter.dispose();
     _ticker?.cancel();
     _rebuildTimer?.cancel();
@@ -184,6 +187,8 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
         LiveRecordingHeader(
           eventCount: _events.length,
           onToggle: _toggleRecording,
+          // §044 — экспорт справа от большой кнопки (в строке дубль убран).
+          onExport: _exportEvents,
         ),
         const Divider(height: 1),
         const CoreLogsHintBanner(),
@@ -195,15 +200,15 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
             // как обычные строки (с confidence=unattributed). Отдельной
             // «no owner» секции (как в per-app) тут нет → unattributed=[].
             // App-ось фильтра применяется внутри TraceExplorer через _filter.
+            // §044 — record-управление НЕ передаём: запись через большую кнопку
+            // в хедере (дубль из control-строки убран). showRecording=true
+            // оставляет аггрегацию/фильтр/паузу, но без кнопки записи и export.
             events: _events,
             unattributed: const [],
             recording: TrafficProfiler.I.isGlobalRecording,
             filter: _filter,
-            // Profiler: app-таб и app-ось активны (system-wide, процессов много).
-            recordScope: _recordScope,
-            onToggleRecordScope: (s) => setState(() => _recordScope = s),
-            isRecording: TrafficProfiler.I.isGlobalRecording,
-            onToggleRecording: _toggleRecording,
+            // Profiler-вкладка: retention-кнопка нужна, record-кнопка — нет.
+            showRetention: true,
           ),
         ),
       ],
