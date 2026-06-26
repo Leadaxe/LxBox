@@ -157,6 +157,14 @@ class TrafficProfiler extends ChangeNotifier {
   // Используется для diff (closed connections).
   final Map<String, _ConnSnapshot> _connSnapshots = <String, _ConnSnapshot>{};
 
+  // §176 — id уже-обработанных closed-conn → когда обработан. ЗАЩИТА ОТ ДУБЛЯ:
+  // ядро держит closed-conn в FilterState(All) до 5 мин (closedConnectionMaxAge),
+  // т.е. один и тот же закрытый conn приходит в снапшоте КАЖДЫЙ тик 5 минут.
+  // Без guard'а профайлер на каждом тике повторно эмитил бы open+close → лавина
+  // дублей. Сюда кладём id при обработке closed-дельты; повторные пропускаем.
+  // Чистится по TTL в _gcStaleConnIds (старше 5 мин — ядро их уже эвиктнуло).
+  final Map<String, DateTime> _closedHandled = <String, DateTime>{};
+
   // ─── Public API ───────────────────────────────────────────────────────
 
   Session? get active => _active;
@@ -317,6 +325,7 @@ class TrafficProfiler extends ChangeNotifier {
     // Очищаем session-scoped maps. _globalRollingBuffer не трогаем —
     // он живёт независимо.
     _connSnapshots.clear();
+    _closedHandled.clear(); // §176
 
     AppLog.I.info(
         'TrafficProfiler: session stopped, ${s.events.length} events, '
@@ -477,6 +486,10 @@ class TrafficProfiler extends ChangeNotifier {
     final cutoff = now.subtract(_connIdTtl);
     _connIdToMeta.removeWhere((_, m) => m.firstSeen.isBefore(cutoff));
     _dnsByConnId.removeWhere((_, a) => a.lastTs.isBefore(cutoff));
+    // §176 — guard уже-обработанных closed: чистим старше 5 мин (ядро их к
+    // этому моменту эвиктнуло из FilterState(All), в снапшоте больше нет).
+    final closedCutoff = now.subtract(const Duration(minutes: 5));
+    _closedHandled.removeWhere((_, ts) => ts.isBefore(closedCutoff));
 
     // Trim global rolling buffer по time window'у.
     final globalCutoff = now.subtract(_globalRollingWindow);
@@ -930,10 +943,19 @@ class TrafficProfiler extends ChangeNotifier {
     for (final c in conns) {
       final id = c.id;
       if (id.isEmpty) continue;
-      // §168 — closed-снапшот ядра (closedAt>0) трактуем как «пропал»:
-      // не добавляем в seenIds → попадёт в closed-detection ниже.
-      if (c.isClosed) continue;
-      seenIds.add(id);
+      // §176 — closed-дельта ядра (closedAt>0, теперь приходит из FilterState
+      // All). Ядро держит закрытый conn в снапшоте до 5 мин → обрабатываем
+      // РОВНО ОДИН раз (guard _closedHandled), иначе лавина дублей.
+      if (c.isClosed) {
+        if (_closedHandled.containsKey(id)) continue; // уже закрыли — пропуск
+        _closedHandled[id] = now;
+        // НЕ добавляем в seenIds → diff-блок ниже эмитит tcpClose. open-код
+        // НЕ пропускаем: новый conn (snap нет — короткий, open проскочил между
+        // тиками) пройдёт open-ветку (emit tcpOpen + snap), затем diff закроет →
+        // обе фазы. Если был открыт — обновит байты, diff закроет.
+      } else {
+        seenIds.add(id);
+      }
       // CcConnection несёт packageName (для иконки) + processPath (из
       // libbox getProcessInfo). Для атрибуции берём packageName, иначе путь.
       final process = c.packageName;
@@ -1239,6 +1261,7 @@ class TrafficProfiler extends ChangeNotifier {
     _connIdToMeta.clear();
     _dnsByConnId.clear();
     _connSnapshots.clear();
+    _closedHandled.clear(); // §176
     _globalRollingBuffer.clear();
     _globalUnattributedEvents.clear();
     _globalRecordingActive = false;

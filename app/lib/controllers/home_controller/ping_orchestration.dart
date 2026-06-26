@@ -287,16 +287,23 @@ mixin _PingMixin on ChangeNotifier {
       if (_massPingEpoch != epoch) return;
       await runGroupUrltest(tag);
     }
+    // §175 — весь пинг-прогон (ноды + urltest-группы) завершён → освобождаем
+    // pingClient (lazy lifecycle: short-lived conn на прогон). Следующий прогон
+    // поднимет свежий. При cancel — disconnect уже сделан в cancelMassPing.
+    if (_massPingEpoch == epoch) unawaited(_cc.cancelPing());
   }
 
   void cancelMassPing() {
     if (!_massPingRunning) return;
     _massPingRunning = false;
     _massPingEpoch++;
-    // §122 — у CommandClient `urlTestOutbound` нет отмены in-flight (unary RPC
-    // ждёт свой timeout). Epoch-bump гарантирует, что результаты уже стартовавших
-    // воркеров отбросятся по epoch-mismatch (см. runMassUrltest worker). Новые
-    // итерации воркеров тоже прервутся проверкой epoch на входе цикла.
+    // §175 — РЕАЛЬНАЯ отмена in-flight тестов в ядре: disconnect pingClient
+    // (отдельный CC-клиент) рвёт per-call ctx уже-ушедших в dial URLTest'ов
+    // (ядро SPEC 015 §3.6), не дожидаясь TCPTimeout. Раньше (§122) отмены не
+    // было — unary RPC дотухал сам, до ~10 «зомби»-тестов держались до timeout.
+    // Epoch-bump (ниже) остаётся: мгновенно гасит ПРИМЕНЕНИЕ результатов в UI;
+    // disconnect гасит сами dial'ы в ядре. Не трогает status/screen/profiler.
+    unawaited(_cc.cancelPing());
     // Очищаем все pingBusy — иначе у нод, не успевших ответить, остаётся "…"
     // indicator до следующего ping'а.
     _emit(_state.copyWith(pingBusy: const {}));

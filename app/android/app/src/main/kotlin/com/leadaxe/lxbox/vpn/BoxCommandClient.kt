@@ -76,6 +76,11 @@ class BoxCommandClient {
     private val statusClient = AtomicReference<CommandClient?>(null)
     private val screenClient = AtomicReference<CommandClient?>(null)
     private val profilerClient = AtomicReference<CommandClient?>(null)
+    // §175 — ОТДЕЛЬНЫЙ клиент под масс-пинг: свой ctx/conn, чтобы его
+    // disconnect() (отмена) рвал per-call ctx тестов (ядро SPEC 015 §3.6,
+    // rc.5: disconnect отменяет уже-ушедшие в dial тесты), НЕ задевая
+    // status/screen/profiler-стримы. Поднимается лениво под прогон.
+    private val pingClient = AtomicReference<CommandClient?>(null)
 
     /// §2.8 reset-синхронизация: каждый connect инкрементит поколение; снапшоты/события
     /// из устаревшего поколения игнорируются (защита от гонки connect/disconnect, §141 P1.2).
@@ -192,6 +197,7 @@ class BoxCommandClient {
         disconnectClient(statusClient, "shutdownAll")
         disconnectClient(screenClient, "shutdownAll")
         disconnectClient(profilerClient, "shutdownAll")
+        disconnectClient(pingClient, "shutdownAll") // §175
         screenAccumulator.set(null)
         profilerAccumulator.set(null)
     }
@@ -262,12 +268,38 @@ class BoxCommandClient {
 
     /// §4.6 — per-node delay. ИНВАРИАНТ: `error` — единственный признак провала,
     /// `delay==0 && error==""` = успех 0мс. `timeout` — МИЛЛИСЕКУНДЫ.
+    ///
+    /// §175 — идёт через ОТДЕЛЬНЫЙ pingClient (лениво поднимается), чтобы
+    /// `cancelPing()` мог оборвать in-flight тесты, не задев другие стримы.
     fun urlTestOutbound(tag: String, link: String, timeoutMs: Int): Map<String, Any> {
-        val client = anyClient() ?: return mapOf("delay" to 0, "error" to "command client not connected")
+        val client = ensurePingClient()
+            ?: return mapOf("delay" to 0, "error" to "command client not connected")
         return runCatching {
             val r: URLTestOutboundResult = client.urlTestOutbound(tag, link, timeoutMs)
             mapOf("delay" to r.getDelay(), "error" to r.getError())
         }.getOrElse { mapOf("delay" to 0, "error" to (it.message ?: "urlTestOutbound failed")) }
+    }
+
+    /// §175 — поднять pingClient лениво (под прогон пинга). Свой ctx/conn —
+    /// disconnect его рвёт только ping-тесты. Голый PingHandler: подписок нет,
+    /// только unary urlTestOutbound. Идемпотентно (CAS): возвращает живой если есть.
+    private fun ensurePingClient(): CommandClient? {
+        pingClient.get()?.let { return it }
+        return runCatching {
+            val options = CommandClientOptions() // подписок нет — unary RPC
+            val client = CommandClient(PingHandler(), options)
+            client.connect()
+            if (pingClient.compareAndSet(null, client)) client
+            else { client.runCatching { disconnect() }; pingClient.get() }
+        }.getOrElse { Log.w(TAG, "ensurePingClient failed: ${it.message}"); null }
+    }
+
+    /// §175 — отмена масс-пинга: disconnect pingClient → ядро отменяет per-call
+    /// ctx уже-ушедших в dial тестов (SPEC 015 §3.6, rc.5), in-flight рвутся, не
+    /// дожидаясь TCPTimeout. status/screen/profiler-стримы целы (другие клиенты).
+    /// Следующий urlTestOutbound поднимет свежий pingClient (ensurePingClient).
+    fun cancelPing() {
+        disconnectClient(pingClient, "cancelPing")
     }
 
     /// §4.7 — снапшот route+DNS правил (только для диагностики).
@@ -467,6 +499,10 @@ class BoxCommandClient {
         }
     }
 
+    /// §175 — pingClient: подписок нет, только unary `urlTestOutbound`. Все
+    /// 11 колбэков — no-op из BaseHandler (fail-safe try/catch).
+    private inner class PingHandler : BaseHandler(0)
+
     /// §3.2 — применить дельты к аккумулятору, эмитить снапшот. getReset()=replace.
     ///
     /// КРИТИЧНО (§122): `ConnectionEvents` — это ДЕЛЬТА между вызовами. Аккумулятор
@@ -491,11 +527,19 @@ class BoxCommandClient {
             // applyEvents учитывает getReset() внутри (replace при reset). ВСЕГДА —
             // даже без Dart-подписчика, иначе пропуск дельты ломает аккумулятор.
             acc.applyEvents(events)
-            // filterState(Active) держит аккумулятор компактным (только живые
-            // соединения) — closed-историю ведёт Dart-сторона (ConnectionsView
-            // `_accumulate`/`_closed*`), чтобы не копить закрытые бесконечно в
-            // native. ConnectionStateActive — long (1L), filterState принимает int.
-            acc.filterState(Libbox.ConnectionStateActive.toInt())
+            // §176 — FilterState(ALL): отдаём ВСЁ, что знает ядро — живые И
+            // закрытые (closedAt>0). Раньше Active резал closed-фазу ДО эмита →
+            // коротко-живущий conn (open+close в одном applyEvents-батче)
+            // отфильтровывался как ClosedAt!=0 → Dart его вообще не видел (ни
+            // open, ни close) → профайлер терял короткие соединения.
+            // Политику показа теперь владеет КАЖДЫЙ Dart-потребитель:
+            //   profiler — берёт всё (closed = tcpClose-событие);
+            //   ConnectionsView — closedAt>0 напрямую (было: seenIds-diff);
+            //   Stats — фильтрует closedAt==0 (срез активных).
+            // Памяти не растит: ядро эвиктит closed через closedConnectionMaxAge
+            // (5 мин, evictClosedConnections внутри ApplyEvents). §170-риск не
+            // растёт — TTL ограничивает map ядра, не наш acc.
+            acc.filterState(Libbox.ConnectionStateAll.toInt())
             // Эмиссия в Dart — только если кто-то слушает. Накопление выше уже
             // случилось, так что первый же подписчик получит полный снапшот.
             if (BoxVpnService.ccConnectionsSink == null) return

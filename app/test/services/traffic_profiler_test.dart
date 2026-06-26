@@ -261,6 +261,61 @@ void main() {
       expect(s.events.last.kind, TrafficEventKind.tcpClose);
     });
 
+    test('§176 — короткий conn сразу closedAt>0 → обе фазы (open+close)',
+        () async {
+      // FilterState(All): коротко-живущий conn может прийти СРАЗУ закрытым
+      // (open проскочил между тиками). Раньше (`if isClosed continue`) терялся
+      // целиком. Теперь профайлер видит и tcpOpen, и tcpClose.
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'short1',
+          network: 'tcp',
+          domain: 'short.example',
+          destination: '5.6.7.8:443',
+          rule: '',
+          uplink: 50,
+          downlink: 80,
+          outbound: 'direct-out',
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 1, // пришёл сразу закрытым
+        ),
+      ]);
+      final s = TrafficProfiler.I.active!;
+      final kinds = s.events.map((e) => e.kind).toList();
+      expect(kinds, contains(TrafficEventKind.tcpOpen),
+          reason: 'open не потерян');
+      expect(kinds, contains(TrafficEventKind.tcpClose),
+          reason: 'close эмитнут');
+    });
+
+    test('§176 — тот же closed conn 2 тика → ОДИН close (анти-дубль)', () async {
+      // Ядро держит closed в FilterState(All) до 5 мин → приходит каждый тик.
+      // Guard _closedHandled обрабатывает РОВНО раз.
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      const closedConn = CcConnection(
+        id: 'dup1',
+        network: 'tcp',
+        domain: 'dup.example',
+        destination: '9.9.9.9:443',
+        rule: '',
+        uplink: 10,
+        downlink: 20,
+        outbound: 'direct-out',
+        packageName: 'ru.tinkoff.investing',
+        createdAt: 0,
+        closedAt: 1,
+      );
+      TrafficProfiler.I.ingestForTest([closedConn]);
+      TrafficProfiler.I.ingestForTest([closedConn]); // повтор (ядро держит 5мин)
+      TrafficProfiler.I.ingestForTest([closedConn]); // ещё раз
+      final s = TrafficProfiler.I.active!;
+      final closes =
+          s.events.where((e) => e.kind == TrafficEventKind.tcpClose).length;
+      expect(closes, 1, reason: 'closed обработан ровно раз, не дублируется');
+    });
+
     test('TCP RST early flagged on close (closed <1s, 0 bytes)', () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
       TrafficProfiler.I.ingestForTest([

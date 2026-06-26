@@ -80,10 +80,25 @@ class _ConnectionsViewState extends State<ConnectionsView> {
 
   void _onConnections(List<CcConnection> conns) {
     if (!mounted) return;
-    final liveIds = conns.map((c) => c.id).where((id) => id.isNotEmpty).toSet();
+    // §176 — ядро отдаёт FilterState(All): живые + closed (closedAt>0) до 5 мин.
+    // liveIds строим ТОЛЬКО из живых (closedAt==0) — иначе closed-conn попал бы в
+    // liveIds и «пропал из снапшота»-детект ниже его не закрыл бы (завис как
+    // живой). Закрытие теперь и явное (closedAt>0), и по исчезновению (diff).
+    final liveIds = conns
+        .where((c) => c.closedAt == 0)
+        .map((c) => c.id)
+        .where((id) => id.isNotEmpty)
+        .toSet();
     final now = DateTime.now();
 
-    // Соединения, пропавшие из живого снапшота → закрыты (метим + timestamp).
+    // §176 — явная closed-дельта от ядра: closedAt>0 → метим closed сразу.
+    for (final c in conns) {
+      if (c.closedAt > 0 && c.id.isNotEmpty && _closedIds.add(c.id)) {
+        _closedAt[c.id] = now;
+      }
+    }
+    // Соединения, пропавшие из снапшота вообще (без closed-дельты) → тоже
+    // закрыты (подстраховка: ядро могло эвиктнуть до того как мы увидели close).
     for (final id in _byId.keys.toList()) {
       if (id.isNotEmpty && !liveIds.contains(id) && _closedIds.add(id)) {
         _closedAt[id] = now;

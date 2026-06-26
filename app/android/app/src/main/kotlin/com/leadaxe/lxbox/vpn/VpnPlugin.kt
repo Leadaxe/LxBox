@@ -546,6 +546,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "ccDisconnectProfiler" -> {
                 BoxService.commandClient?.disconnectProfiler(); result.success(true)
             }
+            // §175 — отмена масс-пинга: disconnect pingClient → ядро рвёт per-call
+            // ctx in-flight тестов (не дожидаясь TCPTimeout), другие стримы целы.
+            "ccCancelPing" -> {
+                BoxService.commandClient?.cancelPing(); result.success(true)
+            }
             // §164 — энергомодель. ccSetStatusFast: FAST 0.1с (Stats открыт) /
             // NORMAL 0.5с (главный). ccPauseClients: фон — гасим status+screen
             // (profilerClient НЕ трогаем, recording живёт в фоне). ccResumeClients:

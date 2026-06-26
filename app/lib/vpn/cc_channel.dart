@@ -152,6 +152,11 @@ class CcChannel {
   Future<void> connectProfiler() => _invoke('ccConnectProfiler');
   Future<void> disconnectProfiler() => _invoke('ccDisconnectProfiler');
 
+  /// §175 — отмена масс-пинга: disconnect отдельного pingClient → ядро рвёт
+  /// per-call ctx in-flight URLTest'ов (не дожидаясь TCPTimeout), не задевая
+  /// status/screen/profiler-стримы. Следующий urlTestOutbound поднимет свежий.
+  Future<void> cancelPing() => _invoke('ccCancelPing');
+
   // §164 — энергомодель CC-клиентов.
   /// FAST (0.1с) — Stats открыт (плавность); NORMAL (0.5с) — главный экран.
   /// Пересоздаёт statusClient с новым интервалом (см. feature 123 §3).

@@ -117,11 +117,16 @@ class _StatsScreenState extends State<StatsScreen> {
     // §069 — bypass warning обновляем на каждом снапшоте (без отдельного таймера).
     unawaited(_refreshAllowBypass());
 
-    _totalConns = conns.length;
+    // §176 — Stats = срез АКТИВНЫХ. Ядро теперь отдаёт FilterState(All) (живые +
+    // closed до 5 мин) — closed нужны Conns/профайлеру, но не статистике.
+    // Фильтруем closedAt>0, иначе _totalConns и byRule/perRule раздулись бы
+    // закрытыми строками.
+    final live = conns.where((c) => c.closedAt == 0).toList();
+    _totalConns = live.length;
 
     final byRule = <String, int>{};
     final perRule = <String, OutboundGroup>{};
-    for (final c in conns) {
+    for (final c in live) {
       // §165 — имя правила через резолвер (справочник из custom_rules + кэш).
       // Пустой/ненайденный rule → 'final' (резолвер сам). Кэш снимает фриз.
       final rule = ruleName(c.rule);
