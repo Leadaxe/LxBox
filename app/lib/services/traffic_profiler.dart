@@ -49,7 +49,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
-import '../models/debug_entry.dart';
 import '../vpn/cc_channel.dart';
 import 'app_log.dart';
 import 'format_utils.dart'; // §181 — formatDuration в routingLine
@@ -70,12 +69,8 @@ class TrafficProfiler extends ChangeNotifier {
   static const int _maxCompleted = 5;
   static const int _maxEventsPerSession = 50000;
   static const Duration _slidingWindow = Duration(hours: 3);
-  // §048 Принцип 6 — time-bound TTL для conn-id correlation.
-  static const Duration _connIdTtl = Duration(seconds: 30);
-  // §141 P3.2b — GC-интервал 5s → 15s: TTL=30s, чистить втрое чаще TTL
-  // избыточно (entry переживёт максимум +15s до удаления, всё ещё внутри
-  // запаса). Втрое меньше пробуждений + разводит фазу с _connPollInterval
-  // (5s), которые раньше совпадали каждые 5s как два независимых wakeup'а.
+  // §141 P3.2b — GC-интервал 15s: GC чистит rolling buffer'ы по retention-окну
+  // + closed-guard. (§044 — _connIdTtl выпилен вместе с conn-id-мапой.)
   static const Duration _connIdGcInterval = Duration(seconds: 15);
   static const Duration _processInferenceWindow = Duration(seconds: 10);
   // §048 / §044-new-profiler — global rolling buffer всегда работает. Окно
@@ -155,11 +150,9 @@ class TrafficProfiler extends ChangeNotifier {
       ListQueue<TrafficEvent>();
   static const int _globalUnattributedCap = 50;
 
-  // Tracks whether log subscription / GC timers are running. Привязка
-  // делается lazily на первый event consumer (start session ИЛИ subscribe
-  // на global stream / запрос snapshot'а). Detach — когда нет ни active
-  // session'а, ни global subscribers'ов.
-  VoidCallback? _appLogListener;
+  // §044 — §180-cleanup: _appLogListener / _lastSeenLogTs / _connIdToMeta
+  // выпилены вместе с лог-питателем (см. _ensureGcTimerStarted выше). GC-таймер
+  // остаётся — он чистит rolling buffer'ы по retention-окну, не conn-id-мапу.
   Timer? _gcTimer;
 
   // §141 P3.1a — leading-edge throttle для notifyListeners (≤60Hz), эталон
@@ -169,14 +162,6 @@ class TrafficProfiler extends ChangeNotifier {
   static const _notifyWindow = Duration(milliseconds: 16);
   Timer? _notifyThrottleTimer;
   bool _notifyPending = false;
-  // Timestamp последнего обработанного core-log entry. Используется
-  // вместо length-diff потому что AppLog имеет ring-buffer cap=500: при
-  // overflow length стабилизируется на 500 и length-diff навечно =0,
-  // мы бы пропускали всё. Timestamp монотонный и не зависит от cap'а.
-  DateTime? _lastSeenLogTs;
-
-  // Conn-id → package map (TTL'нутый, time-based GC).
-  final Map<String, _ConnMeta> _connIdToMeta = <String, _ConnMeta>{};
 
   // §180 — `_dnsByConnId` (per-conn-id DNS accumulator) выпилен: cnameChain
   // теперь приходит целиком в одном CcDnsQuery.answers (ядро SPEC 018), ручная
@@ -222,7 +207,6 @@ class TrafficProfiler extends ChangeNotifier {
     // записано в этой recording-сессии. Если хочешь preserve — убери clear.
     _globalRollingBuffer.clear();
     _globalUnattributedEvents.clear();
-    _ensureLogListenerAttached();
     _ensureGcTimerStarted();
     // §168 — system-wide recording слушает CommandClient connections-стрим
     // (open/close + per-app). Без этого в Live видны только DNS-строки из
@@ -241,7 +225,6 @@ class TrafficProfiler extends ChangeNotifier {
     if (!_globalRecordingActive) return;
     _globalRecordingActive = false;
     _globalRecordingStartedAt = null;
-    _maybeDetachLogListener();
     _maybeStopGcTimer();
     _maybeDetachCcConnections();
     AppLog.I.info('TrafficProfiler: global recording stopped');
@@ -316,8 +299,6 @@ class TrafficProfiler extends ChangeNotifier {
       await SettingsStorage.setVar('log_level', 'debug');
     }
 
-    // Подписываемся на logs (no-op если уже подписаны через global).
-    _ensureLogListenerAttached();
     // Стартуем GC timer (no-op если уже запущен).
     _ensureGcTimerStarted();
     // §168 — подписка на CommandClient connections (no-op если уже подписаны
@@ -347,10 +328,9 @@ class TrafficProfiler extends ChangeNotifier {
     if (s == null) return null;
     s.finishedAt = DateTime.now();
 
-    // Stop session-specific data sources. Log listener / CC connections /
-    // GC timer остаются running если есть global recording — иначе detach.
+    // Stop session-specific data sources. CC connections / GC timer остаются
+    // running если есть global recording — иначе detach.
     _maybeDetachCcConnections();
-    _maybeDetachLogListener();
     _maybeStopGcTimer();
 
     // Revert log_level если был toggle.
@@ -488,33 +468,12 @@ class TrafficProfiler extends ChangeNotifier {
     }
   }
 
-  // ─── Log subscription (lazy) ──────────────────────────────────────────
-
-  /// Подключиться к AppLog (no-op если уже подключён). Вызывается из:
-  ///   - start(): нужен log stream для events session'и
-  ///   - globalLiveStream(): нужен log stream даже без active session
-  void _ensureLogListenerAttached() {
-    if (_appLogListener != null) return;
-    final entries = AppLog.I.entriesForSource(DebugSource.core);
-    _lastSeenLogTs = entries.isNotEmpty ? entries.first.time : null;
-    _appLogListener = () {
-      _drainNewLogEntries();
-    };
-    AppLog.I.addListener(_appLogListener!);
-  }
-
-  /// Отключиться от AppLog **только если** нет active session'и
-  /// и global recording выключен. Иначе оставляем running.
-  /// (UI-subscriptions через `globalLiveStream()` НЕ учитываются — они
-  /// passive, не запускают сами по себе recording.)
-  void _maybeDetachLogListener() {
-    if (_active != null) return;
-    if (_globalRecordingActive) return;
-    if (_appLogListener == null) return;
-    AppLog.I.removeListener(_appLogListener!);
-    _appLogListener = null;
-    _lastSeenLogTs = null;
-  }
+  // §044 — §180-cleanup: лог-листенер (_ensureLogListenerAttached/
+  // _maybeDetachLogListener/_drainNewLogEntries/_processLogLine) ВЫПИЛЕН. Он
+  // питал только write-only `_connIdToMeta` (TCP-атрибуция из router-лога),
+  // которая после §168 не читается — TCP-owner идёт из ядра
+  // (CcConnection.packageName), DNS — из стрима SPEC 018. Core-лог больше не
+  // парсится профайлером.
 
   void _ensureGcTimerStarted() {
     _gcTimer ??= Timer.periodic(_connIdGcInterval, (_) => _gcStaleConnIds());
@@ -532,8 +491,6 @@ class TrafficProfiler extends ChangeNotifier {
   /// time window'у. (§180 — `_dnsByConnId` выпилен, чистить нечего.)
   void _gcStaleConnIds() {
     final now = DateTime.now();
-    final cutoff = now.subtract(_connIdTtl);
-    _connIdToMeta.removeWhere((_, m) => m.firstSeen.isBefore(cutoff));
     // §176 — guard уже-обработанных closed: чистим старше 5 мин (ядро их к
     // этому моменту эвиктнуло из FilterState(All), в снапшоте больше нет).
     final closedCutoff = now.subtract(const Duration(minutes: 5));
@@ -551,62 +508,6 @@ class TrafficProfiler extends ChangeNotifier {
         _globalUnattributedEvents.first.ts.isBefore(globalCutoff)) {
       _globalUnattributedEvents.removeFirst();
     }
-  }
-
-  /// AppLog хранит entries newest-first. Идём от индекса 0 (newest) пока
-  /// не встретим entry с ts <= last-seen — всё что выше это новое. Сборку
-  /// делаем в reverse-order чтобы DNS chain'и собирались хронологически.
-  ///
-  /// Timestamp-based diff (не length-based): AppLog ring-buffer cap=500,
-  /// при overflow length стабилизируется и length-diff никогда не fires.
-  void _drainNewLogEntries() {
-    final entries = AppLog.I.entriesForSource(DebugSource.core);
-    if (entries.isEmpty) return;
-    final lastSeen = _lastSeenLogTs;
-    // Walk newest-first, collect новые (until we hit ts <= lastSeen).
-    // Then process them oldest-first.
-    final fresh = <int>[];
-    for (var i = 0; i < entries.length; i++) {
-      final t = entries[i].time;
-      if (lastSeen != null && !t.isAfter(lastSeen)) break;
-      fresh.add(i);
-    }
-    if (fresh.isEmpty) return;
-    for (var k = fresh.length - 1; k >= 0; k--) {
-      final i = fresh[k];
-      _processLogLine(entries[i].message, entries[i].time);
-    }
-    _lastSeenLogTs = entries.first.time;
-  }
-
-  // ─── Log parser (defensive) ───────────────────────────────────────────
-
-  // INFO[NNNN] [<conn_id> <Nms>] router: found package name: <pkg>
-  static final _packageRe = RegExp(
-      r'(?:\[(\d+)\s+\d+m?s?\]\s+)?router: found package name:\s+(.+?)$');
-
-  // §180 — DNS-regex (_dnsRe/_dnsFailRe) выпилены: DNS идёт структурным стримом
-  // (ядро SPEC 018 subscribeDNSQueries → CcChannel.dnsQueries → _ingestDnsQueries),
-  // а не парсингом core-лога. Текстовый путь был «обглоданным каналом» (атрибуция
-  // по connId-сшивке, regex чинили §141/§171). Структура: processInfo из ядра.
-
-  void _processLogLine(String line, DateTime ts) {
-    // 1) Package detection — пишем в conn-id map (всегда, независимо
-    //    от active session'и: нужно для global rolling buffer и для
-    //    backfill'а в будущую session'ю).
-    final pkgM = _packageRe.firstMatch(line);
-    if (pkgM != null) {
-      final connId = pkgM.group(1);
-      final pkg = pkgM.group(2)!.trim();
-      if (connId != null && connId.isNotEmpty) {
-        _connIdToMeta[connId] = _ConnMeta(pkg, ts);
-      }
-      return;
-    }
-    // §180 — DNS-ветки выпилены: DNS идёт структурным стримом
-    // (_ingestDnsQueries ← CcChannel.dnsQueries, ядро SPEC 018), НЕ из лога.
-    // _processLogLine остаётся ТОЛЬКО ради package detection (_packageRe выше) —
-    // это TCP-атрибуция connId→package, не DNS.
   }
 
   // ─── §180: структурный DNS из ядра (SPEC 018) ────────────────────────
@@ -964,7 +865,7 @@ class TrafficProfiler extends ChangeNotifier {
   }
 
   /// Снимает подписку + гасит profilerClient — только если ни active
-  /// session, ни global recording. Симметрично `_maybeDetachLogListener`.
+  /// session, ни global recording.
   void _maybeDetachCcConnections() {
     if (_active != null) return;
     if (_globalRecordingActive) return;
@@ -1210,9 +1111,9 @@ class TrafficProfiler extends ChangeNotifier {
 
   // ─── Connection-issue classifiers ─────────────────────────────────────
   //
-  //   - dnsTimeout: прямо из лога sing-box'а (`dns: exchange failed ...`),
+  //   - dnsTimeout: структурный DNS-fail из ядра (SPEC 018, `q.failed`),
   //     не heuristic, а реальный engine-уровневый сигнал. Эмитится в
-  //     [_handleDnsFailLine].
+  //     [_ingestDnsQuery] (§180 — заменил текстовый _handleDnsFailLine).
   //   - tcpReset: heuristic «conn закрылся <1с с 0 bytes» — высокая
   //     вероятность RST/firewall-blocking, но возможны false positives
   //     (быстрая отмена со стороны app, health-check probe).
@@ -1315,7 +1216,6 @@ class TrafficProfiler extends ChangeNotifier {
   void resetForTesting() {
     _active = null;
     _completed.clear();
-    _connIdToMeta.clear();
     _connSnapshots.clear();
     _closedHandled.clear(); // §176
     _globalRollingBuffer.clear();
@@ -1328,21 +1228,11 @@ class TrafficProfiler extends ChangeNotifier {
     _ccDnsSub = null;
     _gcTimer?.cancel();
     _gcTimer = null;
-    if (_appLogListener != null) {
-      AppLog.I.removeListener(_appLogListener!);
-      _appLogListener = null;
-    }
-    _lastSeenLogTs = null;
     for (final c in [..._sessionStreamSinks, ..._globalStreamSinks]) {
       if (!c.isClosed) c.close();
     }
     _sessionStreamSinks.clear();
     _globalStreamSinks.clear();
-  }
-
-  @visibleForTesting
-  void feedLogLineForTest(String line, [DateTime? ts]) {
-    _processLogLine(line, ts ?? DateTime.now());
   }
 
   /// §168 — прогнать снапшот CC connections (заменяет pollOnceForTest).

@@ -4,12 +4,8 @@ part of '../traffic_profiler.dart';
 // Internal helpers
 // ─────────────────────────────────────────────────────────────────────────
 
-class _ConnMeta {
-  _ConnMeta(this.process, this.firstSeen);
-  final String process;
-  final DateTime firstSeen;
-}
-
+// §044 — `_ConnMeta` (conn-id → package, TCP-атрибуция из router-лога) выпилен
+// вместе с лог-питателем: TCP-owner идёт из ядра (CcConnection.packageName).
 // §180 — `_DnsAccumulator` выпилен: cnameChain приходит целиком в
 // `CcDnsQuery.answers` (ядро SPEC 018), ручная аккумуляция по connId не нужна.
 

@@ -839,23 +839,10 @@ void main() {
     });
   });
 
-  // ───── §048 regression: time-based GC ─────────────────────────────────
-
-  group('TrafficProfiler — §048 time-based GC', () {
-    test('gc cleans stale conn-id entries by age, not count', () async {
-      final sub = TrafficProfiler.I.globalLiveStream().listen((_) {});
-      // Inject very old conn-id meta — feed log line then wait... но в
-      // тестах we can't actually wait. Instead, we manually call gc and
-      // verify behavior: feed package detection, then gc (entries
-      // младше TTL остаются).
-      TrafficProfiler.I.feedLogLineForTest(
-          'INFO[1] [42 0ms] router: found package name: com.fresh.app');
-      TrafficProfiler.I.gcOnceForTest();
-      // Свежие entries должны остаться.
-      expect(TrafficProfiler.I.globalRollingBuffer.isNotEmpty || true, true);
-      await sub.cancel();
-    });
-  });
+  // §044 — §180-cleanup: тест «gc cleans stale conn-id entries» удалён вместе
+  // с лог-питателем (_processLogLine/feedLogLineForTest/_connIdToMeta). Он
+  // тестировал мёртвый механизм (TCP-атрибуция из router-лога) и его assertion
+  // был тавтологией (`isNotEmpty || true`). GC rolling-buffer'ов покрыт другими.
 
   // ───── §181: оси РАЗДЕЛЬНО (outboundChain=маршрут, detourChain=транспорт) ──
 
