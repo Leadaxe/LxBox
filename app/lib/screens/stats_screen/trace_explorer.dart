@@ -213,22 +213,23 @@ class _TraceExplorerState extends State<TraceExplorer> {
               color: _paused ? cs.error : cs.primary,
               onPressed: _togglePause,
             ),
-          // 2 — Record scope (опционально).
+          // 2 — Record (старт/стоп записи).
           if (widget.onToggleRecording != null) _recordButton(context),
-          // 2b — Retention (окно хранения Live) — только в Profiler.
-          if (widget.onToggleRecording != null) _retentionButton(context),
-          // 3 — Aggregate-меню.
-          _aggregateButton(context),
-          const Spacer(),
-          // 4 — Filter-окно (+ бейдж активных).
-          _filterButton(context),
-          // 5 — Export видимого списка.
+          // 3 — Export — сразу справа от старт/стоп (просьба юзера).
           IconButton(
             tooltip: 'Export visible events',
+            visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.download, size: 22),
             onPressed:
                 visible.isEmpty ? null : () => _export(visible.toList()),
           ),
+          // 4 — Retention (окно хранения Live) — только в Profiler.
+          if (widget.onToggleRecording != null) _retentionButton(context),
+          // 5 — Aggregate-меню.
+          _aggregateButton(context),
+          const Spacer(),
+          // 6 — Filter-окно (+ бейдж активных).
+          _filterButton(context),
         ],
       ),
     );
@@ -434,7 +435,8 @@ class _TraceExplorerState extends State<TraceExplorer> {
     );
   }
 
-  /// Filter — открывает фильтр-окно, бейдж активных фильтров.
+  /// Filter — открывает фильтр-окно. Счётчик `(N)` в лейбле = маркер активных
+  /// фильтров (Positioned-точку убрали — не влезала в строку, просьба юзера).
   Widget _filterButton(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     // App-вкладка app-ось не применяет → не считаем её в бейдж.
@@ -442,31 +444,12 @@ class _TraceExplorerState extends State<TraceExplorer> {
         ? _filter.activeCount
         : _filter.activeCountNoApps;
     final active = n > 0;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        TextButton.icon(
-          icon: Icon(Icons.filter_list,
-              size: 20, color: active ? cs.primary : null),
-          label: Text(active ? 'Filter ($n)' : 'Filter',
-              style: TextStyle(
-                  fontSize: 12, color: active ? cs.primary : null)),
-          onPressed: () => _openFilterSheet(context),
-        ),
-        if (active)
-          Positioned(
-            right: 4,
-            top: 2,
-            child: Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(
-                color: cs.primary,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-      ],
+    return TextButton.icon(
+      icon: Icon(Icons.filter_list,
+          size: 20, color: active ? cs.primary : null),
+      label: Text(active ? 'Filter ($n)' : 'Filter',
+          style: TextStyle(fontSize: 12, color: active ? cs.primary : null)),
+      onPressed: () => _openFilterSheet(context),
     );
   }
 
