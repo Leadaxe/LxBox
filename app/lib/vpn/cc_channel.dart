@@ -339,7 +339,8 @@ class CcGroup {
 /// §122 — `uplink`/`downlink` = НАКОПЛЕННЫЙ итог (`getUplinkTotal/DownlinkTotal`),
 /// сколько ВСЕГО передано за соединение. `uplinkDelta`/`downlinkDelta` = байт за
 /// последний тик статуса (мгновенная скорость; у idle = 0). `outbound`/
-/// `outboundType` — нода/тип цепочки (замена Clash `chains`).
+/// `outboundType` — выбранная нода/тип; `chains` — полная outbound-цепочка
+/// (Clash `chains`, §174: ядро отдаёт через `Connection.chain()`-итератор).
 class CcConnection {
   const CcConnection({
     required this.id,
@@ -354,6 +355,7 @@ class CcConnection {
     this.outbound = '',
     this.outboundType = '',
     this.protocol = '',
+    this.chains = const [],
     this.packageName = '',
     this.processPath = '',
     required this.createdAt,
@@ -374,10 +376,14 @@ class CcConnection {
   final int uplinkDelta;
   final int downlinkDelta;
 
-  /// Выбранная нода/тип цепочки (libbox `getOutbound`/`getOutboundType`).
+  /// Выбранная нода/тип (libbox `getOutbound`/`getOutboundType`).
   final String outbound;
   final String outboundType;
   final String protocol;
+
+  /// §174 — полная outbound-цепочка (Clash `chains`): selector→urltest→node.
+  /// Из `Connection.chain()`-итератора ядра. Пусто для прямого outbound.
+  final List<String> chains;
 
   /// App-attribution из `getProcessInfo()`: package (для иконки) + путь процесса.
   final String packageName;
@@ -401,6 +407,8 @@ class CcConnection {
         outbound: m['outbound']?.toString() ?? '',
         outboundType: m['outboundType']?.toString() ?? '',
         protocol: m['protocol']?.toString() ?? '',
+        chains: (m['chains'] as List?)?.map((e) => e.toString()).toList() ??
+            const [],
         packageName: m['packageName']?.toString() ?? '',
         processPath: m['processPath']?.toString() ?? '',
         createdAt: _int(m['createdAt']),

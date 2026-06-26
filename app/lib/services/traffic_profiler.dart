@@ -945,12 +945,17 @@ class TrafficProfiler extends ChangeNotifier {
       final destIp = _ccHostOf(c.destination);
       final destPort = _ccPortOf(c.destination);
       final network = c.network;
-      // CC даёт один outbound (не цепочку) — оборачиваем в список chains.
-      final chains = c.outbound.isNotEmpty ? <String>[c.outbound] : <String>[];
+      // §174 — реальная outbound-цепочка из ядра (`Connection.chain()`).
+      // Fallback на [outbound] если цепочка пуста (прямой outbound без группы).
+      final chains = c.chains.isNotEmpty
+          ? c.chains
+          : (c.outbound.isNotEmpty ? <String>[c.outbound] : <String>[]);
       final up = c.uplink;
       final down = c.downlink;
       final rule = c.rule;
-      const rulePayload = ''; // CcConnection не несёт rulePayload.
+      // §174 — у ядра нет отдельного rulePayload (в Clash был всегда ""); Rule
+      // уже несёт человекочитаемую форму правила целиком — payload не дублируем.
+      const rulePayload = '';
 
       final prev = _connSnapshots[id];
       if (prev == null) {

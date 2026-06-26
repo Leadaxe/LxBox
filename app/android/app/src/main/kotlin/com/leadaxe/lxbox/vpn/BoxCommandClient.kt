@@ -518,6 +518,17 @@ class BoxCommandClient {
                         if (pkgIt != null && pkgIt.hasNext()) pkg = pkgIt.next() ?: ""
                     }
                 }
+                // §174 — outbound-цепочка (Clash `chains`): ядро отдаёт её через
+                // gRPC `chain_list`, НО только методом-итератором `chain()` (НЕ
+                // как поле). Раньше не читали → цепочка selector→urltest→node
+                // терялась, профайлер довольствовался [outbound]. best-effort.
+                val chains = ArrayList<String>()
+                runCatching {
+                    val chainIt = c.chain()
+                    while (chainIt != null && chainIt.hasNext()) {
+                        chainIt.next()?.let { chains.add(it) }
+                    }
+                }
                 // uplink/downlink = НАКОПЛЕННЫЙ итог (Total), не дельта за тик.
                 list.add(mapOf(
                     "id" to c.getID(),
@@ -532,6 +543,7 @@ class BoxCommandClient {
                     "outbound" to c.getOutbound(),
                     "outboundType" to c.getOutboundType(),
                     "protocol" to c.getProtocol(),
+                    "chains" to chains,
                     "packageName" to pkg,
                     "processPath" to processPath,
                     "createdAt" to c.getCreatedAt(),
