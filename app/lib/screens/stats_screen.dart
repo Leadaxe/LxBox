@@ -265,7 +265,7 @@ class _StatsScreenState extends State<StatsScreen> {
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text('Live'),
+                        const Text('Profiler'),
                         if (TrafficProfiler.I.unattributedBannerActive) ...[
                           const SizedBox(width: 4),
                           Icon(

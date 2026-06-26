@@ -1,36 +1,73 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../services/traffic_profiler.dart';
+import '../per_app_trace_tab/session_json.dart';
 import '../per_app_trace_tab/widgets/aggregate_axis.dart';
 import '../per_app_trace_tab/widgets/aggregated_view.dart';
 import '../per_app_trace_tab/widgets/live_view.dart';
 import 'aggregate_detail_sheet.dart';
+import 'profiler_filter.dart';
+import 'profiler_filter_sheet.dart';
 import 'traffic_event_detail_sheet.dart';
 
-/// §160 — общий explorer трафика: тогл **Live / Aggregated** + общий фильтр
-/// (поиск + чипы типа события) + drill-down детали + пауза Live.
+/// §044/new-profiler — режим записи: persistent (пишем всегда, в фоне тоже) vs
+/// tab-scoped (пишем только пока вкладка открыта). Управляет родитель —
+/// explorer лишь рисует кнопку и зовёт колбэк.
+enum RecordingScope { persistent, tabScoped }
+
+/// §160 / §044-new-profiler — общий explorer трафика. Единый движок Profiler
+/// (Stats→Live) и per-app trace, без дубля кода.
 ///
-/// Единый движок для двух экранов (без дубля кода):
-/// - **Per-app trace** (`PerAppTraceTab`) — `events` = `session.events`.
-/// - **Stats→Live** (`LiveEventsTab`) — `events` = `globalRollingBuffer`.
+/// **§044/new-profiler:** управление свёрнуто в ОДНУ control-строку (Live/pause
+/// · Record-scope · Aggregate-меню · Filter-окно · Export); фильтр вынесен в
+/// `ProfilerFilterSheet`. Фильтр-state — общий `ProfilerFilter` (от родителя).
 ///
-/// Агрегаты (`byDomain`/`byIp`) считаются **здесь** из [events] общим
-/// `computeTraceAggregates` — не завязываясь на `Session`, поэтому работает
-/// и там где сессии нет (Live). [events] — полный таймлайн (newest-last
-/// или любой порядок; explorer сам разворачивает для показа). [unattributed]
-/// — system-wide «no owner» события (Live-секция внизу). [recording] —
-/// идёт ли запись (для empty-state текста).
+/// Агрегаты (`byDomain`/`byIp`) считаются здесь из [events] общим
+/// `computeTraceAggregates`. [events] — полный таймлайн (любой порядок;
+/// explorer сам разворачивает для показа). [unattributed] — system-wide
+/// «no owner» события (Live-секция внизу). [recording] — идёт ли запись
+/// (для empty-state текста).
+///
+/// Record-управление опционально (Profiler даёт, App-вкладка — нет, там запись
+/// через START/STOP сессии). Если [onToggleRecording] == null — кнопка Record
+/// не рисуется.
 class TraceExplorer extends StatefulWidget {
   const TraceExplorer({
     super.key,
     required this.events,
     required this.unattributed,
     required this.recording,
+    required this.filter,
+    this.showAppTab = true,
+    this.includeAppsFilter = true,
+    this.recordScope,
+    this.onToggleRecordScope,
+    this.isRecording,
+    this.onToggleRecording,
   });
 
   final List<TrafficEvent> events;
   final List<TrafficEvent> unattributed;
   final bool recording;
+
+  /// Общая фильтр-модель (редактируется фильтр-окном, применяется здесь).
+  final ProfilerFilter filter;
+
+  /// Показывать ли App-таб в фильтр-окне (App-вкладка: target фиксирован → нет).
+  final bool showAppTab;
+
+  /// Применять ли app-ось к списку (App-вкладка: target фиксирован → нет).
+  final bool includeAppsFilter;
+
+  // ── Record-управление (опционально; Profiler даёт, App-вкладка — нет) ──
+  final RecordingScope? recordScope;
+  final void Function(RecordingScope)? onToggleRecordScope;
+  final bool? isRecording;
+  final VoidCallback? onToggleRecording;
 
   @override
   State<TraceExplorer> createState() => _TraceExplorerState();
@@ -41,10 +78,6 @@ enum _Mode { live, aggregated }
 class _TraceExplorerState extends State<TraceExplorer> {
   _Mode _mode = _Mode.live;
   AggAxis _aggAxis = AggAxis.domain;
-  final TextEditingController _searchCtrl = TextEditingController();
-  String _search = '';
-  final Set<TrafficEventKind> _kindFilter = <TrafficEventKind>{};
-  bool _onlyUnattributed = false;
 
   // Пауза только для отображения Live: запись продолжается, список замирает
   // на снимке. Снимок фиксируется в момент паузы.
@@ -52,10 +85,31 @@ class _TraceExplorerState extends State<TraceExplorer> {
   List<TrafficEvent>? _frozenEvents;
   List<TrafficEvent>? _frozenUnattributed;
 
+  ProfilerFilter get _filter => widget.filter;
+
+  @override
+  void initState() {
+    super.initState();
+    _filter.addListener(_onFilterChanged);
+  }
+
+  @override
+  void didUpdateWidget(TraceExplorer old) {
+    super.didUpdateWidget(old);
+    if (old.filter != widget.filter) {
+      old.filter.removeListener(_onFilterChanged);
+      _filter.addListener(_onFilterChanged);
+    }
+  }
+
   @override
   void dispose() {
-    _searchCtrl.dispose();
+    _filter.removeListener(_onFilterChanged);
     super.dispose();
+  }
+
+  void _onFilterChanged() {
+    if (mounted) setState(() {});
   }
 
   /// Ключ из детального sheet → общий поиск. Повторный тот же ключ — clear.
@@ -64,15 +118,7 @@ class _TraceExplorerState extends State<TraceExplorer> {
     final clean = key.trim();
     if (clean.isEmpty) return;
     setState(() {
-      if (_search == clean) {
-        _searchCtrl.clear();
-        _search = '';
-      } else {
-        _searchCtrl.text = clean;
-        _searchCtrl.selection =
-            TextSelection.collapsed(offset: clean.length);
-        _search = clean;
-      }
+      _filter.search = _filter.search == clean ? '' : clean;
       if (switchToAggregated) {
         _mode = _Mode.aggregated;
         _aggAxis = AggAxis.domain;
@@ -93,6 +139,44 @@ class _TraceExplorerState extends State<TraceExplorer> {
     });
   }
 
+  Future<void> _export(List<TrafficEvent> visible) async {
+    final json = const JsonEncoder.withIndent('  ').convert(
+      eventsToJson(visible),
+    );
+    if (!mounted) return;
+    // Лист: Share / Copy. Делаем просто — Share с fallback на clipboard.
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.share),
+              title: Text('Share ${visible.length} events (JSON)'),
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                Share.share(json, subject: 'LxBox profiler export');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('Copy JSON to clipboard'),
+              onTap: () async {
+                Navigator.pop(sheetCtx);
+                await Clipboard.setData(ClipboardData(text: json));
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Export JSON copied')),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Источник: на паузе — снимок, иначе живые списки родителя.
@@ -102,163 +186,195 @@ class _TraceExplorerState extends State<TraceExplorer> {
 
     return Column(
       children: [
-        _modeToggle(context),
-        _filterBar(context),
+        _controlBar(context, srcEvents),
         Expanded(child: _body(context, srcEvents, srcUnattr)),
       ],
     );
   }
 
-  /// Тогл Live / Aggregated (+ ось by Domain / by IP только в Aggregated).
-  Widget _modeToggle(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: SegmentedButton<_Mode>(
-              segments: [
-                const ButtonSegment(
-                    value: _Mode.live,
-                    label: Text('Live'),
-                    icon: Icon(Icons.stream, size: 16)),
-                ButtonSegment(
-                    value: _Mode.aggregated,
-                    // Сокращаем до «Agg» когда выбран: справа появляется ось.
-                    label: Text(_mode == _Mode.aggregated ? 'Agg' : 'Aggregated'),
-                    icon: const Icon(Icons.summarize, size: 16)),
-              ],
-              selected: {_mode},
-              showSelectedIcon: false,
-              style: const ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
-              ),
-              onSelectionChanged: (s) => setState(() {
-                _mode = s.first;
-                if (_mode != _Mode.live) {
-                  _paused = false;
-                  _frozenEvents = null;
-                  _frozenUnattributed = null;
-                }
-              }),
-            ),
-          ),
-          if (_mode == _Mode.aggregated) ...[
-            const SizedBox(width: 8),
-            SegmentedButton<AggAxis>(
-              segments: const [
-                ButtonSegment(value: AggAxis.domain, label: Text('Domain')),
-                ButtonSegment(value: AggAxis.ip, label: Text('IP')),
-              ],
-              selected: {_aggAxis},
-              showSelectedIcon: false,
-              style: const ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
-              ),
-              onSelectionChanged: (s) => setState(() => _aggAxis = s.first),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  /// Общий фильтр на оба режима. Чипы типа / Unattributed / Pause — только
-  /// в Live (в Aggregated событий-строк нет).
-  Widget _filterBar(BuildContext context) {
+  /// §044/new-profiler — одна строка управления (5 affordance).
+  Widget _controlBar(BuildContext context, List<TrafficEvent> srcEvents) {
+    final cs = Theme.of(context).colorScheme;
+    final visible = _applyFilter(srcEvents).toList();
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-      child: Column(
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchCtrl,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Search domain / IP / app…',
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    suffixIcon: _search.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.close, size: 18),
-                            onPressed: () {
-                              _searchCtrl.clear();
-                              setState(() => _search = '');
-                            },
-                          ),
-                    isDense: true,
-                    border: const OutlineInputBorder(),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
-                  ),
-                  onChanged: (v) => setState(() => _search = v),
-                ),
-              ),
-              if (_mode == _Mode.live) ...[
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: _paused ? 'Resume' : 'Pause',
-                  icon: Icon(_paused ? Icons.play_arrow : Icons.pause, size: 22),
-                  color: _paused
-                      ? Theme.of(context).colorScheme.error
-                      : Theme.of(context).colorScheme.primary,
-                  onPressed: _togglePause,
-                ),
-              ],
-            ],
-          ),
-          if (_mode == _Mode.live) ...[
-            const SizedBox(height: 4),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  ..._kindChips(),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: const Text('Unattributed only',
-                        style: TextStyle(fontSize: 11)),
-                    selected: _onlyUnattributed,
-                    visualDensity: VisualDensity.compact,
-                    onSelected: (v) => setState(() => _onlyUnattributed = v),
-                  ),
-                ],
-              ),
+          // 1 — Live / pause (только в Live-режиме).
+          if (_mode == _Mode.live)
+            IconButton(
+              tooltip: _paused ? 'Resume' : 'Pause',
+              icon: Icon(_paused ? Icons.play_arrow : Icons.pause, size: 22),
+              color: _paused ? cs.error : cs.primary,
+              onPressed: _togglePause,
             ),
-          ],
+          // 2 — Record scope (опционально).
+          if (widget.onToggleRecording != null) _recordButton(context),
+          // 3 — Aggregate-меню.
+          _aggregateButton(context),
+          const Spacer(),
+          // 4 — Filter-окно (+ бейдж активных).
+          _filterButton(context),
+          // 5 — Export видимого списка.
+          IconButton(
+            tooltip: 'Export visible events',
+            icon: const Icon(Icons.download, size: 22),
+            onPressed:
+                visible.isEmpty ? null : () => _export(visible.toList()),
+          ),
         ],
       ),
     );
   }
 
-  List<Widget> _kindChips() {
-    Widget chip(String label, TrafficEventKind kind) => Padding(
-          padding: const EdgeInsets.only(right: 4),
-          child: FilterChip(
-            label: Text(label, style: const TextStyle(fontSize: 11)),
-            selected: _kindFilter.contains(kind),
-            visualDensity: VisualDensity.compact,
-            onSelected: (v) => setState(() {
-              if (v) {
-                _kindFilter.add(kind);
-              } else {
-                _kindFilter.remove(kind);
-              }
-            }),
+  /// Record: tap = старт/стоп записи; long-press = тогл scope persistent↔tab.
+  Widget _recordButton(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final on = widget.isRecording ?? false;
+    final scope = widget.recordScope ?? RecordingScope.persistent;
+    final persistent = scope == RecordingScope.persistent;
+    return IconButton(
+      tooltip: on
+          ? 'Recording (${persistent ? "persistent" : "tab-scoped"}) — tap to stop, long-press: scope'
+          : 'Start recording (${persistent ? "persistent" : "tab-scoped"}) — long-press: scope',
+      icon: Icon(
+        on ? Icons.fiber_manual_record : Icons.radio_button_unchecked,
+        size: 22,
+        color: on
+            ? cs.error
+            : (persistent ? cs.onSurfaceVariant : cs.outline),
+      ),
+      onPressed: widget.onToggleRecording,
+      onLongPress: widget.onToggleRecordScope == null
+          ? null
+          : () {
+              widget.onToggleRecordScope!(
+                persistent
+                    ? RecordingScope.tabScoped
+                    : RecordingScope.persistent,
+              );
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  duration: const Duration(seconds: 2),
+                  content: Text(persistent
+                      ? 'Recording scope: tab-scoped (stops when you leave)'
+                      : 'Recording scope: persistent (keeps recording in background)'),
+                ),
+              );
+            },
+    );
+  }
+
+  /// Aggregate — кнопка-меню: Поток / by Domain / by IP.
+  Widget _aggregateButton(BuildContext context) {
+    final isLive = _mode == _Mode.live;
+    final IconData icon;
+    final String label;
+    if (isLive) {
+      icon = Icons.stream;
+      label = 'Stream';
+    } else {
+      icon = Icons.summarize;
+      label = _aggAxis == AggAxis.domain ? 'by Domain' : 'by IP';
+    }
+    return PopupMenuButton<String>(
+      tooltip: 'Grouping',
+      onSelected: (v) => setState(() {
+        switch (v) {
+          case 'stream':
+            _mode = _Mode.live;
+          case 'domain':
+            _mode = _Mode.aggregated;
+            _aggAxis = AggAxis.domain;
+          case 'ip':
+            _mode = _Mode.aggregated;
+            _aggAxis = AggAxis.ip;
+        }
+        if (_mode != _Mode.live) {
+          _paused = false;
+          _frozenEvents = null;
+          _frozenUnattributed = null;
+        }
+      }),
+      itemBuilder: (_) => [
+        _aggMenuItem('stream', Icons.stream, 'Event stream', isLive),
+        _aggMenuItem('domain', Icons.summarize, 'Group by Domain',
+            !isLive && _aggAxis == AggAxis.domain),
+        _aggMenuItem('ip', Icons.summarize, 'Group by IP',
+            !isLive && _aggAxis == AggAxis.ip),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18),
+            const SizedBox(width: 4),
+            Text(label, style: const TextStyle(fontSize: 12)),
+            const Icon(Icons.arrow_drop_down, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _aggMenuItem(
+      String value, IconData icon, String label, bool selected) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(
+            selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+            size: 18,
           ),
-        );
-    // §177 — фильтр по СЕМЕЙСТВУ, не по фазе: чип DNS ловит resolve+fail,
-    // TCP — open+close. Фазные чипы (DNS×/TCP·) убраны — фаза видна в бейдже
-    // (цвет) и деталях, отдельный фильтр по ней избыточен.
-    return [
-      chip('DNS', TrafficEventKind.dnsResolve),
-      chip('TCP', TrafficEventKind.tcpOpen),
-      chip('UDP', TrafficEventKind.udpOpen),
-    ];
+          const SizedBox(width: 8),
+          Icon(icon, size: 18),
+          const SizedBox(width: 8),
+          Text(label),
+        ],
+      ),
+    );
+  }
+
+  /// Filter — открывает фильтр-окно, бейдж активных фильтров.
+  Widget _filterButton(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final n = widget.includeAppsFilter
+        ? _filter.activeCount
+        // App-вкладка app-ось не применяет → не считаем её в бейдж.
+        : _filter.activeCount - _filter.apps.length;
+    final active = n > 0;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        TextButton.icon(
+          icon: Icon(Icons.filter_list,
+              size: 20, color: active ? cs.primary : null),
+          label: Text(active ? 'Filter ($n)' : 'Filter',
+              style: TextStyle(
+                  fontSize: 12, color: active ? cs.primary : null)),
+          onPressed: () => showProfilerFilterSheet(
+            context,
+            filter: _filter,
+            showAppTab: widget.showAppTab,
+          ),
+        ),
+        if (active)
+          Positioned(
+            right: 4,
+            top: 2,
+            child: Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                color: cs.primary,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _body(BuildContext context, List<TrafficEvent> srcEvents,
@@ -280,7 +396,7 @@ class _TraceExplorerState extends State<TraceExplorer> {
       byDomain: agg.byDomain,
       byIp: agg.byIp,
       axis: _aggAxis,
-      search: _search,
+      search: _filter.search,
       onOpenAggregate: (key) => showAggregateDetailSheet(
         context,
         events: srcEvents,
@@ -293,34 +409,6 @@ class _TraceExplorerState extends State<TraceExplorer> {
     );
   }
 
-  Iterable<TrafficEvent> _applyFilter(Iterable<TrafficEvent> src) {
-    var list = src;
-    if (_kindFilter.isNotEmpty) {
-      // §177 — фильтр по семейству: dnsFail матчит выбранный DNS, tcpClose —
-      // выбранный TCP. _kindFilter держит представителя семейства (dnsResolve
-      // / tcpOpen / udpOpen — те, что в _kindChips).
-      list = list.where((e) => _kindFilter.contains(_kindFamily(e.kind)));
-    }
-    if (_onlyUnattributed) {
-      list =
-          list.where((e) => e.confidence == ConfidenceLevel.unattributed);
-    }
-    if (_search.isNotEmpty) {
-      final lq = _search.toLowerCase();
-      list = list.where((e) =>
-          (e.domain?.toLowerCase().contains(lq) ?? false) ||
-          (e.ip?.contains(_search) ?? false) ||
-          (e.process?.toLowerCase().contains(lq) ?? false));
-    }
-    return list;
-  }
-
-  /// §177 — представитель семейства для kind-фильтра: фазные виды (dnsFail,
-  /// tcpClose) сводятся к базовому чипу (dnsResolve, tcpOpen), чтобы один чип
-  /// ловил обе фазы. udpOpen — сам себе семейство.
-  static TrafficEventKind _kindFamily(TrafficEventKind k) => switch (k) {
-        TrafficEventKind.dnsFail => TrafficEventKind.dnsResolve,
-        TrafficEventKind.tcpClose => TrafficEventKind.tcpOpen,
-        _ => k,
-      };
+  Iterable<TrafficEvent> _applyFilter(Iterable<TrafficEvent> src) =>
+      _filter.apply(src, includeApps: widget.includeAppsFilter);
 }

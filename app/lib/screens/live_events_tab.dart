@@ -22,6 +22,7 @@ import '../services/traffic_profiler.dart';
 import '../widgets/core_logs_hint_banner.dart';
 import 'live_events_tab/recording_header.dart';
 import 'live_events_tab/unattributed_banner.dart';
+import 'stats_screen/profiler_filter.dart';
 import 'stats_screen/trace_explorer.dart';
 
 class LiveEventsTab extends StatefulWidget {
@@ -50,10 +51,17 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
   bool _pendingRebuild = false;
   Timer? _rebuildTimer;
 
-  // System-wide app pre-фильтр (мульти-выбор пакетов). TraceExplorer о нём
-  // не знает — применяем здесь до передачи событий.
-  final Set<String> _appFilter = {}; // empty = no filter
-  final Set<String> _seenApps = {};
+  // §044/new-profiler — фильтр (app-ось + типы + поиск) теперь в общей модели,
+  // редактируется фильтр-окном (ProfilerFilterSheet). Старый локальный
+  // _appFilter/_seenApps удалён — app-выбор живёт в _filter.apps.
+  final ProfilerFilter _filter = ProfilerFilter();
+
+  // §044/new-profiler — режим записи: persistent (фон тоже) vs tab-scoped
+  // (старт при входе на вкладку, стоп при уходе). Дефолт persistent =
+  // прежнее поведение startGlobalRecording.
+  RecordingScope _recordScope = RecordingScope.persistent;
+  TabController? _tabController;
+  int? _myTabIndex; // индекс вкладки Profiler в StatsScreen
 
   @override
   void initState() {
@@ -62,14 +70,43 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
     // [TrafficProfiler.I.startGlobalRecording] (юзер тапает ▶ START).
     final snapshot = TrafficProfiler.I.globalSnapshot(seconds: 60);
     _events.addAll(snapshot);
-    for (final e in snapshot) {
-      _trackApp(e);
-    }
     _sub = TrafficProfiler.I.globalLiveStream().listen(_onEvent);
     TrafficProfiler.I.addListener(_onProfilerChanged);
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && TrafficProfiler.I.isGlobalRecording) setState(() {});
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // §044/new-profiler — подписка на TabController для tab-scoped записи:
+    // запоминаем свой индекс (по текущему, если мы видимы) и слушаем смену.
+    final ctrl = DefaultTabController.maybeOf(context);
+    if (ctrl != _tabController) {
+      _tabController?.removeListener(_onTabChanged);
+      _tabController = ctrl;
+      _myTabIndex ??= ctrl?.index;
+      _tabController?.addListener(_onTabChanged);
+    }
+  }
+
+  /// §044/new-profiler — tab-scoped: при уходе с вкладки стоп записи, при
+  /// возврате — старт (только если scope == tabScoped).
+  void _onTabChanged() {
+    final ctrl = _tabController;
+    if (ctrl == null || _myTabIndex == null) return;
+    if (_recordScope != RecordingScope.tabScoped) return;
+    final onMyTab = ctrl.index == _myTabIndex && !ctrl.indexIsChanging;
+    if (onMyTab) {
+      if (!TrafficProfiler.I.isGlobalRecording) {
+        TrafficProfiler.I.startGlobalRecording();
+      }
+    } else {
+      if (TrafficProfiler.I.isGlobalRecording) {
+        TrafficProfiler.I.stopGlobalRecording();
+      }
+    }
   }
 
   void _onProfilerChanged() {
@@ -78,7 +115,6 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
       // STOP — буфер заморожен, _events остаётся; START — clear.
       if (!TrafficProfiler.I.isGlobalRecording) return;
       _events.clear();
-      _seenApps.clear();
     });
   }
 
@@ -88,12 +124,6 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
     } else {
       TrafficProfiler.I.startGlobalRecording();
     }
-  }
-
-  void _trackApp(TrafficEvent e) {
-    final p =
-        e.process?.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty);
-    if (p != null) _seenApps.addAll(p);
   }
 
   void _onEvent(Map<String, Object?> msg) {
@@ -132,9 +162,6 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
       _events
         ..clear()
         ..addAll(fresh);
-      for (final e in fresh) {
-        _trackApp(e);
-      }
     });
     _rebuiltAt = DateTime.now();
   }
@@ -143,22 +170,11 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
   void dispose() {
     _sub?.cancel();
     TrafficProfiler.I.removeListener(_onProfilerChanged);
+    _tabController?.removeListener(_onTabChanged);
+    _filter.dispose();
     _ticker?.cancel();
     _rebuildTimer?.cancel();
     super.dispose();
-  }
-
-  /// События после system-wide app pre-фильтра.
-  List<TrafficEvent> get _appFiltered {
-    if (_appFilter.isEmpty) return _events;
-    return _events.where((e) {
-      final pkgs = e.process
-              ?.split(',')
-              .map((s) => s.trim())
-              .toSet() ??
-          const <String>{};
-      return pkgs.any(_appFilter.contains);
-    }).toList();
   }
 
   @override
@@ -169,7 +185,6 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
           eventCount: _events.length,
           onToggle: _toggleRecording,
         ),
-        _appFilterBar(context),
         const Divider(height: 1),
         const CoreLogsHintBanner(),
         if (TrafficProfiler.I.unattributedBannerActive)
@@ -179,77 +194,19 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
             // System-wide: unattributed события уже внутри globalRollingBuffer
             // как обычные строки (с confidence=unattributed). Отдельной
             // «no owner» секции (как в per-app) тут нет → unattributed=[].
-            events: _appFiltered,
+            // App-ось фильтра применяется внутри TraceExplorer через _filter.
+            events: _events,
             unattributed: const [],
             recording: TrafficProfiler.I.isGlobalRecording,
+            filter: _filter,
+            // Profiler: app-таб и app-ось активны (system-wide, процессов много).
+            recordScope: _recordScope,
+            onToggleRecordScope: (s) => setState(() => _recordScope = s),
+            isRecording: TrafficProfiler.I.isGlobalRecording,
+            onToggleRecording: _toggleRecording,
           ),
         ),
       ],
-    );
-  }
-
-  /// System-wide app multi-select (уникален для Live; в per-app процесс один).
-  Widget _appFilterBar(BuildContext context) {
-    if (_seenApps.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: TextButton.icon(
-          onPressed: _showAppFilterSheet,
-          icon: const Icon(Icons.android, size: 16),
-          label: Text(
-            _appFilter.isEmpty ? 'All apps' : '${_appFilter.length} app(s)',
-            style: const TextStyle(fontSize: 12),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showAppFilterSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (ctx) {
-        final apps = _seenApps.toList()..sort();
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            return SafeArea(
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-                  ListTile(
-                    title: const Text('Filter by app'),
-                    trailing: TextButton(
-                      onPressed: () => setSheetState(() {
-                        _appFilter.clear();
-                        setState(() {});
-                      }),
-                      child: const Text('Clear'),
-                    ),
-                  ),
-                  for (final a in apps)
-                    CheckboxListTile(
-                      dense: true,
-                      title: Text(a, style: const TextStyle(fontSize: 13)),
-                      value: _appFilter.contains(a),
-                      onChanged: (v) {
-                        setSheetState(() {
-                          if (v ?? false) {
-                            _appFilter.add(a);
-                          } else {
-                            _appFilter.remove(a);
-                          }
-                          setState(() {});
-                        });
-                      },
-                    ),
-                ],
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }
