@@ -5,19 +5,25 @@
 # Зачем: до любой destructive op (reset-network, reload, restart, PUT config)
 # обязательно нужен baseline для post-mortem. См. docs/DIAGNOSTICS.md.
 #
+# §122 (v2.5.0): Clash API выпилен. Соединения/DNS/цепочки берутся из
+# профайлера (`/profiler/live`, §044/§180), proxies/groups — из `/state`
+# (libbox CommandClient), ping — `/action/urltest`. Никакого Clash-порта.
+#
 # Usage:
 #   ./scripts/lxbox-diag.sh                # по дефолту в /tmp/lxbox-debug-<ts>/
 #   ./scripts/lxbox-diag.sh -o ./mydir     # custom output dir
 #   ./scripts/lxbox-diag.sh --token ABC    # override Debug API token
-#   ./scripts/lxbox-diag.sh --no-clash     # skip Clash API (если выключен)
+#   ./scripts/lxbox-diag.sh --port 9270    # host adb-forward port (default 9269)
+#   ./scripts/lxbox-diag.sh --no-profiler  # skip /profiler/live snapshot
+#   ./scripts/lxbox-diag.sh --profiler-secs 30  # окно профайлера (default 60)
+#   ./scripts/lxbox-diag.sh --ping         # запустить urltest (мутирует state!)
 #   ./scripts/lxbox-diag.sh --no-adb       # skip device-side (если adb недоступен)
 #
 # Exit:
 #   0 — snapshot собран (даже если часть источников недоступна)
 #   1 — критическая ошибка (нет ни adb, ни Debug API)
 #
-# Зависимости: bash 4+, curl, jq (optional, для friendly summary), adb,
-# python3 (для ss/log парсинга).
+# Зависимости: bash 4+, curl, jq (optional), adb, python3.
 
 set -uo pipefail   # NB: -e не используем — фейл одного источника не должен убить остальные
 
@@ -25,12 +31,12 @@ set -uo pipefail   # NB: -e не используем — фейл одного 
 
 TS="$(date +%Y-%m-%d-%H%M%S)"
 OUT_DIR="/tmp/lxbox-debug-$TS"
-TOKEN="${LXBOX_DEBUG_TOKEN:-357f5aacdf154419d2787ec61e3ad9f2}"
-LB_HOST_PORT="9270"   # adb forward по умолчанию (см. install-apk.sh)
-LB_DEVICE_PORT="9269"
-CLASH_HOST_PORT="9091"
-CLASH_DEVICE_PORT="63130"
-SKIP_CLASH=0
+TOKEN="${LXBOX_DEBUG_TOKEN:-471592e5f676d0eddee669c0548b3edb}"   # rotated 2026-06-12; override через LXBOX_DEBUG_TOKEN / --token
+LB_HOST_PORT="9269"   # форвард 1:1 (host==device); юзер форвардит 9269→9269. Override: --port
+LB_DEVICE_PORT="9269" # debugPortDefault (SettingsStorage); см. project_dev_endpoints
+PROFILER_SECS="60"    # окно /profiler/live (§048 inclusive observer)
+SKIP_PROFILER=0
+DO_PING=0             # §122 — urltest через CommandClient (мутирует state, OFF by default)
 SKIP_ADB=0
 
 # ─── arg parse ──────────────────────────────────────────────────────
@@ -39,9 +45,12 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -o|--out)        OUT_DIR="$2"; shift 2 ;;
     --token)         TOKEN="$2"; shift 2 ;;
-    --no-clash)      SKIP_CLASH=1; shift ;;
+    --port)          LB_HOST_PORT="$2"; shift 2 ;;
+    --no-profiler)   SKIP_PROFILER=1; shift ;;
+    --profiler-secs) PROFILER_SECS="$2"; shift 2 ;;
+    --ping)          DO_PING=1; shift ;;
     --no-adb)        SKIP_ADB=1; shift ;;
-    -h|--help)       sed -n '1,25p' "$0" | sed 's|^# \?||'; exit 0 ;;
+    -h|--help)       sed -n '2,26p' "$0" | sed 's|^# \?||'; exit 0 ;;
     *) echo "✗ Unknown arg: $1" >&2; exit 1 ;;
   esac
 done
@@ -62,7 +71,6 @@ mkdir -p "$OUT_DIR"
 echo "→ snapshot dir: $OUT_DIR"
 
 LB_BASE="http://localhost:$LB_HOST_PORT"
-CLASH_BASE="http://localhost:$CLASH_HOST_PORT"
 HDR_AUTH="Authorization: Bearer $TOKEN"
 
 # Проверим что Debug API живой
@@ -79,9 +87,38 @@ if [ -z "$PING" ]; then
   exit 1
 fi
 
-# Auto-forward Clash API если нужно
-if [ "$SKIP_CLASH" -eq 0 ] && [ "$SKIP_ADB" -eq 0 ]; then
-  adb forward "tcp:$CLASH_HOST_PORT" "tcp:$CLASH_DEVICE_PORT" >/dev/null 2>&1 || true
+# Auth-check: /ping не требует токена (unauthenticatedPaths), поэтому живой ping
+# ещё НЕ значит что токен верный. Дёргаем защищённый /state — если 401, токен
+# протух/неверный, и иначе снапшот молча соберёт unauthorized-envelope'ы и
+# покажет «?» везде (выглядит как «приложение не запущено»). Не падаем —
+# adb-сбор всё равно ценен, — но громко предупреждаем.
+AUTH_CODE="$(curl -s -m 3 -o /dev/null -w '%{http_code}' -H "$HDR_AUTH" "$LB_BASE/state" 2>/dev/null || echo 000)"
+if [ "$AUTH_CODE" = "401" ] || [ "$AUTH_CODE" = "403" ]; then
+  echo "⚠ Debug API вернул $AUTH_CODE на /state — токен протух/неверный (или Host != 127.0.0.1)." >&2
+  echo "  Передай актуальный: --token <TOKEN> или LXBOX_DEBUG_TOKEN=... (см. App Settings → Diagnostics)." >&2
+fi
+
+# Профайлер (§048 inclusive observer) живёт за тем же Debug API (тот же порт) —
+# отдельный adb forward не нужен. Но system-wide rolling-buffer по умолчанию
+# выключен: без предшествующего live/start `/profiler/live` вернёт пустое окно.
+# Кикаем запись, чтобы буфер начал копить события (см. profiler.dart _liveStart).
+if [ "$SKIP_PROFILER" -eq 0 ]; then
+  curl -sf -m 2 -X POST -H "$HDR_AUTH" "$LB_BASE/profiler/live/start" \
+    -o "$OUT_DIR/profiler_live_state.json" 2>/dev/null || \
+    echo "⚠ profiler/live/start не ответил — буфер может быть пуст" >&2
+fi
+
+# §122 — ping = mass urltest активной группы через CommandClient (был Clash
+# /proxies/<name>/delay). МУТИРУЕТ runtime-state (роняет/пересортировывает
+# ноды), поэтому OFF by default — снапшот read-only. Результат не в ответе
+# (fire-and-forget), а в /state.last_delay, который соберётся ниже. См.
+# action.dart _urltest. Даём ~3с на завершение перед сбором /state.
+if [ "$DO_PING" -eq 1 ]; then
+  echo "→ --ping: запускаю urltest всех нод активной группы (мутирует state)..."
+  curl -sf -m 4 -X POST -H "$HDR_AUTH" "$LB_BASE/action/urltest?all=true" \
+    -o "$OUT_DIR/action_urltest.json" 2>/dev/null || \
+    echo "⚠ urltest не запустился (туннель не up?)" >&2
+  sleep 3
 fi
 
 # ─── parallel collect ───────────────────────────────────────────────
@@ -90,7 +127,6 @@ echo "→ собираю Debug API endpoints (parallel)..."
 
 curl -s -H "$HDR_AUTH" "$LB_BASE/state"                              -o "$OUT_DIR/state.json"            &
 curl -s -H "$HDR_AUTH" "$LB_BASE/state/storage"                      -o "$OUT_DIR/storage.json"          &
-curl -s -H "$HDR_AUTH" "$LB_BASE/state/clash"                        -o "$OUT_DIR/state_clash.json"      &
 curl -s -H "$HDR_AUTH" "$LB_BASE/state/subs"                         -o "$OUT_DIR/state_subs.json"       &
 curl -s -H "$HDR_AUTH" "$LB_BASE/state/rules"                        -o "$OUT_DIR/state_rules.json"      &
 curl -s -H "$HDR_AUTH" "$LB_BASE/state/vpn"                          -o "$OUT_DIR/state_vpn.json"        &
@@ -100,13 +136,13 @@ curl -s -H "$HDR_AUTH" "$LB_BASE/config"                             -o "$OUT_DI
 curl -s -H "$HDR_AUTH" "$LB_BASE/logs?source=core&limit=500"         -o "$OUT_DIR/core_logs.json"        &
 curl -s -H "$HDR_AUTH" "$LB_BASE/logs?source=app&limit=300"          -o "$OUT_DIR/app_logs.json"         &
 
-if [ "$SKIP_CLASH" -eq 0 ]; then
-  # Clash secret вытащим из state/clash после fetching, но для скорости — параллельно с пустым auth
-  # (Clash API в LxBox обычно без secret'а)
-  curl -s -m 3 "$CLASH_BASE/connections"                             -o "$OUT_DIR/clash_connections.json" &
-  curl -s -m 3 "$CLASH_BASE/proxies"                                 -o "$OUT_DIR/clash_proxies.json"     &
-  curl -s -m 3 "$CLASH_BASE/rules"                                   -o "$OUT_DIR/clash_rules.json"       &
-  curl -s -m 3 "$CLASH_BASE/version"                                 -o "$OUT_DIR/clash_version.json"     &
+if [ "$SKIP_PROFILER" -eq 0 ]; then
+  # §122 — Clash API выпилен; «где идёт трафик сейчас» снимается профайлером.
+  # system-wide rolling buffer за окно PROFILER_SECS: TCP/UDP open/close +
+  # DNS resolve/fail всех packages, с routing-цепочкой (§181) per event.
+  # Требует предшествующий live/start (см. выше). Тот же $HDR_AUTH, что и /state.
+  curl -s -m 5 -H "$HDR_AUTH" "$LB_BASE/profiler/live?seconds=$PROFILER_SECS" \
+                                                                     -o "$OUT_DIR/profiler_live.json"     &
 fi
 
 if [ "$SKIP_ADB" -eq 0 ]; then
@@ -152,6 +188,35 @@ print(f"active_connections:   {jr('state.json','traffic.active_connections')}")
 last_err = jr('state.json','last_error') or '(none)'
 print(f"last_error:           {last_err[:100]}")
 
+# Groups / selectors (§122 — заменил clash_proxies.json «Active selectors»;
+# дерево групп теперь в /state из libbox CommandClient, CcChannel.groups).
+try:
+    st = jr('state.json')
+    groups = st.get('groups', []) if isinstance(st, dict) else []
+    active = st.get('active_in_group')
+    delays = st.get('last_delay', {}) or {}
+    if groups:
+        print('\nGroups:')
+        for g in groups:
+            mark = ' ←active' if g == st.get('selected_group') else ''
+            print(f"  {g}{mark}")
+    if active:
+        # last_delay ключуется по tag ноды (совпадает с active_in_group).
+        # Значения: >0 = ms, 0 = timeout, -1 = ещё не пинговалось (mass urltest
+        # не гонялся; запусти с --ping). None = ключа нет.
+        dly = delays.get(active)
+        if isinstance(dly, int) and dly > 0:
+            dtxt = f"{dly}ms"
+        elif dly == 0:
+            dtxt = 'timeout'
+        elif dly == -1:
+            dtxt = 'not pinged'
+        else:
+            dtxt = '?'
+        print(f"active node:           {active} ({dtxt})")
+except Exception:
+    pass
+
 # Errors / warns в core
 try:
     cl = json.load(open(os.path.join(d, 'core_logs.json')))
@@ -175,16 +240,34 @@ try:
 except Exception:
     pass
 
-# Active proxies
+# Profiler live events (§122 — заменил clash_proxies/connections snapshot)
 try:
-    p = json.load(open(os.path.join(d, 'clash_proxies.json')))
-    pr = p.get('proxies', {})
-    print('\nActive selectors:')
-    for name in ['vpn-1','vpn-2','vpn-3','✨auto']:
-        if name in pr:
-            now = pr[name].get('now','?')
-            t = pr[name].get('type','?')
-            print(f"  {name:10} = {now} ({t})")
+    pl = json.load(open(os.path.join(d, 'profiler_live.json')))
+    evs = pl.get('events', [])
+    win = pl.get('window_seconds', '?')
+    print(f"\nProfiler live ({win}s window): {len(evs)} events")
+    if evs:
+        # Разбивка по kind (dnsResolve/dnsFail/tcpOpen/tcpClose/udpOpen).
+        by_kind = {}
+        for e in evs:
+            k = e.get('kind', '?')
+            by_kind[k] = by_kind.get(k, 0) + 1
+        for k in sorted(by_kind):
+            print(f"  {k:12} {by_kind[k]}")
+        # Топ процессов по числу событий (нет process = unattributed).
+        by_proc = {}
+        for e in evs:
+            pr = e.get('process') or '(unattributed)'
+            by_proc[pr] = by_proc.get(pr, 0) + 1
+        print('  top processes:')
+        for name, n in sorted(by_proc.items(), key=lambda kv: -kv[1])[:5]:
+            print(f"    {n:4} {name}")
+        # DNS-сбои — самый частый диагностический сигнал (§177).
+        fails = [e for e in evs if e.get('kind') == 'dnsFail']
+        if fails:
+            print(f"  dnsFail: {len(fails)}")
+            for e in fails[:5]:
+                print(f"    {e.get('domain','?')} (rule={e.get('rule','?')})")
 except Exception:
     pass
 
@@ -200,14 +283,6 @@ try:
         for s in sorted(states):
             if s == 'State': continue
             print(f"  {s:12} {states[s]}")
-except Exception:
-    pass
-
-# Active Clash connections count
-try:
-    cc = json.load(open(os.path.join(d, 'clash_connections.json')))
-    conns = cc.get('connections',[])
-    print(f"\nClash active conns:   {len(conns)}")
 except Exception:
     pass
 PYEOF
