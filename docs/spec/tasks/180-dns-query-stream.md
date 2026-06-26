@@ -1,19 +1,21 @@
 # §180 — DNS на структурный стрим `subscribeDNSQueries` (ядро SPEC 018)
 
 **Тип:** feature (выпил текстового DNS-парсинга → структурный live-поток с атрибуцией из ядра)
-**Статус:** Клиент РЕАЛИЗОВАН (Dart 40 тестов зелёных, analyze чист). **DNS-СТРИМ
-РАБОТАЕТ на rc.8** (device dev.72): 119 DNS/60с, cnameChain, dnsFail структурны.
-- rc.7 отдавал `Unimplemented` (service-registry key mismatch) → **ядро починило
-  в rc.8** (FEEDBACK-1).
-- rc.8 device выявил ДВА:
-  1. **Наш баг (ПОФИКСЕН):** ядро отдаёт `DnsAnswer.RData` ПОЛНОЙ RR-строкой
-     (`"google.com. 29 IN A 64.233.165.139"`), не голым значением → `_rdataValue`
-     извлекает последнее поле (ip/cname-target). Device-verified: `ip=154.91...`.
-  2. **БЛОКЕР ЯДРА (FEEDBACK-2):** `DnsQuery.ProcessInfo` ПУСТ у 119/119 → DNS не
-     атрибутируется (всё unattributed), хотя router package определяет
-     (core-log). Тайминг ядра: ProcessInfo не заполнен в ctx эмита. Клиент читает
-     корректно (тот же код, что для connections). Ждём ядро.
-Решения: §180.5 = вариант A; §177-баннер не трогаем. Биндинг rc.8 как rc.7, javap:
+**Статус:** ✅ DEVICE-VERIFIED ПОЛНОСТЬЮ (dev.74, ядро rc.9, 2026-06-26). DNS-стрим
++ атрибуция + cnameChain + dnsFail + rdata — всё работает. Dart 40 тестов, analyze чист.
+
+Хронология rc.7→rc.9 (три ядровых фикса + один наш):
+- **rc.7:** `Unimplemented` (service-registry key mismatch) → ядро починило rc.8 (FEEDBACK-1).
+- **rc.8:** стрим заработал (119 DNS/60с), но выявил ДВА:
+  1. *Наш баг (пофикшен):* ядро отдавало `DnsAnswer.RData` ПОЛНОЙ RR-строкой →
+     `_rdataValue` берёт значение. (rc.9 ядро отдаёт голым — helper совместим с обоими.)
+  2. *Блокер ядра (FEEDBACK-2):* `DnsQuery.ProcessInfo` ПУСТ 0/119 — fast-path
+     hijack эмитит ДО `searchProcessInfo` (внутри matchRule). → ядро починило rc.9.
+- **rc.9 device-verify:** атрибуция **13/41 (32%)** — `github.com →
+  com.android.chrome`, `mtalk.google.com → com.google.android.gsf` корректно (28
+  unattr = системные резолвы без owner, норма). rdata голый IP `45.198.80.11`.
+  cnameChain 5 шт. §177-баннер не горит (unattributed_count=0).
+Решения: §180.5 = вариант A; §177-баннер не трогаем. Биндинг rc.9 как rc.7, javap:
 `subscribeDNSQueries(bool, DnsQueryHandler)→DnsQuerySubscription`,
 `DnsQuery{getDomain/getQueryType/getRcode/getTTL/getSource/getFailed/getError/
 getProcessInfo, answers()}`, `DnsQueryHandler{onQuery, onError}`.
