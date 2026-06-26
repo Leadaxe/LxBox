@@ -199,29 +199,14 @@ interface PlatformInterfaceWrapper : PlatformInterface {
         return state
     }
 
-    /// §128 (F12.3 generalization): зовётся Go при старте TLS-стека.
-    /// `KeyStore`/`cert.encoded` могут бросить (KeyStoreException, IOException,
-    /// CertificateEncodingException, NPE). Без try/catch → JNI Runtime::Abort.
-    /// Fail-safe: вернуть собранное-до-ошибки (или пусто) — sing-box упадёт
-    /// к встроенным сертификатам ядра.
-    @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
-    override fun systemCertificates(): StringIterator {
-        val certs = mutableListOf<String>()
-        runCatching {
-            val ks = java.security.KeyStore.getInstance("AndroidCAStore")
-            if (ks != null) {
-                ks.load(null, null)
-                val aliases = ks.aliases()
-                while (aliases.hasMoreElements()) {
-                    val cert = ks.getCertificate(aliases.nextElement()) ?: continue
-                    certs.add("-----BEGIN CERTIFICATE-----\n${kotlin.io.encoding.Base64.encode(cert.encoded)}\n-----END CERTIFICATE-----")
-                }
-            }
-        }.onFailure {
-            android.util.Log.w("PIW", "systemCertificates failed (${certs.size} collected): ${it.message}")
-        }
-        return StringArray(certs.iterator())
-    }
+    // §179 (rc.6) — `systemCertificates()` УДАЛЁН из PlatformInterface ядром
+    // (javap AAR rc.6: метода нет). sing-box 1.14 апстрим-мердж перенёс сбор
+    // системных CA внутрь Go-рантайма (читает AndroidCAStore сам через
+    // platform-bridge), наш Kotlin-сборщик §128 больше не нужен и не вызывается.
+    // Оставлять `override fun systemCertificates()` = 'overrides nothing' →
+    // ошибка компиляции. Удалён целиком. Если TLS к серверам с системными
+    // (не встроенными) CA сломается на rc.6 — вернуть как НЕ-override хук через
+    // отдельный binding (маловероятно: ядро берёт CA само).
 
     // ─── libbox 1.14: новые методы PlatformInterface ────────────────────
     // sing-box 1.14 влил Tailscale/SSH-сервер. Для Android VPN-клиента этот
