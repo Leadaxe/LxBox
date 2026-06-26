@@ -808,7 +808,7 @@ class HomeController extends ChangeNotifier
       // закрываем `closeConnection`. Best-effort.
       if (await SettingsStorage.getInterruptOnSwitch()) {
         try {
-          final ids = _connectionIdsInGroup(group);
+          final ids = await _connectionIdsInGroup(group);
           await Future(() async {
             for (final id in ids) {
               try {
@@ -855,12 +855,26 @@ class HomeController extends ChangeNotifier
   /// §143 / §122 — id'ы активных соединений группы [group] для точечного обрыва
   /// при switchNode (interrupt-on-switch).
   ///
-  /// **Known-gap (§122):** `CcConnection` не несёт `chains` (цепочку outbound'ов),
-  /// как Clash `/connections` — надёжно сматчить соединение на selector-группу
-  /// нельзя. Interrupt-on-switch opt-in (default OFF) и не влияет на главный
-  /// экран; до прокидки `chains` в ядре возвращаем пусто (мягкая деградация:
-  /// ноды переключаются, старые сессии доживают сами). Фикс — отдельная таска.
-  List<String> _connectionIdsInGroup(String group) => const <String>[];
+  /// **§122-gap закрыт после §174:** `chains` (цепочка outbound'ов
+  /// selector→urltest→node) восстановлены в ядре (`Connection.chain()`-итератор,
+  /// device-verified 26.06) и приходят в `CcConnection.chains`. Матчим соединение
+  /// на selector-группу через `chains.contains(group)` — [group] = текущий
+  /// `_state.selectedGroup`, тот же selector-тег, что в `selectOutbound` и в
+  /// `chains` (urltest исключён из dropdown §078, префиксов на selector-теге нет).
+  ///
+  /// Снапшот соединений берём из `_cc.connections` — у стрима replay-кэш (§122),
+  /// поэтому `.first` отдаёт ТЕКУЩИЙ снапшот мгновенно (не ждёт нового события).
+  /// HomeState список соединений НЕ хранит (только агрегаты connectionsIn/Out).
+  /// Закрываем только живые (`!isClosed`).
+  Future<List<String>> _connectionIdsInGroup(String group) async {
+    final conns = await _cc.connections.first
+        .timeout(const Duration(seconds: 1), onTimeout: () => const []);
+    return conns
+        .where((c) => !c.isClosed && c.chains.contains(group))
+        .map((c) => c.id)
+        .where((id) => id.isNotEmpty)
+        .toList();
+  }
 
   // Ping / URLTest оркестрация (runNodeUrltest, ping-option resolve chain,
   // reloadPingOptions, _scheduleAutoPing, runGroupUrltest, runMassUrltest,

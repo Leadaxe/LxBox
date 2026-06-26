@@ -4,10 +4,45 @@
 > номером — [`143-warp-masquerade-id-ip-ib.md`](143-warp-masquerade-id-ip-ib.md) («§143-warp»).
 > Не перенумеровано намеренно — см. [README §«Известные коллизии»](README.md#известные-коллизии-номеров).
 
-**Статус:** Implemented
+**Статус:** Implemented (§122-gap закрыт 2026-06-27)
 **Дата:** 2026-06-17
 **Тип:** task (bug-fix + новая настройка)
-**Связь:** §087 (resetNetwork на смену интерфейса), §119 (vpn_mode), §123 (activeInGroup), §078 (control-outbounds)
+**Связь:** §087 (resetNetwork на смену интерфейса), §119 (vpn_mode), §123 (activeInGroup), §078 (control-outbounds), §122 (CommandClient-миграция), §174 (chains восстановлены)
+
+---
+
+## 0. §122-gap закрыт после §174 (2026-06-27)
+
+При миграции на CommandClient (§122) функция **временно сломалась**: считалось,
+что `CcConnection` не несёт `chains`, поэтому матчинг соединений на selector-группу
+обрезали заглушкой `_connectionIdsInGroup(group) => const []` (interrupt-on-switch
+opt-in, default OFF — мягкая деградация). **§174 восстановил `chains`** в ядре
+(`Connection.chain()`-итератор, device-verified 26.06) → `CcConnection.chains`
+реально приходит. Блокер снят, заглушка заменена рабочим фильтром.
+
+**Фактическая реализация (CommandClient, заменяет Clash-вариант ниже из §5.2):**
+
+```dart
+// home_controller.dart — async: снапшот соединений из _cc.connections (replay-
+// кэш стрима §122 → .first отдаёт текущее мгновенно; HomeState список не хранит,
+// только агрегаты connectionsIn/Out). Закрываем только живые (!isClosed).
+Future<List<String>> _connectionIdsInGroup(String group) async {
+  final conns = await _cc.connections.first
+      .timeout(const Duration(seconds: 1), onTimeout: () => const []);
+  return conns
+      .where((c) => !c.isClosed && c.chains.contains(group))
+      .map((c) => c.id)
+      .where((id) => id.isNotEmpty)
+      .toList();
+}
+```
+
+`group` = `_state.selectedGroup` (тот же selector-тег, что в `selectOutbound` и в
+`chains`; urltest исключён из dropdown §078, на selector-теге префиксов нет —
+`chains` вида `["L: 🇳🇱⚡Нидерланды","vpn-1"]`, матчим `vpn-1`). Вызов в `switchNode`:
+`final ids = await _connectionIdsInGroup(group)` — остальной gate/loop/дедлайн
+(§5.1) без изменений. Старый Clash-путь (`ClashApiClient.connectionIdsInChain`,
+§5.2) — **неактуален** (HTTP-моста нет с §122).
 
 ---
 
