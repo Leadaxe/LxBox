@@ -190,4 +190,4 @@ Caller в Dart получает control только после `setStatus(Stopp
 - [x] Reconnect через композицию `stop+start` не имеет race в `onStartCommand` guard (v1.4.0).
 - [x] `getVpnStatus` pull позволяет re-sync после process reattach (v1.4.0).
 - [x] Revoke от другого VPN обрабатывается через `onRevoke` с error-message в broadcast (v1.4.0).
-- [ ] Кнопки Stop / Reconnect в постоянном уведомлении; Reconnect — native-side, работает с убитым UI (§182).
+- [x] Кнопки Stop / Reconnect в постоянном уведомлении; Reconnect — native-side, работает с убитым UI (§182).

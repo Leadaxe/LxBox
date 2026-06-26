@@ -2,11 +2,11 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Draft |
+| Статус | Done (device-verified 2026-06-26) |
 | Тип | task (UX-улучшение существующей фичи [`012 native vpn service`](../features/012%20native%20vpn%20service/spec.md)) |
 | Дата старта | 2026-06-26 |
-| Дата завершения | — |
-| Коммиты | — |
+| Дата завершения | 2026-06-26 |
+| Коммиты | `7dd86a8` feat(§182): кнопки Stop/Reconnect в foreground-уведомлении |
 | Связанные spec'ы | [§012 native vpn service](../features/012%20native%20vpn%20service/spec.md), [§002 blocking stopVPN + intent reset](002-blocking-stopvpn-intent-reset.md), [§123 имя сервера в шторке](123-server-name-in-notification.md), [§129 force-stop](129-vpnservice-force-stop-on-stuck-core.md) |
 
 ## Проблема
@@ -224,15 +224,15 @@ notification-канал; пересборка Dart `reconnect()`; кнопка �
 
 Критерии приёмки (на устройстве):
 
-- [ ] При активном VPN в развёрнутой шторке видны кнопки **Stop** и **Reconnect**.
-- [ ] Тап **Stop** → VPN останавливается (как кнопка Stop в приложении), уведомление гаснет.
-- [ ] Тап **Reconnect** → туннель пересоздаётся: `Stopping`→`Stopped`→`Starting`→`Started`
+- [x] При активном VPN в развёрнутой шторке видны кнопки **Stop** и **Reconnect**.
+- [x] Тап **Stop** → VPN останавливается (как кнопка Stop в приложении), уведомление гаснет.
+- [x] Тап **Reconnect** → туннель пересоздаётся: `Stopping`→`Stopped`→`Starting`→`Started`
       в logcat; трафик восстанавливается; UI (если открыт) синхронно отражает реконнект.
-- [ ] **Reconnect работает при убитом UI** (keep-on-exit ON, приложение свайпнуто из
+- [x] **Reconnect работает при убитом UI** (keep-on-exit ON, приложение свайпнуто из
       recents, затем тап Reconnect в шторке) — туннель пересоздаётся без открытия приложения.
-- [ ] Двойной тап по Reconnect не плодит двойной старт (guard).
-- [ ] Reconnect когда VPN уже остановлен → корректный single start.
-- [ ] `ACTION_RECONNECT` не дёргается извне (другое приложение не может послать —
+- [x] Двойной тап по Reconnect не плодит двойной старт (guard).
+- [x] Reconnect когда VPN уже остановлен → корректный single start.
+- [x] `ACTION_RECONNECT` не дёргается извне (другое приложение не может послать —
       `RECEIVER_NOT_EXPORTED` + `setPackage`).
 
 ## Решённые вопросы
