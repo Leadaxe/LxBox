@@ -74,16 +74,17 @@ void main() {
       expect(b.onTap, isNotNull, reason: 'тап = рестарт');
     });
 
-    test('lastError → last_error, transient 15с + onDismiss', () {
+    test('§166 — lastError НЕ даёт баннер (перенесён в SnackBar снизу)', () {
+      // §166: ошибки (вкл. пинг) рисуются всплывашкой снизу, не верхним
+      // красным баннером. activeBanners больше не содержит last_error.
       final s = HomeState(lastError: 'boom');
-      final b = byKey(s, 'last_error');
-      expect(b.message, 'boom');
-      expect(b.autoDismiss, const Duration(seconds: 15));
-      expect(b.onDismiss, isNotNull);
-      expect(b.palette, BannerPalette.error);
+      final list = activeBanners(s,
+          configDirty: false, busy: false, actions: actions);
+      expect(list.where((b) => b.key == 'last_error'), isEmpty,
+          reason: 'last_error-баннер убран в §166');
     });
 
-    test('несколько условий → стабильный порядок', () {
+    test('§166 — несколько условий → стабильный порядок (без last_error)', () {
       final s = HomeState(
         tunnel: TunnelStatus.connected,
         configChangedNeedRestart: true,
@@ -92,8 +93,9 @@ void main() {
       );
       final list = activeBanners(s,
           configDirty: false, busy: false, actions: actions);
+      // last_error больше не баннер (§166) → остаются только actionable плашки.
       expect(list.map((b) => b.key).toList(),
-          ['restart', 'config_load_error', 'last_error']);
+          ['restart', 'config_load_error']);
     });
   });
 }
