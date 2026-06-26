@@ -107,13 +107,31 @@ class _AppMultiPickerState extends State<AppMultiPicker> {
         const SizedBox(height: 4),
         Flexible(
           child: _loading
+              // Грузим весь список установленных приложений (loadAllApps) — на
+              // устройстве с 200+ apps это пара секунд. Текст вместо голого
+              // спиннера, чтобы не выглядело зависшим. Иконки догрузятся лениво.
               ? const Center(
                   child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: CircularProgressIndicator(),
-                ))
-              : ListView.builder(
-                  shrinkWrap: true,
+                    padding: EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 12),
+                        Text('Loading installed apps…',
+                            style: TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                )
+              : _filtered.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text('No apps match', style: TextStyle(fontSize: 12)),
+                      ),
+                    )
+                  : ListView.builder(
                   itemCount: _filtered.length,
                   itemBuilder: (_, i) {
                     final a = _filtered[i];

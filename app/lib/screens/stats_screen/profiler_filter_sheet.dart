@@ -150,6 +150,16 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Кнопка пикера — В НАЧАЛЕ (просьба юзера): добавить app, которого ещё
+        // не было в трафике, без скролла до конца списка.
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add app from full list'),
+            onPressed: _openPicker,
+          ),
+        ),
         // «Потеряшки» — события без owner'а.
         if (widget.hasUnattributed || f.includeUnattributed)
           CheckboxListTile(
@@ -183,13 +193,6 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
             subtitle: Text(pkg,
                 style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
           ),
-        const SizedBox(height: 4),
-        // Кнопка пикера — добавить app, которого ещё не было в трафике.
-        OutlinedButton.icon(
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('Add app from full list'),
-          onPressed: _openPicker,
-        ),
       ],
     );
   }
