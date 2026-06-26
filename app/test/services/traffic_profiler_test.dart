@@ -857,15 +857,14 @@ void main() {
     });
   });
 
-  // ───── §178: detour-хвост в outboundChain (ядро SPEC 017) ─────────────
+  // ───── §181: оси РАЗДЕЛЬНО (outboundChain=маршрут, detourChain=транспорт) ──
 
-  group('TrafficProfiler — §178 detour tail', () {
-    test('chains + detours склеиваются в полный путь node→selector→WARP',
-        () async {
+  group('TrafficProfiler — §181 routing axes + routingLine', () {
+    test('chains и detours несутся РАЗДЕЛЬНО (не склеены как §178)', () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
       TrafficProfiler.I.ingestForTest([
         const CcConnection(
-          id: 'd178a',
+          id: 'd181a',
           network: 'tcp',
           domain: 'www.google.com',
           destination: '1.2.3.4:443',
@@ -874,48 +873,79 @@ void main() {
           downlink: 20,
           outbound: 'BL: [BL]-3',
           chains: ['BL: [BL]-3', 'vpn-1'], // [node, selector] из ядра
-          detours: ['WARP'], // detour-хвост node→наружу
+          detours: ['WARP'], // detour-ось — ОТДЕЛЬНО
           packageName: 'ru.tinkoff.investing',
           createdAt: 0,
           closedAt: 0,
         ),
       ]);
-      final s = TrafficProfiler.I.active!;
-      expect(s.events.first.outboundChain, ['BL: [BL]-3', 'vpn-1', 'WARP'],
-          reason: 'detour дописан в конец — полный физический путь');
+      final ev = TrafficProfiler.I.active!.events.first;
+      expect(ev.outboundChain, ['BL: [BL]-3', 'vpn-1'],
+          reason: '§181 — outboundChain = только маршрут (БЕЗ detour)');
+      expect(ev.detourChain, ['WARP'],
+          reason: '§181 — detour в своей оси');
     });
 
-    test('пустой detours → outboundChain == chains (поведение §174 неизменно)',
+    test('routingLine: полная трассировка [net] proc ⇒ rule ⇒ группа : node → detour → domain',
         () async {
-      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      await TrafficProfiler.I.start('com.android.vending');
       TrafficProfiler.I.ingestForTest([
         const CcConnection(
-          id: 'd178b',
+          id: 'd181b',
           network: 'tcp',
-          domain: 'api.example',
-          destination: '5.6.7.8:443',
-          rule: 'final',
+          domain: 'play-fe.googleapis.com',
+          destination: '74.125.131.102:443',
+          rule: '', // пусто → "final"
           uplink: 10,
-          downlink: 20,
-          outbound: 'BL: [BL]-3',
-          chains: ['BL: [BL]-3', 'vpn-1'],
-          // detours не задан → const [] → склейки нет
+          downlink: 0,
+          outbound: 'Венгрия',
+          // [node, под-группа, верхняя-группа] — auto между vpn-1 и нодой
+          chains: ['🇭🇺Венгрия', '✨auto', 'vpn-1'],
+          detours: ['WARP'],
+          packageName: 'com.android.vending',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
+      final ev = TrafficProfiler.I.active!.events.first;
+      // [tcp] proc ⇒ final ⇒ vpn-1 ⇒ ✨auto : 🇭🇺Венгрия → WARP → domain
+      expect(
+        ev.routingLine,
+        '[tcp] com.android.vending ⇒ final ⇒ vpn-1 ⇒ ✨auto : 🇭🇺Венгрия → WARP → play-fe.googleapis.com',
+      );
+    });
+
+    test('routingLine: с явным rule (не final)', () async {
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'd181c',
+          network: 'tcp',
+          domain: 'site.ru',
+          destination: '5.6.7.8:443',
+          rule: 'rule_set=ru-domains',
+          uplink: 1,
+          downlink: 1,
+          outbound: 'direct-out',
+          chains: ['direct-out'], // прямой, без групп
           packageName: 'ru.tinkoff.investing',
           createdAt: 0,
           closedAt: 0,
         ),
       ]);
-      final s = TrafficProfiler.I.active!;
-      expect(s.events.first.outboundChain, ['BL: [BL]-3', 'vpn-1'],
-          reason: 'нет detour → путь = chains, как в §174');
+      final ev = TrafficProfiler.I.active!.events.first;
+      // нет групп (chains длины 1), нет detour: proc ⇒ rule : node → domain
+      expect(
+        ev.routingLine,
+        '[tcp] ru.tinkoff.investing ⇒ rule_set=ru-domains : direct-out → site.ru',
+      );
     });
 
-    test('прямой conn (chains пуст) + detours пуст → fallback [outbound]',
-        () async {
+    test('прямой conn (chains пуст) → fallback [outbound], detour пуст', () async {
       await TrafficProfiler.I.start('ru.tinkoff.investing');
       TrafficProfiler.I.ingestForTest([
         const CcConnection(
-          id: 'd178c',
+          id: 'd181d',
           network: 'tcp',
           domain: 'direct.example',
           destination: '9.9.9.9:443',
@@ -929,9 +959,10 @@ void main() {
           closedAt: 0,
         ),
       ]);
-      final s = TrafficProfiler.I.active!;
-      expect(s.events.first.outboundChain, ['direct-out'],
-          reason: 'прямой outbound: fallback на [outbound], detour не вмешивается');
+      final ev = TrafficProfiler.I.active!.events.first;
+      expect(ev.outboundChain, ['direct-out'],
+          reason: 'fallback на [outbound]');
+      expect(ev.detourChain, isEmpty);
     });
   });
 }

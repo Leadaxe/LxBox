@@ -114,15 +114,12 @@ class LiveView extends StatelessWidget {
       TrafficEventKind.udpOpen => (cs.secondary, 'UDP'),
     };
 
-    // Строка 3 — chain · rule · duration (то что в Conns row внизу).
+    // Строка 3 (§181) — единая трассировка маршрута. routingLine несёт
+    // [net] proc ⇒ rule ⇒ группы : node → detour → domain · duration (rule и
+    // duration уже внутри, отдельно не дублируем).
     final meta = <String>[];
-    if (e.outboundChain.isNotEmpty) meta.add(e.outboundChain.join(' → '));
-    if (e.rule != null && e.rule!.isNotEmpty) {
-      meta.add(e.rulePayload != null && e.rulePayload!.isNotEmpty
-          ? '${e.rule} (${e.rulePayload})'
-          : e.rule!);
-    }
-    if (e.duration != null) meta.add('${e.duration!.inMilliseconds}ms');
+    final routing = e.routingLine;
+    if (routing.isNotEmpty) meta.add(routing);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

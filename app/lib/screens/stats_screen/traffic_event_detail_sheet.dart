@@ -131,16 +131,16 @@ class _TrafficEventDetailSheet extends StatelessWidget {
       _copyRow(context, 'Shown because', e.shownBecause ?? ''),
     ]));
 
-    // Routing
+    // Routing (§181) — единая цепочка решения + сырые оси для копирования.
     out.addAll(_group(context, 'Routing', [
-      _copyRow(context, 'Outbound', e.outboundChain.join('\n')),
-      _copyRow(
-        context,
-        'Rule',
-        (e.rulePayload != null && e.rulePayload!.isNotEmpty)
-            ? '${e.rule ?? ''} (${e.rulePayload})'
-            : (e.rule ?? ''),
-      ),
+      // Главная трассировка: [net] proc ⇒ rule ⇒ группы : node → detour → domain.
+      _copyRow(context, 'Route', e.routingLine),
+      // Сырой маршрут (chains как от ядра) — точные теги для копирования.
+      if (e.outboundChain.isNotEmpty)
+        _copyRow(context, 'Chain', e.outboundChain.join(' / ')),
+      // Detour-ось (транспорт) — только если есть.
+      if (e.detourChain.isNotEmpty)
+        _copyRow(context, 'Detour', e.detourChain.join(' → ')),
     ]));
 
     // Traffic — показываем только если есть байты.

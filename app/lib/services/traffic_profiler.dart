@@ -52,6 +52,7 @@ import 'package:flutter/foundation.dart';
 import '../models/debug_entry.dart';
 import '../vpn/cc_channel.dart';
 import 'app_log.dart';
+import 'format_utils.dart'; // §181 — formatDuration в routingLine
 import 'settings_storage.dart';
 
 part 'traffic_profiler/models.dart';
@@ -817,6 +818,7 @@ class TrafficProfiler extends ChangeNotifier {
       ip: ev.ip,
       port: ev.port,
       outboundChain: ev.outboundChain,
+      detourChain: ev.detourChain, // §181
       upBytes: ev.upBytes,
       downBytes: ev.downBytes,
       duration: ev.duration,
@@ -873,6 +875,7 @@ class TrafficProfiler extends ChangeNotifier {
         ip: resolved.ip,
         port: resolved.port,
         outboundChain: resolved.outboundChain,
+        detourChain: resolved.detourChain, // §181
         upBytes: resolved.upBytes,
         downBytes: resolved.downBytes,
         duration: resolved.duration,
@@ -991,18 +994,15 @@ class TrafficProfiler extends ChangeNotifier {
       final destIp = _ccHostOf(c.destination);
       final destPort = _ccPortOf(c.destination);
       final network = c.network;
-      // §174 — реальная outbound-цепочка из ядра (`Connection.chain()`).
-      // Fallback на [outbound] если цепочка пуста (прямой outbound без группы).
-      final baseChain = c.chains.isNotEmpty
+      // §174 — реальная outbound-цепочка из ядра (`Connection.chain()`):
+      // [node, …selectors]. Fallback на [outbound] для прямых без группы.
+      // §181 — chains и detours несём РАЗДЕЛЬНО (не склеиваем как §178): UI
+      // строит цепочку решения `[net] proc ⇒ rule ⇒ группы : node → detour →
+      // domain` сам, разделяя оси (⇒ внутри / : выход / → снаружи).
+      final routeChain = c.chains.isNotEmpty
           ? c.chains
           : (c.outbound.isNotEmpty ? <String>[c.outbound] : <String>[]);
-      // §178 — дописать detour-хвост (`Connection.detour()`, ядро SPEC 017) →
-      // полный физический путь node→…→selector→WARP. detours пуст (прямой /
-      // ядро без поля 23) → outboundChain == baseChain (поведение §174). detours
-      // НЕ содержит node → дублирования нет.
-      final chains = c.detours.isNotEmpty
-          ? <String>[...baseChain, ...c.detours]
-          : baseChain;
+      final detourChain = c.detours; // §181 — detour-ось (транспорт), node→наружу
       final up = c.uplink;
       final down = c.downlink;
       final rule = c.rule;
@@ -1023,7 +1023,8 @@ class TrafficProfiler extends ChangeNotifier {
           domain: host.isNotEmpty ? host : null,
           ip: destIp.isNotEmpty ? destIp : null,
           port: destPort > 0 ? destPort : null,
-          outboundChain: chains,
+          outboundChain: routeChain,
+          detourChain: detourChain,
           upBytes: up,
           downBytes: down,
           process: rawProcess.isNotEmpty ? rawProcess : null,
@@ -1084,7 +1085,8 @@ class TrafficProfiler extends ChangeNotifier {
           ip: destIp,
           port: destPort,
           network: network,
-          chains: chains,
+          chains: routeChain,
+          detours: detourChain, // §181
           upBytes: up,
           downBytes: down,
           startedAt: now,
@@ -1116,6 +1118,7 @@ class TrafficProfiler extends ChangeNotifier {
         ip: snap.ip.isNotEmpty ? snap.ip : null,
         port: snap.port > 0 ? snap.port : null,
         outboundChain: snap.chains,
+        detourChain: snap.detours, // §181
         upBytes: snap.upBytes,
         downBytes: snap.downBytes,
         duration: now.difference(snap.startedAt),

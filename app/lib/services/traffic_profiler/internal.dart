@@ -21,6 +21,7 @@ class _ConnSnapshot {
     required this.port,
     required this.network,
     required this.chains,
+    required this.detours, // §181
     required this.upBytes,
     required this.downBytes,
     required this.startedAt,
@@ -36,7 +37,8 @@ class _ConnSnapshot {
   final String ip;
   final int port;
   final String network;
-  final List<String> chains;
+  final List<String> chains; // §174 — маршрут [node, …selectors]
+  final List<String> detours; // §181 — detour-ось [detour, …наружу]
   int upBytes;
   int downBytes;
   final DateTime startedAt;
