@@ -106,8 +106,9 @@ class NodesHeader extends StatelessWidget {
                 ],
               ),
             ),
-            // §048 — `Icons.tune` toggle панели фильтров. Primary-цвет + точка
-            // когда есть active match-filter (§095 — маркер «фильтр применён»).
+            // §048 / §044-new-profiler — toggle панели фильтров. Иконка
+            // `Icons.filter_list` (унифицирована с control-строкой профайлера).
+            // Primary-цвет + точка когда есть active match-filter (§095).
             IconButton(
               tooltip: filter.panelExpanded ? 'Hide filters' : 'Show filters',
               visualDensity: VisualDensity.compact,
@@ -118,7 +119,7 @@ class NodesHeader extends StatelessWidget {
                 clipBehavior: Clip.none,
                 children: [
                   Icon(
-                    Icons.tune,
+                    Icons.filter_list,
                     size: 20,
                     color: filter.hasActiveFilters
                         ? Theme.of(context).colorScheme.primary
