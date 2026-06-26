@@ -72,7 +72,6 @@ class TrafficProfiler extends ChangeNotifier {
   // §141 P3.2b — GC-интервал 15s: GC чистит rolling buffer'ы по retention-окну
   // + closed-guard. (§044 — _connIdTtl выпилен вместе с conn-id-мапой.)
   static const Duration _connIdGcInterval = Duration(seconds: 15);
-  static const Duration _processInferenceWindow = Duration(seconds: 10);
   // §048 / §044-new-profiler — global rolling buffer всегда работает. Окно
   // НАСТРАИВАЕМО (юзер выбирает 1/10/60 мин в фильтр-окне профайлера) — было
   // жёстко 60s. Default 10 мин (600s). Грузится из SettingsStorage через
@@ -698,21 +697,13 @@ class TrafficProfiler extends ChangeNotifier {
           confidence: ConfidenceLevel.secondary,
           matchedVia: 'secondary_packages_uid_stripped');
     }
-    // Strategy 4: inferred — recent DNS resolved IP принадлежит target.
-    // Применяется только для tcpOpen / udpOpen / tcpClose с known IP.
-    if (ev.ip != null && ev.ip!.isNotEmpty &&
-        (ev.kind == TrafficEventKind.tcpOpen ||
-            ev.kind == TrafficEventKind.udpOpen ||
-            ev.kind == TrafficEventKind.tcpClose)) {
-      final inferredOwner = _inferProcessByIp(s, ev.ip!, ev.ts);
-      if (inferredOwner != null) {
-        return _withConfidence(ev,
-            confidence: ConfidenceLevel.inferred,
-            matchedVia: 'recent_dns_ip',
-            process: inferredOwner,
-            processInferred: true);
-      }
-    }
+    // §044 — Strategy 4 (inferred по recent DNS-IP, _inferProcessByIp) ВЫПИЛЕНА:
+    // после §168/§180 TCP-owner приходит из ядра (CcConnection.packageName),
+    // DNS — из стрима. Эвристика «безымянный TCP принадлежит target по DNS-IP»
+    // маргинальна, без тестов. Безымянный TCP теперь → unattributed (Strategy 5,
+    // ниже) вместо inferred — деградация точности, не поломка. ConfidenceLevel.
+    // inferred остаётся в enum (dormant) для совместимости старых session JSON.
+    //
     // Strategy 5: unattributed (`process == null` или process не известный) —
     // показываем в session как nearby event. Если process явно != target
     // и явно НЕ в secondaryPackages — это not-related, drop.
@@ -1086,28 +1077,8 @@ class TrafficProfiler extends ChangeNotifier {
     return int.tryParse(destination.substring(i + 1)) ?? 0;
   }
 
-  /// Поиск process owner'а по recent DNS resolved IP в окне
-  /// [_processInferenceWindow]. Идём по `_globalRollingBuffer` (не
-  /// session.events: нужно матчить даже до session start'а).
-  String? _inferProcessByIp(Session s, String ip, DateTime now) {
-    final cutoff = now.subtract(_processInferenceWindow);
-    for (var i = _globalRollingBuffer.length - 1; i >= 0; i--) {
-      final e = _globalRollingBuffer.elementAt(i);
-      if (e.ts.isBefore(cutoff)) break;
-      if (e.kind == TrafficEventKind.dnsResolve && e.ip == ip) {
-        // Проверяем что resolved DNS принадлежит target (или secondary).
-        final processNames = _splitPackageNames(e.process);
-        if (processNames.contains(s.targetPackage)) {
-          return s.targetPackage;
-        }
-        if (s.secondaryPackages.isNotEmpty &&
-            processNames.any(s.secondaryPackages.contains)) {
-          return e.process;
-        }
-      }
-    }
-    return null;
-  }
+  // §044 — _inferProcessByIp (Strategy 4 inferred-эвристика) ВЫПИЛЕН вместе с
+  // _processInferenceWindow. Атрибуция TCP/DNS теперь из ядра (§168/§180).
 
   // ─── Connection-issue classifiers ─────────────────────────────────────
   //
