@@ -197,12 +197,19 @@ class TrafficEvent {
   /// `:` выход во внешний мир (группа выбрала сервер), `→` снаружи (detour +
   /// назначение). `outboundChain` = `[node, …selectors]` от ядра (§174);
   /// группы разворачиваем reverse, node = `[0]` ставим после `:`.
-  String get routingLine {
+  String get routingLine => routingLineOf();
+
+  /// [compact] — для live-списка: префикс `[network] process ⇒` опускается,
+  /// т.к. дублирует строку процесса + бейдж типа над ней. Строка начинается с
+  /// `rule` (`final ⇒ vpn-1 : …`). Detail-sheet зовёт без compact (полная).
+  String routingLineOf({bool compact = false}) {
     final sb = StringBuffer();
-    if (network != null && network!.isNotEmpty) sb.write('[$network] ');
+    if (!compact && network != null && network!.isNotEmpty) {
+      sb.write('[$network] ');
+    }
     // Внутренняя цепочка (⇒): процесс → rule → группы (сверху вниз).
     final inner = <String>[];
-    if (process != null && process!.isNotEmpty) inner.add(process!);
+    if (!compact && process != null && process!.isNotEmpty) inner.add(process!);
     inner.add((rule != null && rule!.isNotEmpty) ? rule! : 'final');
     if (outboundChain.length > 1) {
       // selectors = chain[1:] от ВЕРХНЕГО к нижнему (reverse).

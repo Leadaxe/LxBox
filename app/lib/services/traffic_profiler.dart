@@ -584,6 +584,7 @@ class TrafficProfiler extends ChangeNotifier {
       if (q.dnsServerType.isNotEmpty) {
         failExtra['dns_server_type'] = q.dnsServerType;
       }
+      if (q.source.isNotEmpty) failExtra['source'] = q.source;
       _routeEvent(TrafficEvent(
         ts: ts,
         kind: TrafficEventKind.dnsFail,
@@ -628,9 +629,11 @@ class TrafficProfiler extends ChangeNotifier {
     final outboundChain = q.outbound;
 
     // rc.10 — dnsServer/тип в extra (для detail-sheet). + answer для не-адресных.
+    // source (exchanged/cached/optimistic/refreshed) → detail-sheet + cached-бейдж.
     final extra = <String, Object?>{};
     if (q.dnsServer.isNotEmpty) extra['dns_server'] = q.dnsServer;
     if (q.dnsServerType.isNotEmpty) extra['dns_server_type'] = q.dnsServerType;
+    if (q.source.isNotEmpty) extra['source'] = q.source;
     if (ip == null && q.answers.isNotEmpty) {
       extra['answer'] = _rdataValue(q.answers.first.rdata);
     }

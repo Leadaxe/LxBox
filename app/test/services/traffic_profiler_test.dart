@@ -945,6 +945,12 @@ void main() {
         ev.routingLine,
         '[tcp] com.android.vending ⇒ final ⇒ vpn-1 ⇒ ✨auto : 🇭🇺Венгрия → WARP → play-fe.googleapis.com',
       );
+      // compact (live-список): без префикса [net] process ⇒ (он дублирует
+      // строку процесса + бейдж типа). Начинается с rule.
+      expect(
+        ev.routingLineOf(compact: true),
+        'final ⇒ vpn-1 ⇒ ✨auto : 🇭🇺Венгрия → WARP → play-fe.googleapis.com',
+      );
     });
 
     test('routingLine: с явным rule (не final)', () async {

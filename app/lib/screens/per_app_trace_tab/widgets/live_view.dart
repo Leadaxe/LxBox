@@ -117,8 +117,10 @@ class LiveView extends StatelessWidget {
     // Строка 3 (§181) — единая трассировка маршрута. routingLine несёт
     // [net] proc ⇒ rule ⇒ группы : node → detour → domain · duration (rule и
     // duration уже внутри, отдельно не дублируем).
+    // compact: префикс [net] process ⇒ опущен — он дублирует строку процесса
+    // (строка 2) + бейдж типа (TCP/DNS, строка 1). Начинаем с rule.
     final meta = <String>[];
-    final routing = e.routingLine;
+    final routing = e.routingLineOf(compact: true);
     if (routing.isNotEmpty) meta.add(routing);
 
     return Padding(
@@ -169,17 +171,29 @@ class LiveView extends StatelessWidget {
                         size: 16, color: cs.onSurfaceVariant),
                   ],
                 ),
-                // Строка 2: process (app).
+                // Строка 2: process (app) + cached-бейдж справа (DNS из кэша).
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    (e.process ?? '').isNotEmpty ? e.process! : '(no owner)',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: (e.process ?? '').isNotEmpty
-                            ? cs.primary
-                            : cs.onSurfaceVariant),
-                    overflow: TextOverflow.ellipsis,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          (e.process ?? '').isNotEmpty
+                              ? e.process!
+                              : '(no owner)',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: (e.process ?? '').isNotEmpty
+                                  ? cs.primary
+                                  : cs.onSurfaceVariant),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (_isCached(e)) ...[
+                        const SizedBox(width: 6),
+                        _cachedBadge(cs),
+                      ],
+                    ],
                   ),
                 ),
                 // Строка 3: chain · rule · duration.
@@ -234,6 +248,36 @@ class LiveView extends StatelessWidget {
               width: size, height: size, gaplessPlayback: true),
         );
       },
+    );
+  }
+
+  /// rc.10 — ответ пришёл из кэша (без сетевого запроса). source от ядра:
+  /// cached / optimistic (отдан из кэша оптимистично) — оба «не сеть».
+  static bool _isCached(TrafficEvent e) {
+    final s = e.extra?['source']?.toString();
+    return s == 'cached' || s == 'optimistic';
+  }
+
+  /// Маленький бейдж «cached» (вторая строка справа).
+  Widget _cachedBadge(ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: cs.secondary.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.cached, size: 10, color: cs.secondary),
+          const SizedBox(width: 2),
+          Text('cached',
+              style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                  color: cs.secondary)),
+        ],
+      ),
     );
   }
 

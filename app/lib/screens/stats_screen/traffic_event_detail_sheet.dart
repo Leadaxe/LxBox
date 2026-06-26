@@ -123,6 +123,8 @@ class _TrafficEventDetailSheet extends StatelessWidget {
       _copyRow(context, 'CNAME', e.cnameChain.join(' → ')),
       // rc.10 — какой DNS-сервер обработал запрос (на всех путях вкл. провалы).
       _copyRow(context, 'DNS server', dnsServerLabel),
+      // источник ответа: exchanged (сетевой запрос) / cached (из кэша) / …
+      _copyRow(context, 'Source', e.extra?['source']?.toString() ?? ''),
     ]));
 
     // Network
