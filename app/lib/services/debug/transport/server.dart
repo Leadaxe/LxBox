@@ -149,7 +149,7 @@ class DebugServer {
   ///
   /// 1. **Router (здесь)** — prefix-match: `/state/...` → `stateHandler`
   /// 2. **Handler-файл** — exact `switch (req.path)` по sub-path'ам
-  ///    (`/state` → _root, `/state/clash` → _clash, ...).
+  ///    (`/state` → _root, `/state/subs` → _subs, ...).
   ///
   /// Это не случайность — намеренный компромисс. Плюсы:
   /// - handler-файл держит связанные sub-endpoints рядом (всё `/state/*`

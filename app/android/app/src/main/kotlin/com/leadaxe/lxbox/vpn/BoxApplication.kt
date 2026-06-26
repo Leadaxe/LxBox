@@ -96,12 +96,23 @@ class BoxApplication : Application() {
             // §043: forwarding sing-box логов в `writeDebugMessage`.
             // `daemon/started_service.go:1048-1050` gates за `if s.debug`.
             debug = BootReceiver.isCoreLogsEnabled(context)
+            // §173 — OOM-killer: замена удалённому в 1.14 `Libbox.setMemoryLimit`.
+            // libbox 1.14 конфигурит память декларативно через SetupOptions.
+            // ВАЖНО (setup.go:85-91): на Android `oomKillerEnabled=true` БЕЗ
+            // явного `oomMemoryLimit` = НЕТ лимита (`SetMemoryLimit(MaxInt64)`;
+            // дефолт есть только у iOS NetEx). Поэтому задаём лимит явно —
+            // ядро ставит Go soft-limit = limit*3/4 (~150MB), GC агрессивнее →
+            // меньше шансов попасть под Android lowmemorykiller на слабых
+            // устройствах. Раньше (до 1.14) это делал `setMemoryLimit(true)`.
+            oomKillerEnabled = true
+            oomMemoryLimit = 200L * 1024 * 1024 // 200 MB → soft-limit ~150 MB
+            // §038/§173 — crash/stderr-канал: замена удалённому `redirectStderr`.
+            // Непустой source → ядро редиректит stderr в
+            // `workingPath/CrashReport-lxbox.log` (setup.go:102) — восстанавливает
+            // stderr-диагностику §038, потерянную с удалением redirectStderr в 1.14.
+            crashReportSource = "lxbox"
         }
         Libbox.setup(opts)
-        // libbox 1.14: `Libbox.redirectStderr` удалён из API. Crash/stderr-канал
-        // теперь конфигурится декларативно через SetupOptions.crashReportSource.
-        // §038 stderr-viewer на 1.14 опирается на core-log forwarding (debug=...),
-        // отдельный redirect больше не нужен.
     }
 
     companion object {

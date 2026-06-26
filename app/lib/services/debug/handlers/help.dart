@@ -52,7 +52,6 @@ Binds to 127.0.0.1, default port 9269. Auth: `Authorization: Bearer <token>`
 Access from host: `adb forward tcp:9269 tcp:9269`, then curl 127.0.0.1:9269.
 
 Spec: docs/spec/features/031 debug api/spec.md
-Clash API notes: docs/api/clash-api-reference.md
 
 === Health ===
 
@@ -62,7 +61,6 @@ GET /help[?format=text|json]        This map. No auth. text (default) — markdo
 === State (read-only) ===
 
 GET /state                          HomeState dump (tunnel, groups, nodes_count, last_delay, traffic, busy)
-GET /state/clash                    Clash endpoint info (secret masked)
 GET /state/subs[?reveal=true]       Subscriptions. URL masked default; reveal=true — full URL
 GET /state/rules                    CustomRule[] — sealed: inline | srs | preset (with per-kind fields)
 GET /state/storage                  Raw SettingsStorage._cache JSON (for debugging)
@@ -111,8 +109,8 @@ POST /action/clear-error                       Dismiss the lastError banner
 POST /action/reset-network                     Light recovery: closeAllConnections + DNS flush + dialer
                                                   rebind. WITHOUT recreating box/Service/TUN. Spec 031.
                                                   Requires tunnel up. → {"ok":true,"action":"reset-network","native_ok":<bool>}
-POST /action/urltest?tag=<node>                Single-node URLTest (clash /proxies/<tag>/delay)
-POST /action/urltest?group=<group>             Group URLTest (clash /group/<group>/delay, requires tunnel)
+POST /action/urltest?tag=<node>                Single-node URLTest (CommandClient urlTestOutbound)
+POST /action/urltest?group=<group>             Group URLTest (CommandClient, requires tunnel)
 POST /action/urltest?all=true                  Mass URLTest of all nodes in the active group (concurrency 10)
 POST /action/urltest?cancel=1                  Cancel in-flight mass URLTest (epoch-bump)
 POST /action/switch-node?tag=<tag>             HomeController.switchNode
@@ -295,7 +293,6 @@ const Map<String, dynamic> _capabilityJson = {
   'server': 'lxbox-debug',
   'docs': {
     'spec': 'docs/spec/features/031 debug api/spec.md',
-    'clash_reference': 'docs/api/clash-api-reference.md',
   },
   'auth': {
     'header': 'Authorization: Bearer <token>',
@@ -313,7 +310,6 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/help', 'auth': false, 'description': 'This capability map', 'params': {'format': 'text|json (default text)'}},
     // State
     {'method': 'GET', 'path': '/state', 'description': 'HomeState dump (tunnel, groups, nodes, traffic)'},
-    {'method': 'GET', 'path': '/state/clash', 'description': 'Clash endpoint info (secret masked)'},
     {'method': 'GET', 'path': '/state/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Subscriptions list'},
     {'method': 'GET', 'path': '/state/rules', 'description': 'CustomRule[] sealed (inline|srs|preset)'},
     {'method': 'GET', 'path': '/state/storage', 'description': 'Raw SettingsStorage._cache JSON'},
@@ -336,7 +332,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/action/reconnect', 'description': 'Stop→Start under one busy-wrap (start if down)'},
     {'method': 'POST', 'path': '/action/reload-vpn', 'description': 'In-place sing-box reload (no service kill) → {applied}'},
     {'method': 'POST', 'path': '/action/clear-error', 'description': 'Dismiss lastError banner'},
-    {'method': 'POST', 'path': '/action/force-stop-vpn', 'description': '§140 — hard force-stop (doForceStop path): teardown→stopSelf, frees Clash port 63130. fire-and-forget.'},
+    {'method': 'POST', 'path': '/action/force-stop-vpn', 'description': '§140 — hard force-stop (doForceStop path): teardown→stopSelf, frees CommandServer port 63130. fire-and-forget.'},
     {'method': 'POST', 'path': '/action/set-transient-timeout', 'params': {'connecting': 'ms (optional)', 'stopping': 'ms (optional)'}, 'description': '§140 — override transient-timeout thresholds (ms) for on-device force-stop test. At least one param.'},
     {'method': 'POST', 'path': '/action/reset-network', 'description': 'Light recovery: closeAll + DNS flush + dialer rebind (spec 031). Requires tunnel up.'},
     {'method': 'POST', 'path': '/action/urltest', 'params': {'tag': 'node tag (single)', 'group': 'group tag (group urltest, URL-encode emoji)', 'all': 'true (mass urltest)', 'cancel': '1 (abort in-flight mass urltest)'}, 'description': 'URLTest dispatch by query: one of tag/group/all/cancel'},

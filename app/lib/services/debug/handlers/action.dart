@@ -185,8 +185,8 @@ JsonResponse _ok(String action, [Map<String, Object?> extras = const {}]) {
 /// `/action/urltest` — единый endpoint для запуска URLTest. Scope
 /// определяется query-param'ом (ровно один из):
 ///
-/// - `?tag=<node>`  — single-node URLTest через clash `/proxies/<tag>/delay`
-/// - `?group=<tag>` — group URLTest через clash `/group/<tag>/delay` (требует tunnel up)
+/// - `?tag=<node>`  — single-node URLTest через CommandClient `urlTestOutbound`
+/// - `?group=<tag>` — group URLTest через CommandClient (требует tunnel up)
 /// - `?all=true`    — mass URLTest всех нод активной группы (concurrency 10)
 Future<DebugResponse> _urltest(DebugRequest req, DebugContext ctx) async {
   final home = ctx.requireHome();
@@ -268,7 +268,7 @@ Future<DebugResponse> _startVpnHeadless() async {
 /// `POST /action/force-stop-vpn` — §140, debug/diagnostics.
 ///
 /// Напрямую дёргает native `forceStopVPN` (минуя transient-таймаут): тот же
-/// путь `doForceStop`, что и при зависшем ядре. Освобождает Clash-порт 63130
+/// путь `doForceStop`, что и при зависшем ядре. Освобождает CommandServer-порт 63130
 /// (teardown ПЕРЕД `stopSelf`, §140), сервис убивается жёстко. В отличие от
 /// `stop-vpn` (кооперативный, ждёт Stopped от ядра) — fire-and-forget.
 ///
@@ -365,8 +365,8 @@ int? _parsePositiveMs(String? raw, String name) {
 ///
 /// Требует tunnel up — без него resetNetwork no-op в libbox (нет instance).
 /// Возвращает `{"ok": true, "action": "reset-network"}` независимо — реальный
-/// эффект асинхронен и наблюдается через `/clash/connections` (counter
-/// связей упадёт до ~0 моментально, потом начнёт заполняться заново).
+/// эффект асинхронен и наблюдается через `/state` (`traffic.active_connections`
+/// упадёт до ~0 моментально, потом начнёт заполняться заново).
 Future<DebugResponse> _resetNetwork(DebugContext ctx) async {
   final ok = await automation.actionResetNetwork(ctx);
   return _ok('reset-network', {'native_ok': ok});
