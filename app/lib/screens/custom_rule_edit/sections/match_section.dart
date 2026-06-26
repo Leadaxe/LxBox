@@ -5,6 +5,15 @@ import '../validators.dart' as v;
 import '../widgets/items_field.dart';
 import '../widgets/section_header.dart';
 
+/// §030 new_fields — quick-вставки для CIDR-полей (кнопка «Presets ▾»).
+/// Три ходовых сценария: само устройство, домашний Wi-Fi, поймать всё.
+/// `Localhost`/`All` дают обе IP-семьи (v4+v6) одной вставкой.
+const List<FieldPreset> kCidrPresets = [
+  FieldPreset(label: 'Localhost', value: '127.0.0.0/8\n::1/128'),
+  FieldPreset(label: 'Wi-Fi subnet', value: '192.168.0.0/16'),
+  FieldPreset(label: 'All (IPv4 + IPv6)', value: '0.0.0.0/0\n::/0'),
+];
+
 /// §053 Stage 2 — MATCH section: domain / suffix / keyword / IP CIDR
 /// + ipIsPrivate toggle.
 ///
@@ -82,6 +91,7 @@ class MatchSection extends StatelessWidget {
             return s;
           },
           hint: '10.0.0.0/8\n2001:db8::/32',
+          presets: kCidrPresets,
         ),
         CheckboxListTile(
           dense: true,
@@ -113,6 +123,7 @@ class MatchSection extends StatelessWidget {
             return s;
           },
           hint: '192.168.1.0/24\n10.0.0.5',
+          presets: kCidrPresets,
         ),
         CheckboxListTile(
           dense: true,

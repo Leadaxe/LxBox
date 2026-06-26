@@ -11,6 +11,10 @@ import '../normalizers.dart' as norm;
 ///
 /// `validator` + `normalize` — для подсветки invalid count. Pure functions
 /// из `validators.dart` / `normalizers.dart`.
+///
+/// `presets` (опц.) — список быстрых вставок («Presets ▾» action). Тап по
+/// пункту дописывает [FieldPreset.value] в поле (append с новой строки, как
+/// Paste). Используется CIDR-полями (§030 new_fields).
 class ItemsField extends StatefulWidget {
   const ItemsField({
     super.key,
@@ -21,6 +25,7 @@ class ItemsField extends StatefulWidget {
     this.minLines = 2,
     this.maxLines = 5,
     this.hint,
+    this.presets = const [],
   });
 
   final String label;
@@ -31,8 +36,23 @@ class ItemsField extends StatefulWidget {
   final int maxLines;
   final String? hint;
 
+  /// Опциональные quick-вставки. Пусто → кнопка «Presets» не рисуется.
+  final List<FieldPreset> presets;
+
   @override
   State<ItemsField> createState() => _ItemsFieldState();
+}
+
+/// §030 new_fields — один пункт меню «Presets ▾» в [ItemsField].
+/// `value` может быть многострочным (напр. «все приватные сети» = 3 строки).
+class FieldPreset {
+  const FieldPreset({required this.label, required this.value});
+
+  /// Человекочитаемое имя в меню (напр. «Localhost»).
+  final String label;
+
+  /// Что дописывается в поле (CIDR'ы, `\n`-разделённые для нескольких).
+  final String value;
 }
 
 class _ItemsFieldState extends State<ItemsField> {
@@ -85,6 +105,53 @@ class _ItemsFieldState extends State<ItemsField> {
     final existing = widget.controller.text.trim();
     widget.controller.text =
         existing.isEmpty ? text : '$existing\n$text';
+  }
+
+  /// §030 new_fields — append preset value (append с новой строки, как Paste).
+  void _appendPreset(String value) {
+    final existing = widget.controller.text.trim();
+    widget.controller.text =
+        existing.isEmpty ? value : '$existing\n$value';
+  }
+
+  Future<void> _showPresetMenu() async {
+    final box = context.findRenderObject() as RenderBox?;
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (box == null || overlay == null) return;
+    // Меню у нижнего-левого угла поля (под action-row).
+    final origin = box.localToGlobal(box.size.bottomLeft(Offset.zero),
+        ancestor: overlay);
+    final selected = await showMenu<FieldPreset>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        origin.dx,
+        origin.dy,
+        overlay.size.width - origin.dx,
+        0,
+      ),
+      items: [
+        for (final p in widget.presets)
+          PopupMenuItem<FieldPreset>(
+            value: p,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(p.label, style: const TextStyle(fontSize: 14)),
+                Text(
+                  p.value.replaceAll('\n', ' · '),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+    if (selected != null) _appendPreset(selected.value);
   }
 
   @override
@@ -158,6 +225,17 @@ class _ItemsFieldState extends State<ItemsField> {
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                 ),
               ),
+              if (widget.presets.isNotEmpty)
+                TextButton.icon(
+                  icon: const Icon(Icons.list, size: 14),
+                  label: const Text('Presets',
+                      style: TextStyle(fontSize: 12)),
+                  onPressed: _showPresetMenu,
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 28),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                ),
             ],
           ),
         ],
