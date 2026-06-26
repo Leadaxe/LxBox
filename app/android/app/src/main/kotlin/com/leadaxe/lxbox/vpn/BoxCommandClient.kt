@@ -573,6 +573,27 @@ class BoxCommandClient {
                         chainIt.next()?.let { chains.add(it) }
                     }
                 }
+                // §178 — detour-хвост финального outbound (ядро SPEC 017): chain()
+                // отдаёт РОУТИНГ (selector→node), detour() — ТРАНСПОРТ (node→WARP),
+                // порядок node→наружу. Полный физ.путь = chain[0] ⊕ detour.
+                //
+                // ⚠️ rc.5: метода Connection.detour() ЕЩЁ НЕТ (javap AAR подтвердил:
+                // есть только chain()). Прямой вызов c.detour() НЕ КОМПИЛИРУЕТСЯ
+                // (отсутствие метода — ошибка СБОРКИ, runCatching её не ловит).
+                // Dart-слой (CcConnection.detours) + склейка в профайлере + тесты
+                // уже готовы и при пустом detours = no-op (поведение §174).
+                //
+                // КОГДА ПРИЕДЕТ rc.6 (SPEC 017): 1) ./scripts/fetch-libbox.sh;
+                // 2) javap проверить `detour()` на Connection; 3) раскомментировать
+                // блок ниже; 4) добавить "detours" to detours в map; 5) сборка +
+                // device-verify (см. docs/spec/tasks/178).
+                val detours = ArrayList<String>()
+                // runCatching {
+                //     val detourIt = c.detour()
+                //     while (detourIt != null && detourIt.hasNext()) {
+                //         detourIt.next()?.let { detours.add(it) }
+                //     }
+                // }
                 // uplink/downlink = НАКОПЛЕННЫЙ итог (Total), не дельта за тик.
                 list.add(mapOf(
                     "id" to c.getID(),
@@ -588,6 +609,7 @@ class BoxCommandClient {
                     "outboundType" to c.getOutboundType(),
                     "protocol" to c.getProtocol(),
                     "chains" to chains,
+                    "detours" to detours,
                     "packageName" to pkg,
                     "processPath" to processPath,
                     "createdAt" to c.getCreatedAt(),

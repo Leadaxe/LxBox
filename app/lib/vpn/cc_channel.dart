@@ -361,6 +361,7 @@ class CcConnection {
     this.outboundType = '',
     this.protocol = '',
     this.chains = const [],
+    this.detours = const [],
     this.packageName = '',
     this.processPath = '',
     required this.createdAt,
@@ -390,6 +391,12 @@ class CcConnection {
   /// Из `Connection.chain()`-итератора ядра. Пусто для прямого outbound.
   final List<String> chains;
 
+  /// §178 — detour-хвост финального outbound (ядро SPEC 017, `Connection.detour()`).
+  /// Транспортная ось (куда физически ныряет пакет: `node → WARP`), порядок
+  /// node→наружу. Пусто: прямой outbound / block / dns / ядро без поля 23.
+  /// НЕ дублирует `chains` — node там, detour-теги тут.
+  final List<String> detours;
+
   /// App-attribution из `getProcessInfo()`: package (для иконки) + путь процесса.
   final String packageName;
   final String processPath;
@@ -413,6 +420,8 @@ class CcConnection {
         outboundType: m['outboundType']?.toString() ?? '',
         protocol: m['protocol']?.toString() ?? '',
         chains: (m['chains'] as List?)?.map((e) => e.toString()).toList() ??
+            const [],
+        detours: (m['detours'] as List?)?.map((e) => e.toString()).toList() ??
             const [],
         packageName: m['packageName']?.toString() ?? '',
         processPath: m['processPath']?.toString() ?? '',

@@ -679,4 +679,82 @@ void main() {
       await sub.cancel();
     });
   });
+
+  // ───── §178: detour-хвост в outboundChain (ядро SPEC 017) ─────────────
+
+  group('TrafficProfiler — §178 detour tail', () {
+    test('chains + detours склеиваются в полный путь node→selector→WARP',
+        () async {
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'd178a',
+          network: 'tcp',
+          domain: 'www.google.com',
+          destination: '1.2.3.4:443',
+          rule: 'final',
+          uplink: 10,
+          downlink: 20,
+          outbound: 'BL: [BL]-3',
+          chains: ['BL: [BL]-3', 'vpn-1'], // [node, selector] из ядра
+          detours: ['WARP'], // detour-хвост node→наружу
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
+      final s = TrafficProfiler.I.active!;
+      expect(s.events.first.outboundChain, ['BL: [BL]-3', 'vpn-1', 'WARP'],
+          reason: 'detour дописан в конец — полный физический путь');
+    });
+
+    test('пустой detours → outboundChain == chains (поведение §174 неизменно)',
+        () async {
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'd178b',
+          network: 'tcp',
+          domain: 'api.example',
+          destination: '5.6.7.8:443',
+          rule: 'final',
+          uplink: 10,
+          downlink: 20,
+          outbound: 'BL: [BL]-3',
+          chains: ['BL: [BL]-3', 'vpn-1'],
+          // detours не задан → const [] → склейки нет
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
+      final s = TrafficProfiler.I.active!;
+      expect(s.events.first.outboundChain, ['BL: [BL]-3', 'vpn-1'],
+          reason: 'нет detour → путь = chains, как в §174');
+    });
+
+    test('прямой conn (chains пуст) + detours пуст → fallback [outbound]',
+        () async {
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestForTest([
+        const CcConnection(
+          id: 'd178c',
+          network: 'tcp',
+          domain: 'direct.example',
+          destination: '9.9.9.9:443',
+          rule: '',
+          uplink: 5,
+          downlink: 5,
+          outbound: 'direct-out',
+          // chains/detours пусты
+          packageName: 'ru.tinkoff.investing',
+          createdAt: 0,
+          closedAt: 0,
+        ),
+      ]);
+      final s = TrafficProfiler.I.active!;
+      expect(s.events.first.outboundChain, ['direct-out'],
+          reason: 'прямой outbound: fallback на [outbound], detour не вмешивается');
+    });
+  });
 }

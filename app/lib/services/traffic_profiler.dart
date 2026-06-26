@@ -989,9 +989,16 @@ class TrafficProfiler extends ChangeNotifier {
       final network = c.network;
       // §174 — реальная outbound-цепочка из ядра (`Connection.chain()`).
       // Fallback на [outbound] если цепочка пуста (прямой outbound без группы).
-      final chains = c.chains.isNotEmpty
+      final baseChain = c.chains.isNotEmpty
           ? c.chains
           : (c.outbound.isNotEmpty ? <String>[c.outbound] : <String>[]);
+      // §178 — дописать detour-хвост (`Connection.detour()`, ядро SPEC 017) →
+      // полный физический путь node→…→selector→WARP. detours пуст (прямой /
+      // ядро без поля 23) → outboundChain == baseChain (поведение §174). detours
+      // НЕ содержит node → дублирования нет.
+      final chains = c.detours.isNotEmpty
+          ? <String>[...baseChain, ...c.detours]
+          : baseChain;
       final up = c.uplink;
       final down = c.downlink;
       final rule = c.rule;
