@@ -96,7 +96,7 @@ void main() {
       expect(f.apply(events).single.ip, '1.2.3.4');
     });
 
-    test('onlyUnattributed', () {
+    test('потеряшки (includeUnattributed) — OR с выбранными app', () {
       final mixed = [
         ...events,
         _ev(
@@ -104,8 +104,15 @@ void main() {
             domain: 'noowner.example',
             confidence: ConfidenceLevel.unattributed),
       ];
-      f.onlyUnattributed = true;
+      // Только потеряшки: chrome не выбран → лишь noowner.
+      f.includeUnattributed = true;
       expect(f.apply(mixed).single.domain, 'noowner.example');
+      // Chrome + потеряшки: OR → chrome-события И noowner.
+      f.toggleApp('com.android.chrome', true);
+      final out = f.apply(mixed).toList();
+      expect(out.length, 3); // 2 chrome + 1 noowner
+      expect(out.any((e) => e.domain == 'noowner.example'), isTrue);
+      expect(out.any((e) => e.process == 'com.android.chrome'), isTrue);
     });
 
     test('activeCount считает оси', () {
@@ -113,10 +120,21 @@ void main() {
       f.toggleApp('org.telegram.messenger', true);
       f.toggleKind(TrafficEventKind.dnsResolve, true);
       f.search = 'x';
-      f.onlyUnattributed = true;
+      f.includeUnattributed = true;
       expect(f.activeCount, 5); // 2 app + 1 kind + search + unattr
+      // App-вкладка: activeCountNoApps игнорит app-ось.
+      expect(f.activeCountNoApps, 2); // 1 kind + search
       f.clearAll();
       expect(f.activeCount, 0);
+    });
+
+    test('appAxisActive: app или потеряшки', () {
+      expect(f.appAxisActive, isFalse);
+      f.includeUnattributed = true;
+      expect(f.appAxisActive, isTrue);
+      f.includeUnattributed = false;
+      f.toggleApp('com.x', true);
+      expect(f.appAxisActive, isTrue);
     });
 
     test('kindFamily: fail/close сводятся к базовому', () {

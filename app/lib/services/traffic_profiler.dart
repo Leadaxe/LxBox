@@ -78,10 +78,33 @@ class TrafficProfiler extends ChangeNotifier {
   // (5s), которые раньше совпадали каждые 5s как два независимых wakeup'а.
   static const Duration _connIdGcInterval = Duration(seconds: 15);
   static const Duration _processInferenceWindow = Duration(seconds: 10);
-  // §048 Принцип 4 — global rolling buffer всегда работает, окно 60s,
-  // hard cap 3000 events чтобы memory не убегало на busy device'ах.
-  static const Duration _globalRollingWindow = Duration(seconds: 60);
-  static const int _globalRollingHardCap = 3000;
+  // §048 / §044-new-profiler — global rolling buffer всегда работает. Окно
+  // НАСТРАИВАЕМО (юзер выбирает 1/10/60 мин в фильтр-окне профайлера) — было
+  // жёстко 60s. Default 10 мин (600s). Грузится из SettingsStorage через
+  // [loadRetention]; меняется на лету через [setRetention]. Hard cap поднят
+  // (на 60-мин окне событий заметно больше) — защита памяти на busy device'ах.
+  Duration _globalRollingWindow =
+      Duration(seconds: SettingsStorage.profilerRetentionDefaultSec);
+  static const int _globalRollingHardCap = 20000;
+
+  /// Текущее окно хранения Live-журнала (для UI: показать выбранное).
+  Duration get retention => _globalRollingWindow;
+
+  /// §044/new-profiler — загрузить окно хранения из настроек (вызывать при
+  /// открытии профайлера). Идемпотентно.
+  Future<void> loadRetention() async {
+    final sec = await SettingsStorage.getProfilerRetentionSec();
+    _globalRollingWindow = Duration(seconds: sec);
+  }
+
+  /// §044/new-profiler — сменить окно хранения на лету + персист. Немедленно
+  /// влияет на следующий GC-проход (старые события подрежутся/доживут).
+  Future<void> setRetention(Duration window) async {
+    if (window == _globalRollingWindow) return;
+    _globalRollingWindow = window;
+    await SettingsStorage.setProfilerRetentionSec(window.inSeconds);
+    notifyListeners();
+  }
   // Banner threshold: >5 unattributed за 30s → user-visible warning.
   static const int _unattributedBannerThreshold = 5;
   static const Duration _unattributedBannerWindow = Duration(seconds: 30);

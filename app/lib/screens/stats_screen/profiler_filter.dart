@@ -7,29 +7,43 @@ import '../../services/traffic_profiler.dart';
 /// `_onlyUnattributed`). Теперь — один `ChangeNotifier`, который слушают и
 /// `TraceExplorer` (применяет к списку), и `ProfilerFilterSheet` (редактирует).
 ///
-/// Две независимые оси (см. спеку):
-/// - **app** — фильтр «по процессу» (мульти-выбор пакетов).
-/// - **kind** — фильтр «по типу события» (DNS/TCP/UDP, по СЕМЕЙСТВУ §177).
-/// Плюс кросс-осевой `search` (domain/ip/process) и `onlyUnattributed`.
+/// Две независимые оси:
+/// - **Protocol** — фильтр «по типу события» (DNS/TCP/UDP, по СЕМЕЙСТВУ §177).
+/// - **App** — фильтр «по процессу»: выбранные пакеты + «потеряшки»
+///   (unattributed/no-owner) как ещё один пункт. App-ось работает в OR:
+///   событие проходит, если его process ∈ apps ЛИБО (это потеряшка И выбраны
+///   потеряшки).
+/// Плюс кросс-осевой `search` (domain/ip/process).
 class ProfilerFilter extends ChangeNotifier {
   String _search = '';
   final Set<TrafficEventKind> _kinds = <TrafficEventKind>{};
   final Set<String> _apps = <String>{};
-  bool _onlyUnattributed = false;
+  // «Потеряшки» — события без owner'а (unattributed). Галка в App-табе.
+  bool _includeUnattributed = false;
 
   String get search => _search;
   Set<TrafficEventKind> get kinds => _kinds;
   Set<String> get apps => _apps;
-  bool get onlyUnattributed => _onlyUnattributed;
+  bool get includeUnattributed => _includeUnattributed;
+
+  /// Активна ли app-ось (выбран хоть один app или потеряшки).
+  bool get appAxisActive => _apps.isNotEmpty || _includeUnattributed;
 
   /// Сколько «фильтров» активно — для бейджа `(N)` на кнопке фильтра.
-  /// Считаем оси: непустой search (1) + каждый kind + каждый app + unattr (1).
   int get activeCount {
     var n = 0;
     if (_search.isNotEmpty) n++;
     n += _kinds.length;
     n += _apps.length;
-    if (_onlyUnattributed) n++;
+    if (_includeUnattributed) n++;
+    return n;
+  }
+
+  /// Активность без app-оси (для App-вкладки, где app-ось не применяется).
+  int get activeCountNoApps {
+    var n = 0;
+    if (_search.isNotEmpty) n++;
+    n += _kinds.length;
     return n;
   }
 
@@ -64,10 +78,10 @@ class ProfilerFilter extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── unattributed ──
-  set onlyUnattributed(bool v) {
-    if (_onlyUnattributed == v) return;
-    _onlyUnattributed = v;
+  // ── потеряшки (unattributed как пункт app-оси) ──
+  set includeUnattributed(bool v) {
+    if (_includeUnattributed == v) return;
+    _includeUnattributed = v;
     notifyListeners();
   }
 
@@ -75,7 +89,7 @@ class ProfilerFilter extends ChangeNotifier {
     _search = '';
     _kinds.clear();
     _apps.clear();
-    _onlyUnattributed = false;
+    _includeUnattributed = false;
     notifyListeners();
   }
 
@@ -87,8 +101,10 @@ class ProfilerFilter extends ChangeNotifier {
         _ => k,
       };
 
-  /// Применяет фильтр к потоку событий (та же логика, что была в
-  /// `TraceExplorer._applyFilter`). [includeApps] — учитывать ли app-ось
+  static bool _isUnattributed(TrafficEvent e) =>
+      e.confidence == ConfidenceLevel.unattributed;
+
+  /// Применяет фильтр к потоку событий. [includeApps] — учитывать ли app-ось
   /// (в App-вкладке она не нужна: target зафиксирован сессией).
   Iterable<TrafficEvent> apply(Iterable<TrafficEvent> src,
       {bool includeApps = true}) {
@@ -96,11 +112,13 @@ class ProfilerFilter extends ChangeNotifier {
     if (_kinds.isNotEmpty) {
       list = list.where((e) => _kinds.contains(kindFamily(e.kind)));
     }
-    if (includeApps && _apps.isNotEmpty) {
-      list = list.where((e) => e.process != null && _apps.contains(e.process));
-    }
-    if (_onlyUnattributed) {
-      list = list.where((e) => e.confidence == ConfidenceLevel.unattributed);
+    if (includeApps && appAxisActive) {
+      list = list.where((e) {
+        // OR: process в выбранных ИЛИ (потеряшка и потеряшки включены).
+        final byApp = e.process != null && _apps.contains(e.process);
+        final byUnattr = _includeUnattributed && _isUnattributed(e);
+        return byApp || byUnattr;
+      });
     }
     if (_search.isNotEmpty) {
       final lq = _search.toLowerCase();

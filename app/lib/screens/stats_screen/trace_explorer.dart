@@ -91,6 +91,11 @@ class _TraceExplorerState extends State<TraceExplorer> {
   void initState() {
     super.initState();
     _filter.addListener(_onFilterChanged);
+    // §044/new-profiler — подтянуть выбранное окно хранения Live (для Profiler;
+    // в App-вкладке record-управления нет, но загрузка безвредна).
+    TrafficProfiler.I.loadRetention().then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -210,6 +215,8 @@ class _TraceExplorerState extends State<TraceExplorer> {
             ),
           // 2 — Record scope (опционально).
           if (widget.onToggleRecording != null) _recordButton(context),
+          // 2b — Retention (окно хранения Live) — только в Profiler.
+          if (widget.onToggleRecording != null) _retentionButton(context),
           // 3 — Aggregate-меню.
           _aggregateButton(context),
           const Spacer(),
@@ -223,6 +230,59 @@ class _TraceExplorerState extends State<TraceExplorer> {
                 visible.isEmpty ? null : () => _export(visible.toList()),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Retention — окно хранения Live-журнала. Меню 1m / 10m / 1h.
+  Widget _retentionButton(BuildContext context) {
+    const opts = <(String, int)>[
+      ('1m', 60),
+      ('10m', 600),
+      ('1h', 3600),
+    ];
+    final curSec = TrafficProfiler.I.retention.inSeconds;
+    String curLabel() {
+      for (final (l, s) in opts) {
+        if (s == curSec) return l;
+      }
+      return '${(curSec / 60).round()}m';
+    }
+
+    return PopupMenuButton<int>(
+      tooltip: 'Live retention window',
+      onSelected: (sec) async {
+        await TrafficProfiler.I.setRetention(Duration(seconds: sec));
+        if (mounted) setState(() {});
+      },
+      itemBuilder: (_) => [
+        for (final (label, sec) in opts)
+          PopupMenuItem(
+            value: sec,
+            child: Row(
+              children: [
+                Icon(
+                  sec == curSec
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Text('Keep $label'),
+              ],
+            ),
+          ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.history, size: 18),
+            const SizedBox(width: 2),
+            Text(curLabel(), style: const TextStyle(fontSize: 12)),
+          ],
+        ),
       ),
     );
   }
@@ -337,13 +397,50 @@ class _TraceExplorerState extends State<TraceExplorer> {
     );
   }
 
+  /// Собрать список замеченных пакетов + есть ли потеряшки — для App-таба
+  /// фильтр-окна. Источник = текущие события (Live-буфер / события сессии).
+  ({Set<String> apps, bool hasUnattr}) _collectSeen() {
+    final apps = <String>{};
+    var hasUnattr = false;
+    for (final e in widget.events) {
+      if (e.confidence == ConfidenceLevel.unattributed || e.process == null) {
+        hasUnattr = true;
+      }
+      final p = e.process;
+      if (p != null && p.isNotEmpty) {
+        // process может быть «a,b» (secondary packages) — раскладываем.
+        for (final seg in p.split(',')) {
+          final t = seg.trim();
+          if (t.isNotEmpty) apps.add(t);
+        }
+      }
+    }
+    for (final e in widget.unattributed) {
+      if (e.confidence == ConfidenceLevel.unattributed || e.process == null) {
+        hasUnattr = true;
+      }
+    }
+    return (apps: apps, hasUnattr: hasUnattr);
+  }
+
+  void _openFilterSheet(BuildContext context) {
+    final seen = _collectSeen();
+    showProfilerFilterSheet(
+      context,
+      filter: _filter,
+      showAppTab: widget.showAppTab,
+      seenApps: seen.apps,
+      hasUnattributed: seen.hasUnattr,
+    );
+  }
+
   /// Filter — открывает фильтр-окно, бейдж активных фильтров.
   Widget _filterButton(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    // App-вкладка app-ось не применяет → не считаем её в бейдж.
     final n = widget.includeAppsFilter
         ? _filter.activeCount
-        // App-вкладка app-ось не применяет → не считаем её в бейдж.
-        : _filter.activeCount - _filter.apps.length;
+        : _filter.activeCountNoApps;
     final active = n > 0;
     return Stack(
       clipBehavior: Clip.none,
@@ -354,11 +451,7 @@ class _TraceExplorerState extends State<TraceExplorer> {
           label: Text(active ? 'Filter ($n)' : 'Filter',
               style: TextStyle(
                   fontSize: 12, color: active ? cs.primary : null)),
-          onPressed: () => showProfilerFilterSheet(
-            context,
-            filter: _filter,
-            showAppTab: widget.showAppTab,
-          ),
+          onPressed: () => _openFilterSheet(context),
         ),
         if (active)
           Positioned(

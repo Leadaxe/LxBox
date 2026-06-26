@@ -5,35 +5,49 @@ import '../../services/traffic_profiler.dart';
 import '../per_app_trace_tab/app_multi_picker.dart';
 import 'profiler_filter.dart';
 
-/// §044/new-profiler — фильтр-окно профайлера. Bottom-sheet по паттерну
-/// `home/widgets/filter_panel.dart` (эталон фильтра главного экрана):
-/// TabBar с amber-точкой на табе с активным фильтром + сводка `InputChip`
-/// (tap → таб, ✕ → снять) + контент активного таба.
+/// §044/new-profiler — фильтр-окно профайлера. Bottom-sheet, паттерн
+/// `home/widgets/filter_panel.dart`: TabBar с amber-точкой на табе с активным
+/// фильтром + контент таба.
 ///
-/// Две независимые оси: **App** (мульти-пикер, «по процессу») и
-/// **DNS/TCP/UDP** (чипы фаз, «по типу события»). Плюс кросс-осевой поиск над
-/// табами и чип Unattributed.
+/// Две вкладки (порядок по решению юзера):
+/// 1. **Protocol** — чипы DNS / TCP / UDP (по семейству §177).
+/// 2. **App** — галочки замеченных в трафике пакетов ([seenApps]) + «потеряшки»
+///    (unattributed) + кнопка пикера (добавить app, которого ещё не было).
 ///
 /// [showAppTab] — в App-вкладке (`per_app_trace`) target зафиксирован сессией,
-/// app-ось не нужна → таб App скрыт.
+/// App-таб скрыт. [seenApps] — пакеты, реально засветившиеся в текущих событиях.
 Future<void> showProfilerFilterSheet(
   BuildContext context, {
   required ProfilerFilter filter,
   required bool showAppTab,
+  required Set<String> seenApps,
+  required bool hasUnattributed,
 }) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (_) => _ProfilerFilterSheet(filter: filter, showAppTab: showAppTab),
+    builder: (_) => _ProfilerFilterSheet(
+      filter: filter,
+      showAppTab: showAppTab,
+      seenApps: seenApps,
+      hasUnattributed: hasUnattributed,
+    ),
   );
 }
 
 class _ProfilerFilterSheet extends StatefulWidget {
-  const _ProfilerFilterSheet({required this.filter, required this.showAppTab});
+  const _ProfilerFilterSheet({
+    required this.filter,
+    required this.showAppTab,
+    required this.seenApps,
+    required this.hasUnattributed,
+  });
 
   final ProfilerFilter filter;
   final bool showAppTab;
+  final Set<String> seenApps;
+  final bool hasUnattributed;
 
   @override
   State<_ProfilerFilterSheet> createState() => _ProfilerFilterSheetState();
@@ -42,10 +56,9 @@ class _ProfilerFilterSheet extends StatefulWidget {
 class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
     with TickerProviderStateMixin {
   late final TabController _tab;
-  late final TextEditingController _searchCtrl;
 
-  // Описание табов-типов: (label, представитель-семейство §177).
-  static const _kindTabs = <(String, TrafficEventKind)>[
+  // Protocol-чипы: (label, представитель-семейство §177).
+  static const _protocols = <(String, TrafficEventKind)>[
     ('DNS', TrafficEventKind.dnsResolve),
     ('TCP', TrafficEventKind.tcpOpen),
     ('UDP', TrafficEventKind.udpOpen),
@@ -53,144 +66,176 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
 
   ProfilerFilter get f => widget.filter;
 
-  /// Индексы: [App?] DNS TCP UDP. App присутствует только если showAppTab.
-  int get _tabCount => (widget.showAppTab ? 1 : 0) + _kindTabs.length;
+  // Пакеты, добавленные через пикер (которых не было в seenApps) — показываем
+  // их в App-табе тоже, чтобы галочка была видна.
+  final Set<String> _extraApps = {};
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: _tabCount, vsync: this);
-    _searchCtrl = TextEditingController(text: f.search);
-    f.addListener(_onFilterChanged);
+    _tab = TabController(length: widget.showAppTab ? 2 : 1, vsync: this);
+    // app'ы из фильтра, которых нет в seen, — изначально extra (например из
+    // прошлого пикера).
+    _extraApps.addAll(f.apps.where((p) => !widget.seenApps.contains(p)));
+    f.addListener(_onChanged);
   }
 
   @override
   void dispose() {
-    f.removeListener(_onFilterChanged);
+    f.removeListener(_onChanged);
     _tab.dispose();
-    _searchCtrl.dispose();
     super.dispose();
   }
 
-  void _onFilterChanged() {
+  void _onChanged() {
     if (mounted) setState(() {});
   }
 
   String _appLabel(String pkg) {
     final name = AppInfoCache.of(pkg)?.appName;
     if (name != null && name.isNotEmpty) return name;
-    // package короче имени — режем по последнему сегменту.
     final seg = pkg.split('.');
     return seg.isNotEmpty ? seg.last : pkg;
   }
 
-  /// Сводка активных фильтров чипами (tap → таб, ✕ → снять).
-  List<Widget> _summaryChips() {
-    final chips = <Widget>[];
-    if (widget.showAppTab) {
-      for (final pkg in f.apps) {
-        chips.add(InputChip(
-          avatar: const Icon(Icons.android, size: 16),
-          label: Text(_appLabel(pkg), style: const TextStyle(fontSize: 12)),
-          onPressed: () => _tab.animateTo(0),
-          onDeleted: () => f.toggleApp(pkg, false),
-        ));
-      }
-    }
-    for (final (label, kind) in _kindTabs) {
-      if (f.hasKind(kind)) {
-        chips.add(InputChip(
-          label: Text(label, style: const TextStyle(fontSize: 12)),
-          onPressed: () => _tab.animateTo(_kindTabIndex(kind)),
-          onDeleted: () => f.toggleKind(kind, false),
-        ));
-      }
-    }
-    if (f.onlyUnattributed) {
-      chips.add(InputChip(
-        label: const Text('Unattributed', style: TextStyle(fontSize: 12)),
-        onDeleted: () => f.onlyUnattributed = false,
-      ));
-    }
-    return chips;
-  }
-
-  int _kindTabIndex(TrafficEventKind kind) {
-    final base = widget.showAppTab ? 1 : 0;
-    final i = _kindTabs.indexWhere((t) => t.$2 == kind);
-    return base + (i < 0 ? 0 : i);
-  }
-
-  Widget _dotTab(String label, bool active) {
-    return Tab(
-      height: 40,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label),
-          if (active) ...[
-            const SizedBox(width: 5),
-            Container(
-              width: 7,
-              height: 7,
-              decoration: const BoxDecoration(
-                color: Colors.amber,
-                shape: BoxShape.circle,
+  Widget _dotTab(String label, bool active) => Tab(
+        height: 40,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label),
+            if (active) ...[
+              const SizedBox(width: 5),
+              Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(
+                    color: Colors.amber, shape: BoxShape.circle),
               ),
-            ),
+            ],
           ],
+        ),
+      );
+
+  // ── Protocol-таб ──
+  Widget _protocolTab() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          for (final (label, kind) in _protocols)
+            FilterChip(
+              label: Text(label),
+              selected: f.hasKind(kind),
+              onSelected: (v) => f.toggleKind(kind, v),
+            ),
         ],
       ),
     );
   }
 
-  List<Widget> _tabs() {
-    return [
-      if (widget.showAppTab) _dotTab('App', f.apps.isNotEmpty),
-      for (final (label, kind) in _kindTabs) _dotTab(label, f.hasKind(kind)),
-    ];
-  }
-
-  Widget _tabContent(int index) {
-    final base = widget.showAppTab ? 1 : 0;
-    if (widget.showAppTab && index == 0) {
-      return AppMultiPicker(
-        selected: f.apps,
-        onToggle: f.toggleApp,
-      );
-    }
-    final kindIndex = index - base;
-    final (_, kind) = _kindTabs[kindIndex];
-    return _kindContent(kind);
-  }
-
-  /// Контент таба-типа: чипы фаз семейства. DNS=resolve+fail, TCP=open+close,
-  /// UDP=udp. Чип фазы тоглит конкретный вид, но фильтр всё равно матчит по
-  /// семейству (см. `ProfilerFilter.kindFamily`) — поэтому здесь тоглим
-  /// представителя семейства одним чипом (паритет со старым поведением §177).
-  Widget _kindContent(TrafficEventKind family) {
-    final label = switch (family) {
-      TrafficEventKind.dnsResolve => 'DNS queries (resolve + fail)',
-      TrafficEventKind.tcpOpen => 'TCP connections (open + close)',
-      TrafficEventKind.udpOpen => 'UDP connections',
-      _ => 'Events',
-    };
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: FilterChip(
-          label: Text(label, style: const TextStyle(fontSize: 13)),
-          selected: f.hasKind(family),
-          onSelected: (v) => f.toggleKind(family, v),
+  // ── App-таб ──
+  Widget _appTab() {
+    // Замеченные + extra (из пикера), отсортированы: выбранные наверх.
+    final all = <String>{...widget.seenApps, ..._extraApps}.toList();
+    all.sort((a, b) {
+      final sa = f.hasApp(a) ? 0 : 1;
+      final sb = f.hasApp(b) ? 0 : 1;
+      if (sa != sb) return sa - sb;
+      return _appLabel(a).toLowerCase().compareTo(_appLabel(b).toLowerCase());
+    });
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // «Потеряшки» — события без owner'а.
+        if (widget.hasUnattributed || f.includeUnattributed)
+          CheckboxListTile(
+            value: f.includeUnattributed,
+            onChanged: (v) => f.includeUnattributed = v ?? false,
+            controlAffinity: ListTileControlAffinity.leading,
+            dense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            secondary: Icon(Icons.help_outline,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
+            title: const Text('Unattributed (no owner)',
+                style: TextStyle(fontSize: 13)),
+            subtitle: const Text('«потеряшки» — события без приложения',
+                style: TextStyle(fontSize: 10)),
+          ),
+        if (all.isEmpty && !widget.hasUnattributed)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Text('No apps seen yet — traffic will populate this list.',
+                style: TextStyle(fontSize: 12)),
+          ),
+        for (final pkg in all)
+          CheckboxListTile(
+            value: f.hasApp(pkg),
+            onChanged: (v) => f.toggleApp(pkg, v ?? false),
+            controlAffinity: ListTileControlAffinity.leading,
+            dense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            secondary: _appIcon(pkg),
+            title: Text(_appLabel(pkg), style: const TextStyle(fontSize: 13)),
+            subtitle: Text(pkg,
+                style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
+          ),
+        const SizedBox(height: 4),
+        // Кнопка пикера — добавить app, которого ещё не было в трафике.
+        OutlinedButton.icon(
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text('Add app from full list'),
+          onPressed: _openPicker,
         ),
-      ),
+      ],
+    );
+  }
+
+  Widget _appIcon(String pkg) {
+    AppInfoCache.ensure(pkg);
+    return AnimatedBuilder(
+      animation: AppInfoCache.revision,
+      builder: (_, _) {
+        final info = AppInfoCache.of(pkg);
+        if (info?.icon != null) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Image.memory(info!.icon!,
+                width: 28, height: 28, gaplessPlayback: true),
+          );
+        }
+        final cs = Theme.of(context).colorScheme;
+        final label = _appLabel(pkg);
+        return SizedBox(
+          width: 28,
+          height: 28,
+          child: CircleAvatar(
+            backgroundColor: cs.surfaceContainerHighest,
+            child: Text(label.isEmpty ? '?' : label.characters.first.toUpperCase(),
+                style: TextStyle(fontSize: 11, color: cs.onSurface)),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openPicker() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _PickerSheet(filter: f, onPicked: (pkg) {
+        // добавленный пакет показываем в App-табе даже если его не было в seen.
+        setState(() => _extraApps.add(pkg));
+      }),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final summary = _summaryChips();
     final mq = MediaQuery.of(context);
     return Padding(
       padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
@@ -211,81 +256,77 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
                   ),
                   if (f.isActive)
                     TextButton(
-                      onPressed: () {
-                        f.clearAll();
-                        _searchCtrl.clear();
-                      },
+                      onPressed: f.clearAll,
                       child: const Text('Reset all'),
                     ),
                 ],
               ),
-              const SizedBox(height: 4),
-              // Кросс-осевой поиск (domain / ip / process) — над табами.
-              TextField(
-                controller: _searchCtrl,
-                style: const TextStyle(fontSize: 13),
-                decoration: InputDecoration(
-                  hintText: 'Search domain / IP / app…',
-                  prefixIcon: const Icon(Icons.search, size: 18),
-                  suffixIcon: f.search.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () {
-                            _searchCtrl.clear();
-                            f.search = '';
-                          },
-                        ),
-                  isDense: true,
-                  border: const OutlineInputBorder(),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-                onChanged: (v) => f.search = v,
-              ),
-              const SizedBox(height: 8),
               TabBar(
                 controller: _tab,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                labelPadding: const EdgeInsets.symmetric(horizontal: 14),
-                tabs: _tabs(),
-              ),
-              if (summary.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < summary.length; i++) ...[
-                        if (i > 0) const SizedBox(width: 6),
-                        summary[i],
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 8),
-              Flexible(
-                child: AnimatedBuilder(
-                  animation: _tab,
-                  builder: (_, _) =>
-                      SingleChildScrollView(child: _tabContent(_tab.index)),
-                ),
+                tabs: [
+                  _dotTab('Protocol', f.kinds.isNotEmpty),
+                  if (widget.showAppTab) _dotTab('App', f.appAxisActive),
+                ],
               ),
               const SizedBox(height: 4),
-              // Unattributed — кросс-осевой чип под табами.
-              Align(
-                alignment: Alignment.centerLeft,
-                child: FilterChip(
-                  label: const Text('Unattributed only',
-                      style: TextStyle(fontSize: 12)),
-                  selected: f.onlyUnattributed,
-                  onSelected: (v) => f.onlyUnattributed = v,
+              Flexible(
+                child: SingleChildScrollView(
+                  child: AnimatedBuilder(
+                    animation: _tab,
+                    builder: (_, _) => _tab.index == 0 || !widget.showAppTab
+                        ? _protocolTab()
+                        : _appTab(),
+                  ),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Полный пикер приложений (за кнопкой «Add app»). Мульти-select поверх
+/// [AppMultiPicker]; выбор сразу пишется в [filter.apps] + дёргается [onPicked]
+/// чтобы родитель показал пакет в App-табе.
+class _PickerSheet extends StatefulWidget {
+  const _PickerSheet({required this.filter, required this.onPicked});
+  final ProfilerFilter filter;
+  final void Function(String pkg) onPicked;
+
+  @override
+  State<_PickerSheet> createState() => _PickerSheetState();
+}
+
+class _PickerSheetState extends State<_PickerSheet> {
+  @override
+  Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: mq.size.height * 0.85),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text('Add app to filter',
+                  style:
+                      TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
+            Flexible(
+              child: AppMultiPicker(
+                selected: widget.filter.apps,
+                onToggle: (pkg, on) {
+                  widget.filter.toggleApp(pkg, on);
+                  if (on) widget.onPicked(pkg);
+                  setState(() {});
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
