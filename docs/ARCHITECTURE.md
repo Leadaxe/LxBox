@@ -751,15 +751,17 @@ Sensitive-поля при `GET /state/storage` фильтруются allow-list
                      │ events             │ events
                      │                    │
         ┌────────────┴────────┐  ┌────────┴──────────────────────┐
-        │ Source A: log stream│  │ Source B: connections push    │
-        │  AppLog (core src)  │  │  CommandClient (profilerClient)│
-        │  ts-diff drain      │  │  diff vs prev snapshot         │
+        │ DNS-стрим (§180)    │  │ Connections push (§168)       │
+        │  CcChannel.dnsQueries│  │  CcChannel.connections        │
+        │  (profilerClient,   │  │  (profilerClient,             │
+        │   SPEC 018)         │  │   diff vs prev snapshot)      │
         └─────────────────────┘  └────────────────────────────────┘
                      │                    │
                      ▼                    ▼
-        DNS resolves + CNAME       TCP/UDP open/close events
-        attribution by conn-id     attribution by metadata.process
-                                   (UID-stripped) или process inference
+        dnsResolve/dnsFail         TCP/UDP open/close events
+        attribution ИЗ ЯДРА        attribution из ядра
+        (processInfo) + cnameChain (CcConnection.packageName,
+        + dnsServer/outbound(rc.10) chains §174, detours §178)
 
               ┌────────────────────────────────────────┐
               │ Session.events  (append-only)           │
@@ -769,33 +771,32 @@ Sensitive-поля при `GET /state/storage` фильтруются allow-list
                      │
         ┌────────────┴───────────────────────────────────────────┐
         ▼                              ▼                         ▼
-  PerAppTraceTab UI         Debug API /profiler/*          SSE /profiler/stream
-  (Live/Domains/IPs/        (start, stop, active,          (live-push для
-   Connections)              session/<id>, sessions,        external clients)
-                             stream)
+  App + Profiler tabs       Debug API /profiler/*          SSE /profiler/stream
+  (TraceExplorer:           (start, stop, active,          (live-push для
+   поток/Aggregated +        session/<id>, sessions,        external clients)
+   фильтр-окно)              stream)
 ```
 
-**Spawning rules:**
-- Source A live-listen на `AppLog.I` (core source). Drain timestamp-diff'ом — не length, чтобы не залипать на ring-buffer cap=500. Regex'ы ловят `router: found package name`, `dns: exchanged|cached`, `dns: exchange failed`. Per-conn-id accumulator (`_DnsAccumulator`) держит первый-запрошенный domain + CNAME chain.
-- Source B (§168) — CommandClient `connections` push-стрим (`CcChannel.connections` через фоновый `profilerClient`, поднимается `connectProfiler()`) пока есть active session **или** global recording on (§048). Каждый снапшот diff'ается против `_connSnapshots`. Connections фильтруются по `metadata.process` (с UID-strip) или `processPath` или process-inference (10s post-DNS window — IP должен быть в resolved-IPs prior session events).
-- Connection-issue classifier per-event: 2 locale-агностичных типа — `dnsTimeout` (прямой engine-сигнал из `dns: exchange failed` лога) + `tcpReset` (heuristic: TCP закрылся <1с с 0 bytes, вероятный RST/firewall).
+**Источники событий (§180/§044 — БЕЗ парсинга core-лога):**
+- **DNS-стрим (§180, ядро SPEC 018)** — `CcChannel.dnsQueries` (канал `lxbox/cc/dns`, `subscribeDNSQueries` на `profilerClient`). Каждый `CcDnsQuery` несёт `domain`/`queryType`/`rcode`/`source`/`failed`/`error`, атрибуцию к app **из ядра** (`processInfo.packageName`), `answers[]` (весь response.Answer → cnameChain из type==CNAME), и (rc.10) `dnsServer`/`dnsServerType`/`outbound`. `_ingestDnsQuery` эмитит `dnsResolve`/`dnsFail`. **Текстовый core-лог парсинг выпилен начисто** (§044): не было `_dnsRe`/`_DnsAccumulator`/`router: found package` regex'ов — всё структурно из ядра.
+- **Connections-стрим (§168)** — CommandClient `connections` push (`CcChannel.connections` через фоновый `profilerClient`, `connectProfiler()`) пока есть active session **или** global recording (§048). Снапшот diff'ается против `_connSnapshots`. TCP/UDP-атрибуция из ядра: `CcConnection.packageName` (UID-strip), `chains` (§174), `detours` (§178).
+- Connection-issue classifier: `dnsTimeout` (структурный `q.failed` из DNS-стрима) + `tcpReset` (heuristic: TCP закрылся <1с с 0 bytes).
 
-**Global / system-wide recording (§048).** Live tab в Statistics — **четвёртый mode** профайлера (рядом с per-app session): `startGlobalRecording()` подключает Source A + Source B без active session. События идут в `_globalRollingBuffer` (60s window) и `globalLiveStream()` SSE. `_ingestCcConnections()` (обработчик CommandClient connections-снапшота) сделан session-agnostic: session-only блоки (`_resolveForSession`, `_appendEvent(s, ev)`) gated на `if (s != null)`, snapshot tracking `_connSnapshots[id]` unconditional (нужен для closed-detection в global-only режиме). `_maybeDetachCcConnections()` снимает подписку + гасит `profilerClient` только когда **оба** off (session and global) — симметрично `_maybeDetachLogListener` и `_maybeStopGcTimer`. Idle profiler по-прежнему ничего не делает (нет CC-подписки, нет AppLog listener).
+**Global / system-wide recording (§048).** Вкладка **Profiler** (бывш. Live) в Statistics — system-wide режим: `startGlobalRecording()` подключает оба стрима без active session. События в `_globalRollingBuffer` (окно **настраиваемое** 1m/10m/1h, §044 retention; hard cap 20000) и `globalLiveStream()` SSE. `_ingestCcConnections()` session-agnostic (session-блоки gated `if (s != null)`). `_maybeDetachCcConnections()` гасит `profilerClient` когда **оба** off.
 
 **Memory bounds:**
-- `Session.events`: cap = 50000 events ИЛИ 3h sliding window (что раньше). `eventsDropped` в meta.
+- `Session.events`: cap = 50000 events ИЛИ 3h sliding window. `eventsDropped` в meta.
 - `_completed`: ListQueue cap = 5 sessions, FIFO-evict.
-- `_connIdToMeta` / `_dnsByConnId`: GC по 30s TTL, trigger когда map > 256 entries.
+- `_globalRollingBuffer`: retention-окно (§044, default 10мин) + hard cap 20000.
 
-**UI plumbing:**
-- HomeScreen `_buildTrafficBar` показывает ⚡-chip с short package name (`ru.tinkoff` для `ru.tinkoff.investing`) когда session active. Tap всей строки → `StatsScreen(initialTab: StatsTab.perApp)`.
-- `StatsScreen` 3-й tab `Per-app` с ⚡ возле title.
-- `PerAppTraceTab` 4 sub-tab'а: Live / Domains / IPs / Connections. Search-by-IP в Domains, inline expand на Connections, ↗ IP-jump иконки везде где рендерится IP — все три view связаны двусторонней навигацией.
+**UI plumbing (§160/§044):**
+- HomeScreen `_buildTrafficBar` ⚡-chip с short package name когда session active. Tap → Stats→App.
+- `StatsScreen` 4 вкладки: Stats / Conns / **App** (per-app session) / **Profiler** (system-wide, бывш. Live).
+- Общий движок `TraceExplorer` (App + Profiler): control-строка (пауза · retention · группировка · фильтр-окно) + тогл поток/Aggregated(by Domain/IP) + drill-down detail-sheet. Фильтр вынесен в `ProfilerFilterSheet` (Protocol + App оси). §181 `routingLine` строит читаемую трассировку события.
 
 **Coupling (важно для extraction):**
-- **Sing-box log format** — Source A парсит конкретные log lines `router: found package name`, `dns: exchanged|cached`, `dns: exchange failed` regex'ами в `_dnsRe` / `_dnsFailRe` / `_routerRe`. Если sing-box изменит формат логов — TrafficProfiler сломается silent. Формат стабилен на текущем ядре (`sing-box-lx v1.14.0-lx.1`, §097/§104), но при любой смене/апгрейде ядра это первое, что надо verify.
-- **`AppLog` instance + `DebugSource.core` filter** — TrafficProfiler subscribe'ит на `AppLog.I.notifyListeners` и фильтрует по source. Зависимость двунаправленная: `core_logs_enabled=false` → core source пуст → TrafficProfiler видит только Source B (CommandClient connections), теряет DNS resolves и process attribution. UI показывает `CoreLogsHintBanner` чтобы юзер включил forwarding.
-- **`CcChannel` (CommandClient)** — Source B слушает `CcChannel.connections` через фоновый `profilerClient`. Профайлер привязан к жизни CommandClient-канала: tcp/udp open/close приходят только пока туннель жив и `profilerClient` поднят (`connectProfiler()`).
+- **`CcChannel` (CommandClient) — единственный источник.** Профайлер слушает `CcChannel.connections` + `CcChannel.dnsQueries` через фоновый `profilerClient`. Привязан к жизни канала: события идут пока туннель жив и `profilerClient` поднят (`connectProfiler()`). **core-логи больше не нужны** — `CoreLogsHintBanner` оставлен как опциональная подсказка, но DNS/TCP атрибуция от него не зависит (всё из ядра, §180/§168).
+- **Контракт ядра (SPEC 017/018).** Поля `chain()`/`detour()`/`DnsQuery.*` — нативные методы libbox AAR. При бампе ядра новые методы проверять `javap` ДО вызова в Kotlin (forward-compat: отсутствие метода = compile error, не runtime). Имена gomobile-стиля (напр. `getDNSServer`, не `getDnsServer`); итераторы (`chain()`/`outbound()` → `StringIterator`).
 
 ---
 
