@@ -554,7 +554,7 @@ vpn/DefaultNetworkMonitor.kt # §087: detect genuine iface switch (prev!=new), d
 vpn/DefaultNetworkListener.kt# ConnectivityManager.NetworkCallback в coroutine-actor (порт SagerNet)
 vpn/LocalResolver.kt         # LocalDNSTransport — DNS-запросы bound к underlying network (не tun)
 vpn/ConfigManager.kt         # file-based config store (filesDir) + notificationTitle
-vpn/ServiceNotification.kt   # foreground-service notification (typed SPECIAL_USE на API34+)
+vpn/ServiceNotification.kt   # foreground-service notification (typed SPECIAL_USE на API34+); §182 action-кнопки Stop/Reconnect (broadcast ACTION_STOP / ACTION_RECONNECT)
 vpn/VpnStatus.kt             # enum Stopped/Starting/Started/Stopping (native-сторона статуса)
 vpn/BootReceiver.kt          # BOOT_COMPLETED auto-start + SharedPreferences native-тогглов
 vpn/LxBoxTileService.kt      # QS-tile toggle (§032) с оптимистичным рендером

@@ -11,7 +11,12 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import io.nekohasekai.libbox.TunOptions
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 /// §049 F1 split (mirror reference SagerNet 1.13.11).
 ///
@@ -30,6 +35,9 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         const val ACTION_FORCE_STOP = "com.leadaxe.lxbox.ACTION_FORCE_STOP"
         const val ACTION_RELOAD = "com.leadaxe.lxbox.ACTION_RELOAD"
         const val ACTION_RESET_NETWORK = "com.leadaxe.lxbox.ACTION_RESET_NETWORK"
+        /// §182 — кнопка Reconnect в foreground-уведомлении: native-side
+        /// reconnect (stopAwait→start), переживает убитый UI-движок.
+        const val ACTION_RECONNECT = "com.leadaxe.lxbox.ACTION_RECONNECT"
         const val BROADCAST_STATUS = "com.leadaxe.lxbox.BROADCAST_STATUS"
         const val EXTRA_STATUS = "status"
 
@@ -134,6 +142,55 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
                 Intent(ACTION_STOP).setPackage(context.packageName)
             )
             return completer
+        }
+
+        /// §182 — process-level scope для reconnect-цепочки stopAwait→start.
+        /// НЕ на serviceScope: doStop()→stopSelf()→onDestroy отменил бы serviceScope
+        /// до того как мы дождёмся Stopped и сделаем новый start. Живёт на уровне
+        /// процесса (companion), как stopCompleter; не отменяется нигде (лёгкий:
+        /// одна короткоживущая корутина за reconnect).
+        private val reconnectScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+        /// §182 — guard от двойного reconnect'а (двойной тап по кнопке в шторке).
+        @Volatile
+        private var reconnecting: Boolean = false
+
+        /// §182 — native-side reconnect для кнопки Reconnect в уведомлении.
+        /// = stopAwait() (дождаться полного Stopped) → start() (новый
+        /// startForegroundService). Через stopAwait, а НЕ «doStop()+сразу start()»:
+        /// ранний start попал бы в onStartCommand guard (status != Stopped → silent
+        /// return) и сервис не перезапустился бы (тот же race, что §002 закрыл для
+        /// Dart-пути). Работает с убитым UI-движком — путь полностью native.
+        ///
+        /// JNI no-throw (§141/§151): зовётся из BroadcastReceiver; тело защищено,
+        /// наружу не бросаем.
+        fun reconnect(context: Context) {
+            Log.d(TAG, "[vpn] companion.reconnect() current status=${currentStatus.name}")
+            if (reconnecting) {
+                Log.w(TAG, "[vpn] reconnect already in progress — ignore")
+                return
+            }
+            if (currentStatus == VpnStatus.Stopped) {
+                start(context)   // нечего останавливать — просто старт
+                return
+            }
+            reconnecting = true
+            reconnectScope.launch {
+                val stopped = try {
+                    withTimeout(6_000) { stopAwait(context).await(); true }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "[vpn] reconnect: stop phase failed/timeout: ${t.message}")
+                    false
+                }
+                if (stopped) {
+                    start(context)   // startForegroundService(ACTION_START)
+                } else {
+                    // D-1: stop не подтвердился — НЕ стартуем поверх (избегаем
+                    // guard-залипания). Юзер увидит что VPN не поднялся, повторит.
+                    Log.w(TAG, "[vpn] reconnect aborted — stop not confirmed")
+                }
+                reconnecting = false
+            }
         }
     }
 

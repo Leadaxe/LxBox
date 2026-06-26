@@ -107,6 +107,13 @@ class BoxService(
             when (intent.action) {
                 BoxVpnService.ACTION_STOP -> doStop()
                 BoxVpnService.ACTION_FORCE_STOP -> doForceStop()
+                BoxVpnService.ACTION_RECONNECT -> {
+                    // §182 — кнопка Reconnect в уведомлении. Через companion (а не
+                    // локальный метод): reconnect переживает stopSelf этого инстанса.
+                    Log.d(TAG, "[vpn] receiver: ACTION_RECONNECT → BoxVpnService.reconnect()")
+                    runCatching { BoxVpnService.reconnect(service.applicationContext) }
+                        .onFailure { Log.e(TAG, "ACTION_RECONNECT failed", it) }
+                }
                 BoxVpnService.ACTION_RELOAD -> {
                     Log.d(TAG, "[vpn] receiver: ACTION_RELOAD → serviceReload()")
                     runCatching { serviceReload() }
@@ -164,6 +171,7 @@ class BoxService(
             ContextCompat.registerReceiver(service, receiver, IntentFilter().apply {
                 addAction(BoxVpnService.ACTION_STOP)
                 addAction(BoxVpnService.ACTION_FORCE_STOP)
+                addAction(BoxVpnService.ACTION_RECONNECT)   // §182
                 addAction(BoxVpnService.ACTION_RELOAD)
                 addAction(BoxVpnService.ACTION_RESET_NETWORK)
                 when (mode) {

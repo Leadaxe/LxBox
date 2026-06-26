@@ -37,6 +37,26 @@ class ServiceNotification(private val service: Service) {
             .setOngoing(true)
 
         if (pendingIntent != null) builder.setContentIntent(pendingIntent)
+
+        // §182 — кнопки Stop / Reconnect прямо в шторке (фидбэк #180/#261).
+        // ВАЖНО: addAction НЕ идемпотентен — навешиваем СТРОГО здесь, в init
+        // (builder переиспользуется между show()), иначе кнопки стекаются на
+        // каждый апдейт title/text. icon=0: на Android 7+ action-иконки в
+        // развёрнутом уведомлении compat-стиль скрывает, текст-лейбла достаточно.
+        builder
+            .addAction(0, "Stop", broadcastPI(BoxVpnService.ACTION_STOP, 1))
+            .addAction(0, "Reconnect", broadcastPI(BoxVpnService.ACTION_RECONNECT, 2))
+    }
+
+    /// §182 — PendingIntent на explicit-broadcast (только своему пакету →
+    /// receiver RECEIVER_NOT_EXPORTED извне не дёрнуть). FLAG_IMMUTABLE —
+    /// требование API 31+.
+    private fun broadcastPI(action: String, requestCode: Int): PendingIntent {
+        val intent = Intent(action).setPackage(service.packageName)
+        return PendingIntent.getBroadcast(
+            service, requestCode, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 
     private fun createChannel() {
