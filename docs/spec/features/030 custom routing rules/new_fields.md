@@ -8,8 +8,9 @@
 > укладка `source_ip_cidr` в headless. Не отдельная фича: те же
 > `CustomRuleInline`/`CustomRuleSrs`, тот же редактор, тот же билдер.
 
-**Статус:** ✅ РЕАЛИЗОВАНО (решения ниже). 1261 тест зелёный; device-проверка
-headless `wifi_ssid`/`source_ip_cidr` на 1.14 — pending (smoke на устройстве).
+**Статус:** ✅ РЕАЛИЗОВАНО + device-verified (CPH2411, dev.79). 1261 тест зелёный;
+ядро 1.14 принимает headless rule_set с `wifi_ssid`/`source_ip_cidr` без fatal,
+CIDR-пресеты и INBOUND-секция работают на устройстве.
 **Связано:** §119 (`mixed-in` inbound), §120 (`#if` inbounds),
 §051 (wifi_* — здесь ревизуется), §117 (DNS-mirror).
 **Ядро:** `v1.14.0-lx.1-rc.9`, сверено по исходникам
@@ -272,5 +273,6 @@ class InboundSection extends StatefulWidget {  // _expanded локально
 - Ядро НЕ трогаем — все поля нативны в 1.14.
 - `process_name` / `source_geoip` — вне scope.
 - Перенос `wifi_*` route→headless: **поведение эквивалентно** (AND-семантика
-  та же), но JSON-форма меняется → §051-тесты обновить, device-проверить что
-  1.14 headless с `wifi_ssid` парсится (не fatal).
+  та же), но JSON-форма меняется → §051-тесты обновлены; ✅ device-verified
+  (CPH2411, dev.79): 1.14 headless с `wifi_ssid`/`source_ip_cidr` парсится без
+  fatal, туннель поднимается.
