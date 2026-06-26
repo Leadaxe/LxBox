@@ -123,9 +123,10 @@ class _TrafficEventDetailSheet extends StatelessWidget {
       _copyRow(context, 'Kind', e.kind.name),
     ]));
 
-    // Process — кликабельно → поиск; confidence красится по уровню.
-    out.addAll(_group(context, 'Process', [
-      _searchRow(context, 'Process', e.process ?? ''),
+    // §044 — App: иконка + имя приложения + package, плюс атрибуция.
+    // (бывш. Process — теперь с человекочитаемым именем и иконкой).
+    out.addAll(_group(context, 'App', [
+      _appRow(context, e.process ?? ''),
       _confidenceRow(context, e),
       _copyRow(context, 'Matched via', e.matchedVia ?? ''),
       _copyRow(context, 'Shown because', e.shownBecause ?? ''),
@@ -135,6 +136,10 @@ class _TrafficEventDetailSheet extends StatelessWidget {
     out.addAll(_group(context, 'Routing', [
       // Главная трассировка: [net] proc ⇒ rule ⇒ группы : node → detour → domain.
       _copyRow(context, 'Route', e.routingLine),
+      // §044 — явная строка Rule: правило, через которое попало (или «final»
+      // если ядро rule не отдало — дефолт-маршрут; для DNS rule пуст всегда).
+      _copyRow(context, 'Rule',
+          (e.rule != null && e.rule!.isNotEmpty) ? e.rule! : 'final'),
       // Сырой маршрут (chains как от ядра) — точные теги для копирования.
       if (e.outboundChain.isNotEmpty)
         _copyRow(context, 'Chain', e.outboundChain.join(' / ')),
@@ -228,6 +233,56 @@ class _TrafficEventDetailSheet extends StatelessWidget {
               width: size, height: size, gaplessPlayback: true),
         );
       },
+    );
+  }
+
+  /// §044 — строка App: иконка приложения + человекочитаемое имя (из
+  /// AppInfoCache) + package мелким моноширинным. Тап → поиск по package.
+  /// `null` если package пуст.
+  Widget? _appRow(BuildContext context, String pkg) {
+    if (pkg.isEmpty) return null;
+    final cs = Theme.of(context).colorScheme;
+    AppInfoCache.ensure(pkg);
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).pop();
+        onSearchKey(pkg);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: AnimatedBuilder(
+          animation: AppInfoCache.revision,
+          builder: (context, _) {
+            final info = AppInfoCache.of(pkg);
+            final name = (info?.appName.isNotEmpty ?? false)
+                ? info!.appName
+                : pkg.split('.').last;
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _appIcon(context, pkg),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name,
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
+                      Text(pkg,
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              color: cs.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.search, size: 16, color: cs.onSurfaceVariant),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 
