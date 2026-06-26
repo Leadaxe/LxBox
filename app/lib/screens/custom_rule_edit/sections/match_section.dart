@@ -20,6 +20,9 @@ class MatchSection extends StatelessWidget {
     required this.ipCidrCtrl,
     required this.ipIsPrivate,
     required this.onIpIsPrivateChanged,
+    required this.sourceIpCidrCtrl,
+    required this.sourceIpIsPrivate,
+    required this.onSourceIpIsPrivateChanged,
   });
 
   final TextEditingController domainCtrl;
@@ -28,6 +31,12 @@ class MatchSection extends StatelessWidget {
   final TextEditingController ipCidrCtrl;
   final bool ipIsPrivate;
   final ValueChanged<bool> onIpIsPrivateChanged;
+
+  /// §030/new_fields — source-IP-CIDR (источник пакета). Эмитится в headless
+  /// match (sing-box 1.14). chip-поле, та же cidr-валидация что у [ipCidrCtrl].
+  final TextEditingController sourceIpCidrCtrl;
+  final bool sourceIpIsPrivate;
+  final ValueChanged<bool> onSourceIpIsPrivateChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +96,36 @@ class MatchSection extends StatelessWidget {
           subtitle: const Text(
             'Match RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + '
             'link-local',
+            style: TextStyle(fontSize: 11),
+          ),
+        ),
+        // §030/new_fields — source-ось: по источнику пакета (AND с группой
+        // назначения). Полезно для mixed-in прокси-клиентов (LAN) и source-
+        // сегментов tun.
+        ItemsField(
+          label: 'Source IP CIDR',
+          controller: sourceIpCidrCtrl,
+          validator: v.isValidCidr,
+          normalize: (s) {
+            if (!s.contains('/')) {
+              return s.contains(':') ? '$s/128' : '$s/32';
+            }
+            return s;
+          },
+          hint: '192.168.1.0/24\n10.0.0.5',
+        ),
+        CheckboxListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          value: sourceIpIsPrivate,
+          onChanged: (v) => onSourceIpIsPrivateChanged(v ?? false),
+          title: const Text(
+            'Private source IP',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          subtitle: const Text(
+            'Match when the packet SOURCE is a private address',
             style: TextStyle(fontSize: 11),
           ),
         ),
