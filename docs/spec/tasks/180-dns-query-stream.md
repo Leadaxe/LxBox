@@ -1,10 +1,15 @@
 # §180 — DNS на структурный стрим `subscribeDNSQueries` (ядро SPEC 018)
 
 **Тип:** feature (выпил текстового DNS-парсинга → структурный live-поток с атрибуцией из ядра)
-**Статус:** Реализовано (Dart 39 тестов зелёных, analyze чист). Device-verify
-впереди. Решения: §180.5 = **вариант A** (выпил текстового DNS начисто, без
-fallback); §177-баннер оставлен как есть (перестанет загораться естественно —
-атрибуция из ядра; код не трогаем). Биндинг rc.7 сверен javap:
+**Статус:** Клиент РЕАЛИЗОВАН (Dart 39 тестов зелёных, analyze чист, APK rc.7
+собран). **БЛОКЕР ЯДРА (device dev.71, rc.7):** ядро отдаёт `rpc error: code =
+Unimplemented desc = DNS query tracking not available`. RPC `SubscribeDNSQueries`
+объявлен в proto/биндинге (javap классы видит), НО серверная реализация в AAR
+rc.7 НЕ активна. Наша сторона дошла штатно: `connectProfiler → connected gen=2`,
+`subscribeDNSQueries` вызван, `DnsHandler.onError` поймал Unimplemented, профайлер
+не упал, TCP/UDP идут. Ждём ядро с активированным DNS-tracking. ВАЖНО: до фикса
+ядра DNS в Live ПУСТ (вариант A — старого текстового пути нет, новый не отвечает).
+Решения: §180.5 = вариант A; §177-баннер не трогаем. Биндинг rc.7 сверен javap:
 `subscribeDNSQueries(bool, DnsQueryHandler)→DnsQuerySubscription`,
 `DnsQuery{getDomain/getQueryType/getRcode/getTTL/getSource/getFailed/getError/
 getProcessInfo, answers()}`, `DnsQueryHandler{onQuery, onError}`.
