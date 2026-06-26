@@ -645,6 +645,21 @@ void main() {
       expect(TrafficProfiler.I.unattributedBannerActive, true);
       await sub.cancel();
     });
+
+    test('§177-A successful unattributed DNS resolves do NOT light the banner',
+        () async {
+      final sub = TrafficProfiler.I.globalLiveStream().listen((_) {});
+      // 12 УСПЕШНЫХ резолвов без владельца (нет router: found package рядом) —
+      // это норма, НЕ сбой. Баннер не должен гореть.
+      for (var i = 0; i < 12; i++) {
+        TrafficProfiler.I.feedLogLineForTest(
+            'INFO[0970] [${2000 + i} 5ms] dns: exchanged A x$i.test. 60 IN A 1.2.3.4');
+      }
+      expect(TrafficProfiler.I.recentUnattributedCount, 0,
+          reason: 'успешные dnsResolve без владельца — не признак сбоя');
+      expect(TrafficProfiler.I.unattributedBannerActive, false);
+      await sub.cancel();
+    });
   });
 
   // ───── §048 regression: time-based GC ─────────────────────────────────

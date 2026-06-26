@@ -226,13 +226,33 @@ class TrafficProfiler extends ChangeNotifier {
 
   /// §048 — count unattributed events за last [_unattributedBannerWindow]
   /// (для banner detection в UI: > [_unattributedBannerThreshold] = warning).
+  ///
+  /// §177-A — в счёт идут ТОЛЬКО признаки сбоя ([_isBannerWorthy]). Успешный
+  /// `dnsResolve` без владельца — норма (DNS плохо атрибутируется, §171), не
+  /// тревога; раньше он ложно зажигал баннер почти постоянно на busy-устройстве.
   int get recentUnattributedCount {
     final cutoff = DateTime.now().subtract(_unattributedBannerWindow);
     var n = 0;
     for (final e in _globalUnattributedEvents) {
-      if (e.ts.isAfter(cutoff)) n++;
+      if (!e.ts.isAfter(cutoff)) continue;
+      if (!_isBannerWorthy(e)) continue;
+      n++;
     }
     return n;
+  }
+
+  /// §177-A — событие достойно баннера (признак сбоя), если это DNS-fail или
+  /// TCP/UDP без владельца. Успешный dnsResolve без атрибуции — норма, не в счёт.
+  /// Кольцо `_globalUnattributedEvents` НЕ фильтруем — UI-секция и Debug API
+  /// показывают всё; меняется только что считать ТРЕВОГОЙ.
+  bool _isBannerWorthy(TrafficEvent e) {
+    if (e.kind == TrafficEventKind.dnsFail) return true;
+    if ((e.kind == TrafficEventKind.tcpOpen ||
+            e.kind == TrafficEventKind.udpOpen) &&
+        (e.process == null || e.process!.isEmpty)) {
+      return true;
+    }
+    return false;
   }
 
   bool get unattributedBannerActive =>
