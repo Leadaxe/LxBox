@@ -28,7 +28,8 @@ class AppSettingsScreen extends StatefulWidget {
     this.highlightCoreLogs = false,
   });
 
-  /// 0 = General, 1 = Diagnostics. Used by deep-links.
+  /// 0 = General, 1 = Subscriptions, 2 = Diagnostics, 3 = Automation.
+  /// Used by deep-links.
   final int initialTab;
 
   /// Если true — после первого render'а скроллим к «Forward sing-box logs»
@@ -86,7 +87,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     _debugPortCtl = TextEditingController();
     unawaited(_loadAutoStart());
     if (widget.highlightCoreLogs) {
-      // Tile живёт в Diagnostics tab (initialTab=1). Tab сам строит
+      // Tile живёт в Diagnostics tab (initialTab=2). Tab сам строит
       // children когда juзер на нём — postFrame этого build'а гарантирует
       // что _coreLogsTileKey.currentContext доступен.
       WidgetsBinding.instance.addPostFrameCallback((_) {
