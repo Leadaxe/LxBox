@@ -1,10 +1,10 @@
 # §178 — detour-хвост в connection-цепочке (`Connection.Detour()`, ядро SPEC 017)
 
 **Тип:** feature (показать реальный физический путь пакета: `node → WARP`)
-**Статус:** Реализовано полностью (rc.6). Kotlin-чтение `detour()` АКТИВИРОВАНО —
-javap AAR rc.6 подтвердил `detour() → StringIterator` (SPEC 017). Ядро запинено
-`v1.14.0-lx.1-rc.6`. Dart-слой + склейка + тесты (39 зелёных). Device-verify
-впереди (раздел «Проверка»).
+**Статус:** ✅ DEVICE-VERIFIED (dev.68, ядро rc.6, 2026-06-26). Kotlin-чтение
+`detour()` активировано (javap AAR rc.6: `detour() → StringIterator`, SPEC 017).
+Ядро запинено `v1.14.0-lx.1-rc.6`. Live показывает полный путь
+`BL: 🇨🇦 Canada [BL] → vpn-1 → 🔥⛈️ WARP (AWG 1.5)`. Тесты 39 зелёных.
 **Связано:** §174 (chains-паритет с Clash), §168 (профайлер), §044 (Live),
 ядро [SPEC 017](../../../../sing-box-lx/SPECS/017-CONNECTION_DETOUR_CHAIN/SPEC.md)
 
@@ -121,10 +121,21 @@ map как `"detours" to []` — проводка до Dart готова, но �
 `outboundChain == [node, sel, WARP]`. conn с пустым `detours` → `outboundChain`
 неизменён (== §174). conn прямой (`chains=[]`, `detours=[]`) → fallback `[outbound]`.
 
-## Проверка (device) — КОГДА ПРИЕДЕТ ЯДРО rc.6
+## Проверка (device) — ✅ ПОДТВЕРЖДЕНО (dev.68, ядро rc.6, 2026-06-26)
 
-1. `javap` AAR: метод `detour()` на `Connection` присутствует, тип `StringIterator`.
-2. `/profiler/live` для conn через `[BL]`-ноду с detour=WARP → `outbound_chain`
-   оканчивается на `"🔥⛈️ WARP (AWG 1.5)"`.
-3. Прямой/direct conn → detour пуст, путь как был.
-4. Регресс §174: `chains` (Clash-API `/connections`) не изменился.
+1. ✅ `javap` AAR rc.6: `public native StringIterator detour();` на `Connection` —
+   есть, тип `StringIterator` (имя lowercase, как угадали).
+2. ✅ `/profiler/live` после `switch-node` на `BL: 🇨🇦 Canada, Toronto | [BL]`
+   (detour=WARP в конфиге) → `outbound_chain` =
+   **`["BL: 🇨🇦 Canada, Toronto | [BL]", "vpn-1", "🔥⛈️ WARP (AWG 1.5)"]`** —
+   detour-хвост на месте, полный физ.путь `node → selector → WARP`.
+3. ✅ Нода БЕЗ detour (`L: 🇫🇮⚡Финляндия → ✨auto → vpn-1`) — без WARP-хвоста;
+   `direct-out` — без цепочки. Detour не «протекает» на не-detour conn.
+4. ✅ §174-паритет: обычная цепочка `[node, …selectors]` не изменилась.
+
+Доказывает всю цепочку rc.6: ядро `detour()` → Kotlin итератор → `CcConnection.
+detours` → склейка в профайлере → Live. Снято через Debug API `/profiler/live`.
+
+Нюанс: при активной нодe = urltest-группе (`✨auto`) chain[0]=имя ГРУППЫ, detour
+группы пуст (detour — свойство конкретной ноды-листа, не urltest-обёртки). Хвост
+WARP виден когда выбрана КОНКРЕТНАЯ `[BL]`-нода (через неё detour резолвится).

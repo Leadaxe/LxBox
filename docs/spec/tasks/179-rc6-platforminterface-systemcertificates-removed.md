@@ -1,7 +1,10 @@
 # §179 — rc.6: `PlatformInterface.systemCertificates()` убран ядром (миграция обвязки)
 
 **Тип:** bug-fix (breaking change в libbox-биндинге при бампе ядра rc.5→rc.6)
-**Статус:** Реализовано (Kotlin собирается на rc.6)
+**Статус:** ✅ DEVICE-VERIFIED (dev.68, rc.6, 2026-06-26): VPN стартует
+(`start-vpn-headless` → `tunnel: connected`, нода выбирается, трафик идёт) —
+PlatformInterface полностью реализует rc.6-контракт, нет AbstractMethodError,
+удаление systemCertificates не сломало TLS-стек ядра.
 **Связано:** §128 (сбор системных CA), §121 (адаптация на libbox 1.14),
 [migration 1.14 API breaks](../../../app/android), §178 (detour — едет тем же rc.6)
 
