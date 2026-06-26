@@ -1,6 +1,25 @@
 # 044 / new-profiler — редизайн: одна control-строка + фильтр-окно
 
-> **Статус:** 🚧 Спека (обсуждено с юзером 2026-06-26). Не реализовано.
+> **Статус (2026-06-27):** ✅ Реализовано + device-pending. Код: control-строка
+> (`trace_explorer.dart`), `ProfilerFilter` + `ProfilerFilterSheet`, `AppMultiPicker`,
+> `eventsToJson`, Live→Profiler, настраиваемый retention. Сьют 1274 зелёный.
+> Коммиты: 7e27ec0/f959424 (база) + fdcb997 (иконка главной) + b98ce0c (фильтр
+> Protocol+App + retention).
+>
+> **Уточнения по итогам device-фидбэка юзера (2026-06-27):**
+> - Фильтр-окно: **2 вкладки** (не 4). Таб 1 = **Protocol** (DNS/TCP/UDP чипы в
+>   одном табе). Таб 2 = **App** — галочки **замеченных в трафике** пакетов
+>   (`seenApps` из текущих событий) + «**потеряшки**» (unattributed) галочкой +
+>   кнопка **«Add app»** (полный `AppMultiPicker` для пакета, которого ещё не было).
+> - `onlyUnattributed` (эксклюзивно) → **`includeUnattributed`**: потеряшки —
+>   пункт app-оси, работает в **OR** с выбранными app (`process∈apps ∨ unattr`).
+> - **Live retention настраиваемо** (было жёстко 60s): `SettingsStorage.
+>   profiler_retention_sec`, default **10 мин**, опции 1m/10m/1h в control-строке
+>   (кнопка `⏱ history`). Hard cap буфера 3000→20000.
+> - Иконка фильтра на главном унифицирована: `Icons.tune` → `Icons.filter_list`.
+
+> **Исходная спека (обсуждено 2026-06-26).** Ниже — первоначальный план (4 таба
+> App/DNS/TCP/UDP); фактическая реализация = 2 таба (см. уточнения выше).
 > **Родитель:** [`spec.md`](spec.md) — фича 044 Per-app traffic profiler.
 > **Предшественник:** [`tasks/160-perapp-trace-live-aggregated-redesign.md`](../../tasks/160-perapp-trace-live-aggregated-redesign.md)
 > (свернул 4 саб-таба → тогл Live/Aggregated + общий фильтр-строки). Этот документ —
