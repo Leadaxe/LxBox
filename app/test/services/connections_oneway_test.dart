@@ -2,7 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/screens/connections_screen.dart';
+import 'package:lxbox/services/process_name.dart';
+import 'package:lxbox/services/rule_name_resolver.dart';
 
 /// §153 — тесты эвристики `isOneWayStuck` (подсветка зависших соединений).
 ///
@@ -210,6 +213,73 @@ void main() {
         expect(pkg.contains(' '), isFalse);
         expect(pkg.contains('('), isFalse);
       }
+    });
+  });
+
+  group('§165 RuleNameResolver — справочник c.rule → title', () {
+    setUp(() => RuleNameResolver.I.clear());
+    tearDown(() => RuleNameResolver.I.clear());
+
+    CustomRuleInline rule(String name, {
+      List<String> suffixes = const [],
+      List<String> domains = const [],
+      List<String> ssids = const [],
+      List<String> bssids = const [],
+    }) =>
+        CustomRuleInline(
+          name: name,
+          enabled: true,
+          domains: domains,
+          domainSuffixes: suffixes,
+          wifiSsids: ssids,
+          wifiBssids: bssids,
+          outbound: 'vpn-1',
+        );
+
+    test('матч по условиям → title (даже при обрезке списка ядром)', () {
+      RuleNameResolver.I.setRules([
+        rule('Home wifi',
+            suffixes: ['a.com', 'b.com', 'c.com', 'd.com', 'e.com'],
+            ssids: ['LexRouteRich2G', 'LexRouteRich5G']),
+      ]);
+      // Ядро обрезало suffix-список до 3+`...` — но префикс совпадает.
+      expect(
+        ruleName(
+            'domain_suffix=[a.com b.com c.com...] wifi_ssid=[LexRouteRich2G LexRouteRich5G] => route(vpn-1)'),
+        'Home wifi',
+      );
+    });
+
+    test('нормализация: лишние пробелы/переносы не ломают матч', () {
+      RuleNameResolver.I.setRules([
+        rule('Block Ads', suffixes: ['ads.com', 'track.com']),
+      ]);
+      expect(
+        ruleName('domain_suffix=[ads.com   track.com]\n => reject'),
+        'Block Ads',
+      );
+    });
+
+    test('правило не найдено → fallback final', () {
+      RuleNameResolver.I.setRules([rule('Home wifi', suffixes: ['a.com'])]);
+      expect(ruleName('domain=[unknown.xyz]'), isNot('Home wifi'));
+      expect(ruleName('final'), 'final');
+      expect(ruleName(''), 'final');
+    });
+
+    test('кэш: повторный c.rule → тот же результат (быстрый путь)', () {
+      RuleNameResolver.I.setRules([rule('Warp', suffixes: ['warp.test'])]);
+      const s = 'domain_suffix=warp.test => route(vpn-1)';
+      final first = ruleName(s);
+      final second = ruleName(s);
+      expect(first, 'Warp');
+      expect(second, 'Warp');
+    });
+
+    test('fallback rule_set=<tag> когда справочник пуст', () {
+      // setRules не вызван (пустой справочник) → fallback на rule_set-тег.
+      expect(ruleName('rule_set=SomeTag => route(vpn-1)'), 'SomeTag');
+      expect(ruleName('rule_set=[ru-domains ru-services]'), 'ru-domains');
     });
   });
 }

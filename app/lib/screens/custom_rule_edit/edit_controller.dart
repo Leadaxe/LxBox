@@ -70,6 +70,7 @@ class CustomRuleEditController extends ChangeNotifier {
   late final TextEditingController domainSuffixCtrl;
   late final TextEditingController domainKeywordCtrl;
   late final TextEditingController ipCidrCtrl;
+  late final TextEditingController sourceIpCidrCtrl;
   late final TextEditingController portCtrl;
   late final TextEditingController portRangeCtrl;
   late final TextEditingController srsUrlCtrl;
@@ -78,6 +79,8 @@ class CustomRuleEditController extends ChangeNotifier {
 
   late bool _enabled;
   late bool _ipIsPrivate;
+  late bool _sourceIpIsPrivate;
+  late Set<String> _inbounds;
   late CustomRuleKind _kind;
   late String _outbound;
   late Set<String> _protocols;
@@ -86,6 +89,11 @@ class CustomRuleEditController extends ChangeNotifier {
   late Map<String, String> _varsValues;
   late RuleDns? _dns;
   List<String> _dnsServerTags = const [];
+
+  /// §030/new_fields — есть ли в текущем vpn_mode `mixed-in` inbound (режимы
+  /// proxy/vpn_proxy, §119). Гейтит чекбокс `Proxy interface` в INBOUND-секции.
+  /// Читается async в `_init` через [SettingsStorage.getVpnMode].
+  bool _hasMixedInbound = false;
   Map<String, String> _presetSrsPaths = const {};
   SrsDownloadState _srsState = SrsDownloadState.none;
   final Set<String> _boolVarDownloading = <String>{};
@@ -96,6 +104,19 @@ class CustomRuleEditController extends ChangeNotifier {
 
   bool get enabled => _enabled;
   bool get ipIsPrivate => _ipIsPrivate;
+  bool get sourceIpIsPrivate => _sourceIpIsPrivate;
+
+  /// §030/new_fields — выбранные inbound-теги (`tun-in`/`mixed-in`).
+  Set<String> get inbounds => _inbounds;
+
+  /// §030/new_fields — доступные inbound-варианты для INBOUND-секции. Лейбл
+  /// человекочитаемый, значение = тег билдера (§119). `mixed-in` гейтится по
+  /// текущему vpn_mode ([_hasMixedInbound]) — в tun-only его нет.
+  List<({String tag, String label})> get inboundChoices => [
+        (tag: 'tun-in', label: 'TUN — system interface'),
+        if (_hasMixedInbound) (tag: 'mixed-in', label: 'Proxy interface'),
+      ];
+
   CustomRuleKind get kind => _kind;
   String get outbound => _outbound;
   Set<String> get protocols => _protocols;
@@ -129,6 +150,7 @@ class CustomRuleEditController extends ChangeNotifier {
         domainSuffixCtrl,
         domainKeywordCtrl,
         ipCidrCtrl,
+        sourceIpCidrCtrl,
         portCtrl,
         portRangeCtrl,
         srsUrlCtrl,
@@ -143,11 +165,14 @@ class CustomRuleEditController extends ChangeNotifier {
     domainKeywordCtrl =
         TextEditingController(text: r.domainKeywords.join('\n'));
     ipCidrCtrl = TextEditingController(text: r.ipCidrs.join('\n'));
+    sourceIpCidrCtrl = TextEditingController(text: r.sourceIpCidrs.join('\n'));
     portCtrl = TextEditingController(text: r.ports.join('\n'));
     portRangeCtrl = TextEditingController(text: r.portRanges.join('\n'));
     srsUrlCtrl = TextEditingController(text: r.srsUrl);
     _enabled = r.enabled;
     _ipIsPrivate = r.ipIsPrivate;
+    _sourceIpIsPrivate = r.sourceIpIsPrivate;
+    _inbounds = r.inbounds.toSet();
     _kind = r.kind;
     _outbound = r.outbound;
     _protocols = r.protocols.toSet();
@@ -156,6 +181,7 @@ class CustomRuleEditController extends ChangeNotifier {
     _varsValues = Map<String, String>.from(r.varsValues);
     _dns = r.dns;
     unawaited(_loadDnsServerTags());
+    unawaited(_loadVpnMode());
 
     // Forward text changes — AppBar Save-icon (dirty indicator) и
     // tab'ы re-evaluate isDirty / снимок при каждом keystroke.
@@ -203,6 +229,15 @@ class CustomRuleEditController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// §030/new_fields — читает текущий vpn_mode для гейта `mixed-in`-чекбокса
+  /// в INBOUND-секции. `mixed-in` существует только в proxy/vpn_proxy (§119).
+  Future<void> _loadVpnMode() async {
+    final cfg = await SettingsStorage.getVpnMode();
+    if (_disposed) return;
+    _hasMixedInbound = cfg.hasMixed;
+    notifyListeners();
+  }
+
   /// Async-prefetch cached paths для remote rule_set'ов пресета (§011).
   /// Без этого View tab показывал бы warnings «no cached file» для
   /// уже скачанного пресета.
@@ -243,6 +278,22 @@ class CustomRuleEditController extends ChangeNotifier {
   void setIpIsPrivate(bool v) {
     if (_ipIsPrivate == v) return;
     _ipIsPrivate = v;
+    notifyListeners();
+  }
+
+  void setSourceIpIsPrivate(bool v) {
+    if (_sourceIpIsPrivate == v) return;
+    _sourceIpIsPrivate = v;
+    notifyListeners();
+  }
+
+  /// §030/new_fields — тоггл inbound-тега (`tun-in`/`mixed-in`).
+  void toggleInbound(String tag, bool checked) {
+    if (checked) {
+      if (!_inbounds.add(tag)) return;
+    } else {
+      if (!_inbounds.remove(tag)) return;
+    }
     notifyListeners();
   }
 
@@ -469,6 +520,9 @@ class CustomRuleEditController extends ChangeNotifier {
           packages: List.of(_packages),
           protocols: _protocols.toList()..sort(),
           ipIsPrivate: _ipIsPrivate,
+          sourceIpCidrs: norm.normalizedCidrs(sourceIpCidrCtrl.text),
+          sourceIpIsPrivate: _sourceIpIsPrivate,
+          inbounds: _inbounds.toList()..sort(),
           wifiSsids: wifi.ssids,
           wifiBssids: wifi.bssids,
           outbound: _outbound,
@@ -491,6 +545,9 @@ class CustomRuleEditController extends ChangeNotifier {
           packages: List.of(_packages),
           protocols: _protocols.toList()..sort(),
           ipIsPrivate: _ipIsPrivate,
+          sourceIpCidrs: norm.normalizedCidrs(sourceIpCidrCtrl.text),
+          sourceIpIsPrivate: _sourceIpIsPrivate,
+          inbounds: _inbounds.toList()..sort(),
           wifiSsids: wifi.ssids,
           wifiBssids: wifi.bssids,
           outbound: _outbound,

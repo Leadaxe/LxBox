@@ -148,6 +148,23 @@ Caller в Dart получает control только после `setStatus(Stopp
 - Настройка "Keep VPN on exit" — если выключена, VPN останавливается при свайпе приложения.
 - Реализовано через `onTaskRemoved` в VpnService.
 
+### Action-кнопки в уведомлении (§182)
+
+Постоянное foreground-уведомление несёт две action-кнопки (`addAction` в
+`ServiceNotification.init`, навешиваются один раз — `addAction` не идемпотентен):
+
+| Кнопка | Action | Путь |
+|---|---|---|
+| **Stop** | `ACTION_STOP` | broadcast → `receiver` → `doStop()` (та же механика, что кнопка Stop в приложении) |
+| **Reconnect** | `ACTION_RECONNECT` | broadcast → `receiver` → `BoxVpnService.reconnect()` (companion) |
+
+`reconnect()` — **native-side** примитив (`stopAwait()` → `start()`) на companion-level
+`reconnectScope`: дожидается полного `setStatus(Stopped)` перед новым стартом (иначе
+`onStartCommand` guard молча отбросит старт — §002), переживает убитый UI-движок
+(не зависит от Flutter / Dart `reconnect()`). Stop-фаза с `withTimeout(6с)`; при
+таймауте reconnect aborts (D-1). Кнопки шлют explicit broadcast (`setPackage`) на
+`RECEIVER_NOT_EXPORTED`-ресивер → извне не дёрнуть. Подробности — [§182](../../tasks/182-notification-action-buttons.md).
+
 ## Файлы
 
 | Файл | Изменения |
@@ -173,3 +190,4 @@ Caller в Dart получает control только после `setStatus(Stopp
 - [x] Reconnect через композицию `stop+start` не имеет race в `onStartCommand` guard (v1.4.0).
 - [x] `getVpnStatus` pull позволяет re-sync после process reattach (v1.4.0).
 - [x] Revoke от другого VPN обрабатывается через `onRevoke` с error-message в broadcast (v1.4.0).
+- [x] Кнопки Stop / Reconnect в постоянном уведомлении; Reconnect — native-side, работает с убитым UI (§182).

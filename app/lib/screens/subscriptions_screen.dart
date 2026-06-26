@@ -13,6 +13,7 @@ import '../services/settings_storage.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/url_launcher.dart';
 import 'add_server_wizard_screen.dart';
+import 'app_settings_screen.dart';
 import 'node_filter_screen.dart';
 import 'node_settings_screen.dart';
 import 'subscription_detail_screen.dart';
@@ -108,6 +109,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         subController: widget.subController,
         onAdded: _regenerateAndSave,
       ),
+    ));
+  }
+
+  /// Открыть App Settings сразу на табе «Subscriptions» (initialTab: 1).
+  void _openSubscriptionSettings() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => const AppSettingsScreen(initialTab: 1),
     ));
   }
 
@@ -303,6 +311,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     if (v == 'qr') unawaited(_scanQrCode());
                     if (v == 'file') unawaited(_importFromFile());
                     if (v == 'auto_update') unawaited(_toggleAutoUpdate());
+                    if (v == 'sub_settings') _openSubscriptionSettings();
                   },
                   itemBuilder: (_) => [
                     const PopupMenuItem(value: 'wizard', child: Text('Add server…')),
@@ -318,6 +327,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                       value: 'auto_update',
                       checked: _autoUpdateEnabled,
                       child: const Text('Auto-update subscriptions'),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'sub_settings',
+                      child: Text('Subscription settings…'),
                     ),
                   ],
                 ),

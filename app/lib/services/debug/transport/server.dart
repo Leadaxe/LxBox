@@ -8,7 +8,6 @@ import '../context.dart';
 import '../contract/errors.dart';
 import '../handlers/action.dart';
 import '../handlers/backup.dart';
-import '../handlers/clash.dart';
 import '../handlers/config.dart';
 import '../handlers/device.dart';
 import '../handlers/diag.dart';
@@ -150,7 +149,7 @@ class DebugServer {
   ///
   /// 1. **Router (здесь)** — prefix-match: `/state/...` → `stateHandler`
   /// 2. **Handler-файл** — exact `switch (req.path)` по sub-path'ам
-  ///    (`/state` → _root, `/state/clash` → _clash, ...).
+  ///    (`/state` → _root, `/state/subs` → _subs, ...).
   ///
   /// Это не случайность — намеренный компромисс. Плюсы:
   /// - handler-файл держит связанные sub-endpoints рядом (всё `/state/*`
@@ -169,7 +168,6 @@ class DebugServer {
       ..mount('/device', deviceHandler)
       ..mount('/config', configHandler)
       ..mount('/logs', logsHandler)
-      ..mount('/clash', clashHandler)
       ..mount('/action', actionHandler)
       ..mount('/files', filesHandler)
       ..mount('/diag', diagHandler)

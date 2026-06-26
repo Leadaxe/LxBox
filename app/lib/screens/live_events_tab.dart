@@ -15,13 +15,18 @@
 //   - unattributed banner.
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../services/traffic_profiler.dart';
 import '../widgets/core_logs_hint_banner.dart';
 import 'live_events_tab/recording_header.dart';
 import 'live_events_tab/unattributed_banner.dart';
+import 'per_app_trace_tab/session_json.dart';
+import 'stats_screen/profiler_filter.dart';
 import 'stats_screen/trace_explorer.dart';
 
 class LiveEventsTab extends StatefulWidget {
@@ -38,21 +43,31 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
   final List<TrafficEvent> _events = [];
   Timer? _ticker; // для refresh «Recording 02:34» каждую секунду
 
-  // System-wide app pre-фильтр (мульти-выбор пакетов). TraceExplorer о нём
-  // не знает — применяем здесь до передачи событий.
-  final Set<String> _appFilter = {}; // empty = no filter
-  final Set<String> _seenApps = {};
+  // §170 — троттл тяжёлой пересборки списка из global buffer (clear+addAll до
+  // 3000 + _trackApp в цикле + setState). SSE-события на FAST-стриме идут
+  // десятками/сек → без троттла сотни полных ребилдов/сек = фриз и краш
+  // (watchdog/память). Окно мерим от КОНЦА отработанной пересборки, не от
+  // старта: иначе на медленном пересчёте следующий тик наслаивался бы. Буфер
+  // копится в профайлере и без UI-пересборки — события не теряются, отстаёт
+  // только отрисовка (≤700мс). Тот же приём что в stats_screen (§166/§170).
+  static const _rebuildThrottle = Duration(milliseconds: 700);
+  DateTime? _rebuiltAt;
+  bool _pendingRebuild = false;
+  Timer? _rebuildTimer;
+
+  // §044/new-profiler — фильтр (app-ось + типы + поиск) теперь в общей модели,
+  // редактируется фильтр-окном (ProfilerFilterSheet). Старый локальный
+  // _appFilter/_seenApps удалён — app-выбор живёт в _filter.apps.
+  final ProfilerFilter _filter = ProfilerFilter();
 
   @override
   void initState() {
     super.initState();
     // §048 — recording state управляется explicit через
-    // [TrafficProfiler.I.startGlobalRecording] (юзер тапает ▶ START).
+    // [TrafficProfiler.I.startGlobalRecording] (юзер тапает ▶ START в хедере).
+    // Запись persistent (продолжается при уходе с вкладки) — прежнее поведение.
     final snapshot = TrafficProfiler.I.globalSnapshot(seconds: 60);
     _events.addAll(snapshot);
-    for (final e in snapshot) {
-      _trackApp(e);
-    }
     _sub = TrafficProfiler.I.globalLiveStream().listen(_onEvent);
     TrafficProfiler.I.addListener(_onProfilerChanged);
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -66,7 +81,6 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
       // STOP — буфер заморожен, _events остаётся; START — clear.
       if (!TrafficProfiler.I.isGlobalRecording) return;
       _events.clear();
-      _seenApps.clear();
     });
   }
 
@@ -78,48 +92,92 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
     }
   }
 
-  void _trackApp(TrafficEvent e) {
-    final p =
-        e.process?.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty);
-    if (p != null) _seenApps.addAll(p);
+  /// §044 — экспорт записанных событий (весь буфер). Share / Copy JSON.
+  Future<void> _exportEvents() async {
+    if (_events.isEmpty) return;
+    final json =
+        const JsonEncoder.withIndent('  ').convert(eventsToJson(_events));
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.share),
+              title: Text('Share ${_events.length} events (JSON)'),
+              onTap: () {
+                Navigator.pop(sheetCtx);
+                Share.share(json, subject: 'LxBox profiler export');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('Copy JSON to clipboard'),
+              onTap: () async {
+                Navigator.pop(sheetCtx);
+                await Clipboard.setData(ClipboardData(text: json));
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Export JSON copied')),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _onEvent(Map<String, Object?> msg) {
     if (msg['event'] != 'traffic_event') return;
     final data = msg['data'];
     if (data is! Map) return;
-    // Через SSE приходит JSON; проще пересчитать snapshot из global buffer'а
-    // на каждый tick (O(N), N ≤ 3000). Пауза отображения — в TraceExplorer.
+    // §170 — троттл: пересборка не чаще _rebuildThrottle, окно от КОНЦА прошлой
+    // (метка ставится после _rebuildFromBuffer), не от старта. На FAST-стриме
+    // события идут десятками/сек; пересборка списка (clear+addAll ≤3000 +
+    // _trackApp + setState) на каждое = захлёбывание. Буфер копится в профайлере
+    // и без UI-пересборки — событие не теряется, отстаёт ≤_rebuildThrottle.
+    final now = DateTime.now();
+    if (_rebuiltAt != null &&
+        now.difference(_rebuiltAt!) < _rebuildThrottle) {
+      // В окне — отложим один trailing-ребилд, чтобы последнее событие дошло.
+      if (!_pendingRebuild) {
+        _pendingRebuild = true;
+        final wait = _rebuildThrottle - now.difference(_rebuiltAt!);
+        _rebuildTimer = Timer(wait, () {
+          _pendingRebuild = false;
+          if (mounted) _rebuildFromBuffer();
+        });
+      }
+      return;
+    }
+    _rebuildFromBuffer();
+  }
+
+  /// Пересобрать локальный снимок из global rolling buffer'а профайлера.
+  /// Метка _rebuiltAt ставится В КОНЦЕ — окно троттла отсчитывается от
+  /// завершения работы, не от старта.
+  void _rebuildFromBuffer() {
+    if (!mounted) return;
     setState(() {
       final fresh = TrafficProfiler.I.globalRollingBuffer;
       _events
         ..clear()
         ..addAll(fresh);
-      for (final e in fresh) {
-        _trackApp(e);
-      }
     });
+    _rebuiltAt = DateTime.now();
   }
 
   @override
   void dispose() {
     _sub?.cancel();
     TrafficProfiler.I.removeListener(_onProfilerChanged);
+    _filter.dispose();
     _ticker?.cancel();
+    _rebuildTimer?.cancel();
     super.dispose();
-  }
-
-  /// События после system-wide app pre-фильтра.
-  List<TrafficEvent> get _appFiltered {
-    if (_appFilter.isEmpty) return _events;
-    return _events.where((e) {
-      final pkgs = e.process
-              ?.split(',')
-              .map((s) => s.trim())
-              .toSet() ??
-          const <String>{};
-      return pkgs.any(_appFilter.contains);
-    }).toList();
   }
 
   @override
@@ -129,8 +187,9 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
         LiveRecordingHeader(
           eventCount: _events.length,
           onToggle: _toggleRecording,
+          // §044 — экспорт справа от большой кнопки (в строке дубль убран).
+          onExport: _exportEvents,
         ),
-        _appFilterBar(context),
         const Divider(height: 1),
         const CoreLogsHintBanner(),
         if (TrafficProfiler.I.unattributedBannerActive)
@@ -140,77 +199,19 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
             // System-wide: unattributed события уже внутри globalRollingBuffer
             // как обычные строки (с confidence=unattributed). Отдельной
             // «no owner» секции (как в per-app) тут нет → unattributed=[].
-            events: _appFiltered,
+            // App-ось фильтра применяется внутри TraceExplorer через _filter.
+            // §044 — record-управление НЕ передаём: запись через большую кнопку
+            // в хедере (дубль из control-строки убран). showRecording=true
+            // оставляет аггрегацию/фильтр/паузу, но без кнопки записи и export.
+            events: _events,
             unattributed: const [],
             recording: TrafficProfiler.I.isGlobalRecording,
+            filter: _filter,
+            // Profiler-вкладка: retention-кнопка нужна, record-кнопка — нет.
+            showRetention: true,
           ),
         ),
       ],
-    );
-  }
-
-  /// System-wide app multi-select (уникален для Live; в per-app процесс один).
-  Widget _appFilterBar(BuildContext context) {
-    if (_seenApps.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: TextButton.icon(
-          onPressed: _showAppFilterSheet,
-          icon: const Icon(Icons.android, size: 16),
-          label: Text(
-            _appFilter.isEmpty ? 'All apps' : '${_appFilter.length} app(s)',
-            style: const TextStyle(fontSize: 12),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showAppFilterSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (ctx) {
-        final apps = _seenApps.toList()..sort();
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            return SafeArea(
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-                  ListTile(
-                    title: const Text('Filter by app'),
-                    trailing: TextButton(
-                      onPressed: () => setSheetState(() {
-                        _appFilter.clear();
-                        setState(() {});
-                      }),
-                      child: const Text('Clear'),
-                    ),
-                  ),
-                  for (final a in apps)
-                    CheckboxListTile(
-                      dense: true,
-                      title: Text(a, style: const TextStyle(fontSize: 13)),
-                      value: _appFilter.contains(a),
-                      onChanged: (v) {
-                        setSheetState(() {
-                          if (v ?? false) {
-                            _appFilter.add(a);
-                          } else {
-                            _appFilter.remove(a);
-                          }
-                          setState(() {});
-                        });
-                      },
-                    ),
-                ],
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }

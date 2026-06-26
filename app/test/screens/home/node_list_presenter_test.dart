@@ -15,7 +15,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   // A ходит через B → B = detour-таргет (isDetour); A/C — payload non-detour.
-  // auto/direct — control (по proxiesJson.type). Z — отсутствует в configModel.
+  // auto/direct — control (§122: isControlTag читает ConfigNode.isControl из
+  // configModel — urltest/direct). Z — отсутствует в configModel.
   final configRaw = jsonEncode({
     'outbounds': [
       {'tag': 'A', 'type': 'vless', 'detour': 'B'},
@@ -25,15 +26,6 @@ void main() {
       {'tag': 'direct', 'type': 'direct'},
     ],
   });
-  const proxiesJson = <String, dynamic>{
-    'proxies': {
-      'A': {'type': 'vless'},
-      'B': {'type': 'vless'},
-      'C': {'type': 'trojan'},
-      'auto': {'type': 'urltest'},
-      'direct': {'type': 'direct'},
-    },
-  };
   const tags = ['A', 'B', 'C', 'auto', 'direct', 'Z'];
 
   late NodeFilterViewModel filter;
@@ -49,7 +41,6 @@ void main() {
     );
     state = HomeState(
       configRaw: configRaw,
-      proxiesJson: proxiesJson,
       nodes: tags, // для computeListData (viewSortedNodes → sortedNodes)
     );
   });

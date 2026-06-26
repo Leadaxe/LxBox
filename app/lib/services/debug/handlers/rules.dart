@@ -116,6 +116,10 @@ Future<DebugResponse> _update(
   setIfPresent('packages', fieldStringList(body, 'packages'));
   setIfPresent('protocols', fieldStringList(body, 'protocols'));
   setIfPresent('ipIsPrivate', fieldBool(body, 'ip_is_private'));
+  // §030/new_fields — source-ось + inbound.
+  setIfPresent('sourceIpCidrs', fieldStringList(body, 'source_ip_cidrs'));
+  setIfPresent('sourceIpIsPrivate', fieldBool(body, 'source_ip_is_private'));
+  setIfPresent('inbounds', fieldStringList(body, 'inbounds'));
   // §051 — wifi-условия. `wifi_ssids` остаётся as-is, `wifi_bssids`
   // нормализуем lower-case на write-side для consistency.
   setIfPresent('wifiSsids', fieldStringList(body, 'wifi_ssids'));
@@ -219,6 +223,10 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
   final wifiSsids = fieldStringList(j, 'wifi_ssids') ?? const [];
   final wifiBssidsRaw = fieldStringList(j, 'wifi_bssids') ?? const [];
   final wifiBssids = _validateBssids(wifiBssidsRaw);
+  // §030/new_fields — source-ось + inbound (inline/srs).
+  final sourceIpCidrs = fieldStringList(j, 'source_ip_cidrs') ?? const [];
+  final sourceIpIsPrivate = fieldBool(j, 'source_ip_is_private') ?? false;
+  final inbounds = fieldStringList(j, 'inbounds') ?? const [];
   // §117 задача 3 — DNS-опция (inline/srs).
   final dns = _fieldRuleDns(j, 'dns');
 
@@ -236,6 +244,9 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         packages: fieldStringList(j, 'packages') ?? const [],
         protocols: fieldStringList(j, 'protocols') ?? const [],
         ipIsPrivate: fieldBool(j, 'ip_is_private') ?? false,
+        sourceIpCidrs: sourceIpCidrs,
+        sourceIpIsPrivate: sourceIpIsPrivate,
+        inbounds: inbounds,
         wifiSsids: wifiSsids,
         wifiBssids: wifiBssids,
         outbound: outbound,
@@ -251,6 +262,9 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         packages: fieldStringList(j, 'packages') ?? const [],
         protocols: fieldStringList(j, 'protocols') ?? const [],
         ipIsPrivate: fieldBool(j, 'ip_is_private') ?? false,
+        sourceIpCidrs: sourceIpCidrs,
+        sourceIpIsPrivate: sourceIpIsPrivate,
+        inbounds: inbounds,
         wifiSsids: wifiSsids,
         wifiBssids: wifiBssids,
         outbound: outbound,

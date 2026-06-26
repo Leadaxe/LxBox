@@ -42,10 +42,18 @@ Default rule matching (цитата из [docs](https://sing-box.sagernet.org/co
 
 Headless rule (inline rule_set) поддерживает **подмножество** этих полей. **Не поддерживают:**
 - `protocol` — routing-rule level only
-- `ip_is_private` — routing-rule level only
+- `ip_is_private` / `source_ip_is_private` — routing-rule level only
+- `inbound` — routing-rule level only (§030/new_fields)
 - `rule_set` — trivially routing-rule level (headless это сам rule_set)
 
-Builder эмитит ненативные поля (protocol, ip_is_private) на routing-rule level, где они работают как OR/AND по sing-box formula выше.
+> **Обновление под sing-box 1.14** ([new_fields.md](new_fields.md)): headless
+> rule_set 1.14 (`DefaultHeadlessRule`) ПРИНИМАЕТ `source_ip_cidr`, `wifi_ssid`,
+> `wifi_bssid` (раньше, под 1.12, §051 выносил wifi на routing-rule level).
+> Билдер кладёт их в headless `match`. Сверено по `option/rule_set.go`.
+
+Builder эмитит ненативные поля (protocol, ip_is_private, source_ip_is_private,
+inbound) на routing-rule level, где они работают как OR/AND по sing-box formula
+выше; `source_ip_cidr`/`wifi_*` — в headless match (1.14).
 
 ---
 
@@ -85,7 +93,8 @@ class CustomRule {
 ### Ключевые инварианты
 
 - `packages` в inline headless rule (sing-box его там поддерживает) → AND с domain/port внутри rule_set
-- `protocols` и `ipIsPrivate` — **не в headless**, только на routing-rule level
+- `protocols`, `ipIsPrivate`, `sourceIpIsPrivate`, `inbounds` — **не в headless**, только на routing-rule level
+- `sourceIpCidrs`, `wifiSsids`, `wifiBssids` — **в headless** (sing-box 1.14), AND внутри rule_set (§030/new_fields; до 1.14 wifi был routing-rule level)
 - `id` — стабильный UUID (не меняется на rename), используется как ключ для SRS-кэша (`$docs/rule_sets/<id>.srs`)
 - `srsUrl` — только для `kind=srs`, в конфиг **не попадает** (sing-box получает `type:local, path:…`)
 
@@ -343,10 +352,17 @@ SRS файлы — в `$documents/rule_sets/<id>.srs`. Не в json, on-disk bin
 
 ---
 
+## Реализовано после v1.4.0
+
+- **source_ip_cidr / source_ip_is_private / inbound** — добавлены в
+  [new_fields.md](new_fields.md) (feedback-driven; `inbound` стал осмысленным
+  после §119 — два inbound'а tun-in/mixed-in). source_ip_cidr → headless
+  match (1.14), source_ip_is_private/inbound → routing-rule level.
+
 ## Out of scope (на будущее)
 
 - **domain_regex** в MATCH — не запрашивали, sing-box поддерживает, можно добавить textarea аналогично другим доменам
-- **source_ip_cidr / source_port** — exotic, YAGNI
+- **source_port / source_port_range** — пока нет запроса (ось готова, добавим аналогично port)
 - **geoip / geosite** remote rule_sets — можно добавить как отдельный CustomRuleKind (или через srs если провайдер даёт .srs'ку с geoip)
-- **process_name** (desktop-only) — не актуально для Android
+- **process_name** (desktop-only) — не актуально для Android (package_name покрывает)
 - **Rule import/export** через JSON файл — deferred, view-tab + clipboard copy уже почти покрывает

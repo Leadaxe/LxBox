@@ -128,7 +128,7 @@ void main() {
   });
 
   group('applyAllCustomRules — сбор mirror-группы', () {
-    test('inline+dns: mirror шарит headless rule_set, wifi на DNS-rule уровне',
+    test('inline+dns: mirror шарит headless rule_set (wifi внутри rule_set)',
         () {
       final reg = RuleSetRegistry();
       final result = applyAllCustomRules(
@@ -152,7 +152,16 @@ void main() {
       expect(m.presetId, null);
       expect(m.serverTag, 'google_udp');
       expect(m.body['rule_set'], 'tg-via-vpn');
-      expect(m.body['wifi_ssid'], ['HomeWifi']);
+      // §030/new_fields: wifi_* теперь ВНУТРИ shared headless rule_set
+      // (sing-box 1.14) — в DNS-mirror body не дублируется.
+      expect(m.body.containsKey('wifi_ssid'), false);
+      expect(reg.getRuleSets().single['rules'], [
+        {
+          'domain_suffix': ['telegram.org'],
+          'package_name': ['org.telegram.messenger'],
+          'wifi_ssid': ['HomeWifi'],
+        },
+      ]);
       expect(m.body.containsKey('server'), false,
           reason: 'server подставляет applyCustomDns (фильтр пропавших)');
       // Routing-сторона не изменилась: rule_set один, route-rule с outbound.

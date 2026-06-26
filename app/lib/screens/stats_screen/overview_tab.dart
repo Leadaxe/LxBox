@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
-import '../../services/app_info_cache.dart';
-import '../../services/clash_api_client.dart';
 import '../../services/format_utils.dart';
 import 'overview_models.dart';
 
 /// Overview tab of StatsScreen; receives data via props on each parent refresh.
 /// `_expanded` is local state of this widget.
+///
+/// §122 — источник = `CcConnection` (libbox CommandClient). Группировка по
+/// `rule` (chains нет). Карточка «Top apps» убрана: ядро по CommandClient не
+/// отдаёт processPath, per-app разбивки нет.
 class OverviewTab extends StatefulWidget {
   const OverviewTab({
     super.key,
@@ -17,7 +19,6 @@ class OverviewTab extends StatefulWidget {
     required this.totalConns,
     required this.memory,
     required this.byRule,
-    required this.byApp,
     required this.detourChain,
   });
 
@@ -28,7 +29,6 @@ class OverviewTab extends StatefulWidget {
   final int totalConns;
   final int memory;
   final Map<String, int> byRule;
-  final Map<String, AppStat> byApp;
   final List<String> Function(String tag) detourChain;
 
   @override
@@ -65,7 +65,7 @@ class _OverviewTabState extends State<OverviewTab> {
           ),
         ),
         const SizedBox(height: 16),
-        Text('Traffic by Outbound', style: Theme.of(context).textTheme.titleMedium),
+        Text('Traffic by Rule', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         if (sorted.isEmpty)
           const Center(child: Text('No active connections'))
@@ -73,7 +73,6 @@ class _OverviewTabState extends State<OverviewTab> {
           ...sorted.map(_buildOutboundCard),
         const SizedBox(height: 8),
         _buildByRuleCard(context),
-        _buildTopAppsCard(context),
       ],
     );
   }
@@ -164,9 +163,6 @@ class _OverviewTabState extends State<OverviewTab> {
   Widget _buildConnectionTile(Connection c, ColorScheme cs) {
     final hostPort = c.destPort.isNotEmpty ? '${c.host}:${c.destPort}' : c.host;
     final duration = _formatDuration(c.start);
-    final ruleText = c.rulePayload.isNotEmpty
-        ? '${c.rule} (${c.rulePayload})'
-        : c.rule;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -197,27 +193,10 @@ class _OverviewTabState extends State<OverviewTab> {
           Padding(
             padding: const EdgeInsets.only(left: 20, top: 2),
             child: Text(
-              '${c.network.toUpperCase()} · $ruleText · $duration',
+              '${c.network.toUpperCase()} · ${c.rule.isNotEmpty ? c.rule : 'final'} · $duration',
               style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
             ),
           ),
-          if (c.process.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: 20, top: 2),
-              child: Text(
-                c.process,
-                style: TextStyle(fontSize: 10, color: cs.primary),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          if (c.chains.length > 1)
-            Padding(
-              padding: const EdgeInsets.only(left: 20, top: 2),
-              child: Text(
-                'Chain: ${c.chains.join(" → ")}',
-                style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
-              ),
-            ),
         ],
       ),
     );
@@ -244,42 +223,6 @@ class _OverviewTabState extends State<OverviewTab> {
             : [
                 for (final e in entries)
                   _distributionRow(cs, e.key, e.value, total),
-              ],
-      ),
-    );
-  }
-
-  Widget _buildTopAppsCard(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final entries = widget.byApp.entries.toList()
-      ..sort((a, b) => b.value.totalBytes.compareTo(a.value.totalBytes));
-    final top = entries.take(10).toList();
-    // Kick info fetch для каждого видимого pkg'а — сразу при build'е.
-    for (final e in top) {
-      AppInfoCache.ensure(e.key);
-    }
-    return Card(
-      child: ExpansionTile(
-        initiallyExpanded: true,
-        title: Text('Top apps', style: theme.textTheme.titleSmall),
-        subtitle: Text('${widget.byApp.length} total',
-            style: const TextStyle(fontSize: 11)),
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        children: top.isEmpty
-            ? [
-                Text('No app data',
-                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))
-              ]
-            : [
-                // Пере-билдим каждую строку когда в cache подъехали данные.
-                AnimatedBuilder(
-                  animation: AppInfoCache.revision,
-                  builder: (_, _) => Column(
-                    children: [for (final e in top) _appRow(cs, e.key, e.value)],
-                  ),
-                ),
               ],
       ),
     );
@@ -320,87 +263,13 @@ class _OverviewTabState extends State<OverviewTab> {
     );
   }
 
-  Widget _appRow(ColorScheme cs, String pkg, AppStat s) {
-    final info = AppInfoCache.of(pkg);
-    final displayName = info?.appName ?? pkg;
-    final Widget leading;
-    if (info?.icon != null) {
-      leading = ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: Image.memory(info!.icon!, width: 28, height: 28, gaplessPlayback: true),
-      );
-    } else {
-      final letter = displayName.isNotEmpty
-          ? displayName.characters.first.toUpperCase()
-          : '?';
-      leading = SizedBox(
-        width: 28,
-        height: 28,
-        child: CircleAvatar(
-          backgroundColor: cs.surfaceContainerHighest,
-          child: Text(letter,
-              style: TextStyle(fontSize: 12, color: cs.onSurface)),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          leading,
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w500),
-                ),
-                Text(
-                  pkg,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontFamily: 'monospace',
-                      color: cs.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('${s.count} conns',
-                  style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
-              Text('↑ ${formatBytes(s.upload, spaced: true)}',
-                  style: const TextStyle(fontSize: 10)),
-              Text('↓ ${formatBytes(s.download, spaced: true)}',
-                  style: const TextStyle(fontSize: 10)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // §084 H4 — ISO-string → compact duration. Парсит timestamp + delta от
-  // now, форматирование делегирует format_utils. Спецфичен для stats
-  // (другие экраны принимают готовый Duration).
-  String _formatDuration(String startIso) {
-    if (startIso.isEmpty) return '';
-    try {
-      final diff = DateTime.now().difference(DateTime.parse(startIso));
-      return formatDuration(diff);
-    } catch (_) {
-      return '';
-    }
+  // §122 — `start` теперь epoch ms (`CcConnection.createdAt`), не ISO-строка.
+  // delta от now → compact duration через format_utils.
+  String _formatDuration(int startEpochMs) {
+    if (startEpochMs <= 0) return '';
+    final diff = DateTime.now().difference(
+        DateTime.fromMillisecondsSinceEpoch(startEpochMs));
+    if (diff.isNegative) return '';
+    return formatDuration(diff);
   }
 }

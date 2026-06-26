@@ -33,6 +33,10 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         if (r.packages.isNotEmpty) 'packages': r.packages,
         if (r.protocols.isNotEmpty) 'protocols': r.protocols,
         if (r.ipIsPrivate) 'ip_is_private': true,
+        // §030/new_fields — source-ось + inbound.
+        if (r.sourceIpCidrs.isNotEmpty) 'source_ip_cidrs': r.sourceIpCidrs,
+        if (r.sourceIpIsPrivate) 'source_ip_is_private': true,
+        if (r.inbounds.isNotEmpty) 'inbounds': r.inbounds,
         // §051 — wifi-условия. Empty списки скрываем для consistency
         // с другими conditional полями (domains, packages, etc.).
         if (r.wifiSsids.isNotEmpty) 'wifi_ssids': r.wifiSsids,
@@ -52,6 +56,10 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         if (r.packages.isNotEmpty) 'packages': r.packages,
         if (r.protocols.isNotEmpty) 'protocols': r.protocols,
         if (r.ipIsPrivate) 'ip_is_private': true,
+        // §030/new_fields — source-ось + inbound.
+        if (r.sourceIpCidrs.isNotEmpty) 'source_ip_cidrs': r.sourceIpCidrs,
+        if (r.sourceIpIsPrivate) 'source_ip_is_private': true,
+        if (r.inbounds.isNotEmpty) 'inbounds': r.inbounds,
         if (r.wifiSsids.isNotEmpty) 'wifi_ssids': r.wifiSsids,
         if (r.wifiBssids.isNotEmpty) 'wifi_bssids': r.wifiBssids,
         'outbound': r.outbound,

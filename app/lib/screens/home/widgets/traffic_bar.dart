@@ -29,8 +29,6 @@ class TrafficBar extends StatelessWidget {
         : '';
     return GestureDetector(
       onTap: () {
-        final clash = controller.clashClient;
-        if (clash == null) return;
         // §044: идёт recording → сразу Per-app tab, иначе Overview.
         final initial = TrafficProfiler.I.isRecording
             ? StatsTab.perApp
@@ -39,7 +37,6 @@ class TrafficBar extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (_) => StatsScreen(
-              clash: clash,
               configRaw: controller.state.configRaw,
               initialTab: initial,
             ),

@@ -47,20 +47,21 @@
 ## Обзор
 
 L×Box — Android VPN-клиент на базе **sing-box** (через **libbox**). Полный цикл:
-подписки → парсинг → конфиг → VPN-туннель → управление через **Clash API**.
+подписки → парсинг → конфиг → VPN-туннель → управление через **libbox CommandClient**.
 
 ### Ядро: fork `sing-box-lx` (§097 / §104)
 
 С §097 ядро — наш fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)
 (ветка `lx`): upstream sing-box + AmneziaWG 2.0 (`with_awg`) + нативный XHTTP
 (`with_xhttp`). Build-теги: `with_gvisor,with_quic,with_wireguard,with_utls,
-with_naive_outbound,with_clash_api,with_xhttp,with_awg`.
+with_naive_outbound,with_xhttp,with_awg` (§122 — `with_clash_api` убран, Clash
+HTTP-server выпилен; управление через libbox CommandClient).
 
 С §104 fork — **единственное ядро для всех сборок** (local + CI + release;
 готовится релиз v2.0.0):
 
-- пин версии — `app/android/libbox.version` (**`v1.13.13-lx.5`**, single source
-  of truth для local + CI);
+- пин версии — `app/android/libbox.version` (**`v1.14.0-lx.1`**, single source
+  of truth для local + CI; база upstream `v1.14.0-alpha.33`);
 - `scripts/fetch-libbox.sh` скачивает `libbox.aar` из GitHub Releases форка с
   проверкой SHA256 (идемпотентен — маркер `.libbox.version`); вызывается из
   `scripts/build-local-apk.sh` и из CI (`ci.yml` → android job → шаг
@@ -84,8 +85,8 @@ Platform напрямую — только через контроллеры.
 │  presenter/VM. Подписка через AnimatedBuilder / ListenableBuilder.     │
 ├──────────────────────────────────────────────────────────────────────┤
 │  STATE   lib/controllers — ChangeNotifier-брокеры                      │
-│  HomeController  — VPN/Clash/nodes/ping/heartbeat (split на 4 part'а:   │
-│                    config_io · heartbeat · ping_orchestration)         │
+│  HomeController  — VPN/CommandClient/nodes/ping/heartbeat (split на     │
+│                    part'ы: config_io · heartbeat · ping_orchestration)  │
 │  SubscriptionController — entries, fetch, generateConfig (+ part)       │
 │  view-model'и: NodeFilterViewModel · CustomRuleEditController           │
 │  Иммутабельный HomeState + copyWith (_unset sentinel) + ParsedConfig.   │
@@ -93,7 +94,8 @@ Platform напрямую — только через контроллеры.
 │  SERVICES   lib/services · lib/models · lib/config                     │
 │  Parser v2 (parser/) · Builder (builder/) · subscription/ ·            │
 │  settings_storage/ · traffic_profiler/ · debug/ (HTTP Debug API) ·     │
-│  clash_api_client · app_log · кэши (AppInfoCache·HttpCache) ·           │
+│  vpn/cc_channel (libbox CommandClient) · app_log ·                     │
+│  кэши (AppInfoCache·HttpCache) ·                                        │
 │  ConfigNode/ParsedConfig (§091).                                        │
 │  Sealed-модели: NodeSpec · SingboxEntry · CustomRule · ValidationIssue. │
 ├──────────────────────────────────────────────────────────────────────┤
@@ -105,10 +107,15 @@ Platform напрямую — только через контроллеры.
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-**Брокеры событий (push, снизу вверх):** native статус-`Stream<TunnelStatusEvent>`
-и `lxbox/coreLog`-stream (→ `AppLog` → `TrafficProfiler`) — единственные
-push-каналы. Всё остальное — pull (Clash API polling, 20s heartbeat) или
-intent-вызовы сверху вниз. Подробные потоки — в разделе [Потоки данных](#потоки-данных).
+**Брокеры событий (push, снизу вверх):** §122 — управляющий канал UI переведён
+на libbox **CommandClient** (server-stream push вместо Timer-polling). Push-каналы:
+native статус-`Stream<TunnelStatusEvent>` (lifecycle туннеля), `lxbox/coreLog`-stream
+(→ `AppLog` → `TrafficProfiler`) и CommandClient-стримы поверх EventChannel
+`lxbox/cc/*` (status · outbounds · groups · connections — `vpn/cc_channel.dart`).
+Unary-pull остался точечно — `getGroups()` (lifeline там, где groups-push дырявый),
+плюс императивы сверху вниз (`urlTestOutbound` · `selectOutbound` · `closeConnection`).
+Heartbeat — watchdog по **тишине** status-стрима, без HTTP-poll'а. Подробные
+потоки — в разделе [Потоки данных](#потоки-данных).
 
 ### Принцип «cohesion over line-count» (§089)
 
@@ -325,12 +332,16 @@ box_vpn_client.dart          # BoxVpnClient.I — типизированная �
                              #   timeout-wrapped + safe-default; onStatusChanged stream
 box_vpn_client/method_names.dart  # part: _Methods — зеркало when(call.method) из VpnPlugin.kt
 box_vpn_client/timeouts.dart      # part: _Timeouts — per-method Duration (status 3s, start 30s…)
+cc_channel.dart              # §122 CcChannel.instance — Dart-клиент libbox CommandClient (заменил
+                             #   ClashApiClient): push-стримы status/outbounds/groups/connections
+                             #   поверх EventChannel lxbox/cc/* + императивы (urlTestOutbound, getRules,
+                             #   getGroups unary-pull, selectOutbound, closeConnection); фан-аут через
+                             #   broadcast (ОДИН native sink на канал, §122 sink-leak-guard)
 ```
 
 #### `config/`
 
 ```
-clash_endpoint.dart          # ClashEndpoint.fromConfigJson — Clash API base+secret+route.final из конфига
 config_parse.dart            # JSON5/JSONC → canonical JSON (для libbox) + pretty-print (для editor)
 consts.dart                  # kAutoOutboundTag (✨auto), kDetourTagPrefix (⚙) — зеркало wizard_template
 ```
@@ -373,10 +384,12 @@ config_node.dart             # §091 ConfigNode + ParsedConfig — структ�
 #### `controllers/` — ChangeNotifier-брокеры состояния
 
 ```
-home_controller.dart         # главный VPN-брокер: _state/_vpn/_clash; статус-handler; start/stop/
-                             #   reconnect/reload; Clash proxies/groups; selection-сеттеры; lifecycle
+home_controller.dart         # главный VPN-брокер: _state/_vpn/_cc; статус-handler; start/stop/
+                             #   reconnect/reload; CommandClient groups (push + getGroups-pull);
+                             #   selection-сеттеры; lifecycle
 home_controller/config_io.dart          # part _ConfigIoMixin: load/saveParsedConfig, import, configChangedNeedRestart
-home_controller/heartbeat.dart          # part _HeartbeatMixin: 20s Clash poll + dead-tunnel detection
+home_controller/heartbeat.dart          # part _HeartbeatMixin: watchdog по тишине CommandClient status-стрима
+                             #   (§122, без HTTP-poll'а) + dead-tunnel detection
 home_controller/ping_orchestration.dart # part _PingMixin: single/group/mass URLTest, 10 worker'ов, epoch-cancel
 subscription_controller.dart            # подписки: List<ServerList>, add/remove/rename/toggle/move
                                         #   (§098 drag-reorder), fetch, buildConfig; §101 — rehydrationDone
@@ -480,12 +493,11 @@ debug/                       # localhost HTTP Debug API (§031)
   transport/pipeline.dart    #   onion-chain middleware runner
   transport/config.dart      #   DebugServerConfig (port/token/timeout/maxBody/unauth-paths)
   transport/middleware/      #   error_mapper · access_log · host_check · auth · timeout
-  handlers/                  #   /state /settings /action /profiler /rules /subs /clash /config /logs /device
-                             #     /files /diag /backup /wifi_history /help /ping (+ _shared CRUD-хелперы)
+  handlers/                  #   /state /settings /action /profiler /rules /subs /config /logs /device
+                             #     /files /diag /backup /wifi_history /help /ping /warp (+ _shared CRUD-хелперы)
   serializers/               #   home_state · storage (denylist scrubber) · rules · subs (URL-маскинг)
 migration/proxy_source_migration.dart  # one-shot v1 proxy_sources → v2 server_lists
 nav/home_return_observer.dart          # глобальный NavigatorObserver (§076): rebuild на возврат к home
-clash_api_client.dart        # Clash REST (/proxies, /connections, delay/groupDelay); отдельный cancelable client
 app_log.dart                 # AppLog ChangeNotifier-singleton: per-source ring buffers + persistent warn/error (§043)
 app_info_cache.dart          # AppInfoCache — session-кэш AppInfo по package + revision ValueNotifier
 json_clone.dart              # deepCopyJson/deepCloneJson/deepEqualsJson (§089 P6 — общий для builder/backup)
@@ -522,8 +534,14 @@ wifi_entry.dart · wifi_manual_add_dialog.dart · wifi_permission_dialog.dart ·
 MainActivity.kt              # FlutterActivity: регистрирует VpnPlugin; /utils + /wifi_history каналы;
                              #   VPN-consent flow; QS-tile/shortcut quick actions
 vpn/VpnPlugin.kt             # Flutter-плагин (635, см. Обзор): MethodCallHandler всех /methods;
-                             #   status+coreLog EventChannel sinks; statusReceiver мост; app-icon encode
+                             #   status+coreLog EventChannel sinks; §122 cc-методы (ccConnectScreen/
+                             #   ccUrlTestOutbound/ccGetGroups/…) + lxbox/cc/* EventChannel sinks;
+                             #   statusReceiver мост; app-icon encode
+vpn/BoxCommandClient.kt      # §122 — управляющий канал UI↔ядро через libbox CommandClient (три клиента:
+                             #   statusClient/screenClient/profilerClient; addCommand-подписка + write*-колбэки;
+                             #   §163/§164 setStatusInterval-энергомодель). Заменил Clash HTTP API.
 vpn/BoxVpnService.kt         # Android VpnService + PlatformInterface side (§049-split, тонкий):
+                             #   §122 — владеет cc*Sink (status/outbounds/groups/connections push в Dart);
                              #   openTun (Builder.establish, allowBypass §069, per-app routes); forwards в BoxService
                              #   §119: openTun зовётся libbox'ом ТОЛЬКО при наличии tun-inbound. Режим Proxy
                              #   (vpn_mode=proxy, config без tun) → нет openTun → нет establish → нет VPN-туннеля.
@@ -536,7 +554,7 @@ vpn/DefaultNetworkMonitor.kt # §087: detect genuine iface switch (prev!=new), d
 vpn/DefaultNetworkListener.kt# ConnectivityManager.NetworkCallback в coroutine-actor (порт SagerNet)
 vpn/LocalResolver.kt         # LocalDNSTransport — DNS-запросы bound к underlying network (не tun)
 vpn/ConfigManager.kt         # file-based config store (filesDir) + notificationTitle
-vpn/ServiceNotification.kt   # foreground-service notification (typed SPECIAL_USE на API34+)
+vpn/ServiceNotification.kt   # foreground-service notification (typed SPECIAL_USE на API34+); §182 action-кнопки Stop/Reconnect (broadcast ACTION_STOP / ACTION_RECONNECT)
 vpn/VpnStatus.kt             # enum Stopped/Starting/Started/Stopping (native-сторона статуса)
 vpn/BootReceiver.kt          # BOOT_COMPLETED auto-start + SharedPreferences native-тогглов
 vpn/LxBoxTileService.kt      # QS-tile toggle (§032) с оптимистичным рендером
@@ -588,7 +606,8 @@ EventChannel → Dart: HomeController._handleStatusEvent()
   ├─ HapticService.onVpnConnected() — medium impact
   └─ AutoUpdater.onVpnConnected() — triggers refresh after 2 min
   ↓
-ClashApiClient.fetchProxies() → groups (selector only), nodes
+CommandClient: connectScreen() → groups push-стрим (selector only) +
+  getGroups() unary-pull (детерминированное наполнение, push дырявый)
   ↓
 UI updates: group dropdown, node list, traffic bar
 ```
@@ -731,16 +750,18 @@ Sensitive-поля при `GET /state/storage` фильтруются allow-list
                      ▲                    ▲
                      │ events             │ events
                      │                    │
-        ┌────────────┴────────┐  ┌────────┴──────────────────┐
-        │ Source A: log stream│  │ Source B: /connections poll│
-        │  AppLog (core src)  │  │  Clash API every 2s        │
-        │  ts-diff drain      │  │  diff vs prev snapshot     │
-        └─────────────────────┘  └────────────────────────────┘
+        ┌────────────┴────────┐  ┌────────┴──────────────────────┐
+        │ DNS-стрим (§180)    │  │ Connections push (§168)       │
+        │  CcChannel.dnsQueries│  │  CcChannel.connections        │
+        │  (profilerClient,   │  │  (profilerClient,             │
+        │   SPEC 018)         │  │   diff vs prev snapshot)      │
+        └─────────────────────┘  └────────────────────────────────┘
                      │                    │
                      ▼                    ▼
-        DNS resolves + CNAME       TCP/UDP open/close events
-        attribution by conn-id     attribution by metadata.process
-                                   (UID-stripped) или process inference
+        dnsResolve/dnsFail         TCP/UDP open/close events
+        attribution ИЗ ЯДРА        attribution из ядра
+        (processInfo) + cnameChain (CcConnection.packageName,
+        + dnsServer/outbound(rc.10) chains §174, detours §178)
 
               ┌────────────────────────────────────────┐
               │ Session.events  (append-only)           │
@@ -750,33 +771,32 @@ Sensitive-поля при `GET /state/storage` фильтруются allow-list
                      │
         ┌────────────┴───────────────────────────────────────────┐
         ▼                              ▼                         ▼
-  PerAppTraceTab UI         Debug API /profiler/*          SSE /profiler/stream
-  (Live/Domains/IPs/        (start, stop, active,          (live-push для
-   Connections)              session/<id>, sessions,        external clients)
-                             stream)
+  App + Profiler tabs       Debug API /profiler/*          SSE /profiler/stream
+  (TraceExplorer:           (start, stop, active,          (live-push для
+   поток/Aggregated +        session/<id>, sessions,        external clients)
+   фильтр-окно)              stream)
 ```
 
-**Spawning rules:**
-- Source A live-listen на `AppLog.I` (core source). Drain timestamp-diff'ом — не length, чтобы не залипать на ring-buffer cap=500. Regex'ы ловят `router: found package name`, `dns: exchanged|cached`, `dns: exchange failed`. Per-conn-id accumulator (`_DnsAccumulator`) держит первый-запрошенный domain + CNAME chain.
-- Source B `Timer.periodic(2s)` пока есть active session **или** global recording on (§048). Connections фильтруются по `metadata.process` (с UID-strip) или `processPath` или process-inference (10s post-DNS window — IP должен быть в resolved-IPs prior session events).
-- Connection-issue classifier per-event: 2 locale-агностичных типа — `dnsTimeout` (прямой engine-сигнал из `dns: exchange failed` лога) + `tcpReset` (heuristic: TCP закрылся <1с с 0 bytes, вероятный RST/firewall).
+**Источники событий (§180/§044 — БЕЗ парсинга core-лога):**
+- **DNS-стрим (§180, ядро SPEC 018)** — `CcChannel.dnsQueries` (канал `lxbox/cc/dns`, `subscribeDNSQueries` на `profilerClient`). Каждый `CcDnsQuery` несёт `domain`/`queryType`/`rcode`/`source`/`failed`/`error`, атрибуцию к app **из ядра** (`processInfo.packageName`), `answers[]` (весь response.Answer → cnameChain из type==CNAME), и (rc.10) `dnsServer`/`dnsServerType`/`outbound`. `_ingestDnsQuery` эмитит `dnsResolve`/`dnsFail`. **Текстовый core-лог парсинг выпилен начисто** (§044): не было `_dnsRe`/`_DnsAccumulator`/`router: found package` regex'ов — всё структурно из ядра.
+- **Connections-стрим (§168)** — CommandClient `connections` push (`CcChannel.connections` через фоновый `profilerClient`, `connectProfiler()`) пока есть active session **или** global recording (§048). Снапшот diff'ается против `_connSnapshots`. TCP/UDP-атрибуция из ядра: `CcConnection.packageName` (UID-strip), `chains` (§174), `detours` (§178).
+- Connection-issue classifier: `dnsTimeout` (структурный `q.failed` из DNS-стрима) + `tcpReset` (heuristic: TCP закрылся <1с с 0 bytes).
 
-**Global / system-wide recording (§048).** Live tab в Statistics — **четвёртый mode** профайлера (рядом с per-app session): `startGlobalRecording()` подключает Source A + Source B без active session. События идут в `_globalRollingBuffer` (60s window) и `globalLiveStream()` SSE. `_pollConnections()` сделан session-agnostic: session-only блоки (`_resolveForSession`, `_appendEvent(s, ev)`) gated на `if (s != null)`, snapshot tracking `_connSnapshots[id]` unconditional (нужен для closed-detection в global-only режиме). `_maybeStopConnectionPoll()` останавливает таймер только когда **оба** off (session and global) — симметрично `_maybeDetachLogListener` и `_maybeStopGcTimer`. Idle profiler по-прежнему ничего не делает (нет timers, нет AppLog listener).
+**Global / system-wide recording (§048).** Вкладка **Profiler** (бывш. Live) в Statistics — system-wide режим: `startGlobalRecording()` подключает оба стрима без active session. События в `_globalRollingBuffer` (окно **настраиваемое** 1m/10m/1h, §044 retention; hard cap 20000) и `globalLiveStream()` SSE. `_ingestCcConnections()` session-agnostic (session-блоки gated `if (s != null)`). `_maybeDetachCcConnections()` гасит `profilerClient` когда **оба** off.
 
 **Memory bounds:**
-- `Session.events`: cap = 50000 events ИЛИ 3h sliding window (что раньше). `eventsDropped` в meta.
+- `Session.events`: cap = 50000 events ИЛИ 3h sliding window. `eventsDropped` в meta.
 - `_completed`: ListQueue cap = 5 sessions, FIFO-evict.
-- `_connIdToMeta` / `_dnsByConnId`: GC по 30s TTL, trigger когда map > 256 entries.
+- `_globalRollingBuffer`: retention-окно (§044, default 10мин) + hard cap 20000.
 
-**UI plumbing:**
-- HomeScreen `_buildTrafficBar` показывает ⚡-chip с short package name (`ru.tinkoff` для `ru.tinkoff.investing`) когда session active. Tap всей строки → `StatsScreen(initialTab: StatsTab.perApp)`.
-- `StatsScreen` 3-й tab `Per-app` с ⚡ возле title.
-- `PerAppTraceTab` 4 sub-tab'а: Live / Domains / IPs / Connections. Search-by-IP в Domains, inline expand на Connections, ↗ IP-jump иконки везде где рендерится IP — все три view связаны двусторонней навигацией.
+**UI plumbing (§160/§044):**
+- HomeScreen `_buildTrafficBar` ⚡-chip с short package name когда session active. Tap → Stats→App.
+- `StatsScreen` 4 вкладки: Stats / Conns / **App** (per-app session) / **Profiler** (system-wide, бывш. Live).
+- Общий движок `TraceExplorer` (App + Profiler): control-строка (пауза · retention · группировка · фильтр-окно) + тогл поток/Aggregated(by Domain/IP) + drill-down detail-sheet. Фильтр вынесен в `ProfilerFilterSheet` (Protocol + App оси). §181 `routingLine` строит читаемую трассировку события.
 
 **Coupling (важно для extraction):**
-- **Sing-box log format** — Source A парсит конкретные log lines `router: found package name`, `dns: exchanged|cached`, `dns: exchange failed` regex'ами в `_dnsRe` / `_dnsFailRe` / `_routerRe`. Если sing-box изменит формат логов — TrafficProfiler сломается silent. Формат стабилен на текущем ядре (`sing-box-lx 1.13.13-lx.5`, §097/§104 — относительно стокового 1.13.11 формат не менялся), но при любой смене/апгрейде ядра это первое, что надо verify.
-- **`AppLog` instance + `DebugSource.core` filter** — TrafficProfiler subscribe'ит на `AppLog.I.notifyListeners` и фильтрует по source. Зависимость двунаправленная: `core_logs_enabled=false` → core source пуст → TrafficProfiler видит только Source B (Clash poll), теряет DNS resolves и process attribution. UI показывает `CoreLogsHintBanner` чтобы юзер включил forwarding.
-- **`ClashApiClient` instance** — Source B использует наш Clash API client. Поэтому профайлер не работает пока Clash endpoint не resolved (см. раздел Clash API client → wiring).
+- **`CcChannel` (CommandClient) — единственный источник.** Профайлер слушает `CcChannel.connections` + `CcChannel.dnsQueries` через фоновый `profilerClient`. Привязан к жизни канала: события идут пока туннель жив и `profilerClient` поднят (`connectProfiler()`). **core-логи больше не нужны** — `CoreLogsHintBanner` оставлен как опциональная подсказка, но DNS/TCP атрибуция от него не зависит (всё из ядра, §180/§168).
+- **Контракт ядра (SPEC 017/018).** Поля `chain()`/`detour()`/`DnsQuery.*` — нативные методы libbox AAR. При бампе ядра новые методы проверять `javap` ДО вызова в Kotlin (forward-compat: отсутствие метода = compile error, не runtime). Имена gomobile-стиля (напр. `getDNSServer`, не `getDnsServer`); итераторы (`chain()`/`outbound()` → `StringIterator`).
 
 ---
 
@@ -1082,7 +1102,7 @@ HomeController.init()
 |---------|----------|
 | Транзит (`Starting` → `Started`) | broadcast → EventChannel |
 | App reattach (новый Flutter-процесс, сервис жив) | pull `getVpnStatus` в `init` |
-| Heartbeat failed (`/traffic` timeout'ит) | `HomeController._onTunnelDead` → `TunnelStatus.revoked` |
+| Heartbeat failed (тишина CommandClient status-стрима > timeout) | `HomeController._onTunnelDead` → `TunnelStatus.revoked` |
 | Safety-timeout (застряли в Starting/Stopping 10s) | `Future.delayed` в `_handleStatusEvent` форс'ит disconnected |
 
 #### Reconnect flow (v1.4.0+)
@@ -1117,66 +1137,58 @@ Tab'ы которые depend на глобальном toggle в settings (core_
 
 Два паттерна — **contextual banner** (state-зависимый hint) и **overflow item** (state-independent jump):
 
-- **Statistics → Live + Per-app → contextual `CoreLogsHintBanner`** ([core_logs_hint_banner.dart](../app/lib/widgets/core_logs_hint_banner.dart)). Inline banner widget показывается **только когда `core_logs_enabled=false`**; self-hides при включении (auto-refresh на `AppLifecycleState.resumed`). Split hit-zone: левая зона (i + «DNS / router events off») → tooltip с объяснением что без core logs DNS resolves пропадают и process attribution ухудшается до Clash poll'а; правая («turn on Forward sing-box logs» + chevron) → deep-link в `AppSettingsScreen(initialTab: 1)` с auto-scroll и highlight нужного toggle'а. Это лучше чем PopupMenu overflow: явно виден когда нужен, исчезает когда не нужен.
+- **Statistics → Live + Per-app → contextual `CoreLogsHintBanner`** ([core_logs_hint_banner.dart](../app/lib/widgets/core_logs_hint_banner.dart)). Inline banner widget показывается **только когда `core_logs_enabled=false`**; self-hides при включении (auto-refresh на `AppLifecycleState.resumed`). Split hit-zone: левая зона (i + «DNS / router events off») → tooltip с объяснением что без core logs DNS resolves пропадают и process attribution ухудшается до CommandClient connections-снапшота; правая («turn on Forward sing-box logs» + chevron) → deep-link в `AppSettingsScreen(initialTab: 1)` с auto-scroll и highlight нужного toggle'а. Это лучше чем PopupMenu overflow: явно виден когда нужен, исчезает когда не нужен.
 - **Routing → Tunnel apps → ⋮ → "VPN settings (Core)"** → `SettingsScreen(initialTab: 1)`. State-independent jump (всегда полезно ходить из Tunnel apps к Core vars), overflow PopupMenu уместен. Открывает Core а не System — юзер настраивает Tunnel apps mode и хочет рядом mtu / log_level / dns_final.
 - **Drawer → Debug → ⋮ → "Diagnostics settings"** → `AppSettingsScreen(initialTab: 1)` — fast-path на Quit&reopen после toggle Forward sing-box logs.
 
 ---
 
-## Clash API client
+## CommandClient (libbox)
 
-Sing-box экспонирует **Clash-совместимый HTTP API** (`experimental.clash_api`) — мы используем его для всего management'а помимо start/stop/reload (они идут через `BoxVpnClient`). Файл — [`app/lib/services/clash_api_client.dart`](../app/lib/services/clash_api_client.dart).
+§122 — управляющий канал UI ↔ ядро. Clash HTTP API полностью выпилен (ядро собрано без `with_clash_api`, блок `experimental.clash_api` больше не инжектится в конфиг — на 1.14 без server'а он fatal). Вместо HTTP-петель — libbox **CommandClient**: ядро поднимает локальный command-server, клиент подписывается на server-stream push и шлёт unary-RPC. Файлы: нативный [`BoxCommandClient.kt`](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxCommandClient.kt), Dart-клиент [`app/lib/vpn/cc_channel.dart`](../app/lib/vpn/cc_channel.dart) (`CcChannel.instance`).
 
-### Endpoint discovery
+### Модель: push-стримы, не pull-снапшоты
 
-`ClashEndpoint.fromConfigJson(configRaw)` парсит JSON5 (поддержка `//`-комментариев) и достаёт:
+Ядро эмитит изменения; UI подписывается. Старый поток из трёх Timer-polling'ов (Clash HTTP-петли `/proxies`, ~20s heartbeat `/traffic`, `/connections` 5s) заменён server-stream push'ем. Снапшоты приходят сами; точечный unary-pull остался только там, где стартовый push дырявый (`getGroups`).
 
-```json5
-"experimental": {
-  "clash_api": {
-    "external_controller": "127.0.0.1:63130",   // host:port или http://...
-    "secret": "<auto-generated>"                  // используется как Bearer token
-  }
-}
-```
+### Нативные клиенты (`BoxCommandClient.kt`)
 
-Default port если поле отсутствует — `127.0.0.1:9090` (Clash conventional). У нас sing-box генерирует random ephemeral port (49152-65535) при template build — защита от port-scan'а через DNS rebinding. Secret — auto-generated, никогда не пустой (security by default).
+Три независимых `CommandClient` — развязка частоты обновления от состава данных и lifecycle:
 
-`ClashApiClient(endpoint)` принимает endpoint и держит **два HTTP-клиента**:
-- `_http` — основной (`fetchProxies`, `selectInGroup`, `fetchConnections`, `fetchTraffic`, ...)
-- `_delayHttp` — изолированный для `delay` / `groupDelay`. `cancelDelays()` закрывает только этот клиент → in-flight ping requests рвутся, но dashboard / selector switches не страдают.
-
-### Используемые endpoints
-
-| Endpoint | Метод client'а | Назначение |
+| Клиент | Команды | Lifecycle |
 |---|---|---|
-| `GET /version` | `pingVersion` | Health-check (для `/state/clash` Debug API) |
-| `GET /proxies` | `fetchProxies` | Список proxy + selector groups + chains. Фильтрация selectorGroupTags / urltestNow — static helpers. |
-| `PUT /proxies/{tag}` | `selectInGroup(group, outbound)` | Selector switch. Body `{"name":"<child-tag>"}` |
-| `GET /proxies/{tag}/delay` | `delay(proxyTag, timeoutMs, url)` | Single delay test (ms) |
-| `GET /group/{tag}/delay` | `groupDelay(group, timeoutMs, url, onProgress)` | Force URLTest на группе |
-| `GET /connections` | `fetchConnections` | List active TCP/UDP + bytes + metadata.process |
-| `DELETE /connections` | `closeAllConnections` | Close all (используется в `resetNetwork`) |
-| `DELETE /connections/{id}` | `closeConnection(id)` | Close one |
-| `GET /traffic` (SSE) | `fetchTraffic` | Streaming traffic stats — мы читаем **только первый frame** (snapshot) |
+| `statusClient` | `CommandStatus` (+ `setStatusInterval`) | always-on пока туннель жив; в фоне (`onAppPaused`) гасится (0 тиков/0 drain); §164 адаптивная частота NORMAL 0.5с (главный экран) / FAST 0.1с (Stats) — пересоздаётся с новым интервалом |
+| `screenClient` | `CommandOutbounds` + `CommandGroup` + `CommandConnections` | поднимается по `connectScreen()` (refs>0), гасится в фоне |
+| `profilerClient` | `CommandConnections` | поднимается по `connectProfiler()` для recording; §164 **не паузится** в фоне → recording живёт при свёрнутом app |
 
-### Gotchas
+Подписка в gomobile-фасаде = `CommandClientOptions.addCommand(int)` + колбэки `CommandClientHandler.write*` (прямых `subscribe*`-методов в AAR нет).
 
-- **Emoji в URL path** (`✨auto`, `🇮🇹⚡Италия`) — обязательно URL-encode. `selectInGroup` / `delay` это делают автоматически (`Uri.parse`); внешние curl-вызовы — через `python3 urllib`.
-- **Group `.now` quirk** — sing-box обновляет `now` только на первом `urltest_interval` tick, не от `/group/.../delay` ручного вызова. Мы это знаем и не пытаемся читать `.now` сразу после force-urltest'а.
-- **Timeout buffer** — после `groupDelay(timeoutMs)` ждём ещё `_delayResponseBuffer = 750ms` для cleanup/JSON-encode на стороне sing-box. Без этого buffer'а Dart timing rare-falsely cancel'ил bona-fide responses.
-- **No dashboards** — мы не даём подключаться сторонним клиентам (yacd / clash-meta-dashboard). Clash API только для self-fetch — порт ephemeral, secret не прокидывается наружу.
+### Dart-слой (`CcChannel`)
+
+Push-стримы поверх EventChannel `lxbox/cc/*` (`status` · `outbounds` · `groups` · `connections`). **§122 sink-leak-guard:** каждый EventChannel держит РОВНО ОДИН native sink; `CcChannel` делает один внутренний `listen` и фан-аутит через `StreamController.broadcast` (native sink ставится при первом Dart-подписчике, снимается при уходе последнего) — иначе cancel одного потребителя (dispose Stats) обнулял бы sink главного экрана → watchdog видел бы тишину → ложный dead-tunnel.
+
+| Стрим / метод | Тип | Назначение |
+|---|---|---|
+| `status` | push `Stream<CcStatus>` | up/down + traffic snapshot; питает heartbeat-watchdog |
+| `outbounds` | push `Stream<List<CcOutbound>>` | список outbound'ов |
+| `groups` | push `Stream<List<CcGroup>>` | selector/urltest группы + selected/active |
+| `connections` | push `Stream<List<CcConnection>>` | active TCP/UDP + bytes + packageName/processPath |
+| `getGroups()` | unary-pull `List<CcGroup>?` | детерминированный снапшот групп (lifeline на дыру стартового push'а; `null` = ядро не STARTED, не трогать state) |
+| `getRules()` | unary-pull `List<CcRule>` | снапшот route+DNS правил (диагностика) |
+| `urlTestOutbound(tag)` | unary-RPC `CcDelayResult` | per-node delay. **Инвариант:** `error` — единственный признак провала; `delay==0 && error==''` = успех 0мс |
+| `selectOutbound(group, tag)` | unary-RPC | selector switch |
+| `closeConnection(id)` / `closeConnections()` | unary-RPC | закрыть одно/все соединения |
+
+Lifecycle-сигналы (`connectScreen`/`disconnectScreen`, `connectProfiler`/`disconnectProfiler`, `pauseClients`/`resumeClients`, `setStatusFast`) дёргают соответствующие native-клиенты.
 
 ### Wiring
 
-`HomeController._rebuildClashEndpoint()` вызывается на каждом `connected` event:
-1. Парсит `state.configRaw` через `ClashEndpoint.fromConfigJson`.
-2. Если endpoint валиден → создаёт новый `ClashApiClient(endpoint)`.
-3. Старый client cancel'ит in-flight delays.
+`HomeController` на `connected` event подписывается на `status` + `groups`-стримы и поднимает `screenClient` (`connectScreen()`), затем делает unary `getGroups()`-pull (с короткими ретраями пока сервис не STARTED) для детерминированного наполнения дерева групп — на случай если стартовый groups-push потерялся в гонке `waitForStarted`. На disconnect — отписка + `disconnectScreen()` + сброс кэшей. Per-node delay и selector switch идут через `urlTestOutbound` / `selectOutbound`.
 
-Endpoint становится невалидным когда tunnel down — secret и port были у убитого sing-box, port может быть переиспользован системой. Поэтому `_clash = null` на disconnect, recreate на next connect.
+### Gotchas
 
-Debug API `/clash/*` — transparent proxy в наш `ClashApiClient.endpoint` с auto-injection `Authorization: Bearer <secret>` (caller не должен знать secret). См. [docs/api/clash-api-reference.md](api/clash-api-reference.md).
+- **Empty groups-push поверх живого** — ядро может прислать пустой groups-push поверх непустого state; guard в `_onCcGroups` игнорит пустой push если `ccGroups` непуст. Детерминированный источник истины — `getGroups`-pull.
+- **No external subscribers** — командный server слушает localhost; сторонние Clash-дашборды (yacd / clash-meta) больше не поддерживаются в принципе (Clash API нет).
 
 ---
 
@@ -1184,7 +1196,7 @@ Debug API `/clash/*` — transparent proxy в наш `ClashApiClient.endpoint` �
 
 | Controller | Responsibility |
 |-----------|---------------|
-| `HomeController` | VPN lifecycle, Clash API, nodes, ping (10 concurrent — `_pingConcurrency`), heartbeat, traffic, configChangedNeedRestart, autoUpdater wiring, haptic on transitions |
+| `HomeController` | VPN lifecycle, CommandClient (groups/status/connections), nodes, ping (10 concurrent — `_pingConcurrency`), heartbeat, traffic, configChangedNeedRestart, autoUpdater wiring, haptic on transitions |
 | `SubscriptionController` | CRUD entries (server_lists), `refreshEntry`/persist, `generateConfig` (no HTTP), `bindAutoUpdater`, init sweep (inProgress→failed) |
 | `ThemeNotifier` | Theme mode, SharedPreferences persistence |
 | `HapticService` (singleton) | Event-based haptic with 100 ms throttle, respects system setting (spec 029) |
@@ -1239,10 +1251,8 @@ HomeScreen
 | Native VPN service (no plugin) | flutter_singbox_vpn was unmaintained (0 stars), config in SharedPreferences |
 | File-based config storage | Large JSON configs don't belong in SharedPreferences |
 | serviceScope vs GlobalScope | Structured concurrency — coroutines die with service |
-| Clash API for management | sing-box provides HTTP API, no need for custom libbox bindings |
+| libbox CommandClient for management (§122) | Server-stream push вместо Timer-polling; Clash HTTP API выпилен (на 1.14 без `with_clash_api` он fatal). Нет localhost HTTP-порта → нет surface для port-scan |
 | 10 concurrent mass ping (`_pingConcurrency`) | Sequential was too slow for 50+ nodes; cap балансирует latency vs sing-box load |
-| Random Clash API port | Prevent port scanning (49152-65535) |
-| Auto-generated secret | Never empty — security by default |
 | SRS rules off by default | Require download, may fail offline |
 | App list caching | getInstalledApps (~5s) called once, reused |
 | profile-title from headers + content-disposition fallback | Auto-name subscriptions even without profile-title |
@@ -1272,13 +1282,13 @@ HomeScreen
 
 | Package | Purpose |
 |---------|---------|
-| `http` | Clash API + subscription fetch |
+| `http` | subscription fetch + rule-set/update/WARP HTTP requests |
 | `json5` | JSON5/JSONC config parsing |
 | `file_picker` | Config import from filesystem |
 | `path_provider` | Documents directory for persistent storage |
 | `shared_preferences` | Theme mode, haptic toggle |
 | `share_plus` | Config/log export via system share sheet |
-| **libbox** (native) | sing-box core — fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (`with_awg` + `with_xhttp`, §097/§104). Пин — `app/android/libbox.version` (`v1.13.13-lx.5`); AAR скачивает `scripts/fetch-libbox.sh` из GH Releases форка (SHA256-verify) в gitignored `libs/` — и локально (`build-local-apk.sh`), и в CI (`ci.yml` → «Fetch sing-box-lx core»). Maven-строка стокового `libbox 1.13.11` удалена из `build.gradle.kts` (исторически: JitPack `com.github.singbox-android:libbox:1.13.11`, миграция из `io.github.sagernet:libbox` — spec 039) |
+| **libbox** (native) | sing-box core — fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (`with_awg` + `with_xhttp`, §097/§104; §122 — без `with_clash_api`). Пин — `app/android/libbox.version` (`v1.14.0-lx.1`, база upstream `v1.14.0-alpha.33`); AAR скачивает `scripts/fetch-libbox.sh` из GH Releases форка (SHA256-verify) в gitignored `libs/` — и локально (`build-local-apk.sh`), и в CI (`ci.yml` → «Fetch sing-box-lx core»). Maven-строка стокового libbox удалена из `build.gradle.kts` (исторически: JitPack `com.github.singbox-android:libbox:1.13.11`, миграция из `io.github.sagernet:libbox` — spec 039) |
 
 ---
 
@@ -1400,20 +1410,20 @@ LxBox monolith — но архитектурно есть несколько sel
 
 **iOS:** отсутствует. Для cross-platform package — отдельная задача (Network Extension + Packet Tunnel Provider + Swift bridges).
 
-### Layer 2 — Clash API client
+### Layer 2 — CommandClient channel
 
-**Что:** Pure-Dart HTTP client для Clash API (sing-box-compatible).
+**Что:** libbox `CommandClient`-канал управления (§122) — нативный `BoxCommandClient.kt` + Dart-клиент `CcChannel`.
 
 | Файлы | Lines |
 |---|---|
-| `app/lib/services/clash_api_client.dart` | ~320 |
-| `app/lib/config/clash_endpoint.dart` | ~50 |
+| `app/android/.../BoxCommandClient.kt` | ~native |
+| `app/lib/vpn/cc_channel.dart` | ~450 |
 
-**Coupling с LxBox:** **минимальный**. Зависит только от `package:http` и `package:json5` (для `// comments` в config). Никакого `lxbox`-specific кода.
+**Coupling с LxBox:** **средний**. Dart-сторона generic (push-стримы + unary-RPC поверх MethodChannel/EventChannel), но привязана к нативному `BoxCommandClient` (три клиента, §164-энергомодель) и именам каналов `lxbox/cc/*` — extraction идёт в паре с VPN-engine (Layer 1), не отдельно.
 
-**API surface:** см. раздел [Clash API client](#clash-api-client). Уже generic — fetchProxies / selectInGroup / delay / groupDelay / fetchConnections / fetchTraffic.
+**API surface:** см. раздел [CommandClient (libbox)](#commandclient-libbox) — status/outbounds/groups/connections push + `getGroups`/`getRules`/`urlTestOutbound`/`selectOutbound`/`closeConnection`.
 
-**Готовность к extraction:** **высокая**. Можно опубликовать почти как есть. Нужно только тесты добавить (сейчас integration через `HomeController`).
+**Готовность к extraction:** **средняя**. Идёт вместе с Layer 1 (общий native command-server + channel names).
 
 ### Layer 3 — Sing-box subscription parser / builder
 
@@ -1433,15 +1443,15 @@ LxBox monolith — но архитектурно есть несколько sel
 
 **Что:** Per-app + system-wide observer DNS/TCP/UDP events.
 
-**Coupling:** **высокий** — см. coupling notes в [секции 6.5](#65-per-app-traffic-profiler-044). Зависит от `AppLog` instance, sing-box log format, `ClashApiClient` instance. Расцеплять для extraction нужно через 3 интерфейса (log source, log format adapter, connection poller).
+**Coupling:** **высокий** — см. coupling notes в [секции 6.5](#65-per-app-traffic-profiler-044). Зависит от `AppLog` instance, sing-box log format, `CcChannel` connections-стрима. Расцеплять для extraction нужно через 3 интерфейса (log source, log format adapter, connection source).
 
 **Готовность:** низкая. Имеет смысл только если LxBox VPN engine уже extracted и кто-то строит на нём свой profiler.
 
 ### Дорожная карта extraction (если решим идти)
 
-1. **Phase 1** — Clash API client как самостоятельный package (`clash_api_dart`). Самый низкий риск, ~2 дня work. Верифицирует extraction процесс.
-2. **Phase 2** — Sing-box VPN engine в `packages/flutter_singbox/` (path dependency monorepo). Refactor channel names + SharedPreferences keys + notification config. ~1 неделя work. Не публикуем на pub.dev пока — верифицируем что LxBox работает.
+1. **Phase 1** — Sing-box VPN engine + CommandClient-канал (Layer 1 + Layer 2) в `packages/flutter_singbox/` (path dependency monorepo). Refactor channel names (`lxbox/*`, `lxbox/cc/*`) + SharedPreferences keys + notification config. Не публикуем на pub.dev пока — верифицируем что LxBox работает.
+2. **Phase 2** — выделить из Layer 3 reusable `NodeSpec` parser/emit (без builder pipeline).
 3. **Phase 3** — Решение про публикацию: GPLv3 viral от libbox = main blocker. Если ОК с GPLv3-only userbase — публикуем.
 4. **Phase 4** — iOS support (если нужен).
 
-**Текущий статус:** ничего не extracted. Есть смысл начать с Layer 2 (Clash API client) как trial extraction.
+**Текущий статус:** ничего не extracted. VPN-engine (Layer 1) + CommandClient-канал (Layer 2) — связка для первого extraction'а.

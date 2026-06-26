@@ -5,6 +5,10 @@ import 'package:lxbox/models/transport_spec.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/parser/uri_utils.dart';
 
+// §169 — валидный X25519 public key (43-симв base64url = 32 байта) для тестов.
+// Раньше тут стоял `pbk=PK` (2 символа) — с §169-валидацией это уже не REALITY.
+const _validPbk = 'AwoRGB8mLTQ7QklQV15lbHN6gYiPlp2kq7K5wMfO1dw';
+
 void main() {
   // §115 — эталонная матрица брифа: эмитим flow ТОЛЬКО если (а) явно есть во
   // входе И (б) нет транспорта. Проверяем именно сгенерированный outbound.
@@ -14,7 +18,7 @@ void main() {
       return spec.emit(TemplateVars.empty).map['flow'] as String?;
     }
 
-    const reality = 'security=reality&pbk=PK&sid=ABCD&sni=w.example.com';
+    const reality = 'security=reality&pbk=$_validPbk&sid=ABCD&sni=w.example.com';
 
     test('bare TCP + REALITY, без flow → flow не эмитится', () {
       expect(emittedFlow('vless://u@h:443?type=tcp&$reality#L'), isNull);
@@ -54,18 +58,18 @@ void main() {
       // Раньше навязывали xtls-rprx-vision → ломались валидные none-сетапы
       // (x3-ui flow: none). Теперь flow берём из ссылки как есть.
       final spec = parseVless(
-        'vless://u@h:443?type=tcp&security=reality&pbk=PK&sid=ABCD&sni=w.example.com&fp=chrome#L',
+        'vless://u@h:443?type=tcp&security=reality&pbk=$_validPbk&sid=ABCD&sni=w.example.com&fp=chrome#L',
       );
       expect(spec, isNotNull);
       expect(spec!.flow, '', reason: 'flow не навязывается');
-      expect(spec.tls.reality?.publicKey, 'PK');
+      expect(spec.tls.reality?.publicKey, _validPbk);
       expect(spec.tls.reality?.shortId, 'abcd');
       expect(spec.tls.fingerprint, 'chrome');
     });
 
     test('§115: явный flow=vision на bare TCP → сохраняется', () {
       final spec = parseVless(
-        'vless://u@h:443?type=tcp&security=reality&flow=xtls-rprx-vision&pbk=PK&sid=ABCD#L',
+        'vless://u@h:443?type=tcp&security=reality&flow=xtls-rprx-vision&pbk=$_validPbk&sid=ABCD#L',
       );
       expect(spec!.flow, 'xtls-rprx-vision');
       expect(spec.transport, isNull);
@@ -83,7 +87,7 @@ void main() {
     test('§115: vision + xhttp → flow погашен (XHTTP+Vision protocol limit)',
         () {
       final spec = parseVless(
-        'vless://u@h:443?type=xhttp&host=cdn.example&security=reality&pbk=PK&flow=xtls-rprx-vision#L',
+        'vless://u@h:443?type=xhttp&host=cdn.example&security=reality&pbk=$_validPbk&flow=xtls-rprx-vision#L',
       );
       expect(spec!.flow, '');
       expect(spec.warnings.whereType<VisionWithTransportWarning>(), isNotEmpty);
@@ -220,6 +224,51 @@ void main() {
       expect(m['uuid'], 'u');
       expect((m['transport'] as Map)['type'], 'ws');
       expect((m['tls'] as Map)['enabled'], true);
+    });
+  });
+
+  // §169 — битый pbk не отравляет конфиг: REALITY только при валидном X25519.
+  group('§169 REALITY pbk validation (битая подписка не роняет конфиг)', () {
+    test('isValidRealityPublicKey: валидный 32-байтный → true', () {
+      expect(isValidRealityPublicKey(_validPbk), isTrue);
+    });
+
+    test('isValidRealityPublicKey: мусор → false', () {
+      for (final bad in ['', 'enabled', 'true', 'PK', '   ', 'not_a_key']) {
+        expect(isValidRealityPublicKey(bad), isFalse, reason: 'bad="$bad"');
+      }
+    });
+
+    test('БОЕВОЙ КЕЙС: security=tls + pbk=enabled → plain TLS, без reality', () {
+      // Битая подписка («BLACK LISTS») вешает pbk=enabled на обычную TLS-ноду.
+      // Раньше: REALITY с мусорным ключом → sing-box отвергает весь config.
+      // Теперь: нода остаётся рабочей plain TLS, reality не создаётся.
+      final spec = parseVless(
+        'vless://u@h:443?type=tcp&security=tls&pbk=enabled&sni=w.example.com#L',
+      );
+      expect(spec, isNotNull);
+      expect(spec!.tls.enabled, isTrue, reason: 'нода рабочая (plain TLS)');
+      expect(spec.tls.reality, isNull, reason: 'мусорный pbk не даёт reality');
+      expect(spec.tls.serverName, 'w.example.com');
+    });
+
+    test('security=reality + pbk=true → деградация в plain TLS', () {
+      final spec = parseVless(
+        'vless://u@h:443?type=tcp&security=reality&pbk=true&sni=w.example.com#L',
+      );
+      expect(spec, isNotNull);
+      expect(spec!.tls.enabled, isTrue);
+      expect(spec.tls.reality, isNull);
+      expect(spec.tls.serverName, 'w.example.com');
+    });
+
+    test('валидный pbk → REALITY создаётся (контроль)', () {
+      final spec = parseVless(
+        'vless://u@h:443?type=tcp&security=reality&pbk=$_validPbk&sid=ABCD#L',
+      );
+      expect(spec!.tls.reality, isNotNull);
+      expect(spec.tls.reality!.publicKey, _validPbk);
+      expect(spec.tls.reality!.shortId, 'abcd');
     });
   });
 }

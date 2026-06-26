@@ -3,23 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/app_info_cache.dart';
-import '../services/clash_api_client.dart';
 import '../services/format_utils.dart';
+import '../services/rule_name_resolver.dart';
+import '../vpn/cc_channel.dart';
 import 'connections_screen/connection_detail_sheet.dart';
-
-/// §154 — чистый package name из `metadata.processPath`. Ядро форматирует
-/// его как `com.app (com.app)` либо `com.app (user)` / `com.app (1000)`
-/// (см. sing-box `tracker.go`: `processPath + " (" + userName/userId + ")"`).
-/// Для резолва иконки нужен голый package — берём часть до первого пробела.
-/// Возвращает '' если пусто или похоже на абсолютный путь (не Android-pkg).
-String packageNameFromProcess(String raw) {
-  final s = raw.trim();
-  if (s.isEmpty) return '';
-  final pkg = s.split(' ').first.trim();
-  // Android package = `a.b.c`, без слешей. Путь вида /usr/bin/foo — не pkg.
-  if (pkg.contains('/') || !pkg.contains('.')) return '';
-  return pkg;
-}
 
 /// §153 — «однобокое» (зависшее) соединение: TCP, прожившее ≥
 /// [oneWayMinAge], где трафик идёт строго в одну сторону (up>0/down=0 или
@@ -47,145 +34,169 @@ bool isOneWayStuck({
   return (upload > 0 && download == 0) || (upload == 0 && download > 0);
 }
 
+/// §165 — человекочитаемое имя правила для Conns/Stats. Делегирует в
+/// [RuleNameResolver]: справочник из `custom_rules` (нормализация + indexOf +
+/// кэш), т.к. `rule.String()` ядра не несёт имени и обрезает списки >3. Кэш по
+/// `c.rule` (вкл. промахи) — `ruleName` зовётся в цикле ×10/сек (FAST), без
+/// кэша = фриз (§166).
+String ruleName(String rule) => RuleNameResolver.I.resolve(rule);
+
 /// Embeddable view: toolbar + список соединений. Без Scaffold, без AppBar —
 /// сидит во вкладке StatsScreen.
+///
+/// §122 — источник = `CcChannel.instance.connections` (libbox CommandClient
+/// push-стрим), а не Clash HTTP-pull. Native-аккумулятор отдаёт АКТИВНЫЕ
+/// соединения; closed-историю (режим «закрытые не исчезают») ведёт ЭТОТ виджет
+/// (`_accumulate`/`_closedIds`/`_closedAt`) — точно как раньше с Clash-pull.
 class ConnectionsView extends StatefulWidget {
-  const ConnectionsView({super.key, required this.clash});
-
-  final ClashApiClient clash;
+  const ConnectionsView({super.key});
 
   @override
   State<ConnectionsView> createState() => _ConnectionsViewState();
 }
 
-class _ConnectionsViewState extends State<ConnectionsView>
-    with WidgetsBindingObserver {
-  static const _intervals = [500, 1000, 2000, 3000, 5000, 10000, 0]; // ms, 0 = off
-  List<Map<String, dynamic>> _connections = [];
+class _ConnectionsViewState extends State<ConnectionsView> {
+  final _cc = CcChannel.instance;
+  StreamSubscription<List<CcConnection>>? _sub;
+
+  /// Последний снапшот живых соединений (id → conn), плюс — в режиме accumulate
+  /// — недавно закрытые (помечены через [_closedIds]).
+  final Map<String, CcConnection> _byId = {};
   final Set<String> _closedIds = {};
   final Map<String, DateTime> _closedAt = {};
-  bool _loading = true;
   bool _accumulate = false;
-  Timer? _timer;
-  int _intervalMs = 2000;
-  bool _backgrounded = false;
+  bool _loading = true;
+
+  /// §122 — закрытые соединения держим [_closedWindow] (видно недавнюю историю,
+  /// иначе при закрытии всё мгновенно исчезает и «ничего не ясно»). В режиме
+  /// accumulate — без срока (до ручной очистки toggle'ом).
+  static const _closedWindow = Duration(seconds: 30);
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    unawaited(_refresh());
-    _startTimer();
+    _sub = _cc.connections.listen(_onConnections);
   }
 
-  void _startTimer() {
-    _timer?.cancel();
-    if (_intervalMs <= 0) return;
-    if (_backgrounded) return;  // Не запускаем таймер в background.
-    _timer = Timer.periodic(Duration(milliseconds: _intervalMs), (_) => _refresh());
-  }
+  void _onConnections(List<CcConnection> conns) {
+    if (!mounted) return;
+    // §176 — ядро отдаёт FilterState(All): живые + closed (closedAt>0) до 5 мин.
+    // liveIds строим ТОЛЬКО из живых (closedAt==0) — иначе closed-conn попал бы в
+    // liveIds и «пропал из снапшота»-детект ниже его не закрыл бы (завис как
+    // живой). Закрытие теперь и явное (closedAt>0), и по исчезновению (diff).
+    final liveIds = conns
+        .where((c) => c.closedAt == 0)
+        .map((c) => c.id)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final now = DateTime.now();
 
-  void _setInterval(int ms) {
-    setState(() => _intervalMs = ms);
-    _startTimer();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Connections view опрашивает Clash API каждые 500мс–10с. В background
-    // это бесполезный трафик и батарея — юзер экран не видит. Pause/resume
-    // по lifecycle-эвенту.
-    switch (state) {
-      case AppLifecycleState.paused:
-      case AppLifecycleState.hidden:
-      case AppLifecycleState.detached:
-      case AppLifecycleState.inactive:
-        _backgrounded = true;
-        _timer?.cancel();
-        _timer = null;
-      case AppLifecycleState.resumed:
-        _backgrounded = false;
-        if (_timer == null && _intervalMs > 0) {
-          unawaited(_refresh());
-          _startTimer();
-        }
+    // §176 — явная closed-дельта от ядра: closedAt>0 → метим closed сразу.
+    for (final c in conns) {
+      if (c.closedAt > 0 && c.id.isNotEmpty && _closedIds.add(c.id)) {
+        _closedAt[c.id] = now;
+      }
     }
+    // Соединения, пропавшие из снапшота вообще (без closed-дельты) → тоже
+    // закрыты (подстраховка: ядро могло эвиктнуть до того как мы увидели close).
+    for (final id in _byId.keys.toList()) {
+      if (id.isNotEmpty && !liveIds.contains(id) && _closedIds.add(id)) {
+        _closedAt[id] = now;
+      }
+    }
+    // Свежие данные поверх (живые перетирают; закрытые остаются с прежними
+    // байтами — у CcConnection.closedAt>0 они и так помечены).
+    for (final c in conns) {
+      if (c.id.isNotEmpty) _byId[c.id] = c;
+    }
+    // Истечение закрытых: в обычном режиме — старше окна; в accumulate — никогда.
+    if (!_accumulate) {
+      _closedIds.removeWhere((id) {
+        final at = _closedAt[id];
+        final expired = at == null || now.difference(at) > _closedWindow;
+        if (expired) {
+          _byId.remove(id);
+          _closedAt.remove(id);
+        }
+        return expired;
+      });
+    }
+
+    // §166 — аккумуляция (closed-tracking выше) идёт КАЖДЫЙ тик (иначе пропустим
+    // закрытие), но ребилд (setState + ruleName/_appIcon по всему списку) —
+    // троттлим: снапшоты на FAST 0.1с=10/сек, без троттла вкладка ВИСЛА.
+    if (!_loading &&
+        _rebuildAt != null &&
+        now.difference(_rebuildAt!) < _rebuildThrottle) {
+      return;
+    }
+    _rebuildAt = now;
+    setState(() => _loading = false);
   }
 
-  String _intervalLabel(int ms) {
-    if (ms == 0) return 'Off';
-    if (ms < 1000) return '${(ms / 1000).toStringAsFixed(1)}s';
-    return '${ms ~/ 1000}s';
+  // §166 — троттл ребилда (см. _onConnections).
+  static const _rebuildThrottle = Duration(milliseconds: 700);
+  DateTime? _rebuildAt;
+
+  /// Отсортированный список: новейшие сверху (по createdAt epoch ms).
+  List<CcConnection> get _sorted {
+    final list = _byId.values.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _timer?.cancel();
+    _sub?.cancel();
     super.dispose();
   }
 
-  Future<void> _refresh() async {
-    try {
-      final data = await widget.clash.fetchConnections();
-      if (!mounted) return;
-      final conns = (data['connections'] as List<dynamic>? ?? [])
-          .whereType<Map<String, dynamic>>()
-          .toList();
-      List<Map<String, dynamic>> next;
-      if (_accumulate) {
-        final liveIds = conns.map((c) => c['id']?.toString() ?? '').toSet();
-        final byId = <String, Map<String, dynamic>>{};
-        for (final c in _connections) {
-          final id = c['id']?.toString() ?? '';
-          if (id.isEmpty) continue;
-          byId[id] = c;
-          if (!liveIds.contains(id)) {
-            if (_closedIds.add(id)) _closedAt[id] = DateTime.now();
-          }
-        }
-        for (final c in conns) {
-          final id = c['id']?.toString() ?? '';
-          if (id.isEmpty) continue;
-          byId[id] = c;
-        }
-        next = byId.values.toList();
-      } else {
-        _closedIds.clear();
-        _closedAt.clear();
-        next = conns;
-      }
-      next.sort((a, b) {
-        final aStart = a['start']?.toString() ?? '';
-        final bStart = b['start']?.toString() ?? '';
-        return bStart.compareTo(aStart); // newest first
-      });
-      setState(() {
-        _connections = next;
-        _loading = false;
-      });
-    } catch (_) {
-      if (mounted && _loading) setState(() => _loading = false);
-    }
-  }
-
   Future<void> _closeConnection(String id) async {
-    try {
-      await widget.clash.closeConnection(id);
-      unawaited(_refresh());
-    } catch (_) {}
+    if (id.isEmpty) return;
+    await _cc.closeConnection(id);
   }
 
   Future<void> _closeAll() async {
-    try {
-      await widget.clash.closeAllConnections();
-      unawaited(_refresh());
-    } catch (_) {}
+    // Число живых ДО закрытия (closedAt==0) — для snackbar и мгновенной пометки.
+    final liveNow = _byId.values
+        .where((c) => c.closedAt == 0 && c.id.isNotEmpty)
+        .map((c) => c.id)
+        .toList();
+    final ok = await _cc.closeConnections();
+    if (!mounted) return;
+    if (ok) {
+      // §044 — мгновенный отклик: помечаем живые как закрытые локально, не ждём
+      // снапшота (иначе «старые висят» до 700мс-троттла + тика стрима). Следующий
+      // снапшот от ядра подтвердит (closedAt>0). В обычном режиме закрытые
+      // доживут _closedWindow и уйдут; в accumulate — останутся серыми.
+      final now = DateTime.now();
+      setState(() {
+        for (final id in liveNow) {
+          if (_closedIds.add(id)) _closedAt[id] = now;
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 2),
+          content: Text(liveNow.isEmpty
+              ? 'No active connections to close'
+              : 'Closed ${liveNow.length} connection${liveNow.length == 1 ? "" : "s"}'),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(seconds: 2),
+          content: Text('Failed to close connections (tunnel down?)'),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final list = _sorted;
     return Column(
       children: [
         Container(
@@ -196,54 +207,30 @@ class _ConnectionsViewState extends State<ConnectionsView>
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(
             children: [
+              // Toggle: 30s-история (закрытые серым ~30с) ↔ Accumulate (навсегда).
               IconButton(
-                tooltip: 'Refresh now',
-                icon: const Icon(Icons.refresh),
-                onPressed: () => unawaited(_refresh()),
-              ),
-              IconButton(
-                tooltip: _accumulate ? 'Accumulating (tap to clear)' : 'Live (tap to keep closed)',
-                icon: Icon(_accumulate ? Icons.history_toggle_off : Icons.history),
+                tooltip: _accumulate
+                    ? 'Keeping all closed (tap for 30s window)'
+                    : 'Closed kept 30s (tap to keep all)',
+                icon: Icon(
+                  _accumulate ? Icons.history_toggle_off : Icons.history,
+                ),
                 onPressed: () {
                   setState(() {
                     _accumulate = !_accumulate;
                     if (!_accumulate) {
+                      // Выключили accumulate → убираем закрытые из набора.
+                      _byId.removeWhere((id, _) => _closedIds.contains(id));
                       _closedIds.clear();
                       _closedAt.clear();
                     }
                   });
                 },
               ),
-              PopupMenuButton<int>(
-                tooltip: 'Auto-refresh',
-                initialValue: _intervalMs,
-                onSelected: _setInterval,
-                itemBuilder: (_) => [
-                  for (final ms in _intervals)
-                    CheckedPopupMenuItem<int>(
-                      value: ms,
-                      checked: _intervalMs == ms,
-                      child: Text(_intervalLabel(ms)),
-                    ),
-                ],
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.timer_outlined, size: 20),
-                      const SizedBox(width: 4),
-                      Text(_intervalLabel(_intervalMs),
-                          style: const TextStyle(fontSize: 12)),
-                    ],
-                  ),
-                ),
-              ),
               const Spacer(),
-              Text('${_connections.length}',
-                  style: TextStyle(
-                      fontSize: 12, color: cs.onSurfaceVariant)),
-              if (_connections.isNotEmpty)
+              Text('${list.length}',
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              if (list.isNotEmpty)
                 IconButton(
                   tooltip: 'Close all',
                   icon: const Icon(Icons.close_rounded),
@@ -255,41 +242,51 @@ class _ConnectionsViewState extends State<ConnectionsView>
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
-              : _connections.isEmpty
+              : list.isEmpty
                   ? const Center(child: Text('No active connections'))
                   : ListView.separated(
-                      itemCount: _connections.length,
+                      itemCount: list.length,
                       separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, i) => _buildTile(_connections[i]),
+                      itemBuilder: (context, i) => _buildTile(list[i]),
                     ),
         ),
       ],
     );
   }
 
-  Widget _buildTile(Map<String, dynamic> conn) {
-    final meta = conn['metadata'] as Map<String, dynamic>? ?? {};
-    final host = meta['host']?.toString() ?? '';
-    final destIp = meta['destinationIP']?.toString() ?? '';
-    final destPort = meta['destinationPort']?.toString() ?? '';
-    final network = meta['network']?.toString() ?? '';
-    final connType = meta['type']?.toString() ?? '';
-    final process = meta['process']?.toString() ?? meta['processPath']?.toString() ?? '';
+  /// Порт из "host:port" — часть после последнего ':'.
+  static String _portOf(String destination) {
+    final i = destination.lastIndexOf(':');
+    if (i < 0 || i == destination.length - 1) return '';
+    return destination.substring(i + 1);
+  }
 
-    final destination = host.isNotEmpty ? host : destIp;
-    final display = destPort.isNotEmpty ? '$destination:$destPort' : destination;
+  /// Host из "host:port" — часть до последнего ':'.
+  static String _hostOf(String destination) {
+    final i = destination.lastIndexOf(':');
+    return i < 0 ? destination : destination.substring(0, i);
+  }
 
-    final chains = (conn['chains'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
-    final chain = chains.isNotEmpty ? chains.join(' → ') : '?';
+  Widget _buildTile(CcConnection conn) {
+    final network = conn.network;
+    final destPort = _portOf(conn.destination);
+    // host: domain, иначе host-часть destination (IP-соединения без домена).
+    final host = conn.domain.isNotEmpty ? conn.domain : _hostOf(conn.destination);
+    final display = destPort.isNotEmpty ? '$host:$destPort' : host;
 
-    final upload = conn['upload'] as int? ?? 0;
-    final download = conn['download'] as int? ?? 0;
-    final id = conn['id']?.toString() ?? '';
-    final closed = _closedIds.contains(id);
+    final upload = conn.uplink;
+    final download = conn.downlink;
+    final id = conn.id;
+    final closed = conn.isClosed || _closedIds.contains(id);
 
-    final start = conn['start']?.toString() ?? '';
-    final startTime = DateTime.tryParse(start);
-    final endTime = closed ? (_closedAt[id] ?? DateTime.now()) : DateTime.now();
+    final startTime = conn.createdAt > 0
+        ? DateTime.fromMillisecondsSinceEpoch(conn.createdAt)
+        : null;
+    final endTime = closed
+        ? (conn.closedAt > 0
+            ? DateTime.fromMillisecondsSinceEpoch(conn.closedAt)
+            : (_closedAt[id] ?? DateTime.now()))
+        : DateTime.now();
     final duration = startTime != null ? endTime.difference(startTime) : null;
 
     final oneWay = isOneWayStuck(
@@ -301,117 +298,114 @@ class _ConnectionsViewState extends State<ConnectionsView>
     );
 
     final cs = Theme.of(context).colorScheme;
-    final rule = conn['rule']?.toString() ?? '';
-    final rulePayload = conn['rulePayload']?.toString() ?? '';
-    final ruleText = rulePayload.isNotEmpty ? '$rule ($rulePayload)' : rule;
+    final rule = ruleName(conn.rule);
 
     return Container(
-      // §153 — розовый фон у однобоких (зависших) TCP-соединений.
-      color: oneWay
-          ? Color.alphaBlend(
-              Colors.pink.withValues(alpha: 0.16), cs.surface)
+      // §153 — розовый фон у однобоких (зависших) TCP; закрытые — без подсветки.
+      color: oneWay && !closed
+          ? Color.alphaBlend(Colors.pink.withValues(alpha: 0.16), cs.surface)
           : null,
       child: Opacity(
-      opacity: closed ? 0.45 : 1.0,
-      child: InkWell(
-        onTap: () => unawaited(showConnectionDetailSheet(
-          context,
-          conn,
-          oneWay: oneWay,
-          closed: closed,
-          onClose: (cid) => unawaited(_closeConnection(cid)),
-        )),
-        child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Row 1: app icon + host:port + traffic + close button
-          // §152 — иконка-стрелка (→/⇄ для tcp/udp) убрана; §154 — на её
-          // месте launcher-иконка приложения (по processPath = package).
-          Row(
-            children: [
-              _appIcon(packageNameFromProcess(process)),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  display,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                  overflow: TextOverflow.ellipsis,
+        opacity: closed ? 0.5 : 1.0,
+        child: InkWell(
+          onTap: () => unawaited(showConnectionDetailSheet(
+            context,
+            conn,
+            oneWay: oneWay,
+            closed: closed,
+            onClose: (cid) => unawaited(_closeConnection(cid)),
+          )),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Row 1: app-иконка (по getProcessInfo.package) + host:port +
+                // traffic + close. §122 — иконка вернулась (ProcessInfo есть в
+                // Connection); fallback на стрелку tcp/udp если pkg нет.
+                Row(
+                  children: [
+                    _appIcon(conn.packageName, network: network, closed: closed),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        display,
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w500),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      '↑${formatBytes(upload)} ↓${formatBytes(download)}',
+                      style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                    ),
+                    const SizedBox(width: 4),
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: IconButton(
+                        icon: const Icon(Icons.close, size: 14),
+                        padding: EdgeInsets.zero,
+                        tooltip: 'Close',
+                        onPressed: (closed || id.isEmpty)
+                            ? null
+                            : () => _closeConnection(id),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              Text(
-                // §141 P2.4a — общий канон `formatBytes` (B/KB/MB/GB) вместо
-                // локального `_formatBytes` (B/K/M, без GB-разряда).
-                '↑${formatBytes(upload)} ↓${formatBytes(download)}',
-                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-              ),
-              const SizedBox(width: 4),
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: IconButton(
-                  icon: const Icon(Icons.close, size: 14),
-                  padding: EdgeInsets.zero,
-                  tooltip: 'Close',
-                  onPressed: (closed || id.isEmpty) ? null : () => _closeConnection(id),
+                // Row 2: outbound (нода/цепочка) — getOutbound, ОБЯЗАТЕЛЬНО.
+                Padding(
+                  padding: const EdgeInsets.only(left: 22, top: 2),
+                  child: Text(
+                    conn.outbound.isNotEmpty ? conn.outbound : '—',
+                    style: TextStyle(fontSize: 11, color: cs.primary),
+                    overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                // Row 3: protocol · rule · duration. Пустой rule = соединение
+                // пошло по route.final (default-маршрут, без явного правила) —
+                // пишем `final`, как Clash (а не `—`).
+                Padding(
+                  padding: const EdgeInsets.only(left: 22, top: 2),
+                  child: Text(
+                    '${network.toUpperCase()}'
+                    '  ·  ${rule.isNotEmpty ? rule : 'final'}'
+                    '${closed ? '  ·  closed' : ''}'
+                    '${duration != null ? '  ·  ${_formatDuration(duration)}' : ''}',
+                    style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          // Row 2: process (app name)
-          if (process.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: 20, top: 2),
-              child: Text(
-                process,
-                style: TextStyle(fontSize: 11, color: cs.primary),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          // Row 3: chain
-          Padding(
-            padding: const EdgeInsets.only(left: 20, top: 2),
-            child: Text(
-              chain,
-              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-              overflow: TextOverflow.ellipsis,
+              ],
             ),
           ),
-          // Row 4: protocol + rule + duration
-          Padding(
-            padding: const EdgeInsets.only(left: 20, top: 2),
-            child: Text(
-              '$network/$connType'
-              '${ruleText.isNotEmpty ? '  ·  $ruleText' : ''}'
-              '${duration != null ? '  ·  ${_formatDuration(duration)}' : ''}',
-              style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-      ),
-      ),
+        ),
       ),
     );
   }
 
-  /// §154 — launcher-иконка приложения по package name (`processPath`).
+  /// §154/§122 — launcher-иконка приложения по package name (из `getProcessInfo`).
   /// 16×16, перерисовывается через `AppInfoCache.revision` когда иконка
-  /// дотянулась из native асинхронно. Fallback пока нет иконки/нет pkg —
-  /// нейтральный placeholder того же размера (layout не прыгает).
-  Widget _appIcon(String pkg) {
+  /// дотянулась из native асинхронно. Fallback (нет pkg/иконки) — стрелка
+  /// tcp/udp (как до §154), а для закрытых — галочка.
+  Widget _appIcon(String pkg, {required String network, required bool closed}) {
     const double size = 16;
     final cs = Theme.of(context).colorScheme;
-    final placeholder = Icon(Icons.apps, size: size, color: cs.onSurfaceVariant);
-    if (pkg.isEmpty) return placeholder;
+    final fallback = Icon(
+      closed
+          ? Icons.check_circle_outline
+          : (network == 'udp' ? Icons.swap_horiz : Icons.arrow_forward),
+      size: size,
+      color: closed ? cs.primary : cs.onSurfaceVariant,
+    );
+    if (pkg.isEmpty) return fallback;
     AppInfoCache.ensure(pkg);
     return AnimatedBuilder(
       animation: AppInfoCache.revision,
       builder: (context, _) {
         final icon = AppInfoCache.of(pkg)?.icon;
-        if (icon == null) return placeholder;
+        if (icon == null) return fallback;
         return ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: Image.memory(icon,

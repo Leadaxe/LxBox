@@ -292,6 +292,11 @@ List<String> _applySrsSingle(
     packages: cr.packages,
     protocols: cr.protocols,
     ipIsPrivate: cr.ipIsPrivate,
+    // §030/new_fields — у srs нет своего headless match → source/inbound
+    // (вкл. source_ip_cidr) ВСЕ на routing-rule level.
+    sourceIpCidrs: cr.sourceIpCidrs,
+    sourceIpIsPrivate: cr.sourceIpIsPrivate,
+    inbounds: cr.inbounds,
     wifiSsids: cr.wifiSsids,
     wifiBssids: cr.wifiBssids,
   ));
@@ -300,6 +305,9 @@ List<String> _applySrsSingle(
     if (cr.packages.isNotEmpty) mirror['package_name'] = cr.packages;
     if (cr.wifiSsids.isNotEmpty) mirror['wifi_ssid'] = cr.wifiSsids;
     if (cr.wifiBssids.isNotEmpty) mirror['wifi_bssid'] = cr.wifiBssids;
+    // §030/new_fields — DNS-rule 1.14 принимает source_ip_cidr/inbound.
+    if (cr.sourceIpCidrs.isNotEmpty) mirror['source_ip_cidr'] = cr.sourceIpCidrs;
+    if (cr.inbounds.isNotEmpty) mirror['inbound'] = cr.inbounds;
     dnsMirrors.add(DnsMirrorEntry(
       ruleId: cr.id,
       ruleName: cr.name,
@@ -329,9 +337,14 @@ List<String> _applyInlineSingle(
     if (dnsMirrors == null || !cr.dnsMirrorActive) return;
     final mirror = <String, dynamic>{};
     if (ruleSetTag.isNotEmpty) mirror['rule_set'] = ruleSetTag;
-    if (cr.wifiSsids.isNotEmpty) mirror['wifi_ssid'] = cr.wifiSsids;
-    if (cr.wifiBssids.isNotEmpty) mirror['wifi_bssid'] = cr.wifiBssids;
-    // Пустой матч (только ip_is_private) — DNS-rule «match всё» не эмитим.
+    // §030/new_fields — wifi_*/source_ip_cidr теперь ВНУТРИ shared headless
+    // rule_set (если он есть) — в body не дублируем. Когда tag пуст (routing-
+    // level-only правило), match был пуст → wifi/source там и не было.
+    // `inbound` — route-only, в headless его нет → кладём в DNS-rule body
+    // (DNS-rule 1.14 принимает `inbound`).
+    if (cr.inbounds.isNotEmpty) mirror['inbound'] = cr.inbounds;
+    // Пустой матч (только ip_is_private/source_ip_is_private) — DNS-rule
+    // «match всё» не эмитим.
     if (mirror.isEmpty) return;
     dnsMirrors.add(DnsMirrorEntry(
       ruleId: cr.id,
@@ -355,18 +368,26 @@ List<String> _applyInlineSingle(
   if (intPorts.isNotEmpty) match['port'] = intPorts;
   if (cr.portRanges.isNotEmpty) match['port_range'] = cr.portRanges;
   if (cr.packages.isNotEmpty) match['package_name'] = cr.packages;
-  // `ip_is_private`, `wifi_ssid`, `wifi_bssid` НЕ поддерживаются в
-  // headless rule — sing-box отрежет конфиг на парсинге. Выносим на
-  // routing-rule level (там OR с rule_set per default-rule formula).
+  // §030/new_fields — sing-box 1.14 (`DefaultHeadlessRule`) ПРИНИМАЕТ в
+  // headless: `source_ip_cidr`, `wifi_ssid`, `wifi_bssid`. Раньше (§051, под
+  // 1.12) wifi выносился на routing-rule level — теперь кладём прямо в match.
+  // AND с domain/port-группами внутри одного headless rule.
+  if (cr.sourceIpCidrs.isNotEmpty) match['source_ip_cidr'] = cr.sourceIpCidrs;
+  if (cr.wifiSsids.isNotEmpty) match['wifi_ssid'] = cr.wifiSsids;
+  if (cr.wifiBssids.isNotEmpty) match['wifi_bssid'] = cr.wifiBssids;
+  // `ip_is_private`, `source_ip_is_private`, `inbound`, `protocol` НЕ
+  // поддерживаются в headless rule — sing-box отрежет конфиг на парсинге.
+  // Выносим на routing-rule level (там OR/AND с rule_set per default-rule
+  // formula).
 
   if (match.isEmpty) {
     // Нет полей для inline headless rule. Если есть routing-level
-    // поля (protocol / ip_is_private / wifi_*) — эмитим routing rule
-    // без rule_set, иначе правило пустое, скипаем.
+    // поля (protocol / ip_is_private / source_ip_is_private / inbound) —
+    // эмитим routing rule без rule_set, иначе правило пустое, скипаем.
     if (cr.protocols.isEmpty &&
         !cr.ipIsPrivate &&
-        cr.wifiSsids.isEmpty &&
-        cr.wifiBssids.isEmpty) {
+        !cr.sourceIpIsPrivate &&
+        cr.inbounds.isEmpty) {
       return warnings;
     }
     registry.addRule(_outboundToRoute(
@@ -374,10 +395,10 @@ List<String> _applyInlineSingle(
       cr.outbound,
       protocols: cr.protocols,
       ipIsPrivate: cr.ipIsPrivate,
-      wifiSsids: cr.wifiSsids,
-      wifiBssids: cr.wifiBssids,
+      sourceIpIsPrivate: cr.sourceIpIsPrivate,
+      inbounds: cr.inbounds,
     ));
-    addDnsMirror(''); // wifi-only правило: DNS-rule без rule_set
+    addDnsMirror(''); // routing-level-only правило: DNS-rule без rule_set
     return warnings;
   }
 
@@ -386,17 +407,17 @@ List<String> _applyInlineSingle(
     'tag': requestedTag,
     'rules': [match],
   });
-  // Protocol + ip_is_private + wifi_* — на routing rule level (headless
-  // их не поддерживает). `ip_is_private` становится OR с rule_set (per
-  // sing-box default-rule formula) — это ровно то что юзер ожидает.
-  // Wifi-условия AND-ятся: фильтруют match на конкретный wifi network.
+  // Protocol + ip_is_private + source_ip_is_private + inbound — на routing
+  // rule level (headless их не поддерживает). `ip_is_private` становится OR
+  // с rule_set (per sing-box default-rule formula). source_ip_cidr/wifi_* уже
+  // в headless match выше.
   registry.addRule(_outboundToRoute(
     tag,
     cr.outbound,
     protocols: cr.protocols,
     ipIsPrivate: cr.ipIsPrivate,
-    wifiSsids: cr.wifiSsids,
-    wifiBssids: cr.wifiBssids,
+    sourceIpIsPrivate: cr.sourceIpIsPrivate,
+    inbounds: cr.inbounds,
   ));
   addDnsMirror(tag);
   return warnings;
@@ -494,6 +515,9 @@ Map<String, dynamic> _outboundToRoute(
   List<String>? packages,
   List<String>? protocols,
   bool ipIsPrivate = false,
+  List<String>? sourceIpCidrs,
+  bool sourceIpIsPrivate = false,
+  List<String>? inbounds,
   List<String>? wifiSsids,
   List<String>? wifiBssids,
 }) {
@@ -506,6 +530,17 @@ Map<String, dynamic> _outboundToRoute(
   if (packages != null && packages.isNotEmpty) rule['package_name'] = packages;
   if (protocols != null && protocols.isNotEmpty) rule['protocol'] = protocols;
   if (ipIsPrivate) rule['ip_is_private'] = true;
+  // §030/new_fields — source-IP-CIDR на routing-rule level. Для inline он
+  // обычно живёт в headless match (sing-box 1.14 принимает), но для srs/
+  // routing-level-fallback кладётся сюда. OR-группа источника, AND с rule_set.
+  if (sourceIpCidrs != null && sourceIpCidrs.isNotEmpty) {
+    rule['source_ip_cidr'] = sourceIpCidrs;
+  }
+  // §030/new_fields — `source_ip_is_private` / `inbound` ВСЕГДА routing-rule
+  // level: headless rule_set этих полей не имеет (sing-box 1.14
+  // DefaultHeadlessRule). AND с остальным правилом.
+  if (sourceIpIsPrivate) rule['source_ip_is_private'] = true;
+  if (inbounds != null && inbounds.isNotEmpty) rule['inbound'] = inbounds;
   // §051 — wifi_ssid / wifi_bssid эмитятся только non-empty. sing-box
   // AND-ит со всеми остальными полями rule'а; без них — fallback на любую
   // сеть (поведение pre-§051).

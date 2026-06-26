@@ -3,8 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/services.dart' show PlatformException;
 
-import 'clash_api_client.dart';
-
 /// §041: Превращает Dart exception в человекочитаемое сообщение для UI banner /
 /// snackbar / debug log. Скрывает технические артефакты toString'ов
 /// ("Future not completed", "errno = N", длинные address-кортежи и т.п.).
@@ -19,7 +17,6 @@ import 'clash_api_client.dart';
 ///   FileSystemException("Cannot open", ...)        → "No such file or directory"
 ///   PlatformException(start_failed, "msg", ...)    → "msg"
 ///   FormatException("Unexpected character", ...)   → "Unexpected character"
-///   ClashHttpException(401, ...)                   → "HTTP 401"
 String formatUserError(Object e) {
   if (e is TimeoutException) {
     final ms = e.duration?.inMilliseconds ?? 0;
@@ -38,7 +35,6 @@ String formatUserError(Object e) {
   }
   if (e is HttpException) return e.message;
   if (e is FormatException) return e.message;
-  if (e is ClashHttpException) return 'HTTP ${e.status}';
   if (e is PlatformException) {
     final m = e.message;
     if (m != null && m.isNotEmpty) return m;

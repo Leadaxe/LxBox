@@ -26,7 +26,6 @@ import '../services/debug/bootstrap.dart';
 import '../services/debug/debug_registry.dart';
 import '../services/haptic_service.dart';
 import '../services/nav/home_return_observer.dart';
-import '../services/traffic_profiler.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/update_checker.dart';
 import '../vpn/box_vpn_client.dart';
@@ -120,16 +119,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     DebugRegistry.I.home = _controller;
     DebugRegistry.I.sub = _subController;
     DebugRegistry.I.autoUpdater = _autoUpdater;
-    // §044: profiler нужен runtime data-source `/connections`. Биндим один
-    // раз тут (singleton-controller singleton-fetcher), чтобы и Debug API
-    // /profiler/start (без открытого UI), и StatsScreen.PerAppTraceTab
-    // оба видели актуальный fetcher. Closure читает свежий clashClient
-    // на каждом poll'е — переподключение Clash API не требует rebind.
-    TrafficProfiler.I.bindRuntime(connections: () async {
-      final c = _controller.clashClient;
-      if (c == null) return const <String, dynamic>{'connections': []};
-      return c.fetchConnections();
-    });
+    // §168 — profiler берёт connections из CommandClient-стрима напрямую
+    // (CcChannel.connections + profilerClient), источник внутренний. bindRuntime
+    // удалён: пустой Clash-fetcher §122 давал buffer_count=0 (профайлер слеп).
     unawaited(applyDebugApiSettings());
     _controllerInit = _controller.init();
     unawaited(_controllerInit);
@@ -233,8 +225,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         _permissionDialogShowing = false;
       });
     }
-    // §116 — auto-dismiss таймер lastError переехал в BannerStack
-    // (централизованная banner-машинерия). Здесь больше не управляем.
+    // §166 — обычные ошибки показываем ВСПЛЫВАШКОЙ СНИЗУ (SnackBar), не красным
+    // баннером сверху. Новая lastError (не location-alert, тот обработан выше) →
+    // snackbar + clearError, чтобы верхний banner не зажёгся. Location-alert и
+    // config_load_error идут своими путями (dialog / отдельный banner-ключ).
+    if (nowError != _prevError &&
+        nowError.isNotEmpty &&
+        !nowError.contains('alert:permission_location:')) {
+      final msg = nowError;
+      _controller.clearError();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: Text(msg),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+          ));
+      });
+    }
 
     // §083 — per-channel match-filter memory. Канал сменился → save старого
     // + restore нового. ViewModel сам guard'ит no-op и notify'ит только при
@@ -522,14 +532,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     await _rebuildConfig();
     if (!mounted) return;
     await _controller.start();
-    if (mounted && _controller.state.lastError.isNotEmpty && !_controller.state.tunnelUp) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_controller.state.lastError),
-          duration: const Duration(seconds: 5),
-        ),
-      );
-    }
+    // §166 — snackbar ошибки теперь централизован в _onControllerChange
+    // (любой источник lastError → всплывашка снизу). Здесь дубль убран.
   }
 
   Future<void> _startWithAutoRefresh() async {

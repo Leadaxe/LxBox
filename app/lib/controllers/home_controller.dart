@@ -6,14 +6,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import '../config/clash_endpoint.dart';
+import '../config/route_config.dart';
 import '../vpn/box_vpn_client.dart';
+import '../vpn/cc_channel.dart';
 import '../config/config_parse.dart';
 import '../models/home_state.dart';
 import '../services/app_log.dart';
 import '../services/automation/event_emitter.dart';
-import '../services/clash_api_client.dart';
 import '../services/error_format.dart';
+import '../services/rule_name_resolver.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
 import '../services/haptic_service.dart';
@@ -31,9 +32,16 @@ class HomeController extends ChangeNotifier
   final BoxVpnClient _vpn = BoxVpnClient();
   final AutoUpdater? _autoUpdater;
   StreamSubscription<TunnelStatusEvent>? _statusSub;
+
+  /// §122 — единый канал данных от libbox CommandClient (заменил `ClashApiClient`
+  /// HTTP-петли). Данные текут push-стримами `status`/`groups`.
   @override
-  ClashApiClient? _clash;
-  ClashApiClient? get clashClient => _clash;
+  final CcChannel _cc = CcChannel.instance;
+
+  /// §122 — подписки на push-стримы CommandClient'а. `status` (always-on:
+  /// скорость/память/watchdog), `groups` (дерево групп → синтез `proxiesJson`).
+  StreamSubscription<CcStatus>? _ccStatusSub;
+  StreamSubscription<List<CcGroup>>? _ccGroupsSub;
 
   @override
   HomeState _state = HomeState();
@@ -146,6 +154,9 @@ class HomeController extends ChangeNotifier
     _autoPingTimer?.cancel();
     _transientTimeoutTimer?.cancel();
     _statusSub?.cancel();
+    _ccStatusSub?.cancel();
+    _ccGroupsSub?.cancel();
+    _groupsPullTimer?.cancel();
     super.dispose();
   }
 
@@ -191,7 +202,13 @@ class HomeController extends ChangeNotifier
         connectedSince: DateTime.now(),
         configChangedNeedRestart: false,
       ));
-      unawaited(_refreshClashAfterTunnel());
+      // §122 — рантайм-данные текут из CommandClient-стримов (status/groups).
+      _startCcStreams();
+      // §165 — наполнить резолвер имён правил из custom_rules (для Stats/Conns
+      // «Traffic by Rule»: c.rule ядра → title правила). Конфиг уже актуален
+      // (раз connected) → правила те же, что зашиты в running-конфиг.
+      unawaited(SettingsStorage.getCustomRules()
+          .then((r) => RuleNameResolver.I.setRules(r)));
       _startHeartbeat();
       _heartbeatFailNotified = false;
       HapticService.I.onVpnConnected();
@@ -202,20 +219,37 @@ class HomeController extends ChangeNotifier
       AutomationEventEmitter.I.emitVpnConnected();
     } else if (tunnel == TunnelStatus.disconnected ||
         tunnel == TunnelStatus.revoked) {
+      // §122 — guard от stale-терминала. Если мы УЖЕ в терминальном состоянии
+      // (disconnected/revoked), повторный `Stopped` — это дребезг teardown'а
+      // (несколько setStatus(Stopped)-путей в native) и НЕ должен повторно рвать
+      // CC-стримы/обнулять state. Главный фикс дребезга — native dedup в
+      // BoxService.setStatus; это вторая линия (defense-in-depth) на случай
+      // error-несущего повтора, который native пропускает.
+      if (prevTunnel == TunnelStatus.disconnected ||
+          prevTunnel == TunnelStatus.revoked) {
+        _addDebug(DebugSource.app,
+            '[vpn] stale terminal ignored (tunnel=${tunnel.name} prev=${prevTunnel.name})');
+        // Обновим только tunnel-статус (revoked поверх disconnected — важно для
+        // haptic/UI), но НЕ трогаем groups/nodes/streams.
+        if (tunnel != prevTunnel) _emit(_state.copyWith(tunnel: tunnel));
+        _transientTimeoutTimer?.cancel();
+        _transientTimeoutTimer = null;
+        return;
+      }
       _stopHeartbeat();
       // §141 P1.2b — единый контракт «tunnel down»: отменяем in-flight mass-ping
-      // ПЕРЕД обнулением _clash (ниже), симметрично `_onTunnelDead` (heartbeat.dart).
+      // ПЕРЕД гашением канала, симметрично `_onTunnelDead` (heartbeat.dart).
       // Иначе воркеры mass-ping'а, стартовавшие из _scheduleAutoPing/ручного
       // запуска, дописывают stale-delay в мёртвую сессию (epoch-гейт их
       // самоисцелит, но явная отмена — чище и не зависит от тайминга).
       cancelMassPing();
       _autoPingTimer?.cancel();
       _autoPingTimer = null;
-      // Clash endpoint прошлой сессии теперь невалиден — secret был у
-      // убитого sing-box, port может быть переиспользован системой. На
-      // следующем `connected` event мы пересоберём его через
-      // `_refreshClashAfterTunnel` → `_rebuildClashEndpoint`.
-      _clash = null;
+      // §122 — гасим CommandClient-стримы и screenClient (disconnectScreen).
+      // На следующем `connected` пересоберём (`_startCcStreams`).
+      _stopCcStreams();
+      // §165 — сброс кэша имён правил (правила могут смениться к след. запуску).
+      RuleNameResolver.I.clear();
       final reason = tunnel == TunnelStatus.revoked
           ? 'VPN revoked by another app'
           : (event.errorReason != null ? 'Stopped: ${event.errorReason}' : '');
@@ -223,7 +257,7 @@ class HomeController extends ChangeNotifier
         _state.copyWith(
           tunnel: tunnel,
           lastError: reason.isNotEmpty ? reason : _state.lastError,
-          proxiesJson: <String, dynamic>{},
+          ccGroups: const <CcGroup>[],
           groups: <String>[],
           nodes: <String>[],
           highlightedNode: null,
@@ -300,7 +334,7 @@ class HomeController extends ChangeNotifier
       _emit(_state.copyWith(
         tunnel: TunnelStatus.disconnected,
         lastError: 'Connection timed out',
-        proxiesJson: <String, dynamic>{},
+        ccGroups: const <CcGroup>[],
         groups: <String>[],
         nodes: <String>[],
         traffic: TrafficSnapshot.zero,
@@ -317,7 +351,7 @@ class HomeController extends ChangeNotifier
   // Config persistence + import (clipboard / file) вынесены в
   // `home_controller/config_io.dart` (`_ConfigIoMixin`): _loadSavedConfig /
   // saveParsedConfig / saveConfigRaw / readFromClipboard / readFromFile.
-  // `_rebuildClashEndpoint` остался здесь (общий с Clash-секцией).
+  // §122 — Clash endpoint rebuild выпилен (данные текут CommandClient-стримами).
 
   // ---------------------------------------------------------------------------
   // VPN tunnel control
@@ -371,7 +405,7 @@ class HomeController extends ChangeNotifier
   ///           статусный fallback "Connected").
   /// Dart владеет обеими строками — native при своих show(...) не затирает их.
   Future<void> _pushNotificationLabels() async {
-    final routeFinal = ClashEndpoint.routeFinalTag(_state.configRaw);
+    final routeFinal = RouteConfig.finalTag(_state.configRaw);
     final title = (routeFinal == null || routeFinal.isEmpty)
         ? 'L×Box'
         : 'L×Box [final = $routeFinal]';
@@ -521,58 +555,205 @@ class HomeController extends ChangeNotifier
   }
 
   // ---------------------------------------------------------------------------
-  // Clash API — proxies & groups
+  // §122 — CommandClient data streams (заменяют Clash API HTTP-петли)
   // ---------------------------------------------------------------------------
 
-  Future<void> _refreshClashAfterTunnel() async {
-    _rebuildClashEndpoint();
-    await reloadProxies();
-  }
-
+  /// Таймстемп последнего status-снапшота — для watchdog (§122 заменяет
+  /// heartbeat HTTP-fail: «тишина» стрима = ядро не отвечает).
+  DateTime? _lastCcStatusAt;
   @override
-  void _rebuildClashEndpoint() {
-    final endpoint = ClashEndpoint.fromConfigJson(_state.configRaw);
-    _clash = endpoint != null ? ClashApiClient(endpoint) : null;
+  DateTime? get lastCcStatusAt => _lastCcStatusAt;
+
+  /// Поднять push-стримы CommandClient'а и `screenClient` (outbounds+groups+
+  /// connections). Зовётся на `connected`. Идемпотентно — отменяет прежние
+  /// подписки перед новыми (защита от двойного connect).
+  void _startCcStreams() {
+    _ccStatusSub?.cancel();
+    _ccGroupsSub?.cancel();
+    // §122 КРИТИЧНО — ПОРЯДОК: сперва навешиваем Dart-подписки (это
+    // инициализирует ленивые `late final` стримы CcChannel → ставит native
+    // sink'и через EventChannel.onListen), и ТОЛЬКО ПОТОМ connectScreen().
+    // Иначе race: connectScreen() поднимает screenClient, ядро эмитит РАЗОВЫЙ
+    // снапшот groups до того как Dart-подписка успела встать → снапшот
+    // отбрасывается (sink ещё null) → «главный экран пустой при старте».
+    _ccStatusSub = _cc.status.listen(_onCcStatus, onError: (Object e) {
+      _addDebug(DebugSource.app, 'cc status stream error: $e');
+    });
+    _ccGroupsSub = _cc.groups.listen(_onCcGroups, onError: (Object e) {
+      _addDebug(DebugSource.app, 'cc groups stream error: $e');
+    });
+    // §2.8 — теперь sink'и стоят → поднимаем screenClient (groups/connections).
+    unawaited(_cc.connectScreen());
+    // §122/SPEC015 — детерминированный pull стартового снапшота групп. Раньше
+    // тут был watchdog, пересоздававший весь screenClient (`refreshScreen`) —
+    // он НЕ заставлял ядро переслать снапшот (device-факт: 2 ретрая впустую).
+    // Теперь честный unary `getGroups`: читает дерево групп напрямую, минуя
+    // гонку стартового push'а (`waitForStarted`/SubscribeGroups). Push-стрим
+    // остаётся для live-обновлений; pull — гарантия что экран не пуст.
+    _startGroupsPull();
   }
 
+  Timer? _groupsPullTimer;
+  // getGroups бросает (status.Error), пока сервис не STARTED — ретраим короткими
+  // шагами, ПОКА не получим снапшот. Не «N попыток и сдаёмся»: pull дешёвый и
+  // детерминированный, тянем до успеха либо до ухода из connected.
+  static const _groupsPullStep = Duration(milliseconds: 400);
+  static const _groupsPullMaxAttempts = 12; // ~5с суммарно — щедрый STARTED- window
+
+  void _startGroupsPull([int attempt = 0]) {
+    _groupsPullTimer?.cancel();
+    _groupsPullTimer = Timer(_groupsPullStep, () async {
+      if (!_state.tunnelUp) return; // ушли из connected — pull неактуален
+      // Группы уже наполнены (push доехал) — pull не нужен.
+      if (_state.ccGroups.isNotEmpty) return;
+      final groups = await _cc.getGroups();
+      if (!_state.tunnelUp) return; // могли уйти за await
+      if (groups == null) {
+        // Ядро ещё не STARTED (getGroups бросил) — ретраим.
+        if (attempt + 1 < _groupsPullMaxAttempts) {
+          _startGroupsPull(attempt + 1);
+        } else {
+          _addDebug(DebugSource.app,
+              '[cc] getGroups still unavailable after $_groupsPullMaxAttempts attempts');
+        }
+        return;
+      }
+      if (groups.isEmpty) {
+        // STARTED, но групп реально нет (конфиг без selector'ов) — применим как
+        // есть (один раз), повторно не тянем.
+        _addDebug(DebugSource.app, '[cc] getGroups → empty (no selector groups)');
+        _applyGroups(groups);
+        return;
+      }
+      _addDebug(DebugSource.app,
+          '[cc] getGroups pull → ${groups.length} groups');
+      _applyGroups(groups);
+    });
+  }
+
+  /// Отменить подписки + опустить `screenClient`. Зовётся на disconnect/dead.
+  @override
+  void _stopCcStreams() {
+    _ccStatusSub?.cancel();
+    _ccStatusSub = null;
+    _ccGroupsSub?.cancel();
+    _ccGroupsSub = null;
+    _groupsPullTimer?.cancel();
+    _groupsPullTimer = null;
+    _lastCcStatusAt = null;
+    // §122 — сбросить replay-кэши, чтобы при следующем connect новый подписчик
+    // не получил устаревший снапшот прошлой сессии (мигание старых групп/нод).
+    _cc.resetCaches();
+    unawaited(_cc.disconnectScreen());
+  }
+
+  /// §122 — status-стрим тикает часто (0.1с). На главном экране скорость в
+  /// шапке не нужна с такой частотой, а `_emit` ребилдит весь HomeScreen
+  /// (node-list 95 нод) → 10 ребилдов/сек = лаги/батарея. Эмитим traffic не
+  /// чаще [_trafficEmitThrottle]; Stats/Conns берут полный 0.1с-поток напрямую.
+  static const _trafficEmitThrottle = Duration(seconds: 1);
+  DateTime? _lastTrafficEmitAt;
+
+  /// §3.1 — статус-снапшот. `*Total` — накопленный объём (traffic).
+  /// `connectionsIn/Out` — для бейджа активных.
+  void _onCcStatus(CcStatus s) {
+    if (!_state.tunnelUp) return;
+    final now = DateTime.now();
+    // Watchdog обновляем на КАЖДЫЙ тик (дёшево, без emit) — он гейтит dead-tunnel.
+    _lastCcStatusAt = now;
+    _heartbeatFailures = 0;
+    // Throttle тяжёлого _emit (ребилд node-list): не чаще 1с.
+    if (_lastTrafficEmitAt != null &&
+        now.difference(_lastTrafficEmitAt!) < _trafficEmitThrottle) {
+      return;
+    }
+    _lastTrafficEmitAt = now;
+    _emit(_state.copyWith(
+      traffic: TrafficSnapshot(
+        uploadTotal: s.uplinkTotal,
+        downloadTotal: s.downlinkTotal,
+        activeConnections: s.connectionsIn + s.connectionsOut,
+        memory: s.memory,
+        // byRule/byApp — из connections-стрима (stats-экран), не из status.
+        byRule: _state.traffic.byRule,
+        byApp: _state.traffic.byApp,
+      ),
+    ));
+  }
+
+  /// §2.4 — снапшот дерева групп из CommandClient. Кладём в `state.ccGroups`
+  /// (источник истины) и пере-применяем логику выбора группы. reset-снапшот:
+  /// каждый снапшот ПОЛНОСТЬЮ заменяет `ccGroups` (replace-not-merge, §2.8).
+  void _onCcGroups(List<CcGroup> groups) {
+    if (!_state.tunnelUp) return;
+    // §122 КОРЕНЬ пустых групп — стабилизация push'а. Ядро (гонка
+    // waitForStarted/SubscribeGroups) ИЗРЕДКА шлёт пустой снапшот groups поверх
+    // уже наполненного дерева — это шум, а НЕ «групп больше нет»: при поднятом
+    // туннеле с живым трафиком selector-группа в конфиге есть всегда. Принять
+    // пустой снапшот = перетереть live `ccGroups/groups/nodes` пустотой
+    // (device-факт: groups мелькают 95→0). Игнорируем пустой push, если уже есть
+    // непустой снапшот. Первый легитимный пустой (старт, ccGroups ещё пуст)
+    // проходит. Детерминированное наполнение — unary `getGroups`-pull
+    // (`_startGroupsPull`, SPEC015); этот guard — защита live-данных от пустых
+    // push'ей и при наличии pull (не «обезьянье тыканье»: пустых групп при
+    // connected не бывает).
+    if (groups.isEmpty && _state.ccGroups.isNotEmpty) {
+      _addDebug(DebugSource.app,
+          '[cc] empty groups push ignored (have ${_state.ccGroups.length} live)');
+      return;
+    }
+    _applyGroups(groups);
+  }
+
+  /// Общее ядро: из свежего снапшота групп пересчитать список selector-групп,
+  /// выбрать активную (sticky → route.final → первая) и применить её ноды.
+  /// Вызывается из стрима И из `reloadProxies` (pull-refresh / после switchNode).
+  void _applyGroups(List<CcGroup> ccGroups) {
+    // Сначала фиксируем свежий снапшот в state, чтобы производные геттеры
+    // (`selectorGroupTags`/`groupOf`) считали по новым данным.
+    var next = _state.copyWith(ccGroups: ccGroups);
+
+    final groups = next.selectorGroupTags
+        .where((name) => name != 'GLOBAL')
+        .toList();
+
+    String? initial = next.selectedGroup;
+    if (initial == null || !groups.contains(initial)) {
+      final finalTag = RouteConfig.finalTag(next.configRaw);
+      if (finalTag != null && groups.contains(finalTag)) {
+        initial = finalTag;
+      } else {
+        initial = groups.isNotEmpty ? groups.first : null;
+      }
+    }
+
+    _emit(next.copyWith(groups: groups, selectedGroup: initial));
+    unawaited(applyGroup(initial));
+  }
+
+  /// Переприменение после switchNode|groupUrltest. §122 — данные текут стримом;
+  /// здесь лишь пере-применяем логику выбора группы поверх ПОСЛЕДНЕГО снапшота.
   @override
   Future<void> reloadProxies() async {
-    final clash = _clash;
-    if (clash == null || _state.configRaw.isEmpty) return;
-    try {
-      await clash.pingVersion();
-      final proxies = await clash.fetchProxies();
-      // §141 P1.2a — assign-after-await: пока ждали fetchProxies, туннель мог
-      // упасть (`_handleStatusEvent`/`_onTunnelDead` обнулили _clash и почистили
-      // state). Если _clash сменился или ушёл — не перетираем свежий
-      // disconnected-state устаревшим снимком (иначе transient UI-глитч:
-      // groups/nodes от мёртвой сессии поверх «tunnel down»).
-      if (_clash != clash || !_state.tunnelUp) return;
-      final groups = ClashApiClient.selectorGroupTags(proxies)
-          .where((name) => name != 'GLOBAL')
-          .toList();
+    if (!_state.tunnelUp) return;
+    _applyGroups(_state.ccGroups);
+  }
 
-      String? initial = _state.selectedGroup;
-      if (initial == null || !groups.contains(initial)) {
-        final finalTag = ClashEndpoint.routeFinalTag(_state.configRaw);
-        if (finalTag != null && groups.contains(finalTag)) {
-          initial = finalTag;
-        } else {
-          initial = groups.isNotEmpty ? groups.first : null;
-        }
-      }
-
-      _emit(
-        _state.copyWith(
-          proxiesJson: proxies,
-          groups: groups,
-          selectedGroup: initial,
-        ),
-      );
-      await applyGroup(initial);
-    } catch (e) {
-      _emit(_state.copyWith(lastError: 'Clash API: ${formatUserError(e)}'));
-      _addDebug(DebugSource.app, 'Clash API error: $e');
+  /// §122/SPEC015 — ручной pull-to-refresh (свайп вниз на списке нод). Тянет
+  /// свежий снапшот групп через unary `getGroups` (детерминированно, не
+  /// пересоздавая screenClient как раньше). `null` (ядро не STARTED) → оставляем
+  /// текущее; непустой → применяем. Закрывает остаточную гонку push'а.
+  Future<void> pullToRefresh() async {
+    if (!_state.tunnelUp) {
+      _applyGroups(_state.ccGroups);
+      return;
+    }
+    final groups = await _cc.getGroups();
+    if (!_state.tunnelUp) return;
+    if (groups != null) {
+      _applyGroups(groups);
+    } else {
+      _applyGroups(_state.ccGroups);
     }
   }
 
@@ -587,11 +768,10 @@ class HomeController extends ChangeNotifier
       );
       return;
     }
-    final entry = ClashApiClient.proxyEntry(_state.proxiesJson, tag);
-    if (entry == null) return;
-    final all = entry['all'];
-    final now = entry['now']?.toString();
-    final nodes = all is List ? all.map((e) => e.toString()).toList() : <String>[];
+    final group = _state.groupOf(tag);
+    if (group == null) return;
+    final nodes = group.items.map((e) => e.tag).toList();
+    final now = group.selected.isEmpty ? null : group.selected;
     _emit(
       _state.copyWith(
         nodes: nodes,
@@ -614,29 +794,25 @@ class HomeController extends ChangeNotifier
 
   Future<void> switchNode(String nodeTag) async {
     final group = _state.selectedGroup;
-    final clash = _clash;
-    if (group == null || clash == null) return;
+    if (group == null || !_state.tunnelUp) return;
     final prevNode = _state.activeInGroup;
     _emit(_state.copyWith(busy: true, highlightedNode: nodeTag));
     try {
-      await clash.selectInGroup(group, nodeTag);
-      // §143 — `interrupt_exist_connections` рвёт только inbound; уже
-      // установленные upstream-сессии старой ноды доживают сами. По opt-in
-      // тугле точечно закрываем соединения переключаемой группы, чтобы трафик
-      // сразу ушёл на новую ноду. Best-effort: фейл одного DELETE не должен
-      // ронять переключение.
+      // §122 — выбор ноды через CommandClient `selectOutbound` (unary RPC),
+      // не Clash PUT /proxies/<group>.
+      final ok = await _cc.selectOutbound(group, nodeTag);
+      if (!ok) throw const FormatException('selectOutbound rejected');
+      // §143 — точечный обрыв соединений переключаемой группы (opt-in тугл),
+      // чтобы трафик сразу ушёл на новую ноду. §122 — через CommandClient:
+      // снапшот соединений уже в `_state` (connections-стрим), id'ы цепочки
+      // закрываем `closeConnection`. Best-effort.
       if (await SettingsStorage.getInterruptOnSwitch()) {
         try {
-          final conns = await clash.fetchConnections();
-          final ids = ClashApiClient.connectionIdsInChain(conns, group);
-          // Общий дедлайн на весь обрыв: на нормальном loopback DELETE'ы
-          // sub-ms, но если локальный clash-inbound подвиснет, серия из N
-          // запросов с 10s-таймаутом каждый держала бы busy=true слишком
-          // долго. 5s суммарно с запасом хватает на десятки соединений.
+          final ids = await _connectionIdsInGroup(group);
           await Future(() async {
             for (final id in ids) {
               try {
-                await clash.closeConnection(id);
+                await _cc.closeConnection(id);
               } catch (_) {/* соединение уже закрылось — игнор */}
             }
           }).timeout(const Duration(seconds: 5), onTimeout: () {});
@@ -646,7 +822,20 @@ class HomeController extends ChangeNotifier
           _addDebug(DebugSource.app, 'Interrupt-on-switch failed: $e');
         }
       }
-      await reloadProxies();
+      // §122/SPEC015 — после selectOutbound ТЯНЕМ свежий снапшот через
+      // getGroups-pull, а не reloadProxies() поверх СТАРОГО `_state.ccGroups`
+      // (там `selected` ещё прежний → горела старая нода до ручного свайпа).
+      // Раньше выручал groups-push с новым `selected`, но он приходит не сразу/
+      // не всегда — pull детерминирован. Оптимистично сразу подсветим выбранную
+      // (highlightedNode уже = nodeTag), затем pull подтвердит `activeInGroup`.
+      final fresh = await _cc.getGroups();
+      if (fresh != null) {
+        _applyGroups(fresh);
+      } else {
+        // ядро не отдало (редко) — пере-применим что есть + оптимистично выбор.
+        _applyGroups(_state.ccGroups);
+        _emit(_state.copyWith(activeInGroup: nodeTag));
+      }
       _addDebug(DebugSource.app, 'Node selected: $nodeTag');
       // §047 — outgoing state event (gated, default OFF). reason=user: явный
       // выбор ноды (через UI или automation SWITCH_NODE — оба идут сюда).
@@ -661,6 +850,30 @@ class HomeController extends ChangeNotifier
     } finally {
       _emit(_state.copyWith(busy: false));
     }
+  }
+
+  /// §143 / §122 — id'ы активных соединений группы [group] для точечного обрыва
+  /// при switchNode (interrupt-on-switch).
+  ///
+  /// **§122-gap закрыт после §174:** `chains` (цепочка outbound'ов
+  /// selector→urltest→node) восстановлены в ядре (`Connection.chain()`-итератор,
+  /// device-verified 26.06) и приходят в `CcConnection.chains`. Матчим соединение
+  /// на selector-группу через `chains.contains(group)` — [group] = текущий
+  /// `_state.selectedGroup`, тот же selector-тег, что в `selectOutbound` и в
+  /// `chains` (urltest исключён из dropdown §078, префиксов на selector-теге нет).
+  ///
+  /// Снапшот соединений берём из `_cc.connections` — у стрима replay-кэш (§122),
+  /// поэтому `.first` отдаёт ТЕКУЩИЙ снапшот мгновенно (не ждёт нового события).
+  /// HomeState список соединений НЕ хранит (только агрегаты connectionsIn/Out).
+  /// Закрываем только живые (`!isClosed`).
+  Future<List<String>> _connectionIdsInGroup(String group) async {
+    final conns = await _cc.connections.first
+        .timeout(const Duration(seconds: 1), onTimeout: () => const []);
+    return conns
+        .where((c) => !c.isClosed && c.chains.contains(group))
+        .map((c) => c.id)
+        .where((id) => id.isNotEmpty)
+        .toList();
   }
 
   // Ping / URLTest оркестрация (runNodeUrltest, ping-option resolve chain,
@@ -773,6 +986,10 @@ class HomeController extends ChangeNotifier
   /// таймер не создаёт. Поэтому на resume рестартуем явно (см. `_resyncOnResume`).
   void onAppPaused() {
     _stopHeartbeat();
+    // §164 — энергомодель: в фоне UI не виден → гасим status+screen CC-клиенты
+    // (0 тиков/0 drain). profilerClient НЕ трогаем (recording живёт в фоне).
+    // Выключение VPN в фоне ловит нативный broadcast (не CC) → не слепнем.
+    if (_state.tunnelUp) unawaited(_cc.pauseClients());
   }
 
   Future<void> _resyncOnResume() async {
@@ -786,6 +1003,10 @@ class HomeController extends ChangeNotifier
     } catch (e) {
       _addDebug(DebugSource.app, '[vpn] onAppResumed pull error: $e');
     }
+    // §164 — возврат из фона: поднимаем status(NORMAL)+screen(если потребители
+    // живы). Делаем ПОСЛЕ resync статуса — если туннель за время фона лёг,
+    // _handleStatusEvent уже погасил CC через _stopCcStreams, и resume не нужен.
+    if (_state.tunnelUp) unawaited(_cc.resumeClients());
     // §141 P0.2 — heartbeat был остановлен на paused; если туннель всё ещё жив,
     // перезапускаем таймер и делаем немедленный тик (подтянуть свежий traffic
     // сразу, не ждать первые 20с). `_resyncOnResume` мог уже синхронизировать

@@ -113,6 +113,7 @@ class TrafficEvent {
     this.ip,
     this.port,
     this.outboundChain = const [],
+    this.detourChain = const [],
     this.upBytes,
     this.downBytes,
     this.duration,
@@ -138,7 +139,16 @@ class TrafficEvent {
   final List<String> cnameChain;
   final String? ip;
   final int? port;
+
+  /// §174/§181 — РОУТИНГ-цепочка от ядра: `[node, …selectors-снизу-вверх]`
+  /// (напр. `["[BL]-3", "✨auto", "vpn-1"]`). БЕЗ detour (§181 развернул §178-склейку).
+  /// Человекочитаемая «цепочка решения» строится в UI: `rule ⇒ группы ⇒ : node`.
   final List<String> outboundChain;
+
+  /// §181 — DETOUR-ось (транспорт): `[detour, …наружу]` (напр. `["WARP"]`).
+  /// Отдельно от outboundChain — это куда физически ныряет пакет ПОСЛЕ выбора
+  /// сервера, не часть решения маршрута. Пусто для прямых / без detour.
+  final List<String> detourChain;
   final int? upBytes;
   final int? downBytes;
   final Duration? duration;
@@ -181,6 +191,54 @@ class TrafficEvent {
   final List<ConnectionIssue> issues;
   final Map<String, Object?>? extra;
 
+  /// §181 — полная человекочитаемая трассировка пути пакета слева направо:
+  /// `[tcp] процесс ⇒ rule ⇒ группа ⇒ …auto… : node → detour → domain`
+  /// Разделители кодируют тип перехода: `⇒` внутренние (источник + роутинг),
+  /// `:` выход во внешний мир (группа выбрала сервер), `→` снаружи (detour +
+  /// назначение). `outboundChain` = `[node, …selectors]` от ядра (§174);
+  /// группы разворачиваем reverse, node = `[0]` ставим после `:`.
+  String get routingLine => routingLineOf();
+
+  /// [compact] — для live-списка: префикс `[network] process ⇒` опускается,
+  /// т.к. дублирует строку процесса + бейдж типа над ней. Строка начинается с
+  /// `rule` (`final ⇒ vpn-1 : …`). Detail-sheet зовёт без compact (полная).
+  String routingLineOf({bool compact = false}) {
+    final sb = StringBuffer();
+    if (!compact && network != null && network!.isNotEmpty) {
+      sb.write('[$network] ');
+    }
+    // Внутренняя цепочка (⇒): процесс → rule → группы (сверху вниз).
+    final inner = <String>[];
+    if (!compact && process != null && process!.isNotEmpty) inner.add(process!);
+    inner.add((rule != null && rule!.isNotEmpty) ? rule! : 'final');
+    if (outboundChain.length > 1) {
+      // selectors = chain[1:] от ВЕРХНЕГО к нижнему (reverse).
+      inner.addAll(outboundChain.sublist(1).reversed);
+    }
+    sb.write(inner.join(' ⇒ '));
+    // Выход во внешний мир (:): финальный node = chain[0].
+    final node = outboundChain.isNotEmpty ? outboundChain.first : null;
+    if (node != null) sb.write(' : $node');
+    // Снаружи (→): detour-хвост + назначение.
+    final outer = <String>[];
+    outer.addAll(detourChain);
+    final dest = (domain != null && domain!.isNotEmpty)
+        ? domain
+        : (ip != null && ip!.isNotEmpty ? ip : null);
+    if (dest != null) outer.add(dest);
+    if (outer.isNotEmpty) sb.write(' → ${outer.join(' → ')}');
+    // §181 — длительность в человеческом формате: <1s → "930ms", иначе "1s"/"1m".
+    if (duration != null) sb.write(' · ${_fmtDuration(duration!)}');
+    return sb.toString();
+  }
+
+  /// §181 — короткая длительность: до секунды в мс (важно для коротких conn),
+  /// от секунды — `formatDuration` (1s / 1m / 1h Xm).
+  static String _fmtDuration(Duration d) {
+    if (d.inMilliseconds < 1000) return '${d.inMilliseconds}ms';
+    return formatDuration(d);
+  }
+
   Map<String, Object?> toJson() => {
         'ts': ts.toUtc().toIso8601String(),
         'kind': kind.name,
@@ -189,6 +247,7 @@ class TrafficEvent {
         if (ip != null) 'ip': ip,
         if (port != null) 'port': port,
         if (outboundChain.isNotEmpty) 'outbound_chain': outboundChain,
+        if (detourChain.isNotEmpty) 'detour_chain': detourChain,
         if (upBytes != null) 'up_bytes': upBytes,
         if (downBytes != null) 'down_bytes': downBytes,
         if (duration != null) 'duration_ms': duration!.inMilliseconds,
@@ -227,6 +286,7 @@ class TrafficEvent {
         ip: ip,
         port: port,
         outboundChain: outboundChain,
+        detourChain: detourChain,
         upBytes: upBytes,
         downBytes: downBytes,
         duration: duration,

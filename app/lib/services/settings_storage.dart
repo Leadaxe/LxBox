@@ -116,6 +116,7 @@ class SettingsStorage {
     'interrupt_connections_on_switch',
     'node_sort_mode',
     'node_manual_order',
+    'profiler_retention_sec', // §044/new-profiler — окно хранения Live-журнала
   };
 
   /// Var-ключи, которые живут ТОЛЬКО в коде (app feature-flags), а НЕ в
@@ -323,6 +324,26 @@ class SettingsStorage {
   static Future<void> setInterruptOnSwitch(bool value) async {
     final c = await _load();
     c['interrupt_connections_on_switch'] = value;
+    SettingsStorage._cache = c;
+    await _save();
+  }
+
+  /// §044/new-profiler — окно хранения Live-журнала профайлера в секундах
+  /// (global rolling buffer). Не config-significant (поведение UI-буфера, не
+  /// идёт в sing-box config) → без markConfigDirty. Default 600s (10 мин).
+  /// Опции в UI: 60 / 600 / 3600. Дольше = больше памяти на busy device.
+  static const int profilerRetentionDefaultSec = 600;
+
+  static Future<int> getProfilerRetentionSec() async {
+    final c = await _load();
+    final v = c['profiler_retention_sec'];
+    if (v is int && v > 0) return v;
+    return profilerRetentionDefaultSec;
+  }
+
+  static Future<void> setProfilerRetentionSec(int seconds) async {
+    final c = await _load();
+    c['profiler_retention_sec'] = seconds;
     SettingsStorage._cache = c;
     await _save();
   }

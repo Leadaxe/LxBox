@@ -86,6 +86,34 @@ sealed class CustomRule {
         _ => false,
       };
 
+  /// §030/new_fields — source-IP-CIDR (источник пакета). Эмитится в **headless
+  /// rule_set** (sing-box 1.14 `DefaultHeadlessRule` принимает `source_ip_cidr`);
+  /// для srs — на routing-rule level (своего headless нет). OR между собой,
+  /// AND с группой назначения.
+  List<String> get sourceIpCidrs => switch (this) {
+        CustomRuleInline(:final sourceIpCidrs) => sourceIpCidrs,
+        CustomRuleSrs(:final sourceIpCidrs) => sourceIpCidrs,
+        _ => const [],
+      };
+
+  /// §030/new_fields — `source_ip_is_private`. Headless rule_set его НЕ
+  /// принимает (нет в `DefaultHeadlessRule`) → всегда routing-rule level,
+  /// симметрично [ipIsPrivate].
+  bool get sourceIpIsPrivate => switch (this) {
+        CustomRuleInline(:final sourceIpIsPrivate) => sourceIpIsPrivate,
+        CustomRuleSrs(:final sourceIpIsPrivate) => sourceIpIsPrivate,
+        _ => false,
+      };
+
+  /// §030/new_fields — `inbound`-ось: теги inbound'ов билдера (`tun-in`/
+  /// `mixed-in`, §119). Headless rule_set `inbound` НЕ принимает → routing-rule
+  /// level (как `ip_is_private`). AND с остальным правилом.
+  List<String> get inbounds => switch (this) {
+        CustomRuleInline(:final inbounds) => inbounds,
+        CustomRuleSrs(:final inbounds) => inbounds,
+        _ => const [],
+      };
+
   /// §051 — список SSID'ов для условия `wifi_ssid` в sing-box rule. Empty —
   /// условие не эмитится. Чтение текущего ssid требует
   /// `NEARBY_WIFI_DEVICES + ACCESS_BACKGROUND_LOCATION` permission на API 33+
@@ -270,6 +298,9 @@ class CustomRuleInline extends CustomRule {
     this.packages = const [],
     this.protocols = const [],
     this.ipIsPrivate = false,
+    this.sourceIpCidrs = const [],
+    this.sourceIpIsPrivate = false,
+    this.inbounds = const [],
     this.wifiSsids = const [],
     List<String> wifiBssids = const [],
     this.outbound = 'direct-out',
@@ -302,8 +333,24 @@ class CustomRuleInline extends CustomRule {
   @override
   bool ipIsPrivate;
 
-  /// §051 — wifi-условия на routing-rule level (headless rule_set этих полей
-  /// не поддерживает в sing-box). AND с rule_set body.
+  /// §030/new_fields — source-IP-CIDR. В headless `match` (sing-box 1.14
+  /// принимает). OR между собой, AND с domain/port-группами.
+  @override
+  List<String> sourceIpCidrs;
+
+  /// §030/new_fields — `source_ip_is_private`. Routing-rule level (headless
+  /// не принимает), симметрично [ipIsPrivate].
+  @override
+  bool sourceIpIsPrivate;
+
+  /// §030/new_fields — `inbound` (теги `tun-in`/`mixed-in`, §119). Routing-rule
+  /// level (headless не принимает). AND с остальным.
+  @override
+  List<String> inbounds;
+
+  /// §051 — wifi-условия. С sing-box 1.14 эмитятся в **headless rule_set**
+  /// (`DefaultHeadlessRule.wifi_ssid/wifi_bssid`); для srs остаются на
+  /// routing-rule level. AND с остальным match.
   @override
   List<String> wifiSsids;
   @override
@@ -328,10 +375,13 @@ class CustomRuleInline extends CustomRule {
     if (domainKeywords.isNotEmpty) parts.add('${domainKeywords.length} keyword');
     if (ipCidrs.isNotEmpty) parts.add('${ipCidrs.length} cidr');
     if (ipIsPrivate) parts.add('private ip');
+    if (sourceIpCidrs.isNotEmpty) parts.add('${sourceIpCidrs.length} src');
+    if (sourceIpIsPrivate) parts.add('private src');
     final totalPorts = ports.length + portRanges.length;
     if (totalPorts > 0) parts.add('$totalPorts port');
     if (packages.isNotEmpty) parts.add('${packages.length} app');
     if (protocols.isNotEmpty) parts.add('${protocols.length} proto');
+    if (inbounds.isNotEmpty) parts.add('${inbounds.length} in');
     if (wifiSsids.isNotEmpty) parts.add('${wifiSsids.length} wifi');
     return parts.join(' · ');
   }
@@ -351,6 +401,9 @@ class CustomRuleInline extends CustomRule {
         if (packages.isNotEmpty) 'packages': packages,
         if (protocols.isNotEmpty) 'protocols': protocols,
         if (ipIsPrivate) 'ipIsPrivate': true,
+        if (sourceIpCidrs.isNotEmpty) 'sourceIpCidrs': sourceIpCidrs,
+        if (sourceIpIsPrivate) 'sourceIpIsPrivate': true,
+        if (inbounds.isNotEmpty) 'inbounds': inbounds,
         if (wifiSsids.isNotEmpty) 'wifiSsids': wifiSsids,
         if (wifiBssids.isNotEmpty) 'wifiBssids': wifiBssids,
         'outbound': outbound,
@@ -370,6 +423,9 @@ class CustomRuleInline extends CustomRule {
         packages: _stringList(j['packages']),
         protocols: _stringList(j['protocols']),
         ipIsPrivate: (j['ipIsPrivate'] as bool?) ?? false,
+        sourceIpCidrs: _stringList(j['sourceIpCidrs']),
+        sourceIpIsPrivate: (j['sourceIpIsPrivate'] as bool?) ?? false,
+        inbounds: _stringList(j['inbounds']),
         wifiSsids: _stringList(j['wifiSsids']),
         wifiBssids: _stringList(j['wifiBssids']),
         outbound: _outbound(j),
@@ -388,6 +444,9 @@ class CustomRuleInline extends CustomRule {
     List<String>? packages,
     List<String>? protocols,
     bool? ipIsPrivate,
+    List<String>? sourceIpCidrs,
+    bool? sourceIpIsPrivate,
+    List<String>? inbounds,
     List<String>? wifiSsids,
     List<String>? wifiBssids,
     String? outbound,
@@ -406,6 +465,9 @@ class CustomRuleInline extends CustomRule {
         packages: packages ?? this.packages,
         protocols: protocols ?? this.protocols,
         ipIsPrivate: ipIsPrivate ?? this.ipIsPrivate,
+        sourceIpCidrs: sourceIpCidrs ?? this.sourceIpCidrs,
+        sourceIpIsPrivate: sourceIpIsPrivate ?? this.sourceIpIsPrivate,
+        inbounds: inbounds ?? this.inbounds,
         wifiSsids: wifiSsids ?? this.wifiSsids,
         wifiBssids: wifiBssids ?? this.wifiBssids,
         outbound: outbound ?? this.outbound,
@@ -436,6 +498,9 @@ class CustomRuleSrs extends CustomRule {
     this.packages = const [],
     this.protocols = const [],
     this.ipIsPrivate = false,
+    this.sourceIpCidrs = const [],
+    this.sourceIpIsPrivate = false,
+    this.inbounds = const [],
     this.wifiSsids = const [],
     List<String> wifiBssids = const [],
     this.outbound = 'direct-out',
@@ -459,7 +524,17 @@ class CustomRuleSrs extends CustomRule {
   @override
   bool ipIsPrivate;
 
-  /// §051 — wifi-условия. AND с rule_set match.
+  /// §030/new_fields — source/inbound доп-фильтры. У srs нет своего headless
+  /// `match` (rule_set внешний) → ВСЕ эти поля эмитятся на routing-rule level
+  /// (включая `source_ip_cidr` — в отличие от inline, где он в headless).
+  @override
+  List<String> sourceIpCidrs;
+  @override
+  bool sourceIpIsPrivate;
+  @override
+  List<String> inbounds;
+
+  /// §051 — wifi-условия. Для srs — routing-rule level (своего headless нет).
   @override
   List<String> wifiSsids;
   @override
@@ -496,6 +571,9 @@ class CustomRuleSrs extends CustomRule {
         if (packages.isNotEmpty) 'packages': packages,
         if (protocols.isNotEmpty) 'protocols': protocols,
         if (ipIsPrivate) 'ipIsPrivate': true,
+        if (sourceIpCidrs.isNotEmpty) 'sourceIpCidrs': sourceIpCidrs,
+        if (sourceIpIsPrivate) 'sourceIpIsPrivate': true,
+        if (inbounds.isNotEmpty) 'inbounds': inbounds,
         if (wifiSsids.isNotEmpty) 'wifiSsids': wifiSsids,
         if (wifiBssids.isNotEmpty) 'wifiBssids': wifiBssids,
         'outbound': outbound,
@@ -512,6 +590,9 @@ class CustomRuleSrs extends CustomRule {
         packages: _stringList(j['packages']),
         protocols: _stringList(j['protocols']),
         ipIsPrivate: (j['ipIsPrivate'] as bool?) ?? false,
+        sourceIpCidrs: _stringList(j['sourceIpCidrs']),
+        sourceIpIsPrivate: (j['sourceIpIsPrivate'] as bool?) ?? false,
+        inbounds: _stringList(j['inbounds']),
         wifiSsids: _stringList(j['wifiSsids']),
         wifiBssids: _stringList(j['wifiBssids']),
         outbound: _outbound(j),
@@ -527,6 +608,9 @@ class CustomRuleSrs extends CustomRule {
     List<String>? packages,
     List<String>? protocols,
     bool? ipIsPrivate,
+    List<String>? sourceIpCidrs,
+    bool? sourceIpIsPrivate,
+    List<String>? inbounds,
     List<String>? wifiSsids,
     List<String>? wifiBssids,
     String? outbound,
@@ -542,6 +626,9 @@ class CustomRuleSrs extends CustomRule {
         packages: packages ?? this.packages,
         protocols: protocols ?? this.protocols,
         ipIsPrivate: ipIsPrivate ?? this.ipIsPrivate,
+        sourceIpCidrs: sourceIpCidrs ?? this.sourceIpCidrs,
+        sourceIpIsPrivate: sourceIpIsPrivate ?? this.sourceIpIsPrivate,
+        inbounds: inbounds ?? this.inbounds,
         wifiSsids: wifiSsids ?? this.wifiSsids,
         wifiBssids: wifiBssids ?? this.wifiBssids,
         outbound: outbound ?? this.outbound,

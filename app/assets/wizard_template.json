@@ -599,10 +599,6 @@
       "auto_detect_interface": "@auto_detect_interface"
     },
     "experimental": {
-      "clash_api": {
-        "external_controller": "@clash_api",
-        "secret": "@clash_secret"
-      },
       "cache_file": {
         "enabled": true,
         "path": "cache.db"

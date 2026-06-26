@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:lxbox/services/clash_api_client.dart';
 import 'package:lxbox/services/error_format.dart';
 
 void main() {
@@ -47,11 +46,6 @@ void main() {
     test('FormatException — message без stack-debris', () {
       const e = FormatException('Unexpected character', '{...}', 5);
       expect(formatUserError(e), 'Unexpected character');
-    });
-
-    test('ClashHttpException — HTTP <code>', () {
-      expect(formatUserError(ClashHttpException(401, '...')), 'HTTP 401');
-      expect(formatUserError(ClashHttpException(503, '')), 'HTTP 503');
     });
 
     test('PlatformException — берём message если есть', () {

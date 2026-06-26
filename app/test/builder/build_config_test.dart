@@ -166,7 +166,11 @@ void main() {
       expect(result.validation.isOk, true);
     });
 
-    test('clash_api default :9090 randomized to 49152-65535 range', () async {
+    // §122 Фаза 1b — clash_api БОЛЬШЕ НЕ инжектится/рандомизируется (ядро rc.2
+    // без with_clash_api → блок даёт фатальный отказ старта). Раньше тут был
+    // тест рандомизации порта; теперь проверяем ОБРАТНОЕ: clash_api НЕ попадает
+    // в выходной конфиг даже если пришёл в userVars.
+    test('§122 — clash_api НЕ инжектится в выходной конфиг', () async {
       final list = UserServer(
         id: 'u4',
         name: 'E',
@@ -182,9 +186,10 @@ void main() {
         template: template,
         settings: const BuildSettings(userVars: {'clash_api': '127.0.0.1:9090'}),
       );
-      // clash_api var был подменен — но @clash_api нет в template.config,
-      // так что проверяем через internal (смотрим на emitWarnings пустой).
       expect(result.emitWarnings, isEmpty);
+      // experimental.clash_api отсутствует в собранном конфиге.
+      expect(result.config, isNot(contains('clash_api')));
+      expect(result.config, isNot(contains('external_controller')));
     });
   });
 

@@ -8,6 +8,7 @@ import '../../app_log.dart';
 import '../../automation/handlers.dart' as automation;
 import '../../error_humanize.dart';
 import '../../platform_channels.dart';
+import '../../../vpn/box_vpn_client.dart';
 import '../../rule_set_downloader.dart';
 import '../../settings_storage.dart';
 import '../../update_checker.dart';
@@ -40,7 +41,11 @@ Future<DebugResponse> actionHandler(
     '/action/switch-node' => _switchNode(req, ctx),
     '/action/set-group' => _setGroup(req, ctx),
     '/action/start-vpn' => _startVpn(ctx),
+    '/action/start-vpn-headless' => _startVpnHeadless(),
     '/action/stop-vpn' => _stopVpn(ctx),
+    '/action/reconnect' => _reconnect(ctx),
+    '/action/reload-vpn' => _reloadVpn(ctx),
+    '/action/clear-error' => _clearError(ctx),
     '/action/force-stop-vpn' => _forceStopVpn(ctx),
     '/action/set-transient-timeout' => _setTransientTimeout(req, ctx),
     '/action/reset-network' => _resetNetwork(ctx),
@@ -180,11 +185,17 @@ JsonResponse _ok(String action, [Map<String, Object?> extras = const {}]) {
 /// `/action/urltest` — единый endpoint для запуска URLTest. Scope
 /// определяется query-param'ом (ровно один из):
 ///
-/// - `?tag=<node>`  — single-node URLTest через clash `/proxies/<tag>/delay`
-/// - `?group=<tag>` — group URLTest через clash `/group/<tag>/delay` (требует tunnel up)
+/// - `?tag=<node>`  — single-node URLTest через CommandClient `urlTestOutbound`
+/// - `?group=<tag>` — group URLTest через CommandClient (требует tunnel up)
 /// - `?all=true`    — mass URLTest всех нод активной группы (concurrency 10)
 Future<DebugResponse> _urltest(DebugRequest req, DebugContext ctx) async {
   final home = ctx.requireHome();
+  // §163 — `?cancel=1` отменяет in-flight mass-ping (epoch-bump). Раньше из
+  // Debug API можно было только запустить mass-тест (?all), но не остановить.
+  if (req.query['cancel'] != null) {
+    home.cancelMassPing();
+    return _ok('urltest', {'scope': 'cancel'});
+  }
   final tag = req.query['tag'];
   final group = req.query['group'];
   final all = req.query['all'];
@@ -239,10 +250,25 @@ Future<DebugResponse> _stopVpn(DebugContext ctx) async {
   return _ok('stop-vpn');
 }
 
+/// `POST /action/start-vpn-headless` — §165. Поднять VPN БЕЗ Activity/consent —
+/// для автономного тестирования/automation. Работает только если VPN-разрешение
+/// уже выдано юзером ранее (тот же путь, что §047 Tasker-старт). Если разрешения
+/// нет — `needs_consent:true`, нужен ручной старт из UI. В отличие от `start-vpn`
+/// (идёт через Activity и может показать consent-диалог), этот стартует прямо
+/// через `BoxVpnService.start()`. Debug API живёт в Flutter-процессе (не привязан
+/// к VPN), поэтому роут доступен при опущенном туннеле.
+Future<DebugResponse> _startVpnHeadless() async {
+  final r = await BoxVpnClient().startVpnHeadless();
+  return _ok('start-vpn-headless', {
+    'started': r.started,
+    'needs_consent': r.needsConsent,
+  });
+}
+
 /// `POST /action/force-stop-vpn` — §140, debug/diagnostics.
 ///
 /// Напрямую дёргает native `forceStopVPN` (минуя transient-таймаут): тот же
-/// путь `doForceStop`, что и при зависшем ядре. Освобождает Clash-порт 63130
+/// путь `doForceStop`, что и при зависшем ядре. Освобождает CommandServer-порт 63130
 /// (teardown ПЕРЕД `stopSelf`, §140), сервис убивается жёстко. В отличие от
 /// `stop-vpn` (кооперативный, ждёт Stopped от ядра) — fire-and-forget.
 ///
@@ -253,6 +279,36 @@ Future<DebugResponse> _forceStopVpn(DebugContext ctx) async {
   final home = ctx.requireHome();
   final ok = await home.debugForceStopVpn();
   return _ok('force-stop-vpn', {'native_ok': ok});
+}
+
+/// `POST /action/reconnect` — §047/§163. Stop→Start одной командой (под общим
+/// busy-wrap). Если туннель не up — делегирует в start(). Базовый automation-
+/// глагол «починить соединение» — раньше требовал двух вызовов (stop-vpn +
+/// start-vpn) с гонкой transient-таймаута.
+Future<DebugResponse> _reconnect(DebugContext ctx) async {
+  final home = ctx.requireHome();
+  await home.reconnect();
+  return _ok('reconnect');
+}
+
+/// `POST /action/reload-vpn` — in-place reload sing-box runtime БЕЗ убийства
+/// Android-сервиса (cooldown-gated через canReload). Чистый примитив «применить
+/// изменение конфига/настроек» — туннель дропается на ~3с, сервис жив. Если
+/// reload недоступен (не connected / в cooldown) — возвращает applied:false.
+Future<DebugResponse> _reloadVpn(DebugContext ctx) async {
+  final home = ctx.requireHome();
+  final canReload = home.canReload;
+  if (canReload) await home.reloadVpn();
+  return _ok('reload-vpn', {'applied': canReload});
+}
+
+/// `POST /action/clear-error` — сбросить lastError-баннер программно (после того
+/// как automation обработала/спровоцировала ошибку). Раньше баннер сбрасывался
+/// только тапом юзера или успешной операцией.
+Future<DebugResponse> _clearError(DebugContext ctx) async {
+  final home = ctx.requireHome();
+  home.clearError();
+  return _ok('clear-error');
 }
 
 /// `POST /action/set-transient-timeout?connecting=<ms>&stopping=<ms>` — §140.
@@ -309,8 +365,8 @@ int? _parsePositiveMs(String? raw, String name) {
 ///
 /// Требует tunnel up — без него resetNetwork no-op в libbox (нет instance).
 /// Возвращает `{"ok": true, "action": "reset-network"}` независимо — реальный
-/// эффект асинхронен и наблюдается через `/clash/connections` (counter
-/// связей упадёт до ~0 моментально, потом начнёт заполняться заново).
+/// эффект асинхронен и наблюдается через `/state` (`traffic.active_connections`
+/// упадёт до ~0 моментально, потом начнёт заполняться заново).
 Future<DebugResponse> _resetNetwork(DebugContext ctx) async {
   final ok = await automation.actionResetNetwork(ctx);
   return _ok('reset-network', {'native_ok': ok});

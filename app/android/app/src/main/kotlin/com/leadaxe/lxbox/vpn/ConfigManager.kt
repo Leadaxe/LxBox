@@ -23,10 +23,12 @@ object ConfigManager {
 
     fun save(json: String): Boolean {
         return try {
+            // §122 — гарантируем что в файл/кэш не попадёт clash_api (rc.2 без него).
+            val clean = stripClashApi(json)
             val file = File(BoxApplication.application.filesDir, CONFIG_FILE)
-            file.writeText(json)
-            cachedConfig = json
-            Log.d(TAG, "Config saved (${json.length} bytes)")
+            file.writeText(clean)
+            cachedConfig = clean
+            Log.d(TAG, "Config saved (${clean.length} bytes)")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save config", e)
@@ -39,7 +41,7 @@ object ConfigManager {
         return try {
             val file = File(BoxApplication.application.filesDir, CONFIG_FILE)
             if (file.exists()) {
-                val content = file.readText()
+                val content = stripClashApi(file.readText())
                 cachedConfig = content
                 content
             } else {
@@ -48,6 +50,26 @@ object ConfigManager {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load config", e)
             "{}"
+        }
+    }
+
+    /// §122 Фаза 1b / §6.2 — defensive: вырезать блок `experimental.clash_api`
+    /// из ЛЮБОГО конфига перед стартом ядра. rc.2 собран без with_clash_api →
+    /// наличие блока даёт фатальный отказ старта ("clash api is not included").
+    /// Покрывает старые сохранённые конфиги и импорт (builder его уже не пишет).
+    /// JSON-парсинг через org.json — надёжнее regex по вложенному объекту.
+    private fun stripClashApi(json: String): String {
+        return try {
+            val root = org.json.JSONObject(json)
+            val exp = root.optJSONObject("experimental") ?: return json
+            if (!exp.has("clash_api")) return json
+            exp.remove("clash_api")
+            Log.d(TAG, "stripClashApi: removed experimental.clash_api (rc.2 has no with_clash_api)")
+            root.toString()
+        } catch (e: Exception) {
+            // Не валидный JSON / что-то пошло не так — отдаём как есть, не ломаем старт.
+            Log.w(TAG, "stripClashApi failed, passing through: ${e.message}")
+            json
         }
     }
 

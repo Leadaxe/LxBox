@@ -199,29 +199,50 @@ interface PlatformInterfaceWrapper : PlatformInterface {
         return state
     }
 
-    /// §128 (F12.3 generalization): зовётся Go при старте TLS-стека.
-    /// `KeyStore`/`cert.encoded` могут бросить (KeyStoreException, IOException,
-    /// CertificateEncodingException, NPE). Без try/catch → JNI Runtime::Abort.
-    /// Fail-safe: вернуть собранное-до-ошибки (или пусто) — sing-box упадёт
-    /// к встроенным сертификатам ядра.
-    @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
-    override fun systemCertificates(): StringIterator {
-        val certs = mutableListOf<String>()
-        runCatching {
-            val ks = java.security.KeyStore.getInstance("AndroidCAStore")
-            if (ks != null) {
-                ks.load(null, null)
-                val aliases = ks.aliases()
-                while (aliases.hasMoreElements()) {
-                    val cert = ks.getCertificate(aliases.nextElement()) ?: continue
-                    certs.add("-----BEGIN CERTIFICATE-----\n${kotlin.io.encoding.Base64.encode(cert.encoded)}\n-----END CERTIFICATE-----")
-                }
-            }
-        }.onFailure {
-            android.util.Log.w("PIW", "systemCertificates failed (${certs.size} collected): ${it.message}")
-        }
-        return StringArray(certs.iterator())
-    }
+    // §179 (rc.6) — `systemCertificates()` УДАЛЁН из PlatformInterface ядром
+    // (javap AAR rc.6: метода нет). sing-box 1.14 апстрим-мердж перенёс сбор
+    // системных CA внутрь Go-рантайма (читает AndroidCAStore сам через
+    // platform-bridge), наш Kotlin-сборщик §128 больше не нужен и не вызывается.
+    // Оставлять `override fun systemCertificates()` = 'overrides nothing' →
+    // ошибка компиляции. Удалён целиком. Если TLS к серверам с системными
+    // (не встроенными) CA сломается на rc.6 — вернуть как НЕ-override хук через
+    // отдельный binding (маловероятно: ядро берёт CA само).
+
+    // ─── libbox 1.14: новые методы PlatformInterface ────────────────────
+    // sing-box 1.14 влил Tailscale/SSH-сервер. Для Android VPN-клиента этот
+    // функционал не нужен — отдаём безопасные заглушки. Контракт §050/§151:
+    // методы БЕЗ `throws Exception` (registerMyInterface, *NeighborMonitor,
+    // usePlatformShell) бросать НЕЛЬЗЯ → no-op; error-возвращающие — пустые
+    // значения, чтобы ядро деградировало gracefully, а не валилось.
+
+    /** Tailscale identity hook — на Android не используем. */
+    override fun registerMyInterface(name: String) {}
+
+    override fun usePlatformShell(): Boolean = false
+
+    override fun checkPlatformShell() {}
+
+    override fun lookupUser(username: String): io.nekohasekai.libbox.PlatformUser =
+        io.nekohasekai.libbox.PlatformUser()
+
+    override fun lookupSFTPServer(): String = ""
+
+    override fun readSystemSSHHostKey(): String = ""
+
+    override fun tailscaleHostname(): String = ""
+
+    override fun openShellSession(
+        user: io.nekohasekai.libbox.PlatformUser,
+        command: String,
+        env: StringIterator,
+        termType: String,
+        width: Int,
+        height: Int
+    ): io.nekohasekai.libbox.ShellSession = throw UnsupportedOperationException("shell not supported on Android")
+
+    override fun startNeighborMonitor(listener: io.nekohasekai.libbox.NeighborUpdateListener) {}
+
+    override fun closeNeighborMonitor(listener: io.nekohasekai.libbox.NeighborUpdateListener) {}
 
     private class StringArray(private val iter: Iterator<String>) : StringIterator {
         override fun hasNext() = iter.hasNext()

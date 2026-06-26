@@ -100,7 +100,16 @@ Pравила:
 
 ## Builder pipeline
 
-При генерации `route.rules[i]` / `dns.rules[i]` из `CustomRule`:
+> ⚠ **Обновление под sing-box 1.14** (§030 [new_fields.md](../features/030%20custom%20routing%20rules/new_fields.md)):
+> headless rule_set 1.14 (`DefaultHeadlessRule`) ПРИНИМАЕТ `wifi_ssid`/`wifi_bssid`
+> (сверено `option/rule_set.go:207-208`). Поэтому для **inline** правил wifi-условия
+> теперь эмитятся **в headless `match`** (внутри rule_set), а не на routing-rule
+> level как было под 1.12. Для **srs** правил (нет своего headless match) wifi
+> остаётся на routing-rule level. DNS-mirror (§117) для inline больше не дублирует
+> `wifi_*` в DNS-rule body — оно уже в shared rule_set. Тесты обновлены под
+> 1.14-форму (`test/builder/custom_rules_test.dart`, `rule_dns_mirror_test.dart`).
+
+При генерации из `CustomRule` (исторически, под 1.12 — routing-rule level):
 
 ```dart
 if (rule.wifiSsids.isNotEmpty) jsonRule['wifi_ssid'] = rule.wifiSsids;
