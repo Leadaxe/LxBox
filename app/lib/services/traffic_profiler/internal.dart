@@ -10,18 +10,8 @@ class _ConnMeta {
   final DateTime firstSeen;
 }
 
-class _DnsAccumulator {
-  _DnsAccumulator({required this.domain, required this.firstTs})
-      : lastTs = firstTs;
-  final String domain;
-  // §141 P2.4c — поле `lastResolvedName` удалено: было write-only (set в ctor и
-  // в _handleDnsLine, но нигде не читалось). `ips`/`cnameChain`/`firstTs`
-  // оставлены — они реально используются (вопреки исходной находке аудита).
-  final List<String> cnameChain = <String>[];
-  final Set<String> ips = <String>{};
-  DateTime firstTs;
-  DateTime lastTs;
-}
+// §180 — `_DnsAccumulator` выпилен: cnameChain приходит целиком в
+// `CcDnsQuery.answers` (ядро SPEC 018), ручная аккумуляция по connId не нужна.
 
 class _ConnSnapshot {
   _ConnSnapshot({

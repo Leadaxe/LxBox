@@ -31,6 +31,8 @@ class CcChannel {
       EventChannel(PlatformChannels.ccGroups);
   static const EventChannel _connectionsChannel =
       EventChannel(PlatformChannels.ccConnections);
+  static const EventChannel _dnsChannel =
+      EventChannel(PlatformChannels.ccDns); // §180
 
   // ─────────────────────────── Streams ───────────────────────────
   //
@@ -65,6 +67,12 @@ class CcChannel {
     _connectionsChannel,
     (e) => _asList(e).map((m) => CcConnection.fromMap(_asMap(m))).toList(),
   );
+  // §180 — DNS-журнал (SPEC 018). Батч событий списком (EventEmitter native).
+  late final Stream<List<CcDnsQuery>> _dnsQueriesStream =
+      _sharedStream<List<CcDnsQuery>>(
+    _dnsChannel,
+    (e) => _asList(e).map((m) => CcDnsQuery.fromMap(_asMap(m))).toList(),
+  );
 
   /// Статус-снапшот (always-on, §2.8): скорость, объём, память, число
   /// соединений. Shared — главный экран (watchdog/traffic_bar) + StatsScreen.
@@ -79,6 +87,10 @@ class CcChannel {
   /// Снапшот активных соединений (дельты → native-аккумулятор → снапшот, §3.2).
   /// Shared — StatsScreen + ConnectionsView одновременно.
   Stream<List<CcConnection>> get connections => _connectionsStream;
+
+  /// §180 — DNS-журнал из ядра (SPEC 018): батч `CcDnsQuery` на резолв(ы).
+  /// Структурная замена текстового парсинга core-лога. Потребитель — профайлер.
+  Stream<List<CcDnsQuery>> get dnsQueries => _dnsQueriesStream;
 
   /// §122 — shared-стрим с КЭШЕМ последнего снапшота.
   ///
@@ -427,6 +439,102 @@ class CcConnection {
         processPath: m['processPath']?.toString() ?? '',
         createdAt: _int(m['createdAt']),
         closedAt: _int(m['closedAt']),
+      );
+}
+
+/// §180 — структурное DNS-событие из ядра (SPEC 018, `subscribeDNSQueries`).
+/// Заменяет текстовый парсинг core-лога: атрибуция к приложению (`packageName`)
+/// приходит ИЗ ЯДРА (processInfo), не сшивается по connId.
+class CcDnsQuery {
+  const CcDnsQuery({
+    required this.domain,
+    required this.queryType,
+    required this.rcode,
+    this.ttl = 0,
+    this.source = '',
+    this.failed = false,
+    this.error = '',
+    this.packageName = '',
+    this.processPath = '',
+    this.answers = const [],
+  });
+
+  /// Запрошенный домен (оригинал, не финальный CNAME-target).
+  final String domain;
+
+  /// qtype: 1=A, 28=AAAA, 5=CNAME, 65=HTTPS, 33=SRV, … (DNS RR type).
+  final int queryType;
+
+  /// Q1 (SPEC 018): `-1` = НЕТ ОТВЕТА (timeout), физически ≠ 65535. Иначе —
+  /// реальный response.Rcode (0=NOERROR, 3=NXDOMAIN…). НЕ кастить в unsigned:
+  /// ядро отдаёт signed, `_int` знак сохраняет.
+  final int rcode;
+
+  final int ttl;
+
+  /// exchanged/cached/optimistic/refreshed/rejected/failed (источник ответа).
+  final String source;
+
+  /// Q2 (SPEC 018): true на провале (timeout/SERVFAIL/rejected/loopback).
+  /// failed-событие → профайлер делает `dnsFail`.
+  final bool failed;
+
+  /// Причина провала ("timeout"/"loopback"/"rejected"…); "" на успехе.
+  final String error;
+
+  /// Атрибуция к приложению ИЗ ЯДРА (processInfo). Часто непуст — в отличие от
+  /// connId-сшивки текстового пути (корень §177-баннера).
+  final String packageName;
+  final String processPath;
+
+  /// Q3 (SPEC 018): ВЕСЬ response.Answer (CNAME-hops + финальные A/AAAA) в
+  /// исходном порядке. Пусто если подписка без includeAnswers. cnameChain
+  /// собирается из элементов с type==CNAME(5).
+  final List<CcDnsAnswer> answers;
+
+  /// Q1-helper: ответа от сервера не было (timeout).
+  bool get noAnswer => rcode == -1;
+
+  factory CcDnsQuery.fromMap(Map<String, dynamic> m) => CcDnsQuery(
+        domain: m['domain']?.toString() ?? '',
+        queryType: _int(m['queryType']),
+        rcode: _int(m['rcode']), // знак сохраняется → -1 остаётся -1 (Q1)
+        ttl: _int(m['ttl']),
+        source: m['source']?.toString() ?? '',
+        failed: m['failed'] == true,
+        error: m['error']?.toString() ?? '',
+        packageName: m['packageName']?.toString() ?? '',
+        processPath: m['processPath']?.toString() ?? '',
+        answers: (m['answers'] as List?)
+                ?.map((a) => CcDnsAnswer.fromMap(
+                    (a as Map).map((k, v) => MapEntry(k.toString(), v))))
+                .toList() ??
+            const [],
+      );
+}
+
+/// §180 — одна DNS-запись ответа (RR). Часть `CcDnsQuery.answers`.
+class CcDnsAnswer {
+  const CcDnsAnswer({
+    required this.name,
+    required this.type,
+    required this.rdata,
+    this.ttl = 0,
+  });
+
+  final String name;
+  final int type; // RR type (5=CNAME, 1=A, 28=AAAA…)
+  final String rdata; // значение записи (target для CNAME, IP для A/AAAA)
+  final int ttl;
+
+  bool get isCname => type == 5;
+  bool get isAddress => type == 1 || type == 28; // A / AAAA
+
+  factory CcDnsAnswer.fromMap(Map<String, dynamic> m) => CcDnsAnswer(
+        name: m['name']?.toString() ?? '',
+        type: _int(m['type']),
+        rdata: m['rdata']?.toString() ?? '',
+        ttl: _int(m['ttl']),
       );
 }
 

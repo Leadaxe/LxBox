@@ -15,9 +15,9 @@
 //
 // Data sources:
 //   1. Sing-box log stream (через ClashLogPump → AppLog → here): ловим
-//      DNS resolves (с CNAME chain'ом), package detection (`router: found
-//      package name: X`) и связку `[conn_id Nms]`. **Primary source** —
-//      каждый `inbound packet connection` log line == event в session'е.
+//      ТОЛЬКО package detection (`router: found package name: X`) со связкой
+//      `[conn_id Nms]` → `_connIdToMeta` (TCP-атрибуция). §180 — DNS-парсинг из
+//      лога ВЫПИЛЕН (см. источник 3).
 //   2. §168 — CommandClient `connections` push-стрим (`CcChannel.connections`):
 //      tcp/udp open/close + per-app атрибуция (`packageName`/`processPath` из
 //      libbox `getProcessInfo()`) + stats (bytes, duration). Подключается через
@@ -25,9 +25,13 @@
 //      в фоне → recording живёт при свёрнутом app. Раньше тут был Clash API
 //      `/connections` polling (5s) — выпилен в §122, профайлер остался на
 //      пустом fetcher'е (buffer_count=0), §168 перевёл на CommandClient.
+//   3. §180 — CommandClient `dnsQueries` стрим (`CcChannel.dnsQueries`, ядро
+//      SPEC 018): структурные DNS-события с атрибуцией к процессу ИЗ ЯДРА
+//      (processInfo) + cnameChain из answers[] одним событием. Заменил текстовый
+//      парсинг лога (regex `_dnsRe`/`_handleDnsLine` + `_DnsAccumulator` по
+//      conn_id) — тот сшивал package по connId (хрупко, корень §177-баннера).
 //
-// Спарка — через conn_id для DNS, через `metadata.process` для конн'ов.
-// DNS resolves строятся в `_DnsAccumulator` по conn_id.
+// Спарка connections — через `metadata.process`; DNS атрибутируется ядром.
 //
 // **Confidence levels** (§048 Принцип 3):
 //   - `verified`     — `router: found package` явный match с targetPackage
@@ -86,6 +90,7 @@ class TrafficProfiler extends ChangeNotifier {
   // пока есть active session ИЛИ global recording; снимается когда оба off.
   final CcChannel _cc = CcChannel.instance;
   StreamSubscription<List<CcConnection>>? _ccConnSub;
+  StreamSubscription<List<CcDnsQuery>>? _ccDnsSub; // §180 — DNS-журнал из ядра
 
   // ─── State ────────────────────────────────────────────────────────────
   Session? _active;
@@ -149,9 +154,9 @@ class TrafficProfiler extends ChangeNotifier {
   // Conn-id → package map (TTL'нутый, time-based GC).
   final Map<String, _ConnMeta> _connIdToMeta = <String, _ConnMeta>{};
 
-  // Per-conn-id DNS accumulator: собираем CNAME chain + IP до next event.
-  final Map<String, _DnsAccumulator> _dnsByConnId =
-      <String, _DnsAccumulator>{};
+  // §180 — `_dnsByConnId` (per-conn-id DNS accumulator) выпилен: cnameChain
+  // теперь приходит целиком в одном CcDnsQuery.answers (ядро SPEC 018), ручная
+  // аккумуляция по connId не нужна.
 
   // Last-known connection state from /connections poll: id → snapshot.
   // Используется для diff (closed connections).
@@ -499,13 +504,12 @@ class TrafficProfiler extends ChangeNotifier {
   }
 
   /// §048 Принцип 6 — time-based GC, не count-based. Каждые 5s проходим
-  /// и убираем entries старше 30s. Также чистим `_dnsByConnId` и trim'им
-  /// `_globalRollingBuffer` по time window'у.
+  /// и убираем entries старше 30s. Также trim'им `_globalRollingBuffer` по
+  /// time window'у. (§180 — `_dnsByConnId` выпилен, чистить нечего.)
   void _gcStaleConnIds() {
     final now = DateTime.now();
     final cutoff = now.subtract(_connIdTtl);
     _connIdToMeta.removeWhere((_, m) => m.firstSeen.isBefore(cutoff));
-    _dnsByConnId.removeWhere((_, a) => a.lastTs.isBefore(cutoff));
     // §176 — guard уже-обработанных closed: чистим старше 5 мин (ядро их к
     // этому моменту эвиктнуло из FilterState(All), в снапшоте больше нет).
     final closedCutoff = now.subtract(const Duration(minutes: 5));
@@ -557,24 +561,10 @@ class TrafficProfiler extends ChangeNotifier {
   static final _packageRe = RegExp(
       r'(?:\[(\d+)\s+\d+m?s?\]\s+)?router: found package name:\s+(.+?)$');
 
-  // §048 Принцип 2 — defensive DNS regex. Принимаем любой record type
-  // (`(\S+)` capture group вместо `A|AAAA|CNAME` whitelist).
-  // Sing-box логирует обе формы: `exchanged` — реальный network query,
-  // `cached` — DNS cache hit. Для нашей цели обе одинаково полезны.
-  // Time field — `\S+` чтобы принимать `5ms`, `10.0s`, `1m23s`, etc.
-  // Capture groups: connId, recordType, name, answer.
-  static final _dnsRe = RegExp(
-      r'\[(\d+)\s+\S+\]\s+dns: (?:exchanged|cached)\s+(\S+)\s+(\S+?)\.\s+\d+\s+IN\s+\S+\s+(.+?)$');
-
-  // §048 Принцип 2 — defensive DNS-fail regex. Принимает форматы:
-  //   `dns: exchange failed for X. IN HTTPS: context deadline exceeded`
-  //   `dns: exchange failed for X.: timeout`
-  //   `dns: exchange failed for some.host: context deadline exceeded` (без trailing dot)
-  //   `dns: exchange failed: <reason>` (без `for <name>` совсем)
-  // Trailing dot после name — optional. Time field — `\S+` (ms / s / unknown).
-  // Capture groups: connId, queriedName (optional), recordType (optional), reason.
-  static final _dnsFailRe = RegExp(
-      r'\[(\d+)\s+\S+\]\s+dns: exchange failed(?: for (\S+?)\.?(?: IN (\S+))?)?:\s*(.+?)$');
+  // §180 — DNS-regex (_dnsRe/_dnsFailRe) выпилены: DNS идёт структурным стримом
+  // (ядро SPEC 018 subscribeDNSQueries → CcChannel.dnsQueries → _ingestDnsQueries),
+  // а не парсингом core-лога. Текстовый путь был «обглоданным каналом» (атрибуция
+  // по connId-сшивке, regex чинили §141/§171). Структура: processInfo из ядра.
 
   void _processLogLine(String line, DateTime ts) {
     // 1) Package detection — пишем в conn-id map (всегда, независимо
@@ -589,129 +579,115 @@ class TrafficProfiler extends ChangeNotifier {
       }
       return;
     }
-
-    // 2) DNS resolve (defensive — любой record type).
-    final dnsM = _dnsRe.firstMatch(line);
-    if (dnsM != null) {
-      _handleDnsLine(line, ts, dnsM);
-      return;
-    }
-
-    // 3) DNS fail (defensive — extract domain + record type если есть).
-    final failM = _dnsFailRe.firstMatch(line);
-    if (failM != null) {
-      _handleDnsFailLine(line, ts, failM);
-      return;
-    }
-    // §141 P2.4b — была ветка 4 «tun packet» с _tunPacketRe: matched, но no-op
-    // (обработка пакетов tun делается в /connections polling). Удалена вместе с
-    // мёртвым regex — поведение не меняется.
+    // §180 — DNS-ветки выпилены: DNS идёт структурным стримом
+    // (_ingestDnsQueries ← CcChannel.dnsQueries, ядро SPEC 018), НЕ из лога.
+    // _processLogLine остаётся ТОЛЬКО ради package detection (_packageRe выше) —
+    // это TCP-атрибуция connId→package, не DNS.
   }
 
-  void _handleDnsLine(String line, DateTime ts, RegExpMatch m) {
-    final connId = m.group(1)!;
-    final type = m.group(2)!.toUpperCase();
-    final name = m.group(3)!;
-    final answer = m.group(4)!.trim();
+  // ─── §180: структурный DNS из ядра (SPEC 018) ────────────────────────
 
-    final meta = _connIdToMeta[connId];
-
-    final acc = _dnsByConnId.putIfAbsent(
-        connId, () => _DnsAccumulator(domain: name, firstTs: ts));
-
-    if (type == 'CNAME') {
-      // CNAME: <name> → <target>. Если accumulator domain == name, это
-      // следующий шаг chain'а; иначе — multi-step record (rare in practice).
-      final target = answer.replaceAll(RegExp(r'\.$'), '');
-      acc.cnameChain.add(target);
-      acc.lastTs = ts;
-      // §141 P2.4c — `acc.lastResolvedName = target` удалён (write-only поле).
-      // CNAME hops сами по себе не emit'ятся как отдельные events —
-      // они аккумулируются в acc.cnameChain и появляются как поле в
-      // финальном dnsResolve event'е (когда A/AAAA придёт).
-      return;
+  /// §180 — DNS RR type-код → строка (для `dnsRecordType` в UI). Defensive:
+  /// неизвестный код → `TYPE<N>` (как раньше defensive-regex принимал любой тип).
+  static String _qtypeToString(int qtype) {
+    switch (qtype) {
+      case 1:
+        return 'A';
+      case 28:
+        return 'AAAA';
+      case 5:
+        return 'CNAME';
+      case 65:
+        return 'HTTPS';
+      case 64:
+        return 'SVCB';
+      case 6:
+        return 'SOA';
+      case 15:
+        return 'MX';
+      case 16:
+        return 'TXT';
+      case 12:
+        return 'PTR';
+      case 33:
+        return 'SRV';
+      case 2:
+        return 'NS';
+      default:
+        return 'TYPE$qtype';
     }
+  }
 
-    if (type == 'A' || type == 'AAAA') {
-      final ip = answer.split(RegExp(r'\s+')).first;
-      acc.ips.add(ip);
-      acc.lastTs = ts;
-      // Аттрибутируем event на **оригинальный** queried domain
-      // (acc.domain), не на финальный CNAME-target. Так в Domains tab
-      // юзер видит "api-invest-gw.t-bank-app.ru" (то что app реально
-      // запрашивал), а CNAME chain отдельно показывает hops до final IP.
-      final ev = TrafficEvent(
+  /// §180 — батч DNS-событий из ядра (SPEC 018 `subscribeDNSQueries`). Заменяет
+  /// текстовый `_handleDnsLine`/`_handleDnsFailLine`. Атрибуция к приложению —
+  /// `q.packageName` ИЗ ЯДРА (processInfo), не connId-сшивка (корень §177-баннера).
+  void _ingestDnsQueries(List<CcDnsQuery> queries) {
+    // Обрабатываем если есть session ИЛИ global recording (как connections).
+    if (_active == null && !_globalRecordingActive) return;
+    final now = DateTime.now();
+    for (final q in queries) {
+      _ingestDnsQuery(q, now);
+    }
+  }
+
+  void _ingestDnsQuery(CcDnsQuery q, DateTime ts) {
+    // Атрибуция из ядра: packageName непуст → verified. (Раньше — meta по connId.)
+    final attributed = q.packageName.isNotEmpty;
+    final process = attributed ? q.packageName : null;
+    final recordType = _qtypeToString(q.queryType);
+
+    // Q2 (SPEC 018): провал → dnsFail с issue. `error` — структурная причина
+    // (было: reason из regex). rcode==-1 (Q1) = нет ответа (timeout).
+    if (q.failed) {
+      final reason = q.error.isNotEmpty
+          ? q.error
+          : (q.noAnswer ? 'no response' : 'rcode ${q.rcode}');
+      _routeEvent(TrafficEvent(
         ts: ts,
-        kind: TrafficEventKind.dnsResolve,
-        domain: acc.domain,
-        cnameChain: List.of(acc.cnameChain),
-        ip: ip,
-        connId: connId,
-        process: meta?.process,
-        rawLogLine: line,
-        dnsRecordType: type,
-        confidence: meta == null
-            ? ConfidenceLevel.unattributed
-            : ConfidenceLevel.verified,
-        matchedVia: meta == null ? null : 'router_log',
-      );
-      _routeEvent(ev);
+        kind: TrafficEventKind.dnsFail,
+        domain: q.domain.isNotEmpty ? q.domain : null,
+        process: process,
+        dnsRecordType: recordType,
+        confidence:
+            attributed ? ConfidenceLevel.verified : ConfidenceLevel.unattributed,
+        matchedVia: attributed ? 'dns_stream' : null,
+        shownBecause: attributed
+            ? null
+            : 'system-wide DNS failure (no owner package detected)',
+        issues: [
+          ConnectionIssue(
+              ConnectionIssueKind.dnsTimeout, 'DNS exchange failed: $reason'),
+        ],
+      ));
       return;
     }
 
-    // §048 Принцип 2 — другие record types (HTTPS / SVCB / SOA / MX / TXT
-    // / unknown): defensive — emit'им event с record type, чтобы юзер
-    // видел в Live что app сделал такой query.
-    final ev = TrafficEvent(
+    // Q3 (SPEC 018): cnameChain = CNAME-hops из answers; ip = первый A/AAAA.
+    // Аттрибуция на ОРИГИНАЛЬНЫЙ домен (q.domain), не на финальный target —
+    // как в текстовом пути (юзер видит что app запрашивал, CNAME chain отдельно).
+    final cnameChain =
+        q.answers.where((a) => a.isCname).map((a) => a.rdata).toList();
+    final addresses =
+        q.answers.where((a) => a.isAddress).map((a) => a.rdata).toList();
+    final ip = addresses.isNotEmpty ? addresses.first : null;
+
+    _routeEvent(TrafficEvent(
       ts: ts,
       kind: TrafficEventKind.dnsResolve,
-      domain: acc.domain,
-      cnameChain: List.of(acc.cnameChain),
-      // Для HTTPS / SVCB / SOA / MX / TXT etc — answer обычно не IP,
-      // оставляем `extra` для raw payload'а, в `ip` ничего.
-      connId: connId,
-      process: meta?.process,
-      rawLogLine: line,
-      dnsRecordType: type,
-      confidence: meta == null
-          ? ConfidenceLevel.unattributed
-          : ConfidenceLevel.verified,
-      matchedVia: meta == null ? null : 'router_log',
-      extra: {'answer': answer},
-    );
-    _routeEvent(ev);
-  }
-
-  void _handleDnsFailLine(String line, DateTime ts, RegExpMatch m) {
-    final connId = m.group(1)!;
-    final domain = m.group(2); // optional — extract'ится не из всех формат
-    final recordType = m.group(3); // optional — IN <TYPE>
-    final reason = m.group(4)!.trim();
-    final meta = _connIdToMeta[connId];
-
-    // §048 Принцип 1 — DNS fail без owner НЕ дропается. Эмитим как
-    // unattributed event в global ring + (если есть match) в session.
-    final ev = TrafficEvent(
-      ts: ts,
-      kind: TrafficEventKind.dnsFail,
-      domain: domain,
-      connId: connId,
-      process: meta?.process,
-      rawLogLine: line,
-      dnsRecordType: recordType?.toUpperCase(),
-      confidence: meta == null
-          ? ConfidenceLevel.unattributed
-          : ConfidenceLevel.verified,
-      matchedVia: meta == null ? null : 'router_log',
-      shownBecause: meta == null
-          ? 'system-wide DNS failure (no owner package detected)'
+      domain: q.domain,
+      cnameChain: cnameChain,
+      ip: ip,
+      process: process,
+      dnsRecordType: recordType,
+      confidence:
+          attributed ? ConfidenceLevel.verified : ConfidenceLevel.unattributed,
+      matchedVia: attributed ? 'dns_stream' : null,
+      // не-адресные типы (HTTPS/SVCB/SOA…): rdata первого answer в extra (было
+      // `extra: {'answer': ...}`), чтобы Live показывал что app сделал такой query.
+      extra: (ip == null && q.answers.isNotEmpty)
+          ? {'answer': q.answers.first.rdata}
           : null,
-      issues: [
-        ConnectionIssue(ConnectionIssueKind.dnsTimeout,
-            'DNS exchange failed: $reason'),
-      ],
-    );
-    _routeEvent(ev);
+    ));
   }
 
   // ─── Event routing (global + session) ─────────────────────────────────
@@ -933,6 +909,13 @@ class TrafficProfiler extends ChangeNotifier {
       onError: (Object e, StackTrace _) =>
           AppLog.I.warning('TrafficProfiler: cc connections stream error: $e'),
     );
+    // §180 — DNS-журнал из ядра (SPEC 018) на том же profilerClient. Батч
+    // CcDnsQuery; _ingestDnsQuery эмитит dnsResolve/dnsFail с атрибуцией ИЗ ЯДРА.
+    _ccDnsSub = _cc.dnsQueries.listen(
+      _ingestDnsQueries,
+      onError: (Object e, StackTrace _) =>
+          AppLog.I.warning('TrafficProfiler: cc dns stream error: $e'),
+    );
   }
 
   /// Снимает подписку + гасит profilerClient — только если ни active
@@ -946,6 +929,8 @@ class TrafficProfiler extends ChangeNotifier {
   void _detachCcConnections() {
     _ccConnSub?.cancel();
     _ccConnSub = null;
+    _ccDnsSub?.cancel(); // §180
+    _ccDnsSub = null;
     unawaited(_cc.disconnectProfiler());
   }
 
@@ -1286,7 +1271,6 @@ class TrafficProfiler extends ChangeNotifier {
     _active = null;
     _completed.clear();
     _connIdToMeta.clear();
-    _dnsByConnId.clear();
     _connSnapshots.clear();
     _closedHandled.clear(); // §176
     _globalRollingBuffer.clear();
@@ -1295,6 +1279,8 @@ class TrafficProfiler extends ChangeNotifier {
     _globalRecordingStartedAt = null;
     _ccConnSub?.cancel();
     _ccConnSub = null;
+    _ccDnsSub?.cancel(); // §180
+    _ccDnsSub = null;
     _gcTimer?.cancel();
     _gcTimer = null;
     if (_appLogListener != null) {
@@ -1317,6 +1303,10 @@ class TrafficProfiler extends ChangeNotifier {
   /// §168 — прогнать снапшот CC connections (заменяет pollOnceForTest).
   @visibleForTesting
   void ingestForTest(List<CcConnection> conns) => _ingestCcConnections(conns);
+
+  /// §180 — прогнать DNS-события из ядра (заменяет feedLogLineForTest для DNS).
+  @visibleForTesting
+  void ingestDnsForTest(List<CcDnsQuery> queries) => _ingestDnsQueries(queries);
 
   @visibleForTesting
   void gcOnceForTest() => _gcStaleConnIds();

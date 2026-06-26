@@ -39,4 +39,5 @@ class PlatformChannels {
   static const ccOutbounds = 'lxbox/cc/outbounds';
   static const ccGroups = 'lxbox/cc/groups';
   static const ccConnections = 'lxbox/cc/connections';
+  static const ccDns = 'lxbox/cc/dns'; // §180 — DNS-журнал из ядра (SPEC 018)
 }

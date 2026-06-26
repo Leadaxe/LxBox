@@ -37,6 +37,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val CC_OUTBOUNDS_CHANNEL = "lxbox/cc/outbounds"
         private const val CC_GROUPS_CHANNEL = "lxbox/cc/groups"
         private const val CC_CONNECTIONS_CHANNEL = "lxbox/cc/connections"
+        private const val CC_DNS_CHANNEL = "lxbox/cc/dns" // §180
         private const val VPN_REQUEST_CODE = 24
 
         // §047 — статические ссылки для bridge'а из LxBoxIntentReceiver (он
@@ -104,6 +105,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     private lateinit var ccOutboundsEventChannel: EventChannel
     private lateinit var ccGroupsEventChannel: EventChannel
     private lateinit var ccConnectionsEventChannel: EventChannel
+    private lateinit var ccDnsEventChannel: EventChannel // §180
     private lateinit var context: Context
     private var activity: Activity? = null
     private var statusSink: EventChannel.EventSink? = null
@@ -199,6 +201,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccConnectionsSink = sink }
             override fun onCancel(args: Any?) { BoxVpnService.ccConnectionsSink = null }
         })
+        // §180 — DNS-журнал из ядра (SPEC 018).
+        ccDnsEventChannel = EventChannel(binding.binaryMessenger, CC_DNS_CHANNEL)
+        ccDnsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccDnsQueriesSink = sink }
+            override fun onCancel(args: Any?) { BoxVpnService.ccDnsQueriesSink = null }
+        })
 
         Log.d(TAG, "[vpn] onAttachedToEngine: registerReceiver(statusReceiver)")
         // §155 — на отдельных OEM-прошивках registerReceiver может бросить
@@ -223,12 +231,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         ccOutboundsEventChannel.setStreamHandler(null)
         ccGroupsEventChannel.setStreamHandler(null)
         ccConnectionsEventChannel.setStreamHandler(null)
+        ccDnsEventChannel.setStreamHandler(null) // §180
         statusSink = null
         BoxVpnService.coreLogSink = null
         BoxVpnService.ccStatusSink = null
         BoxVpnService.ccOutboundsSink = null
         BoxVpnService.ccGroupsSink = null
         BoxVpnService.ccConnectionsSink = null
+        BoxVpnService.ccDnsQueriesSink = null // §180
         // §047 — обнуляем bridge-ссылки (engine detached).
         bridgeChannel = null
         appContext = null

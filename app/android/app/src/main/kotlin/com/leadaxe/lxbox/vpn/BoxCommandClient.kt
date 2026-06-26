@@ -9,6 +9,9 @@ import io.nekohasekai.libbox.CommandClientHandler
 import io.nekohasekai.libbox.CommandClientOptions
 import io.nekohasekai.libbox.ConnectionEvents
 import io.nekohasekai.libbox.Connections
+import io.nekohasekai.libbox.DnsQuery
+import io.nekohasekai.libbox.DnsQueryHandler
+import io.nekohasekai.libbox.DnsQuerySubscription
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.LogIterator
 import io.nekohasekai.libbox.OutboundGroup
@@ -81,6 +84,10 @@ class BoxCommandClient {
     // rc.5: disconnect отменяет уже-ушедшие в dial тесты), НЕ задевая
     // status/screen/profiler-стримы. Поднимается лениво под прогон.
     private val pingClient = AtomicReference<CommandClient?>(null)
+    // §180 — DNS-подписка (ядро SPEC 018). НЕ отдельный клиент: метод-подписка
+    // `subscribeDNSQueries(includeAnswers, handler)` вешается на ЖИВОЙ
+    // profilerClient, возвращает DnsQuerySubscription (закрываем в disconnect).
+    private val dnsSubscription = AtomicReference<DnsQuerySubscription?>(null)
 
     /// §2.8 reset-синхронизация: каждый connect инкрементит поколение; снапшоты/события
     /// из устаревшего поколения игнорируются (защита от гонки connect/disconnect, §141 P1.2).
@@ -186,7 +193,11 @@ class BoxCommandClient {
 
     /// §2.8 — `profilerClient` поднимается при `startGlobalRecording` (§048).
     fun connectProfiler() = connectProfilerClient()
-    fun disconnectProfiler() = disconnectClient(profilerClient, "disconnectProfiler")
+    fun disconnectProfiler() {
+        // §180 — закрыть DNS-подписку ДО disconnect клиента (она на нём висит).
+        dnsSubscription.getAndSet(null)?.runCatching { close() }
+        disconnectClient(profilerClient, "disconnectProfiler")
+    }
 
     /// Полный teardown — из `BoxService.doStop`/`closeCommandServerAtomic`.
     fun shutdownAll() {
@@ -194,6 +205,7 @@ class BoxCommandClient {
         screenRefs.set(0) // §122 — туннель умер, все экраны логически отвалились
         screenPaused = false // §164 — сброс lifecycle-флагов на teardown
         statusPaused = false
+        dnsSubscription.getAndSet(null)?.runCatching { close() } // §180
         disconnectClient(statusClient, "shutdownAll")
         disconnectClient(screenClient, "shutdownAll")
         disconnectClient(profilerClient, "shutdownAll")
@@ -246,6 +258,14 @@ class BoxCommandClient {
             val client = CommandClient(ProfilerHandler(gen), options)
             client.connect()
             profilerClient.getAndSet(client)?.runCatching { disconnect() }
+            // §180 — DNS-стрим (ядро SPEC 018): метод-подписка на ЖИВОМ
+            // profilerClient. includeAnswers=true (Q3 — нужна CNAME-цепочка).
+            // forward-compat: старое ядро без subscribeDNSQueries → runCatching
+            // проглотит, DNS-стрим пуст (fallback нет — §180 вариант A).
+            runCatching {
+                val sub = client.subscribeDNSQueries(true, DnsHandler())
+                dnsSubscription.getAndSet(sub)?.runCatching { close() }
+            }.onFailure { Log.w(TAG, "subscribeDNSQueries failed (gen=$gen): ${it.message}") }
         }.onFailure { Log.w(TAG, "connectProfiler failed (gen=$gen): ${it.message}") }
     }
 
@@ -503,6 +523,65 @@ class BoxCommandClient {
     /// 11 колбэков — no-op из BaseHandler (fail-safe try/catch).
     private inner class PingHandler : BaseHandler(0)
 
+    /// §180 — DnsQueryHandler (ядро SPEC 018). `onQuery` на каждый DNS-резолв
+    /// (включая провалы: failed=true). Структурная атрибуция к процессу из ядра
+    /// (processInfo) — больше не сшиваем по connId из текстового лога.
+    /// Контракт JNI-no-throw (§050/§151): колбэк НЕ должен бросать через JNI →
+    /// весь body в runCatching.
+    private inner class DnsHandler : DnsQueryHandler {
+        override fun onQuery(query: DnsQuery?) {
+            runCatching {
+                val q = query ?: return
+                if (BoxVpnService.ccDnsQueriesSink == null) return
+                // §180 — processInfo: атрибуция к приложению ИЗ ЯДРА (не connId-сшивка).
+                var pkg = ""
+                var processPath = ""
+                runCatching {
+                    val pi = q.getProcessInfo()
+                    if (pi != null) {
+                        processPath = pi.getProcessPath() ?: ""
+                        val pkgIt = pi.packageNames()
+                        if (pkgIt != null && pkgIt.hasNext()) pkg = pkgIt.next() ?: ""
+                    }
+                }
+                // §180 — answers[] (Q3): ВЕСЬ response.Answer (CNAME-hops + A/AAAA),
+                // включён через includeAnswers=true при подписке. Итератор как chain().
+                val answers = ArrayList<Map<String, Any>>()
+                runCatching {
+                    val it = q.answers()
+                    while (it != null && it.hasNext()) {
+                        val a = it.next() ?: continue
+                        answers.add(mapOf(
+                            "name" to a.getName(),
+                            "type" to a.getType(),
+                            "rdata" to a.getRData(),
+                            "ttl" to a.getTTL(),
+                        ))
+                    }
+                }
+                // §180 — rcode КАК ЕСТЬ (Q1): getRcode() signed int. -1 = «нет
+                // ответа» (timeout), физически ≠ 65535. НЕ конвертим — Dart мапит
+                // rcode==-1 ДО toUInt.
+                dnsQueriesEmitter.offer(mapOf(
+                    "domain" to q.getDomain(),
+                    "queryType" to q.getQueryType(),
+                    "rcode" to q.getRcode(),
+                    "ttl" to q.getTTL(),
+                    "source" to q.getSource(),
+                    "failed" to q.getFailed(),
+                    "error" to q.getError(),
+                    "packageName" to pkg,
+                    "processPath" to processPath,
+                    "answers" to answers,
+                ))
+            }.onFailure { Log.w(TAG, "DnsHandler.onQuery failed: ${it.message}") }
+        }
+
+        override fun onError(error: String?) {
+            Log.w(TAG, "DnsQuery stream error: $error")
+        }
+    }
+
     /// §3.2 — применить дельты к аккумулятору, эмитить снапшот. getReset()=replace.
     ///
     /// КРИТИЧНО (§122): `ConnectionEvents` — это ДЕЛЬТА между вызовами. Аккумулятор
@@ -617,6 +696,8 @@ class BoxCommandClient {
     private val outboundsEmitter = SnapshotEmitter { BoxVpnService.ccOutboundsSink }
     private val groupsEmitter = SnapshotEmitter { BoxVpnService.ccGroupsSink }
     private val connectionsEmitter = SnapshotEmitter { BoxVpnService.ccConnectionsSink }
+    // §180 — DNS: событийный (НЕ coalesce), батч-доставка.
+    private val dnsQueriesEmitter = EventEmitter { BoxVpnService.ccDnsQueriesSink }
 
     /// Дросселированный эмиттер: queue + drop-newest + single Runnable + main-Handler + batch.
     /// Для status/outbounds/groups/connections эмитим ПОСЛЕДНИЙ снапшот (coalesce —
@@ -641,6 +722,34 @@ class BoxCommandClient {
             queue.clear()
             runCatching { sink.success(latest) }
                 .onFailure { Log.w(TAG, "emitter sink.success failed: ${it.message}") }
+        }
+    }
+
+    /// §180 — событийный эмиттер для DNS: НЕ coalesce (в отличие от SnapshotEmitter,
+    /// который держит только последний снапшот). DNS-события дискретны — потеря
+    /// промежуточного резолва = пропавший домен в Live. Копим в очереди, drain
+    /// отдаёт БАТЧ списком (sink.success(List<Map>)), главный-Handler как у снапшота.
+    /// drop-newest при переполнении QUEUE_MAX (наблюдатель, не аудит — как буфер
+    /// observable ядра 256). Контракт sink: Dart-сторона разворачивает список.
+    private inner class EventEmitter(private val sinkProvider: () -> EventChannel.EventSink?) {
+        private val queue = LinkedBlockingQueue<Any>()
+        private val scheduled = AtomicBoolean(false)
+
+        fun offer(event: Any) {
+            if (queue.size < QUEUE_MAX) queue.offer(event)
+            if (scheduled.compareAndSet(false, true)) {
+                mainHandler.post(drainer)
+            }
+        }
+
+        private val drainer = Runnable {
+            scheduled.set(false)
+            val sink = sinkProvider() ?: run { queue.clear(); return@Runnable }
+            val batch = ArrayList<Any>()
+            queue.drainTo(batch)
+            if (batch.isEmpty()) return@Runnable
+            runCatching { sink.success(batch) }
+                .onFailure { Log.w(TAG, "dns emitter sink.success failed: ${it.message}") }
         }
     }
 }
