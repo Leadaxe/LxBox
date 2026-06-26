@@ -559,6 +559,25 @@ class BoxCommandClient {
                         ))
                     }
                 }
+                // rc.10 — DNS-сервер + тип (какой сервер резолвил, на всех путях
+                // вкл. провалы). Имена с DNS заглавными (gomobile-нейминг).
+                var dnsServer = ""
+                var dnsServerType = ""
+                runCatching {
+                    dnsServer = q.getDNSServer() ?: ""
+                    dnsServerType = q.getDNSServerType() ?: ""
+                }
+                // rc.10 — outbound() = StringIterator (как chain()/detour()):
+                // канал DNS-сервера, селектор развёрнут в активный узел. Пусто на
+                // cached. Шлём списком (Dart соберёт outboundChain).
+                val outbound = ArrayList<String>()
+                runCatching {
+                    val it = q.outbound()
+                    while (it != null && it.hasNext()) {
+                        val s = it.next() ?: continue
+                        if (s.isNotEmpty()) outbound.add(s)
+                    }
+                }
                 // §180 — rcode КАК ЕСТЬ (Q1): getRcode() signed int. -1 = «нет
                 // ответа» (timeout), физически ≠ 65535. НЕ конвертим — Dart мапит
                 // rcode==-1 ДО toUInt.
@@ -572,6 +591,9 @@ class BoxCommandClient {
                     "error" to q.getError(),
                     "packageName" to pkg,
                     "processPath" to processPath,
+                    "dnsServer" to dnsServer,
+                    "dnsServerType" to dnsServerType,
+                    "outbound" to outbound,
                     "answers" to answers,
                 ))
             }.onFailure { Log.w(TAG, "DnsHandler.onQuery failed: ${it.message}") }

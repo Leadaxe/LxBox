@@ -578,11 +578,18 @@ class TrafficProfiler extends ChangeNotifier {
       final reason = q.error.isNotEmpty
           ? q.error
           : (q.noAnswer ? 'no response' : 'rcode ${q.rcode}');
+      // rc.10 — dnsServer заполнен и на провалах (какой сервер не ответил).
+      final failExtra = <String, Object?>{};
+      if (q.dnsServer.isNotEmpty) failExtra['dns_server'] = q.dnsServer;
+      if (q.dnsServerType.isNotEmpty) {
+        failExtra['dns_server_type'] = q.dnsServerType;
+      }
       _routeEvent(TrafficEvent(
         ts: ts,
         kind: TrafficEventKind.dnsFail,
         domain: q.domain.isNotEmpty ? q.domain : null,
         process: process,
+        outboundChain: q.outbound, // rc.10 — канал (может быть пуст на провале)
         dnsRecordType: recordType,
         confidence:
             attributed ? ConfidenceLevel.verified : ConfidenceLevel.unattributed,
@@ -594,6 +601,7 @@ class TrafficProfiler extends ChangeNotifier {
           ConnectionIssue(
               ConnectionIssueKind.dnsTimeout, 'DNS exchange failed: $reason'),
         ],
+        extra: failExtra.isEmpty ? null : failExtra,
       ));
       return;
     }
@@ -614,6 +622,19 @@ class TrafficProfiler extends ChangeNotifier {
         .toList();
     final ip = addresses.isNotEmpty ? addresses.first : null;
 
+    // rc.10 — outbound-канал DNS-сервера (узел/селектор→узел), список как
+    // chain. Кладём в outboundChain → routingLine покажет «через какой сервер
+    // пошёл DNS». Пусто на cached (cache-hit без сетевого пути).
+    final outboundChain = q.outbound;
+
+    // rc.10 — dnsServer/тип в extra (для detail-sheet). + answer для не-адресных.
+    final extra = <String, Object?>{};
+    if (q.dnsServer.isNotEmpty) extra['dns_server'] = q.dnsServer;
+    if (q.dnsServerType.isNotEmpty) extra['dns_server_type'] = q.dnsServerType;
+    if (ip == null && q.answers.isNotEmpty) {
+      extra['answer'] = _rdataValue(q.answers.first.rdata);
+    }
+
     _routeEvent(TrafficEvent(
       ts: ts,
       kind: TrafficEventKind.dnsResolve,
@@ -621,15 +642,12 @@ class TrafficProfiler extends ChangeNotifier {
       cnameChain: cnameChain,
       ip: ip,
       process: process,
+      outboundChain: outboundChain,
       dnsRecordType: recordType,
       confidence:
           attributed ? ConfidenceLevel.verified : ConfidenceLevel.unattributed,
       matchedVia: attributed ? 'dns_stream' : null,
-      // не-адресные типы (HTTPS/SVCB/SOA…): rdata первого answer в extra (было
-      // `extra: {'answer': ...}`), чтобы Live показывал что app сделал такой query.
-      extra: (ip == null && q.answers.isNotEmpty)
-          ? {'answer': _rdataValue(q.answers.first.rdata)}
-          : null,
+      extra: extra.isEmpty ? null : extra,
     ));
   }
 

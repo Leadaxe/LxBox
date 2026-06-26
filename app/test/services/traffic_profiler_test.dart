@@ -170,6 +170,51 @@ void main() {
       expect(ev.kind, TrafficEventKind.dnsFail);
       expect(ev.issues.first.kind, ConnectionIssueKind.dnsTimeout);
     });
+
+    test('rc.10 — dnsServer/dnsServerType/outbound пробрасываются', () async {
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'github.com',
+          queryType: 1,
+          rcode: 0,
+          packageName: 'ru.tinkoff.investing',
+          dnsServer: 'https://1.1.1.1/dns-query',
+          dnsServerType: 'https',
+          outbound: ['🇫🇮Финляндия (vpn-1)'],
+          answers: [
+            CcDnsAnswer(name: 'github.com', type: 1, rdata: '140.82.121.3'),
+          ],
+        ),
+      ]);
+      final ev = TrafficProfiler.I.active!.events
+          .firstWhere((e) => e.kind == TrafficEventKind.dnsResolve);
+      // outbound → outboundChain (для routingLine «через какой сервер»).
+      expect(ev.outboundChain, ['🇫🇮Финляндия (vpn-1)']);
+      // dnsServer/тип → extra (для detail-sheet).
+      expect(ev.extra?['dns_server'], 'https://1.1.1.1/dns-query');
+      expect(ev.extra?['dns_server_type'], 'https');
+    });
+
+    test('rc.10 — cached (пустой outbound) → outboundChain пуст', () async {
+      await TrafficProfiler.I.start('ru.tinkoff.investing');
+      TrafficProfiler.I.ingestDnsForTest([
+        const CcDnsQuery(
+          domain: 'cached.example',
+          queryType: 1,
+          rcode: 0,
+          source: 'cached',
+          packageName: 'ru.tinkoff.investing',
+          // outbound пуст на cache-hit (нет сетевого пути).
+          answers: [
+            CcDnsAnswer(name: 'cached.example', type: 1, rdata: '1.2.3.4'),
+          ],
+        ),
+      ]);
+      final ev = TrafficProfiler.I.active!.events
+          .firstWhere((e) => e.kind == TrafficEventKind.dnsResolve);
+      expect(ev.outboundChain, isEmpty);
+    });
   });
 
   group('TrafficProfiler — connection ingest (§168 CommandClient)', () {

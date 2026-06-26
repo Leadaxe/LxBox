@@ -112,9 +112,17 @@ class _TrafficEventDetailSheet extends StatelessWidget {
     ]));
 
     // DNS
+    // rc.10 — DNS-сервер (какой сервер резолвил) + тип (udp/tls/https/…).
+    final dnsServer = e.extra?['dns_server']?.toString() ?? '';
+    final dnsServerType = e.extra?['dns_server_type']?.toString() ?? '';
+    final dnsServerLabel = dnsServer.isEmpty
+        ? ''
+        : (dnsServerType.isEmpty ? dnsServer : '$dnsServer ($dnsServerType)');
     out.addAll(_group(context, 'DNS', [
       _copyRow(context, 'Record', e.dnsRecordType ?? ''),
       _copyRow(context, 'CNAME', e.cnameChain.join(' → ')),
+      // rc.10 — какой DNS-сервер обработал запрос (на всех путях вкл. провалы).
+      _copyRow(context, 'DNS server', dnsServerLabel),
     ]));
 
     // Network

@@ -456,6 +456,9 @@ class CcDnsQuery {
     this.error = '',
     this.packageName = '',
     this.processPath = '',
+    this.dnsServer = '',
+    this.dnsServerType = '',
+    this.outbound = const [],
     this.answers = const [],
   });
 
@@ -487,6 +490,18 @@ class CcDnsQuery {
   final String packageName;
   final String processPath;
 
+  /// rc.10 (SPEC 018+) — какой DNS-сервер резолвил запрос (на всех путях, вкл.
+  /// провалы). Пусто на старом ядре / если ядро не отдало.
+  final String dnsServer;
+
+  /// rc.10 — тип DNS-сервера (udp/tcp/tls/https/quic/…).
+  final String dnsServerType;
+
+  /// rc.10 — outbound-канал DNS-сервера (селектор развёрнут в активный узел
+  /// через Now() server-side), список как chain/detour. ПУСТО на cached
+  /// (cache-hit без сетевого пути).
+  final List<String> outbound;
+
   /// Q3 (SPEC 018): ВЕСЬ response.Answer (CNAME-hops + финальные A/AAAA) в
   /// исходном порядке. Пусто если подписка без includeAnswers. cnameChain
   /// собирается из элементов с type==CNAME(5).
@@ -505,6 +520,13 @@ class CcDnsQuery {
         error: m['error']?.toString() ?? '',
         packageName: m['packageName']?.toString() ?? '',
         processPath: m['processPath']?.toString() ?? '',
+        dnsServer: m['dnsServer']?.toString() ?? '',
+        dnsServerType: m['dnsServerType']?.toString() ?? '',
+        outbound: (m['outbound'] as List?)
+                ?.map((e) => e.toString())
+                .where((s) => s.isNotEmpty)
+                .toList() ??
+            const [],
         answers: (m['answers'] as List?)
                 ?.map((a) => CcDnsAnswer.fromMap(
                     (a as Map).map((k, v) => MapEntry(k.toString(), v))))
