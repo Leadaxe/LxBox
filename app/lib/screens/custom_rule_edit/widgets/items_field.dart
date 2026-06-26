@@ -215,16 +215,6 @@ class _ItemsFieldState extends State<ItemsField> {
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                 ),
               ),
-              TextButton.icon(
-                icon: const Icon(Icons.clear, size: 14),
-                label: const Text('Clear',
-                    style: TextStyle(fontSize: 12)),
-                onPressed: () => widget.controller.clear(),
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(0, 28),
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                ),
-              ),
               if (widget.presets.isNotEmpty)
                 TextButton.icon(
                   icon: const Icon(Icons.list, size: 14),
@@ -236,6 +226,16 @@ class _ItemsFieldState extends State<ItemsField> {
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                   ),
                 ),
+              TextButton.icon(
+                icon: const Icon(Icons.clear, size: 14),
+                label: const Text('Clear',
+                    style: TextStyle(fontSize: 12)),
+                onPressed: () => widget.controller.clear(),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 28),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+              ),
             ],
           ),
         ],
