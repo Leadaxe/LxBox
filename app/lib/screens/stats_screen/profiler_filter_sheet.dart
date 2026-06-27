@@ -172,7 +172,7 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
                 color: Theme.of(context).colorScheme.onSurfaceVariant),
             title: const Text('Unattributed (no owner)',
                 style: TextStyle(fontSize: 13)),
-            subtitle: const Text('«потеряшки» — события без приложения',
+            subtitle: const Text('Events with no owning app',
                 style: TextStyle(fontSize: 10)),
           ),
         if (all.isEmpty && !widget.hasUnattributed)
