@@ -199,7 +199,15 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         })
         ccConnectionsEventChannel = EventChannel(binding.binaryMessenger, CC_CONNECTIONS_CHANNEL)
         ccConnectionsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccConnectionsSink = sink }
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) {
+                BoxVpnService.ccConnectionsSink = sink
+                // §193 — connections single-shot: ядро шлёт reset-снапшот РОВНО
+                // один раз при подписке screenClient (pull в libbox нет). Новый
+                // Dart-подписчик (открытие Stats при уже живом screenClient) не
+                // получает нового reset → пусто. Переэмитим накопленный
+                // аккумулятор сразу, чтобы Stats увидел текущие соединения.
+                BoxService.commandClient?.reEmitScreenConnections()
+            }
             override fun onCancel(args: Any?) { BoxVpnService.ccConnectionsSink = null }
         })
         // §180 — DNS-журнал из ядра (SPEC 018).

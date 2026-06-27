@@ -1223,7 +1223,7 @@ Push-стримы поверх EventChannel `lxbox/cc/*` (`status` · `outbounds
 | `status` | push `Stream<CcStatus>` | up/down + traffic snapshot; питает heartbeat-watchdog |
 | `outbounds` | push `Stream<List<CcOutbound>>` | список outbound'ов |
 | `groups` | push `Stream<List<CcGroup>>` | selector/urltest группы + selected/active |
-| `connections` | push `Stream<List<CcConnection>>` | active TCP/UDP + bytes + packageName/processPath |
+| `connections` | push `Stream<List<CcConnection>>` | active TCP/UDP + bytes + packageName/processPath. **Pull нет** (см. §193 ниже) — ядро шлёт полный список ОДИН раз (reset-снапшот на подписку), дальше только дельты |
 | `getGroups()` | unary-pull `List<CcGroup>?` | детерминированный снапшот групп (lifeline на дыру стартового push'а; `null` = ядро не STARTED, не трогать state) |
 | `getRules()` | unary-pull `List<CcRule>` | снапшот route+DNS правил (диагностика) |
 | `urlTestOutbound(tag)` | unary-RPC `CcDelayResult` | per-node delay. **Инвариант:** `error` — единственный признак провала; `delay==0 && error==''` = успех 0мс |
@@ -1240,6 +1240,11 @@ Lifecycle-сигналы (`connectScreen`/`disconnectScreen`, `connectProfiler`/
 
 - **Empty groups-push поверх живого** — ядро может прислать пустой groups-push поверх непустого state; guard в `_onCcGroups` игнорит пустой push если `ccGroups` непуст. Детерминированный источник истины — `getGroups`-pull.
 - **No external subscribers** — командный server слушает localhost; сторонние Clash-дашборды (yacd / clash-meta) больше не поддерживаются в принципе (Clash API нет).
+- **§193 — connections single-shot, нет pull (асимметрия с groups).** `connections`-под-поток `screenClient`'а принципиально хрупче `groups`. Ядро (sing-box-lx) отдаёт полный список соединений **только один раз** — reset-снапшот при подписке (`SubscribeConnections`); дальше идут только дельты. У `groups` есть unary-pull `getGroups()` плюс повторные снапшоты на urlTest, у `connections` pull'а **нет** (`getConnections` в libbox отсутствует — javap rc.10 подтвердил). Поэтому при **повторном** открытии Stats (`screenClient` не пересоздаётся, refcount>0) нового reset-снапшота не приходит — UI остался бы пустым. Фикс §193: native-сторона при появлении нового connections-sink'а пере-эмитит накопленный `screenAccumulator` — [`BoxCommandClient.reEmitScreenConnections()`](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxCommandClient.kt) зовётся из `VpnPlugin.onListen` connections-канала (идемпотентно: пустой/null acc → пустой list). Плюс `resyncForReopen` (§185, рвущий `screenClient`/`pingClient`) гейтнут до cold-start: флаг `_didColdStartResync` в [`home_controller.dart`](../app/lib/controllers/home_controller.dart) выполняет полный resync ровно один раз за жизнь движка, чтобы не рвать connections на каждом реконнекте. **Долг ядра:** добавить unary `GetConnections` симметрично `GetGroups`.
+- **§194 — три счётчика соединений считают РАЗНОЕ.** Не путать:
+  - **Главный экран** ([`traffic_bar.dart`](../app/lib/screens/home/widgets/traffic_bar.dart)) — два раздельных чипа: `connectionsIn` (🔗 = `trafficManager.ConnectionsLen()` ядра = соединения **приложений**, ТЕ ЖЕ что в `CommandConnections`-списке = на Stats) и `connectionsOut` (🗄 = `connectionManager.Count()` = **физические** соединения наружу к серверам). Раньше шапка складывала In+Out в одно число — путало, т.к. не сходилось со списком на Stats.
+  - **Stats** — активные из списка (`closedAt==0`) ≈ `connectionsIn`.
+  - **Conns** — живые + closed-история, показывает «N active / M total».
 
 ---
 

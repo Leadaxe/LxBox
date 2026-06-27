@@ -66,11 +66,25 @@ class TrafficBar extends StatelessWidget {
                 ),
                 if (state.traffic.activeConnections > 0) ...[
                   const SizedBox(width: 8),
+                  // §194 — РАЗДЕЛЬНО: connectionsIn = соединения приложений
+                  // (трафик-трекер ядра = то, что в списке на Stats);
+                  // connectionsOut = физические соединения наружу к серверам
+                  // (route-менеджер). Раньше показывали сумму «13», путавшую с
+                  // числом активных в списке на Stats (≈connectionsIn).
                   _chip(
                     context,
                     Icons.link,
-                    '${state.traffic.activeConnections}',
+                    '${state.traffic.connectionsIn}',
                     cs.secondary,
+                    tooltip: 'App connections',
+                  ),
+                  const SizedBox(width: 8),
+                  _chip(
+                    context,
+                    Icons.dns_outlined,
+                    '${state.traffic.connectionsOut}',
+                    cs.secondary,
+                    tooltip: 'Outbound connections to servers',
                   ),
                 ],
                 if (profiler.isRecording) ...[
@@ -106,9 +120,10 @@ class TrafficBar extends StatelessWidget {
     BuildContext context,
     IconData icon,
     String label,
-    Color color,
-  ) {
-    return Row(
+    Color color, {
+    String? tooltip,
+  }) {
+    final row = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 14, color: color),
@@ -121,6 +136,15 @@ class TrafficBar extends StatelessWidget {
           ),
         ),
       ],
+    );
+    // §194 — длинное нажатие даёт tooltip (короткий тап ведёт на Stats через
+    // GestureDetector полосы). triggerMode.longPress, чтобы не конфликтовать с
+    // переходом по тапу.
+    if (tooltip == null) return row;
+    return Tooltip(
+      message: tooltip,
+      triggerMode: TooltipTriggerMode.longPress,
+      child: row,
     );
   }
 

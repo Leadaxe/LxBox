@@ -43,6 +43,11 @@ class HomeController extends ChangeNotifier
   StreamSubscription<CcStatus>? _ccStatusSub;
   StreamSubscription<List<CcGroup>>? _ccGroupsSub;
 
+  /// §193 — resyncForReopen (§185 cold-start) делаем ОДИН раз за жизнь движка.
+  /// На реконнектах refcount валиден (тот же движок) → resync только рвал бы
+  /// connections-доставку (single-shot, без pull). false на свежем движке.
+  bool _didColdStartResync = false;
+
   @override
   HomeState _state = HomeState();
   HomeState get state => _state;
@@ -605,11 +610,19 @@ class HomeController extends ChangeNotifier
     // поле CC, пережил swipe; Dart-движок умер без disconnectScreen). Сбросить
     // refcount/паузу + закрыть осиротевший screen/profiler-клиент ПЕРЕД
     // connectScreen, иначе тот увидит refs>0 → не переподнимет screenClient на
-    // свежие (только что поставленные выше) sink'и → пустой UI. Идемпотентно:
-    // на штатном переходе disconnected→connected (refs=0) — no-op. AWAIT
-    // обязателен — resync должен завершиться ДО connectScreen.
-    await _cc.resyncForReopen();
-    if (_disposed || !_state.tunnelUp) return; // ушли за await
+    // свежие sink'и → пустой UI.
+    //
+    // §193 — resync зовём ТОЛЬКО на ПЕРВЫЙ `_startCcStreams` нового Dart-движка
+    // (cold-start). Раньше — на КАЖДЫЙ `connected` (реконнект тоже): resync
+    // disconnect'ит screenClient, а connections — single-shot (нет pull, нет
+    // нового reset при refcount>0) → Stats терял соединения на любой реконнект.
+    // groups самоисцелялись pull'ом, connections — нет. На реконнектах refcount
+    // консистентен (тот же движок) → resync не нужен, обычный connectScreen.
+    if (!_didColdStartResync) {
+      _didColdStartResync = true;
+      await _cc.resyncForReopen();
+      if (_disposed || !_state.tunnelUp) return; // ушли за await
+    }
     // §2.8 — теперь sink'и стоят + refcount чист → поднимаем screenClient.
     unawaited(_cc.connectScreen());
     // §122/SPEC015 — детерминированный pull стартового снапшота групп. Раньше
@@ -701,6 +714,8 @@ class HomeController extends ChangeNotifier
         uploadTotal: s.uplinkTotal,
         downloadTotal: s.downlinkTotal,
         activeConnections: s.connectionsIn + s.connectionsOut,
+        connectionsIn: s.connectionsIn, // §194 — раздельно для шапки ↑In ↓Out
+        connectionsOut: s.connectionsOut,
         memory: s.memory,
         // byRule/byApp — из connections-стрима (stats-экран), не из status.
         byRule: _state.traffic.byRule,
