@@ -255,6 +255,7 @@ class HomeNodeList extends StatelessWidget {
               busy: state.busy,
               urltestNow: urltestNow,
               hasDetour: cache[tag]?.detour != null,
+              outboundType: cache[tag]?.type, // §125 — точный тип из конфига
               protocolLabel: protoType == null
                   ? null
                   : [

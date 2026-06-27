@@ -20,6 +20,7 @@ class NodeViewItem {
     required this.urltestNow,
     required this.hasDetour,
     required this.protocolLabel,
+    this.outboundType,
     this.matches = true,
   });
 
@@ -56,6 +57,11 @@ class NodeViewItem {
   /// Compact protocol label (например `'VLESS + TLS'`, `'Hy2 + TLS'`, `'WG'`).
   /// Показывается справа от имени ноды серым. `null` → не показываем.
   final String? protocolLabel;
+
+  /// §125 — outbound-type из сохранённого конфига (`ParsedConfig[tag].type`):
+  /// `direct` / `urltest` → служебная нода (подменяется label «Direct»/«Auto»
+  /// + иконкой). `null` или иной тип → обычная прокси-нода (показываем tag).
+  final String? outboundType;
 
   /// §048 — результат фильтра: `false` → render с opacity 0.4 (non-matching
   /// под фильтром, юзер видит весь pool но понимает что подходит).

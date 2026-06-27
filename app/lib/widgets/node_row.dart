@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../config/consts.dart';
+import '../screens/home/special_node_display.dart';
 import 'node_view_item.dart';
 
 /// One row в node list на главной screen'е. Read-only widget от
@@ -148,8 +148,8 @@ class NodeRow extends StatelessWidget {
     );
   }
 
-  bool get _isSpecial =>
-      item.tag == 'direct-out' || item.tag == kAutoOutboundTag;
+  // §125 — служебная нода (direct/auto): по типу из конфига, не по маске имени.
+  bool get _isSpecial => specialNodeDisplayForType(item.outboundType) != null;
 
   Future<void> _openLongPressMenu(BuildContext context) async {
     final canPing = item.tunnelUp && !item.busy && !item.pingBusy;
@@ -285,30 +285,38 @@ class NodeRow extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        if (item.tag == kAutoOutboundTag) ...[
-                          Icon(Icons.speed,
-                              size: 18, color: colorScheme.primary),
-                          const SizedBox(width: 6),
-                        ],
-                        Flexible(
-                          child: Text(
-                            item.tag,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyLarge
-                                ?.copyWith(
-                                  fontWeight: item.active
-                                      ? FontWeight.w600
-                                      : FontWeight.w500,
-                                ),
+                    Builder(builder: (context) {
+                      // §125 — служебные ноды (direct/auto) показываем
+                      // подменённым label'ом + иконкой; тип берём ТОЧНО из
+                      // конфига (item.outboundType), не по маске имени.
+                      final special =
+                          specialNodeDisplayForType(item.outboundType);
+                      final displayText = special?.label ?? item.tag;
+                      return Row(
+                        children: [
+                          if (special != null) ...[
+                            Icon(special.icon,
+                                size: 18, color: colorScheme.primary),
+                            const SizedBox(width: 6),
+                          ],
+                          Flexible(
+                            child: Text(
+                              displayText,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyLarge
+                                  ?.copyWith(
+                                    fontWeight: item.active
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                  ),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      );
+                    }),
                     _buildSubtitleRow(context, colorScheme),
                   ],
                 ),
