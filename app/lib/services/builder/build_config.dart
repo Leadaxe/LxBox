@@ -202,6 +202,7 @@ Future<BuildResult> buildConfig({
   final presetOutbounds = _buildChannelGroups(
     channels: channels,
     selectorTags: selectorTags,
+    emitWarnings: emitWarnings,
   );
 
   final baseOutbounds = config['outbounds'] as List<dynamic>? ?? const [];
@@ -443,6 +444,7 @@ class _BuildCtx implements EmitContext {
 List<Map<String, dynamic>> _buildChannelGroups({
   required List<Channel> channels,
   required List<String> selectorTags,
+  required List<String> emitWarnings,
 }) {
   // §125 — единственный слой фильтрации нод теперь per-channel regex
   // (node_filter). Глобальный excluded_nodes (§048) удалён.
@@ -476,6 +478,16 @@ List<Map<String, dynamic>> _buildChannelGroups({
       // Пустой набор (regex не матчит / нет нод / direct выкл) → fallback на
       // direct-out, чтобы selector не был пустой группой (fatal в sing-box).
       selectorOutbounds.add('direct-out');
+    }
+    // §200 — предупреждаем, если ИМЕННО фильтр канала отсёк все ноды (фильтр
+    // непустой, но 0 совпадений). Канал молча работает как Direct — юзеру
+    // важно знать. Пустой фильтр с 0 нод (нет подписки) НЕ варним — это не
+    // вина фильтра.
+    if (nodes.isEmpty && c.nodeFilter.isNotEmpty && selectorTags.isNotEmpty) {
+      final label = c.label.isNotEmpty ? c.label : c.tag;
+      emitWarnings.add(
+          'Канал "$label" (${c.tag}): фильтр не пропустил ни одной ноды — '
+          'трафик идёт напрямую (Direct).');
     }
 
     final selector = <String, dynamic>{

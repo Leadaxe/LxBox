@@ -62,6 +62,16 @@ void main() {
   Map<String, dynamic> byTag(List<Map<String, dynamic>> outs, String tag) =>
       outs.firstWhere((o) => o['tag'] == tag);
 
+  // §200 — полный BuildResult (для проверки emitWarnings).
+  Future<List<String>> warningsFor(List<Channel> channels) async {
+    final r = await buildConfig(
+      lists: [await nodes()],
+      template: template(),
+      settings: BuildSettings(channels: channels),
+    );
+    return r.emitWarnings;
+  }
+
   group('F1 — членство direct/auto/interrupt из галок', () {
     test('includeDirect=false → нет direct-out в selector', () async {
       final outs = await build([
@@ -218,6 +228,40 @@ void main() {
       ]);
       expect(outs.any((o) => o['tag'] == 'vpn-1-auto'), false);
       expect(byTag(outs, 'vpn-1')['outbounds'], ['direct-out']);
+    });
+  });
+
+  group('§200 — warning при пустом фильтре канала', () {
+    test('фильтр отсёк все ноды → warning в emitWarnings', () async {
+      final w = await warningsFor([
+        const Channel(tag: 'vpn-1', label: 'Германия', nodeFilter: 'NOMATCH'),
+      ]);
+      expect(
+          w.any((s) =>
+              s.contains('Германия') && s.contains('напрямую')),
+          true);
+    });
+
+    test('invert исключает всё → тоже warning', () async {
+      final w = await warningsFor([
+        const Channel(
+            tag: 'vpn-1', label: 'x', nodeFilter: '.', nodeFilterInvert: true),
+      ]);
+      expect(w.any((s) => s.contains('vpn-1') && s.contains('напрямую')), true);
+    });
+
+    test('пустой фильтр (все ноды) → НЕ варним', () async {
+      final w = await warningsFor([
+        const Channel(tag: 'vpn-1', label: 'x'),
+      ]);
+      expect(w.any((s) => s.contains('напрямую')), false);
+    });
+
+    test('фильтр матчит хотя бы одну ноду → НЕ варним', () async {
+      final w = await warningsFor([
+        const Channel(tag: 'vpn-1', label: 'x', nodeFilter: '🇩🇪'),
+      ]);
+      expect(w.any((s) => s.contains('напрямую')), false);
     });
   });
 
