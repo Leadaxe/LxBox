@@ -12,7 +12,6 @@ class RoutingChannelsTab extends StatelessWidget {
     required this.maxChannels,
     required this.onAddChannel,
     required this.routeFinalTile,
-    required this.varSections,
   });
 
   final double bottomPad;
@@ -24,7 +23,6 @@ class RoutingChannelsTab extends StatelessWidget {
   final VoidCallback? onAddChannel;
 
   final Widget routeFinalTile;
-  final List<Widget> varSections;
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +48,6 @@ class RoutingChannelsTab extends StatelessWidget {
         ),
         const Divider(height: 24),
         routeFinalTile,
-        ...varSections,
       ],
     );
   }

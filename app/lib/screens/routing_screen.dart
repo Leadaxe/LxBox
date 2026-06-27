@@ -12,7 +12,6 @@ import '../services/selectable_to_custom.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
 import '../widgets/outbound_picker.dart';
-import '../widgets/template_var_list.dart';
 import 'channel_edit_screen.dart';
 import 'custom_rule_edit_screen.dart';
 import 'lazy_persist_mixin.dart';
@@ -63,11 +62,6 @@ class _RoutingScreenState extends State<RoutingScreen>
   bool _loading = true;
   // §076/§085 R4/§107: staging через LazyPersistMixin (markDirty/stageChanges).
 
-  /// chapter==routing vars (Auto Proxy tuning — urltest_url/interval/tolerance).
-  /// Значения держим отдельно от custom_rules: apply'ит их через SettingsStorage.setVar.
-  @override
-  final Map<String, String> _routingVarValues = {};
-
   @override
   SubscriptionController get lazyController => widget.subController;
 
@@ -81,26 +75,6 @@ class _RoutingScreenState extends State<RoutingScreen>
   @override
   void _markDirty() => markDirty();
 
-  /// Рендерит все секции с `chapter: routing` из template (сейчас — только
-  /// "Auto Proxy"). Пустой список если в template нет routing-секций.
-  List<Widget> _buildRoutingVarSections(WizardTemplate template) {
-    final sections = template.sectionsFor('routing');
-    if (sections.isEmpty) return const [];
-    final vars =
-        template.varsFor('routing').where((v) => v.isEditable).toList();
-    if (vars.isEmpty) return const [];
-    return [
-      const Divider(height: 24),
-      TemplateVarListView(
-        vars: vars,
-        initialValues: _routingVarValues,
-        sectionDescriptions: {
-          for (final s in sections) s.title: s.description,
-        },
-        onChanged: _onRoutingVarChanged,
-      ),
-    ];
-  }
 
   /// См. [RoutingHelpers.remoteRuleSetsOf].
   @override
@@ -176,7 +150,6 @@ class _RoutingScreenState extends State<RoutingScreen>
               onAddChannel:
                   _channels.length >= kMaxChannels ? null : _addChannel,
               routeFinalTile: _buildRouteFinalTile(),
-              varSections: _buildRoutingVarSections(template),
             ),
 
             // ─── Presets: catalog of pre-built rules to copy into Rules ───

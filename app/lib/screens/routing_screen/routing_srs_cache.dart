@@ -10,7 +10,6 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   Set<String> get _srsDownloading;
   List<CustomRule> get _customRules;
   List<Channel> get _channels; // §125
-  Map<String, String> get _routingVarValues;
   set _template(WizardTemplate? value);
   String get _routeFinal;
   set _routeFinal(String value);
@@ -27,7 +26,6 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   Future<void> _load() async {
     final template = await TemplateLoader.load();
     final storedFinal = await SettingsStorage.getRouteFinal();
-    final storedVars = await SettingsStorage.getAllVars();
 
     // §125 — каналы из storage. Миграция enabled_groups→channels уже отработала
     // в main() init; на пустом списке (старт без миграции в тестах) синтезируем
@@ -43,11 +41,6 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'vpn-1';
     _customRules.addAll(await SettingsStorage.getCustomRules());
 
-    // Routing vars (Auto Proxy tuning) — берём stored или template default.
-    for (final v in template.varsFor('routing')) {
-      _routingVarValues[v.name] = storedVars[v.name] ?? v.defaultValue;
-    }
-
     // Выставляем `_template` ДО `_refreshSrsCache` — он через `_presetFor`
     // ищет `SelectableRule` в `_template.selectableRules`, иначе получит
     // null и проскочит auto-disable для preset-правил с uncached
@@ -60,14 +53,6 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     setState(() {
       _loading = false;
     });
-  }
-
-  /// Обработчик изменения переменной `chapter: routing` — staged-запись в
-  /// `_cache` (диск догонит на flushToDisk из mixin'а).
-  void _onRoutingVarChanged(String name, String value) {
-    _routingVarValues[name] = value;
-    unawaited(SettingsStorage.setVar(name, value, flush: false));
-    _markDirty();
   }
 
   /// §107: staging — буфер экрана в `_cache` на каждую мутацию; дисковый
