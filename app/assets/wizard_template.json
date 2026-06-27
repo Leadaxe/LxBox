@@ -239,29 +239,6 @@
       ]
     },
     {
-      "name": "Clash API",
-      "chapter": "core",
-      "description": "Real-time proxy management interface",
-      "vars": [
-        {
-          "name": "clash_api",
-          "type": "text",
-          "default_value": "127.0.0.1:9090",
-          "wizard_ui": "edit",
-          "title": "Address",
-          "tooltip": "Host:port for Clash API"
-        },
-        {
-          "name": "clash_secret",
-          "type": "secret",
-          "default_value": "",
-          "wizard_ui": "edit",
-          "title": "Secret",
-          "tooltip": "Authentication secret for Clash API"
-        }
-      ]
-    },
-    {
       "name": "Network",
       "chapter": "core",
       "description": "Connection and routing behavior",

@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.util.Log
 import com.leadaxe.lxbox.MainActivity
+import com.leadaxe.lxbox.vpn.BootReceiver
 import com.leadaxe.lxbox.vpn.BoxVpnService
 import com.leadaxe.lxbox.vpn.VpnPlugin
 import com.leadaxe.lxbox.vpn.VpnStatus
@@ -60,7 +61,9 @@ class LocaleSettingReceiver : BroadcastReceiver() {
             BoxVpnService.stop(context)
             return
         }
-        if (VpnService.prepare(context.applicationContext) == null) {
+        // §192 — proxy-режим без TUN: prepare не нужен (и зря рвёт чужой VPN).
+        if (!BootReceiver.hasTun(context) ||
+            VpnService.prepare(context.applicationContext) == null) {
             BoxVpnService.start(context)
         } else {
             val launch = Intent(context, MainActivity::class.java).apply {

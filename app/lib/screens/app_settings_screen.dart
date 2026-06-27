@@ -129,7 +129,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   }
 
   Future<void> _loadAutoStart() async {
-    final auto = await _vpn.getAutoStart();
+    // §189 — auto_start / core_logs читаем из JSON-зеркала native_prefs.
+    final auto = await SettingsStorage.getNativeBool(NativePrefsKeys.autoStart);
     final haptic = await SettingsStorage.getVar(HapticService.prefsKey, 'true');
     final autoPing = await SettingsStorage.getVar('auto_ping_on_start', 'true');
     final battery = await _vpn.isIgnoringBatteryOptimizations();
@@ -141,7 +142,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final debugEnabled = await SettingsStorage.getDebugEnabled();
     final debugToken = await SettingsStorage.getDebugToken();
     final debugPort = await SettingsStorage.getDebugPort();
-    final coreLogsEnabled = await _vpn.getCoreLogsEnabled();
+    final coreLogsEnabled =
+        await SettingsStorage.getNativeBool(NativePrefsKeys.coreLogsEnabled);
     final configLocked = await SettingsStorage.getConfigLockedForDebug();
     final autoRecordWifi = await SettingsStorage.getAutoRecordWifi();
     final userAgent =
@@ -279,7 +281,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   /// в Kotlin); юзер сам тапает иконку и получает свежий процесс.
   Future<void> _toggleCoreLogs(bool enable) async {
     setState(() => _coreLogsEnabled = enable);
-    await _vpn.setCoreLogsEnabled(enable);
+    // §189 — через NativePrefs (JSON-истина + зеркало в native).
+    await SettingsStorage.setNativeBool(
+        NativePrefsKeys.coreLogsEnabled, enable);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -615,7 +619,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       padding: _tabPadding(context),
       onAutoStartChanged: (val) {
         setState(() => _autoStart = val);
-        unawaited(_vpn.setAutoStart(val));
+        // §189 — через NativePrefs (JSON-истина + зеркало в native).
+        unawaited(
+            SettingsStorage.setNativeBool(NativePrefsKeys.autoStart, val));
       },
       onAutoCheckUpdatesChanged: (val) {
         setState(() => _autoCheckUpdates = val);

@@ -92,7 +92,9 @@ class LxBoxTileService : TileService() {
     }
 
     private fun connectOrPromptConsent() {
-        val needConsent = VpnService.prepare(applicationContext) != null
+        // §192 — proxy-режим без TUN: prepare не нужен (и зря рвёт чужой VPN).
+        val needConsent = BootReceiver.hasTun(applicationContext) &&
+            VpnService.prepare(applicationContext) != null
         if (!needConsent) {
             BoxVpnService.start(applicationContext)
             return

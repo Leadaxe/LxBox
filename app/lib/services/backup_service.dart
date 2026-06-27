@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:package_info_plus/package_info_plus.dart';
 
-import '../models/background_mode.dart';
 import '../models/server_list.dart';
 import '../vpn/box_vpn_client.dart';
 import 'app_log.dart';
@@ -219,9 +218,11 @@ class BackupApplyResult {
 class BackupService {
   const BackupService({BoxVpnClient? vpn}) : _vpn = vpn;
 
+  // §189 — _vpn больше не используется напрямую (vpn_settings ходят через
+  // SettingsStorage.getNativePrefs/setNativeBool). Поле сохранено для
+  // обратной совместимости конструктора (тесты могут передавать мок).
+  // ignore: unused_field
   final BoxVpnClient? _vpn;
-
-  BoxVpnClient get _client => _vpn ?? BoxVpnClient();
 
   /// Build JSON-string для export'а согласно [include]'у.
   Future<String> buildExport({required Set<BackupCategory> include}) async {
@@ -388,50 +389,16 @@ class BackupService {
     );
   }
 
-  Future<Map<String, dynamic>> _readVpnSettings() async {
-    final c = _client;
-    final mode = await c.getBackgroundMode();
-    return {
-      'auto_start': await c.getAutoStart(),
-      'keep_on_exit': await c.getKeepOnExit(),
-      'background_mode': mode.wireValue,
-      'core_logs_enabled': await c.getCoreLogsEnabled(),
-      'allow_bypass': await c.getAllowBypass(),
-    };
-  }
+  // §189 — делегируем единой сериализации NativePrefs (состав/дефолты/типы в
+  // одном месте, см. settings_storage/native_prefs.dart). Wire-формат бэкапа
+  // НЕ меняется — старые бэкапы импортируются.
+  Future<Map<String, dynamic>> _readVpnSettings() =>
+      SettingsStorage.exportNativePrefsBackup();
 
   Future<int> _applyVpnSettings(
-      Map<String, dynamic> data, List<String> errors) async {
-    final c = _client;
-    var n = 0;
-    Future<void> tryApply(String key, Future<void> Function() fn) async {
-      if (!data.containsKey(key)) return;
-      try {
-        await fn();
-        n++;
-      } catch (e) {
-        errors.add('vpn_settings.$key: $e');
-      }
-    }
-
-    await tryApply('auto_start', () async {
-      await c.setAutoStart(data['auto_start'] == true);
-    });
-    await tryApply('keep_on_exit', () async {
-      await c.setKeepOnExit(data['keep_on_exit'] == true);
-    });
-    await tryApply('background_mode', () async {
-      final raw = data['background_mode']?.toString();
-      await c.setBackgroundMode(BackgroundMode.fromNative(raw));
-    });
-    await tryApply('core_logs_enabled', () async {
-      await c.setCoreLogsEnabled(data['core_logs_enabled'] == true);
-    });
-    await tryApply('allow_bypass', () async {
-      await c.setAllowBypass(data['allow_bypass'] == true);
-    });
-    return n;
-  }
+          Map<String, dynamic> data, List<String> errors) =>
+      SettingsStorage.applyNativePrefsBackup(data,
+          onError: (key, e) => errors.add('vpn_settings.$key: $e'));
 
   /// Suggested filename для export'а: `lxbox-backup-v{appver}-{YYYYMMDD-HHMM}.json`.
   static Future<String> suggestedFilename() async {

@@ -735,13 +735,45 @@ app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.d
 └── corelog.txt             # §043 — JSON-lines, 200 строк / 64KB ring
 
 SharedPreferences (Android):
-├── app_theme_mode, haptic_enabled       # Flutter UI prefs
+├── app_theme_mode                       # Flutter UI prefs (haptic_enabled → vars, §159)
 └── boxvpn_boot.{auto_start_vpn, keep_vpn_on_exit, background_mode,
-                 core_logs_enabled}      # §043: core_logs_enabled здесь
-                                         # потому что читается в
-                                         # BoxApplication.initialize() ДО
-                                         # Flutter engine'а
+                 core_logs_enabled, allow_bypass, auto_redirect,
+                 has_tun}                # §189 — ЗЕРКАЛО JSON-секции native_prefs
+                                         # (рабочая копия в оперативке). Истина —
+                                         # lxbox_settings.json. has_tun (§192) —
+                                         # вычисляемое из vpn_mode, только тут.
 ```
+
+##### Три уровня хранения native-prefs (§189 / §192)
+
+Шесть Android-настроек (`auto_start`/`keep_on_exit`/`background_mode`/
+`core_logs_enabled`/`allow_bypass`/`auto_redirect`) живут на трёх уровнях:
+
+| Уровень | Где | Роль |
+|---|---|---|
+| **диск / истина** | `lxbox_settings.json` → секция `native_prefs` | источник правды; backup; переживает всё |
+| **оперативка** | native `SharedPreferences` `boxvpn_boot.*` | рабочая копия для **Dart-less моментов** — когда Flutter-движка нет |
+| **in-memory** | `SettingsStorage._cache` | lazy-loaded кэш JSON в Dart-процессе |
+
+**Зачем нужна native-копия:** часть кода исполняется когда Flutter-движок
+недоступен и JSON прочитать нечем — `BOOT_COMPLETED` (`BootReceiver` авто-старт),
+swipe `onTaskRemoved` (keep-on-exit решение), `openTun`/`establish` (allow_bypass,
+per-app). Эти точки читают native-копию **синхронно**.
+
+**Поток write-through + sync на старте:** любой `SettingsStorage.setNativeBool` /
+`setNativeBackgroundMode` пишет JSON (первично) → зеркалит в native (method-channel);
+native **никогда** не пишет JSON. На старте (`bootstrapAndSyncNativePrefs()` из
+`main.dart`): нет секции → bootstrap (native⇒JSON seed, единственный native⇒JSON);
+есть секция → sync (JSON⇒native, диск перезаливает оперативку — расхождение само
+чинится). Все писатели (UI, импорт `backup_service`, Debug API) обязаны идти через
+этот слой — прямые native-записи эфемерны (sync откатит). Реализация —
+[`lib/services/settings_storage/native_prefs.dart`](../app/lib/services/settings_storage/native_prefs.dart).
+
+**`has_tun` (§192)** — седьмой native-ключ, **производное** от `vpn_mode` (§119):
+`vpn`/`vpn_proxy` → `true`, `proxy` → `false`. Зеркалится при смене режима и на
+старте; гейтит `VpnService.prepare()` (в proxy-режиме `prepare` не зовётся — он зря
+забрал бы VPN-слот и отозвал чужой активный VPN). Вычисляемое, потому **не** в
+backup-блоке и **не** в JSON-секции `native_prefs` — живёт только в `boxvpn_boot.has_tun`.
 
 #### Builder (template + user-state → final config)
 
@@ -885,7 +917,7 @@ HomeController/UI                    Sing-box (Go goroutines)
 |---|---|---|
 | Config | `saveConfig` / `getConfig` | `getConfig` fallback `'{}'` чтобы builder мог parse без null-checks |
 | VPN lifecycle | `startVPN` / `stopVPN` / `reloadVPN` / `resetNetwork` / `getVpnStatus` / `getCoreVersion` / `quitApp` | `stopVPN` блокирующий native до `setStatus(Stopped)` — позволяет `await stop; await start` без race |
-| Settings (boot prefs / native toggles) | auto_start, keep_on_exit, core_logs_enabled, allow_bypass, background_mode | Storage native в `SharedPreferences boxvpn_boot.*`, не в `lxbox_settings.json` |
+| Settings (boot prefs / native toggles) | auto_start, keep_on_exit, core_logs_enabled, allow_bypass, auto_redirect, background_mode (+ has_tun §192) | §189 — native `SharedPreferences boxvpn_boot.*` теперь **зеркало** JSON-секции `native_prefs`; источник истины = `lxbox_settings.json` (write-through + sync на старте). Все писатели идут через `SettingsStorage.setNativeBool`/`setNativeBackgroundMode`. |
 | Per-app routing | `getInstalledApps` / `getAppIcon` / `getAppInfo` | Icons lazy — `getInstalledApps` без icons (тяжело), `getAppIcon` per-package по запросу |
 | System helpers | `isIgnoringBatteryOptimizations` / `open*Settings` / `*NotificationPermission` / `*NearbyWifiPermission` / `showToast` | Permission `request*` — async, UI делает re-check через паренный `check*` |
 | Quick Settings | `requestAddTile` | API 33+ |
@@ -1144,7 +1176,7 @@ HomeController.init()
 
 #### Keep-on-exit настройка
 
-Toggle в **VPN Settings → System** (§052; до §052 жил в App Settings → Background). Персистится в native SharedPreferences (`boxvpn_boot.keep_vpn_on_exit`), передаётся через `setKeepOnExit(bool)` — имя исторически от BootReceiver, но флаг используется и для keep-on-exit. Также экспонирован в Debug API: `GET|PUT /settings/vpn/keep_on_exit`.
+Toggle в **Mode-вкладке** (§188; до §188 — VPN Settings → System (§052); до §052 — App Settings → Background). Персистится через §189-слой: пишется в JSON-секцию `native_prefs.keep_on_exit` (источник истины), зеркалится в native `SharedPreferences` (`boxvpn_boot.keep_vpn_on_exit`) через `setKeepOnExit(bool)` — имя исторически от BootReceiver, но флаг используется и для keep-on-exit. Default ON (§188). Также экспонирован в Debug API: `GET|PUT /settings/vpn/keep_on_exit`.
 
 При значении `true` и killе Flutter-процесса система не обязана останавливать foreground-service, а на `onTaskRemoved` service сам стоп не делает. Значение `false` → service слушает task-removed и вызывает `doStop()`.
 
@@ -1239,7 +1271,8 @@ HomeScreen
   │   ├─ Routing → RoutingScreen
   │   ├─ DNS Settings → DnsSettingsScreen
   │   ├─ VPN Settings → SettingsScreen — 2 tabs (§052):
-  │   │       • System — Allow VPN bypass · Keep VPN on exit · Tunnel sleep mode (`BackgroundMode`)
+  │   │       • System — Tunnel sleep mode (`BackgroundMode`)
+  │   │                 (§188 — «Allow VPN bypass» и «Keep VPN on exit» переехали в Mode-вкладку)
   │   │       • Core   — sing-box engine vars (`chapter: core`, mtu / log_level / dns_final / …)
   │   ├─ App Settings → AppSettingsScreen — 2 tabs (§052 Phase 2):
   │   │       • General      — theme, autostart, haptic
@@ -1291,7 +1324,7 @@ HomeScreen
 | **Two persist patterns: Lazy vs Eager** (v1.9.0, §076) | Editing screens с toggle-flood UX (`tun_apps_tab`, `routing_screen`, `dns_settings_screen`, `settings_screen` Core) используют **lazy** — mutations in-memory + `_markDirty` (sync `configDirty=true`), flush on `dispose()` + `paused`, rebuild lazy на возврат к home. Discrete-event screens (`subscriptions`, `app_settings`, `custom_rule_edit`, `node_filter`) — **eager** immediate-write + snackbar. 1 settings + 1 config write per editing session вместо до 10 (per-toggle eager). |
 | **Global `HomeReturnObserver`** (v1.9.0, §076) | Universal `NavigatorObserver` в `MaterialApp.navigatorObservers`. Срабатывает при `previousRoute.isFirst == true` (home стал top). Покрывает все navigation пути — drawer, long-press, system back, swipe, programmatic pop, cross-nav. Раньше rebuild trigger был в `_pushRoute.then()` callback'е — терялся при опен screen через non-drawer пути. |
 | **mtime-based bootstrap** (v1.9.0, §076; §113) | `ConfigDirtyCheck.isDirty()` сравнивает `lxbox_settings.json.mtime > singbox_config.json.mtime` (**секундная резолюция**, §113) на launch. Восстанавливает `configDirty` после kill mid-edit без persist'а флага. `subController.init` set'ит флаг, `home._initSubsAndAutoUpdate` триггерит тихий bootstrap rebuild. **§113**: после §107 порядок дисковых записей инвертирован (конфиг пишется на возврате к home, настройки — позже на `dispose`), из-за чего `settings>config` стало нормой → ложный «config changed» после kill. Фикс: (а) `configDirty` владеется `SettingsStorage` — config-значимые сейверы (typed + config-var allowlist, **не** `saveServerLists`) сами поднимают флаг (`SubscriptionController.configDirty` — делегат); (б) `_save()` при снятом флаге выравнивает mtime конфига к mtime настроек (`ConfigDirtyCheck.touchConfig`). |
-| **`markConfigChangedNeedRestart` external mark** (v1.9.0, §076) | `HomeController` method для настроек применяемых вне config pipeline. Native VPN System toggles (allow_bypass / keep_on_exit / background_mode) после `_vpn.setX` вызывают этот метод → home banner вместо локального snackbar'а. Gated на `tunnelUp`. |
+| **`markConfigChangedNeedRestart` external mark** (v1.9.0, §076) | `HomeController` method для настроек применяемых вне config pipeline. Native VPN-тогглы (allow_bypass / keep_on_exit / background_mode) — с §189 пишутся write-through через `SettingsStorage.setNativeBool`/`setNativeBackgroundMode` (JSON-истина + зеркало в native) — вызывают этот метод → home banner вместо локального snackbar'а. Gated на `tunnelUp`. |
 | **Cohesion over line-count + `part`/`mixin` декомпозиция** (§089) | Монстры (home_screen 2370, home_controller 1089, …) раздроблены не по числу строк, а по ответственности: тонкий экран + `<screen>/widgets/` + presenter/VM; контроллер + `part`-mixin'ы (та же библиотека → library-private доступ сохранён, поведение bit-identical). ~600 строк легитимны для cohesive-файла; крупные исключения задокументированы (см. [Обзор](#принцип-cohesion-over-line-count-089)). |
 | **`ConfigNode` структурная мета вместо reverse-parse тега** (§091, реализовано) | `config-tag == нода в Clash`; протокол/detour достаются из конфига по тегу без reverse-map. Один `ParsedConfig` (parsed раз на `configRaw`, поле `HomeState.configModel`) заменил `ConfigCache.protoByTag/detourTags` + `ConfigIntrospection` + reverse-map `subscriptionsOfTag` (теперь prefix-фильтр, `home/subscription_lookup.dart`). Класс багов §077/§079/§080 устранён структурно. §102/§103 — eager `transportLabel`/`securityLabel` для subtitle и variant-фильтра. +14 тестов. |
 

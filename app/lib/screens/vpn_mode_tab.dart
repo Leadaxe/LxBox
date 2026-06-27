@@ -23,7 +23,8 @@ import 'package:flutter/services.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/parser_config.dart' show WizardTemplate, WizardVar;
-import '../services/settings_storage.dart' show SettingsStorage, VpnModeConfig;
+import '../services/settings_storage.dart'
+    show SettingsStorage, VpnModeConfig, NativePrefsKeys;
 import '../services/subscription/subscription_identity.dart'
     show generateProxyPassword;
 import 'lazy_persist_mixin.dart';
@@ -52,6 +53,13 @@ class _VpnModeTabState extends State<VpnModeTab>
   VpnModeConfig _cfg = const VpnModeConfig.defaults();
   bool _loading = true;
   bool _showPassword = false;
+
+  // §188 — TUN-зависимые native-тумблеры (keep-alive / allow-bypass) переехали
+  // сюда из App Settings: осмысленны только при наличии TUN (`hasTun`). Хранятся
+  // в native SharedPrefs (BoxVpnClient get/set), НЕ в vpn_mode storage.
+  bool _keepOnExit = true; // §188 — дефолт ON
+  bool _allowBypass = false;
+  bool _tunTogglesLoaded = false;
 
   late final TextEditingController _portCtl;
   late final TextEditingController _userCtl;
@@ -100,6 +108,12 @@ class _VpnModeTabState extends State<VpnModeTab>
 
   Future<void> _load() async {
     final cfg = await SettingsStorage.getVpnMode();
+    // §188/§189 — native-тумблеры (keep-alive / allow-bypass) читаем из
+    // JSON-зеркала native_prefs (источник истины), не method-channel.
+    final keep =
+        await SettingsStorage.getNativeBool(NativePrefsKeys.keepOnExit);
+    final bypass =
+        await SettingsStorage.getNativeBool(NativePrefsKeys.allowBypass);
     if (!mounted) return;
     setState(() {
       _cfg = cfg;
@@ -107,8 +121,28 @@ class _VpnModeTabState extends State<VpnModeTab>
       _userCtl.text = cfg.proxyUsername;
       _passCtl.text = cfg.proxyPassword;
       _listenCtl.text = cfg.proxyListen;
+      _keepOnExit = keep;
+      _allowBypass = bypass;
+      _tunTogglesLoaded = true;
       _loading = false;
     });
+  }
+
+  // §188/§189 — keep-alive: пишем через NativePrefs (JSON-истина + зеркало в
+  // native) + restart-banner. НЕ напрямую в native (иначе sync откатил бы).
+  void _toggleKeepOnExit(bool val) {
+    setState(() => _keepOnExit = val);
+    unawaited(
+        SettingsStorage.setNativeBool(NativePrefsKeys.keepOnExit, val));
+    widget.homeController.markConfigChangedNeedRestart();
+  }
+
+  // §188/§189 — allow-bypass: через NativePrefs + restart-banner.
+  void _toggleAllowBypass(bool val) {
+    setState(() => _allowBypass = val);
+    unawaited(
+        SettingsStorage.setNativeBool(NativePrefsKeys.allowBypass, val));
+    widget.homeController.markConfigChangedNeedRestart();
   }
 
   @override
@@ -133,6 +167,9 @@ class _VpnModeTabState extends State<VpnModeTab>
       _passCtl.text = pass;
     }
     setState(() => _cfg = next);
+    // §192 — зеркалим has_tun в native: гейтит VpnService.prepare() (proxy →
+    // не звать prepare → чужой VPN не отзывается). Производное от mode.
+    unawaited(SettingsStorage.setNativeHasTun(next.hasTun));
     _commit();
   }
 
@@ -333,6 +370,37 @@ class _VpnModeTabState extends State<VpnModeTab>
           _modeDescription(_cfg.mode),
           style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
         ),
+
+        // ─── TUNNEL OPTIONS (§188): keep-alive + allow-bypass ───
+        // Видны только при наличии TUN (vpn / vpn_proxy). В proxy-режиме оба
+        // бессмысленны (нет VpnService.establish / Builder) → скрыты.
+        if (_cfg.hasTun) ...[
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
+          Text('Tunnel options', style: tt.titleMedium),
+          const SizedBox(height: 4),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Keep VPN on exit'),
+            subtitle: const Text('VPN stays active when app is closed'),
+            secondary: const Icon(Icons.exit_to_app),
+            value: _keepOnExit,
+            onChanged: _tunTogglesLoaded ? _toggleKeepOnExit : null,
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Allow VPN bypass'),
+            subtitle: Text(
+              _allowBypass
+                  ? 'Apps may use ConnectivityManager to bypass tun.'
+                  : 'Strict tunnel — all traffic goes through tun.',
+            ),
+            secondary: const Icon(Icons.alt_route),
+            value: _allowBypass,
+            onChanged: _tunTogglesLoaded ? _toggleAllowBypass : null,
+          ),
+        ],
 
         if (_cfg.hasMixed) ...[
           const SizedBox(height: 16),
