@@ -206,6 +206,13 @@ void main() {
       expect((await SettingsStorage.getChannels()).length, 4);
     });
 
+    test('§198 — addChannel без label → дефолт с кружком (VPN ④)', () async {
+      // vpn-1/2/3 заняты → vpn-4 → «VPN ④».
+      final ch = await SettingsStorage.addChannel();
+      expect(ch.tag, 'vpn-4');
+      expect(ch.label, 'VPN ④');
+    });
+
     test('addChannel — лимит 10 throws', () async {
       for (var i = 4; i <= 10; i++) {
         await SettingsStorage.addChannel();

@@ -34,7 +34,9 @@ Future<Channel> _addChannel({String? label}) async {
   final used = channels.map((c) => c.tag).toSet();
   final tag = [for (var i = 2; i <= kMaxChannels; i++) 'vpn-$i']
       .firstWhere((t) => !used.contains(t));
-  final ch = Channel(tag: tag, label: label ?? tag, enabled: true);
+  // §198 — дефолтный label с цифрой-в-кружке по номеру (VPN ②…VPN ⑩).
+  final defaultLabel = defaultChannelLabel(channelNumberOf(tag) ?? 0);
+  final ch = Channel(tag: tag, label: label ?? defaultLabel, enabled: true);
   channels.add(ch);
   await _setChannels(channels);
   return ch;

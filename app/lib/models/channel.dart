@@ -16,6 +16,20 @@ import 'parser_config.dart' show PresetGroup;
 /// Максимум каналов (Решение 5). vpn-1 неудаляем, N∈1..10.
 const int kMaxChannels = 10;
 
+/// §198 — дефолтный label канала по номеру: «VPN ①»…«VPN ⑩». Кружок-цифра —
+/// Unicode «Enclosed Alphanumerics» (① = U+2460, идут подряд 1..10). N вне
+/// 1..10 → без кружка («VPN N»).
+String defaultChannelLabel(int n) {
+  if (n < 1 || n > 10) return 'VPN $n';
+  return 'VPN ${String.fromCharCode(0x2460 + n - 1)}';
+}
+
+/// Номер канала из tag 'vpn-N' (для дефолтного label). null если не парсится.
+int? channelNumberOf(String tag) {
+  final m = RegExp(r'^vpn-(\d+)$').firstMatch(tag);
+  return m == null ? null : int.tryParse(m.group(1)!);
+}
+
 /// uint16 верхняя граница для `tolerance` (§161 — вне диапазона роняет ядро).
 const int _kToleranceMax = 65535;
 

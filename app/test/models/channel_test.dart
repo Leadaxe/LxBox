@@ -73,6 +73,27 @@ void main() {
     });
   });
 
+  group('§198 — defaultChannelLabel (цифра в кружке)', () {
+    test('1..10 → VPN ①..VPN ⑩', () {
+      expect(defaultChannelLabel(1), 'VPN ①');
+      expect(defaultChannelLabel(2), 'VPN ②');
+      expect(defaultChannelLabel(5), 'VPN ⑤');
+      expect(defaultChannelLabel(10), 'VPN ⑩');
+    });
+
+    test('вне 1..10 → без кружка', () {
+      expect(defaultChannelLabel(0), 'VPN 0');
+      expect(defaultChannelLabel(11), 'VPN 11');
+    });
+
+    test('channelNumberOf парсит vpn-N', () {
+      expect(channelNumberOf('vpn-1'), 1);
+      expect(channelNumberOf('vpn-7'), 7);
+      expect(channelNumberOf('vpn-1-auto'), isNull);
+      expect(channelNumberOf('direct-out'), isNull);
+    });
+  });
+
   group('Channel computed', () {
     test('autoTag производный, не из storage', () {
       const c = Channel(tag: 'vpn-4', label: 'x');
