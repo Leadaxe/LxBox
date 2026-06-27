@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../controllers/home_controller.dart';
-import '../config/consts.dart';
 import '../controllers/subscription_controller.dart';
+import '../models/channel.dart';
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../services/rule_set_downloader.dart';
@@ -13,6 +13,7 @@ import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
 import '../widgets/outbound_picker.dart';
 import '../widgets/template_var_list.dart';
+import 'channel_edit_screen.dart';
 import 'custom_rule_edit_screen.dart';
 import 'lazy_persist_mixin.dart';
 import 'routing_screen/routing_screen_helpers.dart';
@@ -49,7 +50,7 @@ class _RoutingScreenState extends State<RoutingScreen>
   @override
   WizardTemplate? _template;
   @override
-  final _enabledGroups = <String>{};
+  final _channels = <Channel>[]; // §125 — source-of-truth каналов (storage)
   @override
   String _routeFinal = '';
   @override
@@ -119,18 +120,18 @@ class _RoutingScreenState extends State<RoutingScreen>
   bool _presetNeedsDownload(CustomRulePreset rule, SelectableRule preset) =>
       RoutingHelpers.presetNeedsDownload(rule, preset, _srsCached);
 
-  /// Returns the list of available outbound options depending on enabled groups.
+  /// §125 — доступные outbound-опции из включённых каналов (storage). vpn-1
+  /// всегда присутствует (required-инвариант). Глобальный ✨auto убран —
+  /// каждый канал имеет свой `<tag>-auto`, который опцией роутинга не выставляем
+  /// (это внутренняя деталь канала).
   List<RoutingOutboundOption> _outboundOptions() {
     final opts = <RoutingOutboundOption>[
       const RoutingOutboundOption(label: 'direct', tag: 'direct-out'),
-      const RoutingOutboundOption(label: 'auto', tag: kAutoOutboundTag),
     ];
-    final template = _template;
-    if (template != null) {
-      for (final g in template.presetGroups) {
-        if (_enabledGroups.contains(g.tag) && g.tag != kAutoOutboundTag) {
-          opts.add(RoutingOutboundOption(label: g.label.isNotEmpty ? g.label : g.tag, tag: g.tag));
-        }
+    for (final c in _channels) {
+      if (c.enabled || c.isRequired) {
+        opts.add(RoutingOutboundOption(
+            label: c.label.isNotEmpty ? c.label : c.tag, tag: c.tag));
       }
     }
     return opts;
@@ -166,11 +167,14 @@ class _RoutingScreenState extends State<RoutingScreen>
         ),
         body: TabBarView(
           children: [
-            // ─── Channels: proxy groups + default fallback + Auto tuning ───
+            // ─── Channels: каналы (CRUD) + default fallback + Auto tuning ───
             RoutingChannelsTab(
               bottomPad: bottomPad,
-              groupTiles:
-                  template.presetGroups.map(_buildGroupTile).toList(),
+              groupTiles: _channels.map(_buildChannelTile).toList(),
+              channelCount: _channels.length,
+              maxChannels: kMaxChannels,
+              onAddChannel:
+                  _channels.length >= kMaxChannels ? null : _addChannel,
               routeFinalTile: _buildRouteFinalTile(),
               varSections: _buildRoutingVarSections(template),
             ),
@@ -203,21 +207,88 @@ class _RoutingScreenState extends State<RoutingScreen>
     );
   }
 
-  Widget _buildGroupTile(PresetGroup group) {
-    return RoutingGroupTile(
-      group: group,
-      enabled: _enabledGroups.contains(group.tag),
-      onChanged: (val) {
+  Widget _buildChannelTile(Channel channel) {
+    return RoutingChannelTile(
+      channel: channel,
+      nodeCount: _nodeCountFor(channel),
+      onToggle: (val) {
         setState(() {
-          if (val) {
-            _enabledGroups.add(group.tag);
-          } else {
-            _enabledGroups.remove(group.tag);
-          }
+          final i = _channels.indexWhere((c) => c.tag == channel.tag);
+          if (i >= 0) _channels[i] = _channels[i].copyWith(enabled: val);
           _markDirty();
         });
       },
+      onTap: () => _editChannel(channel),
     );
+  }
+
+  /// Кол-во нод канала после regex-фильтра (для subtitle). -1 = снимок нод
+  /// недоступен (туннель не поднят).
+  int _nodeCountFor(Channel channel) {
+    final all = _allNodeTags();
+    if (all.isEmpty) return -1;
+    if (channel.nodeFilter.isEmpty) return all.length;
+    try {
+      final re = RegExp(channel.nodeFilter);
+      return all.where(re.hasMatch).length;
+    } catch (_) {
+      return all.length; // невалидный regex → все ноды (как в билдере)
+    }
+  }
+
+  /// Снимок всех node-тегов подписки из ccGroups (union по группам, без самих
+  /// групп). Для live-превью фильтров в редакторе. Пусто = туннель не поднят.
+  List<String> _allNodeTags() {
+    final groupTags =
+        widget.homeController.state.ccGroups.map((g) => g.tag).toSet();
+    final seen = <String>{};
+    final out = <String>[];
+    for (final g in widget.homeController.state.ccGroups) {
+      for (final item in g.items) {
+        if (groupTags.contains(item.tag)) continue; // это группа, не нода
+        if (seen.add(item.tag)) out.add(item.tag);
+      }
+    }
+    return out;
+  }
+
+  Future<void> _addChannel() async {
+    final created = await SettingsStorage.addChannel();
+    if (!mounted) return;
+    setState(() => _channels.add(created));
+    _markDirty();
+    _editChannel(created);
+  }
+
+  Future<void> _editChannel(Channel channel) async {
+    final result = await openChannelEditor(
+      context,
+      initial: channel,
+      canDelete: !channel.isRequired,
+      allNodeTags: _allNodeTags(),
+    );
+    if (result == null || !mounted) return;
+    if (result.wasDeleted) {
+      // deleteChannel в storage уже перевёл dangling-ссылки на vpn-1.
+      await SettingsStorage.deleteChannel(channel.tag);
+      if (!mounted) return;
+      setState(() {
+        _channels.removeWhere((c) => c.tag == channel.tag);
+        if (_routeFinal == channel.tag) _routeFinal = 'vpn-1';
+      });
+      _markDirty();
+    } else if (result.saved != null) {
+      setState(() {
+        final i = _channels.indexWhere((c) => c.tag == channel.tag);
+        if (i >= 0) _channels[i] = result.saved!;
+      });
+      _markDirty();
+    }
+    // §125 — обновить tag→label кеш для home-dropdown (label мог измениться,
+    // канал мог удалиться). stageChanges уже застейджила channels; здесь только
+    // освежаем labels в HomeState. Persist канала — flushToDisk на dispose.
+    await SettingsStorage.setChannels(_channels, flush: true);
+    await widget.homeController.refreshChannelLabels();
   }
 
   /// Каталог пресетов (read-only). Tap на "Copy" → клонирует в `_customRules`

@@ -77,7 +77,11 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
       final config = jsonDecode(configRaw) as Map<String, dynamic>;
       final outbounds = config['outbounds'] as List<dynamic>? ?? [];
 
-      // Collect member tags for vpn-1 (all nodes) and auto-proxy-out (urltest subset)
+      // §125 — «группа» определяется наличием `outbounds[]` (selector/urltest),
+      // а не хардкод-списком тегов: каналов теперь до 10 + их `-auto`-двойники.
+      // Собираем member-теги vpn-1 (полный список нод) и любого urltest-двойника
+      // (fallback, если vpn-1 пуст). Глобального ✨auto больше нет.
+      final groupTags = <String>{'direct-out'};
       final proxyOutTags = <String>{};
       final autoProxyTags = <String>{};
       for (final ob in outbounds) {
@@ -85,23 +89,21 @@ class _NodeFilterScreenState extends State<NodeFilterScreen> {
         final tag = ob['tag']?.toString() ?? '';
         final members = ob['outbounds'] as List<dynamic>?;
         if (members == null) continue;
+        groupTags.add(tag); // это группа (есть outbounds[])
         if (tag == 'vpn-1') {
           for (final m in members) {
             proxyOutTags.add(m.toString());
           }
-        } else if (tag == kAutoOutboundTag) {
+        } else if (ob['type'] == 'urltest') {
           for (final m in members) {
             autoProxyTags.add(m.toString());
           }
         }
       }
 
-      // Use vpn-1 as full list; fall back to auto-proxy-out if vpn-1 empty
+      // Use vpn-1 as full list; fall back to a urltest twin if vpn-1 empty
       final allTags = proxyOutTags.isNotEmpty ? proxyOutTags : autoProxyTags;
       if (allTags.isEmpty) return _ParseResult([], {});
-
-      // Remove group references — keep only real nodes
-      final groupTags = <String>{'vpn-1', 'vpn-2', 'vpn-3', 'vpn-4', kAutoOutboundTag, 'direct-out'};
 
       final nodes = <_NodeInfo>[];
       for (final ob in outbounds) {

@@ -316,8 +316,23 @@ Future<BuildResult> buildConfig({
   route['rules'] = ruleSets.getRules();
   config['route'] = route;
 
+  // §125 — деградация dangling route_final → vpn-1. Ссылка на удалённый канал
+  // или legacy ✨auto (которого больше нет, Решение 2/3) схлопывается в vpn-1
+  // (неудаляем → всегда валидная мишень). Валидные мишени: включённые каналы +
+  // их auto-двойники + direct-out.
   if (settings.routeFinal.isNotEmpty) {
-    route['final'] = settings.routeFinal;
+    final validFinals = <String>{
+      'direct-out',
+      for (final c in channels)
+        if (c.enabled || c.isRequired) ...[c.tag, c.autoTag],
+    };
+    var finalTag = settings.routeFinal;
+    if (!validFinals.contains(finalTag)) {
+      emitWarnings.add(
+          'Route final "$finalTag" не существует — переключено на vpn-1.');
+      finalTag = 'vpn-1';
+    }
+    route['final'] = finalTag;
   }
 
   applyTlsFragment(config, vars);

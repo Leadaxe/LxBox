@@ -9,7 +9,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   Set<String> get _srsCached;
   Set<String> get _srsDownloading;
   List<CustomRule> get _customRules;
-  Set<String> get _enabledGroups;
+  List<Channel> get _channels; // §125
   Map<String, String> get _routingVarValues;
   set _template(WizardTemplate? value);
   String get _routeFinal;
@@ -26,18 +26,19 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
 
   Future<void> _load() async {
     final template = await TemplateLoader.load();
-    final storedGroups = await SettingsStorage.getEnabledGroups();
     final storedFinal = await SettingsStorage.getRouteFinal();
     final storedVars = await SettingsStorage.getAllVars();
 
-    if (storedGroups.isEmpty) {
-      for (final g in template.presetGroups) {
-        if (g.defaultEnabled) _enabledGroups.add(g.tag);
-      }
+    // §125 — каналы из storage. Миграция enabled_groups→channels уже отработала
+    // в main() init; на пустом списке (старт без миграции в тестах) синтезируем
+    // из template, чтобы экран не был пустым.
+    final stored = await SettingsStorage.getChannels();
+    if (stored.isEmpty) {
+      await SettingsStorage.migrateChannelsIfNeeded(template.presetGroups);
+      _channels.addAll(await SettingsStorage.getChannels());
     } else {
-      _enabledGroups.addAll(storedGroups);
+      _channels.addAll(stored);
     }
-    _enabledGroups.add('vpn-1'); // required
 
     _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'vpn-1';
     _customRules.addAll(await SettingsStorage.getCustomRules());
@@ -73,7 +74,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   /// flush — mixin'ом (flushToDisk) на dispose/paused.
   @override
   Future<void> stageChanges() async {
-    await SettingsStorage.saveEnabledGroups(_enabledGroups, flush: false);
+    await SettingsStorage.setChannels(_channels, flush: false); // §125
     await SettingsStorage.saveRouteFinal(_routeFinal, flush: false);
     await SettingsStorage.saveCustomRules(_customRules, flush: false);
     // §076: configDirty уже true (set синхронно в markDirty). НЕ

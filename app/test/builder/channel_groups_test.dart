@@ -250,4 +250,60 @@ void main() {
       expect(outs.any((o) => o['tag'] == kAutoOutboundTag), false);
     });
   });
+
+  group('F4.5 — деградация dangling route_final → vpn-1', () {
+    Future<Map<String, dynamic>> buildWith(
+        List<Channel> channels, String routeFinal) async {
+      final r = await buildConfig(
+        lists: [await nodes()],
+        template: template(),
+        settings: BuildSettings(channels: channels, routeFinal: routeFinal),
+      );
+      expect(r.validation.isOk, true, reason: r.validation.issues.join('\n'));
+      return r.config;
+    }
+
+    test('route_final на удалённый канал → vpn-1', () async {
+      final cfg = await buildWith(
+        [const Channel(tag: 'vpn-1', label: 'X')],
+        'vpn-7', // не существует
+      );
+      expect((cfg['route'] as Map)['final'], 'vpn-1');
+    });
+
+    test('legacy ✨auto-ссылка → vpn-1', () async {
+      final cfg = await buildWith(
+        [const Channel(tag: 'vpn-1', label: 'X')],
+        kAutoOutboundTag,
+      );
+      expect((cfg['route'] as Map)['final'], 'vpn-1');
+    });
+
+    test('валидный route_final (свой канал) не трогается', () async {
+      final cfg = await buildWith(
+        [
+          const Channel(tag: 'vpn-1', label: 'X'),
+          const Channel(tag: 'vpn-2', label: 'Y'),
+        ],
+        'vpn-2',
+      );
+      expect((cfg['route'] as Map)['final'], 'vpn-2');
+    });
+
+    test('route_final на свой auto-двойник валиден', () async {
+      final cfg = await buildWith(
+        [const Channel(tag: 'vpn-1', label: 'X', auto: ChannelAuto())],
+        'vpn-1-auto',
+      );
+      expect((cfg['route'] as Map)['final'], 'vpn-1-auto');
+    });
+
+    test('direct-out как route_final валиден', () async {
+      final cfg = await buildWith(
+        [const Channel(tag: 'vpn-1', label: 'X')],
+        'direct-out',
+      );
+      expect((cfg['route'] as Map)['final'], 'direct-out');
+    });
+  });
 }

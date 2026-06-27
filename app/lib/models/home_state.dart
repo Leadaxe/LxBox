@@ -44,6 +44,7 @@ class HomeState {
     this.busy = false,
     this.ccGroups = const <CcGroup>[],
     this.groups = const <String>[],
+    this.groupLabels = const <String, String>{},
     this.selectedGroup,
     this.nodes = const <String>[],
     this.activeInGroup,
@@ -83,6 +84,14 @@ class HomeState {
   /// Источник истины для групп/нод/active-выбора (заменил Clash `proxiesJson`).
   final List<CcGroup> ccGroups;
   final List<String> groups;
+
+  /// §125 — tag→label каналов (из storage `channels[]`). Для отображения
+  /// человекочитаемого имени канала в home-dropdown вместо tag ('vpn-1').
+  final Map<String, String> groupLabels;
+
+  /// Человекочитаемое имя группы: label канала из storage, иначе сам tag.
+  String groupLabelOf(String tag) => groupLabels[tag] ?? tag;
+
   final String? selectedGroup;
   final List<String> nodes;
   final String? activeInGroup;
@@ -226,6 +235,7 @@ class HomeState {
     bool? busy,
     List<CcGroup>? ccGroups,
     List<String>? groups,
+    Map<String, String>? groupLabels,
     Object? selectedGroup = _unset,
     List<String>? nodes,
     Object? activeInGroup = _unset,
@@ -256,6 +266,7 @@ class HomeState {
       busy: busy ?? this.busy,
       ccGroups: ccGroups ?? this.ccGroups,
       groups: groups ?? this.groups,
+      groupLabels: groupLabels ?? this.groupLabels,
       selectedGroup: identical(selectedGroup, _unset)
           ? this.selectedGroup
           : selectedGroup as String?,
