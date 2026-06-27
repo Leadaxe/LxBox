@@ -410,8 +410,12 @@ CRUD требует снять захардкоженные предположе
 - [§048 home-node-filters](../048%20home-node-filters/spec.md) — текущий **глобальный**
   node-filter (`excluded_nodes`, ручные чекбоксы). **Остаётся** как песочница:
   юзер экспериментирует с набором нод глобально, а удачный результат портирует в
-  per-channel regex вручную. Per-channel regex его **не удаляет** — это независимые
+  per-channel regex. Per-channel regex его **не удаляет** — это независимые
   слои (глобальный экспериментальный + per-channel боевой).
+- [§195 save-home-filter-to-channel](../../tasks/195-save-home-filter-to-channel.md) —
+  мост песочница→канал: кнопка 💾 в regex-поле на главной сохраняет текущий regex
+  в `node_filter`/`default_filter` активного канала (раньше — только вручную через
+  редактор канала).
 - [§008 ping and node management](../008%20ping%20and%20node%20management/spec.md) —
   per-group ping (`ping_options.groups[tag]`); образец per-channel storage и место,
   куда сворачивается ping-настройка в редакторе.

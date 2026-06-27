@@ -22,6 +22,7 @@ class FilterPanel extends StatefulWidget {
     required this.availableProtocols,
     required this.availableVariants,
     required this.subOptions,
+    this.onSaveRegex,
   });
 
   final NodeFilterViewModel filter;
@@ -32,6 +33,9 @@ class FilterPanel extends StatefulWidget {
   final List<String> availableVariants;
 
   final List<(String, String)> subOptions;
+
+  /// §195 — сохранить regex в активный канал. `null` → 💾 скрыта.
+  final ValueChanged<String>? onSaveRegex;
 
   @override
   State<FilterPanel> createState() => _FilterPanelState();
@@ -195,6 +199,7 @@ class _FilterPanelState extends State<FilterPanel>
               invert: f.regexInvert,
               onInvertToggle: f.toggleRegexInvert,
               onClear: f.clearRegex,
+              onSaveRegex: widget.onSaveRegex,
             ),
             if (widget.emojis.isNotEmpty) ...[
               const SizedBox(height: 8),

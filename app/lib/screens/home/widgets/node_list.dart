@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../../../config/consts.dart';
 import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
+import '../../../models/channel.dart';
 import '../../../models/home_state.dart';
+import '../../../services/settings_storage.dart';
 import '../../../services/haptic_service.dart';
 import '../../../services/subscription/auto_updater.dart';
 import '../../../widgets/node_row.dart';
@@ -142,6 +144,12 @@ class HomeNodeList extends StatelessWidget {
               availableProtocols: data.availableProtocols,
               availableVariants: data.availableVariants,
               subOptions: data.subOptions,
+              // §195 — 💾 показываем только когда активный канал валиден
+              // (selectedGroup ∈ groups). Иначе некуда сохранять → null скрывает.
+              onSaveRegex: (state.selectedGroup != null &&
+                      state.groups.contains(state.selectedGroup))
+                  ? (pattern) => _saveRegexToChannel(context, pattern)
+                  : null,
             ),
           Expanded(
             child: RefreshIndicator(
@@ -329,5 +337,68 @@ class HomeNodeList extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// §195 — сохранить regex из фильтра на главной в активный канал. Диалог
+  /// выбора: node_filter (что показывать) или default_filter (default-нода).
+  /// После записи — rebuild конфига (паттерн node_filter_screen._apply).
+  Future<void> _saveRegexToChannel(
+      BuildContext context, String pattern) async {
+    final tag = state.selectedGroup;
+    if (tag == null) return;
+    final channels = await SettingsStorage.getChannels();
+    final idx = channels.indexWhere((c) => c.tag == tag);
+    if (idx < 0 || !context.mounted) return;
+    final channel = channels[idx];
+    final label = channel.label.isNotEmpty ? channel.label : channel.tag;
+
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Save to: $label (${channel.tag})'),
+        content: Text('Where to save "$pattern"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'default'),
+            child: const Text('Default'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'node'),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.primary,
+              textStyle: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            child: const Text('Channel filter'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || !context.mounted) return;
+
+    final Channel updated = choice == 'node'
+        ? channel.copyWith(nodeFilter: pattern)
+        : channel.copyWith(defaultFilter: pattern);
+    await SettingsStorage.updateChannel(updated);
+    if (!context.mounted) return;
+
+    // Rebuild конфига — node_filter/default_filter config-significant (§125).
+    final config = await subController.generateConfig();
+    if (config != null && context.mounted) {
+      await controller.saveParsedConfig(config);
+    }
+    if (!context.mounted) return;
+    final where = choice == 'node' ? 'channel filter' : 'default';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Saved as $where for $label')),
+    );
+    if (state.tunnelUp && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Restart VPN to apply changes')),
+      );
+    }
   }
 }
