@@ -234,11 +234,10 @@ void main() {
   group('§200 — warning при пустом фильтре канала', () {
     test('фильтр отсёк все ноды → warning в emitWarnings', () async {
       final w = await warningsFor([
-        const Channel(tag: 'vpn-1', label: 'Германия', nodeFilter: 'NOMATCH'),
+        const Channel(tag: 'vpn-1', label: 'Germany', nodeFilter: 'NOMATCH'),
       ]);
       expect(
-          w.any((s) =>
-              s.contains('Германия') && s.contains('напрямую')),
+          w.any((s) => s.contains('Germany') && s.contains('direct')),
           true);
     });
 
@@ -247,21 +246,21 @@ void main() {
         const Channel(
             tag: 'vpn-1', label: 'x', nodeFilter: '.', nodeFilterInvert: true),
       ]);
-      expect(w.any((s) => s.contains('vpn-1') && s.contains('напрямую')), true);
+      expect(w.any((s) => s.contains('vpn-1') && s.contains('direct')), true);
     });
 
     test('пустой фильтр (все ноды) → НЕ варним', () async {
       final w = await warningsFor([
         const Channel(tag: 'vpn-1', label: 'x'),
       ]);
-      expect(w.any((s) => s.contains('напрямую')), false);
+      expect(w.any((s) => s.contains('direct')), false);
     });
 
     test('фильтр матчит хотя бы одну ноду → НЕ варним', () async {
       final w = await warningsFor([
         const Channel(tag: 'vpn-1', label: 'x', nodeFilter: '🇩🇪'),
       ]);
-      expect(w.any((s) => s.contains('напрямую')), false);
+      expect(w.any((s) => s.contains('direct')), false);
     });
   });
 

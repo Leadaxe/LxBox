@@ -327,7 +327,7 @@ Future<BuildResult> buildConfig({
     var finalTag = settings.routeFinal;
     if (!validFinals.contains(finalTag)) {
       emitWarnings.add(
-          'Route final "$finalTag" не существует — переключено на vpn-1.');
+          'Route final "$finalTag" no longer exists — switched to vpn-1.');
       finalTag = 'vpn-1';
     }
     route['final'] = finalTag;
@@ -364,8 +364,8 @@ Future<BuildResult> buildConfig({
   final healedDetours = healDanglingDetours(config);
   for (final h in healedDetours) {
     emitWarnings.add(
-        'Detour убран: outbound "${h.owner}" ссылался на отсутствующий '
-        '"${h.target}" — нода работает напрямую.');
+        'Detour removed: outbound "${h.owner}" referenced missing '
+        '"${h.target}" — node works directly.');
   }
 
   final validation = validateConfig(config);
@@ -486,8 +486,8 @@ List<Map<String, dynamic>> _buildChannelGroups({
     if (nodes.isEmpty && c.nodeFilter.isNotEmpty && selectorTags.isNotEmpty) {
       final label = c.label.isNotEmpty ? c.label : c.tag;
       emitWarnings.add(
-          'Канал "$label" (${c.tag}): фильтр не пропустил ни одной ноды — '
-          'трафик идёт напрямую (Direct).');
+          'Channel "$label" (${c.tag}): node filter matched no nodes — '
+          'traffic goes direct (Direct).');
     }
 
     final selector = <String, dynamic>{
