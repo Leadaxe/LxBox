@@ -352,24 +352,28 @@ class HomeNodeList extends StatelessWidget {
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Apply to: $label (${channel.tag})'),
+        title: Text('Apply to $label'),
         content: Text('Use "$pattern" as…'),
+        // Горизонтально (Row), порядок: Channel filter → Default → Cancel.
+        // Короткие лейблы держат всё в один ряд на телефоне.
+        actionsAlignment: MainAxisAlignment.end,
+        actionsOverflowDirection: VerticalDirection.down,
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'default'),
-            child: const Text('Default'),
-          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, 'node'),
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(ctx).colorScheme.primary,
               textStyle: const TextStyle(fontWeight: FontWeight.w600),
             ),
-            child: const Text('Channel filter'),
+            child: const Text('Filter'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'default'),
+            child: const Text('Default'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
           ),
         ],
       ),
