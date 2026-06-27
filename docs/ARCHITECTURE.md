@@ -117,6 +117,18 @@ Unary-pull остался точечно — `getGroups()` (lifeline там, г�
 Heartbeat — watchdog по **тишине** status-стрима, без HTTP-poll'а. Подробные
 потоки — в разделе [Потоки данных](#потоки-данных).
 
+### Инвариант: ДВА канала разной надёжности (статус vs данные) — НЕ путать
+
+Принципиальное разделение, нарушение которого = баги вида «Connected, но Channel/
+Nodes пустые после swipe» (см. §185):
+
+| Канал | Что несёт | Надёжность / жизненный цикл |
+|---|---|---|
+| **VpnService status broadcast** (native `Stream<TunnelStatusEvent>` / `BROADCAST_STATUS`) | ТОЛЬКО **глобальный статус** туннеля (Connected/Stopped/Connecting/error) | **НАДЁЖНЫЙ, всегда есть.** Чисто native (Android Service), переживает смерть Flutter-движка (swipe-kill при keep-VPN). Единственный источник правды для статуса. UI обязан показывать статус из него. |
+| **CommandClient-стримы** (`lxbox/cc/*`: groups · connections · outbounds · status-tick) | **Данные для отображения на экране**: группы/ноды, соединения, трафик, per-app | **ЭФЕМЕРНЫЙ.** Привязан к Flutter-движку: подписки в Dart, refcount в native (`screenRefs`). При swipe-kill движок умирает, стримы слетают — а сервис/ядро живут. **Должен иметь механизм переподнятия/пересинхронизации** при возврате/reopen: на cold-start Flutter native-refcount нельзя считать «уже поднят» (он протух). Восстановление = пере-подписка + `getGroups`-pull (детерминированный lifeline, §122). Рассинхрон native-refcount (persistent) ↔ Dart-потребители (ephemeral) — корень класса багов §185.
+
+**keep-VPN-on-exit НЕ останавливает ядро** — это ВЕРНОЕ поведение (`BoxService.onTaskRemoved` при keep = no-op, ядро/CommandServer живут). Свайп убивает только UI-движок; статус продолжает идти broadcast'ом, а CommandClient-данные должны переподняться при следующем открытии UI. Не «чинить» keep-VPN, не дёргать `doStop` на swipe.
+
 ### Принцип «cohesion over line-count» (§089)
 
 Цель структурного рефактора §089 — **единая ответственность + связность**, не
