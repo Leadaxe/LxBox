@@ -1,10 +1,11 @@
 # §125 — Настраиваемые каналы (Configurable Channels)
 
-> **СТАТУС: DRAFT / ИДЕЯ — open questions закрыты (27.06.2026).** Полностью
-> переписан после согласования с юзером. Заменяет прежний черновик «override
-> поверх фиксированного template». Не реализовано. Числа/имена ключей storage —
-> proposal. Все развилки решены (см. «Решения», бывшие open questions).
-> Готов к переходу в `plan.md`.
+> **СТАТУС: РЕАЛИЗОВАНО (27.06.2026).** Все фазы F0→F4 + regex (F2) + default
+> (F3) реализованы в ветке `feat/configurable-channels-125`. План и трассировка
+> — [`plan.md`](plan.md). Числа/имена ключей storage финализированы (см.
+> [STORAGE.md → channels](../../../STORAGE.md#channels--125)). Все развилки
+> решены (см. «Решения», бывшие open questions). Покрыто тестами
+> (`channel_test.dart`, `channels_migration_test.dart`, `channel_groups_test.dart`).
 
 ## Контекст
 

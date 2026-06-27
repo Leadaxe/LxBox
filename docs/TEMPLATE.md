@@ -308,6 +308,15 @@ Endpoints для speed-test screen. Не override'ится юзером (но ю
 
 ## `preset_groups[]` — selector/urltest группы
 
+> **§125 — `preset_groups[]` стал SEED'ом, не source-of-truth.** Каналы
+> переехали в storage (`channels[]`, см. [STORAGE.md](STORAGE.md#channels--125)).
+> На первом запуске one-shot миграция засевает `channels[]` из `preset_groups[]`;
+> дальше состав каналов живёт в storage и редактируется юзером. Билдер читает
+> `channels[]`, а не `preset_groups[]`. Глобальный `✨auto`-preset больше **не**
+> канал — каждый канал делает свой `<tag>-auto`-двойник через галку auto.
+> Эта секция описывает структуру seed'а (что попадает в `channels[]` при первом
+> запуске).
+
 Catalog of routing-groups: какие selector'ы/urltest'ы создавать при assembly финального config'а. На каждый enabled группу builder добавляет sing-box outbound в `config.outbounds[]`.
 
 ```jsonc

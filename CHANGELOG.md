@@ -8,6 +8,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- **§125 — настраиваемые каналы (configurable channels)** ([feature spec](docs/spec/features/125%20configurable-channels/), [channel.dart](app/lib/models/channel.dart) + [channels.dart](app/lib/services/settings_storage/channels.dart) + [channel_edit_screen.dart](app/lib/screens/channel_edit_screen.dart)). Каналы роутинга (`vpn-1..vpn-4` + `✨auto`) были статичны: юзер мог только включить/выключить их тоглом. Теперь — полноценно настраиваемые объекты с CRUD. Каналы переехали из `wizard_template.json` (`preset_groups[]`) в storage (`channels[]`); template стал seed'ом на первый запуск (one-shot миграция `enabled_groups[]` → `channels[]`). Возможности:
+  - **CRUD** — создавать (до 10 каналов) и удалять (кроме `vpn-1`). Удаление переводит ссылки на удалённый канал (`route_final` / custom-rule outbound) на `vpn-1`.
+  - **Title** — менять отображаемое имя канала («Моя Германия» вместо «vpn-1»); видно в home-dropdown и роутинг-пикерах.
+  - **Galки селектора** — `include direct-out`, `interrupt connections on switch`.
+  - **Regex node-filter** — одна regex по итоговому tag ноды (как §048 на главной); в канал попадают только matched-ноды. Снимает прежнее «все selector делят один набор нод». Пусто/невалидно → все ноды.
+  - **Default-regex** — первая matched нода становится `options.default`.
+  - **Auto-двойник** — галка `include auto` генерирует парный urltest `<tag>-auto` (ноды канала, без direct/auto) с настраиваемыми url/interval/tolerance/idle/interrupt. Глобальный `✨auto` больше не отдельный канал — у каждого канала свой двойник.
+  - Полноэкранный редактор канала (back-guard Save/Keep/Discard) с live-превью regex (matched N/total + выбранная default-нода).
+
 ## [2.5.2] — 2026-06-27
 
 VPN-настройки приведены к единому источнику истины (JSON), TUN-зависимые тумблеры
