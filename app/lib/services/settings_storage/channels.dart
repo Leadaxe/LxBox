@@ -1,0 +1,140 @@
+part of '../settings_storage.dart';
+
+// §125 — Каналы роутинга (`channels[]`) для [SettingsStorage].
+//
+// Вынесено `part`'ом — та же библиотека, тот же доступ к `_load`/`_save`/
+// `_cache`. Паттерн read-весь-объект → mutate-copy → rewrite-atomically
+// идентичен `network.dart:_setGroupPing` (эталон per-group storage).
+//
+// `channels[]` заменяет `enabled_groups[]` (deprecated) и статичные
+// `template.presetGroups` как source-of-truth состава каналов. Миграция
+// (`_migrateChannelsIfNeeded`) на первом запуске seed'ит channels из template.
+
+Future<List<Channel>> _getChannels() async {
+  final data = await _load();
+  final raw = data['channels'] as List<dynamic>? ?? const [];
+  return raw.whereType<Map<String, dynamic>>().map(Channel.fromJson).toList();
+}
+
+Future<void> _setChannels(List<Channel> channels, {bool flush = true}) async {
+  final data = await _load();
+  data['channels'] = channels.map((c) => c.toJson()).toList();
+  SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113 — config-significant
+  if (flush) await _save();
+}
+
+/// Первый свободный 'vpn-N' (N∈2..10; vpn-1 всегда существует инвариантом).
+/// throws [StateError] при лимите [kMaxChannels].
+Future<Channel> _addChannel({String? label}) async {
+  final channels = (await _getChannels()).toList();
+  if (channels.length >= kMaxChannels) {
+    throw StateError('channel limit ($kMaxChannels) reached');
+  }
+  final used = channels.map((c) => c.tag).toSet();
+  final tag = [for (var i = 2; i <= kMaxChannels; i++) 'vpn-$i']
+      .firstWhere((t) => !used.contains(t));
+  final ch = Channel(tag: tag, label: label ?? tag, enabled: true);
+  channels.add(ch);
+  await _setChannels(channels);
+  return ch;
+}
+
+Future<void> _updateChannel(Channel channel) async {
+  final channels = (await _getChannels()).toList();
+  final i = channels.indexWhere((c) => c.tag == channel.tag);
+  if (i < 0) throw StateError('channel not found: ${channel.tag}');
+  channels[i] = channel;
+  await _setChannels(channels);
+}
+
+/// Удалить канал. vpn-1 неудаляем (throws). Любая ссылка на удалённый tag
+/// (route_final / custom-rule outbound) немедленно переводится на 'vpn-1'
+/// для UI-консистентности; билдер дополнительно схлопывает dangling при сборке
+/// (§172-паттерн), так что детур/прочее тоже деградирует.
+Future<void> _deleteChannel(String tag) async {
+  if (tag == 'vpn-1') throw StateError('vpn-1 is not deletable');
+  final channels = (await _getChannels()).toList()
+    ..removeWhere((c) => c.tag == tag);
+  await _setChannels(channels, flush: false); // один flush в _healChannelRefs
+  await _healChannelRefs(tag);
+}
+
+/// Перевод dangling-ссылок на удалённый канал → 'vpn-1'. Без flush до конца —
+/// атомарный финальный `_save()`.
+Future<void> _healChannelRefs(String deletedTag) async {
+  // route_final
+  final routeFinal = await SettingsStorage.getRouteFinal();
+  if (routeFinal == deletedTag) {
+    await SettingsStorage.saveRouteFinal('vpn-1', flush: false);
+  }
+  // custom-rule outbounds (kind-aware: Inline/Srs имеют outbound; reject/direct
+  // — это outbound-значения, не channel-tag'и, под deletedTag не подпадут).
+  final rules = await SettingsStorage.getCustomRules();
+  var changed = false;
+  final healed = rules.map((r) {
+    if (r is CustomRuleInline && r.outbound == deletedTag) {
+      changed = true;
+      return r.withOutbound('vpn-1');
+    }
+    if (r is CustomRuleSrs && r.outbound == deletedTag) {
+      changed = true;
+      return r.withOutbound('vpn-1');
+    }
+    return r;
+  }).toList();
+  if (changed) {
+    await SettingsStorage.saveCustomRules(healed, flush: false);
+  }
+  await _save();
+}
+
+// ---------------------------------------------------------------------------
+// §125 F0.3 — Миграция enabled_groups[] → channels[] (one-shot, first-run seed).
+//
+// Guard-ключ `channels_migrated` (паттерн `_hasDefaultsSeeded`). Принимает
+// template.presetGroups параметром (storage-слой не знает про template —
+// вызывается из main() init с готовым шаблоном). Идемпотентна: повторный вызов
+// при уже существующем `channels` или поднятом флаге — no-op.
+// ---------------------------------------------------------------------------
+
+Future<void> _migrateChannelsIfNeeded(List<PresetGroup> presets) async {
+  final data = await _load();
+  if (data['channels'] is List) return; // уже есть — не трогаем
+  if (data['channels_migrated'] == true) return; // мигрировано (пусто) — не пересеивать
+
+  final enabled = await SettingsStorage.getEnabledGroups(); // legacy set
+  final channels = <Channel>[];
+  for (final p in presets) {
+    if (p.tag == kAutoOutboundTag) continue; // глобальный ✨auto НЕ канал
+    final isEnabled = p.tag == 'vpn-1'
+        ? true // vpn-1 форсим (продуктовый инвариант)
+        : (enabled.isEmpty ? p.defaultEnabled : enabled.contains(p.tag));
+    final auto = p.addOutbounds.contains(kAutoOutboundTag)
+        ? _seedAutoFromTemplate(presets)
+        : null;
+    channels.add(Channel.seedFromPreset(p, enabled: isEnabled, auto: auto));
+  }
+
+  data['channels'] = channels.map((c) => c.toJson()).toList();
+  data['channels_migrated'] = true;
+  SettingsStorage._cache = data;
+  await _save();
+}
+
+/// `ChannelAuto` из глобального ✨auto-пресета (его urltest-опции). Значения —
+/// из `presetGroups` где tag == ✨auto (его options.url/interval/tolerance уже
+/// резолвены из @urltest_* vars при загрузке template). idle_timeout="30m",
+/// interrupt=false — глобальный auto был «мягким» urltest. Дефолты — если
+/// ✨auto-пресет отсутствует.
+ChannelAuto _seedAutoFromTemplate(List<PresetGroup> presets) {
+  final autoPreset = presets.where((p) => p.tag == kAutoOutboundTag).firstOrNull;
+  final opts = autoPreset?.options ?? const {};
+  return ChannelAuto(
+    url: opts['url'] as String? ?? 'https://cp.cloudflare.com/generate_204',
+    interval: opts['interval'] as String? ?? '5m',
+    tolerance: (opts['tolerance'] as num?)?.toInt() ?? 50,
+    idleTimeout: '30m',
+    interruptExistConnections: false,
+  );
+}

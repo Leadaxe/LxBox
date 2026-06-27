@@ -3,8 +3,11 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import '../config/consts.dart';
 import '../models/background_mode.dart';
+import '../models/channel.dart';
 import '../models/custom_rule.dart';
+import '../models/parser_config.dart';
 import '../models/server_list.dart';
 import '../vpn/box_vpn_client.dart';
 import 'app_log.dart';
@@ -15,6 +18,7 @@ import 'warp/warp_account.dart';
 part 'settings_storage/io.dart';
 part 'settings_storage/vars.dart';
 part 'settings_storage/sources_rules.dart';
+part 'settings_storage/channels.dart';
 part 'settings_storage/network.dart';
 part 'settings_storage/backup_tun.dart';
 part 'settings_storage/vpn_mode.dart';
@@ -110,7 +114,9 @@ class SettingsStorage {
     'ping_options',
     'route_final',
     'excluded_nodes',
-    'enabled_groups',
+    'enabled_groups', // §125 — DEPRECATED (читается только миграцией; safe-мусор)
+    'channels', // §125 — каналы роутинга (template→storage)
+    'channels_migrated', // §125 — guard one-shot миграции
     'tun_apps',
     'vpn_mode',
     'warp_account',
@@ -248,6 +254,31 @@ class SettingsStorage {
   static Future<void> saveEnabledGroups(Set<String> groups,
           {bool flush = true}) =>
       _saveEnabledGroups(groups, flush: flush);
+
+  // ---------------------------------------------------------------------------
+  // §125 — Каналы роутинга (channels[]). Заменяют enabled_groups[] + статичные
+  // template.presetGroups как source-of-truth. На первом запуске seeded из
+  // template (migrateChannelsIfNeeded). vpn-1 неудаляем, лимит 10.
+  // ---------------------------------------------------------------------------
+
+  static Future<List<Channel>> getChannels() => _getChannels();
+
+  static Future<void> setChannels(List<Channel> channels, {bool flush = true}) =>
+      _setChannels(channels, flush: flush);
+
+  /// Добавить канал: первый свободный 'vpn-N' (N∈2..10). Throws при лимите 10.
+  static Future<Channel> addChannel({String? label}) => _addChannel(label: label);
+
+  /// Обновить канал по [Channel.tag]. Throws если tag не найден.
+  static Future<void> updateChannel(Channel channel) => _updateChannel(channel);
+
+  /// Удалить канал. Throws для 'vpn-1'. Переводит dangling-ссылки на 'vpn-1'.
+  static Future<void> deleteChannel(String tag) => _deleteChannel(tag);
+
+  /// One-shot миграция enabled_groups[] → channels[] (seed из template).
+  /// Идемпотентна. Зовётся из main() init до первого билда.
+  static Future<void> migrateChannelsIfNeeded(List<PresetGroup> presets) =>
+      _migrateChannelsIfNeeded(presets);
 
   // ---------------------------------------------------------------------------
   // Last global update timestamp

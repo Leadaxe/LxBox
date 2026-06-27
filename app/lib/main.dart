@@ -14,6 +14,7 @@ import 'services/subscription/subscription_identity.dart';
 import 'services/debug/bootstrap.dart' as debug_bootstrap;
 import 'services/nav/home_return_observer.dart';
 import 'services/settings_storage.dart';
+import 'services/template_loader.dart';
 import 'services/version_info.dart';
 import 'services/wifi_history_listener.dart';
 
@@ -67,6 +68,12 @@ void main() async {
     // ДО UI (UI читает native-тумблеры из JSON-зеркала) и ДО возможного
     // авто-старта VPN. best-effort: ошибка не валит запуск (try выше).
     await SettingsStorage.bootstrapAndSyncNativePrefs();
+    // §125 F0 — one-shot миграция enabled_groups[] → channels[] (seed состава
+    // каналов из template на первом запуске). Идемпотентна. ДО первого билда
+    // конфига, чтобы билдер (после F1) читал channels[] как source-of-truth.
+    // best-effort: ошибка не валит запуск (try выше).
+    await SettingsStorage.migrateChannelsIfNeeded(
+        (await TemplateLoader.load()).presetGroups);
     // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в
     // AppLog как DebugSource.core. Идемпотентно (повторный attach no-op).
     ClashLogPump.I.attach();
