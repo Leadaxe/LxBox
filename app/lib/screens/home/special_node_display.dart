@@ -24,7 +24,9 @@ SpecialNodeDisplay? specialNodeDisplayForType(String? outboundType) {
     case 'direct':
       return const SpecialNodeDisplay(label: 'Direct', icon: Icons.public);
     case 'urltest':
-      return const SpecialNodeDisplay(label: 'Auto', icon: Icons.speed);
+      // ✨ — узнаваемая иконка auto (как был эмодзи в старом теге '✨auto').
+      return const SpecialNodeDisplay(
+          label: 'Auto', icon: Icons.auto_awesome);
     default:
       return null;
   }

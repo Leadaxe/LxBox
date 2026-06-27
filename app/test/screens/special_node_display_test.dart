@@ -12,11 +12,11 @@ void main() {
       expect(d.icon, Icons.public);
     });
 
-    test('urltest → «Auto» + speed', () {
+    test('urltest → «Auto» + auto_awesome (✨)', () {
       final d = specialNodeDisplayForType('urltest');
       expect(d, isNotNull);
       expect(d!.label, 'Auto');
-      expect(d.icon, Icons.speed);
+      expect(d.icon, Icons.auto_awesome);
     });
 
     test('обычная прокси-нода (vless/null/selector) → null (показываем tag)', () {
