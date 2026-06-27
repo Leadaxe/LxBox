@@ -120,6 +120,85 @@ void main() {
     });
   });
 
+  group('§196 — активная нода пинится после direct/auto', () {
+    test('активная нода сразу после direct+auto при latencyAsc', () {
+      final s = HomeState(
+        configRaw: cfgDA(['x', 'direct-out', 'y', 'vpn-1-auto', 'z']),
+        nodes: ['x', 'direct-out', 'y', 'vpn-1-auto', 'z'],
+        lastDelay: {'x': 10, 'y': 20, 'z': 30}, // z самый медленный
+        activeInGroup: 'z',
+        sortMode: NodeSortMode.latencyAsc,
+      );
+      // direct → auto → активная (z), затем rest по latency (x<y).
+      expect(s.sortedNodes, ['direct-out', 'vpn-1-auto', 'z', 'x', 'y']);
+    });
+
+    test('активная при любой сортировке — nameAsc', () {
+      final s = HomeState(
+        configRaw: cfgDA(['a', 'direct-out', 'b', 'z']),
+        nodes: ['a', 'direct-out', 'b', 'z'],
+        activeInGroup: 'z', // лексикографически последняя
+        sortMode: NodeSortMode.nameAsc,
+      );
+      // direct → активная(z) → rest по имени (a, b).
+      expect(s.sortedNodes, ['direct-out', 'z', 'a', 'b']);
+    });
+
+    test('активная при default order', () {
+      final s = HomeState(
+        configRaw: cfgDA(['x', 'y', 'z']),
+        nodes: ['x', 'y', 'z'],
+        activeInGroup: 'y',
+        sortMode: NodeSortMode.defaultOrder,
+      );
+      expect(s.sortedNodes, ['y', 'x', 'z']); // y вверх, x/z pristine
+    });
+
+    test('активная нода = direct/auto → НЕ дублируется', () {
+      final s = HomeState(
+        configRaw: cfgDA(['x', 'direct-out', 'vpn-1-auto']),
+        nodes: ['x', 'direct-out', 'vpn-1-auto'],
+        activeInGroup: 'vpn-1-auto', // уже в pinned (urltest)
+        sortMode: NodeSortMode.latencyAsc,
+      );
+      // vpn-1-auto не должен повториться.
+      expect(s.sortedNodes, ['direct-out', 'vpn-1-auto', 'x']);
+      expect(s.sortedNodes.where((n) => n == 'vpn-1-auto').length, 1);
+    });
+
+    test('нет активной → старое поведение', () {
+      final s = HomeState(
+        configRaw: cfgDA(['x', 'direct-out', 'y']),
+        nodes: ['x', 'direct-out', 'y'],
+        sortMode: NodeSortMode.latencyAsc,
+        lastDelay: {'x': 20, 'y': 10},
+      );
+      expect(s.sortedNodes, ['direct-out', 'y', 'x']);
+    });
+
+    test('pinnedNodeCount = direct + auto + активная', () {
+      final s = HomeState(
+        configRaw: cfgDA(['x', 'direct-out', 'vpn-1-auto', 'y']),
+        nodes: ['x', 'direct-out', 'vpn-1-auto', 'y'],
+        activeInGroup: 'x',
+        sortMode: NodeSortMode.latencyAsc,
+      );
+      expect(s.pinnedNodeCount, 3); // direct + auto + x
+      expect(s.sortedNodes.take(3), ['direct-out', 'vpn-1-auto', 'x']);
+    });
+
+    test('активная нода не в списке nodes → игнор', () {
+      final s = HomeState(
+        configRaw: cfgDA(['x', 'y']),
+        nodes: ['x', 'y'],
+        activeInGroup: 'ghost', // нет в nodes
+        sortMode: NodeSortMode.nameAsc,
+      );
+      expect(s.sortedNodes, ['x', 'y']);
+      expect(s.pinnedNodeCount, 0);
+    });
+  });
+
   group('HomeState.sortedNodes — manual mode (§071)', () {
     test('manualOrder применяется к non-pinned', () {
       final s = HomeState(

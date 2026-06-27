@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../config/consts.dart';
 import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/home_state.dart';
@@ -186,19 +185,14 @@ class HomeNodeList extends StatelessWidget {
     required ParsedConfig cache,
     required Set<String> matchingSet,
   }) {
-    // §070+§071: pinnedCount определяем sequential проверкой первых элементов.
-    // Если фильтр §048 затолкал pinned в nonMatching → pin не на index 0 →
-    // pinnedCount=0 (drag-handle покажется и на pinned, но это корректно
-    // т.к. формально он не pinned в текущем render'е).
+    // §070+§071+§125+§196: pinned-секция = direct/auto/активная (источник —
+    // state.pinnedNodeCount). Считаем сколько из них реально в начале
+    // displayList: если фильтр §048 затолкал pinned в nonMatching → префикс
+    // короче → pinnedCount меньше (drag-handle покажется на не-pinned, корректно).
+    final pinnedTags = state.sortedNodes.take(state.pinnedNodeCount).toSet();
     int pinnedCount = 0;
-    if (state.pinDirect &&
-        pinnedCount < displayList.length &&
-        displayList[pinnedCount] == 'direct-out') {
-      pinnedCount++;
-    }
-    if (state.pinAuto &&
-        pinnedCount < displayList.length &&
-        displayList[pinnedCount] == kAutoOutboundTag) {
+    while (pinnedCount < displayList.length &&
+        pinnedTags.contains(displayList[pinnedCount])) {
       pinnedCount++;
     }
 

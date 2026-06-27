@@ -184,15 +184,21 @@ class HomeState {
   /// `sortedNodes` несколько раз (фильтр detour + итерация + builder).
   late final List<String> sortedNodes = _computeSortedNodes();
 
-  List<String> _computeSortedNodes() {
-    // §070/§125: pinDirect/pinAuto управляют наполнением pinned section во
-    // ВСЕХ modes включая `defaultOrder`. Default = pristine config order
-    // для non-pinned части, но pinned всегда сверху если toggle ON.
-    //
-    // §125 — пин по ТИПУ из конфига (`direct`/`urltest`), а не по фикс-тегам:
-    // auto-двойники теперь зовутся `vpn-1-auto`/`vpn-2-auto`..., старая проверка
-    // `== '✨auto'` их не ловила. direct сверху, затем все urltest-двойники
-    // (в config-порядке). Сам tag не важен — важен type из ParsedConfig.
+  /// §070/§125/§196 — pinned-секция (всегда сверху, non-draggable): direct →
+  /// urltest-двойники → активная нода. Вычисляется один раз, используется
+  /// `sortedNodes` и `pinnedNodeCount` (node_list — для drag-handle gating).
+  late final List<String> _pinnedTags = _computePinned();
+
+  /// Кол-во pinned-нод в начале [sortedNodes]. node_list: первые N
+  /// non-draggable (§071). Источник истины — [_computePinned], не пересчёт по
+  /// тегам (auto-двойники теперь vpn-N-auto, §125).
+  int get pinnedNodeCount => _pinnedTags.length;
+
+  /// §070/§125/§196 — наполнение pinned section. pinDirect/pinAuto — тоглы
+  /// (§070); активная нода пинится ВСЕГДА (при любой сортировке). Пин по ТИПУ
+  /// из конфига (`direct`/`urltest`), не по фикс-тегам — auto-двойники зовутся
+  /// `vpn-N-auto`. Порядок: direct → urltest-двойники (config-order) → активная.
+  List<String> _computePinned() {
     final pinnedSet = <String>{
       for (final n in nodes)
         if ((pinDirect && configModel[n]?.type == 'direct') ||
@@ -203,6 +209,22 @@ class HomeState {
       ...nodes.where((n) => pinnedSet.contains(n) && configModel[n]?.type == 'direct'),
       ...nodes.where((n) => pinnedSet.contains(n) && configModel[n]?.type == 'urltest'),
     ];
+    // §196 — активная нода группы сразу ПОСЛЕ direct/auto, при ЛЮБОЙ сортировке
+    // (не за тоглом). Только реальная прокси-нода (не сам direct/auto-двойник,
+    // иначе дубль) и присутствующая в списке.
+    final active = activeInGroup;
+    if (active != null &&
+        active.isNotEmpty &&
+        nodes.contains(active) &&
+        !pinnedSet.contains(active)) {
+      pinned.add(active);
+    }
+    return pinned;
+  }
+
+  List<String> _computeSortedNodes() {
+    final pinned = _pinnedTags;
+    final pinnedSet = pinned.toSet();
     final rest = nodes.where((n) => !pinnedSet.contains(n)).toList();
     switch (sortMode) {
       case NodeSortMode.defaultOrder:
