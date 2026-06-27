@@ -284,6 +284,41 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// §189/§124 — auto_redirect: root-only tproxy (nftables/iptables в sing-tun).
+  /// Default false. UI-тоггла нет (root-only), но участвует в зеркале
+  /// native_prefs и бэкапе. На не-root устройстве ядро вернёт ошибку при старте.
+  Future<bool> setAutoRedirect(bool enabled) async {
+    final ok = await _invoke<bool>(
+      _Methods.setAutoRedirect,
+      args: {'enabled': enabled},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  Future<bool> getAutoRedirect() async {
+    final ok = await _invoke<bool>(
+      _Methods.getAutoRedirect,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
+  /// §192 — зеркало has_tun (производное от §119 vpn_mode) в native. Гейтит
+  /// `VpnService.prepare()`: proxy-режим (false) → prepare не зовётся → чужой
+  /// активный VPN не отзывается. Зовётся при смене режима + на старте (sync).
+  Future<bool> setHasTun(bool hasTun) async {
+    final ok = await _invoke<bool>(
+      _Methods.setHasTun,
+      args: {'enabled': hasTun},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
   /// §069: runtime applied значение `allow_bypass` от последнего
   /// `VpnService.Builder.allowBypass()` вызова в `establish()`. Отличается
   /// от persisted [getAllowBypass] когда юзер поменял toggle но ещё не

@@ -3,8 +3,10 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import '../models/background_mode.dart';
 import '../models/custom_rule.dart';
 import '../models/server_list.dart';
+import '../vpn/box_vpn_client.dart';
 import 'app_log.dart';
 import 'config_dirty_check.dart';
 import 'template_loader.dart';
@@ -17,6 +19,7 @@ part 'settings_storage/network.dart';
 part 'settings_storage/backup_tun.dart';
 part 'settings_storage/vpn_mode.dart';
 part 'settings_storage/warp.dart';
+part 'settings_storage/native_prefs.dart';
 
 /// Persistent storage for user settings: vars, proxy sources, enabled rules.
 ///
@@ -674,6 +677,34 @@ class SettingsStorage {
   /// Persist `vpn_mode`. Caller передаёт финальный shape; валидируем mode.
   static Future<void> setVpnMode(VpnModeConfig cfg, {bool flush = true}) =>
       _setVpnMode(cfg, flush: flush);
+
+  // §189 native_prefs — JSON-зеркало Android-prefs. JSON = истина, native =
+  // рабочая копия. Все писатели идут через setNativeBool/setNativeBackgroundMode
+  // (write-through: JSON + зеркало в native). См. settings_storage/native_prefs.dart.
+  static Future<Map<String, dynamic>> getNativePrefs() => _getNativePrefs();
+  static Future<bool> getNativeBool(String key) => _getNativeBool(key);
+  static Future<String> getNativeBackgroundMode() => _getNativeBackgroundMode();
+  static Future<void> setNativeBool(String key, bool value) =>
+      _setNativeBool(key, value);
+  static Future<void> setNativeBackgroundMode(String wireValue) =>
+      _setNativeBackgroundMode(wireValue);
+
+  /// Старт: bootstrap (первый запуск §189 — seed native⇒JSON) или sync
+  /// (JSON⇒native). Зовётся из app init до UI.
+  static Future<void> bootstrapAndSyncNativePrefs() =>
+      _bootstrapAndSyncNativePrefs();
+
+  /// §189 — единая сериализация backup-блока vpn_settings (состав/дефолты/типы
+  /// в одном месте). backup_service и Debug-handler делегируют сюда.
+  static Future<Map<String, dynamic>> exportNativePrefsBackup() =>
+      _exportToBackupMap();
+  static Future<int> applyNativePrefsBackup(Map<String, dynamic> data,
+          {void Function(String, Object)? onError}) =>
+      _applyFromBackupMap(data, onError: onError);
+
+  /// §192 — зеркалить has_tun (производное от vpn_mode) в native. Гейтит
+  /// VpnService.prepare(). Зовётся при смене режима в Mode-вкладке.
+  static Future<void> setNativeHasTun(bool hasTun) => _setNativeHasTun(hasTun);
 
   // ---------------------------------------------------------------------------
   // §025 — Cloudflare WARP account cache. Закешированный аккаунт переиспользуется

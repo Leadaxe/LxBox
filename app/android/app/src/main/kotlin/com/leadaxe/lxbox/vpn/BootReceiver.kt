@@ -34,6 +34,16 @@ class BootReceiver : BroadcastReceiver() {
         /// полноценный UI + `auto_route` — отдельная таска.
         private const val KEY_AUTO_REDIRECT = "auto_redirect"
 
+        /// §192 — есть ли TUN-inbound в текущем конфиге (производное от §119
+        /// vpn_mode: vpn/vpn_proxy → true, proxy → false). Зеркало из Dart
+        /// (§189 native_prefs). Гейтит `VpnService.prepare()`: в proxy-режиме
+        /// (port-only, без TUN) prepare НЕ нужен и его вызов ЗРЯ забирает
+        /// системный VPN-слот → отзывает чужой активный VPN (onRevoke).
+        /// Default TRUE — безопасно: если ключа ещё нет (старый юзер / до
+        /// первого sync), ведём себя как раньше (prepare вызывается, vpn-режим
+        /// не ломается). proxy-фикс активируется только при явном has_tun=false.
+        private const val KEY_HAS_TUN = "has_tun"
+
         /// Три режима фоновой работы tunnel'а. По умолчанию "never" — максимум
         /// стабильности, минимум экономии батареи. VPN-пользователи обычно
         /// выбирают надёжность (пуши, длинные TCP-сокеты), поэтому default
@@ -71,8 +81,10 @@ class BootReceiver : BroadcastReceiver() {
         }
 
         fun isKeepOnExit(context: Context): Boolean {
+            // §188 — дефолт ON (было false). keep-alive ожидаем пользователями
+            // (VPN живёт при закрытии). Затрагивает существующих без явного ключа.
             return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                .getBoolean(KEY_KEEP_ON_EXIT, false)
+                .getBoolean(KEY_KEEP_ON_EXIT, true)
         }
 
         /// §043: forwarding sing-box логов в наш PlatformInterface.writeDebugMessage
@@ -109,6 +121,17 @@ class BootReceiver : BroadcastReceiver() {
         fun isAutoRedirect(context: Context): Boolean {
             return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
                 .getBoolean(KEY_AUTO_REDIRECT, false)
+        }
+
+        /// §192 — зеркало has_tun из Dart (§189). Default true (см. KEY_HAS_TUN).
+        fun setHasTun(context: Context, enabled: Boolean) {
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_HAS_TUN, enabled).apply()
+        }
+
+        fun hasTun(context: Context): Boolean {
+            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_HAS_TUN, true)
         }
     }
 

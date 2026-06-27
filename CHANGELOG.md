@@ -8,6 +8,28 @@
 
 ## [Unreleased]
 
+## [2.5.2] — 2026-06-27
+
+VPN-настройки приведены к единому источнику истины (JSON), TUN-зависимые тумблеры
+переехали в Mode-вкладку, исправлен баг прерывания чужого VPN в proxy-режиме,
+починена пропажа соединений на Stats со временем, разведены счётчики соединений,
+выпилен мёртвый Clash-рудимент.
+
+### Fixed
+
+- **§193 — Stats со временем терял список соединений** ([task spec](docs/spec/tasks/193-connections-reemit-on-subscribe.md), BoxCommandClient.kt + VpnPlugin.kt + home_controller.dart). Туннель жив, главный экран показывал соединения, но вкладка Stats — 0 («No active connections»). Корень: connections от ядра — single-shot reset-снапшот при подписке (pull `getConnections` в libbox нет, в отличие от `getGroups`); при повторном открытии Stats screenClient не пересоздаётся (refcount>0) → нового снапшота нет. Усугублял §185 `resyncForReopen`, зовущийся на каждый `connected` (рвал connections на реконнектах). Фикс: (1) re-emit накопленного аккумулятора новому подписчику в `onListen` connections-канала; (2) `resyncForReopen` гейтнут до реального cold-start (флаг `_didColdStartResync`), не на каждый реконнект. Device-verified.
+- **§192 — proxy-режим рвал чужой активный VpnService** ([task spec](docs/spec/tasks/192-proxy-mode-prepare-revokes-foreign-vpn.md), BootReceiver.kt + 6 точек запуска). В режиме `proxy` (port-only, без TUN) запуск нашего сервиса отзывал (`onRevoke`) активный VPN другого приложения. Корень: `VpnService.prepare()` (а НЕ `establish()`) забирает системный VPN-слот — Android делает наше приложение «prepared VPN package» уже на consent, и `prepare()` вызывался безусловно на всех 6 точках входа без учёта режима. Фикс: `has_tun` (производное от vpn_mode) зеркалится в native; `prepare()` гейтится за ним — в proxy-режиме не вызывается, чужой VPN не трогается. Точки: `VpnPlugin.startVpn`/`startVpnHeadless`, `MainActivity.startVpnWithConsent`, `LxBoxIntentReceiver`, `LxBoxTileService`, `LocaleSettingReceiver`. Default `has_tun=true` — vpn-режим и старые юзеры не задеты. Device-verified.
+
+### Changed
+
+- **§189 — native_prefs: настройки с единым источником истины (JSON)** ([task spec](docs/spec/tasks/189-native-prefs-mirror-in-json.md), [native_prefs.dart](app/lib/services/settings_storage/native_prefs.dart)). Шесть Android-настроек (`auto_start`, `keep_on_exit`, `background_mode`, `core_logs_enabled`, `allow_bypass`, `auto_redirect`) раньше жили ТОЛЬКО в native SharedPreferences (`boxvpn_boot.*`) — непрозрачно для бэкапа/импорта/UI. Теперь модель: `lxbox_settings.json` = источник истины (диск), native = рабочая копия (оперативка) для Dart-less моментов (BOOT_COMPLETED, swipe, establish — когда Flutter недоступен). Секция `native_prefs` в JSON; write-through (set пишет в JSON → зеркалит в native); на старте sync JSON⇒native (само чинится при расхождении). Все писатели (UI/импорт/Debug API) идут через единую дверь `SettingsStorage.setNativeBool`. Единая backup-сериализация (`exportNativePrefsBackup`/`applyNativePrefsBackup`) — устранён тройной дубль (backup_service + Debug-handler). Доделана Dart-обёртка `auto_redirect` (§124). Device-verified (Debug API: write-through, 6 ключей, bootstrap).
+- **§188 — keep-alive + allow-bypass переехали в Mode-вкладку** ([task spec](docs/spec/tasks/188-tun-toggles-to-mode-tab.md), [vpn_mode_tab.dart](app/lib/screens/vpn_mode_tab.dart)). Тумблеры «Keep VPN on exit» и «Allow VPN bypass» — TUN-зависимые (работают вокруг VpnService/Builder, бессмысленны в proxy-режиме) — переехали из App Settings в VPN Settings → Mode, группа «Tunnel options». Видны только при наличии TUN (режимы VPN / VPN+Proxy), скрыты в Proxy. `keep_on_exit` дефолт изменён `false→true` (keep-alive ожидаем). `interrupt_on_switch` (режим-независим) остался в App Settings. Device-verified.
+- **§194 — ясность счётчиков соединений** ([task spec](docs/spec/tasks/194-connection-counters-clarity.md), [traffic_bar.dart](app/lib/screens/home/widgets/traffic_bar.dart)). Три экрана показывали разные числа соединений (главный «13», Stats «6», Conns своё) — юзер не понимал кому верить. Корень: главный складывал `connectionsIn + connectionsOut`, а это два РАЗНЫХ множества ядра — `connectionsIn` (трафик-трекер = соединения приложений, как на Stats) + `connectionsOut` (route-менеджер = физические соединения к серверам). Теперь главный показывает РАЗДЕЛЬНО: 🔗 (приложений, совпадает со Stats) + 🗄 (серверов), long-press → tooltip. Conns заголовок: «N active / M total». Device-verified.
+
+### Removed
+
+- **§191 — Clash API из VPN Settings → Core** ([task spec](docs/spec/tasks/191-remove-clash-api-from-core.md), wizard_template.json). Удалена секция «Clash API» (Address + Secret) — мёртвый рудимент после §122 (ядро без `with_clash_api`, билдер не инжектил clash с rc.3). Device-verified.
+
 ## [2.5.1] — 2026-06-27
 
 Хотфикс к v2.5.0 — регрессия lifecycle при swipe-from-recents с keep-alive туннелем. После «смахивания» приложения из недавних процесс выживал (foreground VPN-сервис), умирал только Flutter-движок; при повторном открытии все CommandClient-клиенты оставались привязаны к мёртвому движку → UI `Connected`, но пустой (статус-broadcast горел, данные не текли). Cold-start теперь пере-синхронизирует все каналы данных с ядром.

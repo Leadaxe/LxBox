@@ -1,3 +1,4 @@
+import '../../../models/background_mode.dart';
 import '../../../vpn/box_vpn_client.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
@@ -62,13 +63,18 @@ Future<DebugResponse> _storage(DebugRequest req, DebugContext ctx) async {
 
 Future<DebugResponse> _vpn(DebugRequest req, DebugContext ctx) async {
   final vpn = BoxVpnClient();
-  final autoStart = await vpn.getAutoStart();
-  final keepOnExit = await vpn.getKeepOnExit();
-  final allowBypass = await vpn.getAllowBypass();
+  // §189 — persisted-настройки из JSON-зеркала native_prefs (истина).
+  final autoStart =
+      await SettingsStorage.getNativeBool(NativePrefsKeys.autoStart);
+  final keepOnExit =
+      await SettingsStorage.getNativeBool(NativePrefsKeys.keepOnExit);
+  final allowBypass =
+      await SettingsStorage.getNativeBool(NativePrefsKeys.allowBypass);
   // §069 — runtime applied value, может отличаться от persisted allowBypass
-  // если юзер поменял toggle но не reload'нул VPN.
+  // если юзер поменял toggle но не reload'нул VPN (это НЕ настройка — сессия).
   final currentSessionAllowBypass = await vpn.getCurrentSessionAllowBypass();
-  final backgroundMode = await vpn.getBackgroundMode();
+  final backgroundMode = BackgroundMode.fromNative(
+      await SettingsStorage.getNativeBackgroundMode());
   final battery = await vpn.isIgnoringBatteryOptimizations();
   return JsonResponse({
     'auto_start': autoStart,

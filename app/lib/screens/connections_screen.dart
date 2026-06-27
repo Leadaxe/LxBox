@@ -228,8 +228,13 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                 },
               ),
               const Spacer(),
-              Text('${list.length}',
-                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              // §194 — «N активных / M всего»: активные = живые (closedAt==0, не
+              // в _closedIds), всего = весь набор (живые + закрытая история).
+              // Снимает путаницу разных счётчиков между экранами.
+              Text(
+                '${list.where((c) => c.closedAt == 0 && !_closedIds.contains(c.id)).length} active / ${list.length} total',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+              ),
               if (list.isNotEmpty)
                 IconButton(
                   tooltip: 'Close all',

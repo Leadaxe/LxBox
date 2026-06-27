@@ -1,7 +1,5 @@
 import 'package:package_info_plus/package_info_plus.dart';
 
-import '../../../models/background_mode.dart';
-import '../../../vpn/box_vpn_client.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
 import '../contract/errors.dart';
@@ -53,15 +51,8 @@ Future<DebugResponse> _export(DebugRequest req) async {
     out['storage'] = await SettingsStorage.exportRaw();
   }
   if (include.contains('vpn_settings')) {
-    final c = BoxVpnClient();
-    final mode = await c.getBackgroundMode();
-    out['vpn_settings'] = {
-      'auto_start': await c.getAutoStart(),
-      'keep_on_exit': await c.getKeepOnExit(),
-      'background_mode': mode.wireValue,
-      'core_logs_enabled': await c.getCoreLogsEnabled(),
-      'allow_bypass': await c.getAllowBypass(),
-    };
+    // §189 — единая сериализация (делегат NativePrefs, как BackupService).
+    out['vpn_settings'] = await SettingsStorage.exportNativePrefsBackup();
   }
   return JsonResponse(out, pretty: true);
 }
@@ -91,30 +82,8 @@ Future<DebugResponse> _import(DebugRequest req, DebugContext ctx) async {
 
   final vpn = body['vpn_settings'];
   if (vpn is Map<String, dynamic>) {
-    final c = BoxVpnClient();
-    var n = 0;
-    if (vpn.containsKey('auto_start')) {
-      await c.setAutoStart(vpn['auto_start'] == true);
-      n++;
-    }
-    if (vpn.containsKey('keep_on_exit')) {
-      await c.setKeepOnExit(vpn['keep_on_exit'] == true);
-      n++;
-    }
-    if (vpn.containsKey('background_mode')) {
-      await c.setBackgroundMode(
-          BackgroundMode.fromNative(vpn['background_mode']?.toString()));
-      n++;
-    }
-    if (vpn.containsKey('core_logs_enabled')) {
-      await c.setCoreLogsEnabled(vpn['core_logs_enabled'] == true);
-      n++;
-    }
-    if (vpn.containsKey('allow_bypass')) {
-      await c.setAllowBypass(vpn['allow_bypass'] == true);
-      n++;
-    }
-    applied['vpn_settings'] = n;
+    // §189 — единая сериализация (делегат NativePrefs, как BackupService).
+    applied['vpn_settings'] = await SettingsStorage.applyNativePrefsBackup(vpn);
   } else if (vpn != null) {
     throw const BadRequest('vpn_settings must be a JSON object');
   }

@@ -8,7 +8,6 @@ import '../models/background_mode.dart';
 import '../models/parser_config.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
-import '../vpn/box_vpn_client.dart';
 import '../widgets/template_var_list.dart';
 import 'vpn_mode_tab.dart';
 
@@ -41,17 +40,14 @@ class _SettingsScreenState extends State<SettingsScreen>
   // экранов; сигнатура отличается — здесь per-var, не boolean-флаг),
   // flush'ится в `_persist` (dispose + lifecycle.paused).
   //
-  // §084 M14: Native VPN System toggles (allow_bypass / keep_on_exit /
-  // background_mode) идут **другим** путём — НЕ через `_pendingVars`/
-  // `_persist`/`configDirty`, а через `_vpn.setX()` (immediate native write)
-  // + `homeController.markConfigChangedNeedRestart()` (home banner «Restart
-  // VPN»). Это discrete-event toggles, не config-rebuild vars.
+  // §084 M14 / §189: Native VPN System toggle (background_mode; §188 —
+  // allow_bypass / keep_on_exit переехали в Mode-вкладку) идёт через
+  // `SettingsStorage.setNativeBackgroundMode` (§189 — JSON-истина + зеркало в
+  // native) + `markConfigChangedNeedRestart` (home banner «Restart VPN»). Это
+  // discrete-event toggle, не config-rebuild var.
   final _pendingVars = <String, String>{};
   bool _loading = true;
 
-  final _vpn = BoxVpnClient();
-  bool _allowBypass = false;
-  bool _keepOnExit = false;
   BackgroundMode _backgroundMode = BackgroundMode.never;
   bool _vpnLoaded = false;
   // §143 — НЕ native/config-significant: чистая storage-настройка поведения
@@ -82,8 +78,8 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   /// §107: дисковый flush staged vars — мутации уже в `_cache` (см.
   /// `_onVarChanged`), осталось одно атомарное `flushToDisk()`. Native
-  /// System settings (allow_bypass etc.) идут отдельно через `_vpn.setX`
-  /// immediate.
+  /// System settings (background_mode) идут через
+  /// `SettingsStorage.setNativeBackgroundMode` (§189) immediate.
   Future<void> _persist() async {
     if (_pendingVars.isEmpty) return;
     _pendingVars.clear();
@@ -97,14 +93,12 @@ class _SettingsScreenState extends State<SettingsScreen>
     for (final v in template.vars) {
       _varValues[v.name] = storedVars[v.name] ?? v.defaultValue;
     }
-    final allowBypass = await _vpn.getAllowBypass();
-    final keep = await _vpn.getKeepOnExit();
-    final bgMode = await _vpn.getBackgroundMode();
+    // §189 — background_mode читаем из JSON-зеркала native_prefs (истина).
+    final bgMode = BackgroundMode.fromNative(
+        await SettingsStorage.getNativeBackgroundMode());
     final interruptOnSwitch = await SettingsStorage.getInterruptOnSwitch();
     setState(() {
       _template = template;
-      _allowBypass = allowBypass;
-      _keepOnExit = keep;
       _backgroundMode = bgMode;
       _interruptOnSwitch = interruptOnSwitch;
       _vpnLoaded = true;
@@ -119,25 +113,13 @@ class _SettingsScreenState extends State<SettingsScreen>
     unawaited(SettingsStorage.setInterruptOnSwitch(val));
   }
 
-  Future<void> _toggleAllowBypass(bool enable) async {
-    setState(() => _allowBypass = enable);
-    await _vpn.setAllowBypass(enable);
-    if (!mounted) return;
-    // §076: home banner показывает «Restart VPN» если tunnelUp. Локальный
-    // snackbar удалён — единый source-of-truth.
-    widget.homeController.markConfigChangedNeedRestart();
-  }
-
-  void _toggleKeepOnExit(bool val) {
-    setState(() => _keepOnExit = val);
-    unawaited(_vpn.setKeepOnExit(val));
-    widget.homeController.markConfigChangedNeedRestart();
-  }
+  // §188 — _toggleAllowBypass / _toggleKeepOnExit переехали в vpn_mode_tab.dart.
 
   Future<void> _applyBackgroundMode(BackgroundMode? mode) async {
     if (mode == null || mode == _backgroundMode) return;
     setState(() => _backgroundMode = mode);
-    await _vpn.setBackgroundMode(mode);
+    // §189 — через NativePrefs (JSON-истина + зеркало в native).
+    await SettingsStorage.setNativeBackgroundMode(mode.wireValue);
     widget.homeController.markConfigChangedNeedRestart();
   }
 
@@ -200,48 +182,8 @@ class _SettingsScreenState extends State<SettingsScreen>
     return ListView(
       padding: EdgeInsets.fromLTRB(12, 12, 12, bottomPad),
       children: [
-        SwitchListTile(
-          title: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Flexible(child: Text('Allow VPN bypass')),
-              const SizedBox(width: 6),
-              Tooltip(
-                message:
-                    'Allows apps to bypass the VPN tunnel via '
-                    'ConnectivityManager.bindProcessToNetwork(). '
-                    'Useful for banking apps, captive portal detection, '
-                    'or system services that refuse VPN connections.\n\n'
-                    'Off = strict tunnel (all traffic forced through VPN).\n'
-                    'Takes effect on next VPN connect.',
-                preferBelow: false,
-                triggerMode: TooltipTriggerMode.tap,
-                showDuration: const Duration(seconds: 12),
-                waitDuration: const Duration(milliseconds: 100),
-                child: Icon(
-                  Icons.info_outline,
-                  size: 18,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-          subtitle: Text(
-            _allowBypass
-                ? 'Apps may use ConnectivityManager to bypass tun.'
-                : 'Strict tunnel — all traffic goes through tun.',
-          ),
-          secondary: const Icon(Icons.alt_route),
-          value: _allowBypass,
-          onChanged: (val) => unawaited(_toggleAllowBypass(val)),
-        ),
-        SwitchListTile(
-          title: const Text('Keep VPN on exit'),
-          subtitle: const Text('VPN stays active when app is closed'),
-          secondary: const Icon(Icons.exit_to_app),
-          value: _keepOnExit,
-          onChanged: _vpnLoaded ? _toggleKeepOnExit : null,
-        ),
+        // §188 — «Allow VPN bypass» и «Keep VPN on exit» переехали в Mode-вкладку
+        // (TUN-зависимы → видны только в vpn / vpn_proxy режимах).
         SwitchListTile(
           title: const Text('Interrupt connections on switch'),
           subtitle: const Text(

@@ -102,7 +102,15 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 ├─ presets_migrated              bool          §159 — guard «дефолтные пресеты засеяны» (fresh-install seed)
 ├─ interrupt_connections_on_switch  bool       §143 — рвать соединения переключаемой группы при смене ноды (default false, НЕ config-significant)
 ├─ node_sort_mode                string        §100 — выбранный режим сортировки нод ('' = template-default)
-└─ node_manual_order[]           list          §100 — ручной порядок node tags (для mode=manual)
+├─ node_manual_order[]           list          §100 — ручной порядок node tags (для mode=manual)
+└─ native_prefs                  object        §189 — ЗЕРКАЛО шести Android-prefs (`boxvpn_boot.*`).
+    │                                            JSON = источник истины (диск); native = рабочая копия.
+    ├─ auto_start                bool          default false  — auto-start VPN на boot
+    ├─ keep_on_exit              bool          default true   — §188: не глушить tun при swipe-kill
+    ├─ background_mode           string        default "never" — never|lazy|always (Doze-поведение)
+    ├─ core_logs_enabled         bool          default false  — forward sing-box-логов
+    ├─ allow_bypass              bool          default false  — Allow VPN bypass (§069)
+    └─ auto_redirect             bool          default false  — auto-redirect
 
 # §159 — все legacy-ключи (proxy_sources / app_rules / enabled_rules /
 # rule_outbounds / node_overrides / show_detour_servers / vars.auto_rebuild)
@@ -162,7 +170,8 @@ Android SharedPreferences:
   "presets_migrated":   true,      // §159 — guard «дефолты засеяны» (fresh-install seed)
   "interrupt_connections_on_switch": false, // §143 — рвать conns группы при смене ноды (НЕ config-significant)
   "node_sort_mode":     "",        // §100
-  "node_manual_order":  [ … ]      // §100
+  "node_manual_order":  [ … ],     // §100
+  "native_prefs":       { … }      // §189 — зеркало boxvpn_boot.* (JSON = истина)
 }
 ```
 
@@ -565,6 +574,62 @@ CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHist
 
 ---
 
+## `native_prefs` — [§189] зеркало `boxvpn_boot.*`
+
+JSON-зеркало шести Android-prefs, которые исторически жили **только** в native
+`SharedPreferences` (`boxvpn_boot.*`). Реализация — `lib/services/settings_storage/native_prefs.dart`.
+
+```jsonc
+{
+  "auto_start":        false,    // auto-start VPN на boot
+  "keep_on_exit":      true,     // §188 — не глушить tun при swipe-kill (default ON)
+  "background_mode":   "never",  // never | lazy | always — Doze-поведение туннеля
+  "core_logs_enabled": false,    // forward sing-box-логов в Dart
+  "allow_bypass":      false,    // §069 — Allow VPN bypass
+  "auto_redirect":     false     // auto-redirect
+}
+```
+
+**Модель «диск = истина, оперативка = рабочая копия».** Эта секция в
+`lxbox_settings.json` — **источник истины** (диск). Native `SharedPreferences`
+(`boxvpn_boot.*`) — **рабочая копия в оперативке**, нужная для **Dart-less
+моментов**, когда Flutter-движок недоступен: `BOOT_COMPLETED` (`BootReceiver`),
+swipe `onTaskRemoved`, `openTun`/`establish`. native читает свою копию синхронно
+и **никогда не пишет JSON** (единственное исключение — bootstrap-seed, см. ниже).
+
+**Поток записи (write-through).** Любой `setX` → пишет в JSON (первично) →
+зеркалит в native через method-channel. Все писатели — UI
+(`vpn_mode_tab`/`settings_screen`/`app_settings_screen`), импорт (`backup_service`),
+Debug API handlers — идут через единую дверь `SettingsStorage.setNativeBool` /
+`setNativeBackgroundMode`. Прямые native-записи в обход этого слоя эфемерны:
+старт-`sync` (ниже) откатит их на следующем запуске.
+
+**Старт** (`SettingsStorage.bootstrapAndSyncNativePrefs()`, зовётся из `main.dart`
+до UI):
+- секции `native_prefs` нет (первый старт после §189) → **bootstrap**: seed
+  native ⇒ JSON (единственный случай native⇒JSON-записи);
+- секция есть → **sync**: JSON ⇒ native, диск перезаливает оперативку для
+  расходящихся ключей — расхождение само чинится.
+
+**Backup.** Единая сериализация блока — `SettingsStorage.exportNativePrefsBackup()`
+/ `applyNativePrefsBackup()`: состав/дефолты/типы в одном месте
+(`native_prefs.dart`). `backup_service` и Debug-handler делегируют сюда (раньше
+дублировали). Wire-ключи стабильны (старые бэкапы импортируются). Производный
+`has_tun` (см. ниже) **не** входит в backup-блок — это вычисляемое значение, не
+настройка.
+
+> **`has_tun` ([§192]) — седьмой native-ключ, НЕ в JSON-секции.**
+> `boxvpn_boot.has_tun` (default `true`) — **производное** от [`vpn_mode`](#vpn_mode--119)
+> (§119): `vpn`/`vpn_proxy` → `true`, `proxy` → `false`. Зеркалится при смене
+> режима (`vpn_mode_tab._setMode` → `SettingsStorage.setNativeHasTun`) и на старте
+> (`bootstrapAndSyncNativePrefs`). Гейтит `VpnService.prepare()`: в proxy-режиме
+> `prepare` не зовётся (он зря забирает VPN-слот и отзывает чужой активный VPN).
+> Гейт стоит на 6 точках входа (`BootReceiver.hasTun(...)`-чек). Так как это
+> вычисляемое значение, оно живёт только в native (`boxvpn_boot.has_tun`) и **не**
+> хранится в JSON-секции `native_prefs` — пересчитывается из `vpn_mode`.
+
+---
+
 ## Прочие top-level ключи
 
 | Ключ | Тип | Назначение |
@@ -606,7 +671,17 @@ CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHist
 
 ## SharedPreferences (Android)
 
-Не часть `lxbox_settings.json`. Используется для двух категорий: **pre-Flutter boot flags** (читаются в `BoxApplication.initialize()` до того, как Flutter engine стартует) и **UI prefs** через `shared_preferences`-плагин.
+Не часть `lxbox_settings.json`. Используется для двух категорий: **pre-Flutter boot flags** (читаются в `BoxApplication.initialize()` / `BootReceiver` до того, как Flutter engine стартует) и **UI prefs** через `shared_preferences`-плагин.
+
+> **§189 — `boxvpn_boot.*` теперь ЗЕРКАЛО, не первоисточник.** Шесть native-prefs
+> (`auto_start` / `keep_vpn_on_exit` / `background_mode` / `core_logs_enabled` /
+> `allow_bypass` / `auto_redirect`) — **рабочая копия в оперативке** для Dart-less
+> моментов (boot / swipe `onTaskRemoved` / `openTun`). **Источник истины — секция
+> [`native_prefs`](#native_prefs--189-зеркало-boxvpn_boot) в `lxbox_settings.json`
+> (диск)**: все writes идут write-through (JSON первично → зеркало в native), а на
+> старте `sync` JSON⇒native выправляет расхождения. Единственное исключение —
+> вычисляемый `has_tun` ([§192]), который живёт только здесь (производное от
+> `vpn_mode`, в JSON не хранится).
 
 > **Примечание (§159):** `haptic_enabled` ранее ошибочно числился здесь — по
 > факту он живёт в `vars` (`lxbox_settings.json`), читается/пишется через
@@ -616,10 +691,13 @@ CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHist
 | Ключ | Тип | Источник | Спека | Назначение |
 |---|---|---|---|---|
 | `app_theme_mode` | `"system"` / `"light"` / `"dark"` | Flutter | — | UI theme. |
-| `boxvpn_boot.auto_start_vpn` | `Boolean` | Kotlin | — | Auto-start VPN на boot (если разрешено). |
-| `boxvpn_boot.keep_vpn_on_exit` | `Boolean` | Kotlin | — | Не глушить tun при swipe-kill app. |
-| `boxvpn_boot.background_mode` | `String` | Kotlin | — | Foreground-service режим. |
-| `boxvpn_boot.core_logs_enabled` | `Boolean` | Kotlin | [§043][043-applog] | Читается в `BoxApplication.initialize()` ДО Flutter, поэтому здесь, а не в `lxbox_settings.json`. |
+| `boxvpn_boot.auto_start_vpn` | `Boolean` | Kotlin (зеркало JSON) | [§189] | Auto-start VPN на boot (если разрешено). Истина — `native_prefs.auto_start`. |
+| `boxvpn_boot.keep_vpn_on_exit` | `Boolean` | Kotlin (зеркало JSON) | [§189]/§188 | Не глушить tun при swipe-kill app. Истина — `native_prefs.keep_on_exit` (default ON, §188). |
+| `boxvpn_boot.background_mode` | `String` | Kotlin (зеркало JSON) | [§189] | Foreground-service режим (`never`/`lazy`/`always`). Истина — `native_prefs.background_mode`. |
+| `boxvpn_boot.core_logs_enabled` | `Boolean` | Kotlin (зеркало JSON) | [§189], [§043][043-applog] | Forward sing-box-логов. Читается в `BoxApplication.initialize()` ДО Flutter — поэтому нужна native-копия. Истина — `native_prefs.core_logs_enabled`. |
+| `boxvpn_boot.allow_bypass` | `Boolean` | Kotlin (зеркало JSON) | [§189]/§069 | Allow VPN bypass. Истина — `native_prefs.allow_bypass`. |
+| `boxvpn_boot.auto_redirect` | `Boolean` | Kotlin (зеркало JSON) | [§189] | Auto-redirect. Истина — `native_prefs.auto_redirect`. |
+| `boxvpn_boot.has_tun` | `Boolean` | Kotlin (зеркало `vpn_mode`) | [§192] | **Вычисляемое**, default `true`. Производное от `vpn_mode` (§119): proxy → `false`. Гейтит `VpnService.prepare()` (proxy не отзывает чужой VPN). **НЕ** в backup-блоке, **НЕ** в JSON-секции `native_prefs` — пересчитывается из `vpn_mode`. |
 
 ---
 
@@ -664,5 +742,7 @@ CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHist
 [§044]: ./spec/tasks/044-dns-servers-clean-schema.md
 [§046]: ./spec/features/046%20tunnel%20apps%20split-tunneling/spec.md
 [§117]: ./spec/features/117%20dns-rework/spec.md
+[§189]: ./spec/tasks/189-native-prefs-mirror-in-json.md
+[§192]: ./spec/tasks/192-proxy-mode-prepare-revokes-foreign-vpn.md
 [043-applog]: ./spec/features/043%20applog%20per-source%20quotas/spec.md
 [043-dns]: ./spec/tasks/043-dns-servers-refs-by-kind.md

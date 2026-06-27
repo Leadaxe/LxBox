@@ -9,6 +9,8 @@ class TrafficSnapshot {
     this.uploadTotal = 0,
     this.downloadTotal = 0,
     this.activeConnections = 0,
+    this.connectionsIn = 0,
+    this.connectionsOut = 0,
     this.memory = 0,
     this.byRule = const {},
     this.byApp = const {},
@@ -16,7 +18,16 @@ class TrafficSnapshot {
 
   final int uploadTotal;
   final int downloadTotal;
+
+  /// §194 — сумма In+Out (для диалогов «N connections will be closed»).
   final int activeConnections;
+
+  /// §194 — соединения по направлениям из ядра (`CcStatus.connectionsIn/Out`):
+  /// In = inbound (приложения→tun), Out = outbound (ядро→серверы). Главный
+  /// показывает РАЗДЕЛЬНО (↑In ↓Out), чтобы не путать суммой с числом активных
+  /// в списке на Stats.
+  final int connectionsIn;
+  final int connectionsOut;
 
   /// sing-box process RAM (bytes). §122 — из `CcStatus.memory`.
   final int memory;

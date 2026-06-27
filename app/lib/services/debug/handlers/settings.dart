@@ -1,6 +1,5 @@
 import '../../../models/background_mode.dart';
 import '../../settings_storage.dart';
-import '../../../vpn/box_vpn_client.dart';
 import '../context.dart';
 import '../contract/errors.dart';
 import '../transport/request.dart';
@@ -405,7 +404,9 @@ Future<DebugResponse> _putConfigLocked(DebugRequest req) async {
 // ---------------------------------------------------------------------------
 
 Future<DebugResponse> _getCoreLogsEnabled() async {
-  final enabled = await BoxVpnClient().getCoreLogsEnabled();
+  // §189 — из JSON-зеркала native_prefs (истина).
+  final enabled =
+      await SettingsStorage.getNativeBool(NativePrefsKeys.coreLogsEnabled);
   return JsonResponse({'enabled': enabled});
 }
 
@@ -415,7 +416,8 @@ Future<DebugResponse> _putCoreLogsEnabled(DebugRequest req) async {
   if (value is! bool) {
     throw const BadRequest('body must be {"enabled": true|false}');
   }
-  await BoxVpnClient().setCoreLogsEnabled(value);
+  // §189 — через NativePrefs (JSON + зеркало; не эфемерно при sync).
+  await SettingsStorage.setNativeBool(NativePrefsKeys.coreLogsEnabled, value);
   return JsonResponse({
     'ok': true,
     'action': 'settings-core-logs-enabled',
@@ -628,7 +630,7 @@ Future<DebugResponse> _putTunApps(DebugRequest req, DebugContext ctx) async {
 // keep_on_exit → effect at app exit (нет live reload).
 
 Future<DebugResponse> _getAllowBypass() async {
-  final v = await BoxVpnClient().getAllowBypass();
+  final v = await SettingsStorage.getNativeBool(NativePrefsKeys.allowBypass);
   return JsonResponse({'enabled': v});
 }
 
@@ -638,7 +640,7 @@ Future<DebugResponse> _putAllowBypass(DebugRequest req) async {
   if (value is! bool) {
     throw const BadRequest('body must be {"enabled": true|false}');
   }
-  await BoxVpnClient().setAllowBypass(value);
+  await SettingsStorage.setNativeBool(NativePrefsKeys.allowBypass, value);
   return JsonResponse({
     'ok': true,
     'action': 'settings-vpn-allow-bypass',
@@ -648,7 +650,7 @@ Future<DebugResponse> _putAllowBypass(DebugRequest req) async {
 }
 
 Future<DebugResponse> _getKeepOnExit() async {
-  final v = await BoxVpnClient().getKeepOnExit();
+  final v = await SettingsStorage.getNativeBool(NativePrefsKeys.keepOnExit);
   return JsonResponse({'enabled': v});
 }
 
@@ -658,7 +660,7 @@ Future<DebugResponse> _putKeepOnExit(DebugRequest req) async {
   if (value is! bool) {
     throw const BadRequest('body must be {"enabled": true|false}');
   }
-  await BoxVpnClient().setKeepOnExit(value);
+  await SettingsStorage.setNativeBool(NativePrefsKeys.keepOnExit, value);
   return JsonResponse({
     'ok': true,
     'action': 'settings-vpn-keep-on-exit',
@@ -667,8 +669,8 @@ Future<DebugResponse> _putKeepOnExit(DebugRequest req) async {
 }
 
 Future<DebugResponse> _getBackgroundMode() async {
-  final m = await BoxVpnClient().getBackgroundMode();
-  return JsonResponse({'mode': m.wireValue});
+  final m = await SettingsStorage.getNativeBackgroundMode();
+  return JsonResponse({'mode': BackgroundMode.fromNative(m).wireValue});
 }
 
 Future<DebugResponse> _putBackgroundMode(DebugRequest req) async {
@@ -681,7 +683,7 @@ Future<DebugResponse> _putBackgroundMode(DebugRequest req) async {
     throw BadRequest('mode must be one of: never|lazy|always (got "$raw")');
   }
   final mode = BackgroundMode.fromNative(raw);
-  await BoxVpnClient().setBackgroundMode(mode);
+  await SettingsStorage.setNativeBackgroundMode(mode.wireValue);
   return JsonResponse({
     'ok': true,
     'action': 'settings-vpn-background-mode',
