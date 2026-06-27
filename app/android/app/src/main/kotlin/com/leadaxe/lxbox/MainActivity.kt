@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
+import com.leadaxe.lxbox.vpn.BootReceiver
 import com.leadaxe.lxbox.vpn.BoxApplication
 import com.leadaxe.lxbox.vpn.BoxVpnService
 import com.leadaxe.lxbox.vpn.PermissionUtils
@@ -223,6 +224,12 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun startVpnWithConsent() {
+        // §192 — proxy-режим без TUN: prepare не нужен (и зря рвёт чужой VPN).
+        if (!BootReceiver.hasTun(applicationContext)) {
+            BoxVpnService.start(applicationContext)
+            if (finishAfterConsent) finish()
+            return
+        }
         val prep = VpnService.prepare(applicationContext)
         if (prep == null) {
             BoxVpnService.start(applicationContext)

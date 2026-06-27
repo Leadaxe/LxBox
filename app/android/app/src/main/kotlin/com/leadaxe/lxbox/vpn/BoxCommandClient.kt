@@ -699,74 +699,87 @@ class BoxCommandClient {
             // растёт — TTL ограничивает map ядра, не наш acc.
             acc.filterState(Libbox.ConnectionStateAll.toInt())
             // Эмиссия в Dart — только если кто-то слушает. Накопление выше уже
-            // случилось, так что первый же подписчик получит полный снапшот.
+            // случилось; §193 — re-emit при подписке отдаёт накопленное новому
+            // подписчику (см. reEmitScreenConnections), закрывая потерю стартового
+            // reset-снапшота (connections — single-shot, pull в ядре нет).
             if (BoxVpnService.ccConnectionsSink == null) return
-            val list = ArrayList<Map<String, Any>>()
-            val it = acc.iterator()
-            while (it.hasNext()) {
-                val c = it.next()
-                // §122 — ProcessInfo (app-attribution): package для иконки +
-                // processPath. getProcessInfo() может быть null/кинуть — best-effort.
-                // (Проверено: ProcessInfo НЕ виноват в groups-регрессии. Корень был
-                // НЕ в интервале и НЕ тут, а в опоздавшем setStatus(Stopped) при
-                // reconnect — закрыт native-dedup + Dart guard, §14.1.)
-                var pkg = ""
-                var processPath = ""
-                runCatching {
-                    val pi = c.getProcessInfo()
-                    if (pi != null) {
-                        processPath = pi.getProcessPath() ?: ""
-                        val pkgIt = pi.packageNames()
-                        if (pkgIt != null && pkgIt.hasNext()) pkg = pkgIt.next() ?: ""
-                    }
-                }
-                // §174 — outbound-цепочка (Clash `chains`): ядро отдаёт её через
-                // gRPC `chain_list`, НО только методом-итератором `chain()` (НЕ
-                // как поле). Раньше не читали → цепочка selector→urltest→node
-                // терялась, профайлер довольствовался [outbound]. best-effort.
-                val chains = ArrayList<String>()
-                runCatching {
-                    val chainIt = c.chain()
-                    while (chainIt != null && chainIt.hasNext()) {
-                        chainIt.next()?.let { chains.add(it) }
-                    }
-                }
-                // §178 — detour-хвост финального outbound (ядро SPEC 017): chain()
-                // отдаёт РОУТИНГ (selector→node), detour() — ТРАНСПОРТ (node→WARP),
-                // порядок node→наружу. Полный физ.путь = chain[0] ⊕ detour.
-                // Активировано на rc.6 (javap: detour() → StringIterator, SPEC 017).
-                // best-effort, как chain(): пусто для прямых/block/dns.
-                val detours = ArrayList<String>()
-                runCatching {
-                    val detourIt = c.detour()
-                    while (detourIt != null && detourIt.hasNext()) {
-                        detourIt.next()?.let { detours.add(it) }
-                    }
-                }
-                // uplink/downlink = НАКОПЛЕННЫЙ итог (Total), не дельта за тик.
-                list.add(mapOf(
-                    "id" to c.getID(),
-                    "network" to c.getNetwork(),
-                    "domain" to c.getDomain(),
-                    "destination" to c.getDestination(),
-                    "rule" to c.getRule(),
-                    "uplink" to c.getUplinkTotal(),
-                    "downlink" to c.getDownlinkTotal(),
-                    "uplinkDelta" to c.getUplink(),
-                    "downlinkDelta" to c.getDownlink(),
-                    "outbound" to c.getOutbound(),
-                    "outboundType" to c.getOutboundType(),
-                    "protocol" to c.getProtocol(),
-                    "chains" to chains,
-                    "detours" to detours,
-                    "packageName" to pkg,
-                    "processPath" to processPath,
-                    "createdAt" to c.getCreatedAt(),
-                    "closedAt" to c.getClosedAt(),
-                ))
-            }
-            connectionsEmitter.offer(list)
+            connectionsEmitter.offer(serializeConnections(acc))
         }.onFailure { Log.w(TAG, "applyConnectionEvents failed: ${it.message}") }
+    }
+
+    /// §193 — сериализация аккумулятора Connections в список Map для Dart. Единый
+    /// код для applyConnectionEvents (дельты) и reEmitScreenConnections (подписка).
+    private fun serializeConnections(acc: Connections): List<Map<String, Any>> {
+        val list = ArrayList<Map<String, Any>>()
+        val it = acc.iterator()
+        while (it.hasNext()) {
+            val c = it.next()
+            // §122 — ProcessInfo (app-attribution): package для иконки +
+            // processPath. getProcessInfo() может быть null/кинуть — best-effort.
+            var pkg = ""
+            var processPath = ""
+            runCatching {
+                val pi = c.getProcessInfo()
+                if (pi != null) {
+                    processPath = pi.getProcessPath() ?: ""
+                    val pkgIt = pi.packageNames()
+                    if (pkgIt != null && pkgIt.hasNext()) pkg = pkgIt.next() ?: ""
+                }
+            }
+            // §174 — outbound-цепочка (Clash `chains`): только через итератор
+            // `chain()` (selector→urltest→node). best-effort.
+            val chains = ArrayList<String>()
+            runCatching {
+                val chainIt = c.chain()
+                while (chainIt != null && chainIt.hasNext()) {
+                    chainIt.next()?.let { chains.add(it) }
+                }
+            }
+            // §178 — detour-хвост (ядро SPEC 017): chain()=роутинг, detour()=транспорт
+            // (node→WARP). Полный физ.путь = chain[0] ⊕ detour. best-effort.
+            val detours = ArrayList<String>()
+            runCatching {
+                val detourIt = c.detour()
+                while (detourIt != null && detourIt.hasNext()) {
+                    detourIt.next()?.let { detours.add(it) }
+                }
+            }
+            // uplink/downlink = НАКОПЛЕННЫЙ итог (Total), не дельта за тик.
+            list.add(mapOf(
+                "id" to c.getID(),
+                "network" to c.getNetwork(),
+                "domain" to c.getDomain(),
+                "destination" to c.getDestination(),
+                "rule" to c.getRule(),
+                "uplink" to c.getUplinkTotal(),
+                "downlink" to c.getDownlinkTotal(),
+                "uplinkDelta" to c.getUplink(),
+                "downlinkDelta" to c.getDownlink(),
+                "outbound" to c.getOutbound(),
+                "outboundType" to c.getOutboundType(),
+                "protocol" to c.getProtocol(),
+                "chains" to chains,
+                "detours" to detours,
+                "packageName" to pkg,
+                "processPath" to processPath,
+                "createdAt" to c.getCreatedAt(),
+                "closedAt" to c.getClosedAt(),
+            ))
+        }
+        return list
+    }
+
+    /// §193 — переэмитить текущий screenAccumulator новому connections-подписчику.
+    /// Зовётся из VpnPlugin.onListen (connections-канал) при появлении sink.
+    /// Закрывает корень: connections — single-shot reset-снапшот от ядра (pull
+    /// в libbox нет), и при повторном открытии Stats screenClient НЕ
+    /// пересоздаётся (refcount>0) → нового reset нет. Накопленный acc жив —
+    /// отдаём его сразу. Идемпотентно: пустой/null acc → пустой list, безопасно.
+    fun reEmitScreenConnections() {
+        runCatching {
+            val acc = screenAccumulator.get() ?: return
+            connectionsEmitter.offer(serializeConnections(acc))
+        }.onFailure { Log.w(TAG, "reEmitScreenConnections failed: ${it.message}") }
     }
 
     // ═══════════════════════ Emitters (по образцу core-log drainer) ═══════════════════════

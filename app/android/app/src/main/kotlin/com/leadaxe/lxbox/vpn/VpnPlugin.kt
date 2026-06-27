@@ -199,7 +199,15 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         })
         ccConnectionsEventChannel = EventChannel(binding.binaryMessenger, CC_CONNECTIONS_CHANNEL)
         ccConnectionsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccConnectionsSink = sink }
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) {
+                BoxVpnService.ccConnectionsSink = sink
+                // §193 — connections single-shot: ядро шлёт reset-снапшот РОВНО
+                // один раз при подписке screenClient (pull в libbox нет). Новый
+                // Dart-подписчик (открытие Stats при уже живом screenClient) не
+                // получает нового reset → пусто. Переэмитим накопленный
+                // аккумулятор сразу, чтобы Stats увидел текущие соединения.
+                BoxService.commandClient?.reEmitScreenConnections()
+            }
             override fun onCancel(args: Any?) { BoxVpnService.ccConnectionsSink = null }
         })
         // §180 — DNS-журнал из ядра (SPEC 018).
@@ -265,7 +273,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // (prepare==null). Тот же путь, что §047 LxBoxIntentReceiver/Tile.
             // Возвращает {"started":bool, "needs_consent":bool}.
             "startVpnHeadless" -> {
-                val needConsent = VpnService.prepare(context.applicationContext) != null
+                // §192 — proxy-режим без TUN: prepare не нужен (и зря рвёт чужой
+                // VPN). Стартуем напрямую, консент не требуется.
+                val needConsent = BootReceiver.hasTun(context) &&
+                    VpnService.prepare(context.applicationContext) != null
                 if (needConsent) {
                     result.success(mapOf("started" to false, "needs_consent" to true))
                 } else {
@@ -363,6 +374,25 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
             "getAllowBypass" -> {
                 result.success(BootReceiver.isAllowBypass(context))
+            }
+            // §189 — auto_redirect (§124 root-only tproxy). Доделана Dart-обёртка
+            // для зеркала native_prefs. UI-тоггла нет (root-only), но в JSON-
+            // зеркале/бэкапе участвует.
+            "setAutoRedirect" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                BootReceiver.setAutoRedirect(context, enabled)
+                result.success(true)
+            }
+            "getAutoRedirect" -> {
+                result.success(BootReceiver.isAutoRedirect(context))
+            }
+            // §192 — зеркало has_tun (производное от vpn_mode §119): гейтит
+            // VpnService.prepare() на всех точках запуска. proxy → false →
+            // prepare не зовётся → чужой VPN не отзывается.
+            "setHasTun" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: true
+                BootReceiver.setHasTun(context, enabled)
+                result.success(true)
             }
             // §069: runtime applied value (от последнего establish()), в отличие
             // от persisted getAllowBypass() который меняется до VPN reload.
@@ -880,6 +910,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         val act = activity
         if (act == null) {
             result.error("NO_ACTIVITY", "No activity", null)
+            return
+        }
+        // §192 — proxy-режим (port-only, без TUN): НЕ зовём VpnService.prepare()
+        // — он зря забирает системный VPN-слот и отзывает чужой активный VPN
+        // (onRevoke). Стартуем сервис напрямую; ядро в proxy не зовёт openTun.
+        if (!BootReceiver.hasTun(context)) {
+            BoxVpnService.start(context)
+            result.success(true)
             return
         }
         val intent = VpnService.prepare(act)

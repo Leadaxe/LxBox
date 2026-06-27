@@ -43,6 +43,13 @@ class _Methods {
   // §049 F15 — VPN bypass opt-in
   static const setAllowBypass = 'setAllowBypass';
   static const getAllowBypass = 'getAllowBypass';
+  // §189 — auto_redirect (§124 root-only tproxy); зеркало native_prefs.
+  static const setAutoRedirect = 'setAutoRedirect';
+  static const getAutoRedirect = 'getAutoRedirect';
+  // §192 — has_tun (производное от vpn_mode); гейтит VpnService.prepare().
+  // Только set: native читает has_tun напрямую (BootReceiver.hasTun), не через
+  // method-channel — getHasTun-handler не нужен.
+  static const setHasTun = 'setHasTun';
   // §069 — runtime applied value of allowBypass
   static const getCurrentSessionAllowBypass = 'getCurrentSessionAllowBypass';
 

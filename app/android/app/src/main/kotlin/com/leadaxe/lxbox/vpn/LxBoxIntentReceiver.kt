@@ -132,7 +132,9 @@ class LxBoxIntentReceiver : BroadcastReceiver() {
             BoxVpnService.stop(context)
             return
         }
-        if (VpnService.prepare(context.applicationContext) == null) {
+        // §192 — proxy-режим без TUN: prepare не нужен (и зря рвёт чужой VPN).
+        if (!BootReceiver.hasTun(context) ||
+            VpnService.prepare(context.applicationContext) == null) {
             BoxVpnService.start(context)
         } else {
             val launch = Intent(context, MainActivity::class.java).apply {

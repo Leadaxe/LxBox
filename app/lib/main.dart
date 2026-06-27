@@ -13,6 +13,7 @@ import 'services/clash_log_pump.dart';
 import 'services/subscription/subscription_identity.dart';
 import 'services/debug/bootstrap.dart' as debug_bootstrap;
 import 'services/nav/home_return_observer.dart';
+import 'services/settings_storage.dart';
 import 'services/version_info.dart';
 import 'services/wifi_history_listener.dart';
 
@@ -61,6 +62,11 @@ void main() async {
     // (из обоих файлов applog.txt + corelog.txt — §043) до runApp, чтобы
     // Debug-экран сразу видел pre-crash JVM-events.
     await AppLog.I.initPersistent();
+    // §189 — native_prefs: первый старт seed'ит JSON из native (bootstrap),
+    // последующие — sync JSON⇒native (диск-истина перезаливает оперативку).
+    // ДО UI (UI читает native-тумблеры из JSON-зеркала) и ДО возможного
+    // авто-старта VPN. best-effort: ошибка не валит запуск (try выше).
+    await SettingsStorage.bootstrapAndSyncNativePrefs();
     // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в
     // AppLog как DebugSource.core. Идемпотентно (повторный attach no-op).
     ClashLogPump.I.attach();
