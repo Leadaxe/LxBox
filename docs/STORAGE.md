@@ -105,6 +105,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ enabled               bool          вкл/выкл (vpn-1 всегда true)
 │       ├─ include_direct        bool          direct-out опцией селектора
 │       ├─ node_filter           string        regex по итоговому tag ноды; '' = все
+│       ├─ node_filter_invert    bool          §197 — инверсия node_filter (ноды НЕ матчащие); default false
 │       ├─ default_filter        string        regex; первая matched → default; '' = нет
 │       ├─ interrupt_exist_connections  bool   selector.interrupt_exist_connections
 │       └─ auto                  object?       null = галка ВЫКЛ; object → urltest-двойник <tag>-auto (tag производный, не хранится)

@@ -147,7 +147,8 @@ class HomeNodeList extends StatelessWidget {
               // (selectedGroup ∈ groups). Иначе некуда сохранять → null скрывает.
               onSaveRegex: (state.selectedGroup != null &&
                       state.groups.contains(state.selectedGroup))
-                  ? (pattern) => _saveRegexToChannel(context, pattern)
+                  ? (pattern, invert) =>
+                      _saveRegexToChannel(context, pattern, invert)
                   : null,
             ),
           Expanded(
@@ -339,7 +340,7 @@ class HomeNodeList extends StatelessWidget {
   /// может доредактировать и сохранить явно. Результат применяем здесь (на
   /// главной нет routing-стейта, который пишет channel-edit).
   Future<void> _saveRegexToChannel(
-      BuildContext context, String pattern) async {
+      BuildContext context, String pattern, bool invert) async {
     final tag = state.selectedGroup;
     if (tag == null) return;
     final channels = await SettingsStorage.getChannels();
@@ -377,8 +378,10 @@ class HomeNodeList extends StatelessWidget {
 
     // Предзаполняем нужное поле и открываем редактор канала (Routing → Channels
     // → этот канал) — юзер видит подставленное значение и сохраняет явно.
+    // §197 — для node_filter переносим и инверсию с главного фильтра; default
+    // инверсии не имеет (игнор).
     final seeded = choice == 'node'
-        ? channel.copyWith(nodeFilter: pattern)
+        ? channel.copyWith(nodeFilter: pattern, nodeFilterInvert: invert)
         : channel.copyWith(defaultFilter: pattern);
     final allNodeTags = _allNodeTagsFromState();
     final result = await openChannelEditor(

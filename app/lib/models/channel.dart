@@ -82,6 +82,7 @@ class Channel {
     this.enabled = true,
     this.includeDirect = false,
     this.nodeFilter = '',
+    this.nodeFilterInvert = false,
     this.defaultFilter = '',
     this.interruptExistConnections = true,
     this.auto,
@@ -102,6 +103,11 @@ class Channel {
   /// regex по ИТОГОВОМУ tag ноды (§048-style, `n.tag.contains`/`RegExp.hasMatch`).
   /// '' → все ноды (текущее поведение).
   final String nodeFilter;
+
+  /// §197 — инверсия node_filter (как `!`-тогл в §048). true → в канал попадают
+  /// ноды, чей tag НЕ матчит [nodeFilter] (исключающий фильтр). Пустой
+  /// nodeFilter → инверсия игнорируется (все ноды).
+  final bool nodeFilterInvert;
 
   /// regex; первая matched нода → `options.default`. '' → default не выставляется.
   final String defaultFilter;
@@ -124,6 +130,7 @@ class Channel {
     bool? enabled,
     bool? includeDirect,
     String? nodeFilter,
+    bool? nodeFilterInvert,
     String? defaultFilter,
     bool? interruptExistConnections,
     ChannelAuto? auto,
@@ -135,6 +142,7 @@ class Channel {
         enabled: enabled ?? this.enabled,
         includeDirect: includeDirect ?? this.includeDirect,
         nodeFilter: nodeFilter ?? this.nodeFilter,
+        nodeFilterInvert: nodeFilterInvert ?? this.nodeFilterInvert,
         defaultFilter: defaultFilter ?? this.defaultFilter,
         interruptExistConnections:
             interruptExistConnections ?? this.interruptExistConnections,
@@ -149,6 +157,7 @@ class Channel {
       enabled: json['enabled'] as bool? ?? true,
       includeDirect: json['include_direct'] as bool? ?? false,
       nodeFilter: json['node_filter'] as String? ?? '',
+      nodeFilterInvert: json['node_filter_invert'] as bool? ?? false,
       defaultFilter: json['default_filter'] as String? ?? '',
       interruptExistConnections:
           json['interrupt_exist_connections'] as bool? ?? true,
@@ -164,6 +173,7 @@ class Channel {
         'enabled': enabled,
         'include_direct': includeDirect,
         'node_filter': nodeFilter,
+        'node_filter_invert': nodeFilterInvert,
         'default_filter': defaultFilter,
         'interrupt_exist_connections': interruptExistConnections,
         'auto': auto?.toJson(), // null остаётся null в JSON (галка ВЫКЛ)

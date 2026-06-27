@@ -456,11 +456,14 @@ List<Map<String, dynamic>> _buildChannelGroups({
   final active = channels.where((c) => c.enabled || c.isRequired).toList();
 
   /// Ноды канала после regex-фильтра. Пустой/битый regex → все baseNodes.
+  /// §197 — nodeFilterInvert инвертирует смысл: true → ноды, чей tag НЕ матчит.
   List<String> nodesFor(Channel c) {
     if (c.nodeFilter.isEmpty) return baseNodes;
     final re = _tryCompileRegex(c.nodeFilter);
     if (re == null) return baseNodes;
-    return baseNodes.where(re.hasMatch).toList();
+    return baseNodes
+        .where((t) => re.hasMatch(t) != c.nodeFilterInvert)
+        .toList();
   }
 
   final result = <Map<String, dynamic>>[];

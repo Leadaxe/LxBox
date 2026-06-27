@@ -34,8 +34,8 @@ class FilterPanel extends StatefulWidget {
 
   final List<(String, String)> subOptions;
 
-  /// §195 — сохранить regex в активный канал. `null` → 💾 скрыта.
-  final ValueChanged<String>? onSaveRegex;
+  /// §195/§197 — сохранить regex (+инверсию) в активный канал. `null` → 💾 скрыта.
+  final void Function(String pattern, bool invert)? onSaveRegex;
 
   @override
   State<FilterPanel> createState() => _FilterPanelState();

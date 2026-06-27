@@ -67,10 +67,10 @@ class RegexFilterField extends StatelessWidget {
   final VoidCallback onInvertToggle;
   final VoidCallback? onClear;
 
-  /// §195 — сохранить текущий regex в активный канал (node_filter/default_filter).
-  /// `null` → кнопка 💾 скрыта (нет активного канала). Показывается только при
+  /// §195/§197 — сохранить текущий regex (+инверсию) в активный канал. `null`
+  /// → кнопка 💾 скрыта (нет активного канала). Показывается только при
   /// непустом валидном паттерне.
-  final ValueChanged<String>? onSaveRegex;
+  final void Function(String pattern, bool invert)? onSaveRegex;
 
   @override
   Widget build(BuildContext context) {
@@ -119,7 +119,7 @@ class RegexFilterField extends StatelessWidget {
                       children: [
                         if (onSaveRegex != null && valid)
                           InkWell(
-                            onTap: () => onSaveRegex!(controller.text),
+                            onTap: () => onSaveRegex!(controller.text, invert),
                             borderRadius: BorderRadius.circular(4),
                             child: SizedBox(
                               width: 28,

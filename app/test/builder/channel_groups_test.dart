@@ -164,6 +164,35 @@ void main() {
       expect((byTag(outs, 'vpn-1')['outbounds'] as List), hasLength(4));
     });
 
+    test('§197 — nodeFilterInvert: исключить matched (все КРОМЕ 🇺🇸)', () async {
+      final outs = await build([
+        const Channel(
+            tag: 'vpn-1',
+            label: 'not-US',
+            nodeFilter: '🇺🇸',
+            nodeFilterInvert: true),
+      ]);
+      final ob = byTag(outs, 'vpn-1')['outbounds'] as List;
+      expect(ob, containsAll(['🇩🇪 Berlin', '🇩🇪 Premium', '🇳🇱 Amsterdam']));
+      expect(ob, isNot(contains('🇺🇸 NYC')));
+    });
+
+    test('§197 — invert + пустой фильтр → все ноды (инверсия игнор)', () async {
+      final outs = await build([
+        const Channel(tag: 'vpn-1', label: 'x', nodeFilterInvert: true),
+      ]);
+      expect((byTag(outs, 'vpn-1')['outbounds'] as List), hasLength(4));
+    });
+
+    test('§197 — invert исключает ВСЁ → fallback direct-out', () async {
+      // regex матчит всё (.) + invert → ничего не остаётся → direct-out fallback.
+      final outs = await build([
+        const Channel(
+            tag: 'vpn-1', label: 'x', nodeFilter: '.', nodeFilterInvert: true),
+      ]);
+      expect(byTag(outs, 'vpn-1')['outbounds'], ['direct-out']);
+    });
+
     test('невалидный regex → fallback на все ноды (не падает)', () async {
       final outs = await build([
         const Channel(tag: 'vpn-1', label: 'bad', nodeFilter: '[unclosed'),

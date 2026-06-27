@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/channel.dart';
+import 'home/filter_widgets.dart' show NegateToggle;
 
 /// §125 — полноэкранный редактор канала роутинга. Идиома проекта
 /// ([custom_rule_edit_screen.dart], [dns_server_edit_screen.dart]):
@@ -40,6 +41,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
 
   late bool _includeDirect;
   late bool _interrupt;
+  late bool _nodeFilterInvert;
   late bool _autoEnabled;
   late bool _autoInterrupt;
 
@@ -52,6 +54,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     _defaultFilterCtrl = TextEditingController(text: c.defaultFilter);
     _includeDirect = c.includeDirect;
     _interrupt = c.interruptExistConnections;
+    _nodeFilterInvert = c.nodeFilterInvert;
     _autoEnabled = c.auto != null;
 
     final a = c.auto ?? const ChannelAuto();
@@ -102,6 +105,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
           : _labelCtrl.text.trim(),
       includeDirect: _includeDirect,
       nodeFilter: _nodeFilterCtrl.text.trim(),
+      nodeFilterInvert: _nodeFilterInvert,
       defaultFilter: _defaultFilterCtrl.text.trim(),
       interruptExistConnections: _interrupt,
       clearAuto: !_autoEnabled,
@@ -127,6 +131,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     return s.label != i.label ||
         s.includeDirect != i.includeDirect ||
         s.nodeFilter != i.nodeFilter ||
+        s.nodeFilterInvert != i.nodeFilterInvert ||
         s.defaultFilter != i.defaultFilter ||
         s.interruptExistConnections != i.interruptExistConnections ||
         (s.auto == null) != (i.auto == null) ||
@@ -245,11 +250,14 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     final nodeFilterText = _nodeFilterCtrl.text.trim();
     final nodeFilterValid = _isValidRegex(nodeFilterText);
     final re = _compile(nodeFilterText);
+    // §197 — превью учитывает инверсию (как билдер): invert → ноды НЕ матчащие.
     final matchedNodes = nodeFilterText.isEmpty
         ? widget.allNodeTags
         : (re == null
             ? widget.allNodeTags
-            : widget.allNodeTags.where(re.hasMatch).toList());
+            : widget.allNodeTags
+                .where((t) => re.hasMatch(t) != _nodeFilterInvert)
+                .toList());
 
     final defaultText = _defaultFilterCtrl.text.trim();
     final defaultValid = _isValidRegex(defaultText);
@@ -328,27 +336,46 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
             ),
             const Divider(height: 24),
 
-            // node-filter regex + live-превью
+            // node-filter regex + live-превью. §197 — `!`-тогл слева
+            // (NegateToggle, как §048): инвертирует фильтр (ноды НЕ матчащие).
             Text('Node filter (regex)',
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             const SizedBox(height: 4),
-            TextField(
-              controller: _nodeFilterCtrl,
-              decoration: InputDecoration(
-                hintText: 'e.g. 🇩🇪|🇳🇱 — empty = all nodes',
-                border: const OutlineInputBorder(),
-                isDense: true,
-                errorText: nodeFilterValid ? null : 'Invalid regex',
-                errorStyle: const TextStyle(fontSize: 10),
-              ),
-              style: const TextStyle(fontSize: 13),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: NegateToggle(
+                    active: _nodeFilterInvert,
+                    onToggle: () => setState(
+                        () => _nodeFilterInvert = !_nodeFilterInvert),
+                    tooltip: 'Exclude matching (invert)',
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: TextField(
+                    controller: _nodeFilterCtrl,
+                    decoration: InputDecoration(
+                      hintText: 'e.g. 🇩🇪|🇳🇱 — empty = all nodes',
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                      errorText: nodeFilterValid ? null : 'Invalid regex',
+                      errorStyle: const TextStyle(fontSize: 10),
+                    ),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 4),
             _previewLine(
               cs,
               widget.allNodeTags.isEmpty
                   ? 'No node snapshot (connect to preview)'
-                  : 'matched: ${matchedNodes.length} / ${widget.allNodeTags.length} nodes',
+                  : '${_nodeFilterInvert ? "excluded → " : ""}matched: '
+                      '${matchedNodes.length} / ${widget.allNodeTags.length} nodes',
             ),
             const SizedBox(height: 16),
 

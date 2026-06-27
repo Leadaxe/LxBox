@@ -39,6 +39,20 @@ void main() {
       expect(restored.auto!.interruptExistConnections, true);
     });
 
+    test('§197 — nodeFilterInvert round-trip', () {
+      const c = Channel(
+          tag: 'vpn-2', label: 'x', nodeFilter: 'bypass', nodeFilterInvert: true);
+      final r = Channel.fromJson(c.toJson());
+      expect(r.nodeFilterInvert, true);
+      expect(r.nodeFilter, 'bypass');
+      expect(c.toJson()['node_filter_invert'], true);
+    });
+
+    test('§197 — nodeFilterInvert дефолт false для старых каналов', () {
+      final c = Channel.fromJson({'tag': 'vpn-1', 'node_filter': 'x'});
+      expect(c.nodeFilterInvert, false);
+    });
+
     test('auto == null survives round-trip (галка ВЫКЛ)', () {
       const original = Channel(tag: 'vpn-3', label: 'VPN ③');
       final json = original.toJson();
