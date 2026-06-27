@@ -129,6 +129,56 @@ void main() {
     expect(after.map((c) => c.tag), ['vpn-1', 'vpn-3']);
   });
 
+  test('✨auto с нерезолвенными @var-плейсхолдерами → дефолты (не падает)',
+      () async {
+    // Регресс: реальный template хранит сырые "@urltest_*"-плейсхолдеры в
+    // preset.options (var-substitution идёт позже, в билдере). seedAuto не
+    // должен делать `as num?`-каст строки "@urltest_tolerance" → краш миграции
+    // → вечный прелоадер Routing (баг dev.91).
+    final placeholderTemplate = [
+      PresetGroup(
+        tag: 'vpn-1',
+        type: 'selector',
+        addOutbounds: const ['✨auto'],
+      ),
+      PresetGroup(
+        tag: '✨auto',
+        type: 'urltest',
+        options: const {
+          'url': '@urltest_url',
+          'interval': '@urltest_interval',
+          'tolerance': '@urltest_tolerance', // СТРОКА-плейсхолдер!
+        },
+      ),
+    ];
+    await seedFile({});
+    await SettingsStorage.migrateChannelsIfNeeded(placeholderTemplate);
+
+    final channels = await SettingsStorage.getChannels();
+    final vpn1 = channels.firstWhere((c) => c.tag == 'vpn-1');
+    expect(vpn1.auto, isNotNull); // двойник засеян, не упал
+    // плейсхолдеры → дефолты
+    expect(vpn1.auto!.url, 'https://cp.cloudflare.com/generate_204');
+    expect(vpn1.auto!.interval, '5m');
+    expect(vpn1.auto!.tolerance, 50);
+  });
+
+  test('✨auto с tolerance числом-в-строке → парсится', () async {
+    final t = [
+      PresetGroup(tag: 'vpn-1', type: 'selector', addOutbounds: const ['✨auto']),
+      PresetGroup(
+        tag: '✨auto',
+        type: 'urltest',
+        options: const {'tolerance': '30'}, // число-в-строке
+      ),
+    ];
+    await seedFile({});
+    await SettingsStorage.migrateChannelsIfNeeded(t);
+    final vpn1 = (await SettingsStorage.getChannels())
+        .firstWhere((c) => c.tag == 'vpn-1');
+    expect(vpn1.auto!.tolerance, 30);
+  });
+
   test('channels уже есть → миграция no-op', () async {
     await seedFile({
       'channels': [

@@ -123,17 +123,32 @@ Future<void> _migrateChannelsIfNeeded(List<PresetGroup> presets) async {
 }
 
 /// `ChannelAuto` из глобального ✨auto-пресета (его urltest-опции). Значения —
-/// из `presetGroups` где tag == ✨auto (его options.url/interval/tolerance уже
-/// резолвены из @urltest_* vars при загрузке template). idle_timeout="30m",
-/// interrupt=false — глобальный auto был «мягким» urltest. Дефолты — если
-/// ✨auto-пресет отсутствует.
+/// из `presetGroups` где tag == ✨auto. ВНИМАНИЕ: `options` здесь — СЫРОЙ
+/// template (`@urltest_*`-плейсхолдеры НЕ резолвены — var-substitution идёт
+/// позже, в билдере). Поэтому значения могут быть `"@urltest_tolerance"`-строкой,
+/// числом ИЛИ числом-в-строке. Парсим терпимо: нерезолвенный `@`-плейсхолдер
+/// или мусор → дефолт. idle_timeout="30m", interrupt=false (мягкий urltest).
 ChannelAuto _seedAutoFromTemplate(List<PresetGroup> presets) {
   final autoPreset = presets.where((p) => p.tag == kAutoOutboundTag).firstOrNull;
   final opts = autoPreset?.options ?? const {};
+
+  // Строка-значение, но не нерезолвенный `@var`-плейсхолдер.
+  String? str(Object? v) {
+    if (v is! String || v.isEmpty || v.startsWith('@')) return null;
+    return v;
+  }
+
+  // tolerance из num / числа-в-строке; плейсхолдер/мусор → null.
+  int? toInt(Object? v) {
+    if (v is num) return v.toInt();
+    if (v is String && !v.startsWith('@')) return int.tryParse(v.trim());
+    return null;
+  }
+
   return ChannelAuto(
-    url: opts['url'] as String? ?? 'https://cp.cloudflare.com/generate_204',
-    interval: opts['interval'] as String? ?? '5m',
-    tolerance: (opts['tolerance'] as num?)?.toInt() ?? 50,
+    url: str(opts['url']) ?? 'https://cp.cloudflare.com/generate_204',
+    interval: str(opts['interval']) ?? '5m',
+    tolerance: toInt(opts['tolerance']) ?? 50,
     idleTimeout: '30m',
     interruptExistConnections: false,
   );
