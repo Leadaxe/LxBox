@@ -162,6 +162,19 @@ class BoxVpnClient {
     return TunnelStatus.fromNative(s);
   }
 
+  /// §187 — прошедшие мс с реального старта туннеля (native companion,
+  /// переживает swipe). 0 = не запущен / только что стартовал. Dart на
+  /// cold-start вычисляет честный `connectedSince = now - uptime`, не обнуляя
+  /// таймер на «сейчас». Монотонные часы (elapsedRealtime).
+  Future<int> getTunnelUptimeMs() async {
+    final ms = await _invoke<int>(
+      _Methods.getTunnelUptimeMs,
+      timeout: _Timeouts.status,
+      onTimeoutValue: null,
+    );
+    return ms ?? 0;
+  }
+
   // ---------------------------------------------------------------------------
   // Notification + auto-start
   // ---------------------------------------------------------------------------

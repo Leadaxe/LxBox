@@ -7,6 +7,7 @@ import android.net.ProxyInfo
 import android.net.VpnService
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
 import io.nekohasekai.libbox.TunOptions
@@ -57,9 +58,28 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         var currentSessionAllowBypass: Boolean = false
             private set
 
+        /// §187 — время старта туннеля (`SystemClock.elapsedRealtime()`,
+        /// монотонные часы — не прыгают при смене системного времени/таймзоны).
+        /// PERSISTENT companion → переживает swipe (туннель keep-alive не
+        /// перезапускался) → даёт честный uptime после cold-start, когда Dart-
+        /// `connectedSince` обнулился бы на «сейчас». 0 = не запущен.
+        @Volatile
+        var tunnelStartedElapsedMs: Long = 0L
+            private set
+
         /// Internal — для BoxService.setStatus() обновлять companion-state.
         internal fun setCurrentStatus(s: VpnStatus) {
             currentStatus = s
+            // §187 — фиксируем старт ОДИН раз на переходе в Started (не
+            // перетирать при дедуп-повторе). Сброс на Stopped → uptime обнулится.
+            when (s) {
+                VpnStatus.Started ->
+                    if (tunnelStartedElapsedMs == 0L) {
+                        tunnelStartedElapsedMs = SystemClock.elapsedRealtime()
+                    }
+                VpnStatus.Stopped -> tunnelStartedElapsedMs = 0L
+                else -> { /* Starting/Stopping — не трогаем */ }
+            }
         }
 
         /// Completer для `stopAwait` — completes когда `setStatus(Stopped)`

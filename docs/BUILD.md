@@ -33,13 +33,33 @@ flutter run   # устройство или эмулятор Android
 
 | Что делает | Отметка |
 |------------|---------|
-| `scripts/sync-pubspec-version.sh` — версия в pubspec из git state (`X.Y.Z` на теге, иначе `X.Y.Z-dev.N`) | ✓ |
+| Версия в pubspec: build-number **запинен к последнему релизному тегу** (§186, см. ниже); versionName = `X.Y.Z` на теге, иначе `X.Y.Z-dev.<since>` | ✓ |
 | `scripts/fetch-libbox.sh` — ядро sing-box-lx по пину `app/android/libbox.version`, идемпотентно (см. [«Ядро sing-box-lx»](#ядро-sing-box-lx-libbox)) | ✓ |
-| `LXBOX_ABI_FILTER=arm64-v8a` + `--target-platform android-arm64` — APK только под arm64 | ✓ |
+| `--split-per-abi --target-platform android-arm64` — APK только под arm64 (выход `app-arm64-v8a-release.apk`) | ✓ |
 | `flutter build apk --release` (доп. аргументы — через `"$@"`) | ✓ |
 | `--dart-define`-маркеры (`BUILD_LOCAL`, `BUILD_GIT_DESC`, …) | ✗ убраны в §065/§066: версия живёт в pubspec, About читает `PackageInfo` |
 
 Требует `git` и JDK (для gradle); ядро `app/android/app/libs/libbox.aar` скрипт скачивает сам.
+
+#### versionCode — как считается и почему пинится к тегу ([§186](spec/tasks/186-local-build-vc-pin-to-tag.md))
+
+**Кто что добавляет** (проверено `aapt dump badging` на собранном APK):
+
+| Слой | Значение | Кто |
+|------|----------|-----|
+| `pubspec.yaml` `version: X.Y.Z+<build-number>` | build-number = **голый номер коммита** (`git rev-list --count`) | CI и локальный скрипт пишут это |
+| ABI-множитель `+abiCode×1000` (arm64=2 → **+2000**) | добавляет **сам Flutter** при `--split-per-abi` (из коробки, `flutter.gradle`) | автоматически, одинаково CI и локально |
+| Итог в манифесте APK | `versionCode = build-number + 2000` | — |
+
+⚠ Поэтому ручной бамп `versionCode` НЕ нужен и НЕ применять — множитель Flutter общий для всех сборок.
+
+**Почему пин к тегу (а не к HEAD):** релиз CI собирается на коммите тега → `build-number = count(tag)`. Локальная сборка на ветке разработки имеет коммитов БОЛЬШЕ → `count(HEAD) > count(tag)` → локальный vc обгонял бы релизный → релиз с интернета не вставал бы поверх (downgrade-блок, боль «не могу скачивать собственные релизы»). Скрипт пинит `build-number = git rev-list --count <last-vN.N.N-tag>` → локальный arm64 vc = **ровно релизный**. При равном vc `adb install -r` проходит в обе стороны (блок только на СТРОГО меньший vc).
+
+| Случай | build-number | Поведение |
+|--------|--------------|-----------|
+| На ветке есть тег `vN.N.N` | `count(<last-tag>)` | локальный vc = релизный → релиз ставится поверх локалки и наоборот |
+| Тега нет вовсе | `count(HEAD)` (fallback, `version: 0.0.0+<count>`) | downgrade-риск неактуален без релизов |
+| После НОВОГО релиза (новый тег) | подтянется к новому тегу автоматически | самоподдерживается |
 
 ## Ядро sing-box-lx (libbox)
 

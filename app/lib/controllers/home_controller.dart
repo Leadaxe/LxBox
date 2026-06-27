@@ -202,8 +202,14 @@ class HomeController extends ChangeNotifier
         connectedSince: DateTime.now(),
         configChangedNeedRestart: false,
       ));
+      // §187 — на cold-start (swipe-reopen) `connected` приходит pull'ом и
+      // connectedSince выше = «сейчас», теряя реальное время старта. Подтянуть
+      // native-uptime (переживает swipe) и скорректировать назад. Свежий старт →
+      // uptime≈0 → коррекции нет (без регресса). Async — не блокирует отклик.
+      unawaited(_syncUptimeFromNative());
       // §122 — рантайм-данные текут из CommandClient-стримов (status/groups).
-      _startCcStreams();
+      // §185 — теперь async (resync протухшего refcount перед connectScreen).
+      unawaited(_startCcStreams());
       // §165 — наполнить резолвер имён правил из custom_rules (для Stats/Conns
       // «Traffic by Rule»: c.rule ядра → title правила). Конфиг уже актуален
       // (раз connected) → правила те же, что зашиты в running-конфиг.
@@ -564,10 +570,23 @@ class HomeController extends ChangeNotifier
   @override
   DateTime? get lastCcStatusAt => _lastCcStatusAt;
 
+  /// §187 — скорректировать `connectedSince` по реальному uptime туннеля из
+  /// native (companion, переживает swipe). Зовётся на `connected`. На свежем
+  /// старте uptime≈0 → коррекции нет; на cold-start (reopen) uptime значимый →
+  /// сдвигаем `connectedSince` назад на реальное время старта. Порог 2с отсекает
+  /// дребезг свежего старта (мелкая задержка между Started и pull).
+  Future<void> _syncUptimeFromNative() async {
+    final uptimeMs = await _vpn.getTunnelUptimeMs();
+    if (_disposed || _state.tunnel != TunnelStatus.connected) return;
+    if (uptimeMs < 2000) return; // свежий старт — connectedSince≈now уже верно
+    final realStart = DateTime.now().subtract(Duration(milliseconds: uptimeMs));
+    _emit(_state.copyWith(connectedSince: realStart));
+  }
+
   /// Поднять push-стримы CommandClient'а и `screenClient` (outbounds+groups+
   /// connections). Зовётся на `connected`. Идемпотентно — отменяет прежние
   /// подписки перед новыми (защита от двойного connect).
-  void _startCcStreams() {
+  Future<void> _startCcStreams() async {
     _ccStatusSub?.cancel();
     _ccGroupsSub?.cancel();
     // §122 КРИТИЧНО — ПОРЯДОК: сперва навешиваем Dart-подписки (это
@@ -582,7 +601,16 @@ class HomeController extends ChangeNotifier
     _ccGroupsSub = _cc.groups.listen(_onCcGroups, onError: (Object e) {
       _addDebug(DebugSource.app, 'cc groups stream error: $e');
     });
-    // §2.8 — теперь sink'и стоят → поднимаем screenClient (groups/connections).
+    // §185 — cold-start после swipe-keep: native screenRefs протух (PERSISTENT
+    // поле CC, пережил swipe; Dart-движок умер без disconnectScreen). Сбросить
+    // refcount/паузу + закрыть осиротевший screen/profiler-клиент ПЕРЕД
+    // connectScreen, иначе тот увидит refs>0 → не переподнимет screenClient на
+    // свежие (только что поставленные выше) sink'и → пустой UI. Идемпотентно:
+    // на штатном переходе disconnected→connected (refs=0) — no-op. AWAIT
+    // обязателен — resync должен завершиться ДО connectScreen.
+    await _cc.resyncForReopen();
+    if (_disposed || !_state.tunnelUp) return; // ушли за await
+    // §2.8 — теперь sink'и стоят + refcount чист → поднимаем screenClient.
     unawaited(_cc.connectScreen());
     // §122/SPEC015 — детерминированный pull стартового снапшота групп. Раньше
     // тут был watchdog, пересоздававший весь screenClient (`refreshScreen`) —

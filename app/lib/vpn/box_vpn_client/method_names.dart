@@ -24,6 +24,8 @@ class _Methods {
   // §129 — force-stop при зависшем-вхолостую ядре (fire-and-forget).
   static const forceStopVPN = 'forceStopVPN';
   static const getVpnStatus = 'getVpnStatus';
+  // §187 — прошедшие мс с реального старта туннеля (переживает swipe).
+  static const getTunnelUptimeMs = 'getTunnelUptimeMs';
 
   // Notification + auto-start
   static const setNotificationTitle = 'setNotificationTitle';

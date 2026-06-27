@@ -191,6 +191,63 @@ class BoxCommandClient {
         if (tunnelAlive && screenRefs.get() > 0) connectScreenClient()
     }
 
+    /// §185 — cold-start Flutter после swipe-keep (туннель жив, движок умер).
+    /// Все CC-клиенты PERSISTENT (поля CC на companion → пережили swipe), но
+    /// привязаны к МЁРТВЫМ sink'ам прошлого движка; Dart-потребители EPHEMERAL
+    /// (умерли с движком). При swipe disconnect/pause НЕ вызвались (Dart мёртв) →
+    /// клиенты осиротели, refcount/паузы застряли. Reopen без resync → стримы
+    /// привязаны к мёртвому движку → пустой UI (хотя статус-broadcast горит).
+    ///
+    /// Переподнять ОБА стрим-клиента на свежий движок:
+    ///
+    /// 1. **screenClient** (groups/connections — главный экран + Stats/Conns):
+    ///    `screenRefs` застрял на 1 → новый `connectScreen` дал бы 1→2 →
+    ///    `wasZero=false` → клиент НЕ переподнят. Сброс refs=0 + снять паузу +
+    ///    закрыть осиротевший → следующий `connectScreen` увидит `refs=0` →
+    ///    `wasZero=true` → переподнимет на свежие sink'и → ядро даст стартовый push.
+    ///
+    /// 2. **statusClient** (трафик/память — И шапка главного, И Stats): НЕ
+    ///    refcounted. На cold-start остаётся привязан к мёртвому движку (swipe не
+    ///    вызвал pause/disconnect) → ни шапка, ни Stats не получают тики
+    ///    (device-факт: скорость ↑↓ в шапке тоже висит, не только память Stats).
+    ///    Без resync лечилось лишь сворачиванием→разворачиванием (resumeStatus →
+    ///    connectStatus). Форсим `connectStatus()` (минуя ранний return
+    ///    setStatusFast) — сам закроет осиротевший, поднимет новый. Сняв паузу.
+    ///
+    /// ИДЕМПОТЕНТНО и безопасно при ЛЮБОМ старте: первый запуск (refs=0,
+    /// клиенты null) — connectStatus поднимет statusClient штатно, screen — no-op
+    /// до первого connectScreen, ping — no-op (null). profilerClient чистит
+    /// отдельно через handler (VpnPlugin → disconnectProfiler, публичный API).
+    ///
+    /// Итог cold-start по 4 клиентам:
+    ///  - statusClient   — пере-поднят (NORMAL),
+    ///  - screenClient   — почищен + пере-поднимется на следующем connectScreen,
+    ///  - profilerClient — остановлен+почищен (handler),
+    ///  - pingClient     — остановлен+почищен (тут).
+    fun resyncForReopen() {
+        // screenClient — сброс протухшего refcount + закрыть осиротевший.
+        screenRefs.set(0)
+        screenPaused = false
+        disconnectClient(screenClient, "resyncForReopen")
+        // pingClient — мог остаться живым с прошлой сессии (масс-пинг шёл в момент
+        // swipe, cancelPing не вызвался). Не подписочный (unary, без sink) — UI не
+        // ломает, но висящий gRPC-клиент держит ресурс ядра зря. Чистим.
+        disconnectClient(pingClient, "resyncForReopen")
+        // statusClient — форс-переподнятие на свежий движок (минуя ранний return
+        // setStatusFast). Сбрасываем интервал на NORMAL — дефолт главного экрана.
+        // На cold-start ВСЕГДА виден HomeScreen (main.dart: home=HomeScreen, нет
+        // restorationScopeId → навигация не восстанавливается) → Stats НЕ
+        // смонтирован в момент resync. `statusIntervalNs` мог залипнуть на FAST с
+        // прошлой Stats-сессии (поле пережило swipe) → без сброса главный зря
+        // тикал бы 0.1с (дренаж). NORMAL корректен. Когда юзер ПОЗЖЕ навигирует
+        // на Stats — его initState.setStatusFast(true) увидит NORMAL≠FAST → НЕ
+        // выйдет рано → переподнимет на FAST штатно (resync давно отработал, гонки
+        // нет). connectStatus сам disconnect'нет старый + connect новый.
+        statusPaused = false
+        statusIntervalNs = STATUS_INTERVAL_NORMAL
+        if (tunnelAlive) connectStatus()
+    }
+
     /// §2.8 — `profilerClient` поднимается при `startGlobalRecording` (§048).
     fun connectProfiler() = connectProfilerClient()
     fun disconnectProfiler() {
