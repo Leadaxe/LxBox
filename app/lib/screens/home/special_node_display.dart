@@ -19,6 +19,7 @@ class SpecialNodeDisplay {
 ///
 /// - `direct`  → «Direct» (прямой выход наружу).
 /// - `urltest` → «Auto» (latency-test группа, авто-выбор быстрейшего).
+/// - `block`   → «Block» (дроп трафика, §201).
 SpecialNodeDisplay? specialNodeDisplayForType(String? outboundType) {
   switch (outboundType) {
     case 'direct':
@@ -27,6 +28,8 @@ SpecialNodeDisplay? specialNodeDisplayForType(String? outboundType) {
       // ✨ — узнаваемая иконка auto (как был эмодзи в старом теге '✨auto').
       return const SpecialNodeDisplay(
           label: 'Auto', icon: Icons.auto_awesome);
+    case 'block':
+      return const SpecialNodeDisplay(label: 'Block', icon: Icons.block);
     default:
       return null;
   }

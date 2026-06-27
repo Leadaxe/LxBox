@@ -89,6 +89,20 @@ void main() {
       expect(byTag(outs, 'vpn-1')['outbounds'], contains('direct-out'));
     });
 
+    test('§201 — includeBlock=true → block опцией селектора', () async {
+      final outs = await build([
+        const Channel(tag: 'vpn-1', label: 'X', includeBlock: true),
+      ]);
+      expect(byTag(outs, 'vpn-1')['outbounds'], contains('block'));
+    });
+
+    test('§201 — includeBlock=false → нет block', () async {
+      final outs = await build([
+        const Channel(tag: 'vpn-1', label: 'X'),
+      ]);
+      expect(byTag(outs, 'vpn-1')['outbounds'], isNot(contains('block')));
+    });
+
     test('interruptExistConnections=false проброшен', () async {
       final outs = await build([
         const Channel(
@@ -194,13 +208,17 @@ void main() {
       expect((byTag(outs, 'vpn-1')['outbounds'] as List), hasLength(4));
     });
 
-    test('§197 — invert исключает ВСЁ → fallback direct-out', () async {
-      // regex матчит всё (.) + invert → ничего не остаётся → direct-out fallback.
+    test('§197/§201 — invert исключает ВСЁ → fallback [block, direct-out]',
+        () async {
+      // regex матчит всё (.) + invert → ничего не остаётся → block+direct
+      // fallback, default=block (§201).
       final outs = await build([
         const Channel(
             tag: 'vpn-1', label: 'x', nodeFilter: '.', nodeFilterInvert: true),
       ]);
-      expect(byTag(outs, 'vpn-1')['outbounds'], ['direct-out']);
+      final vpn1 = byTag(outs, 'vpn-1');
+      expect(vpn1['outbounds'], ['block', 'direct-out']);
+      expect(vpn1['default'], 'block');
     });
 
     test('невалидный regex → fallback на все ноды (не падает)', () async {
@@ -210,11 +228,14 @@ void main() {
       expect((byTag(outs, 'vpn-1')['outbounds'] as List), hasLength(4));
     });
 
-    test('regex без совпадений → пустой набор → fallback direct-out', () async {
+    test('§201 — regex без совпадений → fallback [block, direct-out] default block',
+        () async {
       final outs = await build([
         const Channel(tag: 'vpn-1', label: 'none', nodeFilter: 'NOMATCH'),
       ]);
-      expect(byTag(outs, 'vpn-1')['outbounds'], ['direct-out']);
+      final vpn1 = byTag(outs, 'vpn-1');
+      expect(vpn1['outbounds'], ['block', 'direct-out']);
+      expect(vpn1['default'], 'block');
     });
 
     test('пустой node-set → auto-двойник НЕ эмитится', () async {
@@ -227,17 +248,17 @@ void main() {
         ),
       ]);
       expect(outs.any((o) => o['tag'] == 'vpn-1-auto'), false);
-      expect(byTag(outs, 'vpn-1')['outbounds'], ['direct-out']);
+      expect(byTag(outs, 'vpn-1')['outbounds'], ['block', 'direct-out']);
     });
   });
 
   group('§200 — warning при пустом фильтре канала', () {
-    test('фильтр отсёк все ноды → warning в emitWarnings', () async {
+    test('фильтр отсёк все ноды → warning (blocked)', () async {
       final w = await warningsFor([
         const Channel(tag: 'vpn-1', label: 'Germany', nodeFilter: 'NOMATCH'),
       ]);
       expect(
-          w.any((s) => s.contains('Germany') && s.contains('direct')),
+          w.any((s) => s.contains('Germany') && s.contains('blocked')),
           true);
     });
 
@@ -246,21 +267,21 @@ void main() {
         const Channel(
             tag: 'vpn-1', label: 'x', nodeFilter: '.', nodeFilterInvert: true),
       ]);
-      expect(w.any((s) => s.contains('vpn-1') && s.contains('direct')), true);
+      expect(w.any((s) => s.contains('vpn-1') && s.contains('blocked')), true);
     });
 
     test('пустой фильтр (все ноды) → НЕ варним', () async {
       final w = await warningsFor([
         const Channel(tag: 'vpn-1', label: 'x'),
       ]);
-      expect(w.any((s) => s.contains('direct')), false);
+      expect(w.any((s) => s.contains('blocked')), false);
     });
 
     test('фильтр матчит хотя бы одну ноду → НЕ варним', () async {
       final w = await warningsFor([
         const Channel(tag: 'vpn-1', label: 'x', nodeFilter: '🇩🇪'),
       ]);
-      expect(w.any((s) => s.contains('direct')), false);
+      expect(w.any((s) => s.contains('blocked')), false);
     });
   });
 

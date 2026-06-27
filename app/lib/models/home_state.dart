@@ -194,20 +194,22 @@ class HomeState {
   /// тегам (auto-двойники теперь vpn-N-auto, §125).
   int get pinnedNodeCount => _pinnedTags.length;
 
-  /// §070/§125/§196 — наполнение pinned section. pinDirect/pinAuto — тоглы
-  /// (§070); активная нода пинится ВСЕГДА (при любой сортировке). Пин по ТИПУ
-  /// из конфига (`direct`/`urltest`), не по фикс-тегам — auto-двойники зовутся
-  /// `vpn-N-auto`. Порядок: direct → urltest-двойники (config-order) → активная.
+  /// §070/§125/§196/§201 — наполнение pinned section. pinDirect/pinAuto —
+  /// тоглы (§070); block и активная нода пинятся ВСЕГДА (при любой сортировке).
+  /// Пин по ТИПУ из конфига (`direct`/`urltest`/`block`), не по фикс-тегам.
+  /// Порядок: direct → urltest-двойники → block → активная.
   List<String> _computePinned() {
     final pinnedSet = <String>{
       for (final n in nodes)
         if ((pinDirect && configModel[n]?.type == 'direct') ||
-            (pinAuto && configModel[n]?.type == 'urltest'))
+            (pinAuto && configModel[n]?.type == 'urltest') ||
+            configModel[n]?.type == 'block') // §201 — block всегда сверху
           n,
     };
     final pinned = [
       ...nodes.where((n) => pinnedSet.contains(n) && configModel[n]?.type == 'direct'),
       ...nodes.where((n) => pinnedSet.contains(n) && configModel[n]?.type == 'urltest'),
+      ...nodes.where((n) => pinnedSet.contains(n) && configModel[n]?.type == 'block'),
     ];
     // §196 — активная нода группы сразу ПОСЛЕ direct/auto, при ЛЮБОЙ сортировке
     // (не за тоглом). Только реальная прокси-нода (не сам direct/auto-двойник,

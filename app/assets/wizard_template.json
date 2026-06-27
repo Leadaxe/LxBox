@@ -539,7 +539,8 @@
     ],
     "endpoints": [],
     "outbounds": [
-      { "type": "direct", "tag": "direct-out" }
+      { "type": "direct", "tag": "direct-out" },
+      { "type": "block", "tag": "block" }
     ],
     "route": {
       "find_process": true,

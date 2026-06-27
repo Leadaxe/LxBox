@@ -18,6 +18,10 @@ const kAutoOutboundTag = '✨auto';
 /// Системный, присутствует во всех конфигах как `{type: direct}`.
 const kDirectOutboundTag = 'direct-out';
 
+/// §201 — tag block-outbound'а (дроп трафика). Системный, `{type: block}`.
+/// Ядро поддерживает (protocol/block). Опция селектора + route_final.
+const kBlockOutboundTag = 'block';
+
 /// Префикс в `tag`, помечающий ноду как detour-сервер (посредник-dialer,
 /// не endpoint). Ставится:
 ///   - парсером при разборе chained-нод подписки (автоматически);

@@ -95,6 +95,7 @@ class Channel {
     required this.label,
     this.enabled = true,
     this.includeDirect = false,
+    this.includeBlock = false,
     this.nodeFilter = '',
     this.nodeFilterInvert = false,
     this.defaultFilter = '',
@@ -113,6 +114,9 @@ class Channel {
 
   /// Галка: добавить `direct-out` опцией в селектор канала.
   final bool includeDirect;
+
+  /// §201 — галка: добавить `block` (дроп трафика) опцией в селектор канала.
+  final bool includeBlock;
 
   /// regex по ИТОГОВОМУ tag ноды (§048-style, `n.tag.contains`/`RegExp.hasMatch`).
   /// '' → все ноды (текущее поведение).
@@ -143,6 +147,7 @@ class Channel {
     String? label,
     bool? enabled,
     bool? includeDirect,
+    bool? includeBlock,
     String? nodeFilter,
     bool? nodeFilterInvert,
     String? defaultFilter,
@@ -155,6 +160,7 @@ class Channel {
         label: label ?? this.label,
         enabled: enabled ?? this.enabled,
         includeDirect: includeDirect ?? this.includeDirect,
+        includeBlock: includeBlock ?? this.includeBlock,
         nodeFilter: nodeFilter ?? this.nodeFilter,
         nodeFilterInvert: nodeFilterInvert ?? this.nodeFilterInvert,
         defaultFilter: defaultFilter ?? this.defaultFilter,
@@ -170,6 +176,7 @@ class Channel {
       label: json['label'] as String? ?? (json['tag'] as String? ?? ''),
       enabled: json['enabled'] as bool? ?? true,
       includeDirect: json['include_direct'] as bool? ?? false,
+      includeBlock: json['include_block'] as bool? ?? false,
       nodeFilter: json['node_filter'] as String? ?? '',
       nodeFilterInvert: json['node_filter_invert'] as bool? ?? false,
       defaultFilter: json['default_filter'] as String? ?? '',
@@ -186,6 +193,7 @@ class Channel {
         'label': label,
         'enabled': enabled,
         'include_direct': includeDirect,
+        'include_block': includeBlock,
         'node_filter': nodeFilter,
         'node_filter_invert': nodeFilterInvert,
         'default_filter': defaultFilter,
@@ -206,6 +214,7 @@ class Channel {
         label: p.label.isEmpty ? p.tag : p.label,
         enabled: enabled,
         includeDirect: p.addOutbounds.contains('direct-out'),
+        includeBlock: p.addOutbounds.contains('block'), // §201 (в template нет → false)
         nodeFilter: '',
         defaultFilter: '', // Решение 6 — старый default не regex, не мигрируем
         interruptExistConnections:

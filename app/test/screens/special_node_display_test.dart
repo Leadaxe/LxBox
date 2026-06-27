@@ -19,6 +19,13 @@ void main() {
       expect(d.icon, Icons.auto_awesome);
     });
 
+    test('§201 — block → «Block» + Icons.block', () {
+      final d = specialNodeDisplayForType('block');
+      expect(d, isNotNull);
+      expect(d!.label, 'Block');
+      expect(d.icon, Icons.block);
+    });
+
     test('обычная прокси-нода (vless/null/selector) → null (показываем tag)', () {
       expect(specialNodeDisplayForType('vless'), isNull);
       expect(specialNodeDisplayForType('selector'), isNull);

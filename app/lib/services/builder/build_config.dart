@@ -321,6 +321,7 @@ Future<BuildResult> buildConfig({
   if (settings.routeFinal.isNotEmpty) {
     final validFinals = <String>{
       'direct-out',
+      'block', // §201 — block системный outbound, валидная route_final-мишень
       for (final c in channels)
         if (c.enabled || c.isRequired) ...[c.tag, c.autoTag],
     };
@@ -468,26 +469,29 @@ List<Map<String, dynamic>> _buildChannelGroups({
     final nodes = nodesFor(c);
     final emitAuto = c.auto != null && nodes.isNotEmpty;
 
-    // selector outbounds: ноды + (direct?) + (<tag>-auto если двойник эмитится)
+    // selector outbounds: ноды + (direct?) + (block?) + (<tag>-auto если эмит)
     final selectorOutbounds = <String>[
       ...nodes,
       if (c.includeDirect) 'direct-out',
+      if (c.includeBlock) 'block',
       if (emitAuto) c.autoTag,
     ];
-    if (selectorOutbounds.isEmpty) {
-      // Пустой набор (regex не матчит / нет нод / direct выкл) → fallback на
-      // direct-out, чтобы selector не был пустой группой (fatal в sing-box).
-      selectorOutbounds.add('direct-out');
+    // §201 — пустой набор (regex не матчит / нет нод) → fallback на [block,
+    // direct-out] с default=block (безопаснее блокировать, чем выпускать мимо
+    // VPN; direct остаётся доступной опцией). selector не должен быть пустой
+    // группой (fatal в sing-box).
+    final emptyFallback = selectorOutbounds.isEmpty;
+    if (emptyFallback) {
+      selectorOutbounds.addAll(['block', 'direct-out']);
     }
     // §200 — предупреждаем, если ИМЕННО фильтр канала отсёк все ноды (фильтр
-    // непустой, но 0 совпадений). Канал молча работает как Direct — юзеру
-    // важно знать. Пустой фильтр с 0 нод (нет подписки) НЕ варним — это не
-    // вина фильтра.
+    // непустой, но 0 совпадений). Канал свалился на block — юзеру важно знать.
+    // Пустой фильтр с 0 нод (нет подписки) НЕ варним — это не вина фильтра.
     if (nodes.isEmpty && c.nodeFilter.isNotEmpty && selectorTags.isNotEmpty) {
       final label = c.label.isNotEmpty ? c.label : c.tag;
       emitWarnings.add(
           'Channel "$label" (${c.tag}): node filter matched no nodes — '
-          'traffic goes direct (Direct).');
+          'traffic is blocked (default), or use direct.');
     }
 
     final selector = <String, dynamic>{
@@ -496,6 +500,8 @@ List<Map<String, dynamic>> _buildChannelGroups({
       'outbounds': selectorOutbounds,
       'interrupt_exist_connections': c.interruptExistConnections,
     };
+    // §201 — fallback пустого канала: block выбран дефолтом.
+    if (emptyFallback) selector['default'] = 'block';
     // §141 — default = первая нода канала, чей итоговый tag матчит defaultFilter.
     // Не матчит/пусто → default не выставляется (sing-box берёт первую опцию).
     if (c.defaultFilter.isNotEmpty) {

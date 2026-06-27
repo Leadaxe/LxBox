@@ -39,6 +39,15 @@ void main() {
       expect(restored.auto!.interruptExistConnections, true);
     });
 
+    test('§201 — includeBlock round-trip + дефолт false', () {
+      const c = Channel(tag: 'vpn-2', label: 'x', includeBlock: true);
+      final r = Channel.fromJson(c.toJson());
+      expect(r.includeBlock, true);
+      expect(c.toJson()['include_block'], true);
+      // дефолт false для старых каналов без ключа
+      expect(Channel.fromJson({'tag': 'vpn-1'}).includeBlock, false);
+    });
+
     test('§197 — nodeFilterInvert round-trip', () {
       const c = Channel(
           tag: 'vpn-2', label: 'x', nodeFilter: 'bypass', nodeFilterInvert: true);

@@ -104,6 +104,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ label                 string        отображаемое имя (юзер вводит)
 │       ├─ enabled               bool          вкл/выкл (vpn-1 всегда true)
 │       ├─ include_direct        bool          direct-out опцией селектора
+│       ├─ include_block         bool          §201 — block (дроп трафика) опцией селектора; default false
 │       ├─ node_filter           string        regex по итоговому tag ноды; '' = все
 │       ├─ node_filter_invert    bool          §197 — инверсия node_filter (ноды НЕ матчащие); default false
 │       ├─ default_filter        string        regex; первая matched → default; '' = нет

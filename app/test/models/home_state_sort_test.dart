@@ -24,6 +24,7 @@ void main() {
         '✨auto': 'urltest',
         'vpn-1-auto': 'urltest',
         'vpn-2-auto': 'urltest',
+        'block': 'block',
       });
 
   group('NodeSortMode.next — §100 carousel (incl. manual)', () {
@@ -196,6 +197,28 @@ void main() {
       );
       expect(s.sortedNodes, ['x', 'y']);
       expect(s.pinnedNodeCount, 0);
+    });
+  });
+
+  group('§201 — block пинится сверху', () {
+    test('block после direct/auto, перед rest', () {
+      final s = HomeState(
+        configRaw: cfgDA(['x', 'direct-out', 'block', 'vpn-1-auto', 'y']),
+        nodes: ['x', 'direct-out', 'block', 'vpn-1-auto', 'y'],
+        sortMode: NodeSortMode.defaultOrder,
+      );
+      // direct → urltest → block → rest (pristine x/y).
+      expect(s.sortedNodes, ['direct-out', 'vpn-1-auto', 'block', 'x', 'y']);
+    });
+
+    test('block пинится при любой сортировке', () {
+      final s = HomeState(
+        configRaw: cfgDA(['z', 'block', 'a']),
+        nodes: ['z', 'block', 'a'],
+        sortMode: NodeSortMode.nameAsc,
+      );
+      // block сверху, rest по имени (a, z).
+      expect(s.sortedNodes, ['block', 'a', 'z']);
     });
   });
 

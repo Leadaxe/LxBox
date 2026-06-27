@@ -101,6 +101,8 @@ class _RoutingScreenState extends State<RoutingScreen>
   List<RoutingOutboundOption> _outboundOptions() {
     final opts = <RoutingOutboundOption>[
       const RoutingOutboundOption(label: 'direct', tag: 'direct-out'),
+      // §201 — block всегда доступен (системный), красный как reject.
+      const RoutingOutboundOption(label: 'block', tag: 'block', danger: true),
     ];
     for (final c in _channels) {
       if (c.enabled || c.isRequired) {

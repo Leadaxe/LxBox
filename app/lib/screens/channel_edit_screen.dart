@@ -40,6 +40,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
   late final TextEditingController _autoIdleCtrl;
 
   late bool _includeDirect;
+  late bool _includeBlock;
   late bool _interrupt;
   late bool _nodeFilterInvert;
   late bool _autoEnabled;
@@ -53,6 +54,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     _nodeFilterCtrl = TextEditingController(text: c.nodeFilter);
     _defaultFilterCtrl = TextEditingController(text: c.defaultFilter);
     _includeDirect = c.includeDirect;
+    _includeBlock = c.includeBlock;
     _interrupt = c.interruptExistConnections;
     _nodeFilterInvert = c.nodeFilterInvert;
     _autoEnabled = c.auto != null;
@@ -104,6 +106,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
           ? c.tag
           : _labelCtrl.text.trim(),
       includeDirect: _includeDirect,
+      includeBlock: _includeBlock,
       nodeFilter: _nodeFilterCtrl.text.trim(),
       nodeFilterInvert: _nodeFilterInvert,
       defaultFilter: _defaultFilterCtrl.text.trim(),
@@ -130,6 +133,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     final i = widget.initial;
     return s.label != i.label ||
         s.includeDirect != i.includeDirect ||
+        s.includeBlock != i.includeBlock ||
         s.nodeFilter != i.nodeFilter ||
         s.nodeFilterInvert != i.nodeFilterInvert ||
         s.defaultFilter != i.defaultFilter ||
@@ -335,6 +339,18 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                   style: TextStyle(fontSize: 14)),
               value: _includeDirect,
               onChanged: (v) => setState(() => _includeDirect = v ?? false),
+            ),
+            CheckboxListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              visualDensity: VisualDensity.compact,
+              title: const Text('Include block',
+                  style: TextStyle(fontSize: 14)),
+              subtitle: const Text('drop traffic option in the selector',
+                  style: TextStyle(fontSize: 11)),
+              value: _includeBlock,
+              onChanged: (v) => setState(() => _includeBlock = v ?? false),
             ),
             CheckboxListTile(
               dense: true,
