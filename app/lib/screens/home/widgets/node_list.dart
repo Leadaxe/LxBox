@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../../../config/consts.dart';
 import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
-import '../../../models/channel.dart';
 import '../../../models/home_state.dart';
 import '../../../services/settings_storage.dart';
 import '../../../services/haptic_service.dart';
@@ -13,6 +12,7 @@ import '../../../services/subscription/auto_updater.dart';
 import '../../../widgets/node_row.dart';
 import '../../../widgets/node_view_item.dart';
 import '../../../widgets/reorder_grab_strip.dart';
+import '../../channel_edit_screen.dart';
 import '../node_actions.dart';
 import '../node_filter_view_model.dart';
 import '../node_list_presenter.dart';
@@ -339,9 +339,11 @@ class HomeNodeList extends StatelessWidget {
     );
   }
 
-  /// §195 — сохранить regex из фильтра на главной в активный канал. Диалог
-  /// выбора: node_filter (что показывать) или default_filter (default-нода).
-  /// После записи — rebuild конфига (паттерн node_filter_screen._apply).
+  /// §195 — перенести regex из фильтра на главной в активный канал. Не пишем
+  /// тихо: спрашиваем КУДА (node_filter / default_filter), затем открываем
+  /// редактор канала с предзаполненным полем — юзер видит куда легло значение,
+  /// может доредактировать и сохранить явно. Результат применяем здесь (на
+  /// главной нет routing-стейта, который пишет channel-edit).
   Future<void> _saveRegexToChannel(
       BuildContext context, String pattern) async {
     final tag = state.selectedGroup;
@@ -355,8 +357,8 @@ class HomeNodeList extends StatelessWidget {
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Save to: $label (${channel.tag})'),
-        content: Text('Where to save "$pattern"?'),
+        title: Text('Apply to: $label (${channel.tag})'),
+        content: Text('Use "$pattern" as…'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -379,26 +381,51 @@ class HomeNodeList extends StatelessWidget {
     );
     if (choice == null || !context.mounted) return;
 
-    final Channel updated = choice == 'node'
+    // Предзаполняем нужное поле и открываем редактор канала (Routing → Channels
+    // → этот канал) — юзер видит подставленное значение и сохраняет явно.
+    final seeded = choice == 'node'
         ? channel.copyWith(nodeFilter: pattern)
         : channel.copyWith(defaultFilter: pattern);
-    await SettingsStorage.updateChannel(updated);
-    if (!context.mounted) return;
+    final allNodeTags = _allNodeTagsFromState();
+    final result = await openChannelEditor(
+      context,
+      initial: seeded,
+      canDelete: !channel.isRequired,
+      allNodeTags: allNodeTags,
+    );
+    if (result == null || result.saved == null || !context.mounted) return;
 
-    // Rebuild конфига — node_filter/default_filter config-significant (§125).
+    // Применяем сохранённый канал + rebuild конфига (паттерн node_filter_screen).
+    await SettingsStorage.updateChannel(result.saved!);
+    await controller.refreshChannelLabels();
+    if (!context.mounted) return;
     final config = await subController.generateConfig();
     if (config != null && context.mounted) {
       await controller.saveParsedConfig(config);
     }
     if (!context.mounted) return;
-    final where = choice == 'node' ? 'channel filter' : 'default';
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Saved as $where for $label')),
+      SnackBar(content: Text('Saved channel "$label"')),
     );
     if (state.tunnelUp && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Restart VPN to apply changes')),
       );
     }
+  }
+
+  /// §195 — снимок всех node-тегов из ccGroups (union, без самих групп) для
+  /// live-превью фильтров в редакторе. Пусто = туннель не поднят.
+  List<String> _allNodeTagsFromState() {
+    final groupTags = state.ccGroups.map((g) => g.tag).toSet();
+    final seen = <String>{};
+    final out = <String>[];
+    for (final g in state.ccGroups) {
+      for (final item in g.items) {
+        if (groupTags.contains(item.tag)) continue;
+        if (seen.add(item.tag)) out.add(item.tag);
+      }
+    }
+    return out;
   }
 }
