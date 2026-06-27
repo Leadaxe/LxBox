@@ -103,6 +103,11 @@ class NodeRow extends StatelessWidget {
     final Widget? proto = hasProto
         ? Text(
             item.protocolLabel!,
+            // §199 — транспорт уступает серверу: обрезается ellipsis'ом, не
+            // переполняет (внутри Flexible).
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w600,
@@ -129,18 +134,25 @@ class NodeRow extends StatelessWidget {
       child: Row(
         children: [
           if (activePill != null) ...[activePill, const SizedBox(width: 6)],
-          // Стрелка → <node>: занимает сколько есть места, но при нехватке
-          // ellipsis'ом обрезается, НЕ переносит на новую строку.
-          // protocol-label фикс. ширины идёт после — стрелка уступает ему.
+          // §199 — в строке auto/urltest ВАЖЕН выбранный сервер (`→ <node>`):
+          // он держит место, а транспорт (proto) уступает по остаточному
+          // принципу — обрезается/исчезает первым при нехватке ширины. Раньше
+          // было наоборот (proto фикс. ширины, сервер обрезался ellipsis'ом).
           if (arrow != null)
             Flexible(
+              flex: 3,
               fit: FlexFit.loose,
               child: Padding(
                 padding: EdgeInsets.only(right: proto != null ? 6 : 0),
                 child: arrow,
               ),
             ),
-          ?proto,
+          if (proto != null)
+            Flexible(
+              flex: 1,
+              fit: FlexFit.loose,
+              child: proto,
+            ),
           const Spacer(),
           right,
         ],
