@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../config/consts.dart';
 import '../vpn/cc_channel.dart';
 import 'config_node.dart';
 import 'debug_entry.dart';
@@ -186,15 +185,25 @@ class HomeState {
   late final List<String> sortedNodes = _computeSortedNodes();
 
   List<String> _computeSortedNodes() {
-    // §070: pinDirect/pinAuto управляют наполнением pinned section во
+    // §070/§125: pinDirect/pinAuto управляют наполнением pinned section во
     // ВСЕХ modes включая `defaultOrder`. Default = pristine config order
     // для non-pinned части, но pinned всегда сверху если toggle ON.
-    final pinnedOrder = <String>[
-      if (pinDirect) 'direct-out',
-      if (pinAuto) kAutoOutboundTag,
+    //
+    // §125 — пин по ТИПУ из конфига (`direct`/`urltest`), а не по фикс-тегам:
+    // auto-двойники теперь зовутся `vpn-1-auto`/`vpn-2-auto`..., старая проверка
+    // `== '✨auto'` их не ловила. direct сверху, затем все urltest-двойники
+    // (в config-порядке). Сам tag не важен — важен type из ParsedConfig.
+    final pinnedSet = <String>{
+      for (final n in nodes)
+        if ((pinDirect && configModel[n]?.type == 'direct') ||
+            (pinAuto && configModel[n]?.type == 'urltest'))
+          n,
+    };
+    final pinned = [
+      ...nodes.where((n) => pinnedSet.contains(n) && configModel[n]?.type == 'direct'),
+      ...nodes.where((n) => pinnedSet.contains(n) && configModel[n]?.type == 'urltest'),
     ];
-    final pinned = pinnedOrder.where(nodes.contains).toList();
-    final rest = nodes.where((n) => !pinnedOrder.contains(n)).toList();
+    final rest = nodes.where((n) => !pinnedSet.contains(n)).toList();
     switch (sortMode) {
       case NodeSortMode.defaultOrder:
         // rest в pristine config order (без сортировки).
