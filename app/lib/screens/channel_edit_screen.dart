@@ -293,7 +293,19 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
             ),
           ],
         ),
-        body: ListView(
+        // Бледный hint во всех полях формы — чтобы placeholder не сливался с
+        // вводимым текстом (один источник через InputDecorationTheme).
+        body: Theme(
+          data: Theme.of(context).copyWith(
+            inputDecorationTheme:
+                Theme.of(context).inputDecorationTheme.copyWith(
+                      hintStyle: TextStyle(
+                        fontSize: 13,
+                        color: cs.onSurfaceVariant.withAlpha(110),
+                      ),
+                    ),
+          ),
+          child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
           children: [
             // системный tag (read-only)
@@ -481,6 +493,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               ),
             ],
           ],
+          ),
         ),
       ),
     );
