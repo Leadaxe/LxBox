@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.VpnService
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -286,6 +287,15 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // новый плагин ничего не получит без явного запроса).
                 result.success(BoxVpnService.currentStatus.name)
             }
+            "getTunnelUptimeMs" -> {
+                // §187 — прошедшие мс с реального старта туннеля (переживает
+                // swipe). 0 = не запущен / только что стартовал. Dart на cold-
+                // start вычисляет честный connectedSince = now - uptime, вместо
+                // обнуления на «сейчас». Монотонные часы (elapsedRealtime).
+                val started = BoxVpnService.tunnelStartedElapsedMs
+                val uptime = if (started > 0L) SystemClock.elapsedRealtime() - started else 0L
+                result.success(uptime)
+            }
             "getCoreVersion" -> {
                 // Libbox.version() — статический Go-side метод; возвращает
                 // строку вида "1.13.11". Используется в About screen.
@@ -544,6 +554,21 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
 
             // ───── §122 Фаза 0 — CommandClient lifecycle + императивы ─────
+            // §185 — cold-start после swipe-keep: ВСЕ CC-клиенты осиротели
+            // (PERSISTENT поля на companion, пережили swipe; Dart-движок умер,
+            // disconnect/pause не вызвались). resyncForReopen переподнимает
+            // screenClient (groups/connections, сброс протухшего refcount) +
+            // statusClient (трафик/память, минуя ранний return setStatusFast)
+            // на свежий движок — иначе стримы привязаны к мёртвым sink'ам →
+            // пустой UI. Идемпотентно при первом старте. Профайлер: чистая
+            // остановка осиротевшего клиента (буфер в Dart потерян by design).
+            "ccResyncForReopen" -> {
+                BoxService.commandClient?.apply {
+                    resyncForReopen()
+                    disconnectProfiler()
+                }
+                result.success(true)
+            }
             "ccConnectScreen" -> {
                 BoxService.commandClient?.connectScreen(); result.success(true)
             }

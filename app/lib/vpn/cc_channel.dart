@@ -159,6 +159,13 @@ class CcChannel {
   // ─────────────────────── Lifecycle signals ───────────────────────
   // §2.8 — screen/profiler клиенты поднимаются/гасятся по сигналу из Dart.
 
+  /// §185 — cold-start Flutter после swipe-keep (туннель жив, native CC жив,
+  /// движок переподнялся). Сбросить протухший native screenRefs + закрыть
+  /// осиротевшие screen/profiler-клиенты ПЕРЕД connectScreen — иначе протухший
+  /// refcount не даст переподнять screenClient на свежий движок (пустой UI).
+  /// Идемпотентно: на штатном старте (refs уже 0) — no-op.
+  Future<void> resyncForReopen() => _invoke('ccResyncForReopen');
+
   Future<void> connectScreen() => _invoke('ccConnectScreen');
   Future<void> disconnectScreen() => _invoke('ccDisconnectScreen');
   Future<void> connectProfiler() => _invoke('ccConnectProfiler');

@@ -8,6 +8,19 @@
 
 ## [Unreleased]
 
+## [2.5.1] — 2026-06-27
+
+Хотфикс к v2.5.0 — регрессия lifecycle при swipe-from-recents с keep-alive туннелем. После «смахивания» приложения из недавних процесс выживал (foreground VPN-сервис), умирал только Flutter-движок; при повторном открытии все CommandClient-клиенты оставались привязаны к мёртвому движку → UI `Connected`, но пустой (статус-broadcast горел, данные не текли). Cold-start теперь пере-синхронизирует все каналы данных с ядром.
+
+### Fixed
+
+- **§185 — cold-start не пере-синхронизировал CommandClient** ([task spec](docs/spec/tasks/185-cold-start-cc-resync.md), [BoxCommandClient.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxCommandClient.kt), [home_controller.dart](app/lib/controllers/home_controller.dart)). После swipe-reopen: `Connected`, но Channel/Nodes пусты, Stats — спиннер, скорость ↑↓ висит; лечилось только перезапуском VPN. Корень: все 4 CC-клиента (поля на companion `BoxService`) переживали swipe, но привязаны к sink'ам мёртвого Flutter-движка. Новый `resyncForReopen()` на cold-start: сброс протухшего `screenRefs`=0 + close осиротевшего screenClient (→ `connectScreen` переподнимет на свежие sink'и) + форс `connectStatus()` на NORMAL для statusClient (минуя ранний return `setStatusFast`) + disconnect осиротевших profiler/ping-клиентов. Зовётся из `_startCcStreams` (async) перед `connectScreen`. Замок A (Dart-триггер) уже был закрыт — `init` пуллит `connected` как переход. Device-verified (vc=2876): swipe-reopen не воспроизводит ни пустой UI, ни подвисание Stats.
+- **§187 — таймер соединения сбрасывался на swipe-reopen** ([task spec](docs/spec/tasks/187-uptime-survives-swipe.md), [BoxVpnService.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/BoxVpnService.kt)). `connectedSince` ставился в `now()` на каждый `connected`-event; на cold-start `connected` приходит pull'ом → время старта терялось. Native companion `tunnelStartedElapsedMs` (`SystemClock.elapsedRealtime()`, монотонные часы, переживает swipe) + handler `getTunnelUptimeMs` → Dart `_syncUptimeFromNative` на cold-start корректирует `connectedSince = now - uptime` (свежий старт uptime≈0 → без регресса).
+
+### Changed
+
+- **§186 — локальная сборка пинит versionCode к релизному тегу** ([task spec](docs/spec/tasks/186-local-build-vc-pin-to-tag.md), [build-local-apk.sh](scripts/build-local-apk.sh)). `build-local-apk.sh` брал `build-number = git rev-list --count HEAD` → на ветке разработки локальный vc обгонял релизный (HEAD-count > tag-count) → релиз с GitHub не ставился поверх локальной сборки (downgrade-блок). Теперь пин к `count(<last-vN.N.N-tag>)` → локальный arm64 vc = ровно релизный → `install -r` в обе стороны. Множитель `+2000` (arm64) добавляет сам Flutter при `--split-per-abi` — одинаков для CI и локалки, не источник расхождения. Fallback без тега: `0.0.0+<HEAD-count>`.
+
 ## [2.5.0] — 2026-06-27
 
 Миграция на ядро sing-box-lx `v1.14.0-lx.1` и полный отказ от Clash API. Управляющий канал UI переведён с Clash HTTP на libbox `CommandClient` (server-stream push вместо Timer-polling): статус, группы, соединения и URLTest теперь идут напрямую из ядра. Kotlin-обвязка адаптирована под breaking-изменения libbox 1.14 (Tailscale/SSH-сервер влил новые обязательные методы PlatformInterface/CommandServerHandler). Добавлена энергомодель CC-клиентов (адаптивная частота + сон в фоне). Профайлер и имена правил переведены на новый канал. Закрыт критический баг REALITY-валидации, ронявший весь конфиг от одной битой ноды.
