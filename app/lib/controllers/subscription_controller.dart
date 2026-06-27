@@ -692,7 +692,6 @@ class SubscriptionController extends ChangeNotifier {
     final settings = BuildSettings(
       userVars: await SettingsStorage.getAllVars(),
       enabledGroups: await SettingsStorage.getEnabledGroups(),
-      excludedNodes: await SettingsStorage.getExcludedNodes(),
       customRules: await SettingsStorage.getCustomRules(),
       routeFinal: await SettingsStorage.getRouteFinal(),
       channels: await SettingsStorage.getChannels(), // §125

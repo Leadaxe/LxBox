@@ -325,10 +325,8 @@ class SettingsStorage {
   static Future<void> saveRouteFinal(String outbound, {bool flush = true}) =>
       _saveRouteFinal(outbound, flush: flush);
 
-  static Future<Set<String>> getExcludedNodes() => _getExcludedNodes();
-
-  static Future<void> saveExcludedNodes(Set<String> excluded) =>
-      _saveExcludedNodes(excluded);
+  // §125-cleanup — excluded_nodes (§048 глобальный фильтр) удалён. Ключ остаётся
+  // в allowlist (legacy backward-compat, безвредный мусор как enabled_groups).
 
   // §100 — персист сортировки нод (имя режима + порядок ручной сортировки).
   static Future<({String mode, List<String> order})> getNodeSort() async {

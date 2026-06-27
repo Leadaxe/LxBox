@@ -96,7 +96,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       └─ <groupTag>            object          {url?, timeout_ms?}
 │
 ├─ route_final                   string        override sing-box route.final
-├─ excluded_nodes[]              list          node tags выкинутые юзером из group resolve / mass-ping
+├─ excluded_nodes[]              list          §125-cleanup DEPRECATED — глобальный node-filter (§048) удалён; safe-мусор
 ├─ enabled_groups[]              list          §125 DEPRECATED — читается только миграцией channels[]. Safe-мусор.
 ├─ channels[]                    list          §125 — каналы роутинга (template→storage). См. ниже.
 │   └─ <item>                    object
@@ -181,7 +181,7 @@ Android SharedPreferences:
   "dns_options":        { … },     // rules + servers
   "ping_options":       { … },
   "route_final":        "<tag>",   // override route.final
-  "excluded_nodes":     [ … ],     // tags выкинутые юзером из mass-ping
+  "excluded_nodes":     [ … ],     // §125-cleanup DEPRECATED (глобальный node-filter удалён)
   "enabled_groups":     [ … ],     // §125 DEPRECATED (читается только миграцией channels[])
   "channels":           [ … ],     // §125 — каналы роутинга (template→storage)
   "channels_migrated":  true,      // §125 — guard миграции enabled_groups→channels
@@ -689,7 +689,7 @@ Debug API handlers — идут через единую дверь `SettingsStor
 | Ключ | Тип | Назначение |
 |---|---|---|
 | `route_final` | `String` | Override `route.final` поверх template (выбранный default outbound). `''` = template-default. Dangling-ссылка (удалённый канал / legacy ✨auto) → `vpn-1` при сборке (§125). |
-| `excluded_nodes` | `List<String>` | Node tags выкинутые юзером — пропускаются в group resolve и mass-ping. |
+| `excluded_nodes` | `List<String>` | §125-cleanup **DEPRECATED** — глобальный node-filter (§048) удалён вместе с экраном. Ключ остаётся в allowlist (безвредный legacy-мусор); per-channel `node_filter` (§125) покрывает фильтрацию. |
 | `enabled_groups` | `List<String>` | §125 **DEPRECATED** — заменён на `channels[]`. Читается только one-shot миграцией; на диске остаётся безвредным мусором. |
 | `last_global_update` | `String` (ISO-8601) | Timestamp последнего успешного auto-refresh всех подписок. |
 | `presets_migrated` | `bool` | §159 — guard «дефолтные пресеты засеяны» (fresh-install seed). Имя ключа историческое (бывшая legacy-миграция); переиспользован, чтобы ранее мигрировавшие юзеры не получили повторный seed. `RoutingScreen._seedDefaultPresets` ставит true. |

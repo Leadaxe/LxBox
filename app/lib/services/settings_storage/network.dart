@@ -23,20 +23,6 @@ Future<void> _saveRouteFinal(String outbound, {bool flush = true}) async {
   if (flush) await _save();
 }
 
-Future<Set<String>> _getExcludedNodes() async {
-  final data = await _load();
-  final list = data['excluded_nodes'] as List<dynamic>?;
-  if (list == null) return {};
-  return list.map((e) => e.toString()).toSet();
-}
-
-Future<void> _saveExcludedNodes(Set<String> excluded) async {
-  final data = await _load();
-  data['excluded_nodes'] = excluded.toList();
-  SettingsStorage._cache = data;
-  SettingsStorage.markConfigDirty(); // §113
-  await _save();
-}
 
 Future<List<Map<String, dynamic>>> _getDnsServers() async {
   final data = await _load();

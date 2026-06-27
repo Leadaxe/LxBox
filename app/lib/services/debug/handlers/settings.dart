@@ -12,12 +12,10 @@ import '_shared.dart';
 /// 1. Некоторые ключи критичны и ломают доступ к Debug API
 ///    (`debug_token`, `debug_enabled`, `debug_port` — blocklist ниже).
 /// 2. Для некоторых полей нужна модельная валидация / strict-type
-///    (excluded_nodes — set of strings, dns_options.servers — list of
-///    object), а не просто String.
+///    (dns_options.servers — list of object), а не просто String.
 ///
 /// Routes:
 /// - `PUT    /settings/route_final`             body `{"outbound":"..."}`
-/// - `PUT    /settings/excluded_nodes`          body `{"nodes":["tag",...]}`
 /// - `PUT    /settings/vars/{key}`              body `{"value":"..."}`
 /// - `DELETE /settings/vars/{key}`              — удалить var
 /// - `PUT    /settings/dns_options/servers`     body `{"servers":[...]}`
@@ -55,10 +53,6 @@ Future<DebugResponse> settingsHandler(DebugRequest req, DebugContext ctx) async 
       if (req.method == 'GET') return _getVpnMode();
       if (req.method == 'PUT') return _putVpnMode(req, ctx);
       throw _methodNotAllowed(req.method, path);
-
-    case '/settings/excluded_nodes':
-      if (req.method != 'PUT') throw _methodNotAllowed(req.method, path);
-      return _putExcludedNodes(req, ctx);
 
     case '/settings/dns_options/servers':
       if (req.method != 'PUT') throw _methodNotAllowed(req.method, path);
@@ -157,26 +151,6 @@ Future<DebugResponse> _putRouteFinal(DebugRequest req, DebugContext ctx) async {
     'ok': true,
     'action': 'settings-route-final',
     'outbound': outbound,
-    ...extras,
-  });
-}
-
-// ---------------------------------------------------------------------------
-// excluded_nodes
-// ---------------------------------------------------------------------------
-
-Future<DebugResponse> _putExcludedNodes(DebugRequest req, DebugContext ctx) async {
-  final body = req.jsonBodyAsMap();
-  final nodes = fieldStringList(body, 'nodes');
-  if (nodes == null) {
-    throw const BadRequest('field "nodes" required (string array)');
-  }
-  await SettingsStorage.saveExcludedNodes(nodes.toSet());
-  final extras = await maybeRebuild(req, ctx);
-  return JsonResponse({
-    'ok': true,
-    'action': 'settings-excluded-nodes',
-    'count': nodes.length,
     ...extras,
   });
 }

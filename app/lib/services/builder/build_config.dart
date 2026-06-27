@@ -41,7 +41,6 @@ class BuildResult {
 class BuildSettings {
   final Map<String, String> userVars;
   final Set<String> enabledGroups;
-  final Set<String> excludedNodes;
   final List<CustomRule> customRules;
   final String routeFinal;
 
@@ -60,7 +59,6 @@ class BuildSettings {
   const BuildSettings({
     this.userVars = const {},
     this.enabledGroups = const {},
-    this.excludedNodes = const {},
     this.customRules = const [],
     this.routeFinal = '',
     this.channels = const [],
@@ -204,7 +202,6 @@ Future<BuildResult> buildConfig({
   final presetOutbounds = _buildChannelGroups(
     channels: channels,
     selectorTags: selectorTags,
-    excludedNodes: settings.excludedNodes,
   );
 
   final baseOutbounds = config['outbounds'] as List<dynamic>? ?? const [];
@@ -446,12 +443,10 @@ class _BuildCtx implements EmitContext {
 List<Map<String, dynamic>> _buildChannelGroups({
   required List<Channel> channels,
   required List<String> selectorTags,
-  required Set<String> excludedNodes,
 }) {
-  // excludedNodes (§048 глобальный фильтр) применяется ДО per-channel regex —
-  // это независимые слои (глобальная песочница + боевой per-channel фильтр).
-  final baseNodes =
-      selectorTags.where((t) => !excludedNodes.contains(t)).toList();
+  // §125 — единственный слой фильтрации нод теперь per-channel regex
+  // (node_filter). Глобальный excluded_nodes (§048) удалён.
+  final baseNodes = selectorTags;
 
   final active = channels.where((c) => c.enabled || c.isRequired).toList();
 
