@@ -46,8 +46,20 @@ Future<void> _updateChannel(Channel channel) async {
   final channels = (await _getChannels()).toList();
   final i = channels.indexWhere((c) => c.tag == channel.tag);
   if (i < 0) throw StateError('channel not found: ${channel.tag}');
+  // §202 — переход enabled: true → false делает канал невалидной мишенью
+  // (как удаление): билдер деградирует только ВЫХЛОП конфига, а route_final /
+  // custom-rule outbound в storage остаются висеть на выключенном теге →
+  // «надо идти пересохранять». Лечим storage сразу (route_final / правило →
+  // vpn-1). Решение B (28.06.2026): необратимо — повторное включение канала
+  // НЕ воскрешает старую ссылку (правила привязаны к активной конфигурации).
+  final wasEnabled = channels[i].enabled;
   channels[i] = channel;
-  await _setChannels(channels);
+  if (wasEnabled && !channel.enabled) {
+    await _setChannels(channels, flush: false); // единый flush в _healChannelRefs
+    await _healChannelRefs(channel.tag);
+  } else {
+    await _setChannels(channels);
+  }
 }
 
 /// Удалить канал. vpn-1 неудаляем (throws). Любая ссылка на удалённый tag
@@ -62,8 +74,9 @@ Future<void> _deleteChannel(String tag) async {
   await _healChannelRefs(tag);
 }
 
-/// Перевод dangling-ссылок на удалённый канал → 'vpn-1'. Без flush до конца —
-/// атомарный финальный `_save()`.
+/// Перевод dangling-ссылок на канал → 'vpn-1'. Вызывается, когда канал
+/// перестаёт быть валидной route-мишенью: удалён (§125 F4.5) ИЛИ выключен
+/// (§202). Без flush до конца — атомарный финальный `_save()`.
 Future<void> _healChannelRefs(String deletedTag) async {
   // route_final
   final routeFinal = await SettingsStorage.getRouteFinal();
