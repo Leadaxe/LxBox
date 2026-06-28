@@ -56,14 +56,16 @@ BannerColors bannerColors(BuildContext context, BannerSeverity severity) {
       );
     case BannerSeverity.warning:
       // Тёмная тема: глубокий полупрозрачный янтарный фон + светлый текст.
-      // Светлая: классический amber.shade100 + тёмный текст.
+      // Светлая: классический amber.shade100 + тёмно-коричневый текст
+      // (brown.800) — amber.shade900 ещё оранжевый и бледнит на светлом фоне;
+      // brown даёт настоящий тёмный контраст, сохраняя тёплый тон.
       return BannerColors(
         background: isDark
             ? Colors.amber.shade900.withValues(alpha: 0.18)
             : Colors.amber.shade100,
         border: isDark ? Colors.amber.shade700 : Colors.amber.shade400,
-        foreground: isDark ? Colors.amber.shade100 : Colors.amber.shade900,
-        action: isDark ? Colors.amber.shade200 : Colors.amber.shade900,
+        foreground: isDark ? Colors.amber.shade100 : Colors.brown.shade800,
+        action: isDark ? Colors.amber.shade200 : Colors.brown.shade800,
       );
     case BannerSeverity.success:
       return BannerColors(
