@@ -961,6 +961,7 @@ class TrafficProfiler extends ChangeNotifier {
           port: destPort > 0 ? destPort : null,
           outboundChain: routeChain,
           detourChain: detourChain,
+          outboundType: c.outboundType.isNotEmpty ? c.outboundType : null, // §204
           upBytes: up,
           downBytes: down,
           process: rawProcess.isNotEmpty ? rawProcess : null,
@@ -1023,6 +1024,7 @@ class TrafficProfiler extends ChangeNotifier {
           network: network,
           chains: routeChain,
           detours: detourChain, // §181
+          outboundType: c.outboundType.isNotEmpty ? c.outboundType : null, // §204
           upBytes: up,
           downBytes: down,
           startedAt: now,
@@ -1055,6 +1057,7 @@ class TrafficProfiler extends ChangeNotifier {
         port: snap.port > 0 ? snap.port : null,
         outboundChain: snap.chains,
         detourChain: snap.detours, // §181
+        outboundType: snap.outboundType, // §204
         upBytes: snap.upBytes,
         downBytes: snap.downBytes,
         duration: now.difference(snap.startedAt),

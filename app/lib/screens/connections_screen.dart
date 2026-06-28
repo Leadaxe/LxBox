@@ -359,27 +359,34 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                     ),
                   ],
                 ),
-                // Row 2: outbound (нода/цепочка) — getOutbound, ОБЯЗАТЕЛЬНО.
+                // §204 — Row 2: единая routing-строка (как ряд профайлера):
+                // `rule ⇒ группы : node → detour → dest` (§181, compact). Слева в
+                // Expanded (ellipsis), duration/closed — ОТДЕЛЬНО справа, фикс.
+                // (решение D: таймер важен и не должен дёргаться внутри строки).
                 Padding(
                   padding: const EdgeInsets.only(left: 22, top: 2),
-                  child: Text(
-                    conn.outbound.isNotEmpty ? conn.outbound : '—',
-                    style: TextStyle(fontSize: 11, color: cs.primary),
-                    overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                // Row 3: protocol · rule · duration. Пустой rule = соединение
-                // пошло по route.final (default-маршрут, без явного правила) —
-                // пишем `final`, как Clash (а не `—`).
-                Padding(
-                  padding: const EdgeInsets.only(left: 22, top: 2),
-                  child: Text(
-                    '${network.toUpperCase()}'
-                    '  ·  ${rule.isNotEmpty ? rule : 'final'}'
-                    '${closed ? '  ·  closed' : ''}'
-                    '${duration != null ? '  ·  ${_formatDuration(duration)}' : ''}',
-                    style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
-                    overflow: TextOverflow.ellipsis,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          conn.routingLineOf(compact: true, ruleLabel: rule),
+                          style: TextStyle(fontSize: 11, color: cs.primary),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (closed) ...[
+                        const SizedBox(width: 6),
+                        Text('closed',
+                            style: TextStyle(
+                                fontSize: 10, color: cs.onSurfaceVariant)),
+                      ],
+                      if (duration != null) ...[
+                        const SizedBox(width: 6),
+                        Text(_formatDuration(duration),
+                            style: TextStyle(
+                                fontSize: 10, color: cs.onSurfaceVariant)),
+                      ],
+                    ],
                   ),
                 ),
               ],
