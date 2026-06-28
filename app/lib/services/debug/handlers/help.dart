@@ -84,6 +84,12 @@ PUT /config                         Overwrite config.json + reload sing-box. Bod
 GET /config/pretty                  Same with indent
 GET /config/path                    Absolute on-device file path
 
+=== Pool (§208 round_robin balancer) ===
+
+GET /pool?tag=<autoTag>             Snapshot of a round_robin urltest pool (e.g. tag=vpn-1-auto).
+                                      → {"tag","count","slots":[{slot,tag,delay,alive}]}. delay=0 → dead/untested.
+                                      non-round_robin / tunnel down → slots:[] (not an error).
+
 === Logs ===
 
 GET /logs?limit=N&source=app|core&q=substr&level=error,warning,info,debug
