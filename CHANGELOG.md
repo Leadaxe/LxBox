@@ -6,6 +6,14 @@
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **§208 — round-robin балансировщик в auto-группе + просмотр пула** ([task spec](docs/spec/tasks/208-urltest-balancer-round-robin.md), [channel.dart](app/lib/models/channel.dart) + [channel_edit_screen.dart](app/lib/screens/channel_edit_screen.dart) + [build_config.dart](app/lib/services/builder/build_config.dart) + [pool_view_dialog.dart](app/lib/widgets/pool_view_dialog.dart)). Ядро (SPEC 019 V2, rc.14) ввело режим балансировки нагрузки на urltest-группах. Auto-двойник канала (`<tag>-auto`, §125) получил выбор **режима** в редакторе: **Fastest** (least_test — один лучший узел по latency, как было) ↔ **Load balance** (round_robin — раскидывает соединения по пулу из N узлов со sticky-привязкой сессий). Под Load balance: **Pool size**, **Pool tolerance** и горизонтально прокручиваемый ряд чипов **sticky-ключей** (process / domain / source ip / dest ip / dest port; пусто = чистая ротация без липкости). Tolerance гасится в Load balance (ядро его там игнорирует). Билдер дописывает `mode` + `balancer{pool, pool_tolerance, sticky_hash}` в config только при round_robin (least_test остаётся бит-в-бит апстримом). Long-press по auto-ноде round_robin-канала → пункт **«View pool»** → попап с текущим составом пула (фиксированные слоты `slot / нода / delay`) через новый RPC `GetPool`. Кламп `pool ≥ 1`, `pool_tolerance` uint16 (§161); старый канал без новых полей → дефолты (обратная совместимость). +26 тестов.
+
+---
+
 ## [2.6.2] — 2026-06-28
 
 Патч к v2.6.1 — новое ядро (фикс холодного Auto), унификация вкладки Conns с

@@ -665,25 +665,32 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
       Text('Sticky session by',
           style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
       const SizedBox(height: 4),
-      Wrap(
-        spacing: 6,
-        runSpacing: 0,
-        children: [
-          for (final k in StickyHashKey.values)
-            FilterChip(
-              label: Text(_stickyLabel(k), style: const TextStyle(fontSize: 12)),
-              selected: _autoSticky.contains(k),
-              visualDensity: VisualDensity.compact,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              onSelected: (sel) => setState(() {
-                if (sel) {
-                  _autoSticky.add(k);
-                } else {
-                  _autoSticky.remove(k);
-                }
-              }),
-            ),
-        ],
+      // §208 — чипы в один ряд с горизонтальной прокруткой (не Wrap-перенос:
+      // юзер просил листать лево-право). 5 ключей не влезают в узкий экран.
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final k in StickyHashKey.values)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: FilterChip(
+                  label: Text(_stickyLabel(k),
+                      style: const TextStyle(fontSize: 12)),
+                  selected: _autoSticky.contains(k),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  onSelected: (sel) => setState(() {
+                    if (sel) {
+                      _autoSticky.add(k);
+                    } else {
+                      _autoSticky.remove(k);
+                    }
+                  }),
+                ),
+              ),
+          ],
+        ),
       ),
       const SizedBox(height: 2),
       _previewLine(
