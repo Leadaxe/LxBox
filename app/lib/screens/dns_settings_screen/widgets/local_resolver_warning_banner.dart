@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../widgets/banner_palette.dart';
+
 /// §047 — banner который показывается под `Default Domain Resolver` когда
 /// выбран `local_dns_resolver`. Объясняет риск + предлагает quick-fix
 /// «Switch to cloudflare_udp» если этот server существует в catalog'е.
@@ -15,14 +17,16 @@ class LocalResolverWarningBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    // §206 — цвета из единого источника (widgets/banner_palette.dart), а не
+    // хардкод `Colors.amber`. Theme-aware для light/dark из коробки.
+    final c = bannerColors(context, BannerSeverity.warning);
     return Container(
       margin: const EdgeInsets.fromLTRB(0, 4, 0, 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.amber.shade100,
+        color: c.background,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.amber.shade400),
+        border: Border.all(color: c.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -30,7 +34,7 @@ class LocalResolverWarningBanner extends StatelessWidget {
           Row(
             children: [
               Icon(Icons.warning_amber_rounded,
-                  size: 18, color: Colors.amber.shade800),
+                  size: 18, color: c.foreground),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -38,7 +42,7 @@ class LocalResolverWarningBanner extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: cs.onSurface),
+                      color: c.foreground),
                 ),
               ),
             ],
@@ -49,7 +53,7 @@ class LocalResolverWarningBanner extends StatelessWidget {
             'addresses, custom outbound endpoints) will go through your '
             'ISP\'s DNS, bypassing the VPN tunnel. Pick a regular DNS '
             'server for full privacy.',
-            style: TextStyle(fontSize: 12, color: cs.onSurface),
+            style: TextStyle(fontSize: 12, color: c.foreground),
           ),
           if (hasCloudflareUdp) ...[
             const SizedBox(height: 8),
@@ -60,7 +64,7 @@ class LocalResolverWarningBanner extends StatelessWidget {
                 label: const Text('Switch to cloudflare_udp'),
                 onPressed: onSwitchToCloudflareUdp,
                 style: TextButton.styleFrom(
-                  foregroundColor: Colors.amber.shade900,
+                  foregroundColor: c.action,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 12, vertical: 4),
                   minimumSize: Size.zero,

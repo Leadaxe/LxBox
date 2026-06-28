@@ -6,6 +6,19 @@
 
 ---
 
+## [2.6.2] — 2026-06-28
+
+Патч к v2.6.1 — новое ядро (фикс холодного Auto), унификация вкладки Conns с
+профайлером, читаемость баннеров в обеих темах.
+
+### Changed
+
+- **§204 — вкладка Conns в стиле профайлера (routing)** ([task spec](docs/spec/tasks/204-conns-routing-unify-with-profiler.md), [cc_channel.dart](app/lib/vpn/cc_channel.dart) + [routing_section.dart](app/lib/screens/stats_screen/routing_section.dart) + [connection_detail_sheet.dart](app/lib/screens/connections_screen/connection_detail_sheet.dart)). Ряд соединения: две строки (outbound + `NETWORK · rule · duration`) → одна routing-строка §181 (`rule ⇒ группы : node → detour → dest`), таймер вынесен фиксированно вправо. Окно детализации: Routing-секция теперь 1:1 с профайлером — **Route + Rule + Chain + Detour + Outbound + Outbound type** (раньше Conns не показывал Chain/Detour, хотя данные были; профайлер не показывал Outbound type). `CcConnection.routingLineOf` идентичен `TrafficEvent.routingLineOf` (один источник цепочек из ядра, 9 golden-тестов).
+
+- **§206 — DNS final по умолчанию → cloudflare_udp + единая палитра баннеров** ([task spec](docs/spec/tasks/206-dns-final-default-cloudflare.md), [banner_palette.dart](app/lib/widgets/banner_palette.dart) + [wizard_template.json](app/assets/wizard_template.json)). Дефолт `dns_final` сменён на `cloudflare_udp`. Warning-баннеры (LocalResolver, resolver-picker, stats) приведены к единой `BannerPalette` — жёлтый текст больше не нечитаем (был белый на светлом amber в тёмной теме / бледный в светлой); warning-текст в светлой теме = контрастный коричневый.
+
+- **§205 — ядро sing-box-lx → `v1.14.0-lx.1-rc.12`** ([task spec](docs/spec/tasks/205-libbox-rc12-cold-urltest.md)). Фикс холодного `urltest.Now()` (SPEC 019): на старте Auto-группа сразу сообщает реально набираемый сервер (`Select(tcp/udp)`-fallback) вместо пустого значения. Теперь строка «Auto» на главной показывает `→ сервер` сразу после подключения, цепочка в профайлере доходит до узла, «Select server» (§203) работает с холодной. API CommandClient без изменений — Dart/Kotlin не трогались.
+
 ## [2.6.1] — 2026-06-28
 
 Патч к v2.6.0 — мелкие доводки главного экрана.

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../widgets/banner_palette.dart';
+
 /// §047/§048 — DNS resolver picker с info-icon ℹ tooltip'ом и опциональным
 /// жёлтым ⚠ маркером когда выбран `local_dns_resolver` (только для
 /// `Default Domain Resolver` поля — там это antipattern).
@@ -40,7 +42,9 @@ class ResolverPicker extends StatelessWidget {
             child: Icon(
               showWarn ? Icons.warning_amber_rounded : Icons.info_outline,
               size: 18,
-              color: showWarn ? Colors.amber.shade700 : cs.onSurfaceVariant,
+              color: showWarn
+                  ? bannerIconColor(context, BannerSeverity.warning)
+                  : cs.onSurfaceVariant,
             ),
           ),
           const SizedBox(width: 6),
