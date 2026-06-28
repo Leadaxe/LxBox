@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../services/settings_storage.dart';
+import '../../../vpn/pprof_profile.dart';
 
 /// Diagnostics tab для App Settings.
 ///
@@ -41,8 +42,7 @@ class DiagnosticsTab extends StatelessWidget {
     required this.onQuitApp,
     required this.onAutoRecordWifiChanged,
     required this.capturing,
-    required this.onCaptureGoroutines,
-    required this.onCaptureCpuProfile,
+    required this.onCaptureProfile,
   });
 
   final bool loaded;
@@ -80,11 +80,20 @@ class DiagnosticsTab extends StatelessWidget {
   final VoidCallback onQuitApp;
   final ValueChanged<bool> onAutoRecordWifiChanged;
 
-  /// §207 — снять goroutine stack-дамп / CPU-профиль (libbox PProfServer).
-  /// `capturing` = захват в процессе → обе кнопки disabled (один сервер/порт).
+  /// §207 — снять pprof-слепок (libbox PProfServer); аргумент = дескриптор
+  /// профиля ([PprofProfile]).
+  /// `capturing` = захват в процессе → все кнопки disabled (один сервер/порт).
   final bool capturing;
-  final VoidCallback onCaptureGoroutines;
-  final VoidCallback onCaptureCpuProfile;
+  final ValueChanged<PprofProfile> onCaptureProfile;
+
+  /// §207 — иконка кнопки по id профиля.
+  static IconData _iconFor(String id) => switch (id) {
+        'goroutine' => Icons.account_tree_outlined,
+        'profile' => Icons.speed_outlined,
+        'heap' => Icons.memory_outlined,
+        'allocs' => Icons.dataset_outlined,
+        _ => Icons.bug_report_outlined,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -307,10 +316,9 @@ class DiagnosticsTab extends StatelessWidget {
             ],
           ),
         ),
-        // §207 — on-device profiling. Snapshots the running core's goroutine
-        // stacks (deadlock/leak) and a 10s CPU profile (busy-spin). Both go
-        // through libbox PProfServer — VPN must be running. Captured file
-        // opens the system Share sheet.
+        // §207 — on-device profiling. Snapshots the running core via libbox
+        // PProfServer (goroutines / CPU / heap / allocs) — VPN must be
+        // running. Captured file opens the system Share sheet.
         const Divider(height: 8),
         Text('Profiling', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
@@ -328,26 +336,25 @@ class DiagnosticsTab extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: (loaded && !capturing) ? onCaptureGoroutines : null,
-                icon: const Icon(Icons.account_tree_outlined, size: 18),
-                label: const Text('Capture goroutine dump'),
-              ),
-              const SizedBox(height: 6),
-              OutlinedButton.icon(
-                onPressed: (loaded && !capturing) ? onCaptureCpuProfile : null,
-                icon: capturing
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.speed_outlined, size: 18),
-                label: const Text('Capture CPU profile (10s)'),
-              ),
-              const SizedBox(height: 4),
+              for (final p in PprofProfile.all) ...[
+                OutlinedButton.icon(
+                  onPressed: (loaded && !capturing)
+                      ? () => onCaptureProfile(p)
+                      : null,
+                  icon: (capturing && p.blockingSeconds > 0)
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(_iconFor(p.id), size: 18),
+                  label: Text('Capture ${p.label}'),
+                ),
+                const SizedBox(height: 6),
+              ],
               Text(
-                'Analyze the CPU profile with: go tool pprof cpu-*.pb',
+                'Binary profiles (.pb): go tool pprof file.pb\n'
+                'Heap inuse_space: go tool pprof -inuse_space heap-*.pb',
                 style: TextStyle(
                   fontSize: 11,
                   fontFamily: 'monospace',

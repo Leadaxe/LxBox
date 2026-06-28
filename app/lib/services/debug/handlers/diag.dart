@@ -60,37 +60,46 @@ Future<DebugResponse> _stderr() async {
 ///
 /// `?profile=goroutine|profile|heap|allocs|block|mutex|threadcreate`
 ///   (default `goroutine`).
-/// `?seconds=N` (1..60, default 10) — только для `profile` (CPU); сервер
-///   держит соединение N секунд.
+/// `?query=...` — сырой pprof-query без `?` (напр. `gc=1`, `debug=1`,
+///   `seconds=20`). Default по профилю: goroutine→`debug=2`, profile→
+///   `seconds=10`, heap→`gc=1`, прочие→пусто.
 ///
-/// Текстовые профили (`goroutine`/`block`/`mutex`/`heap` с `debug=2`)
-/// возвращаются как text/plain; CPU `profile` — бинарный `.pb`
-/// (application/octet-stream, открывается `go tool pprof`).
-///
-/// Туннель должен быть активен (без ядра pprof-сервер не поднять) — иначе
-/// native вернёт фолбэк-текст / бросит, что станет 200 с диагностикой
-/// или 500 соответственно.
+/// Только `goroutine?debug=1|2` отдаётся как text/plain; остальные —
+/// бинарный `.pb` (application/octet-stream, `go tool pprof`).
+/// Туннель должен быть активен (без ядра сервер не поднять).
 Future<DebugResponse> _pprof(DebugRequest req) async {
   final profile = (req.query['profile'] ?? 'goroutine').trim();
   if (!_pprofProfiles.contains(profile)) {
     throw BadRequest(
         'unknown pprof profile: $profile (allowed: ${_pprofProfiles.join('|')})');
   }
-  final seconds =
-      (int.tryParse(req.query['seconds'] ?? '10') ?? 10).clamp(1, 60);
+  // Сырой query: явный ?query=... либо дефолт по профилю.
+  final query = (req.query['query'] ?? _defaultQuery(profile)).trim();
+  final pathAndQuery = query.isEmpty ? profile : '$profile?$query';
 
-  // CPU `profile` — единственный бинарный + блокирующий; остальные —
-  // текстовые мгновенные снимки (debug=2 для читаемости).
-  final isCpu = profile == 'profile';
-  final bytes = await BoxVpnClient().pprofProfile(
-    profile: profile,
-    seconds: seconds,
-  );
-  return isCpu
-      ? BytesResponse(bytes,
-          filename: 'cpu.pb', contentType: 'application/octet-stream')
-      : BytesResponse(bytes, contentType: 'text/plain; charset=utf-8');
+  // Блокирующий — только CPU `profile`; вытащим seconds для масштабирования.
+  final blockingSeconds = profile == 'profile'
+      ? (int.tryParse(RegExp(r'seconds=(\d+)').firstMatch(query)?.group(1) ?? '10') ??
+              10)
+          .clamp(1, 60)
+      : 0;
+  final bytes = await BoxVpnClient()
+      .pprofRaw(pathAndQuery, blockingSeconds: blockingSeconds);
+
+  // Текст только для читаемого goroutine-дампа.
+  final isText = profile == 'goroutine' && query.startsWith('debug=');
+  return isText
+      ? BytesResponse(bytes, contentType: 'text/plain; charset=utf-8')
+      : BytesResponse(bytes,
+          filename: '$profile.pb', contentType: 'application/octet-stream');
 }
+
+String _defaultQuery(String profile) => switch (profile) {
+      'goroutine' => 'debug=2',
+      'profile' => 'seconds=10',
+      'heap' => 'gc=1',
+      _ => '',
+    };
 
 /// Поддерживаемые pprof-профили (зеркало Go `net/http/pprof`).
 const _pprofProfiles = <String>{

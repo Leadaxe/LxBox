@@ -17,6 +17,7 @@ import '../services/url_launcher.dart' as ul;
 import '../services/wifi_history_listener.dart';
 import '../widgets/wifi_permission_dialog.dart';
 import '../vpn/box_vpn_client.dart';
+import '../vpn/pprof_profile.dart';
 import 'app_settings_screen/app_settings_dialogs.dart';
 import 'app_settings_screen/widgets/automation_tab.dart';
 import 'app_settings_screen/widgets/diagnostics_tab.dart';
@@ -687,63 +688,42 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       onQuitApp: () => unawaited(_confirmQuitApp()),
       onAutoRecordWifiChanged: (val) => unawaited(_toggleAutoRecordWifi(val)),
       capturing: _capturing,
-      onCaptureGoroutines: () => unawaited(_captureGoroutines()),
-      onCaptureCpuProfile: () => unawaited(_captureCpuProfile()),
+      onCaptureProfile: (p) => unawaited(_captureProfile(p)),
     );
   }
 
-  /// §207 — снять goroutine stack-дамп (libbox PProfServer) и открыть Share.
-  /// Гейт: туннель должен быть активен (без ядра pprof не поднять). `_capturing`
-  /// дизейблит обе кнопки, чтобы не поднять два сервера на одном порту.
-  Future<void> _captureGoroutines() async {
+  /// §207 — снять pprof-слепок (libbox PProfServer) и открыть Share. Гейт:
+  /// туннель активен. `_capturing` дизейблит все кнопки (один сервер/порт).
+  /// `[p]` несёт path+query, имя файла, text/binary и blocking-секунды.
+  Future<void> _captureProfile(PprofProfile p) async {
     if (_capturing) return;
     if (!(await _vpn.getVpnStatus()).isUp) {
-      _diagSnack('VPN must be running to capture a goroutine dump.');
+      _diagSnack('VPN must be running to capture a profile.');
       return;
     }
     setState(() => _capturing = true);
-    try {
-      final text = await _vpn.dumpGoroutines();
-      final count = RegExp(r'^goroutine \d+', multiLine: true)
-          .allMatches(text)
-          .length;
-      final path = await ProfileDumpWriter.writeGoroutines(text);
-      final name = path.split('/').last;
-      // ignore: deprecated_member_use
-      await Share.shareXFiles(
-        [XFile(path, name: name, mimeType: 'text/plain')],
-        text: 'L×Box goroutine dump${count > 0 ? ' — $count goroutines' : ''}',
-        subject: name,
-      );
-    } catch (e) {
-      _diagSnack('Capture failed: ${formatUserError(e)}');
-    } finally {
-      if (mounted) setState(() => _capturing = false);
+    if (p.blockingSeconds > 0) {
+      _diagSnack('Profiling for ${p.blockingSeconds}s…');
     }
-  }
-
-  /// §207 — снять CPU-профиль (pprof .pb, 10s) и открыть Share. Блокирует
-  /// ~10s — обе кнопки дизейблятся через `_capturing` на время захвата.
-  Future<void> _captureCpuProfile() async {
-    if (_capturing) return;
-    if (!(await _vpn.getVpnStatus()).isUp) {
-      _diagSnack('VPN must be running to capture a CPU profile.');
-      return;
-    }
-    setState(() => _capturing = true);
-    _diagSnack('Profiling CPU for 10s…');
     try {
-      final bytes = await _vpn.captureCpuProfile(durationMs: 10000);
+      final bytes = await _vpn.pprofRaw(p.pathAndQuery,
+          blockingSeconds: p.blockingSeconds);
       if (bytes.isEmpty) {
-        _diagSnack('CPU profile was empty (timeout?).');
+        _diagSnack('Profile was empty (timeout?).');
         return;
       }
-      final path = await ProfileDumpWriter.writeCpuProfile(bytes);
+      final path = await ProfileDumpWriter.writeProfile(p, bytes);
       final name = path.split('/').last;
       // ignore: deprecated_member_use
       await Share.shareXFiles(
-        [XFile(path, name: name, mimeType: 'application/octet-stream')],
-        text: 'L×Box CPU profile — analyze with: go tool pprof $name',
+        [
+          XFile(path,
+              name: name,
+              mimeType: p.isText ? 'text/plain' : 'application/octet-stream')
+        ],
+        text: p.isText
+            ? 'L×Box ${p.label}'
+            : 'L×Box ${p.label} — analyze with: go tool pprof $name',
         subject: name,
       );
     } catch (e) {
