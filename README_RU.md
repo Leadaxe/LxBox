@@ -91,6 +91,19 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 - Fallback для нераспознанного трафика (`route.final`)
 - См. [спека 030](docs/spec/features/030%20custom%20routing%20rules/spec.md), [спека 011](docs/spec/features/011%20local%20ruleset%20cache/spec.md)
 
+**Балансировка нагрузки** — раскидать трафик по пулу серверов (v2.7.0)
+
+Auto-группа канала умеет не только выбирать один быстрейший узел, но и **раскидывать соединения по пулу** из N серверов (round-robin), сохраняя при этом липкость сессий — TLS/авторизация не прыгают между IP.
+
+- **Два режима** в редакторе канала → *Include auto*:
+  - **Fastest** (`least_test`) — один лучший узел по latency, весь трафик через него (классика)
+  - **Load balance** (`round_robin`) — соединения ротируются по пулу фиксированного размера из живых узлов
+- **Pool size** — сколько узлов в пуле одновременно; **Pool tolerance** — `0` держать пул живых (скорость неважна), `>0` вытеснять медленные в пользу быстрых
+- **Sticky session by** — ряд чипов (`process` / `domain` / `source ip` / `dest ip` / `dest port`); ключ вроде `process + domain` сажает все соединения одного приложения к одному сайту на **тот же** сервер пула (ноль реконнектов пока узел жив). Снять все чипы → чистая ротация без липкости
+- **View pool** — long-press по auto-ноде → попап с живым пулом: фиксированные `слот · узел · delay`, видно какие именно N серверов сейчас тянут трафик
+- На базе sing-box-lx **SPEC 019** (фиксированные слоты, ленивый health-check, slot-hash липкость — без per-connection состояния). Билдер пишет блок `balancer{}` только под round_robin; Fastest остаётся бит-в-бит апстримом
+- См. [§208 spec](docs/spec/tasks/208-urltest-balancer-round-robin.md)
+
 **Detour серверы** — цепочки прокси для приватности
 
 Multi-hop цепочки: трафик идёт через промежуточный сервер перед финальным прокси. Полезно при работе в сетях с гео-ограничениями на уровне провайдера или локали: поставьте домашний WireGuard как detour → заграничный мобильный интернет превращается в тоннель к дому.
@@ -167,6 +180,24 @@ Multi-hop цепочки: трафик идёт через промежуточ�
 
 
 
+**Профилирование ядра (pprof)** — ловить нагрев CPU и утечки памяти (v2.7.0)
+
+Когда ядро греется или течёт по памяти, снимите настоящий Go-**pprof** слепок прямо с устройства — без десктопа и пересборки. **App Settings → Diagnostics → Profiling**: каждая кнопка тянет профиль с живого ядра sing-box и открывает системный Share.
+
+| Профиль | Что ловит |
+|---|---|
+| **CPU profile (10s)** | нагрев / 100 % CPU — busy-spin в tight-loop |
+| **Heap (inuse_space)** | что реально держит память сейчас (GC форсится перед снимком → только живые объекты) |
+| **Allocations** | что аллоцирует память (источник давления на GC) |
+| **Goroutines** (summary / full stacks) | счётчик и полные стеки горутин — утечки горутин |
+
+- `.pb`-файлы открываются `go tool pprof` (CPU/heap/allocs); `goroutine?debug=*` — текст. Heap inuse: `go tool pprof -inuse_space heap.pb`
+- Реализовано целиком на стороне оболочки через встроенный в libbox `PProfServer` (Go `net/http/pprof`) — **ядро не правилось**. Сервер поднимается на loopback-порту по тапу, отдаёт один GET и гасится в `finally` (в проде listener не висит)
+- Также через Debug API: `GET /diag/pprof?profile=heap|profile|allocs|goroutine&query=...` (нужен поднятый туннель)
+- См. [§207 spec](docs/spec/tasks/207-goroutine-cpu-dump.md)
+
+
+
 **Настройки ядра** — конфигурация маршрутизации
 
 Организованы по секциям: General, Network, Include Auto, DNS, TUN, Connection Resilience. URLTest параметры для авто-подбора прокси. Все изменения автосохраняются.
@@ -236,7 +267,7 @@ buildConfig(lists, settings)  ← template + post-steps (resilience, DNS, rules)
 sing-box JSON
 ```
 
-- **Bundled-ядро** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **1.14.0-lx.1**: форк sing-box 1.14, собранный с тегами `with_awg` / `with_xhttp` / `with_lx_command`; управляющий канал — libbox `CommandClient` (без Clash API). Версия пинится в `app/android/libbox.version`, AAR скачивается из GitHub Releases форка скриптом `scripts/fetch-libbox.sh` с проверкой SHA256
+- **Bundled-ядро** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **`v1.14.0-lx.1-rc.15`**: форк sing-box 1.14, собранный с тегами `with_awg` / `with_xhttp` / `with_lx_command`; управляющий канал — libbox `CommandClient` (без Clash API). Добавлен round-robin **балансировщик** (SPEC 019) и RPC `GetPool`. Версия пинится в `app/android/libbox.version`, AAR скачивается из GitHub Releases форка скриптом `scripts/fetch-libbox.sh` с проверкой SHA256
 - **Sealed `NodeSpec`** — 9 протоколов, полиморфный `emit(vars)` / `toUri()` (round-trip инвариант)
 - `**EmitContext**` — пробрасывает шаблонные vars в per-node emit
 - `**NodeEntries{main, detours[]}**` — именованный struct для chain-результатов

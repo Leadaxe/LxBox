@@ -96,6 +96,24 @@ Debug API         → GET /diag/pprof?profile=P&seconds=N
   валидация profile, CPU→`.pb`/octet-stream, прочее→text/plain.
 - **`debug/handlers/help.dart`** — регистрация эндпоинта (текст + список).
 
+### Набор профилей (UI-кнопки, источник правды `pprof_profile.dart`)
+Дескриптор `PprofProfile{id, label, pathAndQuery, fileBase, isText, blockingSeconds}`
+— один список `PprofProfile.all` гонит и кнопки, и native-вызов, и имя файла:
+- **Goroutines (summary)** `goroutine?debug=1` → `.txt` — компактные счётчики
+  (сколько горутин, что растёт).
+- **Goroutines (full stacks)** `goroutine?debug=2` → `.txt` — полные стеки.
+- **CPU profile (10s)** `profile?seconds=10` → `.pb` — busy-spin.
+- **Heap (inuse_space)** `heap?gc=1` → `.pb` — `gc=1` форсит GC перед снимком,
+  в inuse_space остаётся только реально живой объём. `go tool pprof -inuse_space`.
+- **Allocations** `allocs` → `.pb` — кто аллоцирует больше всех.
+
+Контракт native упрощён: Dart передаёт готовый `pathAndQuery`, Kotlin
+проверяет имя (до `?`) по allowlist'у `PPROF_PROFILES` и проксирует в
+`PProfClient.fetch`. CPU read-timeout масштабируется по `seconds` из query.
+Формат файла (`.txt`/`.pb`) — по `isText` дескриптора: текст только для
+`goroutine?debug=*` (pprof не парсит debug-текст как профиль → heap/allocs
+бинарём). Debug API `/diag/pprof?profile=P&query=Q` — тот же набор + сырой query.
+
 ### UI (две точки — обе с уже существующим Share)
 - **Debug screen** (`debug_screen.dart`) — две позиции в ⋮-меню (`PopupMenu`):
   `Capture goroutine dump` / `Capture CPU profile (10s)`. Гейт на тапе:
@@ -112,9 +130,20 @@ Debug API         → GET /diag/pprof?profile=P&seconds=N
   подпись `analyze with: go tool pprof <name>`.
 - Обе видны/доступны, но требуют активного туннеля (иначе snackbar-объяснение).
 
+## Грабли: cleartext HTTP на loopback (release)
+Android API 28+ блокирует cleartext-HTTP по умолчанию, **даже на 127.0.0.1**.
+`PProfClient` ходит `HttpURLConnection` на `http://127.0.0.1:<port>` → в
+release падало `Cleartext HTTP traffic to 127.0.0.1 not permitted` (в debug
+работало — Flutter сам добавляет `usesCleartextTraffic=true` в debug-манифест).
+Фикс: `res/xml/network_security_config.xml` с `cleartextTrafficPermitted=true`
+**только для loopback** (127.0.0.1/localhost/::1) + ссылка
+`android:networkSecurityConfig` в `<application>`. Весь внешний трафик
+остаётся под дефолтом (cleartext запрещён). Debug API HTTP-сервер
+(`HttpServer.bind`, Dart) этой политике НЕ подчиняется — он и так работал.
+
 ## Безопасность / приватность
 - pprof http НЕ висит в проде — поднимается по тапу и гасится. Bind на
-  `127.0.0.1` (loopback).
+  `127.0.0.1` (loopback). Cleartext разрешён точечно только для loopback.
 - goroutine/heap могут содержать имена outbound'ов / host'ов в аргументах
   фреймов, но не пароли — тот же уровень что у уже-шарящегося stderr (§038).
 

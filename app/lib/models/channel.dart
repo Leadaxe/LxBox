@@ -35,6 +35,55 @@ const int _kToleranceMax = 65535;
 
 int _clampTolerance(int v) => v < 0 ? 0 : (v > _kToleranceMax ? _kToleranceMax : v);
 
+/// §208 — режим выбора узла в auto-группе (urltest, ядро SPEC 019 V2).
+/// `leastTest` — апстрим: один лучший по delay (как было всегда).
+/// `roundRobin` — балансировка по пулу (читает [Channel.auto] balancer-поля).
+enum UrltestMode {
+  leastTest('least_test'),
+  roundRobin('round_robin');
+
+  const UrltestMode(this.wire);
+
+  /// Значение в config-JSON (`mode`).
+  final String wire;
+
+  static UrltestMode fromWire(String? s) =>
+      UrltestMode.values.firstWhere((m) => m.wire == s,
+          orElse: () => UrltestMode.leastTest);
+}
+
+/// §208 — компонент ключа sticky-сессии (round_robin, `balancer.sticky_hash`).
+enum StickyHashKey {
+  process('process'),
+  domain('domain'),
+  sourceIp('source_ip'),
+  destIp('dest_ip'),
+  destPort('dest_port');
+
+  const StickyHashKey(this.wire);
+
+  /// Значение в config-JSON (элемент `sticky_hash[]`).
+  final String wire;
+
+  static StickyHashKey? fromWire(String? s) {
+    for (final k in StickyHashKey.values) {
+      if (k.wire == s) return k;
+    }
+    return null;
+  }
+}
+
+/// §208 — дефолтный sticky-набор для нового round_robin-пула (липкость по
+/// процессу+домену — на практике сессии почти всегда нужны, как дефолт ядра).
+const List<StickyHashKey> kDefaultStickyHash = [
+  StickyHashKey.process,
+  StickyHashKey.domain,
+];
+
+/// §208 — нижняя граница размера пула. Ядро `0`→дефолт 3, отриц.→ошибка; из UI
+/// шлём всегда осмысленное (min 1), кламп на клиенте безопаснее.
+int _clampPool(int v) => v < 1 ? 1 : v;
+
 /// Параметры urltest-двойника канала (`<tag>-auto`). null-аналог на уровне
 /// [Channel.auto] == null означает «галка auto ВЫКЛ, двойник не эмитится».
 /// `tag` двойника НЕ хранится — производный (`channel.autoTag`).
@@ -45,6 +94,10 @@ class ChannelAuto {
     this.tolerance = 50,
     this.idleTimeout = '30m',
     this.interruptExistConnections = false,
+    this.mode = UrltestMode.leastTest,
+    this.pool = 3,
+    this.poolTolerance = 0,
+    this.stickyHash = kDefaultStickyHash,
   });
 
   final String url; // urltest test endpoint
@@ -53,12 +106,31 @@ class ChannelAuto {
   final String idleTimeout; // duration ("30m")
   final bool interruptExistConnections; // urltest.interrupt_exist_connections
 
+  /// §208 — режим выбора узла (least_test ⇄ round_robin). Только round_robin
+  /// эмитит `balancer{}` в config.
+  final UrltestMode mode;
+
+  /// §208 — `balancer.pool`: размер пула round_robin. clamp ≥1 (см. _clampPool).
+  final int pool;
+
+  /// §208 — `balancer.pool_tolerance` (мс). 0 = держать пул живых; >0 = отбор
+  /// лучших по delay. clamp как tolerance (uint16).
+  final int poolTolerance;
+
+  /// §208 — `balancer.sticky_hash[]`: компоненты ключа липкости. Пустой список
+  /// → `sticky_hash: []` (липкость выключена, чистая ротация).
+  final List<StickyHashKey> stickyHash;
+
   ChannelAuto copyWith({
     String? url,
     String? interval,
     int? tolerance,
     String? idleTimeout,
     bool? interruptExistConnections,
+    UrltestMode? mode,
+    int? pool,
+    int? poolTolerance,
+    List<StickyHashKey>? stickyHash,
   }) =>
       ChannelAuto(
         url: url ?? this.url,
@@ -67,16 +139,42 @@ class ChannelAuto {
         idleTimeout: idleTimeout ?? this.idleTimeout,
         interruptExistConnections:
             interruptExistConnections ?? this.interruptExistConnections,
+        mode: mode ?? this.mode,
+        pool: pool == null ? this.pool : _clampPool(pool),
+        poolTolerance:
+            poolTolerance == null ? this.poolTolerance : _clampTolerance(poolTolerance),
+        stickyHash: stickyHash ?? this.stickyHash,
       );
 
-  factory ChannelAuto.fromJson(Map<String, dynamic> json) => ChannelAuto(
-        url: json['url'] as String? ?? 'https://cp.cloudflare.com/generate_204',
-        interval: json['interval'] as String? ?? '5m',
-        tolerance: _clampTolerance((json['tolerance'] as num?)?.toInt() ?? 50),
-        idleTimeout: json['idle_timeout'] as String? ?? '30m',
-        interruptExistConnections:
-            json['interrupt_exist_connections'] as bool? ?? false,
-      );
+  factory ChannelAuto.fromJson(Map<String, dynamic> json) {
+    // §208 — balancer-поля вложены в `balancer{}` (зеркало config-ядра). Старый
+    // канал без `balancer`/`mode` → leastTest + дефолты (обратная совместимость).
+    final bal = json['balancer'];
+    final balMap = bal is Map<String, dynamic> ? bal : const <String, dynamic>{};
+    final rawSticky = balMap['sticky_hash'];
+    final sticky = rawSticky is List
+        ? rawSticky
+            .map((e) => StickyHashKey.fromWire(e as String?))
+            .whereType<StickyHashKey>()
+            .toList()
+        : kDefaultStickyHash;
+    return ChannelAuto(
+      url: json['url'] as String? ?? 'https://cp.cloudflare.com/generate_204',
+      interval: json['interval'] as String? ?? '5m',
+      tolerance: _clampTolerance((json['tolerance'] as num?)?.toInt() ?? 50),
+      idleTimeout: json['idle_timeout'] as String? ?? '30m',
+      interruptExistConnections:
+          json['interrupt_exist_connections'] as bool? ?? false,
+      mode: UrltestMode.fromWire(json['mode'] as String?),
+      pool: _clampPool((balMap['pool'] as num?)?.toInt() ?? 3),
+      poolTolerance:
+          _clampTolerance((balMap['pool_tolerance'] as num?)?.toInt() ?? 0),
+      // rawSticky == null (нет balancer) → дефолт; явный [] остаётся пустым.
+      stickyHash: rawSticky is List
+          ? sticky // (включая пустой [] = выкл)
+          : kDefaultStickyHash,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'url': url,
@@ -84,6 +182,14 @@ class ChannelAuto {
         'tolerance': _clampTolerance(tolerance),
         'idle_timeout': idleTimeout,
         'interrupt_exist_connections': interruptExistConnections,
+        // §208 — mode всегда; balancer всегда (для round-trip storage). Билдер
+        // решает, эмитить ли balancer в config-ЯДРА (только round_robin).
+        'mode': mode.wire,
+        'balancer': {
+          'pool': _clampPool(pool),
+          'pool_tolerance': _clampTolerance(poolTolerance),
+          'sticky_hash': stickyHash.map((k) => k.wire).toList(),
+        },
       };
 }
 

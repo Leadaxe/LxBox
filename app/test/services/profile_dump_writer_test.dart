@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/services/profile_dump_writer.dart';
+import 'package:lxbox/vpn/pprof_profile.dart';
 
 /// §207 — `ProfileDumpWriter`: goroutine-дамп → `.txt`, CPU-профиль → `.pb`,
 /// оба в temp с timestamp-именем. Round-trip содержимого.
@@ -56,5 +57,32 @@ void main() {
   test('timestamped names: filename has no colons (path-safe)', () async {
     final path = await ProfileDumpWriter.writeGoroutines('x');
     expect(path.split('/').last, isNot(contains(':')));
+  });
+
+  test('writeProfile uses descriptor fileBase + ext (heap → .pb)', () async {
+    final heap = PprofProfile.all.firstWhere((p) => p.id == 'heap');
+    final bytes = Uint8List.fromList([0x05, 0x06, 0x07]);
+    final path = await ProfileDumpWriter.writeProfile(heap, bytes);
+    final name = path.split('/').last;
+    expect(name, startsWith('heap-'));
+    expect(name, endsWith('.pb'));
+    expect(await File(path).readAsBytes(), bytes);
+  });
+
+  test('PprofProfile.all: ids are in the native allowlist, goroutine is text',
+      () {
+    const allowed = {
+      'goroutine', 'profile', 'heap', 'allocs', 'block', 'mutex',
+      'threadcreate'
+    };
+    for (final p in PprofProfile.all) {
+      expect(allowed, contains(p.id), reason: '${p.id} not in native allowlist');
+      // pathAndQuery must start with the id (native splits on '?').
+      expect(p.pathAndQuery.split('?').first, p.id);
+      // Only goroutine summaries/full are text.
+      expect(p.isText, p.id == 'goroutine');
+      // Only CPU profile is blocking.
+      expect(p.blockingSeconds > 0, p.id == 'profile');
+    }
   });
 }

@@ -41,6 +41,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val CC_DNS_CHANNEL = "lxbox/cc/dns" // §180
         private const val VPN_REQUEST_CODE = 24
 
+        // §207 — allowlist имён pprof-профилей (до `?`). Пропускаем наружу
+        // только их, не произвольный path. Зеркало Go net/http/pprof.
+        private val PPROF_PROFILES = setOf(
+            "goroutine", "profile", "heap", "allocs",
+            "block", "mutex", "threadcreate",
+        )
+
         // §047 — статические ссылки для bridge'а из LxBoxIntentReceiver (он
         // живёт вне Flutter-плагина). Заполняются в onAttachedToEngine,
         // обнуляются в onDetachedFromEngine. null = Flutter-engine не активен.
@@ -648,10 +655,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(r)
                 }
             }
+            // §209 — null = клиент недоступен (различаем от [] = правил нет).
+            // Dart getRules превращает null в пустой список (диагностика —
+            // отсутствие данных там не отличают от пустых, см. CcChannel.getRules).
             "ccGetRules" -> {
                 val cc = BoxService.commandClient
                 pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getRules() ?: emptyList<Map<String, Any>>() }
+                    val r = withContext(Dispatchers.IO) { cc?.getRules() }
                     result.success(r)
                 }
             }
@@ -662,6 +672,19 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val cc = BoxService.commandClient
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.getGroups() }
+                    result.success(r)
+                }
+            }
+            // §208/§209 — unary снапшот пула round_robin-группы. На Dispatchers.IO
+            // (RPC может блокировать). КОНТРАКТ: null = клиент недоступен (сервис
+            // down / pingClient не поднялся) → Dart рендерит «Pool unavailable» /
+            // Debug API → 409. [] = пул пуст (не round_robin / нет данных). НЕ
+            // затираем null на emptyList — различение критично (§209).
+            "ccGetPool" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) { cc?.getPool(tag) }
                     result.success(r)
                 }
             }
@@ -692,35 +715,44 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
 
             // §207 — обобщённый pprof-снимок через встроенный libbox
             // `PProfServer` (Способ 1): по требованию поднимаем pprof-http на
-            // loopback, GET /debug/pprof/<profile>, гасим. http в проде не
-            // висит. Один метод на все профили (goroutine/profile/heap/...):
-            // сервер всё равно отдаёт весь набор бесплатно. Возвращает
-            // ByteArray (текст-профили = UTF-8 байты, CPU = .pb). На ошибке
-            // (занятые порты / pprof уже активен) — result.error; смягчение
-            // до фолбэк-текста для goroutine-кнопки делает Dart-слой. IO-поток:
-            // сетевой GET (и до 60s ожидания CPU) нельзя на main. См. PProfClient.
+            // loopback, GET /debug/pprof/<pathAndQuery>, гасим. http в проде
+            // не висит. Dart передаёт готовый `pathAndQuery` (профиль + query,
+            // напр. `heap?gc=1`, `goroutine?debug=1`, `profile?seconds=10`) —
+            // вся query-логика в одном месте (Dart), Kotlin лишь проксирует.
+            // Формат файла решает Dart по флагу text/binary (см. writeProfile).
+            //
+            // Безопасность: разбираем имя профиля до `?` и проверяем по
+            // allowlist'у — наружу пропускаем только известные pprof-профили,
+            // не произвольный path.
+            //
+            // CPU `profile?seconds=N` держит соединение N секунд → read-timeout
+            // масштабируем (N*1000 + запас); прочие снимки мгновенны (5s).
+            // result.error на ошибке (занятые порты / pprof активен). IO-поток:
+            // сетевой GET (и до 60s ожидания CPU) нельзя на main.
             "pprofProfile" -> {
-                val profile = call.argument<String>("profile") ?: "goroutine"
-                val seconds = (call.argument<Int>("seconds") ?: 10).coerceIn(1, 60)
+                val pathAndQuery = call.argument<String>("pathAndQuery")
+                    ?: "goroutine?debug=2"
+                val name = pathAndQuery.substringBefore('?')
                 pluginScope.launch {
                     try {
+                        if (name !in PPROF_PROFILES) {
+                            throw IllegalArgumentException("unknown pprof profile: $name")
+                        }
                         val bytes = withContext(Dispatchers.IO) {
-                            when (profile) {
-                                // Читаемые снимки (?debug=2). heap/allocs тоже
-                                // отдаём текстом для прямого чтения.
-                                "goroutine", "heap", "allocs", "block",
-                                "mutex", "threadcreate" ->
-                                    PProfClient.fetch("$profile?debug=2",
-                                        readTimeoutMs = 5000)
-                                // CPU — бинарный .pb, держит соединение `seconds`.
-                                "profile" -> PProfClient.cpuProfile(seconds = seconds)
-                                else -> throw IllegalArgumentException(
-                                    "unknown pprof profile: $profile")
-                            }
+                            // CPU держит соединение `seconds`; вытащим N из query
+                            // для масштабирования read-timeout, иначе мгновенные 5s.
+                            val secs = if (name == "profile") {
+                                Regex("seconds=(\\d+)").find(pathAndQuery)
+                                    ?.groupValues?.get(1)?.toIntOrNull()
+                                    ?.coerceIn(1, 60) ?: 10
+                            } else 0
+                            val readTimeout =
+                                if (name == "profile") secs * 1000 + 5000 else 5000
+                            PProfClient.fetch(pathAndQuery, readTimeoutMs = readTimeout)
                         }
                         result.success(bytes)
                     } catch (t: Throwable) {
-                        Log.e(TAG, "pprofProfile($profile) failed", t)
+                        Log.e(TAG, "pprofProfile($pathAndQuery) failed", t)
                         result.error("PPROF_FAILED",
                             t.message ?: t.javaClass.simpleName, null)
                     }

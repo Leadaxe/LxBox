@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  §207 — Android API 28+ блокирует cleartext HTTP по умолчанию, даже на
+  loopback. PProfClient ходит HttpURLConnection на http://127.0.0.1:<port>
+  к локально-поднятому libbox PProfServer → без этого разрешения в release
+  падает «Cleartext HTTP traffic to 127.0.0.1 not permitted».
+
+  Разрешаем cleartext ТОЧЕЧНО только для loopback (127.0.0.1 / localhost /
+  ::1) — это VPN-клиент, открывать cleartext всему трафику нельзя. Весь
+  внешний трафик остаётся под дефолтом (cleartext запрещён).
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">::1</domain>
+    </domain-config>
+</network-security-config>

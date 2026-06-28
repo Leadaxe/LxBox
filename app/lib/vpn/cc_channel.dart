@@ -228,6 +228,21 @@ class CcChannel {
     return r.map((m) => CcGroup.fromMap(_asMap(m))).toList();
   }
 
+  /// §208/§209 — unary снапшот пула round_robin-группы [tag]. Слоты
+  /// `[{slot,tag,delay}]` в фиксированном порядке слота. `delay`==0 → мёртвая/не
+  /// измерена.
+  ///
+  /// КОНТРАКТ (§209): `null` = CC-клиент недоступен (сервис down / pingClient не
+  /// поднялся) — НЕ путать с пустым пулом. `[]` = пул пуст (группа не
+  /// round_robin / нет данных). Идёт через незасыпающий pingClient (native), так
+  /// что в фоне отдаёт данные, а не молчит.
+  Future<List<CcPoolSlot>?> getPool(String tag) async {
+    final r = await _methods
+        .invokeMethod<List<dynamic>>('ccGetPool', {'tag': tag});
+    if (r == null) return null; // клиент недоступен (§209)
+    return r.map((m) => CcPoolSlot.fromMap(_asMap(m))).toList();
+  }
+
   Future<bool> selectOutbound(String group, String tag) async =>
       await _methods.invokeMethod<bool>(
           'ccSelectOutbound', {'group': group, 'tag': tag}) ??
@@ -634,6 +649,26 @@ class CcDelayResult {
   factory CcDelayResult.fromMap(Map<String, dynamic> m) => CcDelayResult(
         delay: _int(m['delay']),
         error: m['error']?.toString() ?? '',
+      );
+}
+
+/// §208 (SPEC 019 V2) — один слот пула round_robin-группы (`getPool`). Слоты
+/// фиксированы по `slot`; нода в слоте может меняться (дотест). `delay`==0 →
+/// мёртвая / не измерена (живая всегда ≥1 — ядро клампит на чтении).
+class CcPoolSlot {
+  const CcPoolSlot({required this.slot, required this.tag, required this.delay});
+
+  final int slot;
+  final String tag;
+  final int delay; // мс, 0 = мёртвая/не измерена
+
+  /// true → нода в слоте жива (есть замер). false → мёртвая/не измерена.
+  bool get alive => delay > 0;
+
+  factory CcPoolSlot.fromMap(Map<String, dynamic> m) => CcPoolSlot(
+        slot: _int(m['slot']),
+        tag: m['tag']?.toString() ?? '',
+        delay: _int(m['delay']),
       );
 }
 

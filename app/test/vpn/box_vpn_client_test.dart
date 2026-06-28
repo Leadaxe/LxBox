@@ -127,22 +127,22 @@ void main() {
     });
   });
 
-  // §207 — pprof-снимки через единый native-метод `pprofProfile`.
-  group('BoxVpnClient.pprofProfile (§207)', () {
-    test('packs profile + seconds into the native call', () async {
+  // §207 — pprof-снимки через единый native-метод `pprofProfile`
+  // (Dart передаёт готовый pathAndQuery).
+  group('BoxVpnClient.pprof (§207)', () {
+    test('pprofRaw passes pathAndQuery verbatim to the native call', () async {
       late MethodCall captured;
       messenger.setMockMethodCallHandler(channel, (call) async {
         captured = call;
         return Uint8List.fromList([1, 2, 3]);
       });
-      final bytes =
-          await BoxVpnClient().pprofProfile(profile: 'heap', seconds: 7);
+      final bytes = await BoxVpnClient().pprofRaw('heap?gc=1');
       expect(captured.method, 'pprofProfile');
-      expect(captured.arguments, {'profile': 'heap', 'seconds': 7});
+      expect(captured.arguments, {'pathAndQuery': 'heap?gc=1'});
       expect(bytes, [1, 2, 3]);
     });
 
-    test('dumpGoroutines requests the goroutine profile and decodes text',
+    test('dumpGoroutines requests goroutine?debug=2 and decodes text',
         () async {
       late MethodCall captured;
       messenger.setMockMethodCallHandler(channel, (call) async {
@@ -150,7 +150,7 @@ void main() {
         return Uint8List.fromList('goroutine 1 [running]:'.codeUnits);
       });
       final text = await BoxVpnClient().dumpGoroutines();
-      expect(captured.arguments['profile'], 'goroutine');
+      expect(captured.arguments['pathAndQuery'], 'goroutine?debug=2');
       expect(text, 'goroutine 1 [running]:');
     });
 
@@ -174,7 +174,7 @@ void main() {
       expect(text, contains('port busy'));
     });
 
-    test('captureCpuProfile maps durationMs→seconds (clamped) for profile',
+    test('captureCpuProfile maps durationMs→seconds (clamped) into pathAndQuery',
         () async {
       late MethodCall captured;
       messenger.setMockMethodCallHandler(channel, (call) async {
@@ -182,12 +182,11 @@ void main() {
         return Uint8List(0);
       });
       await BoxVpnClient().captureCpuProfile(durationMs: 10000);
-      expect(captured.arguments['profile'], 'profile');
-      expect(captured.arguments['seconds'], 10);
+      expect(captured.arguments['pathAndQuery'], 'profile?seconds=10');
 
       // durationMs below 1s clamps to 1 (pprof requires seconds>=1).
       await BoxVpnClient().captureCpuProfile(durationMs: 200);
-      expect(captured.arguments['seconds'], 1);
+      expect(captured.arguments['pathAndQuery'], 'profile?seconds=1');
     });
 
     test('captureCpuProfile propagates PlatformException (surfaced in UI)',

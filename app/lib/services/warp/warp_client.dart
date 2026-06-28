@@ -173,7 +173,7 @@ class WarpClient {
         randomEndpoint != null &&
         randomEndpoint.isNotEmpty) {
       effectiveEndpoint = randomEndpoint;
-      AppLog.I.info('WARP: random endpoint $randomEndpoint (§136)');
+      AppLog.I.info('WARP: random endpoint $randomEndpoint');
     }
 
     var account = _parseReg(json, privKey: kp.priv, endpoint: effectiveEndpoint,

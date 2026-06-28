@@ -10,6 +10,7 @@ import '../config/route_config.dart';
 import '../vpn/box_vpn_client.dart';
 import '../vpn/cc_channel.dart';
 import '../config/config_parse.dart';
+import '../models/channel.dart' show UrltestMode;
 import '../models/home_state.dart';
 import '../services/app_log.dart';
 import '../services/automation/event_emitter.dart';
@@ -51,6 +52,11 @@ class HomeController extends ChangeNotifier
   /// §125 — кеш tag→label каналов (storage). Кладётся в state.groupLabels для
   /// home-dropdown. Обновляется в init + после правок каналов.
   Map<String, String> _channelLabels = const {};
+
+  /// §208 — auto-теги каналов в режиме round_robin (`<tag>-auto`). Для гейта
+  /// пункта «View pool» в меню auto-ноды (показываем только для round_robin —
+  /// у least_test пула нет). Обновляется вместе с _channelLabels.
+  Set<String> _roundRobinAutoTags = const {};
 
   @override
   HomeState _state = HomeState();
@@ -164,8 +170,24 @@ class HomeController extends ChangeNotifier
     final channels = await SettingsStorage.getChannels();
     if (_disposed) return;
     _channelLabels = {for (final c in channels) c.tag: c.label};
+    // §208 — auto-теги round_robin-каналов (для гейта «View pool»).
+    _roundRobinAutoTags = {
+      for (final c in channels)
+        if (c.auto?.mode == UrltestMode.roundRobin) c.autoTag,
+    };
     _emit(_state.copyWith(groupLabels: _channelLabels));
   }
+
+  /// §208 — true, если [autoTag] — auto-двойник round_robin-канала (есть пул).
+  /// Sync-геттер для гейта пункта меню «View pool» (least_test → пула нет).
+  bool isRoundRobinAuto(String autoTag) =>
+      _roundRobinAutoTags.contains(autoTag);
+
+  /// §208/§209 — снапшот пула round_robin-группы [autoTag] (ядро SPEC 019 V2).
+  /// `null` = CC-клиент недоступен (сервис down) — НЕ пустой пул. `[]` = пул
+  /// пуст (не round_robin / нет данных). Идёт через незасыпающий pingClient →
+  /// работает и в фоне (§209).
+  Future<List<CcPoolSlot>?> getPool(String autoTag) => _cc.getPool(autoTag);
 
   @override
   void dispose() {
