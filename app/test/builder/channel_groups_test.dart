@@ -195,8 +195,10 @@ void main() {
       expect(auto.containsKey('tolerance'), true);
     });
 
-    test('round_robin + sticky_hash [] → пустой массив (липкость выкл)',
+    test('round_robin + пустой stickyHash → sticky_hash ["none"] (липкость выкл)',
         () async {
+      // Контракт ядра rc.15: пустой [] ядро схлопывает в nil (badjson re-marshal)
+      // → дефолтит липкость. Выключение ТОЛЬКО через sentinel ["none"].
       final outs = await build([
         const Channel(
           tag: 'vpn-1',
@@ -208,7 +210,7 @@ void main() {
         ),
       ]);
       final bal = byTag(outs, 'vpn-1-auto')['balancer'] as Map<String, dynamic>;
-      expect(bal['sticky_hash'], isEmpty);
+      expect(bal['sticky_hash'], ['none']);
     });
   });
 
