@@ -38,7 +38,11 @@ import java.util.concurrent.atomic.AtomicReference
 ///  - `screenClient`   — `CommandOutbounds`+`CommandGroup`+`CommandConnections`.
 ///    refcount по открытию экрана узлов/stats/conn; §164 спит в фоне (pauseScreen).
 ///  - `profilerClient` — `CommandConnections`. connect/disconnect по recording
-///    (§048). ЕДИНСТВЕННЫЙ живёт в фоне (запись не прерывать). См. feature 123.
+///    (§048). Живёт в фоне ПОКА идёт запись (recording). См. feature 123.
+///  - `pingClient`     — голый `PingHandler`, БЕЗ подписок (§175). §209: носитель
+///    ВСЕХ unary RPC (urlTestOutbound + getPool/getGroups/getRules + select/
+///    close*). lifecycle-НЕзависим — pause не трогает → unary работают в фоне.
+///    Поднимается лениво, дисконнект лишь в cancelPing/resync/shutdown.
 ///
 /// **Подписка в gomobile-фасаде** = `CommandClientOptions.addCommand(int)` + колбэки
 /// `CommandClientHandler.write*` (НЕ прямые `subscribe*`-методы — их в AAR нет).
@@ -358,9 +362,15 @@ class BoxCommandClient {
         }.getOrElse { mapOf("delay" to 0, "error" to (it.message ?: "urlTestOutbound failed")) }
     }
 
-    /// §175 — поднять pingClient лениво (под прогон пинга). Свой ctx/conn —
-    /// disconnect его рвёт только ping-тесты. Голый PingHandler: подписок нет,
-    /// только unary urlTestOutbound. Идемпотентно (CAS): возвращает живой если есть.
+    /// §175/§209 — поднять pingClient лениво. Голый `PingHandler`: подписок нет,
+    /// только unary RPC. Свой ctx/conn — disconnect рвёт лишь его вызовы.
+    /// Идемпотентно (CAS): возвращает живой если есть.
+    ///
+    /// §209 — это ЕДИНСТВЕННЫЙ lifecycle-независимый клиент: `pauseStatus`/
+    /// `pauseScreen` (фон, §164) его НЕ трогают. Поэтому ВСЕ unary RPC
+    /// (urlTestOutbound + getPool/getGroups/getRules + select/close*) идут через
+    /// него — работают и когда приложение в фоне. Дисконнект только в `cancelPing`
+    /// / `resyncForReopen` / `shutdownAll` (явные события, не lifecycle-парковка).
     private fun ensurePingClient(): CommandClient? {
         pingClient.get()?.let { return it }
         return runCatching {
@@ -381,8 +391,13 @@ class BoxCommandClient {
     }
 
     /// §4.7 — снапшот route+DNS правил (только для диагностики).
-    fun getRules(): List<Map<String, Any>> {
-        val client = anyClient() ?: return emptyList()
+    /// §209 — через ensurePingClient (lifecycle-независим). `null` = клиент
+    /// недоступен, `[]` = правил нет.
+    fun getRules(): List<Map<String, Any>>? {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "getRules: no command client (paused/down)")
+            return null
+        }
         return runCatching {
             val out = ArrayList<Map<String, Any>>()
             val it: RuleIterator = client.getRules()
@@ -397,21 +412,25 @@ class BoxCommandClient {
             }
             out
         }.getOrElse {
-            Log.w(TAG, "getRules failed: ${it.message}")
-            emptyList()
+            Log.w(TAG, "getRules RPC failed: ${it.message}")
+            null
         }
     }
 
     /// §122/SPEC015 — unary pull-снапшот групп. Закрывает дыру pull-vs-push:
     /// если стартовый `SubscribeGroups`-push не доехал (гонка waitForStarted —
     /// сервис не STARTED в момент подписки) или порвался, перечитать дерево групп
-    /// больше нечем (push-only). `getGroups()` читает то же `readGroups()` ядра
-    /// синхронно, не пересоздавая screenClient. Формат Map ИДЕНТИЧЕН writeGroups
-    /// (общий `serializeGroup`) → Dart-парсер один. Бросает при не-STARTED
-    /// (status.Error) — ловим, возвращаем null (вызвать позже/по pull). null ≠
-    /// пустой список: null = «не смогли прочитать», []=«групп нет» (не трогаем state).
+    /// больше нечем (push-only). Формат Map ИДЕНТИЧЕН writeGroups (общий
+    /// `serializeGroup`) → Dart-парсер один. null ≠ пустой список: null = «не
+    /// смогли прочитать», []=«групп нет» (не трогаем state).
+    ///
+    /// §209 — через `ensurePingClient()` (НЕ anyClient): pingClient
+    /// lifecycle-независим (не паркуется в фоне §164) → pull работает и в фоне.
     fun getGroups(): List<Map<String, Any>>? {
-        val client = anyClient() ?: return null
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "getGroups: no command client (paused/down)")
+            return null
+        }
         return runCatching {
             val out = ArrayList<Map<String, Any>>()
             val it: OutboundGroupIterator = client.getGroups()
@@ -427,10 +446,18 @@ class BoxCommandClient {
     /// §208 (SPEC 019 V2) — unary snapshot пула round_robin-группы. Возвращает
     /// слоты `[{slot, tag, delay}]`. Не-round_robin группа (selector/least_test/
     /// urltest без balancer) → ПУСТОЙ список (не ошибка). `delay` мс, `0`=мёртвая
-    /// /не измерена (живая всегда ≥1, ядро клампит). Читает синхронно через
-    /// `anyClient()` (как getGroups) — снапшот, не ping (НЕ pingClient).
-    fun getPool(tag: String): List<Map<String, Any>> {
-        val client = anyClient() ?: return emptyList()
+    /// /не измерена (живая всегда ≥1, ядро клампит).
+    ///
+    /// §209 — идёт через `ensurePingClient()` (НЕ anyClient): pingClient
+    /// lifecycle-независим (не паркуется в фоне §164), значит /pool и UI-попап
+    /// работают и когда приложение в фоне. КОНТРАКТ: `null` = клиент недоступен
+    /// (туннель down / RPC-фейл), `[]` = пул пуст (группа не round_robin / нет
+    /// данных). Caller различает «недоступно» от «пусто».
+    fun getPool(tag: String): List<Map<String, Any>>? {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "getPool: no command client (paused/down)")
+            return null
+        }
         return runCatching {
             val out = ArrayList<Map<String, Any>>()
             val it: PoolSlotIterator = client.getPool(tag)
@@ -444,8 +471,8 @@ class BoxCommandClient {
             }
             out
         }.getOrElse {
-            Log.d(TAG, "getPool unavailable: ${it.message}")
-            emptyList()
+            Log.w(TAG, "getPool RPC failed: ${it.message}")
+            null
         }
     }
 
@@ -473,17 +500,36 @@ class BoxCommandClient {
         )
     }
 
-    fun selectOutbound(group: String, tag: String): Boolean =
-        runCatching { anyClient()?.selectOutbound(group, tag); true }
+    // §209 — действия через ensurePingClient (lifecycle-независим). Команда
+    // применяется в ЯДРЕ (оно одно) → подписки screen/profiler-клиентов увидят
+    // результат через свои стримы. anyClient давал тихий `true` при null-клиенте
+    // (`?.` пропускал вызов, но `; true` срабатывал) — теперь честный false + лог.
+    fun selectOutbound(group: String, tag: String): Boolean {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "selectOutbound: no command client (paused/down)")
+            return false
+        }
+        return runCatching { client.selectOutbound(group, tag); true }
             .getOrElse { Log.w(TAG, "selectOutbound failed: ${it.message}"); false }
+    }
 
-    fun closeConnection(id: String): Boolean =
-        runCatching { anyClient()?.closeConnection(id); true }
+    fun closeConnection(id: String): Boolean {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "closeConnection: no command client (paused/down)")
+            return false
+        }
+        return runCatching { client.closeConnection(id); true }
             .getOrElse { Log.w(TAG, "closeConnection failed: ${it.message}"); false }
+    }
 
-    fun closeConnections(): Boolean =
-        runCatching { anyClient()?.closeConnections(); true }
+    fun closeConnections(): Boolean {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "closeConnections: no command client (paused/down)")
+            return false
+        }
+        return runCatching { client.closeConnections(); true }
             .getOrElse { Log.w(TAG, "closeConnections failed: ${it.message}"); false }
+    }
 
     // ═══════════════════════ Native Connections accumulators ═══════════════════════
     // §3.2 — connections приходят ДЕЛЬТАМИ (writeConnectionEvents), не снапшотом.

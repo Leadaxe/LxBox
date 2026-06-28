@@ -25,6 +25,11 @@ Future<DebugResponse> poolHandler(DebugRequest req, DebugContext ctx) async {
 
   final home = ctx.requireHome();
   final slots = await home.getPool(tag);
+  // §209 — null = CC-клиент недоступен (НЕ пустой пул). Раньше тихо отдавал
+  // count:0 неотличимо от «пул пуст» — сбивало диагностику. Теперь явный 409.
+  if (slots == null) {
+    throw const Conflict('cc client unavailable (tunnel down?)');
+  }
   return JsonResponse({
     'tag': tag,
     'count': slots.length,

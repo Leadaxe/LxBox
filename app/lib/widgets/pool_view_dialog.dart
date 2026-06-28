@@ -12,7 +12,7 @@ Future<void> showPoolDialog(
   BuildContext context, {
   required String autoTag,
   required String title,
-  required Future<List<CcPoolSlot>> Function(String autoTag) fetch,
+  required Future<List<CcPoolSlot>?> Function(String autoTag) fetch,
 }) {
   return showDialog<void>(
     context: context,
@@ -29,14 +29,14 @@ class _PoolDialog extends StatefulWidget {
 
   final String autoTag;
   final String title;
-  final Future<List<CcPoolSlot>> Function(String autoTag) fetch;
+  final Future<List<CcPoolSlot>?> Function(String autoTag) fetch;
 
   @override
   State<_PoolDialog> createState() => _PoolDialogState();
 }
 
 class _PoolDialogState extends State<_PoolDialog> {
-  late Future<List<CcPoolSlot>> _future;
+  late Future<List<CcPoolSlot>?> _future;
 
   @override
   void initState() {
@@ -79,7 +79,7 @@ class _PoolDialogState extends State<_PoolDialog> {
       contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
       content: SizedBox(
         width: 320,
-        child: FutureBuilder<List<CcPoolSlot>>(
+        child: FutureBuilder<List<CcPoolSlot>?>(
           future: _future,
           builder: (ctx, snap) {
             if (snap.connectionState != ConnectionState.done) {
@@ -92,11 +92,20 @@ class _PoolDialogState extends State<_PoolDialog> {
                         child: CircularProgressIndicator(strokeWidth: 2))),
               );
             }
-            final slots = snap.data ?? const <CcPoolSlot>[];
+            // §209 — null = CC-клиент недоступен (сервис/туннель down). НЕ
+            // путать с пустым пулом ([] = пул пуст / не round_robin).
+            final slots = snap.data;
+            if (slots == null) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Text('Pool unavailable — tunnel not connected',
+                    style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
+              );
+            }
             if (slots.isEmpty) {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Text('Pool not available',
+                child: Text('Pool is empty (not a load-balance group)',
                     style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
               );
             }

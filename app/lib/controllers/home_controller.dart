@@ -183,9 +183,11 @@ class HomeController extends ChangeNotifier
   bool isRoundRobinAuto(String autoTag) =>
       _roundRobinAutoTags.contains(autoTag);
 
-  /// §208 — снапшот пула round_robin-группы [autoTag] (ядро SPEC 019 V2).
-  /// Пустой список → пул недоступен (туннель down / не round_robin / не готов).
-  Future<List<CcPoolSlot>> getPool(String autoTag) => _cc.getPool(autoTag);
+  /// §208/§209 — снапшот пула round_robin-группы [autoTag] (ядро SPEC 019 V2).
+  /// `null` = CC-клиент недоступен (сервис down) — НЕ пустой пул. `[]` = пул
+  /// пуст (не round_robin / нет данных). Идёт через незасыпающий pingClient →
+  /// работает и в фоне (§209).
+  Future<List<CcPoolSlot>?> getPool(String autoTag) => _cc.getPool(autoTag);
 
   @override
   void dispose() {

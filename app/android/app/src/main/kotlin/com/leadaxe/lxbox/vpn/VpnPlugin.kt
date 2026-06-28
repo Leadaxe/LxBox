@@ -655,10 +655,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(r)
                 }
             }
+            // §209 — null = клиент недоступен (различаем от [] = правил нет).
+            // Dart getRules превращает null в пустой список (диагностика —
+            // отсутствие данных там не отличают от пустых, см. CcChannel.getRules).
             "ccGetRules" -> {
                 val cc = BoxService.commandClient
                 pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getRules() ?: emptyList<Map<String, Any>>() }
+                    val r = withContext(Dispatchers.IO) { cc?.getRules() }
                     result.success(r)
                 }
             }
@@ -672,14 +675,16 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(r)
                 }
             }
-            // §208 (SPEC 019 V2) — unary снапшот пула round_robin-группы. На
-            // Dispatchers.IO (RPC может блокировать). Не-round_robin / не готов →
-            // пустой список (не ошибка). Dart рендерит «Pool not available».
+            // §208/§209 — unary снапшот пула round_robin-группы. На Dispatchers.IO
+            // (RPC может блокировать). КОНТРАКТ: null = клиент недоступен (сервис
+            // down / pingClient не поднялся) → Dart рендерит «Pool unavailable» /
+            // Debug API → 409. [] = пул пуст (не round_robin / нет данных). НЕ
+            // затираем null на emptyList — различение критично (§209).
             "ccGetPool" -> {
                 val cc = BoxService.commandClient
                 val tag = call.argument<String>("tag") ?: ""
                 pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getPool(tag) ?: emptyList<Map<String, Any>>() }
+                    val r = withContext(Dispatchers.IO) { cc?.getPool(tag) }
                     result.success(r)
                 }
             }

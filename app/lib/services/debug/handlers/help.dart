@@ -88,7 +88,9 @@ GET /config/path                    Absolute on-device file path
 
 GET /pool?tag=<autoTag>             Snapshot of a round_robin urltest pool (e.g. tag=vpn-1-auto).
                                       → {"tag","count","slots":[{slot,tag,delay,alive}]}. delay=0 → dead/untested.
-                                      non-round_robin / tunnel down → slots:[] (not an error).
+                                      non-round_robin group → 200 slots:[] (pool is empty, not an error).
+                                      §209: tunnel down / cc client unavailable → 409 Conflict (NOT empty 200).
+                                      Reads via the lifecycle-independent pingClient → works while backgrounded.
 
 === Logs ===
 

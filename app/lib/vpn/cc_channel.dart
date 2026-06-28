@@ -228,14 +228,19 @@ class CcChannel {
     return r.map((m) => CcGroup.fromMap(_asMap(m))).toList();
   }
 
-  /// §208 (SPEC 019 V2) — unary снапшот пула round_robin-группы [tag]. Слоты
-  /// `[{slot,tag,delay}]` в фиксированном порядке слота. Не-round_robin группа /
-  /// туннель down / пул не готов → ПУСТОЙ список (не ошибка). `delay`==0 →
-  /// мёртвая/не измерена.
-  Future<List<CcPoolSlot>> getPool(String tag) async {
+  /// §208/§209 — unary снапшот пула round_robin-группы [tag]. Слоты
+  /// `[{slot,tag,delay}]` в фиксированном порядке слота. `delay`==0 → мёртвая/не
+  /// измерена.
+  ///
+  /// КОНТРАКТ (§209): `null` = CC-клиент недоступен (сервис down / pingClient не
+  /// поднялся) — НЕ путать с пустым пулом. `[]` = пул пуст (группа не
+  /// round_robin / нет данных). Идёт через незасыпающий pingClient (native), так
+  /// что в фоне отдаёт данные, а не молчит.
+  Future<List<CcPoolSlot>?> getPool(String tag) async {
     final r = await _methods
         .invokeMethod<List<dynamic>>('ccGetPool', {'tag': tag});
-    return (r ?? const []).map((m) => CcPoolSlot.fromMap(_asMap(m))).toList();
+    if (r == null) return null; // клиент недоступен (§209)
+    return r.map((m) => CcPoolSlot.fromMap(_asMap(m))).toList();
   }
 
   Future<bool> selectOutbound(String group, String tag) async =>
