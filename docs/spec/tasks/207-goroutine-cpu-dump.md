@@ -112,9 +112,20 @@ Debug API         → GET /diag/pprof?profile=P&seconds=N
   подпись `analyze with: go tool pprof <name>`.
 - Обе видны/доступны, но требуют активного туннеля (иначе snackbar-объяснение).
 
+## Грабли: cleartext HTTP на loopback (release)
+Android API 28+ блокирует cleartext-HTTP по умолчанию, **даже на 127.0.0.1**.
+`PProfClient` ходит `HttpURLConnection` на `http://127.0.0.1:<port>` → в
+release падало `Cleartext HTTP traffic to 127.0.0.1 not permitted` (в debug
+работало — Flutter сам добавляет `usesCleartextTraffic=true` в debug-манифест).
+Фикс: `res/xml/network_security_config.xml` с `cleartextTrafficPermitted=true`
+**только для loopback** (127.0.0.1/localhost/::1) + ссылка
+`android:networkSecurityConfig` в `<application>`. Весь внешний трафик
+остаётся под дефолтом (cleartext запрещён). Debug API HTTP-сервер
+(`HttpServer.bind`, Dart) этой политике НЕ подчиняется — он и так работал.
+
 ## Безопасность / приватность
 - pprof http НЕ висит в проде — поднимается по тапу и гасится. Bind на
-  `127.0.0.1` (loopback).
+  `127.0.0.1` (loopback). Cleartext разрешён точечно только для loopback.
 - goroutine/heap могут содержать имена outbound'ов / host'ов в аргументах
   фреймов, но не пароли — тот же уровень что у уже-шарящегося stderr (§038).
 
