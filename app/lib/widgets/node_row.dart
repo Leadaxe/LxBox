@@ -23,6 +23,7 @@ class NodeRow extends StatelessWidget {
     this.onCopyUri,
     this.onViewJson,
     this.onRunUrltest,
+    this.onSelectServer,
   });
 
   final NodeViewItem item;
@@ -37,6 +38,11 @@ class NodeRow extends StatelessWidget {
   /// Non-null only for URLTest group tags — triggers `/group/<tag>/delay`
   /// которое forces sing-box re-test всех members и update `now`.
   final VoidCallback? onRunUrltest;
+
+  /// §203 — non-null только для auto/urltest-ноды с текущим выбором
+  /// (`urltestNow`): «Select server» в меню → подсветка + scroll к выбранному
+  /// сервером тегу. Иначе null → пункт меню скрыт.
+  final VoidCallback? onSelectServer;
 
   /// Right-side delay label (или PING… / ERR), цвет по latency.
   String get _delayLabel {
@@ -130,31 +136,44 @@ class NodeRow extends StatelessWidget {
             ),
           );
 
+    // Пинг (`right`) ВСЕГДА прижат к правому краю строки. Вся левая часть
+    // (active / arrow / proto) живёт в одном Expanded, который съедает остаток
+    // ширины и толкает пинг вправо — без конкуренции flex-ов между proto и
+    // Spacer'ом (из-за неё пинг раньше всплывал в середину строки).
     return Padding(
       padding: const EdgeInsets.only(top: 3),
       child: Row(
         children: [
-          if (activePill != null) ...[activePill, const SizedBox(width: 6)],
-          // §199 — в строке auto/urltest ВАЖЕН выбранный сервер (`→ <node>`):
-          // он держит место, а транспорт (proto) уступает по остаточному
-          // принципу — обрезается/исчезает первым при нехватке ширины. Раньше
-          // было наоборот (proto фикс. ширины, сервер обрезался ellipsis'ом).
-          if (arrow != null)
-            Flexible(
-              flex: 3,
-              fit: FlexFit.loose,
-              child: Padding(
-                padding: EdgeInsets.only(right: proto != null ? 6 : 0),
-                child: arrow,
-              ),
+          Expanded(
+            child: Row(
+              children: [
+                if (activePill != null) ...[
+                  activePill,
+                  const SizedBox(width: 6),
+                ],
+                // §199 — в строке auto/urltest ВАЖЕН выбранный сервер
+                // (`→ <node>`): он держит место (flex:3), транспорт (proto)
+                // уступает по остаточному принципу (flex:1) — обрезается/
+                // исчезает первым при нехватке ширины.
+                if (arrow != null)
+                  Flexible(
+                    flex: 3,
+                    fit: FlexFit.loose,
+                    child: Padding(
+                      padding: EdgeInsets.only(right: proto != null ? 6 : 0),
+                      child: arrow,
+                    ),
+                  ),
+                if (proto != null)
+                  Flexible(
+                    flex: 1,
+                    fit: FlexFit.loose,
+                    child: proto,
+                  ),
+              ],
             ),
-          if (proto != null)
-            Flexible(
-              flex: 1,
-              fit: FlexFit.loose,
-              child: proto,
-            ),
-          const Spacer(),
+          ),
+          const SizedBox(width: 6),
           right,
         ],
       ),
@@ -233,6 +252,19 @@ class NodeRow extends StatelessWidget {
               title: const Text('Run URLTest'),
             ),
           ),
+        // §203 — «Select server»: только для auto/urltest-ноды с текущим
+        // выбором (onSelectServer != null). Подсвечивает и скроллит к серверу,
+        // который urltest выбрал быстрейшим.
+        if (onSelectServer != null)
+          PopupMenuItem<String>(
+            value: 'select_server',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.my_location, size: 20),
+              title: const Text('Select server'),
+            ),
+          ),
         if (onViewJson != null) const PopupMenuDivider(),
         if (onViewJson != null)
           PopupMenuItem<String>(
@@ -262,6 +294,8 @@ class NodeRow extends StatelessWidget {
     switch (chosen) {
       case 'ping':
         onPing();
+      case 'select_server':
+        onSelectServer?.call();
       case 'activate':
         onActivate();
       case 'run_urltest':
