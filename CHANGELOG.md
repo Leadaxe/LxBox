@@ -6,7 +6,15 @@
 
 ---
 
-## [Unreleased]
+## [2.6.0] — 2026-06-28
+
+Настраиваемые каналы роутинга (§125): каналы переехали из статичного шаблона в
+storage и стали полноценными CRUD-объектами — своё имя, regex node-filter (с
+инверсией), default-regex, персональный auto-двойник (urltest) и галки
+`direct`/`block`/`interrupt`. Вокруг — серия UX-доводок главного экрана и
+роутинга (§195–202): сохранение фильтра с главной в канал, пин активной ноды,
+block-outbound с защитой от бессмысленного пинга, и лечение висячих ссылок на
+выключенный канал прямо в storage.
 
 ### Added
 
@@ -31,7 +39,11 @@
 
 - **§200 — Warning: фильтр канала отсёк все ноды** ([build_config.dart](app/lib/services/builder/build_config.dart)). Когда per-channel node_filter (с учётом инверсии) не пропустил ни одной ноды И в подписке ноды были — билдер добавляет в баннер конфига предупреждение «Channel "X" (vpn-N): node filter matched no nodes — traffic is blocked (default), or use direct». Не варнит при пустом фильтре или пустой подписке.
 
-- **§201 — Block-outbound для каналов** ([task spec](docs/spec/tasks/201-block-outbound-for-channels.md), [build_config.dart](app/lib/services/builder/build_config.dart) + [channel_edit_screen.dart](app/lib/screens/channel_edit_screen.dart)). Добавлен системный block-outbound `{type: block, tag: block}` (дроп трафика; ядро rc.10 поддерживает) по образцу `direct-out`. Галка «Include block» в редакторе канала добавляет block опцией селектора. В route-final пикере block всегда доступен и покрашен красным (как reject в правилах). На главной block показывается с иконкой `Icons.block`, закреплён вверху. **Fallback пустого канала** (фильтр отсёк всё) теперь = `[block, direct-out]` с `default: block` — безопаснее блокировать, чем выпускать трафик мимо VPN; direct остаётся доступной опцией.
+- **§201 — Block-outbound для каналов** ([task spec](docs/spec/tasks/201-block-outbound-for-channels.md), [build_config.dart](app/lib/services/builder/build_config.dart) + [channel_edit_screen.dart](app/lib/screens/channel_edit_screen.dart)). Добавлен системный block-outbound `{type: block, tag: block}` (дроп трафика; ядро rc.10 поддерживает) по образцу `direct-out`. Галка «Include block» в редакторе канала добавляет block опцией селектора. В route-final пикере block всегда доступен (последним в списке) и покрашен красным (как reject в правилах). На главной block показывается с иконкой `Icons.block`, закреплён вверху, **не пингуется** (urltest для block всегда вернул бы ERR — пункт Ping выключен, delay-бейдж скрыт, из mass-ping исключён). **Fallback пустого канала** (фильтр отсёк всё) теперь = `[block, direct-out]` с `default: block` — безопаснее блокировать, чем выпускать трафик мимо VPN; direct остаётся доступной опцией.
+
+### Fixed
+
+- **§202 — dangling channel-ссылки лечатся в storage при выключении канала** ([task spec](docs/spec/tasks/202-heal-channel-refs-on-disable.md), [channels.dart](app/lib/services/settings_storage/channels.dart)). Если `route_final` или custom-rule `outbound` указывали на канал, который затем **выключили** (не удалили), деградировал только выхлоп билдера (→ vpn-1 при сборке), а в storage ссылка оставалась висеть на выключенном теге — приходилось вручную пересохранять правило. Теперь переход канала `enabled: true → false` чинит storage немедленно (как при удалении, §125 F4.5): висячие ссылки → `vpn-1`. Необратимо — повторное включение не воскрешает старую ссылку. detour-ссылки по-прежнему деградирует билдер (§172).
 
 ## [2.5.2] — 2026-06-27
 
