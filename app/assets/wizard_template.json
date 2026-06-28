@@ -324,7 +324,7 @@
         {
           "name": "dns_final",
           "type": "text",
-          "default_value": "local_dns_resolver",
+          "default_value": "cloudflare_udp",
           "wizard_ui": "fix",
           "title": "DNS final",
           "tooltip": "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule. For privacy, prefer encrypted: google_doh, cloudflare_dot. For speed: cloudflare_udp, google_udp. local_dns_resolver (system DNS) is safe here."

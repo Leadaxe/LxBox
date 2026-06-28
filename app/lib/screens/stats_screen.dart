@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/config_node.dart';
 import '../services/traffic_profiler.dart';
+import '../widgets/banner_palette.dart';
 import '../vpn/box_vpn_client.dart';
 import '../vpn/cc_channel.dart';
 import 'connections_screen.dart';
@@ -225,7 +226,7 @@ class _StatsScreenState extends State<StatsScreen> {
                     child: Icon(
                       Icons.warning_amber,
                       size: 22,
-                      color: Colors.amber.shade700,
+                      color: bannerIconColor(innerCtx, BannerSeverity.warning),
                     ),
                   ),
                 ),

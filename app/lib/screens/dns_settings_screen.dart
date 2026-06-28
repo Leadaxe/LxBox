@@ -262,7 +262,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     var defaultResolver = vars['dns_default_domain_resolver'] ?? '';
     var resolverReset = false;
     if (dnsFinal.isNotEmpty && !availableTags.contains(dnsFinal)) {
-      dnsFinal = 'local_dns_resolver'; // template default_value
+      dnsFinal = 'cloudflare_udp'; // template default_value
       resolverReset = true;
     }
     if (defaultResolver.isNotEmpty && !availableTags.contains(defaultResolver)) {
