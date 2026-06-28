@@ -8,14 +8,21 @@ class RoutingChannelsTab extends StatelessWidget {
     super.key,
     required this.bottomPad,
     required this.groupTiles,
+    required this.channelCount,
+    required this.maxChannels,
+    required this.onAddChannel,
     required this.routeFinalTile,
-    required this.varSections,
   });
 
   final double bottomPad;
   final List<Widget> groupTiles;
+  final int channelCount;
+  final int maxChannels;
+
+  /// null = лимит достигнут (Add disabled).
+  final VoidCallback? onAddChannel;
+
   final Widget routeFinalTile;
-  final List<Widget> varSections;
 
   @override
   Widget build(BuildContext context) {
@@ -23,16 +30,24 @@ class RoutingChannelsTab extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(12, 12, 12, bottomPad),
       children: [
         Text(
-          'Enabled groups appear in the selector on the home screen.',
+          'Enabled channels appear in the selector on the home screen. '
+          'Tap a channel to edit its nodes, filter and auto twin.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
         ),
         const SizedBox(height: 8),
         ...groupTiles,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: TextButton.icon(
+            onPressed: onAddChannel,
+            icon: const Icon(Icons.add, size: 18),
+            label: Text('Add channel  ($channelCount/$maxChannels)'),
+          ),
+        ),
         const Divider(height: 24),
         routeFinalTile,
-        ...varSections,
       ],
     );
   }

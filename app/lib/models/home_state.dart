@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../config/consts.dart';
 import '../vpn/cc_channel.dart';
 import 'config_node.dart';
 import 'debug_entry.dart';
@@ -44,6 +43,7 @@ class HomeState {
     this.busy = false,
     this.ccGroups = const <CcGroup>[],
     this.groups = const <String>[],
+    this.groupLabels = const <String, String>{},
     this.selectedGroup,
     this.nodes = const <String>[],
     this.activeInGroup,
@@ -83,6 +83,14 @@ class HomeState {
   /// Источник истины для групп/нод/active-выбора (заменил Clash `proxiesJson`).
   final List<CcGroup> ccGroups;
   final List<String> groups;
+
+  /// §125 — tag→label каналов (из storage `channels[]`). Для отображения
+  /// человекочитаемого имени канала в home-dropdown вместо tag ('vpn-1').
+  final Map<String, String> groupLabels;
+
+  /// Человекочитаемое имя группы: label канала из storage, иначе сам tag.
+  String groupLabelOf(String tag) => groupLabels[tag] ?? tag;
+
   final String? selectedGroup;
   final List<String> nodes;
   final String? activeInGroup;
@@ -176,16 +184,50 @@ class HomeState {
   /// `sortedNodes` несколько раз (фильтр detour + итерация + builder).
   late final List<String> sortedNodes = _computeSortedNodes();
 
-  List<String> _computeSortedNodes() {
-    // §070: pinDirect/pinAuto управляют наполнением pinned section во
-    // ВСЕХ modes включая `defaultOrder`. Default = pristine config order
-    // для non-pinned части, но pinned всегда сверху если toggle ON.
-    final pinnedOrder = <String>[
-      if (pinDirect) 'direct-out',
-      if (pinAuto) kAutoOutboundTag,
+  /// §070/§125/§196 — pinned-секция (всегда сверху, non-draggable): direct →
+  /// urltest-двойники → активная нода. Вычисляется один раз, используется
+  /// `sortedNodes` и `pinnedNodeCount` (node_list — для drag-handle gating).
+  late final List<String> _pinnedTags = _computePinned();
+
+  /// Кол-во pinned-нод в начале [sortedNodes]. node_list: первые N
+  /// non-draggable (§071). Источник истины — [_computePinned], не пересчёт по
+  /// тегам (auto-двойники теперь vpn-N-auto, §125).
+  int get pinnedNodeCount => _pinnedTags.length;
+
+  /// §070/§125/§196/§201 — наполнение pinned section. pinDirect/pinAuto —
+  /// тоглы (§070); block и активная нода пинятся ВСЕГДА (при любой сортировке).
+  /// Пин по ТИПУ из конфига (`direct`/`urltest`/`block`), не по фикс-тегам.
+  /// Порядок: direct → urltest-двойники → block → активная.
+  List<String> _computePinned() {
+    final pinnedSet = <String>{
+      for (final n in nodes)
+        if ((pinDirect && configModel[n]?.type == 'direct') ||
+            (pinAuto && configModel[n]?.type == 'urltest') ||
+            configModel[n]?.type == 'block') // §201 — block всегда сверху
+          n,
+    };
+    final pinned = [
+      ...nodes.where((n) => pinnedSet.contains(n) && configModel[n]?.type == 'direct'),
+      ...nodes.where((n) => pinnedSet.contains(n) && configModel[n]?.type == 'urltest'),
+      ...nodes.where((n) => pinnedSet.contains(n) && configModel[n]?.type == 'block'),
     ];
-    final pinned = pinnedOrder.where(nodes.contains).toList();
-    final rest = nodes.where((n) => !pinnedOrder.contains(n)).toList();
+    // §196 — активная нода группы сразу ПОСЛЕ direct/auto, при ЛЮБОЙ сортировке
+    // (не за тоглом). Только реальная прокси-нода (не сам direct/auto-двойник,
+    // иначе дубль) и присутствующая в списке.
+    final active = activeInGroup;
+    if (active != null &&
+        active.isNotEmpty &&
+        nodes.contains(active) &&
+        !pinnedSet.contains(active)) {
+      pinned.add(active);
+    }
+    return pinned;
+  }
+
+  List<String> _computeSortedNodes() {
+    final pinned = _pinnedTags;
+    final pinnedSet = pinned.toSet();
+    final rest = nodes.where((n) => !pinnedSet.contains(n)).toList();
     switch (sortMode) {
       case NodeSortMode.defaultOrder:
         // rest в pristine config order (без сортировки).
@@ -226,6 +268,7 @@ class HomeState {
     bool? busy,
     List<CcGroup>? ccGroups,
     List<String>? groups,
+    Map<String, String>? groupLabels,
     Object? selectedGroup = _unset,
     List<String>? nodes,
     Object? activeInGroup = _unset,
@@ -256,6 +299,7 @@ class HomeState {
       busy: busy ?? this.busy,
       ccGroups: ccGroups ?? this.ccGroups,
       groups: groups ?? this.groups,
+      groupLabels: groupLabels ?? this.groupLabels,
       selectedGroup: identical(selectedGroup, _unset)
           ? this.selectedGroup
           : selectedGroup as String?,

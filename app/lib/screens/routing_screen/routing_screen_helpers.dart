@@ -10,9 +10,16 @@ class PresetRemoteRuleSet {
 
 /// Outbound-опция для селекторов на экране Routing.
 class RoutingOutboundOption {
-  const RoutingOutboundOption({required this.label, required this.tag});
+  const RoutingOutboundOption({
+    required this.label,
+    required this.tag,
+    this.danger = false,
+  });
   final String label;
   final String tag;
+
+  /// §201 — рисовать красным (block, по аналогии с reject в правилах).
+  final bool danger;
 }
 
 /// Sentinel для `firstWhere(..., orElse: ...)` lookups — содержимое игнорируется,

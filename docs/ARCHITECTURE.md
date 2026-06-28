@@ -229,7 +229,7 @@ Asset-шаблон, который читается один раз через `
 | `dns_options.servers` | Canonical DNS-серверы (system/google/cloudflare/quad9/adguard). Storage хранит kind-refs `{enabled, kind: inline\|preset\|template, tag, description?, body?}` (§043 + §044). Body для kind:inline — partial sing-box shape **без** tag/description/enabled (они на ref-level; tag синтезируется на build-time). Резолвится в bodies через `resolveDnsServersBodies`. | `applyCustomDns` через `resolveDnsServersList` |
 | `dns_options.rules` | Дефолтные DNS-rules. Storage — kind-refs (§061 dns-rules-refactor, бывший feature §041) (`inline\|srs\|preset\|template`). Catch-all удалён в task §039 (empty-template-dns-rules) — fall-through идёт через `dns.final`. | `applyCustomDns`: bundle-rules через `resolveDnsRulesList` |
 | `ping_options`, `speed_test_options` | UI-фичи (HomeScreen, SpeedTest) | не попадают в sing-box конфиг |
-| `preset_groups` | Группы outbound'ов (`vpn-1`/`vpn-2`/`vpn-3`, `@auto`) | `_buildPresetGroups` в `build_config.dart` |
+| `preset_groups` | §125 — **SEED** для `channels[]` (на первом запуске). Билдер каналы читает из storage `channels[]`, НЕ из template. | `_buildChannelGroups(channels)` в `build_config.dart` (бывш. `_buildPresetGroups`) |
 | `config` | База sing-box конфига: log, inbounds, route-skeleton | deep-copy'ится в начале `buildConfig` |
 | `sections[].vars[]` | Глобальные переменные UI — chapter: `core` / `routing` / `dns` | `TemplateVarListView` рендерит в SettingsScreen/RoutingScreen; `@name` подставляется в config через `_substituteVars` |
 | `selectable_rules` | Каталог пресет-правил (legacy inline + bundle — spec 033) | вкладка Presets в `RoutingScreen` |
@@ -320,7 +320,8 @@ wizard_template.json
   │    └── kind: srs
   │         └─ local rule_set по cached path + routing rule (spec 030)
   ├── dns_options  ──► applyCustomDns(template + extras)                      ──► config.dns
-  └── preset_groups ──► _buildPresetGroups(vpn-1..3, @auto)                   ──► config.outbounds
+  └── channels[] (storage) ──► _buildChannelGroups(per-channel node_filter)  ──► config.outbounds
+      (§125: каналы из channels[], seed из preset_groups; +block/direct опции, auto-двойник)
 ```
 
 **Почему DoH/DoT в bundle хардкодят `server: "77.88.8.88"` + `tls.server_name`:**
@@ -708,7 +709,7 @@ app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.d
 ├── dns_options             # §043+§044 — default DNS servers + rules
 ├── ping_options            # §040 — default URL + presets
 ├── speed_test_options      # §015 — speed-test endpoints
-├── preset_groups[]         # selector/urltest группы (vpn-1, vpn-2, vpn-3, ✨auto)
+├── preset_groups[]         # §125 — SEED для channels[] (vpn-1..4, ✨auto); билдер читает channels[] из storage
 ├── sections[]              # §022 — Wizard UI chapters (vars сгруппированы по темам)
 ├── config                  # нативная sing-box-секция с @var-плейсхолдерами
 │   ├── log / dns / inbounds / endpoints / outbounds / experimental
@@ -724,8 +725,9 @@ app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.d
 ├── lxbox_settings.json     # SettingsStorage (Dart) — главный файл состояния:
 │                           #   vars / server_lists / custom_rules /
 │                           #   dns_options / ping_options /
-│                           #   route_final / excluded_nodes / enabled_groups /
-│                           #   last_global_update / presets_migrated
+│                           #   route_final / channels[] (§125, replaces enabled_groups) /
+│                           #   excluded_nodes (§048 sandbox) / last_global_update /
+│                           #   presets_migrated / channels_migrated
 ├── singbox_config.json     # ConfigManager (Kotlin) — финальный sing-box JSON
 ├── http_cache/             # HttpCache — сырое тело + headers подписок
 │   └── <sha1(url)>.{body,headers}
@@ -777,7 +779,7 @@ backup-блоке и **не** в JSON-секции `native_prefs` — живёт
 
 #### Builder (template + user-state → final config)
 
-`build_config.dart` мерджит template `config`-секцию + `selectable_rules[*]` (через `expandPreset`) + `dns_options.{servers,rules}` (через resolvers §061/§044) + `preset_groups` (с активными node-tag'ами из `server_lists`) + `vars`-substitution → пишет финальный `singbox_config.json` для libbox.
+`build_config.dart` мерджит template `config`-секцию + `selectable_rules[*]` (через `expandPreset`) + `dns_options.{servers,rules}` (через resolvers §061/§044) + `channels[]` из storage (§125 — `_buildChannelGroups`: per-channel `node_filter`-regex по node-tag'ам из `server_lists`, опции direct/block, auto-двойник) + `vars`-substitution → пишет финальный `singbox_config.json` для libbox.
 
 One-shot миграции (`SettingsStorage`):
 - `proxy_sources` → `server_lists` (v1 → v2, §033) — `migrateProxySources` на первом чтении.

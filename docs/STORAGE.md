@@ -96,8 +96,26 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       └─ <groupTag>            object          {url?, timeout_ms?}
 │
 ├─ route_final                   string        override sing-box route.final
-├─ excluded_nodes[]              list          node tags выкинутые юзером из group resolve / mass-ping
-├─ enabled_groups[]              list          включённые preset-группы (selector membership)
+├─ excluded_nodes[]              list          §125-cleanup DEPRECATED — глобальный node-filter (§048) удалён; safe-мусор
+├─ enabled_groups[]              list          §125 DEPRECATED — читается только миграцией channels[]. Safe-мусор.
+├─ channels[]                    list          §125 — каналы роутинга (template→storage). См. ниже.
+│   └─ <item>                    object
+│       ├─ tag                   string        системный immutable id 'vpn-1'..'vpn-10' (автоген; vpn-1 неудаляем)
+│       ├─ label                 string        отображаемое имя (юзер вводит)
+│       ├─ enabled               bool          вкл/выкл (vpn-1 всегда true)
+│       ├─ include_direct        bool          direct-out опцией селектора
+│       ├─ include_block         bool          §201 — block (дроп трафика) опцией селектора; default false
+│       ├─ node_filter           string        regex по итоговому tag ноды; '' = все
+│       ├─ node_filter_invert    bool          §197 — инверсия node_filter (ноды НЕ матчащие); default false
+│       ├─ default_filter        string        regex; первая matched → default; '' = нет
+│       ├─ interrupt_exist_connections  bool   selector.interrupt_exist_connections
+│       └─ auto                  object?       null = галка ВЫКЛ; object → urltest-двойник <tag>-auto (tag производный, не хранится)
+│           ├─ url               string        urltest test endpoint
+│           ├─ interval          string        duration ("5m")
+│           ├─ tolerance         int           ms, uint16 (§161 — clamp 0..65535)
+│           ├─ idle_timeout      string        duration ("30m")
+│           └─ interrupt_exist_connections  bool  urltest.interrupt_exist_connections
+├─ channels_migrated             bool          §125 — guard one-shot миграции enabled_groups→channels
 ├─ last_global_update            ISO-8601      timestamp последнего auto-refresh
 ├─ presets_migrated              bool          §159 — guard «дефолтные пресеты засеяны» (fresh-install seed)
 ├─ interrupt_connections_on_switch  bool       §143 — рвать соединения переключаемой группы при смене ноды (default false, НЕ config-significant)
@@ -164,8 +182,10 @@ Android SharedPreferences:
   "dns_options":        { … },     // rules + servers
   "ping_options":       { … },
   "route_final":        "<tag>",   // override route.final
-  "excluded_nodes":     [ … ],     // tags выкинутые юзером из mass-ping
-  "enabled_groups":     [ … ],     // включённые preset-группы (selector membership)
+  "excluded_nodes":     [ … ],     // §125-cleanup DEPRECATED (глобальный node-filter удалён)
+  "enabled_groups":     [ … ],     // §125 DEPRECATED (читается только миграцией channels[])
+  "channels":           [ … ],     // §125 — каналы роутинга (template→storage)
+  "channels_migrated":  true,      // §125 — guard миграции enabled_groups→channels
   "last_global_update": "ISO-8601",// последняя auto-refresh подписок
   "presets_migrated":   true,      // §159 — guard «дефолты засеяны» (fresh-install seed)
   "interrupt_connections_on_switch": false, // §143 — рвать conns группы при смене ноды (НЕ config-significant)
@@ -630,13 +650,59 @@ Debug API handlers — идут через единую дверь `SettingsStor
 
 ---
 
+## `channels` — [§125] каналы роутинга (template→storage)
+
+Каналы (`vpn-1..vpn-10`) переехали из статичного `wizard_template.json`
+(`preset_groups[]`) в storage. Template стал **seed'ом** — значениями по
+умолчанию на первом запуске. После миграции состав каналов живёт в `channels[]`
+и редактируется юзером (Routing → таб Channels → редактор канала).
+
+- `tag` — **системный immutable** id (`vpn-1`..`vpn-10`), автогенерируется при
+  создании (первый свободный `vpn-N`), юзер правит только `label`. Стабильный
+  ключ ссылок (`route_final` / `ping_options` / custom-rule outbound / detour).
+- `vpn-1` — продуктово-привилегированный: всегда `enabled`, неудаляем, дефолт
+  `route_final`. Лимит каналов — **10**.
+- `auto` (nullable) — параметры urltest-двойника. `null` = галка auto ВЫКЛ,
+  `<tag>-auto` не эмитится. `auto.tag` НЕ хранится (производный `${tag}-auto`).
+- **Резолюция в билдере**: каждый включённый канал эмитит selector `<tag>` с
+  нодами после `node_filter` (regex по итоговому tag, §048-style) + опции
+  `direct-out`/`block` (по `include_direct`/`include_block`, §201); если `auto !=
+  null` и набор нод непуст — дополнительно urltest `<tag>-auto` (только ноды
+  канала, без direct/block/auto). `default` = первая нода, чей tag матчит
+  `default_filter`. Пустой/невалидный regex → все ноды.
+- **Инверсия `node_filter_invert`** (§197): `true` → в канал попадают ноды, чей
+  tag **НЕ** матчит `node_filter` (исключающий фильтр). Пустой `node_filter` →
+  инверсия игнорируется (все ноды). Пример: `node_filter:"bypass",
+  node_filter_invert:true` → все ноды кроме содержащих «bypass».
+- **Пустой набор после фильтра** (regex/инверсия отсекли всё) → fallback selector
+  `outbounds: ["block","direct-out"]`, `default: "block"` (§201 — безопаснее
+  блокировать, чем выпускать мимо VPN; direct остаётся опцией). Билдер при этом
+  пишет warning в баннер конфига (§200), если в подписке были ноды. `block`
+  всегда присутствует в `config.outbounds[]` как системный outbound и валиден
+  как `route_final`.
+- **Миграция** (one-shot, guard `channels_migrated`): seed из
+  `template.presetGroups` — `enabled_groups[]`/`default_enabled` → `enabled`
+  (vpn-1 форсим true); `add_outbounds ∋ direct-out` → `include_direct`;
+  `add_outbounds ∋ ✨auto` → `auto` из `@urltest_*` vars; `default_filter=''`.
+  Глобальный `✨auto`-preset **не** мигрируется (он больше не канал — каждый
+  канал делает свой двойник). `enabled_groups[]` после миграции депрекейтится.
+- **Деградация ссылок**: при удалении канала любая ссылка на него (`route_final`
+  / custom-rule outbound) переводится на `vpn-1` (storage + билдер). Legacy
+  `✨auto`-ссылки попадают под то же правило.
+- CRUD: `getChannels` / `setChannels` / `addChannel` (throws при 10) /
+  `updateChannel` / `deleteChannel` (throws для vpn-1) / `migrateChannelsIfNeeded`.
+
+Спека: [`docs/spec/features/125 configurable-channels/`](spec/features/125%20configurable-channels/).
+
+---
+
 ## Прочие top-level ключи
 
 | Ключ | Тип | Назначение |
 |---|---|---|
-| `route_final` | `String` | Override `route.final` поверх template (выбранный default outbound). `''` = template-default. |
-| `excluded_nodes` | `List<String>` | Node tags выкинутые юзером — пропускаются в group resolve и mass-ping. |
-| `enabled_groups` | `List<String>` | Включённые preset-группы (selector membership). |
+| `route_final` | `String` | Override `route.final` поверх template (выбранный default outbound). `''` = template-default. Dangling-ссылка (удалённый канал / legacy ✨auto) → `vpn-1` при сборке (§125). |
+| `excluded_nodes` | `List<String>` | §125-cleanup **DEPRECATED** — глобальный node-filter (§048) удалён вместе с экраном. Ключ остаётся в allowlist (безвредный legacy-мусор); per-channel `node_filter` (§125) покрывает фильтрацию. |
+| `enabled_groups` | `List<String>` | §125 **DEPRECATED** — заменён на `channels[]`. Читается только one-shot миграцией; на диске остаётся безвредным мусором. |
 | `last_global_update` | `String` (ISO-8601) | Timestamp последнего успешного auto-refresh всех подписок. |
 | `presets_migrated` | `bool` | §159 — guard «дефолтные пресеты засеяны» (fresh-install seed). Имя ключа историческое (бывшая legacy-миграция); переиспользован, чтобы ранее мигрировавшие юзеры не получили повторный seed. `RoutingScreen._seedDefaultPresets` ставит true. |
 | `interrupt_connections_on_switch` | `bool` | §143 — рвать активные соединения переключаемой группы при смене ноды (default `false`, НЕ config-significant). См. `getInterruptOnSwitch`/`setInterruptOnSwitch`. |

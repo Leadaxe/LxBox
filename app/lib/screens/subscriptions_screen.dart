@@ -5,7 +5,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../config/consts.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/error_format.dart';
@@ -14,7 +13,6 @@ import '../services/subscription/auto_updater.dart';
 import '../services/url_launcher.dart';
 import 'add_server_wizard_screen.dart';
 import 'app_settings_screen.dart';
-import 'node_filter_screen.dart';
 import 'node_settings_screen.dart';
 import 'subscription_detail_screen.dart';
 import 'warp_wizard_screen.dart';
@@ -375,28 +373,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     child: _buildList(ctrl),
                   ),
                 ),
-                if (ctrl.entries.isNotEmpty)
-                  SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => NodeFilterScreen(
-                                subController: widget.subController,
-                                homeController: widget.homeController,
-                              ),
-                            ),
-                          ),
-                          icon: const Icon(Icons.filter_list, size: 18),
-                          label: const Text(kAutoOutboundTag),
-                        ),
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),

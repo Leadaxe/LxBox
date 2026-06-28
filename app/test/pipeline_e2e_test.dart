@@ -80,12 +80,27 @@ tuic://tuic-uuid:tuic-pass@tuic.example:443?congestion_control=bbr&alpn=h3&sni=t
     final tags = outs.map((o) => (o as Map)['tag']).toSet();
     expect(tags, containsAll(['VLESS', 'Trojan', 'SS', 'Hy2', 'TUIC']));
     expect(tags, contains('vpn-1'));
-    expect(tags, contains(kAutoOutboundTag));
     expect(tags, contains('direct-out'));
+    // §125 — глобальный ✨auto больше НЕ канал (Решение 3). vpn-1 имеет ✨auto в
+    // add_outbounds → его auto-двойник теперь свой: vpn-1-auto (urltest по нодам
+    // vpn-1). Глобального ✨auto в outbounds быть не должно.
+    expect(tags, isNot(contains(kAutoOutboundTag)));
+    expect(tags, contains('vpn-1-auto'));
 
     final vpn1 =
         outs.firstWhere((o) => (o as Map)['tag'] == 'vpn-1') as Map;
     expect(vpn1['outbounds'], containsAll(['VLESS', 'Trojan', 'SS', 'Hy2', 'TUIC']));
+    // selector vpn-1 содержит свой auto-двойник опцией + direct-out (галка).
+    expect(vpn1['outbounds'], contains('vpn-1-auto'));
+    expect(vpn1['outbounds'], contains('direct-out'));
+
+    // vpn-1-auto — чистый urltest по нодам канала, БЕЗ direct/auto-членов.
+    final vpn1Auto =
+        outs.firstWhere((o) => (o as Map)['tag'] == 'vpn-1-auto') as Map;
+    expect(vpn1Auto['type'], 'urltest');
+    expect(vpn1Auto['outbounds'],
+        containsAll(['VLESS', 'Trojan', 'SS', 'Hy2', 'TUIC']));
+    expect(vpn1Auto['outbounds'], isNot(contains('direct-out')));
   });
 
   test('disabled UserServer excluded from config', () async {

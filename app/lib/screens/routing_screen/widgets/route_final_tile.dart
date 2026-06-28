@@ -17,6 +17,7 @@ class RouteFinalTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       title: const Text('Default traffic'),
@@ -32,11 +33,15 @@ class RouteFinalTile extends StatelessWidget {
           value: options.any((o) => o.tag == routeFinal)
               ? routeFinal
               : options.first.tag,
+          // §201 — danger-опция (block) красным, как reject в правилах.
           items: options
               .map((o) => DropdownMenuItem(
                   value: o.tag,
-                  child:
-                      Text(o.label, style: const TextStyle(fontSize: 13))))
+                  child: Text(o.label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: o.danger ? cs.error : null,
+                      ))))
               .toList(),
           onChanged: (val) {
             if (val == null) return;

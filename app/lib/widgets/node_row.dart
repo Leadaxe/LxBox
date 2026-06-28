@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../config/consts.dart';
+import '../screens/home/special_node_display.dart';
 import 'node_view_item.dart';
 
 /// One row в node list на главной screen'е. Read-only widget от
@@ -61,7 +61,8 @@ class NodeRow extends StatelessWidget {
     final hasArrow = item.urltestNow != null && item.urltestNow!.isNotEmpty;
     final hasProto =
         item.protocolLabel != null && item.protocolLabel!.isNotEmpty;
-    final dl = _delayLabel;
+    // §201 — у block нет осмысленного delay (всегда ERR): бейдж не рисуем.
+    final dl = _isBlock ? '' : _delayLabel;
 
     if (!hasActive && !hasArrow && !hasProto && dl.isEmpty) {
       return const SizedBox.shrink();
@@ -103,6 +104,11 @@ class NodeRow extends StatelessWidget {
     final Widget? proto = hasProto
         ? Text(
             item.protocolLabel!,
+            // §199 — транспорт уступает серверу: обрезается ellipsis'ом, не
+            // переполняет (внутри Flexible).
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w600,
@@ -129,18 +135,25 @@ class NodeRow extends StatelessWidget {
       child: Row(
         children: [
           if (activePill != null) ...[activePill, const SizedBox(width: 6)],
-          // Стрелка → <node>: занимает сколько есть места, но при нехватке
-          // ellipsis'ом обрезается, НЕ переносит на новую строку.
-          // protocol-label фикс. ширины идёт после — стрелка уступает ему.
+          // §199 — в строке auto/urltest ВАЖЕН выбранный сервер (`→ <node>`):
+          // он держит место, а транспорт (proto) уступает по остаточному
+          // принципу — обрезается/исчезает первым при нехватке ширины. Раньше
+          // было наоборот (proto фикс. ширины, сервер обрезался ellipsis'ом).
           if (arrow != null)
             Flexible(
+              flex: 3,
               fit: FlexFit.loose,
               child: Padding(
                 padding: EdgeInsets.only(right: proto != null ? 6 : 0),
                 child: arrow,
               ),
             ),
-          ?proto,
+          if (proto != null)
+            Flexible(
+              flex: 1,
+              fit: FlexFit.loose,
+              child: proto,
+            ),
           const Spacer(),
           right,
         ],
@@ -148,11 +161,16 @@ class NodeRow extends StatelessWidget {
     );
   }
 
-  bool get _isSpecial =>
-      item.tag == 'direct-out' || item.tag == kAutoOutboundTag;
+  // §125 — служебная нода (direct/auto): по типу из конфига, не по маске имени.
+  bool get _isSpecial => specialNodeDisplayForType(item.outboundType) != null;
+
+  // §201 — block: дропает трафик, urltest всегда ERR. Не пингуем и не
+  // показываем delay-бейдж (был бы всегда «ERR»).
+  bool get _isBlock => item.outboundType == 'block';
 
   Future<void> _openLongPressMenu(BuildContext context) async {
-    final canPing = item.tunnelUp && !item.busy && !item.pingBusy;
+    // §201 — block не пингуется (всегда ERR): пункт Ping disabled.
+    final canPing = item.tunnelUp && !item.busy && !item.pingBusy && !_isBlock;
     final canActivate = item.tunnelUp && !item.busy && !item.active;
     final showCopy = !_isSpecial;
     final box = context.findRenderObject() as RenderBox?;
@@ -285,30 +303,38 @@ class NodeRow extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        if (item.tag == kAutoOutboundTag) ...[
-                          Icon(Icons.speed,
-                              size: 18, color: colorScheme.primary),
-                          const SizedBox(width: 6),
-                        ],
-                        Flexible(
-                          child: Text(
-                            item.tag,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyLarge
-                                ?.copyWith(
-                                  fontWeight: item.active
-                                      ? FontWeight.w600
-                                      : FontWeight.w500,
-                                ),
+                    Builder(builder: (context) {
+                      // §125 — служебные ноды (direct/auto) показываем
+                      // подменённым label'ом + иконкой; тип берём ТОЧНО из
+                      // конфига (item.outboundType), не по маске имени.
+                      final special =
+                          specialNodeDisplayForType(item.outboundType);
+                      final displayText = special?.label ?? item.tag;
+                      return Row(
+                        children: [
+                          if (special != null) ...[
+                            Icon(special.icon,
+                                size: 18, color: colorScheme.primary),
+                            const SizedBox(width: 6),
+                          ],
+                          Flexible(
+                            child: Text(
+                              displayText,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyLarge
+                                  ?.copyWith(
+                                    fontWeight: item.active
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                  ),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      );
+                    }),
                     _buildSubtitleRow(context, colorScheme),
                   ],
                 ),
