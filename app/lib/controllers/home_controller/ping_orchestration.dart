@@ -21,6 +21,8 @@ mixin _PingMixin on ChangeNotifier {
   /// `delay==0 && error==''` = успех 0мс (`CcDelayResult.lastDelayValue`).
   Future<void> runNodeUrltest(String nodeTag) async {
     if (!_state.tunnelUp) return;
+    // §201 — block дропает трафик: urltest всегда ERR, мерить нечего.
+    if (_state.configModel[nodeTag]?.type == 'block') return;
     final pingBusy = Map<String, String>.from(_state.pingBusy)..[nodeTag] = '…';
     _emit(_state.copyWith(pingBusy: pingBusy));
     final group = _state.selectedGroup;
@@ -212,7 +214,11 @@ mixin _PingMixin on ChangeNotifier {
       return;
     }
 
-    final nodes = List<String>.from(order ?? _state.nodes);
+    // §201 — block-ноду не пингуем: она дропает любой коннект, urltest всегда
+    // вернёт ERR. Исключаем из набора (и из single-node, и из mass-ping).
+    final nodes = List<String>.from(order ?? _state.nodes)
+        .where((t) => _state.configModel[t]?.type != 'block')
+        .toList();
     if (nodes.isEmpty) return;
 
     _massPingRunning = true;

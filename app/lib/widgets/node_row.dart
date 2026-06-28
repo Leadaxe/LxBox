@@ -61,7 +61,8 @@ class NodeRow extends StatelessWidget {
     final hasArrow = item.urltestNow != null && item.urltestNow!.isNotEmpty;
     final hasProto =
         item.protocolLabel != null && item.protocolLabel!.isNotEmpty;
-    final dl = _delayLabel;
+    // §201 — у block нет осмысленного delay (всегда ERR): бейдж не рисуем.
+    final dl = _isBlock ? '' : _delayLabel;
 
     if (!hasActive && !hasArrow && !hasProto && dl.isEmpty) {
       return const SizedBox.shrink();
@@ -163,8 +164,13 @@ class NodeRow extends StatelessWidget {
   // §125 — служебная нода (direct/auto): по типу из конфига, не по маске имени.
   bool get _isSpecial => specialNodeDisplayForType(item.outboundType) != null;
 
+  // §201 — block: дропает трафик, urltest всегда ERR. Не пингуем и не
+  // показываем delay-бейдж (был бы всегда «ERR»).
+  bool get _isBlock => item.outboundType == 'block';
+
   Future<void> _openLongPressMenu(BuildContext context) async {
-    final canPing = item.tunnelUp && !item.busy && !item.pingBusy;
+    // §201 — block не пингуется (всегда ERR): пункт Ping disabled.
+    final canPing = item.tunnelUp && !item.busy && !item.pingBusy && !_isBlock;
     final canActivate = item.tunnelUp && !item.busy && !item.active;
     final showCopy = !_isSpecial;
     final box = context.findRenderObject() as RenderBox?;
