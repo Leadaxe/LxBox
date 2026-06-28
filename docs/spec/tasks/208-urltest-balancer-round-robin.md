@@ -4,8 +4,19 @@
 > Ядро: `v1.14.0-lx.1-rc.14` (SPEC 019 — фича с rc.13, `pool:0`-фикс rc.14).
 > Включает бамп пина (rc.12 → rc.14, [§208a](#208a--бамп-пина-ядра-rc12--rc14)).
 > §207 занят другой сессией (goroutine-cpu-dump) — взят 208.
-> 1397 тестов зелёные (+26); Dart analyze чист; Kotlin compile OK. НЕ
-> device-verified (нужен прогон round_robin на устройстве).
+> 1397 тестов зелёные (+26); Dart analyze чист; Kotlin compile OK.
+> **DEVICE-VERIFIED 28.06.2026** (Debug API): конфиг `vpn-1-auto` эмитит
+> `mode:round_robin` + `balancer{pool:3,pool_tolerance:100,sticky_hash:
+> [process,domain]}`; трафик в профайлере раскидан по слотам пула (🇩🇪/🇫🇮/🇨🇭/
+> 🇬🇧). Sticky держит TCP-домены на одном узле.
+>
+> **Нюанс ядра (НЕ баг §208):** UDP/QUIC-флоу часто приходит в ядро с пустым
+> `destination.Fqdn` (Chrome уже зарезолвил домен на IP / HTTP3 после Alt-Svc)
+> → sticky-ключ `[process,domain]` для UDP = `process+""`, а для TCP того же
+> сайта = `process+fqdn` → **разные слоты** для UDP и TCP одного домена.
+> Профайлер показывает domain постфактум (`matched_via:connections_meta`),
+> хотя ядро в момент `pick()` Fqdn не видело. Улучшение — на стороне ЯДРА
+> (для UDP с пустым Fqdn добавлять `dest_ip` в ключ), не нашего билдера.
 
 ## Контекст
 
