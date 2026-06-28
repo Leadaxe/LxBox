@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../services/format_utils.dart';
 import '../../vpn/cc_channel.dart';
+import '../stats_screen/routing_section.dart';
 
 /// §152 — детальный bottom sheet по одному соединению.
 ///
@@ -13,9 +14,11 @@ import '../../vpn/cc_channel.dart';
 /// `label : value`, только непустые поля, без ellipsis. Тап по строке копирует
 /// значение; footer — Copy JSON + Close.
 ///
-/// §122 — источник = `CcConnection` (libbox CommandClient). Доступные поля:
-/// id/network/domain/destination/rule/uplink/downlink/createdAt/closedAt.
-/// Нет chains/source/processPath/dnsMode (CommandClient их не отдаёт).
+/// §122 — источник = `CcConnection` (libbox CommandClient). Поля: id/network/
+/// domain/destination/rule/uplink/downlink/createdAt/closedAt + §174/§178
+/// chains/detours + outbound/outboundType + processPath/packageName.
+/// §204 — Routing-секция (Route/Rule/Chain/Detour/Outbound/type) единая с
+/// профайлером через `routingRows`.
 ///
 /// [onClose] переиспользует `_ConnectionsViewState._closeConnection`
 /// (close через CommandClient + аккумулятор сам обновит снапшот).
@@ -178,14 +181,21 @@ class _ConnectionDetailSheet extends StatelessWidget {
       if (conn.protocol.isNotEmpty) _row(context, 'Protocol', conn.protocol),
     ]));
 
-    // Routing
-    out.addAll(_group(context, 'Routing', [
-      // Пустой rule = route.final (default-маршрут без явного правила) → `final`.
-      _row(context, 'Rule', conn.rule.isNotEmpty ? conn.rule : 'final'),
-      if (conn.outbound.isNotEmpty) _row(context, 'Outbound', conn.outbound),
-      if (conn.outboundType.isNotEmpty)
-        _row(context, 'Outbound type', conn.outboundType),
-    ]));
+    // Routing (§204) — единый набор строк (routingRows), общий с профайлером:
+    // Route (§181) + Rule + Chain + Detour + Outbound + Outbound type. Пустые
+    // строки скрывает _row.
+    out.addAll(_group(
+      context,
+      'Routing',
+      routingRows(
+        route: conn.routingLineOf(),
+        rule: conn.rule,
+        chain: conn.chains,
+        detour: conn.detours,
+        outbound: conn.outbound,
+        outboundType: conn.outboundType,
+      ).map((r) => _row(context, r.label, r.value)).toList(),
+    ));
 
     // Traffic
     out.addAll(_group(context, 'Traffic', [

@@ -425,6 +425,58 @@ class CcConnection {
 
   bool get isClosed => closedAt > 0;
 
+  /// §204 — routing-строка в нотации §181, идентичная
+  /// `TrafficEvent.routingLineOf`: `[net] ⇒ rule ⇒ группы : node → detour → dest`.
+  /// `chains`/`detours` приходят из ТОГО ЖЕ источника ядра, что
+  /// `TrafficEvent.outboundChain`/`detourChain` (`Connection.chain()`/`.detour()`),
+  /// порядок идентичен (`[node, …selectors]` / `[node→наружу]`) — поэтому логика
+  /// копируется 1:1, без reverse.
+  ///
+  /// Отличия от TrafficEvent (намеренно): process НЕ включаем (у ряда Conns своя
+  /// app-строка); duration НЕ дописываем (§204 D — таймер рендерится отдельным
+  /// виджетом справа в ряду / секцией Timing в detail, не внутри строки).
+  ///
+  /// [compact] — для ряда: опускает префикс `[net]` (дублирует бейдж/иконку),
+  /// строка начинается с `rule`.
+  /// [ruleLabel] — резолвленное человекочитаемое имя правила (UI-слой
+  /// `RuleNameResolver`); если передано — используется вместо сырого `rule`
+  /// (модель vpn не знает про резолвер). Пусто → берётся `rule` или `final`.
+  String routingLineOf({bool compact = false, String? ruleLabel}) {
+    final sb = StringBuffer();
+    if (!compact && network.isNotEmpty) sb.write('[$network] ');
+    // Внутренняя цепочка (⇒): rule → селекторы (сверху вниз = chains[1:].reversed).
+    final inner = <String>[];
+    final ruleText = (ruleLabel != null && ruleLabel.isNotEmpty)
+        ? ruleLabel
+        : (rule.isNotEmpty ? rule : 'final');
+    inner.add(ruleText);
+    if (chains.length > 1) inner.addAll(chains.sublist(1).reversed);
+    sb.write(inner.join(' ⇒ '));
+    // Выход во внешний мир (:): финальный node = chains[0] (или outbound-fallback).
+    final node = chains.isNotEmpty
+        ? chains.first
+        : (outbound.isNotEmpty ? outbound : null);
+    if (node != null) sb.write(' : $node');
+    // Снаружи (→): detour-хвост + назначение.
+    final outer = <String>[...detours];
+    final dest = domain.isNotEmpty ? domain : _hostOfDestination;
+    if (dest.isNotEmpty) outer.add(dest);
+    if (outer.isNotEmpty) sb.write(' → ${outer.join(' → ')}');
+    return sb.toString();
+  }
+
+  /// Host из `destination` (`host:port` → `host`); IPv6 в `[..]:port` сохраняем.
+  String get _hostOfDestination {
+    final d = destination;
+    if (d.isEmpty) return '';
+    if (d.startsWith('[')) {
+      final end = d.indexOf(']');
+      return end > 0 ? d.substring(0, end + 1) : d;
+    }
+    final colon = d.lastIndexOf(':');
+    return colon > 0 ? d.substring(0, colon) : d;
+  }
+
   factory CcConnection.fromMap(Map<String, dynamic> m) => CcConnection(
         id: m['id']?.toString() ?? '',
         network: m['network']?.toString() ?? '',

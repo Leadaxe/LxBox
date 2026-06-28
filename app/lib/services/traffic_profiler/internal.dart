@@ -18,6 +18,7 @@ class _ConnSnapshot {
     required this.network,
     required this.chains,
     required this.detours, // §181
+    this.outboundType, // §204
     required this.upBytes,
     required this.downBytes,
     required this.startedAt,
@@ -35,6 +36,7 @@ class _ConnSnapshot {
   final String network;
   final List<String> chains; // §174 — маршрут [node, …selectors]
   final List<String> detours; // §181 — detour-ось [detour, …наружу]
+  final String? outboundType; // §204 — тип финального outbound (для detail 1:1)
   int upBytes;
   int downBytes;
   final DateTime startedAt;

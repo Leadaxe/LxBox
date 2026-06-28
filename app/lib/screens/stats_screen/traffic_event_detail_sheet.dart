@@ -7,6 +7,7 @@ import '../../services/app_info_cache.dart';
 import '../../services/format_utils.dart';
 import '../../services/traffic_profiler.dart';
 import '../../services/process_name.dart';
+import 'routing_section.dart';
 
 /// §160 — детальный bottom-sheet по одному [TrafficEvent] (Live-лента
 /// per-app trace, в перспективе — и Stats→Live).
@@ -142,21 +143,21 @@ class _TrafficEventDetailSheet extends StatelessWidget {
       _copyRow(context, 'Shown because', e.shownBecause ?? ''),
     ]));
 
-    // Routing (§181) — единая цепочка решения + сырые оси для копирования.
-    out.addAll(_group(context, 'Routing', [
-      // Главная трассировка: [net] proc ⇒ rule ⇒ группы : node → detour → domain.
-      _copyRow(context, 'Route', e.routingLine),
-      // §044 — явная строка Rule: правило, через которое попало (или «final»
-      // если ядро rule не отдало — дефолт-маршрут; для DNS rule пуст всегда).
-      _copyRow(context, 'Rule',
-          (e.rule != null && e.rule!.isNotEmpty) ? e.rule! : 'final'),
-      // Сырой маршрут (chains как от ядра) — точные теги для копирования.
-      if (e.outboundChain.isNotEmpty)
-        _copyRow(context, 'Chain', e.outboundChain.join(' / ')),
-      // Detour-ось (транспорт) — только если есть.
-      if (e.detourChain.isNotEmpty)
-        _copyRow(context, 'Detour', e.detourChain.join(' → ')),
-    ]));
+    // Routing (§181/§204) — единый набор строк (routingRows), общий с Conns.
+    // Outbound = outboundChain.first (для event нет отдельного поля); type из
+    // §204-протаскивания. Пустые строки скрывает _copyRow.
+    out.addAll(_group(
+      context,
+      'Routing',
+      routingRows(
+        route: e.routingLine,
+        rule: e.rule ?? '',
+        chain: e.outboundChain,
+        detour: e.detourChain,
+        outbound: e.outboundChain.isNotEmpty ? e.outboundChain.first : '',
+        outboundType: e.outboundType ?? '',
+      ).map((r) => _copyRow(context, r.label, r.value)).toList(),
+    ));
 
     // Traffic — показываем только если есть байты.
     if (e.upBytes != null || e.downBytes != null) {

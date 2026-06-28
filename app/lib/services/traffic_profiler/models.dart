@@ -114,6 +114,7 @@ class TrafficEvent {
     this.port,
     this.outboundChain = const [],
     this.detourChain = const [],
+    this.outboundType,
     this.upBytes,
     this.downBytes,
     this.duration,
@@ -149,6 +150,12 @@ class TrafficEvent {
   /// Отдельно от outboundChain — это куда физически ныряет пакет ПОСЛЕ выбора
   /// сервера, не часть решения маршрута. Пусто для прямых / без detour.
   final List<String> detourChain;
+
+  /// §204 — тип финального outbound (`CcConnection.outboundType`:
+  /// selector/urltest/vless/wireguard/…). Протащен из conn, чтобы detail-секция
+  /// Routing была 1:1 с Conns (строка «Outbound type»). null для DNS / если
+  /// ядро не отдало.
+  final String? outboundType;
   final int? upBytes;
   final int? downBytes;
   final Duration? duration;
@@ -287,6 +294,7 @@ class TrafficEvent {
         port: port,
         outboundChain: outboundChain,
         detourChain: detourChain,
+        outboundType: outboundType, // §204
         upBytes: upBytes,
         downBytes: downBytes,
         duration: duration,
