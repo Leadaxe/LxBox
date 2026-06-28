@@ -88,4 +88,8 @@ class _Methods {
   // §047 — native → Dart incoming intent dispatch (handled on this same
   // MethodChannel via setMethodCallHandler).
   static const automationAction = 'automationAction';
+
+  // §207 — обобщённый pprof-снимок через libbox PProfServer. Один метод на
+  // все профили (goroutine/profile/heap/allocs/block/mutex/threadcreate).
+  static const pprofProfile = 'pprofProfile';
 }

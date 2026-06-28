@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
@@ -211,8 +213,9 @@ class _DebugScreenState extends State<DebugScreen> {
               contentPadding: EdgeInsets.zero,
             ),
           ),
-          // §043: shortcut в Diagnostics tab App Settings'ов — там toggle
-          // "Forward sing-box logs" + Debug API настройки.
+          // §043/§207: shortcut в Diagnostics tab App Settings'ов — там toggle
+          // "Forward sing-box logs" + Debug API + раздел Profiling (полный
+          // набор pprof-кнопок: goroutine/CPU/heap/allocs).
           const PopupMenuDivider(),
           const PopupMenuItem(
             value: _DebugAction.diagnosticsSettings,

@@ -15,6 +15,7 @@ import '../handlers/files.dart';
 import '../handlers/logs.dart';
 import '../handlers/help.dart';
 import '../handlers/ping.dart';
+import '../handlers/pool.dart';
 import '../handlers/profiler.dart';
 import '../handlers/rules.dart';
 import '../handlers/settings.dart';
@@ -167,6 +168,7 @@ class DebugServer {
       ..mount('/state', stateHandler)
       ..mount('/device', deviceHandler)
       ..mount('/config', configHandler)
+      ..mount('/pool', poolHandler) // §208 — снапшот пула round_robin
       ..mount('/logs', logsHandler)
       ..mount('/action', actionHandler)
       ..mount('/files', filesHandler)

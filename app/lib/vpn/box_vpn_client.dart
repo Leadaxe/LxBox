@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
@@ -528,6 +529,63 @@ class BoxVpnClient {
       onTimeoutValue: '',
     );
     return v ?? '';
+  }
+
+  /// §207 — обобщённый pprof-снимок через встроенный libbox `PProfServer`
+  /// (Способ 1): native поднимает pprof-http на loopback по требованию, GET
+  /// `/debug/pprof/<pathAndQuery>`, гасит. Один сервер бесплатно отдаёт весь
+  /// набор `/debug/pprof/*` → один метод; профиль+query задаёт caller
+  /// (напр. `heap?gc=1`, `goroutine?debug=1`, `profile?seconds=10`).
+  ///
+  /// Возвращает сырые байты (текст-профили = UTF-8, бинарные = pprof `.pb`).
+  /// Бросает [PlatformException] (`PPROF_FAILED`) на сетевой/серверной ошибке
+  /// (порт занят / pprof уже активен / нет ядра) — caller решает смягчить или
+  /// показать. `[blockingSeconds]` >0 для CPU `profile` (держит соединение N
+  /// сек) → Dart-таймаут масштабируется. Пустой [Uint8List] на timeout.
+  Future<Uint8List> pprofRaw(
+    String pathAndQuery, {
+    int blockingSeconds = 0,
+  }) async {
+    // CPU-профиль держит соединение `blockingSeconds`, поэтому Dart-таймаут
+    // ДОЛЖЕН масштабироваться и быть БОЛЬШЕ native read-timeout
+    // (`seconds*1000 + 5000`, см. VpnPlugin), иначе Dart оборвёт сбор первым
+    // и вернёт пустой .pb на длинных профилях. Запас поверх native = ещё 5s.
+    // Мгновенные снимки → короткий фиксированный таймаут.
+    final timeout = blockingSeconds > 0
+        ? Duration(seconds: blockingSeconds + _Timeouts.cpuHeadroomSeconds)
+        : _Timeouts.goroutineDump;
+    final bytes = await _invoke<Uint8List>(
+      _Methods.pprofProfile,
+      args: {'pathAndQuery': pathAndQuery},
+      timeout: timeout,
+      onTimeoutValue: Uint8List(0),
+    );
+    return bytes ?? Uint8List(0);
+  }
+
+  /// §207 — goroutine stack-дамп (полные стеки, `debug=2`). Тонкая обёртка
+  /// над [pprofRaw] для DumpBuilder/Debug API: в отличие от счётчика
+  /// `CcStatus.goroutines` даёт стеки. **Никогда не бросает** — на ошибке
+  /// возвращает фолбэк-текст (`goroutine dump unavailable: ...`).
+  Future<String> dumpGoroutines() async {
+    try {
+      final bytes = await pprofRaw('goroutine?debug=2');
+      return bytes.isEmpty
+          ? '<goroutine dump unavailable: empty response (timeout?)>'
+          // pprof отдаёт UTF-8; allowMalformed чтобы не падать на обрезанном
+          // буфере (стек с не-ASCII символами в аргументах фреймов).
+          : utf8.decode(bytes, allowMalformed: true);
+    } on PlatformException catch (e) {
+      return '<goroutine dump unavailable: ${e.message ?? e.code}>';
+    }
+  }
+
+  /// §207 — CPU-профиль за `durationMs` (default 10s) → pprof `.pb`. Ловит
+  /// busy-spin в tight-loop, который один goroutine-снимок может упустить.
+  /// Бросает [PlatformException] (`PPROF_FAILED`). Пустой [Uint8List] на timeout.
+  Future<Uint8List> captureCpuProfile({int durationMs = 10000}) async {
+    final seconds = (durationMs ~/ 1000).clamp(1, 60);
+    return pprofRaw('profile?seconds=$seconds', blockingSeconds: seconds);
   }
 
   /// Recovery action: in-place reload box runtime через

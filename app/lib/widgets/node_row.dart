@@ -24,6 +24,7 @@ class NodeRow extends StatelessWidget {
     this.onViewJson,
     this.onRunUrltest,
     this.onSelectServer,
+    this.onViewPool,
   });
 
   final NodeViewItem item;
@@ -43,6 +44,10 @@ class NodeRow extends StatelessWidget {
   /// (`urltestNow`): «Select server» в меню → подсветка + scroll к выбранному
   /// сервером тегу. Иначе null → пункт меню скрыт.
   final VoidCallback? onSelectServer;
+
+  /// §208 — non-null только для auto-ноды round_robin-канала: «View pool» в меню
+  /// → попап с текущим составом пула (getPool). Иначе null → пункт скрыт.
+  final VoidCallback? onViewPool;
 
   /// Right-side delay label (или PING… / ERR), цвет по latency.
   String get _delayLabel {
@@ -265,6 +270,18 @@ class NodeRow extends StatelessWidget {
               title: const Text('Select server'),
             ),
           ),
+        // §208 — «View pool»: только для auto-ноды round_robin-канала
+        // (onViewPool != null). Попап со слотами пула (getPool).
+        if (onViewPool != null)
+          PopupMenuItem<String>(
+            value: 'view_pool',
+            child: ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.hub_outlined, size: 20),
+              title: const Text('View pool'),
+            ),
+          ),
         if (onViewJson != null) const PopupMenuDivider(),
         if (onViewJson != null)
           PopupMenuItem<String>(
@@ -296,6 +313,8 @@ class NodeRow extends StatelessWidget {
         onPing();
       case 'select_server':
         onSelectServer?.call();
+      case 'view_pool':
+        onViewPool?.call();
       case 'activate':
         onActivate();
       case 'run_urltest':

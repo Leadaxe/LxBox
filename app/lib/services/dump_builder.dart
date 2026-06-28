@@ -28,6 +28,17 @@ class DumpBuilder {
       if (raw.isNotEmpty && raw != '{}') config = raw;
     } catch (_) {}
 
+    // §207 — goroutine stack-дамп встраиваем в пак ТОЛЬКО при активном
+    // туннеле (без ядра `Libbox.dumpStacks()` нечего дампить). CPU-профиль
+    // в JSON не кладём — бинарь .pb шарится отдельным файлом.
+    String? goroutinesStack;
+    try {
+      if ((await BoxVpnClient().getVpnStatus()).isUp) {
+        final s = await BoxVpnClient().dumpGoroutines();
+        if (s.isNotEmpty) goroutinesStack = s;
+      }
+    } catch (_) {}
+
     final vars = await SettingsStorage.getAllVars();
     // Берём live `ServerList`'ы из `SubscriptionController` через
     // DebugRegistry — там после `init()` уже распарсены `nodes` (тело
@@ -66,6 +77,7 @@ class DumpBuilder {
       'stderr_log': stderr,
       'exit_info': exitInfo,
       'logcat_tail': logcatTail,
+      'goroutines_stack': goroutinesStack,  // §207 — null если туннель не активен
     };
 
     final dir = await getTemporaryDirectory();

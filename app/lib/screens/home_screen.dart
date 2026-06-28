@@ -17,6 +17,7 @@ import 'home/widgets/home_drawer.dart';
 import 'home/widgets/home_controls.dart';
 import 'home/widgets/node_list.dart';
 import 'home/widgets/status_chip.dart';
+import '../widgets/pool_view_dialog.dart';
 import 'home/home_menus.dart';
 import 'home/home_dialogs.dart';
 import 'home/node_filter_view_model.dart';
@@ -64,6 +65,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeOutCubic,
       alignment: 0.3,
+    ));
+  }
+
+  /// §208 — попап с составом пула round_robin-канала по его auto-тегу.
+  /// Title = label канала (из groupLabels по базовому tag `<base>-auto`).
+  void _showPool(String autoTag) {
+    final base = autoTag.endsWith('-auto')
+        ? autoTag.substring(0, autoTag.length - '-auto'.length)
+        : autoTag;
+    final label = _controller.state.groupLabels[base] ?? base;
+    unawaited(showPoolDialog(
+      context,
+      autoTag: autoTag,
+      title: label,
+      fetch: _controller.getPool,
     ));
   }
 
@@ -536,6 +552,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 onTapToConnect: () => unawaited(_startWithAutoRefresh()),
                 rowKeyFor: _nodeRowKey, // §203
                 onSelectServer: _scrollToNode, // §203
+                onViewPool: _showPool, // §208
               ),
             ],
           ),

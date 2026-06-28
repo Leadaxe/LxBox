@@ -131,7 +131,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   /// §130 — лог сброса невалидного AWG→WireGuard detour при открытии редактора.
   void _logResetDetour(String removed) {
     AppLog.I.info(
-        '§130: AWG node "$_originalTag" — cleared invalid detour "$removed" '
+        'AWG node "$_originalTag" — cleared invalid detour "$removed" '
         '(AWG cannot run through WireGuard, hangs the core on Android)');
   }
 

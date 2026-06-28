@@ -300,7 +300,7 @@ class SelectableRule {
     if (presetId.isEmpty) {
       throw FormatException(
         'SelectableRule "${json['label'] ?? '<no-label>'}" missing required '
-        '`preset_id` (§067 — legacy entries without preset_id are no longer supported)',
+        '`preset_id` (legacy entries without preset_id are no longer supported)',
       );
     }
     return SelectableRule(

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -121,6 +122,80 @@ void main() {
       });
       await expectLater(
         BoxVpnClient().getAppInfo('com.any.app'),
+        throwsA(isA<PlatformException>()),
+      );
+    });
+  });
+
+  // §207 — pprof-снимки через единый native-метод `pprofProfile`
+  // (Dart передаёт готовый pathAndQuery).
+  group('BoxVpnClient.pprof (§207)', () {
+    test('pprofRaw passes pathAndQuery verbatim to the native call', () async {
+      late MethodCall captured;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        captured = call;
+        return Uint8List.fromList([1, 2, 3]);
+      });
+      final bytes = await BoxVpnClient().pprofRaw('heap?gc=1');
+      expect(captured.method, 'pprofProfile');
+      expect(captured.arguments, {'pathAndQuery': 'heap?gc=1'});
+      expect(bytes, [1, 2, 3]);
+    });
+
+    test('dumpGoroutines requests goroutine?debug=2 and decodes text',
+        () async {
+      late MethodCall captured;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        captured = call;
+        return Uint8List.fromList('goroutine 1 [running]:'.codeUnits);
+      });
+      final text = await BoxVpnClient().dumpGoroutines();
+      expect(captured.arguments['pathAndQuery'], 'goroutine?debug=2');
+      expect(text, 'goroutine 1 [running]:');
+    });
+
+    test('dumpGoroutines decodes UTF-8 bytes correctly (not Latin-1)',
+        () async {
+      // Multi-byte UTF-8 (Cyrillic «тест») would be mojibake under
+      // String.fromCharCodes; utf8.decode round-trips it.
+      final utf8Bytes = Uint8List.fromList(utf8.encode('goroutine тест ✓'));
+      messenger.setMockMethodCallHandler(channel, (call) async => utf8Bytes);
+      final text = await BoxVpnClient().dumpGoroutines();
+      expect(text, 'goroutine тест ✓');
+    });
+
+    test('dumpGoroutines NEVER throws — PlatformException → fallback text',
+        () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        throw PlatformException(code: 'PPROF_FAILED', message: 'port busy');
+      });
+      final text = await BoxVpnClient().dumpGoroutines();
+      expect(text, contains('unavailable'));
+      expect(text, contains('port busy'));
+    });
+
+    test('captureCpuProfile maps durationMs→seconds (clamped) into pathAndQuery',
+        () async {
+      late MethodCall captured;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        captured = call;
+        return Uint8List(0);
+      });
+      await BoxVpnClient().captureCpuProfile(durationMs: 10000);
+      expect(captured.arguments['pathAndQuery'], 'profile?seconds=10');
+
+      // durationMs below 1s clamps to 1 (pprof requires seconds>=1).
+      await BoxVpnClient().captureCpuProfile(durationMs: 200);
+      expect(captured.arguments['pathAndQuery'], 'profile?seconds=1');
+    });
+
+    test('captureCpuProfile propagates PlatformException (surfaced in UI)',
+        () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        throw PlatformException(code: 'PPROF_FAILED', message: 'boom');
+      });
+      await expectLater(
+        BoxVpnClient().captureCpuProfile(),
         throwsA(isA<PlatformException>()),
       );
     });

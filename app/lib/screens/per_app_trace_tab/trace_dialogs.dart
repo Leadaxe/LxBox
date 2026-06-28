@@ -42,7 +42,7 @@ void showHelpDialog(BuildContext context) {
           '• Connections — per-connection timeline. Tap a row to inline-expand '
           '(CNAME, all IPs, issues); button [View in Domains →] jumps to '
           'aggregated breakdown.\n\n'
-          'Confidence badges (§048):\n'
+          'Confidence badges:\n'
           '  • (default) — verified: router log explicitly named the target\n'
           '  • 🔗 sec — secondary: matched via secondary packages (WebView etc)\n'
           '  • 〽 — inferred: a recently DNS-resolved IP belongs to the target\n'
