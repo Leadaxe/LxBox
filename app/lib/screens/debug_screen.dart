@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
@@ -6,7 +8,9 @@ import '../models/debug_entry.dart';
 import '../services/app_log.dart';
 import '../services/dump_builder.dart';
 import '../services/error_format.dart';
+import '../services/profile_dump_writer.dart';
 import '../services/stderr_reader.dart';
+import '../vpn/box_vpn_client.dart';
 import 'app_settings_screen.dart';
 
 class DebugScreen extends StatefulWidget {
@@ -16,12 +20,22 @@ class DebugScreen extends StatefulWidget {
   State<DebugScreen> createState() => _DebugScreenState();
 }
 
-enum _DebugAction { clear, copy, diagnosticsSettings }
+enum _DebugAction {
+  clear,
+  copy,
+  diagnosticsSettings,
+  captureGoroutines, // §207
+  captureCpuProfile, // §207
+}
 
 class _DebugScreenState extends State<DebugScreen> {
   DebugFilter _sourceFilter = DebugFilter.all;
   final Set<DebugLevel> _levels = {...DebugLevel.values};
   bool _buildingDump = false;
+  // §207 — pprof capture in flight (goroutine dump / CPU profile). Disables
+  // both menu items to prevent overlapping pprof servers on the same port.
+  bool _capturing = false;
+  final _vpn = BoxVpnClient();
   // Text search — case-insensitive substring match по message (night T6-3).
   String _searchQuery = '';
   final _searchController = TextEditingController();
@@ -188,6 +202,10 @@ class _DebugScreenState extends State<DebugScreen> {
               _copyAll(filtered);
             case _DebugAction.diagnosticsSettings:
               _openDiagnosticsSettings();
+            case _DebugAction.captureGoroutines:
+              unawaited(_captureGoroutines());
+            case _DebugAction.captureCpuProfile:
+              unawaited(_captureCpuProfile());
           }
         },
         itemBuilder: (_) => [
@@ -223,9 +241,92 @@ class _DebugScreenState extends State<DebugScreen> {
               contentPadding: EdgeInsets.zero,
             ),
           ),
+          // §207 — on-device profiling of the running core (libbox
+          // PProfServer). Gated at tap time on VPN being up.
+          const PopupMenuDivider(),
+          PopupMenuItem(
+            value: _DebugAction.captureGoroutines,
+            enabled: !_capturing,
+            child: const ListTile(
+              leading: Icon(Icons.account_tree_outlined),
+              title: Text('Capture goroutine dump'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+          PopupMenuItem(
+            value: _DebugAction.captureCpuProfile,
+            enabled: !_capturing,
+            child: const ListTile(
+              leading: Icon(Icons.speed_outlined),
+              title: Text('Capture CPU profile (10s)'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
         ],
       ),
     ];
+  }
+
+  /// §207 — snapshot the running core's goroutine stacks and open Share.
+  /// Gated on the tunnel being up (pprof server needs a live core).
+  Future<void> _captureGoroutines() async {
+    if (_capturing) return;
+    if (!(await _vpn.getVpnStatus()).isUp) {
+      _snack('VPN must be running to capture a goroutine dump.');
+      return;
+    }
+    setState(() => _capturing = true);
+    try {
+      final text = await _vpn.dumpGoroutines();
+      final count = RegExp(r'^goroutine \d+', multiLine: true)
+          .allMatches(text)
+          .length;
+      final path = await ProfileDumpWriter.writeGoroutines(text);
+      final name = path.split('/').last;
+      // ignore: deprecated_member_use
+      await Share.shareXFiles(
+        [XFile(path, name: name, mimeType: 'text/plain')],
+        text: 'L×Box goroutine dump${count > 0 ? ' — $count goroutines' : ''}',
+        subject: name,
+      );
+    } catch (e) {
+      _snack('Capture failed: ${formatUserError(e)}');
+    } finally {
+      if (mounted) setState(() => _capturing = false);
+    }
+  }
+
+  /// §207 — record a 10s CPU profile (pprof .pb) and open Share. Catches
+  /// busy-spin a single goroutine snapshot may miss.
+  Future<void> _captureCpuProfile() async {
+    if (_capturing) return;
+    if (!(await _vpn.getVpnStatus()).isUp) {
+      _snack('VPN must be running to capture a CPU profile.');
+      return;
+    }
+    setState(() => _capturing = true);
+    _snack('Profiling CPU for 10s…');
+    try {
+      final bytes = await _vpn.captureCpuProfile(durationMs: 10000);
+      if (bytes.isEmpty) {
+        _snack('CPU profile was empty (timeout?).');
+        return;
+      }
+      final path = await ProfileDumpWriter.writeCpuProfile(bytes);
+      final name = path.split('/').last;
+      // ignore: deprecated_member_use
+      await Share.shareXFiles(
+        [XFile(path, name: name, mimeType: 'application/octet-stream')],
+        text: 'L×Box CPU profile — analyze with: go tool pprof $name',
+        subject: name,
+      );
+    } catch (e) {
+      _snack('Capture failed: ${formatUserError(e)}');
+    } finally {
+      if (mounted) setState(() => _capturing = false);
+    }
   }
 
   void _openDiagnosticsSettings() {

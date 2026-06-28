@@ -2,11 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../main.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/transport/server.dart';
+import '../services/error_format.dart';
 import '../services/haptic_service.dart';
+import '../services/profile_dump_writer.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/subscription_identity.dart';
 import '../services/subscription/user_agent.dart';
@@ -53,6 +56,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _autoUpdateSubs = true;
   bool _autoCheckUpdates = true;
   bool _loaded = false;
+  // §207 — pprof capture in flight (goroutine dump / CPU profile). Guards
+  // both buttons so a double-tap can't spin two servers on the same port.
+  bool _capturing = false;
 
   bool _debugEnabled = false;
   String _debugToken = '';
@@ -680,6 +686,77 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       onCoreLogsChanged: (val) => unawaited(_toggleCoreLogs(val)),
       onQuitApp: () => unawaited(_confirmQuitApp()),
       onAutoRecordWifiChanged: (val) => unawaited(_toggleAutoRecordWifi(val)),
+      capturing: _capturing,
+      onCaptureGoroutines: () => unawaited(_captureGoroutines()),
+      onCaptureCpuProfile: () => unawaited(_captureCpuProfile()),
+    );
+  }
+
+  /// §207 — снять goroutine stack-дамп (libbox PProfServer) и открыть Share.
+  /// Гейт: туннель должен быть активен (без ядра pprof не поднять). `_capturing`
+  /// дизейблит обе кнопки, чтобы не поднять два сервера на одном порту.
+  Future<void> _captureGoroutines() async {
+    if (_capturing) return;
+    if (!(await _vpn.getVpnStatus()).isUp) {
+      _diagSnack('VPN must be running to capture a goroutine dump.');
+      return;
+    }
+    setState(() => _capturing = true);
+    try {
+      final text = await _vpn.dumpGoroutines();
+      final count = RegExp(r'^goroutine \d+', multiLine: true)
+          .allMatches(text)
+          .length;
+      final path = await ProfileDumpWriter.writeGoroutines(text);
+      final name = path.split('/').last;
+      // ignore: deprecated_member_use
+      await Share.shareXFiles(
+        [XFile(path, name: name, mimeType: 'text/plain')],
+        text: 'L×Box goroutine dump${count > 0 ? ' — $count goroutines' : ''}',
+        subject: name,
+      );
+    } catch (e) {
+      _diagSnack('Capture failed: ${formatUserError(e)}');
+    } finally {
+      if (mounted) setState(() => _capturing = false);
+    }
+  }
+
+  /// §207 — снять CPU-профиль (pprof .pb, 10s) и открыть Share. Блокирует
+  /// ~10s — обе кнопки дизейблятся через `_capturing` на время захвата.
+  Future<void> _captureCpuProfile() async {
+    if (_capturing) return;
+    if (!(await _vpn.getVpnStatus()).isUp) {
+      _diagSnack('VPN must be running to capture a CPU profile.');
+      return;
+    }
+    setState(() => _capturing = true);
+    _diagSnack('Profiling CPU for 10s…');
+    try {
+      final bytes = await _vpn.captureCpuProfile(durationMs: 10000);
+      if (bytes.isEmpty) {
+        _diagSnack('CPU profile was empty (timeout?).');
+        return;
+      }
+      final path = await ProfileDumpWriter.writeCpuProfile(bytes);
+      final name = path.split('/').last;
+      // ignore: deprecated_member_use
+      await Share.shareXFiles(
+        [XFile(path, name: name, mimeType: 'application/octet-stream')],
+        text: 'L×Box CPU profile — analyze with: go tool pprof $name',
+        subject: name,
+      );
+    } catch (e) {
+      _diagSnack('Capture failed: ${formatUserError(e)}');
+    } finally {
+      if (mounted) setState(() => _capturing = false);
+    }
+  }
+
+  void _diagSnack(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text), duration: const Duration(seconds: 2)),
     );
   }
 

@@ -206,6 +206,7 @@ GET /diag/exit-info                            ApplicationExitInfo (last 5 syste
 GET /diag/logcat?count=N&level=L               Logcat tail of our process (N=50..5000, default 1000; level=V|D|I|W|E|F, default E).
 GET /diag/stderr                               filesDir/stderr.log content (Go panic stacktrace from libbox).
 GET /diag/applog?prev=true|false|all           AppLog entries; `prev` filters by fromPreviousSession (default `all`).
+GET /diag/pprof?profile=P&seconds=N            §207 pprof snapshot via libbox PProfServer (tunnel must be up). P=goroutine|profile|heap|allocs|block|mutex|threadcreate (default goroutine). seconds=1..60 for CPU `profile` only (default 10, blocks). goroutine/heap/etc → text/plain; profile → .pb (go tool pprof).
 
 === Settings (scoped writes) ===
 
@@ -384,6 +385,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/diag/logcat', 'params': {'count': '50..5000', 'level': 'V|D|I|W|E|F'}, 'description': 'Logcat tail of our process'},
     {'method': 'GET', 'path': '/diag/stderr', 'description': 'filesDir/stderr.log content (Go panic stacktrace)'},
     {'method': 'GET', 'path': '/diag/applog', 'params': {'prev': 'true|false|all'}, 'description': 'AppLog entries (filter by fromPreviousSession)'},
+    {'method': 'GET', 'path': '/diag/pprof', 'params': {'profile': 'goroutine|profile|heap|allocs|block|mutex|threadcreate', 'seconds': '1..60 (CPU profile only)'}, 'description': '§207 pprof snapshot via libbox PProfServer (tunnel must be up)'},
     // Settings (scoped writes — §037 etc)
     {'method': 'PUT', 'path': '/settings/route_final', 'body': '{"outbound":"..."}', 'description': 'Set route.final outbound'},
     {'method': 'GET|PUT', 'path': '/settings/interrupt_on_switch', 'body': '{"enabled":bool}', 'description': 'Toggle interrupt connections on node switch'},

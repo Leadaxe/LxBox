@@ -49,4 +49,15 @@ class _Timeouts {
 
   /// `resetNetwork` — лёгкий reset, должен быть мгновенным. Запас.
   static const resetNet = Duration(seconds: 5);
+
+  /// §207 goroutine/heap/block/mutex снимки — мгновенные текстовые pprof-дампы
+  /// (без блокирующего ожидания). 5s — щедрый запас на поднятие сервера, GET и
+  /// маршалинг дампа через MethodChannel.
+  static const goroutineDump = Duration(seconds: 5);
+
+  /// §207 CPU-профиль `?seconds=N` держит соединение N секунд. Dart-таймаут =
+  /// `N + cpuHeadroomSeconds` и ОБЯЗАН быть больше native read-timeout
+  /// (`N*1000 + 5000` в PProfClient), иначе Dart оборвёт сбор первым → пустой
+  /// .pb на длинных профилях. 10s запаса > 5s native → native всегда успевает.
+  static const cpuHeadroomSeconds = 10;
 }

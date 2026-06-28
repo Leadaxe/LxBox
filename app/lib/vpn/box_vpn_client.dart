@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
@@ -529,6 +530,67 @@ class BoxVpnClient {
     );
     return v ?? '';
   }
+
+  /// §207 — обобщённый pprof-снимок через встроенный libbox `PProfServer`
+  /// (Способ 1): native поднимает pprof-http на loopback по требованию, GET
+  /// `/debug/pprof/<profile>`, гасит. Один сервер бесплатно отдаёт весь набор,
+  /// поэтому один метод на все профили:
+  /// `goroutine|profile|heap|allocs|block|mutex|threadcreate`.
+  ///
+  /// Возвращает сырые байты: текст-профили (`?debug=2`) = UTF-8, CPU
+  /// `profile` = pprof `.pb`. Бросает [PlatformException] (`PPROF_FAILED`)
+  /// на сетевой/серверной ошибке (порт занят / pprof уже активен / нет ядра)
+  /// — caller решает смягчить или показать. `[seconds]` нужен только для CPU
+  /// `profile` (длительность записи); для остальных игнорируется.
+  /// Пустой [Uint8List] на timeout.
+  Future<Uint8List> pprofProfile({
+    required String profile,
+    int seconds = 10,
+  }) async {
+    final isCpu = profile == 'profile';
+    // CPU-профиль держит соединение `seconds` секунд, поэтому Dart-таймаут
+    // ДОЛЖЕН масштабироваться с `seconds` и быть БОЛЬШЕ native read-timeout
+    // (`seconds*1000 + 5000`, см. PProfClient.cpuProfile), иначе Dart
+    // оборвёт сбор первым и вернёт пустой .pb на длинных профилях (напр.
+    // /diag/pprof?profile=profile&seconds=45). Запас поверх native = ещё 5s.
+    // Прочие снимки мгновенны → короткий фиксированный таймаут.
+    final timeout = isCpu
+        ? Duration(seconds: seconds + _Timeouts.cpuHeadroomSeconds)
+        : _Timeouts.goroutineDump;
+    final bytes = await _invoke<Uint8List>(
+      _Methods.pprofProfile,
+      args: {'profile': profile, 'seconds': seconds},
+      timeout: timeout,
+      onTimeoutValue: Uint8List(0),
+    );
+    return bytes ?? Uint8List(0);
+  }
+
+  /// §207 — goroutine stack-дамп (стеки всех горутин). Тонкая обёртка над
+  /// [pprofProfile] для UI-кнопки: в отличие от счётчика `CcStatus.goroutines`
+  /// даёт стеки. **Никогда не бросает** — на ошибке возвращает фолбэк-текст
+  /// (`goroutine dump unavailable: ...`), чтобы кнопка не падала молча.
+  /// Ограничение: при рантайм-дедлоке ядра http не ответит (timeout → пусто),
+  /// но для busy-spin/100% CPU сервер жив.
+  Future<String> dumpGoroutines() async {
+    try {
+      final bytes = await pprofProfile(profile: 'goroutine');
+      return bytes.isEmpty
+          ? '<goroutine dump unavailable: empty response (timeout?)>'
+          // pprof отдаёт UTF-8; allowMalformed чтобы не падать на обрезанном
+          // буфере (стек с не-ASCII символами в аргументах фреймов).
+          : utf8.decode(bytes, allowMalformed: true);
+    } on PlatformException catch (e) {
+      return '<goroutine dump unavailable: ${e.message ?? e.code}>';
+    }
+  }
+
+  /// §207 — CPU-профиль за `durationMs` (default 10s) → pprof `.pb`. Ловит
+  /// busy-spin в tight-loop, который один goroutine-снимок может упустить.
+  /// Бросает [PlatformException] (`PPROF_FAILED`) — callsite показывает
+  /// snackbar. Пустой [Uint8List] на timeout.
+  Future<Uint8List> captureCpuProfile({int durationMs = 10000}) async =>
+      pprofProfile(profile: 'profile', seconds: (durationMs ~/ 1000).clamp(1, 60));
 
   /// Recovery action: in-place reload box runtime через
   /// `CommandServer.startOrReloadService`. **Не убивает** Android Service —

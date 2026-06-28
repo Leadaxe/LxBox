@@ -40,6 +40,9 @@ class DiagnosticsTab extends StatelessWidget {
     required this.onCoreLogsChanged,
     required this.onQuitApp,
     required this.onAutoRecordWifiChanged,
+    required this.capturing,
+    required this.onCaptureGoroutines,
+    required this.onCaptureCpuProfile,
   });
 
   final bool loaded;
@@ -76,6 +79,12 @@ class DiagnosticsTab extends StatelessWidget {
   final ValueChanged<bool> onCoreLogsChanged;
   final VoidCallback onQuitApp;
   final ValueChanged<bool> onAutoRecordWifiChanged;
+
+  /// §207 — снять goroutine stack-дамп / CPU-профиль (libbox PProfServer).
+  /// `capturing` = захват в процессе → обе кнопки disabled (один сервер/порт).
+  final bool capturing;
+  final VoidCallback onCaptureGoroutines;
+  final VoidCallback onCaptureCpuProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -294,6 +303,56 @@ class DiagnosticsTab extends StatelessWidget {
                 onPressed: loaded ? onQuitApp : null,
                 icon: const Icon(Icons.logout, size: 18),
                 label: const Text('Quit & reopen app'),
+              ),
+            ],
+          ),
+        ),
+        // §207 — on-device profiling. Snapshots the running core's goroutine
+        // stacks (deadlock/leak) and a 10s CPU profile (busy-spin). Both go
+        // through libbox PProfServer — VPN must be running. Captured file
+        // opens the system Share sheet.
+        const Divider(height: 8),
+        Text('Profiling', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Capture a diagnostic snapshot of the running core and share '
+                'it. Requires the VPN to be connected.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: (loaded && !capturing) ? onCaptureGoroutines : null,
+                icon: const Icon(Icons.account_tree_outlined, size: 18),
+                label: const Text('Capture goroutine dump'),
+              ),
+              const SizedBox(height: 6),
+              OutlinedButton.icon(
+                onPressed: (loaded && !capturing) ? onCaptureCpuProfile : null,
+                icon: capturing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.speed_outlined, size: 18),
+                label: const Text('Capture CPU profile (10s)'),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Analyze the CPU profile with: go tool pprof cpu-*.pb',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
           ),

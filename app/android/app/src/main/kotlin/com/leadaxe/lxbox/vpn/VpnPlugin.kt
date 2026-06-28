@@ -690,6 +690,43 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
 
+            // §207 — обобщённый pprof-снимок через встроенный libbox
+            // `PProfServer` (Способ 1): по требованию поднимаем pprof-http на
+            // loopback, GET /debug/pprof/<profile>, гасим. http в проде не
+            // висит. Один метод на все профили (goroutine/profile/heap/...):
+            // сервер всё равно отдаёт весь набор бесплатно. Возвращает
+            // ByteArray (текст-профили = UTF-8 байты, CPU = .pb). На ошибке
+            // (занятые порты / pprof уже активен) — result.error; смягчение
+            // до фолбэк-текста для goroutine-кнопки делает Dart-слой. IO-поток:
+            // сетевой GET (и до 60s ожидания CPU) нельзя на main. См. PProfClient.
+            "pprofProfile" -> {
+                val profile = call.argument<String>("profile") ?: "goroutine"
+                val seconds = (call.argument<Int>("seconds") ?: 10).coerceIn(1, 60)
+                pluginScope.launch {
+                    try {
+                        val bytes = withContext(Dispatchers.IO) {
+                            when (profile) {
+                                // Читаемые снимки (?debug=2). heap/allocs тоже
+                                // отдаём текстом для прямого чтения.
+                                "goroutine", "heap", "allocs", "block",
+                                "mutex", "threadcreate" ->
+                                    PProfClient.fetch("$profile?debug=2",
+                                        readTimeoutMs = 5000)
+                                // CPU — бинарный .pb, держит соединение `seconds`.
+                                "profile" -> PProfClient.cpuProfile(seconds = seconds)
+                                else -> throw IllegalArgumentException(
+                                    "unknown pprof profile: $profile")
+                            }
+                        }
+                        result.success(bytes)
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "pprofProfile($profile) failed", t)
+                        result.error("PPROF_FAILED",
+                            t.message ?: t.javaClass.simpleName, null)
+                    }
+                }
+            }
+
             else -> result.notImplemented()
         }
     }
