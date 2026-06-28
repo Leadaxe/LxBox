@@ -42,6 +42,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   late final SubscriptionController _subController;
   late final AutoUpdater _autoUpdater;
 
+  /// §203 — per-tag GlobalKey'и строк node-list'а для `Scrollable.ensureVisible`
+  /// («Select server» в меню auto-ноды скроллит к выбранному urltest-серверу).
+  /// Ленивая карта: ключ на тег создаётся один раз и переживает rebuild'ы
+  /// (иначе ensureVisible получил бы свежий несмонтированный context).
+  final Map<String, GlobalKey> _nodeRowKeys = {};
+
+  GlobalKey _nodeRowKey(String tag) =>
+      _nodeRowKeys.putIfAbsent(tag, () => GlobalKey());
+
+  /// §203 — подсветить ноду [tag] и best-effort проскроллить к ней. Подсветка
+  /// ставится всегда (state); скролл — только если строка смонтирована
+  /// (ensureVisible по её GlobalKey). Дальняя нода в ленивом списке может быть
+  /// не построена — тогда подсветка останется, юзер увидит её при прокрутке.
+  void _scrollToNode(String tag) {
+    _controller.setHighlightedNode(tag);
+    final ctx = _nodeRowKeys[tag]?.currentContext;
+    if (ctx == null) return;
+    unawaited(Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+      alignment: 0.3,
+    ));
+  }
+
   /// §101 — future от `_controller.init()`: bootstrap в
   /// `_initSubsAndAutoUpdate` ждёт его вместо слепой задержки 100ms.
   late final Future<void> _controllerInit;
@@ -509,6 +534,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 onRestoreFromBackup: () =>
                     restoreFromBackup(context, _subController, _autoUpdater),
                 onTapToConnect: () => unawaited(_startWithAutoRefresh()),
+                rowKeyFor: _nodeRowKey, // §203
+                onSelectServer: _scrollToNode, // §203
               ),
             ],
           ),

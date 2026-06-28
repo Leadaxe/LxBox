@@ -37,6 +37,8 @@ class HomeNodeList extends StatelessWidget {
     required this.state,
     required this.onRestoreFromBackup,
     required this.onTapToConnect,
+    required this.rowKeyFor,
+    required this.onSelectServer,
   });
 
   final HomeController controller;
@@ -47,6 +49,11 @@ class HomeNodeList extends StatelessWidget {
   final HomeState state;
   final Future<void> Function() onRestoreFromBackup;
   final VoidCallback onTapToConnect;
+
+  /// §203 — per-tag GlobalKey строки (для scroll-to-node) + колбэк «перейти к
+  /// выбранному urltest-серверу» (Select server в меню auto-ноды).
+  final GlobalKey Function(String tag) rowKeyFor;
+  final void Function(String tag) onSelectServer;
 
   @override
   Widget build(BuildContext context) {
@@ -276,11 +283,18 @@ class HomeNodeList extends StatelessWidget {
             onRunUrltest: isUrltestGroup
                 ? () => unawaited(controller.runGroupUrltest(tag))
                 : null,
+            // §203 — для auto/urltest-ноды с текущим выбором: «перейти к
+            // выбранному серверу» (подсветка + scroll). Иначе null → пункт скрыт.
+            onSelectServer:
+                urltestNow != null ? () => onSelectServer(urltestNow) : null,
           ),
         );
+        // §203 — GlobalKey на сам row (для Scrollable.ensureVisible); reorder-key
+        // остаётся ValueKey('node-$tag') (его требует ReorderableListView).
+        final keyedRow = KeyedSubtree(key: rowKeyFor(tag), child: row);
         // Pinned ряды — без grab strip.
         if (i < pinnedCount) {
-          return KeyedSubtree(key: ValueKey('node-$tag'), child: row);
+          return KeyedSubtree(key: ValueKey('node-$tag'), child: keyedRow);
         }
         // §098 — manual-режим: видимый grab-strip слева (как routing/DNS/subs),
         // immediate-drag (dedicated handle не конфликтует со scroll-ареной).
@@ -292,7 +306,7 @@ class HomeNodeList extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ReorderGrabStrip(index: i),
-                  Expanded(child: row),
+                  Expanded(child: keyedRow),
                 ],
               ),
             ),
@@ -305,7 +319,7 @@ class HomeNodeList extends StatelessWidget {
           child: LayoutBuilder(
             builder: (ctx, c) => Stack(
               children: [
-                row,
+                keyedRow,
                 Positioned(
                   left: 0,
                   top: 0,
