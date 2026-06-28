@@ -131,23 +131,15 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     // §117: template-серверы — обёртки `{description, enabled, vars?, server}`.
     final templateByTag = templateDnsServersByTag(templateServersRaw);
 
-    // §117: активные каналы для outbound-пикера vars.
-    final storedGroups = await SettingsStorage.getEnabledGroups();
-    final activeGroupTags = <String>{};
-    if (storedGroups.isEmpty) {
-      for (final g in template.presetGroups) {
-        if (g.defaultEnabled) activeGroupTags.add(g.tag);
-      }
-    } else {
-      activeGroupTags.addAll(storedGroups);
-    }
-    activeGroupTags.add('vpn-1'); // required, как в routing
+    // §125: активные каналы для outbound-пикера vars (storage, не template).
+    // vpn-1 присутствует required-инвариантом модели.
+    final channels = await SettingsStorage.getChannels();
     final outboundOptions = <OutboundOption>[
       const OutboundOption(value: 'direct-out', label: 'direct'),
-      for (final g in template.presetGroups)
-        if (activeGroupTags.contains(g.tag))
+      for (final c in channels)
+        if (c.enabled || c.isRequired)
           OutboundOption(
-              value: g.tag, label: g.label.isNotEmpty ? g.label : g.tag),
+              value: c.tag, label: c.label.isNotEmpty ? c.label : c.tag),
     ];
 
     // §033: build template rules map by name

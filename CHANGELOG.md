@@ -6,7 +6,44 @@
 
 ---
 
-## [Unreleased]
+## [2.6.0] — 2026-06-28
+
+Настраиваемые каналы роутинга (§125): каналы переехали из статичного шаблона в
+storage и стали полноценными CRUD-объектами — своё имя, regex node-filter (с
+инверсией), default-regex, персональный auto-двойник (urltest) и галки
+`direct`/`block`/`interrupt`. Вокруг — серия UX-доводок главного экрана и
+роутинга (§195–202): сохранение фильтра с главной в канал, пин активной ноды,
+block-outbound с защитой от бессмысленного пинга, и лечение висячих ссылок на
+выключенный канал прямо в storage.
+
+### Added
+
+- **§125 — настраиваемые каналы (configurable channels)** ([feature spec](docs/spec/features/125%20configurable-channels/), [channel.dart](app/lib/models/channel.dart) + [channels.dart](app/lib/services/settings_storage/channels.dart) + [channel_edit_screen.dart](app/lib/screens/channel_edit_screen.dart)). Каналы роутинга (`vpn-1..vpn-4` + `✨auto`) были статичны: юзер мог только включить/выключить их тоглом. Теперь — полноценно настраиваемые объекты с CRUD. Каналы переехали из `wizard_template.json` (`preset_groups[]`) в storage (`channels[]`); template стал seed'ом на первый запуск (one-shot миграция `enabled_groups[]` → `channels[]`). Возможности:
+  - **CRUD** — создавать (до 10 каналов) и удалять (кроме `vpn-1`). Удаление переводит ссылки на удалённый канал (`route_final` / custom-rule outbound) на `vpn-1`.
+  - **Title** — менять отображаемое имя канала («Моя Германия» вместо «vpn-1»); видно в home-dropdown и роутинг-пикерах.
+  - **Galки селектора** — `include direct-out`, `include block` (§201), `interrupt connections on switch`.
+  - **Regex node-filter** — одна regex по итоговому tag ноды (как §048 на главной); в канал попадают только matched-ноды. Снимает прежнее «все selector делят один набор нод». Пусто/невалидно → все ноды. Инверсия (`!`-тогл, §197) — исключающий фильтр.
+  - **Default-regex** — первая matched нода становится `options.default`.
+  - **Auto-двойник** — галка `include auto` генерирует парный urltest `<tag>-auto` (ноды канала, без direct/auto) с настраиваемыми url/interval/tolerance/idle/interrupt. Глобальный `✨auto` больше не отдельный канал — у каждого канала свой двойник.
+  - Полноэкранный редактор канала (back-guard Save/Keep/Discard) с live-превью regex (matched N/total + выбранная default-нода).
+
+- **§195 — Сохранить regex-фильтр с главной в активный канал** ([task spec](docs/spec/tasks/195-save-home-filter-to-channel.md), [node_list.dart](app/lib/screens/home/widgets/node_list.dart) + [filter_widgets.dart](app/lib/screens/home/filter_widgets.dart)). В regex-поле фильтра на главной справа от `×` — кнопка 💾 (видна при непустом валидном паттерне + наличии активного канала). Клик → диалог «Channel filter / Default» → открывается редактор канала с предзаполненным полем (явное сохранение, не тихое), юзер видит куда легло значение и сохраняет через Save. Инверсия фильтра (§197) переносится вместе с паттерном. Мост §048-песочница → §125-канал.
+
+- **§196 — Активная нода пинится вверху после direct/auto** ([task spec](docs/spec/tasks/196-active-node-pinned-after-direct-auto.md), [home_state.dart](app/lib/models/home_state.dart)). Текущая выбранная нода группы закрепляется в списке сразу после direct/auto при ЛЮБОЙ сортировке (не за тоглом) — всегда на виду.
+
+- **§197 — Инверсия node_filter канала** ([task spec](docs/spec/tasks/197-channel-node-filter-invert.md), [channel.dart](app/lib/models/channel.dart) + [channel_edit_screen.dart](app/lib/screens/channel_edit_screen.dart)). `!`-тогл (как в §048-фильтре) слева от поля node-filter в редакторе канала: инвертирует смысл — в канал попадают ноды, чей tag НЕ матчит regex (исключающий фильтр, напр. «всё КРОМЕ bypass»). Отдельный bool `node_filter_invert`. Пустой фильтр → инверсия игнорируется. Только для node_filter (default_filter без инверсии).
+
+- **§198 — Имена каналов с цифрой-в-кружке** ([channel_edit_screen.dart](app/lib/screens/channel_edit_screen.dart) + [wizard_template.json](app/assets/wizard_template.json)). Seed-имена каналов из template укорочены до 2 строк (компактный редактор), дефолтные label получают цифру-в-кружке (①②③④) вместо «vpn-N».
+
+- **§199 — Приоритет сервера в строке auto** ([node_row.dart](app/lib/widgets/node_row.dart)). В строке auto/urltest-ноды на главной выбранный сервер (`→ <нода>`) важнее транспорта: транспорт обрезается первым при нехватке места, сервер виден всегда.
+
+- **§200 — Warning: фильтр канала отсёк все ноды** ([build_config.dart](app/lib/services/builder/build_config.dart)). Когда per-channel node_filter (с учётом инверсии) не пропустил ни одной ноды И в подписке ноды были — билдер добавляет в баннер конфига предупреждение «Channel "X" (vpn-N): node filter matched no nodes — traffic is blocked (default), or use direct». Не варнит при пустом фильтре или пустой подписке.
+
+- **§201 — Block-outbound для каналов** ([task spec](docs/spec/tasks/201-block-outbound-for-channels.md), [build_config.dart](app/lib/services/builder/build_config.dart) + [channel_edit_screen.dart](app/lib/screens/channel_edit_screen.dart)). Добавлен системный block-outbound `{type: block, tag: block}` (дроп трафика; ядро rc.10 поддерживает) по образцу `direct-out`. Галка «Include block» в редакторе канала добавляет block опцией селектора. В route-final пикере block всегда доступен (последним в списке) и покрашен красным (как reject в правилах). На главной block показывается с иконкой `Icons.block`, закреплён вверху, **не пингуется** (urltest для block всегда вернул бы ERR — пункт Ping выключен, delay-бейдж скрыт, из mass-ping исключён). **Fallback пустого канала** (фильтр отсёк всё) теперь = `[block, direct-out]` с `default: block` — безопаснее блокировать, чем выпускать трафик мимо VPN; direct остаётся доступной опцией.
+
+### Fixed
+
+- **§202 — dangling channel-ссылки лечатся в storage при выключении канала** ([task spec](docs/spec/tasks/202-heal-channel-refs-on-disable.md), [channels.dart](app/lib/services/settings_storage/channels.dart)). Если `route_final` или custom-rule `outbound` указывали на канал, который затем **выключили** (не удалили), деградировал только выхлоп билдера (→ vpn-1 при сборке), а в storage ссылка оставалась висеть на выключенном теге — приходилось вручную пересохранять правило. Теперь переход канала `enabled: true → false` чинит storage немедленно (как при удалении, §125 F4.5): висячие ссылки → `vpn-1`. Необратимо — повторное включение не воскрешает старую ссылку. detour-ссылки по-прежнему деградирует билдер (§172).
 
 ## [2.5.2] — 2026-06-27
 

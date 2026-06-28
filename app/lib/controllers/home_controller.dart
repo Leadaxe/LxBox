@@ -48,6 +48,10 @@ class HomeController extends ChangeNotifier
   /// connections-доставку (single-shot, без pull). false на свежем движке.
   bool _didColdStartResync = false;
 
+  /// §125 — кеш tag→label каналов (storage). Кладётся в state.groupLabels для
+  /// home-dropdown. Обновляется в init + после правок каналов.
+  Map<String, String> _channelLabels = const {};
+
   @override
   HomeState _state = HomeState();
   HomeState get state => _state;
@@ -141,6 +145,7 @@ class HomeController extends ChangeNotifier
 
   Future<void> init() async {
     await _loadSavedConfig();
+    await refreshChannelLabels(); // §125 — labels для home-dropdown
     await reloadPingOptions();
     _statusSub = _vpn.onStatusChanged.listen(_handleStatusEvent);
     // Native шлёт broadcast только на переходы. Если Flutter-процесс умер,
@@ -150,6 +155,16 @@ class HomeController extends ChangeNotifier
     // через тот же handler — он сам решит что эмитить.
     final pulled = await _vpn.getVpnStatus();
     _handleStatusEvent(TunnelStatusEvent(status: pulled, raw: pulled.name));
+  }
+
+  /// §125 — перечитать tag→label каналов из storage и положить в state. Зовётся
+  /// из init и после редактирования каналов (Routing), чтобы home-dropdown
+  /// показывал актуальные имена.
+  Future<void> refreshChannelLabels() async {
+    final channels = await SettingsStorage.getChannels();
+    if (_disposed) return;
+    _channelLabels = {for (final c in channels) c.tag: c.label};
+    _emit(_state.copyWith(groupLabels: _channelLabels));
   }
 
   @override
@@ -770,7 +785,8 @@ class HomeController extends ChangeNotifier
       }
     }
 
-    _emit(next.copyWith(groups: groups, selectedGroup: initial));
+    _emit(next.copyWith(
+        groups: groups, groupLabels: _channelLabels, selectedGroup: initial));
     unawaited(applyGroup(initial));
   }
 

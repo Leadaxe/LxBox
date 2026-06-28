@@ -1,0 +1,224 @@
+// §125 — Настраиваемые каналы роутинга.
+//
+// `Channel` заменяет статичный `PresetGroup` из `wizard_template.json` как
+// source-of-truth: каналы переезжают из template в `lxbox_settings.json`
+// (`channels[]`). Template остаётся seed'ом для первого запуска (см. миграцию
+// в `settings_storage/channels.dart`).
+//
+// `tag` — СИСТЕМНЫЙ immutable id ('vpn-1'..'vpn-10'): автогенерируется при
+// создании, юзер правит только `label`. immutable tag ⇒ ссылки (route_final /
+// ping_options / custom-rule outbound / detour) стабильны by design.
+//
+// Спека: docs/spec/features/125 configurable-channels/spec.md.
+
+import 'parser_config.dart' show PresetGroup;
+
+/// Максимум каналов (Решение 5). vpn-1 неудаляем, N∈1..10.
+const int kMaxChannels = 10;
+
+/// §198 — дефолтный label канала по номеру: «VPN ①»…«VPN ⑩». Кружок-цифра —
+/// Unicode «Enclosed Alphanumerics» (① = U+2460, идут подряд 1..10). N вне
+/// 1..10 → без кружка («VPN N»).
+String defaultChannelLabel(int n) {
+  if (n < 1 || n > 10) return 'VPN $n';
+  return 'VPN ${String.fromCharCode(0x2460 + n - 1)}';
+}
+
+/// Номер канала из tag 'vpn-N' (для дефолтного label). null если не парсится.
+int? channelNumberOf(String tag) {
+  final m = RegExp(r'^vpn-(\d+)$').firstMatch(tag);
+  return m == null ? null : int.tryParse(m.group(1)!);
+}
+
+/// uint16 верхняя граница для `tolerance` (§161 — вне диапазона роняет ядро).
+const int _kToleranceMax = 65535;
+
+int _clampTolerance(int v) => v < 0 ? 0 : (v > _kToleranceMax ? _kToleranceMax : v);
+
+/// Параметры urltest-двойника канала (`<tag>-auto`). null-аналог на уровне
+/// [Channel.auto] == null означает «галка auto ВЫКЛ, двойник не эмитится».
+/// `tag` двойника НЕ хранится — производный (`channel.autoTag`).
+class ChannelAuto {
+  const ChannelAuto({
+    this.url = 'https://cp.cloudflare.com/generate_204',
+    this.interval = '5m',
+    this.tolerance = 50,
+    this.idleTimeout = '30m',
+    this.interruptExistConnections = false,
+  });
+
+  final String url; // urltest test endpoint
+  final String interval; // duration ("5m")
+  final int tolerance; // ms, uint16 (§161)
+  final String idleTimeout; // duration ("30m")
+  final bool interruptExistConnections; // urltest.interrupt_exist_connections
+
+  ChannelAuto copyWith({
+    String? url,
+    String? interval,
+    int? tolerance,
+    String? idleTimeout,
+    bool? interruptExistConnections,
+  }) =>
+      ChannelAuto(
+        url: url ?? this.url,
+        interval: interval ?? this.interval,
+        tolerance: tolerance == null ? this.tolerance : _clampTolerance(tolerance),
+        idleTimeout: idleTimeout ?? this.idleTimeout,
+        interruptExistConnections:
+            interruptExistConnections ?? this.interruptExistConnections,
+      );
+
+  factory ChannelAuto.fromJson(Map<String, dynamic> json) => ChannelAuto(
+        url: json['url'] as String? ?? 'https://cp.cloudflare.com/generate_204',
+        interval: json['interval'] as String? ?? '5m',
+        tolerance: _clampTolerance((json['tolerance'] as num?)?.toInt() ?? 50),
+        idleTimeout: json['idle_timeout'] as String? ?? '30m',
+        interruptExistConnections:
+            json['interrupt_exist_connections'] as bool? ?? false,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'url': url,
+        'interval': interval,
+        'tolerance': _clampTolerance(tolerance),
+        'idle_timeout': idleTimeout,
+        'interrupt_exist_connections': interruptExistConnections,
+      };
+}
+
+/// Пользовательский канал роутинга. Хранится в `channels[]`. На первом запуске
+/// seeded из `template.presetGroups` (см. миграцию).
+class Channel {
+  const Channel({
+    required this.tag,
+    required this.label,
+    this.enabled = true,
+    this.includeDirect = false,
+    this.includeBlock = false,
+    this.nodeFilter = '',
+    this.nodeFilterInvert = false,
+    this.defaultFilter = '',
+    this.interruptExistConnections = true,
+    this.auto,
+  });
+
+  /// 'vpn-1'..'vpn-10' — системный immutable id (автоген, юзер НЕ правит).
+  final String tag;
+
+  /// Отображаемое имя ("Моя Германия") — единственное, что юзер вводит как «имя».
+  final String label;
+
+  /// Вкл/выкл (заменяет enabled_groups[]). vpn-1 всегда true инвариантом.
+  final bool enabled;
+
+  /// Галка: добавить `direct-out` опцией в селектор канала.
+  final bool includeDirect;
+
+  /// §201 — галка: добавить `block` (дроп трафика) опцией в селектор канала.
+  final bool includeBlock;
+
+  /// regex по ИТОГОВОМУ tag ноды (§048-style, `n.tag.contains`/`RegExp.hasMatch`).
+  /// '' → все ноды (текущее поведение).
+  final String nodeFilter;
+
+  /// §197 — инверсия node_filter (как `!`-тогл в §048). true → в канал попадают
+  /// ноды, чей tag НЕ матчит [nodeFilter] (исключающий фильтр). Пустой
+  /// nodeFilter → инверсия игнорируется (все ноды).
+  final bool nodeFilterInvert;
+
+  /// regex; первая matched нода → `options.default`. '' → default не выставляется.
+  final String defaultFilter;
+
+  /// selector.interrupt_exist_connections (template = true).
+  final bool interruptExistConnections;
+
+  /// urltest-двойник. null → галка ВЫКЛ, `<tag>-auto` не эмитится.
+  final ChannelAuto? auto;
+
+  /// Производный tag urltest-двойника. В storage НЕ хранится.
+  String get autoTag => '$tag-auto';
+
+  /// vpn-1 — продуктово-привилегированный: всегда enabled, неудаляемый,
+  /// дефолт route_final. Намеренный хардкод (продуктовое решение).
+  bool get isRequired => tag == 'vpn-1';
+
+  Channel copyWith({
+    String? label,
+    bool? enabled,
+    bool? includeDirect,
+    bool? includeBlock,
+    String? nodeFilter,
+    bool? nodeFilterInvert,
+    String? defaultFilter,
+    bool? interruptExistConnections,
+    ChannelAuto? auto,
+    bool clearAuto = false,
+  }) =>
+      Channel(
+        tag: tag, // immutable — не параметр copyWith
+        label: label ?? this.label,
+        enabled: enabled ?? this.enabled,
+        includeDirect: includeDirect ?? this.includeDirect,
+        includeBlock: includeBlock ?? this.includeBlock,
+        nodeFilter: nodeFilter ?? this.nodeFilter,
+        nodeFilterInvert: nodeFilterInvert ?? this.nodeFilterInvert,
+        defaultFilter: defaultFilter ?? this.defaultFilter,
+        interruptExistConnections:
+            interruptExistConnections ?? this.interruptExistConnections,
+        auto: clearAuto ? null : (auto ?? this.auto),
+      );
+
+  factory Channel.fromJson(Map<String, dynamic> json) {
+    final rawAuto = json['auto'];
+    return Channel(
+      tag: json['tag'] as String? ?? '',
+      label: json['label'] as String? ?? (json['tag'] as String? ?? ''),
+      enabled: json['enabled'] as bool? ?? true,
+      includeDirect: json['include_direct'] as bool? ?? false,
+      includeBlock: json['include_block'] as bool? ?? false,
+      nodeFilter: json['node_filter'] as String? ?? '',
+      nodeFilterInvert: json['node_filter_invert'] as bool? ?? false,
+      defaultFilter: json['default_filter'] as String? ?? '',
+      interruptExistConnections:
+          json['interrupt_exist_connections'] as bool? ?? true,
+      auto: rawAuto is Map<String, dynamic>
+          ? ChannelAuto.fromJson(rawAuto)
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'tag': tag,
+        'label': label,
+        'enabled': enabled,
+        'include_direct': includeDirect,
+        'include_block': includeBlock,
+        'node_filter': nodeFilter,
+        'node_filter_invert': nodeFilterInvert,
+        'default_filter': defaultFilter,
+        'interrupt_exist_connections': interruptExistConnections,
+        'auto': auto?.toJson(), // null остаётся null в JSON (галка ВЫКЛ)
+      };
+
+  /// Seed-канал из template-пресета (миграция first-run). `auto` берётся из
+  /// `add_outbounds ∋ ✨auto` снаружи (нужен доступ к urltest-vars), здесь —
+  /// только структурные поля. См. `_migrateChannelsIfNeeded`.
+  static Channel seedFromPreset(
+    PresetGroup p, {
+    required bool enabled,
+    ChannelAuto? auto,
+  }) =>
+      Channel(
+        tag: p.tag,
+        label: p.label.isEmpty ? p.tag : p.label,
+        enabled: enabled,
+        includeDirect: p.addOutbounds.contains('direct-out'),
+        includeBlock: p.addOutbounds.contains('block'), // §201 (в template нет → false)
+        nodeFilter: '',
+        defaultFilter: '', // Решение 6 — старый default не regex, не мигрируем
+        interruptExistConnections:
+            p.options['interrupt_exist_connections'] as bool? ?? true,
+        auto: auto,
+      );
+}

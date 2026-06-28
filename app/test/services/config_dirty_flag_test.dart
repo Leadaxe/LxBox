@@ -54,10 +54,6 @@ void main() {
       expect(SettingsStorage.configDirty, isTrue);
 
       SettingsStorage.configDirty = false;
-      await SettingsStorage.saveExcludedNodes({'node-x'});
-      expect(SettingsStorage.configDirty, isTrue);
-
-      SettingsStorage.configDirty = false;
       await SettingsStorage.saveDnsServers([
         {'tag': 'local', 'address': '1.1.1.1'}
       ]);

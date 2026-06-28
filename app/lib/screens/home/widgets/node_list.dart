@@ -2,15 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../config/consts.dart';
 import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/home_state.dart';
+import '../../../services/settings_storage.dart';
 import '../../../services/haptic_service.dart';
 import '../../../services/subscription/auto_updater.dart';
 import '../../../widgets/node_row.dart';
 import '../../../widgets/node_view_item.dart';
 import '../../../widgets/reorder_grab_strip.dart';
+import '../../channel_edit_screen.dart';
 import '../node_actions.dart';
 import '../node_filter_view_model.dart';
 import '../node_list_presenter.dart';
@@ -142,6 +143,13 @@ class HomeNodeList extends StatelessWidget {
               availableProtocols: data.availableProtocols,
               availableVariants: data.availableVariants,
               subOptions: data.subOptions,
+              // §195 — 💾 показываем только когда активный канал валиден
+              // (selectedGroup ∈ groups). Иначе некуда сохранять → null скрывает.
+              onSaveRegex: (state.selectedGroup != null &&
+                      state.groups.contains(state.selectedGroup))
+                  ? (pattern, invert) =>
+                      _saveRegexToChannel(context, pattern, invert)
+                  : null,
             ),
           Expanded(
             child: RefreshIndicator(
@@ -178,19 +186,14 @@ class HomeNodeList extends StatelessWidget {
     required ParsedConfig cache,
     required Set<String> matchingSet,
   }) {
-    // §070+§071: pinnedCount определяем sequential проверкой первых элементов.
-    // Если фильтр §048 затолкал pinned в nonMatching → pin не на index 0 →
-    // pinnedCount=0 (drag-handle покажется и на pinned, но это корректно
-    // т.к. формально он не pinned в текущем render'е).
+    // §070+§071+§125+§196: pinned-секция = direct/auto/активная (источник —
+    // state.pinnedNodeCount). Считаем сколько из них реально в начале
+    // displayList: если фильтр §048 затолкал pinned в nonMatching → префикс
+    // короче → pinnedCount меньше (drag-handle покажется на не-pinned, корректно).
+    final pinnedTags = state.sortedNodes.take(state.pinnedNodeCount).toSet();
     int pinnedCount = 0;
-    if (state.pinDirect &&
-        pinnedCount < displayList.length &&
-        displayList[pinnedCount] == 'direct-out') {
-      pinnedCount++;
-    }
-    if (state.pinAuto &&
-        pinnedCount < displayList.length &&
-        displayList[pinnedCount] == kAutoOutboundTag) {
+    while (pinnedCount < displayList.length &&
+        pinnedTags.contains(displayList[pinnedCount])) {
       pinnedCount++;
     }
 
@@ -255,6 +258,7 @@ class HomeNodeList extends StatelessWidget {
               busy: state.busy,
               urltestNow: urltestNow,
               hasDetour: cache[tag]?.detour != null,
+              outboundType: cache[tag]?.type, // §125 — точный тип из конфига
               protocolLabel: protoType == null
                   ? null
                   : [
@@ -328,5 +332,101 @@ class HomeNodeList extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// §195 — перенести regex из фильтра на главной в активный канал. Не пишем
+  /// тихо: спрашиваем КУДА (node_filter / default_filter), затем открываем
+  /// редактор канала с предзаполненным полем — юзер видит куда легло значение,
+  /// может доредактировать и сохранить явно. Результат применяем здесь (на
+  /// главной нет routing-стейта, который пишет channel-edit).
+  Future<void> _saveRegexToChannel(
+      BuildContext context, String pattern, bool invert) async {
+    final tag = state.selectedGroup;
+    if (tag == null) return;
+    final channels = await SettingsStorage.getChannels();
+    final idx = channels.indexWhere((c) => c.tag == tag);
+    if (idx < 0 || !context.mounted) return;
+    final channel = channels[idx];
+    final label = channel.label.isNotEmpty ? channel.label : channel.tag;
+
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Apply to $label'),
+        content: Text('Use "$pattern" as…'),
+        // Горизонтально (Row), порядок: Channel filter → Default → Cancel.
+        // Короткие лейблы держат всё в один ряд на телефоне.
+        actionsAlignment: MainAxisAlignment.end,
+        actionsOverflowDirection: VerticalDirection.down,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'node'),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.primary,
+              textStyle: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            child: const Text('Filter'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'default'),
+            child: const Text('Default'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || !context.mounted) return;
+
+    // Предзаполняем нужное поле и открываем редактор канала (Routing → Channels
+    // → этот канал) — юзер видит подставленное значение и сохраняет явно.
+    // §197 — для node_filter переносим и инверсию с главного фильтра; default
+    // инверсии не имеет (игнор).
+    final seeded = choice == 'node'
+        ? channel.copyWith(nodeFilter: pattern, nodeFilterInvert: invert)
+        : channel.copyWith(defaultFilter: pattern);
+    final allNodeTags = _allNodeTagsFromState();
+    final result = await openChannelEditor(
+      context,
+      initial: seeded,
+      canDelete: !channel.isRequired,
+      allNodeTags: allNodeTags,
+    );
+    if (result == null || result.saved == null || !context.mounted) return;
+
+    // Применяем сохранённый канал + rebuild конфига (паттерн node_filter_screen).
+    await SettingsStorage.updateChannel(result.saved!);
+    await controller.refreshChannelLabels();
+    if (!context.mounted) return;
+    final config = await subController.generateConfig();
+    if (config != null && context.mounted) {
+      await controller.saveParsedConfig(config);
+    }
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Saved channel "$label"')),
+    );
+    if (state.tunnelUp && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Restart VPN to apply changes')),
+      );
+    }
+  }
+
+  /// §195 — снимок всех node-тегов из ccGroups (union, без самих групп) для
+  /// live-превью фильтров в редакторе. Пусто = туннель не поднят.
+  List<String> _allNodeTagsFromState() {
+    final groupTags = state.ccGroups.map((g) => g.tag).toSet();
+    final seen = <String>{};
+    final out = <String>[];
+    for (final g in state.ccGroups) {
+      for (final item in g.items) {
+        if (groupTags.contains(item.tag)) continue;
+        if (seen.add(item.tag)) out.add(item.tag);
+      }
+    }
+    return out;
   }
 }

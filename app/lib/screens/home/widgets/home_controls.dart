@@ -134,7 +134,8 @@ class HomeControls extends StatelessWidget {
                           : null,
                       hint: const Text('Select channel'),
                       items: state.groups
-                          .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                          .map((g) => DropdownMenuItem(
+                              value: g, child: Text(state.groupLabelOf(g))))
                           .toList(),
                       onChanged: (!state.tunnelUp || state.busy || state.groups.isEmpty)
                           ? null

@@ -210,7 +210,6 @@ GET /diag/applog?prev=true|false|all           AppLog entries; `prev` filters by
 === Settings (scoped writes) ===
 
 PUT    /settings/route_final                   body {"outbound":"..."}
-PUT    /settings/excluded_nodes                body {"nodes":["tag",...]}
 GET|PUT /settings/interrupt_on_switch          body {"enabled":bool} — рвать conns при switchNode
 GET|PUT /settings/node_sort                    body {"mode":"latency|manual|", "order"?:["tag",...]}
 GET|PUT /settings/enabled_groups               body {"groups":["tag",...]} (config-significant, ?rebuild)
@@ -387,7 +386,6 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/diag/applog', 'params': {'prev': 'true|false|all'}, 'description': 'AppLog entries (filter by fromPreviousSession)'},
     // Settings (scoped writes — §037 etc)
     {'method': 'PUT', 'path': '/settings/route_final', 'body': '{"outbound":"..."}', 'description': 'Set route.final outbound'},
-    {'method': 'PUT', 'path': '/settings/excluded_nodes', 'body': '{"nodes":["tag",...]}', 'description': 'Set hidden-from-auto nodes'},
     {'method': 'GET|PUT', 'path': '/settings/interrupt_on_switch', 'body': '{"enabled":bool}', 'description': 'Toggle interrupt connections on node switch'},
     {'method': 'GET|PUT', 'path': '/settings/node_sort', 'body': '{"mode":"latency|manual|","order"?:[...]}', 'description': 'Node-list sort mode + manual order'},
     {'method': 'GET|PUT', 'path': '/settings/enabled_groups', 'body': '{"groups":[...]}', 'description': 'Preset selector membership (config-significant, ?rebuild)'},

@@ -1,10 +1,11 @@
 # §125 — Настраиваемые каналы (Configurable Channels)
 
-> **СТАТУС: DRAFT / ИДЕЯ — open questions закрыты (27.06.2026).** Полностью
-> переписан после согласования с юзером. Заменяет прежний черновик «override
-> поверх фиксированного template». Не реализовано. Числа/имена ключей storage —
-> proposal. Все развилки решены (см. «Решения», бывшие open questions).
-> Готов к переходу в `plan.md`.
+> **СТАТУС: РЕАЛИЗОВАНО (27.06.2026).** Все фазы F0→F4 + regex (F2) + default
+> (F3) реализованы в ветке `feat/configurable-channels-125`. План и трассировка
+> — [`plan.md`](plan.md). Числа/имена ключей storage финализированы (см.
+> [STORAGE.md → channels](../../../STORAGE.md#channels--125)). Все развилки
+> решены (см. «Решения», бывшие open questions). Покрыто тестами
+> (`channel_test.dart`, `channels_migration_test.dart`, `channel_groups_test.dart`).
 
 ## Контекст
 
@@ -409,8 +410,22 @@ CRUD требует снять захардкоженные предположе
 - [§048 home-node-filters](../048%20home-node-filters/spec.md) — текущий **глобальный**
   node-filter (`excluded_nodes`, ручные чекбоксы). **Остаётся** как песочница:
   юзер экспериментирует с набором нод глобально, а удачный результат портирует в
-  per-channel regex вручную. Per-channel regex его **не удаляет** — это независимые
+  per-channel regex. Per-channel regex его **не удаляет** — это независимые
   слои (глобальный экспериментальный + per-channel боевой).
+- [§195 save-home-filter-to-channel](../../tasks/195-save-home-filter-to-channel.md) —
+  мост песочница→канал: кнопка 💾 в regex-поле на главной сохраняет текущий regex
+  в `node_filter`/`default_filter` активного канала (раньше — только вручную через
+  редактор канала).
+- [§196 active-node-pinned](../../tasks/196-active-node-pinned-after-direct-auto.md) —
+  активная нода закрепляется вверху после direct/auto при любой сортировке.
+- [§197 channel-node-filter-invert](../../tasks/197-channel-node-filter-invert.md) —
+  `node_filter_invert`: `!`-тогл инвертирует фильтр (исключающий, «всё КРОМЕ»).
+- **§198** — имена каналов с цифрой-в-кружке (①②③) + seed-template ≤2 строк.
+- **§199** — в строке auto-ноды на главной сервер важнее транспорта.
+- **§200** — warning в баннере конфига, когда фильтр канала отсёк все ноды.
+- [§201 block-outbound](../../tasks/201-block-outbound-for-channels.md) — block
+  `{type:block, tag:block}`: галка `include_block`, route-final красный, иконка
+  Block, fallback пустого канала `[block, direct-out]` с default block.
 - [§008 ping and node management](../008%20ping%20and%20node%20management/spec.md) —
   per-group ping (`ping_options.groups[tag]`); образец per-channel storage и место,
   куда сворачивается ping-настройка в редакторе.

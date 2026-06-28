@@ -57,6 +57,7 @@ class RegexFilterField extends StatelessWidget {
     required this.invert,
     required this.onInvertToggle,
     this.onClear,
+    this.onSaveRegex,
   });
 
   final TextEditingController controller;
@@ -65,6 +66,11 @@ class RegexFilterField extends StatelessWidget {
   final bool invert;
   final VoidCallback onInvertToggle;
   final VoidCallback? onClear;
+
+  /// §195/§197 — сохранить текущий regex (+инверсию) в активный канал. `null`
+  /// → кнопка 💾 скрыта (нет активного канала). Показывается только при
+  /// непустом валидном паттерне.
+  final void Function(String pattern, bool invert)? onSaveRegex;
 
   @override
   Widget build(BuildContext context) {
@@ -102,27 +108,45 @@ class RegexFilterField extends StatelessWidget {
                   const BoxConstraints(minWidth: 34, minHeight: 28),
               errorText: valid ? null : 'Invalid regex',
               errorStyle: const TextStyle(fontSize: 10),
-              // ✕ — только когда есть text. Текстовый символ (не
-              // Icons.clear) — голый SizedBox 28×28, без material 48dp
-              // tap-target → suffix не прыгает в высоту.
+              // §195 — суффикс: [💾 save] + [× clear], оба только при непустом
+              // тексте. 💾 — лишь если onSaveRegex задан (есть активный канал) И
+              // regex валиден (битый паттерн сохранять нельзя). Каждый — голый
+              // SizedBox 28×28, без material 48dp tap-target → suffix не прыгает.
               suffixIcon: controller.text.isEmpty
                   ? null
-                  : InkWell(
-                      onTap: onClear,
-                      borderRadius: BorderRadius.circular(4),
-                      child: SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: Center(
-                          child: Text(
-                            '×',
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: cs.onSurfaceVariant.withAlpha(180),
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (onSaveRegex != null && valid)
+                          InkWell(
+                            onTap: () => onSaveRegex!(controller.text, invert),
+                            borderRadius: BorderRadius.circular(4),
+                            child: SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: Icon(Icons.save_outlined,
+                                  size: 17,
+                                  color: cs.onSurfaceVariant.withAlpha(200)),
+                            ),
+                          ),
+                        InkWell(
+                          onTap: onClear,
+                          borderRadius: BorderRadius.circular(4),
+                          child: SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: Center(
+                              child: Text(
+                                '×',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: cs.onSurfaceVariant.withAlpha(180),
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
               suffixIconConstraints:
                   const BoxConstraints(minWidth: 32, minHeight: 28),

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../models/channel.dart';
 import '../../models/custom_rule.dart';
 import '../../models/emit_context.dart';
 import '../../models/parser_config.dart';
@@ -40,9 +41,12 @@ class BuildResult {
 class BuildSettings {
   final Map<String, String> userVars;
   final Set<String> enabledGroups;
-  final Set<String> excludedNodes;
   final List<CustomRule> customRules;
   final String routeFinal;
+
+  /// §125 — каналы роутинга (source-of-truth состава). Пусто = старое
+  /// поведение через template.presetGroups (для тестов без storage).
+  final List<Channel> channels;
 
   /// §046: OS-level split-tunneling apps list. `null` = pipeline возьмёт
   /// дефолт (mode=off — все apps через tun, sing-box обычное поведение).
@@ -55,9 +59,9 @@ class BuildSettings {
   const BuildSettings({
     this.userVars = const {},
     this.enabledGroups = const {},
-    this.excludedNodes = const {},
     this.customRules = const [],
     this.routeFinal = '',
+    this.channels = const [],
     this.tunApps,
     this.vpnMode,
   });
@@ -184,16 +188,21 @@ Future<BuildResult> buildConfig({
 
   final selectorTags =
       ctx.selectorEntries.map((e) => e.tag).toList(growable: false);
-  final autoTags =
-      ctx.autoEntries.map((e) => e.tag).toList(growable: false);
 
-  final presetOutbounds = _buildPresetGroups(
-    presets: template.presetGroups,
-    enabledGroupTags: settings.enabledGroups,
+  // §125 — каналы из storage (source-of-truth). Если пусто (тесты без storage /
+  // первый билд до миграции) — синтезируем из template.presetGroups через ту же
+  // seed-логику, что и one-shot миграция, чтобы билдер всегда работал с
+  // List<Channel> единообразно. autoTags больше не нужен: каждый канал делает
+  // свой urltest-двойник по своему node-set.
+  final channels = settings.channels.isNotEmpty
+      ? settings.channels
+      : _channelsFromTemplate(
+          template.presetGroups, settings.enabledGroups, resolve);
+
+  final presetOutbounds = _buildChannelGroups(
+    channels: channels,
     selectorTags: selectorTags,
-    autoTags: autoTags,
-    excludedNodes: settings.excludedNodes,
-    resolve: resolve,
+    emitWarnings: emitWarnings,
   );
 
   final baseOutbounds = config['outbounds'] as List<dynamic>? ?? const [];
@@ -305,8 +314,24 @@ Future<BuildResult> buildConfig({
   route['rules'] = ruleSets.getRules();
   config['route'] = route;
 
+  // §125 — деградация dangling route_final → vpn-1. Ссылка на удалённый канал
+  // или legacy ✨auto (которого больше нет, Решение 2/3) схлопывается в vpn-1
+  // (неудаляем → всегда валидная мишень). Валидные мишени: включённые каналы +
+  // их auto-двойники + direct-out.
   if (settings.routeFinal.isNotEmpty) {
-    route['final'] = settings.routeFinal;
+    final validFinals = <String>{
+      'direct-out',
+      'block', // §201 — block системный outbound, валидная route_final-мишень
+      for (final c in channels)
+        if (c.enabled || c.isRequired) ...[c.tag, c.autoTag],
+    };
+    var finalTag = settings.routeFinal;
+    if (!validFinals.contains(finalTag)) {
+      emitWarnings.add(
+          'Route final "$finalTag" no longer exists — switched to vpn-1.');
+      finalTag = 'vpn-1';
+    }
+    route['final'] = finalTag;
   }
 
   applyTlsFragment(config, vars);
@@ -340,8 +365,8 @@ Future<BuildResult> buildConfig({
   final healedDetours = healDanglingDetours(config);
   for (final h in healedDetours) {
     emitWarnings.add(
-        'Detour убран: outbound "${h.owner}" ссылался на отсутствующий '
-        '"${h.target}" — нода работает напрямую.');
+        'Detour removed: outbound "${h.owner}" referenced missing '
+        '"${h.target}" — node works directly.');
   }
 
   final validation = validateConfig(config);
@@ -406,79 +431,162 @@ class _BuildCtx implements EmitContext {
   void addToAutoList(SingboxEntry entry) => autoEntries.add(entry);
 }
 
-/// Собирает preset-группы (vpn-1/vpn-2/vpn-3/vpn-4/auto). Приватный
+/// Собирает channel-группы (vpn-1..vpn-10 + их auto-двойники). Приватный
 /// helper `buildConfig` — специфичен для одного вызова, выделение в
 /// отдельный файл/модуль не даёт пользы (YAGNI, решение §Принципы #4).
-List<Map<String, dynamic>> _buildPresetGroups({
-  required List<PresetGroup> presets,
-  required Set<String> enabledGroupTags,
+/// §125 — собирает outbound-группы из пользовательских [channels] (storage).
+/// Каждый **включённый** канал эмитит selector `<tag>`; если у канала есть
+/// `auto` И его node-set непуст — дополнительно urltest-двойник `<tag>-auto`.
+///
+/// Per-channel node-set: `selectorTags`, отфильтрованные `channel.nodeFilter`
+/// (regex по **итоговому tag** ноды, §048-style — что видно в имени, то и
+/// матчится). Пустой/невалидный фильтр → все ноды. Это снимает прежнее
+/// допущение «все selector делят один набор нод».
+List<Map<String, dynamic>> _buildChannelGroups({
+  required List<Channel> channels,
   required List<String> selectorTags,
-  required List<String> autoTags,
-  required Set<String> excludedNodes,
-  required VarResolver resolve,
+  required List<String> emitWarnings,
 }) {
-  final activePresets = presets.where((p) {
-    if (p.tag == 'vpn-1') return true;
-    if (enabledGroupTags.isEmpty) return p.defaultEnabled;
-    return enabledGroupTags.contains(p.tag);
-  }).toList();
+  // §125 — единственный слой фильтрации нод теперь per-channel regex
+  // (node_filter). Глобальный excluded_nodes (§048) удалён.
+  final baseNodes = selectorTags;
 
-  final autoProxyEnabled =
-      activePresets.any((p) => p.tag == kAutoOutboundTag);
+  final active = channels.where((c) => c.enabled || c.isRequired).toList();
 
-  List<String> tagsFor(PresetGroup p) {
-    if (p.type == 'urltest') {
-      return autoTags.where((t) => !excludedNodes.contains(t)).toList();
-    }
-    return selectorTags;
+  /// Ноды канала после regex-фильтра. Пустой/битый regex → все baseNodes.
+  /// §197 — nodeFilterInvert инвертирует смысл: true → ноды, чей tag НЕ матчит.
+  List<String> nodesFor(Channel c) {
+    if (c.nodeFilter.isEmpty) return baseNodes;
+    final re = _tryCompileRegex(c.nodeFilter);
+    if (re == null) return baseNodes;
+    return baseNodes
+        .where((t) => re.hasMatch(t) != c.nodeFilterInvert)
+        .toList();
   }
-
-  final emittedGroupTags = <String>{};
-  for (final preset in activePresets) {
-    final nodes = tagsFor(preset);
-    if (nodes.isNotEmpty || preset.type != 'urltest') {
-      emittedGroupTags.add(preset.tag);
-    }
-  }
-
-  final knownTags = <String>{
-    'direct-out',
-    ...selectorTags,
-    ...autoTags,
-    ...emittedGroupTags,
-  };
 
   final result = <Map<String, dynamic>>[];
-  for (final preset in activePresets) {
-    final nodes = tagsFor(preset);
-    final addOutbounds = preset.addOutbounds
-        .where(knownTags.contains)
-        .where((t) => t != kAutoOutboundTag || autoProxyEnabled);
-    final tags = <String>[...nodes, ...addOutbounds];
-    if (tags.isEmpty) {
-      if (preset.type == 'urltest') continue;
-      tags.add('direct-out');
+  for (final c in active) {
+    final nodes = nodesFor(c);
+    final emitAuto = c.auto != null && nodes.isNotEmpty;
+
+    // selector outbounds: ноды + (direct?) + (block?) + (<tag>-auto если эмит)
+    final selectorOutbounds = <String>[
+      ...nodes,
+      if (c.includeDirect) 'direct-out',
+      if (c.includeBlock) 'block',
+      if (emitAuto) c.autoTag,
+    ];
+    // §201 — пустой набор (regex не матчит / нет нод) → fallback на [block,
+    // direct-out] с default=block (безопаснее блокировать, чем выпускать мимо
+    // VPN; direct остаётся доступной опцией). selector не должен быть пустой
+    // группой (fatal в sing-box).
+    final emptyFallback = selectorOutbounds.isEmpty;
+    if (emptyFallback) {
+      selectorOutbounds.addAll(['block', 'direct-out']);
+    }
+    // §200 — предупреждаем, если ИМЕННО фильтр канала отсёк все ноды (фильтр
+    // непустой, но 0 совпадений). Канал свалился на block — юзеру важно знать.
+    // Пустой фильтр с 0 нод (нет подписки) НЕ варним — это не вина фильтра.
+    if (nodes.isEmpty && c.nodeFilter.isNotEmpty && selectorTags.isNotEmpty) {
+      final label = c.label.isNotEmpty ? c.label : c.tag;
+      emitWarnings.add(
+          'Channel "$label" (${c.tag}): node filter matched no nodes — '
+          'traffic is blocked (default), or use direct.');
     }
 
-    final options = deepCopyJson(preset.options);
-    _substituteVars(options, resolve);
-    final def = options['default'];
-    // §141 P1.8b — раньше гейт был `def is String && !tags.contains(def)`:
-    // не-строковый `default` (число/bool из кривого template) проскакивал бы
-    // мимо и оба гейта (здесь + validator) его не ловили. Удаляем любой
-    // присутствующий default, который не является валидным tag'ом.
-    if (def != null && (def is! String || !tags.contains(def))) {
-      options.remove('default');
+    final selector = <String, dynamic>{
+      'tag': c.tag,
+      'type': 'selector',
+      'outbounds': selectorOutbounds,
+      'interrupt_exist_connections': c.interruptExistConnections,
+    };
+    // §201 — fallback пустого канала: block выбран дефолтом.
+    if (emptyFallback) selector['default'] = 'block';
+    // §141 — default = первая нода канала, чей итоговый tag матчит defaultFilter.
+    // Не матчит/пусто → default не выставляется (sing-box берёт первую опцию).
+    if (c.defaultFilter.isNotEmpty) {
+      final re = _tryCompileRegex(c.defaultFilter);
+      final def = re == null ? null : _firstMatch(nodes, re);
+      // Гейт-защита (§141 P1.8b): default обязан быть валидным членом outbounds.
+      if (def != null && selectorOutbounds.contains(def)) {
+        selector['default'] = def;
+      }
     }
+    result.add(selector);
 
-    result.add({
-      'tag': preset.tag,
-      'type': preset.type,
-      'outbounds': tags,
-      ...options,
-    });
+    // urltest-двойник: ТОЛЬКО ноды канала (без direct/auto). Не эмитим при
+    // пустом наборе (urltest без нод недопустим).
+    if (emitAuto) {
+      final a = c.auto!;
+      result.add({
+        'tag': c.autoTag,
+        'type': 'urltest',
+        'outbounds': nodes,
+        'url': a.url,
+        'interval': a.interval,
+        'tolerance': a.tolerance,
+        'idle_timeout': a.idleTimeout,
+        'interrupt_exist_connections': a.interruptExistConnections,
+      });
+    }
   }
   return result;
+}
+
+/// §125 fallback — синтез `List<Channel>` из `template.presetGroups`, когда
+/// storage ещё пуст (тесты без storage / первый билд до миграции). Та же
+/// seed-логика, что и one-shot миграция `_migrateChannelsIfNeeded`, но auto-
+/// параметры резолвятся через [resolve] (@urltest_* vars). ✨auto-preset не
+/// канал — пропускается.
+List<Channel> _channelsFromTemplate(
+  List<PresetGroup> presets,
+  Set<String> enabledGroupTags,
+  VarResolver resolve,
+) {
+  String s(String name, String fallback) {
+    final v = resolve(name);
+    return v == null ? fallback : v.toString();
+  }
+
+  ChannelAuto seedAuto() => ChannelAuto(
+        url: s('urltest_url', 'https://cp.cloudflare.com/generate_204'),
+        interval: s('urltest_interval', '5m'),
+        tolerance: int.tryParse(s('urltest_tolerance', '50')) ?? 50,
+        idleTimeout: '30m',
+        interruptExistConnections: false,
+      );
+
+  final out = <Channel>[];
+  for (final p in presets) {
+    if (p.tag == kAutoOutboundTag) continue;
+    final enabled = p.tag == 'vpn-1'
+        ? true
+        : (enabledGroupTags.isEmpty
+            ? p.defaultEnabled
+            : enabledGroupTags.contains(p.tag));
+    final auto = p.addOutbounds.contains(kAutoOutboundTag) ? seedAuto() : null;
+    out.add(Channel.seedFromPreset(p, enabled: enabled, auto: auto));
+  }
+  return out;
+}
+
+/// Компилирует regex, `null` при невалидном паттерне (caller → fallback на все
+/// ноды). Общий helper для билдера и live-превью редактора (§125 F4).
+RegExp? _tryCompileRegex(String pattern) {
+  try {
+    return RegExp(pattern);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Первая нода (по порядку) из [tags], чей итоговый tag матчит [re]. `null` если
+/// нет совпадений.
+String? _firstMatch(List<String> tags, RegExp re) {
+  for (final t in tags) {
+    if (re.hasMatch(t)) return t;
+  }
+  return null;
 }
 
 // §122 Фаза 1b — `_ensureClashApiDefaults` удалён: clash_api больше не инжектится

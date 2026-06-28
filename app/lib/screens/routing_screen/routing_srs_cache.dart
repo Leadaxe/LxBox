@@ -9,8 +9,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   Set<String> get _srsCached;
   Set<String> get _srsDownloading;
   List<CustomRule> get _customRules;
-  Set<String> get _enabledGroups;
-  Map<String, String> get _routingVarValues;
+  List<Channel> get _channels; // §125
   set _template(WizardTemplate? value);
   String get _routeFinal;
   set _routeFinal(String value);
@@ -26,26 +25,21 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
 
   Future<void> _load() async {
     final template = await TemplateLoader.load();
-    final storedGroups = await SettingsStorage.getEnabledGroups();
     final storedFinal = await SettingsStorage.getRouteFinal();
-    final storedVars = await SettingsStorage.getAllVars();
 
-    if (storedGroups.isEmpty) {
-      for (final g in template.presetGroups) {
-        if (g.defaultEnabled) _enabledGroups.add(g.tag);
-      }
+    // §125 — каналы из storage. Миграция enabled_groups→channels уже отработала
+    // в main() init; на пустом списке (старт без миграции в тестах) синтезируем
+    // из template, чтобы экран не был пустым.
+    final stored = await SettingsStorage.getChannels();
+    if (stored.isEmpty) {
+      await SettingsStorage.migrateChannelsIfNeeded(template.presetGroups);
+      _channels.addAll(await SettingsStorage.getChannels());
     } else {
-      _enabledGroups.addAll(storedGroups);
+      _channels.addAll(stored);
     }
-    _enabledGroups.add('vpn-1'); // required
 
     _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'vpn-1';
     _customRules.addAll(await SettingsStorage.getCustomRules());
-
-    // Routing vars (Auto Proxy tuning) — берём stored или template default.
-    for (final v in template.varsFor('routing')) {
-      _routingVarValues[v.name] = storedVars[v.name] ?? v.defaultValue;
-    }
 
     // Выставляем `_template` ДО `_refreshSrsCache` — он через `_presetFor`
     // ищет `SelectableRule` в `_template.selectableRules`, иначе получит
@@ -61,19 +55,11 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     });
   }
 
-  /// Обработчик изменения переменной `chapter: routing` — staged-запись в
-  /// `_cache` (диск догонит на flushToDisk из mixin'а).
-  void _onRoutingVarChanged(String name, String value) {
-    _routingVarValues[name] = value;
-    unawaited(SettingsStorage.setVar(name, value, flush: false));
-    _markDirty();
-  }
-
   /// §107: staging — буфер экрана в `_cache` на каждую мутацию; дисковый
   /// flush — mixin'ом (flushToDisk) на dispose/paused.
   @override
   Future<void> stageChanges() async {
-    await SettingsStorage.saveEnabledGroups(_enabledGroups, flush: false);
+    await SettingsStorage.setChannels(_channels, flush: false); // §125
     await SettingsStorage.saveRouteFinal(_routeFinal, flush: false);
     await SettingsStorage.saveCustomRules(_customRules, flush: false);
     // §076: configDirty уже true (set синхронно в markDirty). НЕ

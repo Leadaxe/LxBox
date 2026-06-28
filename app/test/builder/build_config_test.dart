@@ -70,7 +70,9 @@ void main() {
           reason: result.validation.issues.join('\n'));
       final outs = result.config['outbounds'] as List;
       final tags = outs.map((o) => (o as Map)['tag']).toList();
-      expect(tags, containsAll(['A', 'B', 'direct-out', 'vpn-1', kAutoOutboundTag]));
+      // §125 — глобальный ✨auto заменён на per-channel двойник vpn-1-auto.
+      expect(tags, containsAll(['A', 'B', 'direct-out', 'vpn-1', 'vpn-1-auto']));
+      expect(tags, isNot(contains(kAutoOutboundTag)));
 
       // vpn-1 includes node tags.
       final vpn1 =

@@ -278,7 +278,7 @@ void main() {
       expect(result.validation.hasFatal, false,
           reason: '§172 — битый detour деградировал, не fatal');
       // warning о снятом detour присутствует.
-      expect(result.emitWarnings.any((w) => w.contains('Detour убран')), true);
+      expect(result.emitWarnings.any((w) => w.contains('Detour removed')), true);
     });
 
     test('empty tagPrefix target: display-form == bare (regression-free)',
