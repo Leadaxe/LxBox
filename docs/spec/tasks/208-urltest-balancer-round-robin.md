@@ -1,26 +1,24 @@
-# §208 — Round-robin балансировщик в auto-группе + просмотр пула (ядро SPEC 019 V2)
+# §208 — Round-robin балансировщик в auto-группе + просмотр пула (ядро SPEC 019)
 
 > **СТАТУС: РЕАЛИЗОВАНО (28.06.2026).** Ветка `feat/urltest-balancer-208`.
-> Ядро: `v1.14.0-lx.1-rc.14` (SPEC 019 — фича с rc.13, `pool:0`-фикс rc.14).
-> Включает бамп пина (rc.12 → rc.14, [§208a](#208a--бамп-пина-ядра-rc12--rc14)).
+> Ядро: **`v1.14.0-lx.1-rc.15`** (sticky_hash-контракт `["none"]` + фиксы
+> балансировщика — см. [§210](210-libbox-rc15-sticky-none.md)). Исходно
+> реализовано на rc.14, бамп до rc.15 — отдельной таской §210.
 > §207 занят другой сессией (goroutine-cpu-dump) — взят 208.
-> 1397 тестов зелёные (+26); Dart analyze чист; Kotlin compile OK.
-> **DEVICE-VERIFIED 28.06.2026** (Debug API): конфиг `vpn-1-auto` эмитит
-> `mode:round_robin` + `balancer{pool:3,pool_tolerance:100,sticky_hash:
-> [process,domain]}`; трафик в профайлере раскидан по слотам пула (🇩🇪/🇫🇮/🇨🇭/
-> 🇬🇧). Sticky держит TCP-домены на одном узле.
+> 1402 теста зелёные; Dart analyze чист; Kotlin compile OK.
 >
-> **Нюанс ядра (НЕ баг §208):** UDP/QUIC-флоу часто приходит в ядро с пустым
-> `destination.Fqdn` (Chrome уже зарезолвил домен на IP / HTTP3 после Alt-Svc)
-> → sticky-ключ `[process,domain]` для UDP = `process+""`, а для TCP того же
-> сайта = `process+fqdn` → **разные слоты** для UDP и TCP одного домена.
-> Профайлер показывает domain постфактум (`matched_via:connections_meta`),
-> хотя ядро в момент `pick()` Fqdn не видело. Улучшение — на стороне ЯДРА
-> (для UDP с пустым Fqdn добавлять `dest_ip` в ключ), не нашего билдера.
+> **DEVICE-проверка 28.06 (Debug API):** конфиг `vpn-1-auto` эмитит
+> `mode:round_robin` + `balancer{}` корректно; трафик раскидан по слотам пула.
+> НО виден **перекос — весь трафик в один узел** (89/3/2/1). Это оказался **БАГ
+> ЯДРА, не §208:** sticky `domain` был всегда пустым (роутер перезаписывал
+> `metadata.Destination` ДО балансировщика → `destination.Fqdn`="" и для TCP, и
+> для UDP) → все ключи схлопывались в один слот. **Фикшен в ядре rc.15**
+> (читает `metadata.Domain`); наш бамп + контракт-фикс — [§210](210-libbox-rc15-sticky-none.md).
+> Перепроверка размазывания — на rc.15 (НЕ device-verified).
 
 ## Контекст
 
-Ядро (SPEC 019 V2) расширило `urltest`-группу режимом балансировки нагрузки.
+Ядро (SPEC 019) расширило `urltest`-группу режимом балансировки нагрузки.
 Раньше urltest = **least_test**: один «лучший» узел по delay, все соединения
 идут через него (через `tolerance`-гистерезис). Новый режим **round_robin**
 раскидывает соединения по **пулу** из N узлов: фиксированные слоты, ленивый
@@ -35,7 +33,7 @@ health-check, sticky-привязка сессий по ключу (process/doma
 балансировщика, прокинуть в config через билдер, и (2) дать **просмотр текущего
 состава пула** по long-press на auto-ноде (через новый RPC `GetPool`).
 
-## Что даёт ядро (rc.14, по SPEC 019 V2)
+## Что даёт ядро (SPEC 019)
 
 Поля urltest-группы (в дополнение к существующим):
 
@@ -50,7 +48,7 @@ health-check, sticky-привязка сессий по ключу (process/doma
 `sticky_hash` компоненты: `process`, `domain`, `source_ip`, `dest_ip`,
 `dest_port`.
 
-**RPC `GetPool` (rc.14 libbox, подтверждено javap):**
+**RPC `GetPool` (libbox, подтверждено javap rc.14 и rc.15):**
 ```
 CommandClient.getPool(group_tag) → PoolSlotIterator
 PoolSlot { int getSlot(); String getTag(); int getDelay(); }   // delay мс, 0 = мёртвая/не измерена
@@ -132,12 +130,12 @@ balancer), потом interrupt.
   ядро.
 - **Pool tolerance (ms)** — number, дефолт 0. Hint «0 = keep pool full».
 - **`sticky_hash` → ряд из 5 FilterChip** (multi-select). Дефолт для нового
-  round_robin = `{process, domain}`. 0 чипов → `sticky_hash: []` (липкость
-  выкл). Подсказка под чипами.
-  - **nil-vs-[] (важно):** наша модель — `List<StickyHashKey>` (не nullable);
-    в режиме round_robin билдер ВСЕГДА эмитит `sticky_hash` явно (непустой или
-    `[]`). Ядровый «опущен→дефолт» нам не нужен — задаём из UI без
-    неоднозначности.
+  round_robin = `{process, domain}`. 0 чипов → липкость выкл. Подсказка под
+  чипами.
+  - **Sentinel `["none"]` (ядро rc.15, §210):** модель — `List<StickyHashKey>`
+    (пустой = выкл). Билдер маппит пустой набор в `sticky_hash:["none"]`, НЕ
+    `[]` — ядро ре-маршалит конфиг и схлопывает `[]`→nil («опущено»→дефолтит
+    липкость). Sentinel живёт ТОЛЬКО в билдере; UI/storage про него не знают.
 
 **Видимость:** секция Mode — только при `_autoEnabled`. balancer-поля — только
 при `Load balance`. Tolerance существует всегда, но disabled в Load balance.
@@ -209,10 +207,14 @@ final m = <String, dynamic>{
 };
 if (a.mode == UrltestMode.roundRobin) {
   m['mode'] = 'round_robin';
+  // §210: пустой набор → sentinel ["none"] (выкл), НЕ [] — ядро схлопывает []→nil.
+  final sticky = a.stickyHash.isEmpty
+      ? const ['none']
+      : a.stickyHash.map((k) => k.wire).toList();
   m['balancer'] = {
     'pool': a.pool,
     'pool_tolerance': a.poolTolerance,
-    'sticky_hash': a.stickyHash.map((k) => k.wire).toList(), // всегда явно ([] = выкл)
+    'sticky_hash': sticky,
   };
 }
 result.add(m);
@@ -280,15 +282,19 @@ Future<List<CcPoolSlot>> getPool(String tag) async {
   JSON без полей → дефолты; кламп pool `0→1`, poolTolerance отриц→0; enum
   wire-мэппинг обе стороны (2 mode + 5 sticky).
 - **builder-тест**: канал `auto.mode==roundRobin` → `mode:'round_robin'` +
-  `balancer{pool,pool_tolerance,sticky_hash}`; `stickyHash==[]`→`sticky_hash:[]`;
-  `leastTest` → НЕТ `mode`/`balancer` (бит-в-бит старый объект).
+  `balancer{pool,pool_tolerance,sticky_hash}`; пустой `stickyHash` →
+  `sticky_hash:["none"]` (§210 sentinel, не `[]`); `leastTest` → НЕТ
+  `mode`/`balancer` (бит-в-бит старый объект).
 - **`CcPoolSlot.fromMap`** — микротест (slot/tag/delay, дефолты, delay 0).
 - Widget-тест попапа — опц.
 
 ## §208a — бамп пина ядра rc.12 → rc.14
 
-Предусловие (пин уже `v1.14.0-lx.1-rc.14`, AAR скачан, SHA256 OK):
-- **rc.13** SPEC 019 V2 (пул/sticky/GetPool RPC); **rc.14** фикс валидации
+> Историческая запись. **Текущий пин — rc.15** (дальнейший бамп rc.14→rc.15 +
+> sticky-контракт `["none"]` вынесен в [§210](210-libbox-rc15-sticky-none.md)).
+
+Предусловие (на момент §208 пин был `v1.14.0-lx.1-rc.14`, AAR, SHA256 OK):
+- **rc.13** SPEC 019 (пул/sticky/GetPool RPC); **rc.14** фикс валидации
   `balancer.pool: 0`, «no behaviour change».
 - **javap rc.14:** базовый CommandClient API не менялся
   (`getGroups`/`urlTestOutbound`/`OutboundGroup.getSelected/getTag/getType`);
@@ -304,7 +310,7 @@ Future<List<CcPoolSlot>> getPool(String tag) async {
 
 ## Связанные
 
-- ядро SPEC 019 V2 (`sing-box-lx/SPECS/019-URLTEST_MODE_STICKY/SPEC.md`).
+- ядро SPEC 019 (`sing-box-lx/SPECS/019-URLTEST_MODE_STICKY/SPEC.md`).
 - [§125 configurable-channels](../features/125%20configurable-channels/spec.md) — auto-двойник = urltest-группа.
 - [§203 select-server](203-select-server-on-auto.md) — контекстное меню auto-ноды (рядом «View pool»).
 - [§205 rc.12](205-libbox-rc12-cold-urltest.md) — предыдущий бамп ядра; этот = rc.12→rc.14.
