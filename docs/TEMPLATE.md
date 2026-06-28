@@ -111,8 +111,9 @@ wizard_template.json
 │   │       ├─ strict_route        "@tun_strict_route"
 │   │       └─ stack               "@tun_stack"
 │   ├─ endpoints[]                 list          wireguard endpoints (заполняется из server_lists)
-│   ├─ outbounds[]                 list[1]       base — direct-out; остальное добавляется builder'ом
-│   │   └─ {type:"direct", tag:"direct-out"}
+│   ├─ outbounds[]                 list[2]       base — direct-out + block; остальное добавляется builder'ом
+│   │   ├─ {type:"direct", tag:"direct-out"}
+│   │   └─ {type:"block",  tag:"block"}        §201 — drop-out, опция селектора канала + route_final (красный)
 │   ├─ route                       object{5 keys}
 │   │   ├─ find_process            bool          true → package_name detection включён
 │   │   ├─ default_domain_resolver "@dns_default_domain_resolver"
@@ -316,6 +317,20 @@ Endpoints для speed-test screen. Не override'ится юзером (но ю
 > канал — каждый канал делает свой `<tag>-auto`-двойник через галку auto.
 > Эта секция описывает структуру seed'а (что попадает в `channels[]` при первом
 > запуске).
+>
+> **Маппинг seed `preset_groups[i]` → `channels[i]`** (one-shot миграция):
+>
+> | preset_groups | channels[] |
+> |---|---|
+> | `tag` | `tag` (vpn-1 форсится `enabled=true`) |
+> | `label` | `label` (пусто → `tag`) |
+> | `default_enabled` / legacy `enabled_groups[]` | `enabled` |
+> | `add_outbounds` ∋ `direct-out` | `include_direct` |
+> | `add_outbounds` ∋ ✨auto | `auto` (ChannelAuto из `@urltest_*` vars) |
+> | `options.interrupt_exist_connections` | `interrupt_exist_connections` |
+> | (не из template) | `node_filter`/`default_filter` = `''`; `include_block` = false |
+>
+> Глобальный `✨auto`-preset (urltest) сам каналом не становится — пропускается.
 
 Catalog of routing-groups: какие selector'ы/urltest'ы создавать при assembly финального config'а. На каждый enabled группу builder добавляет sing-box outbound в `config.outbounds[]`.
 

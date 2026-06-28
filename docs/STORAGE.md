@@ -665,10 +665,21 @@ Debug API handlers — идут через единую дверь `SettingsStor
 - `auto` (nullable) — параметры urltest-двойника. `null` = галка auto ВЫКЛ,
   `<tag>-auto` не эмитится. `auto.tag` НЕ хранится (производный `${tag}-auto`).
 - **Резолюция в билдере**: каждый включённый канал эмитит selector `<tag>` с
-  нодами после `node_filter` (regex по итоговому tag, §048-style); если `auto !=
+  нодами после `node_filter` (regex по итоговому tag, §048-style) + опции
+  `direct-out`/`block` (по `include_direct`/`include_block`, §201); если `auto !=
   null` и набор нод непуст — дополнительно urltest `<tag>-auto` (только ноды
-  канала, без direct/auto). `default` = первая нода, чей tag матчит
+  канала, без direct/block/auto). `default` = первая нода, чей tag матчит
   `default_filter`. Пустой/невалидный regex → все ноды.
+- **Инверсия `node_filter_invert`** (§197): `true` → в канал попадают ноды, чей
+  tag **НЕ** матчит `node_filter` (исключающий фильтр). Пустой `node_filter` →
+  инверсия игнорируется (все ноды). Пример: `node_filter:"bypass",
+  node_filter_invert:true` → все ноды кроме содержащих «bypass».
+- **Пустой набор после фильтра** (regex/инверсия отсекли всё) → fallback selector
+  `outbounds: ["block","direct-out"]`, `default: "block"` (§201 — безопаснее
+  блокировать, чем выпускать мимо VPN; direct остаётся опцией). Билдер при этом
+  пишет warning в баннер конфига (§200), если в подписке были ноды. `block`
+  всегда присутствует в `config.outbounds[]` как системный outbound и валиден
+  как `route_final`.
 - **Миграция** (one-shot, guard `channels_migrated`): seed из
   `template.presetGroups` — `enabled_groups[]`/`default_enabled` → `enabled`
   (vpn-1 форсим true); `add_outbounds ∋ direct-out` → `include_direct`;

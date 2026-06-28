@@ -67,7 +67,7 @@ CHANGELOG.md                        # Список изменений по ве�
 | `dns_options` | DNS серверы (16 пресетов) + правила |
 | `ping_options` | URL, timeout, пресеты для пинга |
 | `speed_test_options` | Серверы, потоки, ping URLs |
-| `preset_groups` | Proxy группы (auto/selector/vpn) |
+| `preset_groups` | §125 — SEED для `channels[]` (каналы живут в storage, не в template) |
 | `vars` | Все конфигурационные переменные |
 | `selectable_rules` | Правила маршрутизации с SRS |
 | `config` | Каркас sing-box конфига |

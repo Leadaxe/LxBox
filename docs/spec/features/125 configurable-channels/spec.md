@@ -416,6 +416,16 @@ CRUD требует снять захардкоженные предположе
   мост песочница→канал: кнопка 💾 в regex-поле на главной сохраняет текущий regex
   в `node_filter`/`default_filter` активного канала (раньше — только вручную через
   редактор канала).
+- [§196 active-node-pinned](../../tasks/196-active-node-pinned-after-direct-auto.md) —
+  активная нода закрепляется вверху после direct/auto при любой сортировке.
+- [§197 channel-node-filter-invert](../../tasks/197-channel-node-filter-invert.md) —
+  `node_filter_invert`: `!`-тогл инвертирует фильтр (исключающий, «всё КРОМЕ»).
+- **§198** — имена каналов с цифрой-в-кружке (①②③) + seed-template ≤2 строк.
+- **§199** — в строке auto-ноды на главной сервер важнее транспорта.
+- **§200** — warning в баннере конфига, когда фильтр канала отсёк все ноды.
+- [§201 block-outbound](../../tasks/201-block-outbound-for-channels.md) — block
+  `{type:block, tag:block}`: галка `include_block`, route-final красный, иконка
+  Block, fallback пустого канала `[block, direct-out]` с default block.
 - [§008 ping and node management](../008%20ping%20and%20node%20management/spec.md) —
   per-group ping (`ping_options.groups[tag]`); образец per-channel storage и место,
   куда сворачивается ping-настройка в редакторе.
