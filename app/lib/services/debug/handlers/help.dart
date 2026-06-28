@@ -65,7 +65,7 @@ GET /state/subs[?reveal=true]       Subscriptions. URL masked default; reveal=tr
 GET /state/rules                    CustomRule[] — sealed: inline | srs | preset (with per-kind fields)
 GET /state/storage                  Raw SettingsStorage._cache JSON (for debugging)
 GET /state/vpn                      { auto_start, keep_on_exit, allow_bypass, background_mode, is_ignoring_battery_optimizations }
-GET /state/config_locked            { "locked": bool } — §037 auto-rebuild lock state
+GET /state/config_locked            { "locked": bool } — auto-rebuild lock state
 
 === Device ===
 
@@ -80,22 +80,22 @@ PUT /config                         Overwrite config.json + reload sing-box. Bod
                                       IMPORTANT: this override is temporary — the next
                                       rebuild-config (or any UI action) wipes it.
                                       To pin it permanently — PUT /settings/config_locked
-                                      {"locked": true} before the write. See §037.
+                                      {"locked": true} before the write.
 GET /config/pretty                  Same with indent
 GET /config/path                    Absolute on-device file path
 
-=== Pool (§208 round_robin balancer) ===
+=== Pool (round_robin balancer) ===
 
 GET /pool?tag=<autoTag>             Snapshot of a round_robin urltest pool (e.g. tag=vpn-1-auto).
                                       → {"tag","count","slots":[{slot,tag,delay,alive}]}. delay=0 → dead/untested.
                                       non-round_robin group → 200 slots:[] (pool is empty, not an error).
-                                      §209: tunnel down / cc client unavailable → 409 Conflict (NOT empty 200).
-                                      Reads via the lifecycle-independent pingClient → works while backgrounded.
+                                      tunnel down / command client unavailable → 409 Conflict (NOT empty 200).
+                                      Works while the app is backgrounded (tunnel must be up).
 
 === Logs ===
 
 GET /logs?limit=N&source=app|core&q=substr&level=error,warning,info,debug
-                                    AppLog entries (§043 per-source quotas:
+                                    AppLog entries (per-source quotas:
                                       app=300, core=500 in-memory).
                                       limit  — default 200, max 1000
                                       source — filter by source
@@ -136,16 +136,16 @@ POST /action/preview-empty-state?on=true|false UI-only override: render the empt
                                                   "Check now" button. Uses primary api.github.com → fallback
                                                   raw.githubusercontent.com/.../docs/latest.json.
 
-=== WARP (§025/§143 — register Cloudflare WARP node) ===
+=== WARP (register Cloudflare WARP node) ===
 
 POST /warp[?rebuild=true]                      Registers a WARP node (same path as the Get WARP button).
                                                   Private key is generated on-device, registration with Cloudflare.
                                                   Node is added to subscriptions automatically. All body fields optional:
                                                   {"licenseKey":"...",       // null/empty → free WARP
                                                    "endpoint":"IP:port",     // default engage.cloudflareclient.com:2408
-                                                   "obfuscate":true,         // §143 masquerade
+                                                   "obfuscate":true,         // QUIC masquerade
                                                    "forceNew":false,         // ignore cache, re-register
-                                                   "includeReserved":false,  // §142; null → default by obfuscate
+                                                   "includeReserved":false,  // null → default by obfuscate
                                                    "quicParams":{"sni":"www.google.com","ip":"quic",
                                                                  "ib":"chrome","jc":4,"jmin":40,"jmax":70}}
                                                   ?rebuild=true → regenerate config + reload core.
@@ -161,7 +161,7 @@ POST   /rules/reorder                          Body: {"order":[id1,id2,...]} —
 
 `?rebuild=true` on any write method → automatically triggers rebuild-config.
 
-=== Wi-Fi history (§051 Phase 3 — saved networks for routing rule editor) ===
+=== Wi-Fi history (saved networks for routing rule editor) ===
 
 GET    /wifi_history                           list [{ssid, bssid, last_seen}]
 POST   /wifi_history                           upsert. body {"ssid": "...", "bssid": "..."}
@@ -176,7 +176,7 @@ GET /files/srs/list                            Cached SRS files: [{rule_id, size
 GET /files/srs?ruleId=<id>                     Binary SRS dump (octet-stream)
 GET /files/local?name=<n>                      Whitelisted internal-storage files (cache.db, stderr.log). `/files/external` — legacy alias.
 
-=== Traffic Profiler (§044 per-app + §048 system-wide) ===
+=== Traffic Profiler (per-app + system-wide) ===
 
 Per-app session (only one active at a time):
 POST   /profiler/start                         Body: {"package":"<pkg>", "verbose":false, "secondary_packages":["<pkg>",...]}.
@@ -195,7 +195,7 @@ GET    /profiler/stream                        SSE per-session live stream (requ
 PATCH  /profiler/secondary-packages            Body: {"secondary_packages":[...]}; updates live on active.
                                                  Returns 404 if no active session.
 
-System-wide (§048 inclusive observer — Live tab in Statistics):
+System-wide (inclusive observer — Live tab in Statistics):
 POST   /profiler/live/start                    startGlobalRecording — subscribes to core logs +
                                                  starts _pollConnections (5s). Idempotent.
 POST   /profiler/live/stop                     stopGlobalRecording. Idempotent.
@@ -207,14 +207,14 @@ GET    /profiler/live/stream                   SSE — all system-wide events li
 GET    /profiler/live/unattributed             Recent unattributed ring (DNS-fail without owner / TCP without
                                                  process attribution). Used for banner detection.
 
-=== Diagnostics (§038) ===
+=== Diagnostics ===
 
 GET /diag/dump                                 Full JSON pack from DumpBuilder.build (config + vars + subs + log + stderr + exit_info + logcat).
 GET /diag/exit-info                            ApplicationExitInfo (last 5 system exits); empty array on API <30.
 GET /diag/logcat?count=N&level=L               Logcat tail of our process (N=50..5000, default 1000; level=V|D|I|W|E|F, default E).
 GET /diag/stderr                               filesDir/stderr.log content (Go panic stacktrace from libbox).
 GET /diag/applog?prev=true|false|all           AppLog entries; `prev` filters by fromPreviousSession (default `all`).
-GET /diag/pprof?profile=P&query=Q            §207 pprof snapshot via libbox PProfServer (tunnel must be up). P=goroutine|profile|heap|allocs|block|mutex|threadcreate (default goroutine). query=raw pprof query w/o `?` (e.g. gc=1, debug=1, seconds=20); default per profile (goroutine→debug=2, profile→seconds=10, heap→gc=1). Only goroutine?debug=* → text/plain; rest → .pb (go tool pprof). heap inuse_space: go tool pprof -inuse_space heap.pb.
+GET /diag/pprof?profile=P&query=Q            pprof snapshot via libbox PProfServer (tunnel must be up). P=goroutine|profile|heap|allocs|block|mutex|threadcreate (default goroutine). query=raw pprof query w/o `?` (e.g. gc=1, debug=1, seconds=20); default per profile (goroutine→debug=2, profile→seconds=10, heap→gc=1). Only goroutine?debug=* → text/plain; rest → .pb (go tool pprof). heap inuse_space: go tool pprof -inuse_space heap.pb.
 
 === Settings (scoped writes) ===
 
@@ -227,11 +227,11 @@ PUT    /settings/vars/{key}                    body {"value":"..."}; blocklist: 
 DELETE /settings/vars/{key}                    Delete var
 PUT    /settings/dns_options/servers           body {"servers":[...]}
 PUT    /settings/dns_options/rules             body {"rules":"<json-string>"}
-PUT    /settings/config_locked                 §037 toggle auto-rebuild lock. body {"locked":true|false}.
+PUT    /settings/config_locked                 toggle auto-rebuild lock. body {"locked":true|false}.
                                                  true → SubscriptionController.generateConfig returns null
                                                  silently, the custom config from PUT /config is not overwritten
                                                  by UI actions. Default false (normal flow).
-GET    /settings/core_logs_enabled              §043 current state of forwarding sing-box logs into /logs/core.
+GET    /settings/core_logs_enabled              current state of forwarding sing-box logs into /logs/core.
                                                  → {"enabled": bool}
 PUT    /settings/core_logs_enabled              body {"enabled":true|false}. Default false. Takes effect
                                                  ONLY on a process restart — Libbox.setup is one-shot. Stop/
@@ -239,10 +239,10 @@ PUT    /settings/core_logs_enabled              body {"enabled":true|false}. Def
                                                  stays alive). Force-stop the app + relaunch, or use the UI button
                                                  "Quit & reopen app" in App Settings → Diagnostics or
                                                  Debug screen → Log tab.
-GET|PUT /settings/vpn/allow_bypass              §052 VpnService.Builder.allowBypass(). body {"enabled":bool}.
+GET|PUT /settings/vpn/allow_bypass              VpnService.Builder.allowBypass(). body {"enabled":bool}.
                                                  Effect at next establish() — reload VPN.
-GET|PUT /settings/vpn/keep_on_exit              §052 keep VPN running when app closed. body {"enabled":bool}.
-GET|PUT /settings/vpn/background_mode           §052 foreground-service tunnel sleep mode.
+GET|PUT /settings/vpn/keep_on_exit              keep VPN running when app closed. body {"enabled":bool}.
+GET|PUT /settings/vpn/background_mode           foreground-service tunnel sleep mode.
                                                  body {"mode":"never|lazy|always"}.
                                                  never (default) — always-on; lazy — pause in deep Doze;
                                                  always — pause on screen-off. Effect at next VPN connect.
@@ -292,7 +292,7 @@ curl -H "Authorization: Bearer \$TOKEN" 'http://127.0.0.1:9269/logs?level=error,
 - emoji in URL path (✨auto etc.) — must be URL-encoded. curl does not do it for you.
 - Subscription URLs masked default (`scheme://host/***`); ?reveal=true for full.
 - /rules CRUD accepts snake_case (domain_suffixes, ip_cidrs, preset_id, vars_values,
-  dns: {enabled, server_tag} — §117) and returns snake_case.
+  dns: {enabled, server_tag}) and returns snake_case.
 - All timestamps are ISO-8601 UTC.
 - Token stays stable until you Regenerate it in the UI — stable for curl sessions.
 ''';
@@ -322,12 +322,12 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/state/rules', 'description': 'CustomRule[] sealed (inline|srs|preset)'},
     {'method': 'GET', 'path': '/state/storage', 'description': 'Raw SettingsStorage._cache JSON'},
     {'method': 'GET', 'path': '/state/vpn', 'description': 'auto_start, keep_on_exit, allow_bypass, background_mode, battery_whitelisted'},
-    {'method': 'GET', 'path': '/state/config_locked', 'description': '{locked: bool} — §037 auto-rebuild lock state'},
+    {'method': 'GET', 'path': '/state/config_locked', 'description': '{locked: bool} — auto-rebuild lock state'},
     // Device
     {'method': 'GET', 'path': '/device', 'description': 'Android version, model, ABI, app version, network, uptime'},
     // Config
     {'method': 'GET', 'path': '/config', 'description': 'Saved sing-box JSON (raw)'},
-    {'method': 'PUT', 'path': '/config', 'body': 'raw sing-box JSON (Map)', 'description': 'Overwrite config.json + reload sing-box. Temporary unless /settings/config_locked=true (§037).'},
+    {'method': 'PUT', 'path': '/config', 'body': 'raw sing-box JSON (Map)', 'description': 'Overwrite config.json + reload sing-box. Temporary unless /settings/config_locked=true.'},
     {'method': 'GET', 'path': '/config/pretty', 'description': 'Indent-formatted'},
     {'method': 'GET', 'path': '/config/path', 'description': 'On-device file path'},
     // Logs
@@ -340,8 +340,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/action/reconnect', 'description': 'Stop→Start under one busy-wrap (start if down)'},
     {'method': 'POST', 'path': '/action/reload-vpn', 'description': 'In-place sing-box reload (no service kill) → {applied}'},
     {'method': 'POST', 'path': '/action/clear-error', 'description': 'Dismiss lastError banner'},
-    {'method': 'POST', 'path': '/action/force-stop-vpn', 'description': '§140 — hard force-stop (doForceStop path): teardown→stopSelf, frees CommandServer port 63130. fire-and-forget.'},
-    {'method': 'POST', 'path': '/action/set-transient-timeout', 'params': {'connecting': 'ms (optional)', 'stopping': 'ms (optional)'}, 'description': '§140 — override transient-timeout thresholds (ms) for on-device force-stop test. At least one param.'},
+    {'method': 'POST', 'path': '/action/force-stop-vpn', 'description': 'Hard force-stop (doForceStop path): teardown→stopSelf, frees CommandServer port 63130. fire-and-forget.'},
+    {'method': 'POST', 'path': '/action/set-transient-timeout', 'params': {'connecting': 'ms (optional)', 'stopping': 'ms (optional)'}, 'description': 'Override transient-timeout thresholds (ms) for on-device force-stop test. At least one param.'},
     {'method': 'POST', 'path': '/action/reset-network', 'description': 'Light recovery: closeAll + DNS flush + dialer rebind (spec 031). Requires tunnel up.'},
     {'method': 'POST', 'path': '/action/urltest', 'params': {'tag': 'node tag (single)', 'group': 'group tag (group urltest, URL-encode emoji)', 'all': 'true (mass urltest)', 'cancel': '1 (abort in-flight mass urltest)'}, 'description': 'URLTest dispatch by query: one of tag/group/all/cancel'},
     {'method': 'POST', 'path': '/action/switch-node', 'params': {'tag': 'node tag'}, 'description': 'Selector switch via HomeController'},
@@ -354,7 +354,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/action/emulate-error', 'params': {'kind': 'socket|timeout|http-401|http-404|http-410|http-429|http-503|format|fs|plain|all'}, 'description': 'Demo humanizeError in /logs'},
     {'method': 'POST', 'path': '/action/check-updates', 'description': 'Force update check (bypass cap + toggle); returns {kind,tag,html_url,...}'},
     // WARP
-    {'method': 'POST', 'path': '/warp', 'params': {'rebuild': 'true|false'}, 'body': '{licenseKey?, endpoint?, obfuscate?, forceNew?, includeReserved?, quicParams?:{sni,ip,ib,jc,jmin,jmax}}', 'description': 'Register Cloudflare WARP node (same path as Get WARP wizard). All fields optional. obfuscate=true → §143 masquerade via quicParams. ?rebuild=true regenerates config.'},
+    {'method': 'POST', 'path': '/warp', 'params': {'rebuild': 'true|false'}, 'body': '{licenseKey?, endpoint?, obfuscate?, forceNew?, includeReserved?, quicParams?:{sni,ip,ib,jc,jmin,jmax}}', 'description': 'Register Cloudflare WARP node (same path as Get WARP wizard). All fields optional. obfuscate=true → QUIC masquerade via quicParams. ?rebuild=true regenerates config.'},
     // Rules
     {'method': 'GET', 'path': '/rules', 'description': 'Alias /state/rules'},
     {'method': 'GET', 'path': '/rules/{id}', 'description': 'Single rule'},
@@ -362,7 +362,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'PATCH', 'path': '/rules/{id}', 'params': {'rebuild': 'true|false'}, 'body': 'Partial CustomRule', 'description': 'Update'},
     {'method': 'DELETE', 'path': '/rules/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Delete'},
     {'method': 'POST', 'path': '/rules/reorder', 'body': '{"order":[id,...]}', 'description': 'Reorder (all ids required)'},
-    // Wi-Fi history (§051 Phase 3)
+    // Wi-Fi history (saved networks for routing rule editor)
     {'method': 'GET', 'path': '/wifi_history', 'description': 'List [{ssid, bssid, last_seen}], cap 50'},
     {'method': 'POST', 'path': '/wifi_history', 'body': '{"ssid":"...","bssid":"..."}', 'description': 'Upsert entry; bssid lower-cased'},
     {'method': 'DELETE', 'path': '/wifi_history', 'body': '{"ssid":"...","bssid":"..."}', 'description': 'Remove specific entry'},
@@ -371,8 +371,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/files/srs/list', 'description': 'Cached SRS [{rule_id,size,mtime}]'},
     {'method': 'GET', 'path': '/files/srs', 'params': {'ruleId': 'id'}, 'description': 'Binary SRS dump'},
     {'method': 'GET', 'path': '/files/local', 'params': {'name': 'cache.db|stderr.log'}, 'description': 'Whitelisted internal-storage files (filesDir). `/files/external` — legacy alias.'},
-    // Profiler (§044 per-app + §048 system-wide)
-    {'method': 'POST', 'path': '/profiler/start', 'body': '{"package":"<pkg>","verbose":false,"secondary_packages":[...]}', 'description': '§044 Start per-app session. 409 if already active.'},
+    // Profiler (per-app + system-wide)
+    {'method': 'POST', 'path': '/profiler/start', 'body': '{"package":"<pkg>","verbose":false,"secondary_packages":[...]}', 'description': 'Start per-app session. 409 if already active.'},
     {'method': 'POST', 'path': '/profiler/stop', 'description': 'Stop active session. 404 if none.'},
     {'method': 'GET', 'path': '/profiler/active', 'description': 'Active session metadata or 404.'},
     {'method': 'GET', 'path': '/profiler/sessions', 'description': 'Last 5 completed sessions (FIFO ring).'},
@@ -381,20 +381,20 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'DELETE', 'path': '/profiler/session/{id}', 'description': 'Delete one session.'},
     {'method': 'GET', 'path': '/profiler/stream', 'description': 'SSE per-session live events (requires active).'},
     {'method': 'PATCH', 'path': '/profiler/secondary-packages', 'body': '{"secondary_packages":[...]}', 'description': 'Update secondary packages on active session. POST also accepted.'},
-    {'method': 'POST', 'path': '/profiler/live/start', 'description': '§048 startGlobalRecording (system-wide). Idempotent.'},
-    {'method': 'POST', 'path': '/profiler/live/stop', 'description': '§048 stopGlobalRecording. Idempotent.'},
+    {'method': 'POST', 'path': '/profiler/live/start', 'description': 'startGlobalRecording (system-wide). Idempotent.'},
+    {'method': 'POST', 'path': '/profiler/live/stop', 'description': 'stopGlobalRecording. Idempotent.'},
     {'method': 'GET', 'path': '/profiler/live/state', 'description': '{recording,started_at,buffer_count,unattributed_count,banner_active}'},
-    {'method': 'GET', 'path': '/profiler/live', 'params': {'seconds': 'window (default 60)'}, 'description': '§048 global rolling buffer snapshot — TCP/UDP open/close + DNS resolves of all packages.'},
-    {'method': 'GET', 'path': '/profiler/live/stream', 'description': '§048 SSE — system-wide events live.'},
-    {'method': 'GET', 'path': '/profiler/live/unattributed', 'description': '§048 recent unattributed ring (DNS-fail / TCP without attribution).'},
-    // Diagnostics (§038)
+    {'method': 'GET', 'path': '/profiler/live', 'params': {'seconds': 'window (default 60)'}, 'description': 'Global rolling buffer snapshot — TCP/UDP open/close + DNS resolves of all packages.'},
+    {'method': 'GET', 'path': '/profiler/live/stream', 'description': 'SSE — system-wide events live.'},
+    {'method': 'GET', 'path': '/profiler/live/unattributed', 'description': 'Recent unattributed ring (DNS-fail / TCP without attribution).'},
+    // Diagnostics
     {'method': 'GET', 'path': '/diag/dump', 'description': 'Full DumpBuilder JSON-pack'},
     {'method': 'GET', 'path': '/diag/exit-info', 'description': 'ApplicationExitInfo entries (API 30+; empty on lower)'},
     {'method': 'GET', 'path': '/diag/logcat', 'params': {'count': '50..5000', 'level': 'V|D|I|W|E|F'}, 'description': 'Logcat tail of our process'},
     {'method': 'GET', 'path': '/diag/stderr', 'description': 'filesDir/stderr.log content (Go panic stacktrace)'},
     {'method': 'GET', 'path': '/diag/applog', 'params': {'prev': 'true|false|all'}, 'description': 'AppLog entries (filter by fromPreviousSession)'},
-    {'method': 'GET', 'path': '/diag/pprof', 'params': {'profile': 'goroutine|profile|heap|allocs|block|mutex|threadcreate', 'query': 'raw pprof query w/o ? (gc=1, debug=1, seconds=20); default per profile'}, 'description': '§207 pprof snapshot via libbox PProfServer (tunnel must be up)'},
-    // Settings (scoped writes — §037 etc)
+    {'method': 'GET', 'path': '/diag/pprof', 'params': {'profile': 'goroutine|profile|heap|allocs|block|mutex|threadcreate', 'query': 'raw pprof query w/o ? (gc=1, debug=1, seconds=20); default per profile'}, 'description': 'pprof snapshot via libbox PProfServer (tunnel must be up)'},
+    // Settings (scoped writes)
     {'method': 'PUT', 'path': '/settings/route_final', 'body': '{"outbound":"..."}', 'description': 'Set route.final outbound'},
     {'method': 'GET|PUT', 'path': '/settings/interrupt_on_switch', 'body': '{"enabled":bool}', 'description': 'Toggle interrupt connections on node switch'},
     {'method': 'GET|PUT', 'path': '/settings/node_sort', 'body': '{"mode":"latency|manual|","order"?:[...]}', 'description': 'Node-list sort mode + manual order'},
@@ -404,13 +404,13 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'DELETE', 'path': '/settings/vars/{key}', 'description': 'Delete var'},
     {'method': 'PUT', 'path': '/settings/dns_options/servers', 'body': '{"servers":[...]}', 'description': 'Set DNS servers list'},
     {'method': 'PUT', 'path': '/settings/dns_options/rules', 'body': '{"rules":"<json-string>"}', 'description': 'Set DNS rules (legacy json-string shape)'},
-    {'method': 'PUT', 'path': '/settings/config_locked', 'body': '{"locked":true|false}', 'description': '§037 toggle auto-rebuild lock — true pins config from UI rebuilds'},
-    {'method': 'GET', 'path': '/settings/vpn/allow_bypass', 'description': '§052 VpnService.Builder.allowBypass() state'},
-    {'method': 'PUT', 'path': '/settings/vpn/allow_bypass', 'body': '{"enabled":true|false}', 'description': '§052 toggle allowBypass — apply on next establish()'},
-    {'method': 'GET', 'path': '/settings/vpn/keep_on_exit', 'description': '§052 keep-VPN-on-app-exit state'},
-    {'method': 'PUT', 'path': '/settings/vpn/keep_on_exit', 'body': '{"enabled":true|false}', 'description': '§052 toggle keep-on-exit'},
-    {'method': 'GET', 'path': '/settings/vpn/background_mode', 'description': '§052 tunnel sleep mode (never|lazy|always)'},
-    {'method': 'PUT', 'path': '/settings/vpn/background_mode', 'body': '{"mode":"never|lazy|always"}', 'description': '§052 set tunnel sleep mode — apply on next VPN connect'},
+    {'method': 'PUT', 'path': '/settings/config_locked', 'body': '{"locked":true|false}', 'description': 'Toggle auto-rebuild lock — true pins config from UI rebuilds'},
+    {'method': 'GET', 'path': '/settings/vpn/allow_bypass', 'description': 'VpnService.Builder.allowBypass() state'},
+    {'method': 'PUT', 'path': '/settings/vpn/allow_bypass', 'body': '{"enabled":true|false}', 'description': 'Toggle allowBypass — apply on next establish()'},
+    {'method': 'GET', 'path': '/settings/vpn/keep_on_exit', 'description': 'keep-VPN-on-app-exit state'},
+    {'method': 'PUT', 'path': '/settings/vpn/keep_on_exit', 'body': '{"enabled":true|false}', 'description': 'Toggle keep-on-exit'},
+    {'method': 'GET', 'path': '/settings/vpn/background_mode', 'description': 'tunnel sleep mode (never|lazy|always)'},
+    {'method': 'PUT', 'path': '/settings/vpn/background_mode', 'body': '{"mode":"never|lazy|always"}', 'description': 'Set tunnel sleep mode — apply on next VPN connect'},
     // Backup
     {'method': 'GET', 'path': '/backup/export', 'params': {'include': 'config,vars,subs (default all)'}, 'description': 'Pure-data snapshot (no diag noise)'},
     {'method': 'POST', 'path': '/backup/import', 'params': {'merge': 'true|false', 'rebuild': 'true|false'}, 'body': '{config?, vars?, server_lists?}', 'description': 'Restore from export or /diag/dump'},

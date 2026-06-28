@@ -260,7 +260,7 @@ class _AutomationTabState extends State<AutomationTab> {
         SwitchListTile(
           title: const Text('Health'),
           subtitle: const Text(
-            'HEARTBEAT_FAILED · LATENCY_DEGRADED (available since §042)',
+            'HEARTBEAT_FAILED · LATENCY_DEGRADED',
           ),
           value: _emitHealth,
           onChanged: _loaded
