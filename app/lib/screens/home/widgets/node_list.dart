@@ -39,6 +39,7 @@ class HomeNodeList extends StatelessWidget {
     required this.onTapToConnect,
     required this.rowKeyFor,
     required this.onSelectServer,
+    required this.onViewPool,
   });
 
   final HomeController controller;
@@ -54,6 +55,9 @@ class HomeNodeList extends StatelessWidget {
   /// выбранному urltest-серверу» (Select server в меню auto-ноды).
   final GlobalKey Function(String tag) rowKeyFor;
   final void Function(String tag) onSelectServer;
+
+  /// §208 — открыть попап пула round_robin-канала по его auto-тегу (View pool).
+  final void Function(String autoTag) onViewPool;
 
   @override
   Widget build(BuildContext context) {
@@ -287,6 +291,11 @@ class HomeNodeList extends StatelessWidget {
             // выбранному серверу» (подсветка + scroll). Иначе null → пункт скрыт.
             onSelectServer:
                 urltestNow != null ? () => onSelectServer(urltestNow) : null,
+            // §208 — «View pool» только для auto-ноды round_robin-канала
+            // (у least_test пула нет). tag здесь = auto-тег группы.
+            onViewPool: (isUrltestGroup && controller.isRoundRobinAuto(tag))
+                ? () => onViewPool(tag)
+                : null,
           ),
         );
         // §203 — GlobalKey на сам row (для Scrollable.ensureVisible); reorder-key

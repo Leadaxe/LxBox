@@ -228,6 +228,16 @@ class CcChannel {
     return r.map((m) => CcGroup.fromMap(_asMap(m))).toList();
   }
 
+  /// §208 (SPEC 019 V2) — unary снапшот пула round_robin-группы [tag]. Слоты
+  /// `[{slot,tag,delay}]` в фиксированном порядке слота. Не-round_robin группа /
+  /// туннель down / пул не готов → ПУСТОЙ список (не ошибка). `delay`==0 →
+  /// мёртвая/не измерена.
+  Future<List<CcPoolSlot>> getPool(String tag) async {
+    final r = await _methods
+        .invokeMethod<List<dynamic>>('ccGetPool', {'tag': tag});
+    return (r ?? const []).map((m) => CcPoolSlot.fromMap(_asMap(m))).toList();
+  }
+
   Future<bool> selectOutbound(String group, String tag) async =>
       await _methods.invokeMethod<bool>(
           'ccSelectOutbound', {'group': group, 'tag': tag}) ??
@@ -634,6 +644,26 @@ class CcDelayResult {
   factory CcDelayResult.fromMap(Map<String, dynamic> m) => CcDelayResult(
         delay: _int(m['delay']),
         error: m['error']?.toString() ?? '',
+      );
+}
+
+/// §208 (SPEC 019 V2) — один слот пула round_robin-группы (`getPool`). Слоты
+/// фиксированы по `slot`; нода в слоте может меняться (дотест). `delay`==0 →
+/// мёртвая / не измерена (живая всегда ≥1 — ядро клампит на чтении).
+class CcPoolSlot {
+  const CcPoolSlot({required this.slot, required this.tag, required this.delay});
+
+  final int slot;
+  final String tag;
+  final int delay; // мс, 0 = мёртвая/не измерена
+
+  /// true → нода в слоте жива (есть замер). false → мёртвая/не измерена.
+  bool get alive => delay > 0;
+
+  factory CcPoolSlot.fromMap(Map<String, dynamic> m) => CcPoolSlot(
+        slot: _int(m['slot']),
+        tag: m['tag']?.toString() ?? '',
+        delay: _int(m['delay']),
       );
 }
 

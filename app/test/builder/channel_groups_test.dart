@@ -159,6 +159,57 @@ void main() {
       ]);
       expect(outs.any((o) => o['tag'] == 'vpn-1-auto'), false);
     });
+
+    // §208 — балансировщик round_robin
+    test('leastTest (дефолт) → НЕТ mode/balancer (бит-в-бит апстрим)', () async {
+      final outs = await build([
+        const Channel(tag: 'vpn-1', label: 'X', auto: ChannelAuto()),
+      ]);
+      final auto = byTag(outs, 'vpn-1-auto');
+      expect(auto.containsKey('mode'), false);
+      expect(auto.containsKey('balancer'), false);
+    });
+
+    test('round_robin → mode + balancer{pool,pool_tolerance,sticky_hash}',
+        () async {
+      final outs = await build([
+        const Channel(
+          tag: 'vpn-1',
+          label: 'X',
+          auto: ChannelAuto(
+            mode: UrltestMode.roundRobin,
+            pool: 5,
+            poolTolerance: 30,
+            stickyHash: [StickyHashKey.process, StickyHashKey.domain],
+          ),
+        ),
+      ]);
+      final auto = byTag(outs, 'vpn-1-auto');
+      expect(auto['mode'], 'round_robin');
+      final bal = auto['balancer'] as Map<String, dynamic>;
+      expect(bal['pool'], 5);
+      expect(bal['pool_tolerance'], 30);
+      expect(bal['sticky_hash'], ['process', 'domain']);
+      // апстрим-поля urltest остаются (tolerance тоже — ядро игнорит в rr)
+      expect(auto['type'], 'urltest');
+      expect(auto.containsKey('tolerance'), true);
+    });
+
+    test('round_robin + sticky_hash [] → пустой массив (липкость выкл)',
+        () async {
+      final outs = await build([
+        const Channel(
+          tag: 'vpn-1',
+          label: 'X',
+          auto: ChannelAuto(
+            mode: UrltestMode.roundRobin,
+            stickyHash: <StickyHashKey>[],
+          ),
+        ),
+      ]);
+      final bal = byTag(outs, 'vpn-1-auto')['balancer'] as Map<String, dynamic>;
+      expect(bal['sticky_hash'], isEmpty);
+    });
   });
 
   group('F2 — per-channel regex node-filter', () {

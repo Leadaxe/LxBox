@@ -140,6 +140,120 @@ void main() {
     });
   });
 
+  group('§208 — ChannelAuto balancer (round_robin)', () {
+    test('дефолты: leastTest, pool 3, poolTolerance 0, sticky process+domain', () {
+      const a = ChannelAuto();
+      expect(a.mode, UrltestMode.leastTest);
+      expect(a.pool, 3);
+      expect(a.poolTolerance, 0);
+      expect(a.stickyHash, [StickyHashKey.process, StickyHashKey.domain]);
+    });
+
+    test('старый JSON без mode/balancer → дефолты (обратная совместимость)', () {
+      final a = ChannelAuto.fromJson({
+        'url': 'https://x/204',
+        'interval': '5m',
+        'tolerance': 50,
+        'idle_timeout': '30m',
+        'interrupt_exist_connections': false,
+      });
+      expect(a.mode, UrltestMode.leastTest);
+      expect(a.pool, 3);
+      expect(a.poolTolerance, 0);
+      expect(a.stickyHash, kDefaultStickyHash);
+    });
+
+    test('round_robin полный round-trip через JSON', () {
+      const a = ChannelAuto(
+        mode: UrltestMode.roundRobin,
+        pool: 5,
+        poolTolerance: 80,
+        stickyHash: [StickyHashKey.domain, StickyHashKey.destIp],
+      );
+      final r = ChannelAuto.fromJson(a.toJson());
+      expect(r.mode, UrltestMode.roundRobin);
+      expect(r.pool, 5);
+      expect(r.poolTolerance, 80);
+      expect(r.stickyHash, [StickyHashKey.domain, StickyHashKey.destIp]);
+    });
+
+    test('toJson — mode в корне, balancer вложен', () {
+      const a = ChannelAuto(
+        mode: UrltestMode.roundRobin,
+        pool: 4,
+        poolTolerance: 10,
+        stickyHash: [StickyHashKey.process],
+      );
+      final j = a.toJson();
+      expect(j['mode'], 'round_robin');
+      final bal = j['balancer'] as Map<String, dynamic>;
+      expect(bal['pool'], 4);
+      expect(bal['pool_tolerance'], 10);
+      expect(bal['sticky_hash'], ['process']);
+    });
+
+    test('явный sticky_hash [] → пустой список (липкость выкл)', () {
+      // round-trip пустого набора: [] остаётся [], НЕ дефолтится.
+      const a = ChannelAuto(
+          mode: UrltestMode.roundRobin, stickyHash: <StickyHashKey>[]);
+      final r = ChannelAuto.fromJson(a.toJson());
+      expect(r.stickyHash, isEmpty);
+      expect((a.toJson()['balancer'] as Map)['sticky_hash'], isEmpty);
+    });
+
+    test('pool clamp: 0/отриц → 1', () {
+      expect(ChannelAuto.fromJson({
+        'balancer': {'pool': 0}
+      }).pool, 1);
+      expect(ChannelAuto.fromJson({
+        'balancer': {'pool': -3}
+      }).pool, 1);
+      expect(const ChannelAuto().copyWith(pool: 0).pool, 1);
+    });
+
+    test('poolTolerance clamp как tolerance (uint16)', () {
+      expect(ChannelAuto.fromJson({
+        'balancer': {'pool_tolerance': 999999}
+      }).poolTolerance, 65535);
+      expect(ChannelAuto.fromJson({
+        'balancer': {'pool_tolerance': -5}
+      }).poolTolerance, 0);
+    });
+
+    test('неизвестный sticky-компонент отбрасывается', () {
+      final a = ChannelAuto.fromJson({
+        'balancer': {
+          'sticky_hash': ['process', 'bogus', 'dest_port']
+        }
+      });
+      expect(a.stickyHash, [StickyHashKey.process, StickyHashKey.destPort]);
+    });
+
+    test('enum wire-мэппинг обе стороны', () {
+      expect(UrltestMode.leastTest.wire, 'least_test');
+      expect(UrltestMode.roundRobin.wire, 'round_robin');
+      expect(UrltestMode.fromWire('round_robin'), UrltestMode.roundRobin);
+      expect(UrltestMode.fromWire('garbage'), UrltestMode.leastTest); // дефолт
+      expect(StickyHashKey.sourceIp.wire, 'source_ip');
+      expect(StickyHashKey.fromWire('dest_port'), StickyHashKey.destPort);
+      expect(StickyHashKey.fromWire('nope'), isNull);
+    });
+
+    test('copyWith балансер-поля', () {
+      const a = ChannelAuto();
+      final n = a.copyWith(
+        mode: UrltestMode.roundRobin,
+        pool: 7,
+        poolTolerance: 25,
+        stickyHash: [StickyHashKey.destPort],
+      );
+      expect(n.mode, UrltestMode.roundRobin);
+      expect(n.pool, 7);
+      expect(n.poolTolerance, 25);
+      expect(n.stickyHash, [StickyHashKey.destPort]);
+    });
+  });
+
   group('Channel.copyWith', () {
     test('tag immutable, меняем только label', () {
       const c = Channel(tag: 'vpn-2', label: 'old');

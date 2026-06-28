@@ -17,6 +17,7 @@ import io.nekohasekai.libbox.LogIterator
 import io.nekohasekai.libbox.OutboundGroup
 import io.nekohasekai.libbox.OutboundGroupIterator
 import io.nekohasekai.libbox.OutboundGroupItemIterator
+import io.nekohasekai.libbox.PoolSlotIterator
 import io.nekohasekai.libbox.RuleIterator
 import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.libbox.StringIterator
@@ -420,6 +421,31 @@ class BoxCommandClient {
             // не-STARTED / транспорт — НЕ ошибка приложения, просто пока нет данных.
             Log.d(TAG, "getGroups unavailable: ${it.message}")
             null
+        }
+    }
+
+    /// §208 (SPEC 019 V2) — unary snapshot пула round_robin-группы. Возвращает
+    /// слоты `[{slot, tag, delay}]`. Не-round_robin группа (selector/least_test/
+    /// urltest без balancer) → ПУСТОЙ список (не ошибка). `delay` мс, `0`=мёртвая
+    /// /не измерена (живая всегда ≥1, ядро клампит). Читает синхронно через
+    /// `anyClient()` (как getGroups) — снапшот, не ping (НЕ pingClient).
+    fun getPool(tag: String): List<Map<String, Any>> {
+        val client = anyClient() ?: return emptyList()
+        return runCatching {
+            val out = ArrayList<Map<String, Any>>()
+            val it: PoolSlotIterator = client.getPool(tag)
+            while (it.hasNext()) {
+                val s = it.next()
+                out.add(mapOf(
+                    "slot" to s.slot,
+                    "tag" to s.tag,
+                    "delay" to s.delay,
+                ))
+            }
+            out
+        }.getOrElse {
+            Log.d(TAG, "getPool unavailable: ${it.message}")
+            emptyList()
         }
     }
 

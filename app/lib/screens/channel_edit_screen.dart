@@ -38,6 +38,9 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
   late final TextEditingController _autoIntervalCtrl;
   late final TextEditingController _autoToleranceCtrl;
   late final TextEditingController _autoIdleCtrl;
+  // §208 — balancer-поля (round_robin)
+  late final TextEditingController _autoPoolCtrl;
+  late final TextEditingController _autoPoolToleranceCtrl;
 
   late bool _includeDirect;
   late bool _includeBlock;
@@ -45,6 +48,9 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
   late bool _nodeFilterInvert;
   late bool _autoEnabled;
   late bool _autoInterrupt;
+  // §208 — режим балансировки + набор sticky-ключей (round_robin)
+  late UrltestMode _autoMode;
+  late Set<StickyHashKey> _autoSticky;
 
   @override
   void initState() {
@@ -65,6 +71,12 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     _autoToleranceCtrl = TextEditingController(text: a.tolerance.toString());
     _autoIdleCtrl = TextEditingController(text: a.idleTimeout);
     _autoInterrupt = a.interruptExistConnections;
+    // §208 — balancer
+    _autoMode = a.mode;
+    _autoPoolCtrl = TextEditingController(text: a.pool.toString());
+    _autoPoolToleranceCtrl =
+        TextEditingController(text: a.poolTolerance.toString());
+    _autoSticky = a.stickyHash.toSet();
 
     for (final ctrl in [
       _labelCtrl,
@@ -74,6 +86,8 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
       _autoIntervalCtrl,
       _autoToleranceCtrl,
       _autoIdleCtrl,
+      _autoPoolCtrl,
+      _autoPoolToleranceCtrl,
     ]) {
       ctrl.addListener(_onAnyChange);
     }
@@ -89,6 +103,8 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
       _autoIntervalCtrl,
       _autoToleranceCtrl,
       _autoIdleCtrl,
+      _autoPoolCtrl,
+      _autoPoolToleranceCtrl,
     ]) {
       ctrl.dispose();
     }
@@ -123,6 +139,16 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                   ? '30m'
                   : _autoIdleCtrl.text.trim(),
               interruptExistConnections: _autoInterrupt,
+              // §208 — balancer (значимы только при round_robin, но храним всегда
+              // — переключение режима не теряет настройки пула). pool<1 → 1.
+              mode: _autoMode,
+              pool: int.tryParse(_autoPoolCtrl.text.trim()) ?? 3,
+              poolTolerance:
+                  int.tryParse(_autoPoolToleranceCtrl.text.trim()) ?? 0,
+              // Set→List в фиксированном порядке enum (детерминизм diff/JSON).
+              stickyHash: StickyHashKey.values
+                  .where(_autoSticky.contains)
+                  .toList(),
             )
           : null,
     );
@@ -146,8 +172,18 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                 s.auto!.tolerance != i.auto!.tolerance ||
                 s.auto!.idleTimeout != i.auto!.idleTimeout ||
                 s.auto!.interruptExistConnections !=
-                    i.auto!.interruptExistConnections));
+                    i.auto!.interruptExistConnections ||
+                // §208 — balancer-поля
+                s.auto!.mode != i.auto!.mode ||
+                s.auto!.pool != i.auto!.pool ||
+                s.auto!.poolTolerance != i.auto!.poolTolerance ||
+                !_sameSticky(s.auto!.stickyHash, i.auto!.stickyHash)));
   }
+
+  /// §208 — равенство sticky-наборов (порядок детерминирован в _snapshot, но
+  /// сравниваем как множества — безопаснее).
+  static bool _sameSticky(List<StickyHashKey> a, List<StickyHashKey> b) =>
+      a.length == b.length && a.toSet().containsAll(b);
 
   Future<void> _handleBack() async {
     if (!_isDirty()) {
@@ -476,10 +512,17 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                     child: TextField(
                       controller: _autoToleranceCtrl,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
+                      // §208 — в Load balance апстрим-tolerance ядром игнорится
+                      // (за гистерезис отвечает Pool tolerance) → гасим.
+                      enabled: _autoMode == UrltestMode.leastTest,
+                      decoration: InputDecoration(
                         labelText: 'Tolerance (ms)',
-                        border: OutlineInputBorder(),
+                        border: const OutlineInputBorder(),
                         isDense: true,
+                        helperText: _autoMode == UrltestMode.roundRobin
+                            ? 'used in Fastest mode'
+                            : null,
+                        helperStyle: const TextStyle(fontSize: 10),
                       ),
                       style: const TextStyle(fontSize: 13),
                     ),
@@ -497,6 +540,61 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                 ),
                 style: const TextStyle(fontSize: 13),
               ),
+              // §208 — advisory: interval > idle_timeout роняет старт ядра.
+              if (_intervalExceedsIdle()) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded,
+                        size: 14, color: cs.error),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text('Interval must be ≤ idle timeout',
+                          style: TextStyle(fontSize: 11, color: cs.error)),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 12),
+
+              // §208 — режим выбора узла (Fastest = least_test / Load balance =
+              // round_robin). Балансировщик-поля показываются только под Load
+              // balance.
+              Text('Mode',
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              const SizedBox(height: 6),
+              SegmentedButton<UrltestMode>(
+                segments: const [
+                  ButtonSegment(
+                    value: UrltestMode.leastTest,
+                    label: Text('Fastest'),
+                    icon: Icon(Icons.bolt, size: 16),
+                  ),
+                  ButtonSegment(
+                    value: UrltestMode.roundRobin,
+                    label: Text('Load balance'),
+                    icon: Icon(Icons.hub_outlined, size: 16),
+                  ),
+                ],
+                selected: {_autoMode},
+                showSelectedIcon: false,
+                style: const ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
+                ),
+                onSelectionChanged: (s) =>
+                    setState(() => _autoMode = s.first),
+              ),
+              const SizedBox(height: 4),
+              _previewLine(
+                cs,
+                _autoMode == UrltestMode.leastTest
+                    ? 'single best server by latency'
+                    : 'spread connections across a pool of servers',
+              ),
+              if (_autoMode == UrltestMode.roundRobin) ..._balancerControls(cs),
+              const SizedBox(height: 4),
+
               CheckboxListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
@@ -519,6 +617,138 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
         text,
         style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
       );
+
+  // ── §208 — balancer-контролы (round_robin) ──
+
+  /// Pool size / Pool tolerance + ряд sticky-чипов. Рендерится только под
+  /// Load balance.
+  List<Widget> _balancerControls(ColorScheme cs) {
+    final nodeCount = widget.allNodeTags.length;
+    return [
+      const SizedBox(height: 10),
+      _previewLine(cs, '15m interval recommended for large pools'),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _autoPoolCtrl,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Pool size',
+                border: const OutlineInputBorder(),
+                isDense: true,
+                helperText: nodeCount > 0 ? 'of $nodeCount nodes' : null,
+                helperStyle: const TextStyle(fontSize: 10),
+              ),
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _autoPoolToleranceCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Pool tolerance (ms)',
+                border: OutlineInputBorder(),
+                isDense: true,
+                helperText: '0 = keep pool full',
+                helperStyle: TextStyle(fontSize: 10),
+              ),
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 10),
+      Text('Sticky session by',
+          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+      const SizedBox(height: 4),
+      Wrap(
+        spacing: 6,
+        runSpacing: 0,
+        children: [
+          for (final k in StickyHashKey.values)
+            FilterChip(
+              label: Text(_stickyLabel(k), style: const TextStyle(fontSize: 12)),
+              selected: _autoSticky.contains(k),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              onSelected: (sel) => setState(() {
+                if (sel) {
+                  _autoSticky.add(k);
+                } else {
+                  _autoSticky.remove(k);
+                }
+              }),
+            ),
+        ],
+      ),
+      const SizedBox(height: 2),
+      _previewLine(
+        cs,
+        _autoSticky.isEmpty
+            ? 'none selected → no stickiness (pure rotation)'
+            : 'sessions stick to a server by the selected keys',
+      ),
+    ];
+  }
+
+  /// Человекочитаемый лейбл sticky-ключа (wire — snake_case, в UI — пробелы).
+  static String _stickyLabel(StickyHashKey k) {
+    switch (k) {
+      case StickyHashKey.process:
+        return 'process';
+      case StickyHashKey.domain:
+        return 'domain';
+      case StickyHashKey.sourceIp:
+        return 'source ip';
+      case StickyHashKey.destIp:
+        return 'dest ip';
+      case StickyHashKey.destPort:
+        return 'dest port';
+    }
+  }
+
+  /// §208 — advisory: interval > idle_timeout (ядро роняет старт). true →
+  /// показываем предупреждение. Обе строки парсимы и interval строго больше.
+  bool _intervalExceedsIdle() {
+    final iv = _parseDuration(_autoIntervalCtrl.text.trim());
+    final idle = _parseDuration(_autoIdleCtrl.text.trim());
+    if (iv == null || idle == null) return false; // непарсимо → не мешаем
+    return iv > idle;
+  }
+
+  /// Минимальный парсер duration (`90s`/`5m`/`2h`/`1h30m` — простые суффиксы) →
+  /// секунды. null если не распознано. Не претендует на полноту Go time.Duration
+  /// — только для advisory-сравнения interval≤idle.
+  static int? _parseDuration(String s) {
+    if (s.isEmpty) return null;
+    final re = RegExp(r'(\d+)\s*([smhd])', caseSensitive: false);
+    final matches = re.allMatches(s);
+    if (matches.isEmpty) return null;
+    var total = 0;
+    for (final m in matches) {
+      final n = int.tryParse(m.group(1)!);
+      if (n == null) return null;
+      switch (m.group(2)!.toLowerCase()) {
+        case 's':
+          total += n;
+          break;
+        case 'm':
+          total += n * 60;
+          break;
+        case 'h':
+          total += n * 3600;
+          break;
+        case 'd':
+          total += n * 86400;
+          break;
+      }
+    }
+    return total;
+  }
 
   static String? _firstMatch(List<String> tags, RegExp re) {
     for (final t in tags) {

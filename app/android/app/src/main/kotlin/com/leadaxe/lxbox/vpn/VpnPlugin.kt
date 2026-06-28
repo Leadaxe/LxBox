@@ -665,6 +665,17 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(r)
                 }
             }
+            // §208 (SPEC 019 V2) — unary снапшот пула round_robin-группы. На
+            // Dispatchers.IO (RPC может блокировать). Не-round_robin / не готов →
+            // пустой список (не ошибка). Dart рендерит «Pool not available».
+            "ccGetPool" -> {
+                val cc = BoxService.commandClient
+                val tag = call.argument<String>("tag") ?: ""
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) { cc?.getPool(tag) ?: emptyList<Map<String, Any>>() }
+                    result.success(r)
+                }
+            }
             "ccSelectOutbound" -> {
                 val cc = BoxService.commandClient
                 val group = call.argument<String>("group") ?: ""

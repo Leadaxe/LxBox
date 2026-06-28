@@ -518,7 +518,7 @@ List<Map<String, dynamic>> _buildChannelGroups({
     // пустом наборе (urltest без нод недопустим).
     if (emitAuto) {
       final a = c.auto!;
-      result.add({
+      final urltest = <String, dynamic>{
         'tag': c.autoTag,
         'type': 'urltest',
         'outbounds': nodes,
@@ -527,7 +527,21 @@ List<Map<String, dynamic>> _buildChannelGroups({
         'tolerance': a.tolerance,
         'idle_timeout': a.idleTimeout,
         'interrupt_exist_connections': a.interruptExistConnections,
-      });
+      };
+      // §208 — round_robin: дописываем `mode` + `balancer{}` (ядро SPEC 019 V2).
+      // least_test → НИЧЕГО не пишем (бит-в-бит апстрим, нулевой diff). `balancer`
+      // без round_robin роняет старт ядра, поэтому только под round_robin.
+      // sticky_hash эмитим ВСЕГДА явно (непустой → липкость по компонентам; [] →
+      // выключена); ядровый nil-дефолт нам не нужен — задаётся из UI.
+      if (a.mode == UrltestMode.roundRobin) {
+        urltest['mode'] = a.mode.wire;
+        urltest['balancer'] = <String, dynamic>{
+          'pool': a.pool,
+          'pool_tolerance': a.poolTolerance,
+          'sticky_hash': a.stickyHash.map((k) => k.wire).toList(),
+        };
+      }
+      result.add(urltest);
     }
   }
   return result;
