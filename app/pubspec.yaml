@@ -2,7 +2,7 @@ name: lxbox
 description: L×Box — Android MVP (sing-box + Clash API).
 publish_to: 'none'
 
-version: 2.5.2-dev.1+890
+version: 2.6.0-dev.2+921
 # ↑ placeholder. Реальная версия записывается из git tag:
 #   • CI release build (.github/workflows/ci.yml → "Inject release version") —
 #     `version: ${tag#v}+${git rev-list --count HEAD}` перед `flutter build`.
