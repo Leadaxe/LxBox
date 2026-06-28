@@ -60,7 +60,7 @@ HTTP-server выпилен; управление через libbox CommandClient
 С §104 fork — **единственное ядро для всех сборок** (local + CI + release;
 готовится релиз v2.0.0):
 
-- пин версии — `app/android/libbox.version` (**`v1.14.0-lx.1`**, single source
+- пин версии — `app/android/libbox.version` (**`v1.14.0-lx.1-rc.15`**, single source
   of truth для local + CI; база upstream `v1.14.0-alpha.33`);
 - `scripts/fetch-libbox.sh` скачивает `libbox.aar` из GitHub Releases форка с
   проверкой SHA256 (идемпотентен — маркер `.libbox.version`); вызывается из
@@ -1206,13 +1206,14 @@ Tab'ы которые depend на глобальном toggle в settings (core_
 
 ### Нативные клиенты (`BoxCommandClient.kt`)
 
-Три независимых `CommandClient` — развязка частоты обновления от состава данных и lifecycle:
+Четыре независимых `CommandClient` — развязка частоты обновления от состава данных и lifecycle:
 
 | Клиент | Команды | Lifecycle |
 |---|---|---|
 | `statusClient` | `CommandStatus` (+ `setStatusInterval`) | always-on пока туннель жив; в фоне (`onAppPaused`) гасится (0 тиков/0 drain); §164 адаптивная частота NORMAL 0.5с (главный экран) / FAST 0.1с (Stats) — пересоздаётся с новым интервалом |
 | `screenClient` | `CommandOutbounds` + `CommandGroup` + `CommandConnections` | поднимается по `connectScreen()` (refs>0), гасится в фоне |
 | `profilerClient` | `CommandConnections` | поднимается по `connectProfiler()` для recording; §164 **не паузится** в фоне → recording живёт при свёрнутом app |
+| `pingClient` | голый `PingHandler`, без подписок — только unary RPC | §175/§209 — поднимается лениво, **lifecycle-независим** (`pauseClients` его НЕ трогает). Носитель ВСЕХ unary-снапшотов/действий (`urlTestOutbound` + `getPool`/`getGroups`/`getRules` + `selectOutbound`/`close*`). Дисконнект только в `cancelPing`/`resyncForReopen`/`shutdownAll`. Подписок нет → 0 нагрузки в покое. Следствие: снапшоты работают и при свёрнутом приложении |
 
 Подписка в gomobile-фасаде = `CommandClientOptions.addCommand(int)` + колбэки `CommandClientHandler.write*` (прямых `subscribe*`-методов в AAR нет).
 
@@ -1226,11 +1227,14 @@ Push-стримы поверх EventChannel `lxbox/cc/*` (`status` · `outbounds
 | `outbounds` | push `Stream<List<CcOutbound>>` | список outbound'ов |
 | `groups` | push `Stream<List<CcGroup>>` | selector/urltest группы + selected/active |
 | `connections` | push `Stream<List<CcConnection>>` | active TCP/UDP + bytes + packageName/processPath. **Pull нет** (см. §193 ниже) — ядро шлёт полный список ОДИН раз (reset-снапшот на подписку), дальше только дельты |
-| `getGroups()` | unary-pull `List<CcGroup>?` | детерминированный снапшот групп (lifeline на дыру стартового push'а; `null` = ядро не STARTED, не трогать state) |
+| `getGroups()` | unary-pull `List<CcGroup>?` | детерминированный снапшот групп (lifeline на дыру стартового push'а; `null` = клиент недоступен, не трогать state) |
 | `getRules()` | unary-pull `List<CcRule>` | снапшот route+DNS правил (диагностика) |
+| `getPool(tag)` | unary-pull `List<CcPoolSlot>?` | §208/§209 — снапшот пула round_robin-группы (`slot/tag/delay`). `null` = клиент недоступен, `[]` = пул пуст (не round_robin). Питает UI «View pool» + Debug `/pool` |
 | `urlTestOutbound(tag)` | unary-RPC `CcDelayResult` | per-node delay. **Инвариант:** `error` — единственный признак провала; `delay==0 && error==''` = успех 0мс |
 | `selectOutbound(group, tag)` | unary-RPC | selector switch |
 | `closeConnection(id)` / `closeConnections()` | unary-RPC | закрыть одно/все соединения |
+
+**§209 — все unary-методы выше идут через `pingClient`** (lifecycle-независим), не через `anyClient()` (status/screen/profiler паркуются в фоне §164). Поэтому снапшоты (`getPool`/`getGroups`/`getRules`) и действия работают и при свёрнутом приложении. Контракт ошибки: при недоступном клиенте List-снапшот возвращает `null` (не пустой список) — «нет клиента» отличимо от «нет данных»; действия возвращают честный `false`.
 
 Lifecycle-сигналы (`connectScreen`/`disconnectScreen`, `connectProfiler`/`disconnectProfiler`, `pauseClients`/`resumeClients`, `setStatusFast`) дёргают соответствующие native-клиенты.
 
@@ -1347,7 +1351,7 @@ HomeScreen
 | `path_provider` | Documents directory for persistent storage |
 | `shared_preferences` | Theme mode, haptic toggle |
 | `share_plus` | Config/log export via system share sheet |
-| **libbox** (native) | sing-box core — fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (`with_awg` + `with_xhttp`, §097/§104; §122 — без `with_clash_api`). Пин — `app/android/libbox.version` (`v1.14.0-lx.1`, база upstream `v1.14.0-alpha.33`); AAR скачивает `scripts/fetch-libbox.sh` из GH Releases форка (SHA256-verify) в gitignored `libs/` — и локально (`build-local-apk.sh`), и в CI (`ci.yml` → «Fetch sing-box-lx core»). Maven-строка стокового libbox удалена из `build.gradle.kts` (исторически: JitPack `com.github.singbox-android:libbox:1.13.11`, миграция из `io.github.sagernet:libbox` — spec 039) |
+| **libbox** (native) | sing-box core — fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (`with_awg` + `with_xhttp`, §097/§104; §122 — без `with_clash_api`). Пин — `app/android/libbox.version` (`v1.14.0-lx.1-rc.15`, база upstream `v1.14.0-alpha.33`); AAR скачивает `scripts/fetch-libbox.sh` из GH Releases форка (SHA256-verify) в gitignored `libs/` — и локально (`build-local-apk.sh`), и в CI (`ci.yml` → «Fetch sing-box-lx core»). Maven-строка стокового libbox удалена из `build.gradle.kts` (исторически: JitPack `com.github.singbox-android:libbox:1.13.11`, миграция из `io.github.sagernet:libbox` — spec 039) |
 
 ---
 

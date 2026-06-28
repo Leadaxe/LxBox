@@ -117,6 +117,21 @@ Block ads, route Russian domains directly, send BitTorrent through specific prox
 </details>
 
 <details>
+<summary><strong>Load balancing</strong> — spread traffic across a pool of servers (v2.7.0)</summary>
+
+A channel's **auto** group can do more than pick the single fastest node. Switch it to **Load balance** and it spreads new connections across a **pool** of N servers (round-robin), while keeping sessions sticky to their server so TLS/auth don't bounce between IPs.
+
+- **Two modes** in the channel editor → *Include auto*:
+  - **Fastest** (`least_test`) — one best node by latency, all traffic through it (the classic behaviour)
+  - **Load balance** (`round_robin`) — connections rotate across a fixed-size pool of live nodes
+- **Pool size** — how many nodes sit in the pool at once; **Pool tolerance** — `0` keeps the pool full (speed-agnostic), `>0` evicts slower nodes in favour of faster ones
+- **Sticky session by** — chip row (`process` / `domain` / `source ip` / `dest ip` / `dest port`); a key like `process + domain` makes every connection of one app to one site land on the **same** pool server (zero reconnects while that node lives). Clear all chips → pure rotation, no stickiness
+- **View pool** — long-press the auto node → popup with the live pool: fixed `slot · node · delay`, so you see exactly which N servers are carrying traffic right now
+- Built on sing-box-lx **SPEC 019** (fixed slots, lazy health-check, slot-hash stickiness — no per-connection state). The builder only emits the `balancer{}` block under round_robin; Fastest stays byte-for-byte upstream
+- See [§208 spec](docs/spec/tasks/208-urltest-balancer-round-robin.md)
+</details>
+
+<details>
 <summary><strong>Wi-Fi-aware routing</strong> — different rules on different networks (v1.7.3)</summary>
 
 Declare rules like *"on this Wi-Fi → direct"* persistently — no temporary `PUT /config` hacks. Rules with `wifi_ssid` / `wifi_bssid` AND-combine with all other match fields:
@@ -226,6 +241,24 @@ Pick an app, hit ▶ Record, and see every domain, IP, and routing decision — 
 </details>
 
 <details>
+<summary><strong>On-device core profiling (pprof)</strong> — catch CPU spin & memory leaks (v2.7.0)</summary>
+
+When the core runs hot or leaks memory, capture a real Go **pprof** snapshot straight from the device — no desktop, no rebuild. **App Settings → Diagnostics → Profiling**: each button pulls a profile from the live sing-box core and opens the system Share sheet.
+
+| Profile | What it catches |
+|---|---|
+| **CPU profile (10s)** | overheating / 100 % CPU — busy-spin in a tight loop |
+| **Heap (inuse_space)** | what actually holds memory now (GC is forced before the snapshot, so only live objects) |
+| **Allocations** | what allocates memory (GC-pressure source) |
+| **Goroutines** (summary / full stacks) | goroutine count and full stacks — goroutine leaks |
+
+- `.pb` files open with `go tool pprof` (CPU/heap/allocs); `goroutine?debug=*` is plain text. Heap inuse: `go tool pprof -inuse_space heap.pb`
+- Implemented entirely shell-side via libbox's built-in `PProfServer` (Go `net/http/pprof`) — **the core was not patched**. The server binds to a loopback port on tap, serves one GET, and shuts down in `finally` (no listener lingers in production)
+- Also via Debug API: `GET /diag/pprof?profile=heap|profile|allocs|goroutine&query=...` (tunnel must be up)
+- See [§207 spec](docs/spec/tasks/207-goroutine-cpu-dump.md)
+</details>
+
+<details>
 <summary><strong>VPN Settings</strong> — tune the engine</summary>
 
 Two tabs (v1.7.3 reorg, see [§052](docs/spec/tasks/052-vpn-settings-system-service-tabs.md)):
@@ -298,7 +331,7 @@ buildConfig(lists, settings)  ← template + post-steps (DPI, DNS, rules)
 sing-box JSON
 ```
 
-- **Bundled core** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **1.14.0-lx.1**: sing-box 1.14 fork built with `with_awg` / `with_xhttp` / `with_lx_command` tags; the control channel runs over libbox `CommandClient` (no Clash API). Version pinned in `app/android/libbox.version`, AAR fetched from the fork's GitHub Releases by `scripts/fetch-libbox.sh` with SHA256 verification
+- **Bundled core** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **`v1.14.0-lx.1-rc.15`**: sing-box 1.14 fork built with `with_awg` / `with_xhttp` / `with_lx_command` tags; the control channel runs over libbox `CommandClient` (no Clash API). Adds the round-robin **load-balancer** (SPEC 019) and `GetPool` RPC. Version pinned in `app/android/libbox.version`, AAR fetched from the fork's GitHub Releases by `scripts/fetch-libbox.sh` with SHA256 verification
 - **Sealed `NodeSpec`** — 9 protocols, polymorphic `emit(vars)` / `toUri()` (round-trip invariant)
 - **`EmitContext`** — passes template vars into per-node emit
 - **`NodeEntries{main, detours[]}`** — named struct for chain results

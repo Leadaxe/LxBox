@@ -56,10 +56,12 @@ Auth: `Authorization: Bearer $TOKEN` (token в `vars.debug_token`, dev-token с�
 | `GET /device` | Android version / model / ABI / app version / VPN perm / uptime |
 | `GET /config` | Финальный sing-box JSON (что ядро реально крутит) |
 | `GET /config/pretty` | То же с indent:2 |
+| `GET /pool?tag=vpn-1-auto` | §208 — снапшот пула round_robin-группы: `{tag, count, slots:[{slot, tag, delay, alive}]}`. Какие N серверов в слотах сейчас + их пинг. Не-round_robin → `200 slots:[]`; туннель down → `409` (не пустой ответ — §209) |
 | `GET /logs?source=core&limit=500` | Sing-box internal logs (требует `core_logs_enabled=true`) |
 | `GET /logs?source=app&limit=300` | App-side warn/error |
 | `GET /logs?source=core&q=tinkoff&level=error,warning` | Фильтрация по substring + level |
 | `GET /diag/*` | §038 диагностика runtime'а (см. api/debug-api-reference.md) |
+| `GET /diag/pprof?profile=P` | §207 — pprof-слепок живого ядра. `P` = `heap` (что держит память, `?query=gc=1` форсит GC) \| `allocs` \| `profile` (CPU, `?query=seconds=10`) \| `goroutine` (`?query=debug=2` — полные стеки). Туннель up. `.pb` → `go tool pprof`; `goroutine?debug=*` → текст |
 | `GET /profiler/active` | §044/§048 — текущая per-app session (или null) |
 | `POST /profiler/live/start` | Включить system-wide rolling-buffer (или тап START в Live tab) |
 | `POST /profiler/live/stop` | Выключить |
@@ -243,6 +245,14 @@ Sing-box matches **первым попавшимся правилом** (top-dow
 4. `/state/storage` `vars.dns_final` / `route_final` — что в storage'е выбрано?
 5. Если group-default `✨auto` (URLTest) — он сам выбирает по ping; смотри historical delays per-node
 
+### «Load balance: трафик идёт не туда / перекос в один сервер» (§208)
+
+1. `/config` → `balancer` у `<tag>-auto`: `mode=round_robin`? `pool`/`pool_tolerance`/`sticky_hash` те, что ожидаешь?
+2. `/pool?tag=<tag>-auto` → состав слотов сейчас: 4 разных живых узла или дубли/мёртвые (`delay:0`)? Сними несколько раз — слоты держат номера, узлы меняются только при замене.
+3. Включи `/profiler/live/start`, нагенери трафик, `/profiler/live?seconds=120` → посчитай `outbound_chain[0]` по узлам: должно быть ~равномерно по слотам (с дефолтным sticky `process+domain` один домен держится на одном узле).
+4. Перекос «всё в один узел» был багом ядра rc.14 (пустой sticky `domain`) — фикшен в rc.15. С `dest_ip` в sticky-ключе домен с round-robin DNS (CDN) законно размазывается по узлам — это не баг.
+5. `pool_tolerance>0` агрессивно переселяет слоты при колебаниях delay → ключи слота легально переезжают на новый узел (SPEC «реконнект для слота, чей жилец сменился»). Для чистого теста липкости — `pool_tolerance=0` (пул не вытесняет живых).
+
 ### «VPN не запускается, status сразу Stopped с alert»
 
 §050 — sing-box не стартует когда config содержит `wifi_ssid:`/`wifi_bssid:` правила, но Android permissions не выданы.
@@ -297,6 +307,20 @@ Sing-box matches **первым попавшимся правилом** (top-dow
 - **Sing-box debug-level** — `vars.log_level = debug` + force-stop. Печатает каждое routing decision и dial event. Сильно увеличивает log volume.
 - **Per-app routing testing** — `adb shell am start -n <activity>` запустить целевое приложение по щелчку, в момент запуска снимать ss + `/profiler/live`.
 - **`adb shell ping`** — обычно blocked без рута. Используй `POST /action/urltest` (urltest нод/групп через ядро) вместо.
+- **pprof — нагрев CPU / утечки памяти ядра (§207)** — для deep-диагностики runtime'а sing-box. Туннель должен быть up.
+  ```bash
+  TOKEN=...   # forward 9269 на телефон
+  H="Authorization: Bearer $TOKEN"
+  # CPU-профиль (10с) — busy-spin / 100% CPU
+  curl -s -H "$H" "http://127.0.0.1:9269/diag/pprof?profile=profile&query=seconds=10" -o cpu.pb
+  go tool pprof -top cpu.pb
+  # Heap (что держит память сейчас, gc=1 форсит GC)
+  curl -s -H "$H" "http://127.0.0.1:9269/diag/pprof?profile=heap&query=gc=1" -o heap.pb
+  go tool pprof -inuse_space -top heap.pb
+  # Goroutine-стеки (утечка горутин) — отдаёт текст, не .pb
+  curl -s -H "$H" "http://127.0.0.1:9269/diag/pprof?profile=goroutine&query=debug=2"
+  ```
+  Или из UI: App Settings → Diagnostics → Profiling (кнопки + системный Share).
 
 ---
 
