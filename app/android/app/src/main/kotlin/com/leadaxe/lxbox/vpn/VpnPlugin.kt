@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.Build
 import android.os.SystemClock
@@ -305,6 +306,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // новый плагин ничего не получит без явного запроса).
                 result.success(BoxVpnService.currentStatus.name)
             }
+            // Есть ли сейчас активный ЧУЖОЙ VPN (другое приложение)? UI спрашивает
+            // перед ручным стартом, чтобы показать «переключиться?» вместо молчаливого
+            // отзыва чужого туннеля. prepare()==null не различает «чужого нет» и
+            // «чужой активен, но наше разрешение уже выдано» — здесь различаем явно.
+            "isForeignVpnActive" -> result.success(isForeignVpnActive())
             "getTunnelUptimeMs" -> {
                 // §187 — прошедшие мс с реального старта туннеля (переживает
                 // swipe). 0 = не запущен / только что стартовал. Dart на cold-
@@ -972,6 +978,25 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             android.util.Base64.encodeToString(stream.toByteArray(), android.util.Base64.NO_WRAP)
         } catch (_: Exception) {
             ""
+        }
+    }
+
+    /// true, если прямо сейчас активен VPN ДРУГОГО приложения. Наш сервис ещё
+    /// не поднят (мы только собираемся стартовать) → любая сеть с VPN-транспортом
+    /// = чужая. Если наш сервис уже не в Stopped — это мы сами, не чужой.
+    /// Источник истины: ConnectivityManager + NetworkCapabilities.TRANSPORT_VPN
+    /// (тот же приём, что DefaultNetworkMonitor.isVpn).
+    private fun isForeignVpnActive(): Boolean {
+        if (BoxVpnService.currentStatus != VpnStatus.Stopped) return false
+        val cm = BoxApplication.connectivity
+        return try {
+            cm.allNetworks.any { n ->
+                cm.getNetworkCapabilities(n)
+                    ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "isForeignVpnActive: $e")
+            false
         }
     }
 

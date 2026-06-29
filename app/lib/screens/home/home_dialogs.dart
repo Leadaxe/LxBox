@@ -47,6 +47,32 @@ void confirmStop(
   }
 }
 
+/// Диалог «активен другой VPN» — показывается перед ручным стартом, если на
+/// устройстве уже работает VPN другого приложения. Старт нашего туннеля молча
+/// отзовёт чужой (onRevoke), поэтому спрашиваем подтверждение. Возвращает `true`
+/// при выборе Switch, `null`/`false` при отмене.
+Future<bool?> showForeignVpnDialog(BuildContext context) {
+  return showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog.adaptive(
+      title: const Text('Another VPN is active'),
+      content: const Text(
+        'Another VPN app is currently running. Switch to L×Box?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Switch'),
+        ),
+      ],
+    ),
+  );
+}
+
 /// SnackBar «VPN taken by another app» — туннель отозван другим VPN-приложением
 /// (§012). Action «Start» перезапускает через [controller].
 void showRevokedSnackBar(BuildContext context, HomeController controller) {

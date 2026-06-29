@@ -581,6 +581,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   }
 
   Future<void> _startWithAutoRefresh() async {
+    // Если уже активен VPN другого приложения — наш старт молча отзовёт его
+    // (onRevoke). Спросим подтверждение перед перебиванием чужого туннеля.
+    // Только для ручного старта из UI; фоновые точки (tile/automation) не трогаем.
+    if (await _vpn.isForeignVpnActive()) {
+      if (!mounted) return;
+      final ok = await showForeignVpnDialog(context);
+      if (ok != true) return;
+    }
     // §107 гейт: pending-изменения или пересборка в полёте — сначала довести
     // конфиг на диске до актуального, потом стартовать. При ошибке сборки
     // (configDirty остаётся true) стартуем со старым конфигом — banner
