@@ -1,17 +1,23 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# =============================================================================
 # lb-test.sh — exit-IP probe for load-balancing verification.
 #
-# Sends exactly ONE request to each "what's my IP" service and reports the exit
-# IP per domain, then the overall distribution. The number of distinct exit IPs
-# tells you how many nodes the balancer spreads across.
+# WHAT:  Sends exactly ONE request to each of ~28 distinct "what's my IP"
+#        services and reports the exit IP per domain, a grouped view, the
+#        distribution, and the Shannon entropy of that distribution. The set of
+#        distinct exit IPs = the nodes your load balancer is actually spreading
+#        traffic across; the entropy says how evenly (1.0 = perfectly even).
 #
-# Why one request per server (and many distinct servers): a sticky /
-# consistent-hashing balancer pins a connection to a node BY DESTINATION, so
-# repeating requests to the SAME domain always exits the same node and tells you
-# nothing. Hitting many DIFFERENT domains once each is what reveals the real
-# spread of nodes. More domains in the list => more nodes revealed.
+# WHY:   To confirm an outbound load balancer is really distributing across
+#        nodes — and not silently pinning everything to one. One request per
+#        server, across MANY different servers, because a sticky /
+#        consistent-hashing balancer pins a connection to a node BY
+#        DESTINATION: hammering one domain always exits the same node and
+#        proves nothing. Many distinct destinations are what reveal the spread;
+#        more domains in the list => more nodes revealed.
 #
 # Runs anywhere bash + curl exist (built for Termux, also fine on Linux/macOS).
+# =============================================================================
 #
 # Usage:
 #   ./lb-test.sh                       # one request per server, concurrency 8
