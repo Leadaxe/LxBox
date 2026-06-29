@@ -43,19 +43,14 @@ SERVICES=(
   https://eth0.me
   https://api.seeip.org
   https://api.ip.sb/ip
-  https://api.my-ip.io/ip
   https://ipof.in/txt
   https://whatismyip.akamai.com
   https://2ip.ru
-  https://ip.42.pl/raw
   https://wgetip.com
   https://myip.dnsomatic.com
-  https://diagnostic.opendns.com/myip
-  https://ip1.dynupdate.no-ip.com
   https://www.trackip.net/ip
   https://ipapi.co/ip
   https://api64.ipify.org
-  https://ip.seeip.org
   https://canhazip.com
   # Cloudflare / trace endpoints: reply "ip=<addr>" amid key=value lines.
   # Parsed below. Rarely down or blocked, so good extra balancing samples.
