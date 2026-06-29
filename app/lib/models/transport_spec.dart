@@ -88,21 +88,52 @@ final class HttpUpgradeTransport extends TransportSpec {
   }
 }
 
-/// §097 — XHTTP (Xray-совместимый `splithttp`). Форк `sing-box-lx` (`with_xhttp`)
-/// умеет нативный `type: "xhttp"` — по образцу singbox-launcher SPEC 071: режимы
+/// §097 / §127 — XHTTP (Xray-совместимый `splithttp`). Форк `sing-box-lx`
+/// (`with_xhttp`) умеет нативный `type: "xhttp"`: режимы
 /// `auto|packet-up|stream-up|stream-one`, `x_padding_bytes`-обфускация,
-/// `no_grpc_header`, extra-headers. Раньше деградировал в httpupgrade (стоковое
-/// ядро без xhttp) — теперь **нативный** emit, без подмены wire-протокола.
+/// `no_grpc_header`, extra-headers. §127 расширил до полной клиентской
+/// поддержки SPEC 002 v2 — настраиваемые placement'ы session/seq/uplink,
+/// ключи, метод upload, X-Padding obfs-режим и packet-up tuning. Раньше
+/// деградировал в httpupgrade (стоковое ядро без xhttp) — теперь **нативный**
+/// emit, без подмены wire-протокола.
+///
+/// Все расширенные поля плоские (String/bool) с omitempty-семантикой: пустое
+/// значение → ключ не эмитим, у ядра свои дефолты (см. URL_PARSING §2). НЕ
+/// вкладывать под-объекты — Go-конфиг тоже плоский в пределах transport.
 ///
 /// NB: на СТОКОВОМ ядре (CI без `with_xhttp`) конфиг с `type=xhttp` отвергается
 /// на load — фича «спит» до релиза fork-ядра (как AWG, §097).
 final class XhttpTransport extends TransportSpec {
+  // v1 (§097)
   final String path;
   final String host;
   final String mode; // '' = ядро решает (auto)
   final String xPaddingBytes; // '' = none, напр. '100-1000'
   final bool noGrpcHeader;
   final Map<String, String> headers;
+
+  // §127 — session / seq placement
+  final String sessionPlacement; // path|query|header|cookie (дефолт path)
+  final String sessionKey;
+  final String seqPlacement; // path|query|header|cookie (дефолт path)
+  final String seqKey;
+
+  // §127 — uplink data
+  final String uplinkDataPlacement; // body|auto|header|cookie (дефолт auto)
+  final String uplinkDataKey;
+  final String uplinkChunkSize; // '"min-max"'
+  final String uplinkHttpMethod; // дефолт POST
+
+  // §127 — X-Padding obfs
+  final bool xPaddingObfsMode; // дефолт false
+  final String xPaddingKey;
+  final String xPaddingHeader;
+  final String xPaddingPlacement; // cookie|header|query|queryInHeader
+  final String xPaddingMethod; // repeat-x|tokenish
+
+  // §127 — packet-up tuning (строка '"N"' или '"N-N"')
+  final String scMaxEachPostBytes;
+  final String scMinPostsIntervalMs;
 
   const XhttpTransport({
     this.path = '/',
@@ -111,6 +142,21 @@ final class XhttpTransport extends TransportSpec {
     this.xPaddingBytes = '',
     this.noGrpcHeader = false,
     this.headers = const {},
+    this.sessionPlacement = '',
+    this.sessionKey = '',
+    this.seqPlacement = '',
+    this.seqKey = '',
+    this.uplinkDataPlacement = '',
+    this.uplinkDataKey = '',
+    this.uplinkChunkSize = '',
+    this.uplinkHttpMethod = '',
+    this.xPaddingObfsMode = false,
+    this.xPaddingKey = '',
+    this.xPaddingHeader = '',
+    this.xPaddingPlacement = '',
+    this.xPaddingMethod = '',
+    this.scMaxEachPostBytes = '',
+    this.scMinPostsIntervalMs = '',
   });
 
   @override
@@ -121,6 +167,31 @@ final class XhttpTransport extends TransportSpec {
     if (xPaddingBytes.isNotEmpty) m['x_padding_bytes'] = xPaddingBytes;
     if (noGrpcHeader) m['no_grpc_header'] = true;
     if (headers.isNotEmpty) m['headers'] = Map<String, String>.from(headers);
+
+    // §127 — расширенные поля. omitempty: пустое → ключ не пишем.
+    if (sessionPlacement.isNotEmpty) m['session_placement'] = sessionPlacement;
+    if (sessionKey.isNotEmpty) m['session_key'] = sessionKey;
+    if (seqPlacement.isNotEmpty) m['seq_placement'] = seqPlacement;
+    if (seqKey.isNotEmpty) m['seq_key'] = seqKey;
+    if (uplinkDataPlacement.isNotEmpty) {
+      m['uplink_data_placement'] = uplinkDataPlacement;
+    }
+    if (uplinkDataKey.isNotEmpty) m['uplink_data_key'] = uplinkDataKey;
+    if (uplinkChunkSize.isNotEmpty) m['uplink_chunk_size'] = uplinkChunkSize;
+    if (uplinkHttpMethod.isNotEmpty) m['uplink_http_method'] = uplinkHttpMethod;
+    if (xPaddingObfsMode) m['x_padding_obfs_mode'] = true;
+    if (xPaddingKey.isNotEmpty) m['x_padding_key'] = xPaddingKey;
+    if (xPaddingHeader.isNotEmpty) m['x_padding_header'] = xPaddingHeader;
+    if (xPaddingPlacement.isNotEmpty) {
+      m['x_padding_placement'] = xPaddingPlacement;
+    }
+    if (xPaddingMethod.isNotEmpty) m['x_padding_method'] = xPaddingMethod;
+    if (scMaxEachPostBytes.isNotEmpty) {
+      m['sc_max_each_post_bytes'] = scMaxEachPostBytes;
+    }
+    if (scMinPostsIntervalMs.isNotEmpty) {
+      m['sc_min_posts_interval_ms'] = scMinPostsIntervalMs;
+    }
     return (m, const []);
   }
 }

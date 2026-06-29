@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../models/transport_spec.dart';
 import '../../models/tls_spec.dart';
 import 'uri_utils.dart';
@@ -59,18 +61,10 @@ TransportSpec? parseTransport(
       if (host.isEmpty) host = (q['sni'] ?? '').trim();
       return HttpUpgradeTransport(path: path, host: host);
     case 'xhttp':
-      // §097 — нативный xhttp + поля Xray splithttp (SPEC 071). Ключи
-      // читаем в обеих формах: camelCase (Xray URI) и snake (sing-box).
-      final path = q['path'] ?? '/';
-      var host = (q['host'] ?? '').trim();
-      if (host.isEmpty) host = (q['sni'] ?? '').trim();
-      return XhttpTransport(
-        path: path,
-        host: host,
-        mode: (q['mode'] ?? '').trim(),
-        xPaddingBytes: (q['xPaddingBytes'] ?? q['x_padding_bytes'] ?? '').trim(),
-        noGrpcHeader: _truthy(q['noGRPCHeader'] ?? q['no_grpc_header']),
-      );
+      // §097/§127 — нативный xhttp + расширенные поля Xray splithttp (SPEC 002
+      // v2). Ключи читаем в обеих формах: camelCase (Xray URI) и snake_case
+      // (sing-box). Плюс параметр `extra` (URL-encoded JSON) с доп. полями.
+      return _parseXhttp(q);
     case 'raw':
     case 'tcp':
     case '':
@@ -78,6 +72,93 @@ TransportSpec? parseTransport(
     default:
       return null;
   }
+}
+
+/// §127 — разбор `type=xhttp` со всеми клиентскими полями SPEC 002 v2.
+///
+/// Источник полей — плоские query И параметр `extra` (URL-encoded JSON).
+/// extra сливается в копию query (его ключи в приоритете для своих); битый
+/// extra игнорируется — ссылка остаётся рабочей на плоских параметрах.
+XhttpTransport _parseXhttp(Map<String, String> q) {
+  final m = _mergeXhttpExtra(q);
+
+  // path: срезать `?…`-хвост (реальные ноды: path=/x?ed=2048 — хвост не путь).
+  var path = m['path'] ?? '/';
+  final qIdx = path.indexOf('?');
+  if (qIdx >= 0) path = path.substring(0, qIdx);
+  if (path.isEmpty) path = '/';
+
+  var host = (m['host'] ?? '').trim();
+  if (host.isEmpty) host = (m['sni'] ?? '').trim();
+
+  return XhttpTransport(
+    path: path,
+    host: host,
+    mode: (m['mode'] ?? '').trim(),
+    xPaddingBytes: _pick(m, 'xPaddingBytes', 'x_padding_bytes'),
+    noGrpcHeader: _truthy(m['noGRPCHeader'] ?? m['no_grpc_header']),
+    sessionPlacement: _pick(m, 'sessionPlacement', 'session_placement'),
+    sessionKey: _pick(m, 'sessionKey', 'session_key'),
+    seqPlacement: _pick(m, 'seqPlacement', 'seq_placement'),
+    seqKey: _pick(m, 'seqKey', 'seq_key'),
+    uplinkDataPlacement: _pick(m, 'uplinkDataPlacement', 'uplink_data_placement'),
+    uplinkDataKey: _pick(m, 'uplinkDataKey', 'uplink_data_key'),
+    uplinkChunkSize: _pick(m, 'uplinkChunkSize', 'uplink_chunk_size'),
+    uplinkHttpMethod: _pick(m, 'uplinkHTTPMethod', 'uplink_http_method'),
+    xPaddingObfsMode:
+        _truthy(m['xPaddingObfsMode'] ?? m['x_padding_obfs_mode']),
+    xPaddingKey: _pick(m, 'xPaddingKey', 'x_padding_key'),
+    xPaddingHeader: _pick(m, 'xPaddingHeader', 'x_padding_header'),
+    xPaddingPlacement: _pick(m, 'xPaddingPlacement', 'x_padding_placement'),
+    xPaddingMethod: _pick(m, 'xPaddingMethod', 'x_padding_method'),
+    scMaxEachPostBytes:
+        _normScRange(_pick(m, 'scMaxEachPostBytes', 'sc_max_each_post_bytes')),
+    scMinPostsIntervalMs: _normScRange(
+        _pick(m, 'scMinPostsIntervalMs', 'sc_min_posts_interval_ms')),
+  );
+}
+
+/// extra (URL-encoded JSON) → копия query со слитыми ключами. extra в приоритете
+/// для своих ключей (как Xray). Битый/обрезанный extra → возвращаем исходную
+/// query как есть (не роняем парсинг ссылки). extra-значения приводим к строке.
+Map<String, String> _mergeXhttpExtra(Map<String, String> q) {
+  final raw = q['extra'];
+  if (raw == null || raw.trim().isEmpty) return q;
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return q;
+    final merged = Map<String, String>.from(q);
+    decoded.forEach((k, v) {
+      if (k is String && v != null) merged[k] = _scalarToString(v);
+    });
+    return merged;
+  } catch (_) {
+    // Битый extra — игнорируем, ссылка живёт на плоских параметрах.
+    return q;
+  }
+}
+
+/// JSON-скаляр → строка. `30.0` (double без дроби) → `"30"`; bool → `true`/
+/// `false`; число/строка как есть.
+String _scalarToString(Object v) {
+  if (v is bool) return v ? 'true' : 'false';
+  if (v is double && v == v.truncateToDouble()) {
+    return v.toInt().toString();
+  }
+  return v.toString();
+}
+
+/// camelCase ИЛИ snake_case (camelCase в приоритете — Xray-форма URL).
+String _pick(Map<String, String> q, String camel, String snake) =>
+    (q[camel] ?? q[snake] ?? '').trim();
+
+/// §127 §2.4 — `sc*`-поле: дробное число `30.0` → `"30"`. Транспорт примет и
+/// `"N"`, и `"N-N"` — нормализуем только float-хвост, range-форму не трогаем.
+String _normScRange(String v) {
+  if (v.isEmpty) return v;
+  final d = double.tryParse(v);
+  if (d != null && d == d.truncateToDouble()) return d.toInt().toString();
+  return v;
 }
 
 /// TLS parameters for VLESS (с поддержкой REALITY через `pbk`/`sid`).
@@ -241,20 +322,38 @@ Map<String, String> transportToQuery(TransportSpec t) {
         if (p.isNotEmpty && p != '/') 'path': p,
         if (h.isNotEmpty) 'host': h,
       };
-    case XhttpTransport(
-        path: final p,
-        host: final h,
-        mode: final mode,
-        xPaddingBytes: final pad,
-        noGrpcHeader: final noGrpc,
-      ):
+    // §127 — пишем плоско camelCase, и только не-дефолтные значения
+    // (URL_PARSING §8.3) — иначе URI раздувается, а round-trip даёт ту же
+    // spec (на входе пустое поле == дефолтное поле).
+    case XhttpTransport x:
       return {
         'type': 'xhttp',
-        if (p.isNotEmpty && p != '/') 'path': p,
-        if (h.isNotEmpty) 'host': h,
-        if (mode.isNotEmpty) 'mode': mode,
-        if (pad.isNotEmpty) 'x_padding_bytes': pad,
-        if (noGrpc) 'no_grpc_header': 'true',
+        if (x.path.isNotEmpty && x.path != '/') 'path': x.path,
+        if (x.host.isNotEmpty) 'host': x.host,
+        if (x.mode.isNotEmpty) 'mode': x.mode,
+        if (x.xPaddingBytes.isNotEmpty) 'xPaddingBytes': x.xPaddingBytes,
+        if (x.noGrpcHeader) 'noGRPCHeader': 'true',
+        if (x.sessionPlacement.isNotEmpty)
+          'sessionPlacement': x.sessionPlacement,
+        if (x.sessionKey.isNotEmpty) 'sessionKey': x.sessionKey,
+        if (x.seqPlacement.isNotEmpty) 'seqPlacement': x.seqPlacement,
+        if (x.seqKey.isNotEmpty) 'seqKey': x.seqKey,
+        if (x.uplinkDataPlacement.isNotEmpty)
+          'uplinkDataPlacement': x.uplinkDataPlacement,
+        if (x.uplinkDataKey.isNotEmpty) 'uplinkDataKey': x.uplinkDataKey,
+        if (x.uplinkChunkSize.isNotEmpty) 'uplinkChunkSize': x.uplinkChunkSize,
+        if (x.uplinkHttpMethod.isNotEmpty)
+          'uplinkHTTPMethod': x.uplinkHttpMethod,
+        if (x.xPaddingObfsMode) 'xPaddingObfsMode': 'true',
+        if (x.xPaddingKey.isNotEmpty) 'xPaddingKey': x.xPaddingKey,
+        if (x.xPaddingHeader.isNotEmpty) 'xPaddingHeader': x.xPaddingHeader,
+        if (x.xPaddingPlacement.isNotEmpty)
+          'xPaddingPlacement': x.xPaddingPlacement,
+        if (x.xPaddingMethod.isNotEmpty) 'xPaddingMethod': x.xPaddingMethod,
+        if (x.scMaxEachPostBytes.isNotEmpty)
+          'scMaxEachPostBytes': x.scMaxEachPostBytes,
+        if (x.scMinPostsIntervalMs.isNotEmpty)
+          'scMinPostsIntervalMs': x.scMinPostsIntervalMs,
       };
   }
 }
