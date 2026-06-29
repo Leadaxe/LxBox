@@ -112,3 +112,19 @@ cut -f1 "$RESULTS" | sort | uniq -c | sort -rn |
   awk -v n="$total" '{ printf "  %3d  %5.1f%%  %s\n", $1, 100*$1/n, $2 }'
 echo
 echo "unique exit IPs: $(cut -f1 "$RESULTS" | sort -u | grep -vc FAIL)  /  services: $total"
+
+# Shannon entropy of the exit-IP distribution (FAILs excluded). High entropy =
+# evenly spread across nodes; low = one node dominating. Normalized to [0,1]
+# against a perfectly uniform spread; 2^H is the effective number of nodes.
+cut -f1 "$RESULTS" | grep -v FAIL | sort | uniq -c |
+  awk '{ c[NR] = $1; tot += $1 }
+       END {
+         if (tot == 0) { print "\nentropy: n/a (no successful responses)"; exit }
+         for (i = 1; i <= NR; i++) { p = c[i] / tot; H -= p * log(p) / log(2) }
+         maxH = (NR > 1) ? log(NR) / log(2) : 0
+         printf "\nbalance (Shannon entropy)\n"
+         printf "---------------------------------------------\n"
+         printf "  entropy:          %.3f bits (max %.3f for %d nodes)\n", H, maxH, NR
+         printf "  normalized:       %.3f  (1.0 = perfectly even)\n", (maxH > 0 ? H / maxH : 0)
+         printf "  effective nodes:  %.2f / %d\n", 2 ^ H, NR
+       }'
