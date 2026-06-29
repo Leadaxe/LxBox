@@ -23,6 +23,7 @@ import 'home/home_dialogs.dart';
 import 'home/node_filter_view_model.dart';
 import 'home/node_list_presenter.dart';
 import 'home/restore_backup.dart';
+import 'home/startup_wizard.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/debug_registry.dart';
 import '../services/haptic_service.dart';
@@ -180,8 +181,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     homeReturnObserver.setHandler(_onReturnToHome);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(maybeShowNotificationPermissionDialog(context));
-      unawaited(maybeShowBatteryOptimizationDialog(context, _vpn));
+      // Единый стартовый визард: notification → battery → add-tile,
+      // последовательно (см. startup_wizard.dart). Раньше эти промпты шли
+      // параллельно через unawaited и наезжали друг на друга.
+      unawaited(StartupWizard(context, _vpn).run());
       // §105 — cold-start: на этот момент статус туннеля обычно ещё не
       // пришёл от native (connectedSince=null) → no-op; реальный показ
       // ловит _onControllerChange, когда придёт connected и сессия дорастёт.
