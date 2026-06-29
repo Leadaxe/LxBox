@@ -59,12 +59,16 @@ one() {
   ip="$(curl -s ${PROXY:+-x "$PROXY"} --max-time "$TIMEOUT" "$svc" | tr -d '[:space:]')"
   # Keep only things shaped like an IPv4/IPv6 address; drop HTML error pages.
   [[ "$ip" =~ ^[0-9a-fA-F:.]+$ ]] || ip="FAIL"
-  printf '  %-34s %s\n' "$svc" "${ip:-FAIL}"          # live line to stdout
-  printf '%s\t%s\n' "${ip:-FAIL}" "$svc" >>"$RESULTS" # record for summary
+  # IP first (fixed column) so it never wraps off a narrow phone screen; the
+  # https:// scheme is stripped to keep the line short.
+  printf '  %-15s %s\n' "${ip:-FAIL}" "${svc#https://}" # live line to stdout
+  printf '%s\t%s\n' "${ip:-FAIL}" "$svc" >>"$RESULTS"   # record for summary
 }
 
-echo "-> ${#SERVICES[@]} services, one request each, concurrency $CONC${PROXY:+, via $PROXY} ..."
-echo "=== exit IP per service (live) ==="
+echo "-> ${#SERVICES[@]} services, one request each, concurrency $CONC${PROXY:+, via $PROXY}"
+echo
+echo "exit IP          service (live)"
+echo "---------------  --------------"
 for svc in "${SERVICES[@]}"; do
   one "$svc" &
   # Cap the number of in-flight jobs at CONC.
@@ -72,9 +76,21 @@ for svc in "${SERVICES[@]}"; do
 done
 wait
 
-echo
-echo "=== exit-IP distribution ==="
 total="${#SERVICES[@]}"
+
+echo
+echo "grouped by exit IP"
+echo "---------------------------------------------"
+# List each exit IP once, with the domains that came out of it.
+cut -f1 "$RESULTS" | sort -u | grep -v FAIL | while read -r ipaddr; do
+  printf '  %s\n' "$ipaddr"
+  awk -F'\t' -v ip="$ipaddr" '$1==ip { sub(/^https:\/\//,"",$2); printf "      %s\n", $2 }' "$RESULTS"
+done
+
+echo
+echo "distribution"
+echo "---------------------------------------------"
 cut -f1 "$RESULTS" | sort | uniq -c | sort -rn |
   awk -v n="$total" '{ printf "  %3d  %5.1f%%  %s\n", $1, 100*$1/n, $2 }'
-echo "unique IPs: $(cut -f1 "$RESULTS" | sort -u | grep -vc FAIL)  /  services: $total"
+echo
+echo "unique exit IPs: $(cut -f1 "$RESULTS" | sort -u | grep -vc FAIL)  /  services: $total"
