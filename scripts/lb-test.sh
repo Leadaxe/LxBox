@@ -52,27 +52,25 @@ SERVICES=(
 RESULTS="$(mktemp)"
 trap 'rm -f "$RESULTS"' EXIT
 
-# Query one service; emit "<ip>\t<service>" ("FAIL" on timeout / non-IP body).
+# Query one service; print "<service>  <ip>" live as it answers, and record
+# "<ip>\t<service>" to RESULTS for the summary. "FAIL" = timeout / non-IP body.
 one() {
   local svc="$1" ip
   ip="$(curl -s ${PROXY:+-x "$PROXY"} --max-time "$TIMEOUT" "$svc" | tr -d '[:space:]')"
   # Keep only things shaped like an IPv4/IPv6 address; drop HTML error pages.
   [[ "$ip" =~ ^[0-9a-fA-F:.]+$ ]] || ip="FAIL"
-  printf '%s\t%s\n' "${ip:-FAIL}" "$svc"
+  printf '  %-34s %s\n' "$svc" "${ip:-FAIL}"          # live line to stdout
+  printf '%s\t%s\n' "${ip:-FAIL}" "$svc" >>"$RESULTS" # record for summary
 }
 
 echo "-> ${#SERVICES[@]} services, one request each, concurrency $CONC${PROXY:+, via $PROXY} ..."
+echo "=== exit IP per service (live) ==="
 for svc in "${SERVICES[@]}"; do
-  one "$svc" >>"$RESULTS" &
+  one "$svc" &
   # Cap the number of in-flight jobs at CONC.
   while (($(jobs -r | wc -l) >= CONC)); do wait -n; done
 done
 wait
-
-echo
-echo "=== exit IP per service ==="
-sort -t$'\t' -k2 "$RESULTS" |
-  awk -F'\t' '{ printf "  %-34s %s\n", $2, $1 }'
 
 echo
 echo "=== exit-IP distribution ==="
