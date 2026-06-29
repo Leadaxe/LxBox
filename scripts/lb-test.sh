@@ -47,6 +47,21 @@ SERVICES=(
   https://ipof.in/txt
   https://whatismyip.akamai.com
   https://2ip.ru
+  https://ip.42.pl/raw
+  https://wgetip.com
+  https://myip.dnsomatic.com
+  https://diagnostic.opendns.com/myip
+  https://ip1.dynupdate.no-ip.com
+  https://www.trackip.net/ip
+  https://ipapi.co/ip
+  https://api64.ipify.org
+  https://ip.seeip.org
+  https://canhazip.com
+  # Cloudflare / trace endpoints: reply "ip=<addr>" amid key=value lines.
+  # Parsed below. Rarely down or blocked, so good extra balancing samples.
+  https://www.cloudflare.com/cdn-cgi/trace
+  https://one.one.one.one/cdn-cgi/trace
+  https://cloudflare-dns.com/cdn-cgi/trace
 )
 
 RESULTS="$(mktemp)"
@@ -55,8 +70,15 @@ trap 'rm -f "$RESULTS"' EXIT
 # Query one service; print "<service>  <ip>" live as it answers, and record
 # "<ip>\t<service>" to RESULTS for the summary. "FAIL" = timeout / non-IP body.
 one() {
-  local svc="$1" ip
-  ip="$(curl -s ${PROXY:+-x "$PROXY"} --max-time "$TIMEOUT" "$svc" | tr -d '[:space:]')"
+  local svc="$1" body ip
+  body="$(curl -s ${PROXY:+-x "$PROXY"} --max-time "$TIMEOUT" "$svc")"
+  if [[ "$body" == *"ip="* ]]; then
+    # cdn-cgi/trace style: extract the value of the ip= line.
+    ip="$(printf '%s\n' "$body" | sed -n 's/^ip=//p')"
+  else
+    ip="$body"
+  fi
+  ip="$(printf '%s' "$ip" | tr -d '[:space:]')"
   # Keep only things shaped like an IPv4/IPv6 address; drop HTML error pages.
   [[ "$ip" =~ ^[0-9a-fA-F:.]+$ ]] || ip="FAIL"
   # IP first (fixed column) so it never wraps off a narrow phone screen; the
