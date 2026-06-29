@@ -1,64 +1,82 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# lb-test.sh — exit-IP distribution probe for load-balancing verification.
+# lb-test.sh — exit-IP probe for load-balancing verification.
 #
-# Fires N requests at a rotating set of "what's my IP" services and aggregates
-# the exit IPs that come back. A healthy load balancer spreads the requests
-# across several node IPs; a single IP for every request means no balancing
-# (or sticky/session-affinity routing).
+# Sends exactly ONE request to each "what's my IP" service and reports the exit
+# IP per domain, then the overall distribution. The number of distinct exit IPs
+# tells you how many nodes the balancer spreads across.
 #
-# Why rotate across many services: a single destination can get pinned to one
-# node by session affinity, hiding the spread. Hitting several distinct
-# services makes the real per-connection distribution visible.
+# Why one request per server (and many distinct servers): a sticky /
+# consistent-hashing balancer pins a connection to a node BY DESTINATION, so
+# repeating requests to the SAME domain always exits the same node and tells you
+# nothing. Hitting many DIFFERENT domains once each is what reveals the real
+# spread of nodes. More domains in the list => more nodes revealed.
 #
 # Runs anywhere bash + curl exist (built for Termux, also fine on Linux/macOS).
 #
 # Usage:
-#   ./lb-test.sh                 # 50 requests, concurrency 8
-#   ./lb-test.sh 100 10          # 100 requests, 10 in flight at once
-#   PROXY=http://127.0.0.1:2080 ./lb-test.sh 100 10   # probe a specific node port
+#   ./lb-test.sh                       # one request per server, concurrency 8
+#   ./lb-test.sh 4                     # same, 4 requests in flight at once
+#   PROXY=http://127.0.0.1:2080 ./lb-test.sh   # probe a specific node port
 set -u
 
-N="${1:-50}"            # total number of requests
-CONC="${2:-8}"          # how many run concurrently
+CONC="${1:-8}"          # how many requests run concurrently
 TIMEOUT="${TIMEOUT:-8}" # per-request timeout (seconds)
 PROXY="${PROXY:-}"      # optional curl proxy, e.g. http://127.0.0.1:2080
 
-# Plain-text IP endpoints, verified to return a clean address.
-# (ifconfig.com is intentionally omitted: it answers 406 via Mod Security.)
+# Plain-text IP endpoints on DISTINCT domains, one request each. The more
+# distinct destinations, the more nodes a consistent-hashing balancer reveals.
+# The FAIL filter tolerates any that are down or rate-limiting on the day.
 SERVICES=(
-  https://wtfismyip.com/text
-  https://checkip.amazonaws.com
-  https://ipecho.net/plain
-  https://ident.me
-  https://ipinfo.io/ip
-  https://icanhazip.com
   https://ifconfig.me
   https://ifconfig.co
+  https://ifconfig.io
+  https://icanhazip.com
+  https://ident.me
+  https://tnedi.me
+  https://ipecho.net/plain
+  https://checkip.amazonaws.com
+  https://api.ipify.org
+  https://ipinfo.io/ip
+  https://wtfismyip.com/text
+  https://myexternalip.com/raw
+  https://l2.io/ip
+  https://eth0.me
+  https://api.seeip.org
+  https://api.ip.sb/ip
+  https://api.my-ip.io/ip
+  https://ipof.in/txt
+  https://whatismyip.akamai.com
   https://2ip.ru
 )
 
 RESULTS="$(mktemp)"
 trap 'rm -f "$RESULTS"' EXIT
 
-# Fetch one IP from a randomly chosen service; emit FAIL on timeout/garbage.
+# Query one service; emit "<ip>\t<service>" ("FAIL" on timeout / non-IP body).
 one() {
-  local svc="${SERVICES[$((RANDOM % ${#SERVICES[@]}))]}" ip
+  local svc="$1" ip
   ip="$(curl -s ${PROXY:+-x "$PROXY"} --max-time "$TIMEOUT" "$svc" | tr -d '[:space:]')"
   # Keep only things shaped like an IPv4/IPv6 address; drop HTML error pages.
   [[ "$ip" =~ ^[0-9a-fA-F:.]+$ ]] || ip="FAIL"
-  printf '%s\n' "${ip:-FAIL}"
+  printf '%s\t%s\n' "${ip:-FAIL}" "$svc"
 }
 
-echo "-> $N requests, concurrency $CONC${PROXY:+, via $PROXY} ..."
-for ((i = 1; i <= N; i++)); do
-  one >>"$RESULTS" &
+echo "-> ${#SERVICES[@]} services, one request each, concurrency $CONC${PROXY:+, via $PROXY} ..."
+for svc in "${SERVICES[@]}"; do
+  one "$svc" >>"$RESULTS" &
   # Cap the number of in-flight jobs at CONC.
   while (($(jobs -r | wc -l) >= CONC)); do wait -n; done
 done
 wait
 
 echo
+echo "=== exit IP per service ==="
+sort -t$'\t' -k2 "$RESULTS" |
+  awk -F'\t' '{ printf "  %-34s %s\n", $2, $1 }'
+
+echo
 echo "=== exit-IP distribution ==="
-sort "$RESULTS" | uniq -c | sort -rn |
-  awk -v n="$N" '{ printf "  %4d  %5.1f%%  %s\n", $1, 100*$1/n, $2 }'
-echo "unique IPs: $(sort -u "$RESULTS" | grep -vc FAIL)  /  total: $N"
+total="${#SERVICES[@]}"
+cut -f1 "$RESULTS" | sort | uniq -c | sort -rn |
+  awk -v n="$total" '{ printf "  %3d  %5.1f%%  %s\n", $1, 100*$1/n, $2 }'
+echo "unique IPs: $(cut -f1 "$RESULTS" | sort -u | grep -vc FAIL)  /  services: $total"
