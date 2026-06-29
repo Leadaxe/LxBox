@@ -76,10 +76,11 @@ one() {
   ip="$(printf '%s' "$ip" | tr -d '[:space:]')"
   # Keep only things shaped like an IPv4/IPv6 address; drop HTML error pages.
   [[ "$ip" =~ ^[0-9a-fA-F:.]+$ ]] || ip="FAIL"
-  # IP first (fixed column) so it never wraps off a narrow phone screen; the
-  # https:// scheme is stripped to keep the line short.
-  printf '  %-15s %s\n' "${ip:-FAIL}" "${svc#https://}" # live line to stdout
-  printf '%s\t%s\n' "${ip:-FAIL}" "$svc" >>"$RESULTS"   # record for summary
+  # IP first (fixed column) so it never wraps off a narrow phone screen; strip
+  # the https:// scheme and the /cdn-cgi/trace path to keep the line short.
+  local show="${svc#https://}"; show="${show%/cdn-cgi/trace}"
+  printf '  %-15s %s\n' "${ip:-FAIL}" "$show"          # live line to stdout
+  printf '%s\t%s\n' "${ip:-FAIL}" "$svc" >>"$RESULTS"  # record for summary
 }
 
 echo "-> ${#SERVICES[@]} services, one request each, concurrency $CONC${PROXY:+, via $PROXY}"
@@ -101,7 +102,7 @@ echo "---------------------------------------------"
 # List each exit IP once, with the domains that came out of it.
 cut -f1 "$RESULTS" | sort -u | grep -v FAIL | while read -r ipaddr; do
   printf '  %s\n' "$ipaddr"
-  awk -F'\t' -v ip="$ipaddr" '$1==ip { sub(/^https:\/\//,"",$2); printf "      %s\n", $2 }' "$RESULTS"
+  awk -F'\t' -v ip="$ipaddr" '$1==ip { sub(/^https:\/\//,"",$2); sub(/\/cdn-cgi\/trace$/,"",$2); printf "      %s\n", $2 }' "$RESULTS"
 done
 
 echo
