@@ -127,6 +127,28 @@ void main() {
     });
   });
 
+  group('BoxVpnClient.isForeignVpnActive', () {
+    test('returns native true', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return true;
+      });
+      final r = await BoxVpnClient().isForeignVpnActive();
+      expect(r, isTrue);
+      expect(calls.single.method, equals('isForeignVpnActive'));
+    });
+
+    test('returns native false', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async => false);
+      expect(await BoxVpnClient().isForeignVpnActive(), isFalse);
+    });
+
+    test('null native answer → false (does not block start)', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async => null);
+      expect(await BoxVpnClient().isForeignVpnActive(), isFalse);
+    });
+  });
+
   // §207 — pprof-снимки через единый native-метод `pprofProfile`
   // (Dart передаёт готовый pathAndQuery).
   group('BoxVpnClient.pprof (§207)', () {

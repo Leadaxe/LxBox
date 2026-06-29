@@ -163,6 +163,18 @@ class BoxVpnClient {
     return TunnelStatus.fromNative(s);
   }
 
+  /// true, если прямо сейчас активен VPN другого приложения. UI спрашивает
+  /// перед ручным стартом, чтобы предложить «переключиться?» вместо молчаливого
+  /// отзыва чужого туннеля. При недоступности/таймауте → false (не блокируем старт).
+  Future<bool> isForeignVpnActive() async {
+    final r = await _invoke<bool>(
+      _Methods.isForeignVpnActive,
+      timeout: _Timeouts.status,
+      onTimeoutValue: false,
+    );
+    return r ?? false;
+  }
+
   /// §187 — прошедшие мс с реального старта туннеля (native companion,
   /// переживает swipe). 0 = не запущен / только что стартовал. Dart на
   /// cold-start вычисляет честный `connectedSince = now - uptime`, не обнуляя
