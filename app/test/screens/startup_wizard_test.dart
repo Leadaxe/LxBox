@@ -59,58 +59,48 @@ void main() {
     });
   }
 
-  // NB: проверяемые функции (maybeShowAddTilePrompt / battery) при этих
-  // мок-ответах НЕ доходят до showDialog(context) — context используется только
-  // в ветках, что здесь не достигаются. Native-вызов идёт через `_invoke` с
-  // `.timeout()`-таймером: реальный Timer не резолвится в fake-async зоне
-  // testWidgets и виснет 10 мин. Поэтому вызов оборачиваем в `tester.runAsync()`
-  // — он гоняет код в НАСТОЯЩЕЙ async-зоне, где timeout-таймеры отрабатывают.
+  // ВАЖНО: используем обычный `test()`, НЕ `testWidgets`. Проверяемые функции
+  // при этих мок-ответах НЕ доходят до `showDialog(context)` — context живёт
+  // только в ветках, которые здесь не достигаются (early-return по флагу /
+  // whitelisted). Native-вызов идёт через `BoxVpnClient._invoke` с
+  // `.timeout()`-таймером; в обычном `test()` MethodChannel-мок отвечает
+  // синхронно → таймер отменяется мгновенно (как в box_vpn_client_test.dart).
+  // testWidgets же гоняет это в fake-async зоне, где реальный Timer не
+  // резолвится → pending timer → 10-минутный hang в CI. Фейковый context
+  // нужен только чтобы удовлетворить сигнатуру — он не разыменовывается.
   group('maybeShowAddTilePrompt', () {
-    testWidgets('first run: calls requestAddTile and sets persist flag',
-        (tester) async {
+    test('first run: calls requestAddTile and sets persist flag', () async {
       mockVpn();
-      late BuildContext ctx;
-      await tester.pumpWidget(MaterialApp(home: Builder(builder: (c) {
-        ctx = c;
-        return const SizedBox();
-      })));
-
-      await tester.runAsync(() => maybeShowAddTilePrompt(ctx, BoxVpnClient()));
-
+      await maybeShowAddTilePrompt(_FakeContext(), BoxVpnClient());
       expect(calls.where((c) => c.method == 'requestAddTile'), hasLength(1));
       expect(await SettingsStorage.getVar('wizard_addtile_v1', '0'), '1');
     });
 
-    testWidgets('second run: flag already set → no native call', (tester) async {
+    test('second run: flag already set → no native call', () async {
       mockVpn();
       await SettingsStorage.setVar('wizard_addtile_v1', '1');
-      late BuildContext ctx;
-      await tester.pumpWidget(MaterialApp(home: Builder(builder: (c) {
-        ctx = c;
-        return const SizedBox();
-      })));
-
-      await tester.runAsync(() => maybeShowAddTilePrompt(ctx, BoxVpnClient()));
-
+      await maybeShowAddTilePrompt(_FakeContext(), BoxVpnClient());
       expect(calls.where((c) => c.method == 'requestAddTile'), isEmpty);
     });
   });
 
   group('maybeShowBatteryOptimizationDialog', () {
-    testWidgets('whitelisted → early return, no persist flag set',
-        (tester) async {
+    test('whitelisted → early return, no persist flag set', () async {
       mockVpn(); // isIgnoringBatteryOptimizations → true
-      late BuildContext ctx;
-      await tester.pumpWidget(MaterialApp(home: Builder(builder: (c) {
-        ctx = c;
-        return const SizedBox();
-      })));
-
-      await tester.runAsync(
-          () => maybeShowBatteryOptimizationDialog(ctx, BoxVpnClient()));
-
+      await maybeShowBatteryOptimizationDialog(_FakeContext(), BoxVpnClient());
       // Не в whitelist → флаг не ставится (повторно спросим когда понадобится).
       expect(await SettingsStorage.getVar('wizard_battery_v1', '0'), '0');
     });
   });
+}
+
+/// Заглушка `BuildContext` — функции под тестом до него не доходят (early-
+/// return), сигнатура удовлетворяется без разыменования. `mounted=false` —
+/// защитный гард `if (!context.mounted) return` в диалог-функциях выйдет раньше
+/// любого реального обращения к контексту, даже если поток дойдёт туда.
+class _FakeContext implements BuildContext {
+  @override
+  bool get mounted => false;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
 }
