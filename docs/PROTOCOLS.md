@@ -4,7 +4,7 @@ L×Box parses proxy URIs from subscriptions and converts them into [sing-box](ht
 
 **Source code (Parser v2, spec 026):**
 - [`app/lib/services/parser/uri_parsers.dart`](../app/lib/services/parser/uri_parsers.dart) — URI-форматы всех 9 протоколов
-- [`app/lib/services/parser/transport.dart`](../app/lib/services/parser/transport.dart) — парсинг `TransportSpec`, нативный XHTTP (§097)
+- [`app/lib/services/parser/transport.dart`](../app/lib/services/parser/transport.dart) — парсинг `TransportSpec`, нативный XHTTP (§097, полный набор параметров §127)
 - [`app/lib/services/parser/json_parsers.dart`](../app/lib/services/parser/json_parsers.dart) — `parseSingboxEntry`, `parseXrayOutbound`
 - [`app/lib/services/parser/ini_parser.dart`](../app/lib/services/parser/ini_parser.dart) — WireGuard INI
 - [`app/lib/services/parser/parse_all.dart`](../app/lib/services/parser/parse_all.dart) — orchestrator
@@ -1145,16 +1145,35 @@ Multiple query keys are checked: `insecure`, `allowInsecure`, `allowinsecure`. V
 - sing-box JSON (`transport.type = "xhttp"`) — `parseSingboxEntry`;
 - Xray JSON (`streamSettings.network = "xhttp"` + `xhttpSettings`) — см. секцию 11.
 
-| Поле | URI query | sing-box JSON | Default |
-|------|-----------|---------------|--------|
-| `path` | `path` | `path` | `/` |
-| `host` | `host` (fallback: `sni`) | `host` | пусто |
-| `mode` | `mode` | `mode` | пусто — поле не эмитится, ядро решает (auto) |
-| `x_padding_bytes` | `xPaddingBytes` / `x_padding_bytes` | `x_padding_bytes` | пусто |
-| `no_grpc_header` | `noGRPCHeader` / `no_grpc_header` | `no_grpc_header` | false |
-| `headers` | — | `headers` | пусто |
+С §127 поддержан **полный клиентский набор** Xray splithttp (SPEC 002 v2): кроме 6 базовых полей — настраиваемые placement'ы session/seq/uplink, ключи, метод upload, X-Padding obfs-режим и packet-up tuning. Источник полей в URI — плоские query-параметры **и** параметр `extra` (URL-encoded JSON, см. ниже).
 
-NB: VMess (base64-JSON) несёт только `path`/`host` — `mode` и padding доступны в URI-формах (VLESS/Trojan) и JSON.
+| Поле (snake_case JSON) | URI query (camelCase / snake) | Default |
+|------|-----------|--------|
+| `path` | `path` | `/` |
+| `host` | `host` (fallback: `sni`) | пусто |
+| `mode` | `mode` | пусто — ядро решает (auto) |
+| `x_padding_bytes` | `xPaddingBytes` | пусто |
+| `no_grpc_header` | `noGRPCHeader` | false |
+| `headers` | — (только JSON) | пусто |
+| `session_placement` | `sessionPlacement` | `path` |
+| `session_key` | `sessionKey` | placement-зав. |
+| `seq_placement` | `seqPlacement` | `path` |
+| `seq_key` | `seqKey` | placement-зав. |
+| `uplink_data_placement` | `uplinkDataPlacement` | `auto` |
+| `uplink_data_key` | `uplinkDataKey` | placement-зав. |
+| `uplink_chunk_size` | `uplinkChunkSize` | placement-зав. |
+| `uplink_http_method` | `uplinkHTTPMethod` | `POST` |
+| `x_padding_obfs_mode` | `xPaddingObfsMode` | false |
+| `x_padding_key` | `xPaddingKey` | `x_padding` |
+| `x_padding_header` | `xPaddingHeader` | `X-Padding` |
+| `x_padding_placement` | `xPaddingPlacement` | `queryInHeader` |
+| `x_padding_method` | `xPaddingMethod` | `repeat-x` |
+| `sc_max_each_post_bytes` | `scMaxEachPostBytes` | `1000000` |
+| `sc_min_posts_interval_ms` | `scMinPostsIntervalMs` | `30` |
+
+Все пустые/дефолтные поля **не эмитятся** (omitempty) — у ядра свои дефолты. NB: VMess (base64-JSON) несёт только `path`/`host`; расширенные поля доступны в URI-формах (VLESS/Trojan) и JSON.
+
+**Параметр `extra` (URL-encoded JSON).** Реальные подписки часто упаковывают часть полей (особенно tuning `scMaxEachPostBytes`/`scMinPostsIntervalMs`) в один query-параметр `extra=<urlencoded-json>`. Парсер декодирует его и вливает ключи в transport (extra в приоритете для своих ключей). **Битый/обрезанный `extra` игнорируется** — ссылка остаётся рабочей на плоских параметрах. Числа из `extra` приводятся к строке (`30.0` → `"30"`); `path` с `?`-хвостом обрезается. Справочник маппинга — `SPECS/002-XHTTP_CLIENT_TRANSPORT/URL_PARSING.md` в репозитории ядра.
 
 **Режимы (`mode`).**
 
@@ -1165,9 +1184,15 @@ NB: VMess (base64-JSON) несёт только `path`/`host` — `mode` и padd
 | `stream-up` | uplink — один потоковый POST, downlink — GET-стрим |
 | `stream-one` | один bidirectional стрим — всё в одном запросе |
 
+**Placement (§127).** Куда транспорт кладёт служебные данные на каждом запросе — для демультиплексирования логических соединений поверх одного HTTP-origin:
+- `session_placement` / `seq_placement` — session id и номер пакета: `path` | `query` | `header` | `cookie` (default `path`);
+- `uplink_data_placement` — payload upload в packet-up: `body` | `auto` | `header` | `cookie` (default `auto`≈body);
+- `*_key` — имя ключа для не-path placement (дефолт зависит от placement: `X-Session`/`x_session` и т.п.).
+
 **Обфускация:**
-- `x_padding_bytes` — диапазон случайного padding'а запросов, напр. `"100-1000"`;
-- `no_grpc_header` — не слать gRPC-обёртку в `stream-up` (нужно, если сервер настроен с `noGRPCHeader: true`).
+- `x_padding_bytes` — диапазон случайного padding'а, напр. `"100-1000"`;
+- `no_grpc_header` — не слать gRPC-обёртку в `stream-up`;
+- `x_padding_obfs_mode` — переключатель configurable-obfs (вместо legacy padding в `Referer`); под ним `x_padding_placement` (`cookie`|`header`|`query`|`queryInHeader`) + `x_padding_method` (`repeat-x` | `tokenish` — HPACK-Huffman) + свои ключ/заголовок.
 
 **Generated transport block:**
 
@@ -1176,14 +1201,21 @@ NB: VMess (base64-JSON) несёт только `path`/`host` — `mode` и padd
   "type": "xhttp",
   "path": "/path",
   "host": "cdn.example.com",
-  "mode": "stream-one",
+  "mode": "packet-up",
   "x_padding_bytes": "100-1000",
-  "no_grpc_header": true
+  "no_grpc_header": true,
+  "session_placement": "header",
+  "seq_placement": "query",
+  "x_padding_obfs_mode": true,
+  "x_padding_method": "tokenish",
+  "sc_max_each_post_bytes": "1000000"
 }
 ```
 
+(Расширенные placement/obfs/tuning-поля — опциональны; в дефолте эмитятся только базовые 6.)
+
 **Несовместимость с Vision.** `flow=xtls-rprx-vision` живёт только на «голом» TCP — с XHTTP (как и с ws/grpc/h2) комбинация невалидна по протоколу. Парсер auto-flow при наличии transport-блока не подставляет (см. TLS Behavior в секции 1); конфиг с явным `flow` + xhttp с сервером не заработает.
 
-**Round-trip.** `XhttpTransport.toSingbox` → transport-map (пустые поля не эмитятся); `transportToQuery` → share-URI (snake_case). `httpupgrade` остаётся **отдельным** транспортом — больше не «приёмник» для xhttp.
+**Round-trip.** `XhttpTransport.toSingbox` → transport-map (пустые поля не эмитятся); `transportToQuery` → share-URI плоским **camelCase** (Xray-форма, интероп с v2rayN/Xray), и только **не-дефолтные** поля — URI не раздувается, инвариант `parseUri(toUri(spec)) ≈ spec` сохраняется (на входе пустое поле == дефолтное дают одну spec). `extra` на выходе не генерируется — поля разворачиваются плоско. `httpupgrade` остаётся **отдельным** транспортом — больше не «приёмник» для xhttp.
 
 **NB про стоковое ядро.** На upstream sing-box (без `with_xhttp`) конфиг с `"type": "xhttp"` отвергается на load (`unknown transport type`). Фича работает только на релизах с бандленным fork-ядром — как AWG (секция 8.5).

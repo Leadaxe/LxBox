@@ -6,6 +6,33 @@
 
 ---
 
+## [2.8.0] — 2026-06-30
+
+Поддержка XHTTP-нод (Xray splithttp) с полным набором параметров — теперь
+расширенные xhttp-подписки (placement/obfs/tuning, в т.ч. через `extra`-JSON)
+парсятся и работают. Плюс качество жизни: единый стартовый визард онбординга,
+диалог-подтверждение при перехвате чужого VPN, открытие приложения долгим
+нажатием на QS-плитку, и версия ядра в Debug API. Ядро обновлено до rc.16
+(поля XHTTP SPEC 002 v2).
+
+### Added
+
+- **§127 — Полный XHTTP (Xray splithttp): все клиентские параметры из ссылки** ([feature spec](docs/spec/features/127%20xhttp-full-url-params/spec.md), [transport_spec.dart](app/lib/models/transport_spec.dart) + [transport.dart](app/lib/services/parser/transport.dart)). Парсер ссылок `vless://…type=xhttp` расширен с 6 полей (v1, §097) до **полной клиентской поддержки SPEC 002 v2**: настраиваемые placement'ы session/seq/uplink (path/query/header/cookie), ключи, метод upload, **X-Padding obfs-режим** (`repeat-x`/`tokenish`), packet-up tuning (`sc_max_each_post_bytes`/`sc_min_posts_interval_ms`). Два источника полей в URL: плоские query-параметры **и** параметр `extra` (URL-encoded JSON) — `extra` декодируется и вливается в transport (битый/обрезанный `extra` игнорируется, ссылка остаётся рабочей на плоских параметрах). Ключи читаются в обеих формах: camelCase (Xray) и snake_case (sing-box); `path` с `?`-хвостом обрезается; числовые `sc*` приводятся к строке (`30.0` → `"30"`). При экспорте (`toUri`) пишутся только не-дефолтные поля — URI не раздувается, round-trip сохраняется. Верифицировано против ядра: `sing-box check -c` (`with_xhttp`) на выхлопе парсера из golden-ссылки → проходит; на реальной подписке xhttp-ноды поднимают коннект. +8 тестов + golden-fixture.
+
+- **§126 — Стартовый визард первого запуска** ([feature spec](docs/spec/features/126%20first-run-wizard/spec.md), [startup_wizard.dart](app/lib/screens/home/startup_wizard.dart)). Онбординг-промпты (разрешение на уведомления → battery optimization → добавить QS-плитку) сведены в **единый последовательный движок**: следующий шаг показывается только после закрытия предыдущего. Раньше они запускались параллельно и наезжали друг на друга. Добавлять/править/переупорядочивать онбординг-вопросы — в одном месте. Новый шаг — промпт «добавить плитку в быстрые настройки» (Android 13+); battery-промпт теперь показывается один раз.
+
+- **§212 — Long-press на QS-плитке открывает приложение** ([task spec](docs/spec/tasks/212-tile-longpress-open-app.md), [AndroidManifest.xml](app/android/app/src/main/AndroidManifest.xml)). Долгое нажатие на плитку L×Box в шторке быстрых настроек открывает приложение (`QS_TILE_PREFERENCES` intent-filter). Короткий тап по-прежнему переключает VPN.
+
+- **§213 — Debug API `/device` отдаёт версию ядра** ([task spec](docs/spec/tasks/213-debug-device-core-version.md), [device.dart](app/lib/services/debug/handlers/device.dart)). `GET /device` теперь возвращает `core_version` (libbox / sing-box-lx, то что реально вкомпилировано в APK) рядом с `app_version`/`app_build` — первое, что нужно при разборе рассинхрона «парсер эмитит поле, которого ядро не знает».
+
+### Changed
+
+- **§211 — Подтверждение перед перехватом чужого VPN** ([task spec](docs/spec/tasks/211-foreign-vpn-switch-dialog.md), [home_dialogs.dart](app/lib/screens/home/home_dialogs.dart) + [VpnPlugin.kt](app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/VpnPlugin.kt)). При ручном старте из UI, если на устройстве уже активен VPN другого приложения, показывается диалог **«Another VPN is active — Switch?»**. Раньше наш старт молча отзывал чужой туннель (`VpnService.prepare()` возвращает `null` и когда чужого VPN нет, и когда он активен — код это не различал). Native определяет активный чужой VPN через `ConnectivityManager`/`TRANSPORT_VPN`. Только для UI-запуска; tile/automation/Debug API не трогаются. +3 теста.
+
+- **§214 — ядро sing-box-lx → `v1.14.0-lx.1-rc.16`** ([task spec](docs/spec/tasks/214-libbox-rc16-xhttp-fields.md), [libbox.version](app/android/libbox.version)). Поля XHTTP SPEC 002 v2 (`sc_max_each_post_bytes`, `session_placement`, `x_padding_obfs_mode` и др.) добавлены в ядро. Без этого бампа расширенная xhttp-нода роняла **весь** конфиг на load (`unknown field`), а не только себя. CommandClient API не менялся.
+
+---
+
 ## [2.7.0] — 2026-06-29
 
 Балансировка нагрузки: auto-группа теперь умеет раскидывать соединения по пулу

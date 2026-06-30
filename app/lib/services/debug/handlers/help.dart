@@ -69,7 +69,7 @@ GET /state/config_locked            { "locked": bool } — auto-rebuild lock sta
 
 === Device ===
 
-GET /device                         Android version / SDK / model / ABI / app version / locale / timezone / network type / uptime
+GET /device                         Android version / SDK / model / ABI / app version + build / core version (libbox) / locale / timezone / network type / uptime
 
 === Config ===
 

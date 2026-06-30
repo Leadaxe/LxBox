@@ -27,6 +27,16 @@ on:
         default: "checks"
         type: choice
         options: [checks, build, release]
+      test_path:
+        description: "Точечный прогон: путь(и) к тесту относительно app/ (напр. test/screens/startup_wizard_test.dart). Пусто = весь набор. Пропускает analyze для скорости."
+        required: false
+        default: ""
+        type: string
+      test_name:
+        description: "Фильтр по имени теста/группы (--name, подстрока). Гонит только матчащие — удобно «начать» с конкретной группы внутри файла. Работает только вместе с test_path."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -90,11 +100,27 @@ jobs:
       - name: Dependencies
         run: flutter pub get
 
+      # Точечный режим (workflow_dispatch + test_path) пропускает analyze —
+      # цель такого прогона быстро проверить конкретный тест, не весь набор.
       - name: Analyze
+        if: ${{ github.event.inputs.test_path == '' }}
         run: flutter analyze
 
       - name: Test
-        run: flutter test
+        run: |
+          if [ -n "${{ github.event.inputs.test_path }}" ]; then
+            # Точечный прогон: -r expanded печатает каждый тест по ходу (живой
+            # прогресс в логе), --name <substr> сужает до конкретной группы/теста.
+            NAME_FILTER=""
+            if [ -n "${{ github.event.inputs.test_name }}" ]; then
+              NAME_FILTER="--name \"${{ github.event.inputs.test_name }}\""
+              echo "::notice::Фильтр по имени: ${{ github.event.inputs.test_name }}"
+            fi
+            echo "::notice::Точечный прогон: ${{ github.event.inputs.test_path }}"
+            eval flutter test -r expanded $NAME_FILTER ${{ github.event.inputs.test_path }}
+          else
+            flutter test
+          fi
 
   android:
     if: startsWith(github.ref, 'refs/tags/v') ||
