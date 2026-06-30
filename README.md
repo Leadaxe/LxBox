@@ -305,7 +305,7 @@ View and edit raw sing-box JSON config. Pretty-printed display with copy button.
 | SOCKS | `socks://` / `socks5://` | TCP, auth |
 | WireGuard / **AmneziaWG** | `wireguard://`, `awg://`, INI / `.conf`, **Amnezia `vpn://`** | UDP, multi-peer, **AWG 1.x/2.0 obfuscation** (jc/jmin/jmax, s1–s4, h1–h4 incl. **`N-M` ranges**, i1–i5), auto-MTU 1280 |
 
-**XHTTP** is a native transport since v2.0.0 (Xray splithttp: `mode` auto/packet-up/stream-up/stream-one, `x_padding_bytes`, `no_grpc_header`) — works with TLS and Reality, incompatible with XTLS-Vision (protocol limitation).
+**XHTTP** is a native transport since v2.0.0 (Xray splithttp: `mode` auto/packet-up/stream-up/stream-one). Since **v2.8.0** the link parser supports the **full client-side param set**: configurable session/seq/uplink placements (path/query/header/cookie), keys, upload method, **X-Padding obfs mode** (`repeat-x`/`tokenish`) and packet-up tuning — read both from flat query params and from the `extra` (URL-encoded JSON) parameter. Works with TLS and Reality, incompatible with XTLS-Vision (protocol limitation).
 
 See [Protocol Documentation](docs/PROTOCOLS.md) for full URI format details and sing-box mapping.
 
@@ -331,7 +331,7 @@ buildConfig(lists, settings)  ← template + post-steps (DPI, DNS, rules)
 sing-box JSON
 ```
 
-- **Bundled core** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **`v1.14.0-lx.1-rc.15`**: sing-box 1.14 fork built with `with_awg` / `with_xhttp` / `with_lx_command` tags; the control channel runs over libbox `CommandClient` (no Clash API). Adds the round-robin **load-balancer** (SPEC 019) and `GetPool` RPC. Version pinned in `app/android/libbox.version`, AAR fetched from the fork's GitHub Releases by `scripts/fetch-libbox.sh` with SHA256 verification
+- **Bundled core** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **`v1.14.0-lx.1-rc.16`**: sing-box 1.14 fork built with `with_awg` / `with_xhttp` / `with_lx_command` tags; the control channel runs over libbox `CommandClient` (no Clash API). Adds the round-robin **load-balancer** (SPEC 019) + `GetPool` RPC, and the full XHTTP client param set (SPEC 002 v2, rc.16). Version pinned in `app/android/libbox.version`, AAR fetched from the fork's GitHub Releases by `scripts/fetch-libbox.sh` with SHA256 verification
 - **Sealed `NodeSpec`** — 9 protocols, polymorphic `emit(vars)` / `toUri()` (round-trip invariant)
 - **`EmitContext`** — passes template vars into per-node emit
 - **`NodeEntries{main, detours[]}`** — named struct for chain results

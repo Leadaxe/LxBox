@@ -241,7 +241,7 @@ Multi-hop цепочки: трафик идёт через промежуточ�
 | WireGuard / **AmneziaWG** | `wireguard://`, `awg://`, INI / `.conf`, **Amnezia `vpn://`** | UDP, multi-peer, **обфускация AWG 1.x/2.0** (jc/jmin/jmax, s1–s4, h1–h4 вкл. **диапазоны `N-M`**, i1–i5), авто-MTU 1280 |
 
 
-**XHTTP** — нативный транспорт с v2.0.0 (Xray splithttp: `mode` auto/packet-up/stream-up/stream-one, `x_padding_bytes`, `no_grpc_header`) — работает с TLS и Reality, несовместим с XTLS-Vision (ограничение протокола).
+**XHTTP** — нативный транспорт с v2.0.0 (Xray splithttp: `mode` auto/packet-up/stream-up/stream-one). С **v2.8.0** парсер ссылок поддерживает **полный клиентский набор полей**: настраиваемые placement'ы session/seq/uplink (path/query/header/cookie), ключи, метод upload, **X-Padding obfs-режим** (`repeat-x`/`tokenish`) и packet-up tuning — читаются из плоских query-параметров и из параметра `extra` (URL-encoded JSON). Работает с TLS и Reality, несовместим с XTLS-Vision (ограничение протокола).
 
 Подробная документация: [docs/PROTOCOLS.md](docs/PROTOCOLS.md)
 
@@ -267,7 +267,7 @@ buildConfig(lists, settings)  ← template + post-steps (resilience, DNS, rules)
 sing-box JSON
 ```
 
-- **Bundled-ядро** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **`v1.14.0-lx.1-rc.15`**: форк sing-box 1.14, собранный с тегами `with_awg` / `with_xhttp` / `with_lx_command`; управляющий канал — libbox `CommandClient` (без Clash API). Добавлен round-robin **балансировщик** (SPEC 019) и RPC `GetPool`. Версия пинится в `app/android/libbox.version`, AAR скачивается из GitHub Releases форка скриптом `scripts/fetch-libbox.sh` с проверкой SHA256
+- **Bundled-ядро** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **`v1.14.0-lx.1-rc.16`**: форк sing-box 1.14, собранный с тегами `with_awg` / `with_xhttp` / `with_lx_command`; управляющий канал — libbox `CommandClient` (без Clash API). Добавлен round-robin **балансировщик** (SPEC 019) + RPC `GetPool`, и полный клиентский набор полей XHTTP (SPEC 002 v2, rc.16). Версия пинится в `app/android/libbox.version`, AAR скачивается из GitHub Releases форка скриптом `scripts/fetch-libbox.sh` с проверкой SHA256
 - **Sealed `NodeSpec`** — 9 протоколов, полиморфный `emit(vars)` / `toUri()` (round-trip инвариант)
 - `**EmitContext**` — пробрасывает шаблонные vars в per-node emit
 - `**NodeEntries{main, detours[]}**` — именованный struct для chain-результатов

@@ -61,7 +61,7 @@ curl -s "$BASE/ping"
 | `GET /state/storage` | весь `SettingsStorage._cache` со scrubber'ом (token/URL/nodes маскируются) |
 | `GET /state/vpn` | `{auto_start,keep_on_exit,allow_bypass,current_session_allow_bypass,background_mode,is_ignoring_battery_optimizations}`. **§069** — `current_session_allow_bypass` это **runtime applied** значение (snapshot из последнего `VpnService.Builder.allowBypass()` в `establish()`); может отличаться от persisted `allow_bypass` если юзер поменял toggle без VPN reload. `false` пока VPN never started или после `stop`. |
 | `GET /state/config_locked` | `{locked: bool}` — §037 текущее состояние auto-rebuild lock'а |
-| `GET /device` | Android version, model, ABI, app version, VPN permission, network type, uptime |
+| `GET /device` | Android version, model, ABI, app version + build, core version (libbox / sing-box-lx), VPN permission, network type, uptime |
 
 ```bash
 curl -s -H "$HDR" "$BASE/state" | jq '{tunnel,active_in_group,nodes_count,groups}'
