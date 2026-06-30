@@ -55,6 +55,11 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Long-press на QS-плитке открывает приложение: Android при долгом
+                 нажатии ищет в пакете activity с этим действием и запускает её. -->
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES"/>
+            </intent-filter>
         </activity>
 
         <service

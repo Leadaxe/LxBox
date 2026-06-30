@@ -43,6 +43,9 @@ Future<DebugResponse> deviceHandler(
   final batteryOk = await vpn.isIgnoringBatteryOptimizations().catchError(
         (_) => false,
       );
+  // Версия ядра (libbox / sing-box-lx) — что РЕАЛЬНО вкомпилировано в APK,
+  // не пин в libbox.version. Пусто на timeout/ошибку → caller рендерит unknown.
+  final coreVersion = await vpn.getCoreVersion().catchError((_) => '');
   final connResults = await connectivity.checkConnectivity();
   final networkType = _networkLabel(connResults);
 
@@ -57,6 +60,7 @@ Future<DebugResponse> deviceHandler(
     'abi': abi,
     'app_version': pkg.version,
     'app_build': int.tryParse(pkg.buildNumber) ?? 0,
+    'core_version': coreVersion,
     'package_name': pkg.packageName,
     'locale': Platform.localeName,
     'timezone': ctx.now().timeZoneName,

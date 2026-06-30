@@ -47,6 +47,32 @@ void confirmStop(
   }
 }
 
+/// Диалог «активен другой VPN» — показывается перед ручным стартом, если на
+/// устройстве уже работает VPN другого приложения. Старт нашего туннеля молча
+/// отзовёт чужой (onRevoke), поэтому спрашиваем подтверждение. Возвращает `true`
+/// при выборе Switch, `null`/`false` при отмене.
+Future<bool?> showForeignVpnDialog(BuildContext context) {
+  return showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog.adaptive(
+      title: const Text('Another VPN is active'),
+      content: const Text(
+        'Another VPN app is currently running. Switch to L×Box?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Switch'),
+        ),
+      ],
+    ),
+  );
+}
+
 /// SnackBar «VPN taken by another app» — туннель отозван другим VPN-приложением
 /// (§012). Action «Start» перезапускает через [controller].
 void showRevokedSnackBar(BuildContext context, HomeController controller) {
@@ -173,12 +199,24 @@ Future<void> maybeShowNotificationPermissionDialog(BuildContext context) async {
 /// optimization whitelist'е. Без whitelist'а Android агрессивно throttle'ит
 /// foreground service + tunnel засыпает в Doze → интернет «отваливается»
 /// до следующего открытия приложения.
+///
+/// First-run-only: показываем один раз (persist-флаг). Повторно зайти можно
+/// через кнопку в App Settings. [skipPersist]=true — для прямого вызова из
+/// App Settings, где persist не нужен (всегда показываем по тапу).
+const _batteryPromptKey = 'wizard_battery_v1';
+
 Future<void> maybeShowBatteryOptimizationDialog(
   BuildContext context,
-  BoxVpnClient vpn,
-) async {
+  BoxVpnClient vpn, {
+  bool skipPersist = false,
+}) async {
   final ok = await vpn.isIgnoringBatteryOptimizations();
   if (ok) return;
+  if (!skipPersist) {
+    final asked = await SettingsStorage.getVar(_batteryPromptKey, '0');
+    if (asked == '1') return;
+    await SettingsStorage.setVar(_batteryPromptKey, '1');
+  }
   if (!context.mounted) return;
   await showDialog<void>(
     context: context,
@@ -255,6 +293,22 @@ Future<void> showOemBatteryFollowupDialog(
       ],
     ),
   );
+}
+
+/// First-run промпт «добавить плитку в быстрые настройки». На Android 13+
+/// система сама показывает диалог (`requestAddTileService`). На более старых
+/// версиях системного промпта нет — шаг помечается показанным и пропускается
+/// молча (кнопка «Add tile» в App Settings остаётся для ручного добавления).
+/// Один раз (persist-флаг).
+const _addTilePromptKey = 'wizard_addtile_v1';
+
+Future<void> maybeShowAddTilePrompt(BuildContext context, BoxVpnClient vpn) async {
+  final asked = await SettingsStorage.getVar(_addTilePromptKey, '0');
+  if (asked == '1') return;
+  await SettingsStorage.setVar(_addTilePromptKey, '1');
+  // requestAddTile сам зовёт системный промпт (API 33+) или возвращает
+  // 'unsupported' на старых — там тихо выходим, инструкцию не навязываем.
+  await vpn.requestAddTile();
 }
 
 /// §105 — диалог «поддержи автора». Чистый показ готового [m]; решение о
