@@ -27,6 +27,11 @@ on:
         default: "checks"
         type: choice
         options: [checks, build, release]
+      test_path:
+        description: "Точечный прогон: путь(и) к тесту относительно app/ (напр. test/screens/startup_wizard_test.dart). Пусто = весь набор. Пропускает analyze для скорости."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -90,11 +95,20 @@ jobs:
       - name: Dependencies
         run: flutter pub get
 
+      # Точечный режим (workflow_dispatch + test_path) пропускает analyze —
+      # цель такого прогона быстро проверить конкретный тест, не весь набор.
       - name: Analyze
+        if: ${{ github.event.inputs.test_path == '' }}
         run: flutter analyze
 
       - name: Test
-        run: flutter test
+        run: |
+          if [ -n "${{ github.event.inputs.test_path }}" ]; then
+            echo "::notice::Точечный прогон: ${{ github.event.inputs.test_path }}"
+            flutter test ${{ github.event.inputs.test_path }}
+          else
+            flutter test
+          fi
 
   android:
     if: startsWith(github.ref, 'refs/tags/v') ||

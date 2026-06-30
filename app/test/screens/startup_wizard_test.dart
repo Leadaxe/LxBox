@@ -59,6 +59,12 @@ void main() {
     });
   }
 
+  // NB: проверяемые функции (maybeShowAddTilePrompt / battery) при этих
+  // мок-ответах НЕ доходят до showDialog(context) — context используется только
+  // в ветках, что здесь не достигаются. Native-вызов идёт через `_invoke` с
+  // `.timeout()`-таймером: реальный Timer не резолвится в fake-async зоне
+  // testWidgets и виснет 10 мин. Поэтому вызов оборачиваем в `tester.runAsync()`
+  // — он гоняет код в НАСТОЯЩЕЙ async-зоне, где timeout-таймеры отрабатывают.
   group('maybeShowAddTilePrompt', () {
     testWidgets('first run: calls requestAddTile and sets persist flag',
         (tester) async {
@@ -69,7 +75,7 @@ void main() {
         return const SizedBox();
       })));
 
-      await maybeShowAddTilePrompt(ctx, BoxVpnClient());
+      await tester.runAsync(() => maybeShowAddTilePrompt(ctx, BoxVpnClient()));
 
       expect(calls.where((c) => c.method == 'requestAddTile'), hasLength(1));
       expect(await SettingsStorage.getVar('wizard_addtile_v1', '0'), '1');
@@ -84,7 +90,7 @@ void main() {
         return const SizedBox();
       })));
 
-      await maybeShowAddTilePrompt(ctx, BoxVpnClient());
+      await tester.runAsync(() => maybeShowAddTilePrompt(ctx, BoxVpnClient()));
 
       expect(calls.where((c) => c.method == 'requestAddTile'), isEmpty);
     });
@@ -100,7 +106,8 @@ void main() {
         return const SizedBox();
       })));
 
-      await maybeShowBatteryOptimizationDialog(ctx, BoxVpnClient());
+      await tester.runAsync(
+          () => maybeShowBatteryOptimizationDialog(ctx, BoxVpnClient()));
 
       // Не в whitelist → флаг не ставится (повторно спросим когда понадобится).
       expect(await SettingsStorage.getVar('wizard_battery_v1', '0'), '0');
