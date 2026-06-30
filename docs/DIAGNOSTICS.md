@@ -53,7 +53,7 @@ Auth: `Authorization: Bearer $TOKEN` (token в `vars.debug_token`, dev-token с�
 | `GET /state/rules` | Custom rules + `srs_cached`/`srs_mtime` flags |
 | `GET /state/vpn` | auto_start / keep_on_exit / battery-opt status |
 | `GET /state/config_locked` | §037 — заперт ли auto-rebuild |
-| `GET /device` | Android version / model / ABI / app version / VPN perm / uptime |
+| `GET /device` | Android version / model / ABI / app version + build / core version (libbox / sing-box-lx) / VPN perm / uptime |
 | `GET /config` | Финальный sing-box JSON (что ядро реально крутит) |
 | `GET /config/pretty` | То же с indent:2 |
 | `GET /pool?tag=vpn-1-auto` | §208 — снапшот пула round_robin-группы: `{tag, count, slots:[{slot, tag, delay, alive}]}`. Какие N серверов в слотах сейчас + их пинг. Не-round_robin → `200 slots:[]`; туннель down → `409` (не пустой ответ — §209) |

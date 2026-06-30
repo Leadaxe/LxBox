@@ -60,7 +60,7 @@ HTTP-server выпилен; управление через libbox CommandClient
 С §104 fork — **единственное ядро для всех сборок** (local + CI + release;
 готовится релиз v2.0.0):
 
-- пин версии — `app/android/libbox.version` (**`v1.14.0-lx.1-rc.15`**, single source
+- пин версии — `app/android/libbox.version` (**`v1.14.0-lx.1-rc.16`**, single source
   of truth для local + CI; база upstream `v1.14.0-alpha.33`);
 - `scripts/fetch-libbox.sh` скачивает `libbox.aar` из GitHub Releases форка с
   проверкой SHA256 (идемпотентен — маркер `.libbox.version`); вызывается из
@@ -1351,7 +1351,7 @@ HomeScreen
 | `path_provider` | Documents directory for persistent storage |
 | `shared_preferences` | Theme mode, haptic toggle |
 | `share_plus` | Config/log export via system share sheet |
-| **libbox** (native) | sing-box core — fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (`with_awg` + `with_xhttp`, §097/§104; §122 — без `with_clash_api`). Пин — `app/android/libbox.version` (`v1.14.0-lx.1-rc.15`, база upstream `v1.14.0-alpha.33`); AAR скачивает `scripts/fetch-libbox.sh` из GH Releases форка (SHA256-verify) в gitignored `libs/` — и локально (`build-local-apk.sh`), и в CI (`ci.yml` → «Fetch sing-box-lx core»). Maven-строка стокового libbox удалена из `build.gradle.kts` (исторически: JitPack `com.github.singbox-android:libbox:1.13.11`, миграция из `io.github.sagernet:libbox` — spec 039) |
+| **libbox** (native) | sing-box core — fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (`with_awg` + `with_xhttp`, §097/§104; §122 — без `with_clash_api`). Пин — `app/android/libbox.version` (`v1.14.0-lx.1-rc.16`, база upstream `v1.14.0-alpha.33`); AAR скачивает `scripts/fetch-libbox.sh` из GH Releases форка (SHA256-verify) в gitignored `libs/` — и локально (`build-local-apk.sh`), и в CI (`ci.yml` → «Fetch sing-box-lx core»). Maven-строка стокового libbox удалена из `build.gradle.kts` (исторически: JitPack `com.github.singbox-android:libbox:1.13.11`, миграция из `io.github.sagernet:libbox` — spec 039) |
 
 ---
 
