@@ -17,6 +17,8 @@ class GeneralTab extends StatelessWidget {
     required this.autoCheckUpdates,
     required this.autoPing,
     required this.haptic,
+    required this.idleSuspend,
+    required this.onPickIdleSuspend,
     required this.padding,
     required this.onAutoStartChanged,
     required this.onAutoCheckUpdatesChanged,
@@ -31,14 +33,28 @@ class GeneralTab extends StatelessWidget {
   final bool autoCheckUpdates;
   final bool autoPing;
   final bool haptic;
+
+  /// §215 — текущий порог idle-suspend ("" = off).
+  final String idleSuspend;
   final EdgeInsets padding;
 
   final ValueChanged<bool> onAutoStartChanged;
   final ValueChanged<bool> onAutoCheckUpdatesChanged;
   final ValueChanged<bool> onAutoPingChanged;
   final ValueChanged<bool> onHapticChanged;
+  final VoidCallback onPickIdleSuspend; // §215
   final VoidCallback onAddQuickSettingsTile;
   final VoidCallback onOpenBackup;
+
+  // §215 — метка текущего порога для trailing-текста. Пресеты совпадают с
+  // AppSettingsDialogs.pickIdleSuspend; незнакомое значение показываем как есть.
+  static String _idleLabel(String v) => switch (v) {
+        '' => 'Off',
+        '30s' => '30 seconds',
+        '2m' => '2 minutes',
+        '5m' => '5 minutes',
+        _ => v,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -79,6 +95,20 @@ class GeneralTab extends StatelessWidget {
           secondary: const Icon(Icons.power_settings_new),
           value: autoStart,
           onChanged: loaded ? onAutoStartChanged : null,
+        ),
+        // §215 — idle-suspend порог для недостижимых WG/AWG эндпоинтов.
+        ListTile(
+          leading: const Icon(Icons.battery_saver),
+          title: const Text('Suspend idle tunnels'),
+          subtitle: const Text(
+              'Put unreachable WireGuard tunnels to sleep after they sit idle, '
+              'freeing memory and saving battery. They wake instantly on use. '
+              'Only affects tunnels not on the active route.'),
+          trailing: Text(
+            _idleLabel(idleSuspend),
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          onTap: loaded ? onPickIdleSuspend : null,
         ),
         const Divider(height: 32),
         Text('Quick connect', style: Theme.of(context).textTheme.titleMedium),

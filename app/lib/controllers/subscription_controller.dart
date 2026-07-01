@@ -697,6 +697,7 @@ class SubscriptionController extends ChangeNotifier {
       channels: await SettingsStorage.getChannels(), // §125
       tunApps: await SettingsStorage.getTunApps(),
       vpnMode: await SettingsStorage.getVpnMode(),
+      idleSuspend: await SettingsStorage.getIdleSuspend(), // §215
     );
 
     final lists = _entries.map((e) => e.list).toList();
