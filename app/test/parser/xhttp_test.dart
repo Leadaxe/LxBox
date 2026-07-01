@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/models/transport_spec.dart';
 import 'package:lxbox/services/parser/transport.dart';
@@ -155,6 +156,7 @@ void main() {
     });
 
     test('snake_case формы расширенных полей тоже читаются', () {
+      // Парсинг дословный — поле читается как есть; нормализация в toSingbox.
       final t = parseTransport({
         'type': 'xhttp',
         'session_placement': 'cookie',
@@ -164,6 +166,41 @@ void main() {
       expect(t.sessionPlacement, 'cookie');
       expect(t.xPaddingObfsMode, true);
       expect(t.uplinkHttpMethod, 'GET');
+    });
+
+    // §217 — нормализация в toSingbox против правил ядра (meta.go normalizeMeta):
+    // битые для ядра комбинации сбрасываются на дефолт + NodeWarning, чтобы одна
+    // нода не роняла весь конфиг fatal при старте.
+    test('§217 GET+не-packet-up → сброс+warning; GET+packet-up → сохраняется', () {
+      // GET без packet-up → в конфиг не пишем + warning.
+      final t1 = parseTransport(
+          {'type': 'xhttp', 'uplink_http_method': 'GET', 'mode': 'auto'})!;
+      final (m1, w1) = t1.toSingbox(TemplateVars.empty);
+      expect(m1.containsKey('uplink_http_method'), false);
+      expect(w1.whereType<XhttpParamResetWarning>().length, 1);
+
+      // GET с packet-up → валидно, пишем, без warning.
+      final t2 = parseTransport(
+          {'type': 'xhttp', 'uplink_http_method': 'GET', 'mode': 'packet-up'})!;
+      final (m2, w2) = t2.toSingbox(TemplateVars.empty);
+      expect(m2['uplink_http_method'], 'GET');
+      expect(w2, isEmpty);
+
+      // header-placement без packet-up → сброс + warning (meta.go:98).
+      final t3 = parseTransport({
+        'type': 'xhttp',
+        'uplink_data_placement': 'header',
+        'mode': 'stream-up',
+      })!;
+      final (m3, w3) = t3.toSingbox(TemplateVars.empty);
+      expect(m3.containsKey('uplink_data_placement'), false);
+      expect(w3.whereType<XhttpParamResetWarning>().length, 1);
+
+      // невалидный enum placement → сброс + warning (ядро бы упало).
+      final t4 = parseTransport({'type': 'xhttp', 'session_placement': 'bogus'})!;
+      final (m4, w4) = t4.toSingbox(TemplateVars.empty);
+      expect(m4.containsKey('session_placement'), false);
+      expect(w4.whereType<XhttpParamResetWarning>().length, 1);
     });
 
     test('extra (URL-encoded JSON) вливается в transport', () {

@@ -113,3 +113,20 @@ final class NaiveBuildTagWarning extends NodeWarning {
   @override
   WarningSeverity get severity => WarningSeverity.error;
 }
+
+/// §217 — XHTTP-параметр сброшен на дефолт, потому что его значение ядро
+/// приняло бы только в другом режиме (или значение вне допустимого множества).
+/// Без сброса одна такая нода роняет ВЕСЬ конфиг fatal при старте
+/// (transport/v2rayxhttp/meta.go normalizeMeta). Нода остаётся рабочей.
+final class XhttpParamResetWarning extends NodeWarning {
+  final String field;
+  final String reason;
+  const XhttpParamResetWarning(this.field, this.reason);
+
+  @override
+  String get message =>
+      'XHTTP "$field" reset to default — $reason (would otherwise break the whole config).';
+
+  @override
+  WarningSeverity get severity => WarningSeverity.warning;
+}
