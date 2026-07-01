@@ -28,11 +28,12 @@ Future<void> _saveRouteFinal(String outbound, {bool flush = true}) async {
 //
 // Duration-строка ("30s", "5m"). Пусто = feature off (поле не попадёт в
 // route, idle-тик ядра не запустится). Config-significant → markConfigDirty.
+// Дефолт (нет сохранённого значения) = "30s": включено по умолчанию.
 // ---------------------------------------------------------------------------
 
 Future<String> _getIdleSuspend() async {
   final data = await _load();
-  return (data['route_idle_suspend'] as String?) ?? '';
+  return (data['route_idle_suspend'] as String?) ?? '30s';
 }
 
 Future<void> _saveIdleSuspend(String threshold, {bool flush = true}) async {

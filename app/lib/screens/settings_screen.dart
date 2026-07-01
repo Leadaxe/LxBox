@@ -239,31 +239,24 @@ class _SettingsScreenState extends State<SettingsScreen>
             ],
           ),
         ),
-        RadioGroup<String>(
-          groupValue: _idleSuspend,
-          onChanged: (String? v) {
-            if (!_vpnLoaded || v == null) return;
-            unawaited(_applyIdleSuspend(v));
-          },
-          child: const Column(
-            children: [
-              RadioListTile<String>(
-                value: '',
-                title: Text('Off'),
-              ),
-              RadioListTile<String>(
-                value: '30s',
-                title: Text('30 seconds'),
-              ),
-              RadioListTile<String>(
-                value: '2m',
-                title: Text('2 minutes'),
-              ),
-              RadioListTile<String>(
-                value: '5m',
-                title: Text('5 minutes'),
-              ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: DropdownButtonFormField<String>(
+            initialValue: _idleSuspend,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: const [
+              DropdownMenuItem<String>(value: '', child: Text('Off')),
+              DropdownMenuItem<String>(value: '30s', child: Text('30 seconds')),
+              DropdownMenuItem<String>(value: '2m', child: Text('2 minutes')),
+              DropdownMenuItem<String>(value: '5m', child: Text('5 minutes')),
             ],
+            onChanged: (String? v) {
+              if (!_vpnLoaded || v == null) return;
+              unawaited(_applyIdleSuspend(v));
+            },
           ),
         ),
         Padding(
