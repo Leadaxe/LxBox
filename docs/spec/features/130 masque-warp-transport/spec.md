@@ -294,15 +294,31 @@ MasqueSpec.emit() → emitMasque() → Outbound{type:masque,...} → build_confi
 
 ---
 
+## Дефолты ядра (из SPEC 021 CONFIG.md — не прокидываем, полагаемся на них)
+
+Все опущенные поля берут дефолт ядра — эмитим только необходимое:
+- `profile` → `cloudflare`, `network` → `h3`, `mtu` → `1280`.
+- `sni` (пустой) → ядро подставит `consumer-masque.cloudflareclient.com` (дефолт профиля cloudflare).
+- `uri` → `https://cloudflareaccess.com` (дефолт профиля).
+- `idle_timeout` → `5m` (idle-suspend, энергомодель как [§128](../128%20idle-suspend/)); `keep_alive_period` → `30s`.
+- `network_list` → `["tcp","udp"]` (оба). TLS-pinning на `public_key` — автоматом при profile=cloudflare.
+
+**Грабля (CONFIG.md §Частые грабли):** MASQUE (как WG-endpoint) — L3 userspace-стек, сам домены НЕ
+резолвит → конфигу нужен top-level `dns`-блок. У нас он всегда есть (WireGuard-WARP той же природы уже
+работает → validator/dns_rules post-step формируют dns-секцию). Для MASQUE отдельных действий не нужно.
+
 ## Открытые вопросы
 
 1. **Версия API для MASQUE-регистрации.** Наш POST /reg на `v0a2158`. usque использует `v0a4471` для
    MASQUE-enroll. Возможно, PATCH с `tunnel_type=masque` требует более свежей версии. Проверить на живом
-   CF; если наша версия не даёт MASQUE-config — бампнуть версию (вынесена в `WarpApi.version`).
-2. **Формат серверного pubkey от CF** — PEM или уже DER? usque видит PEM, mihomo хранит DER. Снимаем
-   PEM-обёртку если есть, иначе используем как base64(DER). Уточнить на живом ответе.
-3. **WARP+ для MASQUE** — нужен ли license-path? Пока не включаем (можно добавить тем же PATCH account).
-4. **idle_timeout по умолчанию** — прокидывать ли из UI или оставить дефолт ядра (5m)? Пока дефолт.
+   CF; если наша версия не даёт MASQUE-config — бампнуть версию (вынесена в `WarpApi.version`). **← первый
+   пункт для live-прогона.**
+2. **WARP+ для MASQUE** — нужен ли license-path? Пока не включаем (можно добавить тем же PATCH account).
+3. **idle_timeout из UI** — прокидывать ли или оставить дефолт ядра (5m)? Пока дефолт (энергомодель ядра).
+
+**Закрыто CONFIG.md:** формат серверного pubkey (`x509.ParsePKIXPublicKey` — base64 DER, наш
+`normalizeServerPubKey` снимает PEM-обёртку CF); формат ключей («ровно тот, что отдаёт Dart-регистрация,
+парсится без преобразований» — верифицировано `scripts/masque_der_check.go`).
 
 ---
 
@@ -317,8 +333,9 @@ MasqueSpec.emit() → emitMasque() → Outbound{type:masque,...} → build_confi
 
 ## Референс
 
-- Ядро: `sing-box-lx/SPECS/021-MASQUE_CONNECT_IP_OUTBOUND/SPEC.md`, `option/masque.go`,
-  `protocol/masque/outbound.go` (parseECPrivateKey/parseECPublicKey — контракт байт).
+- Ядро: `sing-box-lx/SPECS/021-MASQUE_CONNECT_IP_OUTBOUND/SPEC.md` + **`CONFIG.md`** (полный справочник
+  всех полей + дефолтов + граблей, сверен с кодом), `option/masque.go`, `protocol/masque/outbound.go`
+  (parseECPrivateKey/parseECPublicKey — контракт байт). Наш `emitMasque` сверен с CONFIG.md 1:1.
 - Регистрация: `Diniboy1123/usque` (api/cloudflare.go, cmd/register.go, cmd/enroll.go),
   `MetaCubeX/mihomo@Alpha` (adapter/outbound/masque.go).
 - Наш WARP: [§025](../025%20warp%20integration/), `warp_client.dart`, `warp_account.dart`.
