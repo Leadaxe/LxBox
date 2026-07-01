@@ -413,19 +413,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     super.dispose();
   }
 
+  // §216 — когда app ушёл в настоящий фон (для замера длительности сна).
+  DateTime? _pausedAt;
+  static const _bgSnackThreshold = Duration(seconds: 30);
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _lifecycle = state;
     if (state == AppLifecycleState.resumed) {
       _controller.onAppResumed();
       _maybeShowSupport();
+      _maybeShowResumeSnack(); // §216
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
       // §141 P0.2 — фон: гасим heartbeat-таймер (resident-drain). Resume вернёт
       // его через onAppResumed. `inactive` НЕ трогаем — это короткие transient
       // переходы (шторка, звонок, app-switcher preview), не настоящий фон.
+      _pausedAt = DateTime.now(); // §216
       _controller.onAppPaused();
     }
+  }
+
+  // §216 — после ДОЛГОГО фона (> порога) при активном туннеле показываем
+  // ненавязчивый SnackBar: стрим/heartbeat поднимаются после сна. Короткие
+  // переходы (шторка/switcher) порога не достигают → без спама.
+  void _maybeShowResumeSnack() {
+    final pausedAt = _pausedAt;
+    _pausedAt = null;
+    if (pausedAt == null) return;
+    if (DateTime.now().difference(pausedAt) < _bgSnackThreshold) return;
+    if (!_controller.state.tunnelUp) return;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Resumed — syncing tunnel…'),
+        duration: Duration(seconds: 2),
+      ),
+    );
   }
 
   // §105 — состояние показа support-диалога (за процесс).

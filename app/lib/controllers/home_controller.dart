@@ -1094,6 +1094,13 @@ class HomeController extends ChangeNotifier
     // tunnel через native-pull выше — если он лёг, `_handleStatusEvent` сам
     // не стартовал heartbeat (только connected-ветка стартует).
     if (_state.tunnelUp) {
+      // §216 — инфо о пробуждении: в фоне status-стрим и heartbeat были погашены
+      // (§141/§164, экономия батареи). Пишем в лог явный маркер, чтобы «тишина»
+      // после сна не читалась как сбой, и взводим грейс — первый heartbeat-тик
+      // не штрафуем, ждём восстановления стрима.
+      _addDebug(DebugSource.app,
+          'Resumed from background — re-syncing tunnel (heartbeat/streams were paused)');
+      _skipNextHeartbeatFail = true;
       _startHeartbeat();
       unawaited(_checkHeartbeat());
     }
