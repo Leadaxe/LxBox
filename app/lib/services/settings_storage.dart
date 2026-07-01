@@ -13,6 +13,7 @@ import '../vpn/box_vpn_client.dart';
 import 'app_log.dart';
 import 'config_dirty_check.dart';
 import 'template_loader.dart';
+import 'warp/masque_account.dart';
 import 'warp/warp_account.dart';
 
 part 'settings_storage/io.dart';
@@ -755,4 +756,12 @@ class SettingsStorage {
   static Future<void> setWarpAccount(WarpAccount? account,
           {bool flush = true}) =>
       _setWarpAccount(account, flush: flush);
+
+  /// §130 — закешированный MASQUE-WARP аккаунт или null.
+  static Future<MasqueAccount?> getMasqueAccount() => _getMasqueAccount();
+
+  /// §130 — persist (или очистить при null) MASQUE-WARP аккаунт.
+  static Future<void> setMasqueAccount(MasqueAccount? account,
+          {bool flush = true}) =>
+      _setMasqueAccount(account, flush: flush);
 }

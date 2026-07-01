@@ -48,6 +48,14 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
   bool _busy = false;
   WarpAccount? _result;
 
+  // §130 — транспорт WARP: 'wireguard' (дефолт) | 'masque'. MASQUE использует
+  // ECDSA-регистрацию и Outbound type:masque (другой пул выходных нод).
+  String _transport = 'wireguard';
+  String _masqueNetwork = 'h3'; // h3 (QUIC) | h2 (HTTP/2)
+  final _masqueSni = TextEditingController(); // опц. SNI override
+
+  bool get _isMasque => _transport == 'masque';
+
   // §126/§136 — AmneziaWG обфускация (default off — обычный WARP).
   bool _obfuscate = false;
   // §142 — reserved (client_id): null = дефолт по галке (обфускация → off).
@@ -127,6 +135,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     _license.dispose();
     _endpoint.dispose();
     _sni.dispose();
+    _masqueSni.dispose();
     _jc.dispose();
     _jmin.dispose();
     _jmax.dispose();
@@ -151,6 +160,10 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
+      if (_isMasque) {
+        await _registerMasque();
+        return;
+      }
       final endpoint = _endpoint.text.trim().isEmpty
           ? WarpAccount.defaultEndpoint
           : _endpoint.text.trim();
@@ -179,6 +192,26 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// §130 — регистрация MASQUE-транспорта (ECDSA + enroll).
+  Future<void> _registerMasque() async {
+    final sni = _masqueSni.text.trim();
+    final account = await widget.subController.addMasque(
+      network: _masqueNetwork,
+      sni: sni.isEmpty ? null : sni,
+      forceNew: _forceNew,
+    );
+    if (!mounted) return;
+    final err = widget.subController.lastError;
+    if (account == null || err.isNotEmpty) {
+      _showSnack(err.isNotEmpty ? err : 'MASQUE registration failed');
+      return;
+    }
+    await widget.onAdded();
+    if (!mounted) return;
+    _showSnack('Added MASQUE node');
+    Navigator.of(context).pop();
   }
 
   void _showSnack(String msg) {
@@ -232,7 +265,109 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                   ),
             ),
             const SizedBox(height: 16),
+            // §130 — выбор транспорта WARP. WireGuard (дефолт) или MASQUE
+            // (CONNECT-IP over HTTP/3/2 — другой пул выходных нод, иностранные IP).
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                    value: 'wireguard',
+                    label: Text('WireGuard'),
+                    icon: Icon(Icons.vpn_key_outlined)),
+                ButtonSegment(
+                    value: 'masque',
+                    label: Text('MASQUE'),
+                    icon: Icon(Icons.hub_outlined)),
+              ],
+              selected: {_transport},
+              onSelectionChanged: _busy
+                  ? null
+                  : (sel) => setState(() => _transport = sel.first),
+            ),
+            const SizedBox(height: 16),
+            // §130 — MASQUE: транспорт h3/h2 + опц. SNI. Обфускация и WG-Advanced
+            // не применяются (MASQUE сам маскируется под HTTPS/QUIC).
+            if (_isMasque) ...[
+              Card(
+                margin: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'MASQUE tunnels IP over HTTP/3 (QUIC) to Cloudflare — it '
+                        'looks like ordinary HTTPS to DPI and often exits from a '
+                        'foreign IP.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          _label('Transport'),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _masqueNetwork,
+                              isDense: true,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                border: OutlineInputBorder(),
+                                contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                    value: 'h3',
+                                    child: Text('HTTP/3 (QUIC)')),
+                                DropdownMenuItem(
+                                    value: 'h2', child: Text('HTTP/2 (TCP)')),
+                              ],
+                              onChanged: _busy
+                                  ? null
+                                  : (v) => setState(
+                                      () => _masqueNetwork = v ?? 'h3'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _masqueNetwork == 'h2'
+                            ? 'HTTP/2 over TCP — use where QUIC/UDP is blocked.'
+                            : 'HTTP/3 over QUIC — the default, fastest path.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                      ),
+                      const SizedBox(height: 12),
+                      _label('SNI (optional)'),
+                      TextField(
+                        controller: _masqueSni,
+                        enabled: !_busy,
+                        decoration:
+                            _input('Leave empty for the default SNI'),
+                      ),
+                      const SizedBox(height: 8),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _forceNew,
+                        onChanged: _busy
+                            ? null
+                            : (v) => setState(() => _forceNew = v ?? false),
+                        title: const Text('Re-register (force new account)'),
+                        subtitle: const Text(
+                            'Ignore the cached account and register a fresh one.'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             // §126 — значимая опция (не прячем в Advanced): обфускация под DPI.
+            if (!_isMasque)
             Card(
               margin: EdgeInsets.zero,
               child: Column(
@@ -277,6 +412,9 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                 ],
               ),
             ),
+            // §130 — WG-Advanced (license/endpoint/masquerade) только для
+            // WireGuard-транспорта; MASQUE имеет свой блок выше.
+            if (!_isMasque) ...[
             const SizedBox(height: 16),
             ExpansionPanelList.radio(
               elevation: 0,
@@ -499,6 +637,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                 ),
               ],
             ),
+            ],
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: _busy ? null : _register,

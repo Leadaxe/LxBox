@@ -530,6 +530,53 @@ String toUriWireguard(WireguardSpec s) {
   return 'wireguard://$userinfo@$host:${s.port}${qs.isEmpty ? '' : '?$qs'}${frag.isEmpty ? '' : '#$frag'}';
 }
 
+// ─── §130 MASQUE ────────────────────────────────────────────────────────────
+
+/// §130 — MASQUE эмитится как **Outbound** (не Endpoint). Плоская структура
+/// по `option.MASQUEOutboundOptions` ядра: `ip`/`ipv6` берутся из
+/// [MasqueSpec.localAddresses] по признаку `:` (v6). `network` = транспорт h3/h2.
+Outbound emitMasque(MasqueSpec s, TemplateVars vars) {
+  String? ip, ipv6;
+  for (final a in s.localAddresses) {
+    if (a.contains(':')) {
+      ipv6 ??= a;
+    } else {
+      ip ??= a;
+    }
+  }
+  final map = <String, dynamic>{
+    'type': 'masque',
+    'tag': s.tag,
+    'server': s.server,
+    'server_port': s.port,
+    'profile': s.profile,
+    'network': s.network,
+    'private_key': s.privateKeyDer,
+    'public_key': s.publicKeyDer,
+    'ip': ?ip,
+    'ipv6': ?ipv6,
+    if (s.sni.isNotEmpty) 'sni': s.sni,
+    if (s.mtu != null) 'mtu': s.mtu,
+  };
+  return Outbound(map);
+}
+
+String toUriMasque(MasqueSpec s) {
+  final q = <String, String>{
+    'publickey': s.publicKeyDer,
+    if (s.localAddresses.isNotEmpty) 'address': s.localAddresses.join(','),
+    'profile': s.profile,
+    'network': s.network,
+    if (s.sni.isNotEmpty) 'sni': s.sni,
+    if (s.mtu != null) 'mtu': s.mtu.toString(),
+  };
+  final userinfo = encodeParam(s.privateKeyDer);
+  final host = _wrapIpv6(s.server);
+  final qs = buildQuery(q);
+  final frag = encodeFragment(s.label);
+  return 'masque://$userinfo@$host:${s.port}${qs.isEmpty ? '' : '?$qs'}${frag.isEmpty ? '' : '#$frag'}';
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // Helpers
 // ════════════════════════════════════════════════════════════════════════════

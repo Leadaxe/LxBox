@@ -2,7 +2,7 @@ name: lxbox
 description: L×Box — Android MVP (sing-box + Clash API).
 publish_to: 'none'
 
-version: 2.8.0-dev.2+975
+version: 2.8.2-dev.2+998
 # ↑ placeholder. Реальная версия записывается из git tag:
 #   • CI release build (.github/workflows/ci.yml → "Inject release version") —
 #     `version: ${tag#v}+${git rev-list --count HEAD}` перед `flutter build`.
@@ -18,8 +18,9 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   http: ^1.2.2
-  cryptography: ^2.7.0 # §025 — X25519 keygen для Cloudflare WARP-регистрации
+  cryptography: ^2.7.0 # §025 — X25519 keygen; §130 — ECDSA P-256 keygen для MASQUE-WARP
   crypto: ^3.0.0 # §136 — HMAC-SHA256 для QUIC Initial key derivation
+  asn1lib: ^1.5.0 # §130 — SEC1/PKIX DER-сериализация ECDSA-ключей (контракт с ядром MASQUE)
   json5: ^0.8.2
   file_picker: ^11.0.2
   path_provider: ^2.1.5
@@ -31,6 +32,7 @@ dependencies:
   package_info_plus: ^8.0.2
   connectivity_plus: ^6.0.5
   collection: ^1.18.0
+  pointycastle: ^4.0.0 # §130 — ECDSA P-256 keygen (pure-Dart, работает на Android; cryptography P-256 keygen не реализует)
 
 dev_dependencies:
   flutter_test:

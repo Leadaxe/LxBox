@@ -28,6 +28,7 @@ import '../services/subscription/auto_updater.dart';
 import '../services/subscription/http_cache.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/subscription/sources.dart';
+import '../services/warp/masque_account.dart';
 import '../services/warp/masquerade_params.dart';
 import '../services/warp/warp_account.dart';
 import '../services/warp/warp_client.dart';
@@ -309,6 +310,93 @@ class SubscriptionController extends ChangeNotifier {
       _busy = false;
       notifyListeners();
     }
+  }
+
+  /// §130 — регистрирует MASQUE-WARP и добавляет узел. Отдельный путь от
+  /// [addWarp] (ECDSA-крипта, двухшаговый enroll, Outbound вместо Endpoint).
+  /// [network] — `h3` (дефолт) или `h2`. Кеш переиспользуется как в §025.
+  Future<MasqueAccount?> addMasque({
+    String network = 'h3',
+    String? sni,
+    bool reuse = true,
+    bool forceNew = false,
+    WarpClient? client,
+  }) async {
+    _busy = true;
+    _lastError = '';
+    notifyListeners();
+    final warp = client ?? WarpClient();
+    try {
+      MasqueAccount? account = (reuse && !forceNew)
+          ? await SettingsStorage.getMasqueAccount()
+          : null;
+
+      account ??= await warp.registerMasque(
+        nowIso8601: DateTime.now().toUtc().toIso8601String(),
+        network: network,
+        sni: sni,
+      );
+
+      // Транспорт/SNI — клиентские, применяем к кешу без ре-регистрации.
+      if (account.network != network || (sni != null && account.sni != sni)) {
+        account = account.copyWith(network: network, sni: sni);
+      }
+
+      await SettingsStorage.setMasqueAccount(account);
+
+      final tag = _uniqueWarpTag(MasqueAccount.nodeTag());
+      await _addMasqueNode(account, tag);
+      if (_lastError.isNotEmpty) return null;
+      return account;
+    } catch (e) {
+      _lastError = humanizeError(e);
+      AppLog.I.error('addMasque failed: $_lastError');
+      return null;
+    } finally {
+      if (client == null) warp.close();
+      _busy = false;
+      notifyListeners();
+    }
+  }
+
+  /// §130 — MASQUE-узел через `masque://` URI (аналог [_addWarpPlain]).
+  Future<void> _addMasqueNode(MasqueAccount account, String tag) async {
+    final spec = parseMasqueUri(account.toMasqueUri());
+    if (spec == null) {
+      _lastError = 'Invalid MASQUE config';
+      return;
+    }
+    final tagged = MasqueSpec(
+      id: spec.id,
+      tag: tag,
+      label: tag,
+      server: spec.server,
+      port: spec.port,
+      rawUri: spec.rawUri,
+      privateKeyDer: spec.privateKeyDer,
+      publicKeyDer: spec.publicKeyDer,
+      localAddresses: spec.localAddresses,
+      profile: spec.profile,
+      network: spec.network,
+      sni: spec.sni,
+      mtu: spec.mtu,
+      warnings: spec.warnings,
+    );
+    _entries.add(SubscriptionEntry(
+      list: UserServer(
+        id: newUuidV4(),
+        name: '',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        rawBody: tagged.toUri(),
+        nodes: [tagged],
+      ),
+      nodeCount: 1,
+    ));
+    await _persist();
   }
 
   /// §126 — приводит obfuscation у [account] к запрошенному состоянию.

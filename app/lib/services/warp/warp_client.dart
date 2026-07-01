@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'dart:math' show Random;
 
 import 'package:cryptography/cryptography.dart';
 import 'package:http/http.dart' as http;
 
 import '../../models/node_spec.dart' show Awg;
 import '../app_log.dart';
+import 'masque_account.dart';
+import 'masque_keys.dart';
 import 'masquerade_params.dart';
 import 'warp_account.dart';
 
@@ -33,6 +36,10 @@ class WarpApi {
   static Uri reg() => Uri.parse('$base/$version/reg');
   static Uri account(String deviceId) =>
       Uri.parse('$base/$version/reg/$deviceId/account');
+
+  /// §130 — PATCH `/reg/{id}` для MASQUE-enroll (смена ключа на ECDSA).
+  static Uri device(String deviceId) =>
+      Uri.parse('$base/$version/reg/$deviceId');
 
   static Map<String, String> headers({String? bearer}) => {
         'Content-Type': 'application/json',
@@ -258,6 +265,177 @@ class WarpClient {
       endpoint: host,
       createdAt: createdAt,
     );
+  }
+
+  /// §130 — регистрирует MASQUE-устройство. ДВА шага (usque/mihomo):
+  ///   1. POST /reg с фиктивным WG-ключом → `id` + `token`.
+  ///   2. PATCH /reg/{id} (Bearer) с ECDSA-паблик, `key_type=secp256r1`,
+  ///      `tunnel_type=masque` → серверный pubkey + interface addresses + endpoint.
+  ///
+  /// Приватник ECDSA генерится на устройстве ([MasqueKeys]) и не покидает телефон.
+  /// [network] — `h3` (дефолт) или `h2`.
+  Future<MasqueAccount> registerMasque({
+    required String nowIso8601,
+    String network = 'h3',
+    String? sni,
+  }) async {
+    final keys = MasqueKeys.generate();
+
+    // Шаг 1 — обычный POST /reg (фиктивный WG-ключ, mimic Android app).
+    final regBody = jsonEncode({
+      'key': _randomWgKeyB64(),
+      'install_id': '',
+      'fcm_token': '',
+      'tos': nowIso8601,
+      'model': 'PC',
+      'type': 'Android',
+      'locale': 'en_US',
+    });
+
+    final http.Response regResp;
+    try {
+      regResp = await _client
+          .post(WarpApi.reg(), headers: WarpApi.headers(), body: regBody)
+          .timeout(_timeout);
+    } catch (e) {
+      throw WarpException('network error: $e');
+    }
+    if (regResp.statusCode != 200) {
+      throw WarpException(
+          'MASQUE registration failed (HTTP ${regResp.statusCode}). API '
+          'version may have changed (${WarpApi.version}).');
+    }
+    final Map<String, dynamic> regJson;
+    try {
+      regJson = jsonDecode(regResp.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw WarpException('bad response: not JSON');
+    }
+    final deviceId = (regJson['id'] as String?) ?? '';
+    final token = (regJson['token'] as String?) ?? '';
+    if (deviceId.isEmpty || token.isEmpty) {
+      throw WarpException('bad response: missing id/token for MASQUE enroll');
+    }
+
+    // Шаг 2 — PATCH enroll: подменяем ключ на ECDSA, тип на masque.
+    final patchBody = jsonEncode({
+      'key': keys.publicKeyDer,
+      'key_type': 'secp256r1',
+      'tunnel_type': 'masque',
+    });
+    final http.Response patchResp;
+    try {
+      patchResp = await _client
+          .patch(WarpApi.device(deviceId),
+              headers: WarpApi.headers(bearer: token), body: patchBody)
+          .timeout(_timeout);
+    } catch (e) {
+      throw WarpException('network error (MASQUE enroll): $e');
+    }
+    if (patchResp.statusCode != 200) {
+      throw WarpException(
+          'MASQUE enroll failed (HTTP ${patchResp.statusCode}). This API '
+          'version (${WarpApi.version}) may not support MASQUE.');
+    }
+    final Map<String, dynamic> patchJson;
+    try {
+      patchJson = jsonDecode(patchResp.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw WarpException('bad response: MASQUE enroll not JSON');
+    }
+
+    final account = _parseMasqueEnroll(
+      patchJson,
+      privKeyDer: keys.privateKeyDer,
+      deviceId: deviceId,
+      token: token,
+      createdAt: nowIso8601,
+      network: network,
+      sni: sni ?? '',
+    );
+    AppLog.I.info('MASQUE registered: ${account.redacted()}');
+    return account;
+  }
+
+  MasqueAccount _parseMasqueEnroll(
+    Map<String, dynamic> json, {
+    required String privKeyDer,
+    required String deviceId,
+    required String token,
+    required String createdAt,
+    required String network,
+    required String sni,
+  }) {
+    final config = json['config'];
+    if (config is! Map) {
+      throw WarpException('bad response: missing config (MASQUE)');
+    }
+
+    // interface addresses (наш ip/ipv6)
+    String v4 = '', v6 = '';
+    final iface = config['interface'];
+    if (iface is Map) {
+      final addrs = iface['addresses'];
+      if (addrs is Map) {
+        v4 = (addrs['v4'] as String?) ?? '';
+        v6 = (addrs['v6'] as String?) ?? '';
+      }
+    }
+    if (v4.isEmpty && v6.isEmpty) {
+      throw WarpException('bad response: missing interface address (MASQUE)');
+    }
+
+    // peers[0]: серверный pubkey + data-plane endpoint
+    String serverPub = '';
+    String server = MasqueAccount.defaultServer;
+    int port = MasqueAccount.defaultPort;
+    final peersRaw = config['peers'];
+    if (peersRaw is List && peersRaw.isNotEmpty && peersRaw.first is Map) {
+      final peer = peersRaw.first as Map;
+      serverPub = (peer['public_key'] as String?) ?? '';
+      final ep = peer['endpoint'];
+      if (ep is Map) {
+        final host = _stripEndpointHost((ep['v4'] as String?) ?? '');
+        if (host.isNotEmpty) server = host;
+        final ports = ep['ports'];
+        if (ports is List && ports.isNotEmpty && ports.first is num) {
+          port = (ports.first as num).toInt();
+        }
+      }
+    }
+    if (serverPub.isEmpty) {
+      throw WarpException('bad response: missing server public_key (MASQUE)');
+    }
+
+    return MasqueAccount(
+      privKeyDer: privKeyDer,
+      // CF отдаёт серверный pubkey как PEM → чистый base64(DER) для ядра.
+      serverPubDer: MasqueKeys.normalizeServerPubKey(serverPub),
+      clientV4: v4,
+      clientV6: v6,
+      server: server,
+      port: port == 0 ? MasqueAccount.defaultPort : port,
+      deviceId: deviceId,
+      token: token,
+      createdAt: createdAt,
+      network: network,
+      sni: sni,
+    );
+  }
+
+  /// Снимает `:0`-заглушку с endpoint (`162.159.198.1:0` → `162.159.198.1`).
+  static String _stripEndpointHost(String raw) {
+    final i = raw.lastIndexOf(':');
+    if (i <= 0) return raw;
+    return raw.substring(0, i);
+  }
+
+  /// 32 случайных байта в base64 — фиктивный WG-pubkey для POST /reg (его роль —
+  /// только сымитировать регистрацию Android-клиента; реальный ключ идёт в PATCH).
+  static String _randomWgKeyB64() {
+    final rnd = Random.secure();
+    final bytes = List<int>.generate(32, (_) => rnd.nextInt(256));
+    return base64.encode(bytes);
   }
 
   /// PATCH account с license. Безопасный: при любой ошибке возвращает исходный
