@@ -73,7 +73,7 @@ void showEntryContextMenu(
             title: const Text('Edit source…'),
             onTap: () async {
               Navigator.pop(ctx);
-              await _showEditSourceDialog(context, index, entry, subController);
+              await showEditSourceDialog(context, index, entry, subController);
             },
           ),
           // Reset fail-count (night T8-1). Если провайдер вернулся в строй
@@ -127,7 +127,7 @@ void showEntryContextMenu(
 /// §129 — диалог смены источника подписки: online URL ↔ локальный файл.
 /// Переключатель режима; online → текст-поле URL, file → picker. Save зовёт
 /// `updateSourceAt` (транзакционно: старый источник живёт, пока новый не удался).
-Future<void> _showEditSourceDialog(
+Future<void> showEditSourceDialog(
   BuildContext context,
   int index,
   SubscriptionEntry entry,

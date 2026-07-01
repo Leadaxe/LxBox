@@ -468,7 +468,10 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       // AlwaysScrollable — pull-to-refresh на коротких списках. Divider теперь
       // внутри самой строки (у ReorderableListView нет separatorBuilder).
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      // Bottom safe-area: последняя подписка не должна прятаться за системной
+      // навигацией Android (жесты/кнопки). Паттерн проекта — padding.bottom + 24.
+      padding: EdgeInsets.fromLTRB(
+          12, 0, 12, MediaQuery.of(context).padding.bottom + 24),
       buildDefaultDragHandles: false,
       itemCount: ctrl.entries.length,
       onReorder: (oldIndex, newIndex) {

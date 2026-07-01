@@ -644,6 +644,7 @@ class SubscriptionController extends ChangeNotifier {
       lastUpdated: DateTime.now(),
       lastUpdateStatus: UpdateStatus.ok,
       lastNodeCount: result.nodes.length,
+      updateIntervalHours: -1, // §129 — файловая: никогда не обновлять авто (-1)
       nodes: result.nodes,
     );
     final entry = SubscriptionEntry(list: list, nodeCount: result.nodes.length);
@@ -692,6 +693,11 @@ class SubscriptionController extends ChangeNotifier {
       if (old.url != newUrl) {
         await HttpCache.remove(old.url); // осиротевший ключ старого источника
       }
+      // §129 — file → interval -1 (никогда авто, сервера нет); online → если был
+      // ≤0 (пришли с файла / «не обновлять»), вернуть дефолт 24, иначе текущий.
+      final nextInterval = toFile
+          ? -1
+          : (old.updateIntervalHours <= 0 ? 24 : old.updateIntervalHours);
       final next = old.copyWith(
         url: newUrl,
         meta: result.meta,
@@ -699,6 +705,7 @@ class SubscriptionController extends ChangeNotifier {
         lastUpdateStatus: UpdateStatus.ok,
         lastNodeCount: result.nodes.length,
         consecutiveFails: 0,
+        updateIntervalHours: nextInterval,
         nodes: result.nodes,
       );
       entry._replaceList(next);
@@ -948,6 +955,14 @@ class SubscriptionController extends ChangeNotifier {
           ? result.meta!.profileTitle!
           : current.name;
 
+      // §129 — семантика интервала:
+      //   -1 = «Don't auto-update», игнорируем серверный profile-update-interval;
+      //    0 = «Never (respect server)» — сами не по расписанию, но серверный
+      //        заголовок ПРИНИМАЕМ (станет реальным числом → авто по нему);
+      //   >0 = обновлять раз в N часов (сервер тоже может переопределить).
+      final nextInterval = current.updateIntervalHours < 0
+          ? current.updateIntervalHours // -1: жёстко, сервер не переубедит
+          : (result.meta?.updateIntervalHours ?? current.updateIntervalHours);
       final next = current.copyWith(
         name: nextName,
         meta: result.meta,
@@ -956,8 +971,7 @@ class SubscriptionController extends ChangeNotifier {
         lastUpdateStatus: UpdateStatus.ok,
         lastNodeCount: result.nodes.length,
         consecutiveFails: 0,
-        updateIntervalHours: result.meta?.updateIntervalHours ??
-            current.updateIntervalHours,
+        updateIntervalHours: nextInterval,
         nodes: result.nodes,
       );
       entry._replaceList(next);

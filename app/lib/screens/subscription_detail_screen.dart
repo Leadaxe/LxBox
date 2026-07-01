@@ -10,6 +10,7 @@ import '../services/error_humanize.dart';
 import '../services/tag_resolver.dart';
 import '../services/subscription/sources.dart';
 import '../services/url_launcher.dart';
+import 'subscriptions_screen/entry_context_menu.dart' show showEditSourceDialog;
 import 'subscription_detail_screen/detour_mode.dart';
 import 'subscription_detail_screen/subscription_detail_format.dart';
 import 'subscription_detail_screen/widgets/subscription_meta.dart';
@@ -291,12 +292,24 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       },
       onShowIntervalPicker: _showIntervalPicker,
       onRefreshNow: _refreshNow,
+      onEditSource: _editSource, // §129
     );
+  }
+
+  /// §129 — сменить источник подписки (online↔file). Переиспользует общий
+  /// диалог; index берём по ссылке (мог сместиться от reorder/delete).
+  Future<void> _editSource() async {
+    final idx = widget.controller.entries.indexOf(widget.entry);
+    if (idx < 0) return;
+    await showEditSourceDialog(context, idx, widget.entry, widget.controller);
+    if (mounted) setState(() {}); // подхватить смену url/имени
   }
 
   Future<void> _showIntervalPicker() async {
     final list = widget.entry.list as SubscriptionServers;
-    final presets = <int>[1, 3, 6, 12, 24, 48, 72, 168];
+    // §129 — -1 = «Don't auto-update» (никогда, игнор серверного интервала);
+    //          0 = «Never (respect server)» (сами нет, но сервер может задать).
+    final presets = <int>[-1, 0, 1, 3, 6, 12, 24, 48, 72, 168];
     final chosen = await showDialog<int>(
       context: context,
       builder: (ctx) => SimpleDialog(
@@ -312,7 +325,11 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                   else
                     const SizedBox(width: 18),
                   const SizedBox(width: 8),
-                  Text('${h}h (${intervalHuman(h)})'),
+                  Text(switch (h) {
+                    < 0 => "Don't auto-update",
+                    0 => 'Never (respect server)',
+                    _ => '${h}h (${intervalHuman(h)})',
+                  }),
                 ],
               ),
             ),
