@@ -36,6 +36,7 @@ void main() {
         VisionWithTransportWarning() => 'vision_transport',
         InsecureTlsWarning() => 'tls',
         NaiveBuildTagWarning() => 'naive_build',
+        XhttpParamResetWarning() => 'xhttp_reset',
       };
       expect(label, 'transport');
     });
