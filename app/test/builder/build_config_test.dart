@@ -193,6 +193,60 @@ void main() {
       expect(result.config, isNot(contains('clash_api')));
       expect(result.config, isNot(contains('external_controller')));
     });
+
+    // §215 — idle-suspend (ядро SPEC 020, route.lx_idle_suspend). Порог
+    // прокидывается в route только когда задан; пусто = omitempty (поля нет).
+    test('§215 idleSuspend="30s" → route.lx_idle_suspend', () async {
+      final wg = parseWireguardUri(
+        'wireguard://pk_a@wg.example.com:51820?publickey=pk_b&address=10.0.0.2%2F32&mtu=1420#WG',
+      )!;
+      final list = UserServer(
+        id: 'u5',
+        name: 'WG',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        nodes: [wg],
+      );
+      final result = await buildConfig(
+        lists: [list],
+        template: template,
+        settings: const BuildSettings(
+          userVars: {'clash_api': '127.0.0.1:9090'},
+          idleSuspend: '30s',
+        ),
+      );
+      final route = result.config['route'] as Map;
+      expect(route['lx_idle_suspend'], '30s');
+    });
+
+    test('§215 idleSuspend="" (default) → нет route.lx_idle_suspend', () async {
+      final wg = parseWireguardUri(
+        'wireguard://pk_a@wg.example.com:51820?publickey=pk_b&address=10.0.0.2%2F32&mtu=1420#WG',
+      )!;
+      final list = UserServer(
+        id: 'u6',
+        name: 'WG',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        nodes: [wg],
+      );
+      final result = await buildConfig(
+        lists: [list],
+        template: template,
+        settings: const BuildSettings(
+          userVars: {'clash_api': '127.0.0.1:9090'},
+        ),
+      );
+      final route = result.config['route'] as Map;
+      // Kill-switch: поле не пишется, дефолт ядра (idle-тик не запущен).
+      expect(route.containsKey('lx_idle_suspend'), false);
+    });
   });
 
   group('buildConfig — §161 empty required-var → default backstop', () {

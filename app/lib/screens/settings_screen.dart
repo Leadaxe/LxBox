@@ -53,6 +53,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   // §143 — НЕ native/config-significant: чистая storage-настройка поведения
   // Clash-API клиента при переключении ноды. Без Restart-баннера.
   bool _interruptOnSwitch = false;
+  String _idleSuspend = ''; // §215 — route.lx_idle_suspend threshold ("" = off)
 
   @override
   void initState() {
@@ -97,10 +98,12 @@ class _SettingsScreenState extends State<SettingsScreen>
     final bgMode = BackgroundMode.fromNative(
         await SettingsStorage.getNativeBackgroundMode());
     final interruptOnSwitch = await SettingsStorage.getInterruptOnSwitch();
+    final idleSuspend = await SettingsStorage.getIdleSuspend(); // §215
     setState(() {
       _template = template;
       _backgroundMode = bgMode;
       _interruptOnSwitch = interruptOnSwitch;
+      _idleSuspend = idleSuspend;
       _vpnLoaded = true;
       _loading = false;
     });
@@ -121,6 +124,22 @@ class _SettingsScreenState extends State<SettingsScreen>
     // §189 — через NativePrefs (JSON-истина + зеркало в native).
     await SettingsStorage.setNativeBackgroundMode(mode.wireValue);
     widget.homeController.markConfigChangedNeedRestart();
+  }
+
+  /// §215 — idle-suspend threshold (route.lx_idle_suspend, kernel SPEC 020).
+  /// Выбор списком (RadioGroup) — применяется сразу, config-significant.
+  Future<void> _applyIdleSuspend(String value) async {
+    if (value == _idleSuspend) return;
+    setState(() => _idleSuspend = value);
+    await SettingsStorage.saveIdleSuspend(value);
+    widget.subController.configDirty = true;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Applies on next connect.'),
+        duration: Duration(seconds: 3),
+      ),
+    );
   }
 
   /// §076/§107: template var change. Staged-запись в `_cache` сразу + sync
@@ -194,23 +213,77 @@ class _SettingsScreenState extends State<SettingsScreen>
           onChanged: _toggleInterruptOnSwitch,
         ),
         const Divider(height: 32),
+        const TemplateSectionHeader(
+          title: 'Optimization',
+          description:
+              'Memory and battery tuning for WireGuard tunnels and VPN lifecycle',
+        ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-          child: Row(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.bedtime_outlined, size: 20),
-              const SizedBox(width: 12),
-              Text('Tunnel sleep mode',
-                  style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                'Suspend idle tunnels',
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Put unreachable WireGuard tunnels to sleep after they sit '
+                'idle, freeing memory and saving battery. They wake instantly '
+                'on use. Only affects tunnels not on the active route.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
             ],
           ),
         ),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(48, 0, 16, 4),
-          child: Text(
-            'When to pause the tunnel to save battery. Takes effect on '
-            'next VPN connect.',
-            style: TextStyle(fontSize: 12),
+        RadioGroup<String>(
+          groupValue: _idleSuspend,
+          onChanged: (String? v) {
+            if (!_vpnLoaded || v == null) return;
+            unawaited(_applyIdleSuspend(v));
+          },
+          child: const Column(
+            children: [
+              RadioListTile<String>(
+                value: '',
+                title: Text('Off'),
+              ),
+              RadioListTile<String>(
+                value: '30s',
+                title: Text('30 seconds'),
+              ),
+              RadioListTile<String>(
+                value: '2m',
+                title: Text('2 minutes'),
+              ),
+              RadioListTile<String>(
+                value: '5m',
+                title: Text('5 minutes'),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Tunnel sleep mode',
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'When to pause the tunnel to save battery. Takes effect on '
+                'next VPN connect.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
           ),
         ),
         RadioGroup<BackgroundMode>(
