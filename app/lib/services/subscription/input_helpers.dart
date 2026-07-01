@@ -7,6 +7,11 @@ bool isSubscriptionUrl(String input) {
   return t.startsWith('http://') || t.startsWith('https://');
 }
 
+/// §129 — файловая подписка. `url` = `file:<uuid>` (синтетический ключ, а не
+/// путь): дискриминатор режима + ключ HttpCache. Источник нод — снапшот в кэше,
+/// перечитывания файла между сессиями нет (см. spec 129).
+bool isFileSubscription(String url) => url.startsWith('file:');
+
 bool isDirectLink(String input) {
   final t = input.trim();
   return t.startsWith('vless://') ||

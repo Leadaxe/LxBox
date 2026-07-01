@@ -226,7 +226,15 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         return;
       }
       if (!mounted) return;
-      await widget.subController.addFromInput(text);
+      // §129 — если в файле > 1 ноды, создаём ФАЙЛОВУЮ подписку (снапшот в
+      // кэше, живёт как обычная подписка). ≤ 1 ноды → старое поведение
+      // (addFromInput → одиночный сервер/нода).
+      final asFileSub =
+          await widget.subController.addFileSubscription(text, file.name);
+      if (!asFileSub) {
+        if (!mounted) return;
+        await widget.subController.addFromInput(text);
+      }
       if (widget.subController.lastError.isEmpty) {
         await _regenerateAndSave();
       } else if (mounted) {

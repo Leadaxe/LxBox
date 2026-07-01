@@ -9,6 +9,9 @@
 /// `debug/serializers/` только ради одной функции.
 String maskSubscriptionUrl(String raw) {
   if (raw.isEmpty) return '';
+  // §129 — файловая подписка: `file:<uuid>` не несёт секретов (это локальный
+  // ключ кэша), но и хоста у него нет. Светим как `file:<local>`, не `***`.
+  if (raw.startsWith('file:')) return 'file:<local>';
   final u = Uri.tryParse(raw);
   if (u == null) return '***';
   if (u.host.isEmpty) return '***';
