@@ -19,8 +19,16 @@ void main() {
       expect(maskSubscriptionUrl('not a url @#%'), '***');
     });
 
-    test('URL без host → `***`', () {
-      expect(maskSubscriptionUrl('file:///local/path'), '***');
+    test('невалидный URL без host → `***`', () {
+      // §129: любая `file:`-строка светится как `file:<local>` (см. ниже),
+      // поэтому URL-без-host проверяем на data:-схеме — не секрет, но и не хост.
+      expect(maskSubscriptionUrl('data:text/plain,x'), '***');
+    });
+
+    test('§129 файловая подписка `file:<uuid>` → `file:<local>`', () {
+      // Локальный ключ кэша, не секрет и без хоста — светим читаемо, не `***`.
+      expect(maskSubscriptionUrl('file:abc-123-uuid'), 'file:<local>');
+      expect(maskSubscriptionUrl('file:///local/path'), 'file:<local>');
     });
 
     test('сохраняет http и https', () {
