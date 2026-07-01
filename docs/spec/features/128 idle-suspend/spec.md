@@ -18,8 +18,14 @@
 
 ## UX
 
-App Settings → **General** → секция Behavior → **«Suspend idle tunnels»**.
-ListTile с выбором порога (диалог, пресеты):
+VPN Settings → вкладка **System** → секция **Optimization** (заголовок в стиле
+Core через `TemplateSectionHeader`). Два однородных рычага, оба — заголовок +
+описание + `RadioGroup` списком под ним:
+
+- **Suspend idle tunnels** — выбор порога списком (пресеты).
+- **Tunnel sleep mode** — когда паузить туннель целиком (background mode, §124).
+
+Пресеты idle-suspend (RadioGroup, выбор применяется сразу по тапу):
 
 | Пресет | Значение `lx_idle_suspend` | Смысл |
 |---|---|---|
@@ -28,9 +34,10 @@ ListTile с выбором порога (диалог, пресеты):
 | 2 minutes | `2m` | Тик 1 мин |
 | 5 minutes | `5m` | Тик 2.5 мин |
 
-Пресеты, а не сырой ввод — валидные duration-строки ядра гарантированы. Изменение
-config-significant (`markConfigDirty`), применяется при следующей пересборке
-конфига (reconnect). Snackbar «Applies on next connect.».
+Пресеты списком, а не сырой ввод/диалог — валидные duration-строки ядра
+гарантированы, и вид совпадает с соседним `Tunnel sleep mode`. Изменение
+config-significant (`subController.configDirty = true`), применяется при следующей
+пересборке конфига (reconnect). Snackbar «Applies on next connect.».
 
 ## Модель данных
 
@@ -44,9 +51,9 @@ config-significant (`markConfigDirty`), применяется при следу
 ## Control flow
 
 ```
-App Settings (General tab)
-  → AppSettingsDialogs.pickIdleSuspend → SettingsStorage.saveIdleSuspend
-      → route_idle_suspend в storage + markConfigDirty
+VPN Settings (System tab) → RadioGroup выбор
+  → _applyIdleSuspend → SettingsStorage.saveIdleSuspend
+      → route_idle_suspend в storage + subController.configDirty = true
 SubscriptionController.generateConfig
   → BuildSettings(idleSuspend: getIdleSuspend())
   → buildConfig: если idleSuspend непусто → route['lx_idle_suspend'] = порог
@@ -66,9 +73,8 @@ rc.18 знает поле (SPEC 020) — не роняет конфиг (в от
 | storage | `services/settings_storage.dart` | публичные геттер/сеттер + allowlist-ключ |
 | builder | `services/builder/build_config.dart` | поле `BuildSettings.idleSuspend` + инъекция в route |
 | controller | `controllers/subscription_controller.dart` | `idleSuspend: getIdleSuspend()` |
-| UI | `screens/app_settings_screen.dart` | state `_idleSuspend` + load + `_pickIdleSuspend` |
-| UI | `screens/app_settings_screen/widgets/general_tab.dart` | ListTile + `_idleLabel` |
-| UI | `screens/app_settings_screen/app_settings_dialogs.dart` | `pickIdleSuspend` (RadioGroup) |
+| UI | `screens/settings_screen.dart` | state `_idleSuspend` + load + `_applyIdleSuspend` + RadioGroup в секции Optimization |
+| UI | `widgets/template_var_list.dart` | публичный `TemplateSectionHeader` (стиль Core для секции Optimization) |
 | тесты | `test/builder/build_config_test.dart` | «30s»→route + пусто→нет поля |
 
 ## Критерии приёмки
