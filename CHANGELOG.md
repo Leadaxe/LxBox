@@ -6,6 +6,22 @@
 
 ---
 
+## [2.8.1] — 2026-07-01
+
+Настройка энергосбережения **«Suspend idle tunnels»** (idle-suspend): ядро
+усыпляет недостижимые WireGuard/AmneziaWG-туннели после простоя, освобождая
+память и снижая нагрузку на CPU/батарею. Ядро обновлено до rc.18 (SPEC 020).
+
+### Added
+
+- **§128/§215 — Suspend idle tunnels** ([feature spec](docs/spec/features/128%20idle-suspend/spec.md), [task spec](docs/spec/tasks/215-libbox-rc18-idle-suspend.md), [settings_screen.dart](app/lib/screens/settings_screen.dart) + [build_config.dart](app/lib/services/builder/build_config.dart)). Новая настройка в **VPN Settings → System → Optimization**: порог простоя (Off / 30s / 2m / 5m), после которого ядро гасит (`device.Down()`) любой WG/AWG-эндпоинт, который одновременно **недостижим** из активного маршрута И **простаивает** дольше порога. Пробуждение — мгновенное, на следующем дайле. Прокидывается в `route.lx_idle_suspend` (пусто = выкл, kill-switch). Зачем: каждый живой WG-туннель держит recv-воркеры со своими буферами (~8 МБ/воркер при `BatchSize=128`), и GC постоянно их сканирует — при подписке с многими WG это главный держатель RAM и нагрева CPU, даже когда трафик идёт лишь через одну ноду. Device-verified на реальной подписке (11 WG): при включении освобождается **~134–155 МБ** буферов, а доля GC в CPU падает с ~56 % почти до нуля. Backend (storage/builder) и +2 теста.
+
+### Changed
+
+- **§215 — Ядро sing-box-lx → rc.18** ([task spec](docs/spec/tasks/215-libbox-rc18-idle-suspend.md), [libbox.version](app/android/libbox.version)). Бамп rc.16 → rc.18 (SPEC 020 «idle-suspend простаивающих WG/AWG эндпоинтов»). rc.18 понимает поле `route.lx_idle_suspend`; на старых ядрах конфиг с ним не грузился. CommandClient API не менялся.
+
+---
+
 ## [2.8.0] — 2026-06-30
 
 Поддержка XHTTP-нод (Xray splithttp) с полным набором параметров — теперь
