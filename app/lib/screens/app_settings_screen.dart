@@ -56,6 +56,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _autoPing = true;
   bool _autoUpdateSubs = true;
   bool _autoCheckUpdates = true;
+  String _idleSuspend = ''; // §215 — route.lx_idle_suspend threshold ("" = off)
   bool _loaded = false;
   // §207 — pprof capture in flight (goroutine dump / CPU profile). Guards
   // both buttons so a double-tap can't spin two servers on the same port.
@@ -140,6 +141,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final auto = await SettingsStorage.getNativeBool(NativePrefsKeys.autoStart);
     final haptic = await SettingsStorage.getVar(HapticService.prefsKey, 'true');
     final autoPing = await SettingsStorage.getVar('auto_ping_on_start', 'true');
+    final idleSuspend = await SettingsStorage.getIdleSuspend(); // §215
     final battery = await _vpn.isIgnoringBatteryOptimizations();
     final notifications = await _vpn.areNotificationsEnabled();
     final bgLocation = await ul.UrlLauncher.checkBackgroundLocationPermission();
@@ -178,6 +180,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _autoStart = auto;
         _haptic = haptic != 'false';
         _autoPing = autoPing != 'false';
+        _idleSuspend = idleSuspend; // §215
         _batteryWhitelisted = battery;
         _notificationsEnabled = notifications;
         _backgroundLocationGranted = bgLocation;
@@ -210,6 +213,24 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
             ? 'Config locked. UI actions will not rebuild config.'
             : 'Config unlocked. Next UI action will rebuild from settings.'),
         duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// §215 — выбор порога idle-suspend (route.lx_idle_suspend, ядро SPEC 020).
+  /// Config-significant: storage помечает config dirty, применяется при
+  /// следующей пересборке конфига (reconnect / любое routing-действие).
+  Future<void> _pickIdleSuspend() async {
+    final picked =
+        await AppSettingsDialogs.pickIdleSuspend(context, _idleSuspend);
+    if (picked == null || picked == _idleSuspend) return;
+    setState(() => _idleSuspend = picked);
+    await SettingsStorage.saveIdleSuspend(picked);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Applies on next connect.'),
+        duration: Duration(seconds: 3),
       ),
     );
   }
@@ -623,6 +644,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       autoCheckUpdates: _autoCheckUpdates,
       autoPing: _autoPing,
       haptic: _haptic,
+      idleSuspend: _idleSuspend, // §215
+      onPickIdleSuspend: () => unawaited(_pickIdleSuspend()),
       padding: _tabPadding(context),
       onAutoStartChanged: (val) {
         setState(() => _autoStart = val);

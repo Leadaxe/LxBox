@@ -56,6 +56,12 @@ class BuildSettings {
   /// поведение, post-step no-op).
   final VpnModeConfig? vpnMode;
 
+  /// §215: порог простоя для idle-suspend недостижимых WG/AWG эндпоинтов
+  /// (ядро SPEC 020, `route.lx_idle_suspend`). Duration-строка (`"5m"`,
+  /// `"30s"`). Пусто = фича выключена (поле не пишется, дефолт ядра =
+  /// idle-тик не запускается).
+  final String idleSuspend;
+
   const BuildSettings({
     this.userVars = const {},
     this.enabledGroups = const {},
@@ -64,6 +70,7 @@ class BuildSettings {
     this.channels = const [],
     this.tunApps,
     this.vpnMode,
+    this.idleSuspend = '',
   });
 }
 
@@ -313,6 +320,15 @@ Future<BuildResult> buildConfig({
   route['rule_set'] = ruleSets.getRuleSets();
   route['rules'] = ruleSets.getRules();
   config['route'] = route;
+
+  // §215 — idle-suspend недостижимых WG/AWG эндпоинтов (ядро SPEC 020).
+  // Пишем поле только когда порог задан (непустой), чтобы сохранить
+  // omitempty-семантику ядра: отсутствие/пусто = фича выключена (idle-тик
+  // не запускается — безопасный kill-switch).
+  final idle = settings.idleSuspend.trim();
+  if (idle.isNotEmpty) {
+    route['lx_idle_suspend'] = idle;
+  }
 
   // §125 — деградация dangling route_final → vpn-1. Ссылка на удалённый канал
   // или legacy ✨auto (которого больше нет, Решение 2/3) схлопывается в vpn-1
