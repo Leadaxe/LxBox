@@ -155,32 +155,9 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
   }
 
   Widget _buildSectionHeader(BuildContext context, String title) {
-    final desc = widget.sectionDescriptions[title] ?? '';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          if (desc.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                desc,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ),
-          const Divider(),
-        ],
-      ),
+    return TemplateSectionHeader(
+      title: title,
+      description: widget.sectionDescriptions[title] ?? '',
     );
   }
 
@@ -313,6 +290,51 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
     final n = int.tryParse(raw);
     if (n == null) return raw; // formatter уже отсёк не-цифры; defensive
     return n.clamp(0, 65535).toString();
+  }
+}
+
+/// Section header for template-driven settings screens (Core, Routing, DNS).
+///
+/// Also used by VPN Settings → System for native toggles grouped like Core
+/// sections (primary titleSmall + optional description + divider).
+class TemplateSectionHeader extends StatelessWidget {
+  const TemplateSectionHeader({
+    super.key,
+    required this.title,
+    this.description = '',
+  });
+
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          if (description.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                description,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+          const Divider(),
+        ],
+      ),
+    );
   }
 }
 

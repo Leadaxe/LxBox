@@ -113,6 +113,7 @@ class SettingsStorage {
     'dns_options',
     'ping_options',
     'route_final',
+    'route_idle_suspend', // §215 — idle-suspend threshold (route.lx_idle_suspend)
     'excluded_nodes',
     'enabled_groups', // §125 — DEPRECATED (читается только миграцией; safe-мусор)
     'channels', // §125 — каналы роутинга (template→storage)
@@ -324,6 +325,13 @@ class SettingsStorage {
 
   static Future<void> saveRouteFinal(String outbound, {bool flush = true}) =>
       _saveRouteFinal(outbound, flush: flush);
+
+  // §215 — idle-suspend threshold (route.lx_idle_suspend, kernel SPEC 020)
+
+  static Future<String> getIdleSuspend() => _getIdleSuspend();
+
+  static Future<void> saveIdleSuspend(String threshold, {bool flush = true}) =>
+      _saveIdleSuspend(threshold, flush: flush);
 
   // §125-cleanup — excluded_nodes (§048 глобальный фильтр) удалён. Ключ остаётся
   // в allowlist (legacy backward-compat, безвредный мусор как enabled_groups).

@@ -23,6 +23,26 @@ Future<void> _saveRouteFinal(String outbound, {bool flush = true}) async {
   if (flush) await _save();
 }
 
+// ---------------------------------------------------------------------------
+// §215 — idle-suspend threshold (route.lx_idle_suspend, kernel SPEC 020)
+//
+// Duration-строка ("30s", "5m"). Пусто = feature off (поле не попадёт в
+// route, idle-тик ядра не запустится). Config-significant → markConfigDirty.
+// ---------------------------------------------------------------------------
+
+Future<String> _getIdleSuspend() async {
+  final data = await _load();
+  return (data['route_idle_suspend'] as String?) ?? '';
+}
+
+Future<void> _saveIdleSuspend(String threshold, {bool flush = true}) async {
+  final data = await _load();
+  data['route_idle_suspend'] = threshold;
+  SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
+  if (flush) await _save();
+}
+
 
 Future<List<Map<String, dynamic>>> _getDnsServers() async {
   final data = await _load();
