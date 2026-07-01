@@ -49,26 +49,15 @@
 L×Box — Android VPN-клиент на базе **sing-box** (через **libbox**). Полный цикл:
 подписки → парсинг → конфиг → VPN-туннель → управление через **libbox CommandClient**.
 
-### Ядро: fork `sing-box-lx` (§097 / §104)
+### Ядро: fork `sing-box-lx`
 
-С §097 ядро — наш fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)
-(ветка `lx`): upstream sing-box + AmneziaWG 2.0 (`with_awg`) + нативный XHTTP
-(`with_xhttp`). Build-теги: `with_gvisor,with_quic,with_wireguard,with_utls,
-with_naive_outbound,with_xhttp,with_awg` (§122 — `with_clash_api` убран, Clash
-HTTP-server выпилен; управление через libbox CommandClient).
+VPN-ядро — наш форк [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)
+(upstream sing-box + AmneziaWG + XHTTP + LxBox-фичи), управление через libbox
+CommandClient. AAR качается `scripts/fetch-libbox.sh` из GitHub Releases форка,
+версия пинится в `app/android/libbox.version`.
 
-С §104 fork — **единственное ядро для всех сборок** (local + CI + release;
-готовится релиз v2.0.0):
-
-- пин версии — `app/android/libbox.version` (**`v1.14.0-lx.1-rc.16`**, single source
-  of truth для local + CI; база upstream `v1.14.0-alpha.33`);
-- `scripts/fetch-libbox.sh` скачивает `libbox.aar` из GitHub Releases форка с
-  проверкой SHA256 (идемпотентен — маркер `.libbox.version`); вызывается из
-  `scripts/build-local-apk.sh` и из CI (`ci.yml` → android job → шаг
-  «Fetch sing-box-lx core»);
-- AAR не в git (~73MB, `libs/` в `.gitignore`); в `build.gradle.kts` —
-  `implementation(files("libs/libbox.aar"))`, Maven-строка стокового
-  `libbox 1.13.11` удалена.
+**Полностью — build-теги, ловушки при бампе версии, история rc — в
+[`KERNEL.md`](KERNEL.md).**
 
 ### Слои и зоны ответственности
 
