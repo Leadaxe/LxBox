@@ -243,7 +243,10 @@ Sealed по полю `type`:
   "enabled":               true,
   "tag_prefix":            "<str>",           // префикс для node tags при сборке
   "detour_policy":         { … },             // см. ниже
-  "url":                   "https://…",
+  "url":                   "https://…",       // online-подписка. §129: файловая
+                                              // подписка → "file:<uuid>" (снапшот
+                                              // нод в HttpCache по этому ключу;
+                                              // не путь к файлу, доступ не хранится)
   "meta":                  { … }?,            // SubscriptionMeta — HTTP-headers
   "last_updated":          "ISO-8601"?,       // успех
   "last_update_attempt":   "ISO-8601"?,       // любая попытка
