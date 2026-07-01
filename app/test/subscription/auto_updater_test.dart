@@ -36,6 +36,26 @@ void main() {
       );
     });
 
+    test('§129 interval ≤ 0 → never auto (но force работает)', () {
+      // -1 = «Don't auto-update», 0 = «Never (respect server)». Оба на
+      // авто-триггере пропускаются, ручной Update (force) обновляет.
+      for (final iv in [-1, 0]) {
+        final s = _sub(updateIntervalHours: iv, lastUpdated: null);
+        expect(
+          AutoUpdater.shouldUpdatePure(
+              list: s, force: false, fails: 0, now: now),
+          isFalse,
+          reason: 'interval=$iv авто-триггер должен пропустить',
+        );
+        expect(
+          AutoUpdater.shouldUpdatePure(
+              list: s, force: true, fails: 0, now: now),
+          isTrue,
+          reason: 'interval=$iv force должен обновить',
+        );
+      }
+    });
+
     test('fails >= maxFailsPerSession без force → skip', () {
       expect(
         AutoUpdater.shouldUpdatePure(

@@ -137,10 +137,16 @@ class SubscriptionEntry extends ChangeNotifier {
   /// `profile-update-interval` (24ч). AutoUpdater читает значение через
   /// `updateIntervalHours` каждый раз при проверке — persist'им через
   /// `controller.persistSources()` на стороне UI.
+  ///
+  /// §129 — валидные спец-значения: `-1` = «Don't auto-update» (никогда,
+  /// игнорировать серверный profile-update-interval), `0` = «Never (respect
+  /// server)» (сами не по расписанию, но серверный заголовок принимаем).
+  /// AutoUpdater.shouldUpdatePure пропускает подписки с interval ≤ 0 на
+  /// авто-триггерах. Клампим только мусор < -1.
   set updateIntervalHours(int v) {
     final list = _list;
     if (list is! SubscriptionServers) return;
-    final clamped = v < 1 ? 1 : v;
+    final clamped = v < -1 ? -1 : v;
     _replaceList(list.copyWith(updateIntervalHours: clamped));
   }
 

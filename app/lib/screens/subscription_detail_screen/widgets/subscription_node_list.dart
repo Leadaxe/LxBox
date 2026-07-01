@@ -81,7 +81,10 @@ class SubscriptionNodeList extends StatelessWidget {
           ),
         Expanded(
           child: ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      // Bottom safe-area: последняя нода не должна прятаться за системной
+      // навигацией Android. Паттерн проекта — padding.bottom + 24.
+      padding: EdgeInsets.fromLTRB(
+          12, 0, 12, MediaQuery.of(context).padding.bottom + 24),
       itemCount: nodes.length,
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {

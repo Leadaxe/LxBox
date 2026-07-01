@@ -46,6 +46,9 @@ Widget? buildSubscriptionEntrySubtitle(
       if (intervalH > 0) {
         parts.add(Icon(Icons.sync, size: 12, color: muted));
         parts.add(Text(_compactHours(intervalH), style: textStyle));
+      } else {
+        // §129 — авто-обновление выключено (-1 «don't» / 0 «respect server»).
+        parts.add(Icon(Icons.sync_disabled, size: 12, color: muted));
       }
     }
 

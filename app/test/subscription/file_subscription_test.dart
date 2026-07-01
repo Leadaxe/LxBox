@@ -67,8 +67,41 @@ void main() {
       expect(isFileSubscription(list.url), isTrue);
       expect(list.name, 'my-servers'); // имя файла без .txt
       expect(list.nodes, hasLength(2));
+      expect(list.updateIntervalHours, -1); // §129 — никогда авто
       // Снапшот тела лёг в HttpCache по ключу url.
       expect(await HttpCache.loadBody(list.url), twoNodes);
+    });
+
+    test('§129 interval=-1 online → игнорирует серверный profile-update-interval',
+        () async {
+      final c = SubscriptionController();
+      // Сервер отдаёт заголовок profile-update-interval: 12 (часов).
+      c.httpClientForTesting = MockClient((req) async => http.Response(
+            threeNodes,
+            200,
+            headers: {'profile-update-interval': '12'},
+          ));
+      await SettingsStorage.saveServerLists([
+        SubscriptionServers(
+          id: 's1',
+          name: 'no-auto',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          url: 'https://orig.example/sub',
+          updateIntervalHours: -1, // юзер: «Don't auto-update»
+          lastNodeCount: 2,
+        ),
+      ]);
+      await HttpCache.save('https://orig.example/sub', twoNodes, const {});
+      await c.init();
+      await c.rehydrationDone;
+
+      await c.updateAt(0); // ручной fetch
+      final list = c.entries.single.list as SubscriptionServers;
+      // -1 сохраняется, серверные 12h игнорируются (жёсткий режим).
+      expect(list.updateIntervalHours, -1);
+      expect(list.nodes, hasLength(3)); // ноды обновились
     });
 
     test('≤ 1 ноды → НЕ файловая (false, caller упадёт на addFromInput)',

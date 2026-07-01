@@ -142,10 +142,19 @@ bool _shouldUpdate(entry, force):
   if !list.enabled: false
   if !force && _failCounts[url] >= 5: false   // frozen this session
   if force: true
+  if list.updateIntervalHours <= 0: false     // §129 — "Don't auto-update"
   if lastUpdateAttempt != null && now - lastUpdateAttempt < 15min: false
   if lastUpdated == null: true                // never succeeded
   return now - lastUpdated >= interval
 ```
+
+**§129 — три уровня интервала.** `-1` = «Don't auto-update» (никогда, серверный
+`profile-update-interval` **игнорируется**); `0` = «Never (respect server)» (сами
+не по расписанию, но серверный заголовок **принимаем** → станет реальным числом);
+`>0` = раз в N часов. `_shouldUpdate` пропускает `interval ≤ 0` на авто-триггерах
+(ручной force — всегда). Fetch-логика: `interval < 0` не берёт серверный заголовок.
+Файловые подписки ([[129-file-subscription]]) создаются с `-1`. См. picker в
+Subscription detail → Settings.
 
 Отметить: `force=true` пропускает fail-cap и min-retry, но **не** пропускает `enabled` и type-check.
 
