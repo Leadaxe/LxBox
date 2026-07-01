@@ -111,6 +111,10 @@ void main() {
         NaiveSpec(
             id: '10', tag: 't', label: 'l', server: 's', port: 443, rawUri: 'u',
             password: 'p'),
+        MasqueSpec(
+            id: '11', tag: 't', label: 'l', server: 's', port: 443, rawUri: 'u',
+            privateKeyDer: 'pk', publicKeyDer: 'pub',
+            localAddresses: const ['172.16.0.2/32']),
       ];
 
       for (final s in specs) {
@@ -125,6 +129,7 @@ void main() {
           SocksSpec() => 'socks',
           WireguardSpec() => 'wireguard',
           NaiveSpec() => 'naive',
+          MasqueSpec() => 'masque',
         };
         expect(p, s.protocol);
       }
