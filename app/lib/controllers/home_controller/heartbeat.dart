@@ -34,6 +34,15 @@ mixin _HeartbeatMixin on ChangeNotifier {
   /// Иначе — каждые 20 сек вибро-спам пока туннель лежит.
   bool _heartbeatFailNotified = false;
 
+  /// §216 — грейс после возврата из фона. В фоне status-стрим гасится (§164),
+  /// поэтому `lastCcStatusAt` устаревает на всё время сна (могут быть минуты/
+  /// часы). Первый тик сразу после resume увидел бы огромную «тишину» и написал
+  /// ложный `Heartbeat: silent 2905s` — хотя стрим только-только поднимается и
+  /// свежий снапшот придёт в пределах ~1s. Флаг гасит ровно один первый тик
+  /// после resume: не штрафуем, ждём восстановления стрима. Взводится в
+  /// `_resyncOnResume` (см. home_controller.dart).
+  bool _skipNextHeartbeatFail = false;
+
   void _startHeartbeat() {
     _stopHeartbeat();
     _heartbeatFailures = 0;
@@ -64,6 +73,15 @@ mixin _HeartbeatMixin on ChangeNotifier {
     final silence = DateTime.now().difference(last);
     if (silence <= _heartbeatTimeout) {
       _heartbeatFailures = 0;
+      _skipNextHeartbeatFail = false;
+      return;
+    }
+
+    // §216 — первый тик после возврата из фона: стрим ещё не поднялся,
+    // «тишина» — это время сна, а не отказ ядра. Пропускаем ровно один раз,
+    // даём снапшоту прийти. Следующий тик (через 5s) оценит уже честно.
+    if (_skipNextHeartbeatFail) {
+      _skipNextHeartbeatFail = false;
       return;
     }
 

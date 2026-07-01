@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../controllers/subscription_controller.dart';
 import '../../services/subscription/auto_updater.dart';
+import '../../services/subscription/input_helpers.dart';
 
 /// Long-press bottom-sheet для записи подписки/сервера. Поведение 1:1 с
 /// прежним `_showContextMenu` — копировать URL, share, update,
@@ -61,6 +64,18 @@ void showEntryContextMenu(
               unawaited(subController.updateAt(index));
             },
           ),
+          // §129 — сменить источник подписки (online URL ↔ локальный файл).
+          // Транзакционно: старый источник сбрасывается только после успеха
+          // нового (см. updateSourceAt). Для file-подписки это ещё и «обновить»
+          // (выбрать файл заново).
+          ListTile(
+            leading: const Icon(Icons.edit_outlined),
+            title: const Text('Edit source…'),
+            onTap: () async {
+              Navigator.pop(ctx);
+              await showEditSourceDialog(context, index, entry, subController);
+            },
+          ),
           // Reset fail-count (night T8-1). Если провайдер вернулся в строй
           // после фриза (5 фейлов подряд → заморожено до app-restart),
           // юзер может руками разморозить без перезапуска.
@@ -107,4 +122,155 @@ void showEntryContextMenu(
       ),
     ),
   );
+}
+
+/// §129 — диалог смены источника подписки: online URL ↔ локальный файл.
+/// Переключатель режима; online → текст-поле URL, file → picker. Save зовёт
+/// `updateSourceAt` (транзакционно: старый источник живёт, пока новый не удался).
+Future<void> showEditSourceDialog(
+  BuildContext context,
+  int index,
+  SubscriptionEntry entry,
+  SubscriptionController subController,
+) async {
+  final wasFile = isFileSubscription(entry.url);
+  var fileMode = wasFile;
+  final urlCtl = TextEditingController(text: wasFile ? '' : entry.url);
+  String? pickedBody; // тело выбранного файла (file-режим)
+  String pickedName = wasFile ? entry.displayName : '';
+  var busy = false;
+
+  await showDialog<void>(
+    context: context,
+    builder: (dCtx) => StatefulBuilder(
+      builder: (dCtx, setLocal) => AlertDialog(
+        title: const Text('Edit source'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            RadioGroup<bool>(
+              groupValue: fileMode,
+              onChanged: (v) => setLocal(() => fileMode = v ?? false),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<bool>(
+                    value: false,
+                    title: Text('Online URL'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  RadioListTile<bool>(
+                    value: true,
+                    title: Text('Local file'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (!fileMode)
+              TextField(
+                controller: urlCtl,
+                decoration: const InputDecoration(
+                  labelText: 'Subscription URL',
+                  hintText: 'https://…',
+                ),
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      pickedBody == null
+                          ? (pickedName.isEmpty ? 'No file chosen' : pickedName)
+                          : pickedName,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      final res = await FilePicker.pickFiles(
+                          withData: true, allowMultiple: false);
+                      if (res == null || res.files.isEmpty) return;
+                      final f = res.files.single;
+                      String text;
+                      if (f.bytes != null && f.bytes!.isNotEmpty) {
+                        text = String.fromCharCodes(f.bytes!);
+                      } else if (f.path != null) {
+                        text = await File(f.path!).readAsString();
+                      } else {
+                        return;
+                      }
+                      setLocal(() {
+                        pickedBody = text;
+                        pickedName = f.name;
+                      });
+                    },
+                    child: const Text('Choose…'),
+                  ),
+                ],
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: busy ? null : () => Navigator.pop(dCtx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: busy
+                ? null
+                : () async {
+                    setLocal(() => busy = true);
+                    String err;
+                    if (fileMode) {
+                      if (pickedBody == null) {
+                        // file-режим без нового файла: если и было file — просто
+                        // переоткрыть текущий кэш нельзя, требуем выбор.
+                        setLocal(() => busy = false);
+                        ScaffoldMessenger.of(dCtx).showSnackBar(
+                          const SnackBar(content: Text('Choose a file first')),
+                        );
+                        return;
+                      }
+                      // file: контроллер сам сгенерит свежий file:<uuid>.
+                      err = await subController.updateSourceAt(
+                        index,
+                        fileBody: pickedBody,
+                      );
+                    } else {
+                      final url = urlCtl.text.trim();
+                      if (!isSubscriptionUrl(url)) {
+                        setLocal(() => busy = false);
+                        ScaffoldMessenger.of(dCtx).showSnackBar(
+                          const SnackBar(
+                              content: Text('Enter a valid http(s):// URL')),
+                        );
+                        return;
+                      }
+                      err = await subController.updateSourceAt(index,
+                          httpUrl: url);
+                    }
+                    if (!dCtx.mounted) return;
+                    if (err.isEmpty) {
+                      Navigator.pop(dCtx);
+                    } else {
+                      setLocal(() => busy = false);
+                      ScaffoldMessenger.of(dCtx)
+                          .showSnackBar(SnackBar(content: Text(err)));
+                    }
+                  },
+            child: busy
+                ? const SizedBox(
+                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Save'),
+          ),
+        ],
+      ),
+    ),
+  );
+  urlCtl.dispose();
 }

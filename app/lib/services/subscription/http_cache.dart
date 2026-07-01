@@ -72,4 +72,20 @@ class HttpCache {
       return null;
     }
   }
+
+  /// §129 — удалить кэш (тело + headers) осиротевшего ключа. Используется при
+  /// смене источника подписки: старый url больше не адресуется, его снапшот
+  /// не нужен. Best-effort: отсутствие файлов — не ошибка.
+  static Future<void> remove(String url) async {
+    try {
+      final dir = await _dir();
+      final key = _hash(url);
+      final body = File('${dir.path}/$key');
+      final headers = File('${dir.path}/$key.headers');
+      if (body.existsSync()) await body.delete();
+      if (headers.existsSync()) await headers.delete();
+    } catch (_) {
+      // best-effort
+    }
+  }
 }

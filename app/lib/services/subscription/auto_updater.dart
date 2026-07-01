@@ -178,6 +178,11 @@ class AutoUpdater {
 
     if (force) return true;
 
+    // §129 — updateIntervalHours == 0 = «не обновлять автоматически». Ручной
+    // Update (force) выше уже вернул true; авто-триггеры сюда доходят и должны
+    // пропустить подписку. Файловые подписки ставятся в 0 при создании.
+    if (list.updateIntervalHours <= 0) return false;
+
     // Min-retry: не пытаться чаще 15 мин, даже если `updateIntervalHours`
     // прошёл. Защищает от fail-шторма на каждом триггере.
     final lastTry = list.lastUpdateAttempt;

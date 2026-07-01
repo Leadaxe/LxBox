@@ -162,36 +162,78 @@ final class XhttpTransport extends TransportSpec {
   @override
   (Map<String, dynamic>, List<NodeWarning>) toSingbox(TemplateVars vars) {
     final m = <String, dynamic>{'type': 'xhttp', 'path': path};
+    final warnings = <NodeWarning>[];
     if (host.isNotEmpty) m['host'] = host;
     if (mode.isNotEmpty) m['mode'] = mode;
     if (xPaddingBytes.isNotEmpty) m['x_padding_bytes'] = xPaddingBytes;
     if (noGrpcHeader) m['no_grpc_header'] = true;
     if (headers.isNotEmpty) m['headers'] = Map<String, String>.from(headers);
 
-    // §127 — расширенные поля. omitempty: пустое → ключ не пишем.
-    if (sessionPlacement.isNotEmpty) m['session_placement'] = sessionPlacement;
+    // §217 — нормализация против правил ядра normalizeMeta (transport/v2rayxhttp/
+    // meta.go). Комбинации, которые ядро отвергает fatal, чиним на дефолт —
+    // иначе одна битая xhttp-нода роняет ВЕСЬ конфиг на старте. Каждый сброс →
+    // NodeWarning (⚠️ в подписке + строка в AppLog). mode дефолтится ядром
+    // "" → auto (client.go:79), поэтому packet-up только при явном значении.
+    final isPacketUp = mode.toLowerCase() == 'packet-up';
+
+    // --- placement/method enums: значение вне множества ядро роняет fatal ---
+    void putEnum(String key, String value, Set<String> allowed) {
+      if (value.isEmpty) return;
+      if (allowed.contains(value)) {
+        m[key] = value;
+      } else {
+        warnings.add(XhttpParamResetWarning(
+            key, 'value "$value" is not a valid $key'));
+      }
+    }
+
+    putEnum('session_placement', sessionPlacement,
+        const {'path', 'query', 'header', 'cookie'});
     if (sessionKey.isNotEmpty) m['session_key'] = sessionKey;
-    if (seqPlacement.isNotEmpty) m['seq_placement'] = seqPlacement;
+    putEnum('seq_placement', seqPlacement,
+        const {'path', 'query', 'header', 'cookie'});
     if (seqKey.isNotEmpty) m['seq_key'] = seqKey;
+
+    // --- uplink_data_placement: enum + header/cookie только в packet-up ---
+    final up = uplinkDataPlacement.toLowerCase();
     if (uplinkDataPlacement.isNotEmpty) {
-      m['uplink_data_placement'] = uplinkDataPlacement;
+      if (!const {'body', 'auto', 'header', 'cookie'}
+          .contains(uplinkDataPlacement)) {
+        warnings.add(XhttpParamResetWarning('uplink_data_placement',
+            'value "$uplinkDataPlacement" is not valid'));
+      } else if ((up == 'header' || up == 'cookie') && !isPacketUp) {
+        warnings.add(const XhttpParamResetWarning('uplink_data_placement',
+            'header/cookie placement requires packet-up mode'));
+      } else {
+        m['uplink_data_placement'] = uplinkDataPlacement;
+      }
     }
     if (uplinkDataKey.isNotEmpty) m['uplink_data_key'] = uplinkDataKey;
     if (uplinkChunkSize.isNotEmpty) m['uplink_chunk_size'] = uplinkChunkSize;
-    if (uplinkHttpMethod.isNotEmpty) m['uplink_http_method'] = uplinkHttpMethod;
+
+    // --- uplink_http_method: GET валиден только в packet-up (meta.go:105) ---
+    if (uplinkHttpMethod.isNotEmpty) {
+      if (uplinkHttpMethod.toUpperCase() == 'GET' && !isPacketUp) {
+        warnings.add(const XhttpParamResetWarning(
+            'uplink_http_method', 'GET requires packet-up mode'));
+      } else {
+        m['uplink_http_method'] = uplinkHttpMethod;
+      }
+    }
+
     if (xPaddingObfsMode) m['x_padding_obfs_mode'] = true;
     if (xPaddingKey.isNotEmpty) m['x_padding_key'] = xPaddingKey;
     if (xPaddingHeader.isNotEmpty) m['x_padding_header'] = xPaddingHeader;
-    if (xPaddingPlacement.isNotEmpty) {
-      m['x_padding_placement'] = xPaddingPlacement;
-    }
-    if (xPaddingMethod.isNotEmpty) m['x_padding_method'] = xPaddingMethod;
+    putEnum('x_padding_placement', xPaddingPlacement,
+        const {'cookie', 'header', 'query', 'queryInHeader'});
+    putEnum('x_padding_method', xPaddingMethod,
+        const {'repeat-x', 'tokenish'});
     if (scMaxEachPostBytes.isNotEmpty) {
       m['sc_max_each_post_bytes'] = scMaxEachPostBytes;
     }
     if (scMinPostsIntervalMs.isNotEmpty) {
       m['sc_min_posts_interval_ms'] = scMinPostsIntervalMs;
     }
-    return (m, const []);
+    return (m, warnings);
   }
 }

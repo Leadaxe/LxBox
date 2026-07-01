@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/server_list.dart';
+import '../../../services/subscription/input_helpers.dart';
 
 /// Строка под именем подписки. Для SubscriptionServers показываем:
 /// `{nodes} · 🔄 24h · 🕐 3h ago · (2 fails)`
@@ -33,10 +34,22 @@ Widget? buildSubscriptionEntrySubtitle(
   }
 
   if (entry.list is SubscriptionServers) {
-    final intervalH = entry.updateIntervalHours;
-    if (intervalH > 0) {
-      parts.add(Icon(Icons.sync, size: 12, color: muted));
-      parts.add(Text(_compactHours(intervalH), style: textStyle));
+    // §129 — файловая подписка: бейдж «file» вместо sync-интервала
+    // (auto-update файл не читает; обновление вручную через Edit source).
+    final isFile =
+        isFileSubscription((entry.list as SubscriptionServers).url);
+    if (isFile) {
+      parts.add(Icon(Icons.insert_drive_file_outlined, size: 12, color: muted));
+      parts.add(Text('file', style: textStyle));
+    } else {
+      final intervalH = entry.updateIntervalHours;
+      if (intervalH > 0) {
+        parts.add(Icon(Icons.sync, size: 12, color: muted));
+        parts.add(Text(_compactHours(intervalH), style: textStyle));
+      } else {
+        // §129 — авто-обновление выключено (-1 «don't» / 0 «respect server»).
+        parts.add(Icon(Icons.sync_disabled, size: 12, color: muted));
+      }
     }
 
     final last = entry.lastUpdated;

@@ -622,6 +622,114 @@ class SubscriptionController extends ChangeNotifier {
     await _fetchEntry(index, trigger: UpdateTrigger.manual);
   }
 
+  /// §129 — новая файловая подписка из тела файла. Парсит тело; при > 1 ноде
+  /// создаёт `SubscriptionServers(url: file:<uuid>)` + снапшот в HttpCache.
+  /// Возвращает true, если создана файловая подписка; false — если нод ≤ 1
+  /// (caller должен упасть на старое поведение `addFromInput`).
+  Future<bool> addFileSubscription(String body, String fileName) async {
+    final result = await parseFromSource(InlineSource(body));
+    if (result.nodes.length <= 1) return false; // ≤1 → не файловая (spec 129)
+
+    final url = 'file:${newUuidV4()}';
+    await HttpCache.save(url, body, const {});
+    final name = result.meta?.profileTitle ?? _stripExt(fileName);
+    final list = SubscriptionServers(
+      id: newUuidV4(),
+      name: name,
+      enabled: true,
+      tagPrefix: '',
+      detourPolicy: DetourPolicy.defaults,
+      url: url,
+      meta: result.meta,
+      lastUpdated: DateTime.now(),
+      lastUpdateStatus: UpdateStatus.ok,
+      lastNodeCount: result.nodes.length,
+      updateIntervalHours: -1, // §129 — файловая: никогда не обновлять авто (-1)
+      nodes: result.nodes,
+    );
+    final entry = SubscriptionEntry(list: list, nodeCount: result.nodes.length);
+    _entries.add(entry);
+    await _persist();
+    notifyListeners();
+    AppLog.I.info('Added file subscription "$name": ${result.nodes.length} nodes');
+    return true;
+  }
+
+  /// §129 — транзакционная смена источника подписки (Edit source: online↔file).
+  /// Ровно один из: [httpUrl] (online `http(s)://…`) или [fileBody] (тело нового
+  /// файла → file-режим, url = свежий `file:<uuid>`). **Инвариант: старый
+  /// кэш/url/ноды сбрасываются ТОЛЬКО после успеха нового (> 0 нод), иначе
+  /// полный откат — подписка остаётся на прежнем источнике, юзер не остаётся без
+  /// нод.** Возвращает пустую строку при успехе, текст ошибки — при откате.
+  Future<String> updateSourceAt(int index,
+      {String? httpUrl, String? fileBody}) async {
+    if (index < 0 || index >= _entries.length) return 'Invalid subscription';
+    final entry = _entries[index];
+    final old = entry.list;
+    if (old is! SubscriptionServers) return 'Not a subscription';
+
+    final toFile = fileBody != null;
+    final newUrl = toFile ? 'file:${newUuidV4()}' : (httpUrl ?? '').trim();
+    if (newUrl.isEmpty) return 'No source provided';
+
+    _busy = true;
+    notifyListeners();
+    try {
+      // 1. Получаем НОВЫЙ источник (ещё ничего не трогаем).
+      final result = toFile
+          ? await parseFromSource(InlineSource(fileBody))
+          : await parseFromSource(UrlSource(newUrl),
+              client: httpClientForTesting);
+
+      // 2. Успех нового = > 0 нод. Иначе — полный откат (§101-инвариант).
+      if (result.nodes.isEmpty) {
+        return 'Couldn\'t load new source — keeping current subscription';
+      }
+
+      // 3. Коммит: снапшот нового + чистка старого кэша + подмена url/nodes.
+      if (isFileSubscription(newUrl)) {
+        await HttpCache.save(newUrl, fileBody!, const {});
+      }
+      if (old.url != newUrl) {
+        await HttpCache.remove(old.url); // осиротевший ключ старого источника
+      }
+      // §129 — file → interval -1 (никогда авто, сервера нет); online → если был
+      // ≤0 (пришли с файла / «не обновлять»), вернуть дефолт 24, иначе текущий.
+      final nextInterval = toFile
+          ? -1
+          : (old.updateIntervalHours <= 0 ? 24 : old.updateIntervalHours);
+      final next = old.copyWith(
+        url: newUrl,
+        meta: result.meta,
+        lastUpdated: DateTime.now(),
+        lastUpdateStatus: UpdateStatus.ok,
+        lastNodeCount: result.nodes.length,
+        consecutiveFails: 0,
+        updateIntervalHours: nextInterval,
+        nodes: result.nodes,
+      );
+      entry._replaceList(next);
+      entry.nodeCount = result.nodes.length;
+      await _persist();
+      notifyListeners();
+      AppLog.I.info(
+          'Source changed → ${maskSubscriptionUrl(newUrl)}: ${result.nodes.length} nodes');
+      return '';
+    } catch (e) {
+      AppLog.I.warning('updateSourceAt failed (kept current): $e');
+      return 'Couldn\'t load new source — keeping current subscription';
+    } finally {
+      _busy = false;
+      notifyListeners();
+    }
+  }
+
+  /// Имя файла без расширения — дефолтное имя файловой подписки.
+  static String _stripExt(String fileName) {
+    final dot = fileName.lastIndexOf('.');
+    return dot > 0 ? fileName.substring(0, dot) : fileName;
+  }
+
   /// Публичный refresh для AutoUpdater. Помечает попытку
   /// (`lastUpdateAttempt` + `lastUpdateStatus`) и персистит, чтобы триггер #1
   /// (app start) после рестарта мог принять решение.
@@ -749,6 +857,16 @@ class SubscriptionController extends ChangeNotifier {
     final list = entry.list;
     if (list is! SubscriptionServers) return;
 
+    // §129 — файловая подписка: источник локальный, снапшот живёт в HttpCache.
+    // Автоматически перечитать файл нельзя (Вариант Б: доступ между сессиями не
+    // храним). Поэтому fetch/auto-update = keep-previous: ноды остаются из кэша,
+    // подписка НЕ слетает при массовом апдейте онлайн-подписок. Обновление
+    // файловой — только вручную через Edit source → Choose file (updateSourceAt).
+    if (isFileSubscription(list.url)) {
+      AppLog.I.debug('Skip fetch (file subscription): keeping cached nodes');
+      return;
+    }
+
     // Дедупликация: если предыдущий fetch этой же подписки ещё идёт
     // (ручной refresh нажали 2 раза подряд, или manual + триггер совпали),
     // не стартуем второй HTTP. Guard снимается по успеху/фейлу в том же
@@ -837,6 +955,14 @@ class SubscriptionController extends ChangeNotifier {
           ? result.meta!.profileTitle!
           : current.name;
 
+      // §129 — семантика интервала:
+      //   -1 = «Don't auto-update», игнорируем серверный profile-update-interval;
+      //    0 = «Never (respect server)» — сами не по расписанию, но серверный
+      //        заголовок ПРИНИМАЕМ (станет реальным числом → авто по нему);
+      //   >0 = обновлять раз в N часов (сервер тоже может переопределить).
+      final nextInterval = current.updateIntervalHours < 0
+          ? current.updateIntervalHours // -1: жёстко, сервер не переубедит
+          : (result.meta?.updateIntervalHours ?? current.updateIntervalHours);
       final next = current.copyWith(
         name: nextName,
         meta: result.meta,
@@ -845,8 +971,7 @@ class SubscriptionController extends ChangeNotifier {
         lastUpdateStatus: UpdateStatus.ok,
         lastNodeCount: result.nodes.length,
         consecutiveFails: 0,
-        updateIntervalHours: result.meta?.updateIntervalHours ??
-            current.updateIntervalHours,
+        updateIntervalHours: nextInterval,
         nodes: result.nodes,
       );
       entry._replaceList(next);
