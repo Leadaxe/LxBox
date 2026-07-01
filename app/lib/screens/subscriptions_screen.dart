@@ -226,7 +226,15 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         return;
       }
       if (!mounted) return;
-      await widget.subController.addFromInput(text);
+      // §129 — если в файле > 1 ноды, создаём ФАЙЛОВУЮ подписку (снапшот в
+      // кэше, живёт как обычная подписка). ≤ 1 ноды → старое поведение
+      // (addFromInput → одиночный сервер/нода).
+      final asFileSub =
+          await widget.subController.addFileSubscription(text, file.name);
+      if (!asFileSub) {
+        if (!mounted) return;
+        await widget.subController.addFromInput(text);
+      }
       if (widget.subController.lastError.isEmpty) {
         await _regenerateAndSave();
       } else if (mounted) {
@@ -460,7 +468,10 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       // AlwaysScrollable — pull-to-refresh на коротких списках. Divider теперь
       // внутри самой строки (у ReorderableListView нет separatorBuilder).
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      // Bottom safe-area: последняя подписка не должна прятаться за системной
+      // навигацией Android (жесты/кнопки). Паттерн проекта — padding.bottom + 24.
+      padding: EdgeInsets.fromLTRB(
+          12, 0, 12, MediaQuery.of(context).padding.bottom + 24),
       buildDefaultDragHandles: false,
       itemCount: ctrl.entries.length,
       onReorder: (oldIndex, newIndex) {

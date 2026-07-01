@@ -84,4 +84,20 @@ void main() {
       expect(isWireGuardConfig(''), isFalse);
     });
   });
+
+  group('§129 isFileSubscription', () {
+    test('file:<uuid> → true', () {
+      expect(isFileSubscription('file:abc-123'), isTrue);
+    });
+    test('https:// → false', () {
+      expect(isFileSubscription('https://p.example/sub'), isFalse);
+    });
+    test('пустой → false', () {
+      expect(isFileSubscription(''), isFalse);
+    });
+    test('file без двоеточия (случайное) — по префиксу true', () {
+      // Дискриминатор — строгий префикс `file:`; `filename` не матчит.
+      expect(isFileSubscription('filename.txt'), isFalse);
+    });
+  });
 }

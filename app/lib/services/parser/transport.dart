@@ -91,6 +91,9 @@ XhttpTransport _parseXhttp(Map<String, String> q) {
   var host = (m['host'] ?? '').trim();
   if (host.isEmpty) host = (m['sni'] ?? '').trim();
 
+  // §217 — читаем поля дословно; нормализацию против правил ядра
+  // (normalizeMeta, transport/v2rayxhttp/meta.go) делает XhttpTransport.toSingbox,
+  // где есть канал NodeWarning для ⚠️ в подписке.
   return XhttpTransport(
     path: path,
     host: host,

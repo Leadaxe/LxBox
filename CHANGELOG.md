@@ -6,6 +6,32 @@
 
 ---
 
+## [2.8.2] — 2026-07-01
+
+Подписка **из локального файла**: список нод в файле теперь работает как обычная
+подписка — живёт из кэша, показывается в списке, не слетает при авто-обновлении.
+Плюс **редактируемый источник** подписки (сменить URL или переключить online↔file
+без пересоздания). Исправлен краш конфига из-за одного битого XHTTP-параметра.
+idle-suspend теперь включён по умолчанию. Ядро — rc.20.
+
+### Added
+
+- **§129 — Подписка из файла + редактируемый источник** ([feature spec](docs/spec/features/129%20file-subscription/spec.md), [subscription_controller.dart](app/lib/controllers/subscription_controller.dart) + [entry_context_menu.dart](app/lib/screens/subscriptions_screen/entry_context_menu.dart)). **Import from file…** с файлом, где **больше одной** ноды, создаёт **файловую подписку**: тело файла сохраняется снапшотом в кэш подписок, подписка живёт из него как обычная (re-hydrate при старте, бейдж **file** в списке). Файл с одной нодой — старое поведение (одиночный сервер). Ноды берутся из файла тем же парсером, что и онлайн-подписка: списки `vless://`/`vmess://`/…, base64, clash-yaml, JSON-outbounds, **WireGuard/AmneziaWG-конфиг** (`[Interface]`), плюс `#profile-title:`-заголовки. Авто-обновление файловую **не читает** (доступ к файлу между сессиями не хранится) → она не слетает при массовом апдейте онлайн-подписок; ноды остаются из кэша. Новый пункт **Edit source…** (long-press на подписке) — попап со сменой источника: **Online URL** (текстовое поле) ↔ **Local file** (выбор файла). Закрывает и давнюю просьбу — **редактируемый URL** подписки (сменился домен провайдера / опечатка) без пересоздания и потери настроек (`id` стабилен). Смена источника **транзакционна**: старый источник сбрасывается **только после успешной загрузки нового** (> 0 нод) — если новый URL/файл не отдал ноды, всё откатывается, подписка остаётся на прежнем источнике (не остаться без нод). +7 тестов.
+
+### Changed
+
+- **§128 — idle-suspend включён по умолчанию (30 s)** ([settings_storage/network.dart](app/lib/services/settings_storage/network.dart)). Настройка **«Suspend idle tunnels»** (VPN Settings → System → Optimization) теперь по умолчанию `30 seconds`, а не Off — экономия памяти/CPU/батареи при многих WireGuard-нодах работает из коробки. Выключить: выбрать **Off**.
+
+- **Ядро sing-box-lx → rc.20** ([libbox.version](app/android/libbox.version), [docs/KERNEL.md](docs/KERNEL.md)). rc.18 → rc.20: XHTTP `uplink_http_method=GET` вне packet-up теперь мягкий fallback на POST в самом ядре (страховка к §217), udpnat2 buffer fix, upstream sync. idle-suspend запечён в мобильный AAR (`with_lx_idle_suspend`). Ядровые детали и ловушки при бампе версии вынесены в **docs/KERNEL.md**.
+
+### Fixed
+
+- **§217 — Один битый XHTTP-параметр больше не роняет весь конфиг** ([task spec](docs/spec/tasks/217-xhttp-normalize-invalid-params.md), [transport_spec.dart](app/lib/models/transport_spec.dart)). Нода из подписки с `uplink_http_method=GET` (или header/cookie-placement) вне режима `packet-up` — недопустимое для ядра сочетание — валила **весь** конфиг на старте (`initialize outbound[N]: … can be GET only in packet-up mode` → туннель не поднимался). Теперь при сборке конфига такие параметры приводятся к безопасному дефолту (правила ядра `normalizeMeta` отзеркалены на клиенте), нода остаётся рабочей, а на самой ноде в подписке показывается **⚠️** и пишется предупреждение в лог. Крашивший класс сочетаний (GET-метод, невалидные placement/method) покрыт целиком.
+
+- **§216 — heartbeat не пугает ложной «тишиной» после фона** ([task spec](docs/spec/tasks/216-heartbeat-resume-grace.md), [home_controller/heartbeat.dart](app/lib/controllers/home_controller/heartbeat.dart)). В фоне мониторинг туннеля приостанавливается (экономия батареи), поэтому при возврате в приложение первая проверка видела длинную «тишину» и писала пугающее `Heartbeat: silent 2905s` в DEBUG-лог, хотя туннель жив. Теперь первый тик после пробуждения не считается сбоем (даём потоку восстановиться), а в лог/на экран выводится осмысленное «Resumed — syncing tunnel…» (снек-бар только после долгого фона). Watchdog реального зависания ядра не затронут.
+
+---
+
 ## [2.8.1] — 2026-07-01
 
 Настройка энергосбережения **«Suspend idle tunnels»** (idle-suspend): ядро

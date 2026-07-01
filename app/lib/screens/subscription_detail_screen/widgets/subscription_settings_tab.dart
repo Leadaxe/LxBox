@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/server_list.dart';
+import '../../../services/subscription/input_helpers.dart';
 import '../detour_mode.dart';
 import '../subscription_detail_format.dart';
 
@@ -24,6 +25,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
     required this.onCopyUrl,
     required this.onShowIntervalPicker,
     required this.onRefreshNow,
+    required this.onEditSource,
   });
 
   final SubscriptionEntry entry;
@@ -39,6 +41,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
   final VoidCallback onCopyUrl;
   final VoidCallback onShowIntervalPicker;
   final VoidCallback onRefreshNow;
+  final VoidCallback onEditSource; // §129 — сменить источник (online↔file)
 
   @override
   Widget build(BuildContext context) {
@@ -221,18 +224,44 @@ class SubscriptionSettingsTab extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ListTile(
-          leading: const Icon(Icons.link, size: 20),
-          title: const Text('URL'),
-          subtitle: Text(list.url, maxLines: 2, overflow: TextOverflow.ellipsis),
-          trailing: const Icon(Icons.content_copy, size: 18),
-          onTap: onCopyUrl,
-        ),
+        // §129 — источник подписки. Клик по строке → сменить источник
+        // (online URL ↔ файл). Для онлайн — copy-иконка справа (копировать URL);
+        // для файла показываем имя (снапшот в кэше, сырого URL нет).
+        Builder(builder: (context) {
+          final isFile = isFileSubscription(list.url);
+          return ListTile(
+            leading: Icon(isFile ? Icons.insert_drive_file_outlined : Icons.link,
+                size: 20),
+            title: Text(isFile ? 'Source: local file' : 'URL'),
+            subtitle: Text(isFile ? entry.displayName : list.url,
+                maxLines: 2, overflow: TextOverflow.ellipsis),
+            trailing: isFile
+                ? const Icon(Icons.edit, size: 18)
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.content_copy, size: 18),
+                        tooltip: 'Copy URL',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onCopyUrl,
+                      ),
+                      const Icon(Icons.edit, size: 18),
+                    ],
+                  ),
+            onTap: onEditSource,
+          );
+        }),
+        // §129 — Update interval: -1 = никогда (игнор сервера); 0 = respect
+        // server (сами не по расписанию); >0 = раз в N часов.
         ListTile(
           leading: const Icon(Icons.sync, size: 20),
           title: const Text('Update interval'),
-          subtitle: Text('${list.updateIntervalHours}h '
-              '(auto-refresh every ${intervalHuman(list.updateIntervalHours)})'),
+          subtitle: Text(switch (list.updateIntervalHours) {
+            < 0 => "Don't auto-update (manual only)",
+            0 => 'Never (respect server) — manual only unless server sets one',
+            final h => '${h}h (auto-refresh every ${intervalHuman(h)})',
+          }),
           trailing: const Icon(Icons.edit, size: 18),
           onTap: onShowIntervalPicker,
         ),
