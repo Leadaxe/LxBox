@@ -456,13 +456,15 @@ const Map<String, dynamic> _capabilityJson = {
   ],
   'errors': {
     'envelope': '{"error": {"code": "...", "message": "...", "details": {...}}}',
+    // Ключи — строки: JsonEncoder требует String-ключи (int-ключи роняли
+    // весь /help?format=json на "Converting object ... failed: _ConstMap").
     'codes': {
-      400: 'BadRequest',
-      401: 'Unauthorized (no/wrong token)',
-      403: 'Forbidden (Host check)',
-      404: 'NotFound',
-      409: 'Conflict (state precondition fail)',
-      500: 'Internal',
+      '400': 'BadRequest',
+      '401': 'Unauthorized (no/wrong token)',
+      '403': 'Forbidden (Host check)',
+      '404': 'NotFound',
+      '409': 'Conflict (state precondition fail)',
+      '500': 'Internal',
     },
   },
   'notes': [
