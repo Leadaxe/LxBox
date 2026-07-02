@@ -10,7 +10,7 @@ import 'package:flutter/services.dart' show PlatformException;
 /// §219 — НЕ путать с [humanizeError] (error_humanize.dart): это два разных
 /// форматтера с разными зонами. `formatUserError` — «quick»/generic очистка
 /// toString (VPN-старт/стоп в home_controller). `humanizeError` — «detailed»
-/// разбор по типу (SocketException→"No connection to <host>", HTTP-коды) для
+/// разбор по типу (SocketException→"No connection to `<host>`", HTTP-коды) для
 /// сетевых операций подписок (subscription_controller). НЕ конкурируют —
 /// выбирай по домену.
 ///
