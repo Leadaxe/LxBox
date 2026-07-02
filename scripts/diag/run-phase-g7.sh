@@ -25,7 +25,9 @@ cleanup() {
   echo "── cleanup: restore originals ──"
   cp "$PIW_BAK" "$PIW_FILE"
   cp "$APP_BAK" "$APP_FILE"
-  echo "Building stable v1.7.1 final + installing on $DEVICE..."
+  # §219 — версию определяет build-local-apk.sh из git describe; сообщение
+  # больше не хардкодит старую v1.7.1.
+  echo "Building current stable + installing on $DEVICE..."
   bash scripts/build-local-apk.sh --build-number=10999 2>&1 | tail -3
   adb -s "$DEVICE" install -r app/build/app/outputs/flutter-apk/app-release.apk 2>&1 | tail -3
   rm -f "$PIW_BAK" "$APP_BAK"
