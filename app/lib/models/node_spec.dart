@@ -629,6 +629,14 @@ final class MasqueSpec extends NodeSpec {
 
   final int? mtu;
 
+  /// idle-suspend туннеля (Go-duration, напр. `5m`). Пусто = дефолт ядра (5m);
+  /// отрицательное (`-1s`) = выключить. См. [§128](../128%20idle-suspend/).
+  final String idleTimeout;
+
+  /// QUIC keepalive-период (Go-duration, напр. `30s`). Пусто = дефолт (30s);
+  /// отрицательное = выключить. Только для `network=h3`.
+  final String keepAlive;
+
   MasqueSpec({
     required super.id,
     required super.tag,
@@ -643,6 +651,8 @@ final class MasqueSpec extends NodeSpec {
     this.network = 'h3',
     this.sni = '',
     this.mtu,
+    this.idleTimeout = '',
+    this.keepAlive = '',
     super.chained,
     super.warnings,
   });

@@ -278,6 +278,8 @@ class WarpClient {
     required String nowIso8601,
     String network = 'h3',
     String? sni,
+    String? idleTimeout,
+    String? keepAlive,
   }) async {
     final keys = MasqueKeys.generate();
 
@@ -352,6 +354,8 @@ class WarpClient {
       createdAt: nowIso8601,
       network: network,
       sni: sni ?? '',
+      idleTimeout: idleTimeout ?? '',
+      keepAlive: keepAlive ?? '',
     );
     AppLog.I.info('MASQUE registered: ${account.redacted()}');
     return account;
@@ -365,6 +369,8 @@ class WarpClient {
     required String createdAt,
     required String network,
     required String sni,
+    required String idleTimeout,
+    required String keepAlive,
   }) {
     final config = json['config'];
     if (config is! Map) {
@@ -420,6 +426,8 @@ class WarpClient {
       createdAt: createdAt,
       network: network,
       sni: sni,
+      idleTimeout: idleTimeout,
+      keepAlive: keepAlive,
     );
   }
 

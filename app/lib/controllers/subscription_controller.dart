@@ -318,6 +318,8 @@ class SubscriptionController extends ChangeNotifier {
   Future<MasqueAccount?> addMasque({
     String network = 'h3',
     String? sni,
+    String? idleTimeout,
+    String? keepAlive,
     bool reuse = true,
     bool forceNew = false,
     WarpClient? client,
@@ -335,12 +337,17 @@ class SubscriptionController extends ChangeNotifier {
         nowIso8601: DateTime.now().toUtc().toIso8601String(),
         network: network,
         sni: sni,
+        idleTimeout: idleTimeout,
+        keepAlive: keepAlive,
       );
 
-      // Транспорт/SNI — клиентские, применяем к кешу без ре-регистрации.
-      if (account.network != network || (sni != null && account.sni != sni)) {
-        account = account.copyWith(network: network, sni: sni);
-      }
+      // Транспорт/SNI/тюнинг — клиентские, применяем к кешу без ре-регистрации.
+      account = account.copyWith(
+        network: network,
+        sni: sni,
+        idleTimeout: idleTimeout,
+        keepAlive: keepAlive,
+      );
 
       await SettingsStorage.setMasqueAccount(account);
 
@@ -380,6 +387,8 @@ class SubscriptionController extends ChangeNotifier {
       network: spec.network,
       sni: spec.sni,
       mtu: spec.mtu,
+      idleTimeout: spec.idleTimeout,
+      keepAlive: spec.keepAlive,
       warnings: spec.warnings,
     );
     _entries.add(SubscriptionEntry(

@@ -249,8 +249,10 @@ Clash-формате) — **отдельная задача**, не блокер
 ```
 
 - WireGuard выбран → текущий путь (obfuscate/quicParams/endpoint) без изменений.
-- MASQUE выбран → скрываем AWG-masquerade (не применимо), показываем `network` (h3/h2) + опц. SNI;
-  `_register()` вызывает `addMasque()`.
+- MASQUE выбран → скрываем AWG-masquerade (не применимо), показываем 4 параметра:
+  **Transport** (h3/h2), **SNI** (опц.), **Idle timeout** (минуты, пусто=5m), **Keep-alive**
+  (секунды, пусто=30s, только h3). UI-единицы (мин/сек) → Go-duration (`5m`/`30s`) в `_durationOrNull`;
+  пусто/ноль → null (дефолт ядра). `_register()` вызывает `addMasque()`.
 - Строки UI — **английские** (правило проекта); §-номера НЕ в видимых строках.
 
 ---
@@ -299,9 +301,12 @@ MasqueSpec.emit() → emitMasque() → Outbound{type:masque,...} → build_confi
 Все опущенные поля берут дефолт ядра — эмитим только необходимое:
 - `profile` → `cloudflare`, `network` → `h3`, `mtu` → `1280`.
 - `sni` (пустой) → ядро подставит `consumer-masque.cloudflareclient.com` (дефолт профиля cloudflare).
+  **Настраивается из UI** (опц. поле).
 - `uri` → `https://cloudflareaccess.com` (дефолт профиля).
-- `idle_timeout` → `5m` (idle-suspend, энергомодель как [§128](../128%20idle-suspend/)); `keep_alive_period` → `30s`.
-- `network_list` → `["tcp","udp"]` (оба). TLS-pinning на `public_key` — автоматом при profile=cloudflare.
+- `idle_timeout` (5m) / `keep_alive_period` (30s) — **настраиваются из UI** (Idle timeout / Keep-alive);
+  пусто = дефолт ядра. idle-suspend = энергомодель как [§128](../128%20idle-suspend/).
+- `mtu` → `1280`; `network_list` → `["tcp","udp"]` (оба). TLS-pinning на `public_key` — автоматом
+  при profile=cloudflare.
 
 **Грабля (CONFIG.md §Частые грабли):** MASQUE (как WG-endpoint) — L3 userspace-стек, сам домены НЕ
 резолвит → конфигу нужен top-level `dns`-блок. У нас он всегда есть (WireGuard-WARP той же природы уже
@@ -314,7 +319,6 @@ MasqueSpec.emit() → emitMasque() → Outbound{type:masque,...} → build_confi
    CF; если наша версия не даёт MASQUE-config — бампнуть версию (вынесена в `WarpApi.version`). **← первый
    пункт для live-прогона.**
 2. **WARP+ для MASQUE** — нужен ли license-path? Пока не включаем (можно добавить тем же PATCH account).
-3. **idle_timeout из UI** — прокидывать ли или оставить дефолт ядра (5m)? Пока дефолт (энергомодель ядра).
 
 **Закрыто CONFIG.md:** формат серверного pubkey (`x509.ParsePKIXPublicKey` — base64 DER, наш
 `normalizeServerPubKey` снимает PEM-обёртку CF); формат ключей («ровно тот, что отдаёт Dart-регистрация,

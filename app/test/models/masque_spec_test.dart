@@ -18,6 +18,8 @@ void main() {
         localAddresses: ['172.16.0.2/32', '2606:4700:110::2/128'],
         network: 'h3',
         mtu: 1280,
+        idleTimeout: '10m',
+        keepAlive: '45s',
       );
 
   test('emitMasque даёт Outbound с плоской схемой ядра', () {
@@ -34,6 +36,8 @@ void main() {
     expect(m['ip'], '172.16.0.2/32'); // v4 из localAddresses
     expect(m['ipv6'], '2606:4700:110::2/128'); // v6 из localAddresses
     expect(m['mtu'], 1280);
+    expect(m['idle_timeout'], '10m');
+    expect(m['keep_alive_period'], '45s'); // ключ ядра, не 'keep_alive'
     // нет полей WireGuard
     expect(m.containsKey('peers'), isFalse);
     expect(m.containsKey('address'), isFalse);
@@ -52,6 +56,8 @@ void main() {
     expect(parsed.port, s.port);
     expect(parsed.network, s.network);
     expect(parsed.localAddresses, containsAll(s.localAddresses));
+    expect(parsed.idleTimeout, '10m');
+    expect(parsed.keepAlive, '45s');
   });
 
   test('parseUri диспетчеризует masque://', () {

@@ -14,6 +14,8 @@ void main() {
         token: 'secret-token',
         createdAt: '2026-07-02T00:00:00Z',
         network: 'h3',
+        idleTimeout: '10m',
+        keepAlive: '45s',
       );
 
   test('toJson/fromJson round-trip', () {
@@ -26,6 +28,8 @@ void main() {
     expect(b.server, a.server);
     expect(b.port, a.port);
     expect(b.network, a.network);
+    expect(b.idleTimeout, a.idleTimeout);
+    expect(b.keepAlive, a.keepAlive);
   });
 
   test('fromJson отвергает пустые ключи', () {
