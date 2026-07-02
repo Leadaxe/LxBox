@@ -343,15 +343,19 @@ See [Architecture](docs/ARCHITECTURE.md) for the full picture.
 
 ## Development
 
-Spec-driven development — 30 feature specifications document every capability.
+Spec-driven development — feature specifications document every capability.
+Full documentation map: **[docs/README.md](docs/README.md)**.
 
 | Document | Description |
 |----------|-------------|
+| [Documentation index](docs/README.md) | Full map of all docs — start here |
+| [Automation](docs/AUTOMATION.md) | Automate L×Box from Tasker / MacroDroid via Public Intent API (broadcast commands + events, Wi-Fi triggers). For scripted HTTP control see the Debug API. |
+| [Debug API](docs/api/debug-api-reference.md) | Full HTTP control/diagnostics surface (subscriptions & rules CRUD, start/stop, config, logs, profiler) |
 | [Security](docs/SECURITY.md) | Threat model — traffic-leak protection (Unknown traffic / kill-switch), local attack surface, on-device secrets |
 | [Protocol Reference](docs/PROTOCOLS.md) | URI formats, parameters, sing-box mapping |
 | [Architecture](docs/ARCHITECTURE.md) | 3-layer pipeline, data flows, native bridge |
 | [Build](docs/BUILD.md) | Build instructions, CI, APK signing, local-build marker |
-| [Development Guide](docs/DEVELOPMENT_GUIDE.md) | Principles, testing (167 tests), spec organisation |
+| [Development Guide](docs/DEVELOPMENT_GUIDE.md) | Principles, testing, spec organisation |
 | [Changelog](CHANGELOG.md) | Release history |
 | [Release Notes](docs/releases/) | Detailed per-version notes (EN + RU) |
 
