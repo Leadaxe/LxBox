@@ -26,6 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -53,6 +54,11 @@ class BoxService(
 
     companion object {
         private const val TAG = "BoxService"
+
+        /// §223 Часть B (#23) — задержка перед native-snapshot'ом подтекста
+        /// уведомления при старте без UI. Даём ядру устаканить `selected` у
+        /// selector'ов после Started, прежде чем читать getGroups().
+        private const val NOTIFICATION_SNAPSHOT_DELAY_MS = 3000L
 
         /// §122 Фаза 0 — статическая ссылка на активный `BoxCommandClient`, чтобы
         /// `VpnPlugin` (Flutter-процесс) дёргал императивы (urlTestOutbound/getRules/
@@ -372,6 +378,26 @@ class BoxService(
             commandClient = cc
             cc.startStatus()
         }.onFailure { Log.w(TAG, "BoxCommandClient.startStatus failed: ${it.message}") }
+
+        // §223 Часть B (#23) — если UI не открывался (старт с QS-плитки → нет
+        // Flutter-движка → Dart не прислал лейбл), через ~3с сами читаем
+        // выбранную ноду одним unary-pull'ом и рисуем подтекст. serviceScope:
+        // отменяется в onDestroy/stop → не рисуем шторку мёртвого туннеля.
+        serviceScope.launch {
+            delay(NOTIFICATION_SNAPSHOT_DELAY_MS)
+            // Stop/reload успел / Dart уже прислал лейбл (UI открыт) → молчим:
+            // Dart-источник авторитетнее (знает selectedGroup, ловит и смены).
+            if (status != VpnStatus.Started) return@launch
+            if (ConfigManager.notificationText.isNotEmpty()) return@launch
+            val label = commandClient?.selectedNodeLabel(ConfigManager.load())
+            if (label.isNullOrEmpty()) return@launch
+            ConfigManager.setNotificationText(label)
+            withContext(Dispatchers.Main) {
+                if (status == VpnStatus.Started) {
+                    notification.show(ConfigManager.notificationTitle, label)
+                }
+            }
+        }
 
         withContext(Dispatchers.Main) {
             // §123 — подтекст = тег активной ноды / route.final (из Dart через
