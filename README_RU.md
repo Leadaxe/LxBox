@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/github/v/release/Leadaxe/LxBox?label=version)](https://github.com/Leadaxe/LxBox/releases)
 [![Dart](https://img.shields.io/badge/Dart-3.11%2B-blue)](https://dart.dev/)
 
-Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — форке [sing-box](https://sing-box.sagernet.org/) с AmneziaWG 2.0 и нативным XHTTP — для гибкой маршрутизации сетевого трафика, предназначенный для сетевых специалистов различного уровня подготовки. Мульти-подписки, умные правила, встроенный тест скорости.
+Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — форке [sing-box](https://sing-box.sagernet.org/) с AmneziaWG 2.0, нативным XHTTP и MASQUE — для гибкой маршрутизации сетевого трафика, предназначенный для сетевых специалистов различного уровня подготовки. Мульти-подписки, умные правила, встроенный тест скорости.
 
 **[Скачать последний релиз](https://github.com/Leadaxe/LxBox/releases/latest)** | **[English README](README.md)**
 

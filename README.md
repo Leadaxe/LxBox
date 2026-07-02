@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/github/v/release/Leadaxe/LxBox?label=version)](https://github.com/Leadaxe/LxBox/releases)
 [![Dart](https://img.shields.io/badge/Dart-3.11%2B-blue)](https://dart.dev/)
 
-Android VPN client powered by [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — a [sing-box](https://sing-box.sagernet.org/) fork with AmneziaWG 2.0 and native XHTTP. Multi-subscription, smart routing, built-in speed test.
+Android VPN client powered by [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — a [sing-box](https://sing-box.sagernet.org/) fork with AmneziaWG 2.0, native XHTTP and MASQUE. Multi-subscription, smart routing, built-in speed test.
 
 **[Download latest release](https://github.com/Leadaxe/LxBox/releases/latest)** | **[Документация на русском](README_RU.md)**
 
