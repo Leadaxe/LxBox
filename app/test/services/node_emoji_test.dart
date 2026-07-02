@@ -131,4 +131,15 @@ void main() {
   test('палитра содержит ожидаемые эмодзи', () {
     expect(kEmojiPalette, containsAll(<String>['🏠', '⚡', '🚀', '🔁', '⚙']));
   });
+
+  test('каждый эмодзи палитры распознаётся hasEmoji (иначе выбор не сработает)',
+      () {
+    for (final e in kEmojiPalette) {
+      expect(hasEmoji(e), isTrue, reason: 'палитра-эмодзи не матчит _emojiRe: $e');
+    }
+  });
+
+  test('палитра без дублей', () {
+    expect(kEmojiPalette.toSet().length, kEmojiPalette.length);
+  });
 }
