@@ -503,7 +503,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                       )
                     : SubscriptionDetailScreen(
                         entry: entry,
-                        index: i,
                         controller: widget.subController,
                       ),
               ),
