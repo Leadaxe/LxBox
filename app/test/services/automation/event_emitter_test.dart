@@ -53,6 +53,10 @@ void main() {
   });
 
   group('throttle', () {
+    // §219 — проверяем МЕХАНИКУ throttle (дубль в окне режется, per-key
+    // изоляция), а не точную 60с-границу: у emitter нет инъекции часов, а оба
+    // emit идут в одном синхронном блоке (разница « 60с) — тест не флаки от
+    // настенного времени. Проверка именно 60с потребовала бы Clock-seam.
     test('SUB_REFRESH_FAILED capped 1/min per sub_id', () {
       AutomationEventEmitter.I
           .debugConfigureForTest(subs: true, onSend: capture);

@@ -181,8 +181,9 @@ void main() {
       c.httpClientForTesting =
           MockClient((req) async => http.Response(bodyB, 200));
       await c.refreshEntry(c.entries.single);
-      // HttpCache.save в success-path — unawaited; даём microtask'ам дойти.
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      // §219 — HttpCache.save в success-path unawaited; детерминированно ждём
+      // его завершения через test-seam (было хрупкое Future.delayed(50ms)).
+      await c.lastCacheSaveForTesting;
 
       final list = c.entries.single.list as SubscriptionServers;
       expect(list.nodes.map((n) => n.label), ['B1']);

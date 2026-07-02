@@ -59,6 +59,10 @@ void main() {
     expect(staged, 2, reason: 'два markDirty → два stage');
   });
 
+  // §219 — этот набор проверяет КОНТРАКТ mixin'а (когда/сколько раз зовётся
+  // stageChanges), а не фактическую запись на диск: flushToDisk — no-op в
+  // тестах без инициализированного SettingsStorage._cache. Реальную запись
+  // покрывают интеграционные storage-тесты. Разделение слоёв намеренное.
   testWidgets('flush on dispose когда pending (stage safety-net)',
       (tester) async {
     final ctrl = SubscriptionController();
