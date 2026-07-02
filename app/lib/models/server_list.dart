@@ -158,6 +158,13 @@ final class SubscriptionServers extends ServerList {
       );
 }
 
+/// §219 — origin: write-only диагностические метаданные (пишутся в JSON /
+/// видны в `/state/subs`, но нигде не влияют на поведение и не показываются
+/// в UI). В текущем коде присваиваются только `paste` и `manual`; `file`
+/// (file:-подписки идут как SubscriptionServers с `url:'file:<uuid>'`, §129) и
+/// `qr` (сканер — незавершённый задел) не присваиваются. Значения оставлены:
+/// удаление ломает десериализацию старых записей (есть orElse→manual, но
+/// история origin потерялась бы) и задел QR-фичи.
 enum UserSource { paste, file, qr, manual }
 
 final class UserServer extends ServerList {

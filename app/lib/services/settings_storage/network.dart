@@ -137,12 +137,7 @@ Future<void> _clearGroupPing(String groupTag) async {
   await SettingsStorage.savePingOptions(opts);
 }
 
-Future<String> _getDnsRules() async {
-  final data = await _load();
-  final dns = data['dns_options'] as Map<String, dynamic>?;
-  if (dns == null) return '';
-  return dns['rules_json'] as String? ?? '';
-}
+// §219 — `_getDnsRules` удалён (публичный геттер getDnsRules снят, 0 call-sites).
 
 Future<void> _saveDnsRules(String rulesJson) async {
   final data = await _load();

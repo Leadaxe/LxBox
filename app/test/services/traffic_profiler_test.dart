@@ -884,10 +884,8 @@ void main() {
     });
   });
 
-  // §044 — §180-cleanup: тест «gc cleans stale conn-id entries» удалён вместе
-  // с лог-питателем (_processLogLine/feedLogLineForTest/_connIdToMeta). Он
-  // тестировал мёртвый механизм (TCP-атрибуция из router-лога) и его assertion
-  // был тавтологией (`isNotEmpty || true`). GC rolling-buffer'ов покрыт другими.
+  // §044/§180 — тест «gc cleans stale conn-id entries» удалён вместе с
+  // лог-питателем (§180); GC rolling-buffer'ов покрыт другими тестами.
 
   // ───── §181: оси РАЗДЕЛЬНО (outboundChain=маршрут, detourChain=транспорт) ──
 

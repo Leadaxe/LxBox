@@ -436,11 +436,12 @@ class SettingsStorage {
   /// `dns_options.rules_json` — single JSON-string override. Заменён на
   /// структурированный [getDnsRulesList]. Поле в storage остаётся для
   /// downgrade-friendliness, но билдер и UI больше не читают.
-  @Deprecated('Use getDnsRulesList()/saveDnsRulesList() instead. See task 061.')
-  static Future<String> getDnsRules() => _getDnsRules();
-
-  /// DEPRECATED (§061 dns-rules-refactor, бывший feature §041): см. [getDnsRules].
-  @Deprecated('Use getDnsRulesList()/saveDnsRulesList() instead. See task 061.')
+  ///
+  /// §219 — геттер `getDnsRules()` удалён (0 call-sites). `saveDnsRules`
+  /// оставлен: его дёргает legacy Debug-эндпоинт `PUT /settings/dns_options/
+  /// rules`. NB: он пишет в `rules_json`, который билдер игнорирует, — эндпоинт
+  /// фактически no-op; депрекация роута — отдельно (обновить help/reference).
+  @Deprecated('Use saveDnsRulesList() instead. See task 061.')
   static Future<void> saveDnsRules(String rulesJson) => _saveDnsRules(rulesJson);
 
   /// Структурированный список DNS-правил (§061 dns-rules-refactor, бывший feature §041). Каждая запись:
