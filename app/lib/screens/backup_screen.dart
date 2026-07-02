@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../services/backup_service.dart';
 import '../services/error_format.dart';
+import '../services/ui_helpers.dart';
 import '../vpn/box_vpn_client.dart';
 import 'backup_screen/export_card.dart';
 import 'backup_screen/import_card.dart';
@@ -25,7 +26,7 @@ class BackupScreen extends StatefulWidget {
   State<BackupScreen> createState() => _BackupScreenState();
 }
 
-class _BackupScreenState extends State<BackupScreen> {
+class _BackupScreenState extends State<BackupScreen> with SnackHelper {
   final _service = const BackupService();
 
   // Export-side toggles. Default ON для всего кроме debug.
@@ -90,7 +91,7 @@ class _BackupScreenState extends State<BackupScreen> {
   Future<void> _onExport() async {
     final include = _exportInclude();
     if (include.isEmpty) {
-      _snack('Nothing to export — pick at least one category.');
+      showSnack('Nothing to export — pick at least one category.');
       return;
     }
     setState(() => _busy = true);
@@ -106,9 +107,9 @@ class _BackupScreenState extends State<BackupScreen> {
         [XFile(path, mimeType: 'application/json', name: filename)],
         subject: 'LxBox backup',
       );
-      _snack('Backup exported (${json.length} bytes)');
+      showSnack('Backup exported (${json.length} bytes)');
     } catch (e) {
-      _snack('Export failed: ${formatUserError(e)}');
+      showSnack('Export failed: ${formatUserError(e)}');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -134,7 +135,7 @@ class _BackupScreenState extends State<BackupScreen> {
         raw = await File(file.path!).readAsString();
       }
       if (raw == null) {
-        _snack('Could not read file.');
+        showSnack('Could not read file.');
         return;
       }
 
@@ -206,16 +207,13 @@ class _BackupScreenState extends State<BackupScreen> {
         );
       }
     } catch (e) {
-      _snack('Import failed: ${formatUserError(e)}');
+      showSnack('Import failed: ${formatUserError(e)}');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  void _snack(String text) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-  }
+  // §219 — _snack вынесен в SnackHelper.showSnack (services/ui_helpers.dart).
 
   void _showError(String title, String message) {
     showDialog<void>(

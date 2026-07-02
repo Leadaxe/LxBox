@@ -42,18 +42,26 @@ class CommunityServersLoader {
   /// UI решает как сообщить пользователю.
   static Future<CommunityManifest> load({http.Client? client}) async {
     if (_cached != null) return _cached!;
+    // §219 — закрываем только самосозданный клиент (инжектированный — владелец).
+    final owned = client == null;
     final c = client ?? http.Client();
-    final resp = await c.get(Uri.parse(manifestUrl)).timeout(_timeout);
+    final http.Response resp;
+    try {
+      resp = await c.get(Uri.parse(manifestUrl)).timeout(_timeout);
+    } finally {
+      if (owned) c.close();
+    }
     if (resp.statusCode != 200) {
       throw Exception('Manifest HTTP ${resp.statusCode}');
     }
     final json = jsonDecode(resp.body) as Map<String, dynamic>;
     final attrJson = json['attribution'] as Map<String, dynamic>?;
-    final attribution = attrJson != null
-        ? CommunityAttribution(
-            text: (attrJson['text'] as String? ?? '').trim(),
-            link: (attrJson['link'] as String? ?? '').trim(),
-          )
+    final attrText = (attrJson?['text'] as String? ?? '').trim();
+    final attrLink = (attrJson?['link'] as String? ?? '').trim();
+    // §219 — атрибуция только когда есть что показать: пустые text И link
+    // рендерили иконку без текста/ссылки (визуальный мусор).
+    final attribution = (attrText.isNotEmpty || attrLink.isNotEmpty)
+        ? CommunityAttribution(text: attrText, link: attrLink)
         : null;
     final lists = (json['lists'] as List<dynamic>? ?? [])
         .whereType<Map<String, dynamic>>()

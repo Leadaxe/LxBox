@@ -150,8 +150,9 @@ class TrafficProfiler extends ChangeNotifier {
   static const int _globalUnattributedCap = 50;
 
   // §044 — §180-cleanup: _appLogListener / _lastSeenLogTs / _connIdToMeta
-  // выпилены вместе с лог-питателем (см. _ensureGcTimerStarted выше). GC-таймер
-  // остаётся — он чистит rolling buffer'ы по retention-окну, не conn-id-мапу.
+  // выпилены вместе с лог-питателем (§219 — GC-таймер см. _ensureGcTimerStarted
+  // ниже). GC-таймер остаётся — чистит rolling buffer'ы по retention-окну, не
+  // conn-id-мапу.
   Timer? _gcTimer;
 
   // §141 P3.1a — leading-edge throttle для notifyListeners (≤60Hz), эталон
@@ -485,9 +486,9 @@ class TrafficProfiler extends ChangeNotifier {
     _gcTimer = null;
   }
 
-  /// §048 Принцип 6 — time-based GC, не count-based. Каждые 5s проходим
-  /// и убираем entries старше 30s. Также trim'им `_globalRollingBuffer` по
-  /// time window'у. (§180 — `_dnsByConnId` выпилен, чистить нечего.)
+  /// §048 Принцип 6 — time-based GC, не count-based. §219 — тик каждые
+  /// `_connIdGcInterval` (15s); trim'им `_globalRollingBuffer` по динамическому
+  /// `_globalRollingWindow`. (§180 — `_dnsByConnId` выпилен, чистить нечего.)
   void _gcStaleConnIds() {
     final now = DateTime.now();
     // §176 — guard уже-обработанных closed: чистим старше 5 мин (ядро их к
@@ -613,14 +614,16 @@ class TrafficProfiler extends ChangeNotifier {
     // §180-fix (device dev.72): ядро в DnsAnswer.rdata кладёт ПОЛНУЮ RR-строку
     // "name TTL IN TYPE value" (напр. "google.com. 29 IN A 64.233.165.139"),
     // НЕ голое значение → берём последнее поле (_rdataValue).
-    final cnameChain = q.answers
-        .where((a) => a.isCname)
-        .map((a) => _rdataValue(a.rdata))
-        .toList();
-    final addresses = q.answers
-        .where((a) => a.isAddress)
-        .map((a) => _rdataValue(a.rdata))
-        .toList();
+    // §219 — один проход по q.answers (было два раздельных .where).
+    final cnameChain = <String>[];
+    final addresses = <String>[];
+    for (final a in q.answers) {
+      if (a.isCname) {
+        cnameChain.add(_rdataValue(a.rdata));
+      } else if (a.isAddress) {
+        addresses.add(_rdataValue(a.rdata));
+      }
+    }
     final ip = addresses.isNotEmpty ? addresses.first : null;
 
     // rc.10 — outbound-канал DNS-сервера (узел/селектор→узел), список как
@@ -754,6 +757,7 @@ class TrafficProfiler extends ChangeNotifier {
       ip: ev.ip,
       port: ev.port,
       outboundChain: ev.outboundChain,
+      outboundType: ev.outboundType, // §219 — не терять §204-тип при resolve
       detourChain: ev.detourChain, // §181
       upBytes: ev.upBytes,
       downBytes: ev.downBytes,
@@ -777,8 +781,8 @@ class TrafficProfiler extends ChangeNotifier {
 
   void _appendToGlobalRollingBuffer(TrafficEvent ev) {
     _globalRollingBuffer.addLast(ev);
-    // Soft cap: hard limit на 3000 events чтобы memory не убегало на
-    // busy device'ах. Time-based trim — в _gcStaleConnIds (5s tick).
+    // §219 — hard cap `_globalRollingHardCap` (20000) чтобы память не убегала
+    // на busy device'ах. Time-based trim — в GC-тике (_connIdGcInterval = 15s).
     while (_globalRollingBuffer.length > _globalRollingHardCap) {
       _globalRollingBuffer.removeFirst();
     }
@@ -811,6 +815,7 @@ class TrafficProfiler extends ChangeNotifier {
         ip: resolved.ip,
         port: resolved.port,
         outboundChain: resolved.outboundChain,
+        outboundType: resolved.outboundType, // §219 — не терять §204-тип
         detourChain: resolved.detourChain, // §181
         upBytes: resolved.upBytes,
         downBytes: resolved.downBytes,

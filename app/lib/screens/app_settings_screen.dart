@@ -56,6 +56,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
   bool _autoPing = true;
   bool _autoUpdateSubs = true;
   bool _autoCheckUpdates = true;
+  // §220 — снятие портретной фиксации (default OFF = портрет).
+  bool _allowRotation = false;
   bool _loaded = false;
   // §207 — pprof capture in flight (goroutine dump / CPU profile). Guards
   // both buttons so a double-tap can't spin two servers on the same port.
@@ -95,7 +97,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     unawaited(_loadAutoStart());
     if (widget.highlightCoreLogs) {
       // Tile живёт в Diagnostics tab (initialTab=2). Tab сам строит
-      // children когда juзер на нём — postFrame этого build'а гарантирует
+      // children когда юзер на нём — postFrame этого build'а гарантирует
       // что _coreLogsTileKey.currentContext доступен.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToAndHighlightCoreLogs();
@@ -146,6 +148,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final nearbyWifi = await ul.UrlLauncher.checkNearbyWifiPermission();
     final autoUpdateSubs = await SettingsStorage.getAutoUpdateSubs();
     final autoCheckUpdates = await SettingsStorage.getAutoCheckUpdates();
+    final allowRotation = await SettingsStorage.getAllowRotation();
     final debugEnabled = await SettingsStorage.getDebugEnabled();
     final debugToken = await SettingsStorage.getDebugToken();
     final debugPort = await SettingsStorage.getDebugPort();
@@ -184,6 +187,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         _nearbyWifiGranted = nearbyWifi;
         _autoUpdateSubs = autoUpdateSubs;
         _autoCheckUpdates = autoCheckUpdates;
+        _allowRotation = allowRotation;
         _debugEnabled = debugEnabled;
         _debugToken = debugToken;
         _debugPort = debugPort;
@@ -307,6 +311,14 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     final ok = await AppSettingsDialogs.confirmQuitApp(context);
     if (ok != true) return;
     await _vpn.quitApp();
+  }
+
+  /// §220 — toggle «Allow rotation». Применяется мгновенно (helper дёргает
+  /// SystemChrome.setPreferredOrientations), рестарт не нужен.
+  Future<void> _toggleAllowRotation(bool allow) async {
+    setState(() => _allowRotation = allow);
+    await SettingsStorage.setAllowRotation(allow);
+    await applyAllowRotationSetting();
   }
 
   /// §032 Quick Connect — кнопка «Add tile» в General-табе.
@@ -623,6 +635,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       autoCheckUpdates: _autoCheckUpdates,
       autoPing: _autoPing,
       haptic: _haptic,
+      allowRotation: _allowRotation,
       padding: _tabPadding(context),
       onAutoStartChanged: (val) {
         setState(() => _autoStart = val);
@@ -630,6 +643,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
         unawaited(
             SettingsStorage.setNativeBool(NativePrefsKeys.autoStart, val));
       },
+      onAllowRotationChanged: (val) => unawaited(_toggleAllowRotation(val)),
       onAutoCheckUpdatesChanged: (val) {
         setState(() => _autoCheckUpdates = val);
         unawaited(SettingsStorage.setAutoCheckUpdates(val));

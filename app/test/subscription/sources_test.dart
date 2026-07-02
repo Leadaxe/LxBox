@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:lxbox/models/subscription_meta.dart';
 import 'package:lxbox/services/subscription/sources.dart';
 
 void main() {
@@ -74,6 +75,40 @@ void main() {
           'dmxlc3M6Ly91QGguY29tOjQ0MyN4CnRyb2phbjovL3BAaC5jb206NDQzI3kK';
       final r = await parseFromSource(const InlineSource(raw));
       expect(r.nodes, hasLength(2));
+    });
+  });
+
+  group('§219 — expire в subscription-userinfo', () {
+    Future<SubscriptionMeta?> metaFor(String userinfo) async {
+      final client = MockClient((req) async => http.Response(
+            'vless://u@h.com:443#A',
+            200,
+            headers: {'subscription-userinfo': userinfo},
+          ));
+      final r = await parseFromSource(
+        UrlSource('http://x.invalid/sub',
+            timeout: const Duration(milliseconds: 500)),
+        client: client,
+      );
+      return r.meta;
+    }
+
+    test('непарсимый expire → null (не 0 = эпоха 1970)', () async {
+      final m = await metaFor('upload=10; download=20; expire=notanumber');
+      expect(m?.expireTimestamp, isNull);
+      // остальные поля с дефолтом 0 остаются валидными
+      expect(m?.uploadBytes, 10);
+      expect(m?.downloadBytes, 20);
+    });
+
+    test('отсутствие expire → null', () async {
+      final m = await metaFor('upload=10; download=20; total=100');
+      expect(m?.expireTimestamp, isNull);
+    });
+
+    test('валидный expire → сохраняется', () async {
+      final m = await metaFor('expire=1893456000');
+      expect(m?.expireTimestamp, 1893456000);
     });
   });
 }

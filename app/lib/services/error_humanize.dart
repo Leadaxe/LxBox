@@ -3,6 +3,10 @@ import 'dart:io';
 
 /// Превращает технический exception в user-facing сообщение (night T2-2).
 ///
+/// §219 — НЕ путать с `formatUserError` (error_format.dart): «detailed»
+/// разбор по типу для сетевых операций подписок. `formatUserError` — «quick»
+/// generic-очистка для VPN-старта. Выбирай по домену, не конкурируют.
+///
 /// Поведение:
 /// - `SocketException` / network errors → `No connection to <host>` если host
 ///   удаётся извлечь, иначе generic "No connection"

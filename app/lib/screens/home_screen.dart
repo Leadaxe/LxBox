@@ -522,7 +522,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
             children: [
               // Empty state (no config) → guide + CTA берёт на себя весь
               // экран; controls/header не рисуем, чтобы disabled-кнопка
-                // не путала первого пользователя.
+              // не путала первого пользователя.
               if (state.configRaw.isNotEmpty) ...[
                 HomeControls(
                   controller: _controller,
@@ -629,15 +629,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // синхронного HTTP-fetch'а не делаем: если подписки протухли, trigger 2
     // (VPN connected + 2 мин) подтянет их через туннель.
     await _controller.start();
-    // Show diagnostic if start failed
-    if (mounted && _controller.state.lastError.isNotEmpty && !_controller.state.tunnelUp) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_controller.state.lastError),
-          duration: const Duration(seconds: 5),
-        ),
-      );
-    }
+    // §219 — inline error-snackbar удалён: он был мёртвым кодом. start()
+    // эмитит lastError через _emit→notifyListeners→_onControllerChange, который
+    // СИНХРОННО показывает snackbar и зовёт clearError() до возврата сюда →
+    // lastError.isNotEmpty здесь всегда false. Ошибки централизованы в
+    // _onControllerChange (см. коммент §166 выше).
   }
 
   /// §107 single-flight: параллельные триггеры (возврат на home + гейт на

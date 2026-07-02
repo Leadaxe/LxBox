@@ -40,14 +40,14 @@ if [ -n "$TAG" ]; then
   LINE="version: ${VER}+${TAG_COUNT}"
   sed -i.bak -E "s/^version: .*/${LINE}/" app/pubspec.yaml
   rm -f app/pubspec.yaml.bak
-  echo "build-local: pinned $LINE (vc base = count($TAG)=$TAG_COUNT, не HEAD)"
+  echo "build-local: pinned $LINE (vc base = count($TAG)=$TAG_COUNT, not HEAD)"
 else
   # Нет релизного тега на ветке — fallback на ПРОСТО НОМЕР КОММИТА (HEAD-count),
   # чтобы сборка не падала. Downgrade-риск неактуален без релизов.
   HEAD_COUNT=$(git rev-list --count HEAD)
   sed -i.bak -E "s/^version: .*/version: 0.0.0+${HEAD_COUNT}/" app/pubspec.yaml
   rm -f app/pubspec.yaml.bak
-  echo "build-local: нет тега vN.N.N — version: 0.0.0+${HEAD_COUNT} (HEAD-count)"
+  echo "build-local: no tag vN.N.N — version: 0.0.0+${HEAD_COUNT} (HEAD-count)"
 fi
 
 # §104 — ядро sing-box-lx: качаем пиненую версию AAR если ещё нет (идемпотентно).

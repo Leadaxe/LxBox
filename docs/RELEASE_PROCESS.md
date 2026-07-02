@@ -53,6 +53,7 @@ CI (`.github/workflows/ci.yml`) триггерится на:
    cd app
    flutter analyze && flutter test
    ```
+   ⚠ Именно `flutter analyze` **без аргумента** — CI анализирует **весь** проект, включая `test/`. Локальная привычка `flutter analyze lib/` пропускает ошибки в тестах (особенно `non_exhaustive_switch` после добавления подтипа в sealed-класс) — они всплывут в CI уже **после** пуша тега и уронят релиз (ловили на v2.8.2 / §217).
 2. `develop` — прямой потомок последнего stable-тега:
    ```bash
    git fetch --tags
@@ -183,7 +184,7 @@ curl -sL https://raw.githubusercontent.com/Leadaxe/LxBox/main/docs/latest.json |
 ```
 
 - APK качается из release-страницы, `scripts/install-apk.sh` ставит его поверх prod без `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (значит подпись — release).
-- В установленном из релиза APK версия ядра (About/Debug, `Libbox.version()`) — `1.13.13-lx.*` (fork sing-box-lx), **не** `1.13.11`: гарантия, что CI собрал fork-ядро и AWG/XHTTP-конфиги работают.
+- В установленном из релиза APK версия ядра (About/Debug, `Libbox.version()`) содержит суффикс `-lx` и совпадает с пином `app/android/libbox.version` на теге (сейчас `v1.14.0-lx.1`), **не** стоковое `1.13.11`: гарантия, что CI собрал fork-ядро и AWG/XHTTP/MASQUE-конфиги работают.
 - На устройстве с предыдущей версией L×Box UpdateChecker показывает SnackBar с новым релизом.
 
 ---
@@ -233,6 +234,25 @@ git checkout develop && git merge --no-ff origin/main && git push origin develop
 
 ### Тег уже существует, нужно перевыпустить
 
+Сначала определить, дошёл ли CI до создания Release — от этого зависит безопасность re-tag:
+
+```bash
+gh release view vX.Y.Z --json isDraft,createdAt 2>/dev/null || echo "release not found"
+```
+
+#### Случай (а): CI упал ДО `Create GitHub Release` (`release not found`)
+
+Самый частый путь — `checks`/`analyze`/`android` упали раньше, чем job `release` создал релиз (например `flutter analyze` на `test/`, см. pre-flight п.1, или флаки-тест — так падал первый тег v2.8.2 и v2.9.0). GitHub Release и `docs/latest.json` **не тронуты**, поэтому re-tag безопасен:
+
+```bash
+# gh release view выше должен сказать "release not found"
+git push --delete origin vX.Y.Z
+git tag -d vX.Y.Z
+# починить причину, перепройти §2.4 (тот же vX.Y.Z)
+```
+
+#### Случай (б): Release уже опубликован
+
 Последняя мера. `docs/latest.json` уже обновлён бот-коммитом — при необходимости откатывать руками.
 
 ```bash
@@ -258,7 +278,7 @@ git tag -d vX.Y.Z
 - [ ] Local smoke: `scripts/build-local-apk.sh` (derive'ит версию из `git describe`, sed pubspec + revert trap) + `scripts/install-apk.sh` — ставится поверх prod без `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (при работе из worktree не забыть симлинки keystore).
 - [ ] Коммит `docs(release): vX.Y.Z notes` запушен в `develop` (только doc-изменения; никаких pubspec/code bump'ов).
 - [ ] `main` ← merge `--no-ff --no-commit develop` → `commit -m "Merge ..."` → push; тег `vX.Y.Z` запушен **отдельной командой**. **NB:** именно `--no-commit` + явный `commit -m`, не `--no-ff -m` — последнее ломается на «Пустое сообщение коммита» и tag оказывается на старом commit'е (см. memory `feedback_git_merge_no_ff_quirk`).
-- [ ] `gh run watch` зелёный; в релизе 4 APK `LxBox-vX.Y.Z-{arm64-v8a,armeabi-v7a,x86_64,universal}.apk`, подпись — release; версия ядра в APK — `1.13.13-lx.*`.
+- [ ] `gh run watch` зелёный; в релизе 4 APK `LxBox-vX.Y.Z-{arm64-v8a,armeabi-v7a,x86_64,universal}.apk`, подпись — release; версия ядра в APK содержит суффикс `-lx` и совпадает с пином `app/android/libbox.version` на теге (сейчас `v1.14.0-lx.1`).
 - [ ] `publish-manifest` отработал — `docs/latest.json` обновлён на `main`.
 - [ ] `main` слит обратно в `develop` (§2.6), запушен.
 - [ ] `git describe` на `develop` показывает `vX.Y.Z`.

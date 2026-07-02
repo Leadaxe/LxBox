@@ -347,7 +347,7 @@ class BoxService(
 
         setStatus(VpnStatus.Started)
 
-        // §122 Фаза 0 — поднять CommandClient-канал. ПОСЛЕ startCommandServer (:179)
+        // §122 Фаза 0 — поднять CommandClient-канал. ПОСЛЕ startCommandServer()
         // и Started: command.sock существует только когда сервер запущен. statusClient
         // always-on (watchdog + скорость); screen/profiler — по сигналам из Dart.
         runCatching {

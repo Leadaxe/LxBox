@@ -4,6 +4,13 @@
 |------|----------|
 | Статус | Реализовано |
 
+> **§122/§219 — актуализация транспорта.** Эта спека описывалась в эпоху Clash
+> HTTP API; он полностью выпилен в §122. Данные соединений/статуса теперь идут
+> через **libbox CommandClient** (`CcChannel.instance.connections`/`status`
+> push-стримы), закрытие — RPC `CcChannel.closeConnection(id)`/`closeConnections()`.
+> Файла `lib/services/clash_api_client.dart` нет. Ниже упоминания `/connections`,
+> `/proxies`, `DELETE` — исторические; читать как соответствующие CommandClient-вызовы.
+
 ## Контекст
 
 Пользователю нужен мониторинг: сколько трафика прошло, какие соединения активны, через какие outbound'ы.
@@ -54,7 +61,7 @@
 | `lib/screens/stats_screen.dart` | Statistics с expandable outbound cards |
 | `lib/screens/connections_screen.dart` | Live connections с закрытием |
 | `lib/screens/home_screen.dart` | Traffic bar → Stats navigation |
-| `lib/services/clash_api_client.dart` | fetchConnections, closeConnection, closeAllConnections |
+| `lib/vpn/cc_channel.dart` (§122) | CommandClient: `connections`/`status` push-стримы, `closeConnection(id)`/`closeConnections()` RPC (заменил несуществующий clash_api_client.dart) |
 
 ## Критерии приёмки
 

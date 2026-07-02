@@ -93,10 +93,28 @@ void main() async {
     AppLog.I.error('Startup init failed (continuing best-effort): $e\n$st');
   }
 
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  // §220 — ориентация: default портрет (как всегда было), toggle «Allow
+  // rotation» в App Settings → General снимает фиксацию. Планшетный фидбэк.
+  await applyAllowRotationSetting();
   runApp(const LxBoxApp());
+}
+
+/// §220 — применяет сохранённый `allow_rotation`-флаг к preferred
+/// orientations. OFF (default) — жёсткий portraitUp, прежнее поведение.
+/// ON — пустой список = «нет предпочтений»: ориентацию решает система по
+/// своему auto-rotate (уважает системный rotation-lock). Вызывается на
+/// старте (до runApp) и из App Settings при переключении toggle'а —
+/// применяется мгновенно, рестарт не нужен.
+Future<void> applyAllowRotationSetting() async {
+  var allow = false;
+  try {
+    allow = await SettingsStorage.getAllowRotation();
+  } catch (_) {
+    // Storage недоступен — безопасный дефолт (портрет).
+  }
+  await SystemChrome.setPreferredOrientations(
+    allow ? const <DeviceOrientation>[] : const [DeviceOrientation.portraitUp],
+  );
 }
 
 /// Fallback-widget для UI-ошибок (replace Flutter's red screen).

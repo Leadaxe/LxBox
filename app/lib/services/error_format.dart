@@ -7,6 +7,13 @@ import 'package:flutter/services.dart' show PlatformException;
 /// snackbar / debug log. Скрывает технические артефакты toString'ов
 /// ("Future not completed", "errno = N", длинные address-кортежи и т.п.).
 ///
+/// §219 — НЕ путать с [humanizeError] (error_humanize.dart): это два разных
+/// форматтера с разными зонами. `formatUserError` — «quick»/generic очистка
+/// toString (VPN-старт/стоп в home_controller). `humanizeError` — «detailed»
+/// разбор по типу (SocketException→"No connection to `<host>`", HTTP-коды) для
+/// сетевых операций подписок (subscription_controller). НЕ конкурируют —
+/// выбирай по домену.
+///
 /// Не делает локализацию — это формат, не i18n. Если потребуется i18n —
 /// отдельный layer поверх с lookup в `.arb` по типу exception'а.
 ///

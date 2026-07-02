@@ -122,6 +122,8 @@ class SettingsStorage {
     'tun_apps',
     'vpn_mode',
     'warp_account',
+    'masque_account', // §130/§219 — MASQUE-WARP аккаунт; был в бэкапе, но не в
+    //                   allowlist → терялся при restore (default-deny)
     'last_global_update',
     'presets_migrated', // §159 — переиспользуется как «дефолты засеяны» (seed guard)
     'interrupt_connections_on_switch',
@@ -167,6 +169,7 @@ class SettingsStorage {
     // Прочие UI/one-shot флаги
     'haptic_enabled', // §029 — НЕ в SharedPreferences (вопреки старому STORAGE.md)
     'notif_perm_prompted_v1', // §128 — promt уведомлений показан
+    'allow_rotation', // §220 — снятие портретной фиксации
   };
 
   /// Полный allowlist для подключей `vars` при импорте: кодовые флаги ∪ все
@@ -434,11 +437,12 @@ class SettingsStorage {
   /// `dns_options.rules_json` — single JSON-string override. Заменён на
   /// структурированный [getDnsRulesList]. Поле в storage остаётся для
   /// downgrade-friendliness, но билдер и UI больше не читают.
-  @Deprecated('Use getDnsRulesList()/saveDnsRulesList() instead. See task 061.')
-  static Future<String> getDnsRules() => _getDnsRules();
-
-  /// DEPRECATED (§061 dns-rules-refactor, бывший feature §041): см. [getDnsRules].
-  @Deprecated('Use getDnsRulesList()/saveDnsRulesList() instead. See task 061.')
+  ///
+  /// §219 — геттер `getDnsRules()` удалён (0 call-sites). `saveDnsRules`
+  /// оставлен: его дёргает legacy Debug-эндпоинт `PUT /settings/dns_options/
+  /// rules`. NB: он пишет в `rules_json`, который билдер игнорирует, — эндпоинт
+  /// фактически no-op; депрекация роута — отдельно (обновить help/reference).
+  @Deprecated('Use saveDnsRulesList() instead. See task 061.')
   static Future<void> saveDnsRules(String rulesJson) => _saveDnsRules(rulesJson);
 
   /// Структурированный список DNS-правил (§061 dns-rules-refactor, бывший feature §041). Каждая запись:
@@ -515,6 +519,16 @@ class SettingsStorage {
 
   static Future<void> setAutoRecordWifi(bool enabled) =>
       setVar('auto_record_wifi_history', enabled ? 'true' : 'false');
+
+  /// §220 — разрешить поворот UI (landscape). Default false — жёсткий портрет,
+  /// как было всегда; поведение телефонов не меняется. Toggle в App Settings →
+  /// General → Behavior; применяется сразу через `applyAllowRotationSetting()`
+  /// (main.dart), без рестарта.
+  static Future<bool> getAllowRotation() async =>
+      (await getVar('allow_rotation', 'false')) == 'true';
+
+  static Future<void> setAllowRotation(bool enabled) =>
+      setVar('allow_rotation', enabled ? 'true' : 'false');
 
   // ---------------------------------------------------------------------------
   // App update check (§036) — GitHub Releases polling on launch with 24h cap.

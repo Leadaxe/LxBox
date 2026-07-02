@@ -40,7 +40,12 @@
 
 ## Endpoints — где что брать
 
-### LxBox Debug API (`http://<phone>:9269` → forward на `localhost:9270`)
+### LxBox Debug API (`http://<phone>:9269`, adb-forward)
+
+Дефолт — форвард 1:1: `adb forward tcp:9269 tcp:9269` (как в `scripts/lxbox-diag.sh` и
+[debug-api-reference.md](api/debug-api-reference.md)). `scripts/install-apk.sh` форвардит на
+хост-порт **9270** (чтобы не толкаться с singbox-launcher) — тогда `lxbox-diag.sh` надо звать с
+`--port 9270`.
 
 Auth: `Authorization: Bearer $TOKEN` (token в `vars.debug_token`, dev-token см. `project_dev_endpoints.md` memory).
 
@@ -68,7 +73,7 @@ Auth: `Authorization: Bearer $TOKEN` (token в `vars.debug_token`, dev-token с�
 | `GET /profiler/live?seconds=N` | §048 — **где идёт трафик сейчас**: system-wide events за окно N сек (TCP/UDP open/close + DNS resolve/fail всех packages, с routing-цепочкой per event). Требует предшествующий `live/start` |
 | `GET /profiler/live/stream` | SSE stream system-wide events (live push) |
 | `GET /profiler/live/unattributed` | §177 — недавние unattributed события (DNS fail без owner-UID и т.п.) |
-| `GET /profiler/live/state` | `{recording: bool, started_at: ts}` |
+| `GET /profiler/live/state` | `{recording, started_at, buffer_count, unattributed_count, banner_active}`. `buffer_count=0` при `recording=true` — события не приходят (профайлер пишет, но пусто) |
 
 **Read-only safe.** Все остальные endpoints (`POST /action/*`, `PUT /config`, `PUT /settings/*`) — destructive, см. ниже.
 
@@ -227,7 +232,7 @@ Sing-box matches **первым попавшимся правилом** (top-dow
 
 ### «Долгий idle → DNS не работает / соединения висят»
 
-1. Снять snapshot **сразу**, до любых reset/reload (см. [`feedback_no_destructive_diagnostics.md`](../.claude/...) — лучше всё сохранить)
+1. Снять snapshot **сразу**, до любых reset/reload — сначала `./scripts/lxbox-diag.sh`, destructive-op только после явного подтверждения (см. секцию «Что **НЕ делать**» ниже)
 2. `/profiler/live` — какие домены дают `dnsFail` (и через какой `dnsServer`)? Плюс `core_logs?level=error,warning` для контекста
 3. `config.dns.servers` — какой server обслуживает эти домены (по `dns.rules`)?
 4. Этот server — UDP или DoH/DoT?

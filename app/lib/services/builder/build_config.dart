@@ -332,14 +332,18 @@ Future<BuildResult> buildConfig({
 
   // §125 — деградация dangling route_final → vpn-1. Ссылка на удалённый канал
   // или legacy ✨auto (которого больше нет, Решение 2/3) схлопывается в vpn-1
-  // (неудаляем → всегда валидная мишень). Валидные мишени: включённые каналы +
-  // их auto-двойники + direct-out.
+  // (неудаляем → всегда валидная мишень).
+  // §219 — валидные мишени берём из ФАКТИЧЕСКИ эмитированных `presetOutbounds`
+  // (теги селекторов + auto-двойники), а не переугадываем `[tag, autoTag]`:
+  // auto-двойник `<tag>-auto` эмитится лишь при `auto != null && nodes.isNotEmpty`
+  // (см. `_buildChannelGroups`), поэтому статичный `autoTag` для канала с пустым
+  // node-set давал бы висячую ссылку в конфиге (fatal в sing-box).
   if (settings.routeFinal.isNotEmpty) {
     final validFinals = <String>{
       'direct-out',
       'block', // §201 — block системный outbound, валидная route_final-мишень
-      for (final c in channels)
-        if (c.enabled || c.isRequired) ...[c.tag, c.autoTag],
+      for (final o in presetOutbounds)
+        if (o['tag'] is String) o['tag'] as String,
     };
     var finalTag = settings.routeFinal;
     if (!validFinals.contains(finalTag)) {
@@ -633,8 +637,9 @@ String? _firstMatch(List<String> tags, RegExp re) {
 /// §120 — typed substitution + `#if`. Тонкая обёртка над общим [walk]-движком
 /// ([if_engine.dart]). `obj` мутируется на месте. Coerce — по `node.type`
 /// (через [resolve]), `#if` — резолвится здесь же (substitution-фаза, до
-/// post-steps). Заменяет старые `_substituteVars`/`_resolveVar`, которые гадали
-/// тип по содержимому строки.
+/// post-steps). §219 — переписанная версия: заменяет ЛОГИКУ прежних
+/// `_substituteVars`/`_resolveVar` (гадали тип по содержимому строки) на
+/// типизированный walk-движок.
 void _substituteVars(dynamic obj, VarResolver resolve) {
   walk(obj, resolve);
 }

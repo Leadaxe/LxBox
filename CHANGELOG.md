@@ -6,6 +6,92 @@
 
 ---
 
+## [Unreleased]
+
+---
+
+## [2.9.1] — 2026-07-02
+
+**Глубокий аудит проекта (§219)** — релиз стабилизации без новых флагманских
+фич. Прогон по всему коду (`develop` после v2.9.0) вскрыл и закрыл серию багов
+логики, которые не ловит статический анализ: висячая `route.final`, потеря
+`reserved`/`outboundType`, две утечки `http.Client`, гонки use-after-dispose,
+удаление не той подписки после reorder, потеря `masque_account` при restore
+бэкапа. Плюс уборка мёртвого кода, дедуп повторяющихся паттернов, микро-оптимизации
+горячих путей и синхронизация документации с кодом. Единственная новая фича —
+переключатель **«Allow rotation»** (§220) по фидбэку планшетных юзеров.
+
+### Added
+
+- **§220 — toggle «Allow rotation»** (App Settings → General → Behavior):
+  снимает портретную фиксацию — ориентацию решает системный auto-rotate.
+  Default OFF (портрет, как раньше). Применяется сразу, без рестарта.
+  По фидбэку планшетных юзеров с 4PDA.
+
+### Fixed
+
+- **§219 — глубокий аудит: исправлены баги логики.** `route.final` на auto-двойник
+  канала с пустым node-set давал висячую ссылку (fatal старта sing-box) — билдер
+  теперь строит `validFinals` из фактически эмитированных outbound'ов, а validator
+  симметрично проверяет `route.final`. WireGuard из JSON-парсера не заполнял
+  `reserved` (WARP-трафик не шёл) и давал иной дефолт MTU, чем URI-парсер —
+  унифицировано. Две утечки `http.Client` (подписки, community-loader). `expire=0`
+  подписки трактовался как timestamp эпохи 1970 вместо «нет срока». Профайлер терял
+  `outboundType` (§204) при resolve/backfill. Гонки use-after-dispose в
+  `home_controller`. Экран деталей подписки удалял/переименовывал НЕ ту подписку
+  после drag-reorder (`widget.index` устарел). Пустой SSID в ручном добавлении
+  Wi-Fi молча ничего не делал.
+- **§130/§219 — `masque_account` терялся при restore бэкапа** (не был в
+  allowlist top-level ключей → default-deny его отбрасывал).
+- **§221 — backup не сохранял `channels` (модель роутинга §125).** Зеркальная
+  асимметрия к masque_account: ключ был в allowlist restore, но забыт в
+  backup-экспорте → при переносе на новое устройство **вся конфигурация
+  роутинг-каналов** (vpn-1..vpn-10, фильтры, балансировщики) терялась. Также
+  восстановлены в экспорте `channels_migrated`, `route_idle_suspend` (§215),
+  `profiler_retention_sec` (§044). Добавлен тест-инвариант allowlist ⊆ export
+  против будущих забытых ключей. Плюс добор §219-FIX4: `tolerance`/`poolTolerance`
+  канала клэмпятся в снапшоте редактора (как `pool`).
+- **§221 — use-after-dispose закрыт радикально.** §219 гейтил `_disposed` лишь
+  в 2 точках home_controller; `_emit` оставался без гейта → start/stop/reconnect/
+  switchNode/pullToRefresh могли `notifyListeners after dispose`. Одна проверка
+  в `_emit` закрывает весь класс.
+- **§221 — утечка `http.Client` в support-message** (главный экран) — тот же
+  паттерн, что §219 закрыл в подписках/community, но прод-путь был пропущен.
+- **§219 — CI:** `run_mode=release` требует HEAD на теге (иначе мусорная версия);
+  убран `eval` из точечного прогона тестов.
+
+### Changed
+
+- **§219 — правило «UI-строки только английские»:** русский текст в user-facing
+  выводе 6 shell-скриптов → английский.
+- **§219 — производительность:** устранены повторные RegExp-компиляции (фильтры
+  каналов, sanitize UA, MASQUE-ключи, разбор комментов подписки) и повторные
+  пересчёты в `build()` (overview/routing/DNS-экраны); DNS-ответы профайлера — за
+  один проход.
+- **§130 — дефолтные эмодзи** для MASQUE-нод (🎭) и WARP (🔥🎭); палитра эмодзи-пикера.
+- **Ядро `v1.14.0-lx.2`** (correctness-пасс, device-verified): MASQUE (h2) —
+  зависший CONNECT больше не клинит outbound навсегда (handshake ограничен
+  dial-контекстом); AmneziaWG — guard-suspended endpoint не воскрешается дозвоном;
+  + гонка XHTTP-ридера, DNS-события на cache-hit, `GetPool` для nested-групп,
+  AmneziaWG `s4`-MTU. Без новых фич и config-изменений.
+
+### Removed
+
+- **§219 — мёртвый код:** неиспользуемая зависимость `crypto`; write-only поле
+  `VmessSpec.packetEncoding`; неиспользуемый `getDnsRules()`; фикстуры старого
+  Clash API (69 КБ) и `widget_test.dart`-заглушка; видимый юзеру чип «Clash API»
+  → «CommandClient».
+
+### Docs
+
+- **§219 — синхронизация с кодом:** Debug API (`help.dart` JSON + reference.md:
+  удалён несуществующий `/settings/excluded_nodes`, добавлены реальные эндпоинты);
+  ARCHITECTURE.md (services/native дерево, 5 CC-стримов); устаревшие ссылки на
+  Clash API/ClashApiClient в комментариях; неточные докстринги профайлера/билдера.
+- **§219 — отчёт аудита:** [`docs/spec/tasks/219-deep-audit-2026-07.md`](docs/spec/tasks/219-deep-audit-2026-07.md).
+
+---
+
 ## [2.9.0] — 2026-07-02
 
 **MASQUE-транспорт для WARP** — флагман релиза. Cloudflare WARP теперь можно

@@ -71,6 +71,12 @@ class SubscriptionController extends ChangeNotifier {
   @visibleForTesting
   http.Client? httpClientForTesting;
 
+  /// §219 — test seam: future последнего unawaited `HttpCache.save` в
+  /// success-path. Тесты `await`-ят его вместо хрупкого `Future.delayed`,
+  /// чтобы детерминированно дождаться записи кэша.
+  @visibleForTesting
+  Future<void>? lastCacheSaveForTesting;
+
   String _lastError = '';
   String get lastError => _lastError;
 
@@ -1036,7 +1042,10 @@ class SubscriptionController extends ChangeNotifier {
 
       // Кешируем сырое тело и заголовки на диск для офлайн-реактивации после
       // перезапуска (см. `_rehydrateFromCache`) и для Source-вкладки (fallback).
-      unawaited(HttpCache.save(list.url, result.rawBody, result.headers));
+      // §219 — трекаем future для детерминированного await в тестах.
+      final saveFuture = HttpCache.save(list.url, result.rawBody, result.headers);
+      lastCacheSaveForTesting = saveFuture;
+      unawaited(saveFuture);
       final warnNodes = result.nodes.where((n) => n.warnings.isNotEmpty).length;
       if (warnNodes > 0) {
         AppLog.I.warning('$warnNodes nodes with warnings (XHTTP fallback etc.)');

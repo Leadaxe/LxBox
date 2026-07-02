@@ -10,6 +10,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   Set<String> get _srsDownloading;
   List<CustomRule> get _customRules;
   List<Channel> get _channels; // §125
+  void _invalidateOutboundOptions(); // §219 — сброс кэша опций outbound
   set _template(WizardTemplate? value);
   String get _routeFinal;
   set _routeFinal(String value);
@@ -37,6 +38,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     } else {
       _channels.addAll(stored);
     }
+    _invalidateOutboundOptions(); // §219 — сброс кэша после load каналов
 
     _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'vpn-1';
     _customRules.addAll(await SettingsStorage.getCustomRules());

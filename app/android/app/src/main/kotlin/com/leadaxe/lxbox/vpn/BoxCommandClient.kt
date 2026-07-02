@@ -872,8 +872,10 @@ class BoxCommandClient {
 
         fun offer(snapshot: Any) {
             // coalesce: держим только последний снапшот (drop старые).
+            // §219 — после clear() размер всегда 0, проверка QUEUE_MAX была
+            // избыточна (в отличие от EventEmitter.offer без предварит. clear).
             queue.clear()
-            if (queue.size < QUEUE_MAX) queue.offer(snapshot)
+            queue.offer(snapshot)
             if (scheduled.compareAndSet(false, true)) {
                 mainHandler.post(drainer)
             }

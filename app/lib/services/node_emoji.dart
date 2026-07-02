@@ -9,8 +9,12 @@ import '../models/node_spec.dart';
 /// rawBody, nodes ре-деривятся из него — поэтому эмодзи кладём именно туда).
 
 /// Палитра ручного эмодзи-пикера (node_settings + форма создания).
+/// §090 G2b — палитра для ручного выбора эмодзи тега ([EmojiPickerButton]).
+/// Базовые (сеть/статус) + VPN-транспорты: ☁️ WARP, 🎭 MASQUE, ⛈️ AWG — то,
+/// что проект ставит сам ([defaultEmojiFor]).
 const List<String> kEmojiPalette = [
   '🏠', '⚡', '🚀', '🔁', '⚙', '⭐', '🌍', '🔒',
+  '☁️', '🎭', '⛈️', '🌀', '🛡️', '❤️',
 ];
 
 /// Эмодзи: Extended_Pictographic ИЛИ пара Regional_Indicator (флаги).
@@ -24,7 +28,7 @@ final RegExp _emojiRe = RegExp(
 bool hasEmoji(String s) => _emojiRe.hasMatch(s);
 
 /// Дефолтный эмодзи по серверу/протоколу (приоритет сверху вниз):
-/// WARP → локальный → WireGuard → UDP/QUIC → TCP (fallback).
+/// WARP → локальный → WireGuard → MASQUE → UDP/QUIC → TCP (fallback).
 String defaultEmojiFor(NodeSpec node) {
   // §025 — Cloudflare WARP: узел технически WireguardSpec, но тег ставится
   // `WARP`/`WARP+` (toWireguardUri). Распознаём по тегу ДО ветки WireguardSpec,
@@ -37,6 +41,10 @@ String defaultEmojiFor(NodeSpec node) {
     return '🔁';
   }
   if (node is WireguardSpec) return '🏠';
+  // §130 — MASQUE-транспорт: маска 🎭. WARP-MASQUE-узлы из визарда ставят свой
+  // тег 🔥🎭 (🔥 = WARP-брендинг) и сюда не доходят (withDefaultEmoji). Эта
+  // ветка — для generic masque-нод из JSON/URI с тегом без эмодзи.
+  if (node is MasqueSpec) return '🎭';
   if (node is Hysteria2Spec || node is TuicSpec) return '🚀';
   return '⚡';
 }

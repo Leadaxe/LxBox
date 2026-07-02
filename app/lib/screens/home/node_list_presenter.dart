@@ -16,6 +16,7 @@ String protoLabel(String type) => switch (type) {
       'hysteria2' => 'Hy2',
       'tuic' => 'TUIC',
       'wireguard' => 'WG',
+      'masque' => 'MASQUE', // §130 — WARP-транспорт
       'ssh' => 'SSH',
       'socks' => 'SOCKS',
       'http' => 'HTTP',

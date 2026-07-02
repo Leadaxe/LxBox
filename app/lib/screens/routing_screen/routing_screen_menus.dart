@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/custom_rule.dart';
+import '../../services/ui_helpers.dart';
 
 /// Popup-меню экрана Routing. Чистая презентация: показывают `showMenu` /
 /// `showDialog` и возвращают выбор. Вся state-мутация остаётся в экране.
@@ -77,27 +78,15 @@ Future<String?> showRuleContextMenu(
   );
 }
 
-/// Confirm-dialog удаления custom-rule. Возвращает true если юзер подтвердил.
+/// Confirm-dialog удаления custom-rule. §219 — тонкая обёртка над общим
+/// showDeleteConfirmDialog (ui_helpers). Возвращает true если юзер подтвердил.
 Future<bool?> showDeleteCustomRuleDialog(
   BuildContext context,
   CustomRule rule,
 ) {
-  return showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Delete rule?'),
-      content: Text('Remove "${rule.name}" permanently?'),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel')),
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, true),
-          style: TextButton.styleFrom(
-              foregroundColor: Theme.of(ctx).colorScheme.error),
-          child: const Text('Delete'),
-        ),
-      ],
-    ),
+  return showDeleteConfirmDialog(
+    context,
+    title: 'Delete rule?',
+    message: 'Remove "${rule.name}" permanently?',
   );
 }

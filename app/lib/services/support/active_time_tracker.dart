@@ -50,7 +50,11 @@ class ActiveTimeTracker {
       final cur = await SupportState.I.getInt(_key);
       await SupportState.I.set(_key, cur + delta);
     }
-    _lastFlush = now;
+    // §219 — двигаем базовую точку ТОЛЬКО вперёд. При откате системных часов
+    // назад (delta ≤ 0) держим прежний `_lastFlush`: иначе база уехала бы в
+    // прошлое и реальный интервал с момента from потерялся бы безвозвратно
+    // (а следующий tick досчитает его корректно, когда часы догонят from).
+    if (delta > 0) _lastFlush = now;
   }
 
   /// Для тестов — сброс сессии.

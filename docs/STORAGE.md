@@ -26,8 +26,8 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ name                  string        UI display
 │       ├─ enabled               bool
 │       ├─ tag_prefix            string        префикс для node tags
-│       ├─ detour_policy         object{4 keys}       {register_detour_servers, register_detour_in_auto,
-│       │                                       use_detour_servers, override_detour}
+│       ├─ detour_policy         object{5 keys}       {register_detour_servers, register_detour_in_auto,
+│       │                                       use_detour_servers, override_detour, replace_detour_chain}
 │       │                        — subscription only —
 │       ├─ url                   string?       подписочный URL
 │       ├─ meta                  object?         SubscriptionMeta из HTTP-headers (§027):
@@ -39,7 +39,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ last_updated          ISO-8601?     успех
 │       ├─ last_update_attempt   ISO-8601?     любая попытка
 │       ├─ last_update_status    "never"|"ok"|"failed"|"inProgress"
-│       ├─ update_interval_hours int           default 24
+│       ├─ update_interval_hours int           default 24; §129 спец: -1=никогда, 0=respect server, N>0=каждые N ч
 │       ├─ last_node_count       int
 │       ├─ consecutive_fails     int           для UI "(N fails)"
 │       │                        — user only —
@@ -64,9 +64,10 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ protocols[]           list?         routing-rule level: bittorrent/tls/http/...
 │       ├─ ipIsPrivate           bool?         routing-rule level
 │       ├─ outbound              tag           "<outbound-tag>" или "reject" sentinel
+│       ├─ dns                   object? {enabled, serverTag}  §117 — mirror DNS-rule
 │       │                        — srs (CustomRuleSrs) —
 │       ├─ srsUrl                string        URL .srs-бинаря
-│       ├─ ports / portRanges / packages / protocols / ipIsPrivate / outbound
+│       ├─ ports / portRanges / packages / protocols / ipIsPrivate / outbound / dns
 │       │                        — preset (CustomRulePreset) —
 │       ├─ presetId              string        ссылка на selectable_rules[].preset_id
 │       └─ varsValues            object          юзерские vars override (включая 'outbound')
@@ -96,6 +97,8 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       └─ <groupTag>            object          {url?, timeout_ms?}
 │
 ├─ route_final                   string        override sing-box route.final
+├─ route_idle_suspend            string        §215/§128 — idle-suspend threshold (route.lx_idle_suspend);
+│                                                duration ("30s"/"5m"), default "30s" (ВКЛючено), "" = off; config-significant
 ├─ excluded_nodes[]              list          §125-cleanup DEPRECATED — глобальный node-filter (§048) удалён; safe-мусор
 ├─ enabled_groups[]              list          §125 DEPRECATED — читается только миграцией channels[]. Safe-мусор.
 ├─ channels[]                    list          §125 — каналы роутинга (template→storage). См. ниже.
@@ -114,13 +117,20 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │           ├─ interval          string        duration ("5m")
 │           ├─ tolerance         int           ms, uint16 (§161 — clamp 0..65535)
 │           ├─ idle_timeout      string        duration ("30m")
-│           └─ interrupt_exist_connections  bool  urltest.interrupt_exist_connections
+│           ├─ interrupt_exist_connections  bool  urltest.interrupt_exist_connections
+│           ├─ mode              string        §208 — 'least_test' (default) | 'round_robin'
+│           └─ balancer          object{3 keys}  §208 — {pool, pool_tolerance, sticky_hash[]}
 ├─ channels_migrated             bool          §125 — guard one-shot миграции enabled_groups→channels
 ├─ last_global_update            ISO-8601      timestamp последнего auto-refresh
 ├─ presets_migrated              bool          §159 — guard «дефолтные пресеты засеяны» (fresh-install seed)
 ├─ interrupt_connections_on_switch  bool       §143 — рвать соединения переключаемой группы при смене ноды (default false, НЕ config-significant)
 ├─ node_sort_mode                string        §100 — выбранный режим сортировки нод ('' = template-default)
 ├─ node_manual_order[]           list          §100 — ручной порядок node tags (для mode=manual)
+├─ profiler_retention_sec        int           §044 — окно Live-журнала профайлера, default 600 (10 мин); НЕ config-significant
+├─ warp_account                  object?       §025 — кеш WARP-аккаунта (см. раздел ниже)
+├─ masque_account                object?       §130 — кеш MASQUE-WARP аккаунта (см. раздел ниже)
+├─ tun_apps                      object        §046 — split-tunneling (см. раздел ниже)
+├─ vpn_mode                      object?       §119 — режим inbound (см. раздел ниже)
 └─ native_prefs                  object        §189 — ЗЕРКАЛО шести Android-prefs (`boxvpn_boot.*`).
     │                                            JSON = источник истины (диск); native = рабочая копия.
     ├─ auto_start                bool          default false  — auto-start VPN на boot
@@ -167,7 +177,7 @@ Android SharedPreferences:
 | `http_cache/<sha1(url)>.body` + `.headers` | `HttpCache` (Dart) | Сырое тело + headers подписки для offline-rehydrate на старте. | [§027] |
 | `rule_sets/<tag>.srs` | `RuleSetDownloader` (Dart) | Кэш бинарных `.srs` rule-set файлов. | [§011] |
 | `applog.txt` | `AppLog` (Dart) | App-side warn/error лог, JSON-lines, ring-buffer 200 строк / 64 KB. | [§038], [§043][043-applog] |
-| `corelog.txt` | `AppLog` (Dart) | Sing-box warn/error лог. Сообщения приходят в Dart через `ClashLogPump` (HTTP stream от Clash API libbox'а), затем `AppLog.add(source: core)` пишет их сюда тем же ring-buffer-механизмом, что и `applog.txt`. 200 строк / 64 KB. | [§043][043-applog] |
+| `corelog.txt` | `AppLog` (Dart) | Sing-box warn/error лог. Строки приходят из Kotlin через `EventChannel lxbox/coreLog` (`BoxService.coreLogDrainer`, батчи `List<String>`); `ClashLogPump` (легаси-имя, НЕ Clash API — тот выпилен в §122) их принимает и `AppLog.add(source: core)` пишет сюда тем же ring-buffer-механизмом, что и `applog.txt`. TRACE/DEBUG отфильтрованы на native-стороне. 200 строк / 64 KB. | [§043][043-applog] |
 | Android `SharedPreferences` | Kotlin (`BoxApplication`) + Flutter (`shared_preferences`) | Pre-Flutter boot flags + UI prefs. См. раздел [«SharedPreferences»](#sharedpreferences-android) ниже. | — |
 
 ---
@@ -182,6 +192,7 @@ Android SharedPreferences:
   "dns_options":        { … },     // rules + servers
   "ping_options":       { … },
   "route_final":        "<tag>",   // override route.final
+  "route_idle_suspend": "30s",     // §215/§128 — idle-suspend threshold (default "30s"; "" = off)
   "excluded_nodes":     [ … ],     // §125-cleanup DEPRECATED (глобальный node-filter удалён)
   "enabled_groups":     [ … ],     // §125 DEPRECATED (читается только миграцией channels[])
   "channels":           [ … ],     // §125 — каналы роутинга (template→storage)
@@ -191,6 +202,11 @@ Android SharedPreferences:
   "interrupt_connections_on_switch": false, // §143 — рвать conns группы при смене ноды (НЕ config-significant)
   "node_sort_mode":     "",        // §100
   "node_manual_order":  [ … ],     // §100
+  "profiler_retention_sec": 600,   // §044 — окно Live-журнала профайлера (НЕ config-significant)
+  "warp_account":       { … },     // §025 — кеш WARP-аккаунта (секреты)
+  "masque_account":     { … },     // §130 — кеш MASQUE-WARP аккаунта (секреты)
+  "tun_apps":           { … },     // §046 — split-tunneling
+  "vpn_mode":           { … },     // §119 — режим inbound
   "native_prefs":       { … }      // §189 — зеркало boxvpn_boot.* (JSON = истина)
 }
 ```
@@ -221,7 +237,24 @@ Per-key спеки и shape — в разделах ниже.
 | `dns_final` | template | [§043][043-dns] | Финальный DNS-резолвер (`cloudflare_udp` / `google_udp` / `local_dns_resolver` / `yandex_udp` / любой tag из `dns_options.servers`). |
 | `auto_record_wifi_history` | `'false'` | [§051] Phase 3 | Native `WifiNetworkObserver` пушит current SSID/BSSID в `wifi_history` если provel >5 минут на сети. Default off — privacy default. Toggle в App Settings → Diagnostics. |
 | `wifi_history` | `'[]'` | [§051] Phase 3 | JSON-encoded `[{ssid, bssid, last_seen}]` (см. отдельный раздел ниже). |
+| `automation_receive_enabled` | `'false'` | §047 | Public Intent API: приём broadcast/Tasker. Default OFF. |
+| `automation_emit_lifecycle` | `'false'` | §047 | Эмит lifecycle-событий наружу. Default OFF. |
+| `automation_emit_state` | `'false'` | §047 | Эмит state-событий. Default OFF. |
+| `automation_emit_subs` | `'false'` | §047 | Эмит событий подписок. Default OFF. |
+| `automation_emit_health` | `'false'` | §047 | Эмит health-событий. Default OFF. |
+| `automation_explainer_shown_v1` | `'false'` | §047 | One-shot: explainer-диалог автоматизации показан. |
+| `subscription_user_agent` | — | identity headers | User-Agent для fetch подписок. |
+| `subscription_send_hwid` | — | identity headers | Слать ли hwid-заголовки при fetch. |
+| `subscription_hwid` | — | identity headers | HWID (потенциально идентифицирующий). |
+| `subscription_device_os` | — | identity headers | OS-заголовок подписки. |
+| `subscription_ver_os` | — | identity headers | Версия OS-заголовка. |
+| `subscription_device_model` | — | identity headers | Модель устройства-заголовок. |
+| `haptic_enabled` | `'true'` | §029 | Тактильный отклик UI. Живёт в `vars` (`HapticService.prefsKey`), НЕ в SharedPreferences. |
+| `notif_perm_prompted_v1` | `'false'` | §128 | One-shot: промпт разрешения уведомлений показан. |
+| `allow_rotation` | `'false'` | [§220] | Снятие портретной фиксации: `'true'` → пустой preferred-orientations (ориентацию решает системный auto-rotate). Default — жёсткий портрет. Toggle в App Settings → General → Behavior. |
 | `<custom>` | — | — | Любые юзерские template-vars, выставленные через UI / `PUT /settings/vars/<key>`. |
+
+> Полный код-список app-флагов — `SettingsStorage._appFeatureFlagVars`; держать таблицу в синхроне с ним.
 
 `removeVar(k)` ≠ `setVar(k, '')` — пустая строка может быть legitimate value, отсутствие ключа возвращает default.
 
@@ -251,7 +284,12 @@ Sealed по полю `type`:
   "last_updated":          "ISO-8601"?,       // успех
   "last_update_attempt":   "ISO-8601"?,       // любая попытка
   "last_update_status":    "never|ok|failed|inProgress",
-  "update_interval_hours": 24,
+  "update_interval_hours": 24,                 // §129 спец-значения: -1 = никогда
+                                               // (игнор серверного header, ставится
+                                               // авто для file:-подписок), 0 = не по
+                                               // расписанию, но серверный интервал
+                                               // принимаем, N>0 = каждые N ч.
+                                               // AutoUpdater пропускает interval ≤ 0.
   "last_node_count":       0,
   "consecutive_fails":     0                  // для UI "(N fails)"; freezing — in-memory
 }
@@ -280,7 +318,8 @@ Sealed по полю `type`:
   "register_detour_servers":  false,
   "register_detour_in_auto":  false,
   "use_detour_servers":       true,
-  "override_detour":          ""               // '' = no override
+  "override_detour":          "",              // '' = no override
+  "replace_detour_chain":     false            // §178 — false=append override как tail, true=replace всей цепочки
 }
 ```
 
@@ -501,7 +540,7 @@ CRUD: `getTunApps()` / `setTunApps()` (replace целиком). API: `GET/PUT /s
   "mode": "vpn" | "proxy" | "vpn_proxy",
   "proxy_protocol": "mixed" | "http" | "socks",
   "proxy_port": 2080,
-  "proxy_listen": "127.0.0.1" | "0.0.0.0",
+  "proxy_listen": "127.0.0.1",           // любой валидный IPv4; невалид → 127.0.0.1
   "proxy_auth_enabled": true,
   "proxy_username": "user",
   "proxy_password": "<32-hex или пусто>"
@@ -516,16 +555,15 @@ CRUD: `getTunApps()` / `setTunApps()` (replace целиком). API: `GET/PUT /s
 | `"proxy"` | `mixed-in` (без tun) | **нет** (libbox не зовёт `openTun`) | локальный HTTP+SOCKS-порт; приложения настраиваются вручную; нет иконки ключа VPN |
 | `"vpn_proxy"` | `tun-in` + `mixed-in` | да | системный перехват И локальный порт одновременно |
 
-**Builder** (`applyVpnMode`, `post_steps/vpn_mode.dart`) трансформирует `config.inbounds` императивно из этой модели (ДО `applyTunPackages`):
-- `proxy` — удаляет `tun-in`, добавляет `mixed-in`, re-tag'ит `tun-in` resolve/sniff правила на `mixed-in`.
-- `vpn_proxy` — оставляет `tun-in`, добавляет `mixed-in` + отдельные resolve/sniff для него (sniff только если `sniff_enabled != false`).
+**Builder** (§120). Императивный `applyVpnMode`/`post_steps/vpn_mode.dart` **удалён** — вся inbound-структура теперь декларативна в `wizard_template.json` (`tun-in`/`mixed-in`/route-rules гейтятся `#if`-конструкциями по `@vpn_mode`/`@proxy_*`). `build_config.dart` пробрасывает `VpnModeConfig` в плоские vars (`vpn_mode`, `proxy_port`, `proxy_listen`, `proxy_user`, `proxy_pass`, …) до substitution-фазы; `#if`-walker выбирает нужные inbound'ы и re-tag'ит resolve/sniff. К моменту `applyTunPackages` `inbounds[]` уже финальный.
+- `proxy` → только `mixed-in` (без `tun-in`); `vpn_proxy` → `tun-in` + `mixed-in`.
 - `mixed-in` = `{type:mixed, tag:mixed-in, listen, listen_port, users?}`.
 
-**Auth.** `users:[{username,password}]` пишется только при `effectiveAuth && password != ""`. На `0.0.0.0` (LAN-exposed) auth **форсится on** (снять нельзя — `effectiveAuth` игнорирует `proxy_auth_enabled`); на `127.0.0.1` — опционально. Пароль/username идут **императивно**, НЕ через `@var`-substitution (type-coercion `_resolveVar` испортил бы числовой/«true»-пароль). Пароль генерится в UI при первом включении auth (`generateProxyPassword`, 32-hex, образец `clash_secret`).
+**Auth.** `users:[{username,password}]` пишется только при `effectiveAuth && password != ""`. Для любого **не-loopback** listen (не `127.x` — `0.0.0.0` или конкретный LAN-IP) auth **форсится on** (снять нельзя — `effectiveAuth` игнорирует `proxy_auth_enabled`); на loopback — опционально. Пароль/username в §120 идут через vars-подстановку (secret-тип держит строку — числовой/«true»-пароль не искажается). Пароль генерится в UI при первом включении auth (`generateProxyPassword`, 32-hex, образец `clash_secret`).
 
 **Смена режима меняет inbounds → full VPN restart** (наследуется от config-dirty машинерии: home banner Apply/Restart). `markConfigChangedNeedRestart()` дёргается при touch'е.
 
-**Default для existing юзеров:** ключ отсутствует → `mode=vpn` (= текущее поведение, post-step no-op). **Миграция не нужна** — отсутствие ключа эквивалентно дефолту.
+**Default для existing юзеров:** ключ отсутствует → `mode=vpn` (= текущее поведение, `#if`-ветка отдаёт tun-only). **Миграция не нужна** — отсутствие ключа эквивалентно дефолту.
 
 CRUD: `getVpnMode()` / `setVpnMode()` (replace целиком).
 
@@ -556,11 +594,43 @@ CRUD: `getVpnMode()` / `setVpnMode()` (replace целиком).
 
 **Назначение — идемпотентность.** При повторном «Get WARP» (`reuse=true`, default) аккаунт переиспользуется вместо новой регистрации устройства в Cloudflare. «Re-register» (`forceNew`) чистит ключ → следующий вызов регистрирует заново. Сам WARP-узел в конфиг попадает **не** отсюда, а через обычный `UserServer` (собирается из `WarpAccount.toWireguardUri()` → `addFromInput` → endpoints[]). Поэтому ключ **не** config-significant: при его записи `markConfigDirty` не дёргается.
 
-**Секреты.** `priv_key`/`token` — реальные секреты в локальном файле приложения. В логах/diag-снапшотах маскируются (`WarpAccount.redacted()`). При добавлении новых diag-дампов — не включать сырой `warp_account`.
+**Секреты.** `priv_key`/`token` — реальные секреты в локальном файле приложения. В логах маскируются (`WarpAccount.redacted()`). ВНИМАНИЕ: `GET /state/storage` сериализатор `warp_account` сейчас **не** скрабит (см. [Debug API exposure](#debug-api-exposure) — заведён долг). При добавлении новых diag-дампов — не включать сырой `warp_account`.
 
 **`reserved`.** `client_id` (base64, 3 байта) доносится до sing-box endpoint как per-peer `reserved: [b0,b1,b2]`. Без него WARP-handshake проходит, но трафик не идёт. Парсинг/emit — `parseReserved` (`uri_utils.dart`) + `WireguardPeer.reserved`.
 
 CRUD: `getWarpAccount()` / `setWarpAccount(account?)` (null = очистить). См. [features/025](spec/features/025%20warp%20integration/spec.md).
+
+---
+
+## `masque_account` — [§130]
+
+Кеш зарегистрированного MASQUE-WARP аккаунта (Cloudflare QUIC/CONNECT-IP транспорт, флагман v2.9.0). **Отдельный** от `warp_account`: другая крипта (ECDSA-ключи в DER) и другой транспорт. `MasqueAccount` (`services/warp/masque_account.dart`).
+
+```jsonc
+{
+  "priv_key_der":  "<base64 DER — СЕКРЕТ, не логировать>",
+  "server_pub_der":"<base64 DER peer public>",
+  "client_v4":     "…",
+  "client_v6":     "…",
+  "server":        "162.159.198.1",       // data-plane endpoint IP
+  "port":          443,
+  "device_id":     "…",
+  "token":         "<bearer — СЕКРЕТ, не логировать>",
+  "created_at":    "<ISO8601>",
+  "network":       "…",
+  "sni":           "…",
+  "idle_timeout":  "…",
+  "keep_alive":    "…"
+}
+```
+
+**Секреты.** `priv_key_der`/`token` — реальные секреты локального файла; в логах маскируются (`MasqueAccount.redacted()`).
+
+**Не config-significant** — MASQUE-узел попадает в конфиг через обычный `UserServer` (`type:masque` из `MasqueSpec`), не отсюда; при записи `markConfigDirty` не дёргается.
+
+CRUD: `getMasqueAccount()` / `setMasqueAccount(account?)` (null = очистить, `.remove('masque_account')`). Входит в backup-allowlist (`backup_service.dart`).
+
+> **Долг кода (на момент правки дока):** `masque_account` присутствует в `backup_service`, но **отсутствовал** в `SettingsStorage.allowedTopLevelKeys` — при импорте бэкапа `replaceRaw` его отбрасывал. Также сериализатор `GET /state/storage` не скрабит секреты (см. [Debug API exposure](#debug-api-exposure)). Оба — заведены отдельными задачами.
 
 ---
 
@@ -667,6 +737,15 @@ Debug API handlers — идут через единую дверь `SettingsStor
   `route_final`. Лимит каналов — **10**.
 - `auto` (nullable) — параметры urltest-двойника. `null` = галка auto ВЫКЛ,
   `<tag>-auto` не эмитится. `auto.tag` НЕ хранится (производный `${tag}-auto`).
+  Полный shape: `{url, interval, tolerance, idle_timeout,
+  interrupt_exist_connections, mode, balancer:{pool, pool_tolerance,
+  sticky_hash[]}}`. §208-поля `mode` (`least_test` default | `round_robin`) и
+  `balancer` (`pool` ≥1 default 3, `pool_tolerance` uint16 default 0,
+  `sticky_hash[]` из `process/domain/source_ip/dest_ip/dest_port`, default
+  `[process,domain]`, `[]` = липкость off) сериализуются в storage **всегда**,
+  но в config ядра билдер эмитит `mode`+`balancer` **только** при `round_robin`
+  (`balancer` без round-robin роняет старт ядра). Пустой `sticky_hash` уходит в
+  конфиг как sentinel `["none"]` (выключенная липкость, контракт ядра SPEC 019).
 - **Резолюция в билдере**: каждый включённый канал эмитит selector `<tag>` с
   нодами после `node_filter` (regex по итоговому tag, §048-style) + опции
   `direct-out`/`block` (по `include_direct`/`include_block`, §201); если `auto !=
@@ -704,6 +783,7 @@ Debug API handlers — идут через единую дверь `SettingsStor
 | Ключ | Тип | Назначение |
 |---|---|---|
 | `route_final` | `String` | Override `route.final` поверх template (выбранный default outbound). `''` = template-default. Dangling-ссылка (удалённый канал / legacy ✨auto) → `vpn-1` при сборке (§125). |
+| `route_idle_suspend` | `String` | §215/§128 — idle-suspend threshold (`route.lx_idle_suspend`, kernel SPEC 020). Duration-строка (`'30s'`/`'5m'`), **default `'30s'`** (включено с v2.8.2), `''` = off (поле не эмитится в route). **Config-significant** (`markConfigDirty`). CRUD: `getIdleSuspend`/`saveIdleSuspend`. |
 | `excluded_nodes` | `List<String>` | §125-cleanup **DEPRECATED** — глобальный node-filter (§048) удалён вместе с экраном. Ключ остаётся в allowlist (безвредный legacy-мусор); per-channel `node_filter` (§125) покрывает фильтрацию. |
 | `enabled_groups` | `List<String>` | §125 **DEPRECATED** — заменён на `channels[]`. Читается только one-shot миграцией; на диске остаётся безвредным мусором. |
 | `last_global_update` | `String` (ISO-8601) | Timestamp последнего успешного auto-refresh всех подписок. |
@@ -711,8 +791,9 @@ Debug API handlers — идут через единую дверь `SettingsStor
 | `interrupt_connections_on_switch` | `bool` | §143 — рвать активные соединения переключаемой группы при смене ноды (default `false`, НЕ config-significant). См. `getInterruptOnSwitch`/`setInterruptOnSwitch`. |
 | `node_sort_mode` | `String` | §100 — выбранный режим сортировки нод. `''` = template-default. CRUD: `getNodeSort`/`setNodeSort` (пишутся парой с `node_manual_order`). |
 | `node_manual_order` | `List<String>` | §100 — ручной порядок node tags (актуален для режима manual). Пишется вместе с `node_sort_mode`. |
+| `profiler_retention_sec` | `int` | §044 — окно хранения Live-журнала профайлера (rolling buffer), в секундах. Default `600` (10 мин), опции UI 60/600/3600, валидные `> 0`. **НЕ** config-significant. CRUD: `getProfilerRetentionSec`/`setProfilerRetentionSec`. |
 
-> Отдельные структурные ключи описаны в собственных разделах выше: [`tun_apps`](#tun_apps--046), [`vpn_mode`](#vpn_mode--119), [`warp_account`](#warp_account--025). Это исчерпывающий список актуальных top-level ключей `lxbox_settings.json` (см. также §159 — реестр для allowlist-фильтра бэкапа: `SettingsStorage.allowedTopLevelKeys`).
+> Отдельные структурные ключи описаны в собственных разделах выше: [`tun_apps`](#tun_apps--046), [`vpn_mode`](#vpn_mode--119), [`warp_account`](#warp_account--025), [`masque_account`](#masque_account--130). Это исчерпывающий список актуальных top-level ключей `lxbox_settings.json` (см. также §159 — реестр для allowlist-фильтра бэкапа: `SettingsStorage.allowedTopLevelKeys`).
 
 ---
 
@@ -772,13 +853,16 @@ Debug API handlers — идут через единую дверь `SettingsStor
 
 ## Debug API exposure
 
-`SettingsStorage.dumpCache()` возвращает deep-copy всего `_cache`. `GET /state/storage` ([§031]) использует через сериализатор `services/debug/serializers/storage.dart`, который **фильтрует по allow-list** — чтобы не утекли:
+`SettingsStorage.dumpCache()` возвращает deep-copy всего `_cache`. `GET /state/storage` ([§031]) использует через сериализатор `services/debug/serializers/storage.dart`, который работает по **denylist**-модели (всё видно, скрабятся только секреты — см. §159-callout ниже). Реально скрабятся:
 
-- `vars.debug_token`
-- subscription URLs (`server_lists[].url`)
-- `meta.support_url` / `meta.web_page_url`
+- `vars.debug_token` → `'***'`
+- `server_lists[].url` → маскируется (`maskSubscriptionUrl`)
+- `server_lists[].nodes` → заменяется на `nodes_count` (могут нести credentials в UUID/password)
+- `server_lists[].rawBody` → заменяется на `raw_body_bytes` (длина)
 
-См. конкретный allow-list в `serializers/storage.dart`. Любое новое sensitive-поле — добавлять в фильтр.
+Скраббер обрабатывает только ключи `vars` и `server_lists`; всё остальное (`meta.*`, `warp_account`, `masque_account`, …) проходит **как есть** через `default`-ветку. Любое новое sensitive-поле нужно явно добавлять в `_scrub`.
+
+> **Долг:** `warp_account`/`masque_account` (`priv_key`/`token`/`priv_key_der`) и `meta.support_url`/`meta.web_page_url` в `GET /state/storage` сейчас **не** скрабятся (вопреки обещанию раздела `warp_account`, что секреты маскируются в diag-снапшотах). Заведено отдельной задачей.
 
 > **§159 — две РАЗНЫЕ модели фильтрации, не путать (намеренно):**
 > - **выход** (`GET /state/storage`, `serializers/storage.dart`) — **denylist**
@@ -813,5 +897,6 @@ Debug API handlers — идут через единую дверь `SettingsStor
 [§117]: ./spec/features/117%20dns-rework/spec.md
 [§189]: ./spec/tasks/189-native-prefs-mirror-in-json.md
 [§192]: ./spec/tasks/192-proxy-mode-prepare-revokes-foreign-vpn.md
+[§220]: ./spec/tasks/220-allow-rotation-setting.md
 [043-applog]: ./spec/features/043%20applog%20per-source%20quotas/spec.md
 [043-dns]: ./spec/tasks/043-dns-servers-refs-by-kind.md

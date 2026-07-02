@@ -54,13 +54,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
   final bool oneWay;
   final void Function(String id) onClose;
 
-  /// Порт из "host:port" (часть после последнего ':').
-  String get _destPort {
-    final d = conn.destination;
-    final i = d.lastIndexOf(':');
-    if (i < 0 || i == d.length - 1) return '';
-    return d.substring(i + 1);
-  }
+  // §219 — _destPort вынесен в format_utils (portOf).
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +62,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
 
     final destination =
         conn.domain.isNotEmpty ? conn.domain : conn.destination;
-    final port = _destPort;
+    final port = portOf(conn.destination);
     final title = (conn.domain.isNotEmpty && port.isNotEmpty)
         ? '$destination:$port'
         : destination;
@@ -172,7 +166,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
     out.addAll(_group(context, 'Destination', [
       _row(context, 'Host', conn.domain),
       _row(context, 'Destination', conn.destination),
-      _row(context, 'Dest port', _destPort),
+      _row(context, 'Dest port', portOf(conn.destination)),
     ]));
 
     // Network

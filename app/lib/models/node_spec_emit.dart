@@ -15,18 +15,27 @@ import 'transport_spec.dart';
 /// Контракт: выход должен совпадать с v1 `_buildOutbound` на том же узле
 /// (гарантируется parity-тестами в `test/parity/`).
 
+/// §219 — общий каркас outbound-map (`type`/`tag`/`server`/`server_port`).
+/// Был продублирован в 9 emit-функциях. Возвращает growable map для дописывания.
+Map<String, dynamic> _baseOutbound(String type, NodeSpec s) => <String, dynamic>{
+      'type': type,
+      'tag': s.tag,
+      'server': s.server,
+      'server_port': s.port,
+    };
+
+/// §219 — присвоение `detour` при наличии chained-ноды. Было продублировано
+/// 9 раз (`if (s.chained != null) out['detour'] = s.chained!.tag;`).
+void _addDetour(Map<String, dynamic> out, NodeSpec s) {
+  if (s.chained != null) out['detour'] = s.chained!.tag;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // VLESS
 // ════════════════════════════════════════════════════════════════════════════
 
 Outbound emitVless(VlessSpec s, TemplateVars vars) {
-  final out = <String, dynamic>{
-    'type': 'vless',
-    'tag': s.tag,
-    'server': s.server,
-    'server_port': s.port,
-    'uuid': s.uuid,
-  };
+  final out = _baseOutbound('vless', s)..['uuid'] = s.uuid;
 
   if (s.transport != null) {
     final (tmap, warnings) = s.transport!.toSingbox(vars);
@@ -50,7 +59,7 @@ Outbound emitVless(VlessSpec s, TemplateVars vars) {
   final tlsMap = s.tls.toSingbox();
   if (tlsMap.isNotEmpty) out['tls'] = tlsMap;
 
-  if (s.chained != null) out['detour'] = s.chained!.tag;
+  _addDetour(out, s);
 
   return Outbound(out);
 }
@@ -96,14 +105,9 @@ String toUriVless(VlessSpec s) {
 // ════════════════════════════════════════════════════════════════════════════
 
 Outbound emitVmess(VmessSpec s, TemplateVars vars) {
-  final out = <String, dynamic>{
-    'type': 'vmess',
-    'tag': s.tag,
-    'server': s.server,
-    'server_port': s.port,
-    'uuid': s.uuid,
-    'security': s.security,
-  };
+  final out = _baseOutbound('vmess', s)
+    ..['uuid'] = s.uuid
+    ..['security'] = s.security;
   if (s.alterId != 0) out['alter_id'] = s.alterId;
 
   if (s.transport != null) {
@@ -117,7 +121,7 @@ Outbound emitVmess(VmessSpec s, TemplateVars vars) {
   final tlsMap = s.tls.toSingbox();
   if (tlsMap.isNotEmpty) out['tls'] = tlsMap;
 
-  if (s.chained != null) out['detour'] = s.chained!.tag;
+  _addDetour(out, s);
   return Outbound(out);
 }
 
@@ -179,13 +183,7 @@ String _vmessPathFromTransport(TransportSpec? t) => switch (t) {
 // ════════════════════════════════════════════════════════════════════════════
 
 Outbound emitTrojan(TrojanSpec s, TemplateVars vars) {
-  final out = <String, dynamic>{
-    'type': 'trojan',
-    'tag': s.tag,
-    'server': s.server,
-    'server_port': s.port,
-    'password': s.password,
-  };
+  final out = _baseOutbound('trojan', s)..['password'] = s.password;
   if (s.transport != null) {
     final (tmap, warnings) = s.transport!.toSingbox(vars);
     out['transport'] = tmap;
@@ -198,7 +196,7 @@ Outbound emitTrojan(TrojanSpec s, TemplateVars vars) {
   } else {
     out['tls'] = {'enabled': false};
   }
-  if (s.chained != null) out['detour'] = s.chained!.tag;
+  _addDetour(out, s);
   return Outbound(out);
 }
 
@@ -222,19 +220,14 @@ String toUriTrojan(TrojanSpec s) {
 // ════════════════════════════════════════════════════════════════════════════
 
 Outbound emitShadowsocks(ShadowsocksSpec s, TemplateVars vars) {
-  final out = <String, dynamic>{
-    'type': 'shadowsocks',
-    'tag': s.tag,
-    'server': s.server,
-    'server_port': s.port,
-    'method': s.method,
-    'password': s.password,
-  };
+  final out = _baseOutbound('shadowsocks', s)
+    ..['method'] = s.method
+    ..['password'] = s.password;
   if (s.plugin.isNotEmpty) {
     out['plugin'] = s.plugin;
     if (s.pluginOpts.isNotEmpty) out['plugin_opts'] = s.pluginOpts;
   }
-  if (s.chained != null) out['detour'] = s.chained!.tag;
+  _addDetour(out, s);
   return Outbound(out);
 }
 
@@ -252,12 +245,7 @@ String toUriShadowsocks(ShadowsocksSpec s) {
 // ════════════════════════════════════════════════════════════════════════════
 
 Outbound emitHysteria2(Hysteria2Spec s, TemplateVars vars) {
-  final out = <String, dynamic>{
-    'type': 'hysteria2',
-    'tag': s.tag,
-    'server': s.server,
-    'server_port': s.port,
-  };
+  final out = _baseOutbound('hysteria2', s);
   if (s.password.isNotEmpty) out['password'] = s.password;
   if (s.obfs == 'salamander') {
     out['obfs'] = {
@@ -268,7 +256,7 @@ Outbound emitHysteria2(Hysteria2Spec s, TemplateVars vars) {
   if (s.upMbps != null) out['up_mbps'] = s.upMbps;
   if (s.downMbps != null) out['down_mbps'] = s.downMbps;
   out['tls'] = s.tls.toSingbox();
-  if (s.chained != null) out['detour'] = s.chained!.tag;
+  _addDetour(out, s);
   return Outbound(out);
 }
 
@@ -295,12 +283,7 @@ String toUriHysteria2(Hysteria2Spec s) {
 // services/parser/uri_utils.dart (единый источник, был дубль с uri_parsers).
 
 Outbound emitNaive(NaiveSpec s, TemplateVars vars) {
-  final out = <String, dynamic>{
-    'type': 'naive',
-    'tag': s.tag,
-    'server': s.server,
-    'server_port': s.port,
-  };
+  final out = _baseOutbound('naive', s);
   if (s.username.isNotEmpty) out['username'] = s.username;
   if (s.password.isNotEmpty) out['password'] = s.password;
   if (s.extraHeaders.isNotEmpty) {
@@ -312,7 +295,7 @@ Outbound emitNaive(NaiveSpec s, TemplateVars vars) {
     out['extra_headers'] = sorted;
   }
   out['tls'] = s.tls.toSingbox();
-  if (s.chained != null) out['detour'] = s.chained!.tag;
+  _addDetour(out, s);
   return Outbound(out);
 }
 
@@ -361,19 +344,14 @@ String serializeNaiveExtraHeaders(Map<String, String> headers) {
 // ════════════════════════════════════════════════════════════════════════════
 
 Outbound emitTuic(TuicSpec s, TemplateVars vars) {
-  final out = <String, dynamic>{
-    'type': 'tuic',
-    'tag': s.tag,
-    'server': s.server,
-    'server_port': s.port,
-    'uuid': s.uuid,
-    'password': s.password,
-    'congestion_control': s.congestionControl,
-    'udp_relay_mode': s.udpRelayMode,
-    if (s.zeroRtt) 'zero_rtt_handshake': true,
-    'tls': s.tls.toSingbox(),
-  };
-  if (s.chained != null) out['detour'] = s.chained!.tag;
+  final out = _baseOutbound('tuic', s)
+    ..['uuid'] = s.uuid
+    ..['password'] = s.password
+    ..['congestion_control'] = s.congestionControl
+    ..['udp_relay_mode'] = s.udpRelayMode;
+  if (s.zeroRtt) out['zero_rtt_handshake'] = true;
+  out['tls'] = s.tls.toSingbox();
+  _addDetour(out, s);
   return Outbound(out);
 }
 
@@ -398,13 +376,7 @@ String toUriTuic(TuicSpec s) {
 // ════════════════════════════════════════════════════════════════════════════
 
 Outbound emitSsh(SshSpec s, TemplateVars vars) {
-  final out = <String, dynamic>{
-    'type': 'ssh',
-    'tag': s.tag,
-    'server': s.server,
-    'server_port': s.port,
-    'user': s.user,
-  };
+  final out = _baseOutbound('ssh', s)..['user'] = s.user;
   if (s.password.isNotEmpty) out['password'] = s.password;
   if (s.privateKey.isNotEmpty) out['private_key'] = s.privateKey;
   if (s.privateKeyPassphrase.isNotEmpty) {
@@ -414,7 +386,7 @@ Outbound emitSsh(SshSpec s, TemplateVars vars) {
   if (s.hostKeyAlgorithms.isNotEmpty) {
     out['host_key_algorithms'] = s.hostKeyAlgorithms;
   }
-  if (s.chained != null) out['detour'] = s.chained!.tag;
+  _addDetour(out, s);
   return Outbound(out);
 }
 
@@ -442,16 +414,10 @@ String toUriSsh(SshSpec s) {
 // ════════════════════════════════════════════════════════════════════════════
 
 Outbound emitSocks(SocksSpec s, TemplateVars vars) {
-  final out = <String, dynamic>{
-    'type': 'socks',
-    'tag': s.tag,
-    'server': s.server,
-    'server_port': s.port,
-    'version': s.version,
-  };
+  final out = _baseOutbound('socks', s)..['version'] = s.version;
   if (s.username.isNotEmpty) out['username'] = s.username;
   if (s.password.isNotEmpty) out['password'] = s.password;
-  if (s.chained != null) out['detour'] = s.chained!.tag;
+  _addDetour(out, s);
   return Outbound(out);
 }
 

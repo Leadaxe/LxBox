@@ -4,7 +4,9 @@
 /// (легко тестировать).
 String relativeTime(DateTime now, DateTime past) {
   final diff = now.difference(past);
-  if (diff.isNegative) return 'just now';
+  // §219 — `< 60` покрывает и отрицательный diff (часы юзера ушли назад /
+  // past в будущем): inSeconds там тоже < 60. Отдельная isNegative-проверка
+  // была избыточна.
   if (diff.inSeconds < 60) return 'just now';
   if (diff.inMinutes < 60) {
     final m = diff.inMinutes;

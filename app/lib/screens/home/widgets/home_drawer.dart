@@ -16,7 +16,7 @@ import '../../subscriptions_screen.dart';
 
 /// Навигационное меню (Drawer) главного экрана: переход в разделы приложения.
 /// Каждый пункт закрывает drawer и push'ит экран. «Statistics» доступен только
-/// при поднятом туннеле (нужен Clash API client).
+/// при поднятом туннеле (данные из CommandClient push-стримов, §122).
 class HomeDrawer extends StatelessWidget {
   const HomeDrawer({
     super.key,

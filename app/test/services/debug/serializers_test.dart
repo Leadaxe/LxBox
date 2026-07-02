@@ -100,6 +100,20 @@ void main() {
       expect((lists[0] as Map).containsKey('rawBody'), isFalse);
     });
 
+    test('§219 — warp_account/masque_account НЕ маскируются (root by design)', () {
+      // Намеренно: Debug API даёт полный root-доступ к секретам за токеном
+      // (те же приватники доступны сырыми через /backup/export). Scrubber тут —
+      // UX-удобство, не security-граница. НЕ добавлять маскировку этих ключей
+      // как «security-фикс» — см. serializers/storage.dart докстринг.
+      final cache = {
+        'warp_account': {'private_key': 'wp-secret'},
+        'masque_account': {'priv_key_der': 'mp-secret', 'token': 't'},
+      };
+      final out = serializeStorageCache(cache);
+      expect((out['warp_account'] as Map)['private_key'], 'wp-secret');
+      expect((out['masque_account'] as Map)['priv_key_der'], 'mp-secret');
+    });
+
     test('пустой cache → пустая мапа', () {
       expect(serializeStorageCache({}), isEmpty);
     });

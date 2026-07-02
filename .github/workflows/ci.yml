@@ -28,12 +28,12 @@ on:
         type: choice
         options: [checks, build, release]
       test_path:
-        description: "Точечный прогон: путь(и) к тесту относительно app/ (напр. test/screens/startup_wizard_test.dart). Пусто = весь набор. Пропускает analyze для скорости."
+        description: "Pinpoint run: test path(s) relative to app/ (e.g. test/screens/startup_wizard_test.dart). Empty = full suite. Skips analyze for speed."
         required: false
         default: ""
         type: string
       test_name:
-        description: "Фильтр по имени теста/группы (--name, подстрока). Гонит только матчащие — удобно «начать» с конкретной группы внутри файла. Работает только вместе с test_path."
+        description: "Filter by test/group name (--name, substring). Runs only matching — handy to start with a specific group inside a file. Works only together with test_path."
         required: false
         default: ""
         type: string
@@ -70,7 +70,13 @@ jobs:
             echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
             echo "is_release=true" >> "$GITHUB_OUTPUT"
           elif [[ "${{ github.event.inputs.run_mode }}" == "release" ]]; then
-            VERSION="$(git describe --tags --always)"
+            # §219 — release-режим требует HEAD ровно на теге, иначе
+            # git describe даёт 'vX.Y.Z-N-gSHA' → вводящая в заблуждение
+            # pre-release версия. Падаем явно, а не собираем мусорный тег.
+            if ! VERSION="$(git describe --tags --exact-match 2>/dev/null)"; then
+              echo "::error::run_mode=release, но HEAD не на теге. Пуш тега vX.Y.Z или запусти на теге." >&2
+              exit 1
+            fi
             echo "version=$VERSION" >> "$GITHUB_OUTPUT"
             echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
             echo "is_release=true" >> "$GITHUB_OUTPUT"
@@ -108,16 +114,20 @@ jobs:
 
       - name: Test
         run: |
-          if [ -n "${{ github.event.inputs.test_path }}" ]; then
+          TEST_PATH="${{ github.event.inputs.test_path }}"
+          TEST_NAME="${{ github.event.inputs.test_name }}"
+          if [ -n "$TEST_PATH" ]; then
             # Точечный прогон: -r expanded печатает каждый тест по ходу (живой
             # прогресс в логе), --name <substr> сужает до конкретной группы/теста.
-            NAME_FILTER=""
-            if [ -n "${{ github.event.inputs.test_name }}" ]; then
-              NAME_FILTER="--name \"${{ github.event.inputs.test_name }}\""
-              echo "::notice::Фильтр по имени: ${{ github.event.inputs.test_name }}"
+            # §219 — аргументы через массив (без eval): пути/имена с пробелами
+            # не разбиваются, нет shell re-parsing интерполированных inputs.
+            ARGS=(test -r expanded "$TEST_PATH")
+            if [ -n "$TEST_NAME" ]; then
+              ARGS+=(--name "$TEST_NAME")
+              echo "::notice::Name filter: $TEST_NAME"
             fi
-            echo "::notice::Точечный прогон: ${{ github.event.inputs.test_path }}"
-            eval flutter test -r expanded $NAME_FILTER ${{ github.event.inputs.test_path }}
+            echo "::notice::Pinpoint test run: $TEST_PATH"
+            flutter "${ARGS[@]}"
           else
             flutter test
           fi
@@ -161,7 +171,10 @@ jobs:
         # Pre-commit hook (.githooks/pre-commit) синхронизирует pubspec на
         # каждом commit'е, но на момент tag'а HEAD имеет `-dev.N` версию
         # (последний dev-commit до tag). CI override'ит на чистую `X.Y.Z`.
-        # Symmetric с scripts/sync-pubspec-version.sh — та же формула.
+        # §219 — формула BUILD_NUMBER здесь `rev-list --count HEAD`; она НЕ
+        # совпадает с sync-pubspec-version.sh (`TOTAL+1`, компенсирует будущий
+        # hook-commit) и build-local-apk.sh (`count(TAG)`, пин к тегу против
+        # downgrade, §186). Три контекста — три формулы, намеренно.
         shell: bash
         run: |
           set -euo pipefail
