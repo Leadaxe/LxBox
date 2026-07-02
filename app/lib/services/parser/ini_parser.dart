@@ -86,6 +86,11 @@ String? _iniToUri(String config) {
       host = endpoint.substring(0, lastColon);
       port = endpoint.substring(lastColon + 1);
     } else if (lastColon > 0) {
+      // §219 — несколько ':' без скобок = голый IPv6. Порт здесь ПРИНЦИПИАЛЬНО
+      // неотличим от адреса (`2001:db8::1:51820` vs адрес `...::1:51820`), т.к.
+      // WireGuard требует `[IPv6]:port`. Осознанная деградация: весь endpoint —
+      // host, порт по умолчанию. Явный порт голого IPv6 сюда не долетает — это
+      // ожидаемо (некорректный по спеке формат), не баг.
       host = endpoint;
       port = '51820';
     } else {

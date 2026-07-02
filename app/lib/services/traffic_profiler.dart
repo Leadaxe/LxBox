@@ -754,6 +754,7 @@ class TrafficProfiler extends ChangeNotifier {
       ip: ev.ip,
       port: ev.port,
       outboundChain: ev.outboundChain,
+      outboundType: ev.outboundType, // §219 — не терять §204-тип при resolve
       detourChain: ev.detourChain, // §181
       upBytes: ev.upBytes,
       downBytes: ev.downBytes,
@@ -811,6 +812,7 @@ class TrafficProfiler extends ChangeNotifier {
         ip: resolved.ip,
         port: resolved.port,
         outboundChain: resolved.outboundChain,
+        outboundType: resolved.outboundType, // §219 — не терять §204-тип
         detourChain: resolved.detourChain, // §181
         upBytes: resolved.upBytes,
         downBytes: resolved.downBytes,
