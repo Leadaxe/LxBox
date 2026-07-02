@@ -582,7 +582,13 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     }
 
     final theme = Theme.of(context);
-    final serverTags = _enabledServerTags;
+    // §219 — цепочки геттеров вычисляем ОДИН раз за build (каждый заново
+    // прогонял _customRules/_rules): _displayedServers→_ruleRefsByTag→
+    // _customRules, _ruleMirrors, _ruleDisplayRows звались по 2-3 раза.
+    final displayed = _displayedServers;
+    final serverTags = enabledServerTags(displayed);
+    final mirrors = _ruleMirrors;
+    final rows = _ruleDisplayRows;
 
     return Scaffold(
       appBar: AppBar(title: const Text('DNS Settings')),
@@ -600,7 +606,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           const SizedBox(height: 4),
           // §042: единый render через 3-tier merged list. §117 задача 4:
           // тайл — только switch + тап→полноэкранный редактор.
-          ..._displayedServers.map((entry) => MergedServerTile(
+          ...displayed.map((entry) => MergedServerTile(
                 entry: entry,
                 onToggleEnabled: _toggleServerEnabled,
                 onTap: _editServer,
@@ -640,7 +646,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
             ],
           ),
           const SizedBox(height: 4),
-          if (_rules.isEmpty && _ruleMirrors.isEmpty)
+          if (_rules.isEmpty && mirrors.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Text(
@@ -655,10 +661,10 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               buildDefaultDragHandles: false,
-              itemCount: _ruleDisplayRows.length,
+              itemCount: rows.length,
               onReorder: _onReorderRules,
               itemBuilder: (ctx, i) {
-                final row = _ruleDisplayRows[i];
+                final row = rows[i];
                 if (row == -1) {
                   // Группа draggable только при наличии preset-якорей —
                   // иначе позицию не во что персистить.

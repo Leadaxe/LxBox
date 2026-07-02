@@ -614,14 +614,16 @@ class TrafficProfiler extends ChangeNotifier {
     // §180-fix (device dev.72): ядро в DnsAnswer.rdata кладёт ПОЛНУЮ RR-строку
     // "name TTL IN TYPE value" (напр. "google.com. 29 IN A 64.233.165.139"),
     // НЕ голое значение → берём последнее поле (_rdataValue).
-    final cnameChain = q.answers
-        .where((a) => a.isCname)
-        .map((a) => _rdataValue(a.rdata))
-        .toList();
-    final addresses = q.answers
-        .where((a) => a.isAddress)
-        .map((a) => _rdataValue(a.rdata))
-        .toList();
+    // §219 — один проход по q.answers (было два раздельных .where).
+    final cnameChain = <String>[];
+    final addresses = <String>[];
+    for (final a in q.answers) {
+      if (a.isCname) {
+        cnameChain.add(_rdataValue(a.rdata));
+      } else if (a.isAddress) {
+        addresses.add(_rdataValue(a.rdata));
+      }
+    }
     final ip = addresses.isNotEmpty ? addresses.first : null;
 
     // rc.10 — outbound-канал DNS-сервера (узел/селектор→узел), список как

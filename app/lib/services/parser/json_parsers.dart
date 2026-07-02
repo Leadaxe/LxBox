@@ -294,6 +294,8 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
       );
     case 'hysteria2':
       if (server.isEmpty || port == 0) return null;
+      // §219 — кастуем entry['obfs'] один раз (было дважды).
+      final obfs = entry['obfs'] as Map?;
       return Hysteria2Spec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'hy2-$server-$port' : tag,
@@ -302,8 +304,8 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         port: port,
         rawUri: '',
         password: entry['password']?.toString() ?? '',
-        obfs: (entry['obfs'] as Map?)?['type']?.toString() ?? '',
-        obfsPassword: (entry['obfs'] as Map?)?['password']?.toString() ?? '',
+        obfs: obfs?['type']?.toString() ?? '',
+        obfsPassword: obfs?['password']?.toString() ?? '',
         tls: _tlsFromSingbox(entry['tls'], server),
       );
     case 'naive':
