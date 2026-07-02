@@ -122,25 +122,11 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
   }
 
   Future<void> _delete() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete rule?'),
-        content: Text('Remove "${widget.initial.name}" permanently?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(
-                foregroundColor: Theme.of(ctx).colorScheme.error),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
+    final confirmed = await showDeleteConfirmDialog(
+      context,
+      title: 'Delete rule?',
+      message: 'Remove "${widget.initial.name}" permanently?',
+    ); // §219
     if (confirmed == true && mounted) {
       Navigator.pop(context, _CustomRuleEditResult.deleted());
     }

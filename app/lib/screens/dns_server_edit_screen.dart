@@ -138,25 +138,11 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
 
   Future<void> _delete() async {
     final tag = widget.resolved?.tag ?? '';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete DNS server?'),
-        content: Text('Remove "$tag" permanently?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(
-                foregroundColor: Theme.of(ctx).colorScheme.error),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
+    final confirmed = await showDeleteConfirmDialog(
+      context,
+      title: 'Delete DNS server?',
+      message: 'Remove "$tag" permanently?',
+    ); // §219
     if (confirmed == true && mounted) {
       Navigator.pop(context, DnsServerEditResult.deleted());
     }

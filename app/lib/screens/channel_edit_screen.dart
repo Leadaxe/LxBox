@@ -209,27 +209,12 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
   }
 
   Future<void> _delete() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete channel?'),
-        content: Text(
-            'Remove "${widget.initial.label}" (${widget.initial.tag})? '
-            'References to it fall back to vpn-1.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(
-                foregroundColor: Theme.of(ctx).colorScheme.error),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
+    final confirmed = await showDeleteConfirmDialog(
+      context,
+      title: 'Delete channel?',
+      message: 'Remove "${widget.initial.label}" (${widget.initial.tag})? '
+          'References to it fall back to vpn-1.',
+    ); // §219
     if (confirmed == true && mounted) {
       Navigator.pop(context, ChannelEditResult.deleted());
     }
