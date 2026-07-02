@@ -345,13 +345,19 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
             "setNotificationTitle" -> {
                 val title = call.argument<String>("title") ?: "L×Box"
+                // §223 — лейбл поменялся при живом туннеле → перерисовать шторку
+                // (#20: раньше строка только кэшировалась, рендер был лишь на connect).
+                val changed = title != ConfigManager.notificationTitle
                 ConfigManager.setNotificationTitle(title)
+                if (changed) BoxVpnService.updateNotification(context)
                 result.success(true)
             }
             "setNotificationText" -> {
                 // §123 — подтекст уведомления (тег активной ноды / route.final).
                 val text = call.argument<String>("text") ?: ""
+                val changed = text != ConfigManager.notificationText   // §223
                 ConfigManager.setNotificationText(text)
+                if (changed) BoxVpnService.updateNotification(context)
                 result.success(true)
             }
             "setAutoStart" -> {

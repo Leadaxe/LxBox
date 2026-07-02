@@ -124,6 +124,21 @@ class BoxService(
                     runCatching { commandServer.get()?.resetNetwork() }
                         .onFailure { Log.e(TAG, "ACTION_RESET_NETWORK failed", it) }
                 }
+                BoxVpnService.ACTION_UPDATE_NOTIFICATION -> {
+                    // §223 — live-перерисовка лейблов (#20) тем же show()-путём,
+                    // что и connect-рендер (builder переиспользуется → кнопки §182
+                    // не стекаются). СТРОГО в Started: в Starting держим
+                    // "Starting..." (connect-рендер сам подхватит кэш), а после
+                    // notification.stop() повторный show() воскресил бы шторку.
+                    if (status == VpnStatus.Started) {
+                        runCatching {
+                            notification.show(
+                                ConfigManager.notificationTitle,
+                                ConfigManager.notificationText.ifEmpty { "Connected" },
+                            )
+                        }.onFailure { Log.e(TAG, "ACTION_UPDATE_NOTIFICATION failed", it) }
+                    }
+                }
                 PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) onIdleModeChanged()
                 }
@@ -174,6 +189,8 @@ class BoxService(
                 addAction(BoxVpnService.ACTION_RECONNECT)   // §182
                 addAction(BoxVpnService.ACTION_RELOAD)
                 addAction(BoxVpnService.ACTION_RESET_NETWORK)
+                addAction(BoxVpnService.ACTION_UPDATE_NOTIFICATION)   // §223
+
                 when (mode) {
                     BootReceiver.BG_MODE_LAZY -> {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
