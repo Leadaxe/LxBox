@@ -76,14 +76,14 @@ HDR_AUTH="Authorization: Bearer $TOKEN"
 # Проверим что Debug API живой
 PING="$(curl -sf -m 2 -H "$HDR_AUTH" "$LB_BASE/ping" 2>/dev/null || true)"
 if [ -z "$PING" ]; then
-  echo "⚠ Debug API на $LB_BASE недоступен — пробую adb forward..." >&2
+  echo "⚠ Debug API at $LB_BASE unreachable — trying adb forward..." >&2
   if [ "$SKIP_ADB" -eq 0 ]; then
     adb forward "tcp:$LB_HOST_PORT" "tcp:$LB_DEVICE_PORT" >/dev/null 2>&1 || true
     PING="$(curl -sf -m 2 -H "$HDR_AUTH" "$LB_BASE/ping" 2>/dev/null || true)"
   fi
 fi
 if [ -z "$PING" ]; then
-  echo "✗ Debug API недоступен — нечего собирать. Проверь adb forward / token / приложение запущено?" >&2
+  echo "✗ Debug API unreachable — nothing to collect. Check adb forward / token / app running?" >&2
   exit 1
 fi
 
@@ -94,8 +94,8 @@ fi
 # adb-сбор всё равно ценен, — но громко предупреждаем.
 AUTH_CODE="$(curl -s -m 3 -o /dev/null -w '%{http_code}' -H "$HDR_AUTH" "$LB_BASE/state" 2>/dev/null || echo 000)"
 if [ "$AUTH_CODE" = "401" ] || [ "$AUTH_CODE" = "403" ]; then
-  echo "⚠ Debug API вернул $AUTH_CODE на /state — токен протух/неверный (или Host != 127.0.0.1)." >&2
-  echo "  Передай актуальный: --token <TOKEN> или LXBOX_DEBUG_TOKEN=... (см. App Settings → Diagnostics)." >&2
+  echo "⚠ Debug API returned $AUTH_CODE on /state — token stale/invalid (or Host != 127.0.0.1)." >&2
+  echo "  Pass a fresh one: --token <TOKEN> or LXBOX_DEBUG_TOKEN=... (see App Settings → Diagnostics)." >&2
 fi
 
 # Профайлер (§048 inclusive observer) живёт за тем же Debug API (тот же порт) —
@@ -105,7 +105,7 @@ fi
 if [ "$SKIP_PROFILER" -eq 0 ]; then
   curl -sf -m 2 -X POST -H "$HDR_AUTH" "$LB_BASE/profiler/live/start" \
     -o "$OUT_DIR/profiler_live_state.json" 2>/dev/null || \
-    echo "⚠ profiler/live/start не ответил — буфер может быть пуст" >&2
+    echo "⚠ profiler/live/start did not respond — buffer may be empty" >&2
 fi
 
 # §122 — ping = mass urltest активной группы через CommandClient (был Clash
@@ -114,16 +114,16 @@ fi
 # (fire-and-forget), а в /state.last_delay, который соберётся ниже. См.
 # action.dart _urltest. Даём ~3с на завершение перед сбором /state.
 if [ "$DO_PING" -eq 1 ]; then
-  echo "→ --ping: запускаю urltest всех нод активной группы (мутирует state)..."
+  echo "→ --ping: running urltest for all nodes of the active group (mutates state)..."
   curl -sf -m 4 -X POST -H "$HDR_AUTH" "$LB_BASE/action/urltest?all=true" \
     -o "$OUT_DIR/action_urltest.json" 2>/dev/null || \
-    echo "⚠ urltest не запустился (туннель не up?)" >&2
+    echo "⚠ urltest did not start (tunnel not up?)" >&2
   sleep 3
 fi
 
 # ─── parallel collect ───────────────────────────────────────────────
 
-echo "→ собираю Debug API endpoints (parallel)..."
+echo "→ collecting Debug API endpoints (parallel)..."
 
 curl -s -H "$HDR_AUTH" "$LB_BASE/state"                              -o "$OUT_DIR/state.json"            &
 curl -s -H "$HDR_AUTH" "$LB_BASE/state/storage"                      -o "$OUT_DIR/storage.json"          &
@@ -158,7 +158,7 @@ fi
 
 wait
 
-echo "✓ все источники собраны"
+echo "✓ all sources collected"
 
 # ─── tiny summary (jq optional, fallback на python) ─────────────────
 
@@ -292,4 +292,4 @@ echo
 echo "─── files ──────────────────────────────────"
 ls -lh "$OUT_DIR"
 echo
-echo "✓ snapshot готов. Читай docs/DIAGNOSTICS.md → 'Common diagnostic flows'"
+echo "✓ snapshot ready. See docs/DIAGNOSTICS.md → 'Common diagnostic flows'"
