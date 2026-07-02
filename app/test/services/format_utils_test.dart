@@ -69,4 +69,23 @@ void main() {
     test('midday', () =>
         expect(formatTime(DateTime(2026, 1, 1, 23, 59, 59)), '23:59:59'));
   });
+
+  // §219 — host:port extraction (было продублировано в connections/stats).
+  group('hostOf / portOf', () {
+    test('обычный host:port', () {
+      expect(hostOf('example.com:443'), 'example.com');
+      expect(portOf('example.com:443'), '443');
+    });
+    test('без порта → host = вся строка, port = пусто', () {
+      expect(hostOf('example.com'), 'example.com');
+      expect(portOf('example.com'), '');
+    });
+    test('IPv6 (берём последний :) — port = хвост', () {
+      expect(portOf('[::1]:8080'), '8080');
+      expect(hostOf('[::1]:8080'), '[::1]');
+    });
+    test('висячий двоеточие → port пусто', () {
+      expect(portOf('host:'), '');
+    });
+  });
 }
