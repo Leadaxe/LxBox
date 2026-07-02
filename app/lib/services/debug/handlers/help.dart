@@ -111,6 +111,11 @@ POST /action/start-vpn                         Start the tunnel (via Activity, m
 POST /action/start-vpn-headless                Start WITHOUT Activity/consent (needs permission already granted)
                                                   → {"started":bool,"needs_consent":bool}. For automation/self-test.
 POST /action/stop-vpn                          Stop it
+POST /action/force-stop-vpn                    Hard force-stop (doForceStop): teardown→stopSelf, frees CommandServer
+                                                  port 63130 when a normal stop hung. Fire-and-forget.
+POST /action/set-transient-timeout?connecting=<ms>&stopping=<ms>  Override transient-timeout thresholds (§140).
+                                                  Any param optional (unset unchanged), ≥1 required. E.g. connecting=500
+                                                  to arm the timeout fast for on-device force-stop testing.
 POST /action/reconnect                         Stop→Start under one busy-wrap (delegates to start if down)
 POST /action/reload-vpn                        In-place sing-box reload (no service kill). → {"applied":<bool>}
 POST /action/clear-error                       Dismiss the lastError banner
@@ -160,6 +165,24 @@ DELETE /rules/{id}[?rebuild=true]              Delete
 POST   /rules/reorder                          Body: {"order":[id1,id2,...]} — all ids required
 
 `?rebuild=true` on any write method → automatically triggers rebuild-config.
+
+=== Subscriptions CRUD (user servers + subscriptions) ===
+
+GET    /subs[?reveal=true]                     alias /state/subs. reveal=true → unmasked URLs
+GET    /subs/{id}[?reveal=true]                Single entry
+POST   /subs[?rebuild=true]                    Create. Body {"input":"<url|URI|WG-conf|JSON-outbounds>"}.
+                                                 input runs through the parser pipeline (same as UI paste);
+                                                 JSON with multiple outbounds may create several entries.
+PATCH  /subs/{id}[?rebuild=true][?reveal=true] Update meta, any subset: {enabled,name,url,tag_prefix,
+                                                 update_interval_hours,override_detour,register_detour_servers,
+                                                 register_detour_in_auto,use_detour_servers,replace_detour_chain}.
+                                                 url applies to SubscriptionServers only (no-op for UserServer).
+DELETE /subs/{id}[?rebuild=true]               Remove
+POST   /subs/{id}/refresh                      Force HTTP re-fetch (SubscriptionServers only). Fire-and-forget.
+POST   /subs/reorder                           Body {"order":[id1,id2,...]} — exactly the current ids
+
+`?rebuild=true` on any write → auto rebuild-config. Writes go through
+SubscriptionController (fetch-state machine + UI notify), not SettingsStorage directly.
 
 === Wi-Fi history (saved networks for routing rule editor) ===
 
@@ -223,6 +246,9 @@ GET|PUT /settings/interrupt_on_switch          body {"enabled":bool} — рва�
 GET|PUT /settings/node_sort                    body {"mode":"latency|manual|", "order"?:["tag",...]}
 GET|PUT /settings/enabled_groups               body {"groups":["tag",...]} (config-significant, ?rebuild)
 GET|PUT /settings/vpn_mode                     body partial {mode,proxy_protocol,proxy_port,proxy_listen,proxy_auth,proxy_user,proxy_pass} (?rebuild)
+GET|PUT /settings/ping_options                 URLTest defaults. body partial {url?,timeout_ms?,groups?} (groups = per-group overrides map)
+GET|PUT|DELETE /settings/ping_options/groups/{tag}  Per-group URLTest override. PUT body {url?,timeout_ms?} (≥1 required); DELETE clears
+GET|PUT /settings/tun_apps                     Per-app tunnel list. body {"mode":"off|allow|deny","packages":["pkg",...]} (config-significant, ?rebuild)
 PUT    /settings/vars/{key}                    body {"value":"..."}; blocklist: debug_token/debug_enabled/debug_port
 DELETE /settings/vars/{key}                    Delete var
 PUT    /settings/dns_options/servers           body {"servers":[...]}
@@ -362,6 +388,14 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'PATCH', 'path': '/rules/{id}', 'params': {'rebuild': 'true|false'}, 'body': 'Partial CustomRule', 'description': 'Update'},
     {'method': 'DELETE', 'path': '/rules/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Delete'},
     {'method': 'POST', 'path': '/rules/reorder', 'body': '{"order":[id,...]}', 'description': 'Reorder (all ids required)'},
+    // Subscriptions CRUD (user servers + subscriptions)
+    {'method': 'GET', 'path': '/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Alias /state/subs'},
+    {'method': 'GET', 'path': '/subs/{id}', 'params': {'reveal': 'true|false'}, 'description': 'Single entry'},
+    {'method': 'POST', 'path': '/subs', 'params': {'rebuild': 'true|false'}, 'body': '{"input":"<url|URI|WG-conf|JSON-outbounds>"}', 'description': 'Create via parser pipeline (JSON may create several entries)'},
+    {'method': 'PATCH', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {enabled,name,url,tag_prefix,update_interval_hours,override_detour,register_detour_servers,register_detour_in_auto,use_detour_servers,replace_detour_chain}', 'description': 'Update meta. url is SubscriptionServers-only (no-op for UserServer).'},
+    {'method': 'DELETE', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove entry'},
+    {'method': 'POST', 'path': '/subs/{id}/refresh', 'description': 'Force HTTP re-fetch (SubscriptionServers only). Fire-and-forget.'},
+    {'method': 'POST', 'path': '/subs/reorder', 'body': '{"order":[id,...]}', 'description': 'Reorder (exactly the current ids)'},
     // Wi-Fi history (saved networks for routing rule editor)
     {'method': 'GET', 'path': '/wifi_history', 'description': 'List [{ssid, bssid, last_seen}], cap 50'},
     {'method': 'POST', 'path': '/wifi_history', 'body': '{"ssid":"...","bssid":"..."}', 'description': 'Upsert entry; bssid lower-cased'},
@@ -400,6 +434,9 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET|PUT', 'path': '/settings/node_sort', 'body': '{"mode":"latency|manual|","order"?:[...]}', 'description': 'Node-list sort mode + manual order'},
     {'method': 'GET|PUT', 'path': '/settings/enabled_groups', 'body': '{"groups":[...]}', 'description': 'Preset selector membership (config-significant, ?rebuild)'},
     {'method': 'GET|PUT', 'path': '/settings/vpn_mode', 'body': 'partial {mode,proxy_protocol,proxy_port,proxy_listen,proxy_auth,proxy_user,proxy_pass}', 'description': 'VPN/proxy mode (config-significant, ?rebuild)'},
+    {'method': 'GET|PUT', 'path': '/settings/ping_options', 'body': 'partial {url?,timeout_ms?,groups?}', 'description': 'URLTest defaults (groups = per-group overrides map)'},
+    {'method': 'GET|PUT|DELETE', 'path': '/settings/ping_options/groups/{tag}', 'body': '{url?,timeout_ms?} (PUT, ≥1 required)', 'description': 'Per-group URLTest override; DELETE clears it'},
+    {'method': 'GET|PUT', 'path': '/settings/tun_apps', 'body': '{"mode":"off|allow|deny","packages":["pkg",...]}', 'description': 'Per-app tunnel list (config-significant, ?rebuild)'},
     {'method': 'PUT', 'path': '/settings/vars/{key}', 'body': '{"value":"..."}', 'description': 'Set var (blocklist: debug_token/debug_enabled/debug_port)'},
     {'method': 'DELETE', 'path': '/settings/vars/{key}', 'description': 'Delete var'},
     {'method': 'PUT', 'path': '/settings/dns_options/servers', 'body': '{"servers":[...]}', 'description': 'Set DNS servers list'},
