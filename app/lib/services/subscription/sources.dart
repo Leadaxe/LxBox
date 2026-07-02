@@ -99,12 +99,17 @@ Future<ParseResult> parseFromSource(SubscriptionSource source,
   }
 }
 
+// §219 — паттерны на module-level: раньше `_commentPrefixRe` компилился на
+// КАЖДОЙ итерации цикла разбора комментариев, `_newlineRe` — на каждый вызов.
+final _newlineRe = RegExp(r'\r?\n');
+final _commentPrefixRe = RegExp(r'^(#+|//|;)\s*');
+
 /// Извлекает `# key: value` из первых строк-комментариев тела подписки.
 /// Поддерживает `#`, `//`, `;` как префиксы, стопается на первой не-comment
 /// не-пустой строке.
 Map<String, String> _inlineHeaders(String body) {
   final out = <String, String>{};
-  for (final raw in body.split(RegExp(r'\r?\n'))) {
+  for (final raw in body.split(_newlineRe)) {
     final line = raw.trim();
     if (line.isEmpty) continue;
     final isComment = line.startsWith('#') ||
@@ -112,7 +117,7 @@ Map<String, String> _inlineHeaders(String body) {
         line.startsWith(';');
     if (!isComment) break; // первая нормальная строка — секция комментов кончилась
     // Сносим префикс-коммент, оставляем содержимое.
-    final stripped = line.replaceFirst(RegExp(r'^(#+|//|;)\s*'), '');
+    final stripped = line.replaceFirst(_commentPrefixRe, '');
     final colon = stripped.indexOf(':');
     if (colon <= 0) continue;
     final key = stripped.substring(0, colon).trim().toLowerCase();
@@ -264,9 +269,11 @@ String? _parseContentDispositionFilename(String? header) {
   }
   if (name == null) return null;
   var out = name;
-  // Срезаем расширения типичных подписочных файлов.
+  // Срезаем расширения типичных подписочных файлов. §219 — lowercase один раз
+  // до цикла (было .toLowerCase() на каждой из 5 итераций).
+  final outLower = out.toLowerCase();
   for (final e in const ['.txt', '.yaml', '.yml', '.json', '.conf']) {
-    if (out.toLowerCase().endsWith(e)) {
+    if (outLower.endsWith(e)) {
       out = out.substring(0, out.length - e.length);
       break;
     }
@@ -276,13 +283,14 @@ String? _parseContentDispositionFilename(String? header) {
 }
 
 SubscriptionMeta? _metaFromHeaders(Map<String, String> h) {
-  // Case-insensitive lookup.
-  String? get(String key) {
-    for (final k in h.keys) {
-      if (k.toLowerCase() == key.toLowerCase()) return h[k];
-    }
-    return null;
+  // §219 — строим lower-map ОДИН раз: раньше get() линейно сканировал h.keys
+  // с .toLowerCase() на каждом, и звался 6 раз → O(n×6). Ключи выше по стеку
+  // уже уникальны; при коллизии регистра берём первое вхождение.
+  final hLower = <String, String>{};
+  for (final e in h.entries) {
+    hLower.putIfAbsent(e.key.toLowerCase(), () => e.value);
   }
+  String? get(String key) => hLower[key.toLowerCase()];
 
   final userInfo = get('subscription-userinfo');
   // Fallback-цепочка для имени: profile-title → content-disposition.

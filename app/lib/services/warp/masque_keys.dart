@@ -31,6 +31,11 @@ class MasqueKeys {
   /// Длина каждой координаты P-256 в байтах (256 бит).
   static const _coordLen = 32;
 
+  // §219 — module/class-level: раньше компилились на каждый normalizeServerPubKey
+  // (MASQUE-регистрация).
+  static final _wsRe = RegExp(r'\s');
+  static final _pemHeaderRe = RegExp(r'-----(BEGIN|END)[^-]*-----');
+
   /// Сгенерированный ECDSA P-256 keypair, готовый к отправке в CF и ядро.
   ///
   /// - [privateKeyDer] / [publicKeyDer] — base64(DER), контракт с ядром.
@@ -150,11 +155,9 @@ class MasqueKeys {
     final trimmed = raw.trim();
     if (!trimmed.contains('-----BEGIN')) {
       // уже base64(DER) — возвращаем как есть (убрав пробелы/переводы строк)
-      return trimmed.replaceAll(RegExp(r'\s'), '');
+      return trimmed.replaceAll(_wsRe, '');
     }
-    final body = trimmed
-        .replaceAll(RegExp(r'-----(BEGIN|END)[^-]*-----'), '')
-        .replaceAll(RegExp(r'\s'), '');
+    final body = trimmed.replaceAll(_pemHeaderRe, '').replaceAll(_wsRe, '');
     // валидируем, что это парсится в base64 (иначе бросит FormatException)
     base64.decode(body);
     return body;
