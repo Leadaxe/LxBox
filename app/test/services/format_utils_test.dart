@@ -28,6 +28,12 @@ void main() {
         formatDuration(const Duration(minutes: 5, seconds: 30)), '5m 30s'));
     test('hours+minutes', () => expect(
         formatDuration(const Duration(hours: 2, minutes: 5)), '2h 5m'));
+    // §219 — секунды на часовом разряде отбрасываются НАМЕРЕННО (чем длиннее
+    // интервал, тем ниже нужная точность). Не «баг несогласованности» с
+    // минутным разрядом — задокументировано в format_utils.
+    test('hours+minutes+seconds → секунды отбрасываются', () => expect(
+        formatDuration(const Duration(hours: 1, minutes: 5, seconds: 30)),
+        '1h 5m'));
     test('zero', () => expect(formatDuration(Duration.zero), '0s'));
   });
 

@@ -311,6 +311,11 @@ class AppLog extends ChangeNotifier {
           'message': e.message,
         });
         final lineBytes = utf8.encode(encoded).length + 1; // +\n
+        // §219 — `out.isNotEmpty` намеренно: если ПЕРВАЯ строка сама больше
+        // лимита, всё равно пишем её (пустой файл-лог хуже, чем чуть-превышенный
+        // на одну запись). Одна аномально большая строка → файл может превысить
+        // _persistMaxBytesPerFile ровно на её размер — приемлемый компромисс,
+        // не удалять это условие (иначе большая первая строка → пустой файл).
         if (bytes + lineBytes > _persistMaxBytesPerFile && out.isNotEmpty) {
           break;
         }
