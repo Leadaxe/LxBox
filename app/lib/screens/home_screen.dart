@@ -522,7 +522,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
             children: [
               // Empty state (no config) → guide + CTA берёт на себя весь
               // экран; controls/header не рисуем, чтобы disabled-кнопка
-                // не путала первого пользователя.
+              // не путала первого пользователя.
               if (state.configRaw.isNotEmpty) ...[
                 HomeControls(
                   controller: _controller,

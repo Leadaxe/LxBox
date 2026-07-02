@@ -60,7 +60,7 @@ class BundleMerge {
 ///    - иначе `required=false` → `null` (при подстановке ключи с unresolved
 ///      `@var` удаляются из родительского Map).
 /// 2. Deep-copy и substitute `@var` в `rule_set` / `dns_rule` / `rule` /
-///    `dns_servers` через [_substitute].
+///    `dns_servers` через [substituteVars].
 /// 3. Фильтр `dns_servers` до одного — с `tag == vars['dns_server']`.
 ///    Если dns_server == null → пустой список (пресет не вносит DNS-сервер).
 /// 4. Если `detour == 'direct-out'` в DNS-сервере — удаляем ключ (direct
@@ -191,7 +191,7 @@ PresetFragments expandPreset(
       // бьёт её полностью.
       //
       // `varsValues['outbound']` проверяется здесь, а не пропускается
-      // через `_substitute`, потому что preset может не иметь `@outbound`
+      // через `substituteVars`, потому что preset может не иметь `@outbound`
       // substitution (см. Block Ads: `rule: {rule_set, action: reject}`
       // без `vars`) — но override юзера всё равно должен применяться.
       //

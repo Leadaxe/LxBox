@@ -95,7 +95,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     unawaited(_loadAutoStart());
     if (widget.highlightCoreLogs) {
       // Tile живёт в Diagnostics tab (initialTab=2). Tab сам строит
-      // children когда juзер на нём — postFrame этого build'а гарантирует
+      // children когда юзер на нём — postFrame этого build'а гарантирует
       // что _coreLogsTileKey.currentContext доступен.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToAndHighlightCoreLogs();

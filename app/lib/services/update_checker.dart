@@ -212,17 +212,15 @@ class UpdateChecker {
     }
   }
 
-  /// Strips weird chars from version for User-Agent header. Не должно быть
-  /// CR/LF/whitespace; localVersion теоретически "1.5.0" чистый, но на
-  /// всякий случай.
+  /// §219 — возвращает фиксированный `'1.x'` для User-Agent: точную версию не
+  /// утекаем (privacy). Параметр не принимается, ничего не «strips».
   String _userAgentSafeVersion() {
     return '1.x'; // stable UA, не утекаем точную версию (privacy chrome)
   }
 
-  /// Persist «не показывать этот релиз» + clear notifier. Read-guard уже
-  /// работает (getDismissedUpdateVersion в update-snackbar), но writer'а в
-  /// UI пока нет — фича половинчатая. Wire «Later»-action или убрать guard
-  /// целиком — решение §090. Stub оставлен намеренно (не dead code).
+  /// Persist «не показывать этот релиз» + clear notifier. Read-guard
+  /// (getDismissedUpdateVersion в update-snackbar) + writer wired: вызывается
+  /// из «Later»-action диалога обновления (home_dialogs.dart, §092).
   Future<void> dismissCurrent() async {
     final cur = latest.value;
     if (cur == null) return;

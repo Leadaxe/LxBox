@@ -637,8 +637,9 @@ String? _firstMatch(List<String> tags, RegExp re) {
 /// §120 — typed substitution + `#if`. Тонкая обёртка над общим [walk]-движком
 /// ([if_engine.dart]). `obj` мутируется на месте. Coerce — по `node.type`
 /// (через [resolve]), `#if` — резолвится здесь же (substitution-фаза, до
-/// post-steps). Заменяет старые `_substituteVars`/`_resolveVar`, которые гадали
-/// тип по содержимому строки.
+/// post-steps). §219 — переписанная версия: заменяет ЛОГИКУ прежних
+/// `_substituteVars`/`_resolveVar` (гадали тип по содержимому строки) на
+/// типизированный walk-движок.
 void _substituteVars(dynamic obj, VarResolver resolve) {
   walk(obj, resolve);
 }
