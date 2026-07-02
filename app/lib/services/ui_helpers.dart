@@ -16,3 +16,41 @@ mixin SnackHelper<T extends StatefulWidget> on State<T> {
     );
   }
 }
+
+/// §219 — единый диалог «Unsaved changes» (Discard / Keep / Save). Был
+/// идентично продублирован в channel_edit / custom_rule_edit / dns_server_edit
+/// (`_handleBack`). Возвращает `'save'` / `'discard'` / `'keep'` / `null`
+/// (dismiss). Стилизация: Discard — `colorScheme.error`, Save — bold primary.
+Future<String?> showUnsavedChangesDialog(BuildContext context) {
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) {
+      final cs = Theme.of(ctx).colorScheme;
+      return AlertDialog(
+        title: const Text('Unsaved changes'),
+        content: const Text('You have unsaved changes. Save before leaving?'),
+        // §045 — все TextButton + короткие надписи вмещаются в строку.
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'discard'),
+            style: TextButton.styleFrom(foregroundColor: cs.error),
+            child: const Text('Discard'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'keep'),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'save'),
+            style: TextButton.styleFrom(
+              foregroundColor: cs.primary,
+              textStyle: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      );
+    },
+  );
+}
