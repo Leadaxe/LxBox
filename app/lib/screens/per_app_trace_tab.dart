@@ -138,7 +138,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
 
   Future<void> _toggleVerbose(bool value) async {
     setState(() => _verbose = value);
-    // Если сейчас active session — изменить уже nothing нельзя без reload,
+    // Если сейчас active session — изменить уже ничего нельзя без reload,
     // показываем snackbar.
     if (TrafficProfiler.I.isRecording) {
       ScaffoldMessenger.of(context).showSnackBar(
