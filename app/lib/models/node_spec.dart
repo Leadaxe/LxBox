@@ -600,3 +600,69 @@ final class WireguardSpec extends NodeSpec {
   @override
   String toUri() => e.toUriWireguard(this);
 }
+
+/// §130 — MASQUE (CONNECT-IP over HTTP/3/HTTP-2) для Cloudflare WARP.
+///
+/// В отличие от [WireguardSpec] эмитится как **Outbound** (не Endpoint) —
+/// ядро sing-box-lx (SPEC 021) регистрирует `type:masque` через
+/// `outbound.Register`. Ключи — ECDSA P-256 в DER-base64 (см. [MasqueKeys]):
+/// [privateKeyDer] = наш приватник (SEC1), [publicKeyDer] = серверный pubkey
+/// (PKIX, для pinning). `network` — это ТРАНСПОРТ (`h3`/`h2`), не L4.
+final class MasqueSpec extends NodeSpec {
+  /// base64(SEC1 DER) нашего ECDSA-приватника. СЕКРЕТ.
+  final String privateKeyDer;
+
+  /// base64(PKIX DER) серверного ECDSA-pubkey (pinning).
+  final String publicKeyDer;
+
+  /// Локальные адреса туннеля (CIDR): [v4, v6]. Хотя бы один обязателен.
+  final List<String> localAddresses;
+
+  /// `cloudflare` (дефолт) | `standard`.
+  final String profile;
+
+  /// Транспорт: `h3` (QUIC, дефолт) | `h2` (HTTP/2).
+  final String network;
+
+  /// TLS SNI; пусто = дефолт ядра (`consumer-masque.cloudflareclient.com`).
+  final String sni;
+
+  final int? mtu;
+
+  /// idle-suspend туннеля (Go-duration, напр. `5m`). Пусто = дефолт ядра (5m);
+  /// отрицательное (`-1s`) = выключить. См. [§128](../128%20idle-suspend/).
+  final String idleTimeout;
+
+  /// QUIC keepalive-период (Go-duration, напр. `30s`). Пусто = дефолт (30s);
+  /// отрицательное = выключить. Только для `network=h3`.
+  final String keepAlive;
+
+  MasqueSpec({
+    required super.id,
+    required super.tag,
+    required super.label,
+    required super.server,
+    required super.port,
+    required super.rawUri,
+    required this.privateKeyDer,
+    required this.publicKeyDer,
+    required this.localAddresses,
+    this.profile = 'cloudflare',
+    this.network = 'h3',
+    this.sni = '',
+    this.mtu,
+    this.idleTimeout = '',
+    this.keepAlive = '',
+    super.chained,
+    super.warnings,
+  });
+
+  @override
+  String get protocol => 'masque';
+
+  @override
+  SingboxEntry emit(TemplateVars vars) => e.emitMasque(this, vars);
+
+  @override
+  String toUri() => e.toUriMasque(this);
+}

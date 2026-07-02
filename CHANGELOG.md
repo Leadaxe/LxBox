@@ -6,6 +6,31 @@
 
 ---
 
+## [2.9.0] — 2026-07-02
+
+**MASQUE-транспорт для WARP** — флагман релиза. Cloudflare WARP теперь можно
+поднять не только по WireGuard, но и по **MASQUE (CONNECT-IP поверх HTTP/3/QUIC
+и HTTP/2)**: другой пул выходных нод (чаще иностранные IP) и маскировка под
+обычный HTTPS/QUIC к Cloudflare. В визарде Get WARP — переключатель транспорта,
+выбор h3/h2, SNI-комбобокс и тюнинг idle-timeout/keep-alive. Ядро — стабильное
+**v1.14.0-lx.1** (первый полный релиз ветки 1.14-lx). Плюс мелкие фиксы Debug API.
+
+### Added
+
+- **§130 — MASQUE-транспорт для Cloudflare WARP** ([feature spec](docs/spec/features/130%20masque-warp-transport/spec.md), [masque_keys.dart](app/lib/services/warp/masque_keys.dart) · [masque_account.dart](app/lib/services/warp/masque_account.dart) · [warp_wizard_screen.dart](app/lib/screens/warp_wizard_screen.dart)). WARP — это сервис Cloudflare, а **транспорт** к нему теперь на выбор: привычный **WireGuard** или новый **MASQUE** (CONNECT-IP / RFC 9484 поверх QUIC-HTTP/3, с fallback на HTTP/2 там, где режут UDP). MASQUE даёт другой набор выходных нод (часто иностранные IP) и выглядит для DPI как обычный HTTPS к Cloudflare. Регистрация MASQUE-устройства идёт на телефоне (генерируется ECDSA P-256 keypair, приватник не покидает устройство; двухшаговый enroll в Cloudflare), ключи сериализуются в DER байт-в-байт под парсер ядра. В визарде **Get WARP** — переключатель **WireGuard ↔ MASQUE**; для MASQUE доступны: **Transport** (HTTP/3 QUIC / HTTP/2 TCP), **SNI** (combo-box из пула легитимных доменов + свободный ввод + кубик, по умолчанию — случайный домен), **Idle timeout** и **Keep-alive**. Ключевой материал MASQUE кешируется отдельно от WireGuard-аккаунта и попадает в бэкап.
+
+### Changed
+
+- **Ядро sing-box-lx → v1.14.0-lx.1** ([libbox.version](app/android/libbox.version), [docs/KERNEL.md](docs/KERNEL.md)). Первый полный стабильный релиз ветки 1.14-lx (после серии rc). Добавлен MASQUE CONNECT-IP outbound (SPEC 021, `type: masque`, профиль cloudflare, транспорты h3/h2) — ядровая половина §130.
+
+### Fixed
+
+- **§218 — Debug API `/help` синхронизирован с реальными роутами** ([help.dart](app/lib/services/debug/handlers/help.dart)). Самодокументация `/help` разошлась с фактически смонтированными хендлерами (часть роутов не отражалась). Карта приведена в соответствие с `server.dart`.
+
+- **`/help?format=json` больше не падает** ([help.dart](app/lib/services/debug/handlers/help.dart), [help_json_test.dart](app/test/services/debug/help_json_test.dart)). Секция `errors.codes` имела целочисленные ключи (HTTP-код → описание), а `JsonEncoder` требует строковые — сериализация роняла весь ответ, соединение обрывалось (`format=text` при этом работал). Ключи приведены к строкам; тест проверяет сериализацию и что все вложенные Map имеют строковые ключи.
+
+---
+
 ## [2.8.2] — 2026-07-01
 
 Подписка **из локального файла**: список нод в файле теперь работает как обычная

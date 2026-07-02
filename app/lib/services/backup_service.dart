@@ -37,6 +37,7 @@ const _topLevelAppKeys = {
   'last_global_update',
   'presets_migrated',
   'warp_account',
+  'masque_account', // §130 — MASQUE-WARP аккаунт (ECDSA-ключи + endpoint)
   'interrupt_connections_on_switch',
   'node_sort_mode',
   'node_manual_order',
