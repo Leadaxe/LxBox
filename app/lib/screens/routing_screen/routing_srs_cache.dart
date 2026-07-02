@@ -37,6 +37,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     } else {
       _channels.addAll(stored);
     }
+    _invalidateOutboundOptions(); // §219 — сброс кэша после load каналов
 
     _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'vpn-1';
     _customRules.addAll(await SettingsStorage.getCustomRules());

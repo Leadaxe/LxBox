@@ -42,11 +42,15 @@ class _OverviewTabState extends State<OverviewTab> {
 
   @override
   Widget build(BuildContext context) {
-    final sorted = widget.groups.values.toList()
-      ..sort((a, b) => (b.upload + b.download).compareTo(a.upload + a.download));
+    // §219 — loading-guard ДО сортировки (не сортируем впустую при спиннере);
+    // Theme.of(context) один раз (было 5 обходов дерева за build).
     if (widget.loading) {
       return const Center(child: CircularProgressIndicator());
     }
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final sorted = widget.groups.values.toList()
+      ..sort((a, b) => (b.upload + b.download).compareTo(a.upload + a.download));
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
@@ -56,16 +60,16 @@ class _OverviewTabState extends State<OverviewTab> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _totalChip(context, 'Upload', formatBytes(widget.totalUp, spaced: true), Icons.arrow_upward, Theme.of(context).colorScheme.primary),
-                _totalChip(context, 'Download', formatBytes(widget.totalDown, spaced: true), Icons.arrow_downward, Theme.of(context).colorScheme.tertiary),
-                _totalChip(context, 'Connections', '${widget.totalConns}', Icons.link, Theme.of(context).colorScheme.secondary),
-                _totalChip(context, 'sing-box', formatBytes(widget.memory, spaced: true), Icons.memory, Theme.of(context).colorScheme.secondary),
+                _totalChip(context, 'Upload', formatBytes(widget.totalUp, spaced: true), Icons.arrow_upward, cs.primary),
+                _totalChip(context, 'Download', formatBytes(widget.totalDown, spaced: true), Icons.arrow_downward, cs.tertiary),
+                _totalChip(context, 'Connections', '${widget.totalConns}', Icons.link, cs.secondary),
+                _totalChip(context, 'sing-box', formatBytes(widget.memory, spaced: true), Icons.memory, cs.secondary),
               ],
             ),
           ),
         ),
         const SizedBox(height: 16),
-        Text('Traffic by Rule', style: Theme.of(context).textTheme.titleMedium),
+        Text('Traffic by Rule', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         if (sorted.isEmpty)
           const Center(child: Text('No active connections'))
@@ -95,6 +99,9 @@ class _OverviewTabState extends State<OverviewTab> {
     final isExpanded = _expanded.contains(group.name);
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    // §219 — chain один раз (было 2 вызова _detourChain на итерацию цикла,
+    // каждый обходит дерево конфига byTag).
+    final chain = _detourChain(group.name);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -112,11 +119,11 @@ class _OverviewTabState extends State<OverviewTab> {
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (var i = 0; i < _detourChain(group.name).length; i++)
+                for (var i = 0; i < chain.length; i++)
                   Padding(
                     padding: EdgeInsets.only(left: 8.0 + i * 12.0, top: 2),
                     child: Text(
-                      '↳ via ${_detourChain(group.name)[i]}',
+                      '↳ via ${chain[i]}',
                       style: TextStyle(
                         fontSize: 11,
                         color: cs.onSurfaceVariant,
