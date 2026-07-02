@@ -103,6 +103,7 @@ class _RoutingScreenState extends State<RoutingScreen>
   /// каждый канал имеет свой `<tag>-auto`, который опцией роутинга не выставляем
   /// (это внутренняя деталь канала).
   /// §219 — сбросить кэш опций после мутации `_channels`.
+  @override
   void _invalidateOutboundOptions() => _cachedOutboundOptions = null;
 
   List<RoutingOutboundOption> _outboundOptions() {
