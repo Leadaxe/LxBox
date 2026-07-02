@@ -46,7 +46,7 @@ CHANGELOG.md                        # Список изменений по ве�
 
 **Фичи vs задачи:** в `docs/spec/features/` — описание возможности («что это и как устроено»). В [`docs/spec/tasks/`](./spec/tasks/README.md) — журнал отдельных рабочих циклов: баг с нетривиальным root cause, perf-pass, рефакторинг с последствиями; формат и критерии — в `README` папки.
 
-Актуальные спеки — `docs/spec/features/003 home screen/` … `047 public intent api/` (см. полный индекс в [`docs/spec/features/README.md`](spec/features/README.md)). Демотированные/superseded спеки уехали в `docs/spec/tasks/055..061` через [§054 spec reorg](spec/tasks/054-spec-reorg-features-vs-tasks.md). Полный список с описаниями — в [`ARCHITECTURE.md → Feature Specs`](ARCHITECTURE.md#feature-specs). Крупные landmark'и:
+Актуальные спеки — `docs/spec/features/003 home screen/` … `130 masque-warp-transport/` (61 фича; полный индекс — в [`docs/spec/features/README.md`](spec/features/README.md), он не протухает). Демотированные/superseded спеки уехали в `docs/spec/tasks/055..061` через [§054 spec reorg](spec/tasks/054-spec-reorg-features-vs-tasks.md). Полный список с описаниями — в [`ARCHITECTURE.md → Feature Specs`](ARCHITECTURE.md#feature-specs). Крупные landmark'и:
 - **026** — Parser v2 (sealed `NodeSpec`, 3-слойный pipeline) — рефакторинг v1.3.0.
 - **027** — Subscription auto-update (4 триггера + hard gates против спама).
 - **033** — Preset bundles (selectable rules с `preset_id`, expansion + merge).
@@ -157,8 +157,8 @@ Debug и release APK имеют разные подписи. `adb install -r` н
 #### 4. VPN permissions
 Android требует подтверждения VPN permission при первом запуске. Если пользователь отказал — `onRevoke` в VpnService. Нужно корректно обрабатывать этот случай.
 
-#### 5. Clash API порт
-Clash API слушает на рандомном порту (49152-65535). При перезапуске sing-box порт может измениться. ClashEndpoint парсится из configRaw при каждом старте.
+#### 5. CommandClient, а не Clash API
+Clash API полностью выпилен в §122 (CommandClient-миграция): HTTP-порта нет, `experimental.clash_api` в конфиг **не** инжектится (его наличие = фатальный отказ старта ядра «clash api is not included in this build»). Управление и стримы (groups/status/connections/dns) идут через libbox CommandClient. Риск: три CC-клиента (status/screen/profiler) не сливать в один; EventSink пушить только с main thread — один native sink на канал, фан-аут через broadcast.
 
 ### Частые ошибки
 
@@ -192,7 +192,7 @@ cd app && flutter test
 ```
 **0 issues** в analyze и **все тесты зелёные** — обязательно.
 
-Сейчас 436+ тестов (cnt варьируется по мере добавления; источник правды — `flutter test` summary):
+Сейчас ~1400+ тест-кейсов в 112 файлах (cnt варьируется по мере добавления; источник правды — `flutter test` summary):
 - `test/models/` — sealed hierarchies (NodeSpec, NodeWarning, ServerList JSON, CustomRule)
 - `test/parser/` — URI/JSON/INI парсеры + round-trip (parseUri → toUri → parseUri)
 - `test/builder/` — build_config, validator, mixed-case SNI, preset_expand, applyCustomDns, dns_rules_resolver
@@ -223,34 +223,17 @@ cd app && flutter test
 
 ### 3. Сборка и деплой
 ```bash
-# Локальная релизная сборка с LOCAL BUILD badge (рекомендуется для dev)
+# Локальная релизная сборка (версия derive'ится из git describe; рекомендуется для dev)
 ./scripts/build-local-apk.sh
 adb install -r app/build/app/outputs/flutter-apk/app-release.apk
 
-# Релизная сборка без маркера (как CI)
+# Релизная сборка (как CI)
 cd app && flutter build apk --release
 ```
 
 ### 4. Процесс релиза
 
-CI workflow (`.github/workflows/ci.yml`) при push тега `v*` собирает release APK и создаёт GitHub Release с телом из `RELEASE_NOTES.md`. Нужно:
-
-1. **Обновить `app/pubspec.yaml`** — `version: X.Y.Z+N` (bump patch/minor, +build number).
-2. **Обновить `app/lib/screens/about_screen.dart`** — `static const _version = 'X.Y.Z';` (hardcoded — хочется поменять на `package_info_plus`, но пока так).
-3. **Добавить секцию в `CHANGELOG.md`** `## [X.Y.Z] — YYYY-MM-DD` — вверху, под `# Changelog`.
-4. **Создать `docs/releases/vX.Y.Z.md`** — подробные release notes (EN видимые + RU под `<details>`, см. v1.3.0/v1.3.1 как эталон).
-5. **Синхронизировать `RELEASE_NOTES.md`** ← `docs/releases/vX.Y.Z.md` (CI читает корневой файл для тела GitHub release).
-6. **Коммит + tag + push:**
-   ```bash
-   git add -A
-   git commit -m "release: vX.Y.Z"
-   git tag -a vX.Y.Z -m "vX.Y.Z — short description"
-   git push origin main
-   git push origin vX.Y.Z
-   ```
-7. CI автоматически собирает APK и публикует Release.
-
-**Не забыть:** если `RELEASE_NOTES.md` осталось со старой версии — тело автоматического релиза будет неправильным. Для таких случаев — `gh release edit vX.Y.Z --notes-file docs/releases/vX.Y.Z.md` (было с v1.3.0, v1.3.1).
+Канонический протокол релиза — [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md) (single source of truth). Кратко: версия **не правится вручную нигде** — `app/pubspec.yaml` = placeholder, а pre-commit hook + CI инжектят `versionName`/`versionCode` из git-тега (§065/§066); `static const _version` из `about_screen.dart` удалён. Модель веток develop→main→tag, обязательный post-flight merge main→develop. Все шаги, чек-лист и грабли — в RELEASE_PROCESS.md, дублировать их здесь не нужно.
 
 ### 5. Версионирование
 - `pubspec.yaml`: `version: X.Y.Z+N`
@@ -336,14 +319,15 @@ Defaults: `registerDetourServers=false`, `useDetourServers=true`, остальн
 
 | Зависимость | Версия | Где | Риск обновления |
 |------------|--------|-----|----------------|
-| sing-box (libbox) | 1.13.11 (`com.github.singbox-android:libbox`) | JitPack | API может измениться, тестировать native код. Миграция 1.12 → 1.13 — [task §060 libbox-1-13-migration](spec/tasks/060-libbox-1-13-migration/spec.md) (был feature §039) |
+| sing-box-lx (fork, libbox) | v1.14.0-lx.1 | пин `app/android/libbox.version` + `libs/libbox.aar` (качает `scripts/fetch-libbox.sh` из GH Releases форка); Maven/JitPack-строка удалена | API может измениться, тестировать native код. Ловушки бампа версии — [`KERNEL.md`](KERNEL.md) |
 | Flutter | 3.41.6 | SDK | Обычно безопасно, проверять deprecated |
 | Gradle | 8.14 | wrapper | Совместимость с AGP |
 | AGP | 8.11.1 | build.gradle.kts | Совместимость с Gradle и Flutter |
 | Java | 17 | Temurin | Не менять без причины |
 
 ### При обновлении libbox
-1. Проверить API changes в sing-box changelog
-2. Обновить `android/app/build.gradle.kts` (JitPack dependency)
+Ядро — форк sing-box-lx, подключается как `libs/libbox.aar` (не Maven). Процедура и ловушки build-тегов — в [`KERNEL.md → бамп версии`](KERNEL.md). Кратко:
+1. Проверить API changes в changelog форка
+2. Бампнуть пин `app/android/libbox.version` + подтянуть AAR через `scripts/fetch-libbox.sh`
 3. Проверить native код в `vpn/` — методы могут измениться
-4. Полное тестирование: start/stop, Clash API, connections
+4. Полное тестирование: start/stop, CommandClient-стримы (groups/status/connections)

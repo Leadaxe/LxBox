@@ -100,7 +100,7 @@ Platform напрямую — только через контроллеры.
 на libbox **CommandClient** (server-stream push вместо Timer-polling). Push-каналы:
 native статус-`Stream<TunnelStatusEvent>` (lifecycle туннеля), `lxbox/coreLog`-stream
 (→ `AppLog` → `TrafficProfiler`) и CommandClient-стримы поверх EventChannel
-`lxbox/cc/*` (status · outbounds · groups · connections — `vpn/cc_channel.dart`).
+`lxbox/cc/*` (status · outbounds · groups · connections · dns — `vpn/cc_channel.dart`).
 Unary-pull остался точечно — `getGroups()` (lifeline там, где groups-push дырявый),
 плюс императивы сверху вниз (`urlTestOutbound` · `selectOutbound` · `closeConnection`).
 Heartbeat — watchdog по **тишине** status-стрима, без HTTP-poll'а. Подробные
@@ -135,9 +135,9 @@ library-private доступ сохранён) либо вынос виджет-
 
 | Файл | Строк | Почему остаётся целым |
 |---|---|---|
-| `services/traffic_profiler.dart` | 1221 | Монолитный stateful singleton: log-ingest parser + conn-id correlation + confidence + dual SSE fan-out — всё через общий private state и один `ChangeNotifier`-контракт. Pure-типы (`models.dart`) и correlation-структуры (`internal.dart`) уже вынесены `part`'ом. |
+| `services/traffic_profiler.dart` | 1243 | Монолитный stateful singleton: приём CC connections+DNS-стримов + diff-снапшоты + confidence + dual SSE fan-out — всё через общий private state и один `ChangeNotifier`-контракт. Core-лог **не** парсит (лог-питатель выпилен в §044/§180). Pure-типы (`models.dart`) и correlation-структуры (`internal.dart`) уже вынесены `part`'ом. |
 | `models/custom_rule.dart` | 618 | Уже sealed `Inline`/`Srs`/`Preset`; объём присущ трём структурно разным вариантам. Дальнейший split + SRS-cache у Preset (spec 011) — **behavior-changing** → отложен в §090. |
-| `android/.../VpnPlugin.kt` | 635 | Единый `MethodCallHandler`-контракт; split разнёс бы channel-контракт по файлам. |
+| `android/.../VpnPlugin.kt` | 1084 | Единый `MethodCallHandler`-контракт; split разнёс бы channel-контракт по файлам. |
 
 ### ConfigNode / ParsedConfig (§091 — реализовано)
 
@@ -445,8 +445,9 @@ app_settings_screen.dart     # настройки приложения (516): Ge
 backup_screen.dart           # export/import снапшота (229) + export_card/import_card/preview
 lazy_persist_mixin.dart      # LazyPersistMixin — отложенный persist на settings-экранах (flush на возврат)
 # монолитные одиночные экраны (без под-папки, 60–505): about · add_server_wizard ·
-#   app_picker · config · connections · debug · node_filter · node_settings ·
-#   outbound_view · settings · speed_test
+#   app_picker · channel_edit (§125) · config · connections · debug · dns_server_edit ·
+#   node_settings · outbound_view · settings · speed_test · vpn_mode_tab (§119) ·
+#   warp_wizard (§130 WARP/MASQUE мастер)
 ```
 
 #### `services/` — сервисный слой
@@ -469,14 +470,18 @@ builder/                     # NodeSpec + template → sing-box config
   preset_expand.dart         #   expandPreset (CustomRulePreset → fragments, @var) + mergeFragments (§033)
   rule_set_registry.dart     #   реестр route.rule_set + route.rules; tag-уникальность
   validator.dart             #   validateConfig: dangling refs, empty urltest → ValidationResult
-  post_steps.dart            #   barrel (part): пять post-обработок ниже
+  post_steps.dart            #   barrel (part): шесть post-обработок ниже
   post_steps/tls_transforms.dart  #   applyMixedCaseSni + applyTlsFragment (§028)
   post_steps/custom_rules.dart    #   applyAllCustomRules (preset/inline/srs в storage order, §062)
   post_steps/dns_rules.dart       #   applyCustomDns / resolveDnsRulesList (§061+§033)
   post_steps/dns_servers.dart     #   resolveDnsServersList/Bodies (§043+§044)
+  post_steps/heal_dangling_detours.dart # §172 healDanglingDetours: detour∉allTags снимается (warning),
+                             #   зовётся перед validateConfig — битый detour из подписки деградирует, не роняет конфиг
   post_steps/tun_packages.dart    #   applyTunPackages — OS split-tunnel (§046, последний шаг)
 subscription/                # fetch/auto-update подписок
-  sources.dart               #   sealed SubscriptionSource (Url/File/Clipboard/Inline/Qr) + fetch (3-try backoff)
+  sources.dart               #   sealed SubscriptionSource (Url/File/Clipboard/Inline/Qr) + fetch (3-try backoff);
+                             #   §129 file-подписка: url=file:<uuid> (input_helpers.isFileSubscription) читается из HttpCache-снапшота
+                             #   (не сеть); смена источника online↔file транзакционна (updateSourceAt, старый снапшот держится до успеха)
   auto_updater.dart          #   5-триггерный refresh + per-sub interval + retry/fail-caps + dedup (§027)
   http_cache.dart            #   on-disk кэш последнего raw body + headers (offline rehydrate);
                              #   §101 — атомарная запись tmp→rename (kill-safe при unawaited save)
@@ -487,9 +492,9 @@ settings_storage/vars.dart          #   vars-домен + Wi-Fi history (§051)
 settings_storage/sources_rules.dart #   server_lists (+v1 migration), rules/groups, custom_rules
 settings_storage/network.dart       #   route_final/excluded/dns/ping_options (§040/§061)
 settings_storage/backup_tun.dart    #   снапшот (§031) + tun-apps split-tunnel (§046)
-traffic_profiler.dart        # TrafficProfiler singleton (1221, см. Обзор): сессии, rolling buffer, SSE
+traffic_profiler.dart        # TrafficProfiler singleton (1243, см. Обзор): сессии, rolling buffer, SSE
 traffic_profiler/models.dart        #   part: TrafficEvent/Session + enums + JSON
-traffic_profiler/internal.dart      #   part: _ConnMeta/_DnsAccumulator/_ConnSnapshot correlation-структуры
+traffic_profiler/internal.dart      #   part: _ConnSnapshot correlation-структура (§180 _DnsAccumulator/§044 _ConnMeta выпилены)
 debug/                       # localhost HTTP Debug API (§031)
   bootstrap.dart             #   applyDebugApiSettings — строит DebugContext, рестартит сервер
   debug_registry.dart        #   нуллабельные refs на контроллеры (bind в HomeScreen.initState)
@@ -505,6 +510,11 @@ debug/                       # localhost HTTP Debug API (§031)
   handlers/                  #   /state /settings /action /profiler /rules /subs /config /logs /device
                              #     /files /diag /backup /wifi_history /help /ping /warp (+ _shared CRUD-хелперы)
   serializers/               #   home_state · storage (denylist scrubber) · rules · subs (URL-маскинг)
+warp/                        # §025/§130 WARP + MASQUE-транспорт (питает warp_wizard_screen)
+  warp_client.dart           #   регистрация в Cloudflare (POST /reg): X25519-приватник не покидает телефон
+  warp_account.dart          #   WARP-аккаунт (client_id→reserved, ключи)
+  warp_endpoint_picker.dart  #   скан WARP-эндпоинтов (порты 2408/500/1701/4500, WG-handshake liveness)
+  masque_account.dart · masque_keys.dart · masquerade_params.dart  #   §130 MASQUE (Cloudflare QUIC/CONNECT-IP) — эмит MasqueSpec
 migration/proxy_source_migration.dart  # one-shot v1 proxy_sources → v2 server_lists
 nav/home_return_observer.dart          # глобальный NavigatorObserver (§076): rebuild на возврат к home
 app_log.dart                 # AppLog ChangeNotifier-singleton: per-source ring buffers + persistent warn/error (§043)
@@ -514,6 +524,8 @@ format_utils.dart            # formatBytes/formatDuration/formatTime (канон
 relative_time.dart           # relativeTime(now, past) — "2h ago" (pure, тестируемый)
 url_mask.dart                # maskSubscriptionUrl — scheme://host/*** для логов/шеринга
 tag_resolver.dart            # §085 TagResolver — единый владелец display-тега (displayTag/isDetourMarker/strip)
+rule_name_resolver.dart      # §165 — маппинг ядровой rule.String() (лоссовая, обрезает списки >3) →
+                             #   custom_rules[].name для Stats→Traffic by Rule / Conns; нормализация + indexOf + кэш промахов
 template_loader.dart         # wizard_template.json loader (singleton, deep-copy на билд)
 rule_set_downloader.dart     # download+cache remote .srs (parallel, atomic tmp+rename, retry)
 backup_service.dart          # export/import полного снапшота настроек (§031)
@@ -542,7 +554,7 @@ wifi_entry.dart · wifi_manual_add_dialog.dart · wifi_permission_dialog.dart ·
 ```
 MainActivity.kt              # FlutterActivity: регистрирует VpnPlugin; /utils + /wifi_history каналы;
                              #   VPN-consent flow; QS-tile/shortcut quick actions
-vpn/VpnPlugin.kt             # Flutter-плагин (635, см. Обзор): MethodCallHandler всех /methods;
+vpn/VpnPlugin.kt             # Flutter-плагин (1084, см. Обзор): MethodCallHandler всех /methods;
                              #   status+coreLog EventChannel sinks; §122 cc-методы (ccConnectScreen/
                              #   ccUrlTestOutbound/ccGetGroups/…) + lxbox/cc/* EventChannel sinks;
                              #   statusReceiver мост; app-icon encode
@@ -653,6 +665,7 @@ AutoUpdater.maybeUpdateAll(trigger, force)
   ├─ if _running → skip (dedup)
   ├─ candidates = entries.filter(_shouldUpdate)
   │   └─ _shouldUpdate: enabled ∧ !frozen(fails>=5) ∧ !minRetry(15min) ∧ (force ∨ interval elapsed)
+  │       (§129: подписки с url=file:<uuid> auto-updater пропускает — они читаются из HttpCache-снапшота, не из сети)
   └─ for entry in candidates:
        ├─ _inFlight.contains(url) → skip
        ├─ refreshEntry(entry, trigger)  → _fetchEntryByRef
@@ -770,6 +783,8 @@ backup-блоке и **не** в JSON-секции `native_prefs` — живёт
 
 `build_config.dart` мерджит template `config`-секцию + `selectable_rules[*]` (через `expandPreset`) + `dns_options.{servers,rules}` (через resolvers §061/§044) + `channels[]` из storage (§125 — `_buildChannelGroups`: per-channel `node_filter`-regex по node-tag'ам из `server_lists`, опции direct/block, auto-двойник) + `vars`-substitution → пишет финальный `singbox_config.json` для libbox.
 
+**Idle-suspend (§128/§215, ядро SPEC 020).** Настройка threshold'а (storage-ключ `route_idle_suspend`, default `30s`, `''` = off) прокидывается билдером в `route.lx_idle_suspend` финального конфига. Требует ядро с build-тегом `with_lx_idle_suspend` (в AAR он есть; при его отсутствии непустое `route.lx_idle_suspend` роняет старт — детали см. `KERNEL.md`). Управляется через сетевые настройки (`settings_storage/network.dart`).
+
 One-shot миграции (`SettingsStorage`):
 - `proxy_sources` → `server_lists` (v1 → v2, §033) — `migrateProxySources` на первом чтении.
 - `app_rules` → `custom_rules` с `packages` (до v1.3.2 → §030) — `_absorbLegacyAppRules`.
@@ -841,6 +856,13 @@ Sensitive-поля при `GET /state/storage` фильтруются allow-list
 - **Контракт ядра (SPEC 017/018).** Поля `chain()`/`detour()`/`DnsQuery.*` — нативные методы libbox AAR. При бампе ядра новые методы проверять `javap` ДО вызова в Kotlin (forward-compat: отсутствие метода = compile error, не runtime). Имена gomobile-стиля (напр. `getDNSServer`, не `getDnsServer`); итераторы (`chain()`/`outbound()` → `StringIterator`).
 
 ---
+
+### 6.6. WARP / MASQUE (§025 · §130)
+
+Cloudflare WARP-интеграция (`services/warp/`, мастер `screens/warp_wizard_screen.dart`, storage `settings_storage/warp.dart`). Два транспорта:
+
+- **WARP-WireGuard (§025).** `WarpClient` регистрирует устройство сам (POST в Cloudflare) — приватный ключ **X25519 генерируется на телефоне и не покидает его**. `client_id` (3 байта из base64) → WireGuard `reserved`; default-пир `engage.cloudflareclient.com:2408`. `warp_endpoint_picker.dart` сканирует диапазоны IP/портов, liveness = настоящий WG-handshake. Эмитится как обычная WireGuard-нода.
+- **MASQUE (§130, флагман v2.9.0).** Отдельная крипта (`masque_keys.dart` — ECDSA P-256, не X25519), `masque_account.dart`, `masquerade_params.dart`. `MasqueSpec` ([`node_spec.dart`](../app/lib/models/node_spec.dart), `protocol='masque'`) эмитит sing-box outbound `type: masque` (Cloudflare QUIC / CONNECT-IP), `network` = `h3`/`h2`. Требует ядро с поддержкой masque-транспорта — см. `KERNEL.md`.
 
 ### 6. AppLog (per-source ring buffers, §043)
 
@@ -1027,6 +1049,7 @@ Three Flutter-Android channels live в `VpnPlugin.kt`:
 | | getAllowBypass / setAllowBypass | bool | bool — §049 F15 `VpnService.Builder.allowBypass()`; apply на следующем `establish()` |
 | | getBackgroundMode / setBackgroundMode | "never" \| "lazy" \| "always" | bool — §052 foreground-service tunnel sleep mode |
 | **Notifications** | setNotificationTitle | `title: String` | bool — кастомный foreground notification title |
+| | setNotificationText | `text: String` | bool — §123 кастомный foreground notification text (`'<selector>: <node>'`; title = `'L×Box [final = <route.final>]'`), оба owned Dart'ом |
 | **Per-app routing helpers** | getInstalledApps | — | List<Map> (`package` / `appName` / `isSystemApp`) — без icons (тяжело) |
 | | getAppIcon | `packageName: String` | String (base64 PNG) |
 | | getAppInfo | `packageName: String` | Map (name+isSystem, **без icon** — §109) \| `{notFound: true}` (подтверждённо не установлен) \| error (retryable) |
@@ -1086,6 +1109,10 @@ Permission matrix:
 | API 33+ | `ACCESS_BACKGROUND_LOCATION` + `NEARBY_WIFI_DEVICES` (без NEARBY → `<unknown ssid>`) |
 
 **Defensive try/catch в `PlatformInterfaceWrapper.readWIFIState`** ([PlatformInterfaceWrapper.kt:139](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/PlatformInterfaceWrapper.kt:139)) — backup для случая когда permission grants drift'ует (например, Android revoke after long idle). `SecurityException` / `RuntimeException` → `return null`. Sing-box graceful'но получает null, не валит процесс через JNI.
+
+#### JNI no-throw инвариант (§050 · §151)
+
+Кросс-каттинговое правило для **всех** Kotlin-колбэков, которые libbox зовёт через gomobile-биндинг (`PlatformInterfaceWrapper`, `BoxService`/`BoxCommandClient` итераторы и `write*`-колбэки): **unchecked exception, вылетевшее через JNI = `Runtime::Abort` всего процесса** (не ловится Dart'ом, крашит особенно старые API — Android 10). Уточнение §151: методы с Go-сигнатурой `... error` защищены самим биндингом (исключение конвертится в error-возврат) — реальная abort-поверхность это методы **без** error-возврата. Следствие для итераторов (`StringIterator.Next()`/`HasNext()`, `chain()`/`outbound()`): возвращать пустое значение вместо броска. Симптом такого abort исторически — misleading `Unknown reference: 42` (root cause = unhandled `SecurityException` через JNI, см. §050).
 
 **Runtime grant flow** (Flutter side):
 
@@ -1179,7 +1206,7 @@ Tab'ы которые depend на глобальном toggle в settings (core_
 
 Два паттерна — **contextual banner** (state-зависимый hint) и **overflow item** (state-independent jump):
 
-- **Statistics → Live + Per-app → contextual `CoreLogsHintBanner`** ([core_logs_hint_banner.dart](../app/lib/widgets/core_logs_hint_banner.dart)). Inline banner widget показывается **только когда `core_logs_enabled=false`**; self-hides при включении (auto-refresh на `AppLifecycleState.resumed`). Split hit-zone: левая зона (i + «DNS / router events off») → tooltip с объяснением что без core logs DNS resolves пропадают и process attribution ухудшается до CommandClient connections-снапшота; правая («turn on Forward sing-box logs» + chevron) → deep-link в `AppSettingsScreen(initialTab: 1)` с auto-scroll и highlight нужного toggle'а. Это лучше чем PopupMenu overflow: явно виден когда нужен, исчезает когда не нужен.
+- **Statistics → Live + Per-app → contextual `CoreLogsHintBanner`** ([core_logs_hint_banner.dart](../app/lib/widgets/core_logs_hint_banner.dart)). Inline banner widget показывается **только когда `core_logs_enabled=false`**; self-hides при включении (auto-refresh на `AppLifecycleState.resumed`). Split hit-zone: левая зона (i + «DNS / router events off») → tooltip: баннер — опциональная подсказка для просмотра сырого core-лога; DNS/TCP-атрибуция от него **не** зависит (всё из ядра, §180/§168), см. секцию 6.5; правая («turn on Forward sing-box logs» + chevron) → deep-link в `AppSettingsScreen(initialTab: 1)` с auto-scroll и highlight нужного toggle'а. Это лучше чем PopupMenu overflow: явно виден когда нужен, исчезает когда не нужен.
 - **Routing → Tunnel apps → ⋮ → "VPN settings (Core)"** → `SettingsScreen(initialTab: 1)`. State-independent jump (всегда полезно ходить из Tunnel apps к Core vars), overflow PopupMenu уместен. Открывает Core а не System — юзер настраивает Tunnel apps mode и хочет рядом mtu / log_level / dns_final.
 - **Drawer → Debug → ⋮ → "Diagnostics settings"** → `AppSettingsScreen(initialTab: 1)` — fast-path на Quit&reopen после toggle Forward sing-box logs.
 
@@ -1201,14 +1228,14 @@ Tab'ы которые depend на глобальном toggle в settings (core_
 |---|---|---|
 | `statusClient` | `CommandStatus` (+ `setStatusInterval`) | always-on пока туннель жив; в фоне (`onAppPaused`) гасится (0 тиков/0 drain); §164 адаптивная частота NORMAL 0.5с (главный экран) / FAST 0.1с (Stats) — пересоздаётся с новым интервалом |
 | `screenClient` | `CommandOutbounds` + `CommandGroup` + `CommandConnections` | поднимается по `connectScreen()` (refs>0), гасится в фоне |
-| `profilerClient` | `CommandConnections` | поднимается по `connectProfiler()` для recording; §164 **не паузится** в фоне → recording живёт при свёрнутом app |
+| `profilerClient` | `CommandConnections` + `subscribeDNSQueries` (SPEC 018, §180) | поднимается по `connectProfiler()` для recording; §164 **не паузится** в фоне → recording живёт при свёрнутом app |
 | `pingClient` | голый `PingHandler`, без подписок — только unary RPC | §175/§209 — поднимается лениво, **lifecycle-независим** (`pauseClients` его НЕ трогает). Носитель ВСЕХ unary-снапшотов/действий (`urlTestOutbound` + `getPool`/`getGroups`/`getRules` + `selectOutbound`/`close*`). Дисконнект только в `cancelPing`/`resyncForReopen`/`shutdownAll`. Подписок нет → 0 нагрузки в покое. Следствие: снапшоты работают и при свёрнутом приложении |
 
 Подписка в gomobile-фасаде = `CommandClientOptions.addCommand(int)` + колбэки `CommandClientHandler.write*` (прямых `subscribe*`-методов в AAR нет).
 
 ### Dart-слой (`CcChannel`)
 
-Push-стримы поверх EventChannel `lxbox/cc/*` (`status` · `outbounds` · `groups` · `connections`). **§122 sink-leak-guard:** каждый EventChannel держит РОВНО ОДИН native sink; `CcChannel` делает один внутренний `listen` и фан-аутит через `StreamController.broadcast` (native sink ставится при первом Dart-подписчике, снимается при уходе последнего) — иначе cancel одного потребителя (dispose Stats) обнулял бы sink главного экрана → watchdog видел бы тишину → ложный dead-tunnel.
+Push-стримы поверх EventChannel `lxbox/cc/*` (`status` · `outbounds` · `groups` · `connections` · `dns`). **§122 sink-leak-guard:** каждый EventChannel держит РОВНО ОДИН native sink; `CcChannel` делает один внутренний `listen` и фан-аутит через `StreamController.broadcast` (native sink ставится при первом Dart-подписчике, снимается при уходе последнего) — иначе cancel одного потребителя (dispose Stats) обнулял бы sink главного экрана → watchdog видел бы тишину → ложный dead-tunnel.
 
 | Стрим / метод | Тип | Назначение |
 |---|---|---|
@@ -1216,6 +1243,7 @@ Push-стримы поверх EventChannel `lxbox/cc/*` (`status` · `outbounds
 | `outbounds` | push `Stream<List<CcOutbound>>` | список outbound'ов |
 | `groups` | push `Stream<List<CcGroup>>` | selector/urltest группы + selected/active |
 | `connections` | push `Stream<List<CcConnection>>` | active TCP/UDP + bytes + packageName/processPath. **Pull нет** (см. §193 ниже) — ядро шлёт полный список ОДИН раз (reset-снапшот на подписку), дальше только дельты |
+| `dnsQueries` | push `Stream<List<CcDnsQuery>>` | §180 (SPEC 018) — DNS-запросы из ядра (domain/queryType/rcode/answers/cnameChain + dnsServer/outbound); `subscribeDNSQueries` на `profilerClient`; питает профайлер (`dnsResolve`/`dnsFail`) |
 | `getGroups()` | unary-pull `List<CcGroup>?` | детерминированный снапшот групп (lifeline на дыру стартового push'а; `null` = клиент недоступен, не трогать state) |
 | `getRules()` | unary-pull `List<CcRule>` | снапшот route+DNS правил (диагностика) |
 | `getPool(tag)` | unary-pull `List<CcPoolSlot>?` | §208/§209 — снапшот пула round_robin-группы (`slot/tag/delay`). `null` = клиент недоступен, `[]` = пул пуст (не round_robin). Питает UI «View pool» + Debug `/pool` |
@@ -1340,7 +1368,7 @@ HomeScreen
 | `path_provider` | Documents directory for persistent storage |
 | `shared_preferences` | Theme mode, haptic toggle |
 | `share_plus` | Config/log export via system share sheet |
-| **libbox** (native) | sing-box core — fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (`with_awg` + `with_xhttp`, §097/§104; §122 — без `with_clash_api`). Пин — `app/android/libbox.version` (`v1.14.0-lx.1-rc.16`, база upstream `v1.14.0-alpha.33`); AAR скачивает `scripts/fetch-libbox.sh` из GH Releases форка (SHA256-verify) в gitignored `libs/` — и локально (`build-local-apk.sh`), и в CI (`ci.yml` → «Fetch sing-box-lx core»). Maven-строка стокового libbox удалена из `build.gradle.kts` (исторически: JitPack `com.github.singbox-android:libbox:1.13.11`, миграция из `io.github.sagernet:libbox` — spec 039) |
+| **libbox** (native) | sing-box core — fork [`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx) (`with_awg` + `with_xhttp`, §097/§104; §122 — без `with_clash_api`). Пин — `app/android/libbox.version` (single source of truth; сейчас `v1.14.0-lx.1` — первый стабильный 1.14-lx, база upstream `v1.14.0-alpha.33`; при бампе версии сверяться с файлом и `KERNEL.md`, не с этой строкой); AAR скачивает `scripts/fetch-libbox.sh` из GH Releases форка (SHA256-verify) в gitignored `libs/` — и локально (`build-local-apk.sh`), и в CI (`ci.yml` → «Fetch sing-box-lx core»). Maven-строка стокового libbox удалена из `build.gradle.kts` (исторически: JitPack `com.github.singbox-android:libbox:1.13.11`, миграция из `io.github.sagernet:libbox` — spec 039) |
 
 ---
 
@@ -1388,8 +1416,8 @@ Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`]
 | 021 | CI/CD pipeline |
 | 022 | App settings |
 | 023 | Debug and logging |
-| 024 | Load balance — *Draft* |
-| 025 | WARP integration — *Draft* |
+| 024 | Load balance — *Released* (§208 round-robin balancer, v2.7.0) |
+| 025 | WARP integration — *Released* (v2.3.0; §130 MASQUE-транспорт) |
 | **026** | **Parser v2** (sealed NodeSpec, 3-layer pipeline) |
 | **027** | **Subscription auto-update** (4 triggers, spam gates) |
 | **028** | **AntiDPI: mixed-case SNI** |
@@ -1416,6 +1444,21 @@ Config Editor (`ConfigScreen.saveConfigRaw` → [`HomeController.saveConfigRaw`]
 | 074 | Add server wizard |
 | 076 | Settings & config lifecycle (lazy/eager persist, HomeReturnObserver, mtime-bootstrap) |
 | **097** | **AWG2 (AmneziaWG 2.0) + смена ядра на `sing-box-lx`** (`with_awg`/`with_xhttp`: AWG/AWG2 end-to-end, нативный XHTTP, MTU-кламп 1280; §104 — fork-ядро во всех сборках через `fetch-libbox.sh`) |
+| 105 | Support message (support/web URLs в meta подписки) |
+| 117 | DNS rework |
+| 118 | Subscription fetch identity (User-Agent / identity headers) |
+| 120 | Template engine — typed vars + `if` (общее ядро подстановки, §120) |
+| 119 | VPN mode (vpn / vpn_proxy / proxy — §119, has_tun) |
+| **121** | **libbox 1.14 adoption** (миграция обвязки на ядро 1.14) |
+| **122** | **CommandClient migration** (полный отказ от Clash HTTP API → libbox CommandClient) |
+| 123 | Subscription model (три CC-клиента: status/screen/profiler; §123/§164 энергомодель; notification text) |
+| 124 | Background mode — tunnel sleep (Doze-поведение туннеля) |
+| **125** | **Configurable channels** (CRUD-каналы поверх channels[]; enabled_groups DEPRECATED) |
+| 126 | First-run wizard |
+| **127** | **XHTTP full URL params** (нативный XHTTP: mode/x_padding_bytes/no_grpc_header) |
+| **128** | **Idle-suspend** (`route.lx_idle_suspend`, ядро SPEC 020; default `30s`) |
+| **129** | **File subscription** (url=file:<uuid>, HttpCache-снапшот, транзакционная смена online↔file) |
+| **130** | **MASQUE WARP transport** (флагман v2.9.0 — MasqueSpec, Cloudflare QUIC/CONNECT-IP; services/warp/) |
 
 **Демотированные (через §054) — теперь в `tasks/`:**
 
@@ -1469,7 +1512,7 @@ LxBox monolith — но архитектурно есть несколько sel
 | Файлы | Lines |
 |---|---|
 | `app/android/.../BoxCommandClient.kt` | ~native |
-| `app/lib/vpn/cc_channel.dart` | ~450 |
+| `app/lib/vpn/cc_channel.dart` | ~700 |
 
 **Coupling с LxBox:** **средний**. Dart-сторона generic (push-стримы + unary-RPC поверх MethodChannel/EventChannel), но привязана к нативному `BoxCommandClient` (три клиента, §164-энергомодель) и именам каналов `lxbox/cc/*` — extraction идёт в паре с VPN-engine (Layer 1), не отдельно.
 
@@ -1479,7 +1522,7 @@ LxBox monolith — но архитектурно есть несколько sel
 
 ### Layer 3 — Sing-box subscription parser / builder
 
-**Что:** Sealed `NodeSpec` (10 protocol variants) + URI/JSON/INI parsers + builder NodeSpec → sing-box config JSON.
+**Что:** Sealed `NodeSpec` (11 protocol variants, вкл. Masque §130) + URI/JSON/INI parsers + builder NodeSpec → sing-box config JSON.
 
 | Файлы | Lines |
 |---|---|
@@ -1495,7 +1538,7 @@ LxBox monolith — но архитектурно есть несколько sel
 
 **Что:** Per-app + system-wide observer DNS/TCP/UDP events.
 
-**Coupling:** **высокий** — см. coupling notes в [секции 6.5](#65-per-app-traffic-profiler-044). Зависит от `AppLog` instance, sing-box log format, `CcChannel` connections-стрима. Расцеплять для extraction нужно через 3 интерфейса (log source, log format adapter, connection source).
+**Coupling:** **высокий** — см. coupling notes в [секции 6.5](#65-per-app-traffic-profiler-044). Зависит от `CcChannel` connections- и dnsQueries-стримов (core-лог **не** парсится, §044/§180). Расцеплять для extraction нужно через интерфейс connection/DNS source.
 
 **Готовность:** низкая. Имеет смысл только если LxBox VPN engine уже extracted и кто-то строит на нём свой profiler.
 

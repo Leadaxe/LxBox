@@ -21,7 +21,26 @@ round-robin balancer, XHTTP full params, DNS-стрим и др.).
 | Вызывается из | `scripts/build-local-apk.sh` и CI (`ci.yml` → android job → «Fetch sing-box-lx core») |
 | AAR в git | НЕТ (~97 MB, `app/android/app/libs/` в `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**Текущий пин: `v1.14.0-lx.1-rc.20`.**
+**Текущий пин: `v1.14.0-lx.1`** — первый стабильный релиз ветки `lx-1.14`
+(rc-история — в конце файла), выпущен вместе с LxBox v2.9.0.
+
+### AAR до релиза ядра
+
+Пока форк ещё не выпустил официальный релиз (работа на rc-цепочке), AAR берётся
+из artifact CI-прогона форка, НЕ из Releases:
+
+```bash
+gh run download <run-id> --repo Leadaxe/sing-box-lx --name dist-android
+```
+
+Скачанный `libbox.aar` кладётся вручную в `app/android/app/libs/` (маркер
+`.libbox.version` — под нужную rc, иначе `fetch-libbox.sh` перекачает). Так
+готовился §215 (rc.18) и предрелизные rc.21/rc.22 под v2.9.0 (MASQUE-символы
+сверялись `strings libbox.so`).
+
+- ⚠ `app/android/libbox.version` **НЕ коммитить до релиза ядра** — пин на
+  несуществующий в Releases тег сломает fetch у всех остальных и в CI.
+- ⚠ В проде — **только официальный релизный AAR** (см. ловушку 3).
 
 ## Build-теги AAR
 
@@ -87,3 +106,4 @@ gomobile-бинарь не отдаёт version-строку. Сверять в�
 | rc.18 (§215) | SPEC 020 idle-suspend (`route.lx_idle_suspend`) |
 | rc.19 | idle-suspend за `with_lx_idle_suspend` (mobile-only, см. ловушку 1) |
 | rc.20 | XHTTP GET→POST soft-fallback (дублирует §217); udpnat2 buffer fix; upstream sync |
+| **v1.14.0-lx.1** (стабильный) | Первый стабильный релиз ветки `lx-1.14` (rc.16→rc.22): MASQUE outbound (§130), стабилизация; собран с LxBox v2.9.0 |

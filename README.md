@@ -39,7 +39,9 @@ Android VPN client powered by [sing-box-lx](https://github.com/Leadaxe/sing-box-
 <details>
 <summary><strong>Servers & Subscriptions</strong> — manage proxy sources in one place</summary>
 
-Add servers by subscription URL, direct proxy link, WireGuard URI/INI, Amnezia `vpn://` link, or raw sing-box JSON outbound. Smart-paste dialog auto-detects format and previews the content. Enable/disable subscriptions without deleting. Offline rehydrate — nodes restored from body cache after app restart. Per-subscription settings for detour servers.
+Add servers by subscription URL, direct proxy link, WireGuard URI/INI, Amnezia `vpn://` link, raw sing-box JSON outbound, or **Import from file…** (a local `.txt`/`.json`; a file with more than one node becomes a file-backed subscription, §129). Smart-paste dialog auto-detects format and previews the content. Enable/disable subscriptions without deleting. Offline rehydrate — nodes restored from body cache after app restart. Per-subscription settings for detour servers.
+
+- **File subscription & editable source** (§129, v2.8.2) — a multi-node local file becomes a subscription badged `file` that lives from an `HttpCache` snapshot; **Edit source…** changes the subscription URL or switches online↔file transactionally, without re-creating it (long-standing user request)
 
 - **11 protocols**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard (incl. **AmneziaWG / AWG 2.0** — `awg://` URI, AmneziaWG `.conf`, **Amnezia `vpn://` links** (v2.0.3), JSON), **MASQUE** (Cloudflare WARP — `masque://`, QUIC/HTTP-3, v2.9.0)
 - Formats: Base64, Xray JSON Array (chained proxy), plain text, raw sing-box JSON
@@ -57,6 +59,7 @@ Tap **Get WARP** in the Servers overflow menu → a tunnel to Cloudflare is regi
 
 - **Transport**: **WireGuard** (default) or **MASQUE** (CONNECT-IP over QUIC/HTTP-3, HTTP/2 fallback — often exits from a foreign IP and looks like plain HTTPS to DPI). Pick it in the wizard; for MASQUE also choose h3/h2, SNI and idle/keep-alive.
 - **On-device registration**: the private key is generated on the phone and never leaves it — only the public key is sent to Cloudflare (`api.cloudflareclient.com`). WireGuard uses X25519, MASQUE uses ECDSA P-256. We don't use third-party generator workers (they hand out a server-generated private key).
+- **Add Amnezia obfuscation** (WireGuard transport): masks the WARP handshake from DPI by adding junk traffic that mimics a QUIC-Initial (default) or SIP template; SNI, level and Jc/Jmin/Jmax live under *Advanced*. Enable when plain WARP is throttled or blocked.
 - **WARP+** (optional): paste a license key under *Advanced* to bind WARP+ (Argo Smart Routing). Empty = free WARP.
 - **Idempotent**: re-tapping reuses the cached account instead of registering a new device; *Re-register* forces a fresh one.
 - Custom endpoint under *Advanced* (use a working `IP:port` if the default is blocked).
@@ -85,7 +88,7 @@ One-tap VPN start/stop with animated status chip. Choose proxy group, sort nodes
 - **Filter workspace** (v2.0.0): filter panel with **Regex · Protocol · Subscribes · Settings** tabs + active-filter summary chips; each category has its own `!` inversion (NOT); transport/security chip row (`tcp`/`ws`/`grpc`/`h2`/`httpupgrade`/`quic`/`xhttp` + `TLS`/`Reality`/`+Vision`/`awg`/`awg2`); filters remembered per channel
 - **Detour filter — tri-state** (v2.0.0): show all / hide detours / **detours only** (clean relay-list diagnostics)
 - **Custom sort persisted** (v2.0.0): manual order selectable from the sort menu and the tap-carousel (Default → Ping → A-Z → Custom), survives restart; subscriptions drag-reorder by grab-strip
-- Proxy groups: `auto-proxy-out`, VPN ①/②/③
+- **Configurable channels** (§125, v2.6.0) — proxy groups are user-defined selectors (add / rename / delete up to 10; `vpn-1` is undeletable). Each channel has a regex node-filter with `!` inversion, an optional **Include auto** twin (`<tag>-auto`, Fastest or Load balance) and an optional **Include block** entry; a filter that matches zero nodes shows a warning. Dangling channel refs degrade gracefully to `vpn-1`.
 - Node filter: choose which nodes participate in auto-selection
 - Sticky restart warning under Stop — doesn't disappear when you cancel Stop dialog
 - Long-press: Ping · Use this node · View JSON · **Copy URI** (vless://, awg://, etc) — Copy-JSON actions live inside the View JSON dialog (Copy server / Copy detour / Copy server + detours(N))
@@ -100,6 +103,7 @@ Two paths to flip the VPN on/off without launching the UI: a Quick Settings tile
 - **Home-screen shortcut** — long-press the icon → **Toggle VPN**.
 - First tap shows a one-shot toast and flashes `MainActivity` for the system VPN consent dialog (Android API requires Activity context); subsequent taps go directly to the service. After consent the activity finishes itself — no UI flash on regular use.
 - Tile state survives OOM-kill of the service: `currentStatus` is reset on `onDestroy` so the tile won't lie «Connected».
+- **Notification actions** (§182) — **Stop** / **Reconnect** buttons right in the persistent notification; fully native (Reconnect runs `stop`→`start` on the companion scope), they work even if the UI process is killed.
 </details>
 
 <details>
@@ -213,23 +217,26 @@ Real-time traffic by outbound with expandable cards. Each connection shows host,
 
 - **4 tabs**: Overview · Connections · Per-app · **Live** (system-wide, v1.7.2)
 - **Live tab** — discovery without picking a target: see every TCP/UDP open and DNS resolve happening on the device in real time. Filter chips (kind / unattributed-only / app multi-select / domain-IP-process search), pause/resume, long-press → "Open in Per-app session for &lt;pkg&gt;" quick-discovery flow. 60s rolling buffer × 3000 events. Inline `CoreLogsHintBanner` appears when `Forward sing-box logs` is off (without it DNS resolves and process attribution don't reach the buffer)
+- **Connection detail sheet** (§152) — tap a connection → bottom sheet with the full metadata (source/dest IP:port, proxy chain, rule, exact bytes, duration), **Copy JSON** for bug reports and Close from the sheet
+- **Stuck one-way connections** (§153) — TCP connections with traffic in one direction only (↑>0, ↓0) are highlighted pink with a **One-way** badge
+- **App launcher icons** (§154) — each connection row shows the owning app's launcher icon
 </details>
 
 <details>
 <summary><strong>Per-app traffic profiler</strong> — trace any app's network in real time (v1.7.0)</summary>
 
 <p align="center">
-<img src="docs/screenshots/per_app_trace_wide.jpg" alt="Per-app traffic profiler — Live / Domains / Connections sub-tabs"/>
+<img src="docs/screenshots/per_app_trace_wide.jpg" alt="Per-app traffic profiler — Event stream / Aggregated views"/>
 </p>
 
 Pick an app, hit ▶ Record, and see every domain, IP, and routing decision — including which CDN your bank uses, where it gets routed, and whether part of the traffic leaks through a different outbound. Built-in connection-issue detection flags failed DNS and likely-blocked TCP connections.
 
 - **Stats → Per-app tab**: select package via app picker, [▶ START] / [⏹ STOP], status row shows `Recording 02:34 · 47 doms · 53 ips · 287 ev`
-- **4 sub-tabs**:
-  - **Live** — newest events first (DNS resolves with CNAME chain · TCP/UDP open/close), monospace IP `↗` chip jumps to Domains
-  - **Domains** — aggregated unique domains, sortable; expanded view = CNAME targets, all resolved IPs, outbounds, issues. Search field matches by `domain` || `ip` || `cname target` (cross-domain CDN audit)
-  - **IPs** — aggregated by destination IP (ports, conn count, bytes, outbound). Each row has `↗` to jump back to Domains filtered by that IP
-  - **Connections** — per-connection timeline. Tap header to inline-expand: CNAME chain, all IPs, rule, issues, button `[View in Domains →]` that focuses the corresponding aggregate row
+- **One TraceExplorer, two view modes** (§160, v2.4.1 — replaced the old Live/Domains/IPs/Connections sub-tabs):
+  - **Event stream** — newest events first (DNS resolves with CNAME chain · TCP/UDP open/close); tap a row → event detail sheet
+  - **Aggregated** — Group by Domain or by IP; rows show CNAME targets, all resolved IPs, outbounds, conn count, bytes, issues; tap a row → aggregate detail sheet with drill-down
+  - **Shared filter** across both modes — search field (matches `domain` || `ip` || `cname target`, cross-domain CDN audit) plus event-kind chips
+  - Drill-down: a detail sheet offers **View in Aggregated** to jump from an event to its aggregate row
 - **Connection-issue detection (2 locale-agnostic types)**: `dnsTimeout` (sing-box `dns: exchange failed` log — direct engine signal, not heuristic), `tcpReset` (TCP closed within 1s with 0 bytes — likely firewall RST / unreachable). ⚠ icon on Live row + Domain expanded view shows full description
 - **Process inference** — when sing-box's `find_process` misses (rare with WebView/system processes), profiler attributes connection by recently resolved IP within a 10s post-DNS window; rows marked `〽 inferred from prior DNS`
 - **Recording indicators**:
@@ -265,6 +272,7 @@ When the core runs hot or leaks memory, capture a real Go **pprof** snapshot str
 Two tabs (v1.7.3 reorg, see [§052](docs/spec/tasks/052-vpn-settings-system-service-tabs.md)):
 - **System** — Android-side `VpnService.Builder` toggles: `Allow VPN bypass` (apps using `ConnectivityManager` can step around the tun), `Keep VPN on exit` (tunnel survives app close), `Tunnel sleep mode` (`never` / `lazy` Doze-only / `always` screen-off — battery vs reliability trade-off).
 - **Core** — sing-box engine vars (`chapter: 'core'` in template — `mtu` / `log_level` / `dns_final` / etc). Routing- and DNS-specific vars live on their own screens (Routing, DNS Settings).
+- **Suspend idle tunnels** (`route_idle_suspend`, default `30s`, on since v2.8.2; empty = off) — puts unreachable WireGuard/AmneziaWG endpoints that have been idle to sleep, freeing memory and saving battery (device A/B showed a large RAM drop). Only affects tunnels not on the active route; they wake instantly on the next dial.
 
 All changes autosaved. URLTest parameters for auto-proxy latency testing. Permissions block (Battery / Notifications / Location / Wi-Fi / App info) lives in **App Settings → Diagnostics** (interactive — tap to grant).
 </details>
@@ -285,6 +293,8 @@ View and edit raw sing-box JSON config. Pretty-printed display with copy button.
 - **Battery optimization** tile — status + shortcut to system whitelist (v1.4.0)
 - **App info (OEM power settings)** with hint dialog for Autostart / Background activity toggles (v1.4.0)
 - **Auto-ping after connect** — ping active group 5s after VPN up (default on, v1.4.0)
+- **First-run wizard** (§126, v2.8.0) — sequential onboarding prompts (notifications → battery optimization → Quick Settings tile)
+- **Interrupt connections on switch** (§143) — when you switch a channel's node, drops that group's active connections so traffic moves to the new node immediately (default off; also in the channel editor)
 - Haptic feedback toggle
 - See [spec 022](docs/spec/features/022%20app%20settings/spec.md)
 </details>
@@ -333,8 +343,8 @@ buildConfig(lists, settings)  ← template + post-steps (DPI, DNS, rules)
 sing-box JSON
 ```
 
-- **Bundled core** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **`v1.14.0-lx.1-rc.16`**: sing-box 1.14 fork built with `with_awg` / `with_xhttp` / `with_lx_command` tags; the control channel runs over libbox `CommandClient` (no Clash API). Adds the round-robin **load-balancer** (SPEC 019) + `GetPool` RPC, and the full XHTTP client param set (SPEC 002 v2, rc.16). Version pinned in `app/android/libbox.version`, AAR fetched from the fork's GitHub Releases by `scripts/fetch-libbox.sh` with SHA256 verification
-- **Sealed `NodeSpec`** — 9 protocols, polymorphic `emit(vars)` / `toUri()` (round-trip invariant)
+- **Bundled core** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **`v1.14.0-lx.1`** (first full stable release of the 1.14-lx branch): sing-box 1.14 fork built with `with_awg` / `with_xhttp` / `with_lx_command` / `with_lx_idle_suspend` tags; the control channel runs over libbox `CommandClient` (no Clash API). Adds the round-robin **load-balancer** (SPEC 019) + `GetPool` RPC, the full XHTTP client param set (SPEC 002 v2), idle-suspend for unreachable tunnels (SPEC 020) and a **MASQUE / CONNECT-IP** outbound (SPEC 021). Version pinned in `app/android/libbox.version`, AAR fetched from the fork's GitHub Releases by `scripts/fetch-libbox.sh` with SHA256 verification
+- **Sealed `NodeSpec`** — 11 protocols, polymorphic `emit(vars)` / `toUri()` (round-trip invariant)
 - **`EmitContext`** — passes template vars into per-node emit
 - **`NodeEntries{main, detours[]}`** — named struct for chain results
 - **`ValidationResult`** — typed issues: dangling refs, empty urltest, invalid selector default

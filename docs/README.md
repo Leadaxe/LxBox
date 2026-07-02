@@ -5,14 +5,17 @@
 
 ## Автоматизация и управление
 
-L×Box управляется **тремя** способами помимо самого UI. Выбор зависит от того,
+L×Box управляется **двумя** способами помимо самого UI. Выбор зависит от того,
 кто и откуда управляет:
 
 | Канал | Для чего | Документ |
 |---|---|---|
 | **Public Intent API** (§047) | Фоновая автоматизация на устройстве — Tasker / MacroDroid / Locale-plugin. Broadcast-команды и события (Wi-Fi-триггеры, авто-вкл/выкл, switch-node, реакция на падение подписки). Без root, без USB. | [AUTOMATION.md](AUTOMATION.md) |
 | **Debug API** (HTTP) | Программное / скриптовое управление и диагностика — полный CRUD подписок и правил, старт/стоп, конфиг, логи, профайлер. Bearer-токен, порт 9269, обычно через adb-forward или Wi-Fi. Для CI, отладки, автоматизации с ПК. | [api/debug-api-reference.md](api/debug-api-reference.md) · живой `GET /help` |
-| **Clash API** | Совместимость со сторонними Clash-дашбордами (read-only мониторинг). | [api/clash-api-reference.md](api/clash-api-reference.md) |
+
+> **Clash API удалён (§122).** UI и диагностика ходят через libbox CommandClient
+> (push-стримы из ядра); ядро собрано без `with_clash_api`, `experimental.clash_api`
+> в конфиге роняет старт. См. историческую справку [api/clash-api-reference.md](api/clash-api-reference.md).
 
 Разница коротко: **Public Intent** — «телефон сам себя автоматизирует» по
 событиям; **Debug API** — «управляю телефоном снаружи скриптом/руками». Оба
@@ -36,7 +39,7 @@ L×Box управляется **тремя** способами помимо с�
 | [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md) | Философия, принципы, критические gotchas, организация spec'ов |
 | [BUILD.md](BUILD.md) | flutter build команды, CI, signing, local-build marker |
 | [RELEASE_PROCESS.md](RELEASE_PROCESS.md) | Версии, теги, GitHub Releases, post-flight |
-| [DIAGNOSTICS.md](DIAGNOSTICS.md) | Playbook диагностики на устройстве: Debug/Clash API endpoints, анализ TCP/DNS, `scripts/lxbox-diag.sh` |
+| [DIAGNOSTICS.md](DIAGNOSTICS.md) | Playbook диагностики на устройстве: Debug API + CommandClient/профайлер endpoints, анализ TCP/DNS, `scripts/lxbox-diag.sh` |
 | [USER_GUIDE_RU.md](USER_GUIDE_RU.md) | Пользовательское руководство (RU) — как это работает |
 
 ## Справочники API
@@ -44,7 +47,7 @@ L×Box управляется **тремя** способами помимо с�
 | Документ | Описание |
 |---|---|
 | [api/debug-api-reference.md](api/debug-api-reference.md) | Debug API — полный список endpoint'ов (зеркалит живой `GET /help`) |
-| [api/clash-api-reference.md](api/clash-api-reference.md) | Clash API — совместимость со сторонними дашбордами |
+| [api/clash-api-reference.md](api/clash-api-reference.md) | Clash API — **удалён в §122**, историческая справка по sing-box clash-api |
 
 ## Спецификации
 
@@ -63,3 +66,4 @@ L×Box управляется **тремя** способами помимо с�
 | [features/](features/) | Deep-dive заметки по отдельным фичам (per-app-trace, wifi-aware-routing) |
 | [research/](research/) | Исследования (аудит кода, аудитория, 4pda-фидбэк) |
 | [examples/](examples/) | Примеры конфигов (`minimal_local_test.json`) |
+| [DEVELOPMENT_REPORT.md](DEVELOPMENT_REPORT.md) | Исторический отчёт хроники разработки (до v1.9.0) — не поддерживается |

@@ -27,6 +27,12 @@ curl -s "$BASE/ping"
 # → {"pong":true,"server":"lxbox-debug","uptime_seconds":N}
 ```
 
+Актуальную поверхность API можно всегда увидеть через самодокументируемый `GET /help` (тоже без auth):
+```bash
+curl -s "$BASE/help"            # human-readable cheatsheet
+curl -s "$BASE/help?format=json" | jq   # machine-readable для auto-tooling
+```
+
 Все нижеследующие endpoints требуют `$HDR`. Общие rules:
 - Content-type ответа: `application/json; charset=utf-8`.
 - Write'ы (PUT/POST/PATCH/DELETE) возвращают `{"ok":true, "action":"<name>", ...extras}` или 4xx/5xx с `{"error":{"code":"...","message":"..."}}`.
@@ -42,6 +48,8 @@ curl -s "$BASE/ping"
 - [Actions — триггеры](#actions--триггеры)
 - [Rules CRUD — `/rules/*`](#rules-crud--rules)
 - [Subscriptions CRUD — `/subs/*`](#subscriptions-crud--subs)
+- [WARP — `/warp`](#warp--warp)
+- [Pool — `/pool`](#pool--pool)
 - [Settings writes — `/settings/*`](#settings-writes--settings)
 - [Wi-Fi history — `/wifi_history`](#wi-fi-history--wifi_history)
 - [Files](#files)
@@ -55,6 +63,7 @@ curl -s "$BASE/ping"
 | Endpoint | Что отдаёт |
 |---|---|
 | `GET /ping` | `{pong,server,uptime_seconds}` — **без auth** |
+| `GET /help` | `?format=text\|json` — самодокументируемая карта всей поверхности API. **Без auth** (второй no-auth endpoint). `json` — для auto-tooling, `text` (default) — human-readable cheatsheet. |
 | `GET /state` | full HomeState: tunnel/busy/config_length/active_in_group/selected_group/last_delay/ping_busy/traffic/… |
 | `GET /state/subs` | массив подписок, `?reveal=true` показывает clear URLs |
 | `GET /state/rules` | массив custom rules с `srs_cached/srs_mtime` |
@@ -149,7 +158,7 @@ curl -s -H "$HDR" "$BASE/state/config_locked"
 | `GET /logs/core` | GET | Alias для `/logs?source=core`. Sing-box internal logs (router/dns/inbound/outbound/dial/...). **Требует `core_logs_enabled=true`** — иначе только наши broadcast'ы (`status=...`). |
 | `POST /logs/clear` | POST | `source=app\|core` (опц., без — clear всё) |
 
-**Sing-box logs (`source=core`)** — поток приходит через `PlatformInterface.writeDebugMessage` → EventChannel `lxbox/coreLog` → `ClashLogPump` → AppLog. Filter в Kotlin отсеивает TRACE/DEBUG (volume reduction). `parseLevel` определяет уровень regex'ом по форматам `INFO[NNNN]` (default formatter после strip ANSI) или `WARN<spaces>` (terminal mode). Включается через [`/settings/core_logs_enabled`](#settings--coresettings) — изменение применяется только после restart Service'а (`Libbox.setup` читает значение один раз).
+**Sing-box logs (`source=core`)** — поток приходит через `PlatformInterface.writeDebugMessage` → EventChannel `lxbox/coreLog` → `ClashLogPump` → AppLog. Filter в Kotlin отсеивает TRACE/DEBUG (volume reduction). `parseLevel` определяет уровень regex'ом по форматам `INFO[NNNN]` (default formatter после strip ANSI) или `WARN<spaces>` (terminal mode). Включается через [`/settings/core_logs_enabled`](#settings--coresettings) — изменение применяется только после **полного рестарта процесса** (`Libbox.setup` one-shot per process; stop/start VPN не помогает — service пересоздаётся, но Application/libbox остаются).
 
 ```bash
 # Только core warn/error для post-mortem диагностики
@@ -182,6 +191,9 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 | `POST /action/reconnect` | — | §163 — Stop→Start одной командой под общим busy-wrap. Если туннель down — делегирует в `start()`. → `{"ok":true,"action":"reconnect"}` |
 | `POST /action/reload-vpn` | — | §163 — in-place reload sing-box runtime **без** убийства Android-сервиса (cooldown-gated через `canReload`; туннель дропается ~3с). `applied:false` если reload недоступен (не connected / в cooldown). → `{"ok":true,"action":"reload-vpn","applied":<bool>}` |
 | `POST /action/clear-error` | — | сброс `lastError`-баннера программно (после того как automation обработала/спровоцировала ошибку). → `{"ok":true,"action":"clear-error"}` |
+| `POST /action/force-stop-vpn` | — | жёсткий teardown → `stopSelf` (не кооперативный). Освобождает порт CommandServer при зависшем `stop-vpn`. → `{"ok":true,"action":"force-stop-vpn","native_ok":<bool>}` |
+| `POST /action/set-transient-timeout` | `connecting=<ms>` \| `stopping=<ms>` | §140 — override порогов transient-timeout (connecting/stopping). Оба параметра опциональны, но минимум один обязателен; значения — положительные ms. → `{"ok":true,"action":"set-transient-timeout","connecting_ms":N,"stopping_ms":N}` |
+| `POST /action/emulate-error` | `kind=<k>` | демо `humanizeError` в `/logs`. `kind`: `socket\|timeout\|http-401\|http-404\|http-410\|http-429\|http-503\|format\|fs\|plain\|all` |
 | `POST /action/reset-network` | — | §031 light recovery: closeAllConnections + DNS cache flush + dialer rebind. БЕЗ recreate'а box/Service/TUN. Требует tunnel up (409 если down). → `{"ok":true,"action":"reset-network","native_ok":<bool>}` |
 | `POST /action/rebuild-config` | — | `SubscriptionController.generateConfig()` + save |
 | `POST /action/refresh-subs` | `force=true\|false` | триггер AutoUpdater |
@@ -262,7 +274,10 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 {
   "name": "string",                 // required, non-empty
   "enabled": true,
-  "kind": "inline|srs",
+  "kind": "inline|srs|preset",
+  "preset_id": "<id>",              // required при kind=preset
+  "vars_values": {"var":"val"},     // preset-only: overrides шаблонных vars
+  "dns": {"enabled": true, "server_tag": "<tag>"}, // preset-only DNS-attach
   "domains": ["exact.domain"],
   "domain_suffixes": [".ru","xn--p1ai"],
   "domain_keywords": ["tracker"],
@@ -357,6 +372,60 @@ curl -s -H "$HDR" "$BASE/state/subs" | jq '.[] | select(.id=="<id>") | {title, n
 
 ---
 
+## WARP — `/warp`
+
+§147 — регистрация Cloudflare WARP-ноды (тот же путь, что кнопка **Get WARP** в UP). Приватный ключ X25519 генерится на устройстве, регистрация уходит в Cloudflare, готовая нода добавляется в подписки автоматически.
+
+| Endpoint | Метод | Body |
+|---|---|---|
+| `/warp` | POST | все поля опциональны (см. ниже). `?rebuild=true` — регенерит config + reload ядра |
+
+Body (все поля опциональны):
+```json
+{
+  "licenseKey": "...",        // null/пусто → free WARP
+  "endpoint": "IP:port",      // default engage.cloudflareclient.com:2408
+  "obfuscate": false,         // QUIC masquerade (AmneziaWG-обфускация)
+  "forceNew": false,          // игнор кэша, повторная регистрация
+  "includeReserved": false,   // null → default по obfuscate
+  "quicParams": {             // только при obfuscate
+    "sni": "www.google.com",
+    "ip": "quic",             // quic|...
+    "ib": "chrome",           // chrome|firefox|curl
+    "jc": 4, "jmin": 40, "jmax": 70
+  }
+}
+```
+
+```bash
+# Free WARP одной командой + сразу в конфиг
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{}' "$BASE/warp?rebuild=true"
+# → {"ok":true,"action":"warp-add","warp_plus":false,
+#    "obfuscated":false,"endpoint":"...","address":"...","rebuilt":true,...}  (status 201)
+```
+
+---
+
+## Pool — `/pool`
+
+§208 (SPEC 019 V2) — read-only снапшот пула round_robin-балансировщика. Зеркалит UI «View pool» (`HomeController.getPool` → `CcChannel.getPool` → ядро GetPool RPC). Для отладки балансировщика без UI-попапа.
+
+| Endpoint | Метод | Query |
+|---|---|---|
+| `/pool` | GET | `tag=<autoTag>` (обязателен) → `{tag, count, slots:[{slot,tag,delay,alive}]}` |
+
+- `tag` — auto-двойник round_robin-канала (напр. `vpn-1-auto`).
+- `delay==0` → нода мёртвая / не измерена.
+- Не-round_robin группа / пул не готов → `slots: []` (не ошибка).
+- CC-клиент недоступен (туннель down) → **409** `conflict` (§209 — раньше тихо отдавал `count:0`, что путало диагностику).
+
+```bash
+curl -s -H "$HDR" "$BASE/pool?tag=vpn-1-auto" | jq '{tag,count,slots}'
+```
+
+---
+
 ## Settings writes — `/settings/*`
 
 Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **намеренно нет** — blocklist и типизация кастомные per-key.
@@ -369,8 +438,8 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | `/settings/interrupt_on_switch` | PUT | `{"enabled": true\|false}`. → `{ok, action:"settings-interrupt-on-switch", enabled}`. |
 | `/settings/node_sort` | GET | →`{"ok":true,"mode":"<str>","order":["tag",...]}` — режим сортировки списка нод + ручной порядок. |
 | `/settings/node_sort` | PUT | `{"mode": "<str>", "order"?: ["tag",...]}`. `mode` = `""`/`latency`/`manual`; `order` опц. (для manual). UI-only (не config-significant). → `{ok, action:"settings-node-sort", mode, order_count}`. |
-| `/settings/enabled_groups` | GET | →`{"ok":true,"groups":["tag",...]}` — членство preset-групп в selector'е. |
-| `/settings/enabled_groups` | PUT | `{"groups": ["tag",...]}`. **Config-significant** → `?rebuild=true` пересобирает конфиг. → `{ok, action:"settings-enabled-groups", count, ...rebuild-extras}`. |
+| `/settings/enabled_groups` | GET | →`{"ok":true,"groups":["tag",...]}` — членство preset-групп в selector'е. **§125 legacy** — см. PUT-примечание. |
+| `/settings/enabled_groups` | PUT | `{"groups": ["tag",...]}`. **§125 legacy: фактически no-op** — после миграции на `channels[]` билдер читает `enabledGroups` только когда `channels` пуст, иначе `channels[]` перекрывает эту запись. Для управления каналами используйте UI (App Settings → Channels) / backup. `?rebuild=true` пересоберёт конфиг, но результат не изменится. → `{ok, action:"settings-enabled-groups", count, ...rebuild-extras}`. |
 | `/settings/vpn_mode` | GET | →`{"ok":true,"vpn_mode":{...}}` — текущий `VpnModeConfig`. |
 | `/settings/vpn_mode` | PUT | частичное обновление (copyWith поверх текущего): `mode`/`proxy_protocol`/`proxy_port`/`proxy_listen`/`proxy_auth`/`proxy_user`/`proxy_pass`. `proxy_listen` валидируется как IPv4 (иначе 400). **Config-significant** (меняет inbounds) → `?rebuild=true`. → `{ok, action:"settings-vpn-mode", vpn_mode, ...rebuild-extras}`. |
 | `/settings/vars/{key}` | PUT | `{"value":"<str>"}` |
@@ -379,7 +448,12 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | `/settings/dns_options/rules` | PUT | `{"rules":"<JSON string>"}` (legacy shape — stored как JSON-string) |
 | `/settings/config_locked` | PUT | `{"locked": true\|false}` — §037 toggle auto-rebuild lock. true → `generateConfig` возвращает null silently, custom config через `PUT /config` не перетирается UI. |
 | `/settings/core_logs_enabled` | GET | →`{"enabled": bool}` — §043 текущее состояние forwarding'а sing-box логов в `/logs/core`. |
-| `/settings/core_logs_enabled` | PUT | `{"enabled": true\|false}` — §043 включить/выключить forward. **Требует restart Service'а** (`stop-vpn` + `start-vpn`) чтобы применилось — `Libbox.setup` читает значение один раз. Default false. Storage в SharedPreferences (`boxvpn_boot.core_logs_enabled`), не в `lxbox_settings.json`. |
+| `/settings/core_logs_enabled` | PUT | `{"enabled": true\|false}` — §043 включить/выключить forward. **Требует полного рестарта процесса** (`am force-stop` + relaunch, либо UI Quit & reopen) — `Libbox.setup` one-shot per process, stop/start VPN **не** перечитывает флаг. Default false. Storage в SharedPreferences (`boxvpn_boot.core_logs_enabled`), не в `lxbox_settings.json`. |
+| `/settings/ping_options` | GET | →URLTest defaults `{url?, timeout_ms?, groups?}` (пустой map если не set'нуто — caller fall-through на template default). |
+| `/settings/ping_options` | PUT | body `{url?, timeout_ms?, groups?}` — **overwrite целиком** (не merge). Unknown-подключи strip'аются (allowlist `url/timeout_ms/presets/groups`). `url` — string, `timeout_ms` — number, `groups` — object (иначе 400). → `{ok, action:"settings-ping-options", url, timeout_ms, groups_count}`. |
+| `/settings/ping_options/groups/{tag}` | GET | override этой группы или **404** если override нет. |
+| `/settings/ping_options/groups/{tag}` | PUT | body `{url?, timeout_ms?}` — минимум одно поле (read-modify-write). → `{ok, action:"settings-ping-options-group-put", group, ...}`. |
+| `/settings/ping_options/groups/{tag}` | DELETE | снять override группы. → `{ok, action:"settings-ping-options-group-delete", group}`. |
 | `/settings/tun_apps` | GET | →`{"mode":"off\|allow\|deny", "packages":[...]}` — §046 OS-level split-tunneling. |
 | `/settings/tun_apps` | PUT | `{"mode":"off\|allow\|deny", "packages":["pkg1","pkg2",...]}` — §046. Replace целиком. Дубликаты в `packages` schлопываются (idempotent). Пустые строки skip'аются. Невалидный package-name → 400. Response: `{ok, action, mode, count, rebuild_needed: true, ...rebuild-extras}`. **Требует full VPN restart** для apply (Android tun creates только на `establish()`). |
 | `/settings/vpn/allow_bypass` | GET | →`{"enabled": bool}` — §052/§049 F15. |
@@ -465,12 +539,13 @@ curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
   -d '{"enabled":true}' \
   "$BASE/settings/core_logs_enabled"
 # → {"ok":true,"action":"settings-core-logs-enabled","enabled":true,
-#    "note":"restart VPN service for change to take effect"}
+#    "note":"...force-stop & reopen the app to apply (Libbox.setup is
+#     one-shot per process — stop/start VPN does NOT re-apply)"}
 
-# Применить — restart VPN service
-curl -X POST -H "$HDR" "$BASE/action/stop-vpn"
-sleep 2
-curl -X POST -H "$HDR" "$BASE/action/start-vpn"
+# Применить — полный рестарт процесса (stop/start VPN НЕ помогает:
+# Libbox.setup читает флаг один раз за жизнь процесса)
+adb shell am force-stop com.leadaxe.lxbox
+# ... затем relaunch приложения (или UI: App Settings → Diagnostics → Quit & reopen)
 
 # Теперь sing-box logs наполняют /logs/core
 curl -s -H "$HDR" "$BASE/logs/core?level=warning,error&q=dial" | jq
@@ -628,6 +703,7 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 | `GET /diag/logcat?count=N&level=L` | Logcat tail нашего процесса (N=50..5000, level=V/D/I/W/E/F) |
 | `GET /diag/stderr` | Содержимое `filesDir/stderr.log` (Go panic stacktrace) |
 | `GET /diag/applog?prev=true\|false\|all` | AppLog entries с фильтром по `fromPreviousSession` |
+| `GET /diag/pprof?profile=P&query=Q` | §207 — pprof-снапшот через libbox PProfServer (туннель должен быть up). `P` = `goroutine\|profile\|heap\|allocs\|block\|mutex\|threadcreate` (default `goroutine`); `query` — сырой pprof-query без `?` (напр. `gc=1`/`debug=2`/`seconds=10`), дефолт зависит от профиля (`goroutine→debug=2`, `profile→seconds=10`, `heap→gc=1`). `goroutine?debug=*` отдаёт `text/plain`, остальное — `.pb` для `go tool pprof`. |
 
 ```bash
 # Полный диагностический pack
@@ -743,7 +819,7 @@ curl -X POST -H "$HDR" "$BASE/profiler/live/stop"
 | 404 | `not_found` | unknown endpoint, id не существует |
 | 409 | `conflict` | pre-condition (tunnel down, controller not ready, blocked var) |
 | 413 | `payload_too_large` | body > 1 MiB |
-| 502 | `upstream_error` | Clash API / native plugin / saveConfig failed |
+| 502 | `upstream_error` | native plugin / CommandClient / saveConfig failed |
 | 504 | `timeout` | handler не уложился в 30s |
 | 500 | `internal` | unhandled — детали в AppLog, не в response |
 

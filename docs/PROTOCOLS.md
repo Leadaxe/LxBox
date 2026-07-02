@@ -3,7 +3,7 @@
 L×Box parses proxy URIs from subscriptions and converts them into [sing-box](https://sing-box.sagernet.org/) outbound (or endpoint) JSON. This document describes every supported protocol, its URI format, parsed parameters, and the resulting sing-box configuration.
 
 **Source code (Parser v2, spec 026):**
-- [`app/lib/services/parser/uri_parsers.dart`](../app/lib/services/parser/uri_parsers.dart) — URI-форматы всех 10 протоколов
+- [`app/lib/services/parser/uri_parsers.dart`](../app/lib/services/parser/uri_parsers.dart) — URI-форматы всех 11 протоколов (vless, vmess, trojan, shadowsocks, hysteria2, naive, tuic, ssh, socks, wireguard/awg, masque)
 - [`app/lib/services/parser/transport.dart`](../app/lib/services/parser/transport.dart) — парсинг `TransportSpec`, нативный XHTTP (§097, полный набор параметров §127)
 - [`app/lib/services/parser/json_parsers.dart`](../app/lib/services/parser/json_parsers.dart) — `parseSingboxEntry`, `parseXrayOutbound`
 - [`app/lib/services/parser/ini_parser.dart`](../app/lib/services/parser/ini_parser.dart) — WireGuard INI
@@ -101,7 +101,7 @@ This is **cargo cult convention** — works because all clients parse identicall
 - `SubscriptionMeta.webPageUrl` ← `profile-web-page-url`
 - `SubscriptionServers.updateIntervalHours` ← `profile-update-interval` (используется в [spec 027](./spec/features/027%20subscription%20auto%20update/spec.md))
 
-User-Agent HTTP-запросов: `LxBox Android subscription client` (v1.3.0+; ранее `SubscriptionParserClient`).
+User-Agent HTTP-запросов: `LxBox-android/<appVersion>` (напр. `LxBox-android/2.9.0`; бренд-токен с §114, ранее `LxBox Android subscription client` / `SubscriptionParserClient`). Переопределяется per-request через App Settings → Subscriptions → Custom User-Agent (§118). Панели маршрутизируют тело ответа по подстроке `LxBox` в UA (`user_agent.dart`, `resolveSubscriptionUserAgent`).
 
 Displayed в subscription detail → **Source tab** → Headers section.
 
@@ -125,7 +125,7 @@ vless://UUID@host:port?query_params#label
 | SNI | `sni` or `peer` | TLS server name |
 | Fingerprint | `fp` or `fingerprint` | UTLS fingerprint (defaults to `random`) |
 | ALPN | `alpn` | Comma-separated ALPN values |
-| Public key | `pbk` | REALITY public key |
+| Public key | `pbk` | REALITY public key. REALITY активируется только при валидном X25519 (base64/base64url → 32 байта); мусор → plain TLS + warning (§169) |
 | Short ID | `sid` | REALITY short ID (hex, max 16 chars) |
 | Transport type | `type` | `tcp`, `ws`, `grpc`, `http`, `httpupgrade`, `xhttp`, `raw` |
 | Path | `path` | WebSocket/HTTP/HTTPUpgrade path |
@@ -181,11 +181,13 @@ vless://UUID@host:port?query_params#label
 
 ### TLS Behavior
 
-- If `pbk` (REALITY public key) is present: REALITY TLS is enabled, `flow` defaults to `xtls-rprx-vision` when no transport and no explicit flow.
+- If `pbk` is present **and is a valid X25519 public key** (base64/base64url, decodes to exactly 32 bytes): REALITY TLS is enabled. An invalid `pbk` (e.g. `pbk=enabled`/`true` from broken subscriptions) falls back to **plain TLS** with a parse warning instead of emitting a REALITY block the core rejects — before §169 one broken node used to poison the whole `config.json` at startup.
+- `flow` is **never** auto-derived from REALITY (§115): it is taken verbatim from the link. Historically bare-TCP+REALITY without `flow` got a forced Vision, breaking valid `none` setups.
+- `xtls-rprx-vision` is valid only on bare TLS. If a transport (ws/grpc/xhttp/http/httpupgrade) is present, the explicit `flow` is dropped with a `VisionWithTransportWarning` (the core would not bring up that combination). `emit()` writes `flow` only when it is exactly `xtls-rprx-vision` with no transport.
 - If `security=none`: no TLS block.
 - If port is a known plaintext port (80, 8080, 8880, 2052, 2082, 2086, 2095) and no explicit security: no TLS.
 - Otherwise: TLS enabled with UTLS fingerprint (defaults to `random`).
-- Special flow `xtls-rprx-vision-udp443`: normalized to `xtls-rprx-vision` + `packet_encoding: xudp` + `server_port: 443`.
+- Special flow `xtls-rprx-vision-udp443`: normalized to `xtls-rprx-vision` + `packet_encoding: xudp` (в URI-парсере порт **не** меняется; `server_port: 443` форсится только в Xray-JSON-пути, секция 11).
 
 ### packet_encoding allow-list
 
@@ -400,6 +402,15 @@ Both formats are auto-detected. The base64 part before `@` is decoded first; if 
 - `chacha20-ietf-poly1305`
 - `xchacha20-ietf-poly1305`
 
+### SIP003 Plugins
+
+SIP002-URI query несёт SIP003-плагин:
+
+| Query key | Format | Description |
+|-----------|--------|-------------|
+| `plugin` | `name;k=v;k=v…` | Имя плагина (до первого `;`) + опции (`obfs-local`, `v2ray-plugin`, …) |
+| `plugin_opts` | `k=v;k=v…` | Опции отдельно, если не переданы внутри `plugin` |
+
 ### sing-box Outbound Mapping
 
 ```json
@@ -409,15 +420,18 @@ Both formats are auto-detected. The base64 part before `@` is decoded first; if 
   "server": "<host>",
   "server_port": <port>,
   "method": "<method>",
-  "password": "<password>"
+  "password": "<password>",
+  "plugin": "obfs-local",
+  "plugin_opts": "obfs=http;obfs-host=example.com"
 }
 ```
 
 ### Notes
 
-- No transport or TLS options; Shadowsocks handles its own encryption.
+- Shadowsocks handles its own encryption; TLS is not applicable. Transport-обфускация возможна только через SIP003-плагин (`plugin`/`plugin_opts` выше) — эмитятся в outbound, когда заданы.
 - Unsupported methods cause a parse error (node is skipped).
 - Base64 decoding tries both standard and URL-safe variants, with and without padding.
+- Round-trip: `plugin`/`plugin_opts` эмитятся в sing-box JSON, но share-URI (`toUri`) их **не** пишет — при экспорте в `ss://` плагин теряется.
 
 ### Reference
 
@@ -448,7 +462,8 @@ Both `hysteria2://` and `hy2://` schemes are supported (the latter is normalized
 | ALPN | `alpn` | Comma-separated ALPN |
 | Obfuscation | `obfs` | Obfuscation type (only `salamander` supported) |
 | Obfs password | `obfs-password` | Salamander obfuscation password |
-| Multi-port | `mport` or `ports` | Port hopping spec (e.g. `1000-2000,3000`) |
+| Up bandwidth | `up_mbps` | Bandwidth hint, Mbps (int, optional; §084) |
+| Down bandwidth | `down_mbps` | Bandwidth hint, Mbps (int, optional; §084) |
 
 ### sing-box Outbound Mapping
 
@@ -459,7 +474,8 @@ Both `hysteria2://` and `hy2://` schemes are supported (the latter is normalized
   "server": "<host>",
   "server_port": <port>,
   "password": "<password>",
-  "server_ports": ["1000:2000", "3000:3000"],
+  "up_mbps": 100,
+  "down_mbps": 100,
   "obfs": {
     "type": "salamander",
     "password": "<obfs-password>"
@@ -477,8 +493,8 @@ Both `hysteria2://` and `hy2://` schemes are supported (the latter is normalized
 ### Notes
 
 - TLS is always enabled (Hysteria2 runs over QUIC).
-- Multi-port (`mport`) format: comma-separated ranges with `-` converted to `:` for sing-box `server_ports`.
-- `server_ports` is only set when `mport`/`ports` is present.
+- Port hopping (`mport`/`ports` → `server_ports`) is **not** implemented — the parser does not read those keys and `server_ports` is never emitted.
+- `up_mbps`/`down_mbps` are parsed and round-tripped (URI/JSON), emitted only when present.
 - Invalid SNI values (e.g. emoji-only) are replaced with the server address.
 
 ### Reference
@@ -542,7 +558,7 @@ naive+https://u:p@host:443/?extra-headers=X-Forwarded-Proto%3Ahttps#%E2%9C%85%20
 
 ### Build-tag Requirement
 
-NaïveProxy outbound is gated behind the sing-box build tag `with_naive_outbound`. The libbox AAR shipped via `com.github.singbox-android:libbox` (1.12.x / 1.13.x main variant, `androidApi=23+`) **includes** this tag — see [spec 037 §2](spec/features/037%20naive%20proxy/spec.md#2-build-tag-в-libbox--проверено) for verification details. If a future libbox upgrade ships the legacy variant without naive, `BoxVpnClient` surfaces a `NaiveBuildTagWarning` per node when sing-box returns the upstream error string `naive outbound is not included in this build, rebuild with -tags with_naive_outbound`.
+NaïveProxy outbound is gated behind the sing-box build tag `with_naive_outbound`. Since §097/§104 L×Box bundles its own fork core `sing-box-lx` (local `app/android/libbox.aar`, pin in [`app/android/libbox.version`](../app/android/libbox.version); the old Maven `com.github.singbox-android:libbox` dependency is gone), built **with** this tag — see [spec 037 §2](spec/features/037%20naive%20proxy/spec.md#2-build-tag-в-libbox--проверено) for verification details. If a future core build ever ships without naive, `BoxVpnClient` surfaces a `NaiveBuildTagWarning` per node when sing-box returns the upstream error string `naive outbound is not included in this build, rebuild with -tags with_naive_outbound`.
 
 ### Reference
 
@@ -567,11 +583,11 @@ Default port: **22**.
 | Parameter | Source | Description |
 |-----------|--------|-------------|
 | User | userinfo (before `:`) | SSH username (defaults to `root`) |
-| Password | userinfo (after `:`) or `password` query | SSH password |
+| Password | userinfo (after `:`) | SSH password |
 | Private key | `private_key` | URL-encoded private key content |
-| Private key path | `private_key_path` | Path to private key file |
 | Key passphrase | `private_key_passphrase` | Passphrase for private key |
 | Host keys | `host_key` | Comma-separated host key strings |
+| Host key algorithms | `host_key_algorithms` | Comma-separated CSV → array of allowed host-key algorithms |
 
 ### sing-box Outbound Mapping
 
@@ -584,16 +600,17 @@ Default port: **22**.
   "user": "<user>",
   "password": "<password>",
   "private_key": "<key_content>",
-  "private_key_path": "<path>",
   "private_key_passphrase": "<passphrase>",
-  "host_key": ["ssh-rsa AAAA..."]
+  "host_key": ["ssh-rsa AAAA..."],
+  "host_key_algorithms": ["ssh-ed25519", "rsa-sha2-256"]
 }
 ```
 
 ### Notes
 
 - Only password or private key authentication. No agent forwarding.
-- `host_key` is split by comma into an array.
+- `host_key` and `host_key_algorithms` are each split by comma into an array.
+- NB: `parseSingboxEntry` (section 10, raw sing-box JSON) currently drops `host_key_algorithms` on round-trip — only the URI parser reads it.
 
 ### Reference
 
@@ -667,6 +684,7 @@ The private key is URL-encoded in the userinfo position. Default port: **51820**
 | Pre-shared key | `presharedkey` | Peer pre-shared key |
 | Keepalive | `keepalive` | Persistent keepalive interval (seconds) |
 | Allowed IPs | `allowedips` | Peer allowed IPs (default: `0.0.0.0/0, ::/0`) |
+| Reserved / client_id | `reserved` or `client_id` | Cloudflare WARP client_id — 3 bytes, decimal `b0,b1,b2` or base64 (§025/§126). Emitted **per-peer** as `reserved: [b0,b1,b2]`. Without it a WARP handshake may complete but no data passes. |
 
 ### sing-box Endpoint Mapping
 
@@ -728,6 +746,7 @@ awg://PRIVATE_KEY@host:port?publickey=...&address=...&jc=4&jmin=40&jmax=70&s1=0&
 | `s3`, `s4` | int | transport-padding (data-пакеты) | AWG 2.0 |
 | `h1`–`h4` | int \| `"N-M"` | magic headers — подмена типов пакетов; диапазон `N-M` = ranged headers (§112) | AWG 1.x / 2.0 |
 | `i1`–`i5` | string | CPS decoy-пакеты, тег-формат `<b 0xHEX><r N>…` | AWG 2.0 |
+| `id`, `ip`, `ib` | string | masquerade-sugar (WireSock-style) над `i1` — ядро само разворачивает в CPS-пакет `i1`. **Взаимоисключающи с явным `i1`** (оба сразу → ошибка старта ядра). §143 | AWG 2.0 |
 
 - Числовые поля — uint32, эмитятся как JSON **number**.
 - `h1`–`h4` (§112): значение `N` → `int` (строка-число `"5"` нормализуется в `int 5`), диапазон `N-M` → `String`, эмитится JSON **string** (контракт ядра ≥ `lx.6`). Глубже не валидируем (start ≤ end, uint32, непересечение диапазонов) — это делает ядро с явной ошибкой на старте; молчаливый drop здесь дал бы тихо сломанный handshake.
@@ -859,7 +878,7 @@ Auto-detected when input contains both `[Interface]` and `[Peer]` sections.
 The INI config is converted to a `wireguard://` URI internally using `wireGuardConfigToUri()`:
 
 1. Parse `[Interface]`: `PrivateKey`, `Address`, `MTU` + AWG-поля `Jc`/`Jmin`/`Jmax`/`S1`–`S4`/`H1`–`H4`/`I1`–`I5` (§097, см. [8.5](#85-amneziawg-awg-awg2); ключ case-insensitive, регистр значения сохраняется, `i*` URL-эскейпятся в query)
-2. Parse `[Peer]`: `PublicKey`, `Endpoint` (host:port), `PresharedKey`, `PersistentKeepalive`
+2. Parse `[Peer]`: `PublicKey`, `Endpoint` (host:port), `PresharedKey`, `PersistentKeepalive`, `Reserved`/`ClientId` (WARP client_id, §126)
 3. Construct: `wireguard://host:port?publickey=...&privatekey=...&address=...&...#WireGuard`
 4. The resulting URI is then parsed by the standard WireGuard parser (see section 8).
 
@@ -1042,7 +1061,8 @@ Raw sing-box outbound or endpoint JSON pasted directly. The JSON object must hav
 
 ### Notes
 
-- The JSON is used as-is with no transformation.
+- The entry is **re-parsed** into a typed `NodeSpec` via `parseSingboxEntry` — it is not passed through verbatim. Supported `type` values: `vless`, `vmess`, `trojan`, `shadowsocks`, `hysteria2`, `naive`, `tuic`, `ssh`, `socks`, `wireguard`, `masque`. An unknown `type` → the node is skipped (returns null).
+- Because of the typed round-trip, fields the model does not carry are **not preserved** (e.g. hysteria2 port hopping, ssh `host_key_algorithms`). `packet_encoding` is normalized to the allow-list and REALITY `public_key` is validated as X25519 (§169) — an invalid key degrades to plain TLS rather than emitting a config the core rejects.
 - The `tag` field is used for display and must be present.
 - This is for advanced users who want to specify the exact sing-box configuration.
 
@@ -1141,9 +1161,9 @@ When `streamSettings.sockopt.dialerProxy` references another outbound tag:
 - Special flow `xtls-rprx-vision-udp443` -> `flow: xtls-rprx-vision` + `packet_encoding: xudp` + `server_port: 443`
 
 **TLS (from `streamSettings`):**
-- `security: "reality"` -> `tls.reality.enabled: true` with `realitySettings` mapped to `public_key`, `short_id`
+- `security: "reality"` -> `tls.reality.enabled: true` with `realitySettings` mapped to `public_key`, `short_id`. REALITY is only built when the public key is a valid X25519 key (base64/base64url → 32 bytes); an invalid key degrades to plain TLS with a warning (§169).
 - `security: "tls"` -> standard TLS from `tlsSettings` (`serverName`, `fingerprint`, `allowInsecure`)
-- If REALITY is enabled with a public key and no explicit flow on TCP: auto-sets `flow: xtls-rprx-vision`
+- `flow` is taken verbatim from `users[0].flow`; it is **not** auto-derived from REALITY (§115). As in the URI path, Vision with a transport is dropped with a warning.
 
 **Transport (from `streamSettings.network`):**
 - `ws` -> `wsSettings` mapped to `{"type": "ws", "path": ..., "headers": {"Host": ...}}`
@@ -1206,7 +1226,7 @@ URIs exceeding the maximum length (defined by `maxURILength`) are rejected with 
 
 ### TLS Insecure Flag
 
-Multiple query keys are checked: `insecure`, `allowInsecure`, `allowinsecure`. Values `1`, `true`, `yes` all enable insecure mode.
+Multiple query keys are checked: `insecure`, `allowInsecure`, `allowinsecure`, `allow_insecure`, `skip-cert-verify`. Values `1`, `true`, `yes` all enable insecure mode.
 
 ---
 
@@ -1269,6 +1289,13 @@ Multiple query keys are checked: `insecure`, `allowInsecure`, `allowinsecure`. V
 - `x_padding_bytes` — диапазон случайного padding'а, напр. `"100-1000"`;
 - `no_grpc_header` — не слать gRPC-обёртку в `stream-up`;
 - `x_padding_obfs_mode` — переключатель configurable-obfs (вместо legacy padding в `Referer`); под ним `x_padding_placement` (`cookie`|`header`|`query`|`queryInHeader`) + `x_padding_method` (`repeat-x` | `tokenish` — HPACK-Huffman) + свои ключ/заголовок.
+
+**Нормализация (§217).** `parseTransport` читает поля дословно; проверку делает `toSingbox`. Значения вне enum-множеств ядро отвергает **fatal** (одна битая нода роняла бы весь конфиг на старте), поэтому такие поля **не эмитятся** и нода получает `XhttpParamResetWarning` (⚠️ в подписке + строка в AppLog):
+
+- allow-list'ы: `session_placement`/`seq_placement` ∈ {`path`,`query`,`header`,`cookie`}; `uplink_data_placement` ∈ {`body`,`auto`,`header`,`cookie`}; `x_padding_placement` ∈ {`cookie`,`header`,`query`,`queryInHeader`}; `x_padding_method` ∈ {`repeat-x`,`tokenish`};
+- mode-зависимые правила (только при `mode=packet-up`): `uplink_http_method=GET`, а также `uplink_data_placement` = `header`/`cookie`. Вне packet-up эти значения сбрасываются с warning.
+
+Битое значение не роняет конфиг — поле дропается, узел остаётся рабочим на дефолтах ядра.
 
 **Generated transport block:**
 

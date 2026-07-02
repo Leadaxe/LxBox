@@ -35,18 +35,20 @@ wizard_template.json
 │       └─ reload                  duration      auto-refresh subscriptions interval (Go-style "12h")
 │
 ├─ dns_options                     object{2 keys}       default DNS shape для билдера
-│   ├─ servers[]                   list          template-level DNS servers (10 default'ов)
-│   │   └─ <SingboxDnsServer>      object          shape элемента:
-│   │       ├─ type                "udp"|"https"|"tls"|"local"
-│   │       ├─ tag                 string        unique id для ссылки
+│   ├─ servers[]                   list          template-level DNS servers (7 default'ов)
+│   │   └─ <DnsServerRef>          object          обёртка §117 (tag живёт в server.tag):
 │   │       ├─ description         string?       UI label
-│   │       ├─ enabled             bool?         default true
-│   │       ├─ server              string?       IP/host (udp/tls/h3)
-│   │       ├─ server_port         int?
-│   │       ├─ path                string?       (https) "/dns-query"
-│   │       ├─ tls                 object?         {enabled, server_name}
-│   │       ├─ detour              tag?          через какой outbound резолвить
-│   │       └─ domain_resolver     tag?          какой DNS используется для host'а сервера
+│   │       ├─ enabled             bool?         default true (default-enabled для auto-discovery)
+│   │       ├─ vars[]              list?         те же определения, что preset-vars (§033)
+│   │       └─ server              object          sing-box DNS server body + @placeholders:
+│   │           ├─ type            "udp"|"https"|"tls"|"local"
+│   │           ├─ tag             string        unique id для ссылки
+│   │           ├─ server          string?       IP/host (udp/tls/h3)
+│   │           ├─ server_port     int?
+│   │           ├─ path            string?       (https) "/dns-query"
+│   │           ├─ tls             object?         {enabled, server_name}
+│   │           ├─ detour          tag?          через какой outbound резолвить
+│   │           └─ domain_resolver tag?          какой DNS используется для host'а сервера
 │   └─ rules[]                     list          template-level DNS rules (§061, бывший feature §041), сейчас пусто
 │
 ├─ ping_options                    object{3 keys}       (§040)
@@ -61,7 +63,7 @@ wizard_template.json
 │   ├─ stream_options              list[3]       parallel-streams choices (e.g. [1,4,10])
 │   └─ default_streams             int           default 4
 │
-├─ preset_groups[]                 list[5]       selector/urltest группы → config.outbounds[]
+├─ preset_groups[]                 list[3]       seed-группы (✨auto, vpn-1, vpn-2) → channels[] (§125)
 │   └─ <PresetGroup>               object
 │       ├─ tag                     string|@var   sing-box outbound tag (e.g. "vpn-1", "@auto_proxy_tag")
 │       ├─ type                    "selector"|"urltest"
@@ -83,7 +85,7 @@ wizard_template.json
 │       └─ vars[]                  list          переменные секции
 │           └─ <Var>               object
 │               ├─ name            string        @имя для substitution
-│               ├─ type            string        "text"|"bool"|"enum"|"secret"|"outbound"|"dns_servers"
+│               ├─ type            string        "text"|"int"|"bool"|"enum"|"secret"|"outbound"|"dns_servers"
 │               ├─ default_value   any
 │               ├─ required        bool?
 │               ├─ options[]       list?         для enum: ["a","b"] или [{title,value}, ...]
@@ -121,14 +123,16 @@ wizard_template.json
 │   │   │   ├─ {action:"resolve", inbound:"tun-in", strategy:"@resolve_strategy"}
 │   │   │   ├─ {action:"sniff",   inbound:"tun-in", timeout:"1s"}
 │   │   │   └─ {protocol:"dns",   action:"hijack-dns"}
-│   │   ├─ rule_set[]              list          [] — заполняется из selectable_rules[].rule_set
+│   │   ├─ rule_set[]              list          (в шаблоне ключа НЕТ — создаётся билдером
+│   │   │                                         из selectable_rules[].rule_set)
 │   │   ├─ final                   tag           default selector ("vpn-1")
 │   │   └─ auto_detect_interface   "@auto_detect_interface"
-│   └─ experimental                object{2 keys}
-│       ├─ clash_api               object          {external_controller:"@clash_api", secret:"@clash_secret"}
+│   └─ experimental                object{1 keys}
 │       └─ cache_file              object          {enabled:true, path:"cache.db"}
+│                                                  (clash_api УДАЛЁН в §122 — блок в кастомном шаблоне
+│                                                   роняет старт ядра: "clash api is not included in this build")
 │
-└─ selectable_rules[]              list[5]       КАТАЛОГ preset'ов
+└─ selectable_rules[]              list[6]       КАТАЛОГ preset'ов
     └─ <Preset>                    object
         ├─ preset_id               string        id для ссылки из custom_rules (§030)
         ├─ label                   string        UI display
@@ -152,7 +156,9 @@ wizard_template.json
         │                                           outbound:"@var"?, action:"reject"?}
         ├─ dns_rule                object?         DNS-уровень rule, аналогично rule
         └─ dns_servers[]           list?         DNS servers видимые когда preset enabled
-                                                 (тот же shape что dns_options.servers[*])
+                                                 (ПЛОСКИЕ sing-box-тела, shape = внутренность
+                                                  `dns_options.servers[*].server`, БЕЗ обёртки;
+                                                  фильтруются по top-level `tag`)
 ```
 
 Каждый ключ описан подробно в разделах ниже.
@@ -360,22 +366,23 @@ Catalog of routing-groups: какие selector'ы/urltest'ы создавать 
     },
     "add_outbounds": [ "direct-out", "@auto_proxy_tag" ]    // что показать в selector UI помимо node tags
   },
-  {"tag": "vpn-2", "type": "selector", "label": "VPN ②", "default_enabled": false, … },
-  {"tag": "vpn-3", "type": "selector", "label": "VPN ③", "default_enabled": false, … },
-  {"tag": "vpn-4", "type": "selector", "label": "VPN ④", "default_enabled": false, … }
+  {"tag": "vpn-2", "type": "selector", "label": "VPN ②", "default_enabled": false,
+   "options": {"default": "direct-out", …}, … }
 ]
 ```
+
+В шаблоне только **3 seed-группы** (`✨auto`, `vpn-1`, `vpn-2`). Дальнейшие каналы (до `vpn-10`, `kMaxChannels = 10`) юзер создаёт сам в storage (`channels[]`), а не в шаблоне.
 
 | Ключ | Тип | Назначение |
 |---|---|---|
 | `tag` | string | sing-box outbound tag. Может быть `@var`-плейсхолдером. |
 | `type` | `"selector"` \| `"urltest"` | sing-box тип группы. |
 | `label` | string | UI display name (Home → group dropdown). |
-| `default_enabled` | bool | Включена в новой установке? Юзер может toggle через App Settings → Auto Proxy. |
+| `default_enabled` | bool | Влияет только на seed первого запуска (что засеять в `channels[]`). После миграции включённость живёт в `channels[].enabled`, редактируется в Routing → Channels. |
 | `options` | object | Прокидывается в финальный sing-box config (selector/urltest options). |
 | `add_outbounds[]` | list[string] | Дополнительные tags которые показываются в selector помимо node-tag'ов из `server_lists`. |
 
-Storage override: `enabled_groups` в `lxbox_settings.json` контролирует кто реально включён.
+Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `enabled_groups[]` **DEPRECATED** — читается только one-shot миграцией в `channels[]` и как fallback-seed при пустом `channels[]` (см. [STORAGE.md](STORAGE.md#channels--125) и §125-callout выше).
 
 ---
 
@@ -406,7 +413,19 @@ Storage override: `enabled_groups` в `lxbox_settings.json` контролиру
 ]
 ```
 
-7 секций в текущем template'е: `General`, `Clash API`, `Network`, `Auto Proxy`, `DNS`, `TUN`, `DPI Bypass`. Расфасованы по 3 chapter'ам (`core`, `routing`, `dns`).
+7 секций в текущем template'е: `General`, `Network`, `Auto Proxy`, `DNS`, `TUN`, `VPN Mode`, `DPI Bypass`. Расфасованы по 3 chapter'ам (`core`, `routing`, `dns`).
+
+Секция `VPN Mode` — целиком `wizard_ui: hidden` (build-time vars, не показывается в UI). Её 7 переменных питают `#if`-гейтинг inbounds/route-rules (§119/§120), значения проставляются из `VpnModeConfig` на этапе сборки, а не редактируются юзером в Wizard:
+
+| Var | Тип | Назначение |
+|---|---|---|
+| `vpn_mode` | enum | `vpn` / `proxy` / `vpn_proxy` — какие inbounds поднимать |
+| `proxy_type` | enum | тип proxy-inbound (`mixed`/...) |
+| `proxy_listen` | text | listen-адрес proxy |
+| `proxy_port` | int | listen-порт proxy |
+| `proxy_user` | text | имя пользователя (при auth) |
+| `proxy_pass` | secret | пароль (при auth; `secret` — никогда не коэрсится) |
+| `proxy_auth` | bool | включить `users[]` в proxy-inbound |
 
 ### `vars[i]` — описание template-переменной
 
@@ -462,13 +481,16 @@ Storage override: `enabled_groups` в `lxbox_settings.json` контролиру
   ],
   "endpoints": [],                               // wireguard endpoints (from server_lists user nodes)
   "outbounds": [
-    {"type": "direct", "tag": "direct-out"}      // base; остальное добавляется builder'ом
+    {"type": "direct", "tag": "direct-out"},     // base
+    {"type": "block",  "tag": "block"}           // §201 drop-out; остальное добавляется builder'ом
   ],
   "route": {
     "find_process":            true,
     "default_domain_resolver": "@dns_default_domain_resolver",
     "rules": [
       {"action": "resolve", "inbound": "tun-in", "strategy": "@resolve_strategy"},
+      // sniff-правило в шаблоне обёрнуто в #if по @sniff_enabled (см. § #if ниже) —
+      // здесь показано резолвнутым (true-ветка); при false элемент выпадает
       {"action": "sniff",   "inbound": "tun-in", "timeout": "1s"},
       {"protocol": "dns", "action": "hijack-dns"}
     ],
@@ -476,7 +498,10 @@ Storage override: `enabled_groups` в `lxbox_settings.json` контролиру
     "auto_detect_interface":  "@auto_detect_interface"
   },
   "experimental": {
-    "clash_api":  {"external_controller": "...", "secret": "..."},
+    // clash_api УДАЛЁН в §122 (CommandClient-миграция). Управление идёт через
+    // libbox CommandClient, а не HTTP Clash API. Ядро собрано БЕЗ with_clash_api:
+    // блок experimental.clash_api в кастомном шаблоне = ФАТАЛЬНЫЙ отказ старта
+    // ("clash api is not included in this build"). Не добавлять.
     "cache_file": {"enabled": true, "path": "..."}
   }
 }
@@ -508,11 +533,11 @@ Storage override: `enabled_groups` в `lxbox_settings.json` контролиру
   "rule_set": [ <SingboxRuleSet>, … ]?, // rule_set'ы которые должны быть зарегистрированы
   "rule":     <SingboxRoutingRule>?,    // routing rule (single)
   "dns_rule": <SingboxDnsRule>?,        // DNS-уровень routing rule
-  "dns_servers": [ <SingboxDnsServer>, … ]?  // DNS-серверы которые должны существовать когда preset enabled
+  "dns_servers": [ <FlatDnsServer>, … ]?  // ПЛОСКИЕ sing-box DNS-тела (не обёртка §117; top-level tag)
 }
 ```
 
-### Полевая матрица текущих 5 preset'ов
+### Полевая матрица текущих 6 preset'ов
 
 | `preset_id` | `default` | `vars` | `rule_set` | `rule` | `dns_rule` | `dns_servers` |
 |---|---|---|---|---|---|---|
@@ -521,6 +546,11 @@ Storage override: `enabled_groups` в `lxbox_settings.json` контролиру
 | `ru-inside` | (false) | — | ✓ (remote ru-inside) | ✓ | — | — |
 | `bittorrent-direct` | true | — | — | ✓ (`protocol: bittorrent`) | — | — |
 | `private-ip-direct` | (false) | — | — | ✓ (`ip_is_private`) | — | — |
+| `block_unknown` | false | ✓ (`outbound`=reject) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
+
+`block_unknown` — reject/direct для трафика в туннеле, не атрибутированного ни одному установленному приложению (фоновые/чужие процессы). Инлайн `rule_set` `unknown-apps` матчит «всё, что НЕ приложение» через `invert: true` + `package_name_regex: "^"`.
+
+**Backstop `reject`→`action`.** У `block_unknown` var-дефолт `outbound: "reject"`, и `rule.outbound: "@outbound"`. `reject` в sing-box — это `action`, а НЕ outbound-tag: литерал `{outbound: "reject"}` валидатор реджектит как dangling ref → fatal, ядро не стартует. Поэтому `preset_expand.dart` БЕЗУСЛОВНО нормализует финальный результат: `outbound == "reject"` → снять `outbound`, поставить `action: "reject"`. Это инвариант билдера (контракт sing-box), а не забота автора шаблона — работает и когда юзер выбрал reject явно в пикере, и когда просто включил пресет с дефолтом.
 
 ### `selectable_rules[*].rule_set[i]` — sing-box rule-set definition
 
@@ -531,15 +561,15 @@ Storage override: `enabled_groups` в `lxbox_settings.json` контролиру
   "format":           "binary" | "source"?,       // для local/remote
   "rules":            [ … ]?,                      // для inline — список match-условий
   "url":              "https://..."?,              // для remote
-  "path":             "<filesystem>"?,             // для local — обычно sing-box runtime ставит автоматически после download'а .srs
-  "download_detour":  "<outbound-tag>"?,           // для remote — через что качать .srs (default: direct-out)
-  "update_interval":  "<duration>"?                // для remote — period auto-update (e.g. "168h")
+  "path":             "<filesystem>"?,             // для local — путь к .srs (в финальном config ставит билдер)
+  "download_detour":  "<outbound-tag>"?,           // декларативное поле каталога — стрипается билдером
+  "update_interval":  "<duration>"?                // декларативное поле каталога — стрипается билдером
 }
 ```
 
-`download_detour` обычно = `direct-out` чтобы bootstrap'ить .srs до того как VPN поднимется.
+⚠ **sing-box сам НИЧЕГО не скачивает.** В финальный config `remote`-форма не попадает никогда: билдер (`preset_expand.dart`) подменяет `remote` → `{type: "local", path: <кэш>}` и стрипает `url`/`download_detour`/`update_interval`. Кэш = `<docs>/rule_sets/<id>.srs`, где `id` — `CustomRule.id` (UUID), а для пресетов — `cachedPathForPreset(presetId, tag)` (по id пресета/правила, НЕ по `tag`).
 
-`update_interval` — sing-box сам fetch'ит обновления .srs с этой периодичностью; кэш в `<docs>/rule_sets/<tag>.srs`.
+Скачивание — только вручную через кнопку **Download** в UI (`RuleSetDownloader`). Если кэша нет, rule_set пропускается с warning («download first») — sing-box не увидит remote-URL и не полезет в сеть. `download_detour`/`update_interval` в текущем pipeline не используются (декларативные поля каталога).
 
 ### `selectable_rules[*].rule` — routing rule
 
@@ -568,6 +598,8 @@ Single object (НЕ массив) — sing-box routing rule с support'ом вс
 
 Аналогично routing rule, но для DNS pipeline. `dns_rule` — single object, направляющий matched-domains на DNS-сервер из `dns_servers[]` (или ссылку на основной `dns_options.servers[]` сервер по tag).
 
+⚠ В отличие от `dns_options.servers[*]` (обёртка `{description, enabled, vars?, server}` §117), preset-`dns_servers[*]` — это **плоские sing-box-тела** (`{type, tag, detour, …}` без обёртки, tag на top-level). `preset_expand.dart` фильтрует их по top-level `s['tag']`. Пример из `ru-direct`: `{"type":"udp","tag":"yandex_udp","detour":"@outbound",…}`.
+
 ### `vars` substitution
 
 Vars, объявленные в preset'е, **видны только когда preset enabled**. UI рендерит их в Routing → preset detail. При expansion `@varname` в `rule` / `dns_rule` / `dns_servers` подставляется текущим значением (`varsValues[name]` из `CustomRulePreset` storage entry, fallback на `default_value`).
@@ -578,18 +610,20 @@ Vars, объявленные в preset'е, **видны только когда 
 
 ## Vars-substitution syntax
 
-Везде в `config` блоке (и в expansion preset'ов) value-строка вида `"@varname"` или с inline-substitution `"prefix-@varname-suffix"` подставляется из:
+Везде в `config` блоке (и в expansion preset'ов) подставляется **только whole-string** value вида `"@varname"` (строка целиком начинается с `@`, имя = всё после `@`) из:
 1. `lxbox_settings.json` `vars[varname]` (если override'нуто)
 2. `default_value` соответствующего var в `sections[*].vars[*]` или `selectable_rules[*].vars[*]`
 
-Только string-подстановка. Для `bool`/`int` template обычно содержит конкретный default, не `@var`.
+Inline-подстановка **не поддерживается**: `"prefix-@varname-suffix"` не строка-`@var`, поэтому остаётся литералом как есть (молча, без warning). А `"@varname-suffix"` будет искаться как var с именем `varname-suffix` — не тем, что ожидалось. Если var-имя не объявлено, плейсхолдер остаётся как есть (контракт `build_config`).
+
+Результат **типизирован по объявленному `var.type`** (§120): `bool`/`int` коэрсятся `coerceVarValue`, строковые типы (`text`/`secret`/`enum`/`outbound`/`dns_servers`) — дословно. Сам шаблон использует и типизированные `@var`: `"@tun_mtu"` (int), `"@tun_auto_route"` (bool).
 
 См. примеры:
 - `"final": "@dns_final"` — подставится `cloudflare_udp` или то что юзер выбрал
 - `"@auto_proxy_tag"` — подставится `✨auto`
 - `"server": "@dns_ip"` (внутри ru-direct preset) — подставится IP выбранный в dropdown'е
 
-См. реализацию в `app/lib/services/builder/build_config.dart` + `expand_preset.dart`. Общее ядро подстановки и `#if` — `app/lib/services/builder/if_engine.dart` (§120), используется обоими движками.
+См. реализацию в `app/lib/services/builder/build_config.dart` + `preset_expand.dart`. Общее ядро подстановки и `#if` — `app/lib/services/builder/if_engine.dart` (§120), используется обоими движками.
 
 ## `#if`-конструкт (§120)
 
@@ -610,7 +644,7 @@ Vars, объявленные в preset'е, **видны только когда 
 
 **Предикаты:** `"@var"` (bool), `{"@var":"literal"}` (equality), `{"@var":"#notEmpty"/"#isEmpty"}`, `{"@var":{"#in":[...]}}` / `{"#notIn":[...]}` / `{"#matches":"re"}`, `{"#not":predicate}`.
 
-**Naming:** `#` — конструкт/предикат; `@` — var-ref; bare — inner-ключи тела `#if`. Неизвестный `#*`-сиблинг → drop+warn (forward-compat); неизвестный inner-ключ/предикат-оператор → ошибка (валидация на template-load).
+**Naming:** `#` — конструкт/предикат; `@` — var-ref; bare — inner-ключи тела `#if`. Неизвестный `#*`-сиблинг **молча отбрасывается** (`if_engine.dart::_walkMap` делает `obj.remove(k)` без warning — forward-compat); неизвестный inner-ключ/предикат-оператор → ошибка (валидация на template-load).
 
 Пример (§119 inbounds, см. `wizard_template.json`):
 ```jsonc

@@ -13,7 +13,7 @@
 
 ## Flutter-приложение
 
-Каталог **`app/`** — проект L×Box. Зависимости подтягиваются через `flutter pub get`. Нативный VPN — `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/` (свой `BoxVpnService`, не Flutter plugin). libbox на Android — fork **[`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)** (ветка `lx`): AWG/AWG2 (AmneziaWG) + нативный XHTTP ([§097](spec/features/097%20awg2-amneziawg2/spec.md)). AAR подключается файлом `libs/libbox.aar`, скачивание и пин версии — [§104](spec/tasks/104-libbox-fork-ci-fetch.md); см. раздел [«Ядро sing-box-lx (libbox)»](#ядро-sing-box-lx-libbox). История пина: стоковый `com.github.singbox-android:libbox:1.13.11` с JitPack ([task §060](spec/tasks/060-libbox-1-13-migration/spec.md)) ← `io.github.sagernet:libbox:1.12.12`.
+Каталог **`app/`** — проект L×Box. Зависимости подтягиваются через `flutter pub get`. Нативный VPN — `app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/` (свой `BoxVpnService`, не Flutter plugin). libbox на Android — fork **[`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)** (ветка `lx-1.14`): AWG/AWG2 (AmneziaWG) + нативный XHTTP ([§097](spec/features/097%20awg2-amneziawg2/spec.md)) + MASQUE/idle-suspend/balancer. AAR подключается файлом `libs/libbox.aar`, скачивание и пин версии — [§104](spec/tasks/104-libbox-fork-ci-fetch.md); см. раздел [«Ядро sing-box-lx (libbox)»](#ядро-sing-box-lx-libbox). История пина: стоковый `com.github.singbox-android:libbox:1.13.11` с JitPack ([task §060](spec/tasks/060-libbox-1-13-migration/spec.md)) ← `io.github.sagernet:libbox:1.12.12`.
 
 Импорт конфига по кнопке **Read**: **JSON** или **JSON5/JSONC** (комментарии `//`, `/* */` — парсер `json5`), затем в ядро уходит канонический JSON; источник — буфер или системный диалог выбора файла.
 
@@ -41,6 +41,16 @@ flutter run   # устройство или эмулятор Android
 
 Требует `git` и JDK (для gradle); ядро `app/android/app/libs/libbox.aar` скрипт скачивает сам.
 
+##### ⚠ Сборка виснет (CPU≈0) — memory-starvation stall
+
+`app/android/gradle.properties` задаёт `org.gradle.jvmargs=-Xmx8G -XX:MaxMetaspaceSize=4G …`. На машине с 16 ГБ RAM Gradle heap + metaspace + Kotlin/dex-воркеры не влезают → процесс уходит в своп, `assembleRelease` зависает с CPU≈0 (не компиляция, а stall).
+
+| | |
+|---|---|
+| Симптом | `flutter build apk` стоит на `assembleRelease` минутами; `ps aux \| grep java` — CPU java-процессов <5% |
+| Фикс | освободить RAM (закрыть тяжёлые приложения), снести залипший daemon (`pkill -f gradle` или `rm -rf ~/.gradle/daemon`), пересобрать с ограничением: `GRADLE_OPTS='-Dorg.gradle.jvmargs=-Xmx5G' ./scripts/build-local-apk.sh --no-daemon` + при желании `--max-workers=4` |
+| Радикально | снизить `-Xmx` в `gradle.properties` под объём RAM машины |
+
 #### versionCode — как считается и почему пинится к тегу ([§186](spec/tasks/186-local-build-vc-pin-to-tag.md))
 
 **Кто что добавляет** (проверено `aapt dump badging` на собранном APK):
@@ -63,7 +73,7 @@ flutter run   # устройство или эмулятор Android
 
 ## Ядро sing-box-lx (libbox)
 
-С §097 ядро приложения — fork **[`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)** (ветка `lx`), не стоковый sing-box.
+С §097 ядро приложения — fork **[`Leadaxe/sing-box-lx`](https://github.com/Leadaxe/sing-box-lx)** (ветка `lx-1.14`), не стоковый sing-box.
 
 | Что | Отметка |
 |-----|---------|
@@ -79,7 +89,7 @@ Fork публикует артефакты в своих GitHub Releases (workfl
 | `libbox-legacy-<ver>.aar` (minSdk 21) | ✗ не используем — у нас minSdk 26 |
 | `SHA256SUMS` | ✓ верификация скачанного AAR |
 
-Версию ядра отдаёт `Libbox.version()` (About/Debug): `1.13.13-lx.N-<sha>`.
+Версию ядра отдаёт `Libbox.version()` (About/Debug), формат `1.14.0-lx.N` (текущий пин — `v1.14.0-lx.1`).
 
 ### Как ядро попадает в сборку ([§104](spec/tasks/104-libbox-fork-ci-fetch.md))
 
@@ -95,7 +105,7 @@ AAR кладёт [`scripts/fetch-libbox.sh`](../scripts/fetch-libbox.sh): ска
 |--------------------|---------|
 | `scripts/build-local-apk.sh` (локальная сборка) | ✓ автоматически |
 | `ci.yml` → job `android` → шаг `Fetch sing-box-lx core (libbox.aar)` | ✓ автоматически |
-| Вручную (свежий clone, `flutter build` без скрипта): `./scripts/fetch-libbox.sh`; override версии — `./scripts/fetch-libbox.sh v1.13.13-lx.N` | ○ |
+| Вручную (свежий clone, `flutter build` без скрипта): `./scripts/fetch-libbox.sh`; override версии — `./scripts/fetch-libbox.sh v1.14.0-lx.N` | ○ |
 
 Джобу `checks` AAR не нужен (`flutter analyze`/`test` — pure Dart).
 
@@ -111,7 +121,9 @@ AAR кладёт [`scripts/fetch-libbox.sh`](../scripts/fetch-libbox.sh): ска
 
 ## Минимальный конфиг для проверки на телефоне
 
-Файл **[`docs/examples/minimal_local_test.json`](examples/minimal_local_test.json)** — валидный sing-box JSON: только **tun** + **direct/block** в селекторе (без платного/чужого прокси), **Clash API** на `127.0.0.1:9090` без секрета. Подходит, чтобы убедиться, что **Read → Start** поднимает туннель и в UI появляются группа **proxy** и узлы **direct** / **block**. Интернет при этом идёт как обычно через direct (не «обход»).
+Файл **[`docs/examples/minimal_local_test.json`](examples/minimal_local_test.json)** — валидный sing-box JSON: только **tun** + **direct/block** в селекторе (без платного/чужого прокси). Подходит, чтобы убедиться, что **Read → Start** поднимает туннель и в UI появляются группа **proxy** и узлы **direct** / **block**. Интернет при этом идёт как обычно через direct (не «обход»).
+
+⚠ Управление ядром — через **libbox CommandClient**, не Clash HTTP (Clash API выпилен в §122). Блок `experimental.clash_api` в конфиге на нашем ядре (собрано без `with_clash_api`) даёт **фатальный отказ старта** (`clash api is not included in this build`) — в конфиг для проверки его класть **нельзя**.
 
 ## CI (GitHub Actions)
 
@@ -189,4 +201,4 @@ gh workflow run CI -f run_mode=build    # ○ + APK в artifacts
 ## Версии
 
 - В workflow зафиксированы **Flutter 3.41.6** и **JDK 17**; при обновлении — править `ci.yml` и этот файл.
-- Ядро — **sing-box-lx `v1.13.13-lx.5`**: пин в `app/android/libbox.version` (single source для local + CI, читает `scripts/fetch-libbox.sh`); локальный `app/android/app/libs/libbox.aar` должен совпадать с пином (fetch следит через маркер `.libbox.version`). При обновлении — поднять пин, пересобрать локально, прогнать smoke и обновить эту строку.
+- Ядро — **sing-box-lx `v1.14.0-lx.1`** (ветка форка `lx-1.14`): пин в `app/android/libbox.version` (single source для local + CI, читает `scripts/fetch-libbox.sh`); локальный `app/android/app/libs/libbox.aar` должен совпадать с пином (fetch следит через маркер `.libbox.version`). Единственный источник правды по версии/build-тегам ядра — [KERNEL.md](KERNEL.md) + сам пин-файл. При обновлении — поднять пин, пересобрать локально, прогнать smoke и обновить эту строку.
