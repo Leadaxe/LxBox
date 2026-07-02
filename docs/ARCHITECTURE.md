@@ -342,7 +342,7 @@ box_vpn_client.dart          # BoxVpnClient.I — типизированная �
 box_vpn_client/method_names.dart  # part: _Methods — зеркало when(call.method) из VpnPlugin.kt
 box_vpn_client/timeouts.dart      # part: _Timeouts — per-method Duration (status 3s, start 30s…)
 cc_channel.dart              # §122 CcChannel.instance — Dart-клиент libbox CommandClient (заменил
-                             #   ClashApiClient): push-стримы status/outbounds/groups/connections
+                             #   ClashApiClient): push-стримы status/outbounds/groups/connections/dns (§180)
                              #   поверх EventChannel lxbox/cc/* + императивы (urlTestOutbound, getRules,
                              #   getGroups unary-pull, selectOutbound, closeConnection); фан-аут через
                              #   broadcast (ОДИН native sink на канал, §122 sink-leak-guard)
@@ -485,7 +485,7 @@ subscription/                # fetch/auto-update подписок
   auto_updater.dart          #   5-триггерный refresh + per-sub interval + retry/fail-caps + dedup (§027)
   http_cache.dart            #   on-disk кэш последнего raw body + headers (offline rehydrate);
                              #   §101 — атомарная запись tmp→rename (kill-safe при unawaited save)
-  input_helpers.dart         #   isSubscriptionUrl/isDirectLink (вкл. awg://, §097)/isWireGuardConfig (paste UX)
+  input_helpers.dart         #   isSubscriptionUrl/isDirectLink (вкл. awg://, §097)/isWireGuardConfig/isFileSubscription (§129) (paste UX)
 settings_storage.dart        # фасад над lxbox_settings.json — тонкие делегаты в part-файлы:
 settings_storage/io.dart            #   атомарный load/save/recovery (main→.bak→{}, §072)
 settings_storage/vars.dart          #   vars-домен + Wi-Fi history (§051)
@@ -535,6 +535,17 @@ haptic_service.dart · community_servers_loader.dart · dump_builder.dart · url
 config_dirty_check.dart · error_humanize.dart · error_format.dart · parse_hints.dart ·
 clash_log_pump.dart · logcat_reader.dart · stderr_reader.dart · exit_info_reader.dart ·
 selectable_to_custom.dart · version_info.dart · wifi_history_listener.dart  # вспомогательные
+automation/                  # §047 Dart-сторона automation (дополняет Kotlin Locale/Tasker plugin):
+  automation_dispatcher.dart #   диспетчер входящих команд (start/stop/toggle/select-node/…)
+  event_emitter.dart         #   исходящие события (VPN up/down, sub-refresh) с throttle (default OFF)
+  handlers.dart              #   обработчики команд поверх контроллеров
+support/                     # §105 support-message + активное время
+  support_message.dart       #   fetch+cache support-сообщения (баннер)
+  support_state.dart         #   персист support-стейта (SupportState.I)
+  active_time_tracker.dart   #   накопление активного времени сессий (монотонно, §219)
+platform_channels.dart       # §141 — имена MethodChannel/EventChannel (single source: Dart↔Kotlin)
+process_name.dart            # §154 — резолв package→имя процесса (профайлер-атрибуция)
+profile_dump_writer.dart     # §207 — сериализация pprof-дампа (goroutine/CPU) на диск
 ```
 
 #### `widgets/` — кросс-экранные
@@ -562,7 +573,7 @@ vpn/BoxCommandClient.kt      # §122 — управляющий канал UI↔
                              #   statusClient/screenClient/profilerClient; addCommand-подписка + write*-колбэки;
                              #   §163/§164 setStatusInterval-энергомодель). Заменил Clash HTTP API.
 vpn/BoxVpnService.kt         # Android VpnService + PlatformInterface side (§049-split, тонкий):
-                             #   §122 — владеет cc*Sink (status/outbounds/groups/connections push в Dart);
+                             #   §122 — владеет cc*Sink (status/outbounds/groups/connections/dns §180 push в Dart);
                              #   openTun (Builder.establish, allowBypass §069, per-app routes); forwards в BoxService
                              #   §119: openTun зовётся libbox'ом ТОЛЬКО при наличии tun-inbound. Режим Proxy
                              #   (vpn_mode=proxy, config без tun) → нет openTun → нет establish → нет VPN-туннеля.
@@ -571,6 +582,7 @@ vpn/BoxService.kt            # CommandServerHandler — владеет libbox ru
                              #   AtomicReference, serviceScope); startSingbox/doStop/serviceReload; setStatus broadcast
 vpn/BoxApplication.kt        # Application: async Libbox.setup (libboxReady barrier); singleton wifiObserver
 vpn/PlatformInterfaceWrapper.kt # libbox PlatformInterface: localDNS→LocalResolver, findConnectionOwner, readWIFIState
+vpn/PProfClient.kt           # §207 — libbox PProfServer (goroutine/CPU dump, порт 6060..6065; loopback-only)
 vpn/DefaultNetworkMonitor.kt # §087: detect genuine iface switch (prev!=new), debounce 1500ms → resetNetwork
 vpn/DefaultNetworkListener.kt# ConnectivityManager.NetworkCallback в coroutine-actor (порт SagerNet)
 vpn/LocalResolver.kt         # LocalDNSTransport — DNS-запросы bound к underlying network (не tun)
