@@ -724,4 +724,95 @@ void main() {
       expect(updated.wifiBssids, isEmpty);
     });
   });
+
+  // §225 (#17) — raw-JSON правило.
+  group('applyCustomRules — json', () {
+    test('объект → добавляется в route.rules как есть', () {
+      final reg = RuleSetRegistry();
+      final warnings = applyCustomRules(reg, [
+        CustomRuleJson(
+          name: 'Hijack DNS',
+          json: '{ "protocol": "dns", "action": "hijack-dns" }',
+        ),
+      ]);
+      expect(warnings, isEmpty);
+      expect(reg.getRuleSets(), isEmpty);
+      expect(reg.getRules(), [
+        {'protocol': 'dns', 'action': 'hijack-dns'},
+      ]);
+    });
+
+    test('массив объектов → несколько правил, порядок сохранён', () {
+      final reg = RuleSetRegistry();
+      final warnings = applyCustomRules(reg, [
+        CustomRuleJson(
+          name: 'Two',
+          json: '[{"action":"sniff"},{"protocol":"dns","action":"hijack-dns"}]',
+        ),
+      ]);
+      expect(warnings, isEmpty);
+      expect(reg.getRules(), [
+        {'action': 'sniff'},
+        {'protocol': 'dns', 'action': 'hijack-dns'},
+      ]);
+    });
+
+    test('битый JSON → skip + warning, конфиг не падает', () {
+      final reg = RuleSetRegistry();
+      final warnings = applyCustomRules(reg, [
+        CustomRuleJson(name: 'Broken', json: '{not json'),
+      ]);
+      expect(reg.getRules(), isEmpty);
+      expect(warnings, hasLength(1));
+      expect(warnings.first, contains('invalid JSON'));
+    });
+
+    test('пустое тело → skip + warning', () {
+      final reg = RuleSetRegistry();
+      final warnings =
+          applyCustomRules(reg, [CustomRuleJson(name: 'Empty', json: '  ')]);
+      expect(reg.getRules(), isEmpty);
+      expect(warnings.single, contains('empty body'));
+    });
+
+    test('скаляр (не объект/массив) → skip + warning', () {
+      final reg = RuleSetRegistry();
+      final warnings =
+          applyCustomRules(reg, [CustomRuleJson(name: 'Scalar', json: '42')]);
+      expect(reg.getRules(), isEmpty);
+      expect(warnings.single, contains('object or array'));
+    });
+
+    test('массив без объектов → skip + warning', () {
+      final reg = RuleSetRegistry();
+      final warnings = applyCustomRules(
+          reg, [CustomRuleJson(name: 'NoObjs', json: '[1, 2, 3]')]);
+      expect(reg.getRules(), isEmpty);
+      expect(warnings.single, contains('no rule objects'));
+    });
+
+    test('disabled json-правило пропускается (skipDisabled)', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleJson(
+          name: 'Off',
+          enabled: false,
+          json: '{"action":"sniff"}',
+        ),
+      ]);
+      expect(reg.getRules(), isEmpty);
+    });
+
+    test('round-trip toJson/fromJson сохраняет тело', () {
+      final r = CustomRuleJson(
+        id: 'j-1',
+        name: 'RT',
+        json: '{"action":"hijack-dns"}',
+      );
+      final restored = CustomRule.fromJson(r.toJson());
+      expect(restored, isA<CustomRuleJson>());
+      expect((restored as CustomRuleJson).json, '{"action":"hijack-dns"}');
+      expect(restored.kind, CustomRuleKind.json);
+    });
+  });
 }
