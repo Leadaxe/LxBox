@@ -3,7 +3,7 @@
 L×Box parses proxy URIs from subscriptions and converts them into [sing-box](https://sing-box.sagernet.org/) outbound (or endpoint) JSON. This document describes every supported protocol, its URI format, parsed parameters, and the resulting sing-box configuration.
 
 **Source code (Parser v2, spec 026):**
-- [`app/lib/services/parser/uri_parsers.dart`](../app/lib/services/parser/uri_parsers.dart) — URI-форматы всех 11 протоколов (vless, vmess, trojan, shadowsocks, hysteria2, naive, tuic, ssh, socks, wireguard/awg, masque)
+- [`app/lib/services/parser/uri_parsers.dart`](../app/lib/services/parser/uri_parsers.dart) — URI-форматы всех 12 протоколов (vless, vmess, trojan, shadowsocks, hysteria2, naive, tuic, ssh, socks, http, wireguard/awg, masque)
 - [`app/lib/services/parser/transport.dart`](../app/lib/services/parser/transport.dart) — парсинг `TransportSpec`, нативный XHTTP (§097, полный набор параметров §127)
 - [`app/lib/services/parser/json_parsers.dart`](../app/lib/services/parser/json_parsers.dart) — `parseSingboxEntry`, `parseXrayOutbound`
 - [`app/lib/services/parser/ini_parser.dart`](../app/lib/services/parser/ini_parser.dart) — WireGuard INI
@@ -22,16 +22,17 @@ L×Box parses proxy URIs from subscriptions and converts them into [sing-box](ht
 6. [Hysteria2](#5-hysteria2)
 7. [NaïveProxy](#55-naïveproxy)
 8. [SSH](#6-ssh)
-8. [SOCKS](#7-socks)
-9. [WireGuard](#8-wireguard)
-10. [AmneziaWG (AWG, AWG2)](#85-amneziawg-awg-awg2)
-11. [WireGuard INI Config](#9-wireguard-ini-config)
-12. [Amnezia vpn:// Link](#92-amnezia-vpn-link)
-13. [TUIC v5](#95-tuic-v5)
-14. [MASQUE (Cloudflare WARP)](#96-masque-cloudflare-warp)
-15. [JSON Outbound (raw sing-box)](#10-json-outbound)
-16. [Xray JSON Array](#11-xray-json-array)
-17. [XHTTP transport](#xhttp-transport)
+9. [SOCKS](#7-socks)
+10. [HTTP(S) proxy](#75-https-proxy)
+11. [WireGuard](#8-wireguard)
+12. [AmneziaWG (AWG, AWG2)](#85-amneziawg-awg-awg2)
+13. [WireGuard INI Config](#9-wireguard-ini-config)
+14. [Amnezia vpn:// Link](#92-amnezia-vpn-link)
+15. [TUIC v5](#95-tuic-v5)
+16. [MASQUE (Cloudflare WARP)](#96-masque-cloudflare-warp)
+17. [JSON Outbound (raw sing-box)](#10-json-outbound)
+18. [Xray JSON Array](#11-xray-json-array)
+19. [XHTTP transport](#xhttp-transport)
 
 ---
 
@@ -658,6 +659,66 @@ Both `socks://` and `socks5://` are accepted. Default port: **1080**.
 ### Reference
 
 - sing-box outbound: https://sing-box.sagernet.org/configuration/outbound/socks/
+
+---
+
+## 7.5. HTTP(S) proxy
+
+### URI Format
+
+```
+proxy-http://user:password@host:port?path=...&headers=...#label
+proxy-https://user:password@host:port?path=...&headers=...&sni=...&fp=...&alpn=...&allowInsecure=1#label
+```
+
+Кастомные схемы вместо голых `http://`/`https://` (§222): голые схемы
+перехватываются `isSubscriptionUrl` **раньше** `isDirectLink` (вставленная
+ссылка стала бы «подпиской»), а в телах подписок промо-строки вида
+`https://t.me/...` превращались бы в мусорные узлы. Схема — дискриминатор
+TLS: `proxy-https://` → `tls.enabled=true`. Default port: **80** /
+**443** соответственно.
+
+### Parsed Parameters
+
+| Parameter | Source | Description |
+|-----------|--------|-------------|
+| Username | userinfo (before `:`) | Basic-auth username (`user`, `user:pass`, `:pass`) |
+| Password | userinfo (after `:`) | Basic-auth password |
+| Path | `path` | sing-box `path` (query-параметр, не URI-path — проще round-trip) |
+| Headers | `headers` | Сериализация как naive `extra-headers`: `Header1: V1\r\nHeader2: V2`, URL-encoded |
+| SNI | `sni` / `peer` / `host` | Только `proxy-https://`; default = host (конвенции trojan, `parseTrojanTls`) |
+| Fingerprint | `fp` | uTLS fingerprint (только `proxy-https://`) |
+| ALPN | `alpn` | Comma-separated (только `proxy-https://`) |
+| Insecure | `allowInsecure` и алиасы | `tls.insecure` → `InsecureTlsWarning` |
+
+### sing-box Outbound Mapping
+
+```json
+{
+  "type": "http",
+  "tag": "<label>",
+  "server": "<host>",
+  "server_port": <port>,
+  "username": "<user>",
+  "password": "<password>",
+  "path": "<path>",
+  "headers": { "<Header>": "<Value>" },
+  "tls": { "enabled": true, "server_name": "<sni>" }
+}
+```
+
+### Notes
+
+- Все поля кроме `server`/`server_port` опциональны — пустые не эмитятся.
+- JSON-путь (`parseSingboxEntry`) принимает listable-значения `headers`
+  (string | [string, ...]) — как naive `extra_headers`.
+- REALITY в URI не переносится (как у trojan) — JSON-путь сохраняет.
+- Wizard-таб `HTTP` (§222): Tag/Host/Port/Username/Password + switch
+  «HTTPS (TLS)»; тонкая настройка TLS — через JSON-редактор ноды.
+
+### Reference
+
+- sing-box outbound: https://sing-box.sagernet.org/configuration/outbound/http/
 
 ---
 

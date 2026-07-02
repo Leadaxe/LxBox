@@ -8,6 +8,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- **§222 — протокол HTTP(S)-прокси** (sing-box `type: http`). URI-схемы
+  `proxy-http://` / `proxy-https://` (кастомные: голые `http(s)://` заняты
+  URL-ами подписок, а промо-ссылки в телах превращались бы в мусорные узлы),
+  полный набор полей sing-box (auth/path/headers/TLS), приём через тела
+  подписок / paste URI / paste JSON / JSON-редактор ноды, новый таб **HTTP**
+  в Add server wizard (host/port/auth + switch «HTTPS (TLS)»).
+
 ---
 
 ## [2.9.1] — 2026-07-02

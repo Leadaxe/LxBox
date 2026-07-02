@@ -429,6 +429,43 @@ final class SocksSpec extends NodeSpec {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// HTTP(S) CONNECT proxy — see task 222.
+// ════════════════════════════════════════════════════════════════════════════
+
+final class HttpSpec extends NodeSpec {
+  final String username;
+  final String password;
+  final String path;
+  final Map<String, String> headers;
+  final TlsSpec tls; // enabled → HTTPS-прокси (CONNECT over TLS)
+
+  HttpSpec({
+    required super.id,
+    required super.tag,
+    required super.label,
+    required super.server,
+    required super.port,
+    required super.rawUri,
+    this.username = '',
+    this.password = '',
+    this.path = '',
+    this.headers = const {},
+    this.tls = TlsSpec.disabled,
+    super.chained,
+    super.warnings,
+  });
+
+  @override
+  String get protocol => 'http';
+
+  @override
+  SingboxEntry emit(TemplateVars vars) => e.emitHttp(this, vars);
+
+  @override
+  String toUri() => e.toUriHttp(this);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // WireGuard — emit'ится в Endpoint, не в Outbound.
 // ════════════════════════════════════════════════════════════════════════════
 
