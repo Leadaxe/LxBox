@@ -119,7 +119,7 @@ mixin _HeartbeatMixin on ChangeNotifier {
         // перехват другим VPN (это синтез на стороне приложения, не системный
         // onRevoke). Чаще — ядро не отвечает. Прежний текст гнал ложные
         // баг-репорты про «перехват». Реальный системный revoke пишет
-        // отдельный текст ("VPN revoked by another app", см. _handleStatusEvent).
+        // отдельный foreign-VPN текст (см. _handleStatusEvent, §224).
         lastError: 'Connection lost — VPN tunnel is not responding',
         ccGroups: const <CcGroup>[],
         groups: <String>[],

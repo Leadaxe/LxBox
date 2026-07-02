@@ -6,6 +6,7 @@ import '../edit_controller.dart';
 import '../sections/apps_section.dart';
 import '../sections/dns_section.dart';
 import '../sections/inbound_section.dart';
+import '../sections/json_section.dart';
 import '../sections/match_section.dart';
 import '../sections/port_section.dart';
 import '../sections/protocol_section.dart';
@@ -67,21 +68,24 @@ class ParamsTab extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        OutboundPicker(
-          value: c.outbound,
-          options: outboundOptions,
-          onChanged: c.setOutbound,
-          dense: false,
-          label: 'Action',
-        ),
-        const SizedBox(height: 16),
-        const Divider(),
-        AppsSection(
-          packages: c.packages,
-          onTap: actions.onPickApps,
-          onClear: () => c.setPackages(const []),
-        ),
-        const SizedBox(height: 8),
+        // §225 — у json-правила действие внутри тела, OutboundPicker скрыт.
+        if (c.kind != CustomRuleKind.json) ...[
+          OutboundPicker(
+            value: c.outbound,
+            options: outboundOptions,
+            onChanged: c.setOutbound,
+            dense: false,
+            label: 'Action',
+          ),
+          const SizedBox(height: 16),
+          const Divider(),
+          AppsSection(
+            packages: c.packages,
+            onTap: actions.onPickApps,
+            onClear: () => c.setPackages(const []),
+          ),
+          const SizedBox(height: 8),
+        ],
         const Divider(),
         Text('Source', style: theme.textTheme.titleSmall),
         const SizedBox(height: 4),
@@ -109,10 +113,25 @@ class ParamsTab extends StatelessWidget {
                   title: Text('Remote (.srs)'),
                 ),
               ),
+              Expanded(
+                child: RadioListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  value: CustomRuleKind.json,
+                  title: Text('Raw JSON'),
+                ),
+              ),
             ],
           ),
         ),
         const Divider(),
+        // §225 — json-режим: только тело правила, остальные секции скрыты.
+        if (c.kind == CustomRuleKind.json)
+          JsonSection(
+            controller: c.jsonCtrl,
+            errorText: c.jsonError,
+            onChanged: c.notifyJsonChanged,
+          ),
         if (c.kind == CustomRuleKind.inline)
           MatchSection(
             domainCtrl: c.domainCtrl,
@@ -133,48 +152,53 @@ class ParamsTab extends StatelessWidget {
             onShowCloudMenu: actions.onShowCloudMenu,
             onUrlChanged: c.resetSrsErrorIfAny,
           ),
-        PortSection(
-          portCtrl: c.portCtrl,
-          portRangeCtrl: c.portRangeCtrl,
-        ),
-        ProtocolSection(
-          selected: c.protocols,
-          onToggle: c.toggleProtocol,
-        ),
-        if (c.kind == CustomRuleKind.inline ||
-            c.kind == CustomRuleKind.srs)
-          WifiSection(
-            networks: c.wifiNetworks,
-            onRemoveAt: c.removeWifiAt,
-            onAddCurrent: actions.onAddCurrentWifi,
-            onPickSaved: actions.onPickSavedWifi,
-            onManual: actions.onManualAddWifi,
-            onTapPermissionsHint: actions.onOpenWifiPermissions,
+        // §225 — match-фильтры (port/protocol/wifi/inbound/dns) не применимы
+        // к raw-JSON правилу: всё выражается в самом теле.
+        if (c.kind != CustomRuleKind.json) ...[
+          PortSection(
+            portCtrl: c.portCtrl,
+            portRangeCtrl: c.portRangeCtrl,
           ),
-        // §030/new_fields — INBOUND фильтр (tun-in / mixed-in). inline + srs.
-        if (c.kind == CustomRuleKind.inline ||
-            c.kind == CustomRuleKind.srs)
-          InboundSection(
-            selected: c.inbounds,
-            choices: c.inboundChoices,
-            onToggle: c.toggleInbound,
+          ProtocolSection(
+            selected: c.protocols,
+            onToggle: c.toggleProtocol,
           ),
-        // §117 задача 3 — DNS follows the rule (только inline/srs).
-        DnsSection(
-          dns: c.dns,
-          serverTags: c.dnsServerTags,
-          gateBlocked: c.dnsGateBlocked,
-          isSrs: c.kind == CustomRuleKind.srs,
-          onEnabledChanged: c.setDnsEnabled,
-          onServerTagChanged: c.setDnsServerTag,
-        ),
+          if (c.kind == CustomRuleKind.inline ||
+              c.kind == CustomRuleKind.srs)
+            WifiSection(
+              networks: c.wifiNetworks,
+              onRemoveAt: c.removeWifiAt,
+              onAddCurrent: actions.onAddCurrentWifi,
+              onPickSaved: actions.onPickSavedWifi,
+              onManual: actions.onManualAddWifi,
+              onTapPermissionsHint: actions.onOpenWifiPermissions,
+            ),
+          // §030/new_fields — INBOUND фильтр (tun-in / mixed-in). inline + srs.
+          if (c.kind == CustomRuleKind.inline ||
+              c.kind == CustomRuleKind.srs)
+            InboundSection(
+              selected: c.inbounds,
+              choices: c.inboundChoices,
+              onToggle: c.toggleInbound,
+            ),
+          // §117 задача 3 — DNS follows the rule (только inline/srs).
+          DnsSection(
+            dns: c.dns,
+            serverTags: c.dnsServerTags,
+            gateBlocked: c.dnsGateBlocked,
+            isSrs: c.kind == CustomRuleKind.srs,
+            onEnabledChanged: c.setDnsEnabled,
+            onServerTagChanged: c.setDnsServerTag,
+          ),
+        ],
         const SizedBox(height: 24),
         const Divider(),
         const SizedBox(height: 12),
         FilledButton.icon(
           icon: const Icon(Icons.save, size: 18),
           label: const Text('Save'),
-          onPressed: actions.onSave,
+          // §225 — json-режим: блокируем Save на невалидном/пустом теле.
+          onPressed: c.jsonError == null ? actions.onSave : null,
         ),
       ],
     );
