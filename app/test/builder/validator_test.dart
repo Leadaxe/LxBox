@@ -282,7 +282,12 @@ void main() {
         ],
       });
       expect(r.hasFatal, true);
-      expect(r.fatal.whereType<DetourCycle>().length, 1);
+      final cycles = r.fatal.whereType<DetourCycle>().toList();
+      expect(cycles.length, 1);
+      // §219 — проверяем СОДЕРЖИМОЕ cycle, не только факт наличия: оба узла
+      // цикла должны быть в нём (ловит off-by-one в _findDetourCycle).
+      expect(cycles.single.cycle, containsAll(<String>['a', 'b']));
+      expect(cycles.single.cycle, hasLength(2));
     });
 
     test('§141 — detour 3-cycle через endpoint (A→B→C→A) → fatal', () {
