@@ -227,6 +227,8 @@ List<CustomRule> renameRuleDnsServerTag(
       CustomRuleInline() => cr.copyWith(dns: dns.copyWith(serverTag: newTag)),
       CustomRuleSrs() => cr.copyWith(dns: dns.copyWith(serverTag: newTag)),
       CustomRulePreset() => cr,
+      // §225 — json-правило не имеет dns-опции (cr.dns==null отсеян выше).
+      CustomRuleJson() => cr,
     };
   }).toList(growable: false);
   return changed ? out : rules;

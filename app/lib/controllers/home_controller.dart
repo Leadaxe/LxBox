@@ -305,7 +305,7 @@ class HomeController extends ChangeNotifier
       // §165 — сброс кэша имён правил (правила могут смениться к след. запуску).
       RuleNameResolver.I.clear();
       final reason = tunnel == TunnelStatus.revoked
-          ? 'VPN revoked by another app'
+          ? 'Another VPN app took the system VPN slot (e.g. an always-on VPN). Start again to reconnect.'
           : (event.errorReason != null ? 'Stopped: ${event.errorReason}' : '');
       _emit(
         _state.copyWith(

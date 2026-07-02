@@ -75,6 +75,9 @@ class CustomRuleEditController extends ChangeNotifier {
   late final TextEditingController portRangeCtrl;
   late final TextEditingController srsUrlCtrl;
 
+  /// §225 — тело raw-JSON правила (kind == json).
+  late final TextEditingController jsonCtrl;
+
   // ─── Mutable state ───────────────────────────────────────────────────
 
   late bool _enabled;
@@ -154,6 +157,7 @@ class CustomRuleEditController extends ChangeNotifier {
         portCtrl,
         portRangeCtrl,
         srsUrlCtrl,
+        jsonCtrl,
       ];
 
   void _init() {
@@ -169,6 +173,7 @@ class CustomRuleEditController extends ChangeNotifier {
     portCtrl = TextEditingController(text: r.ports.join('\n'));
     portRangeCtrl = TextEditingController(text: r.portRanges.join('\n'));
     srsUrlCtrl = TextEditingController(text: r.srsUrl);
+    jsonCtrl = TextEditingController(text: r.json);
     _enabled = r.enabled;
     _ipIsPrivate = r.ipIsPrivate;
     _sourceIpIsPrivate = r.sourceIpIsPrivate;
@@ -313,6 +318,10 @@ class CustomRuleEditController extends ChangeNotifier {
     _outbound = v;
     notifyListeners();
   }
+
+  /// §225 — тело json-правила изменилось (jsonCtrl уже в _allTextCtrls, но
+  /// нужен явный notify для live-пересчёта jsonError → helper/Save-гейт).
+  void notifyJsonChanged() => notifyListeners();
 
   void toggleProtocol(String p, bool checked) {
     if (checked) {
@@ -499,6 +508,13 @@ class CustomRuleEditController extends ChangeNotifier {
   CustomRule snapshot() {
     final name = nameCtrl.text.trim();
     switch (_kind) {
+      case CustomRuleKind.json:
+        return CustomRuleJson(
+          id: initial.id,
+          name: name,
+          enabled: _enabled,
+          json: jsonCtrl.text,
+        );
       case CustomRuleKind.preset:
         final init = initial;
         return CustomRulePreset(
@@ -558,6 +574,29 @@ class CustomRuleEditController extends ChangeNotifier {
 
   bool isDirty() =>
       jsonEncode(snapshot().toJson()) != jsonEncode(initial.toJson());
+
+  /// §225 — валиден ли текущий текст json-правила (для inline-хелпера в
+  /// JsonSection и гейта Save). `null` = ок (нет ошибки), иначе краткое
+  /// описание. Пустой ввод считается «ещё не заполнено» (ошибка), т.к.
+  /// сохранять пустое json-правило смысла нет.
+  String? get jsonError {
+    if (_kind != CustomRuleKind.json) return null;
+    final text = jsonCtrl.text.trim();
+    if (text.isEmpty) return 'Enter a JSON object or array of objects.';
+    final dynamic decoded;
+    try {
+      decoded = jsonDecode(text);
+    } catch (_) {
+      return 'Invalid JSON.';
+    }
+    if (decoded is Map) return null;
+    if (decoded is List) {
+      if (decoded.isEmpty) return 'Array is empty.';
+      if (decoded.every((e) => e is Map)) return null;
+      return 'Array must contain only rule objects.';
+    }
+    return 'Expected an object or array of objects.';
+  }
 }
 
 /// §045: tag+url пара для batch download'а внутри `onBoolVarToggle`.
