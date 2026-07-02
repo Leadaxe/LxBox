@@ -37,10 +37,10 @@ String defaultEmojiFor(NodeSpec node) {
     return '🔁';
   }
   if (node is WireguardSpec) return '🏠';
-  // §130 — MASQUE = WARP-транспорт (облако). WARP-визард ставит тег с эмодзи
-  // (🔥🎭), т.е. withDefaultEmoji сюда не доходит; ветка нужна для masque-нод
-  // из JSON/URI с тегом без эмодзи (round-trip parseSingboxEntry).
-  if (node is MasqueSpec) return '🔥☁️';
+  // §130 — MASQUE-транспорт: маска 🎭. WARP-MASQUE-узлы из визарда ставят свой
+  // тег 🔥🎭 (🔥 = WARP-брендинг) и сюда не доходят (withDefaultEmoji). Эта
+  // ветка — для generic masque-нод из JSON/URI с тегом без эмодзи.
+  if (node is MasqueSpec) return '🎭';
   if (node is Hysteria2Spec || node is TuicSpec) return '🚀';
   return '⚡';
 }
