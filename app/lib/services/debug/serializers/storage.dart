@@ -16,6 +16,16 @@ import 'subs.dart';
 ///
 /// Всё остальное — pass-through. Новый ключ без правила попадает в ответ
 /// как есть; если он чувствительный — добавить rule здесь и в тесте.
+///
+/// ⚠️ §219 — этот scrubber НЕ является security-границей, а лишь UX-удобством
+/// «не светить секрет случайно в скопированном introspection-дампе». Debug API
+/// by design даёт полный root-доступ к секретам (`GET /backup/export` отдаёт
+/// `exportRaw()` СЫРЫМ, включая приватники WARP/MASQUE; `/state/subs?reveal=true`
+/// снимает URL-маску). Поэтому: `warp_account`/`masque_account` здесь НЕ
+/// маскируются намеренно — маскировка тут ничего не «защищает» (те же данные
+/// доступны сырыми рядом), а лишь усложняет диагностику. НЕ добавлять скраб
+/// этих ключей как «security-фикс» — это ложная граница. См.
+/// `docs/api/debug-api-reference.md` → «Security model — root-доступ by design».
 Map<String, Object?> serializeStorageCache(Map<String, dynamic> cache) {
   final out = <String, Object?>{};
   for (final e in cache.entries) {

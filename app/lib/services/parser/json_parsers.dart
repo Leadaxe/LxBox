@@ -294,6 +294,8 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
       );
     case 'hysteria2':
       if (server.isEmpty || port == 0) return null;
+      // §219 — кастуем entry['obfs'] один раз (было дважды).
+      final obfs = entry['obfs'] as Map?;
       return Hysteria2Spec(
         id: newUuidV4(),
         tag: tag.isEmpty ? 'hy2-$server-$port' : tag,
@@ -302,8 +304,8 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         port: port,
         rawUri: '',
         password: entry['password']?.toString() ?? '',
-        obfs: (entry['obfs'] as Map?)?['type']?.toString() ?? '',
-        obfsPassword: (entry['obfs'] as Map?)?['password']?.toString() ?? '',
+        obfs: obfs?['type']?.toString() ?? '',
+        obfsPassword: obfs?['password']?.toString() ?? '',
         tls: _tlsFromSingbox(entry['tls'], server),
       );
     case 'naive':
@@ -396,8 +398,19 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
           const ['0.0.0.0/0', '::/0'];
       final awg = Awg.fromJson(entry); // §097 — AmneziaWG2 obfuscation params
       final wgTag = tag.isEmpty ? 'wg-$peerServer-$peerPort' : tag;
-      // §097 — AWG: клампим MTU до 1280; plain WG как было (null = omitted).
+      // §097 — AWG: клампим MTU до 1280. §219 — plain WG дефолтит 1408 как в
+      // URI-парсере (было null → зеркалим `wireguard_parser.dart`, чтобы модель
+      // не зависела от источника парсинга: JSON vs URI).
       final rawMtu = (entry['mtu'] as num?)?.toInt();
+      // §025/§126 — WARP client_id. §219 — раньше JSON-парсер не заполнял
+      // `reserved` (WARP-handshake проходил, трафик не шёл). В sing-box JSON
+      // `reserved` — массив из 3 байт `[b0,b1,b2]` (наш round-trip формат
+      // эмиттера); `client_id` — base64-строка. Массив берём напрямую
+      // (с валидацией 3×0..255), строку — через parseReserved.
+      final reserved = _reservedFromJson(p['reserved'] ?? entry['reserved']) ??
+          (p['client_id'] is String
+              ? parseReserved(p['client_id'] as String)
+              : null);
       return WireguardSpec(
         id: newUuidV4(),
         tag: wgTag,
@@ -416,14 +429,60 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
             allowedIps: allowedIps,
             persistentKeepalive:
                 (p['persistent_keepalive_interval'] as num?)?.toInt(),
+            reserved: reserved,
           )
         ],
-        mtu: awg != null ? awgClampMtu(rawMtu, wgTag) : rawMtu,
+        mtu: awg != null ? awgClampMtu(rawMtu, wgTag) : (rawMtu ?? 1408),
         awg: awg,
+      );
+    case 'masque':
+      // §130 — обратная операция к emitMasque (round-trip JSON-редактор /
+      // Smart-Paste). ip/ipv6 → localAddresses; keep_alive_period → keepAlive.
+      if (server.isEmpty || port == 0) return null;
+      final priv = entry['private_key']?.toString() ?? '';
+      final pub = entry['public_key']?.toString() ?? '';
+      if (priv.isEmpty || pub.isEmpty) return null;
+      final ip = entry['ip']?.toString() ?? '';
+      final ipv6 = entry['ipv6']?.toString() ?? '';
+      final addrs = <String>[
+        if (ip.isNotEmpty) ensureCidr(ip),
+        if (ipv6.isNotEmpty) ensureCidr(ipv6),
+      ];
+      if (addrs.isEmpty) return null;
+      return MasqueSpec(
+        id: newUuidV4(),
+        tag: tag.isEmpty ? 'masque-$server-$port' : tag,
+        label: label,
+        server: server,
+        port: port,
+        rawUri: '',
+        privateKeyDer: priv,
+        publicKeyDer: pub,
+        localAddresses: addrs,
+        profile: entry['profile']?.toString() ?? 'cloudflare',
+        network: entry['network']?.toString() ?? 'h3',
+        sni: entry['sni']?.toString() ?? '',
+        mtu: (entry['mtu'] as num?)?.toInt(),
+        idleTimeout: entry['idle_timeout']?.toString() ?? '',
+        keepAlive: entry['keep_alive_period']?.toString() ?? '',
       );
     default:
       return null;
   }
+}
+
+/// §219 — `reserved` из sing-box JSON WireGuard-peer: массив ровно из 3 байт
+/// `[b0,b1,b2]` (0..255). Не-массив / не-3-элемента / вне диапазона → null
+/// (не роняем ноду, деградируем к «без reserved» — ср. §172).
+List<int>? _reservedFromJson(dynamic raw) {
+  if (raw is! List || raw.length != 3) return null;
+  final out = <int>[];
+  for (final e in raw) {
+    final n = e is num ? e.toInt() : null;
+    if (n == null || n < 0 || n > 255) return null;
+    out.add(n);
+  }
+  return out;
 }
 
 TlsSpec _tlsFromSingbox(dynamic raw, String server) {

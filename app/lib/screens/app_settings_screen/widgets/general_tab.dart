@@ -17,11 +17,13 @@ class GeneralTab extends StatelessWidget {
     required this.autoCheckUpdates,
     required this.autoPing,
     required this.haptic,
+    required this.allowRotation,
     required this.padding,
     required this.onAutoStartChanged,
     required this.onAutoCheckUpdatesChanged,
     required this.onAutoPingChanged,
     required this.onHapticChanged,
+    required this.onAllowRotationChanged,
     required this.onAddQuickSettingsTile,
     required this.onOpenBackup,
   });
@@ -31,12 +33,14 @@ class GeneralTab extends StatelessWidget {
   final bool autoCheckUpdates;
   final bool autoPing;
   final bool haptic;
+  final bool allowRotation;
   final EdgeInsets padding;
 
   final ValueChanged<bool> onAutoStartChanged;
   final ValueChanged<bool> onAutoCheckUpdatesChanged;
   final ValueChanged<bool> onAutoPingChanged;
   final ValueChanged<bool> onHapticChanged;
+  final ValueChanged<bool> onAllowRotationChanged;
   final VoidCallback onAddQuickSettingsTile;
   final VoidCallback onOpenBackup;
 
@@ -79,6 +83,17 @@ class GeneralTab extends StatelessWidget {
           secondary: const Icon(Icons.power_settings_new),
           value: autoStart,
           onChanged: loaded ? onAutoStartChanged : null,
+        ),
+        // §220 — снятие портретной фиксации (планшетный фидбэк). Применяется
+        // сразу, без рестарта; уважает системный auto-rotate.
+        SwitchListTile(
+          title: const Text('Allow rotation'),
+          subtitle: const Text(
+              'Rotate to landscape when the device turns — handy on tablets. '
+              'Follows the system auto-rotate setting.'),
+          secondary: const Icon(Icons.screen_rotation),
+          value: allowRotation,
+          onChanged: loaded ? onAllowRotationChanged : null,
         ),
         const Divider(height: 32),
         Text('Quick connect', style: Theme.of(context).textTheme.titleMedium),

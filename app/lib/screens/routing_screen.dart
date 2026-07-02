@@ -50,6 +50,10 @@ class _RoutingScreenState extends State<RoutingScreen>
   WizardTemplate? _template;
   @override
   final _channels = <Channel>[]; // §125 — source-of-truth каналов (storage)
+  // §219 — кэш опций outbound: _outboundOptions() звался в itemBuilder на КАЖДЫЙ
+  // custom-rule tile (N каналов × M правил реконструкций/build). Инвалидируем
+  // при любой мутации _channels (_invalidateOutboundOptions).
+  List<RoutingOutboundOption>? _cachedOutboundOptions;
   @override
   String _routeFinal = '';
   @override
@@ -98,7 +102,13 @@ class _RoutingScreenState extends State<RoutingScreen>
   /// всегда присутствует (required-инвариант). Глобальный ✨auto убран —
   /// каждый канал имеет свой `<tag>-auto`, который опцией роутинга не выставляем
   /// (это внутренняя деталь канала).
+  /// §219 — сбросить кэш опций после мутации `_channels`.
+  @override
+  void _invalidateOutboundOptions() => _cachedOutboundOptions = null;
+
   List<RoutingOutboundOption> _outboundOptions() {
+    final cached = _cachedOutboundOptions;
+    if (cached != null) return cached;
     final opts = <RoutingOutboundOption>[
       const RoutingOutboundOption(label: 'direct', tag: 'direct-out'),
     ];
@@ -112,6 +122,7 @@ class _RoutingScreenState extends State<RoutingScreen>
     // его последним в списке.
     opts.add(
         const RoutingOutboundOption(label: 'block', tag: 'block', danger: true));
+    _cachedOutboundOptions = opts;
     return opts;
   }
 
@@ -192,6 +203,7 @@ class _RoutingScreenState extends State<RoutingScreen>
         setState(() {
           final i = _channels.indexWhere((c) => c.tag == channel.tag);
           if (i >= 0) _channels[i] = _channels[i].copyWith(enabled: val);
+          _invalidateOutboundOptions();
           _markDirty();
         });
       },
@@ -232,7 +244,10 @@ class _RoutingScreenState extends State<RoutingScreen>
   Future<void> _addChannel() async {
     final created = await SettingsStorage.addChannel();
     if (!mounted) return;
-    setState(() => _channels.add(created));
+    setState(() {
+      _channels.add(created);
+      _invalidateOutboundOptions();
+    });
     _markDirty();
     _editChannel(created);
   }
@@ -252,12 +267,14 @@ class _RoutingScreenState extends State<RoutingScreen>
       setState(() {
         _channels.removeWhere((c) => c.tag == channel.tag);
         if (_routeFinal == channel.tag) _routeFinal = 'vpn-1';
+        _invalidateOutboundOptions();
       });
       _markDirty();
     } else if (result.saved != null) {
       setState(() {
         final i = _channels.indexWhere((c) => c.tag == channel.tag);
         if (i >= 0) _channels[i] = result.saved!;
+        _invalidateOutboundOptions();
       });
       _markDirty();
     }

@@ -208,6 +208,12 @@ class HomeController extends ChangeNotifier
 
   @override
   void _emit(HomeState next) {
+    // §221 — единый гейт use-after-dispose: любой _emit после dispose
+    // (async-колбэк из start/stop/reconnect/switchNode/pullToRefresh, вернувшийся
+    // за await) молча no-op вместо `notifyListeners after dispose`. Радикально
+    // закрывает весь класс разом; точечные `if (_disposed) return` после await
+    // (§219) остаются как ранний выход, но больше не единственная защита.
+    if (_disposed) return;
     _state = next;
     notifyListeners();
   }
@@ -377,6 +383,7 @@ class HomeController extends ChangeNotifier
       // teardown). НЕ обычный stopVPN — тот кооперативный, ждёт Stopped и сам
       // виснет. forceStopVPN — fire-and-forget. После — синхронизируем UI.
       await _vpn.forceStopVPN();
+      if (_disposed) return; // §219 — могли dispose'нуться за await → не эмитим
       _addDebug(DebugSource.app, '[vpn] forceStopVPN sent (timeout in ${expected.label})');
       if (_state.tunnel != expected) return;
       _emit(_state.copyWith(
@@ -685,7 +692,7 @@ class HomeController extends ChangeNotifier
       // Группы уже наполнены (push доехал) — pull не нужен.
       if (_state.ccGroups.isNotEmpty) return;
       final groups = await _cc.getGroups();
-      if (!_state.tunnelUp) return; // могли уйти за await
+      if (_disposed || !_state.tunnelUp) return; // §219 — dispose/ушли за await
       if (groups == null) {
         // Ядро ещё не STARTED (getGroups бросил) — ретраим.
         if (attempt + 1 < _groupsPullMaxAttempts) {

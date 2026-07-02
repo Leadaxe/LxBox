@@ -60,7 +60,7 @@ class BundleMerge {
 ///    - иначе `required=false` → `null` (при подстановке ключи с unresolved
 ///      `@var` удаляются из родительского Map).
 /// 2. Deep-copy и substitute `@var` в `rule_set` / `dns_rule` / `rule` /
-///    `dns_servers` через [_substitute].
+///    `dns_servers` через [substituteVars].
 /// 3. Фильтр `dns_servers` до одного — с `tag == vars['dns_server']`.
 ///    Если dns_server == null → пустой список (пресет не вносит DNS-сервер).
 /// 4. Если `detour == 'direct-out'` в DNS-сервере — удаляем ключ (direct
@@ -191,7 +191,7 @@ PresetFragments expandPreset(
       // бьёт её полностью.
       //
       // `varsValues['outbound']` проверяется здесь, а не пропускается
-      // через `_substitute`, потому что preset может не иметь `@outbound`
+      // через `substituteVars`, потому что preset может не иметь `@outbound`
       // substitution (см. Block Ads: `rule: {rule_set, action: reject}`
       // без `vars`) — но override юзера всё равно должен применяться.
       //
@@ -270,7 +270,20 @@ PresetFragments expandPreset(
           result['rule_set'] = present.length == 1 ? present.first : present;
           routingRule = result;
         }
+      } else if (refTag == null) {
+        // Легитимно: правило без `rule_set` матчит по другим полям
+        // (domain/protocol/port/…). Оставляем как есть.
+        routingRule = result;
       } else {
+        // §219 — refTag не null, но и не валидная форма: пустая String либо
+        // непредусмотренный тип (int/bool/Map из кривого шаблона). Раньше
+        // молча проходило как валидное правило; теперь — drop + warning
+        // (деградация вместо fatal, ср. §172/§217).
+        result.remove('rule_set');
+        warnings.add(
+          'preset "${preset.presetId}": routing rule rule_set has invalid '
+          'value (${refTag.runtimeType}) — reference dropped',
+        );
         routingRule = result;
       }
     }

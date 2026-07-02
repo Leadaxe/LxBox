@@ -22,12 +22,10 @@ class SubscriptionDetailScreen extends StatefulWidget {
   const SubscriptionDetailScreen({
     super.key,
     required this.entry,
-    required this.index,
     required this.controller,
   });
 
   final SubscriptionEntry entry;
-  final int index;
   final SubscriptionController controller;
 
   @override
@@ -121,7 +119,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     });
     try {
       if (!cacheOnly) {
-        await widget.controller.updateAt(widget.index);
+        // §219 — index по ссылке (список мог сместиться от reorder).
+        final idx = widget.controller.entries.indexOf(widget.entry);
+        if (idx >= 0) await widget.controller.updateAt(idx);
       }
       // v2: узлы уже распарсены в entry.list.nodes. Детоур-узлы показываем
       // отдельной строкой под родителем.
@@ -159,7 +159,14 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
       ),
     );
     if (confirmed != true || !mounted) return;
-    await widget.controller.removeAt(widget.index);
+    // §219 — index по ссылке: список мог переупорядочиться (drag-reorder) пока
+    // открыт экран → removeAt снёс бы не ту подписку.
+    final idx = widget.controller.entries.indexOf(widget.entry);
+    if (idx < 0) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+    await widget.controller.removeAt(idx);
     if (mounted) Navigator.pop(context);
   }
 
@@ -176,7 +183,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     if (_editing) {
       // Save
       final name = _nameCtrl.text.trim();
-      unawaited(widget.controller.renameAt(widget.index, name));
+      // §219 — index по ссылке (список мог сместиться от reorder).
+      final idx = widget.controller.entries.indexOf(widget.entry);
+      if (idx >= 0) unawaited(widget.controller.renameAt(idx, name));
     }
     setState(() => _editing = !_editing);
   }

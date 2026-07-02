@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
+import '../services/ui_helpers.dart';
 import '../services/warp/masquerade_params.dart';
 import '../services/warp/warp_account.dart';
 import '../services/warp/warp_endpoint_picker.dart';
@@ -29,7 +30,7 @@ class WarpWizardScreen extends StatefulWidget {
   State<WarpWizardScreen> createState() => _WarpWizardScreenState();
 }
 
-class _WarpWizardScreenState extends State<WarpWizardScreen> {
+class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
   final _license = TextEditingController();
   final _endpoint =
       TextEditingController(text: WarpAccount.defaultEndpoint);
@@ -203,13 +204,13 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
       if (!mounted) return;
       final err = widget.subController.lastError;
       if (account == null || err.isNotEmpty) {
-        _showSnack(err.isNotEmpty ? err : 'WARP registration failed');
+        showSnack(err.isNotEmpty ? err : 'WARP registration failed');
         return;
       }
       setState(() => _result = account);
       await widget.onAdded();
       if (!mounted) return;
-      _showSnack(account.warpPlus ? 'Added WARP+ node' : 'Added WARP node');
+      showSnack(account.warpPlus ? 'Added WARP+ node' : 'Added WARP node');
       Navigator.of(context).pop();
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -229,12 +230,12 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     if (!mounted) return;
     final err = widget.subController.lastError;
     if (account == null || err.isNotEmpty) {
-      _showSnack(err.isNotEmpty ? err : 'MASQUE registration failed');
+      showSnack(err.isNotEmpty ? err : 'MASQUE registration failed');
       return;
     }
     await widget.onAdded();
     if (!mounted) return;
-    _showSnack('Added MASQUE node');
+    showSnack('Added MASQUE node');
     Navigator.of(context).pop();
   }
 
@@ -246,12 +247,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     return '$n$unit';
   }
 
-  void _showSnack(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
-    );
-  }
+  // §219 — _showSnack вынесен в SnackHelper.showSnack (services/ui_helpers.dart).
 
   @override
   Widget build(BuildContext context) {

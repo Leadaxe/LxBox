@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/config_node.dart';
+import '../services/format_utils.dart';
 import '../services/traffic_profiler.dart';
 import '../widgets/banner_palette.dart';
 import '../vpn/box_vpn_client.dart';
@@ -136,8 +137,8 @@ class _StatsScreenState extends State<StatsScreen> {
       // destination = "host:port" — порт = часть после последнего ':'.
       // host: domain (если есть), иначе host-часть destination (IP-соединения
       // без resolved-домена приходят с пустым domain).
-      final destPort = _portOf(c.destination);
-      final host = c.domain.isNotEmpty ? c.domain : _hostOf(c.destination);
+      final destPort = portOf(c.destination);
+      final host = c.domain.isNotEmpty ? c.domain : hostOf(c.destination);
 
       final conn = Connection(
         host: host,
@@ -175,18 +176,7 @@ class _StatsScreenState extends State<StatsScreen> {
     _connRecalcAt = DateTime.now();
   }
 
-  /// Порт из "host:port" — часть после последнего ':' (IPv6-safe: берём хвост).
-  static String _portOf(String destination) {
-    final i = destination.lastIndexOf(':');
-    if (i < 0 || i == destination.length - 1) return '';
-    return destination.substring(i + 1);
-  }
-
-  /// Host из "host:port" — часть до последнего ':'. Если ':' нет — вся строка.
-  static String _hostOf(String destination) {
-    final i = destination.lastIndexOf(':');
-    return i < 0 ? destination : destination.substring(0, i);
-  }
+  // §219 — _portOf/_hostOf вынесены в format_utils (portOf/hostOf).
 
   Future<void> _refreshAllowBypass() async {
     final v = await _vpn.getCurrentSessionAllowBypass();

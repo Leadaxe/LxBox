@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'amnezia_link.dart';
 import 'uri_utils.dart';
@@ -11,6 +12,10 @@ sealed class DecodedBody {
 
 final class UriLines extends DecodedBody {
   final List<String> lines;
+
+  /// §219 — диагностический счётчик пропущенных comment-строк. В проде не
+  /// читается; служит наблюдаемым выходом для проверки инварианта парсера
+  /// в тестах (body_decoder_test). Оставлен намеренно, не write-only мусор.
   final int skippedComments;
   const UriLines(this.lines, this.skippedComments);
 }
@@ -108,7 +113,8 @@ DecodedBody _classifyPlain(String body) {
     lines.add(l);
   }
   if (lines.isEmpty) {
-    return DecodeFailure('no parseable content', trimmed.substring(0, trimmed.length.clamp(0, 80)));
+    return DecodeFailure(
+        'no parseable content', trimmed.substring(0, min(trimmed.length, 80)));
   }
   return UriLines(lines, skipped);
 }

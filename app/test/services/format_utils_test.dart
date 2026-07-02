@@ -28,6 +28,12 @@ void main() {
         formatDuration(const Duration(minutes: 5, seconds: 30)), '5m 30s'));
     test('hours+minutes', () => expect(
         formatDuration(const Duration(hours: 2, minutes: 5)), '2h 5m'));
+    // §219 — секунды на часовом разряде отбрасываются НАМЕРЕННО (чем длиннее
+    // интервал, тем ниже нужная точность). Не «баг несогласованности» с
+    // минутным разрядом — задокументировано в format_utils.
+    test('hours+minutes+seconds → секунды отбрасываются', () => expect(
+        formatDuration(const Duration(hours: 1, minutes: 5, seconds: 30)),
+        '1h 5m'));
     test('zero', () => expect(formatDuration(Duration.zero), '0s'));
   });
 
@@ -62,5 +68,24 @@ void main() {
         expect(formatTime(DateTime(2026, 1, 1, 9, 5, 3)), '09:05:03'));
     test('midday', () =>
         expect(formatTime(DateTime(2026, 1, 1, 23, 59, 59)), '23:59:59'));
+  });
+
+  // §219 — host:port extraction (было продублировано в connections/stats).
+  group('hostOf / portOf', () {
+    test('обычный host:port', () {
+      expect(hostOf('example.com:443'), 'example.com');
+      expect(portOf('example.com:443'), '443');
+    });
+    test('без порта → host = вся строка, port = пусто', () {
+      expect(hostOf('example.com'), 'example.com');
+      expect(portOf('example.com'), '');
+    });
+    test('IPv6 (берём последний :) — port = хвост', () {
+      expect(portOf('[::1]:8080'), '8080');
+      expect(hostOf('[::1]:8080'), '[::1]');
+    });
+    test('висячий двоеточие → port пусто', () {
+      expect(portOf('host:'), '');
+    });
   });
 }

@@ -14,7 +14,7 @@ Related specs: [`020 — Security & DPI Bypass`](spec/features/020%20security%20
    - 2.2 [`0.0.0.0/0 → reject` — destination-address filter](#22-00000--reject--destination-address-filter)
    - 2.3 [Ownerless traffic: why `curl --interface tun0` bypasses attribution](#23-ownerless-traffic-why-curl---interface-tun0-bypasses-attribution)
    - 2.4 [The "Unknown traffic" rule — socket-owner filter](#24-the-unknown-traffic-rule--socket-owner-filter)
-   - 2.5 [Layers: route engine vs connection tracker](#25-layers-route-engine-vs-connection-tracker)
+   - 2.5 [Layers: route engine vs connection journal](#25-layers-route-engine-vs-connection-journal)
 3. [Local attack surface](#3-local-attack-surface)
 4. [Secrets on the device](#4-secrets-on-the-device)
 5. [Summary table](#5-summary-table)
@@ -29,7 +29,7 @@ L×Box is a VPN client: it accepts other apps' traffic, wraps it in a tunnel, an
 |-------|--------|------------|
 | **Traffic leak** | Traffic escapes the tunnel or the routing policy — deanonymization, bypass simply doesn't work | [§2](#2-traffic-leaks-out-of-the-tunnel) |
 | **Local surface** | An open local proxy/API that another app on the device could abuse | [§3](#3-local-attack-surface) |
-| **Secret theft** | Private keys, API secret, subscription credentials leak out of the app | [§4](#4-secrets-on-the-device) |
+| **Secret theft** | Private keys, device tokens, subscription credentials leak out of the app | [§4](#4-secrets-on-the-device) |
 
 ---
 
@@ -112,14 +112,14 @@ So the rule isolates exactly the traffic that enters the tunnel without attribut
 2. **Tunnel hygiene.** Only legitimate apps' traffic goes through the proxy; everything unattributed is brought under control (drop or direct).
 3. **Different axis than §2.2.** A legitimate app with a valid UID and destination `1.2.3.4` is caught by `0.0.0.0/0`, but **not** by "Unknown traffic" — the sets barely overlap.
 
-### 2.5 Layers: route engine vs connection tracker
+### 2.5 Layers: route engine vs connection journal
 
-An important diagnostic caveat. Ownerless `tun0`-bind traffic is matched at the **route layer** (the routing engine sees the packet and its empty attribution), but it is **not visible in the Clash API `/connections`** — that's a different layer (the connection tracker).
+An important diagnostic caveat. Two independent layers touch ownerless traffic: the **route layer** (the routing engine sees the packet and its empty attribution and enforces `block_unknown`) and the **connection journal** (the Live/Profiler stream fed by the libbox CommandClient; there is no Clash API `/connections` — it was removed in the §122 CommandClient migration).
 
 Consequences:
 
-- "The rule fired" and "the connection shows up in `/connections`" are **not the same thing**. Don't look for `tun0`-bind traffic in the connection list — it won't be there, neither as `termux` nor as `unknown`.
-- To reproduce something visible in `/connections`, you need an **ordinary long-lived curl without binding to tun0**.
+- "The rule fired" and "the connection shows up in the journal" describe **different layers**. The route layer always rejects ownerless `tun0`-bind traffic via `block_unknown`, regardless of what the journal shows.
+- Since §176 (the profiler switched to `FilterState(All)`), an ownerless `tun0`-bind connection **does** surface in the Live/Profiler journal — as a brief open+close event — even though it is still rejected at the route layer. (Before §176 the connection tracker filtered it out, so the older "won't be there" guidance no longer holds.)
 
 More on diagnostic layers — [`DIAGNOSTICS.md`](DIAGNOSTICS.md).
 
@@ -133,13 +133,16 @@ Threat: another app on the same device abuses our local proxy or API (the class 
 |---------|---------------|-----|
 | **TUN-only inbound** | No SOCKS5/HTTP proxy on localhost by default — traffic enters only through TUN | An open local proxy with no auth = any app silently routes through the VPN |
 | **Local proxy — auth when non-localhost** | If `proxy_listen` ≠ `127.x` (reachable from the network), auth is forced on | A LAN-reachable proxy with no password is an open relay |
-| **Clash API on a random port** | Port from the 49152–65535 range | Makes scanning/brute-forcing a fixed port harder |
-| **Clash API secret** | 32 hex, `Random.secure()`, validated on every request | Without a secret any local app could control the core |
-| **Clash API localhost-only** | Bound to 127.0.0.1 | Not reachable from the network |
-| **Authorization header everywhere** | Every Clash API request carries the secret | No "forgotten" unauthenticated endpoints |
-| **VpnService / BootReceiver not exported** | `android:exported="false"` | Third-party apps can't invoke our components |
+| **No Clash HTTP API** | The Clash API was removed entirely in the §122 CommandClient migration — the core is built without `with_clash_api`, and an `experimental.clash_api` block in a config now causes a **fatal** start failure. Core control goes through the libbox **CommandClient**, an in-process command channel with **no network socket** at all | An open localhost API is the classic mobile-VLESS vulnerability; with no HTTP surface there is nothing to scan or brute-force |
+| **Debug API — opt-in, off by default** | The local HTTP Debug API (subscription/rule/settings CRUD, `PUT /config`) does not run unless the user turns it on (`debug_enabled` default `false`); an empty Bearer token also keeps the server down | No local HTTP attack surface exists in the default install |
+| **Debug API — loopback + Bearer + Host check** | Bound to `127.0.0.1` only (default port `9269`). Every endpoint except `/ping` and `/help` requires `Authorization: Bearer <token>` (fail-closed on an empty token). A Host-header check rejects anything but `127.0.0.1` / `localhost` (anti-DNS-rebinding), so a rebinded `evil.com` gets `403` even if the token leaked | A LAN-reachable or CSRF-style path to full config control would be catastrophic; see [`debug-api-reference.md`](api/debug-api-reference.md) and spec §031 |
+| **pprof server — on-demand, loopback-only, no auth** | The §207 goroutine/CPU capture raises a libbox `PProfServer` on `127.0.0.1` (ports 6060–6065) only for the duration of a user-initiated capture, then tears it down. `network_security_config` permits cleartext HTTP **only** to loopback (`127.0.0.1` / `localhost` / `::1`); all external traffic stays cleartext-forbidden | Diagnostics must not open a persistent unauthenticated port, and the cleartext exemption must stay loopback-scoped; see spec §207 |
+| **Automation receivers — exported but disabled** | The §047/§157 automation receiver and Locale-plugin components are declared `android:exported="true"` but `android:enabled="false"`, so they are inert until the user flips the master "accept automation commands" toggle | Off by default means no third-party app can drive the client out of the box |
+| **VpnService / BootReceiver not exported** | `android:exported="false"` | Third-party apps can't invoke our core service components |
 
 Source and roadmap — [`020 — Security & DPI Bypass`](spec/features/020%20security%20and%20dpi%20bypass/spec.md).
+
+> **Automation caveat (§157).** Once the automation master toggle is ON, the receiver accepts its control commands from **any** caller on the device — a broadcast carries no caller identity, so there is no per-app authentication (`android:permission` is deliberately unset). The commands are control-only (start/stop/switch node/set group/rebuild/refresh/reset/urltest — no secret-exfiltration path), and outgoing automation events carry status labels only. See [`AUTOMATION.md`](AUTOMATION.md) "Безопасность".
 
 ---
 
@@ -148,8 +151,9 @@ Source and roadmap — [`020 — Security & DPI Bypass`](spec/features/020%20sec
 | Secret | How we protect it |
 |--------|-------------------|
 | **WARP private key** | The X25519 key is generated **on the device** and never leaves it — only the public key is sent to Cloudflare. We don't use third-party generator workers (they hand out a server-generated private key). See [§025 WARP](spec/features/025%20warp%20integration/spec.md). |
-| **Clash API secret** | `Random.secure()`, in process memory; never printed to logs. |
-| **Subscription credentials** | Roadmap: encrypted storage (Android Keystore), URL masking in the UI — see the roadmap in spec 020. |
+| **MASQUE key & device token** | The §130 MASQUE transport uses a **separate** ECDSA P-256 keypair generated on the device; only the public part is enrolled with Cloudflare (PATCH enroll), the SEC1-DER private key never leaves the phone. The per-device Cloudflare Bearer token is stored locally and is marked never-log alongside the private key. See [§130 MASQUE](spec/features/130%20masque-warp-transport/spec.md). |
+| **Debug API Bearer token** | Held in settings storage; the Debug API is off by default and bound to loopback only (see §3). |
+| **Subscription credentials** | Roadmap: encrypted storage (Android Keystore), URL masking in the UI — see the roadmap in spec 020. A §129 file-based subscription additionally persists its imported body as a plaintext `HttpCache` snapshot (keyed `file:<uuid>`) in the app's private storage; the same encrypted-storage roadmap item covers these snapshots. |
 
 ---
 
@@ -160,8 +164,9 @@ Source and roadmap — [`020 — Security & DPI Bypass`](spec/features/020%20sec
 | `0.0.0.0/0 → reject` | WHERE (destination IP) | all IPv4 traffic indiscriminately | yes, all |
 | `final = reject` | fallback | everything that matched no rule above | yes, unless explicitly described |
 | **Unknown traffic** (`block_unknown`) | WHO (socket owner) | traffic with an empty package (`INVALID_UID`) | **no** — ownerless only |
-| Random port + secret on Clash API | local surface | unauthorized access to the core | — |
+| No Clash HTTP API (CommandClient) | local surface | in-process control, no network socket to attack | — |
+| Debug API off by default; loopback + Bearer + Host check | local surface | unauthorized config control (opt-in only) | — |
 | TUN-only / auth-on-LAN | local surface | other apps using the local proxy | — |
-| On-device key gen (WARP) | secrets | private-key leakage | — |
+| On-device key gen (WARP X25519, MASQUE P-256) | secrets | private-key leakage | — |
 
 **Key takeaway:** ownerless traffic = entered tun bypassing the VpnService intercept (`curl --interface tun0`, termux bind), the UID doesn't resolve → the package is empty → it's caught **only** by the "Unknown traffic" rule, not by destination rules like `0.0.0.0/0`. So full leak protection needs both axes.

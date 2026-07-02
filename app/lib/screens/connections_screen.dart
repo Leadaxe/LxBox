@@ -259,24 +259,13 @@ class _ConnectionsViewState extends State<ConnectionsView> {
     );
   }
 
-  /// Порт из "host:port" — часть после последнего ':'.
-  static String _portOf(String destination) {
-    final i = destination.lastIndexOf(':');
-    if (i < 0 || i == destination.length - 1) return '';
-    return destination.substring(i + 1);
-  }
-
-  /// Host из "host:port" — часть до последнего ':'.
-  static String _hostOf(String destination) {
-    final i = destination.lastIndexOf(':');
-    return i < 0 ? destination : destination.substring(0, i);
-  }
+  // §219 — _portOf/_hostOf вынесены в format_utils (portOf/hostOf).
 
   Widget _buildTile(CcConnection conn) {
     final network = conn.network;
-    final destPort = _portOf(conn.destination);
+    final destPort = portOf(conn.destination);
     // host: domain, иначе host-часть destination (IP-соединения без домена).
-    final host = conn.domain.isNotEmpty ? conn.domain : _hostOf(conn.destination);
+    final host = conn.domain.isNotEmpty ? conn.domain : hostOf(conn.destination);
     final display = destPort.isNotEmpty ? '$host:$destPort' : host;
 
     final upload = conn.uplink;

@@ -75,14 +75,13 @@ if [ ! -f "$APK" ]; then
   exit 1
 fi
 
-# ─── adb path bootstrap ────────────────────────────────────────────
+# ─── adb path bootstrap (§219 — общий helper) ──────────────────────
 
-if ! command -v adb >/dev/null 2>&1; then
-  export PATH="${ANDROID_SDK_ROOT:-/usr/local/share/android-commandlinetools}/platform-tools:$PATH"
-  if ! command -v adb >/dev/null 2>&1; then
-    echo "✗ adb not found in PATH (or under ANDROID_SDK_ROOT/platform-tools)" >&2
-    exit 1
-  fi
+# shellcheck source=lib/ensure-adb.sh
+. "$(dirname "$0")/lib/ensure-adb.sh"
+if ! ensure_adb_path; then
+  echo "✗ adb not found in PATH (or under ANDROID_SDK_ROOT/platform-tools)" >&2
+  exit 1
 fi
 
 # ─── Device selection ─────────────────────────────────────────────
@@ -128,10 +127,10 @@ echo "$INSTALL_OUTPUT" | tail -3
 if ! echo "$INSTALL_OUTPUT" | grep -q "Success"; then
   echo "✗ Install failed" >&2
   if echo "$INSTALL_OUTPUT" | grep -q "INSTALL_FAILED_UPDATE_INCOMPATIBLE"; then
-    echo "  Signature mismatch — старый APK подписан другим ключом." >&2
-    echo "  Варианты:" >&2
-    echo "    1. adb -s $DEVICE uninstall $PKG  (потеряются настройки/подписки)" >&2
-    echo "    2. Собери APK тем же ключом что установленный (release vs debug)" >&2
+    echo "  Signature mismatch — installed APK is signed with a different key." >&2
+    echo "  Options:" >&2
+    echo "    1. adb -s $DEVICE uninstall $PKG  (loses settings/subscriptions)" >&2
+    echo "    2. Build the APK with the same key as installed (release vs debug)" >&2
   fi
   exit 1
 fi
@@ -166,7 +165,7 @@ if [ "$FORWARD" -eq 1 ]; then
     echo "→ adb forward tcp:$HOST_PORT tcp:$DEBUG_PORT  (host port shifted, see --host-port)"
   fi
   adb -s "$DEVICE" forward tcp:"$HOST_PORT" tcp:"$DEBUG_PORT" >/dev/null 2>&1 || \
-    echo "  (forward failed — Debug API недоступен с хоста, но app работает)"
+    echo "  (forward failed — Debug API unreachable from host, but the app works)"
 fi
 
 echo "✅ Installed to $DEVICE"

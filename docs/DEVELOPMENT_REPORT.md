@@ -3,6 +3,8 @@
 **Дата:** 19 апреля 2026 (подробный нарратив — до v1.3.1; хроника ниже — до v1.9.0)
 **Период:** Эволюция от MVP до полноценного приложения + Parser v2 landmark-рефакторинг
 
+> **Исторический архив.** Документ заморожен на v1.9.0 / кануне v2.0.0 и не отражает текущее состояние. Актуальная версия, счётчики и roadmap — в [`CHANGELOG.md`](../CHANGELOG.md) и [`docs/spec/features/README.md`](spec/features/README.md). На момент правки текущий релиз — **v2.9.0** (02.07.2026).
+
 ---
 
 ## Резюме
@@ -487,13 +489,15 @@ L×Box прошёл путь от MVP (один экран: Read config → Star
 | **v1.8.3** | 12 мая 2026 | Pre-commit hook auto-sync для pubspec.yaml ([§066](spec/tasks/066-pubspec-sync-hook.md)). `.githooks/pre-commit` → `scripts/sync-pubspec-version.sh` (derive `versionName` + `versionCode` из `git describe` + `rev-list --count`). Setup: `scripts/setup-hooks.sh` (one-shot после clone). UpdateChecker skip для `-dev` версий (no snackbar в dev sessions). Удалены `--dart-define BUILD_*` pass-through + `_LocalBuildBadge` widget. `flutter run` теперь показывает realistic `X.Y.Z-dev.N` без extra шагов. |
 | **v1.9.0** | 6 июня 2026 | Главный экран UX: node filters ([§048](spec/features/048%20home-node-filters/spec.md)), sort options menu ([§070](spec/features/070%20sort-options/spec.md)) + manual reorder ([§071](spec/features/071%20manual-node-reorder/spec.md)), Add-server wizard ([§074](spec/features/074%20add-server-wizard/spec.md)), subscription detour `Add detour`/append ([§073](spec/tasks/073-detour-append-vs-replace.md)), settings & config lifecycle ([§076](spec/features/076%20settings-and-config-lifecycle/spec.md)); atomic settings write + `.bak` — data-loss fix Xiaomi/HyperOS ([§072](spec/tasks/072-settings-storage-atomic-write.md)) |
 
-Текущее состояние (после v1.9.0; в develop готовится **v2.0.0** — §089–§104: deep-refactor «монстров», ConfigNode, filter mode, смена ядра на **sing-box-lx** — постоянно, пин `v1.13.13-lx.5` + fetch-скрипт в local-build и CI (§104) — AWG2, нативный XHTTP):
-- **Тесты:** 860+ зелёных
+Состояние **на момент заморозки этого архива** (после v1.9.0; в develop тогда готовился **v2.0.0** — §089–§104: deep-refactor «монстров», ConfigNode, filter mode, смена ядра на **sing-box-lx** + fetch-скрипт в local-build и CI (§104) — AWG2, нативный XHTTP). Снимок исторический, актуальные цифры — в CHANGELOG.md / features README:
+- **Тесты:** 860+ зелёных (на v1.9.0-канун)
 - **Спецификации:** 001–103 (features + tasks)
-- **Релизы:** 17 stable tags
+- **Релизы:** 17 stable tags (на тот момент)
 - **LOC:** `app/lib/` ≈ 45k, native Kotlin ≈ 3.3k
 
 ## Что дальше
+
+> Секция исторична (roadmap на канун v2.0.0). Многое из «не реализовано» уже вышло в последующих релизах — напр. **Load Balance** выпущен в v2.7.0 (§208 round-robin балансировщик). Актуальный roadmap — в features README и tasks.
 
 Большая часть «Высокий» и «Средний» приоритетов из v1.3.1 roadmap — закрыты:
 

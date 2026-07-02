@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/channel.dart';
+import '../services/ui_helpers.dart';
 import 'home/filter_widgets.dart' show NegateToggle;
 
 /// §125 — полноэкранный редактор канала роутинга. Идиома проекта
@@ -134,17 +135,23 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               interval: _autoIntervalCtrl.text.trim().isEmpty
                   ? '5m'
                   : _autoIntervalCtrl.text.trim(),
-              tolerance: int.tryParse(_autoToleranceCtrl.text.trim()) ?? 50,
+              // §219/§221 — tolerance/pool/poolTolerance клэмпим ЗДЕСЬ (как в
+              // ChannelAuto.toJson/copyWith): прямой конструктор не клэмпит,
+              // иначе снапшот в памяти (для _isDirty) расходился бы с тем, что
+              // реально персистится (uint16 [0,65535], pool≥1).
+              tolerance: clampChannelTolerance(
+                  int.tryParse(_autoToleranceCtrl.text.trim()) ?? 50),
               idleTimeout: _autoIdleCtrl.text.trim().isEmpty
                   ? '30m'
                   : _autoIdleCtrl.text.trim(),
               interruptExistConnections: _autoInterrupt,
               // §208 — balancer (значимы только при round_robin, но храним всегда
-              // — переключение режима не теряет настройки пула). pool<1 → 1.
+              // — переключение режима не теряет настройки пула).
               mode: _autoMode,
-              pool: int.tryParse(_autoPoolCtrl.text.trim()) ?? 3,
-              poolTolerance:
-                  int.tryParse(_autoPoolToleranceCtrl.text.trim()) ?? 0,
+              pool: clampChannelPool(
+                  int.tryParse(_autoPoolCtrl.text.trim()) ?? 3),
+              poolTolerance: clampChannelTolerance(
+                  int.tryParse(_autoPoolToleranceCtrl.text.trim()) ?? 0),
               // Set→List в фиксированном порядке enum (детерминизм diff/JSON).
               stickyHash: StickyHashKey.values
                   .where(_autoSticky.contains)
@@ -190,36 +197,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
       Navigator.pop(context);
       return;
     }
-    final action = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        final cs = Theme.of(ctx).colorScheme;
-        return AlertDialog(
-          title: const Text('Unsaved changes'),
-          content: const Text('You have unsaved changes. Save before leaving?'),
-          actionsPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'discard'),
-              style: TextButton.styleFrom(foregroundColor: cs.error),
-              child: const Text('Discard'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'keep'),
-              child: const Text('Keep'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'save'),
-              style: TextButton.styleFrom(
-                foregroundColor: cs.primary,
-                textStyle: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
+    final action = await showUnsavedChangesDialog(context); // §219
     if (!mounted) return;
     if (action == 'save') {
       _save();
@@ -233,27 +211,12 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
   }
 
   Future<void> _delete() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete channel?'),
-        content: Text(
-            'Remove "${widget.initial.label}" (${widget.initial.tag})? '
-            'References to it fall back to vpn-1.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(
-                foregroundColor: Theme.of(ctx).colorScheme.error),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
+    final confirmed = await showDeleteConfirmDialog(
+      context,
+      title: 'Delete channel?',
+      message: 'Remove "${widget.initial.label}" (${widget.initial.tag})? '
+          'References to it fall back to vpn-1.',
+    ); // §219
     if (confirmed == true && mounted) {
       Navigator.pop(context, ChannelEditResult.deleted());
     }
@@ -270,16 +233,8 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
       return null;
     }
   }
-
-  bool _isValidRegex(String pattern) {
-    if (pattern.isEmpty) return true;
-    try {
-      RegExp(pattern);
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
+  // §219 — _isValidRegex удалён: валидность выводится из _compile()!=null,
+  // не компилируем один паттерн дважды за build.
 
   @override
   Widget build(BuildContext context) {
@@ -288,8 +243,10 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     final dirty = _isDirty();
 
     final nodeFilterText = _nodeFilterCtrl.text.trim();
-    final nodeFilterValid = _isValidRegex(nodeFilterText);
+    // §219 — компилируем RegExp ОДИН раз за build. Валидность выводим из
+    // результата (раньше _isValidRegex + _compile компилили один паттерн дважды).
     final re = _compile(nodeFilterText);
+    final nodeFilterValid = nodeFilterText.isEmpty || re != null;
     // §197 — превью учитывает инверсию (как билдер): invert → ноды НЕ матчащие.
     final matchedNodes = nodeFilterText.isEmpty
         ? widget.allNodeTags
@@ -300,8 +257,8 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                 .toList());
 
     final defaultText = _defaultFilterCtrl.text.trim();
-    final defaultValid = _isValidRegex(defaultText);
     final defaultRe = _compile(defaultText);
+    final defaultValid = defaultText.isEmpty || defaultRe != null;
     final defaultPick = (defaultText.isEmpty || defaultRe == null)
         ? null
         : _firstMatch(matchedNodes, defaultRe);

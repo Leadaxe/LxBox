@@ -51,6 +51,86 @@ void main() {
       expect(wg.mtu, 1420);
     });
 
+    test('§219 wireguard: reserved из peer парсится (WARP client_id)', () {
+      final spec = parseSingboxEntry({
+        'type': 'wireguard',
+        'tag': 'wg',
+        'address': ['172.16.0.2/32'],
+        'private_key': 'PRIV==',
+        'peers': [
+          {
+            'address': '162.159.192.1',
+            'port': 2408,
+            'public_key': 'PUB==',
+            'allowed_ips': ['0.0.0.0/0'],
+            'reserved': [1, 2, 3],
+          }
+        ],
+      });
+      expect(spec, isA<WireguardSpec>());
+      final wg = spec! as WireguardSpec;
+      expect(wg.peers.single.reserved, [1, 2, 3]);
+    });
+
+    test('§219 wireguard: plain WG без mtu → дефолт 1408 (как URI-парсер)', () {
+      final spec = parseSingboxEntry({
+        'type': 'wireguard',
+        'tag': 'wg',
+        'address': ['172.16.0.2/32'],
+        'private_key': 'PRIV==',
+        'peers': [
+          {
+            'address': '1.2.3.4',
+            'port': 51820,
+            'public_key': 'PUB==',
+            'allowed_ips': ['0.0.0.0/0'],
+          }
+        ],
+      });
+      expect((spec! as WireguardSpec).mtu, 1408);
+    });
+
+    test('§130 masque round-trip: emit → parseSingboxEntry ≈ spec', () {
+      final orig = MasqueSpec(
+        id: 'x',
+        tag: '🔥🎭 WARP (MASQUE)',
+        label: 'l',
+        server: '162.159.198.2',
+        port: 443,
+        rawUri: '',
+        privateKeyDer: 'PRIVDER==',
+        publicKeyDer: 'PUBDER==',
+        localAddresses: ['172.16.0.2/32', '2606:4700:110::2/128'],
+        network: 'h2',
+        sni: '4pda.to',
+        mtu: 1280,
+        idleTimeout: '10m',
+        keepAlive: '45s',
+      );
+      // emit пишет sing-box JSON — читаем обратно через parseSingboxEntry.
+      final json = orig.emit(TemplateVars.empty).map;
+      final back = parseSingboxEntry(json.cast<String, dynamic>());
+      expect(back, isA<MasqueSpec>());
+      final m = back! as MasqueSpec;
+      expect(m.privateKeyDer, orig.privateKeyDer);
+      expect(m.publicKeyDer, orig.publicKeyDer);
+      expect(m.server, orig.server);
+      expect(m.port, orig.port);
+      expect(m.network, 'h2');
+      expect(m.sni, '4pda.to');
+      expect(m.localAddresses, containsAll(orig.localAddresses));
+      expect(m.idleTimeout, '10m');
+      expect(m.keepAlive, '45s');
+    });
+
+    test('masque без ключей → null', () {
+      expect(
+        parseSingboxEntry(
+            {'type': 'masque', 'server': 'h', 'server_port': 443}),
+        isNull,
+      );
+    });
+
     test('unknown type → null', () {
       expect(parseSingboxEntry({'type': 'bogus'}), isNull);
     });

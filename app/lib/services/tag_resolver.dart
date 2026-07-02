@@ -38,5 +38,4 @@ class TagResolver {
         ? displayTag.substring(p.length)
         : displayTag;
   }
-
 }

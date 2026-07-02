@@ -15,7 +15,7 @@ A commercial license from Leadaxe, when granted, covers **only the original L×B
 A commercial license from Leadaxe **does not and cannot** lift GPLv3 from `libbox` / sing-box: only the sing-box copyright holders can do that. Without a separate arrangement with the sing-box authors, the resulting product still has to be distributed under GPLv3 — even if Leadaxe's portion is offered under different terms. In practice this means a Leadaxe-only commercial license has limited use; in particular, it does **not** authorize embedding L×Box into a proprietary (closed-source) product.
 
 - Commercial terms are negotiated privately and are **not** published in this repository.
-- Inquiries: **[ledaxe@gmail.com](mailto:ledaxe@gmail.com)** (also on [GitHub @Leadaxe](https://github.com/Leadaxe)).
+- Inquiries: **[leadaxe@gmail.com](mailto:leadaxe@gmail.com)** (also on [GitHub @Leadaxe](https://github.com/Leadaxe)).
 
 This file does not grant a commercial license; it only describes the scope and how to request one.
 
@@ -38,6 +38,6 @@ L×Box использует [`libbox`](https://github.com/SagerNet/sing-box) и�
 Коммерческая лицензия от Leadaxe **не снимает и не может снять** GPLv3 с `libbox` / sing-box: это могут сделать только правообладатели sing-box. Без отдельного соглашения с авторами sing-box итоговый продукт всё равно должен распространяться под GPLv3 — даже если часть Leadaxe предоставлена на других условиях. Практически это значит, что коммерческая лицензия только от Leadaxe имеет ограниченное применение; в частности, она **не** даёт права встроить L×Box в проприетарный (закрытый) продукт.
 
 - Условия коммерческой лицензии согласовываются индивидуально и **не** публикуются в этом репозитории.
-- Запросы: **[ledaxe@gmail.com](mailto:ledaxe@gmail.com)** (также [GitHub @Leadaxe](https://github.com/Leadaxe)).
+- Запросы: **[leadaxe@gmail.com](mailto:leadaxe@gmail.com)** (также [GitHub @Leadaxe](https://github.com/Leadaxe)).
 
 Этот документ не предоставляет коммерческую лицензию, а только описывает область её применения и порядок обращения.

@@ -12,5 +12,5 @@ cd "$(dirname "$0")/.."
 git config core.hooksPath .githooks
 chmod +x .githooks/* scripts/sync-pubspec-version.sh
 
-echo "✅ git hooks включены (core.hooksPath = .githooks)"
-echo "   pre-commit будет sync'ить app/pubspec.yaml на каждом git commit."
+echo "✅ git hooks enabled (core.hooksPath = .githooks)"
+echo "   pre-commit will sync app/pubspec.yaml on every git commit."

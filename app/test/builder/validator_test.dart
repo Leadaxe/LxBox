@@ -25,6 +25,29 @@ void main() {
       expect(r.fatal.single, isA<DanglingOutboundRef>());
     });
 
+    test('§219 — dangling route.final → fatal', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'vpn-1', 'type': 'selector', 'outbounds': ['a']},
+          {'tag': 'a', 'type': 'vless'},
+        ],
+        'route': {'final': 'vpn-1-auto'}, // auto-двойник не эмитирован
+      });
+      expect(r.hasFatal, true);
+      expect(r.fatal.single, isA<DanglingOutboundRef>());
+    });
+
+    test('§219 — валидный route.final → ok', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'vpn-1', 'type': 'selector', 'outbounds': ['a']},
+          {'tag': 'a', 'type': 'vless'},
+        ],
+        'route': {'final': 'vpn-1'},
+      });
+      expect(r.isOk, true);
+    });
+
     test('§084 H1 — dangling detour ref → fatal', () {
       final r = validateConfig({
         'outbounds': [
@@ -259,7 +282,12 @@ void main() {
         ],
       });
       expect(r.hasFatal, true);
-      expect(r.fatal.whereType<DetourCycle>().length, 1);
+      final cycles = r.fatal.whereType<DetourCycle>().toList();
+      expect(cycles.length, 1);
+      // §219 — проверяем СОДЕРЖИМОЕ cycle, не только факт наличия: оба узла
+      // цикла должны быть в нём (ловит off-by-one в _findDetourCycle).
+      expect(cycles.single.cycle, containsAll(<String>['a', 'b']));
+      expect(cycles.single.cycle, hasLength(2));
     });
 
     test('§141 — detour 3-cycle через endpoint (A→B→C→A) → fatal', () {

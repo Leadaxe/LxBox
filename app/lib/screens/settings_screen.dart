@@ -50,8 +50,9 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   BackgroundMode _backgroundMode = BackgroundMode.never;
   bool _vpnLoaded = false;
-  // §143 — НЕ native/config-significant: чистая storage-настройка поведения
-  // Clash-API клиента при переключении ноды. Без Restart-баннера.
+  // §143/§219 — НЕ native/config-significant: чистая storage-настройка
+  // поведения CommandClient при переключении ноды (selectOutbound +
+  // closeConnection). Без Restart-баннера.
   bool _interruptOnSwitch = false;
   String _idleSuspend = ''; // §215 — route.lx_idle_suspend threshold ("" = off)
 

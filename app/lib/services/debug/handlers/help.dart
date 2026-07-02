@@ -276,8 +276,8 @@ POST   /settings/rebuild-config                Alias /action/rebuild-config
 
 === Backup ===
 
-GET  /backup/export?include=config,vars,subs   Pure-data snapshot for restore (no diag noise). `include` optional; default — all three.
-POST /backup/import?merge=false&rebuild=false  Accepts the same shape export returns (plus /diag/dump — diag fields ignored).
+GET  /backup/export?include=storage,vpn_settings  Pure-data snapshot for restore (no diag noise). `include` optional; default — both parts.
+POST /backup/import?merge=false&rebuild=false  Accepts the same shape export returns (body {storage?, vpn_settings?}).
                                                  `merge=true` — append/upsert; `rebuild=true` — auto-rebuild config after restore.
 
 === Errors ===
@@ -358,6 +358,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/config/path', 'description': 'On-device file path'},
     // Logs
     {'method': 'GET', 'path': '/logs', 'params': {'limit': 'N (default 200)', 'source': 'app|core', 'q': 'substring search', 'level': 'comma-separated: error,warn,info,debug'}, 'description': 'AppLog entries'},
+    {'method': 'GET', 'path': '/logs/app', 'description': 'Alias for /logs?source=app (same params)'},
+    {'method': 'GET', 'path': '/logs/core', 'description': 'Alias for /logs?source=core (same params)'},
     {'method': 'POST', 'path': '/logs/clear', 'description': 'Clear AppLog'},
     // Actions
     {'method': 'POST', 'path': '/action/start-vpn', 'description': 'Start tunnel (via Activity, may show consent)'},
@@ -441,6 +443,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'DELETE', 'path': '/settings/vars/{key}', 'description': 'Delete var'},
     {'method': 'PUT', 'path': '/settings/dns_options/servers', 'body': '{"servers":[...]}', 'description': 'Set DNS servers list'},
     {'method': 'PUT', 'path': '/settings/dns_options/rules', 'body': '{"rules":"<json-string>"}', 'description': 'Set DNS rules (legacy json-string shape)'},
+    {'method': 'GET', 'path': '/settings/core_logs_enabled', 'description': 'Whether sing-box logs are forwarded into /logs/core'},
+    {'method': 'PUT', 'path': '/settings/core_logs_enabled', 'body': '{"enabled":true|false}', 'description': 'Toggle core-log forwarding (default false)'},
     {'method': 'PUT', 'path': '/settings/config_locked', 'body': '{"locked":true|false}', 'description': 'Toggle auto-rebuild lock — true pins config from UI rebuilds'},
     {'method': 'GET', 'path': '/settings/vpn/allow_bypass', 'description': 'VpnService.Builder.allowBypass() state'},
     {'method': 'PUT', 'path': '/settings/vpn/allow_bypass', 'body': '{"enabled":true|false}', 'description': 'Toggle allowBypass — apply on next establish()'},
@@ -449,8 +453,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/settings/vpn/background_mode', 'description': 'tunnel sleep mode (never|lazy|always)'},
     {'method': 'PUT', 'path': '/settings/vpn/background_mode', 'body': '{"mode":"never|lazy|always"}', 'description': 'Set tunnel sleep mode — apply on next VPN connect'},
     // Backup
-    {'method': 'GET', 'path': '/backup/export', 'params': {'include': 'config,vars,subs (default all)'}, 'description': 'Pure-data snapshot (no diag noise)'},
-    {'method': 'POST', 'path': '/backup/import', 'params': {'merge': 'true|false', 'rebuild': 'true|false'}, 'body': '{config?, vars?, server_lists?}', 'description': 'Restore from export or /diag/dump'},
+    {'method': 'GET', 'path': '/backup/export', 'params': {'include': 'storage,vpn_settings (default both)'}, 'description': 'Pure-data snapshot (no diag noise)'},
+    {'method': 'POST', 'path': '/backup/import', 'params': {'merge': 'true|false', 'rebuild': 'true|false'}, 'body': '{storage?, vpn_settings?}', 'description': 'Restore from export'},
     // Action additions
     {'method': 'POST', 'path': '/action/preview-empty-state', 'params': {'on': 'true|false'}, 'description': 'Toggle empty-state preview in HomeScreen UI without losing data'},
   ],

@@ -128,7 +128,10 @@ void main() {
       expect(parseWireguardUri('$base&mtu=1420')!.mtu, 1420);
     });
 
-    test('JSON endpoint: AWG без mtu → 1280, plain WG без mtu → null', () {
+    // §219 — plain WG без mtu теперь дефолтит 1408 (как URI-парсер), а не null.
+    // Модель не зависит от источника парсинга (JSON vs URI). AWG-clamp до 1280
+    // без изменений.
+    test('JSON endpoint: AWG без mtu → 1280, plain WG без mtu → 1408', () {
       Map<String, dynamic> entry({bool awg = false, int? mtu}) => {
             'type': 'wireguard',
             'tag': 't',
@@ -149,7 +152,7 @@ void main() {
       expect(
           (parseSingboxEntry(entry(awg: true, mtu: 1420)) as WireguardSpec).mtu,
           1280);
-      expect((parseSingboxEntry(entry()) as WireguardSpec).mtu, isNull);
+      expect((parseSingboxEntry(entry()) as WireguardSpec).mtu, 1408);
       expect((parseSingboxEntry(entry(mtu: 1420)) as WireguardSpec).mtu, 1420);
     });
 

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../services/settings_storage.dart';
+import '../services/ui_helpers.dart';
 import '../services/url_launcher.dart' as ul;
 import '../widgets/outbound_picker.dart';
 import '../widgets/wifi_entry.dart';
@@ -121,25 +122,11 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
   }
 
   Future<void> _delete() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete rule?'),
-        content: Text('Remove "${widget.initial.name}" permanently?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(
-                foregroundColor: Theme.of(ctx).colorScheme.error),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
+    final confirmed = await showDeleteConfirmDialog(
+      context,
+      title: 'Delete rule?',
+      message: 'Remove "${widget.initial.name}" permanently?',
+    ); // §219
     if (confirmed == true && mounted) {
       Navigator.pop(context, _CustomRuleEditResult.deleted());
     }
@@ -152,41 +139,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
       Navigator.pop(context);
       return;
     }
-    final action = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        final cs = Theme.of(ctx).colorScheme;
-        return AlertDialog(
-          title: const Text('Unsaved changes'),
-          content:
-              const Text('You have unsaved changes. Save before leaving?'),
-          // §045-followup: все TextButton'ы + короткие надписи →
-          // вмещаются в строку. FilledButton + длинная "Keep editing"
-          // forced wrap в столбец на типичных phone widths.
-          actionsPadding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'discard'),
-              style: TextButton.styleFrom(foregroundColor: cs.error),
-              child: const Text('Discard'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'keep'),
-              child: const Text('Keep'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'save'),
-              style: TextButton.styleFrom(
-                foregroundColor: cs.primary,
-                textStyle: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
+    final action = await showUnsavedChangesDialog(context); // §219
     if (!mounted) return;
     if (action == 'save') {
       _save(); // сам сделает Navigator.pop при успехе

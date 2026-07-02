@@ -177,8 +177,12 @@ class _ConfigScreenState extends State<ConfigScreen> {
                     icon: const Icon(Icons.copy, size: 16),
                     tooltip: 'Copy',
                     visualDensity: VisualDensity.compact,
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: _textController.text));
+                    onPressed: () async {
+                      // §219 — await + mounted перед snackbar (как _copy():40),
+                      // иначе гонка Future/context.
+                      await Clipboard.setData(
+                          ClipboardData(text: _textController.text));
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Config copied')),
                       );

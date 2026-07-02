@@ -81,22 +81,35 @@ class ParseResult {
 /// а не в HTTP-headers. HTTP первичны, inline как fallback.
 Future<ParseResult> parseFromSource(SubscriptionSource source,
     {http.Client? client}) async {
-  final fetch = await _fetch(source, client ?? http.Client());
-  final inline = _inlineHeaders(fetch.body);
-  // inline под капотом, HTTP поверх — HTTP первичны.
-  final merged = <String, String>{...inline, ...fetch.headers};
-  final meta = _metaFromHeaders(merged);
-  final decoded = decode(fetch.body);
-  final nodes = parseAll(decoded);
-  return ParseResult(nodes, decoded, meta, fetch.body, fetch.headers);
+  // §219 — закрываем ТОЛЬКО самосозданный клиент (инжектированный извне
+  // закрывает владелец): иначе `http.Client()` течёт на каждый fetch.
+  final owned = client == null;
+  final c = client ?? http.Client();
+  try {
+    final fetch = await _fetch(source, c);
+    final inline = _inlineHeaders(fetch.body);
+    // inline под капотом, HTTP поверх — HTTP первичны.
+    final merged = <String, String>{...inline, ...fetch.headers};
+    final meta = _metaFromHeaders(merged);
+    final decoded = decode(fetch.body);
+    final nodes = parseAll(decoded);
+    return ParseResult(nodes, decoded, meta, fetch.body, fetch.headers);
+  } finally {
+    if (owned) c.close();
+  }
 }
+
+// §219 — паттерны на module-level: раньше `_commentPrefixRe` компилился на
+// КАЖДОЙ итерации цикла разбора комментариев, `_newlineRe` — на каждый вызов.
+final _newlineRe = RegExp(r'\r?\n');
+final _commentPrefixRe = RegExp(r'^(#+|//|;)\s*');
 
 /// Извлекает `# key: value` из первых строк-комментариев тела подписки.
 /// Поддерживает `#`, `//`, `;` как префиксы, стопается на первой не-comment
 /// не-пустой строке.
 Map<String, String> _inlineHeaders(String body) {
   final out = <String, String>{};
-  for (final raw in body.split(RegExp(r'\r?\n'))) {
+  for (final raw in body.split(_newlineRe)) {
     final line = raw.trim();
     if (line.isEmpty) continue;
     final isComment = line.startsWith('#') ||
@@ -104,7 +117,7 @@ Map<String, String> _inlineHeaders(String body) {
         line.startsWith(';');
     if (!isComment) break; // первая нормальная строка — секция комментов кончилась
     // Сносим префикс-коммент, оставляем содержимое.
-    final stripped = line.replaceFirst(RegExp(r'^(#+|//|;)\s*'), '');
+    final stripped = line.replaceFirst(_commentPrefixRe, '');
     final colon = stripped.indexOf(':');
     if (colon <= 0) continue;
     final key = stripped.substring(0, colon).trim().toLowerCase();
@@ -141,8 +154,16 @@ set fetchBackoffsForTesting(List<Duration>? value) =>
 /// Прямой HTTP GET без декода/парса. Для UI «Source» — показать живой
 /// ответ сервера как есть. Не пишет в кэш.
 Future<FetchResult> fetchRaw(SubscriptionSource source,
-    {http.Client? client}) async =>
-    _fetch(source, client ?? http.Client());
+    {http.Client? client}) async {
+  // §219 — закрываем только самосозданный клиент (см. parseFromSource).
+  final owned = client == null;
+  final c = client ?? http.Client();
+  try {
+    return await _fetch(source, c);
+  } finally {
+    if (owned) c.close();
+  }
+}
 
 Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async {
   switch (source) {
@@ -248,9 +269,11 @@ String? _parseContentDispositionFilename(String? header) {
   }
   if (name == null) return null;
   var out = name;
-  // Срезаем расширения типичных подписочных файлов.
+  // Срезаем расширения типичных подписочных файлов. §219 — lowercase один раз
+  // до цикла (было .toLowerCase() на каждой из 5 итераций).
+  final outLower = out.toLowerCase();
   for (final e in const ['.txt', '.yaml', '.yml', '.json', '.conf']) {
-    if (out.toLowerCase().endsWith(e)) {
+    if (outLower.endsWith(e)) {
       out = out.substring(0, out.length - e.length);
       break;
     }
@@ -260,13 +283,14 @@ String? _parseContentDispositionFilename(String? header) {
 }
 
 SubscriptionMeta? _metaFromHeaders(Map<String, String> h) {
-  // Case-insensitive lookup.
-  String? get(String key) {
-    for (final k in h.keys) {
-      if (k.toLowerCase() == key.toLowerCase()) return h[k];
-    }
-    return null;
+  // §219 — строим lower-map ОДИН раз: раньше get() линейно сканировал h.keys
+  // с .toLowerCase() на каждом, и звался 6 раз → O(n×6). Ключи выше по стеку
+  // уже уникальны; при коллизии регистра берём первое вхождение.
+  final hLower = <String, String>{};
+  for (final e in h.entries) {
+    hLower.putIfAbsent(e.key.toLowerCase(), () => e.value);
   }
+  String? get(String key) => hLower[key.toLowerCase()];
 
   final userInfo = get('subscription-userinfo');
   // Fallback-цепочка для имени: profile-title → content-disposition.
@@ -294,7 +318,11 @@ SubscriptionMeta? _metaFromHeaders(Map<String, String> h) {
     for (final p in userInfo.split(';')) {
       final kv = p.trim().split('=');
       if (kv.length != 2) continue;
-      final n = int.tryParse(kv[1].trim()) ?? 0;
+      final parsed = int.tryParse(kv[1].trim());
+      // upload/download/total: дефолт 0 (нет трафика). expire: §219 — null при
+      // непарсимом значении, НЕ 0 (0 = реальный timestamp эпохи 1970-01-01,
+      // а не «нет срока»).
+      final n = parsed ?? 0;
       switch (kv[0].trim()) {
         case 'upload':
           upload = n;
@@ -303,7 +331,7 @@ SubscriptionMeta? _metaFromHeaders(Map<String, String> h) {
         case 'total':
           total = n;
         case 'expire':
-          expire = n;
+          expire = parsed;
       }
     }
   }
