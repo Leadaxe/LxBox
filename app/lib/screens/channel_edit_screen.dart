@@ -274,16 +274,8 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
       return null;
     }
   }
-
-  bool _isValidRegex(String pattern) {
-    if (pattern.isEmpty) return true;
-    try {
-      RegExp(pattern);
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
+  // §219 — _isValidRegex удалён: валидность выводится из _compile()!=null,
+  // не компилируем один паттерн дважды за build.
 
   @override
   Widget build(BuildContext context) {
@@ -292,8 +284,10 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     final dirty = _isDirty();
 
     final nodeFilterText = _nodeFilterCtrl.text.trim();
-    final nodeFilterValid = _isValidRegex(nodeFilterText);
+    // §219 — компилируем RegExp ОДИН раз за build. Валидность выводим из
+    // результата (раньше _isValidRegex + _compile компилили один паттерн дважды).
     final re = _compile(nodeFilterText);
+    final nodeFilterValid = nodeFilterText.isEmpty || re != null;
     // §197 — превью учитывает инверсию (как билдер): invert → ноды НЕ матчащие.
     final matchedNodes = nodeFilterText.isEmpty
         ? widget.allNodeTags
@@ -304,8 +298,8 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                 .toList());
 
     final defaultText = _defaultFilterCtrl.text.trim();
-    final defaultValid = _isValidRegex(defaultText);
     final defaultRe = _compile(defaultText);
+    final defaultValid = defaultText.isEmpty || defaultRe != null;
     final defaultPick = (defaultText.isEmpty || defaultRe == null)
         ? null
         : _firstMatch(matchedNodes, defaultRe);

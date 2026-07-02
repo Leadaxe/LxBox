@@ -32,6 +32,10 @@ import '../version_info.dart';
 
 const _kProductToken = 'LxBox-android';
 
+// §219 — module-level: раньше компилился на каждый вызов _sanitizeToken
+// (в т.ч. при инициализации приложения).
+final _uaSanitizeRe = RegExp(r'[()\s;]+');
+
 /// Чистая функция-конструктор UA. Подставляет версию и гарантирует инварианты
 /// независимо от мусора на входе. Вынесена отдельно ради regression-теста.
 String buildSubscriptionUserAgent({required String appVersion}) {
@@ -45,7 +49,7 @@ String buildSubscriptionUserAgent({required String appVersion}) {
 String _sanitizeToken(String raw, {required String fallback}) {
   var s = raw.trim();
   if (s.startsWith('v')) s = s.substring(1);
-  s = s.replaceAll(RegExp(r'[()\s;]+'), '');
+  s = s.replaceAll(_uaSanitizeRe, '');
   return s.isEmpty ? fallback : s;
 }
 
