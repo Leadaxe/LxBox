@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../services/ui_helpers.dart';
 import '../widgets/outbound_picker.dart';
 import 'dns_server_edit/edit_controller.dart';
 import 'dns_server_edit/tabs/json_tab.dart';
@@ -202,38 +203,7 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
       Navigator.pop(context);
       return;
     }
-    final action = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        final cs = Theme.of(ctx).colorScheme;
-        return AlertDialog(
-          title: const Text('Unsaved changes'),
-          content:
-              const Text('You have unsaved changes. Save before leaving?'),
-          actionsPadding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'discard'),
-              style: TextButton.styleFrom(foregroundColor: cs.error),
-              child: const Text('Discard'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'keep'),
-              child: const Text('Keep'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, 'save'),
-              style: TextButton.styleFrom(
-                foregroundColor: cs.primary,
-                textStyle: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
+    final action = await showUnsavedChangesDialog(context); // §219
     if (!mounted) return;
     if (action == 'save') {
       unawaited(_save()); // сам сделает Navigator.pop при успехе
