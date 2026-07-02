@@ -61,12 +61,12 @@ void main() {
     test('§025 WARP+ → 🔥☁️', () {
       expect(defaultEmojiFor(wg(tag: 'WARP+')), '🔥☁️');
     });
-    test('§130 MASQUE (тег без эмодзи) → 🔥☁️', () {
+    test('§130 MASQUE (тег без эмодзи) → 🎭', () {
       final masque = parse(
           'masque://PRIV=@162.159.198.2:443?publickey=PUB=&address=172.16.0.2/32'
           '&network=h3#plain-masque');
       expect(masque, isA<MasqueSpec>());
-      expect(defaultEmojiFor(masque), '🔥☁️');
+      expect(defaultEmojiFor(masque), '🎭');
     });
     test('обычный WireGuard (не WARP) остаётся 🏠', () {
       expect(defaultEmojiFor(wg()), '🏠'); // тег wg-node, не WARP
