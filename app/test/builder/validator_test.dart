@@ -25,6 +25,29 @@ void main() {
       expect(r.fatal.single, isA<DanglingOutboundRef>());
     });
 
+    test('§219 — dangling route.final → fatal', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'vpn-1', 'type': 'selector', 'outbounds': ['a']},
+          {'tag': 'a', 'type': 'vless'},
+        ],
+        'route': {'final': 'vpn-1-auto'}, // auto-двойник не эмитирован
+      });
+      expect(r.hasFatal, true);
+      expect(r.fatal.single, isA<DanglingOutboundRef>());
+    });
+
+    test('§219 — валидный route.final → ok', () {
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'vpn-1', 'type': 'selector', 'outbounds': ['a']},
+          {'tag': 'a', 'type': 'vless'},
+        ],
+        'route': {'final': 'vpn-1'},
+      });
+      expect(r.isOk, true);
+    });
+
     test('§084 H1 — dangling detour ref → fatal', () {
       final r = validateConfig({
         'outbounds': [

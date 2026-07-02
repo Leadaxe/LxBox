@@ -3,8 +3,8 @@ import '../../models/validation.dart';
 /// Валидация собранного конфига (§3.5 спеки 026). Функция, не класс.
 ///
 /// Проверяет:
-/// - `route.rules[].outbound` ссылается на существующий tag → иначе
-///   `DanglingOutboundRef` (fatal).
+/// - `route.rules[].outbound` / `route.final` ссылаются на существующий tag →
+///   иначе `DanglingOutboundRef` (fatal). §219.
 /// - `outbounds[]/endpoints[].detour` ссылается на существующий tag → иначе
 ///   `DanglingDetourRef` (fatal). §084 H1.
 /// - `outbounds[type=urltest]` не пуст → иначе `EmptyUrltestGroup` (fatal).
@@ -37,6 +37,18 @@ ValidationResult validateConfig(Map<String, dynamic> config) {
       issues.add(DanglingOutboundRef('rules[$ruleIdx]', outRef));
     }
     ruleIdx++;
+  }
+
+  // §219 — `route.final` → существующий outbound-tag. Симметрично проверке
+  // `route.rules[].outbound` выше и `dns.final` ниже. build_config деградирует
+  // dangling route_final до vpn-1, но validator обязан ловить его независимо от
+  // порядка post-steps (напр. при ручном редактировании JSON): битый route.final
+  // роняет старт ядра.
+  final routeFinal = config['route']?['final'];
+  if (routeFinal is String &&
+      routeFinal.isNotEmpty &&
+      !allTags.contains(routeFinal)) {
+    issues.add(DanglingOutboundRef('route.final', routeFinal));
   }
 
   // §084 H1 — detour references (outbounds + endpoints) → existing tag.
