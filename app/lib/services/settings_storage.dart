@@ -89,6 +89,7 @@ class SettingsStorage {
     'log_level',
     'resolve_strategy',
     'tun_address',
+    'tun_address6',
     'tun_auto_route',
     'tun_mtu',
     'tun_name',
