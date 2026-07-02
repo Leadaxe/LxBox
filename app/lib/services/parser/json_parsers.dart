@@ -421,6 +421,37 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         mtu: awg != null ? awgClampMtu(rawMtu, wgTag) : rawMtu,
         awg: awg,
       );
+    case 'masque':
+      // §130 — обратная операция к emitMasque (round-trip JSON-редактор /
+      // Smart-Paste). ip/ipv6 → localAddresses; keep_alive_period → keepAlive.
+      if (server.isEmpty || port == 0) return null;
+      final priv = entry['private_key']?.toString() ?? '';
+      final pub = entry['public_key']?.toString() ?? '';
+      if (priv.isEmpty || pub.isEmpty) return null;
+      final ip = entry['ip']?.toString() ?? '';
+      final ipv6 = entry['ipv6']?.toString() ?? '';
+      final addrs = <String>[
+        if (ip.isNotEmpty) ensureCidr(ip),
+        if (ipv6.isNotEmpty) ensureCidr(ipv6),
+      ];
+      if (addrs.isEmpty) return null;
+      return MasqueSpec(
+        id: newUuidV4(),
+        tag: tag.isEmpty ? 'masque-$server-$port' : tag,
+        label: label,
+        server: server,
+        port: port,
+        rawUri: '',
+        privateKeyDer: priv,
+        publicKeyDer: pub,
+        localAddresses: addrs,
+        profile: entry['profile']?.toString() ?? 'cloudflare',
+        network: entry['network']?.toString() ?? 'h3',
+        sni: entry['sni']?.toString() ?? '',
+        mtu: (entry['mtu'] as num?)?.toInt(),
+        idleTimeout: entry['idle_timeout']?.toString() ?? '',
+        keepAlive: entry['keep_alive_period']?.toString() ?? '',
+      );
     default:
       return null;
   }

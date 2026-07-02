@@ -3,7 +3,7 @@
 L×Box parses proxy URIs from subscriptions and converts them into [sing-box](https://sing-box.sagernet.org/) outbound (or endpoint) JSON. This document describes every supported protocol, its URI format, parsed parameters, and the resulting sing-box configuration.
 
 **Source code (Parser v2, spec 026):**
-- [`app/lib/services/parser/uri_parsers.dart`](../app/lib/services/parser/uri_parsers.dart) — URI-форматы всех 9 протоколов
+- [`app/lib/services/parser/uri_parsers.dart`](../app/lib/services/parser/uri_parsers.dart) — URI-форматы всех 10 протоколов
 - [`app/lib/services/parser/transport.dart`](../app/lib/services/parser/transport.dart) — парсинг `TransportSpec`, нативный XHTTP (§097, полный набор параметров §127)
 - [`app/lib/services/parser/json_parsers.dart`](../app/lib/services/parser/json_parsers.dart) — `parseSingboxEntry`, `parseXrayOutbound`
 - [`app/lib/services/parser/ini_parser.dart`](../app/lib/services/parser/ini_parser.dart) — WireGuard INI
@@ -28,9 +28,10 @@ L×Box parses proxy URIs from subscriptions and converts them into [sing-box](ht
 11. [WireGuard INI Config](#9-wireguard-ini-config)
 12. [Amnezia vpn:// Link](#92-amnezia-vpn-link)
 13. [TUIC v5](#95-tuic-v5)
-14. [JSON Outbound (raw sing-box)](#10-json-outbound)
-15. [Xray JSON Array](#11-xray-json-array)
-16. [XHTTP transport](#xhttp-transport)
+14. [MASQUE (Cloudflare WARP)](#96-masque-cloudflare-warp)
+15. [JSON Outbound (raw sing-box)](#10-json-outbound)
+16. [Xray JSON Array](#11-xray-json-array)
+17. [XHTTP transport](#xhttp-transport)
 
 ---
 
@@ -944,6 +945,81 @@ tuic://<UUID>:<PASSWORD>@<host>:<port>?<params>#<label>
 ### Reference
 
 - sing-box outbound: https://sing-box.sagernet.org/configuration/outbound/tuic/
+
+---
+
+## 9.6 MASQUE (Cloudflare WARP)
+
+Транспорт WARP по **RFC 9484 (CONNECT-IP over MASQUE)** — IP-туннель поверх
+QUIC/HTTP-3, с fallback на HTTP/2. Добавлен в **v2.9.0** (§130; ядро sing-box-lx
+SPEC 021, `type: masque` через `outbound.Register`). Даёт другой пул выходных нод
+Cloudflare (часто иностранные IP) и для DPI выглядит как обычный HTTPS/QUIC к
+Cloudflare на 443.
+
+MASQUE-узлы создаются через **Get WARP**-визард (ECDSA P-256 регистрируется
+на устройстве, `_addMasqueNode` → `account.toMasqueUri()` → `parseMasqueUri`),
+но имеют полноценный round-trip через `masque://` URI — парсятся из paste/подписки
+так же, как остальные протоколы.
+
+> **Импорт чужих Clash-YAML MASQUE-конфигов не поддерживается** — Clash YAML в
+> L×Box не парсится (для любых протоколов). MASQUE поднимается только своей
+> регистрацией или из `masque://` URI.
+
+### URI Format
+
+```
+masque://<privKeyDer>@<host>:<port>?publickey=<serverPubDer>&address=<v4,v6>&profile=cloudflare&network=h3[&sni=...][&mtu=1280][&idle_timeout=5m][&keep_alive=30s]#<label>
+```
+
+Ключи — base64(DER) ECDSA P-256: `userInfo` (до `@`) = наш приватник (SEC1),
+`publickey` = серверный pubkey (PKIX, для pinning). Сырой `/` в base64
+экранируется (§106). Порт по умолчанию — `443`.
+
+### Parsed Parameters
+
+| Ключ | Значение |
+|------|----------|
+| userInfo / `privatekey` / `private_key` | base64(SEC1 DER) приватника (**секрет**), обязателен |
+| `publickey` / `public_key` | base64(PKIX DER) серверного pubkey, обязателен |
+| `address` | CSV локальных адресов туннеля (`v4,v6`), обязателен; авто-CIDR (`/32`//`128`) |
+| `profile` | `cloudflare` (default) \| `standard` |
+| `network` | `h3` — QUIC (default) \| `h2` — HTTP/2 |
+| `sni` | TLS SNI; пусто = дефолт ядра (`consumer-masque.cloudflareclient.com`) |
+| `mtu` | int, default `1280` |
+| `idle_timeout` | Go-duration idle-suspend туннеля (пусто = дефолт ядра `5m`; отрицательное = выкл, §128) |
+| `keep_alive` | Go-duration QUIC keepalive (пусто = `30s`; только `network=h3`) |
+
+### sing-box Outbound Mapping
+
+Эмитится как **Outbound** (не Endpoint, в отличие от WireGuard). `ip`/`ipv6`
+разбираются из `address` по признаку `:` (v6). `sni`/`mtu`/`idle_timeout`/
+`keep_alive_period` пишутся только при непустых значениях.
+
+```json
+{
+  "type": "masque",
+  "tag": "<tag>",
+  "server": "<host>",
+  "server_port": 443,
+  "profile": "cloudflare",
+  "network": "h3",
+  "private_key": "<privKeyDer>",
+  "public_key": "<serverPubDer>",
+  "ip": "172.16.0.2/32",
+  "ipv6": "2606:4700:110:...::/128",
+  "sni": "consumer-masque.cloudflareclient.com",
+  "mtu": 1280,
+  "idle_timeout": "5m",
+  "keep_alive_period": "30s"
+}
+```
+
+### Reference
+
+- RFC 9484 (CONNECT-IP over MASQUE)
+- §130 spec: [docs/spec/features/130 masque-warp-transport/spec.md](spec/features/130%20masque-warp-transport/spec.md)
+- Ядро sing-box-lx SPEC 021 (`type: masque`)
+- [WARP integration (§025)](spec/features/025%20warp%20integration/spec.md)
 
 ---
 

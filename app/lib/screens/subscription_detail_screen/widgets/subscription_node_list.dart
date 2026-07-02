@@ -166,6 +166,7 @@ class SubscriptionNodeList extends StatelessWidget {
       'ss' => Icons.lock_outline,
       'hysteria2' || 'hy2' => Icons.speed,
       'wireguard' => Icons.lan_outlined,
+      'masque' => Icons.cloud_outlined, // §130 — WARP-транспорт
       _ => Icons.public,
     };
     return Icon(icon, size: 20);
