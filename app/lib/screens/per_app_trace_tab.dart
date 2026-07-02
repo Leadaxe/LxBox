@@ -56,8 +56,9 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
   void initState() {
     super.initState();
     TrafficProfiler.I.addListener(_onProfilerChanged);
-    // Runtime fetcher уже забинден в HomeScreen.initState — не дублируем
-    // (closure там читает свежий clashClient на каждом poll'е).
+    // §219 — профайлер питается push-стримом CcChannel.connections (§168/§176),
+    // подключённым в HomeScreen; здесь только слушаем его агрегат. Поллинга нет
+    // (старый Runtime fetcher / clashClient удалены в §122).
     _onProfilerChanged();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && TrafficProfiler.I.isRecording) setState(() {});
