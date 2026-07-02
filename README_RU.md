@@ -86,8 +86,8 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 
 Блокировка рекламы, прямая маршрутизация для .ru доменов, BitTorrent через прокси, per-app, матчинг приватных IP. Все пользовательские правила — единый `CustomRule` со всеми match-полями параллельно (OR внутри категории, AND между — per sing-box default rule formula).
 
-- **3 вкладки**: Channels (proxy groups) · Presets (read-only каталог → Copy to Rules) · Rules (твой реестр)
-- **Match-поля**: domain, domain_suffix, domain_keyword, ip_cidr, port, port_range, packages (per-app), protocols (tls/quic/bittorrent/…), ip_is_private, remote .srs rule-set
+- **4 вкладки**: Channels (proxy groups) · Presets (read-only каталог → Copy to Rules) · Rules (твой реестр) · Tunnel apps (split-tunneling на уровне ОС)
+- **Match-поля**: domain, domain_suffix, domain_keyword, ip_cidr, port, port_range, packages (per-app), protocols (tls/quic/bittorrent/…), ip_is_private, **wifi_ssid / wifi_bssid** (v1.7.3), remote .srs rule-set
 - **SRS только локально** — никаких авто-обновлений, ручное скачивание через ☁, правило заблокировано пока нет кэша
 - **Drag-reorder** + **long-press → Delete с подтверждением**
 - **Params / View табы** в редакторе — View показывает готовый sing-box-фрагмент конфига
@@ -228,6 +228,7 @@ Multi-hop цепочки: трафик идёт через промежуточ�
 - **App info (OEM power settings)** с hint-диалогом для Autostart / Background activity (v1.4.0)
 - **Auto-ping after connect** — пинг активной группы через 5s после подключения VPN (по умолчанию ON, v1.4.0)
 - **First-run wizard** (§126, v2.8.0) — последовательный онбординг (уведомления → battery optimization → плитка Quick Settings)
+- **System** — тумблеры Android-стороны `VpnService.Builder`: `Allow VPN bypass` (приложения через `ConnectivityManager` могут обойти tun), `Keep VPN on exit` (туннель переживает закрытие приложения), `Tunnel sleep mode` (`never` / `lazy` только в Doze / `always` при выключенном экране — компромисс батарея↔надёжность).
 - **Suspend idle tunnels** (`route_idle_suspend`, по умолчанию `30s` с v2.8.2; пусто = off) — усыпляет недостижимые WireGuard/AmneziaWG-туннели, простаивавшие без трафика, освобождая память и экономя батарею (A/B на устройстве дал крупное снижение RAM). Затрагивает только туннели не на активном маршруте; просыпаются мгновенно при следующем дозвоне.
 - **Interrupt connections on switch** (§143) — при смене узла канала сбрасывает активные соединения этой группы, чтобы трафик сразу перешёл на новый узел (по умолчанию off; есть и в редакторе канала)
 - Haptic feedback toggle
