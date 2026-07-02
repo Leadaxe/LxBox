@@ -275,6 +275,8 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
         ],
         bottom: TabBar(
           controller: _tab,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           tabs: const [
             Tab(text: 'SOCKS5'),
             Tab(text: 'HTTP'),
