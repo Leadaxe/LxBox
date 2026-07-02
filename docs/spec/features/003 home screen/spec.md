@@ -6,6 +6,13 @@
 | MVP | [`../../tasks/056-mvp-scope-historical/spec.md`](../../tasks/056-mvp-scope-historical/spec.md) |
 | Стек / bridge | [`../../tasks/055-mobile-stack-decision/spec.md`](../../tasks/055-mobile-stack-decision/spec.md) |
 
+> **§122/§219 — актуализация транспорта.** Допущения ниже про `experimental.clash_api`
+> и «HTTP API в стиле Clash» **устарели**: Clash API полностью выпилен в §122 (ядро
+> собрано без `with_clash_api`; блок `experimental.clash_api` в конфиге даёт fatal
+> старта на 1.14). Группы/узлы/статус/трафик идут через **libbox CommandClient**
+> push-стримы (`CcChannel`/`home_controller`), переключение ноды — `selectOutbound`.
+> Упоминания Clash API / `_clash` / `_rebuildClashEndpoint` ниже — исторические.
+
 ## 1. Допущения
 
 - Блок **`experimental.clash_api`** в конфиге **предполагается всегда** присутствующим и пригодным; отдельные экраны «включите API в конфиге» **не делаем**.

@@ -6,6 +6,53 @@
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **§219 — глубокий аудит: исправлены баги логики.** `route.final` на auto-двойник
+  канала с пустым node-set давал висячую ссылку (fatal старта sing-box) — билдер
+  теперь строит `validFinals` из фактически эмитированных outbound'ов, а validator
+  симметрично проверяет `route.final`. WireGuard из JSON-парсера не заполнял
+  `reserved` (WARP-трафик не шёл) и давал иной дефолт MTU, чем URI-парсер —
+  унифицировано. Две утечки `http.Client` (подписки, community-loader). `expire=0`
+  подписки трактовался как timestamp эпохи 1970 вместо «нет срока». Профайлер терял
+  `outboundType` (§204) при resolve/backfill. Гонки use-after-dispose в
+  `home_controller`. Экран деталей подписки удалял/переименовывал НЕ ту подписку
+  после drag-reorder (`widget.index` устарел). Пустой SSID в ручном добавлении
+  Wi-Fi молча ничего не делал.
+- **§130/§219 — `masque_account` терялся при restore бэкапа** (не был в
+  allowlist top-level ключей → default-deny его отбрасывал).
+- **§219 — CI:** `run_mode=release` требует HEAD на теге (иначе мусорная версия);
+  убран `eval` из точечного прогона тестов.
+
+### Changed
+
+- **§219 — правило «UI-строки только английские»:** русский текст в user-facing
+  выводе 6 shell-скриптов → английский.
+- **§219 — производительность:** устранены повторные RegExp-компиляции (фильтры
+  каналов, sanitize UA, MASQUE-ключи, разбор комментов подписки) и повторные
+  пересчёты в `build()` (overview/routing/DNS-экраны); DNS-ответы профайлера — за
+  один проход.
+- **§130 — дефолтные эмодзи** для MASQUE-нод (🎭) и WARP (🔥🎭); палитра эмодзи-пикера.
+
+### Removed
+
+- **§219 — мёртвый код:** неиспользуемая зависимость `crypto`; write-only поле
+  `VmessSpec.packetEncoding`; неиспользуемый `getDnsRules()`; фикстуры старого
+  Clash API (69 КБ) и `widget_test.dart`-заглушка; видимый юзеру чип «Clash API»
+  → «CommandClient».
+
+### Docs
+
+- **§219 — синхронизация с кодом:** Debug API (`help.dart` JSON + reference.md:
+  удалён несуществующий `/settings/excluded_nodes`, добавлены реальные эндпоинты);
+  ARCHITECTURE.md (services/native дерево, 5 CC-стримов); устаревшие ссылки на
+  Clash API/ClashApiClient в комментариях; неточные докстринги профайлера/билдера.
+- **§219 — отчёт аудита:** [`docs/spec/tasks/219-deep-audit-2026-07.md`](docs/spec/tasks/219-deep-audit-2026-07.md).
+
+---
+
 ## [2.9.0] — 2026-07-02
 
 **MASQUE-транспорт для WARP** — флагман релиза. Cloudflare WARP теперь можно
