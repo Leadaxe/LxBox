@@ -83,6 +83,12 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
         // SNI при открытии — конкретный случайный домен (не «Random»); юзер
         // может выбрать другой/вписать свой или рерольнуть кубиком.
         if (_sni.text.trim().isEmpty) _sni.text = p.randomSni();
+        // §130 — MASQUE SNI тоже предзаполняем рандомом из masque-пула (не
+        // оставляем дефолт ядра): маскировка под конкретный легит-домен из
+        // старта, юзер может сменить/очистить/рерольнуть.
+        if (_masqueSni.text.trim().isEmpty) {
+          _masqueSni.text = p.randomMasqueSni();
+        }
       });
       // Если юзер успел включить обфускацию до загрузки picker — заполняем.
       if (_obfuscate && _endpointReplaceable) _fillRandomEndpoint();
