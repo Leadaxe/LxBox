@@ -107,7 +107,8 @@ wizard_template.json
 │   │       ├─ type                "tun"
 │   │       ├─ tag                 "tun-in"
 │   │       ├─ interface_name      "@tun_name"
-│   │       ├─ address             "@tun_address"
+│   │       ├─ address             ["@tun_address", "@tun_address6"]   §227 — v4+v6
+│   │       ├─ route_address       ["0.0.0.0/1","128.0.0.0/1","::/1","8000::/1"]  §227 — заворот всего v4+v6
 │   │       ├─ mtu                 "@tun_mtu"
 │   │       ├─ auto_route          "@tun_auto_route"
 │   │       ├─ strict_route        "@tun_strict_route"
