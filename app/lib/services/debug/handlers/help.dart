@@ -358,6 +358,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/config/path', 'description': 'On-device file path'},
     // Logs
     {'method': 'GET', 'path': '/logs', 'params': {'limit': 'N (default 200)', 'source': 'app|core', 'q': 'substring search', 'level': 'comma-separated: error,warn,info,debug'}, 'description': 'AppLog entries'},
+    {'method': 'GET', 'path': '/logs/app', 'description': 'Alias for /logs?source=app (same params)'},
+    {'method': 'GET', 'path': '/logs/core', 'description': 'Alias for /logs?source=core (same params)'},
     {'method': 'POST', 'path': '/logs/clear', 'description': 'Clear AppLog'},
     // Actions
     {'method': 'POST', 'path': '/action/start-vpn', 'description': 'Start tunnel (via Activity, may show consent)'},
@@ -441,6 +443,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'DELETE', 'path': '/settings/vars/{key}', 'description': 'Delete var'},
     {'method': 'PUT', 'path': '/settings/dns_options/servers', 'body': '{"servers":[...]}', 'description': 'Set DNS servers list'},
     {'method': 'PUT', 'path': '/settings/dns_options/rules', 'body': '{"rules":"<json-string>"}', 'description': 'Set DNS rules (legacy json-string shape)'},
+    {'method': 'GET', 'path': '/settings/core_logs_enabled', 'description': 'Whether sing-box logs are forwarded into /logs/core'},
+    {'method': 'PUT', 'path': '/settings/core_logs_enabled', 'body': '{"enabled":true|false}', 'description': 'Toggle core-log forwarding (default false)'},
     {'method': 'PUT', 'path': '/settings/config_locked', 'body': '{"locked":true|false}', 'description': 'Toggle auto-rebuild lock — true pins config from UI rebuilds'},
     {'method': 'GET', 'path': '/settings/vpn/allow_bypass', 'description': 'VpnService.Builder.allowBypass() state'},
     {'method': 'PUT', 'path': '/settings/vpn/allow_bypass', 'body': '{"enabled":true|false}', 'description': 'Toggle allowBypass — apply on next establish()'},

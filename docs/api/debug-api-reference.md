@@ -228,7 +228,7 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 | `POST /action/download-srs` | `ruleId=<id>` | скачать .srs для custom rule |
 | `POST /action/clear-srs` | `ruleId=<id>` | удалить cached .srs |
 | `POST /action/toast` | `msg=<str>&duration=short\|long` | Toast на устройстве (до 200 chars) |
-| `POST /action/check-updates` | — | force update check |
+| `POST /action/check-updates` | — | force update check (обход 24h cap + `auto_check_updates`). → `{ok, action, kind, tag, name, html_url, published_at, dismissed, local_version, message}` (поля tag..dismissed — только при `kind=update-available`; зеркалит UI «Check now»). Primary `api.github.com` → fallback `raw.githubusercontent.com/.../docs/latest.json`. |
 | `POST /action/preview-empty-state` | `on=true\|false` | UI-only override: HomeScreen рендерит empty-state как при чистой инсталляции, реальные данные не трогаются. Полезно для скриншотов / regression UX. |
 
 ```bash
@@ -461,7 +461,6 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | Endpoint | Метод | Body |
 |---|---|---|
 | `/settings/route_final` | PUT | `{"outbound":"<tag>"}` (пустая строка = дефолт) |
-| `/settings/excluded_nodes` | PUT | `{"nodes":["tag1","tag2"]}` (replace set) |
 | `/settings/interrupt_on_switch` | GET | →`{"ok":true,"enabled":bool}` — §163 тугл «рвать активные соединения при switchNode». **НЕ** config-significant. |
 | `/settings/interrupt_on_switch` | PUT | `{"enabled": true\|false}`. → `{ok, action:"settings-interrupt-on-switch", enabled}`. |
 | `/settings/node_sort` | GET | →`{"ok":true,"mode":"<str>","order":["tag",...]}` — режим сортировки списка нод + ручной порядок. |
@@ -473,7 +472,7 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | `/settings/vars/{key}` | PUT | `{"value":"<str>"}` |
 | `/settings/vars/{key}` | DELETE | — (удаляет ключ; не пишет пустую строку) |
 | `/settings/dns_options/servers` | PUT | §043 + §044: kind-refs `[{enabled, kind: 'inline'\|'preset'\|'template', tag, description?, body?}]`. Для `kind: inline` обязателен `body` (partial sing-box shape **без** `tag`/`description`/`enabled` — они на ref-level). Legacy full-body snapshot и §043 inline (с tag/description в body) тоже принимаются — auto-migrate на ближайший resolver. |
-| `/settings/dns_options/rules` | PUT | `{"rules":"<JSON string>"}` (legacy shape — stored как JSON-string) |
+| `/settings/dns_options/rules` | PUT | `{"rules":"<JSON string>"}` (**legacy, §061**: пишет `dns_options.rules_json`, который билдер игнорирует → фактически no-op; используй `dns_options/servers` + custom-rules) |
 | `/settings/config_locked` | PUT | `{"locked": true\|false}` — §037 toggle auto-rebuild lock. true → `generateConfig` возвращает null silently, custom config через `PUT /config` не перетирается UI. |
 | `/settings/core_logs_enabled` | GET | →`{"enabled": bool}` — §043 текущее состояние forwarding'а sing-box логов в `/logs/core`. |
 | `/settings/core_logs_enabled` | PUT | `{"enabled": true\|false}` — §043 включить/выключить forward. **Требует полного рестарта процесса** (`am force-stop` + relaunch, либо UI Quit & reopen) — `Libbox.setup` one-shot per process, stop/start VPN **не** перечитывает флаг. Default false. Storage в SharedPreferences (`boxvpn_boot.core_logs_enabled`), не в `lxbox_settings.json`. |
@@ -497,13 +496,6 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
   -d '{"outbound":"direct-out"}' \
   "$BASE/settings/route_final?rebuild=true"
-```
-
-**Исключить ноды из URLTest:**
-```bash
-curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
-  -d '{"nodes":["BL: 🇲🇩 Moldova, Chisinau | [BL]","BL: 🇵🇱 Poland, Warsaw | [BL]"]}' \
-  "$BASE/settings/excluded_nodes?rebuild=true"
 ```
 
 **Custom vars** (template interpolation):
@@ -728,7 +720,7 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 |---|---|
 | `GET /diag/dump` | Полный JSON-pack от `DumpBuilder.build()` (то же что UI ⤴ Share) |
 | `GET /diag/exit-info` | `ApplicationExitInfo` (5 последних экзитов; API 30+, иначе `[]`) |
-| `GET /diag/logcat?count=N&level=L` | Logcat tail нашего процесса (N=50..5000, level=V/D/I/W/E/F) |
+| `GET /diag/logcat?count=N&level=L` | Logcat tail нашего процесса (N=50..5000, level=V/D/I/W/E/F, default E) |
 | `GET /diag/stderr` | Содержимое `filesDir/stderr.log` (Go panic stacktrace) |
 | `GET /diag/applog?prev=true\|false\|all` | AppLog entries с фильтром по `fromPreviousSession` |
 | `GET /diag/pprof?profile=P&query=Q` | §207 — pprof-снапшот через libbox PProfServer (туннель должен быть up). `P` = `goroutine\|profile\|heap\|allocs\|block\|mutex\|threadcreate` (default `goroutine`); `query` — сырой pprof-query без `?` (напр. `gc=1`/`debug=2`/`seconds=10`), дефолт зависит от профиля (`goroutine→debug=2`, `profile→seconds=10`, `heap→gc=1`). `goroutine?debug=*` отдаёт `text/plain`, остальное — `.pb` для `go tool pprof`. |
@@ -886,7 +878,7 @@ curl -X POST -H "$HDR" "$BASE/action/start-vpn"
 
 ```bash
 curl -X PUT  -H "$HDR" -H "Content-Type: application/json" -d '...' "$BASE/settings/route_final"
-curl -X PUT  -H "$HDR" -H "Content-Type: application/json" -d '...' "$BASE/settings/excluded_nodes"
+curl -X PUT  -H "$HDR" -H "Content-Type: application/json" -d '...' "$BASE/settings/dns_options/servers"
 curl -X POST -H "$HDR" -H "Content-Type: application/json" -d '...' "$BASE/rules"
 # Один rebuild вместо 3
 curl -X POST -H "$HDR" "$BASE/action/rebuild-config"
