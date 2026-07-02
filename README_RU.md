@@ -27,7 +27,7 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 
 Добавляйте серверы по URL подписки, прямой ссылке, WireGuard URI/INI, Amnezia `vpn://`-ссылке или raw sing-box JSON outbound. Умный диалог вставки определяет формат автоматически и показывает превью. Включение/отключение подписок без удаления. Офлайн-rehydrate — ноды восстанавливаются из кеша тела при старте app. Per-subscription настройки detour серверов.
 
-- **10 протоколов**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard (вкл. **AmneziaWG / AWG 2.0** — `awg://` URI, AmneziaWG `.conf`, **Amnezia `vpn://`-ссылки** (v2.0.3), JSON)
+- **11 протоколов**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard (вкл. **AmneziaWG / AWG 2.0** — `awg://` URI, AmneziaWG `.conf`, **Amnezia `vpn://`-ссылки** (v2.0.3), JSON), **MASQUE** (Cloudflare WARP — `masque://`, QUIC/HTTP-3, v2.9.0)
 - Форматы: Base64, Xray JSON Array (chained proxy), plain text, raw sing-box JSON
 - Per-subscription picker **Update interval** (1/3/6/12/24/48/72/168h), учитывает заголовок `profile-update-interval`
 - Subtitle в строке подписки: `124 nodes · 🔄 24h · 🕐 3h ago · (2 fails)`
@@ -239,6 +239,7 @@ Multi-hop цепочки: трафик идёт через промежуточ�
 | SSH         | `ssh://`                           | TCP, host key / password / private key         |
 | SOCKS       | `socks://` / `socks5://`           | TCP, auth                                      |
 | WireGuard / **AmneziaWG** | `wireguard://`, `awg://`, INI / `.conf`, **Amnezia `vpn://`** | UDP, multi-peer, **обфускация AWG 1.x/2.0** (jc/jmin/jmax, s1–s4, h1–h4 вкл. **диапазоны `N-M`**, i1–i5), авто-MTU 1280 |
+| **MASQUE** (Cloudflare WARP) | `masque://` | QUIC / HTTP-3 (RFC 9484 CONNECT-IP), fallback HTTP/2, pinning ECDSA P-256 |
 
 
 **XHTTP** — нативный транспорт с v2.0.0 (Xray splithttp: `mode` auto/packet-up/stream-up/stream-one). С **v2.8.0** парсер ссылок поддерживает **полный клиентский набор полей**: настраиваемые placement'ы session/seq/uplink (path/query/header/cookie), ключи, метод upload, **X-Padding obfs-режим** (`repeat-x`/`tokenish`) и packet-up tuning — читаются из плоских query-параметров и из параметра `extra` (URL-encoded JSON). Работает с TLS и Reality, несовместим с XTLS-Vision (ограничение протокола).

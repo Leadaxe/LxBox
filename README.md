@@ -41,21 +41,22 @@ Android VPN client powered by [sing-box-lx](https://github.com/Leadaxe/sing-box-
 
 Add servers by subscription URL, direct proxy link, WireGuard URI/INI, Amnezia `vpn://` link, or raw sing-box JSON outbound. Smart-paste dialog auto-detects format and previews the content. Enable/disable subscriptions without deleting. Offline rehydrate — nodes restored from body cache after app restart. Per-subscription settings for detour servers.
 
-- **10 protocols**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard (incl. **AmneziaWG / AWG 2.0** — `awg://` URI, AmneziaWG `.conf`, **Amnezia `vpn://` links** (v2.0.3), JSON)
+- **11 protocols**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard (incl. **AmneziaWG / AWG 2.0** — `awg://` URI, AmneziaWG `.conf`, **Amnezia `vpn://` links** (v2.0.3), JSON), **MASQUE** (Cloudflare WARP — `masque://`, QUIC/HTTP-3, v2.9.0)
 - Formats: Base64, Xray JSON Array (chained proxy), plain text, raw sing-box JSON
 - Per-subscription **Update interval** picker (1/3/6/12/24/48/72/168h), honors `profile-update-interval` header
 - Subscription row subtitle: `124 nodes · 🔄 24h · 🕐 3h ago · (2 fails)`
 - Title fallback from `Content-Disposition: filename=...` (RFC 5987)
 - Quick Start with built-in free VPN preset
-- **Get WARP** — one-tap Cloudflare WARP: registers a device on Cloudflare and adds a ready WireGuard node
+- **Get WARP** — one-tap Cloudflare WARP: registers a device on Cloudflare and adds a ready node (**WireGuard** or **MASQUE** transport)
 </details>
 
 <details>
 <summary><strong>Get WARP</strong> — one-tap Cloudflare WARP, keys generated on-device</summary>
 
-Tap **Get WARP** in the Servers overflow menu → a WireGuard tunnel to Cloudflare is registered and added as a node. No copy-pasting configs from third-party generator sites.
+Tap **Get WARP** in the Servers overflow menu → a tunnel to Cloudflare is registered and added as a node. No copy-pasting configs from third-party generator sites.
 
-- **On-device registration**: the X25519 private key is generated on the phone and never leaves it — only the public key is sent to Cloudflare (`api.cloudflareclient.com`). We don't use third-party generator workers (they hand out a server-generated private key).
+- **Transport**: **WireGuard** (default) or **MASQUE** (CONNECT-IP over QUIC/HTTP-3, HTTP/2 fallback — often exits from a foreign IP and looks like plain HTTPS to DPI). Pick it in the wizard; for MASQUE also choose h3/h2, SNI and idle/keep-alive.
+- **On-device registration**: the private key is generated on the phone and never leaves it — only the public key is sent to Cloudflare (`api.cloudflareclient.com`). WireGuard uses X25519, MASQUE uses ECDSA P-256. We don't use third-party generator workers (they hand out a server-generated private key).
 - **WARP+** (optional): paste a license key under *Advanced* to bind WARP+ (Argo Smart Routing). Empty = free WARP.
 - **Idempotent**: re-tapping reuses the cached account instead of registering a new device; *Re-register* forces a fresh one.
 - Custom endpoint under *Advanced* (use a working `IP:port` if the default is blocked).
@@ -304,6 +305,7 @@ View and edit raw sing-box JSON config. Pretty-printed display with copy button.
 | SSH | `ssh://` | TCP, host key / password / private key |
 | SOCKS | `socks://` / `socks5://` | TCP, auth |
 | WireGuard / **AmneziaWG** | `wireguard://`, `awg://`, INI / `.conf`, **Amnezia `vpn://`** | UDP, multi-peer, **AWG 1.x/2.0 obfuscation** (jc/jmin/jmax, s1–s4, h1–h4 incl. **`N-M` ranges**, i1–i5), auto-MTU 1280 |
+| **MASQUE** (Cloudflare WARP) | `masque://` | QUIC / HTTP-3 (RFC 9484 CONNECT-IP), HTTP/2 fallback, ECDSA P-256 pinning |
 
 **XHTTP** is a native transport since v2.0.0 (Xray splithttp: `mode` auto/packet-up/stream-up/stream-one). Since **v2.8.0** the link parser supports the **full client-side param set**: configurable session/seq/uplink placements (path/query/header/cookie), keys, upload method, **X-Padding obfs mode** (`repeat-x`/`tokenish`) and packet-up tuning — read both from flat query params and from the `extra` (URL-encoded JSON) parameter. Works with TLS and Reality, incompatible with XTLS-Vision (protocol limitation).
 

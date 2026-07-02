@@ -51,6 +51,47 @@ void main() {
       expect(wg.mtu, 1420);
     });
 
+    test('§130 masque round-trip: emit → parseSingboxEntry ≈ spec', () {
+      final orig = MasqueSpec(
+        id: 'x',
+        tag: '🔥🎭 WARP (MASQUE)',
+        label: 'l',
+        server: '162.159.198.2',
+        port: 443,
+        rawUri: '',
+        privateKeyDer: 'PRIVDER==',
+        publicKeyDer: 'PUBDER==',
+        localAddresses: ['172.16.0.2/32', '2606:4700:110::2/128'],
+        network: 'h2',
+        sni: '4pda.to',
+        mtu: 1280,
+        idleTimeout: '10m',
+        keepAlive: '45s',
+      );
+      // emit пишет sing-box JSON — читаем обратно через parseSingboxEntry.
+      final json = orig.emit(TemplateVars.empty).map;
+      final back = parseSingboxEntry(json.cast<String, dynamic>());
+      expect(back, isA<MasqueSpec>());
+      final m = back! as MasqueSpec;
+      expect(m.privateKeyDer, orig.privateKeyDer);
+      expect(m.publicKeyDer, orig.publicKeyDer);
+      expect(m.server, orig.server);
+      expect(m.port, orig.port);
+      expect(m.network, 'h2');
+      expect(m.sni, '4pda.to');
+      expect(m.localAddresses, containsAll(orig.localAddresses));
+      expect(m.idleTimeout, '10m');
+      expect(m.keepAlive, '45s');
+    });
+
+    test('masque без ключей → null', () {
+      expect(
+        parseSingboxEntry(
+            {'type': 'masque', 'server': 'h', 'server_port': 443}),
+        isNull,
+      );
+    });
+
     test('unknown type → null', () {
       expect(parseSingboxEntry({'type': 'bogus'}), isNull);
     });

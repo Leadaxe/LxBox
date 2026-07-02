@@ -358,8 +358,8 @@ consts.dart                  # kAutoOutboundTag (✨auto), kDetourTagPrefix (⚙
 #### `models/` — типизированные данные (sealed-иерархии, без I/O)
 
 ```
-node_spec.dart               # sealed NodeSpec (10 вариантов: Vless/Vmess/Trojan/Shadowsocks/
-                             #   Hysteria2/Naive/Tuic/Ssh/Socks + Wireguard); getEntries detour-chain;
+node_spec.dart               # sealed NodeSpec (11 вариантов: Vless/Vmess/Trojan/Shadowsocks/
+                             #   Hysteria2/Naive/Tuic/Ssh/Socks + Wireguard + Masque §130); getEntries detour-chain;
                              #   Awg value-object (§097): AWG/AWG2-поля WireguardSpec (jc/jmin/jmax/
                              #   s1–s4/h1–h4/i1–i5), round-trip parse/emit; null = обычный WG
 node_spec_emit.dart          # emit()/toUri() impl на вариант (NodeSpec → SingboxEntry); parity-tested
@@ -457,7 +457,7 @@ parser/                      # Parser v2 (text → NodeSpec)
   amnezia_link.dart          #   Amnezia vpn:// → WG/AWG INI-тексты (base64url+qCompress, §110)
   parse_all.dart             #   Layer-2: exhaustive switch DecodedBody → List<NodeSpec> (per-line null-skip)
   uri_parsers.dart           #   barrel + parseUri scheme-dispatcher
-  uri_parsers/<proto>.dart   #   per-protocol URI→NodeSpec (vless/vmess/trojan/ss/hy2/naive/tuic/ssh/socks/wg)
+  uri_parsers/<proto>.dart   #   per-protocol URI→NodeSpec (vless/vmess/trojan/ss/hy2/naive/tuic/ssh/socks/wg/masque)
   json_parsers.dart          #   parseXrayOutbound + parseSingboxEntry (round-trip)
   ini_parser.dart            #   WireGuard INI → wg:// URI → WireguardSpec
   transport.dart             #   parseTransport (query→TransportSpec) + transportToQuery
