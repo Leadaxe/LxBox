@@ -316,6 +316,20 @@ void main() {
           reason: 'неизвестный var отбрасывается allowlist\'ом');
     });
 
+    test('§219 — warp_account/masque_account переживают restore', () async {
+      final dropped = await SettingsStorage.replaceRaw({
+        'warp_account': {'private_key': 'wp'},
+        'masque_account': {'priv_key_der': 'mp', 'endpoint': 'e'},
+      });
+      // Ни один не должен попасть в dropped (оба в allowlist).
+      expect(dropped, isNot(contains('warp_account')));
+      expect(dropped, isNot(contains('masque_account')));
+      final raw = await SettingsStorage.exportRaw();
+      expect(raw.containsKey('warp_account'), isTrue);
+      expect(raw.containsKey('masque_account'), isTrue,
+          reason: 'masque_account не должен теряться при restore (§130)');
+    });
+
     test('merge=true тоже фильтрует чужие ключи', () async {
       await seedStorage({
         'vars': {'log_level': 'warn'},

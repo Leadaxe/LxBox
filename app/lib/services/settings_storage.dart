@@ -122,6 +122,8 @@ class SettingsStorage {
     'tun_apps',
     'vpn_mode',
     'warp_account',
+    'masque_account', // §130/§219 — MASQUE-WARP аккаунт; был в бэкапе, но не в
+    //                   allowlist → терялся при restore (default-deny)
     'last_global_update',
     'presets_migrated', // §159 — переиспользуется как «дефолты засеяны» (seed guard)
     'interrupt_connections_on_switch',
