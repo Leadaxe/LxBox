@@ -135,21 +135,23 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               interval: _autoIntervalCtrl.text.trim().isEmpty
                   ? '5m'
                   : _autoIntervalCtrl.text.trim(),
-              tolerance: int.tryParse(_autoToleranceCtrl.text.trim()) ?? 50,
+              // §219/§221 — tolerance/pool/poolTolerance клэмпим ЗДЕСЬ (как в
+              // ChannelAuto.toJson/copyWith): прямой конструктор не клэмпит,
+              // иначе снапшот в памяти (для _isDirty) расходился бы с тем, что
+              // реально персистится (uint16 [0,65535], pool≥1).
+              tolerance: clampChannelTolerance(
+                  int.tryParse(_autoToleranceCtrl.text.trim()) ?? 50),
               idleTimeout: _autoIdleCtrl.text.trim().isEmpty
                   ? '30m'
                   : _autoIdleCtrl.text.trim(),
               interruptExistConnections: _autoInterrupt,
               // §208 — balancer (значимы только при round_robin, но храним всегда
               // — переключение режима не теряет настройки пула).
-              // §219 — pool клэмпим ЗДЕСЬ (pool<1 → 1), как в ChannelAuto.toJson/
-              // copyWith: прямой конструктор не клэмпит, иначе снапшот в памяти
-              // (для _isDirty) расходился бы с тем, что реально персистится.
               mode: _autoMode,
               pool: clampChannelPool(
                   int.tryParse(_autoPoolCtrl.text.trim()) ?? 3),
-              poolTolerance:
-                  int.tryParse(_autoPoolToleranceCtrl.text.trim()) ?? 0,
+              poolTolerance: clampChannelTolerance(
+                  int.tryParse(_autoPoolToleranceCtrl.text.trim()) ?? 0),
               // Set→List в фиксированном порядке enum (детерминизм diff/JSON).
               stickyHash: StickyHashKey.values
                   .where(_autoSticky.contains)

@@ -208,6 +208,12 @@ class HomeController extends ChangeNotifier
 
   @override
   void _emit(HomeState next) {
+    // §221 — единый гейт use-after-dispose: любой _emit после dispose
+    // (async-колбэк из start/stop/reconnect/switchNode/pullToRefresh, вернувшийся
+    // за await) молча no-op вместо `notifyListeners after dispose`. Радикально
+    // закрывает весь класс разом; точечные `if (_disposed) return` после await
+    // (§219) остаются как ранний выход, но больше не единственная защита.
+    if (_disposed) return;
     _state = next;
     notifyListeners();
   }

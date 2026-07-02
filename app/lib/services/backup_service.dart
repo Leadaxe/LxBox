@@ -23,7 +23,14 @@ enum BackupCategory {
 const _topLevelRoutingKeys = {
   'custom_rules',
   'route_final',
-  'enabled_groups',
+  // §219/§221 — channels + guard миграции. КРИТИЧНО: без них backup/restore на
+  // новом устройстве терял всю модель роутинг-каналов §125 (channels в allowlist
+  // restore, но забыт в export — асимметрия). channels_migrated нужен, чтобы
+  // one-shot миграция не пере-сработала поверх восстановленных каналов.
+  'channels',
+  'channels_migrated',
+  'route_idle_suspend', // §215 — idle-suspend threshold (route.lx_idle_suspend)
+  'enabled_groups', // §125 — DEPRECATED (legacy, читается только миграцией)
   'tun_apps',
   'vpn_mode',
   'excluded_nodes',
@@ -41,6 +48,7 @@ const _topLevelAppKeys = {
   'interrupt_connections_on_switch',
   'node_sort_mode',
   'node_manual_order',
+  'profiler_retention_sec', // §219/§221 — окно Live-журнала (был в allowlist, не в export)
 };
 
 /// Sub-keys внутри `vars` относящиеся к Debug API category.

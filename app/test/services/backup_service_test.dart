@@ -69,6 +69,12 @@ void main() {
           },
         ],
         'route_final': 'vpn-1',
+        // §221 — channels (живая модель роутинга §125) + guard миграции.
+        'channels': [
+          {'tag': 'vpn-1', 'label': 'Main', 'enabled': true},
+          {'tag': 'vpn-2', 'label': 'Backup', 'enabled': true},
+        ],
+        'channels_migrated': true,
         'enabled_groups': ['group-a'],
         'dns_options': {
           'servers': [
@@ -187,6 +193,65 @@ void main() {
       expect(st.containsKey('dns_options'), isTrue);
       expect(st.containsKey('server_lists'), isFalse);
       expect(st.containsKey('vars'), isFalse);
+    });
+
+    test('§221 — channels + channels_migrated экспортируются в routing', () async {
+      await seedStorage(sampleSnapshot());
+      final svc = const BackupService();
+      final json = await svc.buildExport(include: {BackupCategory.routing});
+      final st = (jsonDecode(json) as Map<String, dynamic>)['storage']
+          as Map<String, dynamic>;
+      // Регрессия: channels был в allowlist restore, но НЕ в export →
+      // вся модель роутинг-каналов §125 терялась при backup на новом устройстве.
+      expect(st.containsKey('channels'), isTrue,
+          reason: 'channels обязаны попадать в backup (§125 модель роутинга)');
+      expect((st['channels'] as List), hasLength(2));
+      expect(st.containsKey('channels_migrated'), isTrue,
+          reason: 'guard миграции — иначе миграция пере-сработает поверх restore');
+    });
+
+    // §221 — инвариант против будущих забытых ключей: КАЖДЫЙ top-level ключ из
+    // allowedTopLevelKeys (restore принимает) должен экспортироваться при
+    // include={all} (иначе data-loss при backup, как было с channels).
+    test('§221 — allowlist ⊆ export (все категории)', () async {
+      // Снапшот с непустым значением для каждого allowlist-ключа.
+      final snap = <String, dynamic>{};
+      for (final k in SettingsStorage.allowedTopLevelKeys) {
+        snap[k] = switch (k) {
+          'vars' => {'log_level': 'info'},
+          'server_lists' => [
+              {'id': 's', 'type': 'subscription', 'name': 'n', 'url': 'http://x'}
+            ],
+          'dns_options' || 'tun_apps' || 'vpn_mode' || 'ping_options' ||
+          'warp_account' || 'masque_account' =>
+            {'_probe': 1},
+          'channels' || 'custom_rules' || 'node_manual_order' ||
+          'enabled_groups' || 'excluded_nodes' =>
+            ['_probe'],
+          'channels_migrated' || 'presets_migrated' ||
+          'interrupt_connections_on_switch' =>
+            true,
+          _ => '_probe', // строковые: route_final, node_sort_mode, ...
+        };
+      }
+      await seedStorage(snap);
+      final svc = const BackupService();
+      final json = await svc.buildExport(include: {
+        BackupCategory.serverLists,
+        BackupCategory.routing,
+        BackupCategory.appSettings,
+        BackupCategory.debugConfig,
+        BackupCategory.vpnSettings,
+      });
+      final st = (jsonDecode(json) as Map<String, dynamic>)['storage']
+          as Map<String, dynamic>;
+      final missing = SettingsStorage.allowedTopLevelKeys
+          .where((k) => !st.containsKey(k))
+          .toList();
+      expect(missing, isEmpty,
+          reason: 'ключи в allowlist restore, но НЕ в export → потеря при '
+              'backup. Добавь в _topLevelRoutingKeys/_topLevelAppKeys '
+              '(backup_service.dart): $missing');
     });
   });
 
