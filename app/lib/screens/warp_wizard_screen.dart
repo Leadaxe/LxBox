@@ -53,6 +53,10 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
   String _transport = 'wireguard';
   String _masqueNetwork = 'h3'; // h3 (QUIC) | h2 (HTTP/2)
   final _masqueSni = TextEditingController(); // опц. SNI override
+  // §130 — тюнинг ресурсов: idle-suspend (минуты) и QUIC keepalive (секунды).
+  // Пусто → дефолт ядра (5m / 30s). Плейсхолдеры показывают дефолт.
+  final _masqueIdle = TextEditingController(); // минуты
+  final _masqueKeepAlive = TextEditingController(); // секунды
 
   bool get _isMasque => _transport == 'masque';
 
@@ -136,6 +140,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     _endpoint.dispose();
     _sni.dispose();
     _masqueSni.dispose();
+    _masqueIdle.dispose();
+    _masqueKeepAlive.dispose();
     _jc.dispose();
     _jmin.dispose();
     _jmax.dispose();
@@ -200,6 +206,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     final account = await widget.subController.addMasque(
       network: _masqueNetwork,
       sni: sni.isEmpty ? null : sni,
+      idleTimeout: _durationOrNull(_masqueIdle.text, 'm'),
+      keepAlive: _durationOrNull(_masqueKeepAlive.text, 's'),
       forceNew: _forceNew,
     );
     if (!mounted) return;
@@ -212,6 +220,14 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     if (!mounted) return;
     _showSnack('Added MASQUE node');
     Navigator.of(context).pop();
+  }
+
+  /// §130 — число из поля + единица → Go-duration (`"5m"`, `"30s"`). Пусто/ноль
+  /// → null (ядро возьмёт свой дефолт). Только положительные целые.
+  String? _durationOrNull(String raw, String unit) {
+    final n = int.tryParse(raw.trim());
+    if (n == null || n <= 0) return null;
+    return '$n$unit';
   }
 
   void _showSnack(String msg) {
@@ -348,6 +364,50 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                         enabled: !_busy,
                         decoration:
                             _input('Leave empty for the default SNI'),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _masqueIdle,
+                              enabled: !_busy,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly
+                              ],
+                              decoration: _input('5').copyWith(
+                                labelText: 'Idle timeout (min)',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _masqueKeepAlive,
+                              // keep-alive осмыслен только для h3 (QUIC).
+                              enabled: !_busy && _masqueNetwork == 'h3',
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly
+                              ],
+                              decoration: _input('30').copyWith(
+                                labelText: 'Keep-alive (sec)',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Idle timeout suspends the tunnel after inactivity to '
+                        'save battery (default 5 min). Keep-alive pings the QUIC '
+                        'link (default 30 sec, HTTP/3 only). Leave empty for '
+                        'defaults.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
                       ),
                       const SizedBox(height: 8),
                       CheckboxListTile(

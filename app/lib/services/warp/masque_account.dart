@@ -19,6 +19,8 @@ class MasqueAccount {
     required this.createdAt,
     this.network = 'h3',
     this.sni = '',
+    this.idleTimeout = '',
+    this.keepAlive = '',
   });
 
   /// base64(SEC1 DER) нашего ECDSA-приватника. СЕКРЕТ: не логировать.
@@ -53,6 +55,12 @@ class MasqueAccount {
   /// TLS SNI override; пусто = дефолт ядра.
   final String sni;
 
+  /// idle-suspend (Go-duration, напр. `5m`); пусто = дефолт ядра.
+  final String idleTimeout;
+
+  /// QUIC keepalive (Go-duration, напр. `30s`); пусто = дефолт ядра.
+  final String keepAlive;
+
   /// Дефолтный data-plane endpoint MASQUE (QUIC).
   static const String defaultServer = '162.159.198.1';
   static const int defaultPort = 443;
@@ -61,7 +69,13 @@ class MasqueAccount {
   /// ⛈️ (AWG). Коллизия-суффикс накидывает контроллер.
   static String nodeTag() => '🔥🎭 WARP (MASQUE)';
 
-  MasqueAccount copyWith({String? network, String? sni}) => MasqueAccount(
+  MasqueAccount copyWith({
+    String? network,
+    String? sni,
+    String? idleTimeout,
+    String? keepAlive,
+  }) =>
+      MasqueAccount(
         privKeyDer: privKeyDer,
         serverPubDer: serverPubDer,
         clientV4: clientV4,
@@ -73,6 +87,8 @@ class MasqueAccount {
         createdAt: createdAt,
         network: network ?? this.network,
         sni: sni ?? this.sni,
+        idleTimeout: idleTimeout ?? this.idleTimeout,
+        keepAlive: keepAlive ?? this.keepAlive,
       );
 
   /// Собирает `masque://` URI для добавления узла через стандартный
@@ -89,6 +105,8 @@ class MasqueAccount {
       'network': network,
       'mtu': '1280',
       if (sni.isNotEmpty) 'sni': sni,
+      if (idleTimeout.isNotEmpty) 'idle_timeout': idleTimeout,
+      if (keepAlive.isNotEmpty) 'keep_alive': keepAlive,
     };
     final qs = q.entries
         .map((e) =>
@@ -109,6 +127,8 @@ class MasqueAccount {
         'created_at': createdAt,
         'network': network,
         'sni': sni,
+        'idle_timeout': idleTimeout,
+        'keep_alive': keepAlive,
       };
 
   static MasqueAccount? fromJson(Map<String, dynamic> m) {
@@ -129,6 +149,8 @@ class MasqueAccount {
       createdAt: (m['created_at'] as String?) ?? '',
       network: (m['network'] as String?) ?? 'h3',
       sni: (m['sni'] as String?) ?? '',
+      idleTimeout: (m['idle_timeout'] as String?) ?? '',
+      keepAlive: (m['keep_alive'] as String?) ?? '',
     );
   }
 

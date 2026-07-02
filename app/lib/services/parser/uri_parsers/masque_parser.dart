@@ -42,6 +42,8 @@ MasqueSpec? parseMasqueUri(String uri) {
   final network = (q['network'] ?? 'h3').trim();
   final sni = (q['sni'] ?? '').trim();
   final mtu = int.tryParse(q['mtu'] ?? '') ?? 1280;
+  final idleTimeout = (q['idle_timeout'] ?? '').trim();
+  final keepAlive = (q['keep_alive'] ?? '').trim();
 
   final label = decodeFragment(p.fragment);
   final tag = tagFromLabel(label, 'masque', p.host, port);
@@ -60,5 +62,7 @@ MasqueSpec? parseMasqueUri(String uri) {
     network: network,
     sni: sni,
     mtu: mtu,
+    idleTimeout: idleTimeout,
+    keepAlive: keepAlive,
   );
 }

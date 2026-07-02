@@ -557,6 +557,8 @@ Outbound emitMasque(MasqueSpec s, TemplateVars vars) {
     'ipv6': ?ipv6,
     if (s.sni.isNotEmpty) 'sni': s.sni,
     if (s.mtu != null) 'mtu': s.mtu,
+    if (s.idleTimeout.isNotEmpty) 'idle_timeout': s.idleTimeout,
+    if (s.keepAlive.isNotEmpty) 'keep_alive_period': s.keepAlive,
   };
   return Outbound(map);
 }
@@ -569,6 +571,8 @@ String toUriMasque(MasqueSpec s) {
     'network': s.network,
     if (s.sni.isNotEmpty) 'sni': s.sni,
     if (s.mtu != null) 'mtu': s.mtu.toString(),
+    if (s.idleTimeout.isNotEmpty) 'idle_timeout': s.idleTimeout,
+    if (s.keepAlive.isNotEmpty) 'keep_alive': s.keepAlive,
   };
   final userinfo = encodeParam(s.privateKeyDer);
   final host = _wrapIpv6(s.server);
