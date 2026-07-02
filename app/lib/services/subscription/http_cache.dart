@@ -42,8 +42,20 @@ class HttpCache {
 
   static Future<void> _writeAtomic(String path, String content) async {
     final tmp = File('$path.${_tmpSeq++}.tmp');
-    await tmp.writeAsString(content, flush: true);
-    await tmp.rename(path);
+    try {
+      // Директория могла исчезнуть между _dir() и записью (в тестах — очистка
+      // temp между кейсами; на устройстве — clear cache). recursive:true
+      // идемпотентен, не бросает если уже есть.
+      await tmp.parent.create(recursive: true);
+      await tmp.writeAsString(content, flush: true);
+      await tmp.rename(path);
+    } catch (_) {
+      // Кэш опционален (save вызывается unawaited, §101). Провал записи не
+      // должен ни ронять поток, ни всплывать как unhandled из unawaited-future.
+      try {
+        if (tmp.existsSync()) tmp.deleteSync();
+      } catch (_) {}
+    }
   }
 
   static Future<String?> loadBody(String url) async {
