@@ -36,7 +36,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
 
   // §136/§143 — masquerade-параметры (Advanced). Пустой SNI(=id) → рандом из пула.
   final _sni = TextEditingController(); // id (домен маскировки)
-  List<String> _sniPool = const []; // подсказки для DropdownMenu
+  List<String> _sniPool = const []; // подсказки для DropdownMenu (WG §136)
+  List<String> _masqueSniPool = const []; // §130 — SNI-пул для MASQUE-комбобокса
   // §143 — ip (протокол маскировки): quic/dns/stun/sip; ib (браузер) при quic.
   String _masqIp = 'quic';
   String _masqIb = 'chrome';
@@ -47,6 +48,18 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
   bool _forceNew = false;
   bool _busy = false;
   WarpAccount? _result;
+
+  // §130 — транспорт WARP: 'wireguard' (дефолт) | 'masque'. MASQUE использует
+  // ECDSA-регистрацию и Outbound type:masque (другой пул выходных нод).
+  String _transport = 'wireguard';
+  String _masqueNetwork = 'h3'; // h3 (QUIC) | h2 (HTTP/2)
+  final _masqueSni = TextEditingController(); // опц. SNI override
+  // §130 — тюнинг ресурсов: idle-suspend (минуты) и QUIC keepalive (секунды).
+  // Пусто → дефолт ядра (5m / 30s). Плейсхолдеры показывают дефолт.
+  final _masqueIdle = TextEditingController(); // минуты
+  final _masqueKeepAlive = TextEditingController(); // секунды
+
+  bool get _isMasque => _transport == 'masque';
 
   // §126/§136 — AmneziaWG обфускация (default off — обычный WARP).
   bool _obfuscate = false;
@@ -66,9 +79,16 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
       setState(() {
         _picker = p;
         _sniPool = p.sniPool;
+        _masqueSniPool = p.masqueSniPool;
         // SNI при открытии — конкретный случайный домен (не «Random»); юзер
         // может выбрать другой/вписать свой или рерольнуть кубиком.
         if (_sni.text.trim().isEmpty) _sni.text = p.randomSni();
+        // §130 — MASQUE SNI тоже предзаполняем рандомом из masque-пула (не
+        // оставляем дефолт ядра): маскировка под конкретный легит-домен из
+        // старта, юзер может сменить/очистить/рерольнуть.
+        if (_masqueSni.text.trim().isEmpty) {
+          _masqueSni.text = p.randomMasqueSni();
+        }
       });
       // Если юзер успел включить обфускацию до загрузки picker — заполняем.
       if (_obfuscate && _endpointReplaceable) _fillRandomEndpoint();
@@ -92,6 +112,14 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     final sni = _picker?.randomSni();
     if (sni != null && sni.isNotEmpty) {
       setState(() => _sni.text = sni);
+    }
+  }
+
+  /// §130 — кубик 🎲 у MASQUE SNI: случайный домен из MASQUE-пула в поле.
+  void _fillRandomMasqueSni() {
+    final sni = _picker?.randomMasqueSni();
+    if (sni != null && sni.isNotEmpty) {
+      setState(() => _masqueSni.text = sni);
     }
   }
 
@@ -127,6 +155,9 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     _license.dispose();
     _endpoint.dispose();
     _sni.dispose();
+    _masqueSni.dispose();
+    _masqueIdle.dispose();
+    _masqueKeepAlive.dispose();
     _jc.dispose();
     _jmin.dispose();
     _jmax.dispose();
@@ -151,6 +182,10 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
+      if (_isMasque) {
+        await _registerMasque();
+        return;
+      }
       final endpoint = _endpoint.text.trim().isEmpty
           ? WarpAccount.defaultEndpoint
           : _endpoint.text.trim();
@@ -179,6 +214,36 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// §130 — регистрация MASQUE-транспорта (ECDSA + enroll).
+  Future<void> _registerMasque() async {
+    final sni = _masqueSni.text.trim();
+    final account = await widget.subController.addMasque(
+      network: _masqueNetwork,
+      sni: sni.isEmpty ? null : sni,
+      idleTimeout: _durationOrNull(_masqueIdle.text, 'm'),
+      keepAlive: _durationOrNull(_masqueKeepAlive.text, 's'),
+      forceNew: _forceNew,
+    );
+    if (!mounted) return;
+    final err = widget.subController.lastError;
+    if (account == null || err.isNotEmpty) {
+      _showSnack(err.isNotEmpty ? err : 'MASQUE registration failed');
+      return;
+    }
+    await widget.onAdded();
+    if (!mounted) return;
+    _showSnack('Added MASQUE node');
+    Navigator.of(context).pop();
+  }
+
+  /// §130 — число из поля + единица → Go-duration (`"5m"`, `"30s"`). Пусто/ноль
+  /// → null (ядро возьмёт свой дефолт). Только положительные целые.
+  String? _durationOrNull(String raw, String unit) {
+    final n = int.tryParse(raw.trim());
+    if (n == null || n <= 0) return null;
+    return '$n$unit';
   }
 
   void _showSnack(String msg) {
@@ -232,7 +297,176 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                   ),
             ),
             const SizedBox(height: 16),
+            // §130 — выбор транспорта WARP. WireGuard (дефолт) или MASQUE
+            // (CONNECT-IP over HTTP/3/2 — другой пул выходных нод, иностранные IP).
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                    value: 'wireguard',
+                    label: Text('WireGuard'),
+                    icon: Icon(Icons.vpn_key_outlined)),
+                ButtonSegment(
+                    value: 'masque',
+                    label: Text('MASQUE'),
+                    icon: Icon(Icons.hub_outlined)),
+              ],
+              selected: {_transport},
+              onSelectionChanged: _busy
+                  ? null
+                  : (sel) => setState(() => _transport = sel.first),
+            ),
+            const SizedBox(height: 16),
+            // §130 — MASQUE: транспорт h3/h2 + опц. SNI. Обфускация и WG-Advanced
+            // не применяются (MASQUE сам маскируется под HTTPS/QUIC).
+            if (_isMasque) ...[
+              Card(
+                margin: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'MASQUE tunnels IP over HTTP/3 (QUIC) to Cloudflare — it '
+                        'looks like ordinary HTTPS to DPI and often exits from a '
+                        'foreign IP.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          _label('Transport'),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _masqueNetwork,
+                              isDense: true,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                border: OutlineInputBorder(),
+                                contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                    value: 'h3',
+                                    child: Text('HTTP/3 (QUIC)')),
+                                DropdownMenuItem(
+                                    value: 'h2', child: Text('HTTP/2 (TCP)')),
+                              ],
+                              onChanged: _busy
+                                  ? null
+                                  : (v) => setState(
+                                      () => _masqueNetwork = v ?? 'h3'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _masqueNetwork == 'h2'
+                            ? 'HTTP/2 over TCP — use where QUIC/UDP is blocked.'
+                            : 'HTTP/3 over QUIC — the default, fastest path.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                      ),
+                      const SizedBox(height: 12),
+                      _label('SNI (optional)'),
+                      // combo-box: пункты из sni_pool + свободный ввод. Пусто →
+                      // дефолт ядра (consumer-masque.cloudflareclient.com).
+                      // Кубик подставляет случайный домен из пула.
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: LayoutBuilder(
+                              builder: (ctx, c) => DropdownMenu<String>(
+                                controller: _masqueSni,
+                                enabled: !_busy,
+                                width: c.maxWidth,
+                                requestFocusOnTap: true,
+                                menuHeight: 280,
+                                hintText: 'Leave empty for the default SNI',
+                                dropdownMenuEntries: [
+                                  for (final s in _masqueSniPool)
+                                    DropdownMenuEntry(value: s, label: s),
+                                ],
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.casino_outlined),
+                            tooltip: 'Pick another random domain',
+                            onPressed: _busy ? null : _fillRandomMasqueSni,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _masqueIdle,
+                              enabled: !_busy,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly
+                              ],
+                              decoration: _input('5').copyWith(
+                                labelText: 'Idle timeout (min)',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _masqueKeepAlive,
+                              // keep-alive осмыслен только для h3 (QUIC).
+                              enabled: !_busy && _masqueNetwork == 'h3',
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly
+                              ],
+                              decoration: _input('30').copyWith(
+                                labelText: 'Keep-alive (sec)',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Idle timeout suspends the tunnel after inactivity to '
+                        'save battery (default 5 min). Keep-alive pings the QUIC '
+                        'link (default 30 sec, HTTP/3 only). Leave empty for '
+                        'defaults.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _forceNew,
+                        onChanged: _busy
+                            ? null
+                            : (v) => setState(() => _forceNew = v ?? false),
+                        title: const Text('Re-register (force new account)'),
+                        subtitle: const Text(
+                            'Ignore the cached account and register a fresh one.'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             // §126 — значимая опция (не прячем в Advanced): обфускация под DPI.
+            if (!_isMasque)
             Card(
               margin: EdgeInsets.zero,
               child: Column(
@@ -277,6 +511,9 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                 ],
               ),
             ),
+            // §130 — WG-Advanced (license/endpoint/masquerade) только для
+            // WireGuard-транспорта; MASQUE имеет свой блок выше.
+            if (!_isMasque) ...[
             const SizedBox(height: 16),
             ExpansionPanelList.radio(
               elevation: 0,
@@ -499,6 +736,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                 ),
               ],
             ),
+            ],
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: _busy ? null : _register,

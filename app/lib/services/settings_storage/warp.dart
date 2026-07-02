@@ -32,3 +32,27 @@ Future<void> _setWarpAccount(WarpAccount? account, {bool flush = true}) async {
   // обычный UserServer (markConfigDirty там, где меняется список подписок).
   if (flush) await _save();
 }
+
+// §130 — кеш MASQUE-WARP аккаунта. Storage key: `masque_account`. Отдельный от
+// `warp_account` (другая крипта ECDSA, другой транспорт). Секреты (priv_key_der,
+// token) — не в логи (см. MasqueAccount.redacted()).
+
+Future<MasqueAccount?> _getMasqueAccount() async {
+  final data = await _load();
+  final raw = data['masque_account'];
+  if (raw is Map<String, dynamic>) {
+    return MasqueAccount.fromJson(raw);
+  }
+  return null;
+}
+
+Future<void> _setMasqueAccount(MasqueAccount? account, {bool flush = true}) async {
+  final data = await _load();
+  if (account == null) {
+    data.remove('masque_account');
+  } else {
+    data['masque_account'] = account.toJson();
+  }
+  SettingsStorage._cache = data;
+  if (flush) await _save();
+}
