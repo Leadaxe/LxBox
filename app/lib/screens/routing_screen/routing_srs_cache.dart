@@ -10,6 +10,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   Set<String> get _srsDownloading;
   List<CustomRule> get _customRules;
   List<Channel> get _channels; // §125
+  void _invalidateOutboundOptions(); // §219 — сброс кэша опций outbound
   set _template(WizardTemplate? value);
   String get _routeFinal;
   set _routeFinal(String value);

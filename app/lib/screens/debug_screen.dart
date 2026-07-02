@@ -9,6 +9,7 @@ import '../services/app_log.dart';
 import '../services/dump_builder.dart';
 import '../services/error_format.dart';
 import '../services/stderr_reader.dart';
+import '../services/ui_helpers.dart';
 import 'app_settings_screen.dart';
 
 class DebugScreen extends StatefulWidget {
@@ -20,7 +21,7 @@ class DebugScreen extends StatefulWidget {
 
 enum _DebugAction { clear, copy, diagnosticsSettings }
 
-class _DebugScreenState extends State<DebugScreen> {
+class _DebugScreenState extends State<DebugScreen> with SnackHelper {
   DebugFilter _sourceFilter = DebugFilter.all;
   final Set<DebugLevel> _levels = {...DebugLevel.values};
   bool _buildingDump = false;
@@ -66,14 +67,11 @@ class _DebugScreenState extends State<DebugScreen> {
     return buf.toString();
   }
 
-  void _snack(String text) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-  }
+  // §219 — _snack вынесен в SnackHelper.showSnack (services/ui_helpers.dart).
 
   void _copyAll(List<DebugEntry> entries) {
     Clipboard.setData(ClipboardData(text: _entriesToText(entries)));
-    _snack('${entries.length} entries copied');
+    showSnack('${entries.length} entries copied');
   }
 
   /// Собирает единый dump (config + vars + server_lists + debug-log)
@@ -91,7 +89,7 @@ class _DebugScreenState extends State<DebugScreen> {
         subject: name,
       );
     } catch (e) {
-      _snack('Share failed: ${formatUserError(e)}');
+      showSnack('Share failed: ${formatUserError(e)}');
     } finally {
       if (mounted) setState(() => _buildingDump = false);
     }
@@ -103,7 +101,7 @@ class _DebugScreenState extends State<DebugScreen> {
   Future<void> _shareStderr() async {
     final p = await StderrReader.path();
     if (p == null) {
-      _snack('stderr is empty');
+      showSnack('stderr is empty');
       return;
     }
     try {
@@ -114,7 +112,7 @@ class _DebugScreenState extends State<DebugScreen> {
         subject: 'L×Box stderr — $ts',
       );
     } catch (e) {
-      _snack('Share failed: ${formatUserError(e)}');
+      showSnack('Share failed: ${formatUserError(e)}');
     }
   }
 

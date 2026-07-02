@@ -9,6 +9,7 @@ import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/template_vars.dart';
 import '../services/parser/uri_utils.dart' show newUuidV4;
+import '../services/ui_helpers.dart';
 import '../widgets/emoji_picker_button.dart';
 
 // SocksSpec.emit() требует TemplateVars — для wizard-created SOCKS5 без
@@ -43,7 +44,7 @@ class AddServerWizardScreen extends StatefulWidget {
 }
 
 class _AddServerWizardScreenState extends State<AddServerWizardScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, SnackHelper {
   late final TabController _tab;
 
   // SOCKS5 tab controllers.
@@ -116,7 +117,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     // проверка returns раньше чем мы упрёмся в SocksSpec assertion'ы.
     final port = int.tryParse(_socksPort.text.trim()) ?? 0;
     if (port < 1 || port > 65535) {
-      _showSnack('Invalid port');
+      showSnack('Invalid port');
       return;
     }
     final user = _socksUser.text;
@@ -159,7 +160,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   Future<void> _submitInput(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) {
-      _showSnack('Input is empty');
+      showSnack('Input is empty');
       return;
     }
     await widget.subController.addFromInput(trimmed);
@@ -178,7 +179,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     if (!mounted) return;
     final err = widget.subController.lastError;
     if (err.isNotEmpty) {
-      _showSnack(err);
+      showSnack(err);
       return;
     }
     await widget.onAdded();
@@ -186,16 +187,11 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     final msg = addedTag != null && addedTag.isNotEmpty
         ? 'Added: $addedTag'
         : 'Added';
-    _showSnack(msg);
+    showSnack(msg);
     Navigator.of(context).pop();
   }
 
-  void _showSnack(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
-    );
-  }
+  // §219 — _showSnack вынесен в SnackHelper.showSnack (services/ui_helpers.dart).
 
   @override
   Widget build(BuildContext context) {
