@@ -17,6 +17,36 @@ mixin SnackHelper<T extends StatefulWidget> on State<T> {
   }
 }
 
+/// §219 — единый confirm-диалог удаления (Cancel / Delete). Delete —
+/// `colorScheme.error`. Был продублирован в custom_rule_edit / channel_edit /
+/// dns_server_edit / routing_screen_menus. Возвращает `true` при подтверждении.
+Future<bool?> showDeleteConfirmDialog(
+  BuildContext context, {
+  required String title,
+  required String message,
+  String confirmLabel = 'Delete',
+}) {
+  return showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: Text(message),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          style: TextButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.error),
+          child: Text(confirmLabel),
+        ),
+      ],
+    ),
+  );
+}
+
 /// §219 — единый диалог «Unsaved changes» (Discard / Keep / Save). Был
 /// идентично продублирован в channel_edit / custom_rule_edit / dns_server_edit
 /// (`_handleBack`). Возвращает `'save'` / `'discard'` / `'keep'` / `null`
