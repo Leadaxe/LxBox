@@ -3,9 +3,10 @@
 ///
 /// Все derived values для рендера — вычисляются в caller'е
 /// (`home/widgets/node_list.dart` itemBuilder: ping из `state.lastDelay`,
-/// urltest из `ClashApiClient`, proto из `state.configModel.protocolOf`,
-/// matches из `NodeFilter.passes`) и пакуются сюда. `NodeRow` widget — pure
-/// render от этой модели, не делает state lookup внутри.
+/// urltest из `state.urltestNowOf` (CommandClient, §122), proto из
+/// `state.configModel.protocolOf`, matches из `NodeFilter.passes`) и пакуются
+/// сюда. `NodeRow` widget — pure render от этой модели, не делает state lookup
+/// внутри.
 ///
 /// Spec: docs/spec/tasks/068-node-view-item-extract.md
 class NodeViewItem {

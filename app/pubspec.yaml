@@ -1,13 +1,14 @@
 name: lxbox
-description: L×Box — Android MVP (sing-box + Clash API).
+description: L×Box — Android VPN client (sing-box / libbox CommandClient).
 publish_to: 'none'
 
-version: 2.9.0-dev.18+1028
+version: 2.9.0-dev.19+1029
 # ↑ placeholder. Реальная версия записывается из git tag:
 #   • CI release build (.github/workflows/ci.yml → "Inject release version") —
 #     `version: ${tag#v}+${git rev-list --count HEAD}` перед `flutter build`.
 #   • Локальная сборка (scripts/build-local-apk.sh) — `git describe --tags --abbrev=0`
-#     для versionName и `rev-list --count HEAD` для versionCode, revert на EXIT.
+#     для versionName и `rev-list --count <TAG>` (пин к тегу, §186 — против
+#     downgrade-блока при установке релиза) для versionCode, revert на EXIT.
 # Никогда не редактируется в репо вручную при release-flow (см. docs/RELEASE_PROCESS.md).
 
 environment:

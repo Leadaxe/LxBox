@@ -135,7 +135,7 @@ class AboutScreen extends StatelessWidget {
               Chip(label: Text('Dart')),
               Chip(label: Text('sing-box')),
               Chip(label: Text('libbox')),
-              Chip(label: Text('Clash API')),
+              Chip(label: Text('CommandClient')),
               Chip(label: Text('Material 3')),
             ],
           ),
