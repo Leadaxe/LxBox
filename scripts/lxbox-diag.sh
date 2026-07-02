@@ -55,14 +55,13 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# ─── adb path bootstrap (то же что в ensure-wifi-adb.sh) ────────────
+# ─── adb path bootstrap (§219 — общий helper) ──────────────────────
 
-if [ "$SKIP_ADB" -eq 0 ] && ! command -v adb >/dev/null 2>&1; then
-  export PATH="${ANDROID_SDK_ROOT:-/usr/local/share/android-commandlinetools}/platform-tools:$PATH"
-  if ! command -v adb >/dev/null 2>&1; then
-    echo "⚠ adb not in PATH — skipping device-side commands" >&2
-    SKIP_ADB=1
-  fi
+# shellcheck source=lib/ensure-adb.sh
+. "$(dirname "$0")/lib/ensure-adb.sh"
+if [ "$SKIP_ADB" -eq 0 ] && ! ensure_adb_path; then
+  echo "⚠ adb not in PATH — skipping device-side commands" >&2
+  SKIP_ADB=1
 fi
 
 # ─── prepare ────────────────────────────────────────────────────────
