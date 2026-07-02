@@ -37,6 +37,21 @@ String formatDuration(Duration d, {bool daysRollup = false}) {
   return '${d.inSeconds}s';
 }
 
+/// §219 — host из `"host:port"` (часть до последнего `:`). Нет `:` → вся строка.
+/// Ранее дублировалось как `_hostOf` в connections_screen / stats_screen.
+String hostOf(String destination) {
+  final i = destination.lastIndexOf(':');
+  return i < 0 ? destination : destination.substring(0, i);
+}
+
+/// §219 — порт из `"host:port"` (часть после последнего `:`). Нет `:` /
+/// висячий `:` → `''`. Ранее дублировалось (`_portOf` / `_destPort`).
+String portOf(String destination) {
+  final i = destination.lastIndexOf(':');
+  if (i < 0 || i == destination.length - 1) return '';
+  return destination.substring(i + 1);
+}
+
 /// Wall-clock `HH:mm:ss`.
 String formatTime(DateTime t) =>
     '${t.hour.toString().padLeft(2, '0')}:'
