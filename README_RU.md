@@ -25,7 +25,9 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 
 **Серверы и подписки** — управление источниками прокси
 
-Добавляйте серверы по URL подписки, прямой ссылке, WireGuard URI/INI, Amnezia `vpn://`-ссылке или raw sing-box JSON outbound. Умный диалог вставки определяет формат автоматически и показывает превью. Включение/отключение подписок без удаления. Офлайн-rehydrate — ноды восстанавливаются из кеша тела при старте app. Per-subscription настройки detour серверов.
+Добавляйте серверы по URL подписки, прямой ссылке, WireGuard URI/INI, Amnezia `vpn://`-ссылке, raw sing-box JSON outbound или через **Import from file…** (локальный `.txt`/`.json`; файл более чем с одной нодой становится файловой подпиской, §129). Умный диалог вставки определяет формат автоматически и показывает превью. Включение/отключение подписок без удаления. Офлайн-rehydrate — ноды восстанавливаются из кеша тела при старте app. Per-subscription настройки detour серверов.
+
+- **Файловая подписка и редактируемый источник** (§129, v2.8.2) — файл с несколькими нодами становится подпиской с бейджем `file`, живущей из снапшота `HttpCache`; **Edit source…** меняет URL подписки или переключает online↔file транзакционно, без пересоздания (давняя просьба пользователей)
 
 - **11 протоколов**: VLESS, VMess, Trojan, Shadowsocks, Hysteria2, **TUIC v5**, **NaïveProxy**, SSH, SOCKS, WireGuard (вкл. **AmneziaWG / AWG 2.0** — `awg://` URI, AmneziaWG `.conf`, **Amnezia `vpn://`-ссылки** (v2.0.3), JSON), **MASQUE** (Cloudflare WARP — `masque://`, QUIC/HTTP-3, v2.9.0)
 - Форматы: Base64, Xray JSON Array (chained proxy), plain text, raw sing-box JSON
@@ -40,6 +42,7 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 Пункт **Get WARP** в overflow-меню Servers → регистрируется WireGuard-туннель к Cloudflare и добавляется как узел. Без копипасты конфигов с чужих сайтов-генераторов.
 
 - **Регистрация на устройстве**: приватный X25519-ключ генерится на телефоне и НЕ покидает его — в Cloudflare (`api.cloudflareclient.com`) уходит только публичный ключ. Не используем чужие воркеры-генераторы (они отдают приватник, сгенерированный на их сервере).
+- **Add Amnezia obfuscation** (транспорт WireGuard): маскирует WARP-handshake от DPI, подмешивая junk-трафик, имитирующий QUIC-Initial (по умолчанию) или SIP-шаблон; SNI, level и Jc/Jmin/Jmax под *Advanced*. Включайте, когда обычный WARP режут или троттлят.
 - **WARP+** (опционально): вставьте license key под *Advanced* для привязки WARP+ (Argo Smart Routing). Пусто = free WARP.
 - **Идемпотентность**: повторный тап переиспользует закешированный аккаунт, а не плодит регистрации; *Re-register* создаёт новый.
 - Кастомный endpoint под *Advanced* (рабочий `IP:port`, если дефолтный заблокирован).
@@ -64,7 +67,7 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 - **Filter workspace** (v2.0.0): фильтр-панель с табами **Regex · Protocol · Subscribes · Settings** + сводка активных фильтров чипами; у каждой категории своя `!`-инверсия (NOT); строка чипов по транспорту/безопасности (`tcp`/`ws`/`grpc`/`h2`/`httpupgrade`/`quic`/`xhttp` + `TLS`/`Reality`/`+Vision`/`awg`/`awg2`); фильтры запоминаются per-channel
 - **Detour-фильтр — tri-state** (v2.0.0): показать всё / скрыть detour / **только detour** (чистый список релеев для диагностики)
 - **Персистентная сортировка Custom** (v2.0.0): ручной порядок выбирается из меню сортировок и tap-карусели (Default → Ping → A-Z → Custom), переживает рестарт; подписки перетаскиваются за grab-strip
-- Группы прокси: `auto-proxy-out`, VPN ①/②/③
+- **Настраиваемые каналы** (§125, v2.6.0) — группы прокси задаются пользователем (add / rename / delete до 10; `vpn-1` неудаляем). У каждого канала regex-фильтр нод с `!`-инверсией, опциональный **Include auto**-двойник (`<tag>-auto`, Fastest или Load balance) и опциональный **Include block**; фильтр в ноль показывает warning. Битые ссылки на каналы деградируют в `vpn-1`.
 - Фильтр нод: выбор участников автоподбора
 - Sticky restart warning под Stop — не пропадает при отмене Stop-диалога
 - Long-press: Ping · Use this node · View JSON · **Copy URI** (vless://, awg://, …) — действия Copy-JSON живут внутри диалога View JSON (Copy server / Copy detour / Copy server + detours(N))
@@ -77,6 +80,7 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 - **Long-press на иконку app'а** на хоум-скрине → пункт **Toggle VPN**.
 - Первый раз tile/shortcut коротко открывает приложение ради системного VPN consent-диалога (`VpnService.prepare(...)` — Activity-only API). Toast объясняет почему. После consent activity закрывается сама — обычный flow без UI-вспышки.
 - Tile переживает OOM-kill сервиса: `currentStatus` сбрасывается в `onDestroy` чтобы не показывать «Connected» когда сервиса больше нет.
+- **Кнопки в уведомлении** (§182) — **Stop** / **Reconnect** прямо в постоянном уведомлении; полностью нативные (Reconnect гоняет `stop`→`start` на companion-scope), работают даже при убитом UI-процессе.
 
 **Маршрутизация** — единая модель правил (v1.4.0)
 
@@ -156,6 +160,10 @@ Multi-hop цепочки: трафик идёт через промежуточ�
 
 Реалтайм трафик по outbound с раскрывающимися карточками. Каждое соединение: хост, протокол, правило, трафик, длительность, цепочка прокси, имя приложения. Закрытие отдельных соединений.
 
+- **Detail sheet соединения** (§152) — тап по соединению → bottom sheet со всеми метаданными (source/dest IP:port, цепочка прокси, правило, точные байты, длительность), **Copy JSON** для баг-репортов и Close из шторки
+- **Зависшие однобокие соединения** (§153) — TCP с трафиком только в одну сторону (↑>0, ↓0) подсвечиваются розовым с бейджем **One-way**
+- **Иконки приложений** (§154) — в каждой строке соединения launcher-иконка приложения-владельца
+
 
 
 **Per-app traffic profiler** — трассировка сети любого приложения в реальном времени (v1.7.0)
@@ -163,11 +171,11 @@ Multi-hop цепочки: трафик идёт через промежуточ�
 Выбираете app, тапаете ▶ Record — видите все домены, IP и решения роутинга: какой CDN использует ваш банк, через какую ноду уходит, не утекает ли трафик через «не тот» VPN. Встроенный anomaly-detection помечает подозрительные geo-mismatch'ы.
 
 - **Stats → Per-app tab**: app picker, [▶ START] / [⏹ STOP], строка статуса `Recording 02:34 · 47 doms · 53 ips · 287 ev`
-- **4 sub-tab'а**:
-  - **Live** — newest events first (DNS resolves с CNAME chain'ом · TCP/UDP open/close), monospace IP `↗` chip переходит на Domains
-  - **Domains** — aggregated unique domains, sortable; expanded view = CNAME targets, all resolved IPs, outbounds, anomalies. Search-поле матчит по `domain` || `ip` || `cname target` (cross-domain CDN-аудит)
-  - **IPs** — aggregated по destination IP (порты, conn count, bytes, outbound). Каждая строка с `↗` для перехода в Domains с фильтром по этому IP
-  - **Connections** — per-connection timeline. Тап по header → inline-expand: CNAME chain, all IPs, rule, anomalies, кнопка `[View in Domains →]` фокусит соответствующую aggregated row
+- **Единый TraceExplorer, два режима просмотра** (§160, v2.4.1 — заменил прежние саб-табы Live/Domains/IPs/Connections):
+  - **Event stream** — newest events first (DNS resolves с CNAME chain'ом · TCP/UDP open/close); тап по строке → detail sheet события
+  - **Aggregated** — Group by Domain или by IP; строки показывают CNAME targets, все resolved IP, outbounds, conn count, bytes, issues; тап по строке → detail sheet агрегата с drill-down
+  - **Общий фильтр** для обоих режимов — search-поле (матчит `domain` || `ip` || `cname target`, cross-domain CDN-аудит) + чипы по типу события
+  - Drill-down: detail sheet предлагает **View in Aggregated** — прыжок от события к его агрегированной строке
 - **Connection-issue detection (2 locale-агностичных типа)**: `dnsTimeout` (sing-box `dns: exchange failed` log — прямой engine-сигнал, не heuristic), `tcpReset` (TCP closed в течение 1s с 0 bytes — firewall RST / unreachable). ⚠ icon на Live row + Domain expanded view с описанием
 - **Process inference** — когда sing-box `find_process` мисс'нул (rare, для WebView/system processes), profiler attribut'ит conn по resolved IP в окне 10s post-DNS; rows помечены `〽 inferred from prior DNS`
 - **Recording indicators**:
@@ -219,6 +227,9 @@ Multi-hop цепочки: трафик идёт через промежуточ�
 - **Battery optimization** tile — статус + shortcut в системный whitelist (v1.4.0)
 - **App info (OEM power settings)** с hint-диалогом для Autostart / Background activity (v1.4.0)
 - **Auto-ping after connect** — пинг активной группы через 5s после подключения VPN (по умолчанию ON, v1.4.0)
+- **First-run wizard** (§126, v2.8.0) — последовательный онбординг (уведомления → battery optimization → плитка Quick Settings)
+- **Suspend idle tunnels** (`route_idle_suspend`, по умолчанию `30s` с v2.8.2; пусто = off) — усыпляет недостижимые WireGuard/AmneziaWG-туннели, простаивавшие без трафика, освобождая память и экономя батарею (A/B на устройстве дал крупное снижение RAM). Затрагивает только туннели не на активном маршруте; просыпаются мгновенно при следующем дозвоне.
+- **Interrupt connections on switch** (§143) — при смене узла канала сбрасывает активные соединения этой группы, чтобы трафик сразу перешёл на новый узел (по умолчанию off; есть и в редакторе канала)
 - Haptic feedback toggle
 - См. [спека 022](docs/spec/features/022%20app%20settings/spec.md)
 
@@ -268,8 +279,8 @@ buildConfig(lists, settings)  ← template + post-steps (resilience, DNS, rules)
 sing-box JSON
 ```
 
-- **Bundled-ядро** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **`v1.14.0-lx.1-rc.16`**: форк sing-box 1.14, собранный с тегами `with_awg` / `with_xhttp` / `with_lx_command`; управляющий канал — libbox `CommandClient` (без Clash API). Добавлен round-robin **балансировщик** (SPEC 019) + RPC `GetPool`, и полный клиентский набор полей XHTTP (SPEC 002 v2, rc.16). Версия пинится в `app/android/libbox.version`, AAR скачивается из GitHub Releases форка скриптом `scripts/fetch-libbox.sh` с проверкой SHA256
-- **Sealed `NodeSpec`** — 9 протоколов, полиморфный `emit(vars)` / `toUri()` (round-trip инвариант)
+- **Bundled-ядро** (v2.0.0) — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) **`v1.14.0-lx.1`** (первый полный стабильный релиз ветки 1.14-lx): форк sing-box 1.14, собранный с тегами `with_awg` / `with_xhttp` / `with_lx_command` / `with_lx_idle_suspend`; управляющий канал — libbox `CommandClient` (без Clash API). Добавлен round-robin **балансировщик** (SPEC 019) + RPC `GetPool`, полный клиентский набор полей XHTTP (SPEC 002 v2), idle-suspend недостижимых туннелей (SPEC 020) и **MASQUE / CONNECT-IP** outbound (SPEC 021). Версия пинится в `app/android/libbox.version`, AAR скачивается из GitHub Releases форка скриптом `scripts/fetch-libbox.sh` с проверкой SHA256
+- **Sealed `NodeSpec`** — 11 протоколов, полиморфный `emit(vars)` / `toUri()` (round-trip инвариант)
 - `**EmitContext**` — пробрасывает шаблонные vars в per-node emit
 - `**NodeEntries{main, detours[]}**` — именованный struct для chain-результатов
 - `**ValidationResult**` — типизированные issues: dangling refs, empty urltest, invalid selector default
@@ -280,7 +291,7 @@ sing-box JSON
 
 ## Разработка
 
-Spec-driven development — 30 спецификаций фич в [docs/spec/features/](docs/spec/features/).
+Spec-driven development — спецификации фич в [docs/spec/features/](docs/spec/features/) документируют каждую возможность.
 
 
 | Документ                                     | Описание                                                  |
@@ -289,7 +300,7 @@ Spec-driven development — 30 спецификаций фич в [docs/spec/fea
 | [Документация протоколов](docs/PROTOCOLS.md) | URI форматы, параметры, маппинг в sing-box                |
 | [Архитектура](docs/ARCHITECTURE.md)          | 3-слойный pipeline, потоки данных, нативный bridge        |
 | [Сборка](docs/BUILD.md)                      | Инструкции по сборке, CI, подпись APK, local-build marker |
-| [Руководство](docs/DEVELOPMENT_GUIDE.md)     | Принципы, тестирование (167 тестов), организация спек     |
+| [Руководство](docs/DEVELOPMENT_GUIDE.md)     | Принципы, тестирование, организация спек                  |
 | [Список изменений](CHANGELOG.md)             | История релизов                                           |
 | [Release notes](docs/releases/)              | Подробные заметки per-версия (EN + RU)                    |
 

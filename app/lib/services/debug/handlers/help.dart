@@ -276,8 +276,8 @@ POST   /settings/rebuild-config                Alias /action/rebuild-config
 
 === Backup ===
 
-GET  /backup/export?include=config,vars,subs   Pure-data snapshot for restore (no diag noise). `include` optional; default — all three.
-POST /backup/import?merge=false&rebuild=false  Accepts the same shape export returns (plus /diag/dump — diag fields ignored).
+GET  /backup/export?include=storage,vpn_settings  Pure-data snapshot for restore (no diag noise). `include` optional; default — both parts.
+POST /backup/import?merge=false&rebuild=false  Accepts the same shape export returns (body {storage?, vpn_settings?}).
                                                  `merge=true` — append/upsert; `rebuild=true` — auto-rebuild config after restore.
 
 === Errors ===
@@ -449,8 +449,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/settings/vpn/background_mode', 'description': 'tunnel sleep mode (never|lazy|always)'},
     {'method': 'PUT', 'path': '/settings/vpn/background_mode', 'body': '{"mode":"never|lazy|always"}', 'description': 'Set tunnel sleep mode — apply on next VPN connect'},
     // Backup
-    {'method': 'GET', 'path': '/backup/export', 'params': {'include': 'config,vars,subs (default all)'}, 'description': 'Pure-data snapshot (no diag noise)'},
-    {'method': 'POST', 'path': '/backup/import', 'params': {'merge': 'true|false', 'rebuild': 'true|false'}, 'body': '{config?, vars?, server_lists?}', 'description': 'Restore from export or /diag/dump'},
+    {'method': 'GET', 'path': '/backup/export', 'params': {'include': 'storage,vpn_settings (default both)'}, 'description': 'Pure-data snapshot (no diag noise)'},
+    {'method': 'POST', 'path': '/backup/import', 'params': {'merge': 'true|false', 'rebuild': 'true|false'}, 'body': '{storage?, vpn_settings?}', 'description': 'Restore from export'},
     // Action additions
     {'method': 'POST', 'path': '/action/preview-empty-state', 'params': {'on': 'true|false'}, 'description': 'Toggle empty-state preview in HomeScreen UI without losing data'},
   ],

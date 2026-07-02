@@ -179,8 +179,12 @@ Task "Switch to Russia with confirmation":
   (shared-secret токен / UID-allowlist на Android 14+).
 - **События не содержат секретов** подписок / config — только лейблы (теги,
   имена групп, статус); outgoing-broadcast открыт всем подписчикам.
-- **Логи.** Весь обмен виден в App Settings → Diagnostics → log filter
-  `automation` (`[automation] received …` / `[automation] emit …`).
+- **Логи.** В App Settings → Diagnostics → log filter `automation` видны строки
+  `[automation] action <name> → ok / ERROR …` (обработанные команды) и
+  `[automation] emit <event> …` (исходящие события). Сам факт приёма broadcast'а
+  (включая прямые `START_VPN` / `STOP_VPN` / `TOGGLE_VPN`, которые вообще не доходят
+  до Dart) пишется только в logcat под тегом `LxBoxIntent`:
+  `adb logcat -s LxBoxIntent`.
 
 ---
 
@@ -224,7 +228,7 @@ Task "Switch to Russia with confirmation":
 | Симптом | Причина | Решение |
 |---|---|---|
 | Команда не доходит | Мастер-toggle OFF | Включить в App Settings → Automation |
-| Тоже, но toggle ON | Неверный action / target не Broadcast Receiver / опечатка в `com.leadaxe.lxbox.…` | Сверить со списком команд; проверить log filter `automation` (`received …`) |
+| Тоже, но toggle ON | Неверный action / target не Broadcast Receiver / опечатка в `com.leadaxe.lxbox.…` | Сверить со списком команд; факт приёма — в logcat `adb logcat -s LxBoxIntent` (строка `received <action>`); результат команд — log filter `automation` |
 | `SWITCH_NODE` не выбирает ноду | tag не существует / typo | Проверить log filter `automation` |
 | В плагине «Custom…» вместо списка нод/групп — поле ввода | Кеш пуст (L×Box не открывался после установки/смены подписки) | Открыть L×Box, зайти в группу (список закешируется), переоткрыть плагин |
 | L×Box не виден в списке плагинов host'а | Host без plugin-блока (напр. бесплатный Automate) | Использовать MacroDroid (бесплатно) или raw `am broadcast` |
