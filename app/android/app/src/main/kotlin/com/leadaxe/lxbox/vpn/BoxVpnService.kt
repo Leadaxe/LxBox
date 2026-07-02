@@ -39,6 +39,8 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// §182 — кнопка Reconnect в foreground-уведомлении: native-side
         /// reconnect (stopAwait→start), переживает убитый UI-движок.
         const val ACTION_RECONNECT = "com.leadaxe.lxbox.ACTION_RECONNECT"
+        /// §223 — live-перерисовка лейблов уведомления при смене ноды (#20).
+        const val ACTION_UPDATE_NOTIFICATION = "com.leadaxe.lxbox.ACTION_UPDATE_NOTIFICATION"
         const val BROADCAST_STATUS = "com.leadaxe.lxbox.BROADCAST_STATUS"
         const val EXTRA_STATUS = "status"
 
@@ -147,6 +149,17 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
             Log.d(TAG, "[vpn] companion.resetNetwork() current status=${currentStatus.name}")
             context.sendBroadcast(
                 Intent(ACTION_RESET_NETWORK).setPackage(context.packageName)
+            )
+        }
+
+        /// §223 — попросить работающий сервис перерисовать foreground-уведомление
+        /// свежими лейблами из ConfigManager (#20: смена ноды без рестарта).
+        /// Вне Started — no-op: receiver зарегистрирован только у живого сервиса,
+        /// а его обработчик дополнительно гейтит рендер на Started; закэшированные
+        /// лейблы подхватит обычный connect-рендер.
+        fun updateNotification(context: Context) {
+            context.sendBroadcast(
+                Intent(ACTION_UPDATE_NOTIFICATION).setPackage(context.packageName)
             )
         }
 

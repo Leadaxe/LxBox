@@ -1,5 +1,6 @@
 import '../../models/node_spec.dart';
 import 'uri_utils.dart';
+import 'uri_parsers/http_parser.dart';
 import 'uri_parsers/hysteria2_parser.dart';
 import 'uri_parsers/masque_parser.dart';
 import 'uri_parsers/naive_parser.dart';
@@ -14,6 +15,7 @@ import 'uri_parsers/wireguard_parser.dart';
 
 // Per-protocol parsers live under uri_parsers/. Re-exported here so existing
 // imports of 'uri_parsers.dart' keep resolving every parse* entry point.
+export 'uri_parsers/http_parser.dart';
 export 'uri_parsers/hysteria2_parser.dart';
 export 'uri_parsers/masque_parser.dart';
 export 'uri_parsers/naive_parser.dart';
@@ -55,6 +57,9 @@ NodeSpec? parseUri(String uri) {
       case 'socks':
       case 'socks5':
         return parseSocks(t);
+      case 'proxy-http': // §222 — HTTP(S) CONNECT proxy
+      case 'proxy-https':
+        return parseHttpProxy(t);
       case 'wg':
       case 'wireguard':
       case 'awg': // §097 — AmneziaWG2 алиас (та же endpoint-логика, что WG)

@@ -26,7 +26,11 @@ bool isDirectLink(String input) {
       t.startsWith('wg://') ||
       t.startsWith('awg://') ||
       t.startsWith('socks5://') ||
-      t.startsWith('socks://');
+      t.startsWith('socks://') ||
+      // §222 — кастомная схема HTTP(S)-прокси: голые http(s):// заняты
+      // isSubscriptionUrl (проверяется раньше в addFromInput).
+      t.startsWith('proxy-http://') ||
+      t.startsWith('proxy-https://');
 }
 
 bool isWireGuardConfig(String input) {
