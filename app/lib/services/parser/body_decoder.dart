@@ -12,6 +12,10 @@ sealed class DecodedBody {
 
 final class UriLines extends DecodedBody {
   final List<String> lines;
+
+  /// §219 — диагностический счётчик пропущенных comment-строк. В проде не
+  /// читается; служит наблюдаемым выходом для проверки инварианта парсера
+  /// в тестах (body_decoder_test). Оставлен намеренно, не write-only мусор.
   final int skippedComments;
   const UriLines(this.lines, this.skippedComments);
 }

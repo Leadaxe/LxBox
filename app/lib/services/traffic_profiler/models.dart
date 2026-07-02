@@ -18,8 +18,9 @@ enum ConfidenceLevel {
   /// UI marker: `🔗 via <pkg>`.
   secondary,
 
-  /// `meta.process` пустой/null, но recent DNS resolved IP принадлежит
-  /// target в окне `_processInferenceWindow`. UI marker: `〽 inferred`.
+  /// §219 — (DORMANT) больше не присваивается: стратегия 4 (inference по
+  /// recent-DNS IP в окне `_processInferenceWindow`) выпилена в §044. Значение
+  /// оставлено для десериализации старых session JSON. UI marker: `〽 inferred`.
   inferred,
 
   /// Никакая strategy не сработала. Событие показывается в Live tab'е
@@ -162,13 +163,20 @@ class TrafficEvent {
   final String? connId;
   final String? process;
 
-  /// Legacy флаг для обратной совместимости с UI-кодом и API consumers'ами,
-  /// которые ещё не понимают `confidence`. Эквивалентно
-  /// `confidence == inferred`.
+  /// §219 — (DORMANT) всегда `false` в текущем коде: эквивалентно
+  /// `confidence == inferred`, а стратегия 4 (`_inferProcessByIp`) выпилена в
+  /// §044. Поле оставлено для backward-compat со старыми session JSON и
+  /// UI/API-consumer'ами, не понимающими `confidence`. НЕ удалять (сломает
+  /// десериализацию старых дампов), НЕ пытаться «заполнять».
   final bool processInferred;
   final String? network; // tcp / udp
   final String? rule;
   final String? rulePayload;
+
+  /// §219 — (DORMANT) никогда не заполняется: лог-питатель профайлера снят в
+  /// §180 (DNS из структурного стрима, TCP из ядра). Копируется при
+  /// трансформациях и сериализуется для backward-compat со старыми session
+  /// JSON; UI читает как `?? ''`. НЕ удалять (совместимость дампов).
   final String? rawLogLine;
 
   /// §048 Принцип 3 — confidence в attribution event'а к target session'у.
