@@ -476,6 +476,41 @@ class BoxCommandClient {
         }
     }
 
+    /// §223 Часть B (#23) — native-fallback подтекста уведомления, когда UI не
+    /// открывался (старт с QS-плитки → нет Flutter-движка → Dart лейбл не
+    /// прислал). Один unary-pull `getGroups()` (через ensurePingClient —
+    /// lifecycle-независим, БЕЗ подписки): читаем «главную» группу и её
+    /// выбранную ноду, возвращаем готовую строку «<группа>: <нода>».
+    ///
+    /// Повторяет логику выбора selectedGroup из home_controller.dart:807
+    /// (Dart-источник): исключить GLOBAL → взять route.final если он валидный
+    /// selector, иначе первую группу. `null` = групп нет / RPC не удался
+    /// (caller оставит статусный fallback "Connected"). Ловит ТОЛЬКО начальную
+    /// ноду — последующее URLTest-переключение без UI вне скоупа (нет фонового
+    /// подписчика по энергомодели).
+    fun selectedNodeLabel(configRaw: String): String? {
+        val groups = getGroups() ?: return null
+        val selectors = groups.filter { (it["tag"] as? String) != "GLOBAL" }
+        if (selectors.isEmpty()) return null
+
+        val finalTag = routeFinalTag(configRaw)
+        val group = selectors.firstOrNull { (it["tag"] as? String) == finalTag }
+            ?: selectors.first()
+
+        val groupTag = group["tag"] as? String ?: return null
+        val node = (group["selected"] as? String).orEmpty()
+        return if (node.isNotEmpty()) "$groupTag: $node" else groupTag
+    }
+
+    /// Разбор route.final из сырого конфига — эквивалент Dart
+    /// RouteConfig.finalTag (config/route_config.dart). org.json надёжнее regex.
+    private fun routeFinalTag(configRaw: String): String? = runCatching {
+        org.json.JSONObject(configRaw)
+            .optJSONObject("route")
+            ?.optString("final")
+            ?.takeIf { it.isNotEmpty() }
+    }.getOrNull()
+
     /// Сериализация одной группы в Map — единый формат для push (writeGroups) и
     /// pull (getGroups). Менять формат — только здесь.
     private fun serializeGroup(g: OutboundGroup): Map<String, Any> {

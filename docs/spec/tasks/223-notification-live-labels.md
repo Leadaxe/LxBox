@@ -49,12 +49,80 @@ broadcast-паттерн), GitHub issue #20 (репорт с видео), час
 
 ## Что НЕ решает (границы)
 
-- **#23 (старт с QS-плитки без UI)**: в свежем процессе Dart-движка нет, лейблы
-  некому прислать → fallback «Connected» остаётся. НО: как только юзер открывает
-  приложение, `applyGroup` шлёт лейблы, и теперь (в отличие от прежнего
-  поведения) шторка обновится без рестарта. Полный фикс #23 — native-side
-  источник имени ноды, отдельная задача.
+- **URLTest-автопереключение без UI**: подтекст показывает НАЧАЛЬНУЮ ноду
+  (снапшот на старте, см. Часть B). Если ядро потом само переключит ноду через
+  URLTest, пока приложение не открыто, — подтекст не обновится (нет подписчика в
+  фоне по энергомодели). Это осознанно вне скоупа задачи.
 - Трафик-статистика в шторке (#22) — вне скоупа.
+
+---
+
+# Часть B — native-fallback лейбла при старте без UI (#23, частично)
+
+## Проблема
+
+Часть A перерисовывает шторку, но строку по-прежнему поставляет ТОЛЬКО Dart
+(`_pushNotificationLabels`). При старте с **QS-плитки / launcher-shortcut**
+сервис может подняться в свежем процессе БЕЗ Flutter-движка — лейблы прислать
+некому, `ConfigManager.notificationText` пуст → шторка показывает `Connected`.
+
+## Решение: один unary-pull через ~3 с после Started
+
+«Потребитель, а не подписчик»: native сам ОДИН раз читает выбранную ноду через
+уже существующий `BoxCommandClient.getGroups()` — это unary RPC поверх
+`ensurePingClient()` (lifecycle-независимый клиент §209, без подписки). Новой
+резидентной подписки НЕ появляется, энергомодель не трогаем.
+
+Точка: `BoxService.startSingbox()`, сразу после создания `commandClient`
+(тот же метод, где идёт connect-рендер). На `serviceScope` (отменяется в
+onDestroy/stop → нет утечки и рендера мёртвой шторки):
+
+```
+serviceScope.launch {
+    delay(NOTIFICATION_SNAPSHOT_DELAY_MS)   // ~3с — дать ядру устаканить selected
+    if (status != Started) return           // stop/reload успел
+    if (ConfigManager.notificationText.isNotEmpty()) return  // Dart уже прислал — UI есть
+    val label = commandClient?.selectedNodeLabel(ConfigManager.load()) ?: return
+    ConfigManager.setNotificationText(label)
+    notification.show(notificationTitle, label)   // тот же show()-путь
+}
+```
+
+### `BoxCommandClient.selectedNodeLabel(configRaw): String?`
+
+Новый публичный хелпер. Повторяет логику выбора «главной» группы из
+`home_controller.dart:807` (Dart `selectedGroup`):
+
+1. `getGroups()` → список групп (selector'ы; unary через ensurePingClient).
+2. Исключить `GLOBAL`.
+3. Выбрать группу: `route.final` (если есть среди групп и валиден), иначе
+   первую. `route.final` парсим из `configRaw` через `org.json` (как Dart
+   `RouteConfig.finalTag`: `root.route.final`).
+4. Нода = `group.selected`. Формат подтекста — как в Dart
+   `_pushNotificationLabels`: `«<группа>: <нода>»`, при пустой ноде — только
+   группа. `null` если групп нет / RPC не удался (оставляем `Connected`).
+
+## Почему guard'ы обязательны
+
+- **`status != Started`** — за 3 с юзер мог нажать Stop/переоткрыть; рисовать
+  шторку остановленного туннеля нельзя (см. Часть A про воскрешение).
+- **`notificationText.isNotEmpty()`** — если Dart УЖЕ прислал лейбл (UI был
+  открыт), native-fallback молчит: Dart-источник авторитетнее (знает
+  `selectedGroup` из своего state, покроет и последующие смены).
+
+## Файлы (Часть B)
+
+- `BoxCommandClient.kt` — публичный `selectedNodeLabel(configRaw)` + приватный
+  разбор `route.final`.
+- `BoxService.kt` — const `NOTIFICATION_SNAPSHOT_DELAY_MS` + snapshot-корутина
+  в `startSingbox` после создания `commandClient`.
+
+## Верификация (Часть B)
+
+- Kotlin компилируется.
+- Device: НЕ открывая приложение, старт с QS-плитки → через ~3 с подтекст
+  показывает `vpn-1: <нода>` вместо `Connected`. Открытие приложения после —
+  Dart-лейблы работают как в Части A (native молчит: text уже не пуст).
 
 ## Файлы
 
