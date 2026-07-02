@@ -63,13 +63,36 @@ void main() {
     expect(p.sniPool, contains('www.google.com'));
   });
 
-  test('§136 sni_pool НЕ содержит cloudflare-доменов (device-smoke: режутся)',
+  test('§136 WG sni_pool НЕ содержит cloudflare-доменов (device-smoke: режутся)',
       () async {
     final p = await WarpEndpointPicker.load();
-    // Iliya 2026-06-16: cloudflare-quic.com → нет соединения (DPI читает SNI).
+    // Iliya 2026-06-16: cloudflare-quic.com → нет соединения (DPI читает SNI
+    // внутри junk-приманки §136 → cloudflare-* палевно). ТОЛЬКО для WG-пула.
     for (final s in p.sniPool) {
       expect(s.contains('cloudflare'), isFalse,
-          reason: 'cloudflare-SNI палевен: $s');
+          reason: 'cloudflare-SNI палевен в WG-masquerade: $s');
     }
+  });
+
+  test('§130 masque_sni_pool отдельный, СОДЕРЖИТ cloudflare (реальный TLS SNI)',
+      () async {
+    final p = await WarpEndpointPicker.load();
+    expect(p.masqueSniPool, isNotEmpty);
+    // У MASQUE это реальный SNI QUIC-сессии к Cloudflare — cloudflare-домен тут
+    // естественен (в отличие от WG-junk §136), пул специально отдельный.
+    expect(p.masqueSniPool, contains('www.cloudflare.com'));
+    expect(p.masqueSniPool, contains('cdn.jsdelivr.net'));
+    expect(p.masqueSniPool, contains('aws.amazon.com'));
+    // randomMasqueSni отдаёт непустой домен из пула.
+    final s = p.randomMasqueSni();
+    expect(s, isNotEmpty);
+    expect(p.masqueSniPool, contains(s));
+  });
+
+  test('§130 новые чистые домены в обоих пулах (jsdelivr/aws — не cloudflare)',
+      () async {
+    final p = await WarpEndpointPicker.load();
+    expect(p.sniPool, contains('cdn.jsdelivr.net'));
+    expect(p.sniPool, contains('aws.amazon.com'));
   });
 }

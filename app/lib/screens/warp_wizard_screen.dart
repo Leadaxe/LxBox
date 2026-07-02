@@ -36,7 +36,8 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
 
   // §136/§143 — masquerade-параметры (Advanced). Пустой SNI(=id) → рандом из пула.
   final _sni = TextEditingController(); // id (домен маскировки)
-  List<String> _sniPool = const []; // подсказки для DropdownMenu
+  List<String> _sniPool = const []; // подсказки для DropdownMenu (WG §136)
+  List<String> _masqueSniPool = const []; // §130 — SNI-пул для MASQUE-комбобокса
   // §143 — ip (протокол маскировки): quic/dns/stun/sip; ib (браузер) при quic.
   String _masqIp = 'quic';
   String _masqIb = 'chrome';
@@ -78,6 +79,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
       setState(() {
         _picker = p;
         _sniPool = p.sniPool;
+        _masqueSniPool = p.masqueSniPool;
         // SNI при открытии — конкретный случайный домен (не «Random»); юзер
         // может выбрать другой/вписать свой или рерольнуть кубиком.
         if (_sni.text.trim().isEmpty) _sni.text = p.randomSni();
@@ -104,6 +106,14 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
     final sni = _picker?.randomSni();
     if (sni != null && sni.isNotEmpty) {
       setState(() => _sni.text = sni);
+    }
+  }
+
+  /// §130 — кубик 🎲 у MASQUE SNI: случайный домен из MASQUE-пула в поле.
+  void _fillRandomMasqueSni() {
+    final sni = _picker?.randomMasqueSni();
+    if (sni != null && sni.isNotEmpty) {
+      setState(() => _masqueSni.text = sni);
     }
   }
 
@@ -359,11 +369,34 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> {
                       ),
                       const SizedBox(height: 12),
                       _label('SNI (optional)'),
-                      TextField(
-                        controller: _masqueSni,
-                        enabled: !_busy,
-                        decoration:
-                            _input('Leave empty for the default SNI'),
+                      // combo-box: пункты из sni_pool + свободный ввод. Пусто →
+                      // дефолт ядра (consumer-masque.cloudflareclient.com).
+                      // Кубик подставляет случайный домен из пула.
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: LayoutBuilder(
+                              builder: (ctx, c) => DropdownMenu<String>(
+                                controller: _masqueSni,
+                                enabled: !_busy,
+                                width: c.maxWidth,
+                                requestFocusOnTap: true,
+                                menuHeight: 280,
+                                hintText: 'Leave empty for the default SNI',
+                                dropdownMenuEntries: [
+                                  for (final s in _masqueSniPool)
+                                    DropdownMenuEntry(value: s, label: s),
+                                ],
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.casino_outlined),
+                            tooltip: 'Pick another random domain',
+                            onPressed: _busy ? null : _fillRandomMasqueSni,
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       Row(
