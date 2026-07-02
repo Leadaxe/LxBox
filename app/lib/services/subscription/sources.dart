@@ -81,14 +81,22 @@ class ParseResult {
 /// а не в HTTP-headers. HTTP первичны, inline как fallback.
 Future<ParseResult> parseFromSource(SubscriptionSource source,
     {http.Client? client}) async {
-  final fetch = await _fetch(source, client ?? http.Client());
-  final inline = _inlineHeaders(fetch.body);
-  // inline под капотом, HTTP поверх — HTTP первичны.
-  final merged = <String, String>{...inline, ...fetch.headers};
-  final meta = _metaFromHeaders(merged);
-  final decoded = decode(fetch.body);
-  final nodes = parseAll(decoded);
-  return ParseResult(nodes, decoded, meta, fetch.body, fetch.headers);
+  // §219 — закрываем ТОЛЬКО самосозданный клиент (инжектированный извне
+  // закрывает владелец): иначе `http.Client()` течёт на каждый fetch.
+  final owned = client == null;
+  final c = client ?? http.Client();
+  try {
+    final fetch = await _fetch(source, c);
+    final inline = _inlineHeaders(fetch.body);
+    // inline под капотом, HTTP поверх — HTTP первичны.
+    final merged = <String, String>{...inline, ...fetch.headers};
+    final meta = _metaFromHeaders(merged);
+    final decoded = decode(fetch.body);
+    final nodes = parseAll(decoded);
+    return ParseResult(nodes, decoded, meta, fetch.body, fetch.headers);
+  } finally {
+    if (owned) c.close();
+  }
 }
 
 /// Извлекает `# key: value` из первых строк-комментариев тела подписки.
@@ -141,8 +149,16 @@ set fetchBackoffsForTesting(List<Duration>? value) =>
 /// Прямой HTTP GET без декода/парса. Для UI «Source» — показать живой
 /// ответ сервера как есть. Не пишет в кэш.
 Future<FetchResult> fetchRaw(SubscriptionSource source,
-    {http.Client? client}) async =>
-    _fetch(source, client ?? http.Client());
+    {http.Client? client}) async {
+  // §219 — закрываем только самосозданный клиент (см. parseFromSource).
+  final owned = client == null;
+  final c = client ?? http.Client();
+  try {
+    return await _fetch(source, c);
+  } finally {
+    if (owned) c.close();
+  }
+}
 
 Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async {
   switch (source) {
@@ -294,7 +310,11 @@ SubscriptionMeta? _metaFromHeaders(Map<String, String> h) {
     for (final p in userInfo.split(';')) {
       final kv = p.trim().split('=');
       if (kv.length != 2) continue;
-      final n = int.tryParse(kv[1].trim()) ?? 0;
+      final parsed = int.tryParse(kv[1].trim());
+      // upload/download/total: дефолт 0 (нет трафика). expire: §219 — null при
+      // непарсимом значении, НЕ 0 (0 = реальный timestamp эпохи 1970-01-01,
+      // а не «нет срока»).
+      final n = parsed ?? 0;
       switch (kv[0].trim()) {
         case 'upload':
           upload = n;
@@ -303,7 +323,7 @@ SubscriptionMeta? _metaFromHeaders(Map<String, String> h) {
         case 'total':
           total = n;
         case 'expire':
-          expire = n;
+          expire = parsed;
       }
     }
   }

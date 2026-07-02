@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'amnezia_link.dart';
 import 'uri_utils.dart';
@@ -108,7 +109,8 @@ DecodedBody _classifyPlain(String body) {
     lines.add(l);
   }
   if (lines.isEmpty) {
-    return DecodeFailure('no parseable content', trimmed.substring(0, trimmed.length.clamp(0, 80)));
+    return DecodeFailure(
+        'no parseable content', trimmed.substring(0, min(trimmed.length, 80)));
   }
   return UriLines(lines, skipped);
 }
