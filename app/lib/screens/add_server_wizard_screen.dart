@@ -8,6 +8,7 @@ import '../controllers/subscription_controller.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/template_vars.dart';
+import '../models/tls_spec.dart';
 import '../services/parser/uri_utils.dart' show newUuidV4;
 import '../services/ui_helpers.dart';
 import '../widgets/emoji_picker_button.dart';
@@ -17,13 +18,13 @@ import '../widgets/emoji_picker_button.dart';
 // (no template processing).
 final TemplateVars _emptyVars = TemplateVars.empty;
 
-/// §074 — Add server wizard. Full-screen route с 3 tabs: SOCKS5 form,
-/// Paste URI, Paste JSON. Открывается long-press'ом на «+» в
-/// Subscriptions screen.
+/// §074 — Add server wizard. Full-screen route с 4 tabs: SOCKS5 form,
+/// HTTP form (§222), Paste URI, Paste JSON. Открывается long-press'ом на
+/// «+» в Subscriptions screen.
 ///
 /// Submit поведение:
-///   - SOCKS5 tab → конструирует `SocksSpec` + `UserServer`, через
-///     `subController.addUserServer(...)`.
+///   - SOCKS5 / HTTP tabs → конструируют `SocksSpec`/`HttpSpec` +
+///     `UserServer`, через `subController.addUserServer(...)`.
 ///   - URI / JSON tabs → text идёт в `subController.addFromInput(...)`
 ///     (тот же путь что у tap-«+»).
 ///
@@ -62,6 +63,16 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   final _socksName = TextEditingController();
   final _socksFormKey = GlobalKey<FormState>();
 
+  // HTTP tab controllers (§222) — зеркало SOCKS5-формы + TLS switch.
+  final _httpTag = TextEditingController(text: 'local-http-out');
+  final _httpHost = TextEditingController(text: '127.0.0.1');
+  final _httpPort = TextEditingController(text: '8080');
+  final _httpUser = TextEditingController();
+  final _httpPass = TextEditingController();
+  final _httpName = TextEditingController();
+  final _httpFormKey = GlobalKey<FormState>();
+  bool _httpTls = false;
+
   // Paste URI tab controller (multi-line text area).
   final _uriCtrl = TextEditingController();
 
@@ -73,7 +84,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _tab = TabController(length: 4, vsync: this);
     _tab.addListener(() => setState(() {})); // обновить Add button enabled
   }
 
@@ -86,6 +97,12 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     _socksUser.dispose();
     _socksPass.dispose();
     _socksName.dispose();
+    _httpTag.dispose();
+    _httpHost.dispose();
+    _httpPort.dispose();
+    _httpUser.dispose();
+    _httpPass.dispose();
+    _httpName.dispose();
     _uriCtrl.dispose();
     _jsonCtrl.dispose();
     super.dispose();
@@ -99,8 +116,10 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
         case 0:
           await _submitSocks();
         case 1:
-          await _submitInput(_uriCtrl.text);
+          await _submitHttp();
         case 2:
+          await _submitInput(_uriCtrl.text);
+        case 3:
           await _submitInput(_jsonCtrl.text);
       }
     } finally {
@@ -141,6 +160,49 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     // rawBody = JSON outbound (sing-box format). UserServer.fromJson
     // re-parsит rawBody через parseSingboxEntry → tag preserved exactly.
     // Альтернатива (toUri) теряет tag в URI fragment round-trip.
+    final outboundJson = spec.emit(_emptyVars).map;
+    final us = UserServer(
+      id: newUuidV4(),
+      name: name.isNotEmpty ? name : tag,
+      enabled: true,
+      tagPrefix: '',
+      detourPolicy: DetourPolicy.defaults,
+      origin: UserSource.manual,
+      createdAt: DateTime.now(),
+      rawBody: jsonEncode(outboundJson),
+      nodes: [spec],
+    );
+    await widget.subController.addUserServer(us);
+    await _afterAdd(addedTag: tag);
+  }
+
+  /// §222 — зеркало [_submitSocks] для HTTP(S)-прокси. Тот же lossless-путь:
+  /// label = tag, rawBody = JSON outbound (parseSingboxEntry сохраняет tag).
+  Future<void> _submitHttp() async {
+    if (!(_httpFormKey.currentState?.validate() ?? false)) return;
+    final tag = _httpTag.text.trim();
+    final host = _httpHost.text.trim();
+    final port = int.tryParse(_httpPort.text.trim()) ?? 0;
+    if (port < 1 || port > 65535) {
+      showSnack('Invalid port');
+      return;
+    }
+    final name = _httpName.text.trim();
+
+    final spec = HttpSpec(
+      id: newUuidV4(),
+      tag: tag,
+      label: tag,
+      server: host,
+      port: port,
+      rawUri: '',
+      username: _httpUser.text,
+      password: _httpPass.text,
+      // Тонкая настройка TLS (sni/insecure/alpn) — через JSON-редактор ноды.
+      tls: _httpTls
+          ? TlsSpec(enabled: true, serverName: host)
+          : TlsSpec.disabled,
+    );
     final outboundJson = spec.emit(_emptyVars).map;
     final us = UserServer(
       id: newUuidV4(),
@@ -215,6 +277,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
           controller: _tab,
           tabs: const [
             Tab(text: 'SOCKS5'),
+            Tab(text: 'HTTP'),
             Tab(text: 'Paste URI'),
             Tab(text: 'Paste JSON'),
           ],
@@ -224,6 +287,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
         controller: _tab,
         children: [
           _buildSocksForm(context),
+          _buildHttpForm(context),
           _buildUriPaste(context),
           _buildJsonPaste(context),
         ],
@@ -319,6 +383,104 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     );
   }
 
+  /// §222 — вставка эмодзи из пикера в позицию курсора поля Tag (HTTP).
+  void _insertHttpTagEmoji(String emoji) {
+    final text = _httpTag.text;
+    final sel = _httpTag.selection;
+    final start =
+        (sel.start >= 0 && sel.start <= text.length) ? sel.start : text.length;
+    final end = (sel.end >= 0 && sel.end <= text.length) ? sel.end : start;
+    final insert = '$emoji ';
+    _httpTag.value = TextEditingValue(
+      text: text.replaceRange(start, end, insert),
+      selection: TextSelection.collapsed(offset: start + insert.length),
+    );
+    setState(() {});
+  }
+
+  Widget _buildHttpForm(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      child: Form(
+        key: _httpFormKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _label('Tag'),
+            TextFormField(
+              controller: _httpTag,
+              decoration: _input('local-http-out').copyWith(
+                suffixIcon: EmojiPickerButton(onPick: _insertHttpTagEmoji),
+              ),
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Tag required' : null,
+            ),
+            const SizedBox(height: 12),
+            _label('Host'),
+            TextFormField(
+              controller: _httpHost,
+              decoration: _input('127.0.0.1'),
+              keyboardType: TextInputType.url,
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Host required' : null,
+            ),
+            const SizedBox(height: 12),
+            _label('Port'),
+            TextFormField(
+              controller: _httpPort,
+              decoration: _input('8080'),
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              validator: (v) {
+                final n = int.tryParse((v ?? '').trim());
+                if (n == null || n < 1 || n > 65535) return 'Port 1..65535';
+                return null;
+              },
+            ),
+            const SizedBox(height: 12),
+            _label('Username (optional)'),
+            TextFormField(
+              controller: _httpUser,
+              decoration: _input(''),
+            ),
+            const SizedBox(height: 12),
+            _label('Password (optional)'),
+            TextFormField(
+              controller: _httpPass,
+              decoration: _input(''),
+              obscureText: true,
+            ),
+            const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('HTTPS (TLS to proxy)'),
+              subtitle: const Text(
+                  'Connect to the proxy over TLS. Advanced TLS options '
+                  '(SNI, ALPN) can be edited later via node JSON.'),
+              value: _httpTls,
+              onChanged: (v) => setState(() => _httpTls = v),
+            ),
+            const SizedBox(height: 12),
+            _label('Display name (optional)'),
+            TextFormField(
+              controller: _httpName,
+              decoration: _input('My HTTP proxy'),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Shown as the entry title in Subscriptions list. If empty, '
+              'tag is used as the title.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildUriPaste(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
@@ -333,13 +495,13 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
               expands: true,
               textAlignVertical: TextAlignVertical.top,
               decoration: _input(
-                  'vless://… / vmess://… / trojan://… / socks5://… / wireguard://…'),
+                  'vless://… / vmess://… / trojan://… / socks5://… / proxy-http://… / wireguard://…'),
               style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Supported: vless / vmess / trojan / ss / hy2 / tuic / socks5 / wireguard URLs',
+            'Supported: vless / vmess / trojan / ss / hy2 / tuic / socks5 / proxy-http(s) / wireguard URLs',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),

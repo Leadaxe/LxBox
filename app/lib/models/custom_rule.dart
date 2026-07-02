@@ -162,6 +162,12 @@ sealed class CustomRule {
         CustomRuleSrs(:final srsUrl) => srsUrl,
         _ => '',
       };
+
+  /// §225 — сырое тело json-правила. Пусто для остальных kind'ов.
+  String get json => switch (this) {
+        CustomRuleJson(:final json) => json,
+        _ => '',
+      };
   String get presetId => switch (this) {
         CustomRulePreset(:final presetId) => presetId,
         _ => '',
@@ -181,6 +187,9 @@ sealed class CustomRule {
         CustomRuleInline(:final outbound) => outbound,
         CustomRuleSrs(:final outbound) => outbound,
         CustomRulePreset(:final varsValues) => varsValues['outbound'] ?? '',
+        // §225 — у json-правила действие внутри сырого тела; отдельного
+        // outbound-tag нет (не участвует в OutboundPicker/dangling-миграциях).
+        CustomRuleJson() => '',
       };
 
   /// Int-порты для sing-box (`port: [80, 443]`). Нерасспарсенное /
@@ -216,11 +225,12 @@ sealed class CustomRule {
       CustomRuleKind.inline => CustomRuleInline.fromJson(j),
       CustomRuleKind.srs => CustomRuleSrs.fromJson(j),
       CustomRuleKind.preset => CustomRulePreset.fromJson(j),
+      CustomRuleKind.json => CustomRuleJson.fromJson(j),
     };
   }
 }
 
-enum CustomRuleKind { inline, srs, preset }
+enum CustomRuleKind { inline, srs, preset, json }
 
 /// §117 задача 3 — DNS-опция правила («DNS follows the rule»). Правило
 /// **ссылается** на существующий DNS-сервер по tag (выбор из списка, не ввод
@@ -745,6 +755,74 @@ class CustomRulePreset extends CustomRule {
     updated['outbound'] = outbound;
     return copyWith(varsValues: updated);
   }
+}
+
+// ─── Raw JSON (§225) ─────────────────────────────────────────────────────
+
+/// §225 (#17) — правило заданное сырым JSON. Юзер пишет тело правила (или
+/// массив тел) для `route.rules`, билдер кладёт его как есть — это открывает
+/// ЛЮБОЙ sing-box route-action (`hijack-dns`/`sniff`/`resolve`/`route-options`
+/// и т.д.) без модели-на-каждое-поле. Действие — часть самого JSON, поэтому
+/// `outbound` отсутствует, а match-секции UI (domain/port/wifi/dns) скрыты.
+///
+/// `json` хранится как ввёл юзер (не переформатируем). Валидность синтаксиса
+/// проверяется в UI (inline) и в билдере (skip+warning на битом JSON, без
+/// падения сборки). Dangling `outbound` внутри тела ловит `validateConfig`
+/// тем же путём, что и обычные правила.
+class CustomRuleJson extends CustomRule {
+  CustomRuleJson({
+    super.id,
+    required super.name,
+    super.enabled = true,
+    this.json = '',
+  });
+
+  /// Сырой текст правила: JSON-объект `{...}` или массив объектов `[{...}]`.
+  @override
+  final String json;
+
+  @override
+  CustomRuleKind get kind => CustomRuleKind.json;
+
+  @override
+  String get summary {
+    final oneLine = json.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (oneLine.isEmpty) return '';
+    return oneLine.length <= 48 ? oneLine : '${oneLine.substring(0, 48)}…';
+  }
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'enabled': enabled,
+        'kind': kind.name,
+        'json': json,
+      };
+
+  factory CustomRuleJson.fromJson(Map<String, dynamic> j) => CustomRuleJson(
+        id: _id(j),
+        name: (j['name'] as String?) ?? '',
+        enabled: (j['enabled'] as bool?) ?? true,
+        json: (j['json'] as String?) ?? '',
+      );
+
+  CustomRuleJson copyWith({String? name, bool? enabled, String? json}) =>
+      CustomRuleJson(
+        id: id,
+        name: name ?? this.name,
+        enabled: enabled ?? this.enabled,
+        json: json ?? this.json,
+      );
+
+  @override
+  CustomRuleJson withEnabled(bool enabled) => copyWith(enabled: enabled);
+  @override
+  CustomRuleJson withName(String name) => copyWith(name: name);
+
+  /// json-правило не имеет outbound-поля (действие внутри тела) — no-op.
+  @override
+  CustomRuleJson withOutbound(String outbound) => this;
 }
 
 // ─── helpers ───────────────────────────────────────────────────────────

@@ -380,6 +380,35 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         username: entry['username']?.toString() ?? '',
         password: entry['password']?.toString() ?? '',
       );
+    case 'http': // §222 — HTTP(S) CONNECT proxy
+      if (server.isEmpty || port == 0) return null;
+      // headers: listable-значения sing-box (string | [string, ...]) —
+      // как naive extra_headers.
+      final hh = entry['headers'];
+      final headers = <String, String>{};
+      if (hh is Map) {
+        for (final k in hh.keys) {
+          final v = hh[k];
+          if (v is String) {
+            headers[k.toString()] = v;
+          } else if (v is List && v.isNotEmpty) {
+            headers[k.toString()] = v.first.toString();
+          }
+        }
+      }
+      return HttpSpec(
+        id: newUuidV4(),
+        tag: tag.isEmpty ? 'http-$server-$port' : tag,
+        label: label,
+        server: server,
+        port: port,
+        rawUri: '',
+        username: entry['username']?.toString() ?? '',
+        password: entry['password']?.toString() ?? '',
+        path: entry['path']?.toString() ?? '',
+        headers: headers,
+        tls: _tlsFromSingbox(entry['tls'], server),
+      );
     case 'wireguard':
       // §106 — bare IP → CIDR (/32 | /128) для address и allowed_ips.
       final addr = (entry['address'] as List?)

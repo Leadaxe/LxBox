@@ -118,6 +118,12 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         // Флаг «готово к build'у?» — все remote rule_set'ы закэшены.
         'ready': remoteRuleSets.every((rs) => rs['cached'] == true),
       };
+    case CustomRuleJson():
+      // §225 — raw-JSON правило: сырое тело в поле `json`.
+      return {
+        ...base,
+        'json': r.json,
+      };
   }
 }
 

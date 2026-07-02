@@ -33,7 +33,7 @@ enum TunnelStatus {
         connecting => 'Connecting…',
         connected => 'Connected',
         stopping => 'Stopping…',
-        revoked => 'Revoked by another VPN',
+        revoked => 'Taken by another VPN',
         error => 'Error',
         unknown => 'Unknown',
       };

@@ -252,6 +252,8 @@ List<String> applyCustomRules(
         warnings.addAll(_applySrsSingle(cr, registry, srsPaths));
       case CustomRuleInline():
         warnings.addAll(_applyInlineSingle(cr, registry));
+      case CustomRuleJson():
+        warnings.addAll(_applyJsonSingle(cr, registry));
     }
   }
   return warnings;
@@ -468,6 +470,9 @@ UnifiedApplyResult applyAllCustomRules(
         if (!cr.enabled) continue;
         warnings.addAll(_applySrsSingle(cr, registry, srsPaths,
             dnsMirrors: state.dnsMirrors));
+      case CustomRuleJson():
+        if (!cr.enabled) continue;
+        warnings.addAll(_applyJsonSingle(cr, registry));
     }
   }
   return UnifiedApplyResult(
@@ -563,4 +568,45 @@ Map<String, dynamic> _outboundToRoute(
     rule['outbound'] = outbound;
   }
   return rule;
+}
+
+/// §225 (#17) — одно raw-JSON правило. Тело — JSON-объект `{...}` (один rule)
+/// или массив объектов `[{...}, ...]` (несколько, порядок сохраняется). Битый
+/// JSON / скаляр / не-Map-элемент → skip + warning (сборка не падает: правило
+/// деградирует, остальной конфиг цел). Dangling `outbound` внутри тела ловит
+/// `validateConfig` тем же путём, что и обычные правила.
+List<String> _applyJsonSingle(CustomRuleJson cr, RuleSetRegistry registry) {
+  final warnings = <String>[];
+  final name = cr.name.trim().isEmpty ? 'unnamed' : cr.name.trim();
+  final text = cr.json.trim();
+  if (text.isEmpty) {
+    warnings.add('Raw-JSON rule "$name" skipped: empty body.');
+    return warnings;
+  }
+  final dynamic decoded;
+  try {
+    decoded = jsonDecode(text);
+  } catch (_) {
+    warnings.add('Raw-JSON rule "$name" skipped: invalid JSON.');
+    return warnings;
+  }
+  if (decoded is Map<String, dynamic>) {
+    registry.addRule(decoded);
+  } else if (decoded is List) {
+    var added = 0;
+    for (final e in decoded) {
+      if (e is Map<String, dynamic>) {
+        registry.addRule(e);
+        added++;
+      }
+    }
+    if (added == 0) {
+      warnings.add(
+          'Raw-JSON rule "$name" skipped: array has no rule objects.');
+    }
+  } else {
+    warnings.add(
+        'Raw-JSON rule "$name" skipped: expected an object or array of objects.');
+  }
+  return warnings;
 }

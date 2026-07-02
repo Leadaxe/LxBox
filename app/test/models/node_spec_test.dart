@@ -85,7 +85,7 @@ void main() {
       expect(entry.map['peers'], isList);
     });
 
-    test('exhaustive switch compiles for all 10 variants', () {
+    test('exhaustive switch compiles for all NodeSpec variants', () {
       final specs = <NodeSpec>[
         VlessSpec(
             id: '1', tag: 't', label: 'l', server: 's', port: 1, rawUri: 'u', uuid: 'u'),
@@ -105,6 +105,8 @@ void main() {
             id: '7', tag: 't', label: 'l', server: 's', port: 22, rawUri: 'u', user: 'root'),
         SocksSpec(
             id: '8', tag: 't', label: 'l', server: 's', port: 1080, rawUri: 'u'),
+        HttpSpec(
+            id: '12', tag: 't', label: 'l', server: 's', port: 8080, rawUri: 'u'),
         WireguardSpec(
             id: '9', tag: 't', label: 'l', server: 's', port: 51820, rawUri: 'u',
             privateKey: 'pk', localAddresses: const [], peers: const []),
@@ -127,6 +129,7 @@ void main() {
           TuicSpec() => 'tuic',
           SshSpec() => 'ssh',
           SocksSpec() => 'socks',
+          HttpSpec() => 'http',
           WireguardSpec() => 'wireguard',
           NaiveSpec() => 'naive',
           MasqueSpec() => 'masque',

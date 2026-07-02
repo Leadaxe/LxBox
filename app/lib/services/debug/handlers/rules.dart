@@ -205,7 +205,7 @@ CustomRuleKind? _fieldKind(Map<String, dynamic> m, String key) {
   for (final k in CustomRuleKind.values) {
     if (k.name == v) return k;
   }
-  throw BadRequest('unknown kind: $v (expected inline|srs)');
+  throw BadRequest('unknown kind: $v (expected inline|srs|preset|json)');
 }
 
 /// Строгий парсинг для POST — отклоняет пустое `name`, wrong-types.
@@ -281,6 +281,13 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         presetId: presetId,
         varsValues: fieldStringMap(j, 'vars_values'),
       );
+    case CustomRuleKind.json:
+      // §225 — raw-JSON правило: тело в поле `json` (сырой текст route.rule).
+      final body = fieldString(j, 'json') ?? '';
+      if (body.trim().isEmpty) {
+        throw const BadRequest('field "json" required for json rules');
+      }
+      return CustomRuleJson(name: name, enabled: enabled, json: body);
   }
 }
 

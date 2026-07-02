@@ -433,6 +433,64 @@ String toUriSocks(SocksSpec s) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// HTTP(S) CONNECT proxy — task 222
+// ════════════════════════════════════════════════════════════════════════════
+
+Outbound emitHttp(HttpSpec s, TemplateVars vars) {
+  final out = _baseOutbound('http', s);
+  if (s.username.isNotEmpty) out['username'] = s.username;
+  if (s.password.isNotEmpty) out['password'] = s.password;
+  if (s.path.isNotEmpty) out['path'] = s.path;
+  if (s.headers.isNotEmpty) {
+    final keys = s.headers.keys.toList()..sort();
+    final sorted = <String, String>{};
+    for (final k in keys) {
+      sorted[k] = s.headers[k]!;
+    }
+    out['headers'] = sorted;
+  }
+  final tlsMap = s.tls.toSingbox();
+  if (tlsMap.isNotEmpty) out['tls'] = tlsMap;
+  _addDetour(out, s);
+  return Outbound(out);
+}
+
+String toUriHttp(HttpSpec s) {
+  // userinfo: оба пусто → нет; только user → user@; только pass → :pass@.
+  final hasUser = s.username.isNotEmpty;
+  final hasPass = s.password.isNotEmpty;
+  final ui = !hasUser && !hasPass
+      ? ''
+      : (!hasPass
+          ? '${encodeParam(s.username)}@'
+          : '${encodeParam(s.username)}:${encodeParam(s.password)}@');
+
+  final q = <String, String>{};
+  if (s.path.isNotEmpty) q['path'] = s.path;
+  if (s.headers.isNotEmpty) {
+    q['headers'] = serializeNaiveExtraHeaders(s.headers);
+  }
+  if (s.tls.enabled) {
+    if (s.tls.serverName != null && s.tls.serverName!.isNotEmpty) {
+      q['sni'] = s.tls.serverName!;
+    }
+    if (s.tls.fingerprint != null && s.tls.fingerprint!.isNotEmpty) {
+      q['fp'] = s.tls.fingerprint!;
+    }
+    if (s.tls.alpn.isNotEmpty) q['alpn'] = s.tls.alpn.join(',');
+    if (s.tls.insecure) q['allowInsecure'] = '1';
+  }
+
+  final scheme = s.tls.enabled ? 'proxy-https' : 'proxy-http';
+  final host = _wrapIpv6(s.server);
+  final qs = buildQuery(q);
+  final frag = encodeFragment(s.label);
+  return '$scheme://$ui$host:${s.port}'
+      '${qs.isEmpty ? '' : '?$qs'}'
+      '${frag.isEmpty ? '' : '#$frag'}';
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // WireGuard
 // ════════════════════════════════════════════════════════════════════════════
 
