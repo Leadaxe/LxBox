@@ -778,6 +778,7 @@ class CustomRuleJson extends CustomRule {
   });
 
   /// Сырой текст правила: JSON-объект `{...}` или массив объектов `[{...}]`.
+  @override
   final String json;
 
   @override

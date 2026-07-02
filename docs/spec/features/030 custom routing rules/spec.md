@@ -60,7 +60,8 @@ inbound) на routing-rule level, где они работают как OR/AND �
 ## Модель
 
 ```dart
-enum CustomRuleKind { inline, srs }
+// §033 добавил preset, §225 — json (raw sing-box route rule для #17).
+enum CustomRuleKind { inline, srs, preset, json }
 
 class CustomRule {
   final String id;                    // UUID, стабильный
@@ -136,6 +137,17 @@ class CustomRule {
    {"rule_set":"<name>","port":[443],"protocol":["tls"],"package_name":["…"],"ip_is_private":true,"outbound":"direct-out"}
    ```
 3. Если path нет — rule **skip**'ается, в `warnings` пушится `"SRS rule X skipped: no cached file"`. Тунель запускается, правило просто не работает пока юзер не нажмёт Download.
+
+### Raw JSON (`kind == json`, §225 / #17)
+
+Правило заданное сырым JSON-телом. Юзер пишет объект `{...}` (один route.rule)
+или массив `[{...}]` (несколько); билдер кладёт их в `route.rules` как есть.
+Открывает ЛЮБОЙ sing-box route-action (`hijack-dns`/`sniff`/`resolve`/
+`route-options` …) без модели-на-каждое-поле — действие часть тела, поэтому
+OutboundPicker и match-секции (domain/port/wifi/dns) в UI скрыты. Битый JSON /
+скаляр / не-Map → skip + warning (сборка не падает). Dangling `outbound` внутри
+тела ловит `validateConfig` тем же путём, что обычные правила. Подробности —
+[task 225](../../tasks/225-raw-json-routing-rule.md).
 
 ### Reject sentinel
 
