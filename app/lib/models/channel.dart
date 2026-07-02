@@ -33,7 +33,9 @@ int? channelNumberOf(String tag) {
 /// uint16 верхняя граница для `tolerance` (§161 — вне диапазона роняет ядро).
 const int _kToleranceMax = 65535;
 
-int _clampTolerance(int v) => v < 0 ? 0 : (v > _kToleranceMax ? _kToleranceMax : v);
+/// §161 — клэмп tolerance/pool_tolerance в uint16 [0, 65535]. §219/§221 —
+/// публичная (channel_edit клэмпит в снапшоте, симметрично clampChannelPool).
+int clampChannelTolerance(int v) => v < 0 ? 0 : (v > _kToleranceMax ? _kToleranceMax : v);
 
 /// §208 — режим выбора узла в auto-группе (urltest, ядро SPEC 019 V2).
 /// `leastTest` — апстрим: один лучший по delay (как было всегда).
@@ -136,14 +138,14 @@ class ChannelAuto {
       ChannelAuto(
         url: url ?? this.url,
         interval: interval ?? this.interval,
-        tolerance: tolerance == null ? this.tolerance : _clampTolerance(tolerance),
+        tolerance: tolerance == null ? this.tolerance : clampChannelTolerance(tolerance),
         idleTimeout: idleTimeout ?? this.idleTimeout,
         interruptExistConnections:
             interruptExistConnections ?? this.interruptExistConnections,
         mode: mode ?? this.mode,
         pool: pool == null ? this.pool : clampChannelPool(pool),
         poolTolerance:
-            poolTolerance == null ? this.poolTolerance : _clampTolerance(poolTolerance),
+            poolTolerance == null ? this.poolTolerance : clampChannelTolerance(poolTolerance),
         stickyHash: stickyHash ?? this.stickyHash,
       );
 
@@ -162,14 +164,14 @@ class ChannelAuto {
     return ChannelAuto(
       url: json['url'] as String? ?? 'https://cp.cloudflare.com/generate_204',
       interval: json['interval'] as String? ?? '5m',
-      tolerance: _clampTolerance((json['tolerance'] as num?)?.toInt() ?? 50),
+      tolerance: clampChannelTolerance((json['tolerance'] as num?)?.toInt() ?? 50),
       idleTimeout: json['idle_timeout'] as String? ?? '30m',
       interruptExistConnections:
           json['interrupt_exist_connections'] as bool? ?? false,
       mode: UrltestMode.fromWire(json['mode'] as String?),
       pool: clampChannelPool((balMap['pool'] as num?)?.toInt() ?? 3),
       poolTolerance:
-          _clampTolerance((balMap['pool_tolerance'] as num?)?.toInt() ?? 0),
+          clampChannelTolerance((balMap['pool_tolerance'] as num?)?.toInt() ?? 0),
       // rawSticky == null (нет balancer) → дефолт; явный [] остаётся пустым.
       stickyHash: rawSticky is List
           ? sticky // (включая пустой [] = выкл)
@@ -180,7 +182,7 @@ class ChannelAuto {
   Map<String, dynamic> toJson() => {
         'url': url,
         'interval': interval,
-        'tolerance': _clampTolerance(tolerance),
+        'tolerance': clampChannelTolerance(tolerance),
         'idle_timeout': idleTimeout,
         'interrupt_exist_connections': interruptExistConnections,
         // §208 — mode всегда; balancer всегда (для round-trip storage). Билдер
@@ -188,7 +190,7 @@ class ChannelAuto {
         'mode': mode.wire,
         'balancer': {
           'pool': clampChannelPool(pool),
-          'pool_tolerance': _clampTolerance(poolTolerance),
+          'pool_tolerance': clampChannelTolerance(poolTolerance),
           'sticky_hash': stickyHash.map((k) => k.wire).toList(),
         },
       };

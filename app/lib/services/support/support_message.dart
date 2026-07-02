@@ -87,8 +87,11 @@ class SupportMessageService {
 
   /// Сеть (best-effort, кэшируем) → кэш → null.
   Future<SupportMessage?> fetchOrCached() async {
+    // §221 — закрываем самосозданный http.Client (owned): иначе течёт на каждый
+    // fetch с главного экрана (тот же паттерн, что sources/community в §219).
+    final owned = httpClientForTesting == null;
+    final client = httpClientForTesting ?? http.Client();
     try {
-      final client = httpClientForTesting ?? http.Client();
       final resp = await client
           .get(Uri.parse(_url), headers: {'User-Agent': 'LxBox/1.x'})
           .timeout(_httpTimeout);
@@ -101,6 +104,8 @@ class SupportMessageService {
       }
     } catch (e) {
       AppLog.I.debug('SupportMessage: fetch failed ($e) — trying cache');
+    } finally {
+      if (owned) client.close();
     }
     final cached = await SupportState.I.getString('cache_json');
     if (cached.isEmpty) return null;
