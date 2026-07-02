@@ -139,7 +139,8 @@ final class VmessSpec extends NodeSpec {
   final String security; // cipher: auto, aes-128-gcm, chacha20-poly1305, none
   final TlsSpec tls;
   final TransportSpec? transport;
-  final String packetEncoding;
+  // §219 — VMess не имеет packet_encoding в sing-box (это VLESS-параметр);
+  // поле было write-only copy-paste из VlessSpec, удалено.
 
   VmessSpec({
     required super.id,
@@ -153,7 +154,6 @@ final class VmessSpec extends NodeSpec {
     this.security = 'auto',
     this.tls = TlsSpec.disabled,
     this.transport,
-    this.packetEncoding = '',
     super.chained,
     super.warnings,
   });
