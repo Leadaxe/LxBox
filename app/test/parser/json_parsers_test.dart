@@ -51,6 +51,45 @@ void main() {
       expect(wg.mtu, 1420);
     });
 
+    test('§219 wireguard: reserved из peer парсится (WARP client_id)', () {
+      final spec = parseSingboxEntry({
+        'type': 'wireguard',
+        'tag': 'wg',
+        'address': ['172.16.0.2/32'],
+        'private_key': 'PRIV==',
+        'peers': [
+          {
+            'address': '162.159.192.1',
+            'port': 2408,
+            'public_key': 'PUB==',
+            'allowed_ips': ['0.0.0.0/0'],
+            'reserved': [1, 2, 3],
+          }
+        ],
+      });
+      expect(spec, isA<WireguardSpec>());
+      final wg = spec! as WireguardSpec;
+      expect(wg.peers.single.reserved, [1, 2, 3]);
+    });
+
+    test('§219 wireguard: plain WG без mtu → дефолт 1408 (как URI-парсер)', () {
+      final spec = parseSingboxEntry({
+        'type': 'wireguard',
+        'tag': 'wg',
+        'address': ['172.16.0.2/32'],
+        'private_key': 'PRIV==',
+        'peers': [
+          {
+            'address': '1.2.3.4',
+            'port': 51820,
+            'public_key': 'PUB==',
+            'allowed_ips': ['0.0.0.0/0'],
+          }
+        ],
+      });
+      expect((spec! as WireguardSpec).mtu, 1408);
+    });
+
     test('§130 masque round-trip: emit → parseSingboxEntry ≈ spec', () {
       final orig = MasqueSpec(
         id: 'x',

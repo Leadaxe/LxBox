@@ -270,7 +270,20 @@ PresetFragments expandPreset(
           result['rule_set'] = present.length == 1 ? present.first : present;
           routingRule = result;
         }
+      } else if (refTag == null) {
+        // Легитимно: правило без `rule_set` матчит по другим полям
+        // (domain/protocol/port/…). Оставляем как есть.
+        routingRule = result;
       } else {
+        // §219 — refTag не null, но и не валидная форма: пустая String либо
+        // непредусмотренный тип (int/bool/Map из кривого шаблона). Раньше
+        // молча проходило как валидное правило; теперь — drop + warning
+        // (деградация вместо fatal, ср. §172/§217).
+        result.remove('rule_set');
+        warnings.add(
+          'preset "${preset.presetId}": routing rule rule_set has invalid '
+          'value (${refTag.runtimeType}) — reference dropped',
+        );
         routingRule = result;
       }
     }

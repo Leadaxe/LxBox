@@ -444,6 +444,29 @@ void main() {
       expect((cfg['route'] as Map)['final'], 'vpn-1-auto');
     });
 
+    // §219 — auto-двойник НЕ эмитится, если node-filter канала отсёк все ноды
+    // (`auto != null`, но `nodes.isEmpty`). Раньше `<tag>-auto` безусловно
+    // попадал в validFinals → route_final на него давал висячую ссылку (fatal).
+    // Теперь validFinals = фактически эмитированные outbounds → деградация.
+    test('route_final на auto-двойник с пустым node-set → vpn-1', () async {
+      final cfg = await buildWith(
+        [
+          const Channel(
+            tag: 'vpn-1',
+            label: 'X',
+            auto: ChannelAuto(),
+            nodeFilter: '____NOMATCH____', // не матчит ни одну ноду
+          ),
+        ],
+        'vpn-1-auto',
+      );
+      final outbounds = (cfg['outbounds'] as List).cast<Map>();
+      // auto-двойник действительно не эмитирован
+      expect(outbounds.any((o) => o['tag'] == 'vpn-1-auto'), false);
+      // route.final деградировал на неудаляемый vpn-1
+      expect((cfg['route'] as Map)['final'], 'vpn-1');
+    });
+
     test('direct-out как route_final валиден', () async {
       final cfg = await buildWith(
         [const Channel(tag: 'vpn-1', label: 'X')],

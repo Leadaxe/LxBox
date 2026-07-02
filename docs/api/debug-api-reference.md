@@ -38,6 +38,34 @@ curl -s "$BASE/help?format=json" | jq   # machine-readable для auto-tooling
 - Write'ы (PUT/POST/PATCH/DELETE) возвращают `{"ok":true, "action":"<name>", ...extras}` или 4xx/5xx с `{"error":{"code":"...","message":"..."}}`.
 - Любой write опционально принимает `?rebuild=true` — после успешного write'а регенерирует sing-box конфиг через `SubscriptionController.generateConfig()` + `HomeController.saveParsedConfig()`. Ответ расширяется `rebuilt:bool + config_bytes:N` (или `rebuild_error:str`).
 
+## Security model — root-доступ by design
+
+> **Debug API — это полноценный «рутовый» доступ над приложением, намеренно.**
+> Он by design даёт прямой доступ ко **всему состоянию, включая секреты в
+> открытом виде**. Это осознанное проектное решение, а **не** уязвимость.
+
+- `GET /config` отдаёт **raw sing-box JSON as-is** — с `private_key`, `password`,
+  UUID нод в открытом виде.
+- `GET /backup?include=storage` отдаёт весь `SettingsStorage.exportRaw()`.
+- `GET /state/subs?reveal=true` отдаёт **полные URL подписок** (с секретами).
+- `PUT /config` / `PUT /backup` / все CRUD-роуты полностью перезаписывают состояние.
+
+**Единственная граница безопасности:**
+1. **Bearer-токен** (`debug_token`, ротируемый через App Settings → Developer).
+2. **Bind на `127.0.0.1`** (доступ только с устройства / через `adb forward`).
+3. **Toggle default-OFF** — API выключен, пока юзер явно не включил.
+
+Маскирование секретов (scrubber в `GET /state/storage`, URL-mask по умолчанию в
+`GET /state/subs`) — это **UX-удобство** «не светить секрет случайно в скопированном
+логе», а **не** security-граница: маску всегда можно снять (`reveal=true`, raw
+`/config`). Не путать одно с другим.
+
+**Для будущих аудитов/ревью:** прямой доступ к секретам за токеном — намеренный
+дизайн; **не** помечать его как security-находку и **не** закрывать / делать
+маскирование обязательным. Аудит безопасности Debug API должен проверять саму
+границу (стойкость/ротацию токена, bind-адрес, default-OFF, отсутствие обхода
+auth), а не факт, что за границей всё открыто.
+
 ---
 
 ## Index
