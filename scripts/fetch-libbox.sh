@@ -20,7 +20,7 @@ BASE_URL="https://github.com/$REPO/releases/download/$VER"
 
 if [ -f "$DEST/libbox.aar" ] && [ -f "$DEST/.libbox.version" ] \
    && [ "$(cat "$DEST/.libbox.version")" = "$VER" ]; then
-  echo "✓ libbox.aar уже $VER — skip"
+  echo "✓ libbox.aar already $VER — skipping"
   exit 0
 fi
 
