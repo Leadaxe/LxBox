@@ -169,6 +169,7 @@ class SettingsStorage {
     // Прочие UI/one-shot флаги
     'haptic_enabled', // §029 — НЕ в SharedPreferences (вопреки старому STORAGE.md)
     'notif_perm_prompted_v1', // §128 — promt уведомлений показан
+    'allow_rotation', // §220 — снятие портретной фиксации
   };
 
   /// Полный allowlist для подключей `vars` при импорте: кодовые флаги ∪ все
@@ -518,6 +519,16 @@ class SettingsStorage {
 
   static Future<void> setAutoRecordWifi(bool enabled) =>
       setVar('auto_record_wifi_history', enabled ? 'true' : 'false');
+
+  /// §220 — разрешить поворот UI (landscape). Default false — жёсткий портрет,
+  /// как было всегда; поведение телефонов не меняется. Toggle в App Settings →
+  /// General → Behavior; применяется сразу через `applyAllowRotationSetting()`
+  /// (main.dart), без рестарта.
+  static Future<bool> getAllowRotation() async =>
+      (await getVar('allow_rotation', 'false')) == 'true';
+
+  static Future<void> setAllowRotation(bool enabled) =>
+      setVar('allow_rotation', enabled ? 'true' : 'false');
 
   // ---------------------------------------------------------------------------
   // App update check (§036) — GitHub Releases polling on launch with 24h cap.

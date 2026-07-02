@@ -251,6 +251,7 @@ Per-key спеки и shape — в разделах ниже.
 | `subscription_device_model` | — | identity headers | Модель устройства-заголовок. |
 | `haptic_enabled` | `'true'` | §029 | Тактильный отклик UI. Живёт в `vars` (`HapticService.prefsKey`), НЕ в SharedPreferences. |
 | `notif_perm_prompted_v1` | `'false'` | §128 | One-shot: промпт разрешения уведомлений показан. |
+| `allow_rotation` | `'false'` | [§220] | Снятие портретной фиксации: `'true'` → пустой preferred-orientations (ориентацию решает системный auto-rotate). Default — жёсткий портрет. Toggle в App Settings → General → Behavior. |
 | `<custom>` | — | — | Любые юзерские template-vars, выставленные через UI / `PUT /settings/vars/<key>`. |
 
 > Полный код-список app-флагов — `SettingsStorage._appFeatureFlagVars`; держать таблицу в синхроне с ним.
@@ -896,5 +897,6 @@ Debug API handlers — идут через единую дверь `SettingsStor
 [§117]: ./spec/features/117%20dns-rework/spec.md
 [§189]: ./spec/tasks/189-native-prefs-mirror-in-json.md
 [§192]: ./spec/tasks/192-proxy-mode-prepare-revokes-foreign-vpn.md
+[§220]: ./spec/tasks/220-allow-rotation-setting.md
 [043-applog]: ./spec/features/043%20applog%20per-source%20quotas/spec.md
 [043-dns]: ./spec/tasks/043-dns-servers-refs-by-kind.md

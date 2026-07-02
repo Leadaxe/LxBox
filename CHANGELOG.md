@@ -8,6 +8,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- **§220 — toggle «Allow rotation»** (App Settings → General → Behavior):
+  снимает портретную фиксацию — ориентацию решает системный auto-rotate.
+  Default OFF (портрет, как раньше). Применяется сразу, без рестарта.
+  По фидбэку планшетных юзеров с 4PDA.
+
 ### Fixed
 
 - **§219 — глубокий аудит: исправлены баги логики.** `route.final` на auto-двойник
