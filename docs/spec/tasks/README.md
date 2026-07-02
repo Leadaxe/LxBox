@@ -27,6 +27,11 @@ docs/spec/tasks/NNN-short-kebab-title.md
 
 > §146 — **не** коллизия: `146-warp-quic-initial-fragmented-i1.md` + `146-test-vectors/`
 > относятся к одной таске (директория — hex-векторы к ней).
+>
+> §180 — **не** коллизия: `180-dns-query-stream.md` (основная таска, DNS-стрим
+> SPEC 018) + `180-FEEDBACK-kernel-dns-unimplemented.md` +
+> `180-FEEDBACK-2-kernel-dns-processinfo-empty.md` (два фидбэка команде ядра по
+> той же теме) — один пул, не параллельные сессии.
 
 **Профилактика:** перед коммитом новой таски — `git status` + взять реально
 свободный номер (gap-поиск в `tasks/`), а не «следующий по порядку».
