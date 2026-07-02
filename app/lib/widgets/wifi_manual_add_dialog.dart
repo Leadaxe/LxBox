@@ -15,7 +15,8 @@ import 'wifi_entry.dart';
 Future<WifiEntry?> showWifiManualAddDialog(BuildContext context) async {
   final ssidCtrl = TextEditingController();
   final bssidCtrl = TextEditingController();
-  String? errorText;
+  String? ssidError; // §219 — отдельная ошибка для SSID (раньше пустой SSID
+  String? errorText; // молча ничего не делал: errorText был только у BSSID).
   return showDialog<WifiEntry>(
     context: context,
     builder: (ctx) => StatefulBuilder(
@@ -28,11 +29,12 @@ Future<WifiEntry?> showWifiManualAddDialog(BuildContext context) async {
             TextField(
               controller: ssidCtrl,
               autofocus: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'SSID',
                 hintText: 'lexRouter',
+                errorText: ssidError,
                 isDense: true,
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
@@ -60,12 +62,14 @@ Future<WifiEntry?> showWifiManualAddDialog(BuildContext context) async {
               final ssid = ssidCtrl.text.trim();
               final bssid = bssidCtrl.text.trim().toLowerCase();
               if (ssid.isEmpty) {
-                setDlgState(() => errorText = null);
+                setDlgState(() => ssidError = 'SSID required');
                 return;
               }
               if (bssid.isNotEmpty && !isValidBssid(bssid)) {
-                setDlgState(
-                    () => errorText = 'Expected xx:xx:xx:xx:xx:xx');
+                setDlgState(() {
+                  ssidError = null;
+                  errorText = 'Expected xx:xx:xx:xx:xx:xx';
+                });
                 return;
               }
               Navigator.of(ctx).pop(WifiEntry(ssid, bssid));

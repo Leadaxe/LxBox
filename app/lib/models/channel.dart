@@ -81,8 +81,9 @@ const List<StickyHashKey> kDefaultStickyHash = [
 ];
 
 /// §208 — нижняя граница размера пула. Ядро `0`→дефолт 3, отриц.→ошибка; из UI
-/// шлём всегда осмысленное (min 1), кламп на клиенте безопаснее.
-int _clampPool(int v) => v < 1 ? 1 : v;
+/// шлём всегда осмысленное (min 1), кламп на клиенте безопаснее. §219 —
+/// публичная (переиспользуется channel_edit_screen для снапшота).
+int clampChannelPool(int v) => v < 1 ? 1 : v;
 
 /// Параметры urltest-двойника канала (`<tag>-auto`). null-аналог на уровне
 /// [Channel.auto] == null означает «галка auto ВЫКЛ, двойник не эмитится».
@@ -110,7 +111,7 @@ class ChannelAuto {
   /// эмитит `balancer{}` в config.
   final UrltestMode mode;
 
-  /// §208 — `balancer.pool`: размер пула round_robin. clamp ≥1 (см. _clampPool).
+  /// §208 — `balancer.pool`: размер пула round_robin. clamp ≥1 (см. clampChannelPool).
   final int pool;
 
   /// §208 — `balancer.pool_tolerance` (мс). 0 = держать пул живых; >0 = отбор
@@ -140,7 +141,7 @@ class ChannelAuto {
         interruptExistConnections:
             interruptExistConnections ?? this.interruptExistConnections,
         mode: mode ?? this.mode,
-        pool: pool == null ? this.pool : _clampPool(pool),
+        pool: pool == null ? this.pool : clampChannelPool(pool),
         poolTolerance:
             poolTolerance == null ? this.poolTolerance : _clampTolerance(poolTolerance),
         stickyHash: stickyHash ?? this.stickyHash,
@@ -166,7 +167,7 @@ class ChannelAuto {
       interruptExistConnections:
           json['interrupt_exist_connections'] as bool? ?? false,
       mode: UrltestMode.fromWire(json['mode'] as String?),
-      pool: _clampPool((balMap['pool'] as num?)?.toInt() ?? 3),
+      pool: clampChannelPool((balMap['pool'] as num?)?.toInt() ?? 3),
       poolTolerance:
           _clampTolerance((balMap['pool_tolerance'] as num?)?.toInt() ?? 0),
       // rawSticky == null (нет balancer) → дефолт; явный [] остаётся пустым.
@@ -186,7 +187,7 @@ class ChannelAuto {
         // решает, эмитить ли balancer в config-ЯДРА (только round_robin).
         'mode': mode.wire,
         'balancer': {
-          'pool': _clampPool(pool),
+          'pool': clampChannelPool(pool),
           'pool_tolerance': _clampTolerance(poolTolerance),
           'sticky_hash': stickyHash.map((k) => k.wire).toList(),
         },

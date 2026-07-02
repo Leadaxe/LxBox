@@ -76,7 +76,12 @@ class OutboundPicker extends StatelessWidget {
     }
 
     // Fallback: если текущее value отсутствует в options (удалили group),
-    // показываем первый вариант чтобы dropdown не сломался.
+    // показываем первый вариант чтобы dropdown не сломался. §219 — это ТОЛЬКО
+    // визуальная защита от краша: хранимое value здесь НЕ меняется (виджет
+    // презентационный, onChanged дёргается лишь на явный выбор юзера). Целостность
+    // висячих ссылок на удалённый канал обеспечивается проактивно на
+    // storage-уровне: `_healChannelRefs` (§202) переводит route_final / custom-rule
+    // outbound на vpn-1 при удалении канала.
     final effectiveValue = items.any((i) => i.value == value)
         ? value
         : (options.isNotEmpty ? options.first.value : kOutboundReject);

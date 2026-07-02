@@ -140,9 +140,13 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                   : _autoIdleCtrl.text.trim(),
               interruptExistConnections: _autoInterrupt,
               // §208 — balancer (значимы только при round_robin, но храним всегда
-              // — переключение режима не теряет настройки пула). pool<1 → 1.
+              // — переключение режима не теряет настройки пула).
+              // §219 — pool клэмпим ЗДЕСЬ (pool<1 → 1), как в ChannelAuto.toJson/
+              // copyWith: прямой конструктор не клэмпит, иначе снапшот в памяти
+              // (для _isDirty) расходился бы с тем, что реально персистится.
               mode: _autoMode,
-              pool: int.tryParse(_autoPoolCtrl.text.trim()) ?? 3,
+              pool: clampChannelPool(
+                  int.tryParse(_autoPoolCtrl.text.trim()) ?? 3),
               poolTolerance:
                   int.tryParse(_autoPoolToleranceCtrl.text.trim()) ?? 0,
               // Set→List в фиксированном порядке enum (детерминизм diff/JSON).
