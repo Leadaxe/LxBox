@@ -367,6 +367,13 @@ class _RoutingScreenState extends State<RoutingScreen>
         rule.kind == CustomRuleKind.preset ? _presetOut(rule, preset) : rule.outbound;
     final pickerDisabled =
         rule.kind == CustomRuleKind.preset && preset == null;
+    // DNS-only пресеты (FakeIP: только dns_rule, без routing rule и без
+    // var:outbound) роутить нечего — outbound-picker был бы мёртвым.
+    // Для user-rule и пресета «not found» picker оставляем (последний
+    // рисует warning через pickerDisabled).
+    final showOutbound = rule.kind != CustomRuleKind.preset ||
+        preset == null ||
+        preset.hasOutboundAffordance;
 
     Widget? statusButton;
     if (rule is CustomRuleSrs) {
@@ -384,6 +391,7 @@ class _RoutingScreenState extends State<RoutingScreen>
       subtitle: subtitle,
       pickerValue: pickerValue,
       pickerDisabled: pickerDisabled,
+      showOutbound: showOutbound,
       statusButton: statusButton,
       onTap: () => _openCustomRuleEditor(index),
       onLongPressStart: (pos) => _showRuleContextMenu(index, pos),

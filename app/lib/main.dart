@@ -74,6 +74,11 @@ void main() async {
     // best-effort: ошибка не валит запуск (try выше).
     await SettingsStorage.migrateChannelsIfNeeded(
         (await TemplateLoader.load()).presetGroups);
+    // §228 — ремап переименованных preset_id (bittorrent-direct→bittorrent,
+    // private-ip-direct→private-ip, block_unknown→unknown-traffic) в
+    // сохранённых custom_rules. ДО seed'а дефолтных пресетов и первого билда,
+    // чтобы правила юзеров не стали «not found». Идемпотентна, best-effort.
+    await SettingsStorage.migrateRenamedPresetIds();
     // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в
     // AppLog как DebugSource.core. Идемпотентно (повторный attach no-op).
     ClashLogPump.I.attach();

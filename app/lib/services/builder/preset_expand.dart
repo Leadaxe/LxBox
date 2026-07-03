@@ -219,13 +219,13 @@ PresetFragments expandPreset(
       //
       // Override-ветка выше конвертит reject только когда юзер ЯВНО выбрал
       // его в OutboundPicker (`varsValues['outbound']` проставлен). Но `reject`
-      // может прийти и template-дефолтом: пресет `block_unknown` имеет
+      // может прийти и template-дефолтом: пресет `unknown-traffic` имеет
       // `rule.outbound: "@outbound"` + var.default_value: "reject". Если юзер
       // просто включил пресет и не трогал пикер — ключа в `varsValues` нет,
       // override == null, ветка выше пропускается, а substitute уже подставил
       // `@outbound` → "reject" в `result['outbound']`. Без этого backstop'а
       // литерал `outbound: "reject"` уезжал в route.rules → fatal у юзеров
-      // (см. §033 block_unknown). Поэтому нормализуем ФИНАЛЬНЫЙ результат
+      // (см. §033 unknown-traffic). Поэтому нормализуем ФИНАЛЬНЫЙ результат
       // независимо от того, override это или дефолт.
       //
       // Это инвариант билдера (контракт sing-box reject=action), а НЕ забота

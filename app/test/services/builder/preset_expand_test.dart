@@ -403,7 +403,7 @@ void main() {
     });
 
     // §162 регресс — `@outbound`-форма + var.default_value: "reject".
-    // block_unknown (§033) задаёт `rule.outbound: "@outbound"` и дефолт
+    // unknown-traffic (§033) задаёт `rule.outbound: "@outbound"` и дефолт
     // "reject". Если юзер ВКЛЮЧИЛ пресет, но не открывал OutboundPicker,
     // ключа в varsValues нет → override-ветка пропускается, а substitute уже
     // подставил @outbound → "reject" в поле `outbound`. До фикса литерал
@@ -414,7 +414,7 @@ void main() {
         'action:reject, НЕ outbound:reject', () {
       final preset = SelectableRule(
         label: 'Unknown traffic',
-        presetId: 'block_unknown',
+        presetId: 'unknown-traffic',
         vars: [
           WizardVar(
             name: 'outbound',
@@ -435,7 +435,7 @@ void main() {
       );
       final rule = CustomRulePreset(
         name: 'Unknown traffic',
-        presetId: 'block_unknown',
+        presetId: 'unknown-traffic',
         varsValues: {}, // ВКЛючён, но пикер не открывали → ключа outbound нет
       );
 
@@ -603,7 +603,76 @@ void main() {
       expect(ba.dnsServers.map((s) => s['tag']).toList(), ['b', 'a']);
     });
   });
+
+  // §228 — FakeIP: DNS-only пресет. Сервер вливается через hidden-var
+  // `dns_server` (магическая переменная), правило ссылается на него через
+  // @dns_server. Регрессия: без var сервер не эмитился, правило висло в
+  // пустоту и молча дропалось.
+  group('expandPreset — FakeIP (§228)', () {
+    test('сервер fakeip эмитится через hidden-var default; правило ссылается '
+        'на него (юзер var не трогает)', () {
+      final preset = _fakeip();
+      final rule = CustomRulePreset(
+        name: 'FakeIP',
+        presetId: 'fakeip',
+        varsValues: const {}, // hidden-var → значение из default_value
+      );
+
+      final f = expandPreset(rule, preset);
+
+      expect(f.warnings, isEmpty);
+      // Сервер вливается — не пустой список (регрессия #228).
+      expect(f.dnsServers.length, 1);
+      expect(f.dnsServers.first['tag'], 'fakeip');
+      expect(f.dnsServers.first['type'], 'fakeip');
+      // Правило ссылается на реально эмитнутый сервер (не dangling).
+      expect(f.dnsRule, {
+        'query_type': ['A', 'AAAA'],
+        'server': 'fakeip',
+      });
+      // DNS-only: routing rule нет.
+      expect(f.routingRule, isNull);
+    });
+
+    test('hasOutboundAffordance == false (нечего роутить → нет picker)', () {
+      expect(_fakeip().hasOutboundAffordance, isFalse);
+    });
+
+    test('ru-direct.hasOutboundAffordance == true (есть var:outbound и rule)',
+        () {
+      expect(_ruDirect().hasOutboundAffordance, isTrue);
+    });
+  });
 }
+
+/// Фабрика — реплика `FakeIP` пресета из шаблона (§228).
+SelectableRule _fakeip() => SelectableRule(
+      label: 'FakeIP',
+      description: 'Instant DNS via placeholder IPs.',
+      presetId: 'fakeip',
+      vars: [
+        WizardVar(
+          name: 'dns_server',
+          type: 'dns_servers',
+          defaultValue: 'fakeip',
+          wizardUI: 'hidden',
+          title: 'FakeIP server',
+        ),
+      ],
+      dnsRule: const {
+        'query_type': ['A', 'AAAA'],
+        'server': '@dns_server',
+      },
+      dnsServers: [
+        {
+          'type': 'fakeip',
+          'tag': 'fakeip',
+          'inet4_range': '198.18.0.0/15',
+          'inet6_range': 'fc00::/18',
+          'description': 'FakeIP allocator',
+        },
+      ],
+    );
 
 /// Фабрика — сокращённая реплика `Russian domains direct` из шаблона.
 SelectableRule _ruDirect() => SelectableRule(

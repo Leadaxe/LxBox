@@ -121,9 +121,9 @@ wizard_template.json
 │   │   ├─ find_process            bool          true → package_name detection включён
 │   │   ├─ default_domain_resolver "@dns_default_domain_resolver"
 │   │   ├─ rules[]                 list[3]       base routing rules
-│   │   │   ├─ {action:"resolve", inbound:"tun-in", strategy:"@resolve_strategy"}
-│   │   │   ├─ {action:"sniff",   inbound:"tun-in", timeout:"1s"}
-│   │   │   └─ {protocol:"dns",   action:"hijack-dns"}
+│   │   │   ├─ {action:"sniff",   inbound:"tun-in", timeout:"1s"}   §228 — sniff ПЕРЕД resolve (FakeIP)
+│   │   │   ├─ {protocol:"dns",   action:"hijack-dns"}
+│   │   │   └─ {action:"resolve", inbound:"tun-in", strategy:"@resolve_strategy"}
 │   │   ├─ rule_set[]              list          (в шаблоне ключа НЕТ — создаётся билдером
 │   │   │                                         из selectable_rules[].rule_set)
 │   │   ├─ final                   tag           default selector ("vpn-1")
@@ -133,7 +133,7 @@ wizard_template.json
 │                                                  (clash_api УДАЛЁН в §122 — блок в кастомном шаблоне
 │                                                   роняет старт ядра: "clash api is not included in this build")
 │
-└─ selectable_rules[]              list[6]       КАТАЛОГ preset'ов
+└─ selectable_rules[]              list[7]       КАТАЛОГ preset'ов
     └─ <Preset>                    object
         ├─ preset_id               string        id для ссылки из custom_rules (§030)
         ├─ label                   string        UI display
@@ -489,11 +489,13 @@ Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `
     "find_process":            true,
     "default_domain_resolver": "@dns_default_domain_resolver",
     "rules": [
-      {"action": "resolve", "inbound": "tun-in", "strategy": "@resolve_strategy"},
-      // sniff-правило в шаблоне обёрнуто в #if по @sniff_enabled (см. § #if ниже) —
-      // здесь показано резолвнутым (true-ветка); при false элемент выпадает
+      // §228: sniff ПЕРЕД resolve — sniff извлекает домен до того, как resolve
+      // сработает; критично для FakeIP (resolve по фейк-IP 198.18.x.x бессмыслен).
+      // sniff-правило обёрнуто в #if по @sniff_enabled (см. § #if ниже) — здесь
+      // показано резолвнутым (true-ветка); при false элемент выпадает.
       {"action": "sniff",   "inbound": "tun-in", "timeout": "1s"},
-      {"protocol": "dns", "action": "hijack-dns"}
+      {"protocol": "dns", "action": "hijack-dns"},
+      {"action": "resolve", "inbound": "tun-in", "strategy": "@resolve_strategy"}
     ],
     "final":                  "vpn-1",
     "auto_detect_interface":  "@auto_detect_interface"
@@ -544,14 +546,32 @@ Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `
 |---|---|---|---|---|---|---|
 | `block-ads` | false | — | ✓ (remote ads-all) | ✓ (action: reject) | — | — |
 | `ru-direct` | true | ✓ (outbound, dns_server, dns_ip) | ✓ (inline `.ru` suffixes) | ✓ (`@outbound`) | ✓ (`@dns_server`) | ✓ (yandex_udp/doh/dot) |
-| `ru-inside` | (false) | — | ✓ (remote ru-inside) | ✓ | — | — |
-| `bittorrent-direct` | true | — | — | ✓ (`protocol: bittorrent`) | — | — |
-| `private-ip-direct` | (false) | — | — | ✓ (`ip_is_private`) | — | — |
-| `block_unknown` | false | ✓ (`outbound`=reject) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
+| `fakeip` | false | ✓ (dns_server — **hidden**) | — | — | ✓ (`query_type: [A,AAAA]` → `@dns_server`) | ✓ (type `fakeip`, ranges 198.18/15 + fc00::/18) |
+| `ru-inside` | (false) | ✓ (outbound) | ✓ (remote ru-inside) | ✓ (`@outbound`) | — | — |
+| `bittorrent` | true | ✓ (outbound) | — | ✓ (`protocol: bittorrent` → `@outbound`) | — | — |
+| `private-ip` | (false) | ✓ (outbound) | — | ✓ (`ip_is_private` → `@outbound`) | — | — |
+| `unknown-traffic` | false | ✓ (`outbound`=reject) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
 
-`block_unknown` — reject/direct для трафика в туннеле, не атрибутированного ни одному установленному приложению (фоновые/чужие процессы). Инлайн `rule_set` `unknown-apps` матчит «всё, что НЕ приложение» через `invert: true` + `package_name_regex: "^"`.
+`unknown-traffic` — reject/direct для трафика в туннеле, не атрибутированного ни одному установленному приложению (фоновые/чужие процессы). Инлайн `rule_set` `unknown-apps` матчит «всё, что НЕ приложение» через `invert: true` + `package_name_regex: "^"`.
 
-**Backstop `reject`→`action`.** У `block_unknown` var-дефолт `outbound: "reject"`, и `rule.outbound: "@outbound"`. `reject` в sing-box — это `action`, а НЕ outbound-tag: литерал `{outbound: "reject"}` валидатор реджектит как dangling ref → fatal, ядро не стартует. Поэтому `preset_expand.dart` БЕЗУСЛОВНО нормализует финальный результат: `outbound == "reject"` → снять `outbound`, поставить `action: "reject"`. Это инвариант билдера (контракт sing-box), а не забота автора шаблона — работает и когда юзер выбрал reject явно в пикере, и когда просто включил пресет с дефолтом.
+**Backstop `reject`→`action`.** У `unknown-traffic` var-дефолт `outbound: "reject"`, и `rule.outbound: "@outbound"`. `reject` в sing-box — это `action`, а НЕ outbound-tag: литерал `{outbound: "reject"}` валидатор реджектит как dangling ref → fatal, ядро не стартует. Поэтому `preset_expand.dart` БЕЗУСЛОВНО нормализует финальный результат: `outbound == "reject"` → снять `outbound`, поставить `action: "reject"`. Это инвариант билдера (контракт sing-box), а не забота автора шаблона — работает и когда юзер выбрал reject явно в пикере, и когда просто включил пресет с дефолтом.
+
+**`fakeip` (§228)** — FakeIP-DNS: `dns_servers` даёт сервер `type: fakeip` (диапазоны 198.18.0.0/15 + fc00::/18), `dns_rule` заворачивает все `A`/`AAAA`-запросы на него. Приложение получает placeholder-IP мгновенно (0 latency, нет pre-tunnel DNS-утечки), реальный резолв доменов происходит внутри туннеля. **Порядок в каталоге критичен:** `fakeip` стоит ПОСЛЕ `ru-direct` — билдер сохраняет порядок пресетов в `dns.rules[]`, поэтому ru-dns-правило матчится раньше и русские домены резолвятся по-настоящему (иначе они ушли бы в fakeip и `geoip-ru` по фейк-IP не сматчил бы → RU-трафик через VPN). Сервер вливается через **hidden-var** `dns_server` (см. «Магические переменные» ниже — без неё сервер не эмитится). Персистентность фейк-маппинга между реконнектами — `experimental.cache_file.store_fakeip: true` в базовом config (не пресетом; статичный флаг). `dns.independent_cache` НЕ ставим — deprecated в sing-box 1.14.
+
+### Магические переменные пресетов (§033, §228)
+
+Имена preset-vars **не произвольны**: несколько имён имеют специальную семантику — билдер и UI смотрят на них по имени/типу, а не только подставляют `@name`. Пропуск нужной «магической» переменной приводит к тому, что часть пресета **молча не работает** (регрессия §228 с FakeIP — сервер не вливался, потому что не было var `dns_server`).
+
+| Var (имя / тип) | Кто смотрит | Что делает | Пропустишь → |
+|---|---|---|---|
+| `dns_server` (`type: dns_servers`) | `preset_expand.dart` | **Селектор** какой из `dns_servers[]` пресета влить в `config.dns.servers`. Билдер эмитит РОВНО ОДИН сервер — тот, чей `tag == varsValues['dns_server']` (или `default_value`). `dns_rule.server` ссылается на него через `@dns_server`. | `dns_servers[]` **не вливается вообще** (цикл гейтится наличием этой var). `dns_rule` повиснет на несуществующий сервер → dangling → guard молча дропнет правило. Пресет ничего не делает для DNS. |
+| `outbound` (`type: outbound`) | `preset_expand.dart` + Routing UI | Значение для `@outbound` в `rule`/`dns_servers.detour`. UI рисует outbound-picker в строке пресета (см. `hasOutboundAffordance`). Дефолт `"reject"` → backstop-нормализация в `action:reject`. | Нет var:outbound И нет `rule` → `hasOutboundAffordance == false` → outbound-picker в строке **не рисуется** (DNS-only пресет — роутить нечего, picker был бы мёртвым). Это корректно, а не баг. |
+
+**Правила при добавлении пресета:**
+
+1. **Пресет несёт `dns_servers[]`** → обязателен var `dns_server` (`type: dns_servers`, `default_value` = tag нужного сервера), а `dns_rule.server` = `@dns_server`. Иначе сервер не эмитится (§228). Если сервер один и выбирать не из чего (как у FakeIP) — пометь var **`wizard_ui: "hidden"`**: значение всё равно придёт из `default_value`, но мёртвый dropdown-из-одного-пункта в редакторе не рисуется. (Редактор `preset_params_tab.dart` фильтрует hidden-vars; sections тоже.)
+2. **Пресет роутит трафик** (есть `rule` с `outbound`/`action` или var:outbound) → outbound-picker в строке появится автоматически. **DNS-only пресет** (только `dns_rule`, как FakeIP) → picker сам скрывается через `hasOutboundAffordance`.
+3. `outbound`-var с дефолтом `reject` → билдер сам превратит `{outbound:reject}` в `{action:reject}` (backstop, см. `unknown-traffic` выше).
 
 ### `selectable_rules[*].rule_set[i]` — sing-box rule-set definition
 
