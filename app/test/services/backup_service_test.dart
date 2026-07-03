@@ -229,7 +229,7 @@ void main() {
           'enabled_groups' || 'excluded_nodes' =>
             ['_probe'],
           'channels_migrated' || 'presets_migrated' ||
-          'interrupt_connections_on_switch' =>
+          'preset_ids_remapped' || 'interrupt_connections_on_switch' =>
             true,
           _ => '_probe', // строковые: route_final, node_sort_mode, ...
         };
