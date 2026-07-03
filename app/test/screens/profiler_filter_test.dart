@@ -11,6 +11,9 @@ TrafficEvent _ev({
   String? domain,
   String? ip,
   String? process,
+  String? rule,
+  List<String> outboundChain = const [],
+  List<String> detourChain = const [],
   ConfidenceLevel confidence = ConfidenceLevel.verified,
 }) =>
     TrafficEvent(
@@ -19,6 +22,9 @@ TrafficEvent _ev({
       domain: domain,
       ip: ip,
       process: process,
+      rule: rule,
+      outboundChain: outboundChain,
+      detourChain: detourChain,
       confidence: confidence,
     );
 
@@ -144,6 +150,81 @@ void main() {
           TrafficEventKind.tcpOpen);
       expect(ProfilerFilter.kindFamily(TrafficEventKind.udpOpen),
           TrafficEventKind.udpOpen);
+    });
+  });
+
+  group('ProfilerFilter — оси Rule/Outbound (§230)', () {
+    late ProfilerFilter f;
+    late List<TrafficEvent> events;
+
+    setUp(() {
+      f = ProfilerFilter();
+      events = [
+        _ev(
+            kind: TrafficEventKind.tcpOpen,
+            domain: 'a.ru',
+            rule: 'ru-direct',
+            outboundChain: ['node-1', 'vpn-1']),
+        _ev(
+            kind: TrafficEventKind.tcpOpen,
+            domain: 'b.com',
+            rule: 'fakeip',
+            outboundChain: ['node-2', '✨auto', 'vpn-1'],
+            detourChain: ['WARP']),
+        _ev(
+            kind: TrafficEventKind.tcpOpen,
+            domain: 'c.com',
+            rule: null, // без правила → «final»
+            outboundChain: ['direct-out']),
+      ];
+    });
+
+    test('rule-ось: только выбранное правило', () {
+      f.toggleRule('ru-direct', true);
+      final out = f.apply(events).toList();
+      expect(out.single.domain, 'a.ru');
+    });
+
+    test('rule-ось: пустой rule ловится как «final» ('' в наборе)', () {
+      f.toggleRule('', true);
+      final out = f.apply(events).toList();
+      expect(out.single.domain, 'c.com');
+    });
+
+    test('rule-ось OR: два правила', () {
+      f.toggleRule('ru-direct', true);
+      f.toggleRule('fakeip', true);
+      expect(f.apply(events).length, 2);
+    });
+
+    test('outbound-ось: любое звено outboundChain', () {
+      f.toggleOutbound('vpn-1', true);
+      final out = f.apply(events).toList();
+      // vpn-1 есть в цепочках a.ru и b.com (не в direct-out).
+      expect(out.length, 2);
+      expect(out.map((e) => e.domain), containsAll(['a.ru', 'b.com']));
+    });
+
+    test('outbound-ось: ловит detour-звено (WARP)', () {
+      f.toggleOutbound('WARP', true);
+      expect(f.apply(events).single.domain, 'b.com');
+    });
+
+    test('rule + outbound ортогональны (AND между осями)', () {
+      f.toggleRule('fakeip', true);
+      f.toggleOutbound('vpn-1', true);
+      // fakeip И vpn-1 в цепочке → только b.com.
+      expect(f.apply(events).single.domain, 'b.com');
+    });
+
+    test('activeCount учитывает rule+outbound; clearAll сбрасывает', () {
+      f.toggleRule('ru-direct', true);
+      f.toggleOutbound('vpn-1', true);
+      f.toggleOutbound('WARP', true);
+      expect(f.activeCount, 3); // 1 rule + 2 outbound
+      f.clearAll();
+      expect(f.activeCount, 0);
+      expect(f.apply(events).length, 3);
     });
   });
 

@@ -22,6 +22,8 @@ Future<void> showProfilerFilterSheet(
   required bool showAppTab,
   required Set<String> seenApps,
   required bool hasUnattributed,
+  Set<String> seenRules = const {},
+  Set<String> seenOutbounds = const {},
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -32,6 +34,8 @@ Future<void> showProfilerFilterSheet(
       showAppTab: showAppTab,
       seenApps: seenApps,
       hasUnattributed: hasUnattributed,
+      seenRules: seenRules,
+      seenOutbounds: seenOutbounds,
     ),
   );
 }
@@ -42,12 +46,16 @@ class _ProfilerFilterSheet extends StatefulWidget {
     required this.showAppTab,
     required this.seenApps,
     required this.hasUnattributed,
+    required this.seenRules,
+    required this.seenOutbounds,
   });
 
   final ProfilerFilter filter;
   final bool showAppTab;
   final Set<String> seenApps;
   final bool hasUnattributed;
+  final Set<String> seenRules;
+  final Set<String> seenOutbounds;
 
   @override
   State<_ProfilerFilterSheet> createState() => _ProfilerFilterSheetState();
@@ -56,6 +64,10 @@ class _ProfilerFilterSheet extends StatefulWidget {
 class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
     with TickerProviderStateMixin {
   late final TabController _tab;
+  // §230 — поле поиска (domain/ip/process, substring, не regex). Засеяно из
+  // f.search (клик по домену в детали ставит его туда), редактируется/чистится
+  // юзером прямо здесь. Живёт над вкладками — видно на любой оси.
+  late final TextEditingController _searchCtrl;
 
   // Protocol-чипы: (label, представитель-семейство §177).
   static const _protocols = <(String, TrafficEventKind)>[
@@ -70,10 +82,22 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
   // их в App-табе тоже, чтобы галочка была видна.
   final Set<String> _extraApps = {};
 
+  // §230 — какие табы показываем. Protocol всегда; App по флагу; Rule/Outbound
+  // — если есть что показать (значения в трафике ИЛИ уже выбранные в фильтре).
+  bool get _showRuleTab =>
+      widget.seenRules.isNotEmpty || f.rules.isNotEmpty;
+  bool get _showOutboundTab =>
+      widget.seenOutbounds.isNotEmpty || f.outbounds.isNotEmpty;
+
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: widget.showAppTab ? 2 : 1, vsync: this);
+    var len = 1; // Protocol
+    if (widget.showAppTab) len++;
+    if (_showRuleTab) len++;
+    if (_showOutboundTab) len++;
+    _tab = TabController(length: len, vsync: this);
+    _searchCtrl = TextEditingController(text: f.search);
     // app'ы из фильтра, которых нет в seen, — изначально extra (например из
     // прошлого пикера).
     _extraApps.addAll(f.apps.where((p) => !widget.seenApps.contains(p)));
@@ -83,11 +107,14 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
   @override
   void dispose() {
     f.removeListener(_onChanged);
+    _searchCtrl.dispose();
     _tab.dispose();
     super.dispose();
   }
 
   void _onChanged() {
+    // Внешние изменения фильтра (напр. «Reset all») отражаем в поле.
+    if (_searchCtrl.text != f.search) _searchCtrl.text = f.search;
     if (mounted) setState(() {});
   }
 
@@ -197,6 +224,74 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
     );
   }
 
+  // ── Rule-таб (§230) — по сматчившему route-правилу; '' = «final» ──
+  Widget _ruleTab() {
+    // seenRules + уже выбранные (могли осесть в фильтре из прошлой сессии).
+    // '' нормализуем в псевдо-пункт «final».
+    final all = <String>{...widget.seenRules, ...f.rules}.toList()
+      ..sort((a, b) {
+        final sa = f.hasRule(a) ? 0 : 1;
+        final sb = f.hasRule(b) ? 0 : 1;
+        if (sa != sb) return sa - sb;
+        return a.compareTo(b);
+      });
+    if (all.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Text('No rules seen yet — traffic will populate this list.',
+            style: TextStyle(fontSize: 12)),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          for (final r in all)
+            FilterChip(
+              label: Text(r.isEmpty ? 'final' : r),
+              selected: f.hasRule(r),
+              onSelected: (v) => f.toggleRule(r, v),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ── Outbound-таб (§230) — любое звено outboundChain ∪ detourChain ──
+  Widget _outboundTab() {
+    final all = <String>{...widget.seenOutbounds, ...f.outbounds}.toList()
+      ..sort((a, b) {
+        final sa = f.hasOutbound(a) ? 0 : 1;
+        final sb = f.hasOutbound(b) ? 0 : 1;
+        if (sa != sb) return sa - sb;
+        return a.compareTo(b);
+      });
+    if (all.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Text('No outbounds seen yet — traffic will populate this list.',
+            style: TextStyle(fontSize: 12)),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          for (final o in all)
+            FilterChip(
+              label: Text(o),
+              selected: f.hasOutbound(o),
+              onSelected: (v) => f.toggleOutbound(o, v),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _appIcon(String pkg) {
     AppInfoCache.ensure(pkg);
     return AnimatedBuilder(
@@ -237,6 +332,16 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
     );
   }
 
+  // §230 — определения табов (label, есть-ли-активный-фильтр, builder). Порядок
+  // и состав ДОЛЖНЫ совпадать с длиной _tab (initState): Protocol [· App]
+  // [· Rule] [· Outbound]. Условия те же, что в _show*Tab / showAppTab.
+  List<(String, bool, Widget Function())> get _tabDefs => [
+        ('Protocol', f.kinds.isNotEmpty, _protocolTab),
+        if (widget.showAppTab) ('App', f.appAxisActive, _appTab),
+        if (_showRuleTab) ('Rule', f.rules.isNotEmpty, _ruleTab),
+        if (_showOutboundTab) ('Outbound', f.outbounds.isNotEmpty, _outboundTab),
+      ];
+
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
@@ -264,11 +369,39 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
                     ),
                 ],
               ),
+              // §230 — поиск по domain/ip/process (substring). Клик по домену в
+              // детали соединения кладёт значение сюда; юзер видит/правит/чистит.
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (v) => f.search = v.trim(),
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: 'Search domain / IP / app',
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    suffixIcon: _searchCtrl.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.close, size: 18),
+                            tooltip: 'Clear',
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              f.search = '';
+                            },
+                          ),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ),
               TabBar(
                 controller: _tab,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
                 tabs: [
-                  _dotTab('Protocol', f.kinds.isNotEmpty),
-                  if (widget.showAppTab) _dotTab('App', f.appAxisActive),
+                  for (final (label, active, _) in _tabDefs)
+                    _dotTab(label, active),
                 ],
               ),
               const SizedBox(height: 4),
@@ -276,9 +409,11 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
                 child: SingleChildScrollView(
                   child: AnimatedBuilder(
                     animation: _tab,
-                    builder: (_, _) => _tab.index == 0 || !widget.showAppTab
-                        ? _protocolTab()
-                        : _appTab(),
+                    builder: (_, _) {
+                      final defs = _tabDefs;
+                      final i = _tab.index.clamp(0, defs.length - 1);
+                      return defs[i].$3();
+                    },
                   ),
                 ),
               ),

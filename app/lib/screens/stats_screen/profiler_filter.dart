@@ -7,23 +7,32 @@ import '../../services/traffic_profiler.dart';
 /// `_onlyUnattributed`). Теперь — один `ChangeNotifier`, который слушают и
 /// `TraceExplorer` (применяет к списку), и `ProfilerFilterSheet` (редактирует).
 ///
-/// Две независимые оси:
+/// Независимые оси (между собой AND, внутри оси OR):
 /// - **Protocol** — фильтр «по типу события» (DNS/TCP/UDP, по СЕМЕЙСТВУ §177).
 /// - **App** — фильтр «по процессу»: выбранные пакеты + «потеряшки»
 ///   (unattributed/no-owner) как ещё один пункт. App-ось работает в OR:
 ///   событие проходит, если его process ∈ apps ЛИБО (это потеряшка И выбраны
 ///   потеряшки).
-/// Плюс кросс-осевой `search` (domain/ip/process).
+/// - **Rule** (§230) — по сматчившему route-правилу (`event.rule`; '' = «final»).
+/// - **Outbound** (§230) — по любому звену `outboundChain ∪ detourChain`
+///   (селектор / канал / detour-транспорт).
+/// Плюс кросс-осевой `search` (domain/ip/process, substring, не regex).
 class ProfilerFilter extends ChangeNotifier {
   String _search = '';
   final Set<TrafficEventKind> _kinds = <TrafficEventKind>{};
   final Set<String> _apps = <String>{};
+  // §230 — ось Rule (сматчившее route-правило; '' = «final», без правила) и
+  // ось Outbound (любое звено outboundChain ∪ detourChain: селектор/канал/detour).
+  final Set<String> _rules = <String>{};
+  final Set<String> _outbounds = <String>{};
   // «Потеряшки» — события без owner'а (unattributed). Галка в App-табе.
   bool _includeUnattributed = false;
 
   String get search => _search;
   Set<TrafficEventKind> get kinds => _kinds;
   Set<String> get apps => _apps;
+  Set<String> get rules => _rules;
+  Set<String> get outbounds => _outbounds;
   bool get includeUnattributed => _includeUnattributed;
 
   /// Активна ли app-ось (выбран хоть один app или потеряшки).
@@ -35,6 +44,8 @@ class ProfilerFilter extends ChangeNotifier {
     if (_search.isNotEmpty) n++;
     n += _kinds.length;
     n += _apps.length;
+    n += _rules.length;
+    n += _outbounds.length;
     if (_includeUnattributed) n++;
     return n;
   }
@@ -78,6 +89,28 @@ class ProfilerFilter extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── rules (§230 — сматчившее правило; '' = «final») ──
+  bool hasRule(String r) => _rules.contains(r);
+  void toggleRule(String r, bool on) {
+    if (on) {
+      _rules.add(r);
+    } else {
+      _rules.remove(r);
+    }
+    notifyListeners();
+  }
+
+  // ── outbounds (§230 — любое звено outboundChain ∪ detourChain) ──
+  bool hasOutbound(String o) => _outbounds.contains(o);
+  void toggleOutbound(String o, bool on) {
+    if (on) {
+      _outbounds.add(o);
+    } else {
+      _outbounds.remove(o);
+    }
+    notifyListeners();
+  }
+
   // ── потеряшки (unattributed как пункт app-оси) ──
   set includeUnattributed(bool v) {
     if (_includeUnattributed == v) return;
@@ -89,6 +122,8 @@ class ProfilerFilter extends ChangeNotifier {
     _search = '';
     _kinds.clear();
     _apps.clear();
+    _rules.clear();
+    _outbounds.clear();
     _includeUnattributed = false;
     notifyListeners();
   }
@@ -119,6 +154,16 @@ class ProfilerFilter extends ChangeNotifier {
         final byUnattr = _includeUnattributed && _isUnattributed(e);
         return byApp || byUnattr;
       });
+    }
+    if (_rules.isNotEmpty) {
+      // '' в наборе = «final» (событие без явного правила).
+      list = list.where((e) => _rules.contains(e.rule ?? ''));
+    }
+    if (_outbounds.isNotEmpty) {
+      // Любое звено роутинг- или detour-цепочки.
+      list = list.where((e) =>
+          e.outboundChain.any(_outbounds.contains) ||
+          e.detourChain.any(_outbounds.contains));
     }
     if (_search.isNotEmpty) {
       final lq = _search.toLowerCase();

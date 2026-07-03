@@ -298,10 +298,14 @@ class _TraceExplorerState extends State<TraceExplorer> {
     );
   }
 
-  /// Собрать список замеченных пакетов + есть ли потеряшки — для App-таба
-  /// фильтр-окна. Источник = текущие события (Live-буфер / события сессии).
-  ({Set<String> apps, bool hasUnattr}) _collectSeen() {
+  /// Собрать список замеченных пакетов + есть ли потеряшки + §230 замеченные
+  /// rule/outbound — для табов фильтр-окна. Источник = текущие события
+  /// (Live-буфер / события сессии).
+  ({Set<String> apps, bool hasUnattr, Set<String> rules, Set<String> outbounds})
+      _collectSeen() {
     final apps = <String>{};
+    final rules = <String>{}; // '' = «final» (событие без явного правила)
+    final outbounds = <String>{};
     var hasUnattr = false;
     for (final e in widget.events) {
       if (e.confidence == ConfidenceLevel.unattributed || e.process == null) {
@@ -315,13 +319,21 @@ class _TraceExplorerState extends State<TraceExplorer> {
           if (t.isNotEmpty) apps.add(t);
         }
       }
+      rules.add(e.rule ?? ''); // '' попадёт как псевдо-пункт «final»
+      outbounds.addAll(e.outboundChain);
+      outbounds.addAll(e.detourChain);
     }
     for (final e in widget.unattributed) {
       if (e.confidence == ConfidenceLevel.unattributed || e.process == null) {
         hasUnattr = true;
       }
     }
-    return (apps: apps, hasUnattr: hasUnattr);
+    return (
+      apps: apps,
+      hasUnattr: hasUnattr,
+      rules: rules,
+      outbounds: outbounds,
+    );
   }
 
   void _openFilterSheet(BuildContext context) {
@@ -332,6 +344,8 @@ class _TraceExplorerState extends State<TraceExplorer> {
       showAppTab: widget.showAppTab,
       seenApps: seen.apps,
       hasUnattributed: seen.hasUnattr,
+      seenRules: seen.rules,
+      seenOutbounds: seen.outbounds,
     );
   }
 
