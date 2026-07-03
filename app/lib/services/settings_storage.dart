@@ -89,6 +89,7 @@ class SettingsStorage {
     'log_level',
     'resolve_strategy',
     'tun_address',
+    'tun_address6',
     'tun_auto_route',
     'tun_mtu',
     'tun_name',
@@ -126,6 +127,7 @@ class SettingsStorage {
     //                   allowlist → терялся при restore (default-deny)
     'last_global_update',
     'presets_migrated', // §159 — переиспользуется как «дефолты засеяны» (seed guard)
+    'preset_ids_remapped', // §228 — guard ремапа переименованных preset_id
     'interrupt_connections_on_switch',
     'node_sort_mode',
     'node_manual_order',
@@ -284,6 +286,10 @@ class SettingsStorage {
   /// Идемпотентна. Зовётся из main() init до первого билда.
   static Future<void> migrateChannelsIfNeeded(List<PresetGroup> presets) =>
       _migrateChannelsIfNeeded(presets);
+
+  /// §228 — one-shot ремап переименованных preset_id в custom_rules.
+  /// Идемпотентна. Зовётся из main() init ДО seed'а дефолтных пресетов.
+  static Future<void> migrateRenamedPresetIds() => _migrateRenamedPresetIds();
 
   // ---------------------------------------------------------------------------
   // Last global update timestamp

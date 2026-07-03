@@ -18,6 +18,7 @@ class CustomRuleTile extends StatelessWidget {
     required this.subtitle,
     required this.pickerValue,
     required this.pickerDisabled,
+    this.showOutbound = true,
     required this.statusButton,
     required this.onTap,
     required this.onLongPressStart,
@@ -31,6 +32,11 @@ class CustomRuleTile extends StatelessWidget {
   final String subtitle;
   final String pickerValue;
   final bool pickerDisabled;
+
+  /// Рисовать ли outbound-picker. False для DNS-only пресетов (напр. FakeIP),
+  /// которым нечего роутить — picker был бы мёртвым (см.
+  /// [SelectableRule.hasOutboundAffordance]).
+  final bool showOutbound;
 
   /// ☁-кнопка статуса (SRS либо preset) — null если правилу не нужен SRS.
   final Widget? statusButton;
@@ -69,7 +75,9 @@ class CustomRuleTile extends StatelessWidget {
                       )),
                 ),
                 ?statusButton,
-                if (pickerDisabled)
+                if (!showOutbound)
+                  const SizedBox.shrink()
+                else if (pickerDisabled)
                   Icon(Icons.warning_amber_outlined,
                       color: cs.error, size: 18)
                 else

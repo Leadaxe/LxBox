@@ -29,6 +29,8 @@ const _topLevelRoutingKeys = {
   // one-shot миграция не пере-сработала поверх восстановленных каналов.
   'channels',
   'channels_migrated',
+  'preset_ids_remapped', // §228 — guard ремапа preset_id; в export иначе
+  //                        миграция пере-сработает поверх restored custom_rules
   'route_idle_suspend', // §215 — idle-suspend threshold (route.lx_idle_suspend)
   'enabled_groups', // §125 — DEPRECATED (legacy, читается только миграцией)
   'tun_apps',

@@ -123,6 +123,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 ├─ channels_migrated             bool          §125 — guard one-shot миграции enabled_groups→channels
 ├─ last_global_update            ISO-8601      timestamp последнего auto-refresh
 ├─ presets_migrated              bool          §159 — guard «дефолтные пресеты засеяны» (fresh-install seed)
+├─ preset_ids_remapped           bool          §228 — guard one-shot ремапа переименованных preset_id (bittorrent-direct→bittorrent, private-ip-direct→private-ip, block_unknown→unknown-traffic)
 ├─ interrupt_connections_on_switch  bool       §143 — рвать соединения переключаемой группы при смене ноды (default false, НЕ config-significant)
 ├─ node_sort_mode                string        §100 — выбранный режим сортировки нод ('' = template-default)
 ├─ node_manual_order[]           list          §100 — ручной порядок node tags (для mode=manual)
@@ -477,6 +478,7 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 - v1.6.0 ([§043][043-dns]): `dns_options.servers[]` — kind-refs впервые. Tag/description/enabled тогда жили в `body`.
 - v1.6.1 ([§044]): `dns_options.servers[]` — clean schema. Tag/description/enabled подняты на ref-level. Underscore-аннотации (`_kind`, `_overrides`, `_origin`, `_preset_label`) удалены. Builder синтезирует tag в body. One-shot migration в `_migrateLegacyDnsServers`.
 - v1.7.x ([§117]): template-серверы в шаблоне — обёртки `{description, enabled, vars?, server}`; ref-запись `kind: template` получила `varValues`. Миграции нет (не нужна): kind-ref'ы валидны как есть, удалённые из шаблона теги (`quad9_dot`, `adguard_dot`, `adguard_family`, `google_doh_vpn`) орфан-чистятся, vars применяют дефолты; inline-серверы юзера не трогаются.
+- §228: ремап переименованных `preset_id` в `custom_rules` — `bittorrent-direct`→`bittorrent`, `private-ip-direct`→`private-ip`, `block_unknown`→`unknown-traffic` (сняли суффикс `-direct` т.к. outbound стал выбираемым + kebab-case). One-shot `_migrateRenamedPresetIds` (guard `preset_ids_remapped`), зовётся из `main.dart` до seed'а дефолтов. Переписывает ТОЛЬКО `presetId`; `varsValues` (выбранный юзером outbound) не трогается → выбор канала переживает ремап. Без миграции правила стали бы «Preset not found».
 
 ---
 
