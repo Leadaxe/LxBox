@@ -295,6 +295,16 @@ class SelectableRule {
   /// DNS-серверов.
   final List<Map<String, dynamic>> dnsServers;
 
+  /// Показывать ли outbound-picker в строке пресета. Критерий строгий: пресет
+  /// объявляет var типа `outbound`. Наличие var = явное намерение автора
+  /// шаблона «тут outbound выбирается» (билдер применяет выбор через
+  /// `varsValues['outbound']`, см. preset_expand.dart override-ветку).
+  ///
+  /// Пресеты БЕЗ var:outbound (`block-ads` — чистый reject; `fakeip` — DNS-only)
+  /// picker не получают: менять нечего. Захотел дать выбор — добавь var:outbound
+  /// в шаблон (как у ru-inside/bittorrent/private-ip/unknown-traffic).
+  bool get hasOutboundAffordance => vars.any((v) => v.type == 'outbound');
+
   factory SelectableRule.fromJson(Map<String, dynamic> json) {
     final presetId = (json['preset_id'] as String?) ?? '';
     if (presetId.isEmpty) {
