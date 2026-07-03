@@ -305,6 +305,13 @@ class SelectableRule {
   /// в шаблон (как у ru-inside/bittorrent/private-ip/unknown-traffic).
   bool get hasOutboundAffordance => vars.any((v) => v.type == 'outbound');
 
+  /// §231 — пресет вносит изменения в DNS (DNS-сервер и/или DNS-правило в
+  /// `dns.servers`/`dns.rules`). Для UI-маркера «DNS» в списке правил: глядя на
+  /// строку, не видно, что пресет (напр. FakeIP / ru-direct) трогает DNS
+  /// Settings. Тот же split, что в debug-сериализаторе (has_dns_rule /
+  /// dns_servers_count) и в гейте билдера (`p.dnsRule != null`).
+  bool get touchesDns => dnsRule != null || dnsServers.isNotEmpty;
+
   factory SelectableRule.fromJson(Map<String, dynamic> json) {
     final presetId = (json['preset_id'] as String?) ?? '';
     if (presetId.isEmpty) {
