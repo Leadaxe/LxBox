@@ -555,12 +555,6 @@
       "find_process": true,
       "default_domain_resolver": "@dns_default_domain_resolver",
       "rules": [
-        { "action": "resolve",
-          "inbound": [
-            {"#if": {"and": [{"@vpn_mode": {"#in": ["vpn", "vpn_proxy"]}}],   "value": "tun-in"}},
-            {"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": "mixed-in"}}
-          ],
-          "strategy": "@resolve_strategy" },
         {"#if": {"and": ["@sniff_enabled"], "value": {
           "action": "sniff",
           "inbound": [
@@ -569,7 +563,13 @@
           ],
           "timeout": "1s"
         }}},
-        { "protocol": "dns", "action": "hijack-dns" }
+        { "protocol": "dns", "action": "hijack-dns" },
+        { "action": "resolve",
+          "inbound": [
+            {"#if": {"and": [{"@vpn_mode": {"#in": ["vpn", "vpn_proxy"]}}],   "value": "tun-in"}},
+            {"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": "mixed-in"}}
+          ],
+          "strategy": "@resolve_strategy" }
       ],
       "final": "vpn-1",
       "auto_detect_interface": "@auto_detect_interface"
@@ -577,7 +577,8 @@
     "experimental": {
       "cache_file": {
         "enabled": true,
-        "path": "cache.db"
+        "path": "cache.db",
+        "store_fakeip": true
       }
     }
   },
@@ -635,29 +636,51 @@
       ]
     },
     {
+      "preset_id": "fakeip",
+      "label": "FakeIP",
+      "description": "Instant DNS via placeholder IPs; real names resolve inside the tunnel. Speeds up DNS and prevents pre-tunnel DNS leaks. Not a DPI bypass. Enable below special domains so GeoIP direct routing still works.",
+      "default": false,
+      "vars": [
+        {"name": "dns_server", "type": "dns_servers", "default_value": "fakeip", "wizard_ui": "hidden", "title": "FakeIP server", "tooltip": "The FakeIP allocator. Internal — bound to the fakeip DNS server."}
+      ],
+      "dns_servers": [
+        {"type": "fakeip", "tag": "fakeip", "inet4_range": "198.18.0.0/15", "inet6_range": "fc00::/18", "description": "FakeIP allocator"}
+      ],
+      "dns_rule": {"query_type": ["A", "AAAA"], "server": "@dns_server"}
+    },
+    {
       "preset_id": "ru-inside",
-      "label": "Russia-only services direct",
-      "description": "Services available only inside Russia — direct.",
+      "label": "Russia-only services",
+      "description": "Services available only inside Russia. Direct by default, or route via a channel to reach them from abroad.",
+      "vars": [
+        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route Russia-only services. Direct on a Russian network; pick a Russian channel to reach them from abroad."}
+      ],
       "rule_set": [
         { "tag": "ru-inside", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-ru-available-only-inside.srs" }
       ],
-      "rule": { "rule_set": "ru-inside", "outbound": "direct-out" }
+      "rule": { "rule_set": "ru-inside", "outbound": "@outbound" }
     },
     {
-      "preset_id": "bittorrent-direct",
-      "label": "BitTorrent direct",
-      "description": "Route BitTorrent traffic directly.",
+      "preset_id": "bittorrent",
+      "label": "BitTorrent",
+      "description": "Route BitTorrent traffic. Direct by default, or send it to a separate channel.",
       "default": true,
-      "rule": { "protocol": ["bittorrent"], "outbound": "direct-out" }
+      "vars": [
+        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route BitTorrent. Direct to keep it off the VPN, or pick a channel to tunnel it."}
+      ],
+      "rule": { "protocol": ["bittorrent"], "outbound": "@outbound" }
     },
     {
-      "preset_id": "private-ip-direct",
-      "label": "Private IPs direct",
-      "description": "Route private IP ranges (LAN) directly.",
-      "rule": { "ip_is_private": true, "outbound": "direct-out" }
+      "preset_id": "private-ip",
+      "label": "Private IPs",
+      "description": "Route private IP ranges (LAN). Direct by default, or send to a channel to reach routers/devices over a local VPN.",
+      "vars": [
+        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route private/LAN IPs. Direct for local access, or a channel to reach a remote LAN over VPN."}
+      ],
+      "rule": { "ip_is_private": true, "outbound": "@outbound" }
     },
     {
-      "preset_id": "block_unknown",
+      "preset_id": "unknown-traffic",
       "label": "Unknown traffic",
       "description": "Reject traffic in the tunnel not attributed to any installed app (background/foreign processes). Send it direct to bypass VPN instead.",
       "default": false,

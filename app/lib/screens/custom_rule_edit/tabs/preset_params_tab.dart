@@ -69,6 +69,11 @@ class PresetParamsTab extends StatelessWidget {
       );
     }
 
+    // Hidden-vars (wizard_ui: hidden) не редактируются юзером — их значение
+    // приходит из default_value при раскрытии пресета. Из редактора исключаем.
+    final visibleVars =
+        preset.vars.where((v) => v.wizardUI != 'hidden').toList();
+
     return ListView(
       padding: EdgeInsets.fromLTRB(
           16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
@@ -124,14 +129,17 @@ class PresetParamsTab extends StatelessWidget {
         ),
         // PARAMETERS секция показывается только если у preset'а есть vars.
         // Для preset'ов без vars (e.g. Block Ads, BitTorrent direct) — пусто;
-        // показывать заголовок без контента — шум.
-        if (preset.vars.isNotEmpty) ...[
+        // показывать заголовок без контента — шум. Hidden-vars (wizard_ui:
+        // hidden, e.g. магическая dns_server у FakeIP) не редактируются юзером —
+        // их значение приходит из default_value; из редактора их исключаем,
+        // иначе рисуется мёртвый контрол (dropdown из одного пункта).
+        if (visibleVars.isNotEmpty) ...[
           const SizedBox(height: 20),
           Text('PARAMETERS',
               style: theme.textTheme.titleSmall?.copyWith(
                   color: cs.primary, fontWeight: FontWeight.w600)),
           const Divider(),
-          for (final v in preset.vars)
+          for (final v in visibleVars)
             _PresetVarWidget(
               v: v,
               outboundOptions: outboundOptions,
