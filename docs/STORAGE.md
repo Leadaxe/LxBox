@@ -19,9 +19,9 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │   └─ <key>: string                           ─ напр. log_level, dns_final, debug_token,
 │                                                auto_update_subs, last_known_version, ...
 │
-├─ server_lists[]                list          §033 — sealed (subscription / user)
+├─ server_lists[]                list          §033 — sealed (subscription / user / folder §234)
 │   └─ <ServerList>              object          discriminator: type
-│       ├─ type                  "subscription"|"user"
+│       ├─ type                  "subscription"|"user"|"folder"
 │       ├─ id                    uuid          стабильный
 │       ├─ name                  string        UI display
 │       ├─ enabled               bool
@@ -45,7 +45,10 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       │                        — user only —
 │       ├─ origin                "paste"|"file"|"qr"|"manual"
 │       ├─ created_at            ISO-8601
-│       └─ raw_body              string        оригинал для reparse
+│       ├─ raw_body              string        оригинал для reparse
+│       │                        — folder only (§234) —
+│       ├─ created_at            ISO-8601
+│       └─ members[]             list          {raw, enabled} — по фрагменту на члена (member ↔ нода 1:1)
 │
 ├─ custom_rules[]                list          §030 — sealed (inline / srs / preset)
 │   └─ <CustomRule>              object          discriminator: kind
@@ -311,6 +314,32 @@ Sealed по полю `type`:
   "raw_body":      "<original input>"         // для reparse при багах
 }
 ```
+
+### `type: "folder"` — `FolderServers` (§234)
+
+Папка ручных серверов: контейнер членов с общим toggle/`tag_prefix`/`detour_policy`.
+Подписка в папку не кладётся; вложенности нет.
+
+```jsonc
+{
+  "type":          "folder",
+  "id":            "<uuid>",
+  "name":          "<display>",
+  "enabled":       true,                        // toggle всей папки
+  "tag_prefix":    "<str>",
+  "detour_policy": { … },
+  "created_at":    "ISO-8601",
+  "members": [                                  // порядок = порядок в UI
+    { "raw": "vless://…#Alpha", "enabled": true },   // member ↔ нода 1:1
+    { "raw": "wg://…#Beta",     "enabled": false }   // per-member toggle
+  ]
+}
+```
+
+`raw` — самодостаточный парсируемый фрагмент (URI / WG-INI / outbound-JSON);
+ноды реконструируются re-parse'ом каждого `raw` при загрузке (как `raw_body`
+у user). `nodes` в памяти = только включённые члены — builder работает без
+folder-ветвлений. Битый `raw` → член без ноды (виден в UI, правится/удаляется).
 
 ### `detour_policy` (общий)
 
@@ -861,6 +890,7 @@ Debug API handlers — идут через единую дверь `SettingsStor
 - `server_lists[].url` → маскируется (`maskSubscriptionUrl`)
 - `server_lists[].nodes` → заменяется на `nodes_count` (могут нести credentials в UUID/password)
 - `server_lists[].rawBody` → заменяется на `raw_body_bytes` (длина)
+- `server_lists[].members` → заменяется на `members_count` (§234 — raw членов несёт credentials)
 
 Скраббер обрабатывает только ключи `vars` и `server_lists`; всё остальное (`meta.*`, `warp_account`, `masque_account`, …) проходит **как есть** через `default`-ветку. Любое новое sensitive-поле нужно явно добавлять в `_scrub`.
 

@@ -98,7 +98,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     final tags = <String>[];
     for (final e in widget.subController.entries) {
       final list = e.list;
-      if (list is! UserServer) continue;
+      // §234 — папки тоже кандидаты (nodes = включённые члены).
+      if (list is! UserServer && list is! FolderServers) continue;
       // §080: disabled UserServer не эмитит outbounds → skip (dangling).
       if (!list.enabled) continue;
       final prefix = list.tagPrefix;

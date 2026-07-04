@@ -74,7 +74,7 @@
 | 128 | [`128 idle-suspend/`](128%20idle-suspend/) | Idle-suspend туннеля (`route.lx_idle_suspend`, kernel SPEC 020) | Реализовано (v2.8.2) |
 | 129 | [`129 file-subscription/`](129%20file-subscription/) | Подписка из файла (`file:<uuid>`) + редактируемый источник online↔file | Реализовано (v2.8.2) |
 | 130 | [`130 masque-warp-transport/`](130%20masque-warp-transport/) | MASQUE-транспорт для WARP (QUIC/CONNECT-IP) | Реализовано (v2.9.0) |
-| 234 | [`234 server-folders/`](234%20server-folders/) | Папки серверов (folder): контейнер ручных серверов, per-member toggle, перенос между папками | Спека |
+| 234 | [`234 server-folders/`](234%20server-folders/) | Папки серверов (folder): контейнер ручных серверов, per-member toggle, перенос между папками | Реализовано |
 
 ## Демотированные / superseded (теперь в `../tasks/`)
 

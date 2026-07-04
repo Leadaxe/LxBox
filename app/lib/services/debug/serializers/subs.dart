@@ -13,7 +13,11 @@ Map<String, Object?> serializeSubEntry(
   final rawUrl = e.url;
   return {
     'id': e.id,
-    'kind': list is SubscriptionServers ? 'SubscriptionServers' : 'UserServer',
+    'kind': switch (list) {
+      SubscriptionServers() => 'SubscriptionServers',
+      UserServer() => 'UserServer',
+      FolderServers() => 'FolderServers', // §234
+    },
     'url': reveal ? rawUrl : maskSubscriptionUrl(rawUrl),
     'title': e.name,
     'enabled': e.enabled,

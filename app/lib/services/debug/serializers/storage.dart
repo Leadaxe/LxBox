@@ -80,6 +80,9 @@ Map<String, Object?> _scrubServerListEntry(Map<dynamic, dynamic> m) {
       case 'rawBody':
         // UserServer inline URI — могут содержать token'ы. Отдаём длину.
         out['raw_body_bytes'] = e.value?.toString().length ?? 0;
+      case 'members':
+        // §234 — raw членов папки несёт credentials (URI/ключи) → только count.
+        out['members_count'] = e.value is List ? (e.value as List).length : 0;
       default:
         out[k] = e.value;
     }

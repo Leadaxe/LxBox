@@ -833,6 +833,330 @@ class SubscriptionController extends ChangeNotifier {
     return dot > 0 ? fileName.substring(0, dot) : fileName;
   }
 
+  /// Публичный доступ к [_stripExt] для UI (§234 — имя из имени файла).
+  static String fileBaseName(String fileName) => _stripExt(fileName);
+
+  // ──────────────────────── §234 — Server folders ────────────────────────
+
+  /// Самодостаточный raw-фрагмент для члена папки: `rawUri` (оригинал), если
+  /// он парсится ровно в одну ноду; иначе канонический `toUri()`. Держит
+  /// инвариант member ↔ нода 1:1 (у нод multi-нодных контейнеров вроде
+  /// `vpn://` одинаковый rawUri на всех — им нужен toUri()).
+  static String memberRawFor(NodeSpec n) {
+    final raw = n.rawUri.trim();
+    if (raw.isNotEmpty) {
+      try {
+        if (parseAll(decode(raw)).length == 1) return raw;
+      } catch (_) {}
+    }
+    return n.toUri();
+  }
+
+  /// Есть ли у raw собственное имя (URI-фрагмент `#name` / JSON `tag`).
+  static bool _rawHasOwnName(String raw) {
+    final t = raw.trim();
+    if (t.startsWith('{')) return t.contains('"tag"');
+    return !t.contains('\n') && t.contains('://') && t.contains('#');
+  }
+
+  /// Проставить имя в raw-фрагмент: URI → `#fragment`, JSON → `tag`.
+  /// Многострочные формы (INI) сюда не приходят — caller передаёт `toUri()`.
+  static String _rawWithName(String raw, String name) {
+    final t = raw.trim();
+    if (t.startsWith('{')) {
+      try {
+        final m = jsonDecode(t);
+        if (m is Map<String, dynamic>) {
+          m['tag'] = name;
+          return jsonEncode(m);
+        }
+      } catch (_) {}
+      return raw;
+    }
+    if (t.contains('\n') || !t.contains('://')) return raw;
+    final hash = t.indexOf('#');
+    final base = hash >= 0 ? t.substring(0, hash) : t;
+    return '$base#${Uri.encodeComponent(name)}';
+  }
+
+  /// Одиночный сервер из [member] (для ungroup / delete-с-выносом).
+  static UserServer _memberToUserServer(FolderMember m) => UserServer(
+        id: newUuidV4(),
+        name: '',
+        enabled: m.enabled,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.manual,
+        createdAt: DateTime.now(),
+        rawBody: m.raw,
+        nodes: [if (m.node != null) m.node!],
+      );
+
+  /// Создать пустую папку.
+  Future<void> addFolder(String name) async {
+    _entries.add(SubscriptionEntry(
+      list: FolderServers(
+        id: newUuidV4(),
+        name: name,
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+      ),
+      nodeCount: 0,
+    ));
+    await _persist();
+    notifyListeners();
+    AppLog.I.info('Folder created: $name');
+  }
+
+  /// Удалить папку. [keepServers] = вынести членов одиночными серверами на
+  /// место папки (порядок и per-member enabled сохраняются).
+  Future<void> deleteFolderAt(int index, {required bool keepServers}) async {
+    if (index < 0 || index >= _entries.length) return;
+    final list = _entries[index].list;
+    if (list is! FolderServers) return;
+    _entries.removeAt(index);
+    if (keepServers) {
+      _entries.insertAll(
+        index,
+        list.members.map((m) {
+          final us = _memberToUserServer(m);
+          return SubscriptionEntry(list: us, nodeCount: us.nodes.length);
+        }),
+      );
+    }
+    await _persist();
+    notifyListeners();
+    AppLog.I.info(
+        'Folder deleted: ${list.name} (${keepServers ? 'servers kept' : 'servers removed'})');
+  }
+
+  /// Добавить вход (paste / тело файла) в папку. Вход сплитится на членов
+  /// 1:1 по нодам. [nameFallback] — имя для нод без собственного (имя
+  /// файла); коллизии внутри вызова получают суффикс « 2», « 3»…
+  /// Возвращает '' при успехе, иначе текст ошибки.
+  Future<String> addMembersToFolder(int index, String input,
+      {String? nameFallback}) async {
+    if (index < 0 || index >= _entries.length) return 'Folder not found';
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return 'Not a folder';
+
+    List<NodeSpec> nodes;
+    try {
+      nodes = parseAll(decode(input.trim()));
+    } catch (e) {
+      return humanizeError(e);
+    }
+    if (nodes.isEmpty) return 'No servers found in input';
+
+    final usedNames = <String>{};
+    final added = <FolderMember>[];
+    for (final n in nodes) {
+      var raw = memberRawFor(n);
+      if (nameFallback != null &&
+          nameFallback.isNotEmpty &&
+          !_rawHasOwnName(raw)) {
+        var candidate = nameFallback;
+        var i = 2;
+        while (!usedNames.add(candidate)) {
+          candidate = '$nameFallback ${i++}';
+        }
+        raw = _rawWithName(n.toUri(), candidate);
+      }
+      added.add(FolderMember(raw: raw));
+    }
+    entry._replaceList(folder.copyWith(members: [...folder.members, ...added]));
+    entry.nodeCount = entry.list.nodes.length;
+    await _persist();
+    notifyListeners();
+    AppLog.I.info('Folder "${folder.name}": +${added.length} servers');
+    return '';
+  }
+
+  /// Одноразовый импорт в папку по ссылке: fetch → parse → статичные члены.
+  /// Снапшот: meta/auto-update не сохраняются, URL не хранится.
+  Future<String> addUrlSnapshotToFolder(int index, String url) async {
+    if (index < 0 || index >= _entries.length) return 'Folder not found';
+    final entry = _entries[index];
+    if (entry.list is! FolderServers) return 'Not a folder';
+    _busy = true;
+    notifyListeners();
+    try {
+      final result = await parseFromSource(UrlSource(url.trim()),
+          client: httpClientForTesting);
+      if (result.nodes.isEmpty) return 'No servers found at this URL';
+      // Guard после await: entry могли удалить/подменить.
+      final cur = entry.list;
+      if (cur is! FolderServers || !_entries.contains(entry)) {
+        return 'Folder not found';
+      }
+      final added =
+          result.nodes.map((n) => FolderMember(raw: memberRawFor(n))).toList();
+      entry._replaceList(cur.copyWith(members: [...cur.members, ...added]));
+      entry.nodeCount = entry.list.nodes.length;
+      await _persist();
+      AppLog.I.info(
+          'Folder "${cur.name}": +${added.length} servers (URL snapshot)');
+      return '';
+    } catch (e) {
+      return humanizeError(e);
+    } finally {
+      _busy = false;
+      notifyListeners();
+    }
+  }
+
+  /// Вкл/выкл одного члена папки.
+  Future<void> toggleMemberAt(int index, int memberIndex) async {
+    if (index < 0 || index >= _entries.length) return;
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return;
+    if (memberIndex < 0 || memberIndex >= folder.members.length) return;
+    final members = [...folder.members];
+    members[memberIndex] =
+        members[memberIndex].copyWith(enabled: !members[memberIndex].enabled);
+    entry._replaceList(folder.copyWith(members: members));
+    entry.nodeCount = entry.list.nodes.length;
+    await _persist();
+    notifyListeners();
+  }
+
+  /// Правка raw-фрагмента члена. Новый raw обязан парситься ≥1 ноды, иначе
+  /// откат (возврат текста ошибки, старый член не трогается).
+  Future<String> updateMemberAt(
+      int index, int memberIndex, String newRaw) async {
+    if (index < 0 || index >= _entries.length) return 'Folder not found';
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return 'Not a folder';
+    if (memberIndex < 0 || memberIndex >= folder.members.length) {
+      return 'Server not found';
+    }
+    final trimmed = newRaw.trim();
+    final probe = FolderMember(raw: trimmed);
+    if (probe.node == null) {
+      return 'Could not parse server config — keeping current';
+    }
+    final members = [...folder.members];
+    members[memberIndex] = members[memberIndex].copyWith(raw: trimmed);
+    entry._replaceList(folder.copyWith(members: members));
+    entry.nodeCount = entry.list.nodes.length;
+    await _persist();
+    notifyListeners();
+    return '';
+  }
+
+  /// Удалить члена из папки (совсем).
+  Future<void> removeMemberAt(int index, int memberIndex) async {
+    if (index < 0 || index >= _entries.length) return;
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return;
+    if (memberIndex < 0 || memberIndex >= folder.members.length) return;
+    final members = [...folder.members]..removeAt(memberIndex);
+    entry._replaceList(folder.copyWith(members: members));
+    entry.nodeCount = entry.list.nodes.length;
+    await _persist();
+    notifyListeners();
+  }
+
+  /// Ручной порядок членов внутри папки (drag-reorder).
+  Future<void> reorderMember(int index, int from, int to) async {
+    if (index < 0 || index >= _entries.length) return;
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return;
+    if (from < 0 || from >= folder.members.length) return;
+    if (to < 0 || to >= folder.members.length) return;
+    final members = [...folder.members];
+    final m = members.removeAt(from);
+    members.insert(to, m);
+    entry._replaceList(folder.copyWith(members: members));
+    await _persist();
+    notifyListeners();
+  }
+
+  /// Вынести члена из папки в одиночный сервер (вставляется сразу после
+  /// папки). Личные prefix/policy папки НЕ наследуются — дефолты.
+  Future<void> ungroupMemberAt(int index, int memberIndex) async {
+    if (index < 0 || index >= _entries.length) return;
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return;
+    if (memberIndex < 0 || memberIndex >= folder.members.length) return;
+    final member = folder.members[memberIndex];
+    final members = [...folder.members]..removeAt(memberIndex);
+    entry._replaceList(folder.copyWith(members: members));
+    entry.nodeCount = entry.list.nodes.length;
+    final us = _memberToUserServer(member);
+    _entries.insert(
+        index + 1, SubscriptionEntry(list: us, nodeCount: us.nodes.length));
+    await _persist();
+    notifyListeners();
+  }
+
+  /// Перенести члена из папки [fromIndex] в папку [toIndex].
+  Future<String> moveMemberToFolder(
+      int fromIndex, int memberIndex, int toIndex) async {
+    if (fromIndex < 0 || fromIndex >= _entries.length) return 'Folder not found';
+    if (toIndex < 0 || toIndex >= _entries.length) return 'Folder not found';
+    if (fromIndex == toIndex) return '';
+    final fromEntry = _entries[fromIndex];
+    final toEntry = _entries[toIndex];
+    final from = fromEntry.list;
+    final to = toEntry.list;
+    if (from is! FolderServers || to is! FolderServers) return 'Not a folder';
+    if (memberIndex < 0 || memberIndex >= from.members.length) {
+      return 'Server not found';
+    }
+    final member = from.members[memberIndex];
+    final fromMembers = [...from.members]..removeAt(memberIndex);
+    fromEntry._replaceList(from.copyWith(members: fromMembers));
+    fromEntry.nodeCount = fromEntry.list.nodes.length;
+    toEntry._replaceList(to.copyWith(members: [...to.members, member]));
+    toEntry.nodeCount = toEntry.list.nodes.length;
+    await _persist();
+    notifyListeners();
+    return '';
+  }
+
+  /// Перенести одиночный сервер в папку. rawBody сплитится на членов 1:1 по
+  /// нодам; личные tag_prefix/detour_policy сервера отбрасываются — действуют
+  /// папочные (осознанный trade-off §234). Одиночная запись удаляется.
+  Future<String> moveServerToFolder(int serverIndex, int folderIndex) async {
+    if (serverIndex < 0 || serverIndex >= _entries.length) {
+      return 'Server not found';
+    }
+    if (folderIndex < 0 || folderIndex >= _entries.length) {
+      return 'Folder not found';
+    }
+    final serverEntry = _entries[serverIndex];
+    final folderEntry = _entries[folderIndex];
+    final server = serverEntry.list;
+    final folder = folderEntry.list;
+    if (server is! UserServer) return 'Only single servers can be moved';
+    if (folder is! FolderServers) return 'Not a folder';
+
+    final added = server.nodes.isEmpty
+        // Битый/пустой raw — переносим как есть (член будет виден и правим).
+        ? [FolderMember(raw: server.rawBody, enabled: server.enabled)]
+        : [
+            for (final n in server.nodes)
+              FolderMember(raw: memberRawFor(n), enabled: server.enabled),
+          ];
+    folderEntry._replaceList(
+        folder.copyWith(members: [...folder.members, ...added]));
+    folderEntry.nodeCount = folderEntry.list.nodes.length;
+    _entries.remove(serverEntry);
+    await _persist();
+    notifyListeners();
+    AppLog.I.info(
+        'Server moved to folder "${folder.name}" (+${added.length})');
+    return '';
+  }
+
   /// Публичный refresh для AutoUpdater. Помечает попытку
   /// (`lastUpdateAttempt` + `lastUpdateStatus`) и персистит, чтобы триггер #1
   /// (app start) после рестарта мог принять решение.
@@ -1150,15 +1474,15 @@ class SubscriptionController extends ChangeNotifier {
     await SettingsStorage.saveServerLists(_entries.map((e) => e.list).toList());
   }
 
-  ServerList _renameList(ServerList l, String name) {
-    if (l is SubscriptionServers) return l.copyWith(name: name);
-    if (l is UserServer) return l.copyWith(name: name);
-    return l;
-  }
+  ServerList _renameList(ServerList l, String name) => switch (l) {
+        SubscriptionServers() => l.copyWith(name: name),
+        UserServer() => l.copyWith(name: name),
+        FolderServers() => l.copyWith(name: name),
+      };
 
-  ServerList _toggleEnabled(ServerList l, bool enabled) {
-    if (l is SubscriptionServers) return l.copyWith(enabled: enabled);
-    if (l is UserServer) return l.copyWith(enabled: enabled);
-    return l;
-  }
+  ServerList _toggleEnabled(ServerList l, bool enabled) => switch (l) {
+        SubscriptionServers() => l.copyWith(enabled: enabled),
+        UserServer() => l.copyWith(enabled: enabled),
+        FolderServers() => l.copyWith(enabled: enabled),
+      };
 }

@@ -7,17 +7,20 @@ import 'package:flutter/services.dart';
 
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
+import '../models/server_list.dart';
 import '../services/error_format.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/auto_updater.dart';
 import '../services/url_launcher.dart';
 import 'add_server_wizard_screen.dart';
 import 'app_settings_screen.dart';
+import 'folder_detail_screen.dart';
 import 'node_settings_screen.dart';
 import 'subscription_detail_screen.dart';
 import 'warp_wizard_screen.dart';
 import 'subscriptions_screen/clipboard_analysis.dart';
 import 'subscriptions_screen/entry_context_menu.dart';
+import 'subscriptions_screen/folder_picker.dart';
 import 'subscriptions_screen/paste_dialogs.dart';
 import 'subscriptions_screen/public_test_servers.dart';
 import 'subscriptions_screen/share_subscription_url.dart';
@@ -199,24 +202,32 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     }
   }
 
+  /// §234 — создать пустую папку серверов.
+  Future<void> _createFolder() async {
+    final name = await showFolderNameDialog(context);
+    if (name == null) return;
+    await widget.subController.addFolder(name);
+  }
+
   /// Импорт подписки/конфига из файла. Содержимое (URI-список, JSON-конфиг,
   /// proxy-link) идёт в тот же `addFromInput`, что и paste/manual — парсер
   /// сам определяет формат. file_picker уже используется на других экранах
   /// (config_screen / backup) — паттерн чтения bytes/path идентичный.
+  ///
+  /// §234 — multi-select: несколько файлов → все серверы в новую папку
+  /// (имена нод — из имён файлов). Один файл — прежние пути (§129
+  /// file-подписка при >1 ноды / одиночный сервер).
   Future<void> _importFromFile() async {
     try {
-      final result = await FilePicker.pickFiles(withData: true, allowMultiple: false);
+      final result =
+          await FilePicker.pickFiles(withData: true, allowMultiple: true);
       if (result == null || result.files.isEmpty) return;
-      final file = result.files.single;
-      String text;
-      if (file.bytes != null && file.bytes!.isNotEmpty) {
-        text = String.fromCharCodes(file.bytes!);
-      } else if (file.path != null) {
-        text = await File(file.path!).readAsString();
-      } else {
+      if (result.files.length > 1) {
+        await _importFilesIntoFolder(result.files);
         return;
       }
-      text = text.trim();
+      final file = result.files.single;
+      final text = (await _readPickedFile(file))?.trim() ?? '';
       if (text.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -233,7 +244,19 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           await widget.subController.addFileSubscription(text, file.name);
       if (!asFileSub) {
         if (!mounted) return;
+        final countBefore = widget.subController.entries.length;
         await widget.subController.addFromInput(text);
+        // §234 — имя из имени файла: свежедобавленный одиночный сервер без
+        // имени получает имя файла (displayName показывает name первым).
+        final entries = widget.subController.entries;
+        if (widget.subController.lastError.isEmpty &&
+            entries.length == countBefore + 1) {
+          final added = entries.last;
+          if (added.list is UserServer && added.name.isEmpty) {
+            await widget.subController.renameAt(entries.length - 1,
+                SubscriptionController.fileBaseName(file.name));
+          }
+        }
       }
       if (widget.subController.lastError.isEmpty) {
         await _regenerateAndSave();
@@ -248,6 +271,51 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           SnackBar(content: Text('Error: ${formatUserError(e)}')),
         );
       }
+    }
+  }
+
+  static Future<String?> _readPickedFile(PlatformFile file) async {
+    if (file.bytes != null && file.bytes!.isNotEmpty) {
+      return String.fromCharCodes(file.bytes!);
+    }
+    if (file.path != null) return File(file.path!).readAsString();
+    return null;
+  }
+
+  /// §234 — несколько выбранных файлов → новая папка со всеми серверами.
+  Future<void> _importFilesIntoFolder(List<PlatformFile> files) async {
+    final name = await showFolderNameDialog(context,
+        title: 'Import ${files.length} files into folder');
+    if (name == null || !mounted) return;
+    await widget.subController.addFolder(name);
+    final folderIndex = widget.subController.entries.length - 1;
+    var addedFiles = 0;
+    final errors = <String>[];
+    for (final file in files) {
+      final text = (await _readPickedFile(file))?.trim() ?? '';
+      if (text.isEmpty) {
+        errors.add('${file.name}: empty file');
+        continue;
+      }
+      final err = await widget.subController.addMembersToFolder(
+        folderIndex,
+        text,
+        nameFallback: SubscriptionController.fileBaseName(file.name),
+      );
+      if (err.isEmpty) {
+        addedFiles++;
+      } else {
+        errors.add('${file.name}: $err');
+      }
+    }
+    if (!mounted) return;
+    if (errors.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errors.join('\n'))),
+      );
+    }
+    if (addedFiles > 0) {
+      await _regenerateAndSave();
     }
   }
 
@@ -316,6 +384,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     if (v == 'paste') unawaited(_pasteFromClipboard());
                     if (v == 'qr') unawaited(_scanQrCode());
                     if (v == 'file') unawaited(_importFromFile());
+                    if (v == 'folder') unawaited(_createFolder());
                     if (v == 'auto_update') unawaited(_toggleAutoUpdate());
                     if (v == 'sub_settings') _openSubscriptionSettings();
                   },
@@ -326,6 +395,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                     const PopupMenuItem(value: 'paste', child: Text('Paste from clipboard')),
                     const PopupMenuItem(value: 'qr', child: Text('Scan QR code')),
                     const PopupMenuItem(value: 'file', child: Text('Import from file…')),
+                    const PopupMenuItem(value: 'folder', child: Text('New folder…')),
                     const PopupMenuDivider(),
                     const PopupMenuItem(value: 'public', child: Text('Get Public Test Servers')),
                     const PopupMenuDivider(),
@@ -491,6 +561,19 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           onLaunchUrl: _launchUrl,
           onLongPress: (context) => _showContextMenu(context, i, entry),
           onTap: (context) {
+            // §234 — папка открывает свой экран (члены + settings).
+            if (entry.list is FolderServers) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => FolderDetailScreen(
+                    entry: entry,
+                    controller: widget.subController,
+                  ),
+                ),
+              );
+              return;
+            }
             final isDirectServer = entry.url.isEmpty && entry.connections.isNotEmpty;
             Navigator.push(
               context,
