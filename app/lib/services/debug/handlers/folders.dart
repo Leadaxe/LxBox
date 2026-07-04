@@ -385,9 +385,11 @@ Future<DebugResponse> _moveServerIn(String id, DebugRequest req, DebugContext ct
 }
 
 /// §236 — headless «Test servers»: probe-сессия рядом с (или через) боевое
-/// ядро, результаты по каждому члену в ответе. Синхронный: worst-case
-/// ~members/6 × timeout_ms — при больших папках снижать timeout_ms, чтобы
-/// уложиться в request-timeout сервера (30с).
+/// ядро, результаты по каждому члену в ответе. Хендлер async — HTTP-сервер
+/// (HttpServer.listen конкурентен) остаётся отзывчивым во время теста
+/// (device-verified: /ping 17мс при идущем probe). Синхронный ПО ОТВЕТУ:
+/// worst-case ~members/6 × timeout_ms; при больших папках снижать
+/// timeout_ms, чтобы уложиться в request-timeout сервера (30с).
 Future<DebugResponse> _probe(String id, DebugRequest req, DebugContext ctx) async {
   final body = req.jsonBodyAsMap();
   final sub = ctx.requireSub();
