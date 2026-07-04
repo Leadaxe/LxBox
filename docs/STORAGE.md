@@ -48,7 +48,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ raw_body              string        оригинал для reparse
 │       │                        — folder only (§234) —
 │       ├─ created_at            ISO-8601
-│       └─ members[]             list          {raw, enabled} — по фрагменту на члена (member ↔ нода 1:1)
+│       └─ members[]             list          {raw, enabled, detour?} — по фрагменту на члена (member ↔ нода 1:1; §237 detour = личный тег)
 │
 ├─ custom_rules[]                list          §030 — sealed (inline / srs / preset)
 │   └─ <CustomRule>              object          discriminator: kind
@@ -333,7 +333,8 @@ Sealed по полю `type`:
   "detour_policy": { … },
   "created_at":    "ISO-8601",
   "members": [                                  // порядок = порядок в UI
-    { "raw": "vless://…#Alpha", "enabled": true },   // member ↔ нода 1:1
+    { "raw": "vless://…#Alpha", "enabled": true,
+      "detour": "Jump" },                            // §237 — личный detour (опц.)
     { "raw": "wg://…#Beta",     "enabled": false }   // per-member toggle
   ]
 }

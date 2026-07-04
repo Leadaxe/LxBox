@@ -12,21 +12,31 @@ import '../models/server_list.dart';
 import '../models/template_vars.dart';
 import '../widgets/emoji_picker_button.dart';
 
-/// Настройки одиночного сервера (UserServer). Две вкладки (§090 G2b):
-/// **Settings** (Protocol/Server/Tag + эмодзи-пикер + Detour) и **JSON**
-/// (редактируемый outbound). Ручная ⚙-detour-пометка убрана — detour теперь
-/// структурный (§091/G2a), ⚙ остаётся как обычный эмодзи в палитре.
+/// Настройки одиночного сервера (UserServer) ИЛИ члена папки (§237). Две
+/// вкладки (§090 G2b): **Settings** (Protocol/Server/Tag + эмодзи-пикер +
+/// Detour) и **JSON** (редактируемый outbound). Ручная ⚙-detour-пометка
+/// убрана — detour теперь структурный (§091/G2a), ⚙ остаётся как обычный
+/// эмодзи в палитре.
+///
+/// §237 — [memberIndex] != null → [entry] это ПАПКА, экран настраивает её
+/// члена: нода из `members[memberIndex]`, save JSON → `updateMemberAt`,
+/// detour → `setMemberDetour` (личный detour члена; политика папки
+/// применяется к нему в builder'е).
 class NodeSettingsScreen extends StatefulWidget {
   const NodeSettingsScreen({
     super.key,
     required this.entry,
     required this.index,
     required this.subController,
+    this.memberIndex,
   });
 
   final SubscriptionEntry entry;
   final int index;
   final SubscriptionController subController;
+
+  /// §237 — индекс члена папки; null = одиночный сервер (старое поведение).
+  final int? memberIndex;
 
   @override
   State<NodeSettingsScreen> createState() => _NodeSettingsScreenState();
@@ -60,11 +70,30 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     super.dispose();
   }
 
+  /// §237 — член папки, если экран открыт для него.
+  FolderMember? get _member {
+    final mi = widget.memberIndex;
+    if (mi == null) return null;
+    final list = widget.entry.list;
+    if (list is! FolderServers) return null;
+    if (mi < 0 || mi >= list.members.length) return null;
+    return list.members[mi];
+  }
+
   Future<void> _load() async {
-    // v2: узел уже распарсен в entry.list.nodes.first.
-    final nodes = widget.entry.list.nodes;
-    if (nodes.isEmpty) return;
-    final node = nodes.first;
+    // v2: одиночный — узел уже распарсен в entry.list.nodes.first;
+    // §237 член папки — из members[memberIndex].
+    final NodeSpec node;
+    final member = _member;
+    if (member != null) {
+      final n = member.node;
+      if (n == null) return; // битый raw — сюда не попадаем (гейт в UI папки)
+      node = n;
+    } else {
+      final nodes = widget.entry.list.nodes;
+      if (nodes.isEmpty) return;
+      node = nodes.first;
+    }
 
     // §130 — AWG-детект: WireguardSpec с непустыми obfuscation-полями.
     _isAwg = node is WireguardSpec && node.awg != null;
@@ -78,10 +107,11 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
         .convert(node.emit(TemplateVars.empty).map);
     _tagCtrl.text = _originalTag;
 
-    // Detour хранится в `entry.detourPolicy.overrideDetour` (применяется
-    // builder'ом в server_list_build). Раньше писали в JSON node.detour,
-    // но parseSingboxEntry это поле не восстанавливает — терялось при save.
-    _detour = widget.entry.overrideDetour;
+    // Detour: одиночный — `entry.detourPolicy.overrideDetour`; §237 член —
+    // личный `member.detour` (применяются builder'ом в server_list_build).
+    // Раньше писали в JSON node.detour, но parseSingboxEntry это поле не
+    // восстанавливает — терялось при save.
+    _detour = member != null ? member.detour : widget.entry.overrideDetour;
 
     // Доступные detour-теги: все узлы всех `UserServer` кроме себя.
     //
@@ -121,8 +151,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     if (_isAwg && _detour.isNotEmpty && !_availableNodes.contains(_detour)) {
       final removed = _detour;
       _detour = '';
-      widget.entry.overrideDetour = '';
-      unawaited(widget.subController.persistSources());
+      unawaited(_persistDetour(''));
       _logResetDetour(removed);
     }
 
@@ -134,6 +163,18 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     AppLog.I.info(
         'AWG node "$_originalTag" — cleared invalid detour "$removed" '
         '(AWG cannot run through WireGuard, hangs the core on Android)');
+  }
+
+  /// §237 — единая точка записи detour: член папки → setMemberDetour,
+  /// одиночный → overrideDetour + persistSources.
+  Future<void> _persistDetour(String value) async {
+    final mi = widget.memberIndex;
+    if (mi != null) {
+      await widget.subController.setMemberDetour(widget.index, mi, value);
+      return;
+    }
+    widget.entry.overrideDetour = value;
+    await widget.subController.persistSources();
   }
 
   /// §090 G2b — вставка эмодзи из пикера в позицию курсора поля Tag.
@@ -164,6 +205,19 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
         if (newTag.isNotEmpty) map['tag'] = newTag;
       }
       final jsonStr = jsonEncode(map);
+      final mi = widget.memberIndex;
+      if (mi != null) {
+        // §237 — член папки: транзакционная правка raw (битый → откат).
+        unawaited(widget.subController
+            .updateMemberAt(widget.index, mi, jsonStr)
+            .then((err) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(err.isEmpty ? 'Saved' : err)),
+          );
+        }));
+        return;
+      }
       widget.subController.updateConnectionAt(widget.index, [jsonStr]);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -269,11 +323,11 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
             ],
             onChanged: (v) {
               setState(() => _detour = v ?? '');
-              // Persist через ServerList.detourPolicy.overrideDetour — builder
-              // подхватит и перезапишет main.map['detour']. Не трогаем JSON
-              // ноды, иначе после save через parseSingboxEntry поле теряется.
-              widget.entry.overrideDetour = _detour;
-              unawaited(widget.subController.persistSources());
+              // Persist: одиночный → detourPolicy.overrideDetour, член папки →
+              // member.detour (§237). Builder подхватит и перезапишет
+              // main.map['detour']. Не трогаем JSON ноды, иначе после save
+              // через parseSingboxEntry поле теряется.
+              unawaited(_persistDetour(_detour));
             },
           ),
         ),

@@ -10,6 +10,7 @@ import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
+import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -294,6 +295,37 @@ void main() {
       expect(saved.nodes.map((n) => n.tag), ['Alpha', 'Beta']);
     });
 
+    test('§237 setMemberDetour + detour переживает move/ungroup', () async {
+      final c = await makeController();
+      await c.addFromInput(uriA);
+      // Личный detour одиночного сервера.
+      final us = c.entries.single.list as UserServer;
+      await c.replaceList(
+          0,
+          us.copyWith(
+              detourPolicy:
+                  DetourPolicy.defaults.copyWith(overrideDetour: 'Jump')));
+      await c.addFolder('F');
+
+      // Перенос в папку сохраняет личный detour в member.detour.
+      await c.moveServerToFolder(0, 1);
+      var folder = c.entries.single.list as FolderServers;
+      expect(folder.members.single.detour, 'Jump');
+
+      // setMemberDetour меняет и персистит.
+      await c.setMemberDetour(0, 0, 'Jump2');
+      folder = c.entries.single.list as FolderServers;
+      expect(folder.members.single.detour, 'Jump2');
+      final saved =
+          (await SettingsStorage.getServerLists()).single as FolderServers;
+      expect(saved.members.single.detour, 'Jump2');
+
+      // Вынос обратно — detour возвращается в overrideDetour одиночного.
+      await c.ungroupMemberAt(0, 0);
+      final back = c.entries[1].list as UserServer;
+      expect(back.detourPolicy.overrideDetour, 'Jump2');
+    });
+
     test('§236 setMembersEnabled/removeMembersAt/applyMembersOrder', () async {
       final c = await makeController();
       await c.addFolder('F');
@@ -395,6 +427,76 @@ void main() {
       final tags = outboundTags(result);
       expect(tags, contains('pr: Alpha'));
       expect(tags.where((t) => t.contains('Beta')), isEmpty);
+    });
+
+    test('§237 личный detour члена + политика папки (use/append/replace/none)',
+        () async {
+      // Целевые outbound'ы detour'ов — одиночные серверы Jump/Jump2.
+      UserServer jump(String tag, String host) => UserServer(
+            id: 'u-$tag',
+            name: tag,
+            enabled: true,
+            tagPrefix: '',
+            detourPolicy: DetourPolicy.defaults,
+            origin: UserSource.manual,
+            createdAt: DateTime.now(),
+            nodes: [
+              parseUri(
+                  'vless://ju@$host:443?type=ws&security=tls#$tag')!,
+            ],
+          );
+
+      FolderServers folderWith(DetourPolicy policy) => FolderServers(
+            id: 'f-1',
+            name: 'F',
+            enabled: true,
+            tagPrefix: '',
+            detourPolicy: policy,
+            members: [
+              FolderMember(raw: uriA, detour: 'Jump'), // личный detour
+              FolderMember(raw: uriB), // без личного
+            ],
+          );
+
+      Future<Map<String, String?>> detoursFor(DetourPolicy policy) async {
+        final result = await buildConfig(
+          lists: [folderWith(policy), jump('Jump', 'j1'), jump('Jump2', 'j2')],
+          template: template,
+          settings: const BuildSettings(
+            userVars: {'clash_api': '127.0.0.1:9090'},
+            enabledGroups: {'vpn-1', kAutoOutboundTag},
+          ),
+        );
+        expect(result.validation.isOk, true,
+            reason: result.validation.issues.join('\n'));
+        final map = <String, String?>{};
+        for (final o in (result.config['outbounds'] as List)) {
+          final m = o as Map;
+          map[m['tag'] as String] = m['detour'] as String?;
+        }
+        return map;
+      }
+
+      // Use (дефолт): личный применяется, без личного — ничего.
+      var d = await detoursFor(DetourPolicy.defaults);
+      expect(d['Alpha'], 'Jump');
+      expect(d['Beta'], isNull);
+
+      // Append (Replace OFF): личный побеждает, папочный — тем, у кого нет.
+      d = await detoursFor(const DetourPolicy(overrideDetour: 'Jump2'));
+      expect(d['Alpha'], 'Jump');
+      expect(d['Beta'], 'Jump2');
+
+      // Replace ON: папочный переписывает всех.
+      d = await detoursFor(const DetourPolicy(
+          overrideDetour: 'Jump2', replaceDetourChain: true));
+      expect(d['Alpha'], 'Jump2');
+      expect(d['Beta'], 'Jump2');
+
+      // None: без detour вообще (личный тоже снят).
+      d = await detoursFor(const DetourPolicy(useDetourServers: false));
+      expect(d['Alpha'], isNull);
+      expect(d['Beta'], isNull);
     });
 
     test('выключенная папка не эмитит ничего', () async {

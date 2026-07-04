@@ -15,14 +15,33 @@ extension ServerListBuild on ServerList {
   /// 4. Регистрирует entry в ctx: addEntry, selector/auto-списки по политике.
   void build(EmitContext ctx) {
     if (!enabled) return;
-    // §073: replaceMode = override + replace toggle ON. Append mode
-    // (default false) keeps raw chain (skipDetour: false) и подставляет
-    // overrideDetour хвостом цепочки.
-    final replaceMode = detourPolicy.overrideDetour.isNotEmpty &&
-        detourPolicy.replaceDetourChain;
-    final skipDetour = !detourPolicy.useDetourServers || replaceMode;
+    // §237 — у папки члены могут нести ЛИЧНЫЙ detour (аналог overrideDetour
+    // одиночного сервера). Политика папки применяется к нему как подписка к
+    // родной цепочке: None гасит все; Replace переписывает своим; иначе
+    // личный побеждает, а папочный append достаётся членам без личного.
+    final memberDetours = switch (this) {
+      final FolderServers f => f.nodeDetours,
+      _ => null,
+    };
 
-    for (final server in nodes) {
+    for (var i = 0; i < nodes.length; i++) {
+      final server = nodes[i];
+      var policy = detourPolicy;
+      final personal = memberDetours == null ? '' : memberDetours[i];
+      final folderReplaces =
+          policy.overrideDetour.isNotEmpty && policy.replaceDetourChain;
+      if (personal.isNotEmpty && policy.useDetourServers && !folderReplaces) {
+        policy = policy.copyWith(
+            overrideDetour: personal, replaceDetourChain: false);
+      }
+
+      // §073: replaceMode = override + replace toggle ON. Append mode
+      // (default false) keeps raw chain (skipDetour: false) и подставляет
+      // overrideDetour хвостом цепочки.
+      final replaceMode =
+          policy.overrideDetour.isNotEmpty && policy.replaceDetourChain;
+      final skipDetour = !policy.useDetourServers || replaceMode;
+
       final raw = server.getEntries(ctx, skipDetour: skipDetour);
       final main = raw.main;
       final detours = raw.detours;
@@ -37,18 +56,18 @@ extension ServerListBuild on ServerList {
       // Применить detour policy.
       if (replaceMode) {
         // REPLACE — цепочка дропнута (skipDetour=true), main → override.
-        main.map['detour'] = detourPolicy.overrideDetour;
-      } else if (!detourPolicy.useDetourServers) {
+        main.map['detour'] = policy.overrideDetour;
+      } else if (!policy.useDetourServers) {
         main.map.remove('detour');
-      } else if (detourPolicy.overrideDetour.isNotEmpty) {
+      } else if (policy.overrideDetour.isNotEmpty) {
         // §073 APPEND — нативная цепочка сохранена, override хвостом.
         if (detours.isEmpty) {
           // Цепочки нет в raw config → 1-hop (как replace).
-          main.map['detour'] = detourPolicy.overrideDetour;
+          main.map['detour'] = policy.overrideDetour;
         } else {
           // node → detours.first → ... → detours.last → overrideDetour
           main.map['detour'] = detours.first.tag;
-          detours.last.map['detour'] = detourPolicy.overrideDetour;
+          detours.last.map['detour'] = policy.overrideDetour;
         }
       } else if (detours.isNotEmpty) {
         main.map['detour'] = detours.first.tag;

@@ -13,6 +13,7 @@ import '../services/settings_storage.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/tag_resolver.dart';
 import 'home/filter_widgets.dart';
+import 'node_settings_screen.dart';
 import 'home/node_list_presenter.dart' show protoLabel;
 import 'subscription_detail_screen/detour_mode.dart';
 import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
@@ -946,7 +947,25 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
             .then((_) => mounted ? setState(() {}) : null));
       },
       onLongPress: () => _showMemberMenu(i),
-      onTap: () => _showMemberMenu(i),
+      // §237 — тап открывает полный Node Settings (как у одиночного сервера);
+      // битый член (ноды нет) — прежнее меню (Edit raw / Delete).
+      onTap: m.node == null
+          ? () => _showMemberMenu(i)
+          : () {
+              final idx = _index;
+              if (idx < 0) return;
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => NodeSettingsScreen(
+                    entry: widget.entry,
+                    index: idx,
+                    memberIndex: i,
+                    subController: widget.controller,
+                  ),
+                ),
+              ).then((_) => mounted ? setState(() {}) : null);
+            },
       onProbeBadgeTap: () {
         final r = _probe[i];
         if (r == null || r.message.isEmpty) return;
