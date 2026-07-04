@@ -34,20 +34,21 @@ android {
 
     defaultConfig {
         applicationId = "com.leadaxe.lxbox"
-        // Android 8.0 (API 26) minimum — historical claim из release notes
-        // 1.3.x / 1.4.0. Не закрываем дверь пользователям Android 8-10, хотя
-        // приоритет тестирования и поддержки — 11+ (primary target window).
+        // Android 7.0 (API 24) minimum — §233. Это абсолютный пол: Flutter
+        // 3.41.x поддерживает минимум API 24, libbox.aar требует 23.
+        // Приоритет тестирования и поддержки — 11+ (primary target window).
         //
         // Tiers:
         //   - Primary (11+, API 30+)  — все фичи, тестируется.
-        //   - Best-effort (8-10, API 26-29) — compile/install OK, фичи API 30+
-        //     деградируют. Например, silent-kill detection
-        //     (getHistoricalProcessExitReasons) обёрнута в SDK_INT check.
-        //   - Unsupported (<8, API <26) — install blocked.
+        //   - Best-effort (7.0-10, API 24-29) — compile/install OK, фичи
+        //     новых API деградируют за SDK_INT-гейтами. Например, silent-kill
+        //     detection (getHistoricalProcessExitReasons, API 30+) — no-op.
+        //   - Unsupported (<7.0, API <24) — install blocked (пол Flutter).
         //
-        // Если всплывут жалобы с 8-10, возможно придётся понизить до 24
-        // (Flutter default). См. ARCHITECTURE.md → Supported platforms.
-        minSdk = 26
+        // Known limitation 7.x: старый системный trust store (на 7.0 нет
+        // ISRG Root X1 → Let's Encrypt-подписки не валидируются).
+        // См. ARCHITECTURE.md → Supported platforms и docs/spec/tasks/233.
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

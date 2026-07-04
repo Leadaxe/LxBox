@@ -86,7 +86,7 @@ Fork публикует артефакты в своих GitHub Releases (workfl
 | Артефакт | Отметка |
 |----------|---------|
 | `libbox-<ver>.aar` (modern: minSdk 23, 4 ABI, ~73 MB) | ✓ наш вариант |
-| `libbox-legacy-<ver>.aar` (minSdk 21) | ✗ не используем — у нас minSdk 26 |
+| `libbox-legacy-<ver>.aar` (minSdk 21) | ✗ не используем — у нас minSdk 24, modern-AAR (minSdk 23) достаточно |
 | `SHA256SUMS` | ✓ верификация скачанного AAR |
 
 Версию ядра отдаёт `Libbox.version()` (About/Debug), формат `1.14.0-lx.N` (текущий пин — `v1.14.0-lx.1`).
