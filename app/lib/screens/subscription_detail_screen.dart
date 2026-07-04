@@ -374,7 +374,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     final tags = <String>[];
     for (final e in widget.controller.entries) {
       final list = e.list;
-      if (list is! UserServer) continue;
+      // §234 — кандидаты: одиночные UserServer и члены папок (у папки
+      // `nodes` = только включённые члены).
+      if (list is! UserServer && list is! FolderServers) continue;
       // §080: disabled UserServer не эмитит outbounds (server_list_build:
       // `if (!enabled) return`) → выбор его ноды как detour дал бы dangling
       // reference. Skip.

@@ -4,7 +4,8 @@ import 'node_spec.dart';
 import 'subscription_meta.dart';
 
 /// Контейнер узлов (§1 спеки 026). Sealed: `SubscriptionServers` (fetch по
-/// URL) vs `UserServer` (paste/file/qr/manual). Персистится на диск
+/// URL) vs `UserServer` (paste/file/qr/manual) vs `FolderServers` (§234 —
+/// папка ручных серверов, состав редактирует юзер). Персистится на диск
 /// `List<ServerList>` с дискриминатором `type`.
 sealed class ServerList {
   final String id; // uuid, стабилен на всём жизненном цикле
@@ -34,6 +35,8 @@ sealed class ServerList {
         return SubscriptionServers.fromJson(j);
       case 'user':
         return UserServer.fromJson(j);
+      case 'folder':
+        return FolderServers.fromJson(j);
       default:
         throw FormatException('Unknown ServerList type: $t');
     }
@@ -253,6 +256,120 @@ final class UserServer extends ServerList {
         createdAt: createdAt ?? this.createdAt,
         rawBody: rawBody ?? this.rawBody,
         nodes: nodes ?? this.nodes,
+      );
+}
+
+/// §234 — член папки: самодостаточный парсируемый фрагмент (URI-строка,
+/// WG-INI, JSON-outbound) + per-member toggle. Инвариант member ↔ нода 1:1
+/// обеспечивается на импорте (контроллер сплитит вход по нодам); если raw
+/// всё же парсится в несколько нод, берём первую.
+final class FolderMember {
+  final String raw;
+  final bool enabled;
+
+  /// Распарсенная нода фрагмента; null = битый raw (member виден в UI как
+  /// нечитаемый, юзер может отредактировать/удалить).
+  final NodeSpec? node;
+
+  FolderMember({required this.raw, this.enabled = true, NodeSpec? node})
+      : node = node ?? _parseFirst(raw);
+
+  static NodeSpec? _parseFirst(String raw) {
+    if (raw.trim().isEmpty) return null;
+    try {
+      final nodes = parseAll(decode(raw));
+      return nodes.isEmpty ? null : nodes.first;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Map<String, dynamic> toJson() => {'raw': raw, 'enabled': enabled};
+
+  factory FolderMember.fromJson(Map<String, dynamic> j) => FolderMember(
+        raw: (j['raw'] as String?) ?? '',
+        enabled: (j['enabled'] as bool?) ?? true,
+      );
+
+  FolderMember copyWith({String? raw, bool? enabled}) => FolderMember(
+        raw: raw ?? this.raw,
+        enabled: enabled ?? this.enabled,
+        // Смена raw → re-parse в конструкторе (node: null); иначе нода та же.
+        node: raw == null ? node : null,
+      );
+}
+
+/// §234 — папка ручных серверов: контейнер членов с общим toggle,
+/// tag_prefix и detour-политикой на всех. Подписка в папку не кладётся
+/// (у подписки составом владеет источник). `nodes` (база) = ноды только
+/// включённых членов — builder работает без folder-ветвлений.
+final class FolderServers extends ServerList {
+  final List<FolderMember> members;
+  final DateTime createdAt;
+
+  FolderServers({
+    required super.id,
+    required super.name,
+    required super.enabled,
+    required super.tagPrefix,
+    required super.detourPolicy,
+    List<FolderMember>? members,
+    DateTime? createdAt,
+  })  : members = members ?? <FolderMember>[],
+        createdAt = createdAt ?? DateTime.now(),
+        super(nodes: [
+          for (final m in members ?? const <FolderMember>[])
+            if (m.enabled && m.node != null) m.node!,
+        ]);
+
+  @override
+  String get type => 'folder';
+
+  /// Сколько членов выключено (для строки «N servers · M off»).
+  int get disabledCount => members.where((m) => !m.enabled).length;
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        'id': id,
+        'name': name,
+        'enabled': enabled,
+        'tag_prefix': tagPrefix,
+        'detour_policy': detourPolicy.toJson(),
+        'created_at': createdAt.toIso8601String(),
+        'members': members.map((m) => m.toJson()).toList(),
+      };
+
+  factory FolderServers.fromJson(Map<String, dynamic> j) => FolderServers(
+        id: j['id'] as String,
+        name: (j['name'] as String?) ?? '',
+        enabled: (j['enabled'] as bool?) ?? true,
+        tagPrefix: (j['tag_prefix'] as String?) ?? '',
+        detourPolicy: DetourPolicy.fromJson(
+            (j['detour_policy'] as Map?)?.cast<String, dynamic>() ?? const {}),
+        createdAt: DateTime.tryParse((j['created_at'] as String?) ?? '') ??
+            DateTime.now(),
+        members: ((j['members'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((m) => FolderMember.fromJson(m.cast<String, dynamic>()))
+            .toList(),
+      );
+
+  FolderServers copyWith({
+    String? name,
+    bool? enabled,
+    String? tagPrefix,
+    DetourPolicy? detourPolicy,
+    List<FolderMember>? members,
+  }) =>
+      FolderServers(
+        id: id,
+        name: name ?? this.name,
+        enabled: enabled ?? this.enabled,
+        tagPrefix: tagPrefix ?? this.tagPrefix,
+        detourPolicy: detourPolicy ?? this.detourPolicy,
+        createdAt: createdAt,
+        members: members ?? this.members,
       );
 }
 

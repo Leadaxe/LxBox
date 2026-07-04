@@ -6,12 +6,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../controllers/subscription_controller.dart';
+import '../../models/server_list.dart';
 import '../../services/subscription/auto_updater.dart';
 import '../../services/subscription/input_helpers.dart';
+import 'folder_picker.dart';
 
 /// Long-press bottom-sheet для записи подписки/сервера. Поведение 1:1 с
 /// прежним `_showContextMenu` — копировать URL, share, update,
-/// reset fail-count, delete-with-confirm.
+/// reset fail-count, delete-with-confirm. §234 — у папки своё меню
+/// (rename/delete), у одиночного сервера + «Move to folder…».
 void showEntryContextMenu(
   BuildContext context,
   int index,
@@ -20,6 +23,10 @@ void showEntryContextMenu(
   required AutoUpdater autoUpdater,
   required Future<void> Function(SubscriptionEntry entry) onShareUrl,
 }) {
+  if (entry.list is FolderServers) {
+    _showFolderContextMenu(context, index, entry, subController);
+    return;
+  }
   showModalBottomSheet(
     context: context,
     builder: (ctx) => SafeArea(
@@ -93,6 +100,29 @@ void showEntryContextMenu(
                 );
               },
             ),
+          // §234 — одиночный сервер можно перенести в папку (личные
+          // prefix/detour при этом заменяются папочными).
+          if (entry.list is UserServer)
+            ListTile(
+              leading: const Icon(Icons.drive_file_move_outline),
+              title: const Text('Move to folder…'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final folderIndex =
+                    await showFolderPicker(context, subController);
+                if (folderIndex == null || !context.mounted) return;
+                // Индекс сервера по ссылке — создание новой папки в пикере
+                // добавляет entry, а reorder мог сместить исходный index.
+                final serverIndex = subController.entries.indexOf(entry);
+                if (serverIndex < 0) return;
+                final err = await subController.moveServerToFolder(
+                    serverIndex, folderIndex);
+                if (err.isNotEmpty && context.mounted) {
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text(err)));
+                }
+              },
+            ),
           ListTile(
             leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
             title: Text('Delete', style: TextStyle(color: Theme.of(context).colorScheme.error)),
@@ -116,6 +146,78 @@ void showEntryContextMenu(
               if (confirmed == true) {
                 await subController.removeAt(index);
                           }
+            },
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// §234 — long-press меню папки: rename / delete (с выбором судьбы серверов).
+void _showFolderContextMenu(
+  BuildContext context,
+  int index,
+  SubscriptionEntry entry,
+  SubscriptionController subController,
+) {
+  final folder = entry.list as FolderServers;
+  showModalBottomSheet<void>(
+    context: context,
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.edit_outlined),
+            title: const Text('Rename…'),
+            onTap: () async {
+              Navigator.pop(ctx);
+              final name = await showFolderNameDialog(context,
+                  initial: entry.name, title: 'Rename folder');
+              if (name == null) return;
+              await subController.renameAt(index, name);
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.delete_outline,
+                color: Theme.of(context).colorScheme.error),
+            title: Text('Delete…',
+                style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            onTap: () async {
+              Navigator.pop(ctx);
+              final choice = await showDialog<String>(
+                context: context,
+                builder: (dCtx) => AlertDialog(
+                  title: const Text('Delete folder?'),
+                  content: Text(folder.members.isEmpty
+                      ? 'Remove "${entry.displayName}"?'
+                      : 'Folder "${entry.displayName}" contains '
+                          '${folder.members.length} server(s).'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(dCtx),
+                        child: const Text('Cancel')),
+                    if (folder.members.isNotEmpty)
+                      TextButton(
+                        onPressed: () => Navigator.pop(dCtx, 'keep'),
+                        child: const Text('Keep servers'),
+                      ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(dCtx, 'all'),
+                      style: TextButton.styleFrom(
+                          foregroundColor:
+                              Theme.of(dCtx).colorScheme.error),
+                      child: Text(folder.members.isEmpty
+                          ? 'Delete'
+                          : 'Delete folder & servers'),
+                    ),
+                  ],
+                ),
+              );
+              if (choice == null) return;
+              await subController.deleteFolderAt(index,
+                  keepServers: choice == 'keep');
             },
           ),
         ],
