@@ -4,7 +4,7 @@ import '../../models/home_state.dart';
 import '../../models/server_list.dart';
 import 'node_filter.dart';
 import 'node_filter_view_model.dart';
-import 'subscription_lookup.dart';
+import 'source_lookup.dart';
 
 /// Короткий label протокола для строки ноды. TLS опускаем — у большинства
 /// протоколов (VLESS/Trojan/Hy2/TUIC) он дефолт, метить каждую — шум.
@@ -100,10 +100,11 @@ class NodeListPresenter {
     return i >= 0 ? i : _variantOrder.length;
   }
 
-  /// §091 — какие подписки владеют тегом (prefix-based). Тонкая обёртка
-  /// над pure helper'ом `subscriptionsOfTag` (см. `home/subscription_lookup.dart`).
-  Set<String> subscriptionsOfTag_(String tag) =>
-      subscriptionsOfTag(tag, subController.entries);
+  /// §091/§235 — какие источники (подписки + папки) владеют тегом
+  /// (prefix-based). Тонкая обёртка над pure helper'ом `sourcesOfTag`
+  /// (см. `home/source_lookup.dart`).
+  Set<String> _sourcesOfTag(String tag) =>
+      sourcesOfTag(tag, subController.entries);
 
 
   /// §085 R3 — единый `NodeFilter` из view-model + state-зависимых lookup'ов.
@@ -120,7 +121,7 @@ class NodeListPresenter {
         maxPingMs: filter.activeMaxPingMs,
         protocolOf: (t) => protocolOfTag(t, state),
         variantsOf: (t) => variantsOfTag(t, state),
-        subscriptionsOf: subscriptionsOfTag_,
+        subscriptionsOf: _sourcesOfTag,
         pingOf: (t) => state.lastDelay[t],
       );
 
@@ -231,21 +232,21 @@ class NodeListPresenter {
       if (p != null) availableProtocols.add(p);
       availableVariants.addAll(variantsOfTag(t, state));
     }
-    final subOptions = <(String, String)>[];
+    final sourceOptions = <(String, String)>[];
     for (final e in subController.entries) {
       final list = e.list;
-      // §091 — chip показываем только для enabled-подписки с непустым
-      // префиксом И ≥1 нодой. Фильтрация теперь чисто prefix-based
-      // (subscriptionsOfTag), поэтому без префикса chip бесполезен — её
-      // ноды попадают в «Custom». Disabled / пустые → шум.
-      if (list is SubscriptionServers &&
+      // §091/§235 — chip показываем для enabled-ИСТОЧНИКА (подписка или
+      // папка §234) с непустым префиксом И ≥1 нодой. Фильтрация чисто
+      // prefix-based (sourcesOfTag), поэтому без префикса chip бесполезен —
+      // его ноды попадают в «Custom». Disabled / пустые → шум.
+      if ((list is SubscriptionServers || list is FolderServers) &&
           e.enabled &&
           list.tagPrefix.isNotEmpty &&
           list.nodes.isNotEmpty) {
-        subOptions.add((e.id, e.displayName));
+        sourceOptions.add((e.id, e.displayName));
       }
     }
-    // §095 — синтетический «Custom»-чип убран (юзер): не-подписочные ноды
+    // §095 — синтетический «Custom»-чип убран (юзер): ноды вне источников
     // (UserServer / без префикса / импорт) фильтруются прочими средствами,
     // отдельный chip только путал.
 
@@ -260,7 +261,7 @@ class NodeListPresenter {
           final byRank = _variantRank(a).compareTo(_variantRank(b));
           return byRank != 0 ? byRank : a.compareTo(b);
         }),
-      subOptions: subOptions,
+      sourceOptions: sourceOptions,
     );
   }
 }
@@ -274,7 +275,7 @@ class NodeListData {
     required this.emojis,
     required this.availableProtocols,
     required this.availableVariants,
-    required this.subOptions,
+    required this.sourceOptions,
   });
 
   final ParsedConfig cache;
@@ -287,5 +288,6 @@ class NodeListData {
   /// порядок: транспорты → security).
   final List<String> availableVariants;
 
-  final List<(String, String)> subOptions;
+  /// §235 — (id, имя) источников для чипов фильтра: подписки + папки.
+  final List<(String, String)> sourceOptions;
 }

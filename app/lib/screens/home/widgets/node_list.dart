@@ -153,7 +153,7 @@ class HomeNodeList extends StatelessWidget {
               emojis: data.emojis,
               availableProtocols: data.availableProtocols,
               availableVariants: data.availableVariants,
-              subOptions: data.subOptions,
+              sourceOptions: data.sourceOptions,
               // §195 — 💾 показываем только когда активный канал валиден
               // (selectedGroup ∈ groups). Иначе некуда сохранять → null скрывает.
               onSaveRegex: (state.selectedGroup != null &&
