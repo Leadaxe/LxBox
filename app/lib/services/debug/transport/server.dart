@@ -8,10 +8,12 @@ import '../context.dart';
 import '../contract/errors.dart';
 import '../handlers/action.dart';
 import '../handlers/backup.dart';
+import '../handlers/channels.dart';
 import '../handlers/config.dart';
 import '../handlers/device.dart';
 import '../handlers/diag.dart';
 import '../handlers/files.dart';
+import '../handlers/folders.dart';
 import '../handlers/logs.dart';
 import '../handlers/help.dart';
 import '../handlers/ping.dart';
@@ -176,6 +178,8 @@ class DebugServer {
       ..mount('/backup', backupHandler)
       ..mount('/rules', rulesHandler)
       ..mount('/subs', subsHandler)
+      ..mount('/channels', channelsHandler) // §238 — каналы роутинга §125
+      ..mount('/folders', foldersHandler) // §238 — папки серверов §234
       ..mount('/warp', warpHandler)
       ..mount('/settings', settingsHandler)
       ..mount('/wifi_history', wifiHistoryHandler)

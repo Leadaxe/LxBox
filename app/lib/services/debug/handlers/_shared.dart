@@ -71,6 +71,18 @@ List<String>? fieldStringList(Map<String, dynamic> m, String key) {
   throw BadRequest('field "$key" must be array, got ${v.runtimeType}');
 }
 
+List<int>? fieldIntList(Map<String, dynamic> m, String key) {
+  if (!m.containsKey(key)) return null;
+  final v = m[key];
+  if (v is List) {
+    return v.map((e) {
+      if (e is int) return e;
+      throw BadRequest('field "$key" must be list of ints');
+    }).toList();
+  }
+  throw BadRequest('field "$key" must be array, got ${v.runtimeType}');
+}
+
 /// Парсит JSON-object → `Map<String, String>`. Значения приводятся к string
 /// via `toString()` (`null` → `""`). Используется для `vars_values`
 /// в preset-rule'ах.
