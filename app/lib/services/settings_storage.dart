@@ -154,6 +154,11 @@ class SettingsStorage {
     // Wi-Fi history (§051)
     'wifi_history',
     'auto_record_wifi_history',
+    // §236 — пороги цветовой шкалы Test servers (папки). НЕ config-vars
+    // (в sing-box config не идут) → dirty не поднимают.
+    'probe_ms_green',
+    'probe_ms_yellow',
+    'probe_ms_orange',
     // Automation API (§047)
     'automation_receive_enabled',
     'automation_emit_lifecycle',

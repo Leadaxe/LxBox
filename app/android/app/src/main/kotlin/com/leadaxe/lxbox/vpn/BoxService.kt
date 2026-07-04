@@ -412,6 +412,10 @@ class BoxService(
     /// §049 F1 — `CommandServer(handler=this, platform=platformInterface)`
     /// с двумя разными Java instances (port из reference 1.13.11).
     private fun startCommandServer() {
+        // §236 — VPN приоритетнее probe-сессии: если юзер запускает туннель
+        // при живом Test servers, глушим probe (он держит command.sock —
+        // второй CommandServer на том же basePath не поднимется).
+        runCatching { ProbeSession.stop() }
         val cs = CommandServer(this, platformInterface)
         cs.start()
         commandServer.set(cs)

@@ -240,6 +240,9 @@ Per-key спеки и shape — в разделах ниже.
 | `debug_port` | `'9269'` | [§031] | TCP-порт. Range 1024–49151. |
 | `dns_final` | template | [§043][043-dns] | Финальный DNS-резолвер (`cloudflare_udp` / `google_udp` / `local_dns_resolver` / `yandex_udp` / любой tag из `dns_options.servers`). |
 | `auto_record_wifi_history` | `'false'` | [§051] Phase 3 | Native `WifiNetworkObserver` пушит current SSID/BSSID в `wifi_history` если provel >5 минут на сети. Default off — privacy default. Toggle в App Settings → Diagnostics. |
+| `probe_ms_green` | `'250'` | §236 | Test servers (папки): верхняя граница «зелёной» задержки, мс. НЕ config-var (dirty не поднимает). |
+| `probe_ms_yellow` | `'500'` | §236 | Test servers: верхняя граница «жёлтой» задержки, мс. |
+| `probe_ms_orange` | `'700'` | §236 | Test servers: верхняя граница «оранжевой» задержки, мс; выше — красная. |
 | `wifi_history` | `'[]'` | [§051] Phase 3 | JSON-encoded `[{ssid, bssid, last_seen}]` (см. отдельный раздел ниже). |
 | `automation_receive_enabled` | `'false'` | §047 | Public Intent API: приём broadcast/Tasker. Default OFF. |
 | `automation_emit_lifecycle` | `'false'` | §047 | Эмит lifecycle-событий наружу. Default OFF. |
