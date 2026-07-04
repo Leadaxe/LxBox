@@ -128,6 +128,34 @@ class PresetParamsTab extends StatelessWidget {
             ],
           ),
         ),
+        // §231 — инфо-блок: пресет затрагивает DNS. Глядя на правило, юзер
+        // должен понимать, что оно вносит сущности в DNS Settings.
+        // Нейтрально-информативный стиль (как баннер «Based on preset») —
+        // НЕ warning/error: это фича правила, а не проблема.
+        if (preset.touchesDns) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.dns_outlined, size: 16, color: cs.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'This rule changes DNS settings — it adds a DNS server '
+                    'and/or a DNS rule. See DNS Settings.',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         Row(
           children: [
