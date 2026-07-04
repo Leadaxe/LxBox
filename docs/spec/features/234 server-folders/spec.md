@@ -157,7 +157,7 @@ folder…»).
 
 - Вложенные папки; папки для подписок; подписка внутри папки.
 - Авто-обновление URL-импорта (это подписка).
-- Per-member override `tag_prefix`/`detour_policy`.
+- Per-member override `tag_prefix`. (Per-member **detour** добавлен позже — §237: личный detour члена + политика папки поверх, тап по члену открывает полный Node Settings.)
 - Дедупликация членов.
 
 ## Связанные

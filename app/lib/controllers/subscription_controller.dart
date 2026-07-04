@@ -880,12 +880,15 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   /// Одиночный сервер из [member] (для ungroup / delete-с-выносом).
+  /// §237 — личный detour члена переезжает в overrideDetour одиночного.
   static UserServer _memberToUserServer(FolderMember m) => UserServer(
         id: newUuidV4(),
         name: '',
         enabled: m.enabled,
         tagPrefix: '',
-        detourPolicy: DetourPolicy.defaults,
+        detourPolicy: m.detour.isEmpty
+            ? DetourPolicy.defaults
+            : DetourPolicy.defaults.copyWith(overrideDetour: m.detour),
         origin: UserSource.manual,
         createdAt: DateTime.now(),
         rawBody: m.raw,
@@ -1097,6 +1100,22 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// §237 — личный detour члена (display-form тег outbound'а; '' = нет).
+  /// Политика папки применяется к нему в builder'е (см. server_list_build).
+  Future<void> setMemberDetour(
+      int index, int memberIndex, String detour) async {
+    if (index < 0 || index >= _entries.length) return;
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return;
+    if (memberIndex < 0 || memberIndex >= folder.members.length) return;
+    final members = [...folder.members];
+    members[memberIndex] = members[memberIndex].copyWith(detour: detour);
+    entry._replaceList(folder.copyWith(members: members));
+    await _persist();
+    notifyListeners();
+  }
+
   /// §236 — массовый toggle членов (Disable slower than N ms и т.п.).
   Future<void> setMembersEnabled(
       int index, Set<int> memberIndexes, bool enabled) async {
@@ -1194,12 +1213,25 @@ class SubscriptionController extends ChangeNotifier {
     if (server is! UserServer) return 'Only single servers can be moved';
     if (folder is! FolderServers) return 'Not a folder';
 
+    // §237 — личный detour одиночного (overrideDetour) переезжает в члена;
+    // прочая политика (register-флаги и т.п.) заменяется папочной.
+    final personalDetour = server.detourPolicy.useDetourServers
+        ? server.detourPolicy.overrideDetour
+        : '';
     final added = server.nodes.isEmpty
         // Битый/пустой raw — переносим как есть (член будет виден и правим).
-        ? [FolderMember(raw: server.rawBody, enabled: server.enabled)]
+        ? [
+            FolderMember(
+                raw: server.rawBody,
+                enabled: server.enabled,
+                detour: personalDetour),
+          ]
         : [
             for (final n in server.nodes)
-              FolderMember(raw: memberRawFor(n), enabled: server.enabled),
+              FolderMember(
+                  raw: memberRawFor(n),
+                  enabled: server.enabled,
+                  detour: personalDetour),
           ];
     folderEntry._replaceList(
         folder.copyWith(members: [...folder.members, ...added]));

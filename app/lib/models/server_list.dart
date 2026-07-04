@@ -267,12 +267,21 @@ final class FolderMember {
   final String raw;
   final bool enabled;
 
+  /// §237 — личный detour члена: display-form тег outbound'а ('' = нет).
+  /// Аналог `DetourPolicy.overrideDetour` одиночного сервера; политика папки
+  /// применяется к нему как подписка к родной цепочке (см. server_list_build).
+  final String detour;
+
   /// Распарсенная нода фрагмента; null = битый raw (member виден в UI как
   /// нечитаемый, юзер может отредактировать/удалить).
   final NodeSpec? node;
 
-  FolderMember({required this.raw, this.enabled = true, NodeSpec? node})
-      : node = node ?? _parseFirst(raw);
+  FolderMember({
+    required this.raw,
+    this.enabled = true,
+    this.detour = '',
+    NodeSpec? node,
+  }) : node = node ?? _parseFirst(raw);
 
   static NodeSpec? _parseFirst(String raw) {
     if (raw.trim().isEmpty) return null;
@@ -284,16 +293,23 @@ final class FolderMember {
     }
   }
 
-  Map<String, dynamic> toJson() => {'raw': raw, 'enabled': enabled};
+  Map<String, dynamic> toJson() => {
+        'raw': raw,
+        'enabled': enabled,
+        if (detour.isNotEmpty) 'detour': detour,
+      };
 
   factory FolderMember.fromJson(Map<String, dynamic> j) => FolderMember(
         raw: (j['raw'] as String?) ?? '',
         enabled: (j['enabled'] as bool?) ?? true,
+        detour: (j['detour'] as String?) ?? '',
       );
 
-  FolderMember copyWith({String? raw, bool? enabled}) => FolderMember(
+  FolderMember copyWith({String? raw, bool? enabled, String? detour}) =>
+      FolderMember(
         raw: raw ?? this.raw,
         enabled: enabled ?? this.enabled,
+        detour: detour ?? this.detour,
         // Смена raw → re-parse в конструкторе (node: null); иначе нода та же.
         node: raw == null ? node : null,
       );
@@ -327,6 +343,13 @@ final class FolderServers extends ServerList {
 
   /// Сколько членов выключено (для строки «N servers · M off»).
   int get disabledCount => members.where((m) => !m.enabled).length;
+
+  /// §237 — личные detour'ы, выровненные с [nodes] (тот же фильтр
+  /// enabled+parsed, тот же порядок). Builder применяет их пер-нодно.
+  List<String> get nodeDetours => [
+        for (final m in members)
+          if (m.enabled && m.node != null) m.detour,
+      ];
 
   @override
   Map<String, dynamic> toJson() => {
