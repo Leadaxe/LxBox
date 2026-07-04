@@ -166,20 +166,25 @@ class SubscriptionEntry extends ChangeNotifier {
     bool? enabled,
     String? tagPrefix,
     DetourPolicy? detourPolicy,
-  }) {
-    if (_list is SubscriptionServers) {
-      return (_list as SubscriptionServers).copyWith(
-        name: name,
-        enabled: enabled,
-        tagPrefix: tagPrefix,
-        detourPolicy: detourPolicy,
-      );
-    }
-    return (_list as UserServer).copyWith(
-      name: name,
-      enabled: enabled,
-      tagPrefix: tagPrefix,
-      detourPolicy: detourPolicy,
-    );
-  }
+  }) =>
+      switch (_list) {
+        final SubscriptionServers s => s.copyWith(
+            name: name,
+            enabled: enabled,
+            tagPrefix: tagPrefix,
+            detourPolicy: detourPolicy,
+          ),
+        final UserServer u => u.copyWith(
+            name: name,
+            enabled: enabled,
+            tagPrefix: tagPrefix,
+            detourPolicy: detourPolicy,
+          ),
+        final FolderServers f => f.copyWith(
+            name: name,
+            enabled: enabled,
+            tagPrefix: tagPrefix,
+            detourPolicy: detourPolicy,
+          ),
+      };
 }

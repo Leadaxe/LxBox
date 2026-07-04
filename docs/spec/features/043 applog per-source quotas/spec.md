@@ -547,6 +547,8 @@ Alias для `/logs?source=core`. Те же query params. Sing-box логи (rou
 2. **Subscriptions** (`/subs/*`) — add / update meta / change URL / delete / reorder / refresh single.
 3. **Settings storage** (`/settings/*`) — scoped writes на `route_final`, `excluded_nodes`, `vars/<key>`, `dns_options`, `core_logs_enabled`.
 4. **Direct sing-box config override** — уже описано выше (`PUT /config`).
+5. **Routing channels §125** (`/channels/*`) — create / update / delete / reorder (§238, см. [`tasks/238`](../../tasks/238-debug-api-channels-folders.md)).
+6. **Server folders §234** (`/folders/*`) — папки, члены, перенос серверов, headless probe §236 (§238, там же).
 
 Все CRUD endpoints возвращают либо `{"ok": true, "action": "<name>", ...extras}` (если результат асимметричен Create/Delete), либо полный созданный/изменённый ресурс (при GET-after-write pattern'е на Create). Ошибки — стандартные `DebugError`'ы.
 

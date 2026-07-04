@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../controllers/subscription_controller.dart';
+import '../../../models/server_list.dart';
 import '../../../widgets/reorder_grab_strip.dart';
 import 'subscription_entry_subtitle.dart';
 
@@ -72,9 +73,13 @@ class SubscriptionEntryTile extends StatelessWidget {
         ],
       ),
       subtitle: buildSubscriptionEntrySubtitle(context, entry),
-      trailing: entry.url.isEmpty && entry.connections.isNotEmpty
-          ? Icon(Icons.dns, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant)
-          : null,
+      trailing: entry.list is FolderServers
+          // §234 — папка серверов.
+          ? Icon(Icons.folder_outlined,
+              size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant)
+          : entry.url.isEmpty && entry.connections.isNotEmpty
+              ? Icon(Icons.dns, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant)
+              : null,
       onLongPress: () => onLongPress(context),
       onTap: () => onTap(context),
     );

@@ -667,6 +667,31 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     result.success(r)
                 }
             }
+            // §236 — headless probe-сессия (Test servers в папке при
+            // ВЫКЛЮЧЕННОМ VPN). start/urlTest/stop; гейт «VPN не запущен» —
+            // внутри ProbeSession. Все вызовы блокирующие → Dispatchers.IO.
+            "probeStart" -> {
+                val config = call.argument<String>("config") ?: ""
+                pluginScope.launch {
+                    val err = withContext(Dispatchers.IO) { ProbeSession.start(config) }
+                    result.success(err)
+                }
+            }
+            "probeUrlTest" -> {
+                val tag = call.argument<String>("tag") ?: ""
+                val link = call.argument<String>("link") ?: ""
+                val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
+                pluginScope.launch {
+                    val r = withContext(Dispatchers.IO) { ProbeSession.urlTest(tag, link, timeoutMs) }
+                    result.success(r)
+                }
+            }
+            "probeStop" -> {
+                pluginScope.launch {
+                    withContext(Dispatchers.IO) { runCatching { ProbeSession.stop() } }
+                    result.success(null)
+                }
+            }
             // §209 — null = клиент недоступен (различаем от [] = правил нет).
             // Dart getRules превращает null в пустой список (диагностика —
             // отсутствие данных там не отличают от пустых, см. CcChannel.getRules).
