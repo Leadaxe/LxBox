@@ -87,7 +87,7 @@ class NodeListPresenter {
   /// §103 — канонический порядок variant-чипов: транспорты, затем security;
   /// незнакомые теги — в конец по алфавиту (forward-compat).
   static const _variantOrder = <String>[
-    'tcp', 'ws', 'grpc', 'h2', 'httpupgrade', 'quic', 'xhttp',
+    'tcp', 'ws', 'grpc', 'h2', 'h3', 'httpupgrade', 'quic', 'xhttp',
     'TLS', 'TLS+Vision', 'Reality', 'Reality+Vision',
     'awg', 'awg1.5', 'awg2',
   ];
