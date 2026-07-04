@@ -123,8 +123,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   }
 
   /// Число завершённых тестов (для строки-сводки).
-  ({int ok, int dead, int broken}) _probeSummary() {
-    var ok = 0, dead = 0, broken = 0;
+  ({int ok, int dead, int broken, int skipped}) _probeSummary() {
+    var ok = 0, dead = 0, broken = 0, skipped = 0;
     for (final r in _probe.values) {
       switch (r.status) {
         case ProbeStatus.ok:
@@ -134,12 +134,13 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         case ProbeStatus.broken:
         case ProbeStatus.invalid:
           broken++;
-        case ProbeStatus.pending:
         case ProbeStatus.notInConfig:
+          skipped++;
+        case ProbeStatus.pending:
           break;
       }
     }
-    return (ok: ok, dead: dead, broken: broken);
+    return (ok: ok, dead: dead, broken: broken, skipped: skipped);
   }
 
   Future<void> _disableSlowerThan() async {
@@ -833,7 +834,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               _testing
                   ? 'Testing… ${s.ok + s.dead} done'
                   : '${s.ok} ok · ${s.dead} unreachable'
-                      '${s.broken > 0 ? ' · ${s.broken} broken' : ''}',
+                      '${s.broken > 0 ? ' · ${s.broken} broken' : ''}'
+                      // Выключенные не в боевом конфиге — их меряет только
+                      // probe-сессия (при остановленном VPN).
+                      '${s.skipped > 0 ? ' · ${s.skipped} off — stop VPN to test them' : ''}',
               style: TextStyle(fontSize: 12, color: muted),
             ),
           ),
@@ -1010,7 +1014,10 @@ class _MemberTile extends StatelessWidget {
       ProbeStatus.failed => ('err', theme.colorScheme.error),
       ProbeStatus.broken => ('broken', theme.colorScheme.error),
       ProbeStatus.invalid => ('invalid', theme.colorScheme.error),
-      ProbeStatus.notInConfig => ('enable to test', muted),
+      // НЕ «недоступен»: член выключен → его нет в конфиге работающего
+      // ядра → не тестировался вовсе. Подсказка «как протестировать» — в
+      // сводке (_buildTestBar): выключить VPN, probe-сессия меряет всех.
+      ProbeStatus.notInConfig => ('not tested (off)', muted),
     };
     return Text(
       text,
