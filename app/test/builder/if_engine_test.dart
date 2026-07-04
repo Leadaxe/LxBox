@@ -169,6 +169,74 @@ void main() {
       walk(list, _resolver({'x': 'false'}, {'x': 'bool'}));
       expect(list, ['e']);
     });
+
+    // §232 — evalIfScalar: on_change-узел до скаляра (bare-Map в walk уходит
+    // в map-spread и схлопывает скаляр в {} — регрессия, из-за которой
+    // on_change молча не писал целевые var).
+    test('evalIfScalar: галка true → value, false → else', () {
+      final node = <String, dynamic>{
+        '#if': {
+          'and': ['@ipv6_enabled'],
+          'value': 'prefer_ipv6',
+          'else': 'prefer_ipv4',
+        },
+      };
+      expect(
+          evalIfScalar(
+              node, _resolver({'ipv6_enabled': 'true'}, {'ipv6_enabled': 'bool'})),
+          'prefer_ipv6');
+      expect(
+          evalIfScalar(node,
+              _resolver({'ipv6_enabled': 'false'}, {'ipv6_enabled': 'bool'})),
+          'prefer_ipv4');
+    });
+
+    test('evalIfScalar: не-#if узел / false без else → null', () {
+      expect(
+          evalIfScalar(<String, dynamic>{'foo': 'bar'},
+              _resolver({}, {})),
+          isNull);
+      expect(
+          evalIfScalar(<String, dynamic>{
+            '#if': {'and': ['@x'], 'value': 'v'},
+          }, _resolver({'x': 'false'}, {'x': 'bool'})),
+          isNull);
+    });
+
+    // §232 — TUN address-массив: v6-адрес за галкой ipv6_enabled.
+    test('TUN address: ipv6_enabled=false → только v4', () {
+      final list = <dynamic>[
+        '@tun_address',
+        {'#if': {'and': ['@ipv6_enabled'], 'value': '@tun_address6'}},
+      ];
+      walk(
+          list,
+          _resolver({
+            'tun_address': '172.16.0.1/30',
+            'tun_address6': 'fdfe::1/126',
+            'ipv6_enabled': 'false',
+          }, {
+            'ipv6_enabled': 'bool'
+          }));
+      expect(list, ['172.16.0.1/30']);
+    });
+
+    test('TUN address: ipv6_enabled=true → v4+v6', () {
+      final list = <dynamic>[
+        '@tun_address',
+        {'#if': {'and': ['@ipv6_enabled'], 'value': '@tun_address6'}},
+      ];
+      walk(
+          list,
+          _resolver({
+            'tun_address': '172.16.0.1/30',
+            'tun_address6': 'fdfe::1/126',
+            'ipv6_enabled': 'true',
+          }, {
+            'ipv6_enabled': 'bool'
+          }));
+      expect(list, ['172.16.0.1/30', 'fdfe::1/126']);
+    });
   });
 
   group('Часть 2 — predicates', () {

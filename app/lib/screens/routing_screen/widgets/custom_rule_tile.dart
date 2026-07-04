@@ -19,6 +19,7 @@ class CustomRuleTile extends StatelessWidget {
     required this.pickerValue,
     required this.pickerDisabled,
     this.showOutbound = true,
+    this.touchesDns = false,
     required this.statusButton,
     required this.onTap,
     required this.onLongPressStart,
@@ -37,6 +38,12 @@ class CustomRuleTile extends StatelessWidget {
   /// которым нечего роутить — picker был бы мёртвым (см.
   /// [SelectableRule.hasOutboundAffordance]).
   final bool showOutbound;
+
+  /// §231 — правило вносит изменения в DNS (DNS-сервер/правило). Рисует чип
+  /// «DNS» рядом с именем: глядя на список, видно, что правило связано с DNS
+  /// Settings. Пресет → `SelectableRule.touchesDns`; inline/srs →
+  /// `CustomRule.dnsMirrorActive`.
+  final bool touchesDns;
 
   /// ☁-кнопка статуса (SRS либо preset) — null если правилу не нужен SRS.
   final Widget? statusButton;
@@ -92,7 +99,7 @@ class CustomRuleTile extends StatelessWidget {
               ],
             ),
             Padding(
-              padding: const EdgeInsets.only(left: 64, bottom: 4),
+              padding: const EdgeInsets.only(left: 64, right: 8, bottom: 4),
               child: Row(
                 children: [
                   if (rule.kind == CustomRuleKind.preset) ...[
@@ -106,6 +113,11 @@ class CustomRuleTile extends StatelessWidget {
                             TextStyle(fontSize: 12, color: subtitleColor),
                         overflow: TextOverflow.ellipsis),
                   ),
+                  // §231 — чип «DNS» справа на нижней строке, под outbound-пикером.
+                  if (touchesDns) ...[
+                    const SizedBox(width: 6),
+                    _dnsChip(cs, rule.enabled),
+                  ],
                 ],
               ),
             ),
@@ -128,6 +140,29 @@ class CustomRuleTile extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// §231 — компактный бейдж «DNS»: правило трогает DNS-настройки. Приглушён,
+  /// когда правило выключено.
+  Widget _dnsChip(ColorScheme cs, bool enabled) {
+    final c = enabled ? cs.primary : cs.onSurfaceVariant;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        border: Border.all(color: c.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.dns_outlined, size: 12, color: c),
+          const SizedBox(width: 3),
+          Text('DNS',
+              style: TextStyle(
+                  fontSize: 10, fontWeight: FontWeight.w600, color: c)),
         ],
       ),
     );

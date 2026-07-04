@@ -642,6 +642,21 @@ void main() {
         () {
       expect(_ruDirect().hasOutboundAffordance, isTrue);
     });
+
+    // §231 — touchesDns: чип «DNS» в списке правил.
+    test('touchesDns: fakeip (dns_rule+dns_server) и ru-direct → true', () {
+      expect(_fakeip().touchesDns, isTrue);
+      expect(_ruDirect().touchesDns, isTrue);
+    });
+
+    test('touchesDns: пресет без dns_rule/dns_servers → false', () {
+      final noDns = SelectableRule(
+        label: 'X',
+        presetId: 'x',
+        rule: const {'protocol': 'bittorrent', 'outbound': 'direct-out'},
+      );
+      expect(noDns.touchesDns, isFalse);
+    });
   });
 }
 

@@ -224,7 +224,7 @@
         {
           "name": "resolve_strategy",
           "type": "enum",
-          "default_value": "prefer_ipv6",
+          "default_value": "prefer_ipv4",
           "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"],
           "wizard_ui": "edit",
           "title": "Resolve strategy",
@@ -307,7 +307,7 @@
         {
           "name": "dns_strategy",
           "type": "enum",
-          "default_value": "prefer_ipv6",
+          "default_value": "prefer_ipv4",
           "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"],
           "wizard_ui": "edit",
           "title": "Preferred IP version",
@@ -345,12 +345,34 @@
           "tooltip": "TUN interface address (CIDR)"
         },
         {
+          "name": "ipv6_enabled",
+          "type": "bool",
+          "default_value": "false",
+          "wizard_ui": "edit",
+          "title": "Enable IPv6",
+          "tooltip": "Add an IPv6 address to the tunnel and prefer IPv6 for resolution. Off by default — turn on only if your network has working IPv6.",
+          "on_change": {
+            "set": {
+              "@dns_strategy":     {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv6", "else": "prefer_ipv4"}},
+              "@resolve_strategy": {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv6", "else": "prefer_ipv4"}}
+            }
+          }
+        },
+        {
           "name": "tun_address6",
           "type": "text",
           "default_value": "fdfe:dcba:9876::1/126",
           "wizard_ui": "edit",
           "title": "IPv6 address",
-          "tooltip": "TUN interface IPv6 address (CIDR). Enables IPv6 inside the tunnel when your network has IPv6."
+          "tooltip": "TUN interface IPv6 address (CIDR). Applied only when Enable IPv6 is on."
+        },
+        {
+          "name": "route_address_enable",
+          "type": "bool",
+          "default_value": "false",
+          "wizard_ui": "edit",
+          "title": "Custom tunnel routes",
+          "tooltip": "Route all IPv4 and IPv6 through the tunnel via explicit half-ranges instead of sing-box defaults. Off by default — turn on only if the default routing misbehaves."
         },
         {
           "name": "tun_name",
@@ -529,8 +551,8 @@
         "type": "tun",
         "tag": "tun-in",
         "interface_name": "@tun_name",
-        "address": ["@tun_address", "@tun_address6"],
-        "route_address": ["0.0.0.0/1", "128.0.0.0/1", "::/1", "8000::/1"],
+        "address": ["@tun_address", {"#if": {"and": ["@ipv6_enabled"], "value": "@tun_address6"}}],
+        "#if": {"and": ["@route_address_enable"], "value": {"route_address": ["0.0.0.0/1", "128.0.0.0/1", "::/1", "8000::/1"]}},
         "mtu": "@tun_mtu",
         "auto_route": "@tun_auto_route",
         "strict_route": "@tun_strict_route",

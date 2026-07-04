@@ -6,9 +6,11 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/background_mode.dart';
 import '../models/parser_config.dart';
+import '../services/builder/if_engine.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
 import '../widgets/template_var_list.dart';
+import '../widgets/var_values_model.dart';
 import 'vpn_mode_tab.dart';
 
 /// VPN Settings — System (`VpnService.Builder` toggles) + Core (sing-box
@@ -34,18 +36,20 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen>
     with WidgetsBindingObserver {
   WizardTemplate? _template;
-  final _varValues = <String, String>{};
-  // §076: template var changes pending для write-on-exit. Накапливается
-  // {var_name → value} в `_onVarChanged` (роль `_markDirty` других lazy-
-  // экранов; сигнатура отличается — здесь per-var, не boolean-флаг),
-  // flush'ится в `_persist` (dispose + lifecycle.paused).
+  // §232 — реактивная модель значений vars (per-key ValueNotifier). Единый
+  // источник истины для экрана: поля TemplateVarListView подписаны каждый на
+  // свой ключ, программные изменения (`on_change`) видны в UI мгновенно.
+  // Запись — ТОЛЬКО в память (+dirty); storage/cache трогает только `_persist`
+  // (dispose/paused, §076 write-on-exit) по model.dirtyKeys. Юзер, ушедший до
+  // persist (force-kill), staged-значения теряет — как и раньше для всех
+  // правок этого экрана.
   //
   // §084 M14 / §189: Native VPN System toggle (background_mode; §188 —
   // allow_bypass / keep_on_exit переехали в Mode-вкладку) идёт через
   // `SettingsStorage.setNativeBackgroundMode` (§189 — JSON-истина + зеркало в
   // native) + `markConfigChangedNeedRestart` (home banner «Restart VPN»). Это
   // discrete-event toggle, не config-rebuild var.
-  final _pendingVars = <String, String>{};
+  VarValuesModel? _model;
   bool _loading = true;
 
   BackgroundMode _backgroundMode = BackgroundMode.never;
@@ -66,25 +70,35 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    // §076 write-on-exit: Navigator.pop → flush pending vars.
-    if (_pendingVars.isNotEmpty) unawaited(_persist());
+    // §076 write-on-exit: Navigator.pop → flush dirty vars. Снимок значений
+    // _persist делает СИНХРОННО до первого await — поэтому dispose модели
+    // сразу после запуска безопасен (use-after-dispose исключён).
+    if (_model?.dirtyKeys.isNotEmpty ?? false) unawaited(_persist());
+    _model?.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused && _pendingVars.isNotEmpty) {
+    if (state == AppLifecycleState.paused &&
+        (_model?.dirtyKeys.isNotEmpty ?? false)) {
       unawaited(_persist());
     }
   }
 
-  /// §107: дисковый flush staged vars — мутации уже в `_cache` (см.
-  /// `_onVarChanged`), осталось одно атомарное `flushToDisk()`. Native
-  /// System settings (background_mode) идут через
-  /// `SettingsStorage.setNativeBackgroundMode` (§189) immediate.
+  /// §232 — ЕДИНСТВЕННОЕ место записи vars в storage: снимаем dirty-значения
+  /// из модели (синхронно), стейджим в cache (`setVar flush:false`), один
+  /// атомарный `flushToDisk()`. До этого момента все изменения — только в
+  /// памяти модели (strict-семантика on_change: «юзер может не сохранить»).
   Future<void> _persist() async {
-    if (_pendingVars.isEmpty) return;
-    _pendingVars.clear();
+    final model = _model;
+    if (model == null || model.dirtyKeys.isEmpty) return;
+    // Синхронный снимок ДО await — dispose() модели после нас не страшен.
+    final staged = {for (final k in model.dirtyKeys) k: model.get(k)};
+    model.clearDirty();
+    for (final e in staged.entries) {
+      await SettingsStorage.setVar(e.key, e.value, flush: false);
+    }
     await SettingsStorage.flushToDisk();
     // configDirty уже true (set in _onVarChanged sync). Не трогаем.
   }
@@ -92,9 +106,10 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _load() async {
     final template = await TemplateLoader.load();
     final storedVars = await SettingsStorage.getAllVars();
-    for (final v in template.vars) {
-      _varValues[v.name] = storedVars[v.name] ?? v.defaultValue;
-    }
+    _model = VarValuesModel({
+      for (final v in template.vars)
+        v.name: storedVars[v.name] ?? v.defaultValue,
+    });
     // §189 — background_mode читаем из JSON-зеркала native_prefs (истина).
     final bgMode = BackgroundMode.fromNative(
         await SettingsStorage.getNativeBackgroundMode());
@@ -144,13 +159,39 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   /// §076/§107: template var change. Staged-запись в `_cache` сразу + sync
-  /// mark configDirty; дисковая запись — одним flush'ем в `_persist`
-  /// (dispose / lifecycle.paused).
+  /// Колбэк от [TemplateVarListView] — значение УЖЕ в модели (виджет пишет
+  /// через `model.set` до вызова). Здесь только config-dirty + каскад
+  /// декларативных side-effect'ов.
   void _onVarChanged(String name, String value) {
-    _varValues[name] = value;
-    _pendingVars[name] = value;
-    unawaited(SettingsStorage.setVar(name, value, flush: false));
     widget.subController.configDirty = true; // sync race-safe
+    _applyOnChange(name);
+  }
+
+  /// §232 — декларативный side-effect var'а: `on_change.set` пишет производные
+  /// var ТОЛЬКО в модель (in-memory + per-key emit подписанным полям + dirty).
+  /// Storage не трогаем — staged-значения доедут до диска общим `_persist`
+  /// (write-on-exit). Резолвер читает snapshot модели, где переключённая var
+  /// уже новая. Рекурсия по цепочке on_change; fixpoint-guard: `model.set`
+  /// возвращает false для неизменившегося значения → цикл обрывается.
+  void _applyOnChange(String name) {
+    final model = _model;
+    final template = _template;
+    if (model == null || template == null) return;
+    final node = template.vars.where((v) => v.name == name).firstOrNull;
+    final set = node?.onChange?['set'];
+    if (set is! Map<String, dynamic>) return;
+    final byName = {for (final v in template.vars) v.name: v};
+    final resolve = makeResolver(model.snapshot, byName);
+    set.forEach((target, ifNode) {
+      final tName = target.startsWith('@') ? target.substring(1) : target;
+      if (ifNode is! Map<String, dynamic>) return;
+      final resolved = evalIfScalar(ifNode, resolve);
+      if (resolved == null) return;
+      if (model.set(tName, resolved)) {
+        widget.subController.configDirty = true;
+        _applyOnChange(tName); // цепочка on_change целевой var (если есть)
+      }
+    });
   }
 
   @override
@@ -334,7 +375,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       children: [
         TemplateVarListView(
           vars: editableVars,
-          initialValues: _varValues,
+          model: _model!,
           sectionDescriptions: sectionDescriptions,
           onChanged: _onVarChanged,
         ),
