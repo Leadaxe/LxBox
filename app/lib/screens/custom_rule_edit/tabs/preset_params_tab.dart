@@ -92,6 +92,28 @@ class PresetParamsTab extends StatelessWidget {
                 const SizedBox(width: 6),
                 Text('Based on preset',
                     style: TextStyle(fontSize: 12, color: cs.primary)),
+                // §231 — чип «DNS»: пресет трогает DNS-настройки (сервер/правило).
+                if (preset.touchesDns) ...[
+                  const Spacer(),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      border:
+                          Border.all(color: cs.primary.withValues(alpha: 0.5)),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.dns_outlined, size: 12, color: cs.primary),
+                      const SizedBox(width: 3),
+                      Text('DNS',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: cs.primary)),
+                    ]),
+                  ),
+                ],
               ]),
               const SizedBox(height: 4),
               Text(preset.label,
@@ -106,6 +128,34 @@ class PresetParamsTab extends StatelessWidget {
             ],
           ),
         ),
+        // §231 — инфо-блок: пресет затрагивает DNS. Глядя на правило, юзер
+        // должен понимать, что оно вносит сущности в DNS Settings.
+        // Нейтрально-информативный стиль (как баннер «Based on preset») —
+        // НЕ warning/error: это фича правила, а не проблема.
+        if (preset.touchesDns) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.dns_outlined, size: 16, color: cs.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'This rule changes DNS settings — it adds a DNS server '
+                    'and/or a DNS rule. See DNS Settings.',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         Row(
           children: [

@@ -10,7 +10,7 @@
 
 | Параметр | Значение |
 |----------|----------|
-| Android minSdk | **26** (Android 8.0) |
+| Android minSdk | **24** (Android 7.0) |
 | Android targetSdk | `flutter.targetSdkVersion` (актуальная target, обычно API 34/35) |
 | Android compileSdk | `flutter.compileSdkVersion` |
 | JVM | Java 17 |
@@ -21,8 +21,8 @@
 | Tier | Android | Статус |
 |------|---------|--------|
 | **Primary** | 11+ (API 30+) | Тестируется, все фичи работают, production-ready |
-| **Best-effort** | 8.0–10 (API 26–29) | Compile OK, install OK, базовый VPN-функционал должен работать. Фичи требующие API 30+ (например, silent-kill detection через `getHistoricalProcessExitReasons`) деградируют к no-op. Не тестируется регулярно; жалобы принимаются, но fix'ы на best-effort основе. |
-| **Unsupported** | <8 (API <26) | Установка заблокирована `minSdk=26` |
+| **Best-effort** | 7.0–10 (API 24–29) | Compile OK, install OK, базовый VPN-функционал должен работать. Фичи требующие новых API (например, silent-kill detection через `getHistoricalProcessExitReasons`, API 30+) деградируют к no-op за `SDK_INT`-гейтами. Не тестируется регулярно; жалобы принимаются, но fix'ы на best-effort основе. На 7.x дополнительно: старый системный trust store — на 7.0 нет корня ISRG Root X1, HTTPS-подписки с Let's Encrypt-сертификатами не валидируются (на 7.1.1+ корень есть). |
+| **Unsupported** | <7 (API <24) | Установка заблокирована `minSdk=24`; ниже 24 не пускает сам Flutter (пол движка) |
 
 > **Рендерер (§131).** На `Build.VERSION.SDK_INT < 31` (Android ≤11) Flutter
 > принудительно переключается с Impeller на **Skia** (`getFlutterShellArgs` →
@@ -31,16 +31,18 @@
 > На Android 12+ Impeller сохранён. Гейт по версии ОС, не по GPU — у Flutter нет
 > чистого рантайм-детекта GPU. Подробности — [§131](spec/tasks/131-impeller-adreno-gpu-crash.md).
 
-### Почему именно 26 как minSdk
+### Почему именно 24 как minSdk
 
-- **Исторически** в release notes 1.3.x и draft 1.4.0 заявлено «Android 8.0+» — не закрываем дверь пользователям которые видели эту декларацию.
+- **24 — абсолютный пол**: Flutter 3.41.x поддерживает минимум API 24 (`FlutterExtension.minSdkVersion = 24`), libbox.aar собран с `minSdkVersion=23`. Ниже 24 приложение не собрать в принципе.
+- Исторически с v1.4.0 стоял `minSdk=26` («Android 8.0+» из release notes 1.3.x); понижен до 24 в §233 по запросу пользователей со старыми устройствами — технических зависимостей от API 26 в коде не было (см. аудит в [spec/tasks/233](spec/tasks/233-minsdk-24.md)).
 - **VpnService API** (`setMetered`, `setUnderlyingNetworks`) доступны с API 29+, для старых есть fallback-пути (без setMetered — vpn работает нормально, просто не маркируется как non-metered).
 - **`ActivityManager.getHistoricalProcessExitReasons`** (API 30+) — нужен для silent-kill detection в task 007. В коде обёрнут в `if (Build.VERSION.SDK_INT >= 30)` — на старых просто не триггерит snackbar.
-- **Foreground-service lifecycle** на API 26+ достаточно стабилен для наших целей.
+- **`NotificationChannel`** (API 26+) — за `SDK_INT >= O`-гейтами; оба notification-билдера ставят `setPriority(...)`, так что на pre-O приоритет корректен без каналов. FGS стартует через `ContextCompat.startForegroundService` (на <26 — обычный `startService`, background-ограничений до Oreo нет).
+- **`BoxApplication.fixAndroidStack`** включается ровно на API 24–25 — воркараунд libbox под Android 7.x.
 
-### Legacy `Build.VERSION.SDK_INT` проверки
+### `Build.VERSION.SDK_INT` проверки
 
-В Kotlin (DefaultNetworkMonitor, ServiceNotification, BoxApplication, etc.) остались старые version guards — часть libbox-adjacent кода. С `minSdk=26` некоторые из них (`>= M (23)`, `>= N (24)`) всегда true, их можно упростить. Отдельный cleanup-pass после стабилизации 1.4.0, чтобы не мешать с другими изменениями.
+В Kotlin (DefaultNetworkMonitor, ServiceNotification, BoxApplication, etc.) version guards — рабочий механизм тиров: с `minSdk=24` ветки `>= N (24)` и выше снова достижимы. Гейты `>= M (23)` всегда true — можно упростить отдельным cleanup-pass'ом, но выигрыш минимален.
 
 ---
 
@@ -1367,6 +1369,7 @@ HomeScreen
 | **`markConfigChangedNeedRestart` external mark** (v1.9.0, §076) | `HomeController` method для настроек применяемых вне config pipeline. Native VPN-тогглы (allow_bypass / keep_on_exit / background_mode) — с §189 пишутся write-through через `SettingsStorage.setNativeBool`/`setNativeBackgroundMode` (JSON-истина + зеркало в native) — вызывают этот метод → home banner вместо локального snackbar'а. Gated на `tunnelUp`. |
 | **Cohesion over line-count + `part`/`mixin` декомпозиция** (§089) | Монстры (home_screen 2370, home_controller 1089, …) раздроблены не по числу строк, а по ответственности: тонкий экран + `<screen>/widgets/` + presenter/VM; контроллер + `part`-mixin'ы (та же библиотека → library-private доступ сохранён, поведение bit-identical). ~600 строк легитимны для cohesive-файла; крупные исключения задокументированы (см. [Обзор](#принцип-cohesion-over-line-count-089)). |
 | **`ConfigNode` структурная мета вместо reverse-parse тега** (§091, реализовано) | `config-tag == нода в Clash`; протокол/detour достаются из конфига по тегу без reverse-map. Один `ParsedConfig` (parsed раз на `configRaw`, поле `HomeState.configModel`) заменил `ConfigCache.protoByTag/detourTags` + `ConfigIntrospection` + reverse-map `subscriptionsOfTag` (теперь prefix-фильтр, `home/subscription_lookup.dart`). Класс багов §077/§079/§080 устранён структурно. §102/§103 — eager `transportLabel`/`securityLabel` для subtitle и variant-фильтра. +14 тестов. |
+| **`VarValuesModel` — per-key реактивная модель настроек** (§232) | Однонаправленный поток а-ля Vue («props down, events up»): значения template-vars экрана живут в `VarValuesModel` (`Map<String, ValueNotifier>` + dirty-set), каждое поле `TemplateVarListView` подписано `ValueListenableBuilder`'ом на СВОЙ ключ — программные изменения (`on_change`: галка ipv6 → стратегии) видны в UI мгновенно и точечно. Заменила ДВЕ рассинхронизирующиеся копии (`_varValues` в State + приватная `_values` виджета), из-за которых on_change-записи терялись. `model.set` — только память; storage пишет ЕДИНСТВЕННОЕ место — `_persist` на dispose/paused по `dirtyKeys` (уточнение lazy-паттерна §076: до выхода изменения нигде, кроме модели). Кросс-экранная доставка (dns_strategy на DNS Settings) — через cache при следующем `_load()` того экрана; app-global модель отвергнута (экраны не co-mounted). §161-edge: пустое required — `set(markDirty:false)`+`unstage`, до storage не доезжает. |
 
 ---
 

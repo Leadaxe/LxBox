@@ -179,6 +179,7 @@ class WizardVar {
     this.section = '',
     this.chapter = 'core',
     this.required = true,
+    this.onChange,
   });
 
   final String name;
@@ -198,6 +199,15 @@ class WizardVar {
   /// null запрещён. `false` — в UI появляется пункт "—", юзер может не
   /// выбирать, фрагменты с unresolved `@name` выкидываются целиком.
   final bool required;
+
+  /// §232 — декларативный side-effect при переключении этой var. Форма:
+  /// `{"set": {"@target": <#if-node>, ...}}`. При изменении значения var
+  /// каждый `@target` пере-вычисляется через #if-движок (резолвер отдаёт
+  /// НОВОЕ значение этой var) и записывается. Пример: галка `ipv6_enabled`
+  /// ставит `dns_strategy`/`resolve_strategy` в prefer_ipv6/ipv4. `null` —
+  /// нет side-effect (обычная var). Значения — литералы (юзер потом волен
+  /// переопределить вручную; это разовый эффект переключения, не форс).
+  final Map<String, dynamic>? onChange;
 
   bool get isEditable => wizardUI == 'edit';
 
@@ -234,6 +244,7 @@ class WizardVar {
       section: section,
       chapter: chapter,
       required: json['required'] as bool? ?? true,
+      onChange: json['on_change'] as Map<String, dynamic>?,
     );
   }
 }
@@ -304,6 +315,13 @@ class SelectableRule {
   /// picker не получают: менять нечего. Захотел дать выбор — добавь var:outbound
   /// в шаблон (как у ru-inside/bittorrent/private-ip/unknown-traffic).
   bool get hasOutboundAffordance => vars.any((v) => v.type == 'outbound');
+
+  /// §231 — пресет вносит изменения в DNS (DNS-сервер и/или DNS-правило в
+  /// `dns.servers`/`dns.rules`). Для UI-маркера «DNS» в списке правил: глядя на
+  /// строку, не видно, что пресет (напр. FakeIP / ru-direct) трогает DNS
+  /// Settings. Тот же split, что в debug-сериализаторе (has_dns_rule /
+  /// dns_servers_count) и в гейте билдера (`p.dnsRule != null`).
+  bool get touchesDns => dnsRule != null || dnsServers.isNotEmpty;
 
   factory SelectableRule.fromJson(Map<String, dynamic> json) {
     final presetId = (json['preset_id'] as String?) ?? '';
