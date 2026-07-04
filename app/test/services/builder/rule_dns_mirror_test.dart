@@ -112,6 +112,16 @@ void main() {
       );
       expect(
         CustomRuleInline(
+                name: 'net',
+                domains: ['a.com'],
+                network: ['udp'],
+                dns: dnsOn)
+            .dnsMirrorActive,
+        false,
+        reason: '§240 network — headless-гейт',
+      );
+      expect(
+        CustomRuleInline(
                 name: 'off', enabled: false, domains: ['a.com'], dns: dnsOn)
             .dnsMirrorActive,
         false,

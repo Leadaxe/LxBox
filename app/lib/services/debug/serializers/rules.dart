@@ -32,6 +32,8 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         if (r.portRanges.isNotEmpty) 'port_ranges': r.portRanges,
         if (r.packages.isNotEmpty) 'packages': r.packages,
         if (r.protocols.isNotEmpty) 'protocols': r.protocols,
+        // §240 — L4-транспорт (tcp/udp/icmp).
+        if (r.network.isNotEmpty) 'network': r.network,
         if (r.ipIsPrivate) 'ip_is_private': true,
         // §030/new_fields — source-ось + inbound.
         if (r.sourceIpCidrs.isNotEmpty) 'source_ip_cidrs': r.sourceIpCidrs,
@@ -55,6 +57,8 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         if (r.portRanges.isNotEmpty) 'port_ranges': r.portRanges,
         if (r.packages.isNotEmpty) 'packages': r.packages,
         if (r.protocols.isNotEmpty) 'protocols': r.protocols,
+        // §240 — L4-транспорт (tcp/udp/icmp).
+        if (r.network.isNotEmpty) 'network': r.network,
         if (r.ipIsPrivate) 'ip_is_private': true,
         // §030/new_fields — source-ось + inbound.
         if (r.sourceIpCidrs.isNotEmpty) 'source_ip_cidrs': r.sourceIpCidrs,

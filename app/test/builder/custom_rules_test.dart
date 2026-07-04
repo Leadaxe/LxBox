@@ -141,6 +141,55 @@ void main() {
       expect(rule['outbound'], 'vpn-1');
     });
 
+    test('§240 network идёт на routing-rule level, AND с protocol', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'UDP quic',
+          domainSuffixes: ['example.com'],
+          network: ['udp'],
+          protocols: ['quic'],
+          outbound: 'vpn-1',
+        ),
+      ]);
+      final match = reg.getRuleSets().first['rules'].first as Map;
+      // network/protocol — routing-rule level, не в headless match.
+      expect(match.containsKey('network'), isFalse);
+      final rule = reg.getRules().first;
+      expect(rule['network'], ['udp']);
+      expect(rule['protocol'], ['quic']);
+      expect(rule['rule_set'], 'UDP quic');
+    });
+
+    test('§240 network-only (match пуст) → routing rule без rule_set', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'All ICMP',
+          network: ['icmp'],
+          outbound: 'direct-out',
+        ),
+      ]);
+      expect(reg.getRuleSets(), isEmpty);
+      final rule = reg.getRules().single;
+      expect(rule['network'], ['icmp']);
+      expect(rule.containsKey('rule_set'), isFalse);
+      expect(rule['outbound'], 'direct-out');
+    });
+
+    test('§240 пустой network не эмитит ключ', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'Plain',
+          domainSuffixes: ['example.com'],
+          outbound: 'vpn-1',
+        ),
+      ]);
+      final rule = reg.getRules().first;
+      expect(rule.containsKey('network'), isFalse);
+    });
+
     test('reject + protocol → action:reject со сохранением protocol', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
@@ -262,6 +311,7 @@ void main() {
         portRanges: ['8000:9000'],
         packages: ['org.mozilla.firefox'],
         protocols: ['tls'],
+        network: ['tcp'],
         outbound: 'vpn-1',
       );
       applyCustomRules(reg, [rule],
@@ -272,6 +322,7 @@ void main() {
       expect(r['port_range'], ['8000:9000']);
       expect(r['package_name'], ['org.mozilla.firefox']);
       expect(r['protocol'], ['tls']);
+      expect(r['network'], ['tcp']);
       expect(r['outbound'], 'vpn-1');
     });
   });
@@ -286,6 +337,7 @@ void main() {
         ports: ['443'],
         portRanges: ['8000:9000'],
         protocols: ['tls'],
+        network: ['tcp', 'udp'],
         outbound: kOutboundReject,
       );
       final back = CustomRule.fromJson(src.toJson());
@@ -298,6 +350,7 @@ void main() {
       expect(inline.ports, ['443']);
       expect(inline.portRanges, ['8000:9000']);
       expect(inline.protocols, ['tls']);
+      expect(inline.network, ['tcp', 'udp']);
       expect(inline.outbound, kOutboundReject);
     });
 
