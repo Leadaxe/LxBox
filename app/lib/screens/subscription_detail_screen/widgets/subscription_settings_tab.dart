@@ -14,6 +14,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
   const SubscriptionSettingsTab({
     super.key,
     required this.entry,
+    this.folderMode = false,
     required this.hasDetour,
     required this.detourMode,
     required this.onTagPrefixChanged,
@@ -29,6 +30,10 @@ class SubscriptionSettingsTab extends StatelessWidget {
   });
 
   final SubscriptionEntry entry;
+
+  /// §239 — true для папки (§234): адаптированные detour-тексты («servers'
+  /// own detours» вместо «subscription detour servers»).
+  final bool folderMode;
   final bool hasDetour;
   final DetourMode detourMode;
 
@@ -55,9 +60,13 @@ class SubscriptionSettingsTab extends StatelessWidget {
         )),
         const SizedBox(height: 4),
         Text(
-          'Prefix applied to every tag from this subscription '
-          '(e.g. "BL:" → "BL: Frankfurt"). Used to distinguish servers '
-          'from different subscriptions and resolve name collisions.',
+          folderMode
+              ? 'Prefix applied to every server tag in this folder '
+                  '(e.g. "BL:" → "BL: Frankfurt"). Lets a routing channel '
+                  'match the whole folder by regex.'
+              : 'Prefix applied to every tag from this subscription '
+                  '(e.g. "BL:" → "BL: Frankfurt"). Used to distinguish servers '
+                  'from different subscriptions and resolve name collisions.',
           style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 8),
@@ -93,10 +102,14 @@ class SubscriptionSettingsTab extends StatelessWidget {
             groupValue: detourMode,
             onChanged: (m) => onSetDetourMode(m!),
             child: Column(children: [
-              const RadioListTile<DetourMode>(
+              RadioListTile<DetourMode>(
                 value: DetourMode.use,
-                title: Text('Use subscription detour servers'),
-                subtitle: Text('Nodes connect through detour servers'),
+                title: Text(folderMode
+                    ? "Use servers' own detours"
+                    : 'Use subscription detour servers'),
+                subtitle: Text(folderMode
+                    ? 'Members connect through their personal detours'
+                    : 'Nodes connect through detour servers'),
               ),
               // §096 — register-тоглы под Use (нативные детуры используются).
               if (detourMode == DetourMode.use) _registerToggles(),
@@ -157,8 +170,13 @@ class SubscriptionSettingsTab extends StatelessWidget {
           )),
           const SizedBox(height: 4),
           Text(
-            'This subscription has no detour servers of its own. You can '
-            'still route all its nodes through one of your servers.',
+            folderMode
+                ? 'Servers in this folder have no detours yet. You can still '
+                    'route all of them through one of your servers, or set '
+                    'personal detours per server (tap a server on the '
+                    'Servers tab).'
+                : 'This subscription has no detour servers of its own. You can '
+                    'still route all its nodes through one of your servers.',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),

@@ -10,6 +10,7 @@ import '../services/error_format.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/template_vars.dart';
+import '../widgets/detour_target_picker.dart';
 import '../widgets/emoji_picker_button.dart';
 
 /// Настройки одиночного сервера (UserServer) ИЛИ члена папки (§237). Две
@@ -49,7 +50,6 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   String _scheme = '';
   String _serverInfo = '';
   String _detour = '';
-  List<String> _availableNodes = [];
   // §130 — узел = AmneziaWG (WireguardSpec с непустыми AWG-obfuscation полями).
   // У WG и AWG одинаковый protocol == 'wireguard'; различие — поле `awg`.
   // AWG с detour на wireguard вешает ядро на Android (#2) → фильтруем detour.
@@ -113,42 +113,11 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     // восстанавливает — терялось при save.
     _detour = member != null ? member.detour : widget.entry.overrideDetour;
 
-    // Доступные detour-теги: все узлы всех `UserServer` кроме себя.
-    //
-    // §080: строим **display-form** (`'$tagPrefix $base'`) — как
-    // `server_list_build._withPrefix`. Значение сохраняется в
-    // `entry.overrideDetour` и подставляется builder'ом прямо в
-    // `main.map['detour']` без prefix-трансформации, поэтому bare `n.tag`
-    // ссылался бы на несуществующий outbound при непустом `tag_prefix`.
-    // Self-exclude тоже по display-form (текущая нода со своим prefix'ом).
-    // NB: совпадает с эмитированным tag'ом только ДО `allocateTag` de-dup
-    // (collision-suffix `-N` здесь не учитывается — редкий edge, §080).
-    final selfDisplay =
-        TagResolver.displayTag(widget.entry.list.tagPrefix, _originalTag);
-    final tags = <String>[];
-    for (final e in widget.subController.entries) {
-      final list = e.list;
-      // §234 — папки тоже кандидаты (nodes = включённые члены).
-      if (list is! UserServer && list is! FolderServers) continue;
-      // §080: disabled UserServer не эмитит outbounds → skip (dangling).
-      if (!list.enabled) continue;
-      final prefix = list.tagPrefix;
-      for (final n in list.nodes) {
-        if (n.tag.isEmpty) continue;
-        // §130 — AWG-узел не может detour-ить в wireguard (вешает ядро #2):
-        // исключаем всех wireguard-кандидатов (плоский WG + AWG).
-        if (_isAwg && n is WireguardSpec) continue;
-        final display = TagResolver.displayTag(prefix, n.tag);
-        if (display != selfDisplay) tags.add(display);
-      }
-    }
-    _availableNodes = tags;
-
-    // §130 — если у AWG-узла уже сохранён detour на wireguard-цель (старый
-    // сломанный конфиг), её больше нет в отфильтрованном списке → сбрасываем
-    // на None и СРАЗУ персистим (иначе юзер откроет/закроет не трогая dropdown
-    // и битый detour останется в lxbox_settings.json).
-    if (_isAwg && _detour.isNotEmpty && !_availableNodes.contains(_detour)) {
+    // §239 — кандидаты теперь живут в общем пикере (showDetourTargetPicker):
+    // «свободные» одиночки + члены СВОЕЙ папки (для member-режима). Здесь
+    // осталась только §130-страховка: сохранённый AWG→wireguard detour из
+    // старого конфига сбрасываем сразу.
+    if (_isAwg && _detour.isNotEmpty && _detourTargetIsWireguard(_detour)) {
       final removed = _detour;
       _detour = '';
       unawaited(_persistDetour(''));
@@ -156,6 +125,49 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     }
 
     if (mounted) setState(() {});
+  }
+
+  /// §239/§130 — является ли сохранённая цель detour wireguard-нодой.
+  /// Member-режим: сперва голые теги членов своей папки; затем display-теги
+  /// свободных одиночек (§080).
+  bool _detourTargetIsWireguard(String stored) {
+    final list = widget.entry.list;
+    if (widget.memberIndex != null && list is FolderServers) {
+      for (final m in list.members) {
+        final n = m.node;
+        if (n != null && n.tag == stored) return n is WireguardSpec;
+      }
+    }
+    for (final e in widget.subController.entries) {
+      final l = e.list;
+      if (l is! UserServer || !l.enabled) continue;
+      for (final n in l.nodes) {
+        if (TagResolver.displayTag(l.tagPrefix, n.tag) == stored) {
+          return n is WireguardSpec;
+        }
+      }
+    }
+    return false;
+  }
+
+  /// §239 — открыть единый пикер цели detour.
+  Future<void> _pickDetour() async {
+    final list = widget.entry.list;
+    final member = _member;
+    final target = await showDetourTargetPicker(
+      context,
+      controller: widget.subController,
+      currentFolder:
+          (member != null && list is FolderServers) ? list : null,
+      selfBareTag: member?.node?.tag ?? '',
+      selfDisplayTag: member == null
+          ? TagResolver.displayTag(list.tagPrefix, _originalTag)
+          : '',
+      excludeWireguard: _isAwg,
+    );
+    if (target == null || !mounted) return;
+    setState(() => _detour = target.storeValue);
+    await _persistDetour(target.storeValue);
   }
 
   /// §130 — лог сброса невалидного AWG→WireGuard detour при открытии редактора.
@@ -170,7 +182,14 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   Future<void> _persistDetour(String value) async {
     final mi = widget.memberIndex;
     if (mi != null) {
-      await widget.subController.setMemberDetour(widget.index, mi, value);
+      final err =
+          await widget.subController.setMemberDetour(widget.index, mi, value);
+      if (err.isNotEmpty && mounted) {
+        // §239 — отклонено (цикл/self): откатываем локальный выбор.
+        setState(() => _detour = _member?.detour ?? '');
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(err)));
+      }
       return;
     }
     widget.entry.overrideDetour = value;
@@ -304,32 +323,12 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
         ),
         const SizedBox(height: 16),
         _sectionHeader('Detour', 'Route through another server first', theme),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: DropdownButtonFormField<String>(
-            initialValue: _detour.isEmpty
-                ? ''
-                : (_availableNodes.contains(_detour) ? _detour : ''),
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Detour server',
-              isDense: true,
-            ),
-            items: [
-              const DropdownMenuItem(value: '', child: Text('None (direct)')),
-              ..._availableNodes.map((tag) => DropdownMenuItem(
-                  value: tag,
-                  child: Text(tag, overflow: TextOverflow.ellipsis))),
-            ],
-            onChanged: (v) {
-              setState(() => _detour = v ?? '');
-              // Persist: одиночный → detourPolicy.overrideDetour, член папки →
-              // member.detour (§237). Builder подхватит и перезапишет
-              // main.map['detour']. Не трогаем JSON ноды, иначе после save
-              // через parseSingboxEntry поле теряется.
-              unawaited(_persistDetour(_detour));
-            },
-          ),
+        ListTile(
+          leading: const Icon(Icons.alt_route, size: 20),
+          title: const Text('Detour server'),
+          subtitle: Text(_detour.isEmpty ? 'None (direct)' : _detour),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => unawaited(_pickDetour()),
         ),
         // §130 — для AWG-узла WireGuard-цели исключены из списка (AWG поверх
         // WireGuard вешает ядро на Android). Поясняем, почему их нет.
