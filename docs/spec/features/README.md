@@ -68,6 +68,13 @@
 | 122 | [`122 commandclient-migration/`](122%20commandclient-migration/) | Переход управляющего канала на libbox CommandClient (отказ от Clash API) | Реализовано |
 | 123 | [`123 subscription-model/`](123%20subscription-model/) | Модель подписок BoxService / CommandClient (три клиента, энергомодель) | Реализовано |
 | 124 | [`124 background-mode-tunnel-sleep/`](124%20background-mode-tunnel-sleep/) | Tunnel sleep mode (`never`/`lazy`/`always`): pause/wake туннеля ради батареи; инвариант «нет утечки на паузе» | Реализовано |
+| 125 | [`125 configurable-channels/`](125%20configurable-channels/) | Настраиваемые каналы роутинга (CRUD ≤10, node_filter, auto-двойник) | Реализовано (v2.6.0) |
+| 126 | [`126 first-run-wizard/`](126%20first-run-wizard/) | Мастер первого запуска | Реализовано (v2.8.0) |
+| 127 | [`127 xhttp-full-url-params/`](127%20xhttp-full-url-params/) | Полный XHTTP: URL-параметры транспорта | Реализовано (v2.8.0) |
+| 128 | [`128 idle-suspend/`](128%20idle-suspend/) | Idle-suspend туннеля (`route.lx_idle_suspend`, kernel SPEC 020) | Реализовано (v2.8.2) |
+| 129 | [`129 file-subscription/`](129%20file-subscription/) | Подписка из файла (`file:<uuid>`) + редактируемый источник online↔file | Реализовано (v2.8.2) |
+| 130 | [`130 masque-warp-transport/`](130%20masque-warp-transport/) | MASQUE-транспорт для WARP (QUIC/CONNECT-IP) | Реализовано (v2.9.0) |
+| 234 | [`234 server-folders/`](234%20server-folders/) | Папки серверов (folder): контейнер ручных серверов, per-member toggle, перенос между папками | Спека |
 
 ## Демотированные / superseded (теперь в `../tasks/`)
 
