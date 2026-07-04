@@ -12,6 +12,8 @@ import '../services/probe/probe_runner.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/tag_resolver.dart';
+import 'home/filter_widgets.dart';
+import 'home/node_list_presenter.dart' show protoLabel;
 import 'subscription_detail_screen/detour_mode.dart';
 import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscriptions_screen/folder_picker.dart';
@@ -46,6 +48,14 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   bool _testing = false;
   ProbeThresholds _thresholds = const ProbeThresholds();
 
+  // §236 UI-rework — локальный фильтр членов (как на главном: regex +
+  // протоколы). Тоже эфемерный (осознанно не сохраняется, ср. §048).
+  final _filterRegexCtl = TextEditingController();
+  bool _filterExpanded = false;
+  bool _regexInvert = false;
+  final Set<String> _selectedProtocols = {};
+  bool _protocolsInvert = false;
+
   FolderServers get _folder => widget.entry.list as FolderServers;
 
   /// Индекс entry по ссылке — список мог сместиться (reorder/delete).
@@ -65,6 +75,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     _runner?.cancel();
     _tabCtrl.dispose();
     _nameCtrl.dispose();
+    _filterRegexCtl.dispose();
     super.dispose();
   }
 
@@ -119,6 +130,118 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     setState(() => _testing = false);
     if (err.isNotEmpty) {
       await _showError(err);
+      return;
+    }
+    // §236 UI-rework — при живом VPN выключенные члены не в конфиге →
+    // не тестировались. Говорим явно попапом, а не только бейджами.
+    final skipped = _probeSummary().skipped;
+    if (skipped > 0 && mounted) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('VPN is running'),
+          content: Text(
+              '$skipped disabled server(s) were not tested — they are not '
+              'part of the running config. Stop VPN and run the test again '
+              'to test every server in this folder.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  /// §236 UI-rework — настройки теста (long-press на кнопке, как на главном):
+  /// цель пинга (глобальные ping_options) + пороги цветовой шкалы.
+  void _showTestSettings() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: const Text('Ping URL & timeout…'),
+              subtitle: const Text('Shared with the home screen ping'),
+              onTap: () {
+                Navigator.pop(ctx);
+                unawaited(_editPingTarget());
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.palette_outlined),
+              title: const Text('Ping color thresholds…'),
+              onTap: () {
+                Navigator.pop(ctx);
+                unawaited(_editThresholds());
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editPingTarget() async {
+    final ping = await SettingsStorage.getPingOptions();
+    if (!mounted) return;
+    final urlCtl =
+        TextEditingController(text: (ping['url'] as String?) ?? '');
+    final timeoutCtl = TextEditingController(
+        text: '${(ping['timeout_ms'] as num?)?.toInt() ?? 3000}');
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ping target'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: urlCtl,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              decoration: const InputDecoration(
+                labelText: 'Test URL',
+                hintText: 'empty = core default',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: timeoutCtl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Timeout, ms',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    final url = urlCtl.text.trim();
+    final timeout = int.tryParse(timeoutCtl.text.trim());
+    urlCtl.dispose();
+    timeoutCtl.dispose();
+    if (saved != true || !mounted) return;
+    await SettingsStorage.setGlobalPingUrl(url);
+    if (timeout != null && timeout > 0) {
+      await SettingsStorage.setGlobalPingTimeout(timeout);
     }
   }
 
@@ -676,19 +799,6 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
                   ],
                 ),
           actions: [
-            // §236 — Test servers: тап = старт, повторный тап = отмена.
-            IconButton(
-              tooltip: _testing ? 'Cancel test' : 'Test servers',
-              icon: _testing
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.network_check),
-              onPressed:
-                  _folder.members.isEmpty ? null : () => unawaited(_toggleTest()),
-            ),
             IconButton(
               tooltip: _editing ? 'Save' : 'Rename',
               icon: Icon(_editing ? Icons.check : Icons.edit_outlined),
@@ -761,108 +871,275 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         ),
       );
     }
-    final list = ReorderableListView.builder(
-      padding: EdgeInsets.fromLTRB(
-          12, 4, 12, MediaQuery.of(context).padding.bottom + 24),
-      buildDefaultDragHandles: false,
-      itemCount: members.length,
-      onReorder: (oldIndex, newIndex) {
-        if (newIndex > oldIndex) newIndex -= 1;
-        final idx = _index;
-        if (idx < 0) return;
-        unawaited(widget.controller.reorderMember(idx, oldIndex, newIndex));
-        // §236 — ручной drag во время/после теста: результаты по индексам,
-        // перепривязываем как в _sortByPing (иначе бейджи съедут).
-        if (_probe.isNotEmpty) {
-          final r = _probe.remove(oldIndex);
-          final shifted = <int, ProbeResult>{};
-          _probe.forEach((k, v) {
-            var nk = k;
-            if (k > oldIndex) nk--;
-            if (nk >= newIndex) nk++;
-            shifted[nk] = v;
-          });
-          if (r != null) shifted[newIndex] = r;
-          setState(() {
-            _probe
-              ..clear()
-              ..addAll(shifted);
-          });
-        }
-      },
-      itemBuilder: (context, i) {
-        final m = members[i];
-        return _MemberTile(
-          key: ValueKey('member-$i-${m.raw.hashCode}'),
-          member: m,
-          dragIndex: i,
-          folderEnabled: widget.entry.enabled,
-          probe: _probe[i],
-          thresholds: _thresholds,
-          onToggle: () {
-            final idx = _index;
-            if (idx < 0) return;
-            unawaited(widget.controller
-                .toggleMemberAt(idx, i)
-                .then((_) => mounted ? setState(() {}) : null));
-          },
-          onLongPress: () => _showMemberMenu(i),
-          onTap: () => _showMemberMenu(i),
-        );
-      },
-    );
-    if (_probe.isEmpty) return list;
+    final visible = _visibleMembers();
+    final Widget list;
+    if (_filterActive) {
+      // §236 UI-rework — при активном фильтре drag-reorder выключен (индексы
+      // отфильтрованного вида не соответствуют составу папки).
+      list = ListView.builder(
+        padding: EdgeInsets.fromLTRB(
+            12, 4, 12, MediaQuery.of(context).padding.bottom + 24),
+        itemCount: visible.length,
+        itemBuilder: (context, vi) {
+          final (i, m) = visible[vi];
+          return _memberTile(i, m, reorderable: false);
+        },
+      );
+    } else {
+      list = ReorderableListView.builder(
+        padding: EdgeInsets.fromLTRB(
+            12, 4, 12, MediaQuery.of(context).padding.bottom + 24),
+        buildDefaultDragHandles: false,
+        itemCount: members.length,
+        onReorder: (oldIndex, newIndex) {
+          if (newIndex > oldIndex) newIndex -= 1;
+          final idx = _index;
+          if (idx < 0) return;
+          unawaited(widget.controller.reorderMember(idx, oldIndex, newIndex));
+          // §236 — ручной drag во время/после теста: результаты по индексам,
+          // перепривязываем как в _sortByPing (иначе бейджи съедут).
+          if (_probe.isNotEmpty) {
+            final r = _probe.remove(oldIndex);
+            final shifted = <int, ProbeResult>{};
+            _probe.forEach((k, v) {
+              var nk = k;
+              if (k > oldIndex) nk--;
+              if (nk >= newIndex) nk++;
+              shifted[nk] = v;
+            });
+            if (r != null) shifted[newIndex] = r;
+            setState(() {
+              _probe
+                ..clear()
+                ..addAll(shifted);
+            });
+          }
+        },
+        itemBuilder: (context, i) =>
+            _memberTile(i, members[i], reorderable: true),
+      );
+    }
     return Column(
       children: [
-        _buildTestBar(theme),
+        _buildControlBar(theme),
+        if (_filterExpanded) _buildFilterPanel(theme),
         const Divider(height: 1),
         Expanded(child: list),
       ],
     );
   }
 
-  /// §236 — сводка последнего теста + массовые действия.
-  Widget _buildTestBar(ThemeData theme) {
-    final s = _probeSummary();
+  Widget _memberTile(int i, FolderMember m, {required bool reorderable}) {
+    return _MemberTile(
+      key: ValueKey('member-$i-${m.raw.hashCode}'),
+      member: m,
+      dragIndex: i,
+      reorderable: reorderable,
+      folderEnabled: widget.entry.enabled,
+      probe: _probe[i],
+      thresholds: _thresholds,
+      onToggle: () {
+        final idx = _index;
+        if (idx < 0) return;
+        unawaited(widget.controller
+            .toggleMemberAt(idx, i)
+            .then((_) => mounted ? setState(() {}) : null));
+      },
+      onLongPress: () => _showMemberMenu(i),
+      onTap: () => _showMemberMenu(i),
+      onProbeBadgeTap: () {
+        final r = _probe[i];
+        if (r == null || r.message.isEmpty) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(r.message)),
+        );
+      },
+    );
+  }
+
+  // ─── §236 UI-rework — полоса: инфо · действия · тест · фильтр ──────────
+
+  /// Полоса над списком (паттерн главного экрана): слева инфо/сводка теста,
+  /// справа — actions (при результатах), кнопка теста (`Icons.speed`, тап =
+  /// старт/отмена, long-press = настройки) и toggle фильтра (`filter_list`).
+  Widget _buildControlBar(ThemeData theme) {
     final muted = theme.colorScheme.onSurfaceVariant;
+    final s = _probeSummary();
+    final String info;
+    if (_testing) {
+      info = 'Testing… ${s.ok + s.dead} done';
+    } else if (_probe.isNotEmpty) {
+      info = '${s.ok} ok · ${s.dead} err'
+          '${s.broken > 0 ? ' · ${s.broken} broken' : ''}'
+          '${s.skipped > 0 ? ' · ${s.skipped} not tested' : ''}';
+    } else {
+      final total = _folder.members.length;
+      final off = _folder.disabledCount;
+      info =
+          '$total server${total == 1 ? '' : 's'}${off > 0 ? ' · $off off' : ''}';
+    }
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
+      padding: const EdgeInsets.fromLTRB(16, 0, 4, 0),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              _testing
-                  ? 'Testing… ${s.ok + s.dead} done'
-                  : '${s.ok} ok · ${s.dead} unreachable'
-                      '${s.broken > 0 ? ' · ${s.broken} broken' : ''}'
-                      // Выключенные не в боевом конфиге — их меряет только
-                      // probe-сессия (при остановленном VPN).
-                      '${s.skipped > 0 ? ' · ${s.skipped} off — stop VPN to test them' : ''}',
-              style: TextStyle(fontSize: 12, color: muted),
+            child: Text(info, style: TextStyle(fontSize: 12, color: muted)),
+          ),
+          if (_probe.isNotEmpty && !_testing)
+            PopupMenuButton<String>(
+              tooltip: 'Test actions',
+              icon: const Icon(Icons.more_vert, size: 20),
+              onSelected: (v) {
+                if (v == 'disable_slow') unawaited(_disableSlowerThan());
+                if (v == 'delete_dead') unawaited(_deleteUnreachable());
+                if (v == 'sort') unawaited(_sortByPing());
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                    value: 'disable_slow',
+                    child: Text('Disable slower than…')),
+                PopupMenuItem(
+                    value: 'delete_dead', child: Text('Delete unreachable')),
+                PopupMenuItem(value: 'sort', child: Text('Sort by ping')),
+              ],
+            ),
+          // Кнопка теста — как mass-ping на главном (Icons.speed / stop),
+          // long-press = настройки теста (URL/timeout + пороги шкалы).
+          GestureDetector(
+            onTap: _folder.members.isEmpty
+                ? null
+                : () => unawaited(_toggleTest()),
+            onLongPress: _showTestSettings,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Icon(
+                _testing ? Icons.stop_circle_outlined : Icons.speed,
+                size: 22,
+                color: _folder.members.isEmpty
+                    ? Theme.of(context).disabledColor
+                    : null,
+              ),
             ),
           ),
+          // Toggle фильтра — как на главном (§048): primary + точка при
+          // активных фильтрах.
           IconButton(
-            tooltip: 'Ping color thresholds',
+            tooltip: _filterExpanded ? 'Hide filters' : 'Show filters',
             visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.tune, size: 18),
-            onPressed: () => unawaited(_editThresholds()),
+            onPressed: () =>
+                setState(() => _filterExpanded = !_filterExpanded),
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  Icons.filter_list,
+                  size: 20,
+                  color: _filterActive ? theme.colorScheme.primary : null,
+                ),
+                if (_filterActive)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: IgnorePointer(
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.amber,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-          PopupMenuButton<String>(
-            tooltip: 'Actions',
-            enabled: !_testing,
-            onSelected: (v) {
-              if (v == 'disable_slow') unawaited(_disableSlowerThan());
-              if (v == 'delete_dead') unawaited(_deleteUnreachable());
-              if (v == 'sort') unawaited(_sortByPing());
+        ],
+      ),
+    );
+  }
+
+  bool get _filterActive =>
+      _filterRegexCtl.text.trim().isNotEmpty || _selectedProtocols.isNotEmpty;
+
+  bool get _regexValid {
+    final t = _filterRegexCtl.text.trim();
+    if (t.isEmpty) return true;
+    try {
+      RegExp(t);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Члены, проходящие фильтр, парами (оригинальный индекс, член) — probe и
+  /// bulk-операции работают по оригинальным индексам состава.
+  List<(int, FolderMember)> _visibleMembers() {
+    RegExp? re;
+    final pattern = _filterRegexCtl.text.trim();
+    if (pattern.isNotEmpty) {
+      try {
+        re = RegExp(pattern, caseSensitive: false);
+      } catch (_) {
+        re = null; // битый regex = фильтр не применяем (поле подсветится)
+      }
+    }
+    final out = <(int, FolderMember)>[];
+    for (var i = 0; i < _folder.members.length; i++) {
+      final m = _folder.members[i];
+      final node = m.node;
+      if (re != null) {
+        final hay = node == null ? m.raw : '${node.tag} ${node.label}';
+        if (re.hasMatch(hay) == _regexInvert) continue;
+      }
+      if (_selectedProtocols.isNotEmpty) {
+        final match = _selectedProtocols.contains(node?.protocol ?? '');
+        if (match == _protocolsInvert) continue;
+      }
+      out.add((i, m));
+    }
+    return out;
+  }
+
+  /// §236 UI-rework — панель фильтра: regex + протокол-чипы (виджеты главного
+  /// экрана, §048/§095).
+  Widget _buildFilterPanel(ThemeData theme) {
+    final protocols = <String>{
+      for (final m in _folder.members)
+        if (m.node != null) m.node!.protocol,
+    }.toList()
+      ..sort();
+    return Container(
+      color: theme.colorScheme.surfaceContainerLow,
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          RegexFilterField(
+            controller: _filterRegexCtl,
+            onChanged: (_) => setState(() {}),
+            valid: _regexValid,
+            invert: _regexInvert,
+            onInvertToggle: () => setState(() => _regexInvert = !_regexInvert),
+            onClear: () {
+              _filterRegexCtl.clear();
+              setState(() {});
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                  value: 'disable_slow', child: Text('Disable slower than…')),
-              PopupMenuItem(
-                  value: 'delete_dead', child: Text('Delete unreachable')),
-              PopupMenuItem(value: 'sort', child: Text('Sort by ping')),
-            ],
           ),
+          if (protocols.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            MultiSelectChipsRow(
+              options: [for (final p in protocols) (p, protoLabel(p))],
+              enabled: _selectedProtocols,
+              onToggle: (id) => setState(() {
+                if (!_selectedProtocols.add(id)) _selectedProtocols.remove(id);
+              }),
+              invert: _protocolsInvert,
+              onInvertToggle: () =>
+                  setState(() => _protocolsInvert = !_protocolsInvert),
+            ),
+          ],
         ],
       ),
     );
@@ -980,16 +1257,25 @@ class _MemberTile extends StatelessWidget {
     required this.onToggle,
     required this.onLongPress,
     required this.onTap,
+    this.reorderable = true,
+    this.onProbeBadgeTap,
     this.probe,
     this.thresholds = const ProbeThresholds(),
   });
 
   final FolderMember member;
   final int dragIndex;
+
+  /// §236 UI-rework — false при активном фильтре: grab-strip скрыта (drag по
+  /// индексам отфильтрованного вида ломал бы состав).
+  final bool reorderable;
   final bool folderEnabled;
   final VoidCallback onToggle;
   final VoidCallback onLongPress;
   final VoidCallback onTap;
+
+  /// Тап по бейджу результата — показать текст ошибки (диагностика err).
+  final VoidCallback? onProbeBadgeTap;
 
   /// §236 — результат последнего Test servers (null = не тестировался).
   final ProbeResult? probe;
@@ -1019,13 +1305,16 @@ class _MemberTile extends StatelessWidget {
       // сводке (_buildTestBar): выключить VPN, probe-сессия меряет всех.
       ProbeStatus.notInConfig => ('not tested (off)', muted),
     };
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        color: color,
-        fontFeatures: const [FontFeature.tabularFigures()],
+    return GestureDetector(
+      onTap: onProbeBadgeTap,
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: color,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
       ),
     );
   }
@@ -1075,7 +1364,7 @@ class _MemberTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ReorderGrabStrip(index: dragIndex),
+          if (reorderable) ReorderGrabStrip(index: dragIndex),
           Expanded(
             child: Column(
               children: [

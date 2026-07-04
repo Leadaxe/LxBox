@@ -70,19 +70,26 @@ stop():
 - Detour-политика папки к probe НЕ применяется (тестируем ноды, не маршрут
   канала; override-detour цели может не быть в probe-конфиге).
 
-## UI (folder detail → вкладка Servers)
+## UI (folder detail → вкладка Servers; rework по device-фидбэку 04.07)
 
-- Кнопка **Test servers** в AppBar (`network_check`). Повторный тап во время
-  теста = отмена (probeStop / прекращение пула).
-- У каждого члена — бейдж задержки по мере результатов: `123 ms` цветом шкалы,
-  `err` (красный), `broken` (битый raw), `off` → при VPN-запущенном тесте
-  «enable to test».
+- **Контрольная полоса** над списком (паттерн главного экрана):
+  `инфо · [⋮ actions] · кнопка теста · кнопка фильтра`.
+  - Кнопка теста = `Icons.speed` / `stop_circle_outlined` (консистентно с
+    mass-ping главного); тап = старт/отмена, **long-press = настройки теста**
+    (Ping URL & timeout — глобальные `ping_options`; Ping color thresholds).
+  - Кнопка фильтра = `Icons.filter_list` (+primary/точка при активном) →
+    панель фильтра: **regex + протокол-чипы** (виджеты §048/§095 главного);
+    при активном фильтре drag-reorder выключен (индексы вида ≠ состава).
+- У каждого члена — бейдж по мере результатов: `123 ms` цветом шкалы, `err`
+  (красный, **тап по бейджу — текст ошибки**), `broken`, `not tested (off)`.
+- **VPN запущен + есть выключенные члены → попап** после теста: «N disabled
+  server(s) were not tested … Stop VPN and run the test again».
 - **Цветовая шкала** (пороги — настройка, дефолты NeoCat):
   зелёный ≤ 250 < жёлтый ≤ 500 < оранжевый ≤ 700 < красный. Хранение —
-  `vars.probe_ms_green/yellow/orange` (автоматически в backup-allowlist §221).
-  Редактор — диалог по long-press на Test-кнопке (или иконка в результат-баре).
+  `vars.probe_ms_green/yellow/orange` (в `_appFeatureFlagVars` → переживают
+  backup; НЕ config-vars).
 - URL и timeout теста — существующие `ping_options.url` / `timeout_ms`.
-- **Массовые действия** (бар после завершения теста):
+- **Массовые действия** (⋮ в полосе при наличии результатов):
   - `Disable slower than … ms` (prefill = оранжевый порог) — per-member toggle;
   - `Delete unreachable` — err/timeout + broken (confirm с количеством);
   - `Sort by ping` — reorder members по возрастанию (err/broken в конец).
