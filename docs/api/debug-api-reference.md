@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Статус | Reference |
-| Дата | 2026-04-20 |
+| Дата | 2026-07-04 |
 | Версия API | совместим со [`spec 031`](../spec/features/031%20debug%20api/spec.md) |
 | Парный doc | [`clash-api-reference.md`](clash-api-reference.md) — **deprecated**: `/clash/*` proxy выпилен в §122 (Clash API dropped, переход на CommandClient) |
 
