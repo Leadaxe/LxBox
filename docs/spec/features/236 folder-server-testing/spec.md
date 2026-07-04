@@ -1,6 +1,11 @@
 # §236 — Test servers в папке (headless probe + пороги + массовые действия)
 
-> **СТАТУС: РЕАЛИЗОВАНО** (04.07.2026, НЕ device-verified). Тесты:
+> **СТАТУС: РЕАЛИЗОВАНО, device-verified** (04.07.2026, CPH2411 dev.14).
+> Device-прогон папки «test» (VPN off, 14 нод): 10 ok (VLESS 97мс, AWG
+> 49–135мс, plain WARP 80мс, MASQUE «in» 189мс) / 4 failed (MASQUE QUIC
+> `context deadline exceeded` — честный LTE-DPI-результат, НЕ SERVFAIL-баг).
+> Через `POST /folders/{id}/probe` (§238); API отзывчив во время теста.
+> Тесты:
 > `test/probe/probe_test.dart` (+bulk-ops в `test/subscription/folder_test.dart`).
 > Источник — 4PDA: NeoCat #562/#754/#758
 > (пинг пачки при добавлении БЕЗ запущенного VPN, ручные пороги с цветовой
