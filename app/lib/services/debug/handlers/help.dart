@@ -184,6 +184,69 @@ POST   /subs/reorder                           Body {"order":[id1,id2,...]} — 
 `?rebuild=true` on any write → auto rebuild-config. Writes go through
 SubscriptionController (fetch-state machine + UI notify), not SettingsStorage directly.
 
+=== Channels CRUD (routing channels vpn-1..vpn-10) ===
+
+GET    /channels                               List channels (storage shape, snake_case)
+GET    /channels/{tag}                         Single channel (tag = vpn-1..vpn-10)
+POST   /channels[?rebuild=true]                Create. Auto-assigns first free vpn-N tag. Body optional:
+                                                 {"label":"..."} plus any PATCH field below. Limit 10 → 409.
+PATCH  /channels/{tag}[?rebuild=true]          Partial update: {label,enabled,include_direct,include_block,
+                                                 node_filter,node_filter_invert,default_filter,
+                                                 interrupt_exist_connections,auto}.
+                                                 auto is MERGED into current urltest options (nested balancer
+                                                 merges too); "auto":null disables the urltest twin.
+                                                 tag is immutable; vpn-1 cannot be disabled (409).
+                                                 node_filter/default_filter are validated as regex (400 on bad).
+DELETE /channels/{tag}[?rebuild=true]          Remove. vpn-1 is not deletable (409). References to the removed
+                                                 channel (route_final / custom-rule outbound) degrade to vpn-1.
+POST   /channels/reorder[?rebuild=true]        Body {"order":["vpn-1",...]} — exactly the current tags.
+                                                 Channel order = emit order in the config.
+
+Disabling a channel (enabled:false) also degrades references to vpn-1 —
+re-enabling does NOT restore them (same semantics as the UI toggle).
+
+=== Folders CRUD (server folders) ===
+
+A folder is a /subs entry (kind=FolderServers) — folder meta (name/enabled/
+tag_prefix/detour policy) is edited via PATCH /subs/{id}. Members are addressed
+by POSITIONAL index (no per-member id): indexes shift after remove/ungroup/
+reorder — every write response returns a fresh folder snapshot, use it for
+follow-up calls. Member raw carries credentials → hidden unless ?reveal=true.
+
+GET    /folders[?reveal=true]                  List folder entries + members
+POST   /folders[?rebuild=true]                 Create empty folder. Body {"name":"..."} → 201
+GET    /folders/{id}[?reveal=true]             Single folder + members
+DELETE /folders/{id}[?keep_servers=true][?rebuild=true]
+                                               Delete. keep_servers=true → members become standalone
+                                                 single servers in place of the folder (default false)
+POST   /folders/{id}/members[?rebuild=true]    Add members. Body: exactly one of
+                                                 {"input":"<uri|WG-ini|JSON>", "name_fallback"?:"..."} (paste)
+                                                 or {"url":"..."} (one-shot snapshot: fetch → static members,
+                                                 URL is not stored, no auto-update)
+PATCH  /folders/{id}/members/{idx}[?rebuild=true]
+                                               Subset {raw,enabled,detour}. raw must parse (400 keeps old);
+                                                 detour = personal member detour tag ('' clears)
+DELETE /folders/{id}/members/{idx}[?rebuild=true]  Remove member
+POST   /folders/{id}/members/reorder[?rebuild=true]
+                                               Body {"order":[old indexes in new order]} — full permutation
+POST   /folders/{id}/members/{idx}/ungroup[?rebuild=true]
+                                               Member → standalone single server right after the folder
+                                                 (personal detour becomes its override_detour)
+POST   /folders/{id}/members/{idx}/move[?rebuild=true]
+                                               Body {"to":"<folder id>"} — move member to another folder
+POST   /folders/{id}/move-server[?rebuild=true]
+                                               Body {"server_id":"<subs entry id>"} — move a standalone
+                                                 single server INTO the folder (splits 1:1 by nodes; its
+                                                 personal override detour moves onto the members)
+POST   /folders/{id}/probe                     Headless "Test servers" run; results in the response.
+                                                 Body optional {"url":"...","timeout_ms":N} (defaults =
+                                                 global ping_options). Per-member statuses: ok|failed|broken|
+                                                 invalid|not_in_config|pending (+delay_ms on ok).
+                                                 With VPN running, disabled members are not in the live
+                                                 config → not_in_config. Synchronous: worst-case
+                                                 ~members/6 × timeout_ms; lower timeout_ms for big folders
+                                                 to fit the 30s request timeout.
+
 === Wi-Fi history (saved networks for routing rule editor) ===
 
 GET    /wifi_history                           list [{ssid, bssid, last_seen}]
@@ -398,6 +461,26 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'DELETE', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove entry'},
     {'method': 'POST', 'path': '/subs/{id}/refresh', 'description': 'Force HTTP re-fetch (SubscriptionServers only). Fire-and-forget.'},
     {'method': 'POST', 'path': '/subs/reorder', 'body': '{"order":[id,...]}', 'description': 'Reorder (exactly the current ids)'},
+    // Channels CRUD (routing channels vpn-1..vpn-10)
+    {'method': 'GET', 'path': '/channels', 'description': 'List routing channels (storage shape, snake_case)'},
+    {'method': 'GET', 'path': '/channels/{tag}', 'description': 'Single channel (tag = vpn-1..vpn-10)'},
+    {'method': 'POST', 'path': '/channels', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"label":"..."} + any PATCH field', 'description': 'Create channel; auto-assigns first free vpn-N tag. Limit 10 → 409.'},
+    {'method': 'PATCH', 'path': '/channels/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,interrupt_exist_connections,auto}', 'description': 'Partial update. auto merges into current urltest options; "auto":null disables the twin. tag immutable; vpn-1 cannot be disabled.'},
+    {'method': 'DELETE', 'path': '/channels/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove channel. vpn-1 not deletable (409). Dangling references degrade to vpn-1.'},
+    {'method': 'POST', 'path': '/channels/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[tag,...]}', 'description': 'Reorder (exactly the current tags). Order = emit order in config.'},
+    // Folders CRUD (server folders)
+    {'method': 'GET', 'path': '/folders', 'params': {'reveal': 'true|false (raw carries credentials, hidden by default)'}, 'description': 'List folder entries + members (members addressed by positional index)'},
+    {'method': 'POST', 'path': '/folders', 'params': {'rebuild': 'true|false'}, 'body': '{"name":"..."}', 'description': 'Create empty folder → 201. Folder meta is edited via PATCH /subs/{id}.'},
+    {'method': 'GET', 'path': '/folders/{id}', 'params': {'reveal': 'true|false'}, 'description': 'Single folder + members'},
+    {'method': 'DELETE', 'path': '/folders/{id}', 'params': {'keep_servers': 'true|false (default false)', 'rebuild': 'true|false'}, 'description': 'Delete folder. keep_servers=true → members become standalone single servers in place.'},
+    {'method': 'POST', 'path': '/folders/{id}/members', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'exactly one of {"input":"<uri|WG-ini|JSON>","name_fallback"?} (paste) or {"url":"..."} (one-shot snapshot)', 'description': 'Add members. Snapshot: fetch → static members, URL not stored.'},
+    {'method': 'PATCH', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {raw,enabled,detour}', 'description': 'Edit member. raw must parse (400 keeps old); detour = personal member detour ("" clears).'},
+    {'method': 'DELETE', 'path': '/folders/{id}/members/{idx}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove member (indexes shift — use the returned folder snapshot)'},
+    {'method': 'POST', 'path': '/folders/{id}/members/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[old indexes in new order]}', 'description': 'Reorder members (full permutation required)'},
+    {'method': 'POST', 'path': '/folders/{id}/members/{idx}/ungroup', 'params': {'rebuild': 'true|false'}, 'description': 'Member → standalone single server after the folder (personal detour → override_detour)'},
+    {'method': 'POST', 'path': '/folders/{id}/members/{idx}/move', 'params': {'rebuild': 'true|false'}, 'body': '{"to":"<folder id>"}', 'description': 'Move member to another folder'},
+    {'method': 'POST', 'path': '/folders/{id}/move-server', 'params': {'rebuild': 'true|false'}, 'body': '{"server_id":"<subs entry id>"}', 'description': 'Move a standalone single server INTO the folder (splits 1:1 by nodes)'},
+    {'method': 'POST', 'path': '/folders/{id}/probe', 'body': 'optional {"url":"...","timeout_ms":N} (defaults = global ping_options)', 'description': 'Headless Test servers run, results in response. Statuses: ok|failed|broken|invalid|not_in_config|pending. Synchronous — lower timeout_ms for big folders (30s request timeout).'},
     // Wi-Fi history (saved networks for routing rule editor)
     {'method': 'GET', 'path': '/wifi_history', 'description': 'List [{ssid, bssid, last_seen}], cap 50'},
     {'method': 'POST', 'path': '/wifi_history', 'body': '{"ssid":"...","bssid":"..."}', 'description': 'Upsert entry; bssid lower-cased'},
