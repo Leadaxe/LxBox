@@ -84,7 +84,7 @@ class DnsServerParamsTab extends StatelessWidget {
           ServerKind.template => TemplateVarListView(
               key: ValueKey('dns-edit-vars-${c.resolved?.tag ?? ''}'),
               vars: c.vars,
-              initialValues: c.varValues,
+              model: c.varModel,
               showSectionHeaders: false,
               outboundOptions: c.outboundOptions,
               dnsServerTags: c.dnsServerTags,

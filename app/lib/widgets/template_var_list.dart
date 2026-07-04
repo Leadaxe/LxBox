@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../models/parser_config.dart';
 import 'outbound_picker.dart';
+import 'var_values_model.dart';
 
 /// Рендерит список [WizardVar] с секция-заголовками и типизированными
 /// контролами:
@@ -19,18 +20,20 @@ import 'outbound_picker.dart';
 /// - `text` → text-input; при наличии `options` — combo с suffix-▾ popup'ом
 ///   пресетов. Юзер может и выбрать preset, и напечатать своё.
 ///
-/// Stateful — держит локальную копию значений; parent получает коллбэк
-/// `onChanged(name, value)` на каждое изменение и сам персистит.
+/// §232 — БЕЗ локальной копии значений: каждое поле подписано (one-way emit,
+/// [ValueListenableBuilder]) на СВОЙ ключ [VarValuesModel]. Программные
+/// изменения (on_change: галка ipv6 → стратегии) видны в UI мгновенно.
+/// Правки юзера идут `model.set` + коллбэк `onChanged(name, value)` parent'у
+/// (config-dirty + каскад side-effect'ов); persist — parent'ом на выходе.
 ///
 /// Используется:
 /// - `settings_screen.dart` — chapter: core (sing-box низкоуровневое)
-/// - `routing_screen.dart` — chapter: routing (Auto Proxy)
-/// - `dns_settings_screen` — vars DNS-сервера (§117)
+/// - `dns_server_edit/tabs/params_tab.dart` — vars DNS-сервера (§117)
 class TemplateVarListView extends StatefulWidget {
   const TemplateVarListView({
     super.key,
     required this.vars,
-    required this.initialValues,
+    required this.model,
     required this.onChanged,
     this.sectionDescriptions = const {},
     this.showSectionHeaders = true,
@@ -41,10 +44,13 @@ class TemplateVarListView extends StatefulWidget {
   /// Переменные для рендеринга. Порядок и секции сохраняются.
   final List<WizardVar> vars;
 
-  /// Стартовые значения (`{name: value}`). Отсутствующие → `v.defaultValue`.
-  final Map<String, String> initialValues;
+  /// §232 — реактивная модель значений. КОНТРАКТ: parent сидирует её ВСЕМИ
+  /// [vars] (stored ?? defaultValue) до создания виджета — «отсутствующий
+  /// ключ» здесь не различим от «пустого значения».
+  final VarValuesModel model;
 
-  /// Вызывается на каждое изменение. Parent ответственен за persist.
+  /// Вызывается на каждое изменение (значение уже в [model]). Parent
+  /// ответственен за config-dirty/side-effects; persist — на его выходе.
   final void Function(String name, String value) onChanged;
 
   /// Описания секций по title — для подзаголовков. Пусто → без описания.
@@ -68,7 +74,6 @@ class TemplateVarListView extends StatefulWidget {
 }
 
 class _TemplateVarListViewState extends State<TemplateVarListView> {
-  late final Map<String, String> _values;
   late final Map<String, WizardVar> _byName;
 
   /// §161: имена required-полей, которые сейчас пусты — для errorText. Persist
@@ -81,23 +86,17 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
     super.initState();
     _byName = {for (final v in widget.vars) v.name: v};
     // §161 «UI сам чинит»: при загрузке пустое required-поле с непустым
-    // default → подставляем default прямо в точке чтения. Накопившиеся битые
-    // значения (напр. стёртый раньше tolerance) исправляются при открытии
-    // экрана. optional-vars (§033, required:false) НЕ трогаем — для них пусто
-    // легитимно (поле выпадает из конфига через Dropped).
+    // default → чиним прямо в модели (подписчики ещё не построены — emit
+    // безопасен). optional-vars (§033, required:false) НЕ трогаем — для них
+    // пусто легитимно (поле выпадает из конфига через Dropped).
     final repaired = <String, String>{};
-    _values = {
-      for (final v in widget.vars)
-        v.name: () {
-          final raw = widget.initialValues[v.name] ?? v.defaultValue;
-          if (raw.isEmpty && _backfillDefaultOnEmpty(v)) {
-            repaired[v.name] = v.defaultValue;
-            return v.defaultValue;
-          }
-          return raw;
-        }(),
-    };
-    // Персистим самочинение в storage ПОСЛЕ первого кадра — onChanged в
+    for (final v in widget.vars) {
+      if (widget.model.get(v.name).isEmpty && _backfillDefaultOnEmpty(v)) {
+        widget.model.set(v.name, v.defaultValue);
+        repaired[v.name] = v.defaultValue;
+      }
+    }
+    // Сообщаем parent'у о самочинении ПОСЛЕ первого кадра — onChanged в
     // initState небезопасен (parent ещё не смонтирован для колбэка).
     if (repaired.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -115,20 +114,21 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
 
   void _update(String name, String value) {
     final v = _byName[name];
-    // §161: пустое required-поле — НЕ персистим (значение в storage не
-    // меняется), подсвечиваем errorText. Backstop в build_config подставит
-    // default при сборке; здесь же не даём «сохранить пустоту».
+    // §161: пустое required-поле — НЕ персистим. display-only запись
+    // (markDirty:false) + unstage: ни пустота, ни предыдущий staged-ввод
+    // этого поля не доезжают до storage (остаётся исходное значение).
+    // Backstop в build_config подставит default при сборке; здесь же не
+    // даём «сохранить пустоту». onChanged НЕ зовём.
     if (value.isEmpty && v != null && v.required && v.type != 'secret') {
-      setState(() {
-        _values[name] = value;
-        _emptyRequired.add(name);
-      });
-      return; // onChanged НЕ вызываем — persist заблокирован
+      widget.model.set(name, value, markDirty: false);
+      widget.model.unstage(name);
+      setState(() => _emptyRequired.add(name));
+      return;
     }
-    setState(() {
-      _values[name] = value;
-      _emptyRequired.remove(name);
-    });
+    widget.model.set(name, value);
+    if (_emptyRequired.contains(name)) {
+      setState(() => _emptyRequired.remove(name));
+    }
     widget.onChanged(name, value);
   }
 
@@ -161,7 +161,15 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
     );
   }
 
-  Widget _buildVarWidget(WizardVar v) {
+  /// §232 — каждое поле подписано на СВОЙ ключ модели: перерисовывается
+  /// только оно и только на изменение своего значения (юзером или программно
+  /// через on_change).
+  Widget _buildVarWidget(WizardVar v) => ValueListenableBuilder<String>(
+        valueListenable: widget.model.notifier(v.name),
+        builder: (_, value, _) => _buildControl(v, value),
+      );
+
+  Widget _buildControl(WizardVar v, String value) {
     switch (v.type) {
       case 'bool':
         return SwitchListTile(
@@ -169,19 +177,18 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
           subtitle: v.tooltip.isNotEmpty
               ? Text(v.tooltip, style: const TextStyle(fontSize: 12))
               : null,
-          value: _values[v.name] == 'true',
+          value: value == 'true',
           onChanged: (val) => _update(v.name, val.toString()),
         );
 
       case 'enum':
-        final current = _values[v.name] ?? v.defaultValue;
-        final hasCurrent = v.options.any((o) => o.value == current);
+        final hasCurrent = v.options.any((o) => o.value == value);
         return _LabelledField(
           label: v.title.isNotEmpty ? v.title : v.name,
           tooltip: v.tooltip,
           field: DropdownButton<String>(
             isExpanded: true,
-            value: hasCurrent ? current : v.defaultValue,
+            value: hasCurrent ? value : v.defaultValue,
             items: v.options
                 .map((o) => DropdownMenuItem(
                       value: o.value,
@@ -198,7 +205,7 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
       case 'secret':
         return _VarTextField(
           key: ValueKey('secret-${v.name}'),
-          value: _values[v.name] ?? '',
+          value: value,
           obscure: true,
           label: v.title.isNotEmpty ? v.title : v.name,
           tooltip: v.tooltip,
@@ -219,13 +226,12 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
       case 'outbound':
         // §117: пикер канала (Direct + активные каналы). Без options —
         // fallback в text-input (экраны, не передающие каналы).
-        if (widget.outboundOptions.isEmpty) return _buildTextField(v);
-        final current = _values[v.name] ?? v.defaultValue;
+        if (widget.outboundOptions.isEmpty) return _buildTextField(v, value);
         return _LabelledField(
           label: v.title.isNotEmpty ? v.title : v.name,
           tooltip: v.tooltip,
           field: OutboundPicker(
-            value: current,
+            value: value.isNotEmpty ? value : v.defaultValue,
             options: widget.outboundOptions,
             allowReject: false,
             onChanged: (val) => _update(v.name, val),
@@ -234,8 +240,8 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
 
       case 'dns_servers':
         // §117: dropdown DNS-сервер-тегов (domain_resolver и т.п.).
-        if (widget.dnsServerTags.isEmpty) return _buildTextField(v);
-        final currentTag = _values[v.name] ?? v.defaultValue;
+        if (widget.dnsServerTags.isEmpty) return _buildTextField(v, value);
+        final currentTag = value.isNotEmpty ? value : v.defaultValue;
         final tags = widget.dnsServerTags.contains(currentTag)
             ? widget.dnsServerTags
             : [currentTag, ...widget.dnsServerTags];
@@ -259,7 +265,7 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
         );
 
       default:
-        return _buildTextField(v);
+        return _buildTextField(v, value);
     }
   }
 
@@ -267,12 +273,12 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
   /// int (§161): только цифры + clamp в uint16 [0, 65535] — ядро принимает
   /// числовые поля (port/tolerance) как uint16, значение вне диапазона роняет
   /// его на decode. Backstop тот же в `coerceVarValue`.
-  Widget _buildTextField(WizardVar v) {
+  Widget _buildTextField(WizardVar v, String value) {
     final hasSuggestions = v.options.isNotEmpty;
     final isInt = v.type == 'int';
     return _VarTextField(
       key: ValueKey('text-${v.name}'),
-      value: _values[v.name] ?? '',
+      value: value,
       width: hasSuggestions ? 220 : 180,
       label: v.title.isNotEmpty ? v.title : v.name,
       tooltip: v.tooltip,

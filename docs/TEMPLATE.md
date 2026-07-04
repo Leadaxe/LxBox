@@ -107,8 +107,8 @@ wizard_template.json
 │   │       ├─ type                "tun"
 │   │       ├─ tag                 "tun-in"
 │   │       ├─ interface_name      "@tun_name"
-│   │       ├─ address             ["@tun_address", "@tun_address6"]   §227 — v4+v6
-│   │       ├─ route_address       ["0.0.0.0/1","128.0.0.0/1","::/1","8000::/1"]  §227 — заворот всего v4+v6
+│   │       ├─ address             ["@tun_address", {#if @ipv6_enabled → "@tun_address6"}]  §227/§232 — v6 за галкой (дефолт OFF)
+│   │       ├─ {#if @route_address_enable → route_address: ["0.0.0.0/1","128.0.0.0/1","::/1","8000::/1"]}  §232 — заворот v4+v6 opt-in (дефолт OFF → авто 0.0.0.0/0)
 │   │       ├─ mtu                 "@tun_mtu"
 │   │       ├─ auto_route          "@tun_auto_route"
 │   │       ├─ strict_route        "@tun_strict_route"
@@ -440,6 +440,7 @@ Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `
 | `wizard_ui` | `"edit" \| "fix" \| "hidden"`? | Display mode в Wizard UI. `hidden` — internal var (not shown). `fix` — read-only display. `edit` (default) — editable. |
 | `title` | string? | Display label в UI. |
 | `tooltip` | string? | Help-text при tap на info-иконку. |
+| `on_change` | object? | §232 — декларативный side-effect при переключении var (см. раздел ниже). |
 
 ### `var.type` values
 
@@ -458,6 +459,42 @@ Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `
 > **§120 — coerce по объявленному типу, НЕ по содержимому.** `if_engine.dart::coerceVarValue` коэрсит **только** `bool`/`int`, и только по `node.type`. Все строковые типы (`text`/`secret`/`enum`/`outbound`/`dns_servers`) остаются строкой, даже если значение выглядит как `123`/`true` — критично для паролей/секретов (`1234` не должен стать int). Var без объявленной ноды (legacy `clash_secret`, build-time `proxy_*`) → coerce как `text`.
 
 При расширении (добавляешь новый type) — обновлять Wizard UI рендерер в `app/lib/screens/settings_screen.dart` и (если коэрсящийся) `coerceVarValue` в `app/lib/services/builder/if_engine.dart`.
+
+### `on_change` — декларативный side-effect var'а (§232)
+
+Переключение var может ставить производные var'ы. Синтаксис — на существующем
+`#if` (value/else), условие видит УЖЕ НОВОЕ значение переключённой var:
+
+```jsonc
+{
+  "name": "ipv6_enabled", "type": "bool", "default_value": "false",
+  "on_change": {
+    "set": {
+      "@dns_strategy":     {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv6", "else": "prefer_ipv4"}},
+      "@resolve_strategy": {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv6", "else": "prefer_ipv4"}}
+    }
+  }
+}
+```
+
+Семантика:
+
+- **Разовый эффект переключения, не форс** — целевые var записываются в момент
+  клика; юзер потом волен переопределить вручную.
+- **Только in-memory** — цели пишутся в реактивную `VarValuesModel` экрана
+  (per-key `ValueNotifier`; поля `TemplateVarListView` подписаны каждое на свой
+  ключ и обновляются мгновенно). Storage трогается ТОЛЬКО общим write-on-exit
+  (`_persist` по `dirtyKeys`) — юзер, ушедший до выхода с экрана (force-kill),
+  ничего не «сохранил». См. ARCHITECTURE.md → «VarValuesModel».
+- **Цепочки** — если целевая var сама имеет `on_change`, он применяется
+  рекурсивно; fixpoint-guard: запись неизменившегося значения обрывает цикл.
+- **Значения — литералы-строки.** `#if`-узел вычисляется движком через
+  `evalIfScalar` (`if_engine.dart`) — НЕ через `walk` напрямую: bare-Map
+  `{"#if":…}` в `walk` уходит в map-spread режим и схлопывает скаляр в `{}`.
+- **Кросс-экранные цели** (напр. `dns_strategy` — chapter `dns`, рендерится на
+  DNS Settings): live-обновления на другом экране НЕТ (модель — per-экран);
+  значение доедет через cache при следующем открытии того экрана. Экраны не
+  co-mounted → рассинхрон юзеру не виден.
 
 ---
 

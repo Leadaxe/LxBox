@@ -213,6 +213,21 @@ dynamic _selectArrayBranch(Map<String, dynamic> body, VarResolver resolve) {
   return Dropped.instance;
 }
 
+/// §232 — вычисляет одиночный `{"#if": {...}}`-узел до его СКАЛЯРНОГО
+/// value/else. Нужен для `on_change.set`: bare-Map, скормленный [walk],
+/// уходит в map-spread режим и схлопывает скаляр в `{}` (ветка мержится
+/// в родителя, скаляр мержить некуда). Здесь — тот же array-element путь
+/// ([_selectArrayBranch]), который отдаёт ветку любого типа.
+///
+/// Возвращает null, если узел не `{"#if": ...}`, ветка выпала (false без
+/// else) или разрезолвилась не в скаляр-строку.
+String? evalIfScalar(Map<String, dynamic> node, VarResolver resolve) {
+  final body = node['#if'];
+  if (node.length != 1 || body is! Map<String, dynamic>) return null;
+  final picked = _selectArrayBranch(body, resolve);
+  return picked is String ? picked : null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Expression language — predicates
 // ─────────────────────────────────────────────────────────────────────────

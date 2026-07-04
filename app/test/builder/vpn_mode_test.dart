@@ -26,6 +26,18 @@ Map<String, dynamic> _templateConfig() => {
             'value': {
               'type': 'tun',
               'tag': 'tun-in',
+              'address': [
+                '@tun_address',
+                {'#if': {'and': ['@ipv6_enabled'], 'value': '@tun_address6'}},
+              ],
+              // §232 — route_address за галкой route_address_enable (вложенный
+              // map-spread #if внутри value внешнего vpn_mode-#if).
+              '#if': {
+                'and': ['@route_address_enable'],
+                'value': {
+                  'route_address': ['0.0.0.0/1', '128.0.0.0/1', '::/1', '8000::/1'],
+                },
+              },
               'mtu': '@tun_mtu',
               'auto_route': '@tun_auto_route',
             },
@@ -147,16 +159,29 @@ final _nodes = <String, WizardVar>{
       WizardVar(name: 'sniff_enabled', type: 'bool', defaultValue: 'true'),
   'resolve_strategy': WizardVar(
       name: 'resolve_strategy', type: 'enum', defaultValue: 'prefer_ipv4'),
+  'tun_address':
+      WizardVar(name: 'tun_address', type: 'text', defaultValue: ''),
+  'tun_address6':
+      WizardVar(name: 'tun_address6', type: 'text', defaultValue: ''),
+  'ipv6_enabled':
+      WizardVar(name: 'ipv6_enabled', type: 'bool', defaultValue: 'false'),
+  'route_address_enable': WizardVar(
+      name: 'route_address_enable', type: 'bool', defaultValue: 'false'),
 };
 
 /// Прогоняет шаблон через walk, повторяя проброс §120 из build_config:
 /// прямое присваивание vpn_mode/proxy_* из VpnModeConfig в плоский vars,
 /// proxy_auth = effectiveAuth && непустой пароль.
-Map<String, dynamic> _build(VpnModeConfig? cfg, {bool sniff = true}) {
+Map<String, dynamic> _build(VpnModeConfig? cfg,
+    {bool sniff = true, bool ipv6 = false, bool customRoutes = false}) {
   final config = _templateConfig();
   final vars = <String, String>{
     'tun_mtu': '1492',
     'tun_auto_route': 'true',
+    'tun_address': '172.16.0.1/30',
+    'tun_address6': 'fdfe::1/126',
+    'ipv6_enabled': ipv6 ? 'true' : 'false',
+    'route_address_enable': customRoutes ? 'true' : 'false',
     'resolve_strategy': 'prefer_ipv4',
     'sniff_enabled': sniff ? 'true' : 'false',
   };
@@ -476,6 +501,43 @@ void main() {
       expect(d.mode, 'vpn');
       expect(d.proxyPort, 2080);
       expect(d.proxyListen, '127.0.0.1');
+    });
+  });
+
+  // §232 — IPv6/route_address за галками (защитный opt-in).
+  group('§232 IPv6 & custom routes gating', () {
+    Map<String, dynamic> tun(Map<String, dynamic> cfg) =>
+        _firstWhere(_inbounds(cfg), (i) => i['tag'] == 'tun-in')!;
+
+    test('оба OFF (дефолт) → только v4-адрес, нет route_address', () {
+      final t = tun(_build(const VpnModeConfig.defaults()));
+      expect(t['address'], ['172.16.0.1/30']);
+      expect(t.containsKey('route_address'), isFalse);
+    });
+
+    test('ipv6 ON → v4+v6 адрес', () {
+      final t = tun(_build(const VpnModeConfig.defaults(), ipv6: true));
+      expect(t['address'], ['172.16.0.1/30', 'fdfe::1/126']);
+    });
+
+    test('customRoutes ON → route_address появляется (половинки)', () {
+      final t =
+          tun(_build(const VpnModeConfig.defaults(), customRoutes: true));
+      expect(t['route_address'],
+          ['0.0.0.0/1', '128.0.0.0/1', '::/1', '8000::/1']);
+    });
+
+    test('customRoutes OFF → route_address отсутствует (авто 0.0.0.0/0)', () {
+      final t = tun(_build(const VpnModeConfig.defaults(), ipv6: true));
+      expect(t.containsKey('route_address'), isFalse);
+    });
+
+    test('оба ON → v4+v6 адрес И route_address', () {
+      final t = tun(_build(const VpnModeConfig.defaults(),
+          ipv6: true, customRoutes: true));
+      expect(t['address'], ['172.16.0.1/30', 'fdfe::1/126']);
+      expect(t['route_address'],
+          ['0.0.0.0/1', '128.0.0.0/1', '::/1', '8000::/1']);
     });
   });
 }
