@@ -245,7 +245,9 @@ Future<DebugResponse> _updateMember(
     await sub.setMembersEnabled(idx, {i}, enabled);
   }
   if (detour != null) {
-    await sub.setMemberDetour(idx, i, detour);
+    // §239 — контроллер отклоняет self/цикл интра-рёбер; пробрасываем отказ.
+    final err = await sub.setMemberDetour(idx, i, detour);
+    if (err.isNotEmpty) throw BadRequest('detour rejected: $err');
   }
 
   final reveal = req.qBool('reveal');
