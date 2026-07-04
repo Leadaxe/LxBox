@@ -1,18 +1,20 @@
 import '../../controllers/subscription_controller.dart';
 import '../../models/server_list.dart';
 
-/// §091 — какие подписки «владеют» данным display-тэгом, по **префиксу**.
+/// §091/§235 — какие ИСТОЧНИКИ (подписки + папки §234) «владеют» данным
+/// display-тэгом, по **префиксу**.
 ///
 /// `config-tag == нода в Clash`, но `subId` в конфиг не пишется — единственный
 /// реальный mismatch (§091 spec). Восстанавливаем принадлежность чисто по
 /// эмитированному префиксу: билдер кладёт тег как `'$tagPrefix $bare'`
-/// (`TagResolver.displayTag`), поэтому нода принадлежит подписке ⇔
+/// (`TagResolver.displayTag`), поэтому нода принадлежит источнику ⇔
 /// `tag.startsWith('$prefix ')`.
 ///
-/// **Только подписки с заданным префиксом** участвуют (юзер: «префикс не
+/// **Только источники с заданным префиксом** участвуют (юзер: «префикс не
 /// задан → нет поиска»). Пустой результат = тег не начинается ни с одного
 /// префикса → caller относит его к категории `'custom'` (UserServer,
-/// подписка без префикса, импортированный JSON).
+/// источник без префикса, импортированный JSON). Одиночный `UserServer` НЕ
+/// участвует (§091: UI не даёт ему префикс при наличии нод).
 ///
 /// Заменил §077 reverse-map по node-спискам + collision-suffix эвристику
 /// (`TagResolver.matchesAllocated`) — целый класс багов §077/§079/§080
@@ -27,15 +29,16 @@ import '../../models/server_list.dart';
 /// backup-импорт), и решается уникальностью префиксов. Чистого prefix-фикса
 /// нет без возврата проверки членства в node-списках (ровно то, что §091
 /// убрал ради устранения класса §077/§079/§080). См. §091 edge-cases.
-Set<String> subscriptionsOfTag(
+Set<String> sourcesOfTag(
   String tag,
   List<SubscriptionEntry> entries,
 ) {
   final result = <String>{};
   for (final e in entries) {
     final list = e.list;
-    if (list is! SubscriptionServers) continue;
-    if (!e.enabled) continue; // disabled subs не эмитят node'ы в config
+    // §235 — источник = подписка ИЛИ папка (§234).
+    if (list is! SubscriptionServers && list is! FolderServers) continue;
+    if (!e.enabled) continue; // disabled источники не эмитят node'ы в config
     final prefix = list.tagPrefix;
     if (prefix.isEmpty) continue; // §091: нет префикса → нет фильтра
     if (tag.startsWith('$prefix ')) result.add(e.id);

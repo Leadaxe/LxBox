@@ -7,8 +7,9 @@ import '../node_list_presenter.dart';
 /// §048 / §095 / §096 — Filter panel (expanded), tabbed.
 ///
 /// Layout (Filter mode — стат-полоса и Nodes-хедер скрыты родителем):
-/// - **табы** Regex / Protocol / Subscribes / Settings сверху + ✕ закрытия
+/// - **табы** Regex / Protocol / Sources / Settings сверху + ✕ закрытия
 ///   (→ [togglePanel]) — с точкой на табе, где есть активный фильтр;
+///   §235 — Sources = подписки + папки (§234), бывш. «Subscribes»;
 /// - **сводка активных фильтров** чипами (`InputChip`: tap → нужный таб,
 ///   ✕ → снять фильтр; «!» в лейбле = инверсия, §096);
 /// - контент активного таба (авто-высота — рендерим только его, не TabBarView):
@@ -21,7 +22,7 @@ class FilterPanel extends StatefulWidget {
     required this.emojis,
     required this.availableProtocols,
     required this.availableVariants,
-    required this.subOptions,
+    required this.sourceOptions,
     this.onSaveRegex,
   });
 
@@ -32,7 +33,8 @@ class FilterPanel extends StatefulWidget {
   /// §103 — transport/security теги (вторая строка чипов на Protocol-табе).
   final List<String> availableVariants;
 
-  final List<(String, String)> subOptions;
+  /// §235 — (id, имя) источников: подписки + папки (§234).
+  final List<(String, String)> sourceOptions;
 
   /// §195/§197 — сохранить regex (+инверсию) в активный канал. `null` → 💾 скрыта.
   final void Function(String pattern, bool invert)? onSaveRegex;
@@ -43,7 +45,7 @@ class FilterPanel extends StatefulWidget {
 
 class _FilterPanelState extends State<FilterPanel>
     with SingleTickerProviderStateMixin {
-  // Regex=0 · Protocol=1 · Subscribes=2 · Settings=3.
+  // Regex=0 · Protocol=1 · Sources=2 · Settings=3.
   late final TabController _tab = TabController(length: 4, vsync: this);
 
   NodeFilterViewModel get f => widget.filter;
@@ -54,14 +56,14 @@ class _FilterPanelState extends State<FilterPanel>
     super.dispose();
   }
 
-  String _subName(String id) {
-    for (final (sid, name) in widget.subOptions) {
+  String _sourceName(String id) {
+    for (final (sid, name) in widget.sourceOptions) {
       if (sid == id) return name;
     }
     return id;
   }
 
-  /// Макс. ширина чипа: обрезаем лейбл до 15 символов + «…» (имена подписок
+  /// Макс. ширина чипа: обрезаем лейбл до 15 символов + «…» (имена источников
   /// бывают длинные).
   static String _truncate(String s, [int max = 15]) =>
       s.length > max ? '${s.substring(0, max)}…' : s;
@@ -96,7 +98,8 @@ class _FilterPanelState extends State<FilterPanel>
     }
     for (final id in f.enabledSubscriptions) {
       chips.add(InputChip(
-        label: Text('${neg(f.subscriptionsInvert)}${_truncate(_subName(id))}'),
+        label:
+            Text('${neg(f.subscriptionsInvert)}${_truncate(_sourceName(id))}'),
         onPressed: () => _tab.animateTo(2),
         onDeleted: () => f.toggleSubscription(id),
       ));
@@ -241,11 +244,11 @@ class _FilterPanelState extends State<FilterPanel>
                   ],
                 ],
               );
-      case 2: // Subscribes
-        return widget.subOptions.isEmpty
-            ? _hint('No subscriptions')
+      case 2: // Sources (§235 — подписки + папки)
+        return widget.sourceOptions.isEmpty
+            ? _hint('No sources')
             : MultiSelectChipsRow(
-                options: widget.subOptions,
+                options: widget.sourceOptions,
                 enabled: f.enabledSubscriptions,
                 onToggle: f.toggleSubscription,
                 invert: f.subscriptionsInvert,
@@ -338,7 +341,7 @@ class _FilterPanelState extends State<FilterPanel>
                   tabs: [
                     _dotTab('Regex', f.regexActive),
                     _dotTab('Protocol', f.protocolActive || f.variantActive),
-                    _dotTab('Subscribes', f.subscriptionActive),
+                    _dotTab('Sources', f.subscriptionActive),
                     _dotTab('Settings', f.settingsActive),
                   ],
                 ),
