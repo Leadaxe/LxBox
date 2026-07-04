@@ -1,0 +1,186 @@
+import 'dart:convert';
+
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/services/probe/probe_config.dart';
+import 'package:lxbox/services/probe/probe_runner.dart';
+
+/// §236 — headless probe: конфиг, ветвление раннера (сессия vs боевое ядро),
+/// пороги шкалы.
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  const uriA = 'vless://u1@h1.example:443?type=ws&security=tls#Alpha';
+  const uriB = 'vless://u2@h2.example:443?type=ws&security=tls#Beta';
+
+  FolderServers folder({List<FolderMember>? members, bool enabled = true}) =>
+      FolderServers(
+        id: 'f-1',
+        name: 'F',
+        enabled: enabled,
+        tagPrefix: 'pr:',
+        detourPolicy: DetourPolicy.defaults,
+        members: members ??
+            [
+              FolderMember(raw: uriA),
+              FolderMember(raw: uriB, enabled: false),
+            ],
+      );
+
+  group('§236 buildProbeConfig', () {
+    test('ВСЕ члены (включая выключенных) попадают в конфиг, теги голые', () {
+      final cfg = buildProbeConfig(folder());
+      expect(cfg.configJson, isNotNull);
+      final config = jsonDecode(cfg.configJson!) as Map<String, dynamic>;
+      final tags = (config['outbounds'] as List)
+          .map((o) => (o as Map)['tag'] as String)
+          .toList();
+      expect(tags, containsAll(['Alpha', 'Beta'])); // без префикса папки
+      expect(cfg.tagByMember, {0: 'Alpha', 1: 'Beta'});
+      // Без inbound'ов (openTun не должен вызываться) + local-резолвер.
+      expect(config.containsKey('inbounds'), isFalse);
+      expect((config['route'] as Map)['default_domain_resolver'], kProbeDnsTag);
+      final dnsServers = ((config['dns'] as Map)['servers'] as List);
+      expect((dnsServers.single as Map)['type'], 'local');
+    });
+
+    test('битый член исключён из конфига с вердиктом broken', () {
+      final cfg = buildProbeConfig(folder(members: [
+        FolderMember(raw: uriA),
+        FolderMember(raw: 'garbage-not-a-config'),
+      ]));
+      expect(cfg.tagByMember.keys, [0]);
+      expect(cfg.brokenByMember, {1: 'broken'});
+    });
+
+    test('все битые → configJson == null', () {
+      final cfg = buildProbeConfig(folder(members: [
+        FolderMember(raw: 'garbage-1'),
+        FolderMember(raw: 'garbage-2'),
+      ]));
+      expect(cfg.configJson, isNull);
+      expect(cfg.brokenByMember.length, 2);
+    });
+
+    test('коллизия тегов членов уникализируется', () {
+      final cfg = buildProbeConfig(folder(members: [
+        FolderMember(raw: uriA),
+        FolderMember(raw: uriA),
+      ]));
+      expect(cfg.tagByMember[0], 'Alpha');
+      expect(cfg.tagByMember[1], 'Alpha-2');
+    });
+  });
+
+  group('§236 FolderProbeRunner (mock method channel)', () {
+    const channel = MethodChannel('com.leadaxe.lxbox/methods');
+    final calls = <MethodCall>[];
+    String probeStartAnswer = '';
+
+    setUp(() {
+      calls.clear();
+      probeStartAnswer = '';
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        switch (call.method) {
+          case 'probeStart':
+            return probeStartAnswer;
+          case 'probeUrlTest':
+            final tag = (call.arguments as Map)['tag'] as String;
+            // Alpha живой (120мс), остальные — err.
+            return tag == 'Alpha'
+                ? {'delay': 120, 'error': ''}
+                : {'delay': 0, 'error': 'timeout'};
+          case 'probeStop':
+            return null;
+          case 'ccUrlTestOutbound':
+            return {'delay': 42, 'error': ''};
+        }
+        return null;
+      });
+    });
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    test('VPN выключен: сессия, тестируются ВСЕ члены, teardown', () async {
+      final results = <int, ProbeResult>{};
+      final err = await FolderProbeRunner().run(
+        folder(),
+        url: 'https://example.com/gen204',
+        timeoutMs: 3000,
+        onResult: (i, r) => results[i] = r,
+      );
+      expect(err, isEmpty);
+      expect(results[0]!.status, ProbeStatus.ok);
+      expect(results[0]!.delayMs, 120);
+      // Выключенный член тоже протестирован (probe-сессия).
+      expect(results[1]!.status, ProbeStatus.failed);
+      expect(calls.map((c) => c.method), contains('probeStop'));
+    });
+
+    test('битые члены получают вердикт до ядра', () async {
+      final results = <int, ProbeResult>{};
+      await FolderProbeRunner().run(
+        folder(members: [
+          FolderMember(raw: uriA),
+          FolderMember(raw: 'garbage'),
+        ]),
+        url: '',
+        timeoutMs: 0,
+        onResult: (i, r) => results[i] = r,
+      );
+      expect(results[1]!.status, ProbeStatus.broken);
+    });
+
+    test('VPN запущен: ветка боевого ядра, выключенные → notInConfig',
+        () async {
+      probeStartAnswer = 'VPN is running — test uses the live tunnel instead';
+      final results = <int, ProbeResult>{};
+      final err = await FolderProbeRunner().run(
+        folder(),
+        url: '',
+        timeoutMs: 0,
+        onResult: (i, r) => results[i] = r,
+      );
+      expect(err, isEmpty);
+      expect(results[0]!.status, ProbeStatus.ok);
+      expect(results[0]!.delayMs, 42);
+      expect(results[1]!.status, ProbeStatus.notInConfig);
+      // Живая ветка зовёт ccUrlTestOutbound с display-тегом (префикс папки).
+      final live = calls.firstWhere((c) => c.method == 'ccUrlTestOutbound');
+      expect((live.arguments as Map)['tag'], 'pr: Alpha');
+      // probeStop в живой ветке не нужен (сессия не поднималась).
+      expect(calls.map((c) => c.method), isNot(contains('probeStop')));
+    });
+
+    test('фатальная ошибка старта (не «vpn running») возвращается наружу',
+        () async {
+      probeStartAnswer = 'create service: parse config: boom';
+      final err = await FolderProbeRunner().run(
+        folder(),
+        url: '',
+        timeoutMs: 0,
+        onResult: (_, _) {},
+      );
+      expect(err, contains('boom'));
+    });
+  });
+
+  group('§236 ProbeThresholds', () {
+    test('дефолты NeoCat 250/500/700 и границы включительно', () {
+      const t = ProbeThresholds();
+      expect(t.bandOf(0), 0);
+      expect(t.bandOf(250), 0);
+      expect(t.bandOf(251), 1);
+      expect(t.bandOf(500), 1);
+      expect(t.bandOf(501), 2);
+      expect(t.bandOf(700), 2);
+      expect(t.bandOf(701), 3);
+    });
+  });
+}

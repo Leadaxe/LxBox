@@ -1097,6 +1097,61 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// §236 — массовый toggle членов (Disable slower than N ms и т.п.).
+  Future<void> setMembersEnabled(
+      int index, Set<int> memberIndexes, bool enabled) async {
+    if (index < 0 || index >= _entries.length) return;
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return;
+    var changed = false;
+    final members = [...folder.members];
+    for (final i in memberIndexes) {
+      if (i < 0 || i >= members.length) continue;
+      if (members[i].enabled == enabled) continue;
+      members[i] = members[i].copyWith(enabled: enabled);
+      changed = true;
+    }
+    if (!changed) return;
+    entry._replaceList(folder.copyWith(members: members));
+    entry.nodeCount = entry.list.nodes.length;
+    await _persist();
+    notifyListeners();
+  }
+
+  /// §236 — массовое удаление членов (Delete unreachable).
+  Future<void> removeMembersAt(int index, Set<int> memberIndexes) async {
+    if (index < 0 || index >= _entries.length) return;
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return;
+    final members = <FolderMember>[
+      for (var i = 0; i < folder.members.length; i++)
+        if (!memberIndexes.contains(i)) folder.members[i],
+    ];
+    if (members.length == folder.members.length) return;
+    entry._replaceList(folder.copyWith(members: members));
+    entry.nodeCount = entry.list.nodes.length;
+    await _persist();
+    notifyListeners();
+  }
+
+  /// §236 — применить перестановку членов (Sort by ping). [order] — список
+  /// старых индексов в новом порядке; обязан быть полной перестановкой.
+  Future<void> applyMembersOrder(int index, List<int> order) async {
+    if (index < 0 || index >= _entries.length) return;
+    final entry = _entries[index];
+    final folder = entry.list;
+    if (folder is! FolderServers) return;
+    if (order.length != folder.members.length) return;
+    if (order.toSet().length != order.length) return;
+    if (order.any((i) => i < 0 || i >= folder.members.length)) return;
+    entry._replaceList(folder.copyWith(
+        members: [for (final i in order) folder.members[i]]));
+    await _persist();
+    notifyListeners();
+  }
+
   /// Перенести члена из папки [fromIndex] в папку [toIndex].
   Future<String> moveMemberToFolder(
       int fromIndex, int memberIndex, int toIndex) async {

@@ -294,6 +294,30 @@ void main() {
       expect(saved.nodes.map((n) => n.tag), ['Alpha', 'Beta']);
     });
 
+    test('§236 setMembersEnabled/removeMembersAt/applyMembersOrder', () async {
+      final c = await makeController();
+      await c.addFolder('F');
+      await c.addMembersToFolder(0, '$uriA\n$uriB\n$uriUnnamed');
+
+      await c.setMembersEnabled(0, {0, 2}, false);
+      var folder = c.entries.single.list as FolderServers;
+      expect(folder.members.map((m) => m.enabled), [false, true, false]);
+      expect(folder.nodes.map((n) => n.tag), ['Beta']);
+
+      // Перестановка: [2,0,1]; кривые перестановки игнорируются.
+      await c.applyMembersOrder(0, [2, 0, 1]);
+      folder = c.entries.single.list as FolderServers;
+      expect(folder.members[1].node!.tag, 'Alpha');
+      await c.applyMembersOrder(0, [0, 0, 1]); // дубль — no-op
+      await c.applyMembersOrder(0, [0]); // не та длина — no-op
+      folder = c.entries.single.list as FolderServers;
+      expect(folder.members.length, 3);
+
+      await c.removeMembersAt(0, {0, 2});
+      folder = c.entries.single.list as FolderServers;
+      expect(folder.members.single.node!.tag, 'Alpha');
+    });
+
     test('rename/toggle папки через общие пути контроллера', () async {
       final c = await makeController();
       await c.addFolder('Old');

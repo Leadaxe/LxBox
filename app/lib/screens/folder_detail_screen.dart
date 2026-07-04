@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/server_list.dart';
 import '../services/error_format.dart';
+import '../services/probe/probe_runner.dart';
+import '../services/settings_storage.dart';
 import '../services/subscription/input_helpers.dart';
 import '../services/tag_resolver.dart';
 import 'subscription_detail_screen/detour_mode.dart';
@@ -38,6 +40,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   bool _editing = false;
   late TextEditingController _nameCtrl;
 
+  // §236 — состояние Test servers. Результаты эфемерны (не персистятся).
+  final Map<int, ProbeResult> _probe = {};
+  FolderProbeRunner? _runner;
+  bool _testing = false;
+  ProbeThresholds _thresholds = const ProbeThresholds();
+
   FolderServers get _folder => widget.entry.list as FolderServers;
 
   /// Индекс entry по ссылке — список мог сместиться (reorder/delete).
@@ -48,13 +56,275 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
     _nameCtrl = TextEditingController(text: widget.entry.name);
+    unawaited(_loadThresholds());
   }
 
   @override
   void dispose() {
+    // Отмена доводит run() до finally → probeStop (сессия не повисает).
+    _runner?.cancel();
     _tabCtrl.dispose();
     _nameCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadThresholds() async {
+    final g = int.tryParse(await SettingsStorage.getVar('probe_ms_green', ''));
+    final y = int.tryParse(await SettingsStorage.getVar('probe_ms_yellow', ''));
+    final o = int.tryParse(await SettingsStorage.getVar('probe_ms_orange', ''));
+    if (!mounted) return;
+    setState(() {
+      _thresholds = ProbeThresholds(
+        greenMs: g ?? 250,
+        yellowMs: y ?? 500,
+        orangeMs: o ?? 700,
+      );
+    });
+  }
+
+  // ─────────────────────── §236 — Test servers ───────────────────────
+
+  Future<void> _toggleTest() async {
+    if (_testing) {
+      _runner?.cancel();
+      setState(() => _testing = false);
+      return;
+    }
+    if (_folder.members.isEmpty) return;
+    final ping = await SettingsStorage.getPingOptions();
+    final url = (ping['url'] as String?)?.trim() ?? '';
+    final timeoutMs = (ping['timeout_ms'] as num?)?.toInt() ?? 3000;
+    if (!mounted) return;
+    setState(() {
+      _testing = true;
+      _probe
+        ..clear()
+        ..addEntries([
+          for (var i = 0; i < _folder.members.length; i++)
+            MapEntry(i, const ProbeResult(ProbeStatus.pending)),
+        ]);
+    });
+    final runner = FolderProbeRunner();
+    _runner = runner;
+    final err = await runner.run(
+      _folder,
+      url: url,
+      timeoutMs: timeoutMs,
+      onResult: (i, r) {
+        if (!mounted) return;
+        setState(() => _probe[i] = r);
+      },
+    );
+    if (!mounted) return;
+    setState(() => _testing = false);
+    if (err.isNotEmpty) {
+      await _showError(err);
+    }
+  }
+
+  /// Число завершённых тестов (для строки-сводки).
+  ({int ok, int dead, int broken}) _probeSummary() {
+    var ok = 0, dead = 0, broken = 0;
+    for (final r in _probe.values) {
+      switch (r.status) {
+        case ProbeStatus.ok:
+          ok++;
+        case ProbeStatus.failed:
+          dead++;
+        case ProbeStatus.broken:
+        case ProbeStatus.invalid:
+          broken++;
+        case ProbeStatus.pending:
+        case ProbeStatus.notInConfig:
+          break;
+      }
+    }
+    return (ok: ok, dead: dead, broken: broken);
+  }
+
+  Future<void> _disableSlowerThan() async {
+    final ctl = TextEditingController(text: '${_thresholds.orangeMs}');
+    final ms = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Disable slow servers'),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Slower than, ms',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, int.tryParse(ctl.text.trim())),
+            child: const Text('Disable'),
+          ),
+        ],
+      ),
+    );
+    ctl.dispose();
+    if (ms == null || !mounted) return;
+    final slow = <int>{
+      for (final e in _probe.entries)
+        if (e.value.status == ProbeStatus.ok && e.value.delayMs > ms) e.key,
+    };
+    if (slow.isEmpty) {
+      await _showError('No tested servers slower than $ms ms');
+      return;
+    }
+    final idx = _index;
+    if (idx < 0) return;
+    await widget.controller.setMembersEnabled(idx, slow, false);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Disabled ${slow.length} server(s) > $ms ms')),
+    );
+    setState(() {});
+  }
+
+  Future<void> _deleteUnreachable() async {
+    final dead = <int>{
+      for (final e in _probe.entries)
+        if (e.value.status == ProbeStatus.failed ||
+            e.value.status == ProbeStatus.broken ||
+            e.value.status == ProbeStatus.invalid)
+          e.key,
+    };
+    if (dead.isEmpty) {
+      await _showError('No unreachable or broken servers in last test');
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete unreachable?'),
+        content: Text('Remove ${dead.length} server(s) that failed the test '
+            '(unreachable or broken)?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+                foregroundColor: Theme.of(ctx).colorScheme.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final idx = _index;
+    if (idx < 0) return;
+    await widget.controller.removeMembersAt(idx, dead);
+    if (!mounted) return;
+    // Индексы съехали — результаты по оставшимся неатрибутируемы. Сброс.
+    setState(() => _probe.clear());
+  }
+
+  Future<void> _sortByPing() async {
+    final idx = _index;
+    if (idx < 0) return;
+    final n = _folder.members.length;
+    int rank(int i) {
+      final r = _probe[i];
+      if (r == null) return 1 << 30;
+      return switch (r.status) {
+        ProbeStatus.ok => r.delayMs,
+        ProbeStatus.pending || ProbeStatus.notInConfig => 1 << 30,
+        // err/broken — в конец, ниже нетестированных.
+        ProbeStatus.failed ||
+        ProbeStatus.broken ||
+        ProbeStatus.invalid =>
+          (1 << 30) + 1,
+      };
+    }
+
+    final order = [for (var i = 0; i < n; i++) i]
+      ..sort((a, b) {
+        final byRank = rank(a).compareTo(rank(b));
+        return byRank != 0 ? byRank : a.compareTo(b); // stable
+      });
+    await widget.controller.applyMembersOrder(idx, order);
+    if (!mounted) return;
+    // Перепривязка результатов к новым индексам.
+    final remapped = <int, ProbeResult>{};
+    for (var newI = 0; newI < order.length; newI++) {
+      final r = _probe[order[newI]];
+      if (r != null) remapped[newI] = r;
+    }
+    setState(() {
+      _probe
+        ..clear()
+        ..addAll(remapped);
+    });
+  }
+
+  Future<void> _editThresholds() async {
+    final g = TextEditingController(text: '${_thresholds.greenMs}');
+    final y = TextEditingController(text: '${_thresholds.yellowMs}');
+    final o = TextEditingController(text: '${_thresholds.orangeMs}');
+    Widget field(TextEditingController c, String label) => Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: TextField(
+            controller: c,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: label,
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        );
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ping color thresholds'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            field(g, 'Green up to, ms'),
+            field(y, 'Yellow up to, ms'),
+            field(o, 'Orange up to, ms'),
+            Text(
+              'Anything above is red.',
+              style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    final gv = int.tryParse(g.text.trim());
+    final yv = int.tryParse(y.text.trim());
+    final ov = int.tryParse(o.text.trim());
+    g.dispose();
+    y.dispose();
+    o.dispose();
+    if (saved != true || !mounted) return;
+    final next = ProbeThresholds(
+      greenMs: (gv == null || gv <= 0) ? 250 : gv,
+      yellowMs: (yv == null || yv <= 0) ? 500 : yv,
+      orangeMs: (ov == null || ov <= 0) ? 700 : ov,
+    );
+    await SettingsStorage.setVar('probe_ms_green', '${next.greenMs}');
+    await SettingsStorage.setVar('probe_ms_yellow', '${next.yellowMs}');
+    await SettingsStorage.setVar('probe_ms_orange', '${next.orangeMs}');
+    if (!mounted) return;
+    setState(() => _thresholds = next);
   }
 
   void _toggleEdit() {
@@ -405,6 +675,19 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
                   ],
                 ),
           actions: [
+            // §236 — Test servers: тап = старт, повторный тап = отмена.
+            IconButton(
+              tooltip: _testing ? 'Cancel test' : 'Test servers',
+              icon: _testing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.network_check),
+              onPressed:
+                  _folder.members.isEmpty ? null : () => unawaited(_toggleTest()),
+            ),
             IconButton(
               tooltip: _editing ? 'Save' : 'Rename',
               icon: Icon(_editing ? Icons.check : Icons.edit_outlined),
@@ -477,7 +760,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         ),
       );
     }
-    return ReorderableListView.builder(
+    final list = ReorderableListView.builder(
       padding: EdgeInsets.fromLTRB(
           12, 4, 12, MediaQuery.of(context).padding.bottom + 24),
       buildDefaultDragHandles: false,
@@ -487,6 +770,24 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
         final idx = _index;
         if (idx < 0) return;
         unawaited(widget.controller.reorderMember(idx, oldIndex, newIndex));
+        // §236 — ручной drag во время/после теста: результаты по индексам,
+        // перепривязываем как в _sortByPing (иначе бейджи съедут).
+        if (_probe.isNotEmpty) {
+          final r = _probe.remove(oldIndex);
+          final shifted = <int, ProbeResult>{};
+          _probe.forEach((k, v) {
+            var nk = k;
+            if (k > oldIndex) nk--;
+            if (nk >= newIndex) nk++;
+            shifted[nk] = v;
+          });
+          if (r != null) shifted[newIndex] = r;
+          setState(() {
+            _probe
+              ..clear()
+              ..addAll(shifted);
+          });
+        }
       },
       itemBuilder: (context, i) {
         final m = members[i];
@@ -495,6 +796,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           member: m,
           dragIndex: i,
           folderEnabled: widget.entry.enabled,
+          probe: _probe[i],
+          thresholds: _thresholds,
           onToggle: () {
             final idx = _index;
             if (idx < 0) return;
@@ -506,6 +809,58 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           onTap: () => _showMemberMenu(i),
         );
       },
+    );
+    if (_probe.isEmpty) return list;
+    return Column(
+      children: [
+        _buildTestBar(theme),
+        const Divider(height: 1),
+        Expanded(child: list),
+      ],
+    );
+  }
+
+  /// §236 — сводка последнего теста + массовые действия.
+  Widget _buildTestBar(ThemeData theme) {
+    final s = _probeSummary();
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              _testing
+                  ? 'Testing… ${s.ok + s.dead} done'
+                  : '${s.ok} ok · ${s.dead} unreachable'
+                      '${s.broken > 0 ? ' · ${s.broken} broken' : ''}',
+              style: TextStyle(fontSize: 12, color: muted),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Ping color thresholds',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.tune, size: 18),
+            onPressed: () => unawaited(_editThresholds()),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Actions',
+            enabled: !_testing,
+            onSelected: (v) {
+              if (v == 'disable_slow') unawaited(_disableSlowerThan());
+              if (v == 'delete_dead') unawaited(_deleteUnreachable());
+              if (v == 'sort') unawaited(_sortByPing());
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                  value: 'disable_slow', child: Text('Disable slower than…')),
+              PopupMenuItem(
+                  value: 'delete_dead', child: Text('Delete unreachable')),
+              PopupMenuItem(value: 'sort', child: Text('Sort by ping')),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -621,6 +976,8 @@ class _MemberTile extends StatelessWidget {
     required this.onToggle,
     required this.onLongPress,
     required this.onTap,
+    this.probe,
+    this.thresholds = const ProbeThresholds(),
   });
 
   final FolderMember member;
@@ -629,6 +986,42 @@ class _MemberTile extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback onLongPress;
   final VoidCallback onTap;
+
+  /// §236 — результат последнего Test servers (null = не тестировался).
+  final ProbeResult? probe;
+  final ProbeThresholds thresholds;
+
+  /// §236 — бейдж результата теста. Цвет задержки — по порогам шкалы.
+  Widget? _probeBadge(ThemeData theme) {
+    final r = probe;
+    if (r == null) return null;
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final (String text, Color color) = switch (r.status) {
+      ProbeStatus.pending => ('…', muted),
+      ProbeStatus.ok => (
+          '${r.delayMs} ms',
+          switch (thresholds.bandOf(r.delayMs)) {
+            0 => Colors.green,
+            1 => Colors.amber.shade800,
+            2 => Colors.orange.shade800,
+            _ => theme.colorScheme.error,
+          }
+        ),
+      ProbeStatus.failed => ('err', theme.colorScheme.error),
+      ProbeStatus.broken => ('broken', theme.colorScheme.error),
+      ProbeStatus.invalid => ('invalid', theme.colorScheme.error),
+      ProbeStatus.notInConfig => ('enable to test', muted),
+    };
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: color,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -667,6 +1060,7 @@ class _MemberTile extends StatelessWidget {
           style: TextStyle(fontSize: 12, color: muted),
           maxLines: 1,
           overflow: TextOverflow.ellipsis),
+      trailing: _probeBadge(theme),
       onLongPress: onLongPress,
       onTap: onTap,
     );
