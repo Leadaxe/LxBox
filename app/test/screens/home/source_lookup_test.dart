@@ -2,10 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/node_spec.dart';
-import 'package:lxbox/screens/home/subscription_lookup.dart';
+import 'package:lxbox/screens/home/source_lookup.dart';
 
-/// §091 — Unit tests для prefix-based `subscriptionsOfTag`.
-/// Принадлежность ноды подписке = `tag.startsWith('$prefix ')`; пустой
+/// §091/§235 — Unit tests для prefix-based `sourcesOfTag` (бывш.
+/// `subscriptionsOfTag`; §235 — источник = подписка ИЛИ папка §234).
+/// Принадлежность ноды источнику = `tag.startsWith('$prefix ')`; пустой
 /// префикс не участвует; suffix после префикса игнорируется (никакого
 /// reverse-парсинга / collision-эвристики — класс багов §077/§079/§080 ушёл).
 
@@ -57,26 +58,44 @@ SubscriptionEntry _user({
   return SubscriptionEntry(list: list);
 }
 
+SubscriptionEntry _folder({
+  required String id,
+  String tagPrefix = '',
+  bool enabled = true,
+}) {
+  final list = FolderServers(
+    id: id,
+    name: id,
+    enabled: enabled,
+    tagPrefix: tagPrefix,
+    detourPolicy: DetourPolicy.defaults,
+    members: [
+      FolderMember(raw: 'vless://u1@h1.example:443?type=ws&security=tls#M1'),
+    ],
+  );
+  return SubscriptionEntry(list: list);
+}
+
 void main() {
   group('prefix match', () {
     test('tag начинается с "\$prefix " → {entry.id}', () {
       final entries = [_sub(id: 's1', tagPrefix: '🇷🇺 RU')];
-      expect(subscriptionsOfTag('🇷🇺 RU M1', entries), {'s1'});
+      expect(sourcesOfTag('🇷🇺 RU M1', entries), {'s1'});
     });
 
     test('пустой префикс → НЕ участвует (нет поиска), даже для своей ноды', () {
       final entries = [_sub(id: 's1', tagPrefix: '', nodes: ['M1'])];
-      expect(subscriptionsOfTag('M1', entries), isEmpty);
+      expect(sourcesOfTag('M1', entries), isEmpty);
     });
 
     test('tag не начинается с префикса → empty', () {
       final entries = [_sub(id: 's1', tagPrefix: '🇷🇺')];
-      expect(subscriptionsOfTag('Other', entries), isEmpty);
+      expect(sourcesOfTag('Other', entries), isEmpty);
     });
 
     test('префикс без последующего пробела → НЕ матчит', () {
       final entries = [_sub(id: 's1', tagPrefix: '🇷🇺')];
-      expect(subscriptionsOfTag('🇷🇺M1', entries), isEmpty);
+      expect(sourcesOfTag('🇷🇺M1', entries), isEmpty);
     });
   });
 
@@ -86,11 +105,11 @@ void main() {
     test('любой суффикс после "\$prefix " матчит', () {
       // Раньше (reverse-map) различал digit-only collision-suffix; теперь
       // принадлежность определяется ровно префиксом.
-      expect(subscriptionsOfTag('🇷🇺 M1', entries), {'s1'});
-      expect(subscriptionsOfTag('🇷🇺 M1-1', entries), {'s1'}); // collision
-      expect(subscriptionsOfTag('🇷🇺 M1-X', entries), {'s1'}); // non-digit
-      expect(subscriptionsOfTag('🇷🇺 M1 extra', entries), {'s1'});
-      expect(subscriptionsOfTag('🇷🇺 что угодно', entries), {'s1'});
+      expect(sourcesOfTag('🇷🇺 M1', entries), {'s1'});
+      expect(sourcesOfTag('🇷🇺 M1-1', entries), {'s1'}); // collision
+      expect(sourcesOfTag('🇷🇺 M1-X', entries), {'s1'}); // non-digit
+      expect(sourcesOfTag('🇷🇺 M1 extra', entries), {'s1'});
+      expect(sourcesOfTag('🇷🇺 что угодно', entries), {'s1'});
     });
   });
 
@@ -100,7 +119,7 @@ void main() {
         _sub(id: 'A', tagPrefix: '🇷🇺'),
         _sub(id: 'B', tagPrefix: '🇷🇺'),
       ];
-      expect(subscriptionsOfTag('🇷🇺 M1', entries), {'A', 'B'});
+      expect(sourcesOfTag('🇷🇺 M1', entries), {'A', 'B'});
     });
 
     test('разные префиксы → узкий мэтч', () {
@@ -108,8 +127,8 @@ void main() {
         _sub(id: 'A', tagPrefix: '🇷🇺'),
         _sub(id: 'B', tagPrefix: '🇩🇪'),
       ];
-      expect(subscriptionsOfTag('🇷🇺 M1', entries), {'A'});
-      expect(subscriptionsOfTag('🇩🇪 M1', entries), {'B'});
+      expect(sourcesOfTag('🇷🇺 M1', entries), {'A'});
+      expect(sourcesOfTag('🇩🇪 M1', entries), {'B'});
     });
 
     test('префикс A — префикс другого B (prefix-of-prefix) разводится пробелом', () {
@@ -119,15 +138,40 @@ void main() {
         _sub(id: 'A', tagPrefix: 'RU'),
         _sub(id: 'B', tagPrefix: 'RU2'),
       ];
-      expect(subscriptionsOfTag('RU2 M1', entries), {'B'});
-      expect(subscriptionsOfTag('RU M1', entries), {'A'});
+      expect(sourcesOfTag('RU2 M1', entries), {'B'});
+      expect(sourcesOfTag('RU M1', entries), {'A'});
+    });
+  });
+
+  group('§235 — папки как источники', () {
+    test('папка с префиксом участвует наравне с подпиской', () {
+      final entries = [_folder(id: 'f1', tagPrefix: 'pr')];
+      expect(sourcesOfTag('pr M1', entries), {'f1'});
+    });
+
+    test('папка без префикса → НЕ участвует', () {
+      final entries = [_folder(id: 'f1', tagPrefix: '')];
+      expect(sourcesOfTag('M1', entries), isEmpty);
+    });
+
+    test('disabled папка пропущена', () {
+      final entries = [_folder(id: 'f1', tagPrefix: 'pr', enabled: false)];
+      expect(sourcesOfTag('pr M1', entries), isEmpty);
+    });
+
+    test('подписка и папка с одним префиксом → tag матчит обе', () {
+      final entries = [
+        _sub(id: 's1', tagPrefix: 'X'),
+        _folder(id: 'f1', tagPrefix: 'X'),
+      ];
+      expect(sourcesOfTag('X M1', entries), {'s1', 'f1'});
     });
   });
 
   group('UserServer / disabled / empty', () {
-    test('UserServer (не SubscriptionServers) → empty (→ custom)', () {
+    test('UserServer (одиночный) → empty (→ custom)', () {
       final entries = [_user(id: 'u1', tagPrefix: 'X')];
-      expect(subscriptionsOfTag('X M1', entries), isEmpty);
+      expect(sourcesOfTag('X M1', entries), isEmpty);
     });
 
     test('disabled SubscriptionServers пропущена', () {
@@ -135,11 +179,11 @@ void main() {
         _sub(id: 'A', tagPrefix: '🇷🇺', enabled: true),
         _sub(id: 'B', tagPrefix: '🇷🇺', enabled: false),
       ];
-      expect(subscriptionsOfTag('🇷🇺 M1', entries), {'A'});
+      expect(sourcesOfTag('🇷🇺 M1', entries), {'A'});
     });
 
     test('пустой список entries → empty', () {
-      expect(subscriptionsOfTag('M1', const []), isEmpty);
+      expect(sourcesOfTag('M1', const []), isEmpty);
     });
 
     test('mix: prefixed sub + UserServer', () {
@@ -147,8 +191,8 @@ void main() {
         _sub(id: 's1', tagPrefix: '🇷🇺'),
         _user(id: 'u1', nodes: ['Custom1']),
       ];
-      expect(subscriptionsOfTag('🇷🇺 M1', entries), {'s1'});
-      expect(subscriptionsOfTag('Custom1', entries), isEmpty);
+      expect(sourcesOfTag('🇷🇺 M1', entries), {'s1'});
+      expect(sourcesOfTag('Custom1', entries), isEmpty);
     });
   });
 }

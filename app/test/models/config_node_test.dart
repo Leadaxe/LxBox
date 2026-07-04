@@ -172,6 +172,10 @@ void main() {
           'transport': {'type': 'http'},
         },
         {'tag': 'plain', 'type': 'trojan'},
+        // §130 — MASQUE: транспорт из `network` (h3/h2), пусто → h3.
+        {'tag': 'mq3', 'type': 'masque', 'network': 'h3'},
+        {'tag': 'mq2', 'type': 'masque', 'network': 'h2'},
+        {'tag': 'mqdef', 'type': 'masque'},
         {'tag': 'hy2', 'type': 'hysteria2', 'tls': {'enabled': true}},
         {
           'tag': 'rlt',
@@ -231,6 +235,12 @@ void main() {
       expect(pc['h2']?.transportLabel, 'h2');
       expect(pc['plain']?.transportLabel, 'tcp');
       expect(pc['rlt']?.transportLabel, 'tcp');
+    });
+
+    test('§130 transport: MASQUE network h3/h2, пусто → h3', () {
+      expect(pc['mq3']?.transportLabel, 'h3');
+      expect(pc['mq2']?.transportLabel, 'h2');
+      expect(pc['mqdef']?.transportLabel, 'h3');
     });
 
     test('transport: протоколы со встроенным транспортом → null', () {

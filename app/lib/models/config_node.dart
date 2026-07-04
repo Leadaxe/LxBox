@@ -76,6 +76,12 @@ class ConfigNode {
   final String? securityLabel;
 
   static String? _deriveTransport(String type, Map<String, dynamic> raw) {
+    // §130 — MASQUE ходит поверх QUIC(h3)/h2, транспорт задан полем `network`
+    // (не `transport`). Пусто → дефолт ядра h3.
+    if (type == 'masque') {
+      final net = raw['network'];
+      return (net is String && net.isNotEmpty) ? net : 'h3';
+    }
     final tr = raw['transport'];
     if (tr is Map) {
       final t = tr['type'];

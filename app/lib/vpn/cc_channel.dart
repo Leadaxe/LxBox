@@ -210,6 +210,34 @@ class CcChannel {
     return CcDelayResult.fromMap(_asMap(r ?? const {}));
   }
 
+  // ─── §236 — headless probe-сессия (Test servers при выключенном VPN) ───
+
+  /// Стартует probe-инстанс ядра (конфиг БЕЗ tun). Возвращает '' при успехе,
+  /// текст ошибки иначе (в т.ч. «VPN is running…» — тогда caller уходит на
+  /// ветку [urlTestOutbound] через боевое ядро).
+  Future<String> probeStart(String config) async {
+    final r = await _methods
+        .invokeMethod<String>('probeStart', {'config': config});
+    return r ?? '';
+  }
+
+  /// Тест одной ноды в probe-сессии. Семантика результата как у
+  /// [urlTestOutbound] (Variant B: провал — только в `error`).
+  Future<CcDelayResult> probeUrlTest(
+    String tag, {
+    String link = '',
+    int timeoutMs = 0,
+  }) async {
+    final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
+      'probeUrlTest',
+      {'tag': tag, 'link': link, 'timeoutMs': timeoutMs},
+    );
+    return CcDelayResult.fromMap(_asMap(r ?? const {}));
+  }
+
+  /// Гасит probe-сессию (идемпотентно).
+  Future<void> probeStop() => _methods.invokeMethod<void>('probeStop');
+
   /// §4.7 — снапшот route+DNS правил (диагностика).
   Future<List<CcRule>> getRules() async {
     final r = await _methods.invokeMethod<List<dynamic>>('ccGetRules');

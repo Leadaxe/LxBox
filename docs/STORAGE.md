@@ -19,9 +19,9 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │   └─ <key>: string                           ─ напр. log_level, dns_final, debug_token,
 │                                                auto_update_subs, last_known_version, ...
 │
-├─ server_lists[]                list          §033 — sealed (subscription / user)
+├─ server_lists[]                list          §033 — sealed (subscription / user / folder §234)
 │   └─ <ServerList>              object          discriminator: type
-│       ├─ type                  "subscription"|"user"
+│       ├─ type                  "subscription"|"user"|"folder"
 │       ├─ id                    uuid          стабильный
 │       ├─ name                  string        UI display
 │       ├─ enabled               bool
@@ -45,7 +45,10 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       │                        — user only —
 │       ├─ origin                "paste"|"file"|"qr"|"manual"
 │       ├─ created_at            ISO-8601
-│       └─ raw_body              string        оригинал для reparse
+│       ├─ raw_body              string        оригинал для reparse
+│       │                        — folder only (§234) —
+│       ├─ created_at            ISO-8601
+│       └─ members[]             list          {raw, enabled, detour?} — по фрагменту на члена (member ↔ нода 1:1; §237 detour = личный тег)
 │
 ├─ custom_rules[]                list          §030 — sealed (inline / srs / preset)
 │   └─ <CustomRule>              object          discriminator: kind
@@ -237,6 +240,9 @@ Per-key спеки и shape — в разделах ниже.
 | `debug_port` | `'9269'` | [§031] | TCP-порт. Range 1024–49151. |
 | `dns_final` | template | [§043][043-dns] | Финальный DNS-резолвер (`cloudflare_udp` / `google_udp` / `local_dns_resolver` / `yandex_udp` / любой tag из `dns_options.servers`). |
 | `auto_record_wifi_history` | `'false'` | [§051] Phase 3 | Native `WifiNetworkObserver` пушит current SSID/BSSID в `wifi_history` если provel >5 минут на сети. Default off — privacy default. Toggle в App Settings → Diagnostics. |
+| `probe_ms_green` | `'250'` | §236 | Test servers (папки): верхняя граница «зелёной» задержки, мс. НЕ config-var (dirty не поднимает). |
+| `probe_ms_yellow` | `'500'` | §236 | Test servers: верхняя граница «жёлтой» задержки, мс. |
+| `probe_ms_orange` | `'700'` | §236 | Test servers: верхняя граница «оранжевой» задержки, мс; выше — красная. |
 | `wifi_history` | `'[]'` | [§051] Phase 3 | JSON-encoded `[{ssid, bssid, last_seen}]` (см. отдельный раздел ниже). |
 | `automation_receive_enabled` | `'false'` | §047 | Public Intent API: приём broadcast/Tasker. Default OFF. |
 | `automation_emit_lifecycle` | `'false'` | §047 | Эмит lifecycle-событий наружу. Default OFF. |
@@ -311,6 +317,33 @@ Sealed по полю `type`:
   "raw_body":      "<original input>"         // для reparse при багах
 }
 ```
+
+### `type: "folder"` — `FolderServers` (§234)
+
+Папка ручных серверов: контейнер членов с общим toggle/`tag_prefix`/`detour_policy`.
+Подписка в папку не кладётся; вложенности нет.
+
+```jsonc
+{
+  "type":          "folder",
+  "id":            "<uuid>",
+  "name":          "<display>",
+  "enabled":       true,                        // toggle всей папки
+  "tag_prefix":    "<str>",
+  "detour_policy": { … },
+  "created_at":    "ISO-8601",
+  "members": [                                  // порядок = порядок в UI
+    { "raw": "vless://…#Alpha", "enabled": true,
+      "detour": "Jump" },                            // §237 — личный detour (опц.)
+    { "raw": "wg://…#Beta",     "enabled": false }   // per-member toggle
+  ]
+}
+```
+
+`raw` — самодостаточный парсируемый фрагмент (URI / WG-INI / outbound-JSON);
+ноды реконструируются re-parse'ом каждого `raw` при загрузке (как `raw_body`
+у user). `nodes` в памяти = только включённые члены — builder работает без
+folder-ветвлений. Битый `raw` → член без ноды (виден в UI, правится/удаляется).
 
 ### `detour_policy` (общий)
 
@@ -861,6 +894,7 @@ Debug API handlers — идут через единую дверь `SettingsStor
 - `server_lists[].url` → маскируется (`maskSubscriptionUrl`)
 - `server_lists[].nodes` → заменяется на `nodes_count` (могут нести credentials в UUID/password)
 - `server_lists[].rawBody` → заменяется на `raw_body_bytes` (длина)
+- `server_lists[].members` → заменяется на `members_count` (§234 — raw членов несёт credentials)
 
 Скраббер обрабатывает только ключи `vars` и `server_lists`; всё остальное (`meta.*`, `warp_account`, `masque_account`, …) проходит **как есть** через `default`-ветку. Любое новое sensitive-поле нужно явно добавлять в `_scrub`.
 

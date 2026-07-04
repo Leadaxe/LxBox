@@ -19,9 +19,17 @@ Widget? buildSubscriptionEntrySubtitle(
 
   // UserServer всегда single-node — показываем протокол (VLESS/WG/...).
   // SubscriptionServers — нодcount + ⚙ если есть detour-цепочки.
+  // FolderServers (§234) — счётчик членов + сколько выключено.
   final isUser = entry.list is UserServer;
   String statusText;
-  if (isUser) {
+  if (entry.list is FolderServers) {
+    final folder = entry.list as FolderServers;
+    final total = folder.members.length;
+    final off = folder.disabledCount;
+    statusText = total == 0
+        ? 'Empty folder'
+        : '$total server${total == 1 ? '' : 's'}${off > 0 ? ' · $off off' : ''}';
+  } else if (isUser) {
     final node = entry.list.nodes.isNotEmpty ? entry.list.nodes.first : null;
     statusText = node != null ? '${node.protocol.toUpperCase()} server' : '';
   } else if (entry.status.isNotEmpty) {

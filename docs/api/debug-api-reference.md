@@ -3,7 +3,7 @@
 | Поле | Значение |
 |------|----------|
 | Статус | Reference |
-| Дата | 2026-04-20 |
+| Дата | 2026-07-04 |
 | Версия API | совместим со [`spec 031`](../spec/features/031%20debug%20api/spec.md) |
 | Парный doc | [`clash-api-reference.md`](clash-api-reference.md) — **deprecated**: `/clash/*` proxy выпилен в §122 (Clash API dropped, переход на CommandClient) |
 
@@ -76,6 +76,8 @@ auth), а не факт, что за границей всё открыто.
 - [Actions — триггеры](#actions--триггеры)
 - [Rules CRUD — `/rules/*`](#rules-crud--rules)
 - [Subscriptions CRUD — `/subs/*`](#subscriptions-crud--subs)
+- [Channels CRUD — `/channels/*`](#channels-crud--channels)
+- [Folders CRUD — `/folders/*`](#folders-crud--folders)
 - [WARP — `/warp`](#warp--warp)
 - [Pool — `/pool`](#pool--pool)
 - [Settings writes — `/settings/*`](#settings-writes--settings)
@@ -397,6 +399,137 @@ curl -s -H "$HDR" "$BASE/state/subs" | jq '.[] | select(.id=="<id>") | {title, n
 - `replace_detour_chain` (§073) — bool detour-флаг, ранее пропущенный в PATCH-маппинге (асимметрия с соседними `register_detour_*`); теперь маппится. Config-significant → `?rebuild=true` чтобы применить.
 - `POST /subs/{id}/refresh` на UserServer → 409 `conflict` (нечего фетчить).
 - `POST /subs` с `?rebuild=true` **не ждёт fetch'а** — fetch асинхронный, rebuild'ит с текущими nodes (которых ещё нет → config без этих outbound'ов). Делай последовательно: `POST /subs` → `POST /subs/{id}/refresh` → wait → `POST /action/rebuild-config`.
+
+---
+
+## Channels CRUD — `/channels/*`
+
+§238 — каналы роутинга §125 (`channels[]` в storage). Обёртка над
+`SettingsStorage.getChannels / addChannel / updateChannel / deleteChannel` —
+семантика идентична UI: `vpn-1` неудаляем и всегда enabled, лимит 10 каналов,
+удаление/выключение канала деградирует ссылки (route_final / custom-rule
+outbound) на `vpn-1` (§202, необратимо). Shape ресурса — storage-JSON канала
+(`Channel.toJson()`, snake_case).
+
+| Endpoint | Метод | Body |
+|---|---|---|
+| `/channels` | GET | — |
+| `/channels/{tag}` | GET | tag = `vpn-1`..`vpn-10` |
+| `/channels` | POST | опц. `{"label":"..."}` + любые PATCH-поля; tag автоназначается (первый свободный `vpn-N`), 201 |
+| `/channels/{tag}` | PATCH | subset: `label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,interrupt_exist_connections,auto` |
+| `/channels/{tag}` | DELETE | — |
+| `/channels/reorder` | POST | `{"order":["vpn-1",...]}` — ровно текущие теги |
+
+Все write'ы принимают `?rebuild=true` (порядок каналов = порядок эмита в
+конфиге, так что reorder тоже config-significant).
+
+```bash
+# Список
+curl -s -H "$HDR" "$BASE/channels" | jq 'map({tag,label,enabled})'
+
+# Создать канал с фильтром по немецким нодам и urltest-двойником
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"label":"Germany","node_filter":"DE|Frankfurt","auto":{"interval":"3m"}}' \
+  "$BASE/channels?rebuild=true"
+# → 201 {"tag":"vpn-2","label":"Germany",...,"rebuilt":true,...}
+
+# Включить round_robin балансировщик на канале
+curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"auto":{"mode":"round_robin","balancer":{"pool":4}}}' \
+  "$BASE/channels/vpn-2?rebuild=true"
+
+# Снять галку auto (убрать urltest-двойник)
+curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"auto":null}' "$BASE/channels/vpn-2"
+```
+
+**Quirks:**
+- `auto` в PATCH — **merge**, не replace: `{"auto":{"url":...}}` меняет только
+  `url`, остальные urltest-опции (и вложенный `balancer{}`) сохраняются.
+  Полный reset — прислать все поля явно. `"auto": null` — снять галку.
+- `tag` immutable (системный id) → передан в PATCH → 400. Юзер-имя — `label`.
+- `PATCH vpn-1 {"enabled":false}` и `DELETE /channels/vpn-1` → 409 `conflict`.
+- Выключение канала (enabled:false) деградирует ссылки на vpn-1 сразу и
+  **необратимо** — повторное включение старую ссылку не воскрешает (§202).
+- `node_filter`/`default_filter` валидируются как regex → битый паттерн 400
+  (иначе уронил бы сборку конфига).
+
+---
+
+## Folders CRUD — `/folders/*`
+
+§238 — папки серверов §234 (`FolderServers` в `server_lists`) поверх публичных
+методов `SubscriptionController`. Папка — это entry общего списка `/subs`
+(kind=`FolderServers`): **meta папки (name/enabled/tag_prefix/detour_policy)
+правится через `PATCH /subs/{id}`**, `/folders/*` добавляет только
+папко-специфичные операции.
+
+**Члены адресуются позиционным индексом** (у `FolderMember` нет id): после
+remove/ungroup/reorder индексы съезжают — каждый write-ответ возвращает свежий
+снапшот папки (`folder`), по нему строить следующий вызов. `raw` члена несёт
+credentials (URI/ключи) → по умолчанию скрыт, `?reveal=true` показывает
+(симметрия со скраббером `/state/storage`).
+
+| Endpoint | Метод | Body |
+|---|---|---|
+| `/folders` | GET | `?reveal=true` — с raw членов |
+| `/folders` | POST | `{"name":"..."}` → 201 |
+| `/folders/{id}` | GET | — |
+| `/folders/{id}` | DELETE | `?keep_servers=true` — вынести членов одиночными серверами (default false — удалить совсем) |
+| `/folders/{id}/members` | POST | ровно одно из: `{"input":"<uri\|WG-ini\|JSON>","name_fallback"?}` (paste) или `{"url":"..."}` (одноразовый снапшот: URL не хранится, авто-обновления нет) |
+| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour}` |
+| `/folders/{id}/members/{idx}` | DELETE | — |
+| `/folders/{id}/members/reorder` | POST | `{"order":[старые индексы в новом порядке]}` — полная перестановка |
+| `/folders/{id}/members/{idx}/ungroup` | POST | член → одиночный сервер сразу после папки |
+| `/folders/{id}/members/{idx}/move` | POST | `{"to":"<folder id>"}` — в другую папку |
+| `/folders/{id}/move-server` | POST | `{"server_id":"<subs entry id>"}` — одиночный сервер въезжает в папку |
+| `/folders/{id}/probe` | POST | опц. `{"url":"...","timeout_ms":N}` — headless «Test servers» §236 |
+
+Все write'ы принимают `?rebuild=true`.
+
+```bash
+# Создать папку + накидать серверов paste'ом
+FID=$(curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"name":"My folder"}' "$BASE/folders" | jq -r .id)
+curl -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"input":"vless://uuid@h1.example:443?security=tls#Alpha\nvless://uuid@h2.example:443?security=tls#Beta"}' \
+  "$BASE/folders/$FID/members?rebuild=true"
+# → 201 {"ok":true,"action":"folder-members-add","added":2,"folder":{...}}
+
+# Выключить члена 0, повесить личный detour на члена 1 (§237)
+curl -X PATCH -H "$HDR" -d '{"enabled":false}' "$BASE/folders/$FID/members/0"
+curl -X PATCH -H "$HDR" -d '{"detour":"jump-de"}' "$BASE/folders/$FID/members/1"
+
+# Прогнать Test servers (§236) — результаты сразу в ответе
+curl -s -X POST -H "$HDR" -d '{"timeout_ms":2000}' "$BASE/folders/$FID/probe" | \
+  jq '{summary, results: [.results[] | {index,tag,status,delay_ms}]}'
+# → {"summary":{"ok":1,"failed":1},"results":[{"index":0,"tag":"Alpha","status":"ok","delay_ms":184},...]}
+
+# Распустить папку, сохранив серверы одиночными записями
+curl -X DELETE -H "$HDR" "$BASE/folders/$FID?keep_servers=true&rebuild=true"
+```
+
+**Probe (§236):**
+- Статусы: `ok` (+`delay_ms`), `failed` (+`message`), `broken` (raw не
+  парсится), `invalid` (нода не собирается в конфиг), `not_in_config`,
+  `pending` (тест не дошёл/отменён).
+- При **остановленном** VPN поднимается отдельная headless probe-сессия —
+  тестируются ВСЕ члены (включая выключенных). При **запущенном** VPN тест
+  идёт через боевое ядро — выключенные члены не в конфиге → `not_in_config`.
+- Синхронный запрос: worst-case ~`members/6 × timeout_ms`. Папка на 60+ членов
+  с дефолтным timeout 3000мс может упереться в request-timeout сервера (30с) —
+  снижай `timeout_ms`.
+
+**Quirks:**
+- entry существует, но не папка → 409 `conflict` (не 404) — ловит путаницу
+  `/subs/{id}` vs `/folders/{id}`.
+- `PATCH .../members/{idx}` с битым `raw` → 400, старый член не трогается.
+- `move-server` принимает только одиночный `UserServer` (подписка в папку не
+  кладётся — составом владеет источник) → иначе 409.
+- `ungroup` / `delete?keep_servers=true`: личный detour члена переезжает в
+  `override_detour` одиночного сервера; папочные tag_prefix/policy не
+  наследуются.
+- URL-снапшот с недоступным URL → 502 `upstream_error` (сетевой fetch).
 
 ---
 
