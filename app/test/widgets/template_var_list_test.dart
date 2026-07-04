@@ -3,29 +3,38 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/widgets/template_var_list.dart';
+import 'package:lxbox/widgets/var_values_model.dart';
 
 /// §161 — поведение пустых required-полей в [TemplateVarListView]:
 ///  - «UI сам чинит»: пустое required с непустым default → подставляется
 ///    default при загрузке (initState) и персистится через onChanged.
 ///  - пустое required нельзя сохранить: onChanged НЕ зовётся, показан errorText.
 ///  - optional (§033 required:false) и secret — не трогаются.
+///
+/// §232 — виджет получает реактивную [VarValuesModel] (per-key подписка)
+/// вместо снапшота initialValues; хелпер сидирует модель по контракту
+/// (все vars: initial ?? default).
 
-Future<void> _pump(
+Future<VarValuesModel> _pump(
   WidgetTester tester, {
   required List<WizardVar> vars,
   required Map<String, String> initialValues,
   required void Function(String, String) onChanged,
 }) async {
+  final model = VarValuesModel({
+    for (final v in vars) v.name: initialValues[v.name] ?? v.defaultValue,
+  });
   await tester.pumpWidget(MaterialApp(
     home: Scaffold(
       body: TemplateVarListView(
         vars: vars,
-        initialValues: initialValues,
+        model: model,
         onChanged: onChanged,
       ),
     ),
   ));
   await tester.pumpAndSettle();
+  return model;
 }
 
 void main() {
@@ -110,6 +119,58 @@ void main() {
       await tester.pump();
       expect(captured['tol'], '40');
       expect(find.text('Required'), findsNothing);
+    });
+  });
+
+  // §232 — реактивная подписка: внешнее изменение модели (программное,
+  // как _applyOnChange у on_change-галки) видно в отрендеренном контроле
+  // БЕЗ пересоздания виджета. Ядро фикса «UI показывает старое».
+  group('§232 — per-key подписка на VarValuesModel', () {
+    testWidgets('внешний model.set обновляет enum-dropdown', (tester) async {
+      final model = await _pump(
+        tester,
+        vars: [
+          WizardVar(name: 'strategy', type: 'enum', defaultValue: 'prefer_ipv4',
+              options: [
+                WizardOption.fromAny('prefer_ipv4'),
+                WizardOption.fromAny('prefer_ipv6'),
+              ]),
+        ],
+        initialValues: {'strategy': 'prefer_ipv4'},
+        onChanged: (_, _) {},
+      );
+      expect(find.text('prefer_ipv4'), findsOneWidget);
+      // Программное изменение (как on_change галки ipv6).
+      model.set('strategy', 'prefer_ipv6');
+      await tester.pump();
+      expect(find.text('prefer_ipv6'), findsOneWidget);
+      expect(model.dirtyKeys, contains('strategy'));
+    });
+
+    testWidgets('внешний model.set обновляет bool-switch', (tester) async {
+      final model = await _pump(
+        tester,
+        vars: [WizardVar(name: 'flag', type: 'bool', defaultValue: 'false')],
+        initialValues: {'flag': 'false'},
+        onChanged: (_, _) {},
+      );
+      var sw = tester.widget<SwitchListTile>(find.byType(SwitchListTile));
+      expect(sw.value, isFalse);
+      model.set('flag', 'true');
+      await tester.pump();
+      sw = tester.widget<SwitchListTile>(find.byType(SwitchListTile));
+      expect(sw.value, isTrue);
+    });
+
+    test('unstage/markDirty: пустое required не доезжает до dirty', () {
+      final m = VarValuesModel({'tol': '30'});
+      m.set('tol', '50');
+      expect(m.dirtyKeys, {'tol'});
+      // §161-путь: display-only + unstage.
+      m.set('tol', '', markDirty: false);
+      m.unstage('tol');
+      expect(m.get('tol'), '');
+      expect(m.dirtyKeys, isEmpty);
     });
   });
 }

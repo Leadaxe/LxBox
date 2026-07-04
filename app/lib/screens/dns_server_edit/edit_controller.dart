@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../models/parser_config.dart' show WizardVar;
 import '../../widgets/outbound_picker.dart';
+import '../../widgets/var_values_model.dart';
 import '../dns_settings_screen/resolved_server.dart';
 
 /// §117 задача 4b — три режима формы создания/редактирования inline-сервера.
@@ -97,6 +98,14 @@ class DnsServerEditController extends ChangeNotifier {
 
   late bool _enabled;
   late Map<String, String> _varValues;
+
+  /// §232 — реактивная модель для [TemplateVarListView] (per-key подписка
+  /// полей). Persistence-истина остаётся [_varValues] (сериализуется в
+  /// `out['varValues']` только с явно заданными ключами) — модель сидируется
+  /// vars+defaults и обновляется TVLV напрямую; [setVarValue] (onChanged)
+  /// ведёт запись в [_varValues]. §161: пустое required попадает в модель
+  /// display-only и до [_varValues] не доходит.
+  late final VarValuesModel varModel;
   late Map<String, dynamic> _body;
   String? _jsonError;
   bool _disposed = false;
@@ -146,6 +155,11 @@ class DnsServerEditController extends ChangeNotifier {
     _varValues = vv is Map
         ? {for (final e in vv.entries) e.key.toString(): '${e.value}'}
         : <String, String>{};
+    // §232 — модель для TVLV: все vars с fallback на default (контракт TVLV:
+    // «отсутствующий ключ» не различим от пустого — сидируем всё).
+    varModel = VarValuesModel({
+      for (final v in vars) v.name: _varValues[v.name] ?? v.defaultValue,
+    });
     // Inline body: для существующего — resolved.body без синтезированного
     // tag'а; для new — заготовка из initialRef.
     Map<String, dynamic> body;
@@ -194,6 +208,7 @@ class DnsServerEditController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    varModel.dispose();
     tagCtrl
       ..removeListener(_onTagChanged)
       ..dispose();
