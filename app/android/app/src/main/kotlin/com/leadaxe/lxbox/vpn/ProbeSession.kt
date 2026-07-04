@@ -15,6 +15,11 @@ import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.libbox.StringIterator
 import io.nekohasekai.libbox.SystemProxyStatus
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 
 /// §236 — headless probe-сессия: ВРЕМЕННЫЙ CommandServer + конфиг БЕЗ tun,
 /// чтобы гонять `urlTestOutbound` по нодам папки, пока VPN ВЫКЛЮЧЕН.
@@ -35,6 +40,13 @@ object ProbeSession : CommandServerHandler {
     private val server = AtomicReference<CommandServer?>(null)
     private val client = AtomicReference<CommandClient?>(null)
 
+    /// §237-fix — `LocalResolver` отвечает SERVFAIL, пока
+    /// `DefaultNetworkMonitor.defaultNetwork == null`, а монитор поднимает
+    /// только боевой VPN-flow. Probe-сессия стартует его сама (и гасит только
+    /// свой — если к моменту stop VPN уже жив, монитор принадлежит ему).
+    private var probeScope: CoroutineScope? = null
+    private var monitorOwned = false
+
     val active: Boolean get() = server.get() != null
 
     /// Запуск сессии с готовым probe-конфигом (без inbound'ов). Возвращает ''
@@ -47,6 +59,12 @@ object ProbeSession : CommandServerHandler {
         }
         stopInternal()
         return runCatching {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            probeScope = scope
+            // Без монитора local-DNS (§049 F26) мертв → каждый lookup из
+            // probe-конфига падал SERVFAIL (device-репро 04.07.2026).
+            runBlocking { DefaultNetworkMonitor.start(scope) { } }
+            monitorOwned = true
             val cs = CommandServer(this, ProbePlatform)
             cs.start()
             server.set(cs)
@@ -87,6 +105,16 @@ object ProbeSession : CommandServerHandler {
             runCatching { it.close() }
             Log.d(TAG, "probe session stopped")
         }
+        if (monitorOwned) {
+            monitorOwned = false
+            // VPN мог уже перехватить монитор (start VPN глушит probe и
+            // стартует монитор сам) — гасим только пока туннеля нет.
+            if (BoxService.commandClient == null) {
+                runCatching { runBlocking { DefaultNetworkMonitor.stop() } }
+            }
+        }
+        probeScope?.cancel()
+        probeScope = null
     }
 
     // ─── CommandServerHandler (probe-инстанс) — минимальные no-op'ы ──────
