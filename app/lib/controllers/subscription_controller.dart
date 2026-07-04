@@ -1100,20 +1100,58 @@ class SubscriptionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// §237 — личный detour члена (display-form тег outbound'а; '' = нет).
-  /// Политика папки применяется к нему в builder'е (см. server_list_build).
-  Future<void> setMemberDetour(
+  /// §237/§239 — личный detour члена: для цели из СВОЕЙ папки хранится
+  /// ГОЛЫЙ тег члена (resolve при сборке — переживает смену префикса), для
+  /// внешней — display-form (§080). Отклоняет self и ребро, замыкающее
+  /// интра-цикл. Возвращает '' при успехе, иначе текст ошибки.
+  Future<String> setMemberDetour(
       int index, int memberIndex, String detour) async {
-    if (index < 0 || index >= _entries.length) return;
+    if (index < 0 || index >= _entries.length) return 'Folder not found';
     final entry = _entries[index];
     final folder = entry.list;
-    if (folder is! FolderServers) return;
-    if (memberIndex < 0 || memberIndex >= folder.members.length) return;
+    if (folder is! FolderServers) return 'Not a folder';
+    if (memberIndex < 0 || memberIndex >= folder.members.length) {
+      return 'Server not found';
+    }
+
+    if (detour.isNotEmpty) {
+      // Интра-цикл: ребро member→target замыкает петлю, если из target по
+      // существующим интра-рёбрам достижим сам member.
+      final bare = <String, int>{};
+      for (var k = 0; k < folder.members.length; k++) {
+        final t = folder.members[k].node?.tag;
+        if (t != null && t.isNotEmpty) bare.putIfAbsent(t, () => k);
+      }
+      final target = bare[detour];
+      if (target == memberIndex) {
+        return 'A server cannot detour through itself';
+      }
+      if (target != null) {
+        int? edgeOf(int k) {
+          if (k == memberIndex) return target; // новое ребро
+          final d = folder.members[k].detour;
+          if (d.isEmpty) return null;
+          final j = bare[d];
+          return (j != null && j != k) ? j : null;
+        }
+
+        final seen = <int>{};
+        int? cur = target;
+        while (cur != null && seen.add(cur)) {
+          if (cur == memberIndex) {
+            return 'This would create a detour loop inside the folder';
+          }
+          cur = edgeOf(cur);
+        }
+      }
+    }
+
     final members = [...folder.members];
     members[memberIndex] = members[memberIndex].copyWith(detour: detour);
     entry._replaceList(folder.copyWith(members: members));
     await _persist();
     notifyListeners();
+    return '';
   }
 
   /// §236 — массовый toggle членов (Disable slower than N ms и т.п.).

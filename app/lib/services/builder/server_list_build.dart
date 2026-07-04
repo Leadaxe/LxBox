@@ -15,25 +15,18 @@ extension ServerListBuild on ServerList {
   /// 4. Регистрирует entry в ctx: addEntry, selector/auto-списки по политике.
   void build(EmitContext ctx) {
     if (!enabled) return;
-    // §237 — у папки члены могут нести ЛИЧНЫЙ detour (аналог overrideDetour
-    // одиночного сервера). Политика папки применяется к нему как подписка к
-    // родной цепочке: None гасит все; Replace переписывает своим; иначе
-    // личный побеждает, а папочный append достаётся членам без личного.
-    final memberDetours = switch (this) {
-      final FolderServers f => f.nodeDetours,
+    // §237/§239 — у папки члены несут ЛИЧНЫЙ detour; интра-ссылки (на членов
+    // той же папки) резолвятся планом: цепочки внутри папки, exempt-набор
+    // папочного override, разрыв циклов, register-гейт ⚙-целей.
+    final plan = switch (this) {
+      final FolderServers f => FolderDetourPlan(f),
       _ => null,
     };
 
     for (var i = 0; i < nodes.length; i++) {
       final server = nodes[i];
-      var policy = detourPolicy;
-      final personal = memberDetours == null ? '' : memberDetours[i];
-      final folderReplaces =
-          policy.overrideDetour.isNotEmpty && policy.replaceDetourChain;
-      if (personal.isNotEmpty && policy.useDetourServers && !folderReplaces) {
-        policy = policy.copyWith(
-            overrideDetour: personal, replaceDetourChain: false);
-      }
+      final policy =
+          plan == null ? detourPolicy : plan.policyFor(i, detourPolicy);
 
       // §073: replaceMode = override + replace toggle ON. Append mode
       // (default false) keeps raw chain (skipDetour: false) и подставляет
@@ -85,7 +78,10 @@ extension ServerListBuild on ServerList {
       //     per-server политике, как обычные chained-detours. Default обе OFF →
       //     main-as-detour скрыт в selector и ✨auto, доступен только как звено.
       //   - chained-detours (raw.detours) — как раньше, по той же политике.
-      final isMainAsDetour = main.tag.startsWith(kDetourTagPrefix);
+      //   - §239 — член-цель ИНТРА-detour другого члена = звено цепочки папки:
+      //     регистрируется по тем же register-тогглам (симметрия с ⚙ подписки).
+      final isMainAsDetour = main.tag.startsWith(kDetourTagPrefix) ||
+          (plan?.isChainLink(i) ?? false);
       if (!isMainAsDetour) {
         ctx.addToSelectorTagList(main);
         ctx.addToAutoList(main);
@@ -98,5 +94,125 @@ extension ServerListBuild on ServerList {
         if (detourPolicy.registerDetourInAuto) ctx.addToAutoList(d);
       }
     }
+  }
+}
+
+/// §239 — план detour-резолюции папки. Считается один раз на build:
+///
+/// - **Интра-ссылка**: значение личного detour (или папочного override),
+///   совпадающее с ГОЛЫМ тегом другого члена → цель внутри папки; display-
+///   форма (префикс) подставляется здесь. Иначе значение трактуется как
+///   внешний display-таг (§080). Приоритет члена — папочная область ближе.
+/// - **Циклы** интра-рёбер рвутся (замыкающее ребро выбрасывается) — основной
+///   guard в контроллере (`setMemberDetour`), здесь страховка от ручного
+///   бэкапа.
+/// - **Exempt-набор**: если папочный override указывает в СВОЕГО члена X,
+///   X и всё достижимое из него по интра-рёбрам ведут себя как policy=Use
+///   (личные сохраняются, папочный не применяется) — иначе `…→X→…→X`.
+/// - **isChainLink**: член-цель чужого интра-detour (для register-гейта).
+class FolderDetourPlan {
+  FolderDetourPlan(FolderServers folder)
+      : _prefix = folder.tagPrefix,
+        _personalRaw = folder.nodeDetours {
+    final n = folder.nodes.length;
+    final bareIndex = <String, int>{};
+    for (var i = 0; i < n; i++) {
+      bareIndex.putIfAbsent(folder.nodes[i].tag, () => i);
+    }
+
+    // Интра-рёбра (self-ссылка ребром не считается → внешняя → heal §172).
+    _edge = List<int?>.filled(n, null);
+    for (var i = 0; i < n; i++) {
+      final p = _personalRaw[i];
+      if (p.isEmpty) continue;
+      final j = bareIndex[p];
+      if (j != null && j != i) _edge[i] = j;
+    }
+
+    // Разрыв циклов (DFS, замыкающее ребро выбрасывается).
+    final color = List<int>.filled(n, 0); // 0=нет, 1=в пути, 2=готов
+    void dfs(int u) {
+      color[u] = 1;
+      final v = _edge[u];
+      if (v != null) {
+        if (color[v] == 1) {
+          _edge[u] = null; // цикл — рвём здесь
+        } else if (color[v] == 0) {
+          dfs(v);
+        }
+      }
+      color[u] = 2;
+    }
+
+    for (var i = 0; i < n; i++) {
+      if (color[i] == 0) dfs(i);
+    }
+
+    _chainLinks = {
+      for (final v in _edge) ?v,
+    };
+
+    // Резолвнутые личные detour'ы: интра → display-форма; интра-кандидат с
+    // вырезанным ребром (цикл/self) → '' (не эмитим ссылку — иначе голый тег
+    // ушёл бы в конфиг dangling'ом); иначе — внешний display-таг как хранится.
+    _personalResolved = List<String>.generate(n, (i) {
+      final j = _edge[i];
+      if (j != null) return TagResolver.displayTag(_prefix, folder.nodes[j].tag);
+      final p = _personalRaw[i];
+      if (p.isNotEmpty && bareIndex.containsKey(p)) return '';
+      return p;
+    });
+
+    // Папочный override: интра-цель → display + exempt-закрытие.
+    final ov = folder.detourPolicy.overrideDetour;
+    final ovIdx = ov.isEmpty ? null : bareIndex[ov];
+    if (ovIdx != null) {
+      _overrideResolved =
+          TagResolver.displayTag(_prefix, folder.nodes[ovIdx].tag);
+      final exempt = <int>{};
+      int? cur = ovIdx;
+      while (cur != null && exempt.add(cur)) {
+        cur = _edge[cur];
+      }
+      _exempt = exempt;
+    } else {
+      _overrideResolved = ov;
+      _exempt = const <int>{};
+    }
+  }
+
+  final String _prefix;
+  final List<String> _personalRaw;
+  late final List<int?> _edge;
+  late final Set<int> _chainLinks;
+  late final List<String> _personalResolved;
+  late final String _overrideResolved;
+  late final Set<int> _exempt;
+
+  /// Член-цель чужого интра-detour → регистрируется как звено (⚙-семантика).
+  bool isChainLink(int i) => _chainLinks.contains(i);
+
+  /// Эффективная политика ноды [i] поверх папочной [base] (§237-семантика +
+  /// §239 exempt/резолюция).
+  DetourPolicy policyFor(int i, DetourPolicy base) {
+    final personal = _personalResolved[i];
+
+    if (_exempt.contains(i)) {
+      // Инфраструктура папочного override: как Use — личный сохраняется,
+      // папочный не применяется (иначе цикл через цель).
+      return base.copyWith(
+          overrideDetour: personal, replaceDetourChain: false);
+    }
+
+    final folderReplaces =
+        _overrideResolved.isNotEmpty && base.replaceDetourChain;
+    if (personal.isNotEmpty && base.useDetourServers && !folderReplaces) {
+      return base.copyWith(
+          overrideDetour: personal, replaceDetourChain: false);
+    }
+    if (_overrideResolved != base.overrideDetour) {
+      return base.copyWith(overrideDetour: _overrideResolved);
+    }
+    return base;
   }
 }

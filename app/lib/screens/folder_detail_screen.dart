@@ -11,13 +11,13 @@ import '../services/error_format.dart';
 import '../services/probe/probe_runner.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/input_helpers.dart';
-import '../services/tag_resolver.dart';
 import 'home/filter_widgets.dart';
 import 'node_settings_screen.dart';
 import 'home/node_list_presenter.dart' show protoLabel;
 import 'subscription_detail_screen/detour_mode.dart';
 import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscriptions_screen/folder_picker.dart';
+import '../widgets/detour_target_picker.dart';
 import '../widgets/reorder_grab_strip.dart';
 
 /// §234 — экран папки серверов. Зеркалит SubscriptionDetailScreen: вкладка
@@ -58,6 +58,24 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   bool _protocolsInvert = false;
 
   FolderServers get _folder => widget.entry.list as FolderServers;
+
+  /// §239 — голые теги членов, служащих интра-целью detour другого члена
+  /// (⚙-бейдж; в билдере такие регистрируются по register-тогглам).
+  Set<String> _chainLinkTags() {
+    final folder = _folder;
+    final bare = <String>{
+      for (final m in folder.members)
+        if (m.node != null) m.node!.tag,
+    };
+    final links = <String>{};
+    for (final m in folder.members) {
+      final d = m.detour;
+      if (d.isEmpty || !bare.contains(d)) continue;
+      if (d == m.node?.tag) continue; // self не считается
+      links.add(d);
+    }
+    return links;
+  }
 
   /// Индекс entry по ссылке — список мог сместиться (reorder/delete).
   int get _index => widget.controller.entries.indexOf(widget.entry);
@@ -934,6 +952,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     return _MemberTile(
       key: ValueKey('member-$i-${m.raw.hashCode}'),
       member: m,
+      isChainLink:
+          m.node != null && _chainLinkTags().contains(m.node!.tag), // §239 ⚙
       dragIndex: i,
       reorderable: reorderable,
       folderEnabled: widget.entry.enabled,
@@ -1165,9 +1185,15 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   }
 
   Widget _buildSettingsTab(ThemeData theme) {
-    final hasDetour = _folder.nodes.any((n) => n.chained != null);
+    // §237 — полное detour-радио (Use / Add+Replace / None) нужно папке не
+    // только при родных цепочках (§111-логика подписки), но и когда у членов
+    // есть ЛИЧНЫЕ detour'ы: Replace = переписать их, append = дополнить тех,
+    // у кого личного нет. Иначе Replace-тоггл недостижим.
+    final hasDetour = _folder.nodes.any((n) => n.chained != null) ||
+        _folder.members.any((m) => m.detour.isNotEmpty);
     return SubscriptionSettingsTab(
       entry: widget.entry,
+      folderMode: true, // §239 — адаптированные тексты
       hasDetour: hasDetour,
       detourMode: _detourMode,
       onTagPrefixChanged: (val) {
@@ -1223,43 +1249,17 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   }
 
   Future<void> _showOverrideDetourPicker() async {
-    // Кандидаты: ноды одиночных UserServer и ДРУГИХ папок (enabled). Свои
-    // ноды исключены — detour в собственную ноду = цикл. Display-form тег
-    // (§080 — как в subscription detail).
-    final tags = <String>[];
-    for (final e in widget.controller.entries) {
-      final list = e.list;
-      if (!list.enabled) continue;
-      if (list is UserServer ||
-          (list is FolderServers && list.id != widget.entry.id)) {
-        for (final n in list.nodes) {
-          if (n.tag.isEmpty) continue;
-          tags.add(TagResolver.displayTag(list.tagPrefix, n.tag));
-        }
-      }
-    }
-
-    if (!mounted) return;
-    final chosen = await showDialog<String>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: const Text('Override detour'),
-        children: [
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx, ''),
-            child: const Text('None (use original)'),
-          ),
-          ...tags.map((tag) => SimpleDialogOption(
-                onPressed: () => Navigator.pop(ctx, tag),
-                child: Text(tag),
-              )),
-        ],
-      ),
+    // §239 — кандидаты: «свободные» одиночки + члены СВОЕЙ папки (интра-цель
+    // хранится голым тегом; exempt-набор в билдере не даёт циклов через цель).
+    final chosen = await showDetourTargetPicker(
+      context,
+      controller: widget.controller,
+      currentFolder: _folder,
     );
-    if (chosen == null) return;
+    if (chosen == null || !mounted) return;
     setState(() {
-      widget.entry.overrideDetour = chosen;
-      if (chosen.isNotEmpty) widget.entry.useDetourServers = true;
+      widget.entry.overrideDetour = chosen.storeValue;
+      if (chosen.storeValue.isNotEmpty) widget.entry.useDetourServers = true;
     });
     unawaited(widget.controller.persistSources());
   }
@@ -1277,6 +1277,7 @@ class _MemberTile extends StatelessWidget {
     required this.onLongPress,
     required this.onTap,
     this.reorderable = true,
+    this.isChainLink = false,
     this.onProbeBadgeTap,
     this.probe,
     this.thresholds = const ProbeThresholds(),
@@ -1288,6 +1289,10 @@ class _MemberTile extends StatelessWidget {
   /// §236 UI-rework — false при активном фильтре: grab-strip скрыта (drag по
   /// индексам отфильтрованного вида ломал бы состав).
   final bool reorderable;
+
+  /// §239 — член служит интра-целью detour другого члена (⚙ как у звеньев
+  /// подписки; видимость в селекторах гейтится register-тогглами папки).
+  final bool isChainLink;
   final bool folderEnabled;
   final VoidCallback onToggle;
   final VoidCallback onLongPress;
@@ -1344,9 +1349,10 @@ class _MemberTile extends StatelessWidget {
     final node = member.node;
     final active = member.enabled && folderEnabled;
     final muted = theme.colorScheme.onSurfaceVariant;
-    final title = node == null
+    var title = node == null
         ? 'Unreadable entry'
         : (node.label.isNotEmpty ? node.label : node.tag);
+    if (isChainLink) title = '⚙ $title'; // §239 — авто-маркировка звена
     final subtitle = node == null
         ? 'Tap to edit or delete'
         : '${node.protocol.toUpperCase()} · ${node.server}:${node.port}';

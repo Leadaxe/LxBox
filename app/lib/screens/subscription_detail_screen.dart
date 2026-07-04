@@ -7,8 +7,8 @@ import '../controllers/subscription_controller.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../services/error_humanize.dart';
-import '../services/tag_resolver.dart';
 import '../services/subscription/sources.dart';
+import '../widgets/detour_target_picker.dart';
 import '../services/url_launcher.dart';
 import 'subscriptions_screen/entry_context_menu.dart' show showEditSourceDialog;
 import 'subscription_detail_screen/detour_mode.dart';
@@ -361,57 +361,18 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   }
 
   Future<void> _showOverrideDetourPicker() async {
-    // Direct-server picker: все UserServer-узлы из других entries.
-    //
-    // §080: показываем и сохраняем **display-form** тэг (`'$tagPrefix $base'`),
-    // как `server_list_build._withPrefix`. `overrideDetour` подставляется
-    // builder'ом прямо в `main.map['detour']` без prefix-трансформации —
-    // поэтому bare `n.tag` ссылался бы на несуществующий outbound когда у
-    // UserServer непустой `tag_prefix`.
-    // NB: совпадает с эмитированным tag'ом только ДО `allocateTag` de-dup
-    // (collision-suffix `-N` при коллизии prefix+name между нодами здесь не
-    // учитывается — см. §080 «Известное ограничение», редкий edge).
-    final tags = <String>[];
-    for (final e in widget.controller.entries) {
-      final list = e.list;
-      // §234 — кандидаты: одиночные UserServer и члены папок (у папки
-      // `nodes` = только включённые члены).
-      if (list is! UserServer && list is! FolderServers) continue;
-      // §080: disabled UserServer не эмитит outbounds (server_list_build:
-      // `if (!enabled) return`) → выбор его ноды как detour дал бы dangling
-      // reference. Skip.
-      if (!list.enabled) continue;
-      final prefix = list.tagPrefix;
-      for (final n in list.nodes) {
-        if (n.tag.isEmpty) continue;
-        tags.add(TagResolver.displayTag(prefix, n.tag));
-      }
-    }
-
-    if (!mounted) return;
-    final chosen = await showDialog<String>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: const Text('Override detour'),
-        children: [
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx, ''),
-            child: const Text('None (use original)'),
-          ),
-          ...tags.map((tag) => SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx, tag),
-            child: Text(tag),
-          )),
-        ],
-      ),
+    // §239 — единый пикер; для подписки кандидаты = только «свободные»
+    // одиночки (члены папок живут под политикой своей папки — чужим нельзя).
+    final chosen = await showDetourTargetPicker(
+      context,
+      controller: widget.controller,
     );
-    if (chosen == null) return;
+    if (chosen == null || !mounted) return;
     setState(() {
-      widget.entry.overrideDetour = chosen;
+      widget.entry.overrideDetour = chosen.storeValue;
       // §111: leftover useDetourServers=false (mode был None) молча гасит
-      // override в builder'е (server_list_build.dart:41 старше APPEND-ветки).
-      // Для полного UI идемпотентно — туда приходим только из mode=override.
-      if (chosen.isNotEmpty) widget.entry.useDetourServers = true;
+      // override в builder'е. Для полного UI идемпотентно.
+      if (chosen.storeValue.isNotEmpty) widget.entry.useDetourServers = true;
     });
     unawaited(widget.controller.persistSources());
   }
