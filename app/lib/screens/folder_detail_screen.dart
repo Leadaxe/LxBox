@@ -985,24 +985,6 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           Expanded(
             child: Text(info, style: TextStyle(fontSize: 12, color: muted)),
           ),
-          if (_probe.isNotEmpty && !_testing)
-            PopupMenuButton<String>(
-              tooltip: 'Test actions',
-              icon: const Icon(Icons.more_vert, size: 20),
-              onSelected: (v) {
-                if (v == 'disable_slow') unawaited(_disableSlowerThan());
-                if (v == 'delete_dead') unawaited(_deleteUnreachable());
-                if (v == 'sort') unawaited(_sortByPing());
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(
-                    value: 'disable_slow',
-                    child: Text('Disable slower than…')),
-                PopupMenuItem(
-                    value: 'delete_dead', child: Text('Delete unreachable')),
-                PopupMenuItem(value: 'sort', child: Text('Sort by ping')),
-              ],
-            ),
           // Кнопка теста — как mass-ping на главном (Icons.speed / stop),
           // long-press = настройки теста (URL/timeout + пороги шкалы).
           GestureDetector(
@@ -1054,6 +1036,24 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
               ],
             ),
           ),
+          if (_probe.isNotEmpty && !_testing)
+            PopupMenuButton<String>(
+              tooltip: 'Test actions',
+              icon: const Icon(Icons.more_vert, size: 20),
+              onSelected: (v) {
+                if (v == 'disable_slow') unawaited(_disableSlowerThan());
+                if (v == 'delete_dead') unawaited(_deleteUnreachable());
+                if (v == 'sort') unawaited(_sortByPing());
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                    value: 'disable_slow',
+                    child: Text('Disable slower than…')),
+                PopupMenuItem(
+                    value: 'delete_dead', child: Text('Delete unreachable')),
+                PopupMenuItem(value: 'sort', child: Text('Sort by ping')),
+              ],
+            ),
         ],
       ),
     );
