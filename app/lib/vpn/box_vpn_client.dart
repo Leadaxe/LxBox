@@ -555,6 +555,21 @@ class BoxVpnClient {
     return v ?? '';
   }
 
+  /// Разбивка памяти процесса приложения (native `Debug.MemoryInfo`). Ядро
+  /// sing-box живёт в этом же процессе, поэтому native heap включает его
+  /// Go-буферы. Даёт категории, которых нет в CommandClient-статусе (там —
+  /// только суммарный RSS). Все значения в байтах. `null` на ошибку/timeout —
+  /// caller рендерит fallback.
+  Future<MemoryInfo?> getMemoryInfo() async {
+    final r = await _invoke<Map<dynamic, dynamic>>(
+      _Methods.getMemoryInfo,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: null,
+    );
+    if (r == null) return null;
+    return MemoryInfo.fromMap(r);
+  }
+
   /// §207 — обобщённый pprof-снимок через встроенный libbox `PProfServer`
   /// (Способ 1): native поднимает pprof-http на loopback по требованию, GET
   /// `/debug/pprof/<pathAndQuery>`, гасит. Один сервер бесплатно отдаёт весь
@@ -798,4 +813,55 @@ class BoxVpnClient {
       return onTimeoutValue;
     }
   }
+}
+
+/// Разбивка памяти процесса приложения из native `Debug.MemoryInfo`
+/// (`getMemoryInfo`). Все поля — в байтах. Категории `summary.*` (PSS) плюс
+/// прямые счётчики native heap. Ядро sing-box в том же процессе → его память
+/// внутри [nativeHeap]/[nativeHeapAllocated].
+class MemoryInfo {
+  const MemoryInfo({
+    this.totalPss = 0,
+    this.totalSwap = 0,
+    this.javaHeap = 0,
+    this.nativeHeap = 0,
+    this.code = 0,
+    this.stack = 0,
+    this.graphics = 0,
+    this.privateOther = 0,
+    this.system = 0,
+    this.nativeHeapAllocated = 0,
+    this.nativeHeapSize = 0,
+  });
+
+  /// summary.total-pss — суммарный PSS процесса.
+  final int totalPss;
+  final int totalSwap;
+  final int javaHeap;
+  final int nativeHeap;
+  final int code;
+  final int stack;
+  final int graphics;
+  final int privateOther;
+  final int system;
+
+  /// Аллоцированный native heap (malloc) — прямой счётчик, не PSS.
+  final int nativeHeapAllocated;
+  final int nativeHeapSize;
+
+  static int _int(Object? v) => v is int ? v : (v is num ? v.toInt() : 0);
+
+  factory MemoryInfo.fromMap(Map<dynamic, dynamic> m) => MemoryInfo(
+        totalPss: _int(m['totalPss']),
+        totalSwap: _int(m['totalSwap']),
+        javaHeap: _int(m['javaHeap']),
+        nativeHeap: _int(m['nativeHeap']),
+        code: _int(m['code']),
+        stack: _int(m['stack']),
+        graphics: _int(m['graphics']),
+        privateOther: _int(m['privateOther']),
+        system: _int(m['system']),
+        nativeHeapAllocated: _int(m['nativeHeapAllocated']),
+        nativeHeapSize: _int(m['nativeHeapSize']),
+      );
 }
