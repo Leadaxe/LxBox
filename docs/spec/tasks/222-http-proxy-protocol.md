@@ -58,6 +58,11 @@ proxy-https://[user[:pass]@]host:port[?path=..&headers=..&sni=..&fp=..&alpn=..&a
 | Визард | `app/lib/screens/add_server_wizard_screen.dart` | 4-й таб `HTTP` зеркально SOCKS5: Tag (`local-http-out`), Host, Port (hint 8080), Username/Password (opt), switch **HTTPS (TLS)**, Display name. Persist как у SOCKS: rawBody = JSON outbound (tag lossless) |
 | UI-метки | `node_list_presenter.dart` | нет изменений — `'http' => 'HTTP'` уже есть |
 
+> **Update §243 (05.07.2026):** поле «Display name» из HTTP-формы (и
+> SOCKS5) удалено, Tag опционален (пусто → `local-http-out`),
+> `UserServer.name` визард пишет пустым — см.
+> `docs/spec/tasks/243-wg-import-filename-tag.md`.
+
 Тела подписок: `body_decoder` пропускает все не-комментные строки в
 `parseUri` — строки `proxy-http://` доходят без правок. Exhaustive-switch'ей
 по sealed `NodeSpec` в коде нет (полиморфные `emit`/`toUri`) — новый подтип

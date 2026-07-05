@@ -85,7 +85,12 @@ class SubscriptionEntry extends ChangeNotifier {
   static String formatAgo(DateTime dt) => _formatAgo(dt);
 
   String get displayName {
-    if (name.isNotEmpty) return name;
+    // §243 — у одиночного сервера (UserServer) поле name игнорируем:
+    // источник правды — tag/label узла (правится в Node Settings). Непустой
+    // name мог остаться от v2.11.0-импорта (писал туда имя файла) — показывать
+    // его нельзя, иначе правка tag не отражается в списке Servers. Для
+    // подписок и папок name работает как раньше.
+    if (_list is! UserServer && name.isNotEmpty) return name;
     if (url.isNotEmpty) {
       final uri = Uri.tryParse(url);
       if (uri != null && uri.host.isNotEmpty) return uri.host;

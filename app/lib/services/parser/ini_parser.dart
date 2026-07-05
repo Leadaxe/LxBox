@@ -5,8 +5,12 @@ import 'uri_parsers.dart';
 ///
 /// Обязательные поля: `[Interface].PrivateKey`, `[Peer].PublicKey`,
 /// `[Peer].Endpoint`. Остальные — опциональные с дефолтами.
-WireguardSpec? parseWireguardIni(String config) {
-  final uri = _iniToUri(config);
+///
+/// §243 — [nameHint] (имя файла при импорте `.conf`) становится фрагментом
+/// синтетического URI ⇒ tag узла. Пустой/null → прежний фолбэк `WireGuard`
+/// (вставка INI-текста из буфера).
+WireguardSpec? parseWireguardIni(String config, {String? nameHint}) {
+  final uri = _iniToUri(config, nameHint);
   if (uri == null) return null;
   final spec = parseWireguardUri(uri);
   if (spec == null) return null;
@@ -27,7 +31,7 @@ WireguardSpec? parseWireguardIni(String config) {
   );
 }
 
-String? _iniToUri(String config) {
+String? _iniToUri(String config, String? nameHint) {
   final lines = config.split(RegExp(r'\r?\n'));
   String section = '';
   String privateKey = '';
@@ -120,5 +124,10 @@ String? _iniToUri(String config) {
       .join('&');
 
   final wrappedHost = host.contains(':') && !host.startsWith('[') ? '[$host]' : host;
-  return 'wireguard://$wrappedHost:$port?$query#WireGuard';
+  // §243 — фрагмент = имя источника (имя файла), фолбэк — прежний 'WireGuard'.
+  // encodeComponent симметричен разбору (parseWireguardUri → decodeFragment →
+  // Uri.decodeComponent): пробелы/скобки/кириллица переживают round-trip.
+  final hint = nameHint?.trim() ?? '';
+  final fragment = Uri.encodeComponent(hint.isEmpty ? 'WireGuard' : hint);
+  return 'wireguard://$wrappedHost:$port?$query#$fragment';
 }
