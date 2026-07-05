@@ -66,6 +66,7 @@ class _Methods {
   static const openAppDetailsSettings = 'openAppDetailsSettings';
   static const areNotificationsEnabled = 'areNotificationsEnabled';
   static const openNotificationSettings = 'openNotificationSettings';
+  static const openVpnSettings = 'openVpnSettings';
 
   // Background mode
   static const getBackgroundMode = 'getBackgroundMode';
@@ -76,6 +77,7 @@ class _Methods {
 
   // Diagnostics / introspection
   static const getCoreVersion = 'getCoreVersion';
+  static const getMemoryInfo = 'getMemoryInfo';
 
   // Recovery actions (specs 030, 031)
   static const reloadVPN = 'reloadVPN';

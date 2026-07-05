@@ -314,5 +314,31 @@ void main() {
       expect(map['h1'], '43613244-384550127');
       expect(map['s3'], 25);
     });
+
+    // §243 — имя файла → tag; AWG-поля при этом не теряются.
+    test('awg2-INI с nameHint (имя файла) → tag = имя файла, AWG на месте',
+        () {
+      const conf = '[Interface]\n'
+          'Address = 10.8.1.25/32\n'
+          'PrivateKey = PRIV\n'
+          'Jc = 5\n'
+          'Jmin = 10\n'
+          'Jmax = 50\n'
+          'H1 = 43613244-384550127\n'
+          'I1 = <b 0x084481800001>\n'
+          '[Peer]\n'
+          'PublicKey = PUB\n'
+          'Endpoint = 64.188.69.128:44733\n';
+      final spec = parseWireguardIni(conf, nameHint: 'awg2 export (home)')!;
+      expect(spec.tag, 'awg2 export (home)');
+      final f = spec.awg!.fields;
+      expect(f['jc'], 5);
+      expect(f['h1'], '43613244-384550127');
+      expect(f['i1'], '<b 0x084481800001>');
+      // Round-trip через синтетический URI (путь рестарта) — tag и AWG живы.
+      final again = parseWireguardUri(spec.rawUri)!;
+      expect(again.tag, 'awg2 export (home)');
+      expect(again.awg!.fields['i1'], '<b 0x084481800001>');
+    });
   });
 }
