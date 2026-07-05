@@ -77,6 +77,7 @@ class _Methods {
 
   // Diagnostics / introspection
   static const getCoreVersion = 'getCoreVersion';
+  static const getMemoryInfo = 'getMemoryInfo';
 
   // Recovery actions (specs 030, 031)
   static const reloadVPN = 'reloadVPN';

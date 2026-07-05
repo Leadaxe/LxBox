@@ -805,6 +805,41 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
 
+            // Разбивка памяти процесса приложения (ядро sing-box живёт в этом
+            // же процессе — VpnService без android:process). Даёт категории,
+            // которых нет в CommandClient-статусе (там только RSS всего
+            // процесса): native heap (сюда попадают Go-буферы ядра), Dalvik/ART,
+            // graphics, code, stack, system. Значения — в байтах (Debug отдаёт
+            // KB → ×1024) для единого formatBytes на Dart-стороне. summary.*
+            // из Debug.MemoryInfo.getMemoryStat доступны с API 23.
+            "getMemoryInfo" -> {
+                try {
+                    val mi = android.os.Debug.MemoryInfo()
+                    android.os.Debug.getMemoryInfo(mi)
+                    fun stat(key: String): Long =
+                        mi.getMemoryStat(key)?.toLongOrNull()?.times(1024) ?: 0L
+                    val out = hashMapOf<String, Any>(
+                        "totalPss" to stat("summary.total-pss"),
+                        "totalSwap" to stat("summary.total-swap"),
+                        "javaHeap" to stat("summary.java-heap"),
+                        "nativeHeap" to stat("summary.native-heap"),
+                        "code" to stat("summary.code"),
+                        "stack" to stat("summary.stack"),
+                        "graphics" to stat("summary.graphics"),
+                        "privateOther" to stat("summary.private-other"),
+                        "system" to stat("summary.system"),
+                        // Аллоцированный native heap (Go-память ядра + прочая
+                        // нативка) — прямой счётчик malloc, не PSS-категория.
+                        "nativeHeapAllocated" to android.os.Debug.getNativeHeapAllocatedSize(),
+                        "nativeHeapSize" to android.os.Debug.getNativeHeapSize(),
+                    )
+                    result.success(out)
+                } catch (t: Throwable) {
+                    Log.e(TAG, "getMemoryInfo failed", t)
+                    result.error("MEMINFO_FAILED", t.message ?: t.javaClass.simpleName, null)
+                }
+            }
+
             else -> result.notImplemented()
         }
     }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/format_utils.dart';
+import 'memory_detail_sheet.dart';
 import 'overview_models.dart';
 
 /// Overview tab of StatsScreen; receives data via props on each parent refresh.
@@ -18,6 +19,9 @@ class OverviewTab extends StatefulWidget {
     required this.totalDown,
     required this.totalConns,
     required this.memory,
+    required this.goroutines,
+    required this.connectionsIn,
+    required this.connectionsOut,
     required this.byRule,
     required this.detourChain,
   });
@@ -28,6 +32,9 @@ class OverviewTab extends StatefulWidget {
   final int totalDown;
   final int totalConns;
   final int memory;
+  final int goroutines;
+  final int connectionsIn;
+  final int connectionsOut;
   final Map<String, int> byRule;
   final List<String> Function(String tag) detourChain;
 
@@ -62,8 +69,24 @@ class _OverviewTabState extends State<OverviewTab> {
               children: [
                 _totalChip(context, 'Upload', formatBytes(widget.totalUp, spaced: true), Icons.arrow_upward, cs.primary),
                 _totalChip(context, 'Download', formatBytes(widget.totalDown, spaced: true), Icons.arrow_downward, cs.tertiary),
-                _totalChip(context, 'Connections', '${widget.totalConns}', Icons.link, cs.secondary),
-                _totalChip(context, 'sing-box', formatBytes(widget.memory, spaced: true), Icons.memory, cs.secondary),
+                // Тап → вкладка Conns (индекс 1 в DefaultTabController родителя).
+                _totalChip(
+                  context, 'Connections', '${widget.totalConns}', Icons.link, cs.secondary,
+                  onTap: () => DefaultTabController.of(context).animateTo(1),
+                ),
+                // Подпись — LxBox, а не sing-box: это RSS всего процесса
+                // приложения (ядро в том же процессе), не только ядра. Тап →
+                // попап с разбивкой памяти.
+                _totalChip(
+                  context, 'LxBox', formatBytes(widget.memory, spaced: true), Icons.memory, cs.secondary,
+                  onTap: () => showMemoryDetailSheet(
+                    context,
+                    rss: widget.memory,
+                    goroutines: widget.goroutines,
+                    connectionsIn: widget.connectionsIn,
+                    connectionsOut: widget.connectionsOut,
+                  ),
+                ),
               ],
             ),
           ),
@@ -81,8 +104,16 @@ class _OverviewTabState extends State<OverviewTab> {
     );
   }
 
-  Widget _totalChip(BuildContext context, String label, String value, IconData icon, Color color) {
-    return Column(
+  Widget _totalChip(
+    BuildContext context,
+    String label,
+    String value,
+    IconData icon,
+    Color color, {
+    VoidCallback? onTap,
+  }) {
+    final chip = Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, color: color, size: 24),
         const SizedBox(height: 4),
@@ -90,8 +121,28 @@ class _OverviewTabState extends State<OverviewTab> {
           value,
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color),
         ),
-        Text(label, style: const TextStyle(fontSize: 11)),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: const TextStyle(fontSize: 11)),
+            // Affordance: интерактивные чипы помечаем стрелкой.
+            if (onTap != null) ...[
+              const SizedBox(width: 2),
+              Icon(Icons.chevron_right, size: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ],
+          ],
+        ),
       ],
+    );
+    if (onTap == null) return chip;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: chip,
+      ),
     );
   }
 

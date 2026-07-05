@@ -41,6 +41,9 @@ class _StatsScreenState extends State<StatsScreen> {
   int _totalDown = 0;
   int _totalConns = 0;
   int _memory = 0;
+  int _goroutines = 0;
+  int _connsIn = 0;
+  int _connsOut = 0;
   Map<String, int> _byRule = const {};
   bool _loading = true;
 
@@ -100,6 +103,9 @@ class _StatsScreenState extends State<StatsScreen> {
       _totalUp = s.uplinkTotal;
       _totalDown = s.downlinkTotal;
       _memory = s.memory;
+      _goroutines = s.goroutines;
+      _connsIn = s.connectionsIn;
+      _connsOut = s.connectionsOut;
     });
   }
 
@@ -281,6 +287,9 @@ class _StatsScreenState extends State<StatsScreen> {
                 totalDown: _totalDown,
                 totalConns: _totalConns,
                 memory: _memory,
+                goroutines: _goroutines,
+                connectionsIn: _connsIn,
+                connectionsOut: _connsOut,
                 byRule: _byRule,
                 detourChain: _detourChain,
               ),
