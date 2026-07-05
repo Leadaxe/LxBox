@@ -168,13 +168,11 @@ jobs:
           cache: true
 
       - name: Inject release version from tag
-        # Pre-commit hook (.githooks/pre-commit) синхронизирует pubspec на
-        # каждом commit'е, но на момент tag'а HEAD имеет `-dev.N` версию
-        # (последний dev-commit до tag). CI override'ит на чистую `X.Y.Z`.
-        # §219 — формула BUILD_NUMBER здесь `rev-list --count HEAD`; она НЕ
-        # совпадает с sync-pubspec-version.sh (`TOTAL+1`, компенсирует будущий
-        # hook-commit) и build-local-apk.sh (`count(TAG)`, пин к тегу против
-        # downgrade, §186). Три контекста — три формулы, намеренно.
+        # pubspec в репо — фиксированный placeholder `0.0.0+1`; версия
+        # вычисляется на сборке. Здесь переписываем на чистую `X.Y.Z` из тега.
+        # BUILD_NUMBER = `rev-list --count HEAD`. Отличается от build-local-apk.sh
+        # (`count(TAG)`, пин к тегу против downgrade, §186) — намеренно: локальная
+        # dev-сборка не должна обгонять релизный versionCode.
         shell: bash
         run: |
           set -euo pipefail
