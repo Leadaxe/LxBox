@@ -16,6 +16,11 @@
 # arm64 vc = РОВНО релизный (2000 + count(tag)) → `install -r` проходит в обе
 # стороны (равный vc не блокируется). versionName остаётся `-dev.<since>` —
 # в About видно что это dev-сборка, а vc не выше релиза.
+#
+# pubspec в репо — фиксированный placeholder `0.0.0+1` (версия не хранится в git,
+# git-хуков нет). Этот скрипт переписывает `version:` строку перед build'ом, а на
+# выходе (trap EXIT — даже при ошибке сборки) ВОЗВРАЩАЕТ pubspec к закоммиченному
+# состоянию через `git checkout`. Итог: сборка не оставляет diff в рабочем дереве.
 
 set -euo pipefail
 
@@ -26,6 +31,11 @@ fi
 export ANDROID_SDK_ROOT
 
 cd "$(dirname "$0")/.."
+
+# Восстанавливаем pubspec к закоммиченному placeholder'у на любом выходе, чтобы
+# вычисленная на время сборки `version:` не оставалась в рабочем дереве.
+# `git checkout` возвращает ровно то, что в HEAD (устойчиво к смене placeholder'а).
+trap 'git checkout -- app/pubspec.yaml 2>/dev/null || true' EXIT
 
 # §186 — пишем версию в pubspec с build-number, ЗАПИНЕННЫМ к последнему
 # релизному тегу (а не к HEAD-count), чтобы локальный vc не обгонял релизный.

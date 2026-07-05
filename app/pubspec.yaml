@@ -2,14 +2,17 @@ name: lxbox
 description: L×Box — Android VPN client (sing-box / libbox CommandClient).
 publish_to: 'none'
 
-version: 2.10.2-dev.1+1090
-# ↑ placeholder. Реальная версия записывается из git tag:
+version: 0.0.0+1
+# ↑ ФИКСИРОВАННЫЙ placeholder. НЕ редактируется вручную и НЕ бампится в git.
+# Реальная версия вычисляется из git-состояния В МОМЕНТ СБОРКИ и переписывает
+# эту строку прямо перед `flutter build` (файл в репо остаётся 0.0.0+1):
 #   • CI release build (.github/workflows/ci.yml → "Inject release version") —
-#     `version: ${tag#v}+${git rev-list --count HEAD}` перед `flutter build`.
+#     `version: ${tag#v}+${git rev-list --count HEAD}`.
 #   • Локальная сборка (scripts/build-local-apk.sh) — `git describe --tags --abbrev=0`
 #     для versionName и `rev-list --count <TAG>` (пин к тегу, §186 — против
-#     downgrade-блока при установке релиза) для versionCode, revert на EXIT.
-# Никогда не редактируется в репо вручную при release-flow (см. docs/RELEASE_PROCESS.md).
+#     downgrade-блока при установке релиза) для versionCode.
+# Runtime берёт версию из APK-манифеста через PackageInfo (lib/services/version_info.dart),
+# а не из этой строки — потому placeholder в git безвреден.
 
 environment:
   sdk: ^3.11.4
