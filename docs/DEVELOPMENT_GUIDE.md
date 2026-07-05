@@ -233,7 +233,7 @@ cd app && flutter build apk --release
 
 ### 4. Процесс релиза
 
-Канонический протокол релиза — [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md) (single source of truth). Кратко: версия **не правится вручную нигде** — `app/pubspec.yaml` = placeholder, а pre-commit hook + CI инжектят `versionName`/`versionCode` из git-тега (§065/§066); `static const _version` из `about_screen.dart` удалён. Модель веток develop→main→tag, обязательный post-flight merge main→develop. Все шаги, чек-лист и грабли — в RELEASE_PROCESS.md, дублировать их здесь не нужно.
+Канонический протокол релиза — [`docs/RELEASE_PROCESS.md`](RELEASE_PROCESS.md) (single source of truth). Кратко: версия **не правится вручную нигде и не хранится в git** — `app/pubspec.yaml` = фиксированный placeholder `0.0.0+1`, а `versionName`/`versionCode` вычисляются из git-тега **в момент сборки** (CI и `build-local-apk.sh` переписывают pubspec перед `flutter build`); `static const _version` из `about_screen.dart` удалён. Модель веток develop→main→tag, обязательный post-flight merge main→develop. Все шаги, чек-лист и грабли — в RELEASE_PROCESS.md, дублировать их здесь не нужно.
 
 ### 5. Версионирование
 - `pubspec.yaml`: `version: X.Y.Z+N`

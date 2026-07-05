@@ -84,28 +84,28 @@ CI (`.github/workflows/ci.yml`) триггерится на:
 новые фичи. Minor/major — только по явному решению мейнтейнера. Не додумывать
 «тут же фичи, значит minor» — по умолчанию всегда следующий patch.
 
-С v1.8.3 версия **не правится вручную нигде**:
+Версия **не правится вручную нигде** и **не хранится в git** — `app/pubspec.yaml` держит фиксированный placeholder `0.0.0+1`, а реальная версия вычисляется из git-состояния **в момент сборки**:
 
-- **`app/pubspec.yaml`** автоматически синхронизируется с git state через **pre-commit hook** (`.githooks/pre-commit` → [`scripts/sync-pubspec-version.sh`](../scripts/sync-pubspec-version.sh)). На каждом `git commit` версия пересчитывается:
-  - `versionName` = `${last_tag#v}` если HEAD на tag commit'е (clean release). Иначе `${last_tag#v}-dev.${commits_since_last_tag}` (например `1.8.2-dev.3`).
-  - `versionCode` = `git rev-list --count HEAD` + 1 (monotonic, всегда растёт).
-- **CI release** дополнительно override'ит pubspec из tag перед `flutter build` (потому что hook не triggers на `git tag`). Результат — чистая `X.Y.Z` без `-dev` суффикса в production APK.
-- **About screen / UpdateChecker** читают версию через `VersionInfo.I.version` (load из `PackageInfo.fromPlatform()` в `main()` перед `runApp`).
+- **`app/pubspec.yaml`** в репо всегда `version: 0.0.0+1` (placeholder, не бампится, не участвует в diff'ах / merge-конфликтах).
+- **CI release** переписывает pubspec из tag перед `flutter build`:
+  - `versionName` = `${tag#v}` (чистая `X.Y.Z` без `-dev` суффикса в production APK).
+  - `versionCode` = `git rev-list --count HEAD`.
+- **Локальная сборка** ([`scripts/build-local-apk.sh`](../scripts/build-local-apk.sh)) переписывает pubspec перед `flutter build`:
+  - `versionName` = `${tag#v}` на теге, иначе `${tag#v}-dev.${commits_since_tag}` (например `1.8.2-dev.3`).
+  - `versionCode`-база = `git rev-list --count <last_tag>` (пин к тегу, §186 — против downgrade-блока при установке релиза поверх dev-сборки).
+- **About screen / UpdateChecker** читают версию через `VersionInfo.I.version` (load из `PackageInfo.fromPlatform()` в `main()` перед `runApp`) — то есть из APK-манифеста, а не из pubspec-файла. Потому placeholder в git безвреден.
 - **UpdateChecker skip для `-dev` versions** — dev builds не получают snackbar «X.Y.Z available» (всегда выглядит как «обновитесь до latest»).
 
 ### Setup для нового clone
 
-```bash
-./scripts/setup-hooks.sh
-```
-
-One-shot — включает `git config core.hooksPath .githooks`. После этого все локальные commits автоматически синхронизируют pubspec.
+Ничего не требуется — версионирование целиком вычисляется на сборке (`build-local-apk.sh` / CI). Git-хуки не используются.
 
 ### История
 
 - До v1.8.2 версия дублировалась в `pubspec.yaml` + `about_screen.dart _version` const. v1.8.0 ▼: расхождение, UI показал v1.7.0. v1.8.1 hotfix + CI consistency check как guard.
 - v1.8.2 ([§065](spec/tasks/065-version-from-tag.md)): убрана hardcoded const, pubspec → placeholder, CI/local-script инжектят. Но требовался manual `scripts/build-local-apk.sh` для realistic version при dev sessions.
-- v1.8.3 ([§066](spec/tasks/066-pubspec-sync-hook.md)): pre-commit hook делает sync автоматом. Pubspec всегда in sync с git state, `flutter run` показывает realistic версию без extra шагов.
+- v1.8.3 ([§066](spec/tasks/066-pubspec-sync-hook.md)): pre-commit hook делал sync автоматом на каждый commit.
+- v2.11.x: pre-commit hook **удалён** (`.githooks/`, `setup-hooks.sh`, `sync-pubspec-version.sh`). Хук лишь бампил закоммиченный pubspec, но обе сборки (local + CI) всё равно переписывают версию перед `flutter build`, а runtime читает её из APK-манифеста — значение хука до APK не доживало. Взамен pubspec заморожен на `0.0.0+1`, версия вычисляется только на сборке. Выгода: конец «дрожанию» pubspec и merge-конфликтам по `version:`.
 
 ### 2.3. RELEASE_NOTES.md → архив
 
