@@ -66,6 +66,7 @@ class _Methods {
   static const openAppDetailsSettings = 'openAppDetailsSettings';
   static const areNotificationsEnabled = 'areNotificationsEnabled';
   static const openNotificationSettings = 'openNotificationSettings';
+  static const openVpnSettings = 'openVpnSettings';
 
   // Background mode
   static const getBackgroundMode = 'getBackgroundMode';

@@ -483,6 +483,18 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// Open system VPN settings (Settings → VPN). §241 — активный VPN там
+  /// помечен «Connected»: единственный zero-permission способ показать,
+  /// какое приложение держит VPN-слот (ownerUid чужой сети скрыт системой).
+  Future<bool> openVpnSettings() async {
+    final ok = await _invoke<bool>(
+      _Methods.openVpnSettings,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
   // ---------------------------------------------------------------------------
   // Background mode (pause/wake)
   // ---------------------------------------------------------------------------

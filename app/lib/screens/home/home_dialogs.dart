@@ -51,18 +51,31 @@ void confirmStop(
 /// устройстве уже работает VPN другого приложения. Старт нашего туннеля молча
 /// отзовёт чужой (onRevoke), поэтому спрашиваем подтверждение. Возвращает `true`
 /// при выборе Switch, `null`/`false` при отмене.
+/// §241 — кнопка «VPN settings» открывает системный экран Settings → VPN, где
+/// активный VPN помечен «Connected»: имя перехватчика Android приложению не
+/// отдаёт (ownerUid чужой сети скрыт), а там юзер видит его сам. Старт при
+/// этом не выполняется — юзер ушёл разбираться, чей туннель активен.
 Future<bool?> showForeignVpnDialog(BuildContext context) {
   return showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog.adaptive(
       title: const Text('Another VPN is active'),
       content: const Text(
-        'Another VPN app is currently running. Switch to L×Box?',
+        'Another VPN app is currently running. Switch to L×Box?\n\n'
+        'To see which app it is, open VPN settings — the active VPN '
+        'is marked as connected.',
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(false),
           child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.of(ctx).pop(false);
+            unawaited(BoxVpnClient.I.openVpnSettings());
+          },
+          child: const Text('VPN settings'),
         ),
         FilledButton(
           onPressed: () => Navigator.of(ctx).pop(true),
