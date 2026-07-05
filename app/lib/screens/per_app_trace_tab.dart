@@ -26,6 +26,7 @@ import '../services/format_utils.dart';
 import '../widgets/core_logs_hint_banner.dart';
 import 'app_picker_screen.dart';
 import 'stats_screen/profiler_filter.dart';
+import 'stats_screen/profiler_filters.dart';
 import 'stats_screen/trace_explorer.dart';
 import 'per_app_trace_tab/session_json.dart';
 import 'per_app_trace_tab/single_app_picker_screen.dart';
@@ -50,7 +51,9 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
 
   // §044/new-profiler — фильтр (типы + поиск); app-ось скрыта (target фиксирован
   // сессией). Общая модель, редактируется фильтр-окном через TraceExplorer.
-  final ProfilerFilter _filter = ProfilerFilter();
+  // §244 — фильтр session-scope (ProfilerFilters.appTab), не поле State:
+  // переживает переключение вкладок и уход со Stats-экрана. НЕ dispose'ить.
+  ProfilerFilter get _filter => ProfilerFilters.appTab;
 
   @override
   void initState() {
@@ -80,7 +83,7 @@ class _PerAppTraceTabState extends State<PerAppTraceTab> {
   void dispose() {
     TrafficProfiler.I.removeListener(_onProfilerChanged);
     _ticker?.cancel();
-    _filter.dispose();
+    // §244 — _filter НЕ диспоузим: session-объект (ProfilerFilters.appTab).
     super.dispose();
   }
 
