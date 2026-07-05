@@ -529,6 +529,15 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // если прямой action не найден OEM).
                 result.success(openNotificationSettings())
             }
+            "openVpnSettings" -> {
+                // §241 — системный экран Settings → VPN: активный VPN там
+                // помечен «Connected», юзер видит, кто держит слот. Action
+                // public с API 24 (minSdk), package в URI не нужен.
+                result.success(openSystemSettings(
+                    primaryAction = android.provider.Settings.ACTION_VPN_SETTINGS,
+                    primaryWithPackage = false,
+                ))
+            }
             "requestAddTile" -> {
                 // §032 Quick Connect. API 33+ позволяет приложению попросить
                 // систему показать prompt «Add L×Box to Quick Settings?».
