@@ -27,6 +27,7 @@ import 'live_events_tab/recording_header.dart';
 import 'live_events_tab/unattributed_banner.dart';
 import 'per_app_trace_tab/session_json.dart';
 import 'stats_screen/profiler_filter.dart';
+import 'stats_screen/profiler_filters.dart';
 import 'stats_screen/trace_explorer.dart';
 
 class LiveEventsTab extends StatefulWidget {
@@ -58,7 +59,9 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
   // §044/new-profiler — фильтр (app-ось + типы + поиск) теперь в общей модели,
   // редактируется фильтр-окном (ProfilerFilterSheet). Старый локальный
   // _appFilter/_seenApps удалён — app-выбор живёт в _filter.apps.
-  final ProfilerFilter _filter = ProfilerFilter();
+  // §244 — фильтр session-scope (ProfilerFilters.liveTab), не поле State:
+  // переживает переключение вкладок и уход со Stats-экрана. НЕ dispose'ить.
+  ProfilerFilter get _filter => ProfilerFilters.liveTab;
 
   @override
   void initState() {
@@ -174,7 +177,7 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
   void dispose() {
     _sub?.cancel();
     TrafficProfiler.I.removeListener(_onProfilerChanged);
-    _filter.dispose();
+    // §244 — _filter НЕ диспоузим: session-объект (ProfilerFilters.liveTab).
     _ticker?.cancel();
     _rebuildTimer?.cancel();
     super.dispose();
