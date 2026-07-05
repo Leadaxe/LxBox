@@ -1,5 +1,10 @@
 # 073 — Detour: append vs replace (subscription policy)
 
+> **Update §245 (05.07.2026):** toggle «Replace existing chain» заменён
+> на два явных radio-режима «Replace all» / «Fill missing» поверх того же
+> `replaceDetourChain` (только формулировки UI, семантика без изменений).
+> См. [245-detour-mode-wording.md](245-detour-mode-wording.md).
+
 | Поле | Значение |
 |------|----------|
 | Статус | Released в v1.9.0 |

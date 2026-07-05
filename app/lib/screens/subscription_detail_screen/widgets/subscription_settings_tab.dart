@@ -119,12 +119,14 @@ class SubscriptionSettingsTab extends StatelessWidget {
                 subtitle: Text(entry.overrideDetour.isEmpty
                     ? 'Append an outbound to the end of the chain'
                     : entry.replaceDetourChain
-                        ? 'Replace chain → ${entry.overrideDetour}'
-                        : 'Append → ${entry.overrideDetour}'),
+                        ? 'Replace all → ${entry.overrideDetour}'
+                        : 'Fill missing → ${entry.overrideDetour}'),
               ),
-              // Sub-tiles под «Add detour»: outbound picker + replace toggle.
-              // §073: default behaviour = APPEND (toggle OFF). Включить
-              // toggle чтобы вернуться к старому replace-поведению.
+              // Sub-tiles под «Add detour»: outbound picker + выбор режима.
+              // §073/§245: тот же bool replaceDetourChain, но вместо
+              // невнятного toggle — два явных radio-режима:
+              //   Replace all  → replaceDetourChain=true  (дропнуть цепочки)
+              //   Fill missing → replaceDetourChain=false (default, append)
               if (detourMode == DetourMode.override) ...[
                 Padding(
                   padding: const EdgeInsets.only(left: 24),
@@ -139,16 +141,36 @@ class SubscriptionSettingsTab extends StatelessWidget {
                 ),
                 Padding(
                   padding: const EdgeInsets.only(left: 24),
-                  child: SwitchListTile(
-                    title: const Text('Replace existing chain'),
-                    subtitle: const Text(
-                        'Drop the native detour chain, use only this outbound'),
-                    value: entry.replaceDetourChain,
-                    onChanged: onReplaceDetourChainChanged,
+                  child: RadioGroup<bool>(
+                    groupValue: entry.replaceDetourChain,
+                    onChanged: (v) => onReplaceDetourChainChanged(v!),
+                    child: Column(children: [
+                      RadioListTile<bool>(
+                        value: true,
+                        title: const Text('Replace all'),
+                        subtitle: Text(folderMode
+                            ? 'Drop existing detours — every member '
+                                'connects through this outbound'
+                            : 'Drop existing detours — every node '
+                                'connects through this outbound'),
+                      ),
+                      RadioListTile<bool>(
+                        value: false,
+                        title: const Text('Fill missing'),
+                        subtitle: Text(folderMode
+                            ? 'Members with their own detour keep it; '
+                                'this outbound is set only where none '
+                                'is defined'
+                            : 'Nodes with their own detour keep it; '
+                                'this outbound is set only where none '
+                                'is defined'),
+                      ),
+                    ]),
                   ),
                 ),
-                // §096 — при APPEND (Replace выкл) нативные детуры подписки
-                // сохраняются в цепочке → register-тоглы осмысленны и тут.
+                // §096 — в режиме Fill missing (append) нативные детуры
+                // подписки сохраняются в цепочке → register-тоглы
+                // осмысленны и тут.
                 if (!entry.replaceDetourChain) _registerToggles(),
               ],
               const RadioListTile<DetourMode>(
@@ -209,8 +231,9 @@ class SubscriptionSettingsTab extends StatelessWidget {
   }
 
   /// §096/§026 — register-тоглы detour-серверов. Показываются когда нативные
-  /// детуры в игре: режим **Use** ИЛИ **Add detour + APPEND** (Replace выкл).
-  /// Прячутся при REPLACE / None (нативных детуров нет — регистрировать нечего).
+  /// детуры в игре: режим **Use** ИЛИ **Add detour + Fill missing** (append).
+  /// Прячутся при Replace all / None (нативных детуров нет — регистрировать
+  /// нечего).
   /// Делают detour-сервера видимыми как ноды (selector) / в ✨auto. Флаги
   /// хранятся независимо от режима — переключение Use↔Add detour их не теряет.
   Widget _registerToggles() => Padding(
