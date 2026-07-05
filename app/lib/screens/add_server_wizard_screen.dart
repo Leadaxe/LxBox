@@ -48,28 +48,31 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     with SingleTickerProviderStateMixin, SnackHelper {
   late final TabController _tab;
 
+  // Дефолтные tag'и при пустом поле Tag (поле опционально с §243).
+  static const _kDefaultSocksTag = 'local-socks5-out';
+  static const _kDefaultHttpTag = 'local-http-out';
+
   // SOCKS5 tab controllers.
-  final _socksTag = TextEditingController(text: 'local-socks5-out');
+  //
+  // §243 — отдельного поля «Display name» (= UserServer.name) больше нет:
+  // заголовок записи в списке Servers — это tag узла (displayName игнорирует
+  // UserServer.name), поэтому поле Tag — единственный источник имени. Поле
+  // опционально: пусто → _kDefaultSocksTag. SocksSpec.label = tag для
+  // lossless serialization через JSON outbound (parseSingboxEntry читает
+  // tag, label = tag) — tag переживает рестарт через re-parse rawBody.
+  final _socksTag = TextEditingController();
   final _socksHost = TextEditingController(text: '127.0.0.1');
   final _socksPort = TextEditingController(text: '1080');
   final _socksUser = TextEditingController();
   final _socksPass = TextEditingController();
-  // §074 — «Display name» = UserServer.name (persisted натив'но, не через
-  // rawBody round-trip). SocksSpec.label = tag для lossless serialization
-  // через JSON outbound (parseSingboxEntry читает tag, label = tag).
-  // Раньше в spec'е было отдельное «label» поле в SocksSpec — но URI/JSON
-  // round-trip с `label != tag` ломал ссылки в routing rules (label
-  // derive'ит tag в URI parser, или label = tag в JSON parser).
-  final _socksName = TextEditingController();
   final _socksFormKey = GlobalKey<FormState>();
 
   // HTTP tab controllers (§222) — зеркало SOCKS5-формы + TLS switch.
-  final _httpTag = TextEditingController(text: 'local-http-out');
+  final _httpTag = TextEditingController();
   final _httpHost = TextEditingController(text: '127.0.0.1');
   final _httpPort = TextEditingController(text: '8080');
   final _httpUser = TextEditingController();
   final _httpPass = TextEditingController();
-  final _httpName = TextEditingController();
   final _httpFormKey = GlobalKey<FormState>();
   bool _httpTls = false;
 
@@ -96,13 +99,11 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     _socksPort.dispose();
     _socksUser.dispose();
     _socksPass.dispose();
-    _socksName.dispose();
     _httpTag.dispose();
     _httpHost.dispose();
     _httpPort.dispose();
     _httpUser.dispose();
     _httpPass.dispose();
-    _httpName.dispose();
     _uriCtrl.dispose();
     _jsonCtrl.dispose();
     super.dispose();
@@ -129,7 +130,9 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
 
   Future<void> _submitSocks() async {
     if (!(_socksFormKey.currentState?.validate() ?? false)) return;
-    final tag = _socksTag.text.trim();
+    // §243 — пустое поле Tag → дефолтный tag (поле опционально).
+    final tagInput = _socksTag.text.trim();
+    final tag = tagInput.isNotEmpty ? tagInput : _kDefaultSocksTag;
     final host = _socksHost.text.trim();
     // Defensive parse — validator уже отфильтровал, но int.parse бросит
     // на любой raceconditional edge. tryParse ?? 0 + дополнительная
@@ -141,7 +144,6 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     }
     final user = _socksUser.text;
     final pass = _socksPass.text;
-    final name = _socksName.text.trim();
 
     // Construct SocksSpec с label = tag — иначе round-trip ломается:
     // URI persists fragment (label) и tag re-derive'ится из fragment'а
@@ -160,10 +162,12 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     // rawBody = JSON outbound (sing-box format). UserServer.fromJson
     // re-parsит rawBody через parseSingboxEntry → tag preserved exactly.
     // Альтернатива (toUri) теряет tag в URI fragment round-trip.
+    // §243 — name всегда пуст: заголовок записи = tag узла (displayName
+    // игнорирует UserServer.name).
     final outboundJson = spec.emit(_emptyVars).map;
     final us = UserServer(
       id: newUuidV4(),
-      name: name.isNotEmpty ? name : tag,
+      name: '',
       enabled: true,
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
@@ -180,14 +184,15 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
   /// label = tag, rawBody = JSON outbound (parseSingboxEntry сохраняет tag).
   Future<void> _submitHttp() async {
     if (!(_httpFormKey.currentState?.validate() ?? false)) return;
-    final tag = _httpTag.text.trim();
+    // §243 — пустое поле Tag → дефолтный tag (поле опционально).
+    final tagInput = _httpTag.text.trim();
+    final tag = tagInput.isNotEmpty ? tagInput : _kDefaultHttpTag;
     final host = _httpHost.text.trim();
     final port = int.tryParse(_httpPort.text.trim()) ?? 0;
     if (port < 1 || port > 65535) {
       showSnack('Invalid port');
       return;
     }
-    final name = _httpName.text.trim();
 
     final spec = HttpSpec(
       id: newUuidV4(),
@@ -203,10 +208,11 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
           ? TlsSpec(enabled: true, serverName: host)
           : TlsSpec.disabled,
     );
+    // §243 — name всегда пуст: заголовок записи = tag узла.
     final outboundJson = spec.emit(_emptyVars).map;
     final us = UserServer(
       id: newUuidV4(),
-      name: name.isNotEmpty ? name : tag,
+      name: '',
       enabled: true,
       tagPrefix: '',
       detourPolicy: DetourPolicy.defaults,
@@ -321,14 +327,22 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _label('Tag'),
+            // §243 — tag = заголовок записи; поле опционально (пусто →
+            // дефолтный tag). Отдельного «Display name» больше нет.
+            _label('Tag (optional)'),
             TextFormField(
               controller: _socksTag,
-              decoration: _input('local-socks5-out').copyWith(
+              decoration: _input(_kDefaultSocksTag).copyWith(
                 suffixIcon: EmojiPickerButton(onPick: _insertSocksTagEmoji),
               ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Tag required' : null,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Shown as the server title in the Servers list. If empty, '
+              '"$_kDefaultSocksTag" is used.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
             ),
             const SizedBox(height: 12),
             _label('Host'),
@@ -365,20 +379,6 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
               decoration: _input(''),
               obscureText: true,
             ),
-            const SizedBox(height: 12),
-            _label('Display name (optional)'),
-            TextFormField(
-              controller: _socksName,
-              decoration: _input('My local proxy'),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Shown as the entry title in Subscriptions list. If empty, '
-              'tag is used as the title.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-            ),
           ],
         ),
       ),
@@ -409,14 +409,22 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _label('Tag'),
+            // §243 — tag = заголовок записи; поле опционально (пусто →
+            // дефолтный tag). Отдельного «Display name» больше нет.
+            _label('Tag (optional)'),
             TextFormField(
               controller: _httpTag,
-              decoration: _input('local-http-out').copyWith(
+              decoration: _input(_kDefaultHttpTag).copyWith(
                 suffixIcon: EmojiPickerButton(onPick: _insertHttpTagEmoji),
               ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Tag required' : null,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Shown as the server title in the Servers list. If empty, '
+              '"$_kDefaultHttpTag" is used.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
             ),
             const SizedBox(height: 12),
             _label('Host'),
@@ -462,20 +470,6 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
                   '(SNI, ALPN) can be edited later via node JSON.'),
               value: _httpTls,
               onChanged: (v) => setState(() => _httpTls = v),
-            ),
-            const SizedBox(height: 12),
-            _label('Display name (optional)'),
-            TextFormField(
-              controller: _httpName,
-              decoration: _input('My HTTP proxy'),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Shown as the entry title in Subscriptions list. If empty, '
-              'tag is used as the title.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
             ),
           ],
         ),

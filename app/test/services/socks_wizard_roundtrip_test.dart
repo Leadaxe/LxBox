@@ -18,7 +18,9 @@ import 'package:lxbox/services/parser/uri_utils.dart' show newUuidV4;
 /// читает entry['tag'] напрямую — exact round-trip.
 void main() {
   test('SocksSpec → JSON outbound → UserServer.fromJson preserves tag', () {
-    // Wizard-create симуляция: пользовательский tag + display name.
+    // Модельный round-trip: пользовательский tag + name. С §243 визард
+    // name больше не пишет (заголовок = tag), но поле в модели живо
+    // (подписки/папки) — persist-контракт UserServer.name проверяем тут.
     const userTag = 'my-socks-out';
     final spec = SocksSpec(
       id: newUuidV4(),

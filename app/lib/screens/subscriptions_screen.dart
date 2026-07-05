@@ -244,19 +244,12 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           await widget.subController.addFileSubscription(text, file.name);
       if (!asFileSub) {
         if (!mounted) return;
-        final countBefore = widget.subController.entries.length;
-        await widget.subController.addFromInput(text);
-        // §234 — имя из имени файла: свежедобавленный одиночный сервер без
-        // имени получает имя файла (displayName показывает name первым).
-        final entries = widget.subController.entries;
-        if (widget.subController.lastError.isEmpty &&
-            entries.length == countBefore + 1) {
-          final added = entries.last;
-          if (added.list is UserServer && added.name.isEmpty) {
-            await widget.subController.renameAt(entries.length - 1,
-                SubscriptionController.fileBaseName(file.name));
-          }
-        }
+        // §243 — имя файла уходит nameHint'ом: для WG/AWG `.conf` оно
+        // становится tag'ом узла (фрагмент синтетического URI). Прежний
+        // §234-renameAt в entry.name убран — displayName одиночного сервера
+        // name игнорирует, правда живёт в tag'е.
+        await widget.subController.addFromInput(text,
+            nameHint: SubscriptionController.fileBaseName(file.name));
       }
       if (widget.subController.lastError.isEmpty) {
         await _regenerateAndSave();

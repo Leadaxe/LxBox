@@ -544,7 +544,12 @@ class SubscriptionController extends ChangeNotifier {
     }
   }
 
-  Future<void> addFromInput(String input) async {
+  /// §243 — [nameHint] (имя файла без расширения при импорте из файла)
+  /// становится tag'ом узла для WG/AWG INI-ветки (фрагмент синтетического
+  /// URI, живёт в rawBody ⇒ переживает рестарт). Ветка `vpn://` hint
+  /// сознательно НЕ получает: её rawBody = оригинальная ссылка, имя
+  /// потерялось бы при ре-парсе после рестарта.
+  Future<void> addFromInput(String input, {String? nameHint}) async {
     final trimmed = input.trim();
     if (trimmed.isEmpty) return;
 
@@ -574,7 +579,7 @@ class SubscriptionController extends ChangeNotifier {
         await _persist();
         await _fetchEntry(_entries.length - 1);
       } else if (isWireGuardConfig(trimmed)) {
-        final spec = parseWireguardIni(trimmed);
+        final spec = parseWireguardIni(trimmed, nameHint: nameHint);
         if (spec == null) {
           _lastError = 'Invalid WireGuard config';
           return;
@@ -947,7 +952,9 @@ class SubscriptionController extends ChangeNotifier {
 
     List<NodeSpec> nodes;
     try {
-      nodes = parseAll(decode(input.trim()));
+      // §243 — INI-ноды получают имя файла прямо во фрагмент синтетического
+      // URI (rawUri) — фолбэк-цикл ниже до них не дойдёт (_rawHasOwnName).
+      nodes = parseAll(decode(input.trim()), nameHint: nameFallback);
     } catch (e) {
       return humanizeError(e);
     }
@@ -1584,6 +1591,9 @@ class SubscriptionController extends ChangeNotifier {
       nodes.addAll(parseAll(decoded));
     }
     final next = list.copyWith(
+      // §243 — displayName у UserServer name игнорирует (legacy v2.11.0 мог
+      // записать туда имя файла); при пересохранении затираем совсем.
+      name: '',
       rawBody: connections.join('\n'),
       nodes: nodes,
     );

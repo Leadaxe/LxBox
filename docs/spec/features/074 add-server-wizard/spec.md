@@ -157,7 +157,16 @@ label. После restart'а `tag = "My Local SOCKS"` (из label fragment), а 
 entry title в Subscriptions list. На Home node row показывается tag
 (который юзер explicitly выбрал).
 
-Регрессионный тест: `app/test/services/socks_wizard_roundtrip_test.dart`.
+> **Update §243 (05.07.2026):** поле «Display name» из форм визарда
+> **удалено** — `SubscriptionEntry.displayName` теперь игнорирует
+> `UserServer.name`, заголовок записи = tag узла. Поле Tag стало
+> опциональным (пусто → дефолтный tag `local-socks5-out`/`local-http-out`),
+> `UserServer.name` визард всегда пишет пустым. Детали и принятые
+> последствия — `docs/spec/tasks/243-wg-import-filename-tag.md`.
+
+Регрессионные тесты: `app/test/services/socks_wizard_roundtrip_test.dart`
+(модельный round-trip), `app/test/screens/add_server_wizard_test.dart`
+(§243 — формы визарда).
 
 **Tab 2 — «Paste URI»**:
 ```
