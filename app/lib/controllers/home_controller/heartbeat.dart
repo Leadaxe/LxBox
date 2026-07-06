@@ -112,6 +112,10 @@ mixin _HeartbeatMixin on ChangeNotifier {
     // (broadcast от native или heartbeat-timeout) — state в одинаковом
     // финальном виде.
     _stopCcStreams(); // §122 — гасим стримы + screenClient
+    // §251 — выборы групп протухли; последующий настоящий Stopped проглотит
+    // stale-terminal guard в _handleStatusEvent (prevTunnel уже terminal),
+    // до его clearSelected дело не дойдёт — чистим здесь.
+    SelectorInfo.I.clearSelected();
     _emit(
       _state.copyWith(
         tunnel: TunnelStatus.revoked,

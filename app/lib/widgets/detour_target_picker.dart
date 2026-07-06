@@ -5,6 +5,7 @@ import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
+import '../services/selector_info.dart';
 import '../services/tag_resolver.dart';
 
 /// §239 — выбранная цель detour-пикера.
@@ -28,14 +29,29 @@ class DetourTarget {
 /// (сырой тег). Интра-приоритет омонимов (bare-тег члена СВОЕЙ папки
 /// побеждает канал-тёзку, зеркало `FolderDetourPlan`) — забота вызывающего:
 /// он знает контекст папки, здесь только lookup по каналам.
+/// §251 — текущий выбор канала дописывается в скобках (`⚙ <label> (<node>)`),
+/// когда известен (туннель up); видно, куда сейчас поедет трафик.
 String detourChannelDisplay(String stored, List<Channel> channels) {
   if (stored.isEmpty) return stored;
   for (final c in channels) {
     if (stored == c.tag || stored == c.autoTag) {
-      return kDetourTagPrefix + c.label;
+      final selected = SelectorInfo.I.selectedOf(stored);
+      final pick = (selected != null && selected.isNotEmpty)
+          ? ' ($selected)'
+          : '';
+      return '$kDetourTagPrefix${c.label}$pick';
     }
   }
   return stored;
+}
+
+/// §251 — заголовок канала в секции Channels пикера: `⚙ <label>` + текущий
+/// выбор селектора в скобках, когда известен.
+String _channelTitle(Channel c) {
+  final selected = SelectorInfo.I.selectedOf(c.tag);
+  final pick =
+      (selected != null && selected.isNotEmpty) ? ' ($selected)' : '';
+  return '$kDetourTagPrefix${c.label}$pick';
 }
 
 /// §248 — каналы для секции Channels пикера: enabled && isDetour. Омонимия:
@@ -184,7 +200,9 @@ Future<DetourTarget?> showDetourTargetPicker(
                 ),
                 for (final c in detourChannels)
                   ListTile(
-                    title: Text(kDetourTagPrefix + c.label,
+                    // §251 — текущий выбор канала в скобках (когда туннель up
+                    // и группы известны): видно, куда СЕЙЧАС поедет трафик.
+                    title: Text(_channelTitle(c),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text(
                       'Switchable detour channel',
