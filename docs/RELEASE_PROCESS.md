@@ -170,7 +170,10 @@ gh run watch "$RUN_ID" --exit-status
 ```bash
 git checkout develop
 git fetch origin
-git merge --no-ff origin/main -m "chore: merge main (vX.Y.Z tag) back into develop"
+# ⚠ Тот же two-step quirk, что в §2.4: `merge --no-ff -m` падает с
+# «Пустое сообщение коммита» (ловили на v2.11.1) — всегда --no-commit + commit -m.
+git merge --no-ff --no-commit origin/main
+git commit -m "chore: merge main (vX.Y.Z tag) back into develop"
 git push origin develop
 
 # Проверка:

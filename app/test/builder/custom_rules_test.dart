@@ -815,4 +815,201 @@ void main() {
       expect(restored.kind, CustomRuleKind.json);
     });
   });
+
+  // §247 — resolve-опция правила: route + resolve (пара правил) /
+  // resolve-only (одно нетерминальное) / гейт по доменному матчу.
+  group('§247 resolve action', () {
+    test('inline + resolve (route mode) → ДВА правила: resolve перед route, '
+        'один tag', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'RU v4',
+          domainSuffixes: ['ru'],
+          outbound: 'direct-out',
+          resolve: const RuleResolve(strategy: 'ipv4_only'),
+        ),
+      ]);
+      expect(reg.getRules(), [
+        {'rule_set': 'RU v4', 'action': 'resolve', 'strategy': 'ipv4_only'},
+        {'rule_set': 'RU v4', 'outbound': 'direct-out'},
+      ]);
+    });
+
+    test('inline + resolve only → ОДНО нетерминальное правило без outbound',
+        () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'RU v4',
+          domainSuffixes: ['ru'],
+          outbound: 'direct-out', // в модели остаётся — билдер игнорирует
+          resolve: const RuleResolve(only: true, strategy: 'ipv4_only'),
+        ),
+      ]);
+      expect(reg.getRules(), [
+        {'rule_set': 'RU v4', 'action': 'resolve', 'strategy': 'ipv4_only'},
+      ]);
+    });
+
+    test('inline БЕЗ доменных полей + resolve в модели → resolve НЕ эмитится '
+        '(гейт resolveEligible)', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'LAN',
+          ipCidrs: ['10.0.0.0/8'],
+          outbound: 'direct-out',
+          resolve: const RuleResolve(strategy: 'ipv4_only'),
+        ),
+      ]);
+      expect(reg.getRules(), [
+        {'rule_set': 'LAN', 'outbound': 'direct-out'},
+      ], reason: 'чистый ip-матч резолвить нечего — только route');
+    });
+
+    test('srs + resolve → пара с srs-tag (srs всегда eligible)', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(
+        reg,
+        [
+          CustomRuleSrs(
+            id: 'srs-1',
+            name: 'RU srs',
+            srsUrl: 'https://ex.com/ru.srs',
+            outbound: 'vpn-1',
+            resolve: const RuleResolve(
+                strategy: 'ipv4_only', serverTag: 'yandex_udp'),
+          ),
+        ],
+        srsPaths: {'srs-1': '/cache/ru.srs'},
+      );
+      expect(reg.getRules(), [
+        {
+          'rule_set': 'RU srs',
+          'action': 'resolve',
+          'strategy': 'ipv4_only',
+          'server': 'yandex_udp',
+        },
+        {'rule_set': 'RU srs', 'outbound': 'vpn-1'},
+      ]);
+    });
+
+    test('reject + resolve → resolve перед {action: reject}', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'Block RU',
+          domainSuffixes: ['ru'],
+          outbound: kOutboundReject,
+          resolve: const RuleResolve(strategy: 'ipv4_only'),
+        ),
+      ]);
+      expect(reg.getRules(), [
+        {'rule_set': 'Block RU', 'action': 'resolve', 'strategy': 'ipv4_only'},
+        {'rule_set': 'Block RU', 'action': 'reject'},
+      ]);
+    });
+
+    test('advanced-поля: заданные эмитятся, пустые нет; routing-level '
+        'AND-поля дублируются на resolve-правило', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'Adv',
+          domainSuffixes: ['ru'],
+          protocols: ['tls'],
+          outbound: 'direct-out',
+          resolve: const RuleResolve(
+            strategy: 'ipv4_only',
+            disableCache: true,
+            rewriteTtl: 60,
+            timeout: '5s',
+            clientSubnet: '1.2.3.0/24',
+          ),
+        ),
+      ]);
+      expect(reg.getRules().first, {
+        'rule_set': 'Adv',
+        'protocol': ['tls'],
+        'action': 'resolve',
+        'strategy': 'ipv4_only',
+        'disable_cache': true,
+        'rewrite_ttl': 60,
+        'timeout': '5s',
+        'client_subnet': '1.2.3.0/24',
+      });
+      expect(reg.getRules()[1], {
+        'rule_set': 'Adv',
+        'protocol': ['tls'],
+        'outbound': 'direct-out',
+      });
+    });
+
+    test('resolve без опций → голое {action: resolve} (inherit всего)', () {
+      final reg = RuleSetRegistry();
+      applyCustomRules(reg, [
+        CustomRuleInline(
+          name: 'Bare',
+          domainSuffixes: ['ru'],
+          outbound: 'direct-out',
+          resolve: const RuleResolve(),
+        ),
+      ]);
+      expect(reg.getRules().first, {'rule_set': 'Bare', 'action': 'resolve'});
+    });
+
+    test('JSON round-trip: RuleResolve сохраняется; старые записи без '
+        'resolve → null', () {
+      final r = CustomRuleInline(
+        id: 'rt-1',
+        name: 'RT',
+        domainSuffixes: ['ru'],
+        outbound: 'direct-out',
+        resolve: const RuleResolve(
+          only: true,
+          strategy: 'ipv4_only',
+          serverTag: 'yandex_udp',
+          disableOptimisticCache: true,
+          rewriteTtl: 30,
+          timeout: '2s',
+          clientSubnet: '10.0.0.0/8',
+        ),
+      );
+      final restored =
+          CustomRule.fromJson(r.toJson()) as CustomRuleInline;
+      final rr = restored.resolve!;
+      expect(rr.only, isTrue);
+      expect(rr.strategy, 'ipv4_only');
+      expect(rr.serverTag, 'yandex_udp');
+      expect(rr.disableCache, isFalse);
+      expect(rr.disableOptimisticCache, isTrue);
+      expect(rr.rewriteTtl, 30);
+      expect(rr.timeout, '2s');
+      expect(rr.clientSubnet, '10.0.0.0/8');
+
+      // Старая запись без resolve.
+      final legacy = CustomRule.fromJson({
+        'name': 'Old',
+        'kind': 'inline',
+        'domainSuffixes': ['ru'],
+        'outbound': 'direct-out',
+      });
+      expect(legacy.resolve, isNull);
+      expect(legacy.resolveActive, isFalse);
+    });
+
+    test('resolveEligible: inline с доменами true, чистый ip false, '
+        'srs всегда true', () {
+      expect(
+        CustomRuleInline(name: 'A', domainSuffixes: ['ru']).resolveEligible,
+        isTrue,
+      );
+      expect(
+        CustomRuleInline(name: 'B', ipCidrs: ['10.0.0.0/8']).resolveEligible,
+        isFalse,
+      );
+      expect(CustomRuleSrs(name: 'C').resolveEligible, isTrue);
+    });
+  });
 }

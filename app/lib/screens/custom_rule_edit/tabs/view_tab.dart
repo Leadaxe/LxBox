@@ -46,8 +46,10 @@ class ViewTab extends StatelessWidget {
             },
             'route': {
               'rule_set': fragments.ruleSets,
-              if (fragments.routingRule != null)
-                'rules': [fragments.routingRule],
+              // §246: пресет может эмитить несколько route-правил
+              // (напр. resolve + route у ru-direct).
+              if (fragments.routingRules.isNotEmpty)
+                'rules': fragments.routingRules,
             },
           });
         }

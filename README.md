@@ -116,6 +116,7 @@ Block ads, route Russian domains directly, send BitTorrent through specific prox
 - **SRS local-only** — no auto-update, manual download via ☁ icon, rule disabled until cached
 - **Drag-reorder** + **long-press → Delete with confirm**
 - **Params / View tabs** in rule editor — View shows live sing-box config preview
+- **Action & Resolve** (v2.12.0) — gear next to the Action picker: resolve the domain before routing with a forced address family (e.g. IPv4-only for direct routes on networks without working IPv6), or advanced resolve-only mode; full sing-box resolve options (strategy, DNS server, cache, TTL, timeout, client subnet)
 - **Dirty-aware save** — unsaved back → "Discard changes?" dialog
 - Default traffic fallback (`route.final`)
 - See [spec 030](docs/spec/features/030%20custom%20routing%20rules/spec.md), [spec 011](docs/spec/features/011%20local%20ruleset%20cache/spec.md), [spec 051](docs/spec/tasks/051-custom-rule-wifi-conditions.md)

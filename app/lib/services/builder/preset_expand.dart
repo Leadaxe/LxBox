@@ -13,14 +13,17 @@ class PresetFragments {
   final List<Map<String, dynamic>> dnsServers;
   final Map<String, dynamic>? dnsRule;
   final List<Map<String, dynamic>> ruleSets;
-  final Map<String, dynamic>? routingRule;
+
+  /// Route-правила пресета в порядке шаблона (§246: `rule` может быть
+  /// массивом — напр. `[resolve ipv4_only, route]` у ru-direct).
+  final List<Map<String, dynamic>> routingRules;
   final List<String> warnings;
 
   const PresetFragments({
     this.dnsServers = const [],
     this.dnsRule,
     this.ruleSets = const [],
-    this.routingRule,
+    this.routingRules = const [],
     this.warnings = const [],
   });
 
@@ -28,8 +31,13 @@ class PresetFragments {
       dnsServers.isEmpty &&
       dnsRule == null &&
       ruleSets.isEmpty &&
-      routingRule == null;
+      routingRules.isEmpty;
 }
+
+/// §246: не-терминальные route rule actions sing-box 1.14 — правило
+/// продолжает матчинг дальше по цепочке (в отличие от route/reject/
+/// hijack-dns). Outbound-override и reject-backstop к ним не применяются.
+const _kIntermediateActions = {'resolve', 'sniff', 'route-options'};
 
 /// Результат merge всех preset-фрагментов от разных CustomRule'ов.
 class BundleMerge {
@@ -177,75 +185,99 @@ PresetFragments expandPreset(
     }
   }
 
-  Map<String, dynamic>? routingRule;
+  final routingRules = <Map<String, dynamic>>[];
   {
-    final copy = deepCopyJson(preset.rule);
-    final result = substituteVars(copy, varsMap);
-    if (result is Map<String, dynamic> &&
-        (result['outbound'] is String || result['action'] is String)) {
-      // Universal outbound override через `varsValues['outbound']` —
-      // юзер всегда может заменить template-решение любым каналом
-      // (reject → direct, direct → vpn-1, reject → vpn-2, и в обратную
-      // сторону). Template-форма (`action: reject`, hardcoded outbound,
-      // `@outbound`-placeholder) рассматривается как default; override
-      // бьёт её полностью.
-      //
-      // `varsValues['outbound']` проверяется здесь, а не пропускается
-      // через `substituteVars`, потому что preset может не иметь `@outbound`
-      // substitution (см. Block Ads: `rule: {rule_set, action: reject}`
-      // без `vars`) — но override юзера всё равно должен применяться.
-      //
-      // Семантика:
-      // - override пустой/отсутствует → template-решение as is
-      // - override == "reject" → `action: reject`, `outbound` убирается
-      //   (sing-box не принимает `outbound: "reject"` — это не tag'а)
-      // - override == любой другой tag → `outbound: <tag>`, `action` убирается
-      final override = rule.varsValues['outbound'];
-      if (override != null && override.isNotEmpty) {
-        result.remove('action');
-        result.remove('outbound');
-        if (override == 'reject') {
-          result['action'] = 'reject';
-        } else {
-          result['outbound'] = override;
-        }
+    // §246: substitute гоняется по массиву ЦЕЛИКОМ — array-element `#if`
+    // (гейт `{"and": ["@force_ipv4"]}` у resolve-правила ru-direct/ru-inside)
+    // живёт в обходе List: false без else → элемент выпадает (Dropped).
+    // Поэлементный substitute сломал бы гейт — standalone-Map `#if`
+    // мержится map-spread'ом (false → пустой Map), а не выпадает.
+    // <dynamic>: if_engine._walkList мутирует список in-place через
+    // addAll(List<dynamic>) — типизированный List<Map> тут упадёт на cast.
+    final copy = <dynamic>[for (final r in preset.rules) deepCopyJson(r)];
+    final substituted = substituteVars(copy, varsMap);
+    final expandedTags = {
+      for (final rs in expandedRuleSets) rs['tag'] as String,
+    };
+    final items = substituted is List ? substituted : const [];
+    for (final item in items) {
+      if (item is! Map<String, dynamic>) continue;
+      final result = item;
+      if (result['outbound'] is! String && result['action'] is! String) {
+        // После substitute нет ни outbound, ни action (optional-var
+        // выпал / кривой шаблон) → элемент дропается silently (§033).
+        continue;
       }
 
-      // ⚠ reject→action normalization — БЕЗУСЛОВНЫЙ backstop, НЕ удалять.
-      //
-      // `reject` в sing-box — это `action`, а НЕ outbound-tag. Правило
-      // `{outbound: "reject"}` валидатор реджектит как dangling ref
-      // (`DanglingOutboundRef`, validator.dart) → fatal → ядро не стартует.
-      //
-      // Override-ветка выше конвертит reject только когда юзер ЯВНО выбрал
-      // его в OutboundPicker (`varsValues['outbound']` проставлен). Но `reject`
-      // может прийти и template-дефолтом: пресет `unknown-traffic` имеет
-      // `rule.outbound: "@outbound"` + var.default_value: "reject". Если юзер
-      // просто включил пресет и не трогал пикер — ключа в `varsValues` нет,
-      // override == null, ветка выше пропускается, а substitute уже подставил
-      // `@outbound` → "reject" в `result['outbound']`. Без этого backstop'а
-      // литерал `outbound: "reject"` уезжал в route.rules → fatal у юзеров
-      // (см. §033 unknown-traffic). Поэтому нормализуем ФИНАЛЬНЫЙ результат
-      // независимо от того, override это или дефолт.
-      //
-      // Это инвариант билдера (контракт sing-box reject=action), а НЕ забота
-      // автора шаблона — поэтому фикс здесь, а не `#if` в wizard_template.json.
-      if (result['outbound'] == 'reject') {
-        result.remove('outbound');
-        result['action'] = 'reject';
+      // §246: промежуточные правила (resolve/sniff/route-options) не
+      // роутят — outbound-override и reject-backstop к ним не применяются
+      // (override заменил бы `action: resolve` на outbound юзера и убил
+      // семантику). Их присутствие в конфиге решает `#if`-гейт шаблона
+      // (ru-direct/ru-inside: resolve эмитится по bool-var `@force_ipv4`).
+      final isIntermediate = _kIntermediateActions.contains(result['action']);
+      if (!isIntermediate) {
+        // Universal outbound override через `varsValues['outbound']` —
+        // юзер всегда может заменить template-решение любым каналом
+        // (reject → direct, direct → vpn-1, reject → vpn-2, и в обратную
+        // сторону). Template-форма (`action: reject`, hardcoded outbound,
+        // `@outbound`-placeholder) рассматривается как default; override
+        // бьёт её полностью.
+        //
+        // `varsValues['outbound']` проверяется здесь, а не пропускается
+        // через `substituteVars`, потому что preset может не иметь `@outbound`
+        // substitution (см. Block Ads: `rule: {rule_set, action: reject}`
+        // без `vars`) — но override юзера всё равно должен применяться.
+        //
+        // Семантика:
+        // - override пустой/отсутствует → template-решение as is
+        // - override == "reject" → `action: reject`, `outbound` убирается
+        //   (sing-box не принимает `outbound: "reject"` — это не tag'а)
+        // - override == любой другой tag → `outbound: <tag>`, `action` убирается
+        final override = rule.varsValues['outbound'];
+        if (override != null && override.isNotEmpty) {
+          result.remove('action');
+          result.remove('outbound');
+          if (override == 'reject') {
+            result['action'] = 'reject';
+          } else {
+            result['outbound'] = override;
+          }
+        }
+
+        // ⚠ reject→action normalization — БЕЗУСЛОВНЫЙ backstop, НЕ удалять.
+        //
+        // `reject` в sing-box — это `action`, а НЕ outbound-tag. Правило
+        // `{outbound: "reject"}` валидатор реджектит как dangling ref
+        // (`DanglingOutboundRef`, validator.dart) → fatal → ядро не стартует.
+        //
+        // Override-ветка выше конвертит reject только когда юзер ЯВНО выбрал
+        // его в OutboundPicker (`varsValues['outbound']` проставлен). Но `reject`
+        // может прийти и template-дефолтом: пресет `unknown-traffic` имеет
+        // `rule.outbound: "@outbound"` + var.default_value: "reject". Если юзер
+        // просто включил пресет и не трогал пикер — ключа в `varsValues` нет,
+        // override == null, ветка выше пропускается, а substitute уже подставил
+        // `@outbound` → "reject" в `result['outbound']`. Без этого backstop'а
+        // литерал `outbound: "reject"` уезжал в route.rules → fatal у юзеров
+        // (см. §033 unknown-traffic). Поэтому нормализуем ФИНАЛЬНЫЙ результат
+        // независимо от того, override это или дефолт.
+        //
+        // Это инвариант билдера (контракт sing-box reject=action), а НЕ забота
+        // автора шаблона — поэтому фикс здесь, а не `#if` в wizard_template.json.
+        if (result['outbound'] == 'reject') {
+          result.remove('outbound');
+          result['action'] = 'reject';
+        }
       }
 
       // Dangling-rule_set guard (§011 + §045): если ссылка на tag, которого
       // нет в expandedRuleSets — drop правила целиком (или выкинуть его из
       // массива). Иначе sing-box упадёт: `rule-set not found: <tag>`.
+      // §246: guard поэлементный — битый элемент дропается, остальные живут.
       //
       // Поддерживаются обе формы: String (один tag) и List<String> (массив,
       // OR-семантика sing-box'а). Из массива выживший один tag даунгрейдим
       // до String — идиоматичнее.
       final refTag = result['rule_set'];
-      final expandedTags = {
-        for (final rs in expandedRuleSets) rs['tag'] as String,
-      };
       if (refTag is String && refTag.isNotEmpty) {
         if (!expandedTags.contains(refTag)) {
           warnings.add(
@@ -253,7 +285,7 @@ PresetFragments expandPreset(
             'missing rule_set "$refTag" (download SRS first)',
           );
         } else {
-          routingRule = result;
+          routingRules.add(result);
         }
       } else if (refTag is List) {
         final present = refTag
@@ -268,12 +300,12 @@ PresetFragments expandPreset(
         } else {
           // Один остался → даунгрейд до string. >1 → оставляем массив.
           result['rule_set'] = present.length == 1 ? present.first : present;
-          routingRule = result;
+          routingRules.add(result);
         }
       } else if (refTag == null) {
         // Легитимно: правило без `rule_set` матчит по другим полям
         // (domain/protocol/port/…). Оставляем как есть.
-        routingRule = result;
+        routingRules.add(result);
       } else {
         // §219 — refTag не null, но и не валидная форма: пустая String либо
         // непредусмотренный тип (int/bool/Map из кривого шаблона). Раньше
@@ -284,7 +316,7 @@ PresetFragments expandPreset(
           'preset "${preset.presetId}": routing rule rule_set has invalid '
           'value (${refTag.runtimeType}) — reference dropped',
         );
-        routingRule = result;
+        routingRules.add(result);
       }
     }
   }
@@ -307,7 +339,7 @@ PresetFragments expandPreset(
     dnsServers: dnsServers,
     dnsRule: dnsRule,
     ruleSets: expandedRuleSets,
-    routingRule: routingRule,
+    routingRules: routingRules,
     warnings: warnings,
   );
 }
@@ -361,7 +393,7 @@ BundleMerge mergeFragments(List<PresetFragments> all) {
     }
 
     if (f.dnsRule != null) dnsRules.add(f.dnsRule!);
-    if (f.routingRule != null) routingRules.add(f.routingRule!);
+    routingRules.addAll(f.routingRules); // §246: порядок внутри пресета сохранён
   }
 
   return BundleMerge(

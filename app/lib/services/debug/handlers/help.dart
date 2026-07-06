@@ -382,6 +382,10 @@ curl -H "Authorization: Bearer \$TOKEN" 'http://127.0.0.1:9269/logs?level=error,
 - Subscription URLs masked default (`scheme://host/***`); ?reveal=true for full.
 - /rules CRUD accepts snake_case (domain_suffixes, ip_cidrs, preset_id, vars_values,
   dns: {enabled, server_tag}) and returns snake_case.
+- /rules resolve option (inline/srs): resolve: {only, strategy, server_tag,
+  disable_cache, disable_optimistic_cache, rewrite_ttl, timeout, client_subnet}.
+  only=false emits a non-terminal resolve rule BEFORE the route rule; only=true
+  emits resolve without routing (fall-through). "resolve": null clears it.
 - All timestamps are ISO-8601 UTC.
 - Token stays stable until you Regenerate it in the UI — stable for curl sessions.
 ''';
@@ -558,6 +562,7 @@ const Map<String, dynamic> _capabilityJson = {
     'Emoji in URL path (✨auto etc.) — must be URL-encoded',
     'Subscription URLs masked default; ?reveal=true for full URL',
     '/rules CRUD: snake_case both ways (domain_suffixes, preset_id, vars_values, dns.server_tag)',
+    '/rules resolve option: {only, strategy, server_tag, disable_cache, disable_optimistic_cache, rewrite_ttl, timeout, client_subnet}; null clears',
     'Timestamps — ISO-8601 UTC',
     '`?rebuild=true` on /rules write → automatically rebuild-config',
   ],

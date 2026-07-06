@@ -44,6 +44,8 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         'outbound': r.outbound,
         // §117 задача 3 — DNS-опция правила (DNS follows the rule).
         if (r.dns != null) 'dns': _serializeRuleDns(r.dns!),
+        // §247 — resolve-опция (route action resolve).
+        if (r.resolve != null) 'resolve': _serializeRuleResolve(r.resolve!),
       };
     case CustomRuleSrs():
       final cachedPath = await RuleSetDownloader.cachedPath(r.id);
@@ -64,6 +66,7 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         if (r.wifiBssids.isNotEmpty) 'wifi_bssids': r.wifiBssids,
         'outbound': r.outbound,
         if (r.dns != null) 'dns': _serializeRuleDns(r.dns!),
+        if (r.resolve != null) 'resolve': _serializeRuleResolve(r.resolve!), // §247
         'srs': {
           'cached': cachedPath != null,
           'path': cachedPath,
@@ -131,6 +134,19 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
 Map<String, Object?> _serializeRuleDns(RuleDns dns) => {
       'enabled': dns.enabled,
       'server_tag': dns.serverTag,
+    };
+
+/// §247 — resolve-опция. Пустые/дефолтные поля скрываем (симметрия
+/// с conditional-эмиссией остальных полей API).
+Map<String, Object?> _serializeRuleResolve(RuleResolve r) => {
+      'only': r.only,
+      if (r.strategy.isNotEmpty) 'strategy': r.strategy,
+      if (r.serverTag.isNotEmpty) 'server_tag': r.serverTag,
+      if (r.disableCache) 'disable_cache': true,
+      if (r.disableOptimisticCache) 'disable_optimistic_cache': true,
+      if (r.rewriteTtl != null) 'rewrite_ttl': r.rewriteTtl,
+      if (r.timeout.isNotEmpty) 'timeout': r.timeout,
+      if (r.clientSubnet.isNotEmpty) 'client_subnet': r.clientSubnet,
     };
 
 Future<dynamic> _lookupPreset(String presetId) async {

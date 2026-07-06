@@ -70,13 +70,49 @@ class ParamsTab extends StatelessWidget {
         const SizedBox(height: 12),
         // §225 — у json-правила действие внутри тела, OutboundPicker скрыт.
         if (c.kind != CustomRuleKind.json) ...[
-          OutboundPicker(
-            value: c.outbound,
-            options: outboundOptions,
-            onChanged: c.setOutbound,
-            dense: false,
-            label: 'Action',
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: OutboundPicker(
+                  value: c.outbound,
+                  options: outboundOptions,
+                  onChanged: c.setOutbound,
+                  dense: false,
+                  label: 'Action',
+                ),
+              ),
+              // §247 — шестерёнка «Action & Resolve». Видна только когда
+              // правилу есть что резолвить (inline с доменами / srs).
+              if (c.resolveEligible) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Action & Resolve',
+                  icon: Icon(
+                    Icons.settings_outlined,
+                    color: c.resolve != null
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                  onPressed: actions.onOpenActionResolve,
+                ),
+              ],
+            ],
           ),
+          // §247 — inline-статус текущего режима (виден без открытия окна).
+          if (c.resolve != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6, left: 4),
+              child: Text(
+                c.resolve!.only
+                    ? '✳ Resolve only'
+                        '${c.resolve!.strategy.isNotEmpty ? ' · ${c.resolve!.strategy}' : ''}'
+                    : '✳ Resolve first'
+                        '${c.resolve!.strategy.isNotEmpty ? ' · ${c.resolve!.strategy}' : ''}',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.primary),
+              ),
+            ),
           const SizedBox(height: 16),
           const Divider(),
           AppsSection(
@@ -219,6 +255,7 @@ class ParamsTabActions {
     required this.onOpenWifiPermissions,
     required this.onShowCloudMenu,
     required this.onBoolVarFailed,
+    required this.onOpenActionResolve,
   });
 
   final VoidCallback onSave;
@@ -229,6 +266,9 @@ class ParamsTabActions {
   final VoidCallback onManualAddWifi;
   final VoidCallback onOpenWifiPermissions;
   final void Function(Offset globalPos) onShowCloudMenu;
+
+  /// §247 — открыть окно «Action & Resolve» (⚙ у Action-пикера).
+  final VoidCallback onOpenActionResolve;
 
   /// Bool-var toggle закончился ошибкой — caller показывает snackbar.
   /// Параметр — display-имя var'а ("title or name") для текста сообщения.

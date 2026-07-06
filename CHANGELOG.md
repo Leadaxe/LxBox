@@ -6,6 +6,50 @@
 
 ---
 
+## [2.12.0] — 2026-07-06
+
+### Fixed
+
+- **§246 — российские сайты не открывались при включённом IPv6** на сетях без
+  рабочего глобального IPv6: приложения получали AAAA и коннектились по IPv6,
+  RU-трафик шёл напрямую (direct) в мёртвую v6-сеть → ERR_CONNECTION_RESET.
+  Двухслойный фикс за галкой **Force IPv4** (default on) в пресетах
+  «Russian domains & IPs» / «Russia-only services»: DNS-правило пресета
+  отдаёт только A-записи + route-`resolve` со `strategy: ipv4_only` для
+  доменных соединений. IPv6 в туннеле не затронут. Device-verified.
+- **§202 — VPN не стартовал после удаления канала, на который смотрел пресет
+  с явным override**: `_healChannelRefs` не лечил `varsValues['outbound']` →
+  dangling outbound → fatal. Теперь heal kind-agnostic.
+- **§247 — битая ссылка resolve-правила на DNS-сервер** (выключенный
+  DNS-аспект пресета / удалённый сервер) валила каждое сматчившееся
+  соединение лениво («DNS server not found») — ядро не ловит это на старте,
+  валидатор не видел. Новый пост-степ `healDanglingResolveServers`: битый
+  `server` снимается с warning, резолв деградирует в DNS-роутинг.
+
+### Added
+
+- **§247 — окно «Action & Resolve»** у пользовательских inline/srs-правил
+  (шестерёнка у Action-пикера): режимы Route / Route + Resolve first /
+  Resolve only (advanced, с предупреждением), стратегия ipv4/ipv6,
+  выбор DNS-сервера, advanced-опции (cache/TTL/timeout/client subnet),
+  живой preview эмитируемых правил, значок ✳ в списке правил. Модель
+  `RuleResolve` + Debug API `/rules` поле `resolve` (strict-валидация).
+- **§246 — `rules`-массив у пресетов шаблона**: пресет эмитит несколько
+  route-правил в порядке шаблона; `#if`-гейты на элементах; override/
+  reject-backstop только терминальным (resolve/sniff/route-options —
+  промежуточные); поэлементный dangling-guard; `terminalRule` для UI.
+  E2e-тесты на реальном `wizard_template.json`.
+
+### Changed
+
+- **§249 — дефолт стратегии резолва: `ipv4_only`** (`dns_strategy` +
+  `resolve_strategy`); тумблер Enable IPv6 развязан от prefer_ipv6:
+  включение → `prefer_ipv4`, выключение → `ipv4_only` (оба направления
+  детерминированы). Ручная настройка — DNS Settings → Strategy. Миграции
+  нет: сохранённый prefer_ipv6 уходит при первом переключении тумблера.
+
+---
+
 ## [2.11.1] — 2026-07-05
 
 ### Fixed

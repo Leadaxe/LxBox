@@ -146,9 +146,13 @@ List<String> _applyPresetSingle(
     }
   }
 
-  // Routing rule — только если route-aspect активен.
-  if (routeEnabled && raw.routingRule != null) {
-    registry.addRule(raw.routingRule!);
+  // Routing rules — только если route-aspect активен. §246: пресет может
+  // эмитить несколько правил (напр. resolve + route у ru-direct) — порядок
+  // шаблона сохраняется.
+  if (routeEnabled) {
+    for (final r in raw.routingRules) {
+      registry.addRule(r);
+    }
   }
 
   // DNS аспекты — только если dns-aspect активен.
@@ -286,22 +290,44 @@ List<String> _applySrsSingle(
     'format': 'binary',
     'path': path,
   });
-  registry.addRule(_outboundToRoute(
-    tag,
-    cr.outbound,
-    ports: cr.intPorts,
-    portRanges: cr.portRanges,
-    packages: cr.packages,
-    protocols: cr.protocols,
-    ipIsPrivate: cr.ipIsPrivate,
-    // §030/new_fields — у srs нет своего headless match → source/inbound
-    // (вкл. source_ip_cidr) ВСЕ на routing-rule level.
-    sourceIpCidrs: cr.sourceIpCidrs,
-    sourceIpIsPrivate: cr.sourceIpIsPrivate,
-    inbounds: cr.inbounds,
-    wifiSsids: cr.wifiSsids,
-    wifiBssids: cr.wifiBssids,
-  ));
+  // §247 — resolve-опция: нетерминальное resolve-правило перед route (тот же
+  // srs-tag и AND-фильтры). Для srs всегда eligible — домены в `.srs` возможны
+  // (содержимое не парсим; IP-only лист просто не даст домена — безвредно).
+  if (cr.resolveActive) {
+    registry.addRule(_resolveToRoute(
+      tag,
+      cr.resolve!,
+      ports: cr.intPorts,
+      portRanges: cr.portRanges,
+      packages: cr.packages,
+      protocols: cr.protocols,
+      ipIsPrivate: cr.ipIsPrivate,
+      sourceIpCidrs: cr.sourceIpCidrs,
+      sourceIpIsPrivate: cr.sourceIpIsPrivate,
+      inbounds: cr.inbounds,
+      wifiSsids: cr.wifiSsids,
+      wifiBssids: cr.wifiBssids,
+    ));
+  }
+  // §247 resolve-only: терминальный route не эмитится (см. inline-ветку).
+  if (!(cr.resolveActive && cr.resolve!.only)) {
+    registry.addRule(_outboundToRoute(
+      tag,
+      cr.outbound,
+      ports: cr.intPorts,
+      portRanges: cr.portRanges,
+      packages: cr.packages,
+      protocols: cr.protocols,
+      ipIsPrivate: cr.ipIsPrivate,
+      // §030/new_fields — у srs нет своего headless match → source/inbound
+      // (вкл. source_ip_cidr) ВСЕ на routing-rule level.
+      sourceIpCidrs: cr.sourceIpCidrs,
+      sourceIpIsPrivate: cr.sourceIpIsPrivate,
+      inbounds: cr.inbounds,
+      wifiSsids: cr.wifiSsids,
+      wifiBssids: cr.wifiBssids,
+    ));
+  }
   if (dnsMirrors != null && cr.dnsMirrorActive) {
     final mirror = <String, dynamic>{'rule_set': tag};
     if (cr.packages.isNotEmpty) mirror['package_name'] = cr.packages;
@@ -409,18 +435,37 @@ List<String> _applyInlineSingle(
     'tag': requestedTag,
     'rules': [match],
   });
+  // §247 — resolve-опция: нетерминальное resolve-правило ПЕРЕД терминальным
+  // route (тот же матч/tag). Гейт resolveActive: только при непустой
+  // domain-группе (чистый ip/port/proto-матч резолвить нечего).
+  if (cr.resolveActive) {
+    registry.addRule(_resolveToRoute(
+      tag,
+      cr.resolve!,
+      protocols: cr.protocols,
+      ipIsPrivate: cr.ipIsPrivate,
+      sourceIpIsPrivate: cr.sourceIpIsPrivate,
+      inbounds: cr.inbounds,
+    ));
+  }
   // Protocol + ip_is_private + source_ip_is_private + inbound — на routing
   // rule level (headless их не поддерживает). `ip_is_private` становится OR
   // с rule_set (per sing-box default-rule formula). source_ip_cidr/wifi_* уже
   // в headless match выше.
-  registry.addRule(_outboundToRoute(
-    tag,
-    cr.outbound,
-    protocols: cr.protocols,
-    ipIsPrivate: cr.ipIsPrivate,
-    sourceIpIsPrivate: cr.sourceIpIsPrivate,
-    inbounds: cr.inbounds,
-  ));
+  //
+  // §247 resolve-only: терминальное route-правило НЕ эмитится — трафик
+  // проваливается к следующим правилам / route.final (осознанный advanced-
+  // выбор юзера, предупреждение показано в UI; билдер не варнит).
+  if (!(cr.resolveActive && cr.resolve!.only)) {
+    registry.addRule(_outboundToRoute(
+      tag,
+      cr.outbound,
+      protocols: cr.protocols,
+      ipIsPrivate: cr.ipIsPrivate,
+      sourceIpIsPrivate: cr.sourceIpIsPrivate,
+      inbounds: cr.inbounds,
+    ));
+  }
   addDnsMirror(tag);
   return warnings;
 }
@@ -567,6 +612,53 @@ Map<String, dynamic> _outboundToRoute(
   } else {
     rule['outbound'] = outbound;
   }
+  return rule;
+}
+
+/// §247 — нетерминальное resolve-правило (route rule action `resolve`,
+/// sing-box 1.14). Тот же матч, что у парного route-правила (переиспользует
+/// [_outboundToRoute] для всей AND-механики match-полей), но вместо
+/// outbound/reject — `action: resolve` + непустые опции [RuleResolve].
+/// Эмитится ПЕРЕД терминальным route (или вместо него при `only`).
+Map<String, dynamic> _resolveToRoute(
+  String tag,
+  RuleResolve r, {
+  List<int>? ports,
+  List<String>? portRanges,
+  List<String>? packages,
+  List<String>? protocols,
+  bool ipIsPrivate = false,
+  List<String>? sourceIpCidrs,
+  bool sourceIpIsPrivate = false,
+  List<String>? inbounds,
+  List<String>? wifiSsids,
+  List<String>? wifiBssids,
+}) {
+  final rule = _outboundToRoute(
+    tag,
+    '',
+    ports: ports,
+    portRanges: portRanges,
+    packages: packages,
+    protocols: protocols,
+    ipIsPrivate: ipIsPrivate,
+    sourceIpCidrs: sourceIpCidrs,
+    sourceIpIsPrivate: sourceIpIsPrivate,
+    inbounds: inbounds,
+    wifiSsids: wifiSsids,
+    wifiBssids: wifiBssids,
+  );
+  rule.remove('outbound');
+  rule['action'] = 'resolve';
+  // Пустое/null поле = ключ не эмитится (дефолты ядра: strategy наследует
+  // dns.strategy, server — DNS-роутинг).
+  if (r.strategy.isNotEmpty) rule['strategy'] = r.strategy;
+  if (r.serverTag.isNotEmpty) rule['server'] = r.serverTag;
+  if (r.disableCache) rule['disable_cache'] = true;
+  if (r.disableOptimisticCache) rule['disable_optimistic_cache'] = true;
+  if (r.rewriteTtl != null) rule['rewrite_ttl'] = r.rewriteTtl;
+  if (r.timeout.isNotEmpty) rule['timeout'] = r.timeout;
+  if (r.clientSubnet.isNotEmpty) rule['client_subnet'] = r.clientSubnet;
   return rule;
 }
 

@@ -282,7 +282,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         _outboundOptions = outboundOptions;
         _customRules = activeRules;
         _dnsMirrorByRuleId = dnsMirrorByRuleId;
-        _strategy = vars['dns_strategy'] ?? 'prefer_ipv4';
+        // Fallback = default_value шаблона (ipv4_only) — иначе UI покажет
+        // не то, что реально применит билдер при незаписанном var'е.
+        _strategy = vars['dns_strategy'] ?? 'ipv4_only';
         _dnsFinal = dnsFinal;
         _defaultResolver = defaultResolver;
         _loading = false;
@@ -620,7 +622,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
             title: const Text('Strategy'),
             trailing: DropdownButton<String>(
               value: ['prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only'].contains(_strategy)
-                  ? _strategy : 'prefer_ipv4',
+                  ? _strategy : 'ipv4_only',
               items: const [
                 DropdownMenuItem(value: 'prefer_ipv4', child: Text('prefer_ipv4')),
                 DropdownMenuItem(value: 'prefer_ipv6', child: Text('prefer_ipv6')),

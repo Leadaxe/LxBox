@@ -83,16 +83,18 @@ Future<void> _healChannelRefs(String deletedTag) async {
   if (routeFinal == deletedTag) {
     await SettingsStorage.saveRouteFinal('vpn-1', flush: false);
   }
-  // custom-rule outbounds (kind-aware: Inline/Srs имеют outbound; reject/direct
-  // — это outbound-значения, не channel-tag'и, под deletedTag не подпадут).
+  // custom-rule outbounds — kind-agnostic через общие `outbound`/`withOutbound`:
+  // inline/srs — поле `outbound`; preset — override `varsValues['outbound']`
+  // (§033 Expansion §5), без heal он уезжал в expandPreset dangling-тегом →
+  // fatal DanglingOutboundRef, VPN не стартует; json — '' (deletedTag всегда
+  // непустой 'vpn-N', не сматчит). reject/direct-out — не channel-tag'и, под
+  // deletedTag не подпадут. Build-time страховки для rule-outbound НЕТ
+  // (healDanglingDetours §172 чинит только detour-поля, валидатор §141 P0.1
+  // блокирует, не лечит) — storage-heal здесь единственное самолечение.
   final rules = await SettingsStorage.getCustomRules();
   var changed = false;
   final healed = rules.map((r) {
-    if (r is CustomRuleInline && r.outbound == deletedTag) {
-      changed = true;
-      return r.withOutbound('vpn-1');
-    }
-    if (r is CustomRuleSrs && r.outbound == deletedTag) {
+    if (r.outbound == deletedTag) {
       changed = true;
       return r.withOutbound('vpn-1');
     }
