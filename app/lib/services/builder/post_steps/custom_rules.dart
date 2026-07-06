@@ -52,7 +52,8 @@ class _PresetSharedState {
   final List<Map<String, dynamic>> dnsServers = [];
   final Map<String, Map<String, dynamic>> dnsServerByTag = {};
   final List<Map<String, dynamic>> dnsRules = [];
-  final Map<String, Map<String, dynamic>> dnsRulesByPresetId = {};
+  // §253: пресет может нести несколько DNS-правил (порядок шаблона).
+  final Map<String, List<Map<String, dynamic>>> dnsRulesByPresetId = {};
   final Map<String, String> labelByPresetId = {};
 
   /// §117 задача 3: упорядоченная mirror-группа DNS-правил — по одной записи
@@ -64,8 +65,10 @@ class _PresetSharedState {
 
 /// §117 задача 3: один элемент mirror-группы DNS-правил.
 ///
-/// - **preset-источник** (`presetId != null`) — `body` это готовый dns_rule
-///   пресета (server уже внутри, §033).
+/// - **preset-источник** (`presetId != null`) — `body` это одно готовое
+///   DNS-правило пресета (`server` внутри, §033; у serverless-действий
+///   `predefined`/`reject` его нет — §253). Пресет с несколькими правилами
+///   даёт несколько entries подряд (порядок шаблона).
 /// - **rule-источник** (`ruleId != null`) — `body` это DNS-безопасный матч
 ///   БЕЗ `server`; `serverTag` подставляется эмиссией ([applyCustomDns])
 ///   только если сервер дожил до финального `dns.servers` (пропавший реф —
@@ -157,15 +160,19 @@ List<String> _applyPresetSingle(
 
   // DNS аспекты — только если dns-aspect активен.
   if (dnsEnabled) {
-    if (raw.dnsRule != null) {
-      state.dnsRules.add(raw.dnsRule!);
-      state.dnsRulesByPresetId[cr.presetId] = raw.dnsRule!;
+    if (raw.dnsRules.isNotEmpty) {
+      state.dnsRules.addAll(raw.dnsRules);
+      state.dnsRulesByPresetId[cr.presetId] = raw.dnsRules;
       // §117: в mirror-группу — в позиции routing-правила (решение №6).
-      state.dnsMirrors.add(DnsMirrorEntry(
-        presetId: cr.presetId,
-        ruleName: match.label,
-        body: raw.dnsRule!,
-      ));
+      // §253: по одной записи на правило, порядок шаблона сохранён — группа
+      // эмитится подряд (mirror-эмиссия обходит список линейно).
+      for (final r in raw.dnsRules) {
+        state.dnsMirrors.add(DnsMirrorEntry(
+          presetId: cr.presetId,
+          ruleName: match.label,
+          body: r,
+        ));
+      }
     }
     for (final s in raw.dnsServers) {
       final tag = s['tag'];
@@ -199,7 +206,7 @@ List<String> _applyPresetSingle(
 class PresetApplyResult {
   final List<Map<String, dynamic>> extraDnsServers;
   final List<Map<String, dynamic>> extraDnsRules;
-  final Map<String, Map<String, dynamic>> dnsRulesByPresetId;
+  final Map<String, List<Map<String, dynamic>>> dnsRulesByPresetId;
   final Map<String, String> labelByPresetId;
   final List<String> warnings;
 
@@ -539,7 +546,7 @@ UnifiedApplyResult applyAllCustomRules(
 class UnifiedApplyResult {
   final List<Map<String, dynamic>> extraDnsServers;
   final List<Map<String, dynamic>> extraDnsRules;
-  final Map<String, Map<String, dynamic>> dnsRulesByPresetId;
+  final Map<String, List<Map<String, dynamic>>> dnsRulesByPresetId;
   final Map<String, String> labelByPresetId;
   final List<DnsMirrorEntry> dnsMirrors;
   final List<String> warnings;

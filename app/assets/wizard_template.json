@@ -650,7 +650,13 @@
         ]}]},
         {"tag": "geoip-ru", "enabled": "@geoip_enabled", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru.srs", "update_interval": "168h"}
       ],
-      "dns_rule": {"rule_set": ["ru-domains", "ru-services"], "server": "@dns_server"},
+      "dns_rules": [
+        {"#if": {"and": ["@force_ipv4"], "value": {
+          "rule_set": ["ru-domains", "ru-services"], "ip_version": 6,
+          "action": "predefined", "rcode": "NOERROR"
+        }}},
+        {"rule_set": ["ru-domains", "ru-services"], "server": "@dns_server", "action": "route"}
+      ],
       "rules": [
         {"#if": {"and": ["@force_ipv4"], "value": {"rule_set": ["ru-domains", "ru-services"], "action": "resolve", "server": "@dns_server", "strategy": "ipv4_only"}}},
         {"rule_set": ["ru-domains", "ru-services", "geoip-ru"], "outbound": "@outbound"}

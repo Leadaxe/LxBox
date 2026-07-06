@@ -155,7 +155,9 @@ wizard_template.json
         │                                           ip_cidr[]?, ip_is_private?, port[]?,
         │                                           package_name[]?, protocol[]?,
         │                                           outbound:"@var"?, action:"reject"?}
-        ├─ dns_rule                object?         DNS-уровень rule, аналогично rule
+        ├─ dns_rule                object?         DNS-уровень rule — legacy single (Map)
+        ├─ dns_rules               list?           §253: массив DNS-rules (канонический
+        │                                          ключ; побеждает `dns_rule`)
         └─ dns_servers[]           list?         DNS servers видимые когда preset enabled
                                                  (ПЛОСКИЕ sing-box-тела, shape = внутренность
                                                   `dns_options.servers[*].server`, БЕЗ обёртки;
@@ -259,7 +261,7 @@ Builder (`resolveTemplateDnsServerBody`) подставляет vars значе�
 
 ### `dns_options.rules[]` — template DNS rules (опционально)
 
-Currently empty. После [§039](./spec/tasks/039-empty-template-dns-rules.md) — намеренно пусто, юзер строит DNS-rules через preset'ы (`selectable_rules[*].dns_rule`). Если template хочет пушнуть default DNS-rule, она пойдёт сюда.
+Currently empty. После [§039](./spec/tasks/039-empty-template-dns-rules.md) — намеренно пусто, юзер строит DNS-rules через preset'ы (`selectable_rules[*].dns_rules`). Если template хочет пушнуть default DNS-rule, она пойдёт сюда.
 
 См. полный shape ref-уровня — [`STORAGE.md` § dns_options](./STORAGE.md#dns_options--§061-rules--§043043-dns--§044-servers).
 
@@ -517,7 +519,7 @@ Strategy (тумблер — разовый эффект, не форс).
   },
   "dns": {
     "servers":  [],                              // пусто; заполняется из dns_options.servers + selectable_rules[].dns_servers
-    "rules":    [],                              // пусто; заполняется из dns_options.rules + selectable_rules[].dns_rule
+    "rules":    [],                              // пусто; заполняется из dns_options.rules + selectable_rules[].dns_rules
     "final":    "@dns_final",
     "strategy": "@dns_strategy"
   },
@@ -557,7 +559,7 @@ Strategy (тумблер — разовый эффект, не форс).
 Что builder добавляет в эту базу:
 - `config.outbounds[+]` ← node-outbounds из enabled `server_lists[]`, плюс selectors/urltest из `preset_groups`
 - `config.dns.servers[+]` ← `dns_options.servers[*]` (resolved через [§044]) + `selectable_rules[*].dns_servers[*]`
-- `config.dns.rules[+]` ← `dns_options.rules[*]` ([§061]) + `selectable_rules[*].dns_rule`
+- `config.dns.rules[+]` ← `dns_options.rules[*]` ([§061]) + `selectable_rules[*].dns_rules`
 - `config.route.rules[+]` ← `selectable_rules[*].rule` (после `selectable_rules[*]` enabled-проверки) + `custom_rules[*]` user routing rules
 - `config.route.rule_set[+]` ← `selectable_rules[*].rule_set[*]` (см. § ниже)
 - `config.inbounds[*]` + route-rules `inbound` ← **декларативны через `#if`** ([§120]): `tun-in` и `mixed-in` — array-element `#if` по `@vpn_mode` (`vpn`/`proxy`/`vpn_proxy`); `users` внутри `mixed-in` — map-spread `#if` по `@proxy_auth`. `applyVpnMode` удалён. Значения (`@proxy_type`/`@proxy_port`/`@proxy_pass`/…) пробрасываются в `vars` из `VpnModeConfig` на этапе сборки. Раньше `mixed-in` строился императивно, т.к. подстановка коэрсила тип по содержимому (пароль `1234`→int); §120 ввёл coerce **по объявленному `node.type`** (`secret`/`text` — всегда строка), что и сделало `mixed-in`-в-шаблоне безопасным. `inbound` в route-rules теперь `Listable[string]`-массив (`["tun-in"]`/`["mixed-in"]`/`["tun-in","mixed-in"]`) — тождественно скаляру для sing-box.
@@ -580,17 +582,18 @@ Strategy (тумблер — разовый эффект, не форс).
   "rule_set": [ <SingboxRuleSet>, … ]?, // rule_set'ы которые должны быть зарегистрированы
   "rule":     <SingboxRoutingRule>?,    // routing rule — legacy single (Map)
   "rules":    [ <SingboxRoutingRule>, … ]?, // §246: массив routing rules (канонический ключ; побеждает `rule`)
-  "dns_rule": <SingboxDnsRule>?,        // DNS-уровень routing rule
+  "dns_rule": <SingboxDnsRule>?,        // DNS-уровень rule — legacy single (Map)
+  "dns_rules": [ <SingboxDnsRule>, … ]?, // §253: массив DNS-rules (канонический ключ; побеждает `dns_rule`)
   "dns_servers": [ <FlatDnsServer>, … ]?  // ПЛОСКИЕ sing-box DNS-тела (не обёртка §117; top-level tag)
 }
 ```
 
 ### Полевая матрица текущих 6 preset'ов
 
-| `preset_id` | `default` | `vars` | `rule_set` | `rule` | `dns_rule` | `dns_servers` |
+| `preset_id` | `default` | `vars` | `rule_set` | `rule` | `dns_rule(s)` | `dns_servers` |
 |---|---|---|---|---|---|---|
 | `block-ads` | false | — | ✓ (remote ads-all) | ✓ (action: reject) | — | — |
-| `ru-direct` | true | ✓ (outbound, dns_server, dns_ip, geoip_enabled, force_ipv4) | ✓ (inline `.ru` suffixes) | ✓ массив: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | ✓ (`@dns_server`) | ✓ (yandex_udp/doh/dot) |
+| `ru-direct` | true | ✓ (outbound, dns_server, dns_ip, geoip_enabled, force_ipv4) | ✓ (inline `.ru` suffixes) | ✓ массив: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | ✓ массив: `[predefined-NOERROR ip_version:6 #if @force_ipv4, → @dns_server]` (§253) | ✓ (yandex_udp/doh/dot) |
 | `fakeip` | false | ✓ (dns_server — **hidden**) | — | — | ✓ (`query_type: [A,AAAA]` → `@dns_server`) | ✓ (type `fakeip`, ranges 198.18/15 + fc00::/18) |
 | `ru-inside` | (false) | ✓ (outbound, force_ipv4) | ✓ (remote ru-inside) | ✓ массив: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | — | — |
 | `bittorrent` | true | ✓ (outbound) | — | ✓ (`protocol: bittorrent` → `@outbound`) | — | — |
@@ -609,13 +612,13 @@ Strategy (тумблер — разовый эффект, не форс).
 
 | Var (имя / тип) | Кто смотрит | Что делает | Пропустишь → |
 |---|---|---|---|
-| `dns_server` (`type: dns_servers`) | `preset_expand.dart` | **Селектор** какой из `dns_servers[]` пресета влить в `config.dns.servers`. Билдер эмитит РОВНО ОДИН сервер — тот, чей `tag == varsValues['dns_server']` (или `default_value`). `dns_rule.server` ссылается на него через `@dns_server`. | `dns_servers[]` **не вливается вообще** (цикл гейтится наличием этой var). `dns_rule` повиснет на несуществующий сервер → dangling → guard молча дропнет правило. Пресет ничего не делает для DNS. |
+| `dns_server` (`type: dns_servers`) | `preset_expand.dart` | **Селектор** какой из `dns_servers[]` пресета влить в `config.dns.servers`. Билдер эмитит РОВНО ОДИН сервер — тот, чей `tag == varsValues['dns_server']` (или `default_value`). `dns_rules[*].server` ссылается на него через `@dns_server`. | `dns_servers[]` **не вливается вообще** (цикл гейтится наличием этой var). DNS-правило повиснет на несуществующий сервер → dangling → guard молча дропнет правило. Пресет ничего не делает для DNS. |
 | `outbound` (`type: outbound`) | `preset_expand.dart` + Routing UI | Значение для `@outbound` в `rule`/`dns_servers.detour`. UI рисует outbound-picker в строке пресета (см. `hasOutboundAffordance`). Дефолт `"reject"` → backstop-нормализация в `action:reject`. | Нет var:outbound И нет `rule` → `hasOutboundAffordance == false` → outbound-picker в строке **не рисуется** (DNS-only пресет — роутить нечего, picker был бы мёртвым). Это корректно, а не баг. |
 
 **Правила при добавлении пресета:**
 
-1. **Пресет несёт `dns_servers[]`** → обязателен var `dns_server` (`type: dns_servers`, `default_value` = tag нужного сервера), а `dns_rule.server` = `@dns_server`. Иначе сервер не эмитится (§228). Если сервер один и выбирать не из чего (как у FakeIP) — пометь var **`wizard_ui: "hidden"`**: значение всё равно придёт из `default_value`, но мёртвый dropdown-из-одного-пункта в редакторе не рисуется. (Редактор `preset_params_tab.dart` фильтрует hidden-vars; sections тоже.)
-2. **Пресет роутит трафик** (есть `rule` с `outbound`/`action` или var:outbound) → outbound-picker в строке появится автоматически. **DNS-only пресет** (только `dns_rule`, как FakeIP) → picker сам скрывается через `hasOutboundAffordance`.
+1. **Пресет несёт `dns_servers[]`** → обязателен var `dns_server` (`type: dns_servers`, `default_value` = tag нужного сервера), а `dns_rules[*].server` = `@dns_server`. Иначе сервер не эмитится (§228). Если сервер один и выбирать не из чего (как у FakeIP) — пометь var **`wizard_ui: "hidden"`**: значение всё равно придёт из `default_value`, но мёртвый dropdown-из-одного-пункта в редакторе не рисуется. (Редактор `preset_params_tab.dart` фильтрует hidden-vars; sections тоже.)
+2. **Пресет роутит трафик** (есть `rule` с `outbound`/`action` или var:outbound) → outbound-picker в строке появится автоматически. **DNS-only пресет** (только DNS-правила, как FakeIP) → picker сам скрывается через `hasOutboundAffordance`.
 3. `outbound`-var с дефолтом `reject` → билдер сам превратит `{outbound:reject}` в `{action:reject}` (backstop, см. `unknown-traffic` выше).
 
 ### `selectable_rules[*].rule_set[i]` — sing-box rule-set definition
@@ -682,15 +685,19 @@ Strategy (тумблер — разовый эффект, не форс).
 
 Для UI outbound-picker'а дефолт берётся из **терминального** элемента (`SelectableRule.terminalRule` — последний не-промежуточный).
 
-### `selectable_rules[*].dns_rule` / `dns_servers`
+### `selectable_rules[*].dns_rule(s)` / `dns_servers`
 
-Аналогично routing rule, но для DNS pipeline. `dns_rule` — single object, направляющий matched-domains на DNS-сервер из `dns_servers[]` (или ссылку на основной `dns_options.servers[]` сервер по tag).
+Аналогично routing rule, но для DNS pipeline. Канонический ключ — `dns_rules` (массив, §253); `dns_rule` (single Map) — legacy-форма (fakeip). Элемент направляет matched-domains на DNS-сервер из `dns_servers[]` (или ссылку на основной `dns_options.servers[]` сервер по tag), либо отвечает сам serverless-действием (`predefined`/`reject` — `server` не нужен).
+
+Массивная форма поддерживает **array-element `#if`** (§246-механика): `#if` false без else → элемент выпадает из массива целиком. Пример из `ru-direct` (Force IPv4, §253): первым идёт `#if @force_ipv4`-гейт `{ip_version: 6, action: predefined, rcode: NOERROR}` (AAAA-запросы к RU-доменам получают пустой успешный ответ — приложение чисто берёт A; НЕ `reject`: он отвечает REFUSED и после 50 срабатываний/30с переходит в drop), вторым — безусловный маршрут `{server: @dns_server}`. **Порядок критичен:** гейт первым, маршрут безусловным — иначе не-A/AAAA-запросы (HTTPS type 65 и пр.) уйдут мимо `@dns_server` (`ip_version` матчит только A/AAAA; прочие типы не матчатся ни `4`, ни `6`).
+
+⚠ Легаси `strategy` в DNS-правиле **запрещён** (deprecated в ядре 1.14 и несовместим с `query_type`/`ip_version` в том же конфиге — fatal на старте; билдер снимает его heal'ом, §246). Ограничение семейства адресов — только через `ip_version`-matcher + `predefined`.
 
 ⚠ В отличие от `dns_options.servers[*]` (обёртка `{description, enabled, vars?, server}` §117), preset-`dns_servers[*]` — это **плоские sing-box-тела** (`{type, tag, detour, …}` без обёртки, tag на top-level). `preset_expand.dart` фильтрует их по top-level `s['tag']`. Пример из `ru-direct`: `{"type":"udp","tag":"yandex_udp","detour":"@outbound",…}`.
 
 ### `vars` substitution
 
-Vars, объявленные в preset'е, **видны только когда preset enabled**. UI рендерит их в Routing → preset detail. При expansion `@varname` в `rule` / `dns_rule` / `dns_servers` подставляется текущим значением (`varsValues[name]` из `CustomRulePreset` storage entry, fallback на `default_value`).
+Vars, объявленные в preset'е, **видны только когда preset enabled**. UI рендерит их в Routing → preset detail. При expansion `@varname` в `rule(s)` / `dns_rule(s)` / `dns_servers` подставляется текущим значением (`varsValues[name]` из `CustomRulePreset` storage entry, fallback на `default_value`).
 
 Универсальный `outbound`-override (spec [§033] Expansion §5): если `varsValues['outbound']` задан непустой — заменяет любое template-решение (`@outbound`-substitution / hardcoded outbound / `action: reject`).
 

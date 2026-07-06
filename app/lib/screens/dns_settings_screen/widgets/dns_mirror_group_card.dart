@@ -97,7 +97,7 @@ class DnsMirrorTile extends StatelessWidget {
   const DnsMirrorTile({
     super.key,
     required this.title,
-    required this.previewBody,
+    required this.previewBodies,
     required this.sourceKind, // 'preset' | 'rule'
     required this.enabled,
     required this.onToggle,
@@ -106,9 +106,11 @@ class DnsMirrorTile extends StatelessWidget {
 
   final String title;
 
-  /// Эмитимое DNS-rule тело (`rule_set` + `server` + package/wifi) — для
-  /// превью-подзаголовка и read-only диалога по тапу.
-  final Map<String, dynamic> previewBody;
+  /// Эмитимые DNS-rule тела (`rule_set` + `server` + package/wifi) — для
+  /// превью-подзаголовка и read-only диалога по тапу. §253: пресет может
+  /// нести несколько правил (switch тогглит блок атомарно); rule-источник
+  /// передаёт `[body]`.
+  final List<Map<String, dynamic>> previewBodies;
 
   /// `'preset'` | `'rule'` — плашка-источник + label в диалоге.
   final String sourceKind;
@@ -125,14 +127,14 @@ class DnsMirrorTile extends StatelessWidget {
     final (String badgeText, Color badgeColor) = sourceKind == 'preset'
         ? ('preset', cs.primary)
         : ('rule', cs.secondary);
-    final preview = formatRulePreview(previewBody, kind: sourceKind);
+    final preview = formatRulesPreview(previewBodies, kind: sourceKind);
     final subtitle = (note != null && note!.isNotEmpty)
         ? '$preview · $note'
         : preview;
     return Card(
       child: ListTile(
         onTap: () =>
-            showRuleBodyDialog(context, title, sourceKind, previewBody),
+            showRuleBodyDialog(context, title, sourceKind, previewBodies),
         leading: Switch(value: enabled, onChanged: onToggle),
         title: Text(
           title.isNotEmpty ? title : '(unnamed rule)',
@@ -149,7 +151,9 @@ class DnsMirrorTile extends StatelessWidget {
             color: cs.onSurfaceVariant,
             fontFamily: 'monospace',
           ),
-          maxLines: 2,
+          // §253: по 2 строки на правило — многоправильный пресет (AAAA-гейт
+          // + маршрут у ru-direct) не прячет второе правило за ellipsis'ом.
+          maxLines: previewBodies.length > 1 ? 2 * previewBodies.length : 2,
           overflow: TextOverflow.ellipsis,
         ),
         trailing: DnsBadge(badgeText, badgeColor),

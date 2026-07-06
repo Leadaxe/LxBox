@@ -242,7 +242,7 @@ List<CustomRule> renameRuleDnsServerTag(
 List<Map<String, dynamic>> cleanDnsRulesForPersist(
   List<Map<String, dynamic>> rules,
   Map<String, Map<String, dynamic>> templateRulesByName,
-  Map<String, Map<String, dynamic>> presetRulesByPresetId,
+  Map<String, List<Map<String, dynamic>>> presetRulesByPresetId,
 ) {
   return rules.where((e) {
     final kind = e['kind'] as String?;
