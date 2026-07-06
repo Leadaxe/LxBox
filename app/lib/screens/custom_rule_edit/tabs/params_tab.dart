@@ -225,6 +225,7 @@ class ParamsTab extends StatelessWidget {
             isSrs: c.kind == CustomRuleKind.srs,
             onEnabledChanged: c.setDnsEnabled,
             onServerTagChanged: c.setDnsServerTag,
+            onForceIpv4Changed: c.setForceIpv4,
           ),
         ],
         const SizedBox(height: 24),

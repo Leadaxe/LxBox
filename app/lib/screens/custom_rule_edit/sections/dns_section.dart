@@ -21,6 +21,7 @@ class DnsSection extends StatelessWidget {
     required this.isSrs,
     required this.onEnabledChanged,
     required this.onServerTagChanged,
+    required this.onForceIpv4Changed,
   });
 
   final RuleDns? dns;
@@ -35,11 +36,15 @@ class DnsSection extends StatelessWidget {
   final ValueChanged<bool> onEnabledChanged;
   final ValueChanged<String> onServerTagChanged;
 
+  /// §255 — переключение галки Force IPv4 (AAAA-глушилка).
+  final ValueChanged<bool> onForceIpv4Changed;
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     final cs = t.colorScheme;
     final enabled = dns?.enabled ?? false;
+    final forceIpv4 = dns?.forceIpv4 ?? false;
     final serverTag = dns?.serverTag ?? '';
     // Выбранный tag мог исчезнуть из списка (сервер удалён) — показываем
     // его в дропдауне, build тихо не эмитит mirror (решение №3).
@@ -107,6 +112,24 @@ class DnsSection extends StatelessWidget {
               ),
             ),
         ],
+        // §255 — Force IPv4: независимая галка (не требует dedicated-сервера;
+        // predefined отвечает локально). Тот же port/protocol-гейт.
+        CheckboxListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          visualDensity: VisualDensity.compact,
+          title: const Text('Force IPv4 (drop AAAA)',
+              style: TextStyle(fontSize: 13)),
+          subtitle: Text(
+            'Answer AAAA (IPv6) queries locally so matched traffic uses '
+            'IPv4. No DNS server required.',
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+          ),
+          value: forceIpv4,
+          onChanged:
+              gateBlocked ? null : (v) => onForceIpv4Changed(v ?? false),
+        ),
         const SizedBox(height: 8),
       ],
     );

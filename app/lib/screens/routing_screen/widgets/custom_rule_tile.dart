@@ -42,7 +42,7 @@ class CustomRuleTile extends StatelessWidget {
   /// §231 — правило вносит изменения в DNS (DNS-сервер/правило). Рисует чип
   /// «DNS» рядом с именем: глядя на список, видно, что правило связано с DNS
   /// Settings. Пресет → `SelectableRule.touchesDns`; inline/srs →
-  /// `CustomRule.dnsMirrorActive`.
+  /// `dnsMirrorActive || forceIpv4Active` (§255 — Force IPv4 тоже DNS-аспект).
   final bool touchesDns;
 
   /// ☁-кнопка статуса (SRS либо preset) — null если правилу не нужен SRS.
