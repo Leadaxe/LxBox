@@ -140,6 +140,14 @@ Future<DebugResponse> _update(
       patched['dns'] = _fieldRuleDns(body, 'dns')!.toJson();
     }
   }
+  // §247 — resolve-опция. `"resolve": null` явно очищает поле.
+  if (body.containsKey('resolve')) {
+    if (body['resolve'] == null) {
+      patched.remove('resolve');
+    } else {
+      patched['resolve'] = _fieldRuleResolve(body, 'resolve')!.toJson();
+    }
+  }
 
   final updated = CustomRule.fromJson(patched);
   rules[idx] = updated;
@@ -229,6 +237,8 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
   final inbounds = fieldStringList(j, 'inbounds') ?? const [];
   // §117 задача 3 — DNS-опция (inline/srs).
   final dns = _fieldRuleDns(j, 'dns');
+  // §247 — resolve-опция (inline/srs).
+  final resolve = _fieldRuleResolve(j, 'resolve');
 
   switch (kind) {
     case CustomRuleKind.inline:
@@ -251,6 +261,7 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         wifiBssids: wifiBssids,
         outbound: outbound,
         dns: dns,
+        resolve: resolve,
       );
     case CustomRuleKind.srs:
       return CustomRuleSrs(
@@ -269,6 +280,7 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         wifiBssids: wifiBssids,
         outbound: outbound,
         dns: dns,
+        resolve: resolve,
       );
     case CustomRuleKind.preset:
       final presetId = fieldString(j, 'preset_id') ?? '';
@@ -307,6 +319,74 @@ RuleDns? _fieldRuleDns(Map<String, dynamic> m, String key) {
   }
   return RuleDns(enabled: enabled, serverTag: tag);
 }
+
+/// §247 — resolve-опция правила. Wire shape (snake_case):
+/// `{"only": bool, "strategy": "ipv4_only", "server_tag": "...",
+///   "disable_cache": bool, "disable_optimistic_cache": bool,
+///   "rewrite_ttl": uint, "timeout": "5s", "client_subnet": "1.2.3.0/24"}`.
+/// Все поля кроме `only` опциональны. Отсутствие ключа → null (не задано).
+RuleResolve? _fieldRuleResolve(Map<String, dynamic> m, String key) {
+  if (!m.containsKey(key)) return null;
+  final v = m[key];
+  if (v is! Map) throw BadRequest('field "$key" must be object');
+  const strategies = {'prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only'};
+  final strategy = v['strategy']?.toString() ?? '';
+  if (strategy.isNotEmpty && !strategies.contains(strategy)) {
+    throw BadRequest(
+        'field "$key.strategy" must be one of ${strategies.join('/')}');
+  }
+  // Strict bools — заданный ключ обязан быть bool (паттерн _fieldRuleDns);
+  // отсутствие ключа = дефолт false.
+  bool strictBool(String name) {
+    final raw = v[name];
+    if (raw == null) return false;
+    if (raw is! bool) throw BadRequest('field "$key.$name" must be bool');
+    return raw;
+  }
+
+  // rewrite_ttl: int или числовая строка; всё прочее (включая "abc") — 400,
+  // а не тихо «не задано» (битое поле не должно молча теряться).
+  final ttlRaw = v['rewrite_ttl'];
+  final int? ttl;
+  switch (ttlRaw) {
+    case null:
+      ttl = null;
+    case final int n when n >= 0:
+      ttl = n;
+    case final String s when int.tryParse(s) != null && int.parse(s) >= 0:
+      ttl = int.parse(s);
+    default:
+      throw BadRequest(
+          'field "$key.rewrite_ttl" must be non-negative integer');
+  }
+  // timeout: duration-строка sing-box (та же проверка, что в UI-окне).
+  final timeout = v['timeout']?.toString() ?? '';
+  if (timeout.isNotEmpty && !RegExp(r'^\d+(ms|s|m|h)$').hasMatch(timeout)) {
+    throw BadRequest('field "$key.timeout" must be duration (e.g. "5s")');
+  }
+  // client_subnet: IP или CIDR — битое значение валит конфиг на старте ядра,
+  // поэтому режем на входе.
+  final subnet = v['client_subnet']?.toString() ?? '';
+  if (subnet.isNotEmpty && !_clientSubnetPattern.hasMatch(subnet)) {
+    throw BadRequest(
+        'field "$key.client_subnet" must be IP or CIDR (e.g. "1.2.3.0/24")');
+  }
+  return RuleResolve(
+    only: strictBool('only'),
+    strategy: strategy,
+    serverTag: v['server_tag']?.toString() ?? '',
+    disableCache: strictBool('disable_cache'),
+    disableOptimisticCache: strictBool('disable_optimistic_cache'),
+    rewriteTtl: ttl,
+    timeout: timeout,
+    clientSubnet: subnet,
+  );
+}
+
+/// §247 — IPv4/IPv6-адрес с опциональным /prefix (лёгкая структурная
+/// проверка; полную семантику проверит ядро).
+final RegExp _clientSubnetPattern = RegExp(
+    r'^([0-9]{1,3}(\.[0-9]{1,3}){3}|[0-9A-Fa-f:]+:[0-9A-Fa-f:]*)(/\d{1,3})?$');
 
 /// §051 — strict BSSID validation для Debug API (write-side).
 /// Принимает `xx:xx:xx:xx:xx:xx` (case-insensitive), нормализует к lower-case.

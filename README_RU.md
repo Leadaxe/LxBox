@@ -91,6 +91,7 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 - **SRS только локально** — никаких авто-обновлений, ручное скачивание через ☁, правило заблокировано пока нет кэша
 - **Drag-reorder** + **long-press → Delete с подтверждением**
 - **Params / View табы** в редакторе — View показывает готовый sing-box-фрагмент конфига
+- **Action & Resolve** (v2.12.0) — шестерёнка у Action-пикера: резолв домена перед роутингом с принудительным семейством адресов (например IPv4-only для прямых маршрутов на сетях без рабочего IPv6) или advanced-режим «только резолв»; полный набор resolve-опций sing-box (strategy, DNS-сервер, кэш, TTL, таймаут, client subnet)
 - **Dirty-aware save** — back с несохранёнными → диалог "Discard changes?"
 - Fallback для нераспознанного трафика (`route.final`)
 - См. [спека 030](docs/spec/features/030%20custom%20routing%20rules/spec.md), [спека 011](docs/spec/features/011%20local%20ruleset%20cache/spec.md)
