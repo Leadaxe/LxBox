@@ -11,6 +11,8 @@
 // снаружи`); `CcConnection.routingLineOf` и `TrafficEvent.routingLineOf` дают
 // идентичную строку (один источник chains/detours из ядра).
 
+import '../../services/selector_info.dart';
+
 /// Одна строка секции Routing: подпись + значение. Пустые `value` отсеиваются
 /// вызывающим (его row-builder возвращает null на пустую строку).
 class RoutingRow {
@@ -41,8 +43,12 @@ List<RoutingRow> routingRows({
   return [
     RoutingRow('Route', route),
     RoutingRow('Rule', rule.isNotEmpty ? rule : 'final'),
+    // Chain НЕ фолдится (§251): там выбор идёт ПЕРЕД селектором
+    // (`[node, …selectors]`) — соседней пары «селектор → его выбор» нет.
     RoutingRow('Chain', chain.join(' / ')),
-    RoutingRow('Detour', detour.join(' → ')),
+    // §251 — «селектор + его выбор» (detour-канал §248 и кого он выбрал) —
+    // одна точка пути: `селектор (выбор)`, а не два хопа через →.
+    RoutingRow('Detour', foldSelectorPairs(detour).join(' → ')),
     RoutingRow('Outbound', outbound),
     RoutingRow('Outbound type', outboundType),
   ];

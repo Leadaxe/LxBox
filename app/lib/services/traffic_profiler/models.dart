@@ -234,9 +234,11 @@ class TrafficEvent {
     // Выход во внешний мир (:): финальный node = chain[0].
     final node = outboundChain.isNotEmpty ? outboundChain.first : null;
     if (node != null) sb.write(' : $node');
-    // Снаружи (→): detour-хвост + назначение.
+    // Снаружи (→): detour-хвост + назначение. §251 — пара «селектор + его
+    // выбор» (detour-канал §248 и кого он выбрал) — одна точка пути, не два
+    // хопа: схлопываем в `селектор (выбор)`.
     final outer = <String>[];
-    outer.addAll(detourChain);
+    outer.addAll(foldSelectorPairs(detourChain));
     final dest = (domain != null && domain!.isNotEmpty)
         ? domain
         : (ip != null && ip!.isNotEmpty ? ip : null);

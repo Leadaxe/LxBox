@@ -52,6 +52,7 @@ import 'package:flutter/foundation.dart';
 import '../vpn/cc_channel.dart';
 import 'app_log.dart';
 import 'format_utils.dart'; // §181 — formatDuration в routingLine
+import 'selector_info.dart'; // §251 — fold «селектор (выбор)» в routingLine
 import 'settings_storage.dart';
 
 part 'traffic_profiler/models.dart';

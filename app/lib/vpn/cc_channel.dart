@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 
 import '../services/platform_channels.dart';
+import '../services/selector_info.dart'; // §251 — fold «селектор (выбор)»
 
 /// §122 Фаза 1a — Dart-клиент нативного libbox `CommandClient`-канала
 /// (`BoxCommandClient.kt`, Фаза 0). Замена `ClashApiClient` (HTTP-петли).
@@ -500,8 +501,10 @@ class CcConnection {
         ? chains.first
         : (outbound.isNotEmpty ? outbound : null);
     if (node != null) sb.write(' : $node');
-    // Снаружи (→): detour-хвост + назначение.
-    final outer = <String>[...detours];
+    // Снаружи (→): detour-хвост + назначение. §251 — пара «селектор + его
+    // выбор» (detour-канал §248 и кого он выбрал) — одна точка пути, не два
+    // хопа: схлопываем в `селектор (выбор)`.
+    final outer = <String>[...foldSelectorPairs(detours)];
     final dest = domain.isNotEmpty ? domain : _hostOfDestination;
     if (dest.isNotEmpty) outer.add(dest);
     if (outer.isNotEmpty) sb.write(' → ${outer.join(' → ')}');
