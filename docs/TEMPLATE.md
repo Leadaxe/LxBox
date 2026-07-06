@@ -571,7 +571,8 @@ Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `
   "default":     <bool>?,              // default true → включён в новой установке
   "vars": [ <Var>, … ]?,                // vars видимые только при включении этого preset'а
   "rule_set": [ <SingboxRuleSet>, … ]?, // rule_set'ы которые должны быть зарегистрированы
-  "rule":     <SingboxRoutingRule>?,    // routing rule (single)
+  "rule":     <SingboxRoutingRule>?,    // routing rule — legacy single (Map)
+  "rules":    [ <SingboxRoutingRule>, … ]?, // §246: массив routing rules (канонический ключ; побеждает `rule`)
   "dns_rule": <SingboxDnsRule>?,        // DNS-уровень routing rule
   "dns_servers": [ <FlatDnsServer>, … ]?  // ПЛОСКИЕ sing-box DNS-тела (не обёртка §117; top-level tag)
 }
@@ -582,9 +583,9 @@ Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `
 | `preset_id` | `default` | `vars` | `rule_set` | `rule` | `dns_rule` | `dns_servers` |
 |---|---|---|---|---|---|---|
 | `block-ads` | false | — | ✓ (remote ads-all) | ✓ (action: reject) | — | — |
-| `ru-direct` | true | ✓ (outbound, dns_server, dns_ip) | ✓ (inline `.ru` suffixes) | ✓ (`@outbound`) | ✓ (`@dns_server`) | ✓ (yandex_udp/doh/dot) |
+| `ru-direct` | true | ✓ (outbound, dns_server, dns_ip, geoip_enabled, force_ipv4) | ✓ (inline `.ru` suffixes) | ✓ массив: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | ✓ (`@dns_server`) | ✓ (yandex_udp/doh/dot) |
 | `fakeip` | false | ✓ (dns_server — **hidden**) | — | — | ✓ (`query_type: [A,AAAA]` → `@dns_server`) | ✓ (type `fakeip`, ranges 198.18/15 + fc00::/18) |
-| `ru-inside` | (false) | ✓ (outbound) | ✓ (remote ru-inside) | ✓ (`@outbound`) | — | — |
+| `ru-inside` | (false) | ✓ (outbound, force_ipv4) | ✓ (remote ru-inside) | ✓ массив: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | — | — |
 | `bittorrent` | true | ✓ (outbound) | — | ✓ (`protocol: bittorrent` → `@outbound`) | — | — |
 | `private-ip` | (false) | ✓ (outbound) | — | ✓ (`ip_is_private` → `@outbound`) | — | — |
 | `unknown-traffic` | false | ✓ (`outbound`=reject) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
@@ -629,9 +630,9 @@ Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `
 
 Скачивание — только вручную через кнопку **Download** в UI (`RuleSetDownloader`). Если кэша нет, rule_set пропускается с warning («download first») — sing-box не увидит remote-URL и не полезет в сеть. `download_detour`/`update_interval` в текущем pipeline не используются (декларативные поля каталога).
 
-### `selectable_rules[*].rule` — routing rule
+### `selectable_rules[*].rule` / `rules` — routing rule(s)
 
-Single object (НЕ массив) — sing-box routing rule с support'ом всех его полей:
+`rule` — Map (один rule, legacy); `rules` — **массив** (§246, канонический ключ; при обоих ключах побеждает `rules`). Каждый rule — sing-box routing rule с support'ом всех его полей:
 
 ```jsonc
 {
@@ -651,6 +652,28 @@ Single object (НЕ массив) — sing-box routing rule с support'ом вс
 ```
 
 В template'е стандартный pattern: ссылка на `rule_set` + outbound. См. примеры в `selectable_rules[]` существующего template'а.
+
+**Массивная форма (§246, ключ `rules`).** Пресет может эмитить несколько route-правил — порядок элементов сохраняется в финальном `config.route.rules`. Семантика expansion (`preset_expand.dart`):
+
+- элемент с `action ∈ {resolve, sniff, route-options}` — **промежуточный** (non-terminal): outbound-override юзера и reject-backstop к нему НЕ применяются; его присутствие в конфиге контролируется `#if`-гейтом (§120, array-element form: false без `else` → элемент выпадает);
+- остальные элементы — **терминальные**: override/backstop работают как для одиночного rule (к каждому);
+- dangling-rule_set guard — поэлементный: битый элемент дропается с warning, остальные живут;
+- substitute гоняется по массиву целиком (иначе array-element `#if` не сработал бы).
+
+Мотивирующий пример — `ru-direct`: на устройствах без глобального IPv6 direct-трафик на AAAA-адреса умирает (`network is unreachable`), поэтому RU-домены резолвятся `ipv4_only`. Управляется bool-var `force_ipv4` (default `true`) — юзер может выключить, если у сети рабочий IPv6:
+
+```jsonc
+"rules": [
+  {"#if": {"and": ["@force_ipv4"],
+           "value": {"rule_set": ["ru-domains", "ru-services"],
+                     "action": "resolve", "server": "@dns_server", "strategy": "ipv4_only"}}},
+  {"rule_set": ["ru-domains", "ru-services", "geoip-ru"], "outbound": "@outbound"}
+]
+```
+
+⚠ `server` в resolve-элементе ссылается на DNS-сервер, который эмитится **DNS-аспектом** пресета (галка DNS, §033/§121): при выключенном DNS-аспекте тег повиснет (dangling) → fatal у ядра. Использовать `server` в resolve только если пресет надёжно эмитит сервер, либо не указывать `server` вовсе (internal-резолв пойдёт через DNS-роутинг / `default_domain_resolver`).
+
+Для UI outbound-picker'а дефолт берётся из **терминального** элемента (`SelectableRule.terminalRule` — последний не-промежуточный).
 
 ### `selectable_rules[*].dns_rule` / `dns_servers`
 

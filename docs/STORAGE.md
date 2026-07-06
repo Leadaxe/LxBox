@@ -68,6 +68,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 │       ├─ ipIsPrivate           bool?         routing-rule level
 │       ├─ outbound              tag           "<outbound-tag>" или "reject" sentinel
 │       ├─ dns                   object? {enabled, serverTag}  §117 — mirror DNS-rule
+│       ├─ resolve               object? {only, strategy, …}   §247 — resolve-опция (route action resolve)
 │       │                        — srs (CustomRuleSrs) —
 │       ├─ srsUrl                string        URL .srs-бинаря
 │       ├─ ports / portRanges / packages / protocols / ipIsPrivate / outbound / dns
@@ -400,7 +401,10 @@ folder-ветвлений. Битый `raw` → член без ноды (вид
   "protocols":      [ … ]?,        // routing-rule level (subset of kKnownProtocols)
   "ipIsPrivate":    true?,         // routing-rule level
   "outbound":       "<tag>",       // или "reject" (sentinel → action: reject)
-  "dns":            { "enabled": true, "serverTag": "<dns-server tag>" }?  // §117 задача 3
+  "dns":            { "enabled": true, "serverTag": "<dns-server tag>" }?,  // §117 задача 3
+  "resolve":        { "only": false, "strategy": "ipv4_only", "serverTag": ""?,
+                      "disableCache": true?, "disableOptimisticCache": true?,
+                      "rewriteTtl": 60?, "timeout": "5s"?, "clientSubnet": "…"? }?  // §247
 }
 ```
 
@@ -409,6 +413,8 @@ folder-ветвлений. Битый `raw` → член без ноды (вид
 OR-семантика внутри category, AND между. `protocols` и `ipIsPrivate` не headless'ятся, выносятся в routing-rule level.
 
 `dns` ([§117] задача 3, «DNS follows the rule») — опционально: builder эмитит mirror DNS-rule `{rule_set: <тот же headless>, server: serverTag}` в атомарной mirror-группе (порядок = routing-правила). Отсутствует в старых записях → null → старое поведение. Гейт: при непустых `ports`/`protocols` mirror не эмитится.
+
+`resolve` ([§247]) — опционально: builder эмитит нетерминальное route-правило `{rule_set: <тот же headless>, action: resolve, …}` ПЕРЕД терминальным route (`only: false`, флагман — форс `ipv4_only` для direct-веток) либо ВМЕСТО него (`only: true`, advanced — fall-through). Отсутствует в старых записях → null. Гейт: у inline эмитится только при непустой domain-группе (`resolveEligible`); srs — всегда (домены в `.srs` возможны).
 
 ### `kind: "srs"` — `CustomRuleSrs`
 
@@ -425,7 +431,8 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
   "protocols":   [ … ]?,
   "ipIsPrivate": true?,
   "outbound":    "<tag>",
-  "dns":         { "enabled": true, "serverTag": "<dns-server tag>" }?  // §117 задача 3
+  "dns":         { "enabled": true, "serverTag": "<dns-server tag>" }?,  // §117 задача 3
+  "resolve":     { "only": false, "strategy": "ipv4_only", … }?          // §247 (как у inline)
 }
 ```
 

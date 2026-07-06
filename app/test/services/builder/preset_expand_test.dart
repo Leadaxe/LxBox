@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/models/custom_rule.dart';
@@ -20,7 +23,7 @@ void main() {
       expect(f.ruleSets.length, 1);
       expect(f.ruleSets.first['tag'], 'ru-domains');
       expect(f.dnsRule, {'rule_set': 'ru-domains', 'server': 'yandex_doh'});
-      expect(f.routingRule,
+      expect(f.routingRules.single,
           {'rule_set': 'ru-domains', 'outbound': 'vpn-1'});
       expect(f.dnsServers.length, 1);
       expect(f.dnsServers.first['tag'], 'yandex_doh');
@@ -57,7 +60,7 @@ void main() {
       final f = expandPreset(rule, preset);
 
       expect(f.warnings, isEmpty);
-      expect(f.routingRule!['outbound'], 'direct-out');
+      expect(f.routingRules.single['outbound'], 'direct-out');
       expect(f.dnsRule, isNull);
       expect(f.dnsServers, isEmpty);
     });
@@ -74,7 +77,7 @@ void main() {
 
       expect(f.dnsServers.length, 1);
       expect(f.dnsServers.first.containsKey('detour'), isFalse);
-      expect(f.routingRule!['outbound'], 'direct-out');
+      expect(f.routingRules.single['outbound'], 'direct-out');
     });
 
     test('required var без explicit + defaultValue → substituted by default', () {
@@ -88,7 +91,7 @@ void main() {
       final f = expandPreset(rule, preset);
 
       expect(f.warnings, isEmpty);
-      expect(f.routingRule!['outbound'], 'direct-out');
+      expect(f.routingRules.single['outbound'], 'direct-out');
     });
 
     test('required var + no value + empty default → empty fragments + warn', () {
@@ -176,7 +179,7 @@ void main() {
 
       expect(f.ruleSets, isEmpty,
           reason: 'без кэша remote rule_set не попадает в конфиг');
-      expect(f.routingRule, isNull,
+      expect(f.routingRules, isEmpty,
           reason: 'rule без своего rule_set → drop, иначе sing-box падает '
               'с "rule-set not found"');
       expect(f.warnings.length, 2,
@@ -219,8 +222,8 @@ void main() {
       expect(geoip.containsKey('enabled'), isFalse,
           reason: 'enabled — наша мета-конвенция, sing-box не знает');
       // routing rule: массив остался (оба tag'а expanded)
-      expect(f.routingRule!['rule_set'], ['ru-domains', 'geoip-ru']);
-      expect(f.routingRule!['outbound'], 'direct-out');
+      expect(f.routingRules.single['rule_set'], ['ru-domains', 'geoip-ru']);
+      expect(f.routingRules.single['outbound'], 'direct-out');
     });
 
     test('§045: geoip on + .srs НЕ cached → даунгрейд до single ru-domains '
@@ -241,8 +244,8 @@ void main() {
       expect(f.ruleSets.length, 1, reason: 'только ru-domains expanded');
       expect(f.ruleSets.first['tag'], 'ru-domains');
       // routing rule даунгрейдился до single string
-      expect(f.routingRule!['rule_set'], 'ru-domains');
-      expect(f.routingRule!['outbound'], 'direct-out');
+      expect(f.routingRules.single['rule_set'], 'ru-domains');
+      expect(f.routingRules.single['outbound'], 'direct-out');
       // warning про missing geoip-ru
       expect(f.warnings.any((w) => w.contains('geoip-ru') && w.contains('no cached')),
           isTrue);
@@ -269,7 +272,7 @@ void main() {
       expect(f.ruleSets.length, 1, reason: 'geoip-ru gated за enabled var');
       expect(f.ruleSets.first['tag'], 'ru-domains');
       // routing rule даунгрейдился до single string (geoip-ru не в expandedTags)
-      expect(f.routingRule!['rule_set'], 'ru-domains');
+      expect(f.routingRules.single['rule_set'], 'ru-domains');
     });
 
     test('§045: geoip off + .srs НЕ cached → geoip-ru пропускается без '
@@ -290,7 +293,7 @@ void main() {
       expect(f.warnings, isEmpty,
           reason: 'gated rule_set не доходит до cache-check warning');
       expect(f.ruleSets.length, 1);
-      expect(f.routingRule!['rule_set'], 'ru-domains');
+      expect(f.routingRules.single['rule_set'], 'ru-domains');
     });
 
     test('§045: enabled bool literal true → фрагмент включается', () {
@@ -319,7 +322,7 @@ void main() {
       );
       final f = expandPreset(CustomRulePreset(name: 'X', presetId: 'x'), preset);
       expect(f.ruleSets, isEmpty);
-      expect(f.routingRule, isNull,
+      expect(f.routingRules, isEmpty,
           reason: 'rule_set не expanded → dangling guard дропнул rule');
     });
 
@@ -335,7 +338,7 @@ void main() {
       );
       final f = expandPreset(CustomRulePreset(name: 'X', presetId: 'x'), preset);
       expect(f.ruleSets, isEmpty);
-      expect(f.routingRule, isNull);
+      expect(f.routingRules, isEmpty);
       expect(f.warnings.any((w) => w.contains('none of') && w.contains('a') && w.contains('b')),
           isTrue);
     });
@@ -354,8 +357,8 @@ void main() {
       );
 
       final f = expandPreset(rule, preset);
-      expect(f.routingRule, {'rule_set': 'ru-domains', 'action': 'reject'});
-      expect(f.routingRule!.containsKey('outbound'), isFalse);
+      expect(f.routingRules.single, {'rule_set': 'ru-domains', 'action': 'reject'});
+      expect(f.routingRules.single.containsKey('outbound'), isFalse);
     });
 
     test('outbound override == vpn-tag → outbound set, action удаляется '
@@ -377,8 +380,8 @@ void main() {
       );
 
       final f = expandPreset(rule, preset);
-      expect(f.routingRule, {'rule_set': 'ads', 'outbound': 'vpn-1'});
-      expect(f.routingRule!.containsKey('action'), isFalse);
+      expect(f.routingRules.single, {'rule_set': 'ads', 'outbound': 'vpn-1'});
+      expect(f.routingRules.single.containsKey('action'), isFalse);
     });
 
     test('outbound override пустой → template-решение остаётся', () {
@@ -399,7 +402,7 @@ void main() {
       );
 
       final f = expandPreset(rule, preset);
-      expect(f.routingRule, {'rule_set': 'ads', 'action': 'reject'});
+      expect(f.routingRules.single, {'rule_set': 'ads', 'action': 'reject'});
     });
 
     // §162 регресс — `@outbound`-форма + var.default_value: "reject".
@@ -440,8 +443,8 @@ void main() {
       );
 
       final f = expandPreset(rule, preset);
-      expect(f.routingRule, {'rule_set': 'unknown-apps', 'action': 'reject'});
-      expect(f.routingRule!.containsKey('outbound'), isFalse,
+      expect(f.routingRules.single, {'rule_set': 'unknown-apps', 'action': 'reject'});
+      expect(f.routingRules.single.containsKey('outbound'), isFalse,
           reason: 'sing-box не принимает outbound:"reject" — это action');
     });
 
@@ -464,15 +467,17 @@ void main() {
       );
 
       final f = expandPreset(rule, preset);
-      // routingRule проходит валидацию (outbound is String), значение не
+      // Правило проходит валидацию (outbound is String), значение не
       // разрезолвлено — это осознанный pass-through (см. _substitute docstring).
-      expect(f.routingRule, {'rule_set': 'x', 'outbound': '@foo'});
+      expect(f.routingRules.single, {'rule_set': 'x', 'outbound': '@foo'});
     });
 
     test('deep-copy isolation: source preset не мутируется после expansion', () {
       final preset = _ruDirect();
       final originalRuleSet = Map<String, dynamic>.from(preset.ruleSets.first);
-      final originalRule = Map<String, dynamic>.from(preset.rule);
+      final originalRules = preset.rules
+          .map((r) => Map<String, dynamic>.from(r))
+          .toList();
       final originalDnsServers = preset.dnsServers
           .map((s) => Map<String, dynamic>.from(s))
           .toList();
@@ -486,7 +491,7 @@ void main() {
 
       expect(preset.ruleSets.first, originalRuleSet,
           reason: 'rule_set в шаблоне не должен мутироваться');
-      expect(preset.rule, originalRule,
+      expect(preset.rules, originalRules,
           reason: 'rule в шаблоне не должен мутироваться');
       expect(preset.dnsServers, originalDnsServers,
           reason: 'dns_servers в шаблоне не должны мутироваться');
@@ -513,7 +518,7 @@ void main() {
 
       final f = expandPreset(rule, preset);
 
-      expect(f.routingRule, isNull);
+      expect(f.routingRules, isEmpty);
     });
   });
 
@@ -576,11 +581,15 @@ void main() {
     test('dns_rules и routing_rules append без dedup', () {
       final f1 = PresetFragments(
         dnsRule: {'rule_set': 'ru-domains', 'server': 'a'},
-        routingRule: {'rule_set': 'ru-domains', 'outbound': 'direct-out'},
+        routingRules: [
+          {'rule_set': 'ru-domains', 'outbound': 'direct-out'}
+        ],
       );
       final f2 = PresetFragments(
         dnsRule: {'rule_set': 'x', 'server': 'b'},
-        routingRule: {'rule_set': 'x', 'outbound': 'vpn-1'},
+        routingRules: [
+          {'rule_set': 'x', 'outbound': 'vpn-1'}
+        ],
       );
 
       final m = mergeFragments([f1, f2]);
@@ -631,7 +640,7 @@ void main() {
         'server': 'fakeip',
       });
       // DNS-only: routing rule нет.
-      expect(f.routingRule, isNull);
+      expect(f.routingRules, isEmpty);
     });
 
     test('hasOutboundAffordance == false (нечего роутить → нет picker)', () {
@@ -658,7 +667,362 @@ void main() {
       expect(noDns.touchesDns, isFalse);
     });
   });
+
+  // §246 — `rule` как массив route-правил: пресет эмитит несколько правил
+  // в порядке шаблона. Мотивация: ru-direct эмитит пару
+  // `[resolve ipv4_only (#if @outbound==direct-out), route]` — IPv4-only
+  // резолв только для direct-ветки (устройства без глобального IPv6),
+  // туннельный IPv6 не режется.
+  group('expandPreset — rule массив (§246)', () {
+    test('дефолт (direct-out) → resolve+route, порядок сохранён', () {
+      final f = expandPreset(
+        CustomRulePreset(name: 'X', presetId: 'ru-direct'),
+        _ruDirectArray(),
+      );
+
+      expect(f.warnings, isEmpty);
+      expect(f.routingRules.length, 2);
+      expect(f.routingRules[0], {
+        'rule_set': 'ru-domains',
+        'action': 'resolve',
+        'strategy': 'ipv4_only',
+      });
+      expect(f.routingRules[1],
+          {'rule_set': 'ru-domains', 'outbound': 'direct-out'});
+    });
+
+    test('override vpn-1 → #if-гейт роняет resolve; route получает override',
+        () {
+      final f = expandPreset(
+        CustomRulePreset(
+          name: 'X',
+          presetId: 'ru-direct',
+          varsValues: {'outbound': 'vpn-1'},
+        ),
+        _ruDirectArray(),
+      );
+
+      expect(f.warnings, isEmpty);
+      expect(f.routingRules.single,
+          {'rule_set': 'ru-domains', 'outbound': 'vpn-1'},
+          reason: 'resolve ipv4_only вреден в туннеле (IPv6 там живёт) — '
+              '#if-гейт эмитит его только при direct-out');
+    });
+
+    test('override reject → терминальный action:reject, промежуточный '
+        'resolve не тронут override\'ом', () {
+      // Без #if-гейта: resolve эмитится всегда — override его не подменяет
+      // (иначе `action: resolve` стал бы outbound'ом юзера и убил семантику).
+      final preset = SelectableRule(
+        label: 'X',
+        presetId: 'x',
+        ruleSets: [
+          {'tag': 'a', 'type': 'inline', 'rules': []},
+        ],
+        rule: const [
+          {'rule_set': 'a', 'action': 'resolve', 'strategy': 'ipv4_only'},
+          {'rule_set': 'a', 'outbound': 'direct-out'},
+        ],
+      );
+      final f = expandPreset(
+        CustomRulePreset(
+            name: 'X', presetId: 'x', varsValues: {'outbound': 'reject'}),
+        preset,
+      );
+
+      expect(f.routingRules.length, 2);
+      expect(f.routingRules[0],
+          {'rule_set': 'a', 'action': 'resolve', 'strategy': 'ipv4_only'});
+      expect(f.routingRules[1], {'rule_set': 'a', 'action': 'reject'});
+    });
+
+    test('dangling rule_set в одном элементе → дропается только он + warning',
+        () {
+      final preset = SelectableRule(
+        label: 'X',
+        presetId: 'x',
+        ruleSets: [
+          {'tag': 'a', 'type': 'inline', 'rules': []},
+        ],
+        rule: const [
+          {'rule_set': 'missing', 'action': 'resolve', 'strategy': 'ipv4_only'},
+          {'rule_set': 'a', 'outbound': 'direct-out'},
+        ],
+      );
+      final f = expandPreset(
+        CustomRulePreset(name: 'X', presetId: 'x'),
+        preset,
+      );
+
+      expect(f.routingRules.single,
+          {'rule_set': 'a', 'outbound': 'direct-out'});
+      expect(
+        f.warnings.any((w) => w.contains('missing rule_set "missing"')),
+        isTrue,
+      );
+    });
+
+    test('force_ipv4=false → resolve-элемент выпадает, остаётся только route',
+        () {
+      final f = expandPreset(
+        CustomRulePreset(
+          name: 'X',
+          presetId: 'ru-direct',
+          varsValues: {'force_ipv4': 'false'},
+        ),
+        _ruDirectForceIpv4(),
+      );
+
+      expect(f.warnings, isEmpty);
+      expect(f.routingRules.single,
+          {'rule_set': 'ru-domains', 'outbound': 'direct-out'},
+          reason: 'галка off → ipv4-резолв не эмитится (юзер сам решил)');
+    });
+
+    test('force_ipv4=true (дефолт) → resolve ipv4_only + route', () {
+      final f = expandPreset(
+        CustomRulePreset(name: 'X', presetId: 'ru-direct'),
+        _ruDirectForceIpv4(),
+      );
+
+      expect(f.routingRules.length, 2);
+      expect(f.routingRules[0]['action'], 'resolve');
+      expect(f.routingRules[0]['strategy'], 'ipv4_only');
+    });
+
+    test('terminalRule: у массива — терминальный элемент (не resolve)', () {
+      expect(_ruDirectArray().terminalRule,
+          {'rule_set': 'ru-domains', 'outbound': '@outbound'});
+    });
+
+    test('SelectableRule.fromJson: rule-массив нормализуется в rules', () {
+      final sr = SelectableRule.fromJson({
+        'preset_id': 'x',
+        'label': 'X',
+        'rule': [
+          {'rule_set': 'a', 'action': 'resolve', 'strategy': 'ipv4_only'},
+          {'rule_set': 'a', 'outbound': 'direct-out'},
+        ],
+      });
+      expect(sr.rules.length, 2);
+      expect(sr.terminalRule, {'rule_set': 'a', 'outbound': 'direct-out'});
+    });
+
+    test('SelectableRule.fromJson: канонический ключ "rules" (массив) — '
+        'как в шаблоне ru-direct', () {
+      final sr = SelectableRule.fromJson({
+        'preset_id': 'x',
+        'label': 'X',
+        'rules': [
+          {'rule_set': 'a', 'action': 'resolve', 'strategy': 'ipv4_only'},
+          {'rule_set': 'a', 'outbound': 'direct-out'},
+        ],
+      });
+      expect(sr.rules.length, 2,
+          reason: 'ключ "rules" должен читаться (регрессия: пресет молча '
+              'терял все правила, ни warning, ни route.rules)');
+      expect(sr.terminalRule, {'rule_set': 'a', 'outbound': 'direct-out'});
+    });
+
+    test('SelectableRule.fromJson: legacy Map → один элемент rules', () {
+      final sr = SelectableRule.fromJson({
+        'preset_id': 'x',
+        'label': 'X',
+        'rule': {'rule_set': 'a', 'outbound': 'direct-out'},
+      });
+      expect(sr.rules.single, {'rule_set': 'a', 'outbound': 'direct-out'});
+      expect(sr.terminalRule, {'rule_set': 'a', 'outbound': 'direct-out'});
+    });
+
+    test('SelectableRule.fromJson: rule отсутствует → rules пуст, '
+        'terminalRule пустой Map', () {
+      final sr = SelectableRule.fromJson({'preset_id': 'x', 'label': 'X'});
+      expect(sr.rules, isEmpty);
+      expect(sr.terminalRule, isEmpty);
+    });
+  });
+
+  // §246 e2e — НАСТОЯЩИЙ wizard_template.json (не синтетическая реплика).
+  // Регрессия первого прогона: движок читал ключ `rule`, шаблон использовал
+  // `rules` → пресет молча терял все правила (ни warning, ни route.rules),
+  // синтетические тесты этого не ловили.
+  group('§246 e2e — реальный wizard_template.json', () {
+    SelectableRule realPreset(String presetId) {
+      final raw = File('assets/wizard_template.json').readAsStringSync();
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      final rules = (json['selectable_rules'] as List<dynamic>)
+          .whereType<Map<String, dynamic>>()
+          .toList();
+      final found =
+          rules.firstWhere((r) => r['preset_id'] == presetId, orElse: () => {});
+      expect(found, isNotEmpty, reason: 'preset "$presetId" есть в шаблоне');
+      return SelectableRule.fromJson(found);
+    }
+
+    test('ru-direct (дефолты: force_ipv4=true) → пара resolve+route + '
+        'dns_rule со strategy', () {
+      final preset = realPreset('ru-direct');
+      final f = expandPreset(
+        CustomRulePreset(name: 'RU', presetId: 'ru-direct'),
+        preset,
+      );
+
+      // geoip-ru — remote без кэша: терминальное правило даунгрейдится до
+      // inline-набора, warning про geoip-ru ожидаем; правил всё равно ДВА.
+      expect(f.routingRules.length, 2,
+          reason: 'resolve + route; 0 или 1 = движок потерял правило '
+              '(регрессия rule/rules-ключа)');
+      final resolve = f.routingRules[0];
+      expect(resolve['action'], 'resolve');
+      expect(resolve['strategy'], 'ipv4_only');
+      expect(resolve['server'], 'yandex_udp',
+          reason: 'server из default dns_server (битую ссылку при '
+              'выключенном DNS-аспекте снимает healDanglingResolveServers)');
+      expect(resolve['rule_set'], ['ru-domains', 'ru-services']);
+      final route = f.routingRules[1];
+      expect(route['outbound'], 'direct-out');
+      expect(route.containsKey('action'), isFalse);
+
+      // Главный слой фикса: dns_rule режет AAAA для приложений (route-resolve
+      // покрывает только FQDN-destination — ядро actionResolve гейтится на
+      // Destination.IsDomain(), IP-коннекты Chrome он не переписывает).
+      expect(f.dnsRule, isNotNull);
+      expect(f.dnsRule!['strategy'], 'ipv4_only',
+          reason: 'map-spread #if по @force_ipv4 домержил strategy');
+      expect(f.dnsRule!['server'], 'yandex_udp');
+    });
+
+    test('ru-direct: force_ipv4=false → dns_rule БЕЗ strategy', () {
+      final preset = realPreset('ru-direct');
+      final f = expandPreset(
+        CustomRulePreset(
+          name: 'RU',
+          presetId: 'ru-direct',
+          varsValues: {'force_ipv4': 'false'},
+        ),
+        preset,
+      );
+      expect(f.dnsRule, isNotNull);
+      expect(f.dnsRule!.containsKey('strategy'), isFalse,
+          reason: 'галка off → AAAA живёт (map-spread #if не мержит)');
+    });
+
+    test('ru-direct: force_ipv4=false → только route', () {
+      final preset = realPreset('ru-direct');
+      final f = expandPreset(
+        CustomRulePreset(
+          name: 'RU',
+          presetId: 'ru-direct',
+          varsValues: {'force_ipv4': 'false'},
+        ),
+        preset,
+      );
+      expect(f.routingRules.length, 1);
+      expect(f.routingRules.single['outbound'], 'direct-out');
+    });
+
+    test('ru-inside (srs закэширован) → пара resolve+route', () {
+      final preset = realPreset('ru-inside');
+      final f = expandPreset(
+        CustomRulePreset(name: 'RU inside', presetId: 'ru-inside'),
+        preset,
+        srsPaths: {'ru-inside': '/cache/ru-inside.srs'},
+      );
+      expect(f.routingRules.length, 2);
+      expect(f.routingRules[0]['action'], 'resolve');
+      expect(f.routingRules[0]['strategy'], 'ipv4_only');
+      expect(f.routingRules[0].containsKey('server'), isFalse,
+          reason: 'ru-inside resolve без server — резолв через DNS-роутинг');
+      expect(f.routingRules[1]['outbound'], 'direct-out');
+    });
+  });
 }
+
+/// §246: реплика `ru-direct` с гейтом resolve по bool-var `force_ipv4`
+/// (default true). Галка off → resolve-элемент выпадает.
+SelectableRule _ruDirectForceIpv4() => SelectableRule(
+      label: 'Russian domains & IPs',
+      presetId: 'ru-direct',
+      vars: [
+        WizardVar(
+          name: 'outbound',
+          type: 'outbound',
+          defaultValue: 'direct-out',
+          title: 'Outbound',
+        ),
+        WizardVar(
+          name: 'force_ipv4',
+          type: 'bool',
+          defaultValue: 'true',
+          title: 'Force IPv4',
+        ),
+      ],
+      ruleSets: [
+        {
+          'tag': 'ru-domains',
+          'type': 'inline',
+          'rules': [
+            {
+              'domain_suffix': ['ru']
+            }
+          ],
+        },
+      ],
+      rule: const [
+        {
+          '#if': {
+            'and': ['@force_ipv4'],
+            'value': {
+              'rule_set': 'ru-domains',
+              'action': 'resolve',
+              'strategy': 'ipv4_only',
+            },
+          },
+        },
+        {'rule_set': 'ru-domains', 'outbound': '@outbound'},
+      ],
+    );
+
+/// §246: реплика `ru-direct` из шаблона с rule-массивом —
+/// `[resolve ipv4_only под #if-гейтом, терминальный route]`.
+SelectableRule _ruDirectArray() => SelectableRule(
+      label: 'Russian domains & IPs',
+      presetId: 'ru-direct',
+      vars: [
+        WizardVar(
+          name: 'outbound',
+          type: 'outbound',
+          defaultValue: 'direct-out',
+          title: 'Outbound',
+        ),
+      ],
+      ruleSets: [
+        {
+          'tag': 'ru-domains',
+          'type': 'inline',
+          'rules': [
+            {
+              'domain_suffix': ['ru']
+            }
+          ],
+        },
+      ],
+      rule: const [
+        {
+          '#if': {
+            'and': [
+              {'@outbound': 'direct-out'}
+            ],
+            'value': {
+              'rule_set': 'ru-domains',
+              'action': 'resolve',
+              'strategy': 'ipv4_only',
+            },
+          },
+        },
+        {'rule_set': 'ru-domains', 'outbound': '@outbound'},
+      ],
+    );
 
 /// Фабрика — реплика `FakeIP` пресета из шаблона (§228).
 SelectableRule _fakeip() => SelectableRule(

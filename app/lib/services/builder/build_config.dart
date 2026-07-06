@@ -389,6 +389,17 @@ Future<BuildResult> buildConfig({
         '"${h.target}" — node works directly.');
   }
 
+  // §247 — деградация битых `server`-ссылок у resolve-правил (симметрично
+  // detour-heal выше): ядро валит каждое сматчившееся соединение лениво
+  // («DNS server not found»), а не на старте — validator этого не видит.
+  // Снятый server → резолв через обычный DNS-роутинг.
+  final healedResolve = healDanglingResolveServers(config);
+  for (final h in healedResolve) {
+    emitWarnings.add(
+        'Resolve server removed: route rule #${h.ruleIndex} referenced '
+        'missing DNS server "${h.target}" — falling back to DNS routing.');
+  }
+
   final validation = validateConfig(config);
   return BuildResult(
     configJson: jsonEncode(config),

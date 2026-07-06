@@ -636,7 +636,8 @@
           {"title": "77.88.8.3 · Family alt",            "value": "77.88.8.3"},
           {"title": "2a02:6b8::feed:a11 · Family v6",    "value": "2a02:6b8::feed:a11"}
         ]},
-        {"name": "geoip_enabled", "type": "bool", "default_value": "true", "title": "GeoIP IP-range fallback", "tooltip": "Match Russian-AS IPs as well as domains — catches CDN/QUIC/ECH cases where domain detection fails. Auto-downloads geoip-ru.srs (~150 KB) on first use."}
+        {"name": "geoip_enabled", "type": "bool", "default_value": "true", "title": "GeoIP IP-range fallback", "tooltip": "Match Russian-AS IPs as well as domains — catches CDN/QUIC/ECH cases where domain detection fails. Auto-downloads geoip-ru.srs (~150 KB) on first use."},
+        {"name": "force_ipv4", "type": "bool", "default_value": "true", "title": "Force IPv4", "tooltip": "Resolve Russian domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Works through this preset's DNS rule — keep the DNS toggle on. Turn off if your network has functional IPv6."}
       ],
       "rule_set": [
         {"tag": "ru-domains", "type": "inline", "rules": [{"domain_suffix": ["ru", "su", "xn--p1ai", "xn--p1acf", "xn--80adxhks", "moscow", "tatar", "xn--d1acj3b", "xn--80asehdb", "xn--80aswg", "xn--c1avg", "xn--j1aef"]}]},
@@ -649,8 +650,11 @@
         ]}]},
         {"tag": "geoip-ru", "enabled": "@geoip_enabled", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geoip/geoip-ru.srs", "update_interval": "168h"}
       ],
-      "dns_rule": {"rule_set": ["ru-domains", "ru-services"], "server": "@dns_server"},
-      "rule": {"rule_set": ["ru-domains", "ru-services", "geoip-ru"], "outbound": "@outbound"},
+      "dns_rule": {"rule_set": ["ru-domains", "ru-services"], "server": "@dns_server", "#if": {"and": ["@force_ipv4"], "value": {"strategy": "ipv4_only"}}},
+      "rules": [
+        {"#if": {"and": ["@force_ipv4"], "value": {"rule_set": ["ru-domains", "ru-services"], "action": "resolve", "server": "@dns_server", "strategy": "ipv4_only"}}},
+        {"rule_set": ["ru-domains", "ru-services", "geoip-ru"], "outbound": "@outbound"}
+      ],
       "dns_servers": [
         {"type": "udp",   "tag": "yandex_udp", "server": "@dns_ip",    "server_port": 53,  "detour": "@outbound", "description": "Yandex UDP (IP from above)"},
         {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@outbound", "description": "Yandex Safe DoH"},
@@ -675,12 +679,16 @@
       "label": "Russia-only services",
       "description": "Services available only inside Russia. Direct by default, or route via a channel to reach them from abroad.",
       "vars": [
-        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route Russia-only services. Direct on a Russian network; pick a Russian channel to reach them from abroad."}
+        {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route Russia-only services. Direct on a Russian network; pick a Russian channel to reach them from abroad."},
+        {"name": "force_ipv4", "type": "bool", "default_value": "true", "title": "Force IPv4", "tooltip": "Resolve these domains to IPv4 only. Prevents dead IPv6 connections on networks without working global IPv6. Turn off if your network has functional IPv6."}
       ],
       "rule_set": [
         { "tag": "ru-inside", "type": "remote", "format": "binary", "url": "https://raw.githubusercontent.com/runetfreedom/russia-v2ray-rules-dat/release/sing-box/rule-set-geosite/geosite-ru-available-only-inside.srs" }
       ],
-      "rule": { "rule_set": "ru-inside", "outbound": "@outbound" }
+      "rules": [
+        {"#if": {"and": ["@force_ipv4"], "value": {"rule_set": "ru-inside", "action": "resolve", "strategy": "ipv4_only"}}},
+        {"rule_set": "ru-inside", "outbound": "@outbound"}
+      ]
     },
     {
       "preset_id": "bittorrent",

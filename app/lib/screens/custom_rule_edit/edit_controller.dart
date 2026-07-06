@@ -91,6 +91,7 @@ class CustomRuleEditController extends ChangeNotifier {
   late List<WifiEntry> _wifiNetworks;
   late Map<String, String> _varsValues;
   late RuleDns? _dns;
+  late RuleResolve? _resolve;
   List<String> _dnsServerTags = const [];
 
   /// §030/new_fields — есть ли в текущем vpn_mode `mixed-in` inbound (режимы
@@ -132,6 +133,25 @@ class CustomRuleEditController extends ChangeNotifier {
 
   /// §117 задача 3 — DNS-опция правила (null = не настраивалась).
   RuleDns? get dns => _dns;
+
+  /// §247 — resolve-опция правила (null = обычный outbound).
+  RuleResolve? get resolve => _resolve;
+
+  /// §247: live-гейт применимости resolve — по ТЕКУЩЕМУ состоянию формы
+  /// (не по initial). inline: domain-группа непуста (чистый ip/port/proto
+  /// резолвить нечего → ⚙ скрыта); srs: всегда true (домены в `.srs`
+  /// возможны, содержимое не парсим).
+  bool get resolveEligible => switch (_kind) {
+        CustomRuleKind.srs => true,
+        CustomRuleKind.inline =>
+          norm.normalizedDomains(domainCtrl.text).isNotEmpty ||
+              norm
+                  .normalizedDomains(domainSuffixCtrl.text,
+                      stripLeadingDot: true)
+                  .isNotEmpty ||
+              norm.normalizedKeywords(domainKeywordCtrl.text).isNotEmpty,
+        _ => false,
+      };
 
   /// §117: теги существующих DNS-серверов для дропдауна (storage-refs ∪
   /// template; правило ссылается по tag, не вводит адрес — решение №2).
@@ -185,6 +205,7 @@ class CustomRuleEditController extends ChangeNotifier {
     _wifiNetworks = unzipWifiEntries(r.wifiSsids, r.wifiBssids);
     _varsValues = Map<String, String>.from(r.varsValues);
     _dns = r.dns;
+    _resolve = r.resolve;
     unawaited(_loadDnsServerTags());
     unawaited(_loadVpnMode());
 
@@ -209,6 +230,11 @@ class CustomRuleEditController extends ChangeNotifier {
 
   void _onTextChanged() {
     if (_disposed) return;
+    // §247: сброс resolve при опустении доменных полей НЕ здесь — keystroke
+    // транзиентен (юзер стирает домен, чтобы вписать новый; live-сброс терял
+    // бы настройку безвозвратно). Гейт живёт в snapshot() (Save без доменов
+    // → resolve отпадает) и в билдере (resolveActive); UI прячет ⚙/статус
+    // через resolveEligible.
     notifyListeners();
   }
 
@@ -310,12 +336,22 @@ class CustomRuleEditController extends ChangeNotifier {
         _srsState != SrsDownloadState.cached) {
       _enabled = false;
     }
+    // §247: resolve при смене kind НЕ сбрасываем — snapshot()-гейт не даст
+    // ему попасть в неприменимый snapshot (json/preset его вообще не несут),
+    // а round-trip inline→json→inline не теряет настройку.
     notifyListeners();
   }
 
   void setOutbound(String v) {
     if (_outbound == v) return;
     _outbound = v;
+    notifyListeners();
+  }
+
+  /// §247 — установка resolve-опции из окна «Action & Resolve». null = снять
+  /// (вернуться к простому outbound).
+  void setResolve(RuleResolve? v) {
+    _resolve = v;
     notifyListeners();
   }
 
@@ -543,6 +579,9 @@ class CustomRuleEditController extends ChangeNotifier {
           wifiBssids: wifi.bssids,
           outbound: _outbound,
           dns: _dns,
+          // §247: гейт на случай snapshot до notify (сброс live в
+          // _onTextChanged, но подстраховка дешёвая).
+          resolve: resolveEligible ? _resolve : null,
         );
       case CustomRuleKind.inline:
         final wifi = zipWifiEntries(_wifiNetworks);
@@ -568,6 +607,7 @@ class CustomRuleEditController extends ChangeNotifier {
           wifiBssids: wifi.bssids,
           outbound: _outbound,
           dns: _dns,
+          resolve: resolveEligible ? _resolve : null, // §247
         );
     }
   }

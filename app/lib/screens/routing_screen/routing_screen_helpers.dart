@@ -116,9 +116,11 @@ class RoutingHelpers {
     for (final v in preset.vars) {
       if (v.name == 'outbound') return v.defaultValue;
     }
-    final action = preset.rule['action'];
+    // §246: rule может быть массивом — outbound-дефолт несёт терминальный
+    // элемент (resolve/sniff — промежуточные, у них outbound'а нет).
+    final action = preset.terminalRule['action'];
     if (action is String && action.isNotEmpty) return action;
-    final literal = preset.rule['outbound'];
+    final literal = preset.terminalRule['outbound'];
     if (literal is String && literal.isNotEmpty && !literal.startsWith('@')) {
       return literal;
     }

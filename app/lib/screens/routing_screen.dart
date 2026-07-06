@@ -620,10 +620,11 @@ class _RoutingScreenState extends State<RoutingScreen>
   ///    применяется в `preset_expand` независимо от формы template'а.
   /// 2. `preset.vars['outbound'].default_value` — если template объявил
   ///    outbound-var (Russian domains direct → `direct-out`).
-  /// 3. `preset.rule['action']` — template shorthand вроде Block Ads
+  /// 3. `preset.terminalRule['action']` — template shorthand вроде Block Ads
   ///    (`action: reject`). Отдаём сам `action`; picker интерпретирует
-  ///    `reject` как пункт "Reject".
-  /// 4. `preset.rule['outbound']` — hardcoded literal (ru-inside →
+  ///    `reject` как пункт "Reject". §246: terminalRule — терминальный
+  ///    элемент rule-массива (промежуточные resolve/sniff пропускаются).
+  /// 4. `preset.terminalRule['outbound']` — hardcoded literal (ru-inside →
   ///    `direct-out`).
   /// 5. Fallback `'direct-out'`.
   ///
