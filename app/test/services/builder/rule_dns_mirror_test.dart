@@ -126,7 +126,7 @@ void main() {
       );
     });
 
-    // §255 — Force IPv4 (AAAA-глушилка).
+    // §256 — Force IPv4 (AAAA-глушилка).
     test('forceIpv4 roundtrip + скрыт когда false', () {
       final on = CustomRuleInline(
         name: 'f',
@@ -269,7 +269,7 @@ void main() {
       expect(m.serverTag, 'cloudflare_udp');
     });
 
-    // §255 — srs + Force IPv4: serverless-mirror с .srs-тегом.
+    // §256 — srs + Force IPv4: serverless-mirror с .srs-тегом.
     test('srs+forceIpv4 → serverless-mirror ссылается на .srs-тег', () {
       final reg = RuleSetRegistry();
       final srs = CustomRuleSrs(
@@ -314,7 +314,7 @@ void main() {
       expect(reg.getRules(), hasLength(1), reason: 'routing-сторона живёт');
     });
 
-    // §255 — Force IPv4: serverless AAAA-глушилка.
+    // §256 — Force IPv4: serverless AAAA-глушилка.
     test('forceIpv4 inline → serverless-mirror {ip_version:6, predefined}',
         () {
       final reg = RuleSetRegistry();
@@ -503,7 +503,7 @@ void main() {
       ]);
     });
 
-    // §255 — serverless rule-mirror (Force IPv4 predefined): server НЕ
+    // §256 — serverless rule-mirror (Force IPv4 predefined): server НЕ
     // подставляется, запись НЕ режется отсутствием сервера в dns.servers.
     test('serverless rule-mirror эмитится как есть (без server-подстановки)',
         () async {

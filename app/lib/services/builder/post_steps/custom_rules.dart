@@ -88,7 +88,7 @@ class DnsMirrorEntry {
   final String ruleName;
   final String serverTag;
 
-  /// §255 — `body` самодостаточно (serverless-действие вроде `predefined`):
+  /// §256 — `body` самодостаточно (serverless-действие вроде `predefined`):
   /// эмиссия НЕ подставляет `server` и НЕ режет запись по отсутствию сервера
   /// в `dns.servers`. Для rule-источника (у preset-источника serverless-тела
   /// эмитятся по ветке `presetId != null`, §253).
@@ -356,7 +356,7 @@ List<String> _applySrsSingle(
       return m;
     }
 
-    // §255 — Force IPv4 (AAAA-глушилка) ПЕРЕД server-mirror'ом (симметрия §253).
+    // §256 — Force IPv4 (AAAA-глушилка) ПЕРЕД server-mirror'ом (симметрия §253).
     if (cr.forceIpv4Active) {
       final mirror = srsMatch()
         ..['ip_version'] = 6
@@ -406,7 +406,7 @@ List<String> _applyInlineSingle(
     return m;
   }
 
-  // §255 — Force IPv4 (AAAA-глушилка) эмитится ПЕРЕД server-mirror'ом
+  // §256 — Force IPv4 (AAAA-глушилка) эмитится ПЕРЕД server-mirror'ом
   // (симметрия §253: ip_version-гейт первым, маршрут вторым — иначе
   // server-mirror без ip_version перехватит AAAA-запрос до глушилки).
   // Serverless: `predefined` отвечает локально, server не нужен.
@@ -487,7 +487,7 @@ List<String> _applyInlineSingle(
       sourceIpIsPrivate: cr.sourceIpIsPrivate,
       inbounds: cr.inbounds,
     ));
-    addForceIpv4Mirror(''); // §255 — AAAA-глушилка перед server-mirror'ом
+    addForceIpv4Mirror(''); // §256 — AAAA-глушилка перед server-mirror'ом
     addDnsMirror(''); // routing-level-only правило: DNS-rule без rule_set
     return warnings;
   }
@@ -528,7 +528,7 @@ List<String> _applyInlineSingle(
       inbounds: cr.inbounds,
     ));
   }
-  addForceIpv4Mirror(tag); // §255 — AAAA-глушилка перед server-mirror'ом
+  addForceIpv4Mirror(tag); // §256 — AAAA-глушилка перед server-mirror'ом
   addDnsMirror(tag);
   return warnings;
 }

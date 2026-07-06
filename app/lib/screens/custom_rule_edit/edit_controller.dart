@@ -417,7 +417,7 @@ class CustomRuleEditController extends ChangeNotifier {
           ? 'google_udp'
           : (_dnsServerTags.isNotEmpty ? _dnsServerTags.first : '');
     }
-    // §255: copyWith сохраняет forceIpv4 (ортогонален dedicated-серверу).
+    // §256: copyWith сохраняет forceIpv4 (ортогонален dedicated-серверу).
     _dns = (_dns ?? const RuleDns()).copyWith(enabled: v, serverTag: tag);
     notifyListeners();
   }
@@ -428,7 +428,7 @@ class CustomRuleEditController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// §255: галка Force IPv4 (AAAA-глушилка). Ортогональна enabled/serverTag —
+  /// §256: галка Force IPv4 (AAAA-глушилка). Ортогональна enabled/serverTag —
   /// `RuleDns` может существовать только из-за неё (enabled=false, serverTag='').
   /// Снятие галки на «пустой» dns (без dedicated-сервера) обнуляет _dns целиком
   /// — иначе в storage/backup остаётся мёртвый `RuleDns{}` (шумит isDirty).

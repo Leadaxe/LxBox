@@ -36,7 +36,7 @@ class DnsSection extends StatelessWidget {
   final ValueChanged<bool> onEnabledChanged;
   final ValueChanged<String> onServerTagChanged;
 
-  /// §255 — переключение галки Force IPv4 (AAAA-глушилка).
+  /// §256 — переключение галки Force IPv4 (AAAA-глушилка).
   final ValueChanged<bool> onForceIpv4Changed;
 
   @override
@@ -112,7 +112,7 @@ class DnsSection extends StatelessWidget {
               ),
             ),
         ],
-        // §255 — Force IPv4: независимая галка (не требует dedicated-сервера;
+        // §256 — Force IPv4: независимая галка (не требует dedicated-сервера;
         // predefined отвечает локально). Тот же port/protocol-гейт.
         CheckboxListTile(
           dense: true,

@@ -1,4 +1,4 @@
-# §255 — `Force IPv4` у пользовательского правила: AAAA-глушилка на DNS-слое
+# §256 — `Force IPv4` у пользовательского правила: AAAA-глушилка на DNS-слое
 
 > **СТАТУС: РЕАЛИЗОВАНО** (07.07.2026, НЕ device-verified). Продолжение §253:
 > тот же двухслойный Force IPv4, но теперь доступный юзеру на его собственных
@@ -59,7 +59,7 @@
 1. `dns.enabled` (Send to dedicated server) → `{rule_set|match, server}` —
    как сейчас (§117).
 2. `dns.forceIpv4` → `{rule_set|match, ip_version: 6, action: predefined,
-   rcode: NOERROR}` — **serverless**, новый (§255).
+   rcode: NOERROR}` — **serverless**, новый (§256).
 
 Оба независимы. **Порядок:** AAAA-глушилка эмитится ПЕРЕД server-mirror'ом
 (симметрия §253: гейт AAAA первым, маршрут вторым; иначе server-mirror
@@ -90,7 +90,7 @@ class RuleDns {
   const RuleDns({this.enabled = false, this.serverTag = '', this.forceIpv4 = false});
   final bool enabled;
   final String serverTag;
-  final bool forceIpv4;    // §255 — AAAA-глушилка (независима от enabled/serverTag)
+  final bool forceIpv4;    // §256 — AAAA-глушилка (независима от enabled/serverTag)
   // toJson: if (forceIpv4) 'forceIpv4': true
   // fromJson: forceIpv4: j['forceIpv4'] == true
   // copyWith: forceIpv4 параметр
@@ -100,12 +100,12 @@ class RuleDns {
 Геттеры на `CustomRule` (рядом с `dnsMirrorEligible`/`dnsMirrorActive`):
 
 ```dart
-/// §255 — Force IPv4 (AAAA-глушилка) применима: правило DNS-mirror-способно
+/// §256 — Force IPv4 (AAAA-глушилка) применима: правило DNS-mirror-способно
 /// по headless-гейту (нет port/protocol), НЕ требует serverTag.
 bool get forceIpv4Eligible =>
     enabled && ports.isEmpty && portRanges.isEmpty && protocols.isEmpty;
 
-/// §255 — Force IPv4 активна: eligible И галка dns.forceIpv4 включена.
+/// §256 — Force IPv4 активна: eligible И галка dns.forceIpv4 включена.
 bool get forceIpv4Active => forceIpv4Eligible && (dns?.forceIpv4 ?? false);
 ```
 

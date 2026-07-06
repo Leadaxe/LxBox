@@ -7,7 +7,7 @@ import '../transport/request.dart';
 import '../transport/response.dart';
 import '_shared.dart';
 
-/// §255 — тест-хук для чистого парсера тела правила (без storage/rebuild),
+/// §256 — тест-хук для чистого парсера тела правила (без storage/rebuild),
 /// чтобы покрыть read/write симметрию DNS-полей. Суффикс `ForTest` —
 /// конвенция «вызывать только из тестов» (meta-аннотацию не тянем в deps).
 CustomRule ruleFromJsonStrictForTest(Map<String, dynamic> j) =>
@@ -309,11 +309,11 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
   }
 }
 
-/// §117 задача 3 / §255 — DNS-опция правила. Wire shape (snake_case как у
+/// §117 задача 3 / §256 — DNS-опция правила. Wire shape (snake_case как у
 /// остальных полей API): `{"enabled": bool, "server_tag": dns-server-tag,
 /// "force_ipv4": bool}`. Отсутствие ключа → null (поле не задано).
 ///
-/// §255: `enabled`/`server_tag`/`force_ipv4` независимы — DNS-опция может
+/// §256: `enabled`/`server_tag`/`force_ipv4` независимы — DNS-опция может
 /// нести только Force IPv4 (глушилка AAAA серверу не нужна). Поэтому
 /// `enabled` дефолтит в false, а `server_tag` обязателен ТОЛЬКО когда
 /// `enabled == true` (dedicated-server-mirror без tag'а бессмыслен). Сервер
