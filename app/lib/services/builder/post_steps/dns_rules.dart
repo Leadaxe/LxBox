@@ -138,7 +138,7 @@ Future<void> applyCustomDns(
         if (srv is String && !emittedServerTags.contains(srv)) continue;
         outRules.add(m.body);
       } else if (m.serverless) {
-        // §255 — Rule-источник, serverless (Force IPv4 predefined): тело
+        // §256 — Rule-источник, serverless (Force IPv4 predefined): тело
         // самодостаточно, server не подставляем и не режем по его отсутствию.
         outRules.add(m.body);
       } else {

@@ -158,7 +158,7 @@ sealed class CustomRule {
   /// Build (эмиссия) и UI (lifecycle-локи серверов) используют этот предикат.
   bool get dnsMirrorActive => dnsMirrorEligible && (dns?.enabled ?? false);
 
-  /// §255: Force IPv4 (AAAA-глушилка) **применима** — правило DNS-mirror-
+  /// §256: Force IPv4 (AAAA-глушилка) **применима** — правило DNS-mirror-
   /// способно по headless-гейту (порт/протокол неизвестны в момент
   /// DNS-запроса → DNS-слой слеп), но БЕЗ требования `serverTag`: глушилка
   /// `predefined` отвечает локально, серверу не нужна. Домен / приложение
@@ -166,7 +166,7 @@ sealed class CustomRule {
   bool get forceIpv4Eligible =>
       enabled && ports.isEmpty && portRanges.isEmpty && protocols.isEmpty;
 
-  /// §255: Force IPv4 **активна** — [forceIpv4Eligible] И галка включена.
+  /// §256: Force IPv4 **активна** — [forceIpv4Eligible] И галка включена.
   /// Build (эмиссия serverless-mirror'а) и UI (маркер) используют этот предикат.
   bool get forceIpv4Active => forceIpv4Eligible && (dns?.forceIpv4 ?? false);
 
@@ -284,7 +284,7 @@ class RuleDns {
   final bool enabled;
   final String serverTag;
 
-  /// §255 — Force IPv4: гасить AAAA (IPv6) для матча правила пустым
+  /// §256 — Force IPv4: гасить AAAA (IPv6) для матча правила пустым
   /// authoritative-ответом (`ip_version: 6, action: predefined, rcode:
   /// NOERROR`), приложение чисто берёт A. Ортогонально [enabled]/[serverTag]
   /// — глушилка отвечает локально, DNS-серверу не нужна.

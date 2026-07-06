@@ -137,7 +137,7 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
 Map<String, Object?> _serializeRuleDns(RuleDns dns) => {
       'enabled': dns.enabled,
       'server_tag': dns.serverTag,
-      // §255 — Force IPv4 (AAAA-глушилка), скрываем когда выкл.
+      // §256 — Force IPv4 (AAAA-глушилка), скрываем когда выкл.
       if (dns.forceIpv4) 'force_ipv4': true,
     };
 
