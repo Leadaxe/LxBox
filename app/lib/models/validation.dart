@@ -67,21 +67,46 @@ final class DanglingDnsServerRef extends ValidationIssue {
   String get message => '$field references missing DNS server "$tag".';
 }
 
-/// §141 P1.8a — цикл в графе `detour` (включая self-reference `A.detour=A`).
+/// §141 P1.8a / §254 — цикл в detour-графе (включая self-reference
+/// `A.detour=A` и кольца через selector/urltest-группы: группа зависит от
+/// ВСЕХ членов — так же считает и ядро при топосортировке старта).
 /// `DanglingDetourRef` ловит ссылку на ОТСУТСТВУЮЩИЙ tag, но цикл из
-/// существующих tag'ов (A→B→A) он пропускает. sing-box при дайле уходит в
-/// бесконечную рекурсию по цепочке detour → фейл-старт / зависание. Fatal.
+/// существующих tag'ов он пропускает. Ядро отклоняет такой конфиг на старте
+/// (`circular outbound dependency`). Fatal.
+///
+/// §254 — конфиг НЕ правится автоматически: детектор называет минимальный
+/// набор нод-виновников ([culprits], алгоритм окраски в validator.dart),
+/// устранение — за пользователем.
 final class DetourCycle extends ValidationIssue {
-  /// Теги, образующие цикл, в порядке обхода (последний замыкает на первый).
+  /// Репрезентативный цикл: теги в порядке обхода (последний замыкает на
+  /// первый). Показывается при раскрытии в UI.
   final List<String> cycle;
-  const DetourCycle(this.cycle);
+
+  /// Минимальный набор рёбер к устранению: нода + её detour-цель. Пустой
+  /// только для колец из одних групп (selector→selector, конструируемо лишь
+  /// правкой JSON руками) — там устранение = состав групп, не detour.
+  final List<({String tag, String detour})> culprits;
+
+  const DetourCycle(this.cycle, {this.culprits = const []});
 
   @override
   Severity get severity => Severity.fatal;
 
   @override
-  String get message =>
-      'Detour chain forms a cycle: ${cycle.join(" → ")} → ${cycle.first}.';
+  String get message {
+    if (culprits.isEmpty) {
+      return 'Routing loop between groups: ${cycle.join(" → ")} → '
+          '${cycle.first} — fix group membership to start the VPN.';
+    }
+    if (culprits.length == 1) {
+      final c = culprits.single;
+      return 'Routing loop: "${c.tag}" points back into "${c.detour}" — '
+          'change or remove its detour to start the VPN.';
+    }
+    final tags = culprits.map((c) => '"${c.tag}"').join(', ');
+    return 'Routing loop: ${culprits.length} nodes point back into their '
+        'own chain — change or remove their detours to start the VPN: $tags.';
+  }
 }
 
 final class EmptyUrltestGroup extends ValidationIssue {
