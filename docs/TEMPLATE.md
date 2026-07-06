@@ -470,12 +470,19 @@ Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `
   "name": "ipv6_enabled", "type": "bool", "default_value": "false",
   "on_change": {
     "set": {
-      "@dns_strategy":     {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv6", "else": "prefer_ipv4"}},
-      "@resolve_strategy": {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv6", "else": "prefer_ipv4"}}
+      "@dns_strategy":     {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv4", "else": "ipv4_only"}},
+      "@resolve_strategy": {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv4", "else": "ipv4_only"}}
     }
   }
 }
 ```
+
+Актуальная семантика тумблера IPv6 (§249): дефолт обеих strategy-vars —
+`ipv4_only` (IPv6 на tun выключен по умолчанию — AAAA приложениям не нужен);
+включение IPv6 переводит резолв в `prefer_ipv4` (v6 доступен, но v4-first —
+`prefer_ipv6` на сетях с полурабочим v6 давал мёртвые direct-коннекты, см.
+§246), выключение — форсит `ipv4_only`. Тонкая настройка — DNS Settings →
+Strategy (тумблер — разовый эффект, не форс).
 
 Семантика:
 

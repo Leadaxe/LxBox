@@ -224,7 +224,7 @@
         {
           "name": "resolve_strategy",
           "type": "enum",
-          "default_value": "prefer_ipv4",
+          "default_value": "ipv4_only",
           "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"],
           "wizard_ui": "edit",
           "title": "Resolve strategy",
@@ -307,7 +307,7 @@
         {
           "name": "dns_strategy",
           "type": "enum",
-          "default_value": "prefer_ipv4",
+          "default_value": "ipv4_only",
           "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"],
           "wizard_ui": "edit",
           "title": "Preferred IP version",
@@ -350,11 +350,11 @@
           "default_value": "false",
           "wizard_ui": "edit",
           "title": "Enable IPv6",
-          "tooltip": "Add an IPv6 address to the tunnel and prefer IPv6 for resolution. Off by default — turn on only if your network has working IPv6.",
+          "tooltip": "Add an IPv6 address to the tunnel. Off by default — turn on only if your network has working IPv6. Turning on sets resolution to prefer IPv4, turning off forces IPv4-only — you can change the strategy in DNS Settings.",
           "on_change": {
             "set": {
-              "@dns_strategy":     {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv6", "else": "prefer_ipv4"}},
-              "@resolve_strategy": {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv6", "else": "prefer_ipv4"}}
+              "@dns_strategy":     {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv4", "else": "ipv4_only"}},
+              "@resolve_strategy": {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv4", "else": "ipv4_only"}}
             }
           }
         },
