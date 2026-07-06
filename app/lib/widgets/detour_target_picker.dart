@@ -45,6 +45,74 @@ String detourChannelDisplay(String stored, List<Channel> channels) {
   return stored;
 }
 
+/// §252 — разворот сохранённого detour-значения в цепочку хопов «как пакет
+/// пойдёт», В ПОРЯДКЕ ПАКЕТА: самый глубокий транспорт (вплотную к телефону)
+/// первым, прямой detour ноды — последним (§245: detour — входной; сама
+/// экспансия идёт «цель → её detour → …», результат разворачивается).
+/// Хоп-виды:
+///  - интра-член [folder] (bare-тег, приоритет FolderDetourPlan) → дальше по
+///    его личному `member.detour` (интра-контекст той же папки);
+///  - detour-канал (tag/autoTag) → терминальный хоп `⚙ label (выбор)` —
+///    за каналом выбор динамический;
+///  - свободная одиночка (display-form) → дальше по её `overrideDetour`.
+/// Storage может содержать цикл до сборки (билдер рвёт edge-strip'ом §248) —
+/// гейт visited + потолок 6 хопов. Превью best-effort: сложные политики
+/// (append/replace, register) не разворачиваем — это про ЛИЧНУЮ ось цели.
+List<String> detourPathHops(
+  String stored, {
+  required SubscriptionController controller,
+  required List<Channel> channels,
+  FolderServers? folder,
+}) {
+  final hops = <String>[];
+  final visited = <String>{};
+  var current = stored;
+  var folderCtx = folder;
+  while (current.isNotEmpty && hops.length < 6 && visited.add(current)) {
+    // 1) Интра-член текущей папки: bare-тег побеждает канал-тёзку (§248).
+    FolderMember? member;
+    if (folderCtx != null) {
+      for (final m in folderCtx.members) {
+        if (m.node?.tag == current) {
+          member = m;
+          break;
+        }
+      }
+    }
+    if (member != null) {
+      hops.add(current);
+      current = member.detour; // интра-цепочка продолжается в той же папке
+      continue;
+    }
+    // 2) Detour-канал — терминальный (его выбор показываем в скобках).
+    final channelText = detourChannelDisplay(current, channels);
+    if (channelText != current) {
+      hops.add(channelText);
+      break;
+    }
+    // 3) Свободная одиночка по display-form тегу → её личный detour.
+    UserServer? owner;
+    for (final e in controller.entries) {
+      final l = e.list;
+      if (l is! UserServer || !l.enabled) continue;
+      for (final n in l.nodes) {
+        if (TagResolver.displayTag(l.tagPrefix, n.tag) == current) {
+          owner = l;
+          break;
+        }
+      }
+      if (owner != null) break;
+    }
+    hops.add(current);
+    if (owner == null) break; // неизвестная цель — дальше не разворачиваем
+    current = owner.detourPolicy.overrideDetour;
+    folderCtx = null; // внешняя ссылка — интра-контекст исходной папки кончился
+  }
+  // Экспансия шла «цель → её detour → …» (вглубь); физически пакет идёт
+  // из глубины наружу — разворачиваем в порядок пакета.
+  return hops.reversed.toList();
+}
+
 /// §251 — заголовок канала в секции Channels пикера: `⚙ <label>` + текущий
 /// выбор селектора в скобках, когда известен.
 String _channelTitle(Channel c) {

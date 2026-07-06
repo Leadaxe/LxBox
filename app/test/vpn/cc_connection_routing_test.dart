@@ -63,7 +63,7 @@ void main() {
       );
       expect(c.routingLineOf(), e.routingLineOf());
       expect(c.routingLineOf(),
-          '[tcp] final ⇒ vpn-1 : ✨auto → spotify.com');
+          '[tcp] final ⇒ vpn-1 : vpn-1 (✨auto) → spotify.com');
     });
 
     test('compact — без [net]-префикса (для ряда)', () {
@@ -71,7 +71,7 @@ void main() {
       final e = ev(domain: 'x.com', outboundChain: ['node-fi', 'vpn-1']);
       expect(c.routingLineOf(compact: true), e.routingLineOf(compact: true));
       expect(c.routingLineOf(compact: true),
-          'final ⇒ vpn-1 : node-fi → x.com');
+          'final ⇒ vpn-1 : vpn-1 (node-fi) → x.com');
     });
 
     test('явное правило + detour (WARP)', () {
@@ -89,7 +89,7 @@ void main() {
       );
       expect(c.routingLineOf(), e.routingLineOf());
       expect(c.routingLineOf(),
-          '[tcp] youtube ⇒ vpn-2 : node-de → WARP → yt.com');
+          '[tcp] youtube ⇒ vpn-2 : WARP → vpn-2 (node-de) → yt.com');
     });
 
     test('прямой outbound (без группы) — chains=[direct-out]', () {
@@ -118,7 +118,7 @@ void main() {
       );
       expect(c.routingLineOf(), e.routingLineOf());
       expect(c.routingLineOf(),
-          '[tcp] final ⇒ sel-1 ⇒ urltest-1 : node-x → a.b');
+          '[tcp] final ⇒ sel-1 ⇒ urltest-1 : sel-1 (urltest-1 (node-x)) → a.b');
     });
 
     test('domain пуст → host из destination', () {
@@ -138,10 +138,10 @@ void main() {
         chains: ['node', 'vpn-1'],
       );
       expect(c.routingLineOf(compact: true, ruleLabel: 'My YouTube Rule'),
-          'My YouTube Rule ⇒ vpn-1 : node → x.com');
+          'My YouTube Rule ⇒ vpn-1 : vpn-1 (node) → x.com');
       // Пустой ruleLabel → берётся сырой rule.
       expect(c.routingLineOf(compact: true, ruleLabel: ''),
-          'rule_42 ⇒ vpn-1 : node → x.com');
+          'rule_42 ⇒ vpn-1 : vpn-1 (node) → x.com');
     });
   });
 }

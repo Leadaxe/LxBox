@@ -1208,6 +1208,14 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       entry: widget.entry,
       folderMode: true, // §239 — адаптированные тексты
       channels: _channels, // §248 — подпись канальной override-цели
+      // §252 — разворот цели в цепочку «как пакет пойдёт»; интра-члены
+      // папки имеют приоритет (bare-тег, зеркало FolderDetourPlan).
+      detourPathHopsOf: (stored) => detourPathHops(stored,
+          controller: widget.controller,
+          channels: _channels,
+          folder: widget.entry.list is FolderServers
+              ? widget.entry.list as FolderServers
+              : null),
       hasDetour: hasDetour,
       detourMode: _detourMode,
       onTagPrefixChanged: (val) {

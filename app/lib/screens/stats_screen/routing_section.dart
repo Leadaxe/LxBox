@@ -7,9 +7,11 @@
 // показывать), чтобы не тащить общий рендер через два разных контекста (copy/
 // search-семантика, footer, Close-кнопка у Conns остаются у каждого свои).
 //
-// Источник истины нотации Route-строки — §181 (`⇒ внутри / : выход / →
-// снаружи`); `CcConnection.routingLineOf` и `TrafficEvent.routingLineOf` дают
-// идентичную строку (один источник chains/detours из ядра).
+// Источник истины нотации Route-строки — §252 (эволюция §181): `⇒` ось
+// решения, `:` граница, `→` физический путь пакета (вход первым, выход
+// `селектор (выбор)` перед целью); `CcConnection.routingLineOf` и
+// `TrafficEvent.routingLineOf` дают идентичную строку (один источник
+// chains/detours из ядра).
 
 import '../../services/selector_info.dart';
 
@@ -46,9 +48,10 @@ List<RoutingRow> routingRows({
     // Chain НЕ фолдится (§251): там выбор идёт ПЕРЕД селектором
     // (`[node, …selectors]`) — соседней пары «селектор → его выбор» нет.
     RoutingRow('Chain', chain.join(' / ')),
-    // §251 — «селектор + его выбор» (detour-канал §248 и кого он выбрал) —
-    // одна точка пути: `селектор (выбор)`, а не два хопа через →.
-    RoutingRow('Detour', foldSelectorPairs(detour).join(' → ')),
+    // §251/§252 — «селектор + его выбор» схлопнуты в `селектор (выбор)`,
+    // порядок ФИЗИЧЕСКИЙ (по ходу пакета: вход первым) — ядро отдаёт
+    // detour-ось изнутри наружу, разворачиваем.
+    RoutingRow('Detour', foldSelectorPairs(detour).reversed.join(' → ')),
     RoutingRow('Outbound', outbound),
     RoutingRow('Outbound type', outboundType),
   ];

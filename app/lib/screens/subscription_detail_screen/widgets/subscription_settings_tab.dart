@@ -18,6 +18,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
     required this.entry,
     this.folderMode = false,
     this.channels = const [],
+    this.detourPathHopsOf,
     required this.hasDetour,
     required this.detourMode,
     required this.onTagPrefixChanged,
@@ -41,6 +42,10 @@ class SubscriptionSettingsTab extends StatelessWidget {
   /// §248 — каналы для подписи «⚙ <label>» канальной override-цели
   /// (экран грузит SettingsStorage.getChannels и передаёт сюда).
   final List<Channel> channels;
+
+  /// §252 — разворот цели в цепочку хопов «как пакет пойдёт» (detourPathHops
+  /// с controller'ом экрана). null → показываем один хоп (как раньше).
+  final List<String> Function(String stored)? detourPathHopsOf;
   final bool hasDetour;
   final DetourMode detourMode;
 
@@ -68,6 +73,14 @@ class SubscriptionSettingsTab extends StatelessWidget {
       }
     }
     return detourChannelDisplay(stored, channels);
+  }
+
+  /// §252 — цепочка хопов цели по ходу пакета (или один хоп, если экран не
+  /// прокинул разворот).
+  String _overridePath() {
+    final hops = detourPathHopsOf?.call(entry.overrideDetour);
+    if (hops == null || hops.isEmpty) return _overrideDisplay();
+    return hops.join(' → ');
   }
 
   @override
@@ -231,10 +244,10 @@ class SubscriptionSettingsTab extends StatelessWidget {
             subtitle: Text(entry.overrideDetour.isEmpty
                 ? 'None — nodes connect directly'
                 // detour — ВХОДНОЙ (трафик идёт через него ПЕРВЫМ, потом в
-                // ноды подписки, потом наружу). Порядок как в node_settings:
-                // источник → detour → нода → Internet. БАГ был «Nodes → detour
-                // → Internet» (detour выглядел выходным — неверно).
-                : 'Phone → ${_overrideDisplay()} → Nodes → Internet'),
+                // ноды подписки, потом наружу). §252 — полная цепочка «как
+                // пакет пойдёт»: цель → её собственный detour → … (та же
+                // детализация, что у одиночного сервера в Node Settings).
+                : 'Phone → ${_overridePath()} → Nodes → Internet'),
             trailing: const Icon(Icons.chevron_right),
             onTap: onShowOverrideDetourPicker,
           ),

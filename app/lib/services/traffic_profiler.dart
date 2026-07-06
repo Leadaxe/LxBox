@@ -938,9 +938,9 @@ class TrafficProfiler extends ChangeNotifier {
       final network = c.network;
       // §174 — реальная outbound-цепочка из ядра (`Connection.chain()`):
       // [node, …selectors]. Fallback на [outbound] для прямых без группы.
-      // §181 — chains и detours несём РАЗДЕЛЬНО (не склеиваем как §178): UI
-      // строит цепочку решения `[net] proc ⇒ rule ⇒ группы : node → detour →
-      // domain` сам, разделяя оси (⇒ внутри / : выход / → снаружи).
+      // §181/§252 — chains и detours несём РАЗДЕЛЬНО (не склеиваем как §178):
+      // UI строит строку `proc ⇒ [net] rule ⇒ группы : физический путь →
+      // domain` сам, разделяя оси (⇒ решение / → путь пакета).
       final routeChain = c.chains.isNotEmpty
           ? c.chains
           : (c.outbound.isNotEmpty ? <String>[c.outbound] : <String>[]);

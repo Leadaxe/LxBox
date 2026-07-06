@@ -349,7 +349,7 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                   ],
                 ),
                 // §204 — Row 2: единая routing-строка (как ряд профайлера):
-                // `rule ⇒ группы : node → detour → dest` (§181, compact). Слева в
+                // `rule ⇒ группы : вход → … → выход → dest` (§252, compact). Слева в
                 // Expanded (ellipsis), duration/closed — ОТДЕЛЬНО справа, фикс.
                 // (решение D: таймер важен и не должен дёргаться внутри строки).
                 Padding(

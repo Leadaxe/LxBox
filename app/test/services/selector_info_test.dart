@@ -121,8 +121,8 @@ void main() {
       );
       expect(
         e.routingLineOf(),
-        '[udp] final ⇒ vpn-1 : WARP out → '
-        'vpn-4 (🇳🇱 Нидерланды) → WARP in → 142.250.150.132',
+        '[udp] final ⇒ vpn-1 : WARP in → '
+        'vpn-4 (🇳🇱 Нидерланды) → vpn-1 (WARP out) → 142.250.150.132',
       );
     });
 
@@ -144,8 +144,8 @@ void main() {
       );
       expect(
         c.routingLineOf(),
-        '[udp] final ⇒ vpn-1 : WARP out → '
-        'vpn-4 (🇳🇱 Нидерланды) → WARP in → 142.250.150.132',
+        '[udp] final ⇒ vpn-1 : WARP in → '
+        'vpn-4 (🇳🇱 Нидерланды) → vpn-1 (WARP out) → 142.250.150.132',
       );
     });
 
@@ -160,7 +160,7 @@ void main() {
         detourChain: const ['WARP in'],
       );
       expect(e.routingLineOf(),
-          '[tcp] final ⇒ vpn-1 : node-a → WARP in → ya.ru');
+          '[tcp] final ⇒ vpn-1 : WARP in → vpn-1 (node-a) → ya.ru');
     });
   });
 
@@ -174,7 +174,7 @@ void main() {
         detour: const ['vpn-4', '🇳🇱 Нидерланды', 'WARP in'],
       );
       final byLabel = {for (final r in rows) r.label: r.value};
-      expect(byLabel['Detour'], 'vpn-4 (🇳🇱 Нидерланды) → WARP in');
+      expect(byLabel['Detour'], 'WARP in → vpn-4 (🇳🇱 Нидерланды)');
       // Chain: [node, …selectors] — выбор ПЕРЕД селектором, пары нет.
       expect(byLabel['Chain'], 'WARP out / vpn-1');
     });
