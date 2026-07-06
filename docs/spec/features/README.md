@@ -76,7 +76,7 @@
 | 130 | [`130 masque-warp-transport/`](130%20masque-warp-transport/) | MASQUE-транспорт для WARP (QUIC/CONNECT-IP) | Реализовано (v2.9.0) |
 | 234 | [`234 server-folders/`](234%20server-folders/) | Папки серверов (folder): контейнер ручных серверов, per-member toggle, перенос между папками | Реализовано |
 | 236 | [`236 folder-server-testing/`](236%20folder-server-testing/) | Test servers в папке: headless probe (CommandServer без tun), пороги шкалы, disable slow / delete unreachable / sort by ping | Реализовано |
-| 248 | [`248 detour-channels/`](248%20detour-channels/) | Detour-каналы: канал §125 с галкой «Use as detour» как переключаемая прослойка для detour серверов/папок/подписок (⚙, исключён из целей правил, cycle-prune на билде) | Спека |
+| 248 | [`248 detour-channels/`](248%20detour-channels/) | Detour-каналы: канал §125 с галкой «Use as detour» как переключаемая прослойка для detour серверов/папок/подписок (⚙, исключён из целей правил, edge-strip detour-циклов на билде) | Спека |
 
 ## Демотированные / superseded (теперь в `../tasks/`)
 
