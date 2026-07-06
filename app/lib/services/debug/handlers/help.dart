@@ -60,7 +60,10 @@ GET /help[?format=text|json]        This map. No auth. text (default) — markdo
 
 === State (read-only) ===
 
-GET /state                          HomeState dump (tunnel, groups, nodes_count, last_delay, traffic, busy)
+GET /state                          HomeState dump (tunnel, groups, nodes_count, last_delay, traffic, busy).
+                                      last_start_error / last_start_error_at — last VPN start/stop
+                                      failure reason; cleared only by a successful start; in-memory
+                                      (empty after process restart)
 GET /state/subs[?reveal=true]       Subscriptions. URL masked default; reveal=true — full URL
 GET /state/rules                    CustomRule[] — sealed: inline | srs | preset (with per-kind fields)
 GET /state/storage                  Raw SettingsStorage._cache JSON (for debugging)
@@ -420,7 +423,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/ping', 'auth': false, 'description': 'Health-check', 'response': '{"pong":true,"server":"lxbox-debug","uptime_seconds":N}'},
     {'method': 'GET', 'path': '/help', 'auth': false, 'description': 'This capability map', 'params': {'format': 'text|json (default text)'}},
     // State
-    {'method': 'GET', 'path': '/state', 'description': 'HomeState dump (tunnel, groups, nodes, traffic)'},
+    {'method': 'GET', 'path': '/state', 'description': 'HomeState dump (tunnel, groups, nodes, traffic). last_start_error/last_start_error_at — last VPN start/stop failure reason; cleared only by a successful start; in-memory (empty after process restart)'},
     {'method': 'GET', 'path': '/state/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Subscriptions list'},
     {'method': 'GET', 'path': '/state/rules', 'description': 'CustomRule[] sealed (inline|srs|preset)'},
     {'method': 'GET', 'path': '/state/storage', 'description': 'Raw SettingsStorage._cache JSON'},

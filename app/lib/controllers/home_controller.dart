@@ -237,6 +237,12 @@ class HomeController extends ChangeNotifier
   // Native VPN events
   // ---------------------------------------------------------------------------
 
+  /// §250 — тестовый мост к приватному [_handleStatusEvent]: юнит-тесты
+  /// прогоняют статус-события через реальный handler без native-стрима.
+  @visibleForTesting
+  void debugHandleStatusEvent(TunnelStatusEvent event) =>
+      _handleStatusEvent(event);
+
   void _handleStatusEvent(TunnelStatusEvent event) {
     final tunnel = event.status;
     final prevTunnel = _state.tunnel;
@@ -255,6 +261,10 @@ class HomeController extends ChangeNotifier
         tunnel: tunnel,
         connectedSince: DateTime.now(),
         configChangedNeedRestart: false,
+        // §250 — успешный старт = ЕДИНСТВЕННОЕ место очистки lastStartError
+        // (clearError/оптимистичные lastError:'' его не трогают).
+        lastStartError: '',
+        lastStartErrorAt: null,
       ));
       // §187 — на cold-start (swipe-reopen) `connected` приходит pull'ом и
       // connectedSince выше = «сейчас», теряя реальное время старта. Подтянуть
@@ -317,6 +327,14 @@ class HomeController extends ChangeNotifier
         _state.copyWith(
           tunnel: tunnel,
           lastError: reason.isNotEmpty ? reason : _state.lastError,
+          // §250 — диагностический дубль для Debug API: живёт до следующего
+          // УСПЕШНОГО старта (UI-consume через clearError его не затирает).
+          // Пустой reason (чистый user-stop) НЕ затирает предыдущее значение —
+          // симметрично поведению lastError строкой выше.
+          lastStartError:
+              reason.isNotEmpty ? reason : _state.lastStartError,
+          lastStartErrorAt:
+              reason.isNotEmpty ? DateTime.now() : _state.lastStartErrorAt,
           ccGroups: const <CcGroup>[],
           groups: <String>[],
           nodes: <String>[],
