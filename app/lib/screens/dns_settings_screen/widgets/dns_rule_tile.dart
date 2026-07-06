@@ -34,7 +34,7 @@ class DnsRuleTile extends StatelessWidget {
 
   final Map<String, dynamic> entry;
   final Map<String, Map<String, dynamic>> templateRulesByName;
-  final Map<String, Map<String, dynamic>> presetRulesByPresetId;
+  final Map<String, List<Map<String, dynamic>>> presetRulesByPresetId;
   final Map<String, String> presetLabelByPresetId;
   final void Function(int index, bool value) onToggleEnabled;
   final void Function(int index) onEdit;
@@ -50,6 +50,8 @@ class DnsRuleTile extends StatelessWidget {
     // (storage хранит presetId), для остальных — берётся из entry.name.
     final String displayTitle;
     Map<String, dynamic>? body;
+    // §253: preset может нести несколько DNS-правил — превью/диалог по списку.
+    List<Map<String, dynamic>>? bodies;
     if (kind == 'inline') {
       displayTitle = entry['name'] as String? ?? '';
       final r = entry['rule'];
@@ -60,7 +62,7 @@ class DnsRuleTile extends StatelessWidget {
     } else if (kind == 'preset') {
       final pid = entry['presetId'] as String? ?? '';
       displayTitle = presetLabelByPresetId[pid] ?? pid;
-      body = presetRulesByPresetId[pid];
+      bodies = presetRulesByPresetId[pid];
     } else if (kind == 'srs') {
       displayTitle = entry['name'] as String? ?? '';
       // body: показываем сам entry как preview (срz config'а здесь нет — body
@@ -73,7 +75,9 @@ class DnsRuleTile extends StatelessWidget {
       displayTitle = entry['name'] as String? ?? '';
     }
 
-    final preview = formatRulePreview(body, kind: kind);
+    final preview = bodies != null
+        ? formatRulesPreview(bodies, kind: kind)
+        : formatRulePreview(body, kind: kind);
 
     final badgeText = switch (kind) {
       'template' => 'template',
@@ -95,7 +99,8 @@ class DnsRuleTile extends StatelessWidget {
     // тянется Positioned(top:0,bottom:0).
     final tile = Card(
       child: ListTile(
-        onTap: () => showRuleBodyDialog(context, displayTitle, kind, body),
+        onTap: () => showRuleBodyDialog(
+            context, displayTitle, kind, bodies ?? body),
         leading: Switch(
           value: enabled,
           onChanged: (v) => onToggleEnabled(index, v),
@@ -115,7 +120,10 @@ class DnsRuleTile extends StatelessWidget {
             color: theme.colorScheme.onSurfaceVariant,
             fontFamily: 'monospace',
           ),
-          maxLines: 2,
+          // §253: по 2 строки на правило у многоправильного пресета.
+          maxLines: (bodies != null && bodies.length > 1)
+              ? 2 * bodies.length
+              : 2,
           overflow: TextOverflow.ellipsis,
         ),
         // Badge над action-кнопками. У kind:inline — edit/delete; у

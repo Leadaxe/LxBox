@@ -427,11 +427,12 @@ class _RoutingScreenState extends State<RoutingScreen>
         preset == null ||
         preset.hasOutboundAffordance;
     // §231 — трогает ли правило DNS (для чипа «DNS»). Пресет → touchesDns
-    // (dns_rule/dns_servers); inline/srs → dnsMirrorActive (то, на что реально
-    // гейтится билдер — не над-репортит при ports/protocols).
+    // (dns_rule/dns_servers); inline/srs → dnsMirrorActive ИЛИ forceIpv4Active
+    // (§256 — оба гейтятся так же, как билдер; не над-репортят при
+    // ports/protocols).
     final touchesDns = rule.kind == CustomRuleKind.preset
         ? (preset?.touchesDns ?? false)
-        : rule.dnsMirrorActive;
+        : (rule.dnsMirrorActive || rule.forceIpv4Active);
 
     Widget? statusButton;
     if (rule is CustomRuleSrs) {

@@ -307,7 +307,7 @@ Rules матчатся **first-wins** сверху вниз, так что reord
   "kind": "inline|srs|preset",
   "preset_id": "<id>",              // required при kind=preset
   "vars_values": {"var":"val"},     // preset-only: overrides шаблонных vars
-  "dns": {"enabled": true, "server_tag": "<tag>"}, // preset-only DNS-attach
+  "dns": {"enabled": true, "server_tag": "<tag>", "force_ipv4": false}, // inline/srs DNS-опция: dedicated server + Force IPv4 (drop AAAA); поля независимы, server_tag обязателен лишь при enabled=true
   "domains": ["exact.domain"],
   "domain_suffixes": [".ru","xn--p1ai"],
   "domain_keywords": ["tracker"],

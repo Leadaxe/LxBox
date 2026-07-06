@@ -29,10 +29,15 @@ class FolderDetailScreen extends StatefulWidget {
     super.key,
     required this.entry,
     required this.controller,
+    this.focusMemberIndex,
   });
 
   final SubscriptionEntry entry;
   final SubscriptionController controller;
+
+  /// §255 — при открытии проскроллить к этому члену и мигнуть его строкой
+  /// (навигация из detour-cycle sheet к ноде-виновнику). null = нет.
+  final int? focusMemberIndex;
 
   @override
   State<FolderDetailScreen> createState() => _FolderDetailScreenState();
@@ -64,6 +69,17 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
 
   FolderServers get _folder => widget.entry.list as FolderServers;
 
+  // §255 — прокрутка к члену + вспышка строки (навигация из detour-cycle
+  // sheet). Локальная (таймер-вспышка). Скролл с retry: в lazy-списке строка
+  // за вьюпортом не смонтирована → currentContext null на первом кадре;
+  // пробуем несколько кадров, подтягивая список.
+  final _scrollController = ScrollController();
+  final _memberKeys = <int, GlobalKey>{};
+  int? _highlightedMember;
+  Timer? _highlightTimer;
+
+  GlobalKey _memberKey(int i) => _memberKeys.putIfAbsent(i, GlobalKey.new);
+
   /// §239 — голые теги членов, служащих интра-целью detour другого члена
   /// (⚙-бейдж; в билдере такие регистрируются по register-тогглам).
   Set<String> _chainLinkTags() {
@@ -92,6 +108,41 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     _nameCtrl = TextEditingController(text: widget.entry.name);
     unawaited(_loadThresholds());
     unawaited(_loadChannels());
+    final focus = widget.focusMemberIndex;
+    if (focus != null && focus >= 0 && focus < _folder.members.length) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _focusMember(focus, attempt: 0));
+    }
+  }
+
+  /// §255 — проскроллить к члену [i] + вспышка. Retry по кадрам: строка за
+  /// пределами вьюпорта в lazy-списке не смонтирована на первом кадре
+  /// (currentContext null). Грубо прыгаем ScrollController'ом по оценке
+  /// позиции, ждём следующий кадр, повторяем ensureVisible — до [maxAttempts].
+  void _focusMember(int i, {required int attempt}) {
+    if (!mounted) return;
+    if (attempt == 0) setState(() => _highlightedMember = i);
+    const maxAttempts = 6;
+    final ctx = _memberKeys[i]?.currentContext;
+    if (ctx != null) {
+      unawaited(Scrollable.ensureVisible(ctx,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          alignment: 0.3));
+    } else if (attempt < maxAttempts && _scrollController.hasClients) {
+      // Строка ещё не смонтирована — грубый прыжок по оценке (средняя высота
+      // строки ~64px), затем повтор на следующем кадре: список подтянет её.
+      final target = (i * 64.0)
+          .clamp(0.0, _scrollController.position.maxScrollExtent);
+      _scrollController.jumpTo(target);
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _focusMember(i, attempt: attempt + 1));
+      return;
+    }
+    _highlightTimer?.cancel();
+    _highlightTimer = Timer(const Duration(milliseconds: 2200), () {
+      if (mounted) setState(() => _highlightedMember = null);
+    });
   }
 
   /// §248 — загрузка каналов (initState + refresh перед пикером).
@@ -108,6 +159,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     _tabCtrl.dispose();
     _nameCtrl.dispose();
     _filterRegexCtl.dispose();
+    _scrollController.dispose();
+    _highlightTimer?.cancel();
     super.dispose();
   }
 
@@ -909,6 +962,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       // §236 UI-rework — при активном фильтре drag-reorder выключен (индексы
       // отфильтрованного вида не соответствуют составу папки).
       list = ListView.builder(
+        controller: _scrollController,
         padding: EdgeInsets.fromLTRB(
             12, 4, 12, MediaQuery.of(context).padding.bottom + 24),
         itemCount: visible.length,
@@ -919,6 +973,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       );
     } else {
       list = ReorderableListView.builder(
+        scrollController: _scrollController,
         padding: EdgeInsets.fromLTRB(
             12, 4, 12, MediaQuery.of(context).padding.bottom + 24),
         buildDefaultDragHandles: false,
@@ -962,9 +1017,24 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   }
 
   Widget _memberTile(int i, FolderMember m, {required bool reorderable}) {
-    return _MemberTile(
+    final cs = Theme.of(context).colorScheme;
+    final highlighted = _highlightedMember == i;
+    // §255 — reorder-key top-level (KeyedSubtree); GlobalKey + вспышка на
+    // внутреннем AnimatedContainer (навигация из detour-cycle sheet).
+    return KeyedSubtree(
       key: ValueKey('member-$i-${m.raw.hashCode}'),
-      member: m,
+      child: AnimatedContainer(
+        key: _memberKey(i),
+        duration: const Duration(milliseconds: 200),
+        decoration: highlighted
+            ? BoxDecoration(
+                color: cs.primaryContainer.withValues(alpha: 0.5),
+                border: Border(
+                    left: BorderSide(color: cs.primary, width: 3)),
+              )
+            : null,
+        child: _MemberTile(
+          member: m,
       isChainLink:
           m.node != null && _chainLinkTags().contains(m.node!.tag), // §239 ⚙
       dragIndex: i,
@@ -1006,6 +1076,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           SnackBar(content: Text(r.message)),
         );
       },
+        ),
+      ),
     );
   }
 
@@ -1295,7 +1367,6 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
 /// для drag-reorder (§098-паттерн).
 class _MemberTile extends StatelessWidget {
   const _MemberTile({
-    super.key,
     required this.member,
     required this.dragIndex,
     required this.folderEnabled,

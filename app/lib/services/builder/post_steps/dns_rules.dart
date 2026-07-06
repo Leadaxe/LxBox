@@ -40,7 +40,7 @@ Future<void> applyCustomDns(
   Map<String, dynamic> config,
   Map<String, dynamic> templateDnsOptions, {
   List<Map<String, dynamic>> extraServers = const [],
-  Map<String, Map<String, dynamic>> extraDnsRulesByPresetId = const {},
+  Map<String, List<Map<String, dynamic>>> extraDnsRulesByPresetId = const {},
   Set<String> activePresetIdsWithDnsRule = const {},
   Map<String, String> dnsSrsCachedPaths = const {},
   List<DnsMirrorEntry> dnsMirrors = const [],
@@ -130,10 +130,16 @@ Future<void> applyCustomDns(
     mirrorGroupEmitted = true;
     for (final m in dnsMirrors) {
       if (m.presetId != null) {
-        // Preset-источник: body уже несёт server. Defensive: dangling server
-        // (преcет-сервер не дожил до dns.servers) → тихо пропускаем.
+        // Preset-источник: body несёт server (serverless-действия §253 —
+        // predefined/reject — без него, эмитятся как есть). Defensive:
+        // dangling server (преcет-сервер не дожил до dns.servers) → тихо
+        // пропускаем.
         final srv = m.body['server'];
         if (srv is String && !emittedServerTags.contains(srv)) continue;
+        outRules.add(m.body);
+      } else if (m.serverless) {
+        // §256 — Rule-источник, serverless (Force IPv4 predefined): тело
+        // самодостаточно, server не подставляем и не режем по его отсутствию.
         outRules.add(m.body);
       } else {
         // Rule-источник: пропавший сервер → DNS-rule тихо не эмитится
@@ -156,12 +162,13 @@ Future<void> applyCustomDns(
         continue;
       }
       // Legacy-ветка (вызовы без dnsMirrors — shim'ы/старые тесты):
-      // позиционная эмиссия тела по записи, как до §117.
+      // позиционная эмиссия тел по записи, как до §117 (§253: правил
+      // может быть несколько — порядок шаблона).
       if (entry['enabled'] != true) continue;
       final pid = entry['presetId'] as String?;
       if (pid == null || pid.isEmpty) continue;
-      final body = extraDnsRulesByPresetId[pid];
-      if (body != null) outRules.add(body);
+      final bodies = extraDnsRulesByPresetId[pid];
+      if (bodies != null) outRules.addAll(bodies);
       continue;
     }
     if (kind == 'template' && dnsMirrors.isNotEmpty && !mirrorGroupEmitted) {

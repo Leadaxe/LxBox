@@ -11,7 +11,10 @@ import 'if_engine.dart';
 /// (например, optional var = null выкинул fragment целиком).
 class PresetFragments {
   final List<Map<String, dynamic>> dnsServers;
-  final Map<String, dynamic>? dnsRule;
+
+  /// DNS-правила пресета в порядке шаблона (§253: `dns_rule` может быть
+  /// массивом `dns_rules` — напр. `[predefined-AAAA-#if, route]` у ru-direct).
+  final List<Map<String, dynamic>> dnsRules;
   final List<Map<String, dynamic>> ruleSets;
 
   /// Route-правила пресета в порядке шаблона (§246: `rule` может быть
@@ -21,7 +24,7 @@ class PresetFragments {
 
   const PresetFragments({
     this.dnsServers = const [],
-    this.dnsRule,
+    this.dnsRules = const [],
     this.ruleSets = const [],
     this.routingRules = const [],
     this.warnings = const [],
@@ -29,7 +32,7 @@ class PresetFragments {
 
   bool get isEmpty =>
       dnsServers.isEmpty &&
-      dnsRule == null &&
+      dnsRules.isEmpty &&
       ruleSets.isEmpty &&
       routingRules.isEmpty;
 }
@@ -38,6 +41,11 @@ class PresetFragments {
 /// продолжает матчинг дальше по цепочке (в отличие от route/reject/
 /// hijack-dns). Outbound-override и reject-backstop к ним не применяются.
 const _kIntermediateActions = {'resolve', 'sniff', 'route-options'};
+
+/// §253: DNS rule actions, которым `server` не нужен. Закрытый список —
+/// у ядра `route` И `evaluate` без server = fatal на старте, а неизвестный
+/// action = decode error; опечатка в шаблоне не должна доезжать до ядра.
+const _kServerlessDnsActions = {'predefined', 'reject', 'route-options'};
 
 /// Результат merge всех preset-фрагментов от разных CustomRule'ов.
 class BundleMerge {
@@ -67,15 +75,15 @@ class BundleMerge {
 ///    - иначе `required=true` → `defaultValue` (пустой → broken preset, warn).
 ///    - иначе `required=false` → `null` (при подстановке ключи с unresolved
 ///      `@var` удаляются из родительского Map).
-/// 2. Deep-copy и substitute `@var` в `rule_set` / `dns_rule` / `rule` /
+/// 2. Deep-copy и substitute `@var` в `rule_set` / `dns_rules` / `rule` /
 ///    `dns_servers` через [substituteVars].
 /// 3. Фильтр `dns_servers` до одного — с `tag == vars['dns_server']`.
 ///    Если dns_server == null → пустой список (пресет не вносит DNS-сервер).
 /// 4. Если `detour == 'direct-out'` в DNS-сервере — удаляем ключ (direct
 ///    не требует detour).
 /// 5. Валидация критичных полей — если после substitute у `rule` нет
-///    `outbound`/`action`, у `dns_rule` нет `server`, у DNS-сервера нет
-///    `tag` → фрагмент отбрасывается.
+///    `outbound`/`action`, у DNS-правила нет ни `server`, ни serverless
+///    `action` (§253), у DNS-сервера нет `tag` → фрагмент отбрасывается.
 /// `srsPaths` — mapping `rule_set.tag → local .srs path` для remote-rule_set'ов
 /// пресета (pre-resolved через `RuleSetDownloader.cachedPathForPreset`).
 /// Если pre-resolved path есть, `type: "remote"` в фрагменте заменяется на
@@ -176,12 +184,67 @@ PresetFragments expandPreset(
     expandedRuleSets.add(result);
   }
 
-  Map<String, dynamic>? dnsRule;
-  if (preset.dnsRule != null) {
-    final copy = deepCopyJson(preset.dnsRule!);
-    final result = substituteVars(copy, varsMap);
-    if (result is Map<String, dynamic> && result['server'] is String) {
-      dnsRule = result;
+  final expandedTags = {
+    for (final rs in expandedRuleSets) rs['tag'] as String,
+  };
+
+  // §253: DNS-правила — тот же array-walk, что у route-правил §246 ниже
+  // (array-element `#if` force_ipv4-гейта AAAA-правила ru-direct: false без
+  // else → элемент выпадает из массива).
+  final dnsRules = <Map<String, dynamic>>[];
+  {
+    final copy = <dynamic>[for (final r in preset.dnsRules) deepCopyJson(r)];
+    final substituted = substituteVars(copy, varsMap);
+    final items = substituted is List ? substituted : const [];
+    for (final item in items) {
+      if (item is! Map<String, dynamic>) continue;
+      final result = item;
+      // Валидность элемента: `server` (route-семантика) ИЛИ serverless
+      // action из закрытого списка. Ни того ни другого (optional-var
+      // выпал / кривой шаблон / опечатка в action) → drop silently
+      // (§033 — прежний гейт `server is String` для single-формы).
+      final action = result['action'];
+      final serverless =
+          action is String && _kServerlessDnsActions.contains(action);
+      if (result['server'] is! String && !serverless) continue;
+
+      // Dangling-rule_set guard — паритет с route-правилами (§011/§045):
+      // DNS-правило со ссылкой на незарегистрированный tag уронило бы ядро
+      // на старте (у legacy single-формы guard'а не было — повезло, что
+      // ru-direct ссылается только на inline-set'ы).
+      final refTag = result['rule_set'];
+      if (refTag is String && refTag.isNotEmpty) {
+        if (!expandedTags.contains(refTag)) {
+          warnings.add(
+            'preset "${preset.presetId}": DNS rule skipped — references '
+            'missing rule_set "$refTag" (download SRS first)',
+          );
+          continue;
+        }
+      } else if (refTag is List) {
+        final present = refTag
+            .whereType<String>()
+            .where(expandedTags.contains)
+            .toList();
+        if (present.isEmpty) {
+          warnings.add(
+            'preset "${preset.presetId}": DNS rule skipped — none of '
+            '[${refTag.join(", ")}] available in expanded rule_sets',
+          );
+          continue;
+        }
+        result['rule_set'] = present.length == 1 ? present.first : present;
+      } else if (refTag != null) {
+        // §219-паритет с route-правилами: невалидная форма (пустая String,
+        // int/bool/Map из кривого шаблона) → снимаем ссылку, правило живёт
+        // (деградация вместо fatal «rule-set not found» у ядра).
+        result.remove('rule_set');
+        warnings.add(
+          'preset "${preset.presetId}": DNS rule rule_set has invalid '
+          'value (${refTag.runtimeType}) — reference dropped',
+        );
+      }
+      dnsRules.add(result);
     }
   }
 
@@ -196,9 +259,6 @@ PresetFragments expandPreset(
     // addAll(List<dynamic>) — типизированный List<Map> тут упадёт на cast.
     final copy = <dynamic>[for (final r in preset.rules) deepCopyJson(r)];
     final substituted = substituteVars(copy, varsMap);
-    final expandedTags = {
-      for (final rs in expandedRuleSets) rs['tag'] as String,
-    };
     final items = substituted is List ? substituted : const [];
     for (final item in items) {
       if (item is! Map<String, dynamic>) continue;
@@ -337,7 +397,7 @@ PresetFragments expandPreset(
 
   return PresetFragments(
     dnsServers: dnsServers,
-    dnsRule: dnsRule,
+    dnsRules: dnsRules,
     ruleSets: expandedRuleSets,
     routingRules: routingRules,
     warnings: warnings,
@@ -392,7 +452,7 @@ BundleMerge mergeFragments(List<PresetFragments> all) {
       }
     }
 
-    if (f.dnsRule != null) dnsRules.add(f.dnsRule!);
+    dnsRules.addAll(f.dnsRules); // §253: порядок внутри пресета сохранён
     routingRules.addAll(f.routingRules); // §246: порядок внутри пресета сохранён
   }
 

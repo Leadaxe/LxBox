@@ -80,6 +80,13 @@ class SubscriptionController extends ChangeNotifier {
   String _lastError = '';
   String get lastError => _lastError;
 
+  /// §254 — структурный дубль [lastError]: fatal-issues последней генерации.
+  /// UI различает по типу (DetourCycle → bottom sheet со списком виновников
+  /// вместо плоского SnackBar). Очищается на входе в generateConfig,
+  /// заполняется только из [FatalValidationException].
+  List<ValidationIssue> _lastFatalIssues = const [];
+  List<ValidationIssue> get lastFatalIssues => _lastFatalIssues;
+
   String _progressMessage = '';
   String get progressMessage => _progressMessage;
 
@@ -1331,10 +1338,14 @@ class SubscriptionController extends ChangeNotifier {
     // делают `if (json != null)` skip-check, так что null не ломает ничего.
     if (await SettingsStorage.getConfigLockedForDebug()) {
       AppLog.I.info('generateConfig: skipped (config_locked_for_debug=true)');
+      // §254 — не дать залипшему DetourCycle прошлой генерации показать
+      // ложный sheet и отменить старт с запиненным конфигом.
+      _lastFatalIssues = const [];
       return null;
     }
     _busy = true;
     _lastError = '';
+    _lastFatalIssues = const [];
     notifyListeners();
     try {
       final config = await _generate();
@@ -1343,6 +1354,8 @@ class SubscriptionController extends ChangeNotifier {
       return config;
     } catch (e) {
       _lastError = humanizeError(e);
+      // §254 — сохранить структуру fatal-issues для UI (DetourCycle → sheet).
+      if (e is FatalValidationException) _lastFatalIssues = e.issues;
       return null;
     } finally {
       _busy = false;

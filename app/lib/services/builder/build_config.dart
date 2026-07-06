@@ -207,9 +207,10 @@ Future<BuildResult> buildConfig({
       : _channelsFromTemplate(
           template.presetGroups, settings.enabledGroups, resolve);
 
-  // §248 — эмитированные узлы (те же map-объекты уходят в config ниже):
-  // edge-strip циклов снимает с них `detour` in-place, AWG-advisory читает
-  // типы. Endpoints тоже — WG/AWG живут там.
+  // §248/§254 — эмитированные узлы (те же map-объекты уходят в config ниже):
+  // AWG-advisory читает типы. detour больше НЕ правится in-place (§254 —
+  // детекция циклов переехала в validateConfig, конфиг не мутируется).
+  // Endpoints тоже — WG/AWG живут там.
   final nodeEntries = <Map<String, dynamic>>[
     for (final e in ctx.outbounds) e.map,
     for (final e in ctx.endpoints) e.map,
@@ -288,7 +289,7 @@ Future<BuildResult> buildConfig({
         e['presetId'] as String: e['enabled'] == true,
   };
 
-  // §033: presetIds with custom_rules.kind:preset entry AND dns_rule defined
+  // §033: presetIds with custom_rules.kind:preset entry AND dns_rules defined
   // in template — для auto-discovery `kind:preset` записей в dns_options.rules.
   // §121: routing-тоггл = король — выключенный пресет (cr.enabled=false) не
   // считается active'ным для DNS-правил, поэтому его kind:preset запись в
@@ -297,7 +298,7 @@ Future<BuildResult> buildConfig({
     for (final cr in settings.customRules)
       if (cr is CustomRulePreset && cr.enabled && cr.presetId.isNotEmpty)
         if (template.selectableRules
-            .any((p) => p.presetId == cr.presetId && p.dnsRule != null))
+            .any((p) => p.presetId == cr.presetId && p.dnsRules.isNotEmpty))
           cr.presetId,
   };
 
@@ -421,14 +422,16 @@ Future<BuildResult> buildConfig({
   }
 
   // §246 hotfix — легаси `strategy` в dns.rules × query_type/ip_version
-  // (FakeIP §228) = fatal у ядра 1.14 на старте. Снимаем strategy, если
-  // несовместимая пара присутствует (деградация вместо мёртвого VPN).
+  // (FakeIP §228, Force IPv4 §253) = fatal у ядра 1.14 на старте. Снимаем
+  // strategy, если несовместимая пара присутствует (деградация вместо
+  // мёртвого VPN).
   final healedDnsStrategy = healLegacyDnsStrategy(config);
   if (healedDnsStrategy.isNotEmpty) {
     emitWarnings.add(
         'DNS rule strategy removed on rules ${healedDnsStrategy.join(", ")}: '
-        'incompatible with query_type/ip_version rules (FakeIP) — kernel would '
-        'reject the config. Resolution falls back to the global DNS strategy.');
+        'incompatible with query_type/ip_version DNS rules (e.g. FakeIP or '
+        'Force IPv4) — kernel would reject the config. Resolution falls back '
+        'to the global DNS strategy.');
   }
 
   final validation = validateConfig(config);
@@ -527,10 +530,10 @@ List<Map<String, dynamic>> _buildChannelGroups({
         .toList();
   }
 
-  // §248 — member-set'ы считаем один раз: их делят selector и auto-двойник,
-  // и по ним же строится граф разрыва detour-циклов. Общие структуры графа:
-  // тег узла → его map (detour читаем/снимаем in-place), алиас канала
-  // (tag И autoTag — двойник содержит те же ноды) → индекс в active.
+  // §248 — member-set'ы считаем один раз: их делят selector и auto-двойник.
+  // §254 — детур-циклы билдер больше НЕ рвёт: детекция и минимальный набор
+  // виновников — в validateConfig (fatal, конфиг не собирается); здесь
+  // структуры графа нужны только AWG-advisory ниже.
   final memberSets = [for (final c in active) nodesFor(c)];
   final entryByTag = <String, Map<String, dynamic>>{
     for (final m in nodeEntries)
@@ -543,13 +546,6 @@ List<Map<String, dynamic>> _buildChannelGroups({
     },
   };
 
-  _stripChannelDetourCycles(
-    active: active,
-    memberSets: memberSets,
-    entryByTag: entryByTag,
-    channelByAlias: channelByAlias,
-    emitWarnings: emitWarnings,
-  );
   _warnAwgDetourViaWgChannels(
     active: active,
     memberSets: memberSets,
@@ -660,79 +656,11 @@ List<Map<String, dynamic>> _buildChannelGroups({
   return result;
 }
 
-/// §248 — разрыв detour-циклов edge-strip'ом (exempt-семантика, как у
-/// интра-циклов FolderDetourPlan §239). Цикл: узел n входит в node-set
-/// канала C, а detour-цепочка n достигает C — для sing-box это circular
-/// outbound dependency, ФАТАЛЬНАЯ на старте (не мягкий dangling §172).
-///
-/// Рвём ребро узла: n ОСТАЁТСЯ в C, но эмитится без цикл-образующего
-/// `detour` (мутируем уже собранный map; storage не трогаем). НЕ исключаем
-/// n из node-set: типовой кейс «relay-ноды в той же подписке, на которую
-/// повешен overrideDetour=C» (override применяется ко всем членам, включая
-/// сами relay'и) опустошил бы канал и превратил detour-прослойку в no-op;
-/// edge-strip даёт «флот → C → relay (напрямую)» — намерение пользователя.
-///
-/// Граф: узел → его detour-тег; тег канала и тег auto-двойника — алиасы
-/// одной вершины (двойник содержит те же ноды); канал → его члены. Гейт
-/// для ВСЕХ каналов, не только detour-flagged: ссылка на обычный канал
-/// (Debug API — root by design; правленный backup) даёт тот же fatal.
-/// Каналы в порядке эмиссии; снятое ребро сразу исчезает из графа
-/// (межканальные циклы не пере-рвутся лишний раз).
-void _stripChannelDetourCycles({
-  required List<Channel> active,
-  required List<List<String>> memberSets,
-  required Map<String, Map<String, dynamic>> entryByTag,
-  required Map<String, int> channelByAlias,
-  required List<String> emitWarnings,
-}) {
-  // Достижим ли канал [target] из detour-цепочки узла [node].
-  bool reaches(String node, int target) {
-    final first = entryByTag[node]?['detour'];
-    if (first is! String || first.isEmpty) return false;
-    final seenNodes = <String>{node};
-    final seenChannels = <int>{};
-    final queue = <String>[first];
-    while (queue.isNotEmpty) {
-      final t = queue.removeLast();
-      final ci = channelByAlias[t];
-      if (ci != null) {
-        if (ci == target) return true;
-        // Канал → все его члены: selector выбирает любой в рантайме, значит
-        // зависимость (и потенциальный цикл) — через каждого.
-        if (seenChannels.add(ci)) queue.addAll(memberSets[ci]);
-        continue;
-      }
-      if (!seenNodes.add(t)) continue;
-      final d = entryByTag[t]?['detour'];
-      if (d is String && d.isNotEmpty) queue.add(d);
-    }
-    return false;
-  }
-
-  for (var i = 0; i < active.length; i++) {
-    final stripped = <String>[];
-    for (final member in memberSets[i]) {
-      if (reaches(member, i)) {
-        entryByTag[member]!.remove('detour');
-        stripped.add(member);
-      }
-    }
-    if (stripped.isNotEmpty) {
-      final c = active[i];
-      final label = c.label.isNotEmpty ? c.label : c.tag;
-      emitWarnings.add('Channel "$label" (${c.tag}): removed detour from '
-          '${stripped.length} node(s) to break a routing loop '
-          '(they connect directly): ${stripped.join(', ')}.');
-    }
-  }
-}
-
 /// §248 — advisory: узел AmneziaWG детурится через канал, в node-set
 /// которого есть wireguard-эндпоинты. Прямую ссылку AWG→WG прячет §130-гейт
 /// пикера; канальная секция его осознанно обходит (состав канала не
 /// ограничен) — предупреждаем, не запрещаем (AWG через WireGuard вешает
-/// ядро на Android). Вызывается ПОСЛЕ edge-strip: узлы со снятым detour
-/// больше не детурятся — warning для них ложный.
+/// ядро на Android).
 void _warnAwgDetourViaWgChannels({
   required List<Channel> active,
   required List<List<String>> memberSets,
