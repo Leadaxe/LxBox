@@ -79,6 +79,7 @@ class DnsMirrorEntry {
     this.ruleId,
     this.ruleName = '',
     this.serverTag = '',
+    this.serverless = false,
     required this.body,
   });
 
@@ -86,6 +87,12 @@ class DnsMirrorEntry {
   final String? ruleId;
   final String ruleName;
   final String serverTag;
+
+  /// §255 — `body` самодостаточно (serverless-действие вроде `predefined`):
+  /// эмиссия НЕ подставляет `server` и НЕ режет запись по отсутствию сервера
+  /// в `dns.servers`. Для rule-источника (у preset-источника serverless-тела
+  /// эмитятся по ветке `presetId != null`, §253).
+  final bool serverless;
   final Map<String, dynamic> body;
 }
 
@@ -335,20 +342,41 @@ List<String> _applySrsSingle(
       wifiBssids: cr.wifiBssids,
     ));
   }
-  if (dnsMirrors != null && cr.dnsMirrorActive) {
-    final mirror = <String, dynamic>{'rule_set': tag};
-    if (cr.packages.isNotEmpty) mirror['package_name'] = cr.packages;
-    if (cr.wifiSsids.isNotEmpty) mirror['wifi_ssid'] = cr.wifiSsids;
-    if (cr.wifiBssids.isNotEmpty) mirror['wifi_bssid'] = cr.wifiBssids;
-    // §030/new_fields — DNS-rule 1.14 принимает source_ip_cidr/inbound.
-    if (cr.sourceIpCidrs.isNotEmpty) mirror['source_ip_cidr'] = cr.sourceIpCidrs;
-    if (cr.inbounds.isNotEmpty) mirror['inbound'] = cr.inbounds;
-    dnsMirrors.add(DnsMirrorEntry(
-      ruleId: cr.id,
-      ruleName: cr.name,
-      serverTag: cr.dns!.serverTag,
-      body: mirror,
-    ));
+  if (dnsMirrors != null && (cr.dnsMirrorActive || cr.forceIpv4Active)) {
+    // DNS-безопасные AND-поля правила (srs: rule_set + package/wifi/source/
+    // inbound — ports/protocols отрезаны гейтом). Общие для обоих mirror'ов.
+    Map<String, dynamic> srsMatch() {
+      final m = <String, dynamic>{'rule_set': tag};
+      if (cr.packages.isNotEmpty) m['package_name'] = cr.packages;
+      if (cr.wifiSsids.isNotEmpty) m['wifi_ssid'] = cr.wifiSsids;
+      if (cr.wifiBssids.isNotEmpty) m['wifi_bssid'] = cr.wifiBssids;
+      // §030/new_fields — DNS-rule 1.14 принимает source_ip_cidr/inbound.
+      if (cr.sourceIpCidrs.isNotEmpty) m['source_ip_cidr'] = cr.sourceIpCidrs;
+      if (cr.inbounds.isNotEmpty) m['inbound'] = cr.inbounds;
+      return m;
+    }
+
+    // §255 — Force IPv4 (AAAA-глушилка) ПЕРЕД server-mirror'ом (симметрия §253).
+    if (cr.forceIpv4Active) {
+      final mirror = srsMatch()
+        ..['ip_version'] = 6
+        ..['action'] = 'predefined'
+        ..['rcode'] = 'NOERROR';
+      dnsMirrors.add(DnsMirrorEntry(
+        ruleId: cr.id,
+        ruleName: cr.name,
+        serverless: true,
+        body: mirror,
+      ));
+    }
+    if (cr.dnsMirrorActive) {
+      dnsMirrors.add(DnsMirrorEntry(
+        ruleId: cr.id,
+        ruleName: cr.name,
+        serverTag: cr.dns!.serverTag,
+        body: srsMatch(),
+      ));
+    }
   }
   return warnings;
 }
@@ -368,16 +396,42 @@ List<String> _applyInlineSingle(
   final warnings = <String>[];
   if (cr.outbound.isEmpty) return warnings;
 
+  // DNS-безопасные AND-поля для mirror-body (общие для server- и
+  // forceIpv4-mirror'ов). rule_set несёт domain/port/wifi/source; здесь —
+  // только `inbound` (route-only, в headless его нет; DNS-rule 1.14 принимает).
+  Map<String, dynamic> mirrorBody(String ruleSetTag) {
+    final m = <String, dynamic>{};
+    if (ruleSetTag.isNotEmpty) m['rule_set'] = ruleSetTag;
+    if (cr.inbounds.isNotEmpty) m['inbound'] = cr.inbounds;
+    return m;
+  }
+
+  // §255 — Force IPv4 (AAAA-глушилка) эмитится ПЕРЕД server-mirror'ом
+  // (симметрия §253: ip_version-гейт первым, маршрут вторым — иначе
+  // server-mirror без ip_version перехватит AAAA-запрос до глушилки).
+  // Serverless: `predefined` отвечает локально, server не нужен.
+  void addForceIpv4Mirror(String ruleSetTag) {
+    if (dnsMirrors == null || !cr.forceIpv4Active) return;
+    final matchFields = mirrorBody(ruleSetTag);
+    // Без матча (нет rule_set/inbound — правило только source_ip_is_private
+    // и т.п.) глушилка гасила бы AAAA ГЛОБАЛЬНО. Не эмитим — нечего точечно
+    // матчить на DNS-слое.
+    if (matchFields.isEmpty) return;
+    final mirror = matchFields
+      ..['ip_version'] = 6
+      ..['action'] = 'predefined'
+      ..['rcode'] = 'NOERROR';
+    dnsMirrors.add(DnsMirrorEntry(
+      ruleId: cr.id,
+      ruleName: cr.name,
+      serverless: true,
+      body: mirror,
+    ));
+  }
+
   void addDnsMirror(String ruleSetTag) {
     if (dnsMirrors == null || !cr.dnsMirrorActive) return;
-    final mirror = <String, dynamic>{};
-    if (ruleSetTag.isNotEmpty) mirror['rule_set'] = ruleSetTag;
-    // §030/new_fields — wifi_*/source_ip_cidr теперь ВНУТРИ shared headless
-    // rule_set (если он есть) — в body не дублируем. Когда tag пуст (routing-
-    // level-only правило), match был пуст → wifi/source там и не было.
-    // `inbound` — route-only, в headless его нет → кладём в DNS-rule body
-    // (DNS-rule 1.14 принимает `inbound`).
-    if (cr.inbounds.isNotEmpty) mirror['inbound'] = cr.inbounds;
+    final mirror = mirrorBody(ruleSetTag);
     // Пустой матч (только ip_is_private/source_ip_is_private) — DNS-rule
     // «match всё» не эмитим.
     if (mirror.isEmpty) return;
@@ -433,6 +487,7 @@ List<String> _applyInlineSingle(
       sourceIpIsPrivate: cr.sourceIpIsPrivate,
       inbounds: cr.inbounds,
     ));
+    addForceIpv4Mirror(''); // §255 — AAAA-глушилка перед server-mirror'ом
     addDnsMirror(''); // routing-level-only правило: DNS-rule без rule_set
     return warnings;
   }
@@ -473,6 +528,7 @@ List<String> _applyInlineSingle(
       inbounds: cr.inbounds,
     ));
   }
+  addForceIpv4Mirror(tag); // §255 — AAAA-глушилка перед server-mirror'ом
   addDnsMirror(tag);
   return warnings;
 }

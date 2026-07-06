@@ -158,6 +158,18 @@ sealed class CustomRule {
   /// Build (эмиссия) и UI (lifecycle-локи серверов) используют этот предикат.
   bool get dnsMirrorActive => dnsMirrorEligible && (dns?.enabled ?? false);
 
+  /// §255: Force IPv4 (AAAA-глушилка) **применима** — правило DNS-mirror-
+  /// способно по headless-гейту (порт/протокол неизвестны в момент
+  /// DNS-запроса → DNS-слой слеп), но БЕЗ требования `serverTag`: глушилка
+  /// `predefined` отвечает локально, серверу не нужна. Домен / приложение
+  /// (`package_name`) / source_ip — работает.
+  bool get forceIpv4Eligible =>
+      enabled && ports.isEmpty && portRanges.isEmpty && protocols.isEmpty;
+
+  /// §255: Force IPv4 **активна** — [forceIpv4Eligible] И галка включена.
+  /// Build (эмиссия serverless-mirror'а) и UI (маркер) используют этот предикат.
+  bool get forceIpv4Active => forceIpv4Eligible && (dns?.forceIpv4 ?? false);
+
   /// §247 — resolve-опция правила (только inline/srs). `null` = обычный
   /// outbound (backward-compat: старые записи без `resolve`).
   RuleResolve? get resolve => switch (this) {
@@ -263,14 +275,25 @@ enum CustomRuleKind { inline, srs, preset, json }
 /// его не трогает (№1). `enabled: false` сохраняет выбранный `serverTag`,
 /// чтобы повторное включение не теряло выбор.
 class RuleDns {
-  const RuleDns({this.enabled = false, this.serverTag = ''});
+  const RuleDns({
+    this.enabled = false,
+    this.serverTag = '',
+    this.forceIpv4 = false,
+  });
 
   final bool enabled;
   final String serverTag;
 
+  /// §255 — Force IPv4: гасить AAAA (IPv6) для матча правила пустым
+  /// authoritative-ответом (`ip_version: 6, action: predefined, rcode:
+  /// NOERROR`), приложение чисто берёт A. Ортогонально [enabled]/[serverTag]
+  /// — глушилка отвечает локально, DNS-серверу не нужна.
+  final bool forceIpv4;
+
   Map<String, dynamic> toJson() => {
         'enabled': enabled,
         'serverTag': serverTag,
+        if (forceIpv4) 'forceIpv4': true,
       };
 
   /// Backward-compat: не-Map (отсутствует в старых записях) → null.
@@ -279,12 +302,15 @@ class RuleDns {
     return RuleDns(
       enabled: j['enabled'] == true,
       serverTag: j['serverTag']?.toString() ?? '',
+      forceIpv4: j['forceIpv4'] == true,
     );
   }
 
-  RuleDns copyWith({bool? enabled, String? serverTag}) => RuleDns(
+  RuleDns copyWith({bool? enabled, String? serverTag, bool? forceIpv4}) =>
+      RuleDns(
         enabled: enabled ?? this.enabled,
         serverTag: serverTag ?? this.serverTag,
+        forceIpv4: forceIpv4 ?? this.forceIpv4,
       );
 }
 
