@@ -1,5 +1,6 @@
 import '../../controllers/subscription_controller.dart';
 import '../../models/server_list.dart';
+import '../../services/tag_resolver.dart';
 
 /// §091/§235 — какие ИСТОЧНИКИ (подписки + папки §234) «владеют» данным
 /// display-тэгом, по **префиксу**.
@@ -44,4 +45,56 @@ Set<String> sourcesOfTag(
     if (tag.startsWith('$prefix ')) result.add(e.id);
   }
   return result;
+}
+
+/// §255 — владелец config-тэга: entry + (для папки) индекс члена. Для
+/// навигации из detour-cycle sheet прямо в экран владельца.
+class TagOwner {
+  /// Индекс entry в `SubscriptionController.entries`.
+  final int entryIndex;
+
+  /// Индекс члена в `FolderServers.members` (null = не папка / одиночный).
+  final int? memberIndex;
+
+  const TagOwner(this.entryIndex, {this.memberIndex});
+}
+
+/// §254/§255 — какой entry владеет данным config-тэгом (для навигации из
+/// detour-cycle sheet в экран владельца). В отличие от [sourcesOfTag] —
+/// суперсет: ловит и `UserServer` (без префикса), и одиночный сервер, и члена
+/// папки, матча по bare-тегу ноды (не только по префиксу). Возвращает
+/// [TagOwner] первого совпавшего entry (+ memberIndex для папки) либо `null`
+/// (тег без владельца — custom JSON).
+///
+/// Тег в конфиге = `TagResolver.displayTag(prefix, bare)`, плюс возможный
+/// `allocateTag`-суффикс дедупликации `-<digits>`. Пробуем сперва тег как есть
+/// (bare-тег, легитимно кончающийся на `-2`, выигрывает), затем со снятым
+/// суффиксом.
+///
+/// Tradeoff (как [sourcesOfTag] §091): prefix-collision → вернём соседа с тем
+/// же префиксом; неоднозначность суффикса → косметически не та строка. Оба
+/// приемлемы для affordance «открыть владельца».
+TagOwner? ownerOfTag(String culpritTag, List<SubscriptionEntry> entries) {
+  final candidates = <String>[culpritTag];
+  final m = RegExp(r'^(.*)-\d+$').firstMatch(culpritTag);
+  if (m != null) candidates.add(m.group(1)!);
+
+  for (final cand in candidates) {
+    for (var ei = 0; ei < entries.length; ei++) {
+      final list = entries[ei].list;
+      final bare = TagResolver.stripPrefix(cand, list.tagPrefix);
+      if (list is FolderServers) {
+        for (var mi = 0; mi < list.members.length; mi++) {
+          if (list.members[mi].node?.tag == bare) {
+            return TagOwner(ei, memberIndex: mi);
+          }
+        }
+      } else {
+        for (final n in list.nodes) {
+          if (n.tag == bare || n.chained?.tag == bare) return TagOwner(ei);
+        }
+      }
+    }
+  }
+  return null;
 }

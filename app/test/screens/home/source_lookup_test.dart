@@ -195,4 +195,58 @@ void main() {
       expect(sourcesOfTag('Custom1', entries), isEmpty);
     });
   });
+
+  // §255 — ownerOfTag: суперсет sourcesOfTag для навигации к владельцу
+  // culprit-ноды (ловит и UserServer без префикса, и члена папки).
+  // Возвращает TagOwner(entryIndex, memberIndex?).
+  group('ownerOfTag', () {
+    test('prefixed subscription node → entryIndex, memberIndex null', () {
+      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺', nodes: ['Node A'])];
+      final o = ownerOfTag('🇷🇺 Node A', entries)!;
+      expect(o.entryIndex, 0);
+      expect(o.memberIndex, isNull);
+    });
+
+    test('bare UserServer node (без префикса) → entryIndex', () {
+      // sourcesOfTag сюда бы вернул empty (UserServer не участвует); ownerOfTag
+      // — суперсет, ловит по bare-тегу.
+      final entries = [_user(id: 'u1', nodes: ['MyServer'])];
+      expect(ownerOfTag('MyServer', entries)?.entryIndex, 0);
+    });
+
+    test('folder member → entryIndex + memberIndex', () {
+      // Папка _folder имеет члена с raw #M1 → node.tag == 'M1' (member 0).
+      final entries = [
+        _sub(id: 's0', tagPrefix: 'x', nodes: ['zzz']),
+        _folder(id: 'f1', tagPrefix: 'pr'),
+      ];
+      final o = ownerOfTag('pr M1', entries)!;
+      expect(o.entryIndex, 1);
+      expect(o.memberIndex, 0);
+    });
+
+    test('dedup-суффикс: culprit "…-1", bare-нода без суффикса → owner', () {
+      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺', nodes: ['Node A'])];
+      expect(ownerOfTag('🇷🇺 Node A-1', entries)?.entryIndex, 0);
+    });
+
+    test('bare-тег легитимно кончается на -2 → unsuffixed кандидат выигрывает',
+        () {
+      final entries = [_user(id: 'u1', nodes: ['WARP-2'])];
+      expect(ownerOfTag('WARP-2', entries)?.entryIndex, 0);
+    });
+
+    test('нет владельца (custom-тег) → null', () {
+      final entries = [_sub(id: 's1', tagPrefix: '🇷🇺', nodes: ['M1'])];
+      expect(ownerOfTag('Unknown Tag', entries), isNull);
+    });
+
+    test('первый матч выигрывает при коллизии', () {
+      final entries = [
+        _sub(id: 'A', tagPrefix: '🇷🇺', nodes: ['M1']),
+        _sub(id: 'B', tagPrefix: '🇷🇺', nodes: ['M1']),
+      ];
+      expect(ownerOfTag('🇷🇺 M1', entries)?.entryIndex, 0);
+    });
+  });
 }

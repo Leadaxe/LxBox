@@ -4,13 +4,15 @@ import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';
+import 'package:lxbox/models/validation.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
 /// §248 — detour-каналы в билдере: block-гейт, direct-fallback пустого
-/// detour-канала, edge-strip detour-циклов (exempt-семантика: узел остаётся
-/// в канале, снимается его цикл-образующий detour), autoTag-алиас,
-/// деградация route_final, AWG→WG advisory. Harness — как в
+/// detour-канала, autoTag-алиас, деградация route_final, AWG→WG advisory.
+/// §254 — detour-циклы больше НЕ рвутся edge-strip'ом: детектор в
+/// validateConfig возвращает fatal DetourCycle с минимальным набором
+/// виновников (группа тестов «§254 — detour-циклы»). Harness — как в
 /// channel_groups_test.dart (настоящий buildConfig, channels из settings).
 void main() {
   WizardTemplate template() => WizardTemplate(
@@ -116,10 +118,25 @@ void main() {
     });
   });
 
-  group('§248 — edge-strip detour-циклов', () {
-    test('прямой цикл: member.detour=C → detour снят, узел ОСТАЁТСЯ в канале',
+  group('§254 — detour-циклы: fatal + минимальный набор виновников', () {
+    // §254 сменил семантику §248: билдер цикл НЕ рвёт (никакого снятия
+    // detour), детектор в validateConfig возвращает fatal DetourCycle с
+    // минимальным набором culprits — конфиг не собирается, юзер устраняет
+    // причину сам. Хелпер: билд без expect(isOk).
+    Future<BuildResult> buildRaw(
+            List<ServerList> lists, List<Channel> channels) =>
+        buildConfig(
+          lists: lists,
+          template: template(),
+          settings: BuildSettings(channels: channels),
+        );
+
+    List<DetourCycle> cyclesOf(BuildResult r) =>
+        r.validation.fatal.whereType<DetourCycle>().toList();
+
+    test('прямой цикл: member.detour=C → fatal, culprit = член, detour цел',
         () async {
-      final r = await build([
+      final r = await buildRaw([
         vlessServer(
             id: 'u',
             names: ['Relay Berlin'],
@@ -129,15 +146,18 @@ void main() {
         const Channel(
             tag: 'vpn-2', label: 'Relay', isDetour: true, nodeFilter: 'Relay'),
       ]);
-      expect(byTag(r, 'Relay Berlin').containsKey('detour'), false);
-      expect(byTag(r, 'vpn-2')['outbounds'], contains('Relay Berlin'));
-      expect(r.emitWarnings,
-          contains(contains('removed detour from 1 node(s)')));
+      final cycles = cyclesOf(r);
+      expect(cycles, hasLength(1));
+      expect(cycles.single.culprits,
+          [(tag: 'Relay Berlin', detour: 'vpn-2')]);
+      // §254 — конфиг НЕ правится: detour остаётся на месте.
+      expect(byTag(r, 'Relay Berlin')['detour'], 'vpn-2');
+      expect(r.emitWarnings, isNot(contains(contains('removed detour'))));
     });
 
-    test('цикл через auto-двойник (detour=<tag>-auto) рвётся так же',
+    test('цикл через auto-двойник (detour=<tag>-auto) — тот же fatal',
         () async {
-      final r = await build([
+      final r = await buildRaw([
         vlessServer(
             id: 'u',
             names: ['Relay Berlin'],
@@ -151,14 +171,17 @@ void main() {
             nodeFilter: 'Relay',
             auto: ChannelAuto()),
       ]);
-      expect(byTag(r, 'Relay Berlin').containsKey('detour'), false);
-      expect(r.emitWarnings, contains(contains('routing loop')));
+      final cycles = cyclesOf(r);
+      expect(cycles, hasLength(1));
+      expect(cycles.single.culprits.single.tag, 'Relay Berlin');
+      expect(cycles.single.message, contains('Routing loop'));
     });
 
-    test('транзитивный цикл через промежуточный узел', () async {
-      // Client ∈ vpn-2; Client→Mid→vpn-2. Рвётся ребро ЧЛЕНА (Client),
-      // Mid (не член) сохраняет свой detour на канал — это валидная цепочка.
-      final r = await build([
+    test('транзитивный цикл через промежуточный узел — 1 culprit', () async {
+      // Client ∈ vpn-2; Client→Mid→vpn-2. Оба ребра развязывают цикл
+      // (равный score) — тай-брейк лексикографический даёт Client.
+      // Показывается ОДИН виновник, цикл целиком — в issue.cycle.
+      final r = await buildRaw([
         vlessServer(
             id: 'c',
             names: ['Client'],
@@ -175,12 +198,17 @@ void main() {
             isDetour: true,
             nodeFilter: 'Client'),
       ]);
-      expect(byTag(r, 'Client').containsKey('detour'), false);
-      expect(byTag(r, 'Mid')['detour'], 'vpn-2');
+      final cycles = cyclesOf(r);
+      expect(cycles, hasLength(1));
+      expect(cycles.single.culprits, hasLength(1));
+      expect(cycles.single.culprits.single.tag, 'Client');
+      expect(cycles.single.cycle,
+          containsAll(<String>['Client', 'Mid', 'vpn-2']));
     });
 
-    test('межканальный цикл: A∈C1→C2, B∈C2→C1 — рвётся один раз', () async {
-      final r = await build([
+    test('межканальный цикл: A∈C1→C2, B∈C2→C1 — один culprit, один issue',
+        () async {
+      final r = await buildRaw([
         vlessServer(
             id: 'a',
             names: ['Node A'],
@@ -196,15 +224,16 @@ void main() {
         const Channel(
             tag: 'vpn-3', label: 'C2', isDetour: true, nodeFilter: 'Node B'),
       ]);
-      // vpn-2 обрабатывается первым: ребро A→vpn-3 снято; после этого цикл
-      // для vpn-3 исчез — B сохраняет свой detour (минимальность разрыва).
-      expect(byTag(r, 'Node A').containsKey('detour'), false);
-      expect(byTag(r, 'Node B')['detour'], 'vpn-2');
+      // Кольцо одно (A→C2→B→C1→A): минимальный набор = 1 ребро (какое —
+      // тай-брейк, оба симметричны).
+      final cycles = cyclesOf(r);
+      expect(cycles, hasLength(1));
+      expect(cycles.single.culprits, hasLength(1));
     });
 
-    test('ссылка на ОБЫЧНЫЙ канал (Debug API-сценарий) рвётся так же',
+    test('ссылка на ОБЫЧНЫЙ канал (Debug API-сценарий) — тот же fatal',
         () async {
-      final r = await build([
+      final r = await buildRaw([
         vlessServer(
             id: 'u',
             names: ['Node X'],
@@ -213,14 +242,15 @@ void main() {
         const Channel(tag: 'vpn-1', label: 'Main'),
         const Channel(tag: 'vpn-2', label: 'Plain', nodeFilter: 'Node X'),
       ]);
-      expect(byTag(r, 'Node X').containsKey('detour'), false);
+      expect(cyclesOf(r).single.culprits.single.tag, 'Node X');
     });
 
-    test('флагман: relay в той же подписке под overrideDetour=C', () async {
-      // Политика применяется ко ВСЕМ нодам, включая сами relay'и: без
-      // edge-strip канал опустел бы (исключение), с ним — relay едет
-      // напрямую, остальной флот через канал → relay.
-      final r = await build([
+    test('флагман §248: relay в той же подписке под overrideDetour=C — '
+        'fatal с culprit=relay, клиенты невиновны', () async {
+      // §254 — осознанная смена поведения: раньше edge-strip выпутывал relay
+      // автоматически, теперь юзер устраняет сам (см. spec 254, секция
+      // «Осознанное изменение поведения»).
+      final r = await buildRaw([
         vlessServer(
             id: 'u',
             names: ['Relay Berlin', 'Client A', 'Client B'],
@@ -234,12 +264,93 @@ void main() {
             nodeFilter: 'Relay',
             auto: ChannelAuto()),
       ]);
-      expect(byTag(r, 'Relay Berlin').containsKey('detour'), false);
-      expect(byTag(r, 'Client A')['detour'], 'vpn-2');
-      expect(byTag(r, 'Client B')['detour'], 'vpn-2');
-      // Селектор и auto-двойник согласованы: один member-set.
-      expect(byTag(r, 'vpn-2')['outbounds'], contains('Relay Berlin'));
-      expect(byTag(r, 'vpn-2-auto')['outbounds'], ['Relay Berlin']);
+      final cycles = cyclesOf(r);
+      expect(cycles, hasLength(1));
+      // Минимальный набор: только relay (член канала), клиенты — транзит.
+      expect(cycles.single.culprits,
+          [(tag: 'Relay Berlin', detour: 'vpn-2')]);
+    });
+
+    test('реальный кейс §254: флот∈C1→C2, одна нода∈C2→C1 — culprit '
+        'ровно она, не флот', () async {
+      // Миниатюра device-кейса: 3 «BL»-ноды в vpn-2 детурят в vpn-3
+      // (WARP IN); внутри vpn-3 одна AWG-нода по ошибке детурит обратно в
+      // vpn-2, две MASQUE-ноды чисты. Виновник — ровно AWG (1, не 3).
+      final r = await buildRaw([
+        vlessServer(
+            id: 'bl',
+            names: ['BL Sofia', 'BL Zagreb', 'BL Helsinki'],
+            policy: const DetourPolicy(overrideDetour: 'vpn-3')),
+        vlessServer(id: 'in1', names: ['IN Masque A']),
+        vlessServer(id: 'in2', names: ['IN Masque B']),
+        vlessServer(
+            id: 'awg',
+            names: ['IN Awg'],
+            policy: const DetourPolicy(overrideDetour: 'vpn-2')),
+      ], [
+        const Channel(tag: 'vpn-1', label: 'Main'),
+        const Channel(
+            tag: 'vpn-2', label: 'BL', isDetour: true, nodeFilter: 'BL'),
+        const Channel(
+            tag: 'vpn-3', label: 'WARP IN', isDetour: true, nodeFilter: 'IN'),
+      ]);
+      final cycles = cyclesOf(r);
+      expect(cycles, hasLength(1));
+      expect(cycles.single.culprits, [(tag: 'IN Awg', detour: 'vpn-2')]);
+      // Флот не тронут и не оговорён.
+      expect(byTag(r, 'BL Sofia')['detour'], 'vpn-3');
+      expect(cycles.single.message, isNot(contains('BL Sofia')));
+    });
+
+    test('линейная цепочка каналов C1→C2→C3 без замыкания → ok', () async {
+      // Регрессия device-кейса ПОСЛЕ устранения виновника: [BL]→WARP IN→
+      // наружу, WARP OUT→[BL] — ацикличная цепочка, fatal быть не должно.
+      final r = await build([
+        vlessServer(
+            id: 'out',
+            names: ['OUT Warp'],
+            policy: const DetourPolicy(overrideDetour: 'vpn-3')),
+        vlessServer(
+            id: 'bl',
+            names: ['BL Sofia', 'BL Zagreb'],
+            policy: const DetourPolicy(overrideDetour: 'vpn-4')),
+        vlessServer(id: 'in1', names: ['IN Masque'])
+      ], [
+        const Channel(tag: 'vpn-1', label: 'Main'),
+        const Channel(
+            tag: 'vpn-2', label: 'OUT', isDetour: true, nodeFilter: 'OUT'),
+        const Channel(
+            tag: 'vpn-3', label: 'BL', isDetour: true, nodeFilter: 'BL'),
+        const Channel(
+            tag: 'vpn-4', label: 'WARP IN', isDetour: true, nodeFilter: 'IN'),
+      ]);
+      expect(byTag(r, 'BL Sofia')['detour'], 'vpn-4');
+      expect(byTag(r, 'OUT Warp')['detour'], 'vpn-3');
+    });
+
+    test('два независимых кольца → два issue, по culprit на каждое',
+        () async {
+      final r = await buildRaw([
+        vlessServer(
+            id: 'x',
+            names: ['Node X'],
+            policy: const DetourPolicy(overrideDetour: 'vpn-2')),
+        vlessServer(
+            id: 'y',
+            names: ['Node Y'],
+            policy: const DetourPolicy(overrideDetour: 'vpn-3')),
+      ], [
+        const Channel(tag: 'vpn-1', label: 'Main'),
+        const Channel(
+            tag: 'vpn-2', label: 'C1', isDetour: true, nodeFilter: 'Node X'),
+        const Channel(
+            tag: 'vpn-3', label: 'C2', isDetour: true, nodeFilter: 'Node Y'),
+      ]);
+      final cycles = cyclesOf(r);
+      expect(cycles, hasLength(2));
+      expect(
+          cycles.expand((c) => c.culprits.map((x) => x.tag)),
+          containsAll(<String>['Node X', 'Node Y']));
     });
   });
 

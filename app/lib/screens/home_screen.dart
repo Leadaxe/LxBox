@@ -5,12 +5,20 @@ import 'package:flutter/material.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/home_state.dart';
+import '../models/server_list.dart';
+import '../models/validation.dart';
 import '../services/app_log.dart';
 import '../services/error_humanize.dart';
 import '../services/support/active_time_tracker.dart';
 import '../services/support/support_message.dart';
 import '../services/version_info.dart';
+import 'home/source_lookup.dart';
+import 'home/widgets/detour_cycle_sheet.dart';
 import 'home/widgets/traffic_bar.dart';
+import 'folder_detail_screen.dart';
+import 'node_settings_screen.dart';
+import 'subscription_detail_screen.dart';
+import 'subscriptions_screen.dart';
 import 'home/widgets/progress_banner.dart';
 import 'home/widgets/nodes_header.dart';
 import 'home/widgets/home_drawer.dart';
@@ -595,6 +603,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   Future<void> _rebuildAndReconnect() async {
     await _rebuildConfig();
     if (!mounted) return;
+    // §254 — reconnect при VPN off = фактический старт (reconnect делегирует
+    // start); при VPN up новый конфиг не собран, reconnect поехал бы на старом
+    // с диска. Оба — тихая подмена: показываем sheet, дальше не идём.
+    if (_showDetourCycleSheetIfAny()) return;
     await _controller.reconnect();
   }
 
@@ -602,9 +614,65 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   Future<void> _rebuildAndStart() async {
     await _rebuildConfig();
     if (!mounted) return;
+    // §254 — detour-цикл в пересборке: новый конфиг не собран, а старт со
+    // старым с диска был бы тихой подменой. Показываем sheet с виновниками
+    // и не стартуем — юзер устраняет причину сам.
+    if (_showDetourCycleSheetIfAny()) return;
     await _controller.start();
     // §166 — snackbar ошибки теперь централизован в _onControllerChange
     // (любой источник lastError → всплывашка снизу). Здесь дубль убран.
+  }
+
+  /// §254 — если последняя генерация упала на detour-цикле, показывает
+  /// bottom sheet со списком нод-виновников. true = показан (старт прервать).
+  bool _showDetourCycleSheetIfAny() {
+    final cycles =
+        _subController.lastFatalIssues.whereType<DetourCycle>().toList();
+    if (cycles.isEmpty) return false;
+    unawaited(showDetourCycleSheet(context, cycles,
+        onCulpritTap: _goToCulpritOwner));
+    return true;
+  }
+
+  /// §255 — тап по ноде-виновнику в sheet: закрыть sheet, найти владельца и
+  /// открыть его экран прямо на нужном месте:
+  ///   папка       → FolderDetailScreen + подсветка члена;
+  ///   подписка     → SubscriptionDetailScreen (там override detour);
+  ///   одиночный    → NodeSettingsScreen (это и есть та нода).
+  /// Владелец не найден (custom JSON) → открываем список Servers как fallback.
+  void _goToCulpritOwner(String culpritTag) {
+    Navigator.of(context).pop(); // закрыть sheet
+    final owner = ownerOfTag(culpritTag, _subController.entries);
+    final nav = Navigator.of(context);
+    if (owner == null) {
+      nav.push(MaterialPageRoute(
+        builder: (_) => SubscriptionsScreen(
+          subController: _subController,
+          homeController: _controller,
+          autoUpdater: _autoUpdater,
+        ),
+      ));
+      return;
+    }
+    final entry = _subController.entries[owner.entryIndex];
+    final list = entry.list;
+    nav.push(MaterialPageRoute(builder: (_) {
+      if (list is FolderServers) {
+        return FolderDetailScreen(
+          entry: entry,
+          controller: _subController,
+          focusMemberIndex: owner.memberIndex,
+        );
+      }
+      if (list is UserServer) {
+        return NodeSettingsScreen(
+          entry: entry,
+          index: owner.entryIndex,
+          subController: _subController,
+        );
+      }
+      return SubscriptionDetailScreen(entry: entry, controller: _subController);
+    }));
   }
 
   Future<void> _startWithAutoRefresh() async {
@@ -624,6 +692,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     final inFlight = _rebuildInFlight;
     if (inFlight != null) await inFlight;
     if (_subController.configDirty) await _rebuildAndClearDirty();
+    if (!mounted) return;
+    // §254 — detour-цикл в свежей пересборке → sheet + отмена старта (см.
+    // _rebuildAndStart).
+    if (_showDetourCycleSheetIfAny()) return;
     // Обновление подписок теперь через AutoUpdater (см. services/subscription/
     // auto_updater.dart) — 4 триггера, общая логика. При Start никакого
     // синхронного HTTP-fetch'а не делаем: если подписки протухли, trigger 2
