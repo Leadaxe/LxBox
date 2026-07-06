@@ -142,6 +142,88 @@ void main() {
     expect(await ruleOutbound(), 'vpn-1');
   });
 
+  // ── Preset-правила (§248-дыра): outbound override живёт в
+  // varsValues['outbound'], а не в поле `outbound` — heal обязан лечить и его,
+  // иначе expandPreset эмитит route-правило на несуществующий тег → fatal
+  // валидации (DanglingOutboundRef), VPN не стартует.
+
+  /// Storage с каналами vpn-1/vpn-3 и одним preset-правилом, чей override
+  /// указывает на vpn-3 (+второй var, который heal терять не должен).
+  Future<void> seedPresetOverrideOnVpn3() async {
+    final data = {
+      'channels_migrated': true,
+      'channels': [
+        Channel(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
+        Channel(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
+      ],
+      'route_final': 'vpn-1',
+      'custom_rules': [
+        CustomRulePreset(
+          name: 'Block Ads',
+          presetId: 'block-ads',
+          varsValues: const {'outbound': 'vpn-3', 'ruleset': 'ads-all'},
+        ).toJson(),
+      ],
+    };
+    await File(mainPath()).writeAsString(jsonEncode(data));
+    SettingsStorage.resetCacheForTesting();
+  }
+
+  Future<CustomRulePreset> presetRule() async {
+    final rules = await SettingsStorage.getCustomRules();
+    return rules.single as CustomRulePreset;
+  }
+
+  test('delete канала: preset varsValues[outbound] → vpn-1', () async {
+    await seedPresetOverrideOnVpn3();
+    expect((await presetRule()).outbound, 'vpn-3');
+
+    await SettingsStorage.deleteChannel('vpn-3');
+
+    final healed = await presetRule();
+    expect(healed.varsValues['outbound'], 'vpn-1');
+    // Остальные user-vars heal не теряет.
+    expect(healed.varsValues['ruleset'], 'ads-all');
+  });
+
+  test('disable канала (§202): preset varsValues[outbound] → vpn-1', () async {
+    await seedPresetOverrideOnVpn3();
+    final vpn3 = (await SettingsStorage.getChannels())
+        .firstWhere((c) => c.tag == 'vpn-3');
+
+    await SettingsStorage.updateChannel(vpn3.copyWith(enabled: false));
+
+    expect((await presetRule()).varsValues['outbound'], 'vpn-1');
+  });
+
+  test('preset БЕЗ override: heal не подсовывает ключ outbound', () async {
+    // Нет ключа 'outbound' → template-решение as is (spec §033); heal не
+    // должен превращать «юзер не трогал пикер» в явный override на vpn-1.
+    final data = {
+      'channels_migrated': true,
+      'channels': [
+        Channel(tag: 'vpn-1', label: 'Main', enabled: true).toJson(),
+        Channel(tag: 'vpn-3', label: 'Aux', enabled: true).toJson(),
+      ],
+      'route_final': 'vpn-1',
+      'custom_rules': [
+        CustomRulePreset(
+          name: 'Block Ads',
+          presetId: 'block-ads',
+          varsValues: const {'ruleset': 'ads-all'},
+        ).toJson(),
+      ],
+    };
+    await File(mainPath()).writeAsString(jsonEncode(data));
+    SettingsStorage.resetCacheForTesting();
+
+    await SettingsStorage.deleteChannel('vpn-3');
+
+    final rule = await presetRule();
+    expect(rule.varsValues.containsKey('outbound'), isFalse);
+    expect(rule.varsValues['ruleset'], 'ads-all');
+  });
+
   test('§202 — disabled → update без смены enabled НЕ перелечивает', () async {
     // Канал уже выключен; меняем у него label (enabled остаётся false). Heal
     // не должен запускаться повторно (wasEnabled=false).
