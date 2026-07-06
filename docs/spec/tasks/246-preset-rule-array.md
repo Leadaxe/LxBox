@@ -58,21 +58,29 @@ DNS-галка (или first-build до auto-discovery) → тег повиса�
 `healDanglingResolveServers` (§247): битый `server` снимается + warning,
 резолв деградирует в DNS-роутинг.
 
-**Двухслойность фикса (итог device-проверки).** Route-`resolve` в ядре
-гейтится на `metadata.Destination.IsDomain()` (route.go actionResolve) —
-IP-коннекты он НЕ переписывает. Chrome же коннектится по готовому
-IPv6-адресу из своего DNS-ответа → route-слоя недостаточно. Точечный
-sniff-override не работает: повторный sniff-action скипается
-(«duplicate sniff skipped») до override-ветки. Поэтому:
+**Фикс = route-`resolve` (v2.12.1 hotfix — слой в `dns_rule` УБРАН).**
+Первая попытка добавляла `strategy: ipv4_only` в `dns_rule` пресета
+(«слой 1») — это оказалось **fatal**: легаси-опция `strategy` в DNS
+rule action несовместима с `query_type`/`ip_version` в других dns.rules
+(FakeIP §228 эмитит `query_type: [A, AAAA]`). Ядро 1.14 при наличии
+query_type/ip_version включает не-легаси DNS-режим и роняет старт
+(«Legacy `strategy` DNS rule action option is deprecated…», VPN не
+стартует). В одиночку `strategy` лишь ворчит warning'ом — потому баг
+прошёл тесты и устройства без FakeIP, но у юзеров с FakeIP (и у dev-
+устройства) старт умирал. Убрано из ru-direct.
 
-- **слой 1 (главный)** — `dns_rule` пресета получает `strategy: ipv4_only`
-  (map-spread `#if` по `@force_ipv4`): приложение не видит AAAA для
-  RU-доменов вовсе → коннект IPv4. Поле `strategy` DNS-rule action —
-  deprecated (удалят в 1.16; форк наш, миграция — например predefined-фильтр
-  AAAA — отдельной таской к бампу). Работает только при включённой DNS-галке
-  пресета (§121) — отражено в tooltip'е force_ipv4;
-- **слой 2** — route-`resolve` (не-deprecated) кроет FQDN-destination
-  (FakeIP, доменные коннекты, UDP-запросы с доменом).
+Force IPv4 держится ТОЛЬКО на route-`resolve` (`action: resolve`,
+`strategy: ipv4_only`) — там deprecation нет, старт легален. Ограничение:
+route-`resolve` в ядре гейтится на `metadata.Destination.IsDomain()`
+(route.go actionResolve) — переписывает FQDN-destination, но не готовые
+IP-коннекты приложений. На практике связки route-resolve + глобального
+`ipv4_only`-дефолта (§249) достаточно; полный ipv4-only для приложений
+через AAAA-фильтр (predefined NOERROR-правило по query_type=AAAA,
+совместимое с FakeIP) — отдельной таской при необходимости.
+
+**Защита билдера** — `healLegacyDnsStrategy` (post-step, §121-паттерн):
+если в dns.rules есть `strategy` И где-то есть query_type/ip_version →
+снимаем strategy + warning (конфиг из подписки/raw-JSON не убьёт старт).
 
 ### Семантика expansion (`preset_expand.dart`)
 

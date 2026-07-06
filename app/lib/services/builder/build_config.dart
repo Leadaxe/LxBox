@@ -420,6 +420,17 @@ Future<BuildResult> buildConfig({
         'missing DNS server "${h.target}" — falling back to DNS routing.');
   }
 
+  // §246 hotfix — легаси `strategy` в dns.rules × query_type/ip_version
+  // (FakeIP §228) = fatal у ядра 1.14 на старте. Снимаем strategy, если
+  // несовместимая пара присутствует (деградация вместо мёртвого VPN).
+  final healedDnsStrategy = healLegacyDnsStrategy(config);
+  if (healedDnsStrategy.isNotEmpty) {
+    emitWarnings.add(
+        'DNS rule strategy removed on rules ${healedDnsStrategy.join(", ")}: '
+        'incompatible with query_type/ip_version rules (FakeIP) — kernel would '
+        'reject the config. Resolution falls back to the global DNS strategy.');
+  }
+
   final validation = validateConfig(config);
   return BuildResult(
     configJson: jsonEncode(config),
