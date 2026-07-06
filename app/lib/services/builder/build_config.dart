@@ -288,7 +288,7 @@ Future<BuildResult> buildConfig({
         e['presetId'] as String: e['enabled'] == true,
   };
 
-  // §033: presetIds with custom_rules.kind:preset entry AND dns_rule defined
+  // §033: presetIds with custom_rules.kind:preset entry AND dns_rules defined
   // in template — для auto-discovery `kind:preset` записей в dns_options.rules.
   // §121: routing-тоггл = король — выключенный пресет (cr.enabled=false) не
   // считается active'ным для DNS-правил, поэтому его kind:preset запись в
@@ -297,7 +297,7 @@ Future<BuildResult> buildConfig({
     for (final cr in settings.customRules)
       if (cr is CustomRulePreset && cr.enabled && cr.presetId.isNotEmpty)
         if (template.selectableRules
-            .any((p) => p.presetId == cr.presetId && p.dnsRule != null))
+            .any((p) => p.presetId == cr.presetId && p.dnsRules.isNotEmpty))
           cr.presetId,
   };
 
@@ -421,14 +421,16 @@ Future<BuildResult> buildConfig({
   }
 
   // §246 hotfix — легаси `strategy` в dns.rules × query_type/ip_version
-  // (FakeIP §228) = fatal у ядра 1.14 на старте. Снимаем strategy, если
-  // несовместимая пара присутствует (деградация вместо мёртвого VPN).
+  // (FakeIP §228, Force IPv4 §253) = fatal у ядра 1.14 на старте. Снимаем
+  // strategy, если несовместимая пара присутствует (деградация вместо
+  // мёртвого VPN).
   final healedDnsStrategy = healLegacyDnsStrategy(config);
   if (healedDnsStrategy.isNotEmpty) {
     emitWarnings.add(
         'DNS rule strategy removed on rules ${healedDnsStrategy.join(", ")}: '
-        'incompatible with query_type/ip_version rules (FakeIP) — kernel would '
-        'reject the config. Resolution falls back to the global DNS strategy.');
+        'incompatible with query_type/ip_version DNS rules (e.g. FakeIP or '
+        'Force IPv4) — kernel would reject the config. Resolution falls back '
+        'to the global DNS strategy.');
   }
 
   final validation = validateConfig(config);

@@ -23,3 +23,13 @@ String formatRulePreview(Map<String, dynamic>? body, {required String kind}) {
   }
   return parts.join(' · ');
 }
+
+/// §253: preview для пресета с несколькими DNS-правилами — по строке на
+/// правило (subtitle усечёт через maxLines/ellipsis). Пустой список =
+/// активный пресет, у которого expansion выкинул все DNS-правила
+/// (нескачанный SRS и т.п.) — не путать с orphan'ом (null-body).
+String formatRulesPreview(List<Map<String, dynamic>> bodies,
+    {required String kind}) {
+  if (bodies.isEmpty) return '(no DNS rules emitted)';
+  return bodies.map((b) => formatRulePreview(b, kind: kind)).join('\n');
+}

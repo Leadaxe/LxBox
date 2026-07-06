@@ -114,7 +114,10 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
             'default_enabled': preset.defaultEnabled,
             'inline_rule_sets': inlineCount,
             'remote_rule_sets': remoteRuleSets,
-            'has_dns_rule': preset.dnsRule != null,
+            'has_dns_rule': preset.dnsRules.isNotEmpty,
+            // §253: пресет может нести несколько DNS-правил (массив
+            // dns_rules в шаблоне); has_dns_rule оставлен для совместимости.
+            'dns_rules_count': preset.dnsRules.length,
             'dns_servers_count': preset.dnsServers.length,
             'vars_count': preset.vars.length,
           },

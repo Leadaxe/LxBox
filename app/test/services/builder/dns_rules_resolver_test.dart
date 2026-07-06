@@ -281,13 +281,19 @@ void main() {
         config,
         {'servers': [], 'rules': []},
         extraDnsRulesByPresetId: const {
-          'ru-direct': {'rule_set': 'ru-domains', 'server': 'yandex_doh'},
+          // §253: пресет может нести несколько правил — legacy-ветка
+          // (без dnsMirrors) эмитит ВСЕ, в порядке шаблона.
+          'ru-direct': [
+            {'rule_set': 'ru-domains', 'action': 'predefined', 'rcode': 'NOERROR'},
+            {'rule_set': 'ru-domains', 'server': 'yandex_doh'},
+          ],
         },
         activePresetIdsWithDnsRule: const {'ru-direct'},
       );
 
       final dns = config['dns'] as Map<String, dynamic>;
       expect(dns['rules'], [
+        {'rule_set': 'ru-domains', 'action': 'predefined', 'rcode': 'NOERROR'},
         {'rule_set': 'ru-domains', 'server': 'yandex_doh'},
       ]);
     });
@@ -389,7 +395,9 @@ void main() {
           ],
         },
         extraDnsRulesByPresetId: const {
-          'p-id': {'server': 'p'},
+          'p-id': [
+            {'server': 'p'},
+          ],
         },
         activePresetIdsWithDnsRule: const {'p-id'},
       );

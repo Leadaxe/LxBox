@@ -9,7 +9,13 @@ part of '../post_steps.dart';
 /// наличии query_type/ip_version, и тогда легаси `strategy` → FATAL на старте
 /// («Legacy `strategy` DNS rule action option is deprecated…»), VPN не
 /// стартует. В одиночку `strategy` лишь ворчит warning'ом — потому баг не
-/// виден без FakeIP-пресета (§228 эмитит `query_type: [A, AAAA]`).
+/// виден без несовместимых правил: `query_type: [A, AAAA]` эмитит FakeIP
+/// (§228), `ip_version: 6` — ru-direct Force IPv4 (§253, дефолт ON).
+///
+/// Известное сужение: ядро отключает легаси-режим и по другим триггерам
+/// (match_response, response_rcode/answer/ns/extra, action evaluate/respond —
+/// dns/router.go resolveLegacyDNSMode), которые сюда не входят: наш шаблон их
+/// не эмитит, а ловить все юзерские формы — отдельная задача.
 ///
 /// Наш шаблон `strategy` в dns.rules больше не эмитит (убрано из ru-direct),
 /// но оно может прийти из подписки / raw-JSON DNS-правил. Защита как §121:

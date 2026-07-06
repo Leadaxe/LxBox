@@ -42,7 +42,9 @@ class ViewTab extends StatelessWidget {
           json = const JsonEncoder.withIndent('  ').convert({
             'dns_options': {
               'servers': fragments.dnsServers,
-              if (fragments.dnsRule != null) 'rules': [fragments.dnsRule],
+              // §253: пресет может эмитить несколько DNS-правил
+              // (напр. AAAA-гейт + маршрут у ru-direct при Force IPv4).
+              if (fragments.dnsRules.isNotEmpty) 'rules': fragments.dnsRules,
             },
             'route': {
               'rule_set': fragments.ruleSets,

@@ -244,6 +244,33 @@ void main() {
       expect(result.dnsMirrors[1].presetId, 'ru-direct');
       expect(result.dnsMirrors[2].ruleName, 'last-rule');
     });
+
+    // §253 — пресет с dns_rules-массивом: mirror на КАЖДОЕ правило, подряд,
+    // в порядке шаблона; dnsRulesByPresetId несёт весь список.
+    test('dns_rules-массив пресета → mirror на каждое правило, порядок шаблона',
+        () {
+      final reg = RuleSetRegistry();
+      final result = applyAllCustomRules(
+        reg,
+        [
+          CustomRulePreset(
+            name: 'ru',
+            presetId: 'ru-direct',
+            varsValues: {'outbound': 'direct-out'},
+          ),
+        ],
+        [_ruDirectDnsPair()],
+        isPresetDnsEnabled: const {'ru-direct': true},
+      );
+
+      expect(result.dnsMirrors, hasLength(2));
+      expect(result.dnsMirrors[0].presetId, 'ru-direct');
+      expect(result.dnsMirrors[0].body['action'], 'predefined');
+      expect(result.dnsMirrors[0].body.containsKey('server'), isFalse);
+      expect(result.dnsMirrors[1].presetId, 'ru-direct');
+      expect(result.dnsMirrors[1].body['server'], 'yandex_udp');
+      expect(result.dnsRulesByPresetId['ru-direct'], hasLength(2));
+    });
   });
 
   group('applyCustomDns — эмиссия mirror-группы', () {
@@ -277,6 +304,59 @@ void main() {
       final dns = config['dns'] as Map<String, dynamic>;
       expect(dns['rules'], [
         {'rule_set': 'tg', 'server': 'google_udp'},
+      ]);
+    });
+
+    // §253 — serverless-тело пресета (predefined, без ключа `server`)
+    // проходит defensive-гейт эмиссии (гейт только для String-server).
+    test('serverless preset-mirror (predefined) эмитится; route-тело — '
+        'с server-гейтом', () async {
+      await SettingsStorage.saveDnsRulesList([
+        {'enabled': true, 'kind': 'preset', 'presetId': 'ru-direct'},
+      ]);
+
+      final config = <String, dynamic>{};
+      await applyCustomDns(
+        config,
+        {'servers': [], 'rules': []},
+        extraServers: const [
+          {'type': 'udp', 'tag': 'yandex_udp', 'server': '77.88.8.8'},
+        ],
+        activePresetIdsWithDnsRule: const {'ru-direct'},
+        dnsMirrors: const [
+          DnsMirrorEntry(
+            presetId: 'ru-direct',
+            ruleName: 'ru',
+            body: {
+              'rule_set': ['ru-domains'],
+              'ip_version': 6,
+              'action': 'predefined',
+              'rcode': 'NOERROR',
+            },
+          ),
+          DnsMirrorEntry(
+            presetId: 'ru-direct',
+            ruleName: 'ru',
+            body: {
+              'rule_set': ['ru-domains'],
+              'server': 'yandex_udp',
+            },
+          ),
+        ],
+      );
+
+      final dns = config['dns'] as Map<String, dynamic>;
+      expect(dns['rules'], [
+        {
+          'rule_set': ['ru-domains'],
+          'ip_version': 6,
+          'action': 'predefined',
+          'rcode': 'NOERROR',
+        },
+        {
+          'rule_set': ['ru-domains'],
+          'server': 'yandex_udp',
+        },
       ]);
     });
 
@@ -444,6 +524,55 @@ SelectableRule _ruDirect() => SelectableRule(
         }
       ],
       dnsRule: const {'rule_set': 'ru-domains', 'server': '@dns_server'},
+      rule: const {'rule_set': 'ru-domains', 'outbound': '@outbound'},
+      dnsServers: [
+        {
+          'type': 'udp',
+          'tag': 'yandex_udp',
+          'server': '77.88.8.8',
+          'detour': '@outbound',
+        }
+      ],
+    );
+
+/// §253 — реплика ru-direct с ПАРОЙ DNS-правил (AAAA-гейт + маршрут).
+SelectableRule _ruDirectDnsPair() => SelectableRule(
+      label: 'Russian domains direct',
+      presetId: 'ru-direct',
+      vars: [
+        WizardVar(
+          name: 'outbound',
+          type: 'outbound',
+          defaultValue: 'direct-out',
+        ),
+        WizardVar(
+          name: 'dns_server',
+          type: 'dns_servers',
+          defaultValue: 'yandex_udp',
+          required: false,
+        ),
+      ],
+      ruleSets: [
+        {
+          'tag': 'ru-domains',
+          'type': 'inline',
+          'format': 'domain_suffix',
+          'rules': [
+            {
+              'domain_suffix': ['ru']
+            }
+          ]
+        }
+      ],
+      dnsRule: const [
+        {
+          'rule_set': 'ru-domains',
+          'ip_version': 6,
+          'action': 'predefined',
+          'rcode': 'NOERROR',
+        },
+        {'rule_set': 'ru-domains', 'server': '@dns_server'},
+      ],
       rule: const {'rule_set': 'ru-domains', 'outbound': '@outbound'},
       dnsServers: [
         {
