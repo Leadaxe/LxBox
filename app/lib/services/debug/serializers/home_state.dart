@@ -23,6 +23,11 @@ Map<String, Object?> serializeHomeState(HomeState s) {
     },
     'connected_since': s.connectedSince?.toUtc().toIso8601String(),
     'last_error': s.lastError,
+    // §250 — причина последнего аварийного стопа/revoke; в отличие от
+    // last_error не расходуется UI, чистится только успешным стартом.
+    // In-memory — пусто после рестарта процесса.
+    'last_start_error': s.lastStartError,
+    'last_start_error_at': s.lastStartErrorAt?.toUtc().toIso8601String(),
     // §076 renamed from `config_stale_since_start`.
     'config_changed_need_restart': s.configChangedNeedRestart,
     'sort_mode': s.sortMode.name,

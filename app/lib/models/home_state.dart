@@ -66,6 +66,8 @@ class HomeState {
     this.connectedSince,
     this.configChangedNeedRestart = false,
     this.configLoadError = false,
+    this.lastStartError = '',
+    this.lastStartErrorAt,
   }) : configModel = configModel ?? ParsedConfig.parse(configRaw);
 
   final String configRaw;
@@ -128,6 +130,17 @@ class HomeState {
   /// рестартом. Гаснет, когда `configRaw` стал непустым (load/save). Не
   /// пересобираем (см. bootstrap split).
   final bool configLoadError;
+
+  /// §250 — диагностический дубль [lastError] для Debug API: причина
+  /// последнего аварийного стопа/revoke. В отличие от [lastError] НЕ
+  /// расходуется UI (`clearError` §166 и оптимистичные `lastError: ''` в
+  /// start/stop/reload его не трогают); очищается ТОЛЬКО успешным стартом
+  /// (`tunnel → connected`). In-memory by design — пусто после рестарта
+  /// процесса.
+  final String lastStartError;
+
+  /// §250 — когда [lastStartError] был записан (null, если пусто).
+  final DateTime? lastStartErrorAt;
 
   bool get tunnelUp => tunnel.isUp;
 
@@ -286,6 +299,8 @@ class HomeState {
     Object? connectedSince = _unset,
     bool? configChangedNeedRestart,
     bool? configLoadError,
+    String? lastStartError,
+    Object? lastStartErrorAt = _unset,
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
@@ -325,6 +340,10 @@ class HomeState {
           : connectedSince as DateTime?,
       configChangedNeedRestart: configChangedNeedRestart ?? this.configChangedNeedRestart,
       configLoadError: configLoadError ?? this.configLoadError,
+      lastStartError: lastStartError ?? this.lastStartError,
+      lastStartErrorAt: identical(lastStartErrorAt, _unset)
+          ? this.lastStartErrorAt
+          : lastStartErrorAt as DateTime?,
     );
   }
 }
