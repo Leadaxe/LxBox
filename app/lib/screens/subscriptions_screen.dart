@@ -34,11 +34,16 @@ class SubscriptionsScreen extends StatefulWidget {
     required this.subController,
     required this.homeController,
     required this.autoUpdater,
+    this.focusEntryId,
   });
 
   final SubscriptionController subController;
   final HomeController homeController;
   final AutoUpdater autoUpdater;
+
+  /// §255 — при открытии проскроллить к этому entry и мигнуть его строкой
+  /// (навигация из detour-cycle sheet к владельцу ноды-виновника). null = нет.
+  final String? focusEntryId;
 
   @override
   State<SubscriptionsScreen> createState() => _SubscriptionsScreenState();
@@ -48,10 +53,55 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   final _inputController = TextEditingController();
   bool _autoUpdateEnabled = true;
 
+  // §255 — прокрутка к владельцу + вспышка строки (навигация из detour-cycle
+  // sheet). Локальная (в этом экране нет HomeState для персистентного кольца) —
+  // таймер-вспышка, гаснет сама.
+  final _scrollController = ScrollController();
+  final _tileKeys = <String, GlobalKey>{};
+  String? _highlightedEntryId;
+  Timer? _highlightTimer;
+
+  GlobalKey _tileKey(String id) => _tileKeys.putIfAbsent(id, GlobalKey.new);
+
   @override
   void initState() {
     super.initState();
     unawaited(_loadAutoUpdateFlag());
+    final focus = widget.focusEntryId;
+    if (focus != null) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _focusEntry(focus, attempt: 0));
+    }
+  }
+
+  /// §255 — скролл к строке владельца + вспышка. Retry по кадрам: строка за
+  /// вьюпортом в lazy-списке не смонтирована (currentContext null); грубо
+  /// прыгаем по оценке позиции и повторяем ensureVisible.
+  void _focusEntry(String id, {required int attempt}) {
+    if (!mounted) return;
+    if (attempt == 0) setState(() => _highlightedEntryId = id);
+    const maxAttempts = 6;
+    final ctx = _tileKeys[id]?.currentContext;
+    if (ctx != null) {
+      unawaited(Scrollable.ensureVisible(ctx,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic,
+          alignment: 0.3));
+    } else if (attempt < maxAttempts && _scrollController.hasClients) {
+      final idx = widget.subController.entries.indexWhere((e) => e.id == id);
+      if (idx >= 0) {
+        final target = (idx * 88.0)
+            .clamp(0.0, _scrollController.position.maxScrollExtent);
+        _scrollController.jumpTo(target);
+      }
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _focusEntry(id, attempt: attempt + 1));
+      return;
+    }
+    _highlightTimer?.cancel();
+    _highlightTimer = Timer(const Duration(milliseconds: 2200), () {
+      if (mounted) setState(() => _highlightedEntryId = null);
+    });
   }
 
   Future<void> _loadAutoUpdateFlag() async {
@@ -70,6 +120,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   @override
   void dispose() {
     _inputController.dispose();
+    _scrollController.dispose();
+    _highlightTimer?.cancel();
     super.dispose();
   }
 
@@ -530,6 +582,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       // §098 — drag-reorder подписок (grab-strip слева, как routing rules).
       // AlwaysScrollable — pull-to-refresh на коротких списках. Divider теперь
       // внутри самой строки (у ReorderableListView нет separatorBuilder).
+      scrollController: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
       // Bottom safe-area: последняя подписка не должна прятаться за системной
       // навигацией Android (жесты/кнопки). Паттерн проекта — padding.bottom + 24.
@@ -544,10 +597,25 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       },
       itemBuilder: (context, i) {
         final entry = ctrl.entries[i];
-        return SubscriptionEntryTile(
+        final highlighted = _highlightedEntryId == entry.id;
+        final cs = Theme.of(context).colorScheme;
+        // §255 — reorder-key остаётся top-level (KeyedSubtree); GlobalKey для
+        // ensureVisible + вспышка — на внутреннем Container.
+        return KeyedSubtree(
           key: ValueKey(entry.id),
-          dragIndex: i,
-          entry: entry,
+          child: AnimatedContainer(
+            key: _tileKey(entry.id),
+            duration: const Duration(milliseconds: 200),
+            decoration: highlighted
+                ? BoxDecoration(
+                    color: cs.primaryContainer.withValues(alpha: 0.5),
+                    border: Border(
+                        left: BorderSide(color: cs.primary, width: 3)),
+                  )
+                : null,
+            child: SubscriptionEntryTile(
+              dragIndex: i,
+              entry: entry,
           onToggle: () {
             unawaited(widget.subController.toggleAt(i));
           },
@@ -584,6 +652,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
               ),
             );
           },
+            ),
+          ),
         );
       },
     );

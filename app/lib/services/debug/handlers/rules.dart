@@ -7,6 +7,12 @@ import '../transport/request.dart';
 import '../transport/response.dart';
 import '_shared.dart';
 
+/// §256 — тест-хук для чистого парсера тела правила (без storage/rebuild),
+/// чтобы покрыть read/write симметрию DNS-полей. Суффикс `ForTest` —
+/// конвенция «вызывать только из тестов» (meta-аннотацию не тянем в deps).
+CustomRule ruleFromJsonStrictForTest(Map<String, dynamic> j) =>
+    _ruleFromJsonStrict(j);
+
 /// `/rules/*` — CRUD для custom routing rules (§030).
 ///
 /// Работает поверх [SettingsStorage.getCustomRules] / [saveCustomRules] —
@@ -303,21 +309,39 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
   }
 }
 
-/// §117 задача 3 — DNS-опция правила. Wire shape (snake_case как у остальных
-/// полей API): `{"enabled": bool, "server_tag": "<dns-server tag>"}`.
-/// Отсутствие ключа → null (поле не задано). Сервер по tag не валидируем —
-/// пропавший реф build тихо не эмитит (решение №3).
+/// §117 задача 3 / §256 — DNS-опция правила. Wire shape (snake_case как у
+/// остальных полей API): `{"enabled": bool, "server_tag": dns-server-tag,
+/// "force_ipv4": bool}`. Отсутствие ключа → null (поле не задано).
+///
+/// §256: `enabled`/`server_tag`/`force_ipv4` независимы — DNS-опция может
+/// нести только Force IPv4 (глушилка AAAA серверу не нужна). Поэтому
+/// `enabled` дефолтит в false, а `server_tag` обязателен ТОЛЬКО когда
+/// `enabled == true` (dedicated-server-mirror без tag'а бессмыслен). Сервер
+/// по tag не валидируем — пропавший реф build тихо не эмитит (решение №3).
 RuleDns? _fieldRuleDns(Map<String, dynamic> m, String key) {
   if (!m.containsKey(key)) return null;
   final v = m[key];
   if (v is! Map) throw BadRequest('field "$key" must be object');
-  final enabled = v['enabled'];
-  if (enabled is! bool) throw BadRequest('field "$key.enabled" must be bool');
-  final tag = v['server_tag'];
-  if (tag is! String || tag.isEmpty) {
-    throw BadRequest('field "$key.server_tag" must be non-empty string');
+  final enabledRaw = v['enabled'];
+  if (enabledRaw != null && enabledRaw is! bool) {
+    throw BadRequest('field "$key.enabled" must be bool');
   }
-  return RuleDns(enabled: enabled, serverTag: tag);
+  final enabled = enabledRaw == true;
+  final forceRaw = v['force_ipv4'];
+  if (forceRaw != null && forceRaw is! bool) {
+    throw BadRequest('field "$key.force_ipv4" must be bool');
+  }
+  final forceIpv4 = forceRaw == true;
+  final tagRaw = v['server_tag'];
+  if (tagRaw != null && tagRaw is! String) {
+    throw BadRequest('field "$key.server_tag" must be string');
+  }
+  final tag = (tagRaw as String?) ?? '';
+  if (enabled && tag.isEmpty) {
+    throw BadRequest(
+        'field "$key.server_tag" must be non-empty when enabled is true');
+  }
+  return RuleDns(enabled: enabled, serverTag: tag, forceIpv4: forceIpv4);
 }
 
 /// §247 — resolve-опция правила. Wire shape (snake_case):

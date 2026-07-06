@@ -125,6 +125,82 @@ void main() {
         false,
       );
     });
+
+    // §256 — Force IPv4 (AAAA-глушилка).
+    test('forceIpv4 roundtrip + скрыт когда false', () {
+      final on = CustomRuleInline(
+        name: 'f',
+        domains: ['a.com'],
+        dns: const RuleDns(forceIpv4: true),
+      );
+      expect(on.toJson()['dns'], containsPair('forceIpv4', true));
+      final r = CustomRule.fromJson(on.toJson());
+      expect(r.dns!.forceIpv4, true);
+
+      // false → ключ не пишется (симметрия с resolve-опциями).
+      final off = CustomRuleInline(
+        name: 'f2',
+        domains: ['a.com'],
+        dns: const RuleDns(enabled: true, serverTag: 'google_udp'),
+      );
+      expect(
+          (off.toJson()['dns'] as Map).containsKey('forceIpv4'), false);
+    });
+
+    test('гейт forceIpv4Active: НЕ требует serverTag; режется port/protocol',
+        () {
+      const force = RuleDns(forceIpv4: true);
+      // Домены + галка, без сервера → активна (глушилка серверу не нужна).
+      expect(
+        CustomRuleInline(name: 'd', domains: ['a.com'], dns: force)
+            .forceIpv4Active,
+        true,
+        reason: 'serverTag не требуется',
+      );
+      // Только приложение (package_name), без доменов → активна (кейс
+      // «глючному приложению v4»).
+      expect(
+        CustomRuleInline(
+                name: 'app', packages: ['com.x'], dns: force)
+            .forceIpv4Active,
+        true,
+      );
+      // ports / protocols → DNS-слеп → неактивна.
+      expect(
+        CustomRuleInline(
+                name: 'p', domains: ['a.com'], ports: ['443'], dns: force)
+            .forceIpv4Active,
+        false,
+      );
+      expect(
+        CustomRuleInline(
+                name: 'pr',
+                domains: ['a.com'],
+                protocols: ['quic'],
+                dns: force)
+            .forceIpv4Active,
+        false,
+      );
+      // disabled правило → неактивна.
+      expect(
+        CustomRuleInline(
+                name: 'off',
+                enabled: false,
+                domains: ['a.com'],
+                dns: force)
+            .forceIpv4Active,
+        false,
+      );
+      // галка выкл → неактивна.
+      expect(
+        CustomRuleInline(
+                name: 'g',
+                domains: ['a.com'],
+                dns: const RuleDns(enabled: true, serverTag: 'google_udp'))
+            .forceIpv4Active,
+        false,
+      );
+    });
   });
 
   group('applyAllCustomRules — сбор mirror-группы', () {
@@ -193,6 +269,32 @@ void main() {
       expect(m.serverTag, 'cloudflare_udp');
     });
 
+    // §256 — srs + Force IPv4: serverless-mirror с .srs-тегом.
+    test('srs+forceIpv4 → serverless-mirror ссылается на .srs-тег', () {
+      final reg = RuleSetRegistry();
+      final srs = CustomRuleSrs(
+        name: 'cn-list',
+        srsUrl: 'https://e/cn.srs',
+        outbound: 'vpn-2',
+        dns: const RuleDns(forceIpv4: true),
+      );
+      final result = applyAllCustomRules(
+        reg,
+        [srs],
+        const [],
+        srsPaths: {srs.id: '/tmp/cn.srs'},
+      );
+      final m = result.dnsMirrors.single;
+      expect(m.serverless, true);
+      expect(m.serverTag, '');
+      expect(m.body, {
+        'rule_set': 'cn-list',
+        'ip_version': 6,
+        'action': 'predefined',
+        'rcode': 'NOERROR',
+      });
+    });
+
     test('гейт в build: ports → mirror не собирается (defensive к UI)', () {
       final reg = RuleSetRegistry();
       final result = applyAllCustomRules(
@@ -210,6 +312,100 @@ void main() {
       );
       expect(result.dnsMirrors, isEmpty);
       expect(reg.getRules(), hasLength(1), reason: 'routing-сторона живёт');
+    });
+
+    // §256 — Force IPv4: serverless AAAA-глушилка.
+    test('forceIpv4 inline → serverless-mirror {ip_version:6, predefined}',
+        () {
+      final reg = RuleSetRegistry();
+      final result = applyAllCustomRules(
+        reg,
+        [
+          CustomRuleInline(
+            name: 'ru',
+            domainSuffixes: ['ru'],
+            outbound: 'direct-out',
+            dns: const RuleDns(forceIpv4: true),
+          ),
+        ],
+        const [],
+      );
+      final m = result.dnsMirrors.single;
+      expect(m.serverless, true);
+      expect(m.serverTag, '');
+      expect(m.body, {
+        'rule_set': 'ru',
+        'ip_version': 6,
+        'action': 'predefined',
+        'rcode': 'NOERROR',
+      });
+      expect(reg.getRules().single['outbound'], 'direct-out',
+          reason: 'routing-сторона живёт независимо');
+    });
+
+    test('forceIpv4 + dedicated server → ДВА mirror\'а, глушилка ПЕРВОЙ', () {
+      final reg = RuleSetRegistry();
+      final result = applyAllCustomRules(
+        reg,
+        [
+          CustomRuleInline(
+            name: 'ru',
+            domainSuffixes: ['ru'],
+            outbound: 'direct-out',
+            dns: const RuleDns(
+                enabled: true, serverTag: 'google_udp', forceIpv4: true),
+          ),
+        ],
+        const [],
+      );
+      expect(result.dnsMirrors, hasLength(2));
+      // Порядок §253: AAAA-гейт первым, server-mirror вторым.
+      expect(result.dnsMirrors[0].serverless, true);
+      expect(result.dnsMirrors[0].body['ip_version'], 6);
+      expect(result.dnsMirrors[1].serverless, false);
+      expect(result.dnsMirrors[1].serverTag, 'google_udp');
+      expect(result.dnsMirrors[1].body.containsKey('ip_version'), false);
+    });
+
+    test('forceIpv4 только приложение (без доменов) → serverless-mirror '
+        'с package_name', () {
+      final reg = RuleSetRegistry();
+      final result = applyAllCustomRules(
+        reg,
+        [
+          CustomRuleInline(
+            name: 'glitchy',
+            packages: ['com.buggy.ipv6'],
+            outbound: 'direct-out',
+            dns: const RuleDns(forceIpv4: true),
+          ),
+        ],
+        const [],
+      );
+      final m = result.dnsMirrors.single;
+      expect(m.serverless, true);
+      expect(m.body['ip_version'], 6);
+      expect(m.body['action'], 'predefined');
+      // rule_set — headless-тег правила (package_name внутри него).
+      expect(m.body['rule_set'], 'glitchy');
+    });
+
+    test('forceIpv4 + ports → serverless-mirror не собирается (DNS-слеп)', () {
+      final reg = RuleSetRegistry();
+      final result = applyAllCustomRules(
+        reg,
+        [
+          CustomRuleInline(
+            name: 'p',
+            domains: ['a.com'],
+            ports: ['443'],
+            outbound: 'vpn-1',
+            dns: const RuleDns(forceIpv4: true),
+          ),
+        ],
+        const [],
+      );
+      expect(result.dnsMirrors, isEmpty);
     });
 
     test('порядок группы = порядок routing-правил (preset + rule)', () {
@@ -244,6 +440,33 @@ void main() {
       expect(result.dnsMirrors[1].presetId, 'ru-direct');
       expect(result.dnsMirrors[2].ruleName, 'last-rule');
     });
+
+    // §253 — пресет с dns_rules-массивом: mirror на КАЖДОЕ правило, подряд,
+    // в порядке шаблона; dnsRulesByPresetId несёт весь список.
+    test('dns_rules-массив пресета → mirror на каждое правило, порядок шаблона',
+        () {
+      final reg = RuleSetRegistry();
+      final result = applyAllCustomRules(
+        reg,
+        [
+          CustomRulePreset(
+            name: 'ru',
+            presetId: 'ru-direct',
+            varsValues: {'outbound': 'direct-out'},
+          ),
+        ],
+        [_ruDirectDnsPair()],
+        isPresetDnsEnabled: const {'ru-direct': true},
+      );
+
+      expect(result.dnsMirrors, hasLength(2));
+      expect(result.dnsMirrors[0].presetId, 'ru-direct');
+      expect(result.dnsMirrors[0].body['action'], 'predefined');
+      expect(result.dnsMirrors[0].body.containsKey('server'), isFalse);
+      expect(result.dnsMirrors[1].presetId, 'ru-direct');
+      expect(result.dnsMirrors[1].body['server'], 'yandex_udp');
+      expect(result.dnsRulesByPresetId['ru-direct'], hasLength(2));
+    });
   });
 
   group('applyCustomDns — эмиссия mirror-группы', () {
@@ -277,6 +500,92 @@ void main() {
       final dns = config['dns'] as Map<String, dynamic>;
       expect(dns['rules'], [
         {'rule_set': 'tg', 'server': 'google_udp'},
+      ]);
+    });
+
+    // §256 — serverless rule-mirror (Force IPv4 predefined): server НЕ
+    // подставляется, запись НЕ режется отсутствием сервера в dns.servers.
+    test('serverless rule-mirror эмитится как есть (без server-подстановки)',
+        () async {
+      final config = <String, dynamic>{};
+      await applyCustomDns(
+        config,
+        {'servers': [], 'rules': []},
+        dnsMirrors: const [
+          DnsMirrorEntry(
+            ruleId: 'r1',
+            ruleName: 'ru',
+            serverless: true,
+            body: {
+              'rule_set': 'ru',
+              'ip_version': 6,
+              'action': 'predefined',
+              'rcode': 'NOERROR',
+            },
+          ),
+        ],
+      );
+      final dns = config['dns'] as Map<String, dynamic>;
+      expect(dns['rules'], [
+        {
+          'rule_set': 'ru',
+          'ip_version': 6,
+          'action': 'predefined',
+          'rcode': 'NOERROR',
+        },
+      ]);
+    });
+
+    // §253 — serverless-тело пресета (predefined, без ключа `server`)
+    // проходит defensive-гейт эмиссии (гейт только для String-server).
+    test('serverless preset-mirror (predefined) эмитится; route-тело — '
+        'с server-гейтом', () async {
+      await SettingsStorage.saveDnsRulesList([
+        {'enabled': true, 'kind': 'preset', 'presetId': 'ru-direct'},
+      ]);
+
+      final config = <String, dynamic>{};
+      await applyCustomDns(
+        config,
+        {'servers': [], 'rules': []},
+        extraServers: const [
+          {'type': 'udp', 'tag': 'yandex_udp', 'server': '77.88.8.8'},
+        ],
+        activePresetIdsWithDnsRule: const {'ru-direct'},
+        dnsMirrors: const [
+          DnsMirrorEntry(
+            presetId: 'ru-direct',
+            ruleName: 'ru',
+            body: {
+              'rule_set': ['ru-domains'],
+              'ip_version': 6,
+              'action': 'predefined',
+              'rcode': 'NOERROR',
+            },
+          ),
+          DnsMirrorEntry(
+            presetId: 'ru-direct',
+            ruleName: 'ru',
+            body: {
+              'rule_set': ['ru-domains'],
+              'server': 'yandex_udp',
+            },
+          ),
+        ],
+      );
+
+      final dns = config['dns'] as Map<String, dynamic>;
+      expect(dns['rules'], [
+        {
+          'rule_set': ['ru-domains'],
+          'ip_version': 6,
+          'action': 'predefined',
+          'rcode': 'NOERROR',
+        },
+        {
+          'rule_set': ['ru-domains'],
+          'server': 'yandex_udp',
+        },
       ]);
     });
 
@@ -444,6 +753,55 @@ SelectableRule _ruDirect() => SelectableRule(
         }
       ],
       dnsRule: const {'rule_set': 'ru-domains', 'server': '@dns_server'},
+      rule: const {'rule_set': 'ru-domains', 'outbound': '@outbound'},
+      dnsServers: [
+        {
+          'type': 'udp',
+          'tag': 'yandex_udp',
+          'server': '77.88.8.8',
+          'detour': '@outbound',
+        }
+      ],
+    );
+
+/// §253 — реплика ru-direct с ПАРОЙ DNS-правил (AAAA-гейт + маршрут).
+SelectableRule _ruDirectDnsPair() => SelectableRule(
+      label: 'Russian domains direct',
+      presetId: 'ru-direct',
+      vars: [
+        WizardVar(
+          name: 'outbound',
+          type: 'outbound',
+          defaultValue: 'direct-out',
+        ),
+        WizardVar(
+          name: 'dns_server',
+          type: 'dns_servers',
+          defaultValue: 'yandex_udp',
+          required: false,
+        ),
+      ],
+      ruleSets: [
+        {
+          'tag': 'ru-domains',
+          'type': 'inline',
+          'format': 'domain_suffix',
+          'rules': [
+            {
+              'domain_suffix': ['ru']
+            }
+          ]
+        }
+      ],
+      dnsRule: const [
+        {
+          'rule_set': 'ru-domains',
+          'ip_version': 6,
+          'action': 'predefined',
+          'rcode': 'NOERROR',
+        },
+        {'rule_set': 'ru-domains', 'server': '@dns_server'},
+      ],
       rule: const {'rule_set': 'ru-domains', 'outbound': '@outbound'},
       dnsServers: [
         {

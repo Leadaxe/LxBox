@@ -75,7 +75,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// PresetId-keyed map: expanded `dns_rule` from active preset
   /// CustomRulePreset entries (used to render content for `kind: preset` rows).
   /// §032: pivot moved from preset.label to preset.preset_id (immutable).
-  Map<String, Map<String, dynamic>> _presetRulesByPresetId = {};
+  Map<String, List<Map<String, dynamic>>> _presetRulesByPresetId = {};
 
   /// PresetId → label map для UI render'а title'а у `kind: preset` строк.
   /// Live lookup: storage хранит presetId, UI отображает текущий label.
@@ -155,7 +155,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     // build-time (custom_rules.dart dnsEnabled gate + build_config
     // activePresetIdsWithDnsRule). Иначе UI набрал бы серверы/правила
     // выключенного пресета и orphan-cleanup рассинхронизировался бы с серверами.
-    final presetRulesByPresetId = <String, Map<String, dynamic>>{};
+    final presetRulesByPresetId = <String, List<Map<String, dynamic>>>{};
     final presetLabelByPresetId = <String, String>{};
     final presetServersWithLabel = <Map<String, dynamic>>[];
     final activeRules = await SettingsStorage.getCustomRules();
@@ -173,12 +173,18 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         }
       }
       if (match == null) continue;
-      if (match.dnsRule != null) {
+      if (match.dnsRules.isNotEmpty) {
         activePresetIdsWithDnsRule.add(cr.presetId);
       }
       final fragments = expandPreset(cr, match);
-      if (fragments.dnsRule != null) {
-        presetRulesByPresetId[cr.presetId] = fragments.dnsRule!;
+      if (match.dnsRules.isNotEmpty) {
+        // §253: ключ по СЫРОМУ шаблону — симметрия с
+        // activePresetIdsWithDnsRule выше. Если expansion выкинул все
+        // DNS-правила (нескачанный SRS и т.п.), запись kind:preset не должна
+        // выпасть из persist'а (cleanDnsRulesForPersist фильтрует по
+        // containsKey) — иначе auto-discovery воскресит её с enabled=true и
+        // затрёт выключенное юзером состояние.
+        presetRulesByPresetId[cr.presetId] = fragments.dnsRules;
       }
       presetLabelByPresetId[cr.presetId] = match.label;
       // Collect preset's expanded dns_servers — annotate with preset.label
@@ -495,7 +501,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         children.add(DnsMirrorTile(
           key: ValueKey('dns-rule-preset-${cr.presetId}'),
           title: _presetLabelByPresetId[cr.presetId] ?? cr.presetId,
-          previewBody: _presetRulesByPresetId[cr.presetId] ?? const {},
+          // §253: пресет может нести несколько DNS-правил — тайл один,
+          // switch тогглит блок атомарно, превью показывает все тела.
+          previewBodies: _presetRulesByPresetId[cr.presetId] ?? const [],
           sourceKind: 'preset',
           enabled: _rules[idx]['enabled'] == true,
           onToggle: (v) => _toggleRuleEnabled(idx, v),
@@ -514,7 +522,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         children.add(DnsMirrorTile(
           key: ValueKey('dns-mirror-${cr.id}'),
           title: cr.name,
-          previewBody: previewBody,
+          previewBodies: [previewBody],
           sourceKind: 'rule',
           enabled: cr.dns!.enabled,
           onToggle: (v) => _toggleRuleDns(cr, v),

@@ -285,7 +285,7 @@ void main() {
       final cycles = r.fatal.whereType<DetourCycle>().toList();
       expect(cycles.length, 1);
       // §219 — проверяем СОДЕРЖИМОЕ cycle, не только факт наличия: оба узла
-      // цикла должны быть в нём (ловит off-by-one в _findDetourCycle).
+      // цикла должны быть в нём (§254 — детектор в _detectDetourCycles).
       expect(cycles.single.cycle, containsAll(<String>['a', 'b']));
       expect(cycles.single.cycle, hasLength(2));
     });
@@ -323,6 +323,65 @@ void main() {
         ],
       });
       expect(r.fatal.whereType<DetourCycle>().length, 1);
+    });
+
+    // §254 — цикл через selector-группу (граф включает группа→члены) +
+    // структурные кольца + минимальный набор виновников.
+
+    test('§254 — цикл через selector: node→group→node → 1 culprit', () {
+      // A ∈ vpn-2 (selector); A детурит в vpn-2 → group-fan-out → A. Цикл.
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'A', 'type': 'vless', 'detour': 'vpn-2'},
+          {'tag': 'vpn-2', 'type': 'selector', 'outbounds': ['A'], 'default': 'A'},
+        ],
+      });
+      final c = r.fatal.whereType<DetourCycle>().single;
+      expect(c.culprits, [(tag: 'A', detour: 'vpn-2')]);
+    });
+
+    test('§254 — node-цикл НЕ теряется при structural-кольце (находка №1)', () {
+      // structural S↔T (selector'ы друг на друга, неустранимы) + node a↔b.
+      // Ранний return выбросил бы culprit a — регрессия-guard.
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'a', 'type': 'vless', 'detour': 'b'},
+          {'tag': 'b', 'type': 'vless', 'detour': 'a'},
+          {'tag': 'S', 'type': 'selector', 'outbounds': ['T'], 'default': 'T'},
+          {'tag': 'T', 'type': 'selector', 'outbounds': ['S'], 'default': 'S'},
+        ],
+      });
+      final cycles = r.fatal.whereType<DetourCycle>().toList();
+      final culprits =
+          cycles.expand((c) => c.culprits.map((x) => x.tag)).toList();
+      expect(culprits.any((t) => t == 'a' || t == 'b'), true,
+          reason: 'node-цикл потерян');
+    });
+
+    test('§254 — group-only кольцо → issue с пустыми culprits', () {
+      // S↔T без устранимых detour-рёбер: виновников-нод нет, но issue есть
+      // (иначе silent no-op → ядро отвергнет конфиг на старте).
+      final r = validateConfig({
+        'outbounds': [
+          {'tag': 'S', 'type': 'selector', 'outbounds': ['T'], 'default': 'T'},
+          {'tag': 'T', 'type': 'selector', 'outbounds': ['S'], 'default': 'S'},
+        ],
+      });
+      final cycles = r.fatal.whereType<DetourCycle>().toList();
+      expect(cycles, isNotEmpty);
+      expect(cycles.every((c) => c.culprits.isEmpty), true);
+    });
+
+    test('§254 — cap: показываем не больше kMaxDetourCulprits виновников', () {
+      final obs = [
+        for (var i = 0; i < 6; i++)
+          {'tag': 'n$i', 'type': 'vless', 'detour': 'n$i'},
+      ];
+      final r = validateConfig({'outbounds': obs});
+      final total = r.fatal
+          .whereType<DetourCycle>()
+          .fold<int>(0, (n, c) => n + c.culprits.length);
+      expect(total, lessThanOrEqualTo(kMaxDetourCulprits));
     });
 
     // §141 P1.8b — non-string selector default.

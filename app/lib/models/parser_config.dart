@@ -280,9 +280,10 @@ class SelectableRule {
     this.ruleSets = const [],
     dynamic rule,
     this.vars = const [],
-    this.dnsRule,
+    dynamic dnsRule,
     this.dnsServers = const [],
-  }) : rules = _normalizeRules(rule);
+  })  : rules = _normalizeRules(rule),
+        dnsRules = _normalizeRules(dnsRule);
 
   final String label;
   final String description;
@@ -330,9 +331,12 @@ class SelectableRule {
   /// rule_set/dns_rule/rule/dns_servers подставляется при expansion'е.
   final List<WizardVar> vars;
 
-  /// DNS-правило, которое пресет вносит в `dns.rules` (insert перед
-  /// fallback). Null → пресет не трогает DNS-rules.
-  final Map<String, dynamic>? dnsRule;
+  /// DNS-правила, которые пресет вносит в `dns.rules`, в порядке шаблона
+  /// (§253). Template-форма `dns_rules` — List (канонический) ИЛИ
+  /// `dns_rule` — Map (legacy single, fakeip). Пустой список → пресет не
+  /// трогает DNS-rules. Элементы могут быть `#if`-обёртками (§120/§246) —
+  /// разворачиваются на expansion'е.
+  final List<Map<String, dynamic>> dnsRules;
 
   /// DNS-серверы, из которых `@dns_server` var выбирает один для
   /// добавления в `dns.servers`. Пустой список → пресет не вносит
@@ -353,8 +357,8 @@ class SelectableRule {
   /// `dns.servers`/`dns.rules`). Для UI-маркера «DNS» в списке правил: глядя на
   /// строку, не видно, что пресет (напр. FakeIP / ru-direct) трогает DNS
   /// Settings. Тот же split, что в debug-сериализаторе (has_dns_rule /
-  /// dns_servers_count) и в гейте билдера (`p.dnsRule != null`).
-  bool get touchesDns => dnsRule != null || dnsServers.isNotEmpty;
+  /// dns_servers_count) и в гейте билдера (`p.dnsRules.isNotEmpty`).
+  bool get touchesDns => dnsRules.isNotEmpty || dnsServers.isNotEmpty;
 
   factory SelectableRule.fromJson(Map<String, dynamic> json) {
     final presetId = (json['preset_id'] as String?) ?? '';
@@ -381,7 +385,9 @@ class SelectableRule {
               .map((v) => WizardVar.fromJson(v))
               .toList() ??
           const [],
-      dnsRule: json['dns_rule'] as Map<String, dynamic>?,
+      // §253: `dns_rules` (List, канонический ключ массивной формы) |
+      // `dns_rule` (Map, legacy single) — нормализует конструктор.
+      dnsRule: json['dns_rules'] ?? json['dns_rule'],
       dnsServers: (json['dns_servers'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??

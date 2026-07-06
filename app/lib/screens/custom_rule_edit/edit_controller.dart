@@ -417,13 +417,26 @@ class CustomRuleEditController extends ChangeNotifier {
           ? 'google_udp'
           : (_dnsServerTags.isNotEmpty ? _dnsServerTags.first : '');
     }
-    _dns = RuleDns(enabled: v, serverTag: tag);
+    // §256: copyWith сохраняет forceIpv4 (ортогонален dedicated-серверу).
+    _dns = (_dns ?? const RuleDns()).copyWith(enabled: v, serverTag: tag);
     notifyListeners();
   }
 
   /// §117: выбор DNS-сервера для mirror'а (по tag из существующих).
   void setDnsServerTag(String tag) {
-    _dns = RuleDns(enabled: _dns?.enabled ?? false, serverTag: tag);
+    _dns = (_dns ?? const RuleDns()).copyWith(serverTag: tag);
+    notifyListeners();
+  }
+
+  /// §256: галка Force IPv4 (AAAA-глушилка). Ортогональна enabled/serverTag —
+  /// `RuleDns` может существовать только из-за неё (enabled=false, serverTag='').
+  /// Снятие галки на «пустой» dns (без dedicated-сервера) обнуляет _dns целиком
+  /// — иначе в storage/backup остаётся мёртвый `RuleDns{}` (шумит isDirty).
+  void setForceIpv4(bool v) {
+    final next = (_dns ?? const RuleDns()).copyWith(forceIpv4: v);
+    _dns = (!next.forceIpv4 && !next.enabled && next.serverTag.isEmpty)
+        ? null
+        : next;
     notifyListeners();
   }
 

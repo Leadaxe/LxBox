@@ -1,5 +1,10 @@
 import '../../models/validation.dart';
 
+/// §254 — сколько detour-виновников показывать максимум. Юзер чинит первые,
+/// пересобирает, видит следующие. Кап рубит квадратичную окраску на
+/// патологическом конфиге (много нод, каждая замыкает свой цикл).
+const kMaxDetourCulprits = 3;
+
 /// Валидация собранного конфига (§3.5 спеки 026). Функция, не класс.
 ///
 /// Проверяет:
@@ -68,14 +73,28 @@ ValidationResult validateConfig(Map<String, dynamic> config) {
     }
   }
 
-  // §141 P1.8a — цикл в detour-графе (3-цветный DFS). Каждый узел имеет ≤1
-  // исходящего detour-ребра, так что граф — набор цепочек/деревьев; цикл =
-  // ребро обратно в текущий путь обхода (gray). Первый найденный цикл —
-  // достаточный сигнал fatal (один битый detour ломает старт ядра).
-  final cycle = _findDetourCycle(detourEdge);
-  if (cycle != null) {
-    issues.add(DetourCycle(cycle));
+  // §141 P1.8a / §254 — циклы в detour-графе. Граф включает структурные
+  // рёбра «группа → каждый член» (selector/urltest): ядро при топосортировке
+  // старта считает так же (selector объявляет зависимостями ВСЕХ членов), и
+  // без них кольцо через канал ([BL]→vpn-5→AWG→vpn-4→[BL]) невидимо для
+  // чистых node→detour цепочек. Один issue на цикл-компоненту, с минимальным
+  // набором виновников (§254 — ничего не правим, юзер устраняет сам).
+  final groupMembers = <String, List<String>>{};
+  for (final o in outbounds) {
+    final type = o['type'] as String? ?? '';
+    if (type != 'selector' && type != 'urltest') continue;
+    final tag = o['tag'] as String? ?? '';
+    if (tag.isEmpty) continue;
+    final members = (o['outbounds'] as List<dynamic>? ?? const [])
+        .whereType<String>()
+        .where(allTags.contains)
+        .toList();
+    if (members.isNotEmpty) groupMembers[tag] = members;
   }
+  issues.addAll(_detectDetourCycles(
+    detourEdge: detourEdge,
+    groupMembers: groupMembers,
+  ));
 
   // §121 — DNS resolver refs → existing dns.servers tag.
   final dns = config['dns'];
@@ -121,35 +140,245 @@ ValidationResult validateConfig(Map<String, dynamic> config) {
   return ValidationResult(issues);
 }
 
-/// §141 P1.8a — поиск первого цикла в detour-графе. `edges`: tag → его detour
-/// (ровно одно исходящее ребро на узел). Возвращает список тегов цикла в
-/// порядке обхода (последний замыкает на первый) либо `null`, если циклов нет.
+/// §254 — детектор detour-циклов с минимальным набором виновников.
 ///
-/// 3-цветный обход: `done` — узлы, из которых цикл точно недостижим (уже
-/// раскрученная цепочка); `path` — узлы текущего следования по ребрам. Встретив
-/// узел из `path`, отрезаем хвост от него — это и есть цикл (ловит и self-ref
-/// `A→A`, где `start == detour`).
-List<String>? _findDetourCycle(Map<String, String> edges) {
-  final done = <String>{};
-  for (final start in edges.keys) {
-    if (done.contains(start)) continue;
-    final path = <String>[];
-    final seenInPath = <String>{};
-    var node = start;
-    while (true) {
-      if (done.contains(node)) break; // уперлись в безопасную раскрутку
-      if (seenInPath.contains(node)) {
-        // Нашли цикл — вернуть его, отрезав возможный «хвост-подход».
-        final from = path.indexOf(node);
-        return path.sublist(from);
+/// Граф: removable-рёбра `node → node.detour` (устранимы правкой юзера) +
+/// структурные `группа → каждый член` (semantика selector/urltest,
+/// устранению не подлежат). Циклы ищутся SCC (итеративный Tarjan);
+/// виновники — итеративной окраской:
+///
+/// 1. Найти циклические узлы (SCC >1 или self-loop). Нет — конец.
+/// 2. Кандидаты = removable-рёбра внутри циклического множества.
+/// 3. score(e) = сколько узлов перестают быть циклическими при виртуальном
+///    снятии e. Ребро, через которое идут ВСЕ циклы компоненты, разваливает
+///    её целиком → max score (в реальном кейсе: 1 нода против 150 членов
+///    канала, см. spec 254).
+/// 4. Победитель (тай-брейк — лексикографически по тегу) виртуально
+///    снимается; повторить с шага 1 — «обнажившиеся» кольца ловятся
+///    следующей итерацией.
+///
+/// Виновники группируются по цикл-компонентам ИСХОДНОГО графа: один
+/// [DetourCycle] на компоненту, с репрезентативным циклом (кратчайшее
+/// замыкание первого виновника) для раскрытия в UI.
+List<DetourCycle> _detectDetourCycles({
+  required Map<String, String> detourEdge,
+  required Map<String, List<String>> groupMembers,
+}) {
+  final nodes = <String>{
+    ...detourEdge.keys,
+    ...detourEdge.values,
+    ...groupMembers.keys,
+    for (final ms in groupMembers.values) ...ms,
+  };
+  if (nodes.isEmpty) return const [];
+
+  final initialCyclic = _cyclicNodes(nodes, detourEdge, groupMembers, const {});
+  if (initialCyclic.isEmpty) return const [];
+
+  // §254 — показываем не больше [kMaxDetourCulprits] виновников: юзер чинит
+  // первые, пересобирает, видит следующие. Заодно кап рубит квадратичную
+  // окраску на патологическом конфиге (150 нод, каждая детурит в свой канал:
+  // без капа 150 итераций × ~150 кандидатов × Tarjan ≈ 1.3с внутри
+  // generateConfig). structuralIssues копятся отдельно.
+  final removed = <String>{};
+  final culprits = <String>[];
+  final structuralCycles = <List<String>>[];
+  while (culprits.length < kMaxDetourCulprits) {
+    final cyclic = _cyclicNodes(nodes, detourEdge, groupMembers, removed);
+    if (cyclic.isEmpty) break;
+    final candidates = detourEdge.keys
+        .where((u) =>
+            !removed.contains(u) &&
+            cyclic.contains(u) &&
+            cyclic.contains(detourEdge[u]))
+        .toList()
+      ..sort();
+    var best = candidates.isEmpty ? null : candidates.first;
+    var bestScore = 0;
+    for (final u in candidates) {
+      final after =
+          _cyclicNodes(nodes, detourEdge, groupMembers, {...removed, u});
+      final score = cyclic.length - after.length;
+      if (score > bestScore) {
+        bestScore = score;
+        best = u;
       }
-      seenInPath.add(node);
-      path.add(node);
-      final next = edges[node];
-      if (next == null) break; // конец цепочки — циклов на этом пути нет
-      node = next;
     }
-    done.addAll(path); // вся пройденная цепочка цикла не содержит
+    if (best == null || bestScore <= 0) {
+      // Ни одно removable-ребро не лежит на цикле (кольцо из structural-рёбер
+      // selector↔selector — только ручная правка JSON; либо мост-ребро вне
+      // цикла). Виновников-нод нет: репортим эту компоненту как group-only
+      // цикл и снимаем её из графа, чтобы не зациклиться (structural-рёбра
+      // неустранимы → удаляем узлы компоненты из дальнейшего рассмотрения).
+      structuralCycles.add(cyclic.toList()..sort());
+      break;
+    }
+    removed.add(best);
+    culprits.add(best);
   }
-  return null;
+
+  // Группировка виновников по компонентам исходного графа: BFS-достижимость
+  // внутри initialCyclic (SCC-компонента = взаимодостижимость; для
+  // группировки хватает слабой связности внутри циклического множества —
+  // разные SCC, слитые в одну слабую компоненту detour-мостом, дадут один
+  // общий issue, что для UI даже читабельнее).
+  final undirected = <String, Set<String>>{};
+  void link(String a, String b) {
+    if (!initialCyclic.contains(a) || !initialCyclic.contains(b)) return;
+    (undirected[a] ??= {}).add(b);
+    (undirected[b] ??= {}).add(a);
+  }
+
+  for (final e in detourEdge.entries) {
+    link(e.key, e.value);
+  }
+  for (final g in groupMembers.entries) {
+    for (final m in g.value) {
+      link(g.key, m);
+    }
+  }
+
+  final componentOf = <String, int>{};
+  var compId = 0;
+  for (final start in initialCyclic) {
+    if (componentOf.containsKey(start)) continue;
+    final queue = [start];
+    componentOf[start] = compId;
+    while (queue.isNotEmpty) {
+      final u = queue.removeLast();
+      for (final v in undirected[u] ?? const <String>{}) {
+        if (componentOf.containsKey(v)) continue;
+        componentOf[v] = compId;
+        queue.add(v);
+      }
+    }
+    compId++;
+  }
+
+  final byComponent = <int, List<String>>{};
+  for (final c in culprits) {
+    (byComponent[componentOf[c] ?? -1] ??= []).add(c);
+  }
+
+  return [
+    for (final group in byComponent.values)
+      DetourCycle(
+        _representativeCycle(group.first, detourEdge, groupMembers),
+        culprits: [
+          for (final tag in group) (tag: tag, detour: detourEdge[tag]!),
+        ],
+      ),
+    // Group-only кольца (structural-рёбра, ручная правка JSON): виновников-нод
+    // нет, показываем сам цикл. Отдельным issue каждое — не склеиваем.
+    for (final cycle in structuralCycles) DetourCycle(cycle),
+  ];
+}
+
+/// Циклические узлы графа: итеративный Tarjan SCC; циклична SCC размера >1
+/// либо одиночный узел с self-loop.
+Set<String> _cyclicNodes(
+  Set<String> nodes,
+  Map<String, String> detourEdge,
+  Map<String, List<String>> groupMembers,
+  Set<String> removed,
+) {
+  List<String> adjOf(String u) => [
+        ...?groupMembers[u],
+        if (!removed.contains(u) && detourEdge.containsKey(u)) detourEdge[u]!,
+      ];
+
+  final index = <String, int>{};
+  final low = <String, int>{};
+  final onStack = <String>{};
+  final stack = <String>[];
+  final cyclic = <String>{};
+  var counter = 0;
+
+  for (final root in nodes) {
+    if (index.containsKey(root)) continue;
+    // Итеративный DFS: (узел, позиция в adjacency).
+    final work = <(String, int)>[(root, 0)];
+    while (work.isNotEmpty) {
+      final (v, pi) = work.last;
+      if (pi == 0) {
+        index[v] = low[v] = counter++;
+        stack.add(v);
+        onStack.add(v);
+      }
+      var recursed = false;
+      final adj = adjOf(v);
+      for (var i = pi; i < adj.length; i++) {
+        final w = adj[i];
+        if (!index.containsKey(w)) {
+          work.last = (v, i + 1);
+          work.add((w, 0));
+          recursed = true;
+          break;
+        } else if (onStack.contains(w)) {
+          low[v] = low[v]!.compareTo(index[w]!) < 0 ? low[v]! : index[w]!;
+        }
+      }
+      if (recursed) continue;
+      if (low[v] == index[v]) {
+        final comp = <String>[];
+        while (true) {
+          final w = stack.removeLast();
+          onStack.remove(w);
+          comp.add(w);
+          if (w == v) break;
+        }
+        if (comp.length > 1) {
+          cyclic.addAll(comp);
+        } else if (adjOf(comp.single).contains(comp.single)) {
+          cyclic.add(comp.single); // self-loop
+        }
+      }
+      work.removeLast();
+      if (work.isNotEmpty) {
+        final (u, upi) = work.last;
+        low[u] = low[u]!.compareTo(low[v]!) < 0 ? low[u]! : low[v]!;
+        work.last = (u, upi);
+      }
+    }
+  }
+  return cyclic;
+}
+
+/// Репрезентативный цикл для виновника: BFS кратчайший путь от его detour-цели
+/// обратно к нему + само ребро. Формат — теги в порядке обхода (последний
+/// замыкает на первый): `[culprit, detour, ..., предшественник culprit]`.
+List<String> _representativeCycle(
+  String culprit,
+  Map<String, String> detourEdge,
+  Map<String, List<String>> groupMembers,
+) {
+  final target = detourEdge[culprit]!;
+  if (target == culprit) return [culprit]; // self-loop
+  final prev = <String, String>{};
+  final queue = [target];
+  final seen = <String>{target};
+  while (queue.isNotEmpty) {
+    final u = queue.removeAt(0);
+    if (u == culprit) break;
+    final adj = [
+      ...?groupMembers[u],
+      if (detourEdge.containsKey(u)) detourEdge[u]!,
+    ];
+    for (final v in adj) {
+      if (!seen.add(v)) continue;
+      prev[v] = u;
+      queue.add(v);
+    }
+  }
+  // Раскрутка пути target..culprit; цикл начинается с culprit.
+  final path = <String>[];
+  String? cur = culprit;
+  while (cur != null && cur != target) {
+    path.add(cur);
+    cur = prev[cur];
+  }
+  path.add(target);
+  // path = [culprit, ..., target] в обратном порядке следования; развернём в
+  // порядок обхода: culprit → target → ... → предшественник culprit.
+  return [culprit, ...path.reversed.where((t) => t != culprit)];
 }

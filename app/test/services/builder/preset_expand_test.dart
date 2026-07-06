@@ -22,7 +22,8 @@ void main() {
       expect(f.warnings, isEmpty);
       expect(f.ruleSets.length, 1);
       expect(f.ruleSets.first['tag'], 'ru-domains');
-      expect(f.dnsRule, {'rule_set': 'ru-domains', 'server': 'yandex_doh'});
+      expect(f.dnsRules.single,
+          {'rule_set': 'ru-domains', 'server': 'yandex_doh'});
       expect(f.routingRules.single,
           {'rule_set': 'ru-domains', 'outbound': 'vpn-1'});
       expect(f.dnsServers.length, 1);
@@ -42,7 +43,8 @@ void main() {
       final f = expandPreset(rule, preset);
 
       expect(f.warnings, isEmpty);
-      expect(f.dnsRule, {'rule_set': 'ru-domains', 'server': 'yandex_doh'},
+      expect(f.dnsRules.single,
+          {'rule_set': 'ru-domains', 'server': 'yandex_doh'},
           reason: 'default_value из шаблона применяется');
       expect(f.dnsServers.length, 1);
       expect(f.dnsServers.first['tag'], 'yandex_doh');
@@ -61,7 +63,7 @@ void main() {
 
       expect(f.warnings, isEmpty);
       expect(f.routingRules.single['outbound'], 'direct-out');
-      expect(f.dnsRule, isNull);
+      expect(f.dnsRules, isEmpty);
       expect(f.dnsServers, isEmpty);
     });
 
@@ -580,13 +582,17 @@ void main() {
 
     test('dns_rules и routing_rules append без dedup', () {
       final f1 = PresetFragments(
-        dnsRule: {'rule_set': 'ru-domains', 'server': 'a'},
+        dnsRules: [
+          {'rule_set': 'ru-domains', 'server': 'a'}
+        ],
         routingRules: [
           {'rule_set': 'ru-domains', 'outbound': 'direct-out'}
         ],
       );
       final f2 = PresetFragments(
-        dnsRule: {'rule_set': 'x', 'server': 'b'},
+        dnsRules: [
+          {'rule_set': 'x', 'server': 'b'}
+        ],
         routingRules: [
           {'rule_set': 'x', 'outbound': 'vpn-1'}
         ],
@@ -635,7 +641,7 @@ void main() {
       expect(f.dnsServers.first['tag'], 'fakeip');
       expect(f.dnsServers.first['type'], 'fakeip');
       // Правило ссылается на реально эмитнутый сервер (не dangling).
-      expect(f.dnsRule, {
+      expect(f.dnsRules.single, {
         'query_type': ['A', 'AAAA'],
         'server': 'fakeip',
       });
@@ -883,17 +889,31 @@ void main() {
       expect(route['outbound'], 'direct-out');
       expect(route.containsKey('action'), isFalse);
 
-      // ⚠ dns_rule НЕ несёт strategy (v2.12.1 hotfix). Легаси-опция strategy
-      // в dns rule action × query_type/ip_version в других dns.rules (FakeIP
-      // §228) → ядро 1.14 отклоняет старт (resolveLegacyDNSMode fatal).
-      // Force IPv4 держится ТОЛЬКО на route-resolve (там deprecation нет).
-      expect(f.dnsRule, isNotNull);
-      expect(f.dnsRule!.containsKey('strategy'), isFalse,
-          reason: 'strategy в dns_rule = fatal при включённом FakeIP; убрано');
-      expect(f.dnsRule!['server'], 'yandex_udp');
+      // ⚠ Легаси-опция strategy в dns rule deprecated (ядро 1.14,
+      // resolveLegacyDNSMode fatal при query_type/ip_version в конфиге) —
+      // её нет нигде. §253: DNS-слой Force IPv4 = пара правил:
+      // [AAAA-гейт predefined NOERROR (ip_version: 6), маршрут].
+      expect(f.dnsRules.length, 2,
+          reason: 'AAAA-гейт + маршрут; 1 = #if-гейт потерян '
+              '(регрессия dns_rule/dns_rules-ключа)');
+      final gate = f.dnsRules[0];
+      expect(gate['ip_version'], 6);
+      expect(gate['action'], 'predefined');
+      expect(gate['rcode'], 'NOERROR');
+      expect(gate['rule_set'], ['ru-domains', 'ru-services']);
+      expect(gate.containsKey('server'), isFalse,
+          reason: 'serverless-действие — predefined отвечает сам');
+      expect(gate.containsKey('strategy'), isFalse);
+      final dnsRoute = f.dnsRules[1];
+      expect(dnsRoute['server'], 'yandex_udp');
+      expect(dnsRoute.containsKey('ip_version'), isFalse,
+          reason: 'маршрут безусловный — не-A/AAAA-запросы (HTTPS type 65) '
+              'тоже должны идти в @dns_server');
+      expect(dnsRoute.containsKey('strategy'), isFalse,
+          reason: 'strategy в dns rule = fatal при включённом FakeIP');
     });
 
-    test('ru-direct: force_ipv4=false → route без resolve, dns_rule как есть',
+    test('ru-direct: force_ipv4=false → route без resolve, DNS без AAAA-гейта',
         () {
       final preset = realPreset('ru-direct');
       final f = expandPreset(
@@ -907,7 +927,11 @@ void main() {
       // Галка off → resolve-элемент выпал, остался только терминальный route.
       expect(f.routingRules.length, 1);
       expect(f.routingRules.single['outbound'], 'direct-out');
-      expect(f.dnsRule!.containsKey('strategy'), isFalse);
+      // §253: AAAA-гейт выпал целиком (array-element #if), маршрут остался.
+      expect(f.dnsRules.length, 1);
+      expect(f.dnsRules.single['server'], 'yandex_udp');
+      expect(f.dnsRules.single.containsKey('ip_version'), isFalse);
+      expect(f.dnsRules.single.containsKey('strategy'), isFalse);
     });
 
     test('ru-direct: force_ipv4=false → только route', () {
@@ -937,6 +961,129 @@ void main() {
       expect(f.routingRules[0].containsKey('server'), isFalse,
           reason: 'ru-inside resolve без server — резолв через DNS-роутинг');
       expect(f.routingRules[1]['outbound'], 'direct-out');
+    });
+  });
+
+  // §253 — механика dns_rules-массива: валидность элементов + guards.
+  group('expandPreset — dns_rules array (§253)', () {
+    test('элемент без server, но с serverless-action (predefined) выживает; '
+        'без server и без action — дропается', () {
+      final preset = SelectableRule(
+        label: 'X',
+        presetId: 'x',
+        ruleSets: [
+          {
+            'tag': 'rs',
+            'type': 'inline',
+            'rules': [
+              {
+                'domain_suffix': ['ru']
+              }
+            ],
+          },
+        ],
+        dnsRule: const [
+          {'rule_set': 'rs', 'action': 'predefined', 'rcode': 'NOERROR'},
+          {'rule_set': 'rs'}, // ни server, ни action → drop
+          // action вне закрытого serverless-списка (у ядра evaluate без
+          // server = fatal, опечатка = decode error) → drop.
+          {'rule_set': 'rs', 'action': 'evaluate'},
+        ],
+      );
+      final f = expandPreset(
+        CustomRulePreset(name: 'X', presetId: 'x'),
+        preset,
+      );
+      expect(f.dnsRules.length, 1);
+      expect(f.dnsRules.single['action'], 'predefined');
+    });
+
+    test('невалидная форма rule_set (int) → ссылка снимается, правило живёт '
+        '(паритет §219 с route-правилами)', () {
+      final preset = SelectableRule(
+        label: 'X',
+        presetId: 'x',
+        dnsRule: const [
+          {'rule_set': 42, 'action': 'predefined', 'rcode': 'NOERROR'},
+        ],
+      );
+      final f = expandPreset(
+        CustomRulePreset(name: 'X', presetId: 'x'),
+        preset,
+      );
+      expect(f.dnsRules.single.containsKey('rule_set'), isFalse);
+      expect(f.dnsRules.single['action'], 'predefined');
+      expect(f.warnings.any((w) => w.contains('invalid')), isTrue);
+    });
+
+    test('dangling rule_set в DNS-правиле → правило дропается с warning', () {
+      final preset = SelectableRule(
+        label: 'X',
+        presetId: 'x',
+        ruleSets: [
+          {
+            'tag': 'cached',
+            'type': 'inline',
+            'rules': [
+              {
+                'domain_suffix': ['ru']
+              }
+            ],
+          },
+        ],
+        dnsRule: const [
+          {'rule_set': 'missing-srs', 'action': 'predefined'},
+          // массив-форма: выживший один tag даунгрейдится до String
+          {
+            'rule_set': ['cached', 'missing-srs'],
+            'action': 'predefined',
+          },
+        ],
+      );
+      final f = expandPreset(
+        CustomRulePreset(name: 'X', presetId: 'x'),
+        preset,
+      );
+      expect(f.dnsRules.length, 1);
+      expect(f.dnsRules.single['rule_set'], 'cached');
+      expect(f.warnings.any((w) => w.contains('missing-srs')), isTrue);
+    });
+
+    test('SelectableRule: dns_rules (List) из JSON нормализуется; '
+        'legacy dns_rule (Map) — тоже', () {
+      final fromList = SelectableRule.fromJson({
+        'preset_id': 'x',
+        'label': 'X',
+        'dns_rules': [
+          {'rule_set': 'a', 'server': 's'},
+          {'rule_set': 'a', 'action': 'predefined'},
+        ],
+      });
+      expect(fromList.dnsRules.length, 2);
+      expect(fromList.touchesDns, isTrue);
+
+      final fromMap = SelectableRule.fromJson({
+        'preset_id': 'x',
+        'label': 'X',
+        'dns_rule': {'rule_set': 'a', 'server': 's'},
+      });
+      expect(fromMap.dnsRules.length, 1);
+      expect(fromMap.touchesDns, isTrue);
+    });
+
+    test('оба ключа сразу → dns_rules побеждает dns_rule (контракт TEMPLATE.md)',
+        () {
+      final r = SelectableRule.fromJson({
+        'preset_id': 'x',
+        'label': 'X',
+        'dns_rule': {'rule_set': 'legacy', 'server': 's'},
+        'dns_rules': [
+          {'rule_set': 'a', 'server': 's'},
+          {'rule_set': 'a', 'action': 'predefined'},
+        ],
+      });
+      expect(r.dnsRules.length, 2);
+      expect(r.dnsRules.first['rule_set'], 'a');
     });
   });
 }

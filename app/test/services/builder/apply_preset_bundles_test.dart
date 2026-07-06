@@ -40,8 +40,9 @@ void main() {
       // §033: dnsRulesByPresetId — авторитативный источник для applyCustomDns
       // (по immutable presetId). labelByPresetId — для UI рендера.
       expect(result.dnsRulesByPresetId, hasLength(1));
-      expect(result.dnsRulesByPresetId['ru-direct'],
-          {'rule_set': 'ru-domains', 'server': 'yandex_doh'});
+      expect(result.dnsRulesByPresetId['ru-direct'], [
+        {'rule_set': 'ru-domains', 'server': 'yandex_doh'}
+      ]);
       expect(result.labelByPresetId['ru-direct'], 'Russian domains direct');
     });
 
