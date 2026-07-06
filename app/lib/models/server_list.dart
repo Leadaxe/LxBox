@@ -396,6 +396,55 @@ final class FolderServers extends ServerList {
       );
 }
 
+/// §248 — сброс detour-ссылок на канал [tag] (или его auto-двойник
+/// `<tag>-auto`) в '' у одного списка: `detourPolicy.overrideDetour` +
+/// личные `FolderMember.detour`. Интра-омонимы пропускаются: значение,
+/// равное bare-тегу распарсенного члена ТОЙ ЖЕ папки (включая выключенных —
+/// toggle члена не должен молча менять смысл ссылки), означает члена, а не
+/// канал. Возвращает копию с изменениями (null = нечего лечить) + счётчик.
+///
+/// Общее ядро: storage-heal (`_healDetourChannelRefs`) и in-memory ресинк
+/// `SubscriptionController.syncDetourChannelRefsCleared` обязаны сбрасывать
+/// одинаково, иначе следующий `_persist()` воскресит вылеченную ссылку.
+({ServerList? healed, int count}) clearDetourChannelRefs(
+    ServerList l, String tag) {
+  final autoTag = '$tag-auto';
+  bool matches(String v) => v == tag || v == autoTag;
+
+  final memberBare = l is FolderServers
+      ? <String>{
+          for (final m in l.members)
+            if (m.node != null) m.node!.tag,
+        }
+      : const <String>{};
+
+  var count = 0;
+  ServerList next = l;
+  final override = l.detourPolicy.overrideDetour;
+  if (matches(override) && !memberBare.contains(override)) {
+    final p = l.detourPolicy.copyWith(overrideDetour: '');
+    next = switch (l) {
+      SubscriptionServers s => s.copyWith(detourPolicy: p),
+      UserServer u => u.copyWith(detourPolicy: p),
+      FolderServers f => f.copyWith(detourPolicy: p),
+    };
+    count++;
+  }
+  if (next is FolderServers) {
+    var membersChanged = false;
+    final ms = next.members.map((m) {
+      if (matches(m.detour) && !memberBare.contains(m.detour)) {
+        membersChanged = true;
+        count++;
+        return m.copyWith(detour: '');
+      }
+      return m;
+    }).toList();
+    if (membersChanged) next = next.copyWith(members: ms);
+  }
+  return (healed: count > 0 ? next : null, count: count);
+}
+
 /// Политика применения detour-серверов (§1.3 спеки 026, перенесено из 018).
 /// Хранится на `ServerList`, применяется inline в `buildConfig`.
 class DetourPolicy {

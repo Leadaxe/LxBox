@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
+import '../models/channel.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../services/error_humanize.dart';
+import '../services/settings_storage.dart';
 import '../services/subscription/sources.dart';
 import '../widgets/detour_target_picker.dart';
 import '../services/url_launcher.dart';
@@ -47,6 +49,10 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   String? _sourceError;
   bool _showAllHeaders = false;
 
+  // §248 — каналы: секция Channels в detour-пикере + подпись «⚙ <label>»
+  // канальной override-цели в Settings-вкладке.
+  List<Channel> _channels = const [];
+
   /// Headers, которые нам реально нужны — подписочные метаданные.
   /// Остальное (server, date, cookies, content-length, ddos-guard, etc.) —
   /// под раскрывашкой.
@@ -65,6 +71,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     _tabCtrl = TabController(length: 3, vsync: this);
     _nameCtrl = TextEditingController(text: widget.entry.name);
     unawaited(_loadNodes());
+    unawaited(_loadChannels());
     // При первом заходе на Source — живой GET.
     _tabCtrl.addListener(() {
       if (_tabCtrl.index == 2 && !_sourceLoaded && !_sourceLoading) {
@@ -271,6 +278,10 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     final hasDetour = (_nodes ?? const []).any((n) => n.chained != null);
     return SubscriptionSettingsTab(
       entry: widget.entry,
+      channels: _channels, // §248 — подпись канальной override-цели
+      // §252 — разворот цели в цепочку «как пакет пойдёт» для превью.
+      detourPathHopsOf: (stored) => detourPathHops(stored,
+          controller: widget.controller, channels: _channels),
       hasDetour: hasDetour,
       detourMode: _detourMode,
       onTagPrefixChanged: (val) {
@@ -360,12 +371,23 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     setState(() {});
   }
 
+  /// §248 — загрузка каналов (initState + refresh перед пикером).
+  Future<void> _loadChannels() async {
+    final channels = await SettingsStorage.getChannels();
+    if (!mounted) return;
+    setState(() => _channels = channels);
+  }
+
   Future<void> _showOverrideDetourPicker() async {
     // §239 — единый пикер; для подписки кандидаты = только «свободные»
     // одиночки (члены папок живут под политикой своей папки — чужим нельзя).
+    // §248 — свежие каналы (могли измениться, пока экран открыт).
+    await _loadChannels();
+    if (!mounted) return;
     final chosen = await showDetourTargetPicker(
       context,
       controller: widget.controller,
+      channels: _channels,
     );
     if (chosen == null || !mounted) return;
     setState(() {

@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../config/consts.dart' show kDetourTagPrefix;
 import '../config/route_config.dart';
 import '../vpn/box_vpn_client.dart';
 import '../vpn/cc_channel.dart';
@@ -16,6 +17,7 @@ import '../services/app_log.dart';
 import '../services/automation/event_emitter.dart';
 import '../services/error_format.dart';
 import '../services/rule_name_resolver.dart';
+import '../services/selector_info.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
 import '../services/haptic_service.dart';
@@ -169,12 +171,23 @@ class HomeController extends ChangeNotifier
   Future<void> refreshChannelLabels() async {
     final channels = await SettingsStorage.getChannels();
     if (_disposed) return;
-    _channelLabels = {for (final c in channels) c.tag: c.label};
+    // §248 — detour-канал получает ⚙-префикс (display-only): в dropdown и
+    // заголовках видно, что переключаешь прослойку, а не канал правил.
+    _channelLabels = {
+      for (final c in channels)
+        c.tag: c.isDetour ? '$kDetourTagPrefix${c.label}' : c.label,
+    };
     // §208 — auto-теги round_robin-каналов (для гейта «View pool»).
     _roundRobinAutoTags = {
       for (final c in channels)
         if (c.auto?.mode == UrltestMode.roundRobin) c.autoTag,
     };
+    // §251 — storage-fallback тегов селекторов: fold «селектор (выбор)» в
+    // routing-строках работает и до первого подключения (двойники тоже —
+    // detour-ссылка может указывать на `<tag>-auto`).
+    SelectorInfo.I.setFallbackTags([
+      for (final c in channels) ...[c.tag, c.autoTag],
+    ]);
     _emit(_state.copyWith(groupLabels: _channelLabels));
   }
 
@@ -231,6 +244,12 @@ class HomeController extends ChangeNotifier
   // Native VPN events
   // ---------------------------------------------------------------------------
 
+  /// §250 — тестовый мост к приватному [_handleStatusEvent]: юнит-тесты
+  /// прогоняют статус-события через реальный handler без native-стрима.
+  @visibleForTesting
+  void debugHandleStatusEvent(TunnelStatusEvent event) =>
+      _handleStatusEvent(event);
+
   void _handleStatusEvent(TunnelStatusEvent event) {
     final tunnel = event.status;
     final prevTunnel = _state.tunnel;
@@ -249,6 +268,10 @@ class HomeController extends ChangeNotifier
         tunnel: tunnel,
         connectedSince: DateTime.now(),
         configChangedNeedRestart: false,
+        // §250 — успешный старт = ЕДИНСТВЕННОЕ место очистки lastStartError
+        // (clearError/оптимистичные lastError:'' его не трогают).
+        lastStartError: '',
+        lastStartErrorAt: null,
       ));
       // §187 — на cold-start (swipe-reopen) `connected` приходит pull'ом и
       // connectedSince выше = «сейчас», теряя реальное время старта. Подтянуть
@@ -304,6 +327,9 @@ class HomeController extends ChangeNotifier
       _stopCcStreams();
       // §165 — сброс кэша имён правил (правила могут смениться к след. запуску).
       RuleNameResolver.I.clear();
+      // §251 — выборы групп протухли (туннель down); ТЕГИ остаются — история
+      // профайлера/закрытых conns продолжает фолдиться корректно.
+      SelectorInfo.I.clearSelected();
       final reason = tunnel == TunnelStatus.revoked
           ? 'Another VPN app took the system VPN slot (e.g. an always-on VPN). Start again to reconnect.'
           : (event.errorReason != null ? 'Stopped: ${event.errorReason}' : '');
@@ -311,6 +337,14 @@ class HomeController extends ChangeNotifier
         _state.copyWith(
           tunnel: tunnel,
           lastError: reason.isNotEmpty ? reason : _state.lastError,
+          // §250 — диагностический дубль для Debug API: живёт до следующего
+          // УСПЕШНОГО старта (UI-consume через clearError его не затирает).
+          // Пустой reason (чистый user-stop) НЕ затирает предыдущее значение —
+          // симметрично поведению lastError строкой выше.
+          lastStartError:
+              reason.isNotEmpty ? reason : _state.lastStartError,
+          lastStartErrorAt:
+              reason.isNotEmpty ? DateTime.now() : _state.lastStartErrorAt,
           ccGroups: const <CcGroup>[],
           groups: <String>[],
           nodes: <String>[],
@@ -386,6 +420,9 @@ class HomeController extends ChangeNotifier
       if (_disposed) return; // §219 — могли dispose'нуться за await → не эмитим
       _addDebug(DebugSource.app, '[vpn] forceStopVPN sent (timeout in ${expected.label})');
       if (_state.tunnel != expected) return;
+      // §251 — синтезированный tunnel-down: настоящий Stopped потом проглотит
+      // stale-terminal guard, его clearSelected недостижим — чистим здесь.
+      SelectorInfo.I.clearSelected();
       _emit(_state.copyWith(
         tunnel: TunnelStatus.disconnected,
         lastError: 'Connection timed out',
@@ -796,6 +833,12 @@ class HomeController extends ChangeNotifier
   /// выбрать активную (sticky → route.final → первая) и применить её ноды.
   /// Вызывается из стрима И из `reloadProxies` (pull-refresh / после switchNode).
   void _applyGroups(List<CcGroup> ccGroups) {
+    // §251 — снапшот «тег группы → её текущий выбор» для fold'а
+    // «селектор (выбор)» в routing-строках и пикере detour. Все группы
+    // (selector + urltest): detour-ссылка может указывать и на двойник.
+    SelectorInfo.I.setGroups({
+      for (final g in ccGroups) g.tag: g.selected,
+    });
     // Сначала фиксируем свежий снапшот в state, чтобы производные геттеры
     // (`selectorGroupTags`/`groupOf`) считали по новым данным.
     var next = _state.copyWith(ccGroups: ccGroups);

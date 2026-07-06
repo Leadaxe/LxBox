@@ -45,6 +45,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
 
   late bool _includeDirect;
   late bool _includeBlock;
+  late bool _isDetour;
   late bool _interrupt;
   late bool _nodeFilterInvert;
   late bool _autoEnabled;
@@ -62,6 +63,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     _defaultFilterCtrl = TextEditingController(text: c.defaultFilter);
     _includeDirect = c.includeDirect;
     _includeBlock = c.includeBlock;
+    _isDetour = c.isDetour;
     _interrupt = c.interruptExistConnections;
     _nodeFilterInvert = c.nodeFilterInvert;
     _autoEnabled = c.auto != null;
@@ -124,6 +126,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
           : _labelCtrl.text.trim(),
       includeDirect: _includeDirect,
       includeBlock: _includeBlock,
+      isDetour: _isDetour,
       nodeFilter: _nodeFilterCtrl.text.trim(),
       nodeFilterInvert: _nodeFilterInvert,
       defaultFilter: _defaultFilterCtrl.text.trim(),
@@ -167,6 +170,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
     return s.label != i.label ||
         s.includeDirect != i.includeDirect ||
         s.includeBlock != i.includeBlock ||
+        s.isDetour != i.isDetour ||
         s.nodeFilter != i.nodeFilter ||
         s.nodeFilterInvert != i.nodeFilterInvert ||
         s.defaultFilter != i.defaultFilter ||
@@ -333,18 +337,42 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               value: _includeDirect,
               onChanged: (v) => setState(() => _includeDirect = v ?? false),
             ),
-            CheckboxListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              visualDensity: VisualDensity.compact,
-              title: const Text('Include block',
-                  style: TextStyle(fontSize: 14)),
-              subtitle: const Text('drop traffic option in the selector',
-                  style: TextStyle(fontSize: 11)),
-              value: _includeBlock,
-              onChanged: (v) => setState(() => _includeBlock = v ?? false),
-            ),
+            // §248 — detour-прослойка. vpn-1 — резервная мишень heal-путей,
+            // detour для него запрещён → галку не показываем вовсе. block в
+            // прослойке запрещён («upstream недоступен» ≠ «весь флот мёртв»)
+            // → при включении Include block скрываем И сбрасываем стейт
+            // сразу, чтобы Save не унёс includeBlock=true.
+            if (!c.isRequired)
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                visualDensity: VisualDensity.compact,
+                title: const Text('Use as detour',
+                    style: TextStyle(fontSize: 14)),
+                subtitle: const Text(
+                    'detour target for servers and folders — '
+                    'removed from rule targets',
+                    style: TextStyle(fontSize: 11)),
+                value: _isDetour,
+                onChanged: (v) => setState(() {
+                  _isDetour = v ?? false;
+                  if (_isDetour) _includeBlock = false;
+                }),
+              ),
+            if (!_isDetour)
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                visualDensity: VisualDensity.compact,
+                title: const Text('Include block',
+                    style: TextStyle(fontSize: 14)),
+                subtitle: const Text('drop traffic option in the selector',
+                    style: TextStyle(fontSize: 11)),
+                value: _includeBlock,
+                onChanged: (v) => setState(() => _includeBlock = v ?? false),
+              ),
             CheckboxListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,

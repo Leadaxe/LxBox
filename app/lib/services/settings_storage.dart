@@ -282,10 +282,15 @@ class SettingsStorage {
   static Future<Channel> addChannel({String? label}) => _addChannel(label: label);
 
   /// Обновить канал по [Channel.tag]. Throws если tag не найден.
-  static Future<void> updateChannel(Channel channel) => _updateChannel(channel);
+  /// §248 — возвращает счётчики вылеченных ссылок (disable/flag-set →
+  /// rules-ссылки → vpn-1; disable/flag-unset → detour-ссылки → '').
+  static Future<ChannelHealResult> updateChannel(Channel channel) =>
+      _updateChannel(channel);
 
-  /// Удалить канал. Throws для 'vpn-1'. Переводит dangling-ссылки на 'vpn-1'.
-  static Future<void> deleteChannel(String tag) => _deleteChannel(tag);
+  /// Удалить канал. Throws для 'vpn-1'. Переводит rules-ссылки на 'vpn-1',
+  /// §248 detour-ссылки — на '' (None); возвращает счётчики.
+  static Future<ChannelHealResult> deleteChannel(String tag) =>
+      _deleteChannel(tag);
 
   /// One-shot миграция enabled_groups[] → channels[] (seed из template).
   /// Идемпотентна. Зовётся из main() init до первого билда.

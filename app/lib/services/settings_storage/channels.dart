@@ -10,6 +10,11 @@ part of '../settings_storage.dart';
 // `template.presetGroups` как source-of-truth состава каналов. Миграция
 // (`_migrateChannelsIfNeeded`) на первом запуске seed'ит channels из template.
 
+/// §248 — счётчики вылеченных ссылок при мутации канала (SnackBar в UI,
+/// тело ответа Debug API). `rules` — route_final/custom-rule → vpn-1;
+/// `detours` — overrideDetour/member.detour → '' (None).
+typedef ChannelHealResult = ({int rules, int detours});
+
 Future<List<Channel>> _getChannels() async {
   final data = await _load();
   final raw = data['channels'] as List<dynamic>? ?? const [];
@@ -42,7 +47,7 @@ Future<Channel> _addChannel({String? label}) async {
   return ch;
 }
 
-Future<void> _updateChannel(Channel channel) async {
+Future<ChannelHealResult> _updateChannel(Channel channel) async {
   final channels = (await _getChannels()).toList();
   final i = channels.indexWhere((c) => c.tag == channel.tag);
   if (i < 0) throw StateError('channel not found: ${channel.tag}');
@@ -52,36 +57,63 @@ Future<void> _updateChannel(Channel channel) async {
   // «надо идти пересохранять». Лечим storage сразу (route_final / правило →
   // vpn-1). Решение B (28.06.2026): необратимо — повторное включение канала
   // НЕ воскрешает старую ссылку (правила привязаны к активной конфигурации).
-  final wasEnabled = channels[i].enabled;
+  //
+  // §248 — смена detour-роли лечит ссылки рода, который канал ПОКИДАЕТ:
+  // flag-set → rules-ссылки → vpn-1 (канал больше не цель правил);
+  // flag-unset → detour-ссылки → '' (канал больше не detour-мишень).
+  // Disable лечит ОБА рода (канал перестаёт быть какой-либо мишенью).
+  // Та же необратимость Решения B.
+  final was = channels[i];
   channels[i] = channel;
-  if (wasEnabled && !channel.enabled) {
-    await _setChannels(channels, flush: false); // единый flush в _healChannelRefs
-    await _healChannelRefs(channel.tag);
+  final disabling = was.enabled && !channel.enabled;
+  final flagSet = !was.isDetour && channel.isDetour;
+  final flagUnset = was.isDetour && !channel.isDetour;
+  var rules = 0;
+  var detours = 0;
+  if (disabling || flagSet || flagUnset) {
+    await _setChannels(channels, flush: false); // единый flush ниже
+    if (disabling || flagSet) rules = await _healChannelRefs(channel.tag);
+    if (disabling || flagUnset) {
+      detours = await _healDetourChannelRefs(channel.tag);
+    }
+    await _save();
   } else {
     await _setChannels(channels);
   }
+  return (rules: rules, detours: detours);
 }
 
 /// Удалить канал. vpn-1 неудаляем (throws). Любая ссылка на удалённый tag
-/// (route_final / custom-rule outbound) немедленно переводится на 'vpn-1'
-/// для UI-консистентности; билдер дополнительно схлопывает dangling при сборке
-/// (§172-паттерн), так что детур/прочее тоже деградирует.
-Future<void> _deleteChannel(String tag) async {
+/// (route_final / custom-rule outbound → vpn-1; §248 detour-ссылки → '')
+/// немедленно лечится для UI-консистентности; билдер дополнительно
+/// схлопывает dangling при сборке (§172-паттерн).
+Future<ChannelHealResult> _deleteChannel(String tag) async {
   if (tag == 'vpn-1') throw StateError('vpn-1 is not deletable');
   final channels = (await _getChannels()).toList()
     ..removeWhere((c) => c.tag == tag);
-  await _setChannels(channels, flush: false); // один flush в _healChannelRefs
-  await _healChannelRefs(tag);
+  await _setChannels(channels, flush: false); // единый flush ниже
+  final rules = await _healChannelRefs(tag);
+  final detours = await _healDetourChannelRefs(tag);
+  await _save();
+  return (rules: rules, detours: detours);
 }
 
-/// Перевод dangling-ссылок на канал → 'vpn-1'. Вызывается, когда канал
-/// перестаёт быть валидной route-мишенью: удалён (§125 F4.5) ИЛИ выключен
-/// (§202). Без flush до конца — атомарный финальный `_save()`.
-Future<void> _healChannelRefs(String deletedTag) async {
+/// Перевод rules-ссылок на канал → 'vpn-1'. Вызывается, когда канал
+/// перестаёт быть валидной route-мишенью: удалён (§125 F4.5), выключен
+/// (§202) ИЛИ стал detour-прослойкой (§248 flag-set). Возвращает число
+/// вылеченных ссылок. Всё flush:false — атомарный `_save()` на вызывающем.
+///
+/// §248 — ссылка «на канал» = его тег ИЛИ тег auto-двойника `<tag>-auto`:
+/// UI-пикеры двойник не предлагают, но Debug API / правленный backup могут
+/// записать что угодно (симметрия с validFinals-гейтом билдера).
+Future<int> _healChannelRefs(String deletedTag) async {
+  final autoTag = '$deletedTag-auto';
+  var count = 0;
   // route_final
   final routeFinal = await SettingsStorage.getRouteFinal();
-  if (routeFinal == deletedTag) {
+  if (routeFinal == deletedTag || routeFinal == autoTag) {
     await SettingsStorage.saveRouteFinal('vpn-1', flush: false);
+    count++;
   }
   // custom-rule outbounds — kind-agnostic через общие `outbound`/`withOutbound`:
   // inline/srs — поле `outbound`; preset — override `varsValues['outbound']`
@@ -94,8 +126,9 @@ Future<void> _healChannelRefs(String deletedTag) async {
   final rules = await SettingsStorage.getCustomRules();
   var changed = false;
   final healed = rules.map((r) {
-    if (r.outbound == deletedTag) {
+    if (r.outbound == deletedTag || r.outbound == autoTag) {
       changed = true;
+      count++;
       return r.withOutbound('vpn-1');
     }
     return r;
@@ -103,7 +136,36 @@ Future<void> _healChannelRefs(String deletedTag) async {
   if (changed) {
     await SettingsStorage.saveCustomRules(healed, flush: false);
   }
-  await _save();
+  return count;
+}
+
+/// §248 — сброс detour-ссылок на канал → '' (None/direct): overrideDetour
+/// одиночки/подписки/папки + личные `FolderMember.detour`. Вызывается, когда
+/// канал перестаёт быть detour-мишенью: галка detour снята, канал выключен
+/// или удалён. Необратимо (Решение B §202). Возвращает число сброшенных.
+///
+/// Интра-омонимия: значение, равное bare-тегу члена ТОЙ ЖЕ папки, — интра-
+/// ссылка на члена (приоритет bareIndex в FolderDetourPlan), канал тут ни
+/// при чём — пропускаем. Ссылка «на канал» = tag ИЛИ `<tag>-auto` (двойник).
+/// Всё flush:false — атомарный `_save()` на вызывающем.
+Future<int> _healDetourChannelRefs(String tag) async {
+  final lists = await _getServerLists();
+  var count = 0;
+  var changed = false;
+  final healed = <ServerList>[];
+  for (final l in lists) {
+    // Общее ядро с in-memory ресинком контроллера (server_list.dart).
+    final r = clearDetourChannelRefs(l, tag);
+    if (r.healed != null) {
+      changed = true;
+      count += r.count;
+      healed.add(r.healed!);
+    } else {
+      healed.add(l);
+    }
+  }
+  if (changed) await _saveServerLists(healed, flush: false);
+  return count;
 }
 
 // ---------------------------------------------------------------------------

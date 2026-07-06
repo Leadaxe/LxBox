@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 
 import '../services/platform_channels.dart';
+import '../services/selector_info.dart'; // §251 — fold «селектор (выбор)»
 
 /// §122 Фаза 1a — Dart-клиент нативного libbox `CommandClient`-канала
 /// (`BoxCommandClient.kt`, Фаза 0). Замена `ClashApiClient` (HTTP-петли).
@@ -468,12 +469,14 @@ class CcConnection {
 
   bool get isClosed => closedAt > 0;
 
-  /// §204 — routing-строка в нотации §181, идентичная
-  /// `TrafficEvent.routingLineOf`: `[net] ⇒ rule ⇒ группы : node → detour → dest`.
+  /// §204 — routing-строка в нотации §252 (эволюция §181), идентичная
+  /// `TrafficEvent.routingLineOf`: `[net] rule ⇒ группы : транспорт-вход → …
+  /// → выход (селектор (выбор)) → dest` — справа от `:` физический путь
+  /// пакета (вход первым, выход перед целью).
   /// `chains`/`detours` приходят из ТОГО ЖЕ источника ядра, что
   /// `TrafficEvent.outboundChain`/`detourChain` (`Connection.chain()`/`.detour()`),
   /// порядок идентичен (`[node, …selectors]` / `[node→наружу]`) — поэтому логика
-  /// копируется 1:1, без reverse.
+  /// копируется 1:1.
   ///
   /// Отличия от TrafficEvent (намеренно): process НЕ включаем (у ряда Conns своя
   /// app-строка); duration НЕ дописываем (§204 D — таймер рендерится отдельным
@@ -486,25 +489,32 @@ class CcConnection {
   /// (модель vpn не знает про резолвер). Пусто → берётся `rule` или `final`.
   String routingLineOf({bool compact = false, String? ruleLabel}) {
     final sb = StringBuffer();
-    if (!compact && network.isNotEmpty) sb.write('[$network] ');
-    // Внутренняя цепочка (⇒): rule → селекторы (сверху вниз = chains[1:].reversed).
+    // Ось решения (⇒): [net] rule → селекторы (сверху вниз = chains[1:].reversed).
     final inner = <String>[];
     final ruleText = (ruleLabel != null && ruleLabel.isNotEmpty)
         ? ruleLabel
         : (rule.isNotEmpty ? rule : 'final');
-    inner.add(ruleText);
+    inner.add(!compact && network.isNotEmpty ? '[$network] $ruleText' : ruleText);
     if (chains.length > 1) inner.addAll(chains.sublist(1).reversed);
     sb.write(inner.join(' ⇒ '));
-    // Выход во внешний мир (:): финальный node = chains[0] (или outbound-fallback).
-    final node = chains.isNotEmpty
-        ? chains.first
-        : (outbound.isNotEmpty ? outbound : null);
-    if (node != null) sb.write(' : $node');
-    // Снаружи (→): detour-хвост + назначение.
-    final outer = <String>[...detours];
+    // §252 — физический путь (→ по ходу пакета): транспорт изнутри наружу
+    // (detour-ось развёрнута: вход первым) → выход ОДНИМ элементом
+    // `селектор (…вложенно… (node))` (свёртка ПО СТРУКТУРЕ chains
+    // `[node, …selectors]`, не через SelectorInfo; пустые chains —
+    // outbound-fallback) → назначение.
+    final phys = <String>[...foldSelectorPairs(detours).reversed];
+    final exitChain =
+        chains.isNotEmpty ? chains : (outbound.isNotEmpty ? [outbound] : null);
+    if (exitChain != null) {
+      var exit = exitChain.first;
+      for (final sel in exitChain.skip(1)) {
+        exit = '$sel ($exit)';
+      }
+      phys.add(exit);
+    }
     final dest = domain.isNotEmpty ? domain : _hostOfDestination;
-    if (dest.isNotEmpty) outer.add(dest);
-    if (outer.isNotEmpty) sb.write(' → ${outer.join(' → ')}');
+    if (dest.isNotEmpty) phys.add(dest);
+    if (phys.isNotEmpty) sb.write(' : ${phys.join(' → ')}');
     return sb.toString();
   }
 

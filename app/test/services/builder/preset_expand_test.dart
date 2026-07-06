@@ -859,8 +859,8 @@ void main() {
       return SelectableRule.fromJson(found);
     }
 
-    test('ru-direct (дефолты: force_ipv4=true) → пара resolve+route + '
-        'dns_rule со strategy', () {
+    test('ru-direct (дефолты: force_ipv4=true) → пара resolve+route; '
+        'dns_rule БЕЗ strategy', () {
       final preset = realPreset('ru-direct');
       final f = expandPreset(
         CustomRulePreset(name: 'RU', presetId: 'ru-direct'),
@@ -883,16 +883,18 @@ void main() {
       expect(route['outbound'], 'direct-out');
       expect(route.containsKey('action'), isFalse);
 
-      // Главный слой фикса: dns_rule режет AAAA для приложений (route-resolve
-      // покрывает только FQDN-destination — ядро actionResolve гейтится на
-      // Destination.IsDomain(), IP-коннекты Chrome он не переписывает).
+      // ⚠ dns_rule НЕ несёт strategy (v2.12.1 hotfix). Легаси-опция strategy
+      // в dns rule action × query_type/ip_version в других dns.rules (FakeIP
+      // §228) → ядро 1.14 отклоняет старт (resolveLegacyDNSMode fatal).
+      // Force IPv4 держится ТОЛЬКО на route-resolve (там deprecation нет).
       expect(f.dnsRule, isNotNull);
-      expect(f.dnsRule!['strategy'], 'ipv4_only',
-          reason: 'map-spread #if по @force_ipv4 домержил strategy');
+      expect(f.dnsRule!.containsKey('strategy'), isFalse,
+          reason: 'strategy в dns_rule = fatal при включённом FakeIP; убрано');
       expect(f.dnsRule!['server'], 'yandex_udp');
     });
 
-    test('ru-direct: force_ipv4=false → dns_rule БЕЗ strategy', () {
+    test('ru-direct: force_ipv4=false → route без resolve, dns_rule как есть',
+        () {
       final preset = realPreset('ru-direct');
       final f = expandPreset(
         CustomRulePreset(
@@ -902,9 +904,10 @@ void main() {
         ),
         preset,
       );
-      expect(f.dnsRule, isNotNull);
-      expect(f.dnsRule!.containsKey('strategy'), isFalse,
-          reason: 'галка off → AAAA живёт (map-spread #if не мержит)');
+      // Галка off → resolve-элемент выпал, остался только терминальный route.
+      expect(f.routingRules.length, 1);
+      expect(f.routingRules.single['outbound'], 'direct-out');
+      expect(f.dnsRule!.containsKey('strategy'), isFalse);
     });
 
     test('ru-direct: force_ipv4=false → только route', () {

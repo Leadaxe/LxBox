@@ -98,33 +98,16 @@ class _RoutingScreenState extends State<RoutingScreen>
   bool _presetNeedsDownload(CustomRulePreset rule, SelectableRule preset) =>
       RoutingHelpers.presetNeedsDownload(rule, preset, _srsCached);
 
-  /// §125 — доступные outbound-опции из включённых каналов (storage). vpn-1
-  /// всегда присутствует (required-инвариант). Глобальный ✨auto убран —
-  /// каждый канал имеет свой `<tag>-auto`, который опцией роутинга не выставляем
-  /// (это внутренняя деталь канала).
   /// §219 — сбросить кэш опций после мутации `_channels`.
   @override
   void _invalidateOutboundOptions() => _cachedOutboundOptions = null;
 
-  List<RoutingOutboundOption> _outboundOptions() {
-    final cached = _cachedOutboundOptions;
-    if (cached != null) return cached;
-    final opts = <RoutingOutboundOption>[
-      const RoutingOutboundOption(label: 'direct', tag: 'direct-out'),
-    ];
-    for (final c in _channels) {
-      if (c.enabled || c.isRequired) {
-        opts.add(RoutingOutboundOption(
-            label: c.label.isNotEmpty ? c.label : c.tag, tag: c.tag));
-      }
-    }
-    // §201 — block всегда доступен (системный), красный как reject; держим
-    // его последним в списке.
-    opts.add(
-        const RoutingOutboundOption(label: 'block', tag: 'block', danger: true));
-    _cachedOutboundOptions = opts;
-    return opts;
-  }
+  /// См. [RoutingHelpers.outboundOptions] (семантика списка — там). Глобальный
+  /// ✨auto убран — каждый канал имеет свой `<tag>-auto`, который опцией
+  /// роутинга не выставляем (это внутренняя деталь канала). Кэш §219
+  /// инвалидируется на любой мутации каналов.
+  List<RoutingOutboundOption> _outboundOptions() =>
+      _cachedOutboundOptions ??= RoutingHelpers.outboundOptions(_channels);
 
   @override
   Widget build(BuildContext context) {
@@ -199,15 +182,69 @@ class _RoutingScreenState extends State<RoutingScreen>
     return RoutingChannelTile(
       channel: channel,
       nodeCount: _nodeCountFor(channel),
-      onToggle: (val) {
-        setState(() {
-          final i = _channels.indexWhere((c) => c.tag == channel.tag);
-          if (i >= 0) _channels[i] = _channels[i].copyWith(enabled: val);
-          _invalidateOutboundOptions();
-          _markDirty();
-        });
-      },
+      onToggle: (val) => unawaited(_toggleChannel(channel, val)),
       onTap: () => _editChannel(channel),
+    );
+  }
+
+  /// Вкл/выкл канала. §202/§248 — идёт через storage-API: disable лечит
+  /// ссылки покинутых ролей (rules → vpn-1, detour-ссылки → None) и
+  /// возвращает счётчики для SnackBar. Storage мутируем ДО локальных
+  /// буферов: stageChanges (markDirty) тогда пишет в кэш уже вылеченные
+  /// значения, а не затирает их устаревшим буфером экрана.
+  Future<void> _toggleChannel(Channel channel, bool val) async {
+    final next = channel.copyWith(enabled: val);
+    final healed = await SettingsStorage.updateChannel(next);
+    if (!mounted) return;
+    await _resyncHealedRefs(channel.tag, healed);
+    if (!mounted) return;
+    setState(() {
+      final i = _channels.indexWhere((c) => c.tag == channel.tag);
+      if (i >= 0) _channels[i] = next;
+      _invalidateOutboundOptions();
+      _markDirty();
+    });
+    // enable heal'ов не даёт (нулевые счётчики) — SnackBar молчит.
+    _notifyHealed(next, healed, ruleLead: 'disabled');
+  }
+
+  /// §248 — heal мог переписать route_final / custom-rule outbounds в storage
+  /// (→ vpn-1); подтягиваем локальные буферы экрана, иначе следующий
+  /// stageChanges затёр бы вылеченные значения устаревшим буфером.
+  /// Detour-ссылки живут в `_entries` контроллера (не в буферах экрана) —
+  /// зеркальный ресинк, иначе следующий `_persist()`/`generateConfig()`
+  /// воскресил бы вылеченный storage.
+  Future<void> _resyncHealedRefs(String tag, ChannelHealResult healed) async {
+    if (healed.detours > 0) {
+      widget.subController.syncDetourChannelRefsCleared(tag);
+    }
+    if (healed.rules == 0) return;
+    final storedFinal = await SettingsStorage.getRouteFinal();
+    _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'vpn-1';
+    _customRules
+      ..clear()
+      ..addAll(await SettingsStorage.getCustomRules());
+  }
+
+  /// §248 Q3 — heal молчаливым не бывает: SnackBar со счётчиками вылеченных
+  /// ссылок после мутации канала. [ruleLead] — вводная для rules-части
+  /// («disabled» / «deleted» / «is now a detour channel»). Оба счётчика
+  /// ненулевые → один суммарный SnackBar. Нулевые → тишина.
+  void _notifyHealed(Channel channel, ChannelHealResult healed,
+      {required String ruleLead}) {
+    if (healed.rules == 0 && healed.detours == 0) return;
+    final label = channel.label.isNotEmpty ? channel.label : channel.tag;
+    final lead = healed.rules > 0
+        ? 'Channel "$label" $ruleLead'
+        : 'Channel "$label" is no longer a detour target';
+    final parts = [
+      if (healed.rules > 0)
+        '${healed.rules} rule reference(s) switched to vpn-1',
+      if (healed.detours > 0)
+        '${healed.detours} detour reference(s) reset to None',
+    ];
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$lead — ${parts.join(', ')}.')),
     );
   }
 
@@ -261,22 +298,37 @@ class _RoutingScreenState extends State<RoutingScreen>
     );
     if (result == null || !mounted) return;
     if (result.wasDeleted) {
-      // deleteChannel в storage уже перевёл dangling-ссылки на vpn-1.
-      await SettingsStorage.deleteChannel(channel.tag);
+      // deleteChannel в storage лечит ссылки: rules → vpn-1 (§202),
+      // detour-ссылки → None (§248). Счётчики — в SnackBar ниже.
+      final healed = await SettingsStorage.deleteChannel(channel.tag);
+      if (!mounted) return;
+      await _resyncHealedRefs(channel.tag, healed);
       if (!mounted) return;
       setState(() {
         _channels.removeWhere((c) => c.tag == channel.tag);
-        if (_routeFinal == channel.tag) _routeFinal = 'vpn-1';
         _invalidateOutboundOptions();
       });
       _markDirty();
+      _notifyHealed(channel, healed, ruleLead: 'deleted');
     } else if (result.saved != null) {
+      final saved = result.saved!;
+      // §202/§248 — persist через updateChannel: disable и смена detour-роли
+      // лечат ссылки покинутого рода, счётчики — в SnackBar ниже.
+      final healed = await SettingsStorage.updateChannel(saved);
+      if (!mounted) return;
+      await _resyncHealedRefs(saved.tag, healed);
+      if (!mounted) return;
       setState(() {
         final i = _channels.indexWhere((c) => c.tag == channel.tag);
-        if (i >= 0) _channels[i] = result.saved!;
+        if (i >= 0) _channels[i] = saved;
         _invalidateOutboundOptions();
       });
       _markDirty();
+      // rules-ссылки лечатся и при disable, и при flag-set (§248) — вводную
+      // выбираем по фактическому переходу (disable покрывает оба рода).
+      final disabled = channel.enabled && !saved.enabled;
+      _notifyHealed(saved, healed,
+          ruleLead: disabled ? 'disabled' : 'is now a detour channel');
     }
     // §125 — обновить tag→label кеш для home-dropdown (label мог измениться,
     // канал мог удалиться). stageChanges уже застейджила channels; здесь только

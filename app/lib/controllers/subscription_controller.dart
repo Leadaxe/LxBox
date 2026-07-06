@@ -1609,6 +1609,25 @@ class SubscriptionController extends ChangeNotifier {
     await SettingsStorage.saveServerLists(_entries.map((e) => e.list).toList());
   }
 
+  /// §248 — ресинк in-memory `_entries` после storage-heal detour-ссылок
+  /// (снятие галки detour / disable / delete канала): storage уже вылечен
+  /// `updateChannel`/`deleteChannel`, но `_entries` живёт с init() — без
+  /// зеркального сброса следующий `_persist()` (rename, toggle члена,
+  /// авто-refresh подписки) воскресил бы ссылку на диске, а
+  /// `generateConfig()` собирал бы конфиг с ней вопреки показанному юзеру
+  /// уведомлению. Повторный `_persist` не нужен — на диске уже верно.
+  void syncDetourChannelRefsCleared(String tag) {
+    var changed = false;
+    for (final e in _entries) {
+      final r = clearDetourChannelRefs(e.list, tag);
+      if (r.healed != null) {
+        e._replaceList(r.healed!);
+        changed = true;
+      }
+    }
+    if (changed) notifyListeners();
+  }
+
   ServerList _renameList(ServerList l, String name) => switch (l) {
         SubscriptionServers() => l.copyWith(name: name),
         UserServer() => l.copyWith(name: name),
