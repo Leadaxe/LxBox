@@ -7,6 +7,8 @@ import '../services/app_log.dart';
 import '../services/tag_resolver.dart';
 import '../controllers/subscription_controller.dart';
 import '../services/error_format.dart';
+import '../services/settings_storage.dart';
+import '../models/channel.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../models/template_vars.dart';
@@ -54,6 +56,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   // У WG и AWG одинаковый protocol == 'wireguard'; различие — поле `awg`.
   // AWG с detour на wireguard вешает ядро на Android (#2) → фильтруем detour.
   bool _isAwg = false;
+
+  // §248 — каналы: секция Channels в пикере + рендер сохранённого канального
+  // detour как «⚙ <label>».
+  List<Channel> _channels = const [];
 
   @override
   void initState() {
@@ -113,6 +119,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     // восстанавливает — терялось при save.
     _detour = member != null ? member.detour : widget.entry.overrideDetour;
 
+    // §248 — каналы для подписи «⚙ <label>» сохранённого канального detour
+    // (_pickDetour перечитывает свежий список перед показом пикера).
+    _channels = await SettingsStorage.getChannels();
+
     // §239 — кандидаты теперь живут в общем пикере (showDetourTargetPicker):
     // «свободные» одиночки + члены СВОЕЙ папки (для member-режима). Здесь
     // осталась только §130-страховка: сохранённый AWG→wireguard detour из
@@ -154,9 +164,13 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
   Future<void> _pickDetour() async {
     final list = widget.entry.list;
     final member = _member;
+    // §248 — свежий список каналов (мог измениться, пока экран открыт).
+    _channels = await SettingsStorage.getChannels();
+    if (!mounted) return;
     final target = await showDetourTargetPicker(
       context,
       controller: widget.subController,
+      channels: _channels,
       currentFolder:
           (member != null && list is FolderServers) ? list : null,
       selfBareTag: member?.node?.tag ?? '',
@@ -168,6 +182,20 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     if (target == null || !mounted) return;
     setState(() => _detour = target.storeValue);
     await _persistDetour(target.storeValue);
+  }
+
+  /// §248 — подпись сохранённого detour: тег detour-канала (или его
+  /// auto-двойника) → «⚙ <label>»; канал не найден → сырой тег. Интра-омоним
+  /// (bare-тег члена СВОЕЙ папки) побеждает канал-тёзку — резолвится в члена
+  /// (приоритет bareIndex в FolderDetourPlan), показываем как тег.
+  String _detourDisplay(String stored) {
+    final list = widget.entry.list;
+    if (widget.memberIndex != null && list is FolderServers) {
+      for (final m in list.members) {
+        if (m.node?.tag == stored) return stored;
+      }
+    }
+    return detourChannelDisplay(stored, _channels);
   }
 
   /// §130 — лог сброса невалидного AWG→WireGuard detour при открытии редактора.
@@ -326,7 +354,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
         ListTile(
           leading: const Icon(Icons.alt_route, size: 20),
           title: const Text('Detour server'),
-          subtitle: Text(_detour.isEmpty ? 'None (direct)' : _detour),
+          // §248 — канальная цель рендерится как «⚙ <label>».
+          subtitle:
+              Text(_detour.isEmpty ? 'None (direct)' : _detourDisplay(_detour)),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => unawaited(_pickDetour()),
         ),
@@ -357,7 +387,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
           child: Text(
             _detour.isEmpty
                 ? 'Traffic goes directly to this server.'
-                : 'Phone → $_detour → $_originalTag → Internet',
+                : 'Phone → ${_detourDisplay(_detour)} → $_originalTag → Internet',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),

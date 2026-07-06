@@ -1,3 +1,4 @@
+import '../../models/channel.dart';
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
 
@@ -33,6 +34,29 @@ final SelectableRule kEmptySelectable =
 /// `_RoutingScreenState` чтобы ужать сам экран — поведение идентично.
 class RoutingHelpers {
   const RoutingHelpers._();
+
+  /// §125 — outbound-опции для селекторов экрана Routing из списка каналов
+  /// (storage). vpn-1 всегда присутствует (required-инвариант), выключенные
+  /// каналы скрыты. §248 — detour-канал не цель правил/route final (роли
+  /// применения взаимоисключающие): в опции не попадает; единственная точка
+  /// закрывает route final, тайлы правил, редактор правила и outbound-var
+  /// пресетов. §201 — block всегда доступен (системный), красный как reject;
+  /// держим его последним, direct — первым.
+  static List<RoutingOutboundOption> outboundOptions(List<Channel> channels) {
+    final opts = <RoutingOutboundOption>[
+      const RoutingOutboundOption(label: 'direct', tag: 'direct-out'),
+    ];
+    for (final c in channels) {
+      if (c.isDetour) continue;
+      if (c.enabled || c.isRequired) {
+        opts.add(RoutingOutboundOption(
+            label: c.label.isNotEmpty ? c.label : c.tag, tag: c.tag));
+      }
+    }
+    opts.add(const RoutingOutboundOption(
+        label: 'block', tag: 'block', danger: true));
+    return opts;
+  }
 
   /// Список remote `rule_set` пресета (type=remote + url). Пустой если
   /// пресет только inline или без rule_set'ов.

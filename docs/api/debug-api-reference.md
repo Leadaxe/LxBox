@@ -407,16 +407,18 @@ curl -s -H "$HDR" "$BASE/state/subs" | jq '.[] | select(.id=="<id>") | {title, n
 §238 — каналы роутинга §125 (`channels[]` в storage). Обёртка над
 `SettingsStorage.getChannels / addChannel / updateChannel / deleteChannel` —
 семантика идентична UI: `vpn-1` неудаляем и всегда enabled, лимит 10 каналов,
-удаление/выключение канала деградирует ссылки (route_final / custom-rule
-outbound) на `vpn-1` (§202, необратимо). Shape ресурса — storage-JSON канала
-(`Channel.toJson()`, snake_case).
+удаление/выключение канала деградирует rules-ссылки (route_final / custom-rule
+outbound) на `vpn-1` (§202, необратимо), detour-ссылки (`override_detour` /
+`members[].detour`) — в `''` (None, §248). Shape ресурса — storage-JSON канала
+(`Channel.toJson()`, snake_case), включая поле `detour` (§248 — канал как
+detour-прослойка).
 
 | Endpoint | Метод | Body |
 |---|---|---|
 | `/channels` | GET | — |
 | `/channels/{tag}` | GET | tag = `vpn-1`..`vpn-10` |
 | `/channels` | POST | опц. `{"label":"..."}` + любые PATCH-поля; tag автоназначается (первый свободный `vpn-N`), 201 |
-| `/channels/{tag}` | PATCH | subset: `label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,interrupt_exist_connections,auto` |
+| `/channels/{tag}` | PATCH | subset: `label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,interrupt_exist_connections,auto,detour` |
 | `/channels/{tag}` | DELETE | — |
 | `/channels/reorder` | POST | `{"order":["vpn-1",...]}` — ровно текущие теги |
 
@@ -441,6 +443,12 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
 # Снять галку auto (убрать urltest-двойник)
 curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   -d '{"auto":null}' "$BASE/channels/vpn-2"
+
+# Сделать канал detour-прослойкой (§248): исчезает из целей правил,
+# появляется в пикерах detour; rules-ссылки на него лечатся сразу
+curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"detour":true}' "$BASE/channels/vpn-2?rebuild=true"
+# → {"tag":"vpn-2",...,"detour":true,"healed":{"rules":1,"detours":0},"rebuilt":true,...}
 ```
 
 **Quirks:**
@@ -449,10 +457,25 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   Полный reset — прислать все поля явно. `"auto": null` — снять галку.
 - `tag` immutable (системный id) → передан в PATCH → 400. Юзер-имя — `label`.
 - `PATCH vpn-1 {"enabled":false}` и `DELETE /channels/vpn-1` → 409 `conflict`.
-- Выключение канала (enabled:false) деградирует ссылки на vpn-1 сразу и
-  **необратимо** — повторное включение старую ссылку не воскрешает (§202).
+- `detour` (§248): `PATCH vpn-1 {"detour":true}` → 409 `conflict` (vpn-1 —
+  резервная мишень heal-путей). `include_block:true` вместе с `detour:true` в
+  одном body, либо на уже detour-канале → 409 `conflict` (block в прослойке
+  запрещён). `detour:true` на канале с сохранённым `include_block:true` —
+  include_block молча нормализуется в `false` (merge-философия PATCH).
+- Ответы мутаций (POST/PATCH/DELETE) содержат `"healed": {"rules": N,
+  "detours": M}` — счётчики вылеченных ссылок (API-аналог UI-SnackBar'а):
+  `rules` — route_final / custom-rule outbound → `vpn-1` (disable, delete,
+  detour flag-set); `detours` — `override_detour` / `members[].detour` → `''`
+  (disable, delete, detour flag-unset). Ссылкой «на канал» считается его tag
+  И tag urltest-двойника `<tag>-auto`.
+- Выключение канала (enabled:false) деградирует ссылки сразу и **необратимо**
+  — повторное включение старую ссылку не воскрешает (§202, Решение B).
 - `node_filter`/`default_filter` валидируются как regex → битый паттерн 400
   (иначе уронил бы сборку конфига).
+- POST с PATCH-полями применяет их **после** создания: конфликтный body
+  (например `detour:true` + `include_block:true`) вернёт 409, но канал уже
+  создан — с `label` из body (если был) и дефолтами остальных полей;
+  прочие PATCH-поля body не применены.
 
 ---
 
