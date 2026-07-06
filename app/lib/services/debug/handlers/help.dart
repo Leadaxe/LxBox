@@ -192,18 +192,28 @@ POST   /channels[?rebuild=true]                Create. Auto-assigns first free v
                                                  {"label":"..."} plus any PATCH field below. Limit 10 → 409.
 PATCH  /channels/{tag}[?rebuild=true]          Partial update: {label,enabled,include_direct,include_block,
                                                  node_filter,node_filter_invert,default_filter,
-                                                 interrupt_exist_connections,auto}.
+                                                 interrupt_exist_connections,auto,detour}.
                                                  auto is MERGED into current urltest options (nested balancer
                                                  merges too); "auto":null disables the urltest twin.
                                                  tag is immutable; vpn-1 cannot be disabled (409).
                                                  node_filter/default_filter are validated as regex (400 on bad).
+                                                 detour:true makes the channel a detour target (gear channel):
+                                                 it leaves rule targets (refs switch to vpn-1) and becomes
+                                                 selectable as a server/folder/subscription detour.
+                                                 vpn-1 cannot be a detour channel (409); a detour channel
+                                                 cannot include block (409; stored include_block is coerced
+                                                 to false when detour is set).
 DELETE /channels/{tag}[?rebuild=true]          Remove. vpn-1 is not deletable (409). References to the removed
-                                                 channel (route_final / custom-rule outbound) degrade to vpn-1.
+                                                 channel (route_final / custom-rule outbound) degrade to vpn-1;
+                                                 detour references (override_detour / members[].detour) reset
+                                                 to None.
 POST   /channels/reorder[?rebuild=true]        Body {"order":["vpn-1",...]} — exactly the current tags.
                                                  Channel order = emit order in the config.
 
-Disabling a channel (enabled:false) also degrades references to vpn-1 —
-re-enabling does NOT restore them (same semantics as the UI toggle).
+Disabling a channel (enabled:false) also degrades rule references to vpn-1
+and resets detour references to None — re-enabling does NOT restore them
+(same semantics as the UI toggle). Every mutation response carries
+"healed": {"rules": N, "detours": M} — how many references were reset.
 
 === Folders CRUD (server folders) ===
 
@@ -469,8 +479,8 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/channels', 'description': 'List routing channels (storage shape, snake_case)'},
     {'method': 'GET', 'path': '/channels/{tag}', 'description': 'Single channel (tag = vpn-1..vpn-10)'},
     {'method': 'POST', 'path': '/channels', 'params': {'rebuild': 'true|false'}, 'body': 'optional {"label":"..."} + any PATCH field', 'description': 'Create channel; auto-assigns first free vpn-N tag. Limit 10 → 409.'},
-    {'method': 'PATCH', 'path': '/channels/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,interrupt_exist_connections,auto}', 'description': 'Partial update. auto merges into current urltest options; "auto":null disables the twin. tag immutable; vpn-1 cannot be disabled.'},
-    {'method': 'DELETE', 'path': '/channels/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove channel. vpn-1 not deletable (409). Dangling references degrade to vpn-1.'},
+    {'method': 'PATCH', 'path': '/channels/{tag}', 'params': {'rebuild': 'true|false'}, 'body': 'Any subset: {label,enabled,include_direct,include_block,node_filter,node_filter_invert,default_filter,interrupt_exist_connections,auto,detour}', 'description': 'Partial update. auto merges into current urltest options; "auto":null disables the twin. tag immutable; vpn-1 cannot be disabled. detour:true = detour channel (leaves rule targets, refs → vpn-1); vpn-1+detour → 409; detour channel cannot include block (409, stored include_block coerced to false). Mutation responses carry "healed":{rules,detours}.'},
+    {'method': 'DELETE', 'path': '/channels/{tag}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove channel. vpn-1 not deletable (409). Rule references degrade to vpn-1; detour references reset to None. Response carries "healed":{rules,detours}.'},
     {'method': 'POST', 'path': '/channels/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[tag,...]}', 'description': 'Reorder (exactly the current tags). Order = emit order in config.'},
     // Folders CRUD (server folders)
     {'method': 'GET', 'path': '/folders', 'params': {'reveal': 'true|false (raw carries credentials, hidden by default)'}, 'description': 'List folder entries + members (members addressed by positional index)'},

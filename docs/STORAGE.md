@@ -788,6 +788,13 @@ Debug API handlers — идут через единую дверь `SettingsStor
   но в config ядра билдер эмитит `mode`+`balancer` **только** при `round_robin`
   (`balancer` без round-robin роняет старт ядра). Пустой `sticky_hash` уходит в
   конфиг как sentinel `["none"]` (выключенная липкость, контракт ядра SPEC 019).
+- `detour` (bool, default `false` — отсутствие ключа читается как false,
+  миграции нет; §248) — канал = **detour-прослойка**: цель detour-полей
+  серверов/папок/подписок (значение ссылки = `tag`), исключён из целей правил
+  (`route_final` / custom-rule outbound). `vpn-1` не бывает detour (он —
+  резервная мишень heal-путей); `detour ⇒ include_block=false`. Оба инварианта
+  принуждаются при чтении (`Channel.fromJson`) — restore из backup и ручная
+  правка файла пишут raw JSON мимо UI/storage/API и их не обходят.
 - **Резолюция в билдере**: каждый включённый канал эмитит selector `<tag>` с
   нодами после `node_filter` (regex по итоговому tag, §048-style) + опции
   `direct-out`/`block` (по `include_direct`/`include_block`, §201); если `auto !=
@@ -810,13 +817,23 @@ Debug API handlers — идут через единую дверь `SettingsStor
   `add_outbounds ∋ ✨auto` → `auto` из `@urltest_*` vars; `default_filter=''`.
   Глобальный `✨auto`-preset **не** мигрируется (он больше не канал — каждый
   канал делает свой двойник). `enabled_groups[]` после миграции депрекейтится.
-- **Деградация ссылок**: при удалении канала любая ссылка на него (`route_final`
-  / custom-rule outbound) переводится на `vpn-1` (storage + билдер). Legacy
-  `✨auto`-ссылки попадают под то же правило.
+- **Деградация ссылок** (heal): канал перестал быть валидной мишенью данного
+  рода → ссылки этого рода лечатся сразу в storage, **необратимо** (§202
+  Решение B, расширено §248): rules-ссылки (`route_final` / custom-rule
+  outbound) → `vpn-1` при удалении / выключении / включении detour-роли;
+  detour-ссылки (`override_detour` / `members[].detour`) → `''` (None) при
+  удалении / выключении / снятии detour-роли. Ссылка «на канал» = его `tag`
+  ИЛИ `<tag>-auto`; значение, совпадающее с bare-тегом члена той же папки, —
+  интра-ссылка, heal её не трогает. Restore из backup heal не ре-гоняет
+  (принятые деградации — билдер схлопывает dangling при сборке). Legacy
+  `✨auto`-ссылки попадают под то же правило. Подробно:
+  [`spec/features/248 detour-channels/`](spec/features/248%20detour-channels/).
 - CRUD: `getChannels` / `setChannels` / `addChannel` (throws при 10) /
   `updateChannel` / `deleteChannel` (throws для vpn-1) / `migrateChannelsIfNeeded`.
 
-Спека: [`docs/spec/features/125 configurable-channels/`](spec/features/125%20configurable-channels/).
+Спеки: [`docs/spec/features/125 configurable-channels/`](spec/features/125%20configurable-channels/),
+[`docs/spec/features/248 detour-channels/`](spec/features/248%20detour-channels/)
+(detour-прослойка).
 
 ---
 

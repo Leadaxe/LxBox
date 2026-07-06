@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../controllers/subscription_controller.dart';
+import '../../../models/channel.dart';
 import '../../../models/server_list.dart';
 import '../../../services/subscription/input_helpers.dart';
+import '../../../widgets/detour_target_picker.dart' show detourChannelDisplay;
 import '../detour_mode.dart';
 import '../subscription_detail_format.dart';
 
@@ -15,6 +17,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
     super.key,
     required this.entry,
     this.folderMode = false,
+    this.channels = const [],
     required this.hasDetour,
     required this.detourMode,
     required this.onTagPrefixChanged,
@@ -34,6 +37,10 @@ class SubscriptionSettingsTab extends StatelessWidget {
   /// §239 — true для папки (§234): адаптированные detour-тексты («servers'
   /// own detours» вместо «subscription detour servers»).
   final bool folderMode;
+
+  /// §248 — каналы для подписи «⚙ <label>» канальной override-цели
+  /// (экран грузит SettingsStorage.getChannels и передаёт сюда).
+  final List<Channel> channels;
   final bool hasDetour;
   final DetourMode detourMode;
 
@@ -47,6 +54,21 @@ class SubscriptionSettingsTab extends StatelessWidget {
   final VoidCallback onShowIntervalPicker;
   final VoidCallback onRefreshNow;
   final VoidCallback onEditSource; // §129 — сменить источник (online↔file)
+
+  /// §248 — подпись override-цели: тег detour-канала (или его auto-двойника)
+  /// → «⚙ <label>»; канал не найден → сырой тег. Интра-омоним папки (bare-тег
+  /// собственного члена) побеждает канал-тёзку — это ссылка на члена
+  /// (приоритет bareIndex в FolderDetourPlan), показываем как тег.
+  String _overrideDisplay() {
+    final stored = entry.overrideDetour;
+    final list = entry.list;
+    if (folderMode && list is FolderServers) {
+      for (final m in list.members) {
+        if (m.node?.tag == stored) return stored;
+      }
+    }
+    return detourChannelDisplay(stored, channels);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -119,8 +141,8 @@ class SubscriptionSettingsTab extends StatelessWidget {
                 subtitle: Text(entry.overrideDetour.isEmpty
                     ? 'Append an outbound to the end of the chain'
                     : entry.replaceDetourChain
-                        ? 'Replace all → ${entry.overrideDetour}'
-                        : 'Fill missing → ${entry.overrideDetour}'),
+                        ? 'Replace all → ${_overrideDisplay()}'
+                        : 'Fill missing → ${_overrideDisplay()}'),
               ),
               // Sub-tiles под «Add detour»: outbound picker + выбор режима.
               // §073/§245: тот же bool replaceDetourChain, но вместо
@@ -134,7 +156,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
                     title: const Text('Outbound'),
                     subtitle: Text(entry.overrideDetour.isEmpty
                         ? '(tap to choose)'
-                        : entry.overrideDetour),
+                        : _overrideDisplay()),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: onShowOverrideDetourPicker,
                   ),
@@ -212,7 +234,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
                 // ноды подписки, потом наружу). Порядок как в node_settings:
                 // источник → detour → нода → Internet. БАГ был «Nodes → detour
                 // → Internet» (detour выглядел выходным — неверно).
-                : 'Phone → ${entry.overrideDetour} → Nodes → Internet'),
+                : 'Phone → ${_overrideDisplay()} → Nodes → Internet'),
             trailing: const Icon(Icons.chevron_right),
             onTap: onShowOverrideDetourPicker,
           ),

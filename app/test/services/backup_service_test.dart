@@ -344,6 +344,38 @@ void main() {
     expect((restored['server_lists'] as List).length, 1);
   });
 
+  test('§248 — detour-роль канала переживает backup round-trip', () async {
+    // Restore пишет raw JSON мимо UI/storage-мутаторов — поле `detour`
+    // обязано пережить export→restore и прочитаться в Channel.isDetour
+    // (parse-гейт fromJson валидную роль не срезает).
+    await seedStorage({
+      'channels': [
+        {'tag': 'vpn-1', 'label': 'Main', 'enabled': true},
+        {'tag': 'vpn-2', 'label': 'Relay', 'enabled': true, 'detour': true},
+      ],
+      'channels_migrated': true,
+    });
+    final svc = const BackupService();
+    final exported = await svc.buildExport(include: {BackupCategory.routing});
+    // Сырое поле в самом бэкапе (формат переживает и ручную правку файла).
+    final st = (jsonDecode(exported) as Map<String, dynamic>)['storage']
+        as Map<String, dynamic>;
+    expect(((st['channels'] as List)[1] as Map)['detour'], isTrue);
+
+    // Wipe → restore.
+    await SettingsStorage.replaceRaw({});
+    final contents = await svc.parseImport(exported);
+    final apply = await svc.applyImport(contents,
+        merge: false, include: {BackupCategory.routing});
+    expect(apply.errors, isEmpty);
+
+    final restored = await SettingsStorage.getChannels();
+    final vpn2 = restored.firstWhere((c) => c.tag == 'vpn-2');
+    expect(vpn2.isDetour, isTrue,
+        reason: 'detour-роль не должна теряться при restore');
+    expect(restored.firstWhere((c) => c.tag == 'vpn-1').isDetour, isFalse);
+  });
+
   group('§159 — allowlist (default-deny) на импорте', () {
     test('replaceRaw отбрасывает чужеродный top-level ключ', () async {
       final dropped = await SettingsStorage.replaceRaw({

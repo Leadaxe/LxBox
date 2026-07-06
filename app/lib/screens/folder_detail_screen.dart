@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
+import '../models/channel.dart';
 import '../models/server_list.dart';
 import '../services/error_format.dart';
 import '../services/probe/probe_runner.dart';
@@ -57,6 +58,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   final Set<String> _selectedProtocols = {};
   bool _protocolsInvert = false;
 
+  // §248 — каналы: секция Channels в detour-пикере + подпись «⚙ <label>»
+  // канальной override-цели в Settings-вкладке.
+  List<Channel> _channels = const [];
+
   FolderServers get _folder => widget.entry.list as FolderServers;
 
   /// §239 — голые теги членов, служащих интра-целью detour другого члена
@@ -86,6 +91,14 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     _tabCtrl = TabController(length: 2, vsync: this);
     _nameCtrl = TextEditingController(text: widget.entry.name);
     unawaited(_loadThresholds());
+    unawaited(_loadChannels());
+  }
+
+  /// §248 — загрузка каналов (initState + refresh перед пикером).
+  Future<void> _loadChannels() async {
+    final channels = await SettingsStorage.getChannels();
+    if (!mounted) return;
+    setState(() => _channels = channels);
   }
 
   @override
@@ -1194,6 +1207,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
     return SubscriptionSettingsTab(
       entry: widget.entry,
       folderMode: true, // §239 — адаптированные тексты
+      channels: _channels, // §248 — подпись канальной override-цели
       hasDetour: hasDetour,
       detourMode: _detourMode,
       onTagPrefixChanged: (val) {
@@ -1251,9 +1265,13 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   Future<void> _showOverrideDetourPicker() async {
     // §239 — кандидаты: «свободные» одиночки + члены СВОЕЙ папки (интра-цель
     // хранится голым тегом; exempt-набор в билдере не даёт циклов через цель).
+    // §248 — свежие каналы (могли измениться, пока экран открыт).
+    await _loadChannels();
+    if (!mounted) return;
     final chosen = await showDetourTargetPicker(
       context,
       controller: widget.controller,
+      channels: _channels,
       currentFolder: _folder,
     );
     if (chosen == null || !mounted) return;
