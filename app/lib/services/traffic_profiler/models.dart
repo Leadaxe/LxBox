@@ -206,44 +206,52 @@ class TrafficEvent {
   final List<ConnectionIssue> issues;
   final Map<String, Object?>? extra;
 
-  /// §181 — полная человекочитаемая трассировка пути пакета слева направо:
-  /// `[tcp] процесс ⇒ rule ⇒ группа ⇒ …auto… : node → detour → domain`
-  /// Разделители кодируют тип перехода: `⇒` внутренние (источник + роутинг),
-  /// `:` выход во внешний мир (группа выбрала сервер), `→` снаружи (detour +
-  /// назначение). `outboundChain` = `[node, …selectors]` от ядра (§174);
-  /// группы разворачиваем reverse, node = `[0]` ставим после `:`.
+  /// §252 (эволюция §181) — трассировка: слева ось РЕШЕНИЯ, справа от `:` —
+  /// физический путь пакета по факту:
+  /// `процесс ⇒ [tcp] rule ⇒ группы : транспорт-вход → … → выход (селектор
+  /// (его выбор)) → domain`
+  /// `⇒` — как роутер выбирал (процесс → правило → селекторы сверху вниз);
+  /// `:` — граница «решение / путь»; `→` — движение пакета (вход первым,
+  /// выход в интернет — последним перед целью). Пары «селектор + его выбор»
+  /// схлопнуты в `селектор (выбор)` (§251).
   String get routingLine => routingLineOf();
 
-  /// [compact] — для live-списка: префикс `[network] process ⇒` опускается,
+  /// [compact] — для live-списка: префикс `process ⇒ [network]` опускается,
   /// т.к. дублирует строку процесса + бейдж типа над ней. Строка начинается с
   /// `rule` (`final ⇒ vpn-1 : …`). Detail-sheet зовёт без compact (полная).
   String routingLineOf({bool compact = false}) {
     final sb = StringBuffer();
-    if (!compact && network != null && network!.isNotEmpty) {
-      sb.write('[$network] ');
-    }
-    // Внутренняя цепочка (⇒): процесс → rule → группы (сверху вниз).
+    // Ось решения (⇒): процесс → [net] правило → селекторы (сверху вниз).
     final inner = <String>[];
     if (!compact && process != null && process!.isNotEmpty) inner.add(process!);
-    inner.add((rule != null && rule!.isNotEmpty) ? rule! : 'final');
+    final ruleText = (rule != null && rule!.isNotEmpty) ? rule! : 'final';
+    inner.add(!compact && network != null && network!.isNotEmpty
+        ? '[$network] $ruleText'
+        : ruleText);
     if (outboundChain.length > 1) {
       // selectors = chain[1:] от ВЕРХНЕГО к нижнему (reverse).
       inner.addAll(outboundChain.sublist(1).reversed);
     }
     sb.write(inner.join(' ⇒ '));
-    // Выход во внешний мир (:): финальный node = chain[0].
-    final node = outboundChain.isNotEmpty ? outboundChain.first : null;
-    if (node != null) sb.write(' : $node');
-    // Снаружи (→): detour-хвост + назначение. §251 — пара «селектор + его
-    // выбор» (detour-канал §248 и кого он выбрал) — одна точка пути, не два
-    // хопа: схлопываем в `селектор (выбор)`.
-    final outer = <String>[];
-    outer.addAll(foldSelectorPairs(detourChain));
+    // §252 — физический путь (→ по ходу пакета): транспорт изнутри наружу
+    // (detour-ось развёрнута: вход первым) → выход ОДНИМ элементом
+    // `селектор (…вложенно… (node))` → назначение. Выход сворачивается ПО
+    // СТРУКТУРЕ outboundChain (`[node, …selectors]` — роли известны от
+    // ядра §174), не через SelectorInfo: селекторы не должны рассыпаться в
+    // ложные «хопы», даже если держатель тегов пуст.
+    final phys = <String>[...foldSelectorPairs(detourChain).reversed];
+    if (outboundChain.isNotEmpty) {
+      var exit = outboundChain.first;
+      for (final sel in outboundChain.skip(1)) {
+        exit = '$sel ($exit)';
+      }
+      phys.add(exit);
+    }
     final dest = (domain != null && domain!.isNotEmpty)
         ? domain
         : (ip != null && ip!.isNotEmpty ? ip : null);
-    if (dest != null) outer.add(dest);
-    if (outer.isNotEmpty) sb.write(' → ${outer.join(' → ')}');
+    if (dest != null) phys.add(dest);
+    if (phys.isNotEmpty) sb.write(' : ${phys.join(' → ')}');
     // §181 — длительность в человеческом формате: <1s → "930ms", иначе "1s"/"1m".
     if (duration != null) sb.write(' · ${_fmtDuration(duration!)}');
     return sb.toString();

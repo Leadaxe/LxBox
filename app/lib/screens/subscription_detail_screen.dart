@@ -279,6 +279,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     return SubscriptionSettingsTab(
       entry: widget.entry,
       channels: _channels, // §248 — подпись канальной override-цели
+      // §252 — разворот цели в цепочку «как пакет пойдёт» для превью.
+      detourPathHopsOf: (stored) => detourPathHops(stored,
+          controller: widget.controller, channels: _channels),
       hasDetour: hasDetour,
       detourMode: _detourMode,
       onTagPrefixChanged: (val) {

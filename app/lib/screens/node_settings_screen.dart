@@ -198,6 +198,20 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     return detourChannelDisplay(stored, _channels);
   }
 
+  /// §252 — полная цепочка хопов от цели detour вглубь (её собственный
+  /// detour → …), по ходу пакета. Для превью «Phone → … → node → Internet».
+  String _detourPath() {
+    final list = widget.entry.list;
+    return detourPathHops(
+      _detour,
+      controller: widget.subController,
+      channels: _channels,
+      folder: (widget.memberIndex != null && list is FolderServers)
+          ? list
+          : null,
+    ).join(' → ');
+  }
+
   /// §130 — лог сброса невалидного AWG→WireGuard detour при открытии редактора.
   void _logResetDetour(String removed) {
     AppLog.I.info(
@@ -385,9 +399,11 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Text(
+            // §252 — полная цепочка «как пакет пойдёт»: цель → её собственный
+            // detour → … (detourPathHops), а не только первый хоп.
             _detour.isEmpty
                 ? 'Traffic goes directly to this server.'
-                : 'Phone → ${_detourDisplay(_detour)} → $_originalTag → Internet',
+                : 'Phone → ${_detourPath()} → $_originalTag → Internet',
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
