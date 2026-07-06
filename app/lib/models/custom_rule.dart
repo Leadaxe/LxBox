@@ -158,6 +158,31 @@ sealed class CustomRule {
   /// Build (эмиссия) и UI (lifecycle-локи серверов) используют этот предикат.
   bool get dnsMirrorActive => dnsMirrorEligible && (dns?.enabled ?? false);
 
+  /// §247 — resolve-опция правила (только inline/srs). `null` = обычный
+  /// outbound (backward-compat: старые записи без `resolve`).
+  RuleResolve? get resolve => switch (this) {
+        CustomRuleInline(:final resolve) => resolve,
+        CustomRuleSrs(:final resolve) => resolve,
+        _ => null,
+      };
+
+  /// §247: правило resolve-**способно** — есть чему резолвиться. inline:
+  /// domain-группа непуста (чистый ip_cidr/protocol/port-матч резолвить
+  /// нечего — UI прячет шестерёнку); srs: всегда true (содержимое `.srs`
+  /// не парсим — домены возможны).
+  bool get resolveEligible => switch (this) {
+        CustomRuleInline() => domains.isNotEmpty ||
+            domainSuffixes.isNotEmpty ||
+            domainKeywords.isNotEmpty,
+        CustomRuleSrs() => true,
+        _ => false,
+      };
+
+  /// §247: resolve **активен** — опция задана И правило resolve-способно.
+  /// Билдер (эмиссия resolve-правила) и UI (✳-маркер в списке) используют
+  /// этот предикат.
+  bool get resolveActive => resolve != null && resolveEligible;
+
   String get srsUrl => switch (this) {
         CustomRuleSrs(:final srsUrl) => srsUrl,
         _ => '',
@@ -263,6 +288,105 @@ class RuleDns {
       );
 }
 
+/// §247 — resolve-опция правила (route rule action `resolve`, sing-box 1.14).
+/// `null` на правиле = обычный outbound (backward-compat: старые записи).
+///
+/// Два режима:
+/// - `only == false` — **route + resolve**: билдер эмитит ДВА правила —
+///   нетерминальный resolve ПЕРЕД терминальным route (тот же матч);
+/// - `only == true` — **resolve only** (advanced): одно нетерминальное
+///   правило; трафик проваливается к следующим правилам / route.final.
+///   `outbound` правила при этом сохраняется в модели (переключение
+///   режимов не теряет выбор), но билдером игнорируется.
+///
+/// Пустая строка / null у опциональных полей = ключ не эмитится
+/// (минимальный конфиг, дефолты ядра).
+class RuleResolve {
+  const RuleResolve({
+    this.only = false,
+    this.strategy = '',
+    this.serverTag = '',
+    this.disableCache = false,
+    this.disableOptimisticCache = false,
+    this.rewriteTtl,
+    this.timeout = '',
+    this.clientSubnet = '',
+  });
+
+  final bool only;
+
+  /// '' = inherit `dns.strategy`; иначе prefer_ipv4/prefer_ipv6/ipv4_only/ipv6_only.
+  final String strategy;
+
+  /// '' = auto (резолв через DNS-роутинг); иначе tag DNS-сервера.
+  final String serverTag;
+
+  final bool disableCache;
+  final bool disableOptimisticCache;
+
+  /// null = не эмитить. sing-box: uint32.
+  final int? rewriteTtl;
+
+  /// '' = не эмитить. Duration-строка sing-box ('5s', '500ms').
+  final String timeout;
+
+  /// '' = не эмитить. CIDR/IP для edns0-subnet.
+  final String clientSubnet;
+
+  Map<String, dynamic> toJson() => {
+        'only': only,
+        if (strategy.isNotEmpty) 'strategy': strategy,
+        if (serverTag.isNotEmpty) 'serverTag': serverTag,
+        if (disableCache) 'disableCache': true,
+        if (disableOptimisticCache) 'disableOptimisticCache': true,
+        if (rewriteTtl != null) 'rewriteTtl': rewriteTtl,
+        if (timeout.isNotEmpty) 'timeout': timeout,
+        if (clientSubnet.isNotEmpty) 'clientSubnet': clientSubnet,
+      };
+
+  /// Backward-compat: не-Map (отсутствует в старых записях) → null.
+  static RuleResolve? fromJson(dynamic j) {
+    if (j is! Map) return null;
+    return RuleResolve(
+      only: j['only'] == true,
+      strategy: j['strategy']?.toString() ?? '',
+      serverTag: j['serverTag']?.toString() ?? '',
+      disableCache: j['disableCache'] == true,
+      disableOptimisticCache: j['disableOptimisticCache'] == true,
+      rewriteTtl: switch (j['rewriteTtl']) {
+        final int v when v >= 0 => v,
+        final String s => int.tryParse(s),
+        _ => null,
+      },
+      timeout: j['timeout']?.toString() ?? '',
+      clientSubnet: j['clientSubnet']?.toString() ?? '',
+    );
+  }
+
+  RuleResolve copyWith({
+    bool? only,
+    String? strategy,
+    String? serverTag,
+    bool? disableCache,
+    bool? disableOptimisticCache,
+    int? rewriteTtl,
+    bool clearRewriteTtl = false,
+    String? timeout,
+    String? clientSubnet,
+  }) =>
+      RuleResolve(
+        only: only ?? this.only,
+        strategy: strategy ?? this.strategy,
+        serverTag: serverTag ?? this.serverTag,
+        disableCache: disableCache ?? this.disableCache,
+        disableOptimisticCache:
+            disableOptimisticCache ?? this.disableOptimisticCache,
+        rewriteTtl: clearRewriteTtl ? null : (rewriteTtl ?? this.rewriteTtl),
+        timeout: timeout ?? this.timeout,
+        clientSubnet: clientSubnet ?? this.clientSubnet,
+      );
+}
+
 /// Sentinel-значение для `CustomRuleInline.outbound` / `CustomRuleSrs.outbound`.
 /// Билдер матчит на `{action: "reject"}` вместо `{outbound: <tag>}`. sing-box
 /// не имеет outbound'а с таким именем — коллизий нет.
@@ -315,6 +439,7 @@ class CustomRuleInline extends CustomRule {
     List<String> wifiBssids = const [],
     this.outbound = 'direct-out',
     this.dns,
+    this.resolve,
   }) : wifiBssids = _normalizeBssids(wifiBssids);
 
   // OR-группа #1 (domain-family + ip). Внутри OR, между остальными — AND.
@@ -374,6 +499,10 @@ class CustomRuleInline extends CustomRule {
   @override
   RuleDns? dns;
 
+  /// §247 — resolve-опция (route action `resolve` перед/вместо route).
+  @override
+  RuleResolve? resolve;
+
   @override
   CustomRuleKind get kind => CustomRuleKind.inline;
 
@@ -418,6 +547,7 @@ class CustomRuleInline extends CustomRule {
         if (wifiBssids.isNotEmpty) 'wifiBssids': wifiBssids,
         'outbound': outbound,
         if (dns != null) 'dns': dns!.toJson(),
+        if (resolve != null) 'resolve': resolve!.toJson(),
       };
 
   factory CustomRuleInline.fromJson(Map<String, dynamic> j) => CustomRuleInline(
@@ -440,6 +570,7 @@ class CustomRuleInline extends CustomRule {
         wifiBssids: _stringList(j['wifiBssids']),
         outbound: _outbound(j),
         dns: RuleDns.fromJson(j['dns']),
+        resolve: RuleResolve.fromJson(j['resolve']),
       );
 
   CustomRuleInline copyWith({
@@ -461,6 +592,7 @@ class CustomRuleInline extends CustomRule {
     List<String>? wifiBssids,
     String? outbound,
     RuleDns? dns,
+    RuleResolve? resolve,
   }) =>
       CustomRuleInline(
         id: id,
@@ -482,6 +614,7 @@ class CustomRuleInline extends CustomRule {
         wifiBssids: wifiBssids ?? this.wifiBssids,
         outbound: outbound ?? this.outbound,
         dns: dns ?? this.dns,
+        resolve: resolve ?? this.resolve,
       );
 
   @override
@@ -515,6 +648,7 @@ class CustomRuleSrs extends CustomRule {
     List<String> wifiBssids = const [],
     this.outbound = 'direct-out',
     this.dns,
+    this.resolve,
   }) : wifiBssids = _normalizeBssids(wifiBssids);
 
   @override
@@ -559,6 +693,11 @@ class CustomRuleSrs extends CustomRule {
   @override
   RuleDns? dns;
 
+  /// §247 — resolve-опция. Для srs всегда eligible (домены в `.srs`
+  /// возможны, содержимое не парсим — симметрично dns-пометке выше).
+  @override
+  RuleResolve? resolve;
+
   @override
   CustomRuleKind get kind => CustomRuleKind.srs;
 
@@ -588,6 +727,7 @@ class CustomRuleSrs extends CustomRule {
         if (wifiBssids.isNotEmpty) 'wifiBssids': wifiBssids,
         'outbound': outbound,
         if (dns != null) 'dns': dns!.toJson(),
+        if (resolve != null) 'resolve': resolve!.toJson(),
       };
 
   factory CustomRuleSrs.fromJson(Map<String, dynamic> j) => CustomRuleSrs(
@@ -607,6 +747,7 @@ class CustomRuleSrs extends CustomRule {
         wifiBssids: _stringList(j['wifiBssids']),
         outbound: _outbound(j),
         dns: RuleDns.fromJson(j['dns']),
+        resolve: RuleResolve.fromJson(j['resolve']),
       );
 
   CustomRuleSrs copyWith({
@@ -625,6 +766,7 @@ class CustomRuleSrs extends CustomRule {
     List<String>? wifiBssids,
     String? outbound,
     RuleDns? dns,
+    RuleResolve? resolve,
   }) =>
       CustomRuleSrs(
         id: id,
@@ -643,6 +785,7 @@ class CustomRuleSrs extends CustomRule {
         wifiBssids: wifiBssids ?? this.wifiBssids,
         outbound: outbound ?? this.outbound,
         dns: dns ?? this.dns,
+        resolve: resolve ?? this.resolve,
       );
 
   @override

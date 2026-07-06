@@ -278,17 +278,50 @@ class SelectableRule {
     this.description = '',
     this.defaultEnabled = false,
     this.ruleSets = const [],
-    this.rule = const {},
+    dynamic rule,
     this.vars = const [],
     this.dnsRule,
     this.dnsServers = const [],
-  });
+  }) : rules = _normalizeRules(rule);
 
   final String label;
   final String description;
   final bool defaultEnabled;
   final List<Map<String, dynamic>> ruleSets;
-  final Map<String, dynamic> rule;
+
+  /// Route-правила пресета в порядке шаблона (§246).
+  ///
+  /// Template-форма `rule` — Map (legacy, один rule) ИЛИ List (несколько,
+  /// напр. `[resolve-#if, route]` у ru-direct). Конструктор нормализует
+  /// обе в список; элементы могут быть `#if`-обёртками (§120) — они
+  /// разворачиваются на expansion'е, не здесь.
+  final List<Map<String, dynamic>> rules;
+
+  /// Терминальный элемент [rules] — с `outbound` или терминальным `action`
+  /// (не resolve/sniff/route-options). Для UI fallback-chain'а
+  /// (`presetOut`): у пресетов без var:outbound терминальное правило —
+  /// единственный источник дефолта (Block Ads → `action: reject`).
+  /// `#if`-обёртки пропускаются (не имеют outbound/action на верхнем
+  /// уровне) — такие пресеты объявляют var:outbound, chain до сюда не
+  /// доходит. Нет терминального → пустой Map (fallback `direct-out`).
+  Map<String, dynamic> get terminalRule {
+    for (final r in rules.reversed) {
+      final action = r['action'];
+      if (action is String && _intermediateActions.contains(action)) continue;
+      if (r['outbound'] is String || action is String) return r;
+    }
+    return const {};
+  }
+
+  static const _intermediateActions = {'resolve', 'sniff', 'route-options'};
+
+  static List<Map<String, dynamic>> _normalizeRules(dynamic rule) {
+    if (rule is Map<String, dynamic>) return rule.isEmpty ? const [] : [rule];
+    if (rule is List) {
+      return rule.whereType<Map<String, dynamic>>().toList();
+    }
+    return const [];
+  }
 
   /// Stable slug для bundle-пресетов (spec §033). Пустой → legacy-режим.
   final String presetId;
@@ -339,7 +372,9 @@ class SelectableRule {
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [],
-      rule: json['rule'] as Map<String, dynamic>? ?? {},
+      // §246: `rules` (List, канонический ключ массивной формы) |
+      // `rule` (Map, legacy single) — нормализует конструктор.
+      rule: json['rules'] ?? json['rule'],
       presetId: presetId,
       vars: (json['vars'] as List<dynamic>?)
               ?.whereType<Map<String, dynamic>>()

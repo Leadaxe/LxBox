@@ -113,6 +113,17 @@ class CustomRuleTile extends StatelessWidget {
                             TextStyle(fontSize: 12, color: subtitleColor),
                         overflow: TextOverflow.ellipsis),
                   ),
+                  // §247 — значок ✳: у правила resolve-опция (action сложнее
+                  // простого outbound). Просто маркер, деталей в списке нет.
+                  if (rule.resolveActive) ...[
+                    const SizedBox(width: 6),
+                    Text('✳',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: rule.enabled
+                                ? cs.primary
+                                : cs.onSurfaceVariant)),
+                  ],
                   // §231 — чип «DNS» справа на нижней строке, под outbound-пикером.
                   if (touchesDns) ...[
                     const SizedBox(width: 6),

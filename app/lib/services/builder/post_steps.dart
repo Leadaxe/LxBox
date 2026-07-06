@@ -26,3 +26,4 @@ part 'post_steps/dns_rules.dart';
 part 'post_steps/custom_rules.dart';
 part 'post_steps/dns_servers.dart';
 part 'post_steps/heal_dangling_detours.dart';
+part 'post_steps/heal_dangling_resolve_servers.dart';
