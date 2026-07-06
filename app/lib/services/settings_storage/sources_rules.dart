@@ -36,11 +36,11 @@ Future<List<ServerList>> _getServerLists() async {
       .toList();
 }
 
-Future<void> _saveServerLists(List<ServerList> lists) async {
+Future<void> _saveServerLists(List<ServerList> lists, {bool flush = true}) async {
   final data = await _load();
   data['server_lists'] = lists.map((e) => e.toJson()).toList();
   SettingsStorage._cache = data;
-  await _save();
+  if (flush) await _save();
 }
 
 // §159 — `enabled_rules` API удалён (legacy-миграция в `custom_rules` снята).

@@ -114,9 +114,9 @@ class LiveView extends StatelessWidget {
       TrafficEventKind.udpOpen => (cs.secondary, 'UDP'),
     };
 
-    // Строка 3 (§181) — единая трассировка маршрута. routingLine несёт
-    // [net] proc ⇒ rule ⇒ группы : node → detour → domain · duration (rule и
-    // duration уже внутри, отдельно не дублируем).
+    // Строка 3 (§252) — единая трассировка маршрута. routingLine несёт
+    // proc ⇒ [net] rule ⇒ группы : вход → … → выход → domain · duration (rule
+    // и duration уже внутри, отдельно не дублируем).
     // compact: префикс [net] process ⇒ опущен — он дублирует строку процесса
     // (строка 2) + бейдж типа (TCP/DNS, строка 1). Начинаем с rule.
     final meta = <String>[];

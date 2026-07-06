@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/channel.dart';
+import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/debug/context.dart';
 import 'package:lxbox/services/debug/contract/errors.dart';
 import 'package:lxbox/services/debug/debug_registry.dart';
@@ -226,6 +227,100 @@ void main() {
         channelsHandler(req('DELETE', '/channels/vpn-2'), ctx()),
         throwsA(isA<NotFound>()),
       );
+    });
+  });
+
+  group('§248 — detour-роль канала', () {
+    test('GET/PATCH roundtrip поля detour', () async {
+      await channelsHandler(req('POST', '/channels'), ctx()); // vpn-2
+      final r1 = await channelsHandler(
+          req('PATCH', '/channels/vpn-2', body: {'detour': true}), ctx());
+      expect(asMap(r1)['detour'], isTrue);
+      final r2 = await channelsHandler(req('GET', '/channels/vpn-2'), ctx());
+      expect(asMap(r2)['detour'], isTrue);
+      // Снятие роли — тем же полем.
+      final r3 = await channelsHandler(
+          req('PATCH', '/channels/vpn-2', body: {'detour': false}), ctx());
+      expect(asMap(r3)['detour'], isFalse);
+    });
+
+    test('vpn-1 не может стать detour → 409', () async {
+      await expectLater(
+        channelsHandler(
+            req('PATCH', '/channels/vpn-1', body: {'detour': true}), ctx()),
+        throwsA(isA<Conflict>()),
+      );
+    });
+
+    test('detour + include_block в одном body → 409', () async {
+      await channelsHandler(req('POST', '/channels'), ctx()); // vpn-2
+      await expectLater(
+        channelsHandler(
+          req('PATCH', '/channels/vpn-2',
+              body: {'detour': true, 'include_block': true}),
+          ctx(),
+        ),
+        throwsA(isA<Conflict>()),
+      );
+    });
+
+    test('include_block:true на уже-detour канале → 409', () async {
+      await channelsHandler(
+          req('POST', '/channels', body: {'detour': true}), ctx()); // vpn-2
+      await expectLater(
+        channelsHandler(
+            req('PATCH', '/channels/vpn-2', body: {'include_block': true}),
+            ctx()),
+        throwsA(isA<Conflict>()),
+      );
+    });
+
+    test('detour:true на канале с сохранённым include_block → нормализация',
+        () async {
+      // Унаследованный из storage block молча снимается (merge-философия:
+      // PATCH одним полем не обязан знать про ранее выставленные галки).
+      await channelsHandler(
+          req('POST', '/channels', body: {'include_block': true}), ctx());
+      final r = await channelsHandler(
+          req('PATCH', '/channels/vpn-2', body: {'detour': true}), ctx());
+      expect(asMap(r)['detour'], isTrue);
+      expect(asMap(r)['include_block'], isFalse);
+      final stored = (await SettingsStorage.getChannels())
+          .firstWhere((c) => c.tag == 'vpn-2');
+      expect(stored.isDetour, isTrue);
+      expect(stored.includeBlock, isFalse);
+    });
+
+    test('healed в PATCH: flag-set лечит rules-ссылки на канал', () async {
+      await channelsHandler(req('POST', '/channels'), ctx()); // vpn-2
+      await SettingsStorage.saveRouteFinal('vpn-2');
+      final r = await channelsHandler(
+          req('PATCH', '/channels/vpn-2', body: {'detour': true}), ctx());
+      expect(asMap(r)['healed'], {'rules': 1, 'detours': 0});
+      expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
+    });
+
+    test('healed в DELETE: rules → vpn-1, detour-ссылки → \'\'', () async {
+      await channelsHandler(
+          req('POST', '/channels', body: {'detour': true}), ctx()); // vpn-2
+      await SettingsStorage.saveRouteFinal('vpn-2'); // Debug API может и так
+      await SettingsStorage.saveServerLists([
+        UserServer(
+          id: 'u1',
+          name: 'Solo',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: const DetourPolicy(overrideDetour: 'vpn-2'),
+          origin: UserSource.paste,
+          createdAt: DateTime.now(),
+        ),
+      ]);
+
+      final r = await channelsHandler(req('DELETE', '/channels/vpn-2'), ctx());
+      expect(asMap(r)['healed'], {'rules': 1, 'detours': 1});
+      expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
+      final solo = (await SettingsStorage.getServerLists()).single;
+      expect(solo.detourPolicy.overrideDetour, '');
     });
   });
 

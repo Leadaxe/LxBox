@@ -11,8 +11,9 @@ import '_shared.dart';
 /// Тонкая обёртка над `SettingsStorage.getChannels / addChannel /
 /// updateChannel / deleteChannel` — та же семантика, что у UI:
 /// vpn-1 неудаляем и всегда enabled, лимит [kMaxChannels], удаление /
-/// выключение канала деградирует ссылки (route_final / custom-rule
-/// outbound) на vpn-1 внутри storage (§202-механика).
+/// выключение / смена detour-роли канала лечит ссылки в storage
+/// (rules-ссылки → vpn-1, §202-механика; detour-ссылки → '', §248);
+/// счётчики вылеченного — блок `healed` в ответах мутаций.
 ///
 /// Routes:
 /// - `GET    /channels`            → list (Channel.toJson, snake_case)
@@ -84,13 +85,21 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   // Остальные поля body — как PATCH сразу после создания (один вызов
   // вместо POST+PATCH). label уже применён.
   var ch = created;
+  // Свежий tag обычно ни на что не ссылается (счётчики нули), но re-create
+  // тега после restore из backup может встретить stale-ссылку — heal тот же,
+  // что у PATCH, поэтому и shape ответа единый.
+  ChannelHealResult healed = (rules: 0, detours: 0);
   final patched = _applyPatch(ch, body);
   if (patched != null) {
     ch = patched;
-    await SettingsStorage.updateChannel(ch);
+    healed = await SettingsStorage.updateChannel(ch);
   }
   final extras = await maybeRebuild(req, ctx);
-  return JsonResponse({...ch.toJson(), ...extras}, status: 201);
+  return JsonResponse({
+    ...ch.toJson(),
+    'healed': {'rules': healed.rules, 'detours': healed.detours},
+    ...extras,
+  }, status: 201);
 }
 
 Future<DebugResponse> _update(String tag, DebugRequest req, DebugContext ctx) async {
@@ -100,24 +109,41 @@ Future<DebugResponse> _update(String tag, DebugRequest req, DebugContext ctx) as
   if (ch == null) throw NotFound('channel: $tag');
 
   final next = _applyPatch(ch, body) ?? ch;
-  await SettingsStorage.updateChannel(next);
+  final healed = await SettingsStorage.updateChannel(next);
+  // §248 — зеркальный ресинк in-memory _entries контроллера: без него
+  // следующий _persist()/generateConfig() воскресил бы вылеченный storage.
+  if (healed.detours > 0) {
+    ctx.registry.sub?.syncDetourChannelRefsCleared(tag);
+  }
   final extras = await maybeRebuild(req, ctx);
-  return JsonResponse({...next.toJson(), ...extras});
+  // §238-паттерн «снапшот в ответе»: healed-счётчики — API-аналог
+  // UI-SnackBar'а о вылеченных ссылках (§202/§248), heal молчаливым не бывает.
+  return JsonResponse({
+    ...next.toJson(),
+    'healed': {'rules': healed.rules, 'detours': healed.detours},
+    ...extras,
+  });
 }
 
 Future<DebugResponse> _delete(String tag, DebugRequest req, DebugContext ctx) async {
   final channels = await SettingsStorage.getChannels();
   if (!channels.any((c) => c.tag == tag)) throw NotFound('channel: $tag');
+  final ChannelHealResult healed;
   try {
-    await SettingsStorage.deleteChannel(tag);
+    healed = await SettingsStorage.deleteChannel(tag);
   } on StateError catch (e) {
     throw Conflict(e.message); // vpn-1 is not deletable
+  }
+  // §248 — зеркальный ресинк _entries контроллера (см. _update).
+  if (healed.detours > 0) {
+    ctx.registry.sub?.syncDetourChannelRefsCleared(tag);
   }
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({
     'ok': true,
     'action': 'channels-delete',
     'tag': tag,
+    'healed': {'rules': healed.rules, 'detours': healed.detours},
     ...extras,
   });
 }
@@ -204,6 +230,26 @@ Channel? _applyPatch(Channel ch, Map<String, dynamic> body) {
   final nodeFilterInvert = fieldBool(body, 'node_filter_invert');
   final interrupt = fieldBool(body, 'interrupt_exist_connections');
 
+  // §248 — роль detour-прослойки. vpn-1 — резервная мишень heal-путей,
+  // detour ему запрещён; block в прослойке запрещён («upstream недоступен»
+  // не должен превращаться в «весь флот мёртв»). Явный include_block:true
+  // при detour-роли — отказ; унаследованный из storage при включении detour
+  // — молча нормализуем в false (merge-философия: PATCH одним полем не
+  // обязан знать про ранее выставленные галки).
+  final detour = fieldBool(body, 'detour');
+  if (detour == true && ch.isRequired) {
+    throw Conflict(
+      'channel ${ch.tag} is the fallback rule target and cannot be a detour channel',
+    );
+  }
+  if (includeBlock == true && (detour ?? ch.isDetour)) {
+    throw const Conflict(
+      'a detour channel cannot include block '
+      '("detour" and "include_block" are mutually exclusive)',
+    );
+  }
+  final dropBlock = detour == true && ch.includeBlock;
+
   final changed = label != null ||
       enabled != null ||
       includeDirect != null ||
@@ -212,6 +258,7 @@ Channel? _applyPatch(Channel ch, Map<String, dynamic> body) {
       nodeFilterInvert != null ||
       defaultFilter != null ||
       interrupt != null ||
+      detour != null ||
       auto != null ||
       clearAuto;
   if (!changed) return null;
@@ -220,13 +267,14 @@ Channel? _applyPatch(Channel ch, Map<String, dynamic> body) {
     label: label,
     enabled: enabled,
     includeDirect: includeDirect,
-    includeBlock: includeBlock,
+    includeBlock: dropBlock ? false : includeBlock,
     nodeFilter: nodeFilter,
     nodeFilterInvert: nodeFilterInvert,
     defaultFilter: defaultFilter,
     interruptExistConnections: interrupt,
     auto: auto,
     clearAuto: clearAuto,
+    isDetour: detour,
   );
 }
 

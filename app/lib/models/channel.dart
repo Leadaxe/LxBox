@@ -210,6 +210,7 @@ class Channel {
     this.defaultFilter = '',
     this.interruptExistConnections = true,
     this.auto,
+    this.isDetour = false,
   });
 
   /// 'vpn-1'..'vpn-10' — системный immutable id (автоген, юзер НЕ правит).
@@ -245,6 +246,14 @@ class Channel {
   /// urltest-двойник. null → галка ВЫКЛ, `<tag>-auto` не эмитится.
   final ChannelAuto? auto;
 
+  /// §248 — канал = detour-прослойка: цель detour серверов/папок/подписок
+  /// (пикер §239), исключён из целей правил (route_final / custom-rule
+  /// outbound). Маркер в UI — префикс ⚙. Инварианты («vpn-1 не detour»,
+  /// «detour ⇒ includeBlock=false») принуждаются в [Channel.fromJson] —
+  /// restore из backup пишет raw JSON мимо UI/storage/API, только read-time
+  /// коэрс закрывает все пути.
+  final bool isDetour;
+
   /// Производный tag urltest-двойника. В storage НЕ хранится.
   String get autoTag => '$tag-auto';
 
@@ -263,6 +272,7 @@ class Channel {
     bool? interruptExistConnections,
     ChannelAuto? auto,
     bool clearAuto = false,
+    bool? isDetour,
   }) =>
       Channel(
         tag: tag, // immutable — не параметр copyWith
@@ -276,16 +286,23 @@ class Channel {
         interruptExistConnections:
             interruptExistConnections ?? this.interruptExistConnections,
         auto: clearAuto ? null : (auto ?? this.auto),
+        isDetour: isDetour ?? this.isDetour,
       );
 
   factory Channel.fromJson(Map<String, dynamic> json) {
     final rawAuto = json['auto'];
+    final tag = json['tag'] as String? ?? '';
+    // §248 — parse-гейт (единственная точка, которую не обходит restore из
+    // backup / ручная правка файла): vpn-1 — резервная мишень heal-путей,
+    // detour-роль ему запрещена; block в detour-прослойке запрещён (Q1) —
+    // «upstream недоступен» не должен превращаться в «весь флот мёртв».
+    final isDetour = tag != 'vpn-1' && (json['detour'] as bool? ?? false);
     return Channel(
-      tag: json['tag'] as String? ?? '',
-      label: json['label'] as String? ?? (json['tag'] as String? ?? ''),
+      tag: tag,
+      label: json['label'] as String? ?? tag,
       enabled: json['enabled'] as bool? ?? true,
       includeDirect: json['include_direct'] as bool? ?? false,
-      includeBlock: json['include_block'] as bool? ?? false,
+      includeBlock: !isDetour && (json['include_block'] as bool? ?? false),
       nodeFilter: json['node_filter'] as String? ?? '',
       nodeFilterInvert: json['node_filter_invert'] as bool? ?? false,
       defaultFilter: json['default_filter'] as String? ?? '',
@@ -294,6 +311,7 @@ class Channel {
       auto: rawAuto is Map<String, dynamic>
           ? ChannelAuto.fromJson(rawAuto)
           : null,
+      isDetour: isDetour,
     );
   }
 
@@ -308,6 +326,7 @@ class Channel {
         'default_filter': defaultFilter,
         'interrupt_exist_connections': interruptExistConnections,
         'auto': auto?.toJson(), // null остаётся null в JSON (галка ВЫКЛ)
+        'detour': isDetour, // §248
       };
 
   /// Seed-канал из template-пресета (миграция first-run). `auto` берётся из

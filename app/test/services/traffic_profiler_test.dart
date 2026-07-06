@@ -938,16 +938,16 @@ void main() {
         ),
       ]);
       final ev = TrafficProfiler.I.active!.events.first;
-      // [tcp] proc ⇒ final ⇒ vpn-1 ⇒ ✨auto : 🇭🇺Венгрия → WARP → domain
+      // §252: proc ⇒ [tcp] final ⇒ vpn-1 ⇒ ✨auto : WARP → vpn-1 (✨auto (🇭🇺Венгрия)) → domain
       expect(
         ev.routingLine,
-        '[tcp] com.android.vending ⇒ final ⇒ vpn-1 ⇒ ✨auto : 🇭🇺Венгрия → WARP → play-fe.googleapis.com',
+        'com.android.vending ⇒ [tcp] final ⇒ vpn-1 ⇒ ✨auto : WARP → vpn-1 (✨auto (🇭🇺Венгрия)) → play-fe.googleapis.com',
       );
       // compact (live-список): без префикса [net] process ⇒ (он дублирует
       // строку процесса + бейдж типа). Начинается с rule.
       expect(
         ev.routingLineOf(compact: true),
-        'final ⇒ vpn-1 ⇒ ✨auto : 🇭🇺Венгрия → WARP → play-fe.googleapis.com',
+        'final ⇒ vpn-1 ⇒ ✨auto : WARP → vpn-1 (✨auto (🇭🇺Венгрия)) → play-fe.googleapis.com',
       );
     });
 
@@ -973,7 +973,7 @@ void main() {
       // нет групп (chains длины 1), нет detour: proc ⇒ rule : node → domain
       expect(
         ev.routingLine,
-        '[tcp] ru.tinkoff.investing ⇒ rule_set=ru-domains : direct-out → site.ru',
+        'ru.tinkoff.investing ⇒ [tcp] rule_set=ru-domains : direct-out → site.ru',
       );
     });
 

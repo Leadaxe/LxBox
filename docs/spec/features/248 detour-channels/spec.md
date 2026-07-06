@@ -1,8 +1,12 @@
 # §248 — Detour channels (канал как detour-прослойка)
 
-> **СТАТУС: СПЕКА** (согласована 06.07.2026, вопросы Q1–Q4 решены с владельцем;
-> прошла адверсарную ревизию: циклы через auto-двойник, exempt-семантика
-> разрыва, омонимия тегов, restore-обходы).
+> **СТАТУС: РЕАЛИЗОВАНО, device-verified** (06.07.2026, CPH2411). Согласована с
+> владельцем (Q1–Q4), прошла адверсарную ревизию спеки (циклы через
+> auto-двойник, exempt-семантика разрыва, омонимия тегов, restore-обходы) и
+> адверсарное ревью реализации (блокер: heal обязан зеркалиться в in-memory
+> `_entries` контроллера — см. Heal). Тесты: builder
+> `detour_channel_gates_test.dart`, storage `detour_channel_heal_test.dart`,
+> модель `channel_detour_test.dart` + Debug API/backup/ресинк-кейсы.
 > Идея владельца: канал §125 с галкой «Use as detour» становится переключаемой
 > detour-прослойкой для серверов/папок/подписок и исчезает из выбора целей
 > правил. Ядро не трогаем.
@@ -142,6 +146,13 @@ Circular outbound dependency — **fatal старта sing-box**, не мягк�
   (однозначно закодировать выбор невозможно).
 - Heal detour-ссылок (ниже) пропускает значения, матчащие bare-тег члена той
   же папки, — это интра-ссылки, канал тут ни при чём.
+- Пикер и heal сверяются по ВСЕМ распарсенным членам, **включая
+  выключенных** (консервативный superset: toggle члена-тёзки не должен
+  молча менять смысл сохранённой ссылки), тогда как `bareIndex` билдера
+  строится только по enabled-членам. Остаточная деградация осознанна:
+  ссылка-тёзка при ВЫКЛЮЧЕННОМ члене резолвится билдером как канальная
+  (детурит через канал, пока тёзка выключен) и переживает heal — добивается
+  билдер-гейтами (edge-strip/§172) без падения конфига.
 
 ## Ссылочная целостность (heal, Q3)
 
@@ -169,10 +180,27 @@ Circular outbound dependency — **fatal старта sing-box**, не мягк�
   (`route_final == '<tag>-auto'` — возможен только через restore/API,
   но heal обязан быть симметричен validFinals-гейту).
 - `_healDetourChannelRefs` пропускает интра-омонимы (см. Омонимия).
+- **Зеркальный ресинк контроллера (ОБЯЗАТЕЛЕН)**: storage-heal сам по себе
+  фикция — владелец server_lists в рантайме — in-memory
+  `SubscriptionController._entries` (грузится один раз в init), от него идут
+  и `generateConfig()`, и каждый `_persist()` (rename/toggle/авто-refresh),
+  который воскресил бы вылеченную ссылку на диске. Общее ядро сброса —
+  `clearDetourChannelRefs` (server_list.dart); storage-heal и
+  `SubscriptionController.syncDetourChannelRefsCleared(tag)` зеркальны.
+  Все вызыватели `updateChannel`/`deleteChannel` при `healed.detours > 0`
+  обязаны звать ресинк (routing_screen `_resyncHealedRefs`, node_list,
+  Debug-handler через `ctx.registry.sub`).
 - **Обратная связь (Q3: heal «с warning»)**: heal молчаливым не бывает —
-  UI показывает уведомление (SnackBar) со счётчиком, self-contained EN:
-  - flag-unset/disable/delete: `Channel "<label>" is no longer a detour target — N detour reference(s) reset to None.`
-  - flag-set: `Channel "<label>" is now a detour channel — N rule reference(s) switched to vpn-1.`
+  UI показывает SnackBar со счётчиками, self-contained EN. Фактическая
+  матрица (реализация покрывает больше кейсов, чем черновые два текста:
+  disable/delete лечат ОБА рода):
+  - вводная по событию: `Channel "<label>" disabled` / `… deleted` /
+    `… is now a detour channel` (rules > 0), `Channel "<label>" is no longer
+    a detour target` (только detours);
+  - части счётчиков: `N rule reference(s) switched to vpn-1`,
+    `M detour reference(s) reset to None` — оба ненулевые склеиваются в один
+    SnackBar через запятую;
+  - Home-путь редактора: префикс `Saved channel "<label>" — <части через ;>`.
   Мутация через Debug API — счётчики healed-ссылок в теле ответа
   (паттерн «снапшот в ответе» §238).
 - Build-time страховка не меняется: `healDanglingDetours` (§172) как есть —
@@ -249,6 +277,8 @@ Circular outbound dependency — **fatal старта sing-box**, не мягк�
 | Слой | Файл | Изменение |
 |---|---|---|
 | model | `models/channel.dart` | `isDetour` + JSON `detour`; parse-гейт fromJson (vpn-1 → detour=false, detour → includeBlock=false) |
+| model | `models/server_list.dart` | `clearDetourChannelRefs` — общее ядро сброса detour-ссылок (storage-heal + контроллерный ресинк) |
+| controller | `controllers/subscription_controller.dart` | `syncDetourChannelRefsCleared` — зеркальный ресинк in-memory `_entries` после storage-heal |
 | storage | `services/settings_storage/channels.dart` | `_healDetourChannelRefs` (4 вида detour-ссылок, tag+autoTag, пропуск интра-омонимов); heal при flag-set/unset/disable/delete; `_healChannelRefs` + autoTag; healed-счётчики наружу |
 | builder | `services/builder/build_config.dart` | `_buildChannelGroups`: block-гейт, direct-fallback пустого detour-канала, edge-strip циклов для всех каналов (доступ к detour-полям собранных outbounds/endpoints и составам папок), AWG→WG advisory; validFinals без detour-канала и его autoTag + отдельный warning |
 | UI | `screens/channel_edit_screen.dart` | чекбокс Use as detour, скрытие Include block, скрытие для vpn-1; SnackBar heal-уведомлений при flag-set/unset |
@@ -256,7 +286,8 @@ Circular outbound dependency — **fatal старта sing-box**, не мягк�
 | UI | `widgets/detour_target_picker.dart` | секция Channels; скрытие омонимов в контексте папки |
 | UI | `screens/node_settings_screen.dart`, `subscription_detail_screen/widgets/subscription_settings_tab.dart` | рендер сохранённого канального значения как `⚙ <label>` |
 | UI | `controllers/home_controller.dart` | ⚙ в `_channelLabels` |
-| debug | `services/debug/handlers/channels.dart` | поле `detour`, 409-отказы, нормализация include_block, healed-счётчики в ответе |
+| debug | `services/debug/handlers/channels.dart` | поле `detour`, 409-отказы, нормализация include_block, healed-счётчики в ответе, ресинк контроллера |
+| debug | `services/debug/handlers/help.dart` | self-doc: поле detour, 409-инварианты, healed-счётчики, сброс detour-ссылок |
 | docs | `STORAGE.md`, `api/debug-api-reference.md`, `spec/features/README.md` | схема, API, индекс |
 | тесты | `test/…` | см. ниже |
 

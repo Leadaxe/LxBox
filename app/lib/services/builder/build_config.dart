@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../../models/channel.dart';
 import '../../models/custom_rule.dart';
 import '../../models/emit_context.dart';
+import '../../models/node_spec.dart' show Awg;
 import '../../models/parser_config.dart';
 import '../../models/server_list.dart';
 import '../../models/singbox_entry.dart';
@@ -206,9 +207,18 @@ Future<BuildResult> buildConfig({
       : _channelsFromTemplate(
           template.presetGroups, settings.enabledGroups, resolve);
 
+  // §248 — эмитированные узлы (те же map-объекты уходят в config ниже):
+  // edge-strip циклов снимает с них `detour` in-place, AWG-advisory читает
+  // типы. Endpoints тоже — WG/AWG живут там.
+  final nodeEntries = <Map<String, dynamic>>[
+    for (final e in ctx.outbounds) e.map,
+    for (final e in ctx.endpoints) e.map,
+  ];
+
   final presetOutbounds = _buildChannelGroups(
     channels: channels,
     selectorTags: selectorTags,
+    nodeEntries: nodeEntries,
     emitWarnings: emitWarnings,
   );
 
@@ -339,16 +349,26 @@ Future<BuildResult> buildConfig({
   // (см. `_buildChannelGroups`), поэтому статичный `autoTag` для канала с пустым
   // node-set давал бы висячую ссылку в конфиге (fatal в sing-box).
   if (settings.routeFinal.isNotEmpty) {
+    // §248 — detour-каналы (и их auto-двойники) — не rules-мишени: убираем
+    // из validFinals. Отдельный warning: канал СУЩЕСТВУЕТ (эмитится, виден
+    // на Home) — «no longer exists» здесь ложь. UI такой выбор не даёт,
+    // ссылка возможна через restore из backup / Debug API.
+    final detourChannelTags = <String>{
+      for (final c in channels)
+        if (c.isDetour) ...[c.tag, c.autoTag],
+    };
     final validFinals = <String>{
       'direct-out',
       'block', // §201 — block системный outbound, валидная route_final-мишень
       for (final o in presetOutbounds)
         if (o['tag'] is String) o['tag'] as String,
-    };
+    }..removeAll(detourChannelTags);
     var finalTag = settings.routeFinal;
     if (!validFinals.contains(finalTag)) {
-      emitWarnings.add(
-          'Route final "$finalTag" no longer exists — switched to vpn-1.');
+      emitWarnings.add(detourChannelTags.contains(finalTag)
+          ? 'Route final "$finalTag" is a detour channel and cannot be a '
+              'rule target — switched to vpn-1.'
+          : 'Route final "$finalTag" no longer exists — switched to vpn-1.');
       finalTag = 'vpn-1';
     }
     route['final'] = finalTag;
@@ -398,6 +418,17 @@ Future<BuildResult> buildConfig({
     emitWarnings.add(
         'Resolve server removed: route rule #${h.ruleIndex} referenced '
         'missing DNS server "${h.target}" — falling back to DNS routing.');
+  }
+
+  // §246 hotfix — легаси `strategy` в dns.rules × query_type/ip_version
+  // (FakeIP §228) = fatal у ядра 1.14 на старте. Снимаем strategy, если
+  // несовместимая пара присутствует (деградация вместо мёртвого VPN).
+  final healedDnsStrategy = healLegacyDnsStrategy(config);
+  if (healedDnsStrategy.isNotEmpty) {
+    emitWarnings.add(
+        'DNS rule strategy removed on rules ${healedDnsStrategy.join(", ")}: '
+        'incompatible with query_type/ip_version rules (FakeIP) — kernel would '
+        'reject the config. Resolution falls back to the global DNS strategy.');
   }
 
   final validation = validateConfig(config);
@@ -476,6 +507,7 @@ class _BuildCtx implements EmitContext {
 List<Map<String, dynamic>> _buildChannelGroups({
   required List<Channel> channels,
   required List<String> selectorTags,
+  required List<Map<String, dynamic>> nodeEntries,
   required List<String> emitWarnings,
 }) {
   // §125 — единственный слой фильтрации нод теперь per-channel regex
@@ -495,34 +527,75 @@ List<Map<String, dynamic>> _buildChannelGroups({
         .toList();
   }
 
+  // §248 — member-set'ы считаем один раз: их делят selector и auto-двойник,
+  // и по ним же строится граф разрыва detour-циклов. Общие структуры графа:
+  // тег узла → его map (detour читаем/снимаем in-place), алиас канала
+  // (tag И autoTag — двойник содержит те же ноды) → индекс в active.
+  final memberSets = [for (final c in active) nodesFor(c)];
+  final entryByTag = <String, Map<String, dynamic>>{
+    for (final m in nodeEntries)
+      if (m['tag'] is String) m['tag'] as String: m,
+  };
+  final channelByAlias = <String, int>{
+    for (var i = 0; i < active.length; i++) ...{
+      active[i].tag: i,
+      active[i].autoTag: i,
+    },
+  };
+
+  _stripChannelDetourCycles(
+    active: active,
+    memberSets: memberSets,
+    entryByTag: entryByTag,
+    channelByAlias: channelByAlias,
+    emitWarnings: emitWarnings,
+  );
+  _warnAwgDetourViaWgChannels(
+    active: active,
+    memberSets: memberSets,
+    nodeEntries: nodeEntries,
+    entryByTag: entryByTag,
+    channelByAlias: channelByAlias,
+    emitWarnings: emitWarnings,
+  );
+
   final result = <Map<String, dynamic>>[];
-  for (final c in active) {
-    final nodes = nodesFor(c);
+  for (var i = 0; i < active.length; i++) {
+    final c = active[i];
+    final nodes = memberSets[i];
     final emitAuto = c.auto != null && nodes.isNotEmpty;
 
     // selector outbounds: ноды + (direct?) + (block?) + (<tag>-auto если эмит)
     final selectorOutbounds = <String>[
       ...nodes,
       if (c.includeDirect) 'direct-out',
-      if (c.includeBlock) 'block',
+      // §248 — block в detour-прослойке запрещён (Q1): parse-гейт fromJson
+      // коэрсит include_block при чтении, здесь — defense-in-depth.
+      if (c.includeBlock && !c.isDetour) 'block',
       if (emitAuto) c.autoTag,
     ];
     // §201 — пустой набор (regex не матчит / нет нод) → fallback на [block,
     // direct-out] с default=block (безопаснее блокировать, чем выпускать мимо
     // VPN; direct остаётся доступной опцией). selector не должен быть пустой
     // группой (fatal в sing-box).
+    // §248 — у detour-канала fallback = [direct-out] с default=direct-out
+    // (Q1): хоп исчезает, детурящиеся серверы ходят напрямую; block превратил
+    // бы «upstream недоступен» в «весь детурящийся флот мёртв».
     final emptyFallback = selectorOutbounds.isEmpty;
     if (emptyFallback) {
-      selectorOutbounds.addAll(['block', 'direct-out']);
+      selectorOutbounds
+          .addAll(c.isDetour ? ['direct-out'] : ['block', 'direct-out']);
     }
     // §200 — предупреждаем, если ИМЕННО фильтр канала отсёк все ноды (фильтр
     // непустой, но 0 совпадений). Канал свалился на block — юзеру важно знать.
     // Пустой фильтр с 0 нод (нет подписки) НЕ варним — это не вина фильтра.
     if (nodes.isEmpty && c.nodeFilter.isNotEmpty && selectorTags.isNotEmpty) {
       final label = c.label.isNotEmpty ? c.label : c.tag;
-      emitWarnings.add(
-          'Channel "$label" (${c.tag}): node filter matched no nodes — '
-          'traffic is blocked (default), or use direct.');
+      emitWarnings.add(c.isDetour
+          ? 'Detour channel "$label" (${c.tag}): no nodes matched — '
+              'detour falls back to direct (no hop).'
+          : 'Channel "$label" (${c.tag}): node filter matched no nodes — '
+              'traffic is blocked (default), or use direct.');
     }
 
     final selector = <String, dynamic>{
@@ -531,8 +604,10 @@ List<Map<String, dynamic>> _buildChannelGroups({
       'outbounds': selectorOutbounds,
       'interrupt_exist_connections': c.interruptExistConnections,
     };
-    // §201 — fallback пустого канала: block выбран дефолтом.
-    if (emptyFallback) selector['default'] = 'block';
+    // §201/§248 — fallback пустого канала: block (обычный) / direct (detour).
+    if (emptyFallback) {
+      selector['default'] = c.isDetour ? 'direct-out' : 'block';
+    }
     // §141 — default = первая нода канала, чей итоговый tag матчит defaultFilter.
     // Не матчит/пусто → default не выставляется (sing-box берёт первую опцию).
     if (c.defaultFilter.isNotEmpty) {
@@ -583,6 +658,113 @@ List<Map<String, dynamic>> _buildChannelGroups({
     }
   }
   return result;
+}
+
+/// §248 — разрыв detour-циклов edge-strip'ом (exempt-семантика, как у
+/// интра-циклов FolderDetourPlan §239). Цикл: узел n входит в node-set
+/// канала C, а detour-цепочка n достигает C — для sing-box это circular
+/// outbound dependency, ФАТАЛЬНАЯ на старте (не мягкий dangling §172).
+///
+/// Рвём ребро узла: n ОСТАЁТСЯ в C, но эмитится без цикл-образующего
+/// `detour` (мутируем уже собранный map; storage не трогаем). НЕ исключаем
+/// n из node-set: типовой кейс «relay-ноды в той же подписке, на которую
+/// повешен overrideDetour=C» (override применяется ко всем членам, включая
+/// сами relay'и) опустошил бы канал и превратил detour-прослойку в no-op;
+/// edge-strip даёт «флот → C → relay (напрямую)» — намерение пользователя.
+///
+/// Граф: узел → его detour-тег; тег канала и тег auto-двойника — алиасы
+/// одной вершины (двойник содержит те же ноды); канал → его члены. Гейт
+/// для ВСЕХ каналов, не только detour-flagged: ссылка на обычный канал
+/// (Debug API — root by design; правленный backup) даёт тот же fatal.
+/// Каналы в порядке эмиссии; снятое ребро сразу исчезает из графа
+/// (межканальные циклы не пере-рвутся лишний раз).
+void _stripChannelDetourCycles({
+  required List<Channel> active,
+  required List<List<String>> memberSets,
+  required Map<String, Map<String, dynamic>> entryByTag,
+  required Map<String, int> channelByAlias,
+  required List<String> emitWarnings,
+}) {
+  // Достижим ли канал [target] из detour-цепочки узла [node].
+  bool reaches(String node, int target) {
+    final first = entryByTag[node]?['detour'];
+    if (first is! String || first.isEmpty) return false;
+    final seenNodes = <String>{node};
+    final seenChannels = <int>{};
+    final queue = <String>[first];
+    while (queue.isNotEmpty) {
+      final t = queue.removeLast();
+      final ci = channelByAlias[t];
+      if (ci != null) {
+        if (ci == target) return true;
+        // Канал → все его члены: selector выбирает любой в рантайме, значит
+        // зависимость (и потенциальный цикл) — через каждого.
+        if (seenChannels.add(ci)) queue.addAll(memberSets[ci]);
+        continue;
+      }
+      if (!seenNodes.add(t)) continue;
+      final d = entryByTag[t]?['detour'];
+      if (d is String && d.isNotEmpty) queue.add(d);
+    }
+    return false;
+  }
+
+  for (var i = 0; i < active.length; i++) {
+    final stripped = <String>[];
+    for (final member in memberSets[i]) {
+      if (reaches(member, i)) {
+        entryByTag[member]!.remove('detour');
+        stripped.add(member);
+      }
+    }
+    if (stripped.isNotEmpty) {
+      final c = active[i];
+      final label = c.label.isNotEmpty ? c.label : c.tag;
+      emitWarnings.add('Channel "$label" (${c.tag}): removed detour from '
+          '${stripped.length} node(s) to break a routing loop '
+          '(they connect directly): ${stripped.join(', ')}.');
+    }
+  }
+}
+
+/// §248 — advisory: узел AmneziaWG детурится через канал, в node-set
+/// которого есть wireguard-эндпоинты. Прямую ссылку AWG→WG прячет §130-гейт
+/// пикера; канальная секция его осознанно обходит (состав канала не
+/// ограничен) — предупреждаем, не запрещаем (AWG через WireGuard вешает
+/// ядро на Android). Вызывается ПОСЛЕ edge-strip: узлы со снятым detour
+/// больше не детурятся — warning для них ложный.
+void _warnAwgDetourViaWgChannels({
+  required List<Channel> active,
+  required List<List<String>> memberSets,
+  required List<Map<String, dynamic>> nodeEntries,
+  required Map<String, Map<String, dynamic>> entryByTag,
+  required Map<String, int> channelByAlias,
+  required List<String> emitWarnings,
+}) {
+  bool isWg(Map<String, dynamic> m) => m['type'] == 'wireguard';
+  // §097 — AWG = wireguard-endpoint с obfuscation-полями в корне (writeInto).
+  bool isAwg(Map<String, dynamic> m) =>
+      isWg(m) &&
+      (Awg.numKeys.any(m.containsKey) || Awg.strKeys.any(m.containsKey));
+
+  final channelHasWg = <int, bool>{};
+  for (final m in nodeEntries) {
+    final d = m['detour'];
+    if (d is! String || d.isEmpty) continue;
+    final ci = channelByAlias[d];
+    if (ci == null || !isAwg(m)) continue;
+    final hasWg = channelHasWg[ci] ??= memberSets[ci].any((t) {
+      final e = entryByTag[t];
+      return e != null && isWg(e);
+    });
+    if (hasWg) {
+      final c = active[ci];
+      final label = c.label.isNotEmpty ? c.label : c.tag;
+      emitWarnings.add('Node "${m['tag']}" (AmneziaWG) detours via channel '
+          '"$label" which contains WireGuard node(s) — this can hang the '
+          'tunnel on Android.');
+    }
+  }
 }
 
 /// §125 fallback — синтез `List<Channel>` из `template.presetGroups`, когда
