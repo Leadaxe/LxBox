@@ -539,8 +539,11 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         // настроен ХОТЬ ОДИН аспект — Force IPv4-правило без dedicated-
         // сервера больше не невидимка (гейт не требует serverTag).
         final hasServerAspect = cr.dnsMirrorEligible; // serverTag настроен
-        final hasForceAspect =
-            cr.forceIpv4Eligible && (cr.dns?.forceIpv4 ?? false);
+        // Вариант A (решение владельца): Force-строка — только когда галка
+        // РЕАЛЬНО стоит (forceIpv4Active), не у любого eligible-правила.
+        // Правило с одним сервером не тащит пустой Force-тумблер; включают
+        // Force в редакторе правила.
+        final hasForceAspect = cr.forceIpv4Active;
         if (!hasServerAspect && !hasForceAspect) continue;
         final mirrors = _dnsMirrorsByRuleId[cr.id] ?? const <DnsMirrorEntry>[];
         Map<String, dynamic>? serverBody;
@@ -572,9 +575,11 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                   ].join(' · '),
                 )
               : null,
-          // Force-строка видна всегда внутри блока (вкл/выкл отсюда);
-          // fallback-body — когда mirror не собран (галка сейчас выкл).
-          forceIpv4Row: cr.forceIpv4Eligible
+          // Force-строка только когда галка стоит (вариант A). Свитч на ней
+          // = выключить Force прямо из DNS Settings. Галка активна →
+          // serverless-mirror собран → forceBody не null (fallback-статика
+          // defensive, на случай гейта превью).
+          forceIpv4Row: hasForceAspect
               ? DnsAspectRow(
                   body: forceBody ??
                       const <String, dynamic>{
@@ -582,7 +587,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                         'action': 'predefined',
                         'rcode': 'NOERROR',
                       },
-                  enabled: cr.dns?.forceIpv4 ?? false,
+                  enabled: true,
                   onToggle: (v) => _toggleRuleForceIpv4(cr, v),
                 )
               : null,
