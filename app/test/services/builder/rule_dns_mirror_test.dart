@@ -432,7 +432,6 @@ void main() {
           ),
         ],
         [_ruDirect()],
-        isPresetDnsEnabled: const {'ru-direct': true},
       );
 
       expect(result.dnsMirrors, hasLength(3));
@@ -456,7 +455,6 @@ void main() {
           ),
         ],
         [_ruDirectDnsPair()],
-        isPresetDnsEnabled: const {'ru-direct': true},
       );
 
       expect(result.dnsMirrors, hasLength(2));

@@ -618,6 +618,10 @@ class CustomRuleInline extends CustomRule {
     List<String>? wifiBssids,
     String? outbound,
     RuleDns? dns,
+    // §257: `dns ?? this.dns` не позволяет обнулить — явный флаг (паттерн
+    // clearRewriteTtl в RuleResolve.copyWith). DNS Settings обнуляет dns,
+    // когда сняты оба аспекта (не копить мёртвый RuleDns{}).
+    bool clearDns = false,
     RuleResolve? resolve,
   }) =>
       CustomRuleInline(
@@ -639,7 +643,7 @@ class CustomRuleInline extends CustomRule {
         wifiSsids: wifiSsids ?? this.wifiSsids,
         wifiBssids: wifiBssids ?? this.wifiBssids,
         outbound: outbound ?? this.outbound,
-        dns: dns ?? this.dns,
+        dns: clearDns ? null : (dns ?? this.dns),
         resolve: resolve ?? this.resolve,
       );
 
@@ -792,6 +796,7 @@ class CustomRuleSrs extends CustomRule {
     List<String>? wifiBssids,
     String? outbound,
     RuleDns? dns,
+    bool clearDns = false, // §257 — см. CustomRuleInline.copyWith
     RuleResolve? resolve,
   }) =>
       CustomRuleSrs(
@@ -810,7 +815,7 @@ class CustomRuleSrs extends CustomRule {
         wifiSsids: wifiSsids ?? this.wifiSsids,
         wifiBssids: wifiBssids ?? this.wifiBssids,
         outbound: outbound ?? this.outbound,
-        dns: dns ?? this.dns,
+        dns: clearDns ? null : (dns ?? this.dns),
         resolve: resolve ?? this.resolve,
       );
 

@@ -513,6 +513,15 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 
 `type: template/rule` — orphan-cleanup: title не нашёлся в активном шаблоне/пресете → выбрасывается в `resolveDnsRulesList`.
 
+⚠ §257: у записи `kind: preset` поле `enabled` — **мёртвое**: тумблер
+DNS-блока пресета переехал в магическую var `dns_enable`
+(`custom_rules[].varsValues`, см. TEMPLATE.md «Магические переменные»).
+Запись остаётся только **позиционным якорем** mirror-группы (§117) —
+определяет место DNS-правил пресета в `dns.rules`. Билдер и UI её
+`enabled` не читают; auto-discovery продолжает писать `enabled: true`
+(безвредно). Миграции нет — у всех пресетов с var DNS-блок после
+обновления включён (default true), «кто надо — сам вырубит».
+
 ### Migration history
 
 - v1.5.x: `dns_options.rules_json` — single JSON-string (`@Deprecated`). Сейчас игнорится; поле остаётся на диске для downgrade-friendliness.

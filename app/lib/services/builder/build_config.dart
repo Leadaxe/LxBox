@@ -279,15 +279,13 @@ Future<BuildResult> buildConfig({
     }
   }
 
-  // §033: Read DNS rules storage to determine independent DNS-aspect enable
-  // for each preset (custom_rules entry has its own .enabled, dns side has
-  // its own .enabled — independent flags).
+  // §257: DNS-аспект пресета теперь гейтится магической var `dns_enable`
+  // (внутри _applyPresetSingle) — прежний isPresetDnsEnabled из
+  // dns_options.rules[kind:preset].enabled удалён (два тумблера на один
+  // флаг = источник багов «поставил, а не сработало»). Запись kind:preset
+  // остаётся только позиционным якорем mirror-группы (§117); её `enabled` —
+  // мёртвое поле. Storage всё ещё читаем — для kind:srs cached-paths ниже.
   final dnsRulesStorage = await SettingsStorage.getDnsRulesList();
-  final isPresetDnsEnabled = <String, bool>{
-    for (final e in dnsRulesStorage)
-      if (e['kind'] == 'preset' && e['presetId'] is String)
-        e['presetId'] as String: e['enabled'] == true,
-  };
 
   // §033: presetIds with custom_rules.kind:preset entry AND dns_rules defined
   // in template — для auto-discovery `kind:preset` записей в dns_options.rules.
@@ -322,7 +320,6 @@ Future<BuildResult> buildConfig({
     template.selectableRules,
     srsPaths: srsPaths,
     presetSrsPaths: presetSrsPaths,
-    isPresetDnsEnabled: isPresetDnsEnabled,
   );
   emitWarnings.addAll(unifiedApply.warnings);
 

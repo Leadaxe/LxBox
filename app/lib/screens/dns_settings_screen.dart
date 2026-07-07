@@ -90,10 +90,17 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   /// (DNS-mirror'ы inline/srs правил) и lifecycle-локов «used by <правило>».
   List<CustomRule> _customRules = const [];
 
-  /// §117: эмитимое DNS-rule тело каждого rule-источника mirror'а (ключ —
+  /// §117: эмитимые DNS-rule тела каждого rule-источника mirror'а (ключ —
   /// `cr.id`) для read-only превью по тапу. Реальный билд через
   /// [applyAllCustomRules] (тот же тег rule_set, что в финальном конфиге).
-  Map<String, DnsMirrorEntry> _dnsMirrorByRuleId = const {};
+  /// §257: правило может нести ДВА mirror'а (server + serverless Force IPv4)
+  /// — значение стало списком (раньше Map→entry терял второй mirror).
+  Map<String, List<DnsMirrorEntry>> _dnsMirrorsByRuleId = const {};
+
+  /// §257: состояние магической var `dns_enable` активных пресетов.
+  /// Ключ — presetId; null-отсутствие ключа = пресет var не объявляет
+  /// (тумблера нет, DNS-блок жив пока routing on).
+  Map<String, bool> _presetDnsEnable = const {};
 
 
   bool _loading = true;
@@ -157,6 +164,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     // выключенного пресета и orphan-cleanup рассинхронизировался бы с серверами.
     final presetRulesByPresetId = <String, List<Map<String, dynamic>>>{};
     final presetLabelByPresetId = <String, String>{};
+    final presetDnsEnable = <String, bool>{}; // §257
     final presetServersWithLabel = <Map<String, dynamic>>[];
     final activeRules = await SettingsStorage.getCustomRules();
     final allPresets = template.selectableRules;
@@ -175,6 +183,12 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       if (match == null) continue;
       if (match.dnsRules.isNotEmpty) {
         activePresetIdsWithDnsRule.add(cr.presetId);
+      }
+      // §257: тумблер DNS-блока пресета — магическая var dns_enable
+      // (единая точка истины с билдером). Нет var → ключ не пишем
+      // (UI рисует строку без свитча).
+      if (match.vars.any((v) => v.name == 'dns_enable')) {
+        presetDnsEnable[cr.presetId] = presetDnsEnableVar(cr, match);
       }
       final fragments = expandPreset(cr, match);
       if (match.dnsRules.isNotEmpty) {
@@ -246,10 +260,14 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       allPresets,
       srsPaths: mirrorSrsPaths,
     );
-    final dnsMirrorByRuleId = <String, DnsMirrorEntry>{
-      for (final m in unifiedMirrors.dnsMirrors)
-        if (m.ruleId != null && m.ruleId!.isNotEmpty) m.ruleId!: m,
-    };
+    // §257: правило может нести ДВА mirror'а (server + serverless Force
+    // IPv4) — группируем списком (Map→entry молча терял бы второй).
+    final dnsMirrorsByRuleId = <String, List<DnsMirrorEntry>>{};
+    for (final m in unifiedMirrors.dnsMirrors) {
+      final id = m.ruleId;
+      if (id == null || id.isEmpty) continue;
+      (dnsMirrorsByRuleId[id] ??= []).add(m);
+    }
 
     // §121: автосброс DNS Final / Default Resolver на template-дефолт, если
     // выбранный сервер исчез из каталога (напр. выключили пресет, чьи серверы
@@ -285,9 +303,10 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         _templateRulesByName = templateRulesByName;
         _presetRulesByPresetId = presetRulesByPresetId;
         _presetLabelByPresetId = presetLabelByPresetId;
+        _presetDnsEnable = presetDnsEnable;
         _outboundOptions = outboundOptions;
         _customRules = activeRules;
-        _dnsMirrorByRuleId = dnsMirrorByRuleId;
+        _dnsMirrorsByRuleId = dnsMirrorsByRuleId;
         // Fallback = default_value шаблона (ipv4_only) — иначе UI покажет
         // не то, что реально применит билдер при незаписанном var'е.
         _strategy = vars['dns_strategy'] ?? 'ipv4_only';
@@ -493,11 +512,14 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     final seenPresetIds = <String>{};
     for (final cr in _customRules) {
       if (cr is CustomRulePreset) {
-        // §117: preset-источник DNS-аспекта — единый [DnsMirrorTile]. Switch
-        // тогглит §061-запись пресета в `_rules` (DNS-часть; routing-часть
-        // пресета живёт отдельно).
+        // §117: preset-источник DNS-аспекта — единый [DnsMirrorTile].
+        // §257: switch тогглит магическую var `dns_enable` пресета
+        // (единственный тумблер DNS-блока; запись в `_rules` — только
+        // позиционный якорь, её `enabled` мёртв). Пресет без var —
+        // строка без свитча (DNS жив, пока routing on).
         final idx = presetIdxByPid[cr.presetId];
         if (idx == null || !seenPresetIds.add(cr.presetId)) continue;
+        final dnsEnable = _presetDnsEnable[cr.presetId];
         children.add(DnsMirrorTile(
           key: ValueKey('dns-rule-preset-${cr.presetId}'),
           title: _presetLabelByPresetId[cr.presetId] ?? cr.presetId,
@@ -505,31 +527,65 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           // switch тогглит блок атомарно, превью показывает все тела.
           previewBodies: _presetRulesByPresetId[cr.presetId] ?? const [],
           sourceKind: 'preset',
-          enabled: _rules[idx]['enabled'] == true,
-          onToggle: (v) => _toggleRuleEnabled(idx, v),
+          enabled: dnsEnable ?? true,
+          onToggle: dnsEnable == null
+              ? null
+              : (v) => _togglePresetDnsEnable(cr.presetId, v),
         ));
-      } else if (cr.dnsMirrorEligible) {
-        // §117: rule-источник — тот же [DnsMirrorTile]. Switch тогглит
-        // `cr.dns.enabled` (DNS-аспект правила; routing-часть живёт). Строка
-        // видна и в выключенном состоянии (eligible, не active). Тап →
-        // read-only превью эмитимого DNS-rule (rule_set + server + фильтры).
-        final mirror = _dnsMirrorByRuleId[cr.id];
-        final previewBody = <String, dynamic>{
-          if (mirror != null) ...mirror.body,
-          'server': cr.dns!.serverTag,
-        };
-        final missing = !_servers.any((s) => s['tag'] == cr.dns!.serverTag);
-        children.add(DnsMirrorTile(
+      } else {
+        // §257: объединённый блок DNS-аспектов правила — заголовок = имя,
+        // под-строки «Server» (RuleDns.enabled) и «Force IPv4»
+        // (RuleDns.forceIpv4), каждая со своим свитчем. Блок виден, когда
+        // настроен ХОТЬ ОДИН аспект — Force IPv4-правило без dedicated-
+        // сервера больше не невидимка (гейт не требует serverTag).
+        final hasServerAspect = cr.dnsMirrorEligible; // serverTag настроен
+        final hasForceAspect =
+            cr.forceIpv4Eligible && (cr.dns?.forceIpv4 ?? false);
+        if (!hasServerAspect && !hasForceAspect) continue;
+        final mirrors = _dnsMirrorsByRuleId[cr.id] ?? const <DnsMirrorEntry>[];
+        Map<String, dynamic>? serverBody;
+        Map<String, dynamic>? forceBody;
+        for (final m in mirrors) {
+          if (m.serverless) {
+            forceBody ??= m.body;
+          } else {
+            serverBody ??= m.body;
+          }
+        }
+        final missing =
+            !_servers.any((s) => s['tag'] == (cr.dns?.serverTag ?? ''));
+        children.add(DnsRuleAspectsTile(
           key: ValueKey('dns-mirror-${cr.id}'),
           title: cr.name,
-          previewBodies: [previewBody],
-          sourceKind: 'rule',
-          enabled: cr.dns!.enabled,
-          onToggle: (v) => _toggleRuleDns(cr, v),
-          note: [
-            if (cr is CustomRuleSrs) 'matches only domains in the rule-set',
-            if (missing) 'server missing',
-          ].join(' · '),
+          serverRow: hasServerAspect
+              ? DnsAspectRow(
+                  body: <String, dynamic>{
+                    ...?serverBody,
+                    'server': cr.dns!.serverTag,
+                  },
+                  enabled: cr.dns!.enabled,
+                  onToggle: (v) => _toggleRuleDns(cr, v),
+                  note: [
+                    if (cr is CustomRuleSrs)
+                      'matches only domains in the rule-set',
+                    if (missing) 'server missing',
+                  ].join(' · '),
+                )
+              : null,
+          // Force-строка видна всегда внутри блока (вкл/выкл отсюда);
+          // fallback-body — когда mirror не собран (галка сейчас выкл).
+          forceIpv4Row: cr.forceIpv4Eligible
+              ? DnsAspectRow(
+                  body: forceBody ??
+                      const <String, dynamic>{
+                        'ip_version': 6,
+                        'action': 'predefined',
+                        'rcode': 'NOERROR',
+                      },
+                  enabled: cr.dns?.forceIpv4 ?? false,
+                  onToggle: (v) => _toggleRuleForceIpv4(cr, v),
+                )
+              : null,
         ));
       }
     }
@@ -807,6 +863,51 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     };
     setState(() {
       _customRules = [..._customRules]..[idx] = updated;
+      _markDirty();
+    });
+    unawaited(SettingsStorage.saveCustomRules(_customRules));
+  }
+
+  /// §257: свитч Force IPv4 в DNS-блоке правила — пишет `RuleDns.forceIpv4`
+  /// (тот же persist-паттерн, что [_toggleRuleDns]). Снятие при пустых
+  /// остальных полях обнуляет `dns` целиком (clearDns) — не копим мёртвый
+  /// пустой объект в storage/backup (§256-инвариант).
+  void _toggleRuleForceIpv4(CustomRule cr, bool value) {
+    final idx = _customRules.indexWhere((r) => r.id == cr.id);
+    if (idx < 0) return;
+    final next = (cr.dns ?? const RuleDns()).copyWith(forceIpv4: value);
+    final clear =
+        !next.forceIpv4 && !next.enabled && next.serverTag.isEmpty;
+    final updated = switch (cr) {
+      CustomRuleInline() =>
+        clear ? cr.copyWith(clearDns: true) : cr.copyWith(dns: next),
+      CustomRuleSrs() =>
+        clear ? cr.copyWith(clearDns: true) : cr.copyWith(dns: next),
+      _ => cr,
+    };
+    if (identical(updated, cr)) return;
+    setState(() {
+      _customRules = [..._customRules]..[idx] = updated;
+      _markDirty();
+    });
+    unawaited(SettingsStorage.saveCustomRules(_customRules));
+  }
+
+  /// §257: свитч DNS-блока пресета — пишет магическую var `dns_enable` в
+  /// `varsValues` (единая точка истины с билдером, [presetDnsEnableVar]).
+  /// Затрагивает ПЕРВУЮ запись с этим presetId (список рендерит её же —
+  /// dedup через seenPresetIds).
+  void _togglePresetDnsEnable(String presetId, bool value) {
+    final idx = _customRules.indexWhere(
+        (r) => r is CustomRulePreset && r.presetId == presetId);
+    if (idx < 0) return;
+    final cr = _customRules[idx] as CustomRulePreset;
+    final updated = cr.copyWith(
+      varsValues: {...cr.varsValues, 'dns_enable': value ? 'true' : 'false'},
+    );
+    setState(() {
+      _customRules = [..._customRules]..[idx] = updated;
+      _presetDnsEnable = {..._presetDnsEnable, presetId: value};
       _markDirty();
     });
     unawaited(SettingsStorage.saveCustomRules(_customRules));
