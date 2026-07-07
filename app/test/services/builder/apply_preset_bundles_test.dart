@@ -17,12 +17,11 @@ void main() {
       );
       final reg = RuleSetRegistry();
 
-      // §033: DNS-aspect независим. Включаем для этого теста.
+      // §257: DNS-aspect гейтится var dns_enable; без var — всегда on.
       final result = applyPresetBundles(
         reg,
         [rule],
         [preset],
-        isPresetDnsEnabled: const {'ru-direct': true},
       );
 
       expect(result.warnings, isEmpty);
@@ -46,22 +45,21 @@ void main() {
       expect(result.labelByPresetId['ru-direct'], 'Russian domains direct');
     });
 
-    test('§033 independent enable: route active, dns disabled → '
-        'route emit но без DNS fragments', () {
-      final preset = _ruDirect();
+    // §257: тумблер DNS-блока — магическая var dns_enable.
+    test('§257 dns_enable=false: route emit, но без DNS fragments', () {
+      final preset = _ruDirectWithDnsEnable();
       final rule = CustomRulePreset(
         name: 'Russian domains direct',
         presetId: 'ru-direct',
-        varsValues: {'outbound': 'direct-out', 'dns_server': 'yandex_doh'},
+        varsValues: {
+          'outbound': 'direct-out',
+          'dns_server': 'yandex_doh',
+          'dns_enable': 'false', // юзер выключил DNS-блок пресета
+        },
       );
       final reg = RuleSetRegistry();
 
-      final result = applyPresetBundles(
-        reg,
-        [rule],
-        [preset],
-        // dns не enabled (default false)
-      );
+      final result = applyPresetBundles(reg, [rule], [preset]);
 
       // Route side активен — rule_set и routing rule зарегистрированы
       expect(reg.getRuleSets().length, 1);
@@ -70,6 +68,58 @@ void main() {
       // DNS side НЕ активен — dns_rule и dns_servers пропущены
       expect(result.dnsRulesByPresetId, isEmpty);
       expect(result.extraDnsServers, isEmpty);
+    });
+
+    test('§257 dns_enable объявлена, юзер не трогал → default true → DNS on',
+        () {
+      final preset = _ruDirectWithDnsEnable();
+      final rule = CustomRulePreset(
+        name: 'RU',
+        presetId: 'ru-direct',
+        varsValues: {'outbound': 'direct-out', 'dns_server': 'yandex_doh'},
+      );
+      final reg = RuleSetRegistry();
+      final result = applyPresetBundles(reg, [rule], [preset]);
+      expect(result.dnsRulesByPresetId, hasLength(1));
+      expect(result.extraDnsServers, hasLength(1));
+    });
+
+    test('§257 пресет БЕЗ var dns_enable → DNS всегда on (пока routing on)',
+        () {
+      final preset = _ruDirect(); // var не объявлена
+      final rule = CustomRulePreset(
+        name: 'RU',
+        presetId: 'ru-direct',
+        varsValues: {'outbound': 'direct-out', 'dns_server': 'yandex_doh'},
+      );
+      final reg = RuleSetRegistry();
+      final result = applyPresetBundles(reg, [rule], [preset]);
+      expect(result.dnsRulesByPresetId, hasLength(1));
+      expect(result.extraDnsServers, hasLength(1));
+    });
+
+    // §257 — DNS-only пресет (fakeip) с dns_enable=false → пресет ничего
+    // не эмитит (у него нет routing, только DNS-блок под тумблером).
+    test('§257 fakeip dns_enable=false → пусто (DNS-only пресет)', () {
+      final preset = _fakeipWithDnsEnable();
+      final rule = CustomRulePreset(
+        name: 'FakeIP',
+        presetId: 'fakeip',
+        varsValues: {'dns_enable': 'false'},
+      );
+      final reg = RuleSetRegistry();
+      final result = applyPresetBundles(reg, [rule], [preset]);
+      expect(result.dnsRulesByPresetId, isEmpty);
+      expect(result.extraDnsServers, isEmpty);
+    });
+
+    test('§257 fakeip dns_enable по умолчанию (default true) → DNS on', () {
+      final preset = _fakeipWithDnsEnable();
+      final rule = CustomRulePreset(name: 'FakeIP', presetId: 'fakeip');
+      final reg = RuleSetRegistry();
+      final result = applyPresetBundles(reg, [rule], [preset]);
+      expect(result.dnsRulesByPresetId, hasLength(1));
+      expect(result.extraDnsServers, hasLength(1));
     });
 
     test('§121 routing = король: route disabled подавляет DNS-аспект целиком '
@@ -90,7 +140,6 @@ void main() {
         reg,
         [rule],
         [preset],
-        isPresetDnsEnabled: const {'ru-direct': true}, // DNS on, но gated
       );
 
       // Пресет мёртв целиком — ничего не эмитится.
@@ -189,6 +238,56 @@ void main() {
       expect(reg.getRules().first['rule_set'], 'ru-domains');
     });
   });
+}
+
+/// §257 — реплика DNS-only пресета `fakeip` с var `dns_enable` (default true).
+SelectableRule _fakeipWithDnsEnable() => SelectableRule(
+      label: 'FakeIP',
+      presetId: 'fakeip',
+      vars: [
+        WizardVar(
+          name: 'dns_enable',
+          type: 'bool',
+          defaultValue: 'true',
+          title: 'DNS',
+        ),
+        WizardVar(
+          name: 'dns_server',
+          type: 'dns_servers',
+          defaultValue: 'fakeip',
+          wizardUI: 'hidden',
+        ),
+      ],
+      dnsServers: [
+        {'type': 'fakeip', 'tag': 'fakeip', 'inet4_range': '198.18.0.0/15'},
+      ],
+      dnsRule: const {
+        'query_type': ['A', 'AAAA'],
+        'server': '@dns_server',
+      },
+    );
+
+/// §257 — реплика [_ruDirect] с магической var `dns_enable` (default true).
+SelectableRule _ruDirectWithDnsEnable() {
+  final base = _ruDirect();
+  return SelectableRule(
+    label: base.label,
+    defaultEnabled: base.defaultEnabled,
+    presetId: base.presetId,
+    vars: [
+      ...base.vars,
+      WizardVar(
+        name: 'dns_enable',
+        type: 'bool',
+        defaultValue: 'true',
+        title: 'DNS',
+      ),
+    ],
+    ruleSets: base.ruleSets,
+    rule: base.rules,
+    dnsRule: base.dnsRules,
+    dnsServers: base.dnsServers,
+  );
 }
 
 SelectableRule _ruDirect() => SelectableRule(

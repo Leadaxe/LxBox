@@ -316,7 +316,7 @@
         {
           "name": "dns_default_domain_resolver",
           "type": "text",
-          "default_value": "cloudflare_udp",
+          "default_value": "google_udp",
           "wizard_ui": "fix",
           "title": "Default domain resolver",
           "tooltip": "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use. Recommended: cloudflare_udp, google_udp, or google_doh. Avoid local_dns_resolver here — system DNS leaks these lookups to your ISP, bypassing the VPN."
@@ -324,7 +324,7 @@
         {
           "name": "dns_final",
           "type": "text",
-          "default_value": "cloudflare_udp",
+          "default_value": "google_udp",
           "wizard_ui": "fix",
           "title": "DNS final",
           "tooltip": "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule. For privacy, prefer encrypted: google_doh, cloudflare_dot. For speed: cloudflare_udp, google_udp. local_dns_resolver (system DNS) is safe here."
@@ -623,6 +623,7 @@
       "default": true,
       "vars": [
         {"name": "outbound", "type": "outbound", "default_value": "direct-out", "title": "Outbound", "tooltip": "Where to route traffic for Russian domains and IPs"},
+        {"name": "dns_enable", "type": "bool", "default_value": "true", "title": "DNS", "tooltip": "Send matched domains to this preset's DNS server and apply DNS-level options like Force IPv4. Turn off to keep routing without DNS changes."},
         {"name": "dns_server", "type": "dns_servers", "required": false, "default_value": "yandex_udp", "title": "DNS server", "tooltip": "Recommended: Base/UDP — most stable. DoH/DoT may be filtered by ISPs."},
         {"name": "dns_ip", "type": "enum", "default_value": "77.88.8.8", "title": "UDP server IP", "tooltip": "Applies to UDP only. DoH and DoT are pinned to 77.88.8.88 with SNI safe.dot.dns.yandex.net.", "options": [
           {"title": "77.88.8.8 · Base",                  "value": "77.88.8.8"},
@@ -673,7 +674,8 @@
       "description": "Instant DNS via placeholder IPs; real names resolve inside the tunnel. Speeds up DNS and prevents pre-tunnel DNS leaks. Not a DPI bypass. Enable below special domains so GeoIP direct routing still works.",
       "default": false,
       "vars": [
-        {"name": "dns_server", "type": "dns_servers", "default_value": "fakeip", "wizard_ui": "hidden", "title": "FakeIP server", "tooltip": "The FakeIP allocator. Internal — bound to the fakeip DNS server."}
+        {"name": "dns_enable",  "type": "bool",        "default_value": "true",   "title": "DNS",         "tooltip": "Apply this preset's FakeIP DNS handling. Turn off to disable FakeIP without removing the preset."},
+        {"name": "dns_server",  "type": "dns_servers",  "default_value": "fakeip", "wizard_ui": "hidden", "title": "FakeIP server", "tooltip": "The FakeIP allocator. Internal — bound to the fakeip DNS server."}
       ],
       "dns_servers": [
         {"type": "fakeip", "tag": "fakeip", "inet4_range": "198.18.0.0/15", "inet6_range": "fc00::/18", "description": "FakeIP allocator"}

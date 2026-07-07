@@ -156,8 +156,9 @@ Future<void> applyCustomDns(
     if (kind == 'preset') {
       if (dnsMirrors.isNotEmpty) {
         // §117: запись — позиционный якорь группы; тела preset-правил живут
-        // в mirror-группе (порядок routing-правил), per-preset enabled уже
-        // учтён при её сборке (isPresetDnsEnabled).
+        // в mirror-группе (порядок routing-правил), per-preset тумблер уже
+        // учтён при её сборке (§257: магическая var dns_enable; поле
+        // `enabled` этой записи — мёртвое, билдер его не читает).
         emitMirrorGroup();
         continue;
       }

@@ -186,7 +186,6 @@ void main() {
         reg,
         rules,
         [preset],
-        isPresetDnsEnabled: const {'ru-direct': true},
       );
 
       expect(result.extraDnsServers.length, 1);
@@ -198,7 +197,7 @@ void main() {
     });
 
     test('§121 — routing off (cr.enabled=false) подавляет DNS-аспект '
-        'даже если isPresetDnsEnabled=true (routing = король)', () {
+        'даже при включённом DNS-блоке (routing = король)', () {
       final preset = _ruDirect();
       final rules = <CustomRule>[
         CustomRulePreset(
@@ -214,7 +213,6 @@ void main() {
         reg,
         rules,
         [preset],
-        isPresetDnsEnabled: const {'ru-direct': true}, // DNS-аспект on, но gated
       );
 
       // §121: выключенный routing-тоггл = пресет мёртв целиком.

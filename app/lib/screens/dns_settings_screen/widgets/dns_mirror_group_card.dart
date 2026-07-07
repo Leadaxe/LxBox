@@ -116,7 +116,10 @@ class DnsMirrorTile extends StatelessWidget {
   final String sourceKind;
 
   final bool enabled;
-  final ValueChanged<bool> onToggle;
+
+  /// §257: null → свитч не рисуется (пресет без магической var `dns_enable`
+  /// — тумблера у него нет, DNS-блок жив пока routing on).
+  final ValueChanged<bool>? onToggle;
 
   /// Доп-пометка в подзаголовке (srs-каузат / пропавший сервер).
   final String? note;
@@ -135,7 +138,11 @@ class DnsMirrorTile extends StatelessWidget {
       child: ListTile(
         onTap: () =>
             showRuleBodyDialog(context, title, sourceKind, previewBodies),
-        leading: Switch(value: enabled, onChanged: onToggle),
+        // §257: пресет без var `dns_enable` тумблера не имеет — вместо
+        // серого свитча (читался бы как «выключено») нейтральная иконка.
+        leading: onToggle == null
+            ? Icon(Icons.dns_outlined, size: 22, color: cs.onSurfaceVariant)
+            : Switch(value: enabled, onChanged: onToggle),
         title: Text(
           title.isNotEmpty ? title : '(unnamed rule)',
           style: TextStyle(
@@ -157,6 +164,104 @@ class DnsMirrorTile extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         trailing: DnsBadge(badgeText, badgeColor),
+      ),
+    );
+  }
+}
+
+/// §257 — данные одной под-строки DNS-аспекта в [DnsRuleAspectsTile].
+class DnsAspectRow {
+  const DnsAspectRow({
+    required this.body,
+    required this.enabled,
+    required this.onToggle,
+    this.note,
+  });
+
+  /// Эмитимое DNS-rule тело аспекта — превью-подзаголовок + диалог по тапу.
+  final Map<String, dynamic> body;
+  final bool enabled;
+  final ValueChanged<bool> onToggle;
+  final String? note;
+}
+
+/// §257 — объединённый блок DNS-аспектов ОДНОГО пользовательского правила
+/// (inline/srs) внутри [DnsMirrorGroupCard]. Правило может нести до двух
+/// независимых DNS-аспектов — каждый со своим свитчем:
+/// - «Server» — mirror на dedicated DNS-сервер (`RuleDns.enabled`, §117);
+/// - «Force IPv4» — AAAA-глушилка (`RuleDns.forceIpv4`, §256).
+/// Общий заголовок = имя правила (владелец: один блок, не две карточки).
+class DnsRuleAspectsTile extends StatelessWidget {
+  const DnsRuleAspectsTile({
+    super.key,
+    required this.title,
+    this.serverRow,
+    this.forceIpv4Row,
+  });
+
+  final String title;
+  final DnsAspectRow? serverRow;
+  final DnsAspectRow? forceIpv4Row;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 12, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title.isNotEmpty ? title : '(unnamed rule)',
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                ),
+                DnsBadge('rule', cs.secondary),
+              ],
+            ),
+          ),
+          if (serverRow != null) _aspectRow(context, 'Server', serverRow!),
+          if (forceIpv4Row != null)
+            _aspectRow(context, 'Force IPv4 (drop AAAA)', forceIpv4Row!),
+          const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+
+  Widget _aspectRow(BuildContext context, String label, DnsAspectRow row) {
+    final cs = Theme.of(context).colorScheme;
+    final preview = formatRulePreview(row.body, kind: 'rule');
+    final subtitle = (row.note != null && row.note!.isNotEmpty)
+        ? '$preview · ${row.note}'
+        : preview;
+    return ListTile(
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      onTap: () =>
+          showRuleBodyDialog(context, '$title · $label', 'rule', row.body),
+      leading: Switch(value: row.enabled, onChanged: row.onToggle),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12.5,
+          color: row.enabled ? null : cs.onSurfaceVariant,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(
+          fontSize: 11,
+          color: cs.onSurfaceVariant,
+          fontFamily: 'monospace',
+        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
