@@ -174,14 +174,22 @@ class DnsAspectRow {
   const DnsAspectRow({
     required this.body,
     required this.enabled,
-    required this.onToggle,
+    this.onToggle,
+    this.onRemove,
     this.note,
   });
 
   /// Эмитимое DNS-rule тело аспекта — превью-подзаголовок + диалог по тапу.
   final Map<String, dynamic> body;
   final bool enabled;
-  final ValueChanged<bool> onToggle;
+
+  /// §257: свитч вкл/выкл. null → свитча нет (Force-аспект — только крестик,
+  /// «выключить» нечего: снял = убрал).
+  final ValueChanged<bool>? onToggle;
+
+  /// §257: крестик-удаление аспекта (Server — стереть serverTag; Force —
+  /// снять галку). Убрав ОБА аспекта, правило исчезает из DNS-секции.
+  final VoidCallback? onRemove;
   final String? note;
 }
 
@@ -245,7 +253,11 @@ class DnsRuleAspectsTile extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       onTap: () =>
           showRuleBodyDialog(context, '$title · $label', 'rule', row.body),
-      leading: Switch(value: row.enabled, onChanged: row.onToggle),
+      // Server: свитч (вкл/выкл, сервер помнится — удаление в редакторе).
+      // Force IPv4: свитча нет (onToggle == null) — только крестик-удаление.
+      leading: row.onToggle != null
+          ? Switch(value: row.enabled, onChanged: row.onToggle)
+          : Icon(Icons.dns_outlined, size: 20, color: cs.onSurfaceVariant),
       title: Text(
         label,
         style: TextStyle(
@@ -263,6 +275,14 @@ class DnsRuleAspectsTile extends StatelessWidget {
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       ),
+      trailing: row.onRemove == null
+          ? null
+          : IconButton(
+              icon: Icon(Icons.close, size: 18, color: cs.error),
+              tooltip: 'Remove',
+              visualDensity: VisualDensity.compact,
+              onPressed: row.onRemove,
+            ),
     );
   }
 }
