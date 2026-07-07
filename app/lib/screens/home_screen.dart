@@ -5,19 +5,15 @@ import 'package:flutter/material.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/home_state.dart';
-import '../models/server_list.dart';
 import '../models/validation.dart';
 import '../services/app_log.dart';
 import '../services/error_humanize.dart';
 import '../services/support/active_time_tracker.dart';
 import '../services/support/support_message.dart';
 import '../services/version_info.dart';
-import 'home/source_lookup.dart';
 import 'home/widgets/detour_cycle_sheet.dart';
 import 'home/widgets/traffic_bar.dart';
-import 'folder_detail_screen.dart';
-import 'node_settings_screen.dart';
-import 'subscription_detail_screen.dart';
+import 'owner_navigation.dart';
 import 'subscriptions_screen.dart';
 import 'home/widgets/progress_banner.dart';
 import 'home/widgets/nodes_header.dart';
@@ -634,45 +630,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     return true;
   }
 
-  /// §255 — тап по ноде-виновнику в sheet: закрыть sheet, найти владельца и
-  /// открыть его экран прямо на нужном месте:
-  ///   папка       → FolderDetailScreen + подсветка члена;
-  ///   подписка     → SubscriptionDetailScreen (там override detour);
-  ///   одиночный    → NodeSettingsScreen (это и есть та нода).
-  /// Владелец не найден (custom JSON) → открываем список Servers как fallback.
+  /// §255 — тап по ноде-виновнику в sheet: закрыть sheet и открыть экран
+  /// владельца. Сама навигация (папка+подсветка / подписка / одиночный /
+  /// канал) — общий §258 `openTagOwner`. Владелец не найден (custom JSON) →
+  /// открываем список Servers как fallback.
   void _goToCulpritOwner(String culpritTag) {
     Navigator.of(context).pop(); // закрыть sheet
-    final owner = ownerOfTag(culpritTag, _subController.entries);
-    final nav = Navigator.of(context);
-    if (owner == null) {
-      nav.push(MaterialPageRoute(
-        builder: (_) => SubscriptionsScreen(
-          subController: _subController,
-          homeController: _controller,
-          autoUpdater: _autoUpdater,
-        ),
-      ));
-      return;
-    }
-    final entry = _subController.entries[owner.entryIndex];
-    final list = entry.list;
-    nav.push(MaterialPageRoute(builder: (_) {
-      if (list is FolderServers) {
-        return FolderDetailScreen(
-          entry: entry,
-          controller: _subController,
-          focusMemberIndex: owner.memberIndex,
-        );
-      }
-      if (list is UserServer) {
-        return NodeSettingsScreen(
-          entry: entry,
-          index: owner.entryIndex,
-          subController: _subController,
-        );
-      }
-      return SubscriptionDetailScreen(entry: entry, controller: _subController);
-    }));
+    unawaited(openTagOwner(
+      context,
+      culpritTag,
+      subController: _subController,
+      homeController: _controller,
+      onOwnerNotFound: () {
+        if (!mounted) return;
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => SubscriptionsScreen(
+            subController: _subController,
+            homeController: _controller,
+            autoUpdater: _autoUpdater,
+          ),
+        ));
+      },
+    ));
   }
 
   Future<void> _startWithAutoRefresh() async {
