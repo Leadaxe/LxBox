@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../controllers/home_controller.dart';
 import '../../controllers/subscription_controller.dart';
 import '../../models/home_state.dart';
 import '../../models/node_spec.dart';
@@ -13,7 +14,15 @@ import '../outbound_view_screen.dart';
 /// Все принимают `context` явно (раньше использовали `mounted`/`context`
 /// напрямую); поведение байт-в-байт идентично.
 
-void viewOutboundJson(BuildContext context, String tag, HomeState state) {
+/// §258 — «View details»: экран Overview/JSON. Контроллеры нужны
+/// Overview-вкладке для навигации по хопам цепочки (openTagOwner).
+void viewOutboundJson(
+  BuildContext context,
+  String tag,
+  HomeState state, {
+  required SubscriptionController subController,
+  required HomeController homeController,
+}) {
   if (state.configRaw.isEmpty) return;
   // §091 — уже распарсенная модель из state (без ре-парса на каждый tap).
   final intro = state.configModel;
@@ -34,6 +43,9 @@ void viewOutboundJson(BuildContext context, String tag, HomeState state) {
       kind: intro.kindOf(tag),
       json: json,
       detourCount: detourCount,
+      config: intro,
+      subController: subController,
+      homeController: homeController,
       // §099 — copy-варианты JSON перенесены из контекстного меню сюда.
       onCopy: (mode) => copyNodeJson(context, tag, state, mode),
     ),

@@ -32,10 +32,15 @@ class RoutingScreen extends StatefulWidget {
     super.key,
     required this.subController,
     required this.homeController,
+    this.focusChannelTag,
   });
 
   final SubscriptionController subController;
   final HomeController homeController;
+
+  /// §258 — при открытии показать канал с этим тегом и мигнуть его тайлом
+  /// (навигация «хоп рантайм-цепочки → канал», openTagOwner). null = нет.
+  final String? focusChannelTag;
 
   @override
   State<RoutingScreen> createState() => _RoutingScreenState();
@@ -66,13 +71,49 @@ class _RoutingScreenState extends State<RoutingScreen>
   bool _loading = true;
   // §076/§085 R4/§107: staging через LazyPersistMixin (markDirty/stageChanges).
 
+  // §258 — подсветка канала при focusChannelTag (навигация из рантайм-цепочки
+  // View-экрана). Ключи per-tag: таб Channels — нелениый ListView(children:),
+  // тайл смонтирован с первого кадра, retry (§255) не нужен.
+  final _channelKeys = <String, GlobalKey>{};
+  String? _highlightedChannelTag;
+  Timer? _channelHighlightTimer;
+
   @override
   SubscriptionController get lazyController => widget.subController;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_load());
+    unawaited(_load().then((_) => _focusChannelIfAny()));
+  }
+
+  @override
+  void dispose() {
+    _channelHighlightTimer?.cancel();
+    super.dispose();
+  }
+
+  /// §258 — после загрузки каналов: скролл к focusChannelTag + вспышка 2.2 с
+  /// (зеркало _focusMember в folder_detail_screen, §255).
+  void _focusChannelIfAny() {
+    final tag = widget.focusChannelTag;
+    if (tag == null || !mounted) return;
+    if (!_channels.any((c) => c.tag == tag)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _highlightedChannelTag = tag);
+      final ctx = _channelKeys[tag]?.currentContext;
+      if (ctx != null) {
+        unawaited(Scrollable.ensureVisible(ctx,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            alignment: 0.3));
+      }
+      _channelHighlightTimer?.cancel();
+      _channelHighlightTimer = Timer(const Duration(milliseconds: 2200), () {
+        if (mounted) setState(() => _highlightedChannelTag = null);
+      });
+    });
   }
 
   // §085 R4 — alias: сохраняет существующие call-sites `_markDirty()`.
@@ -179,11 +220,24 @@ class _RoutingScreenState extends State<RoutingScreen>
   }
 
   Widget _buildChannelTile(Channel channel) {
-    return RoutingChannelTile(
-      channel: channel,
-      nodeCount: _nodeCountFor(channel),
-      onToggle: (val) => unawaited(_toggleChannel(channel, val)),
-      onTap: () => _editChannel(channel),
+    // §258 — вспышка при focusChannelTag (стиль как у члена папки, §255).
+    final cs = Theme.of(context).colorScheme;
+    final highlighted = _highlightedChannelTag == channel.tag;
+    return AnimatedContainer(
+      key: _channelKeys.putIfAbsent(channel.tag, GlobalKey.new),
+      duration: const Duration(milliseconds: 200),
+      decoration: highlighted
+          ? BoxDecoration(
+              color: cs.primaryContainer.withValues(alpha: 0.5),
+              border: Border(left: BorderSide(color: cs.primary, width: 3)),
+            )
+          : null,
+      child: RoutingChannelTile(
+        channel: channel,
+        nodeCount: _nodeCountFor(channel),
+        onToggle: (val) => unawaited(_toggleChannel(channel, val)),
+        onTap: () => _editChannel(channel),
+      ),
     );
   }
 
