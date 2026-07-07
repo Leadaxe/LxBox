@@ -72,8 +72,10 @@ orphan-cleanup / order-compaction `kind:preset`-записей (resolveDnsRulesL
   + note (server missing / srs-домены). Видна при настроенном serverTag
   (`dnsMirrorEligible`);
 - под-строка «Force IPv4 (drop AAAA)» — свитч (`RuleDns.forceIpv4`) +
-  превью AAAA-глушилки (mirror-body; fallback-статика, когда выключена).
-  Видна всегда внутри блока (`forceIpv4Eligible`) — вкл/выкл прямо отсюда.
+  превью AAAA-глушилки. **Вариант A (решение владельца):** видна ТОЛЬКО
+  когда галка реально стоит (`forceIpv4Active`) — правило с одним сервером
+  не тащит пустой Force-тумблер. Свитч на строке = выключить Force отсюда;
+  включают Force в редакторе правила.
 
 Пресет — как §253: один блок, все DNS-тела в превью; свитч → var
 `dns_enable` (пишет `varsValues` через `saveCustomRules`); пресет без var —
