@@ -68,14 +68,18 @@ orphan-cleanup / order-compaction `kind:preset`-записей (resolveDnsRulesL
 
 Правило с DNS-аспектами → **ОДИН блок-карточка** [`DnsRuleAspectsTile`]:
 - общий заголовок = имя правила + бейдж `rule`;
-- под-строка «Server» — свитч (`RuleDns.enabled`) + превью server-mirror
-  + note (server missing / srs-домены). Видна при настроенном serverTag
-  (`dnsMirrorEligible`);
-- под-строка «Force IPv4 (drop AAAA)» — свитч (`RuleDns.forceIpv4`) +
-  превью AAAA-глушилки. **Вариант A (решение владельца):** видна ТОЛЬКО
-  когда галка реально стоит (`forceIpv4Active`) — правило с одним сервером
-  не тащит пустой Force-тумблер. Свитч на строке = выключить Force отсюда;
-  включают Force в редакторе правила.
+- под-строка «Server» — **свитч** (`RuleDns.enabled`) + превью server-mirror
+  + note. Видна при выбранном serverTag (`dnsMirrorEligible`), НЕЗАВИСИМО
+  от `enabled` → **выключенный свитч оставляет строку видимой** (сервер
+  помнится, включить обратно тут же). **Удаление сервера — в редакторе
+  правила:** снятие галки «Send DNS to dedicated server» стирает serverTag
+  (`setDnsEnabled(false)` → serverTag='', dns=null если Force тоже нет).
+  Крестика у Server в DNS Settings НЕТ — двухступенчатость через редактор;
+- под-строка «Force IPv4 (drop AAAA)» — **крестик** (не свитч): видна
+  только когда галка стоит (`forceIpv4Active`, вариант A), крестик удаляет
+  Force (`forceIpv4=false`). Помнить нечего → снял = убрал.
+
+Правило **исчезает из DNS-секции**, когда нет ни serverTag, ни forceIpv4.
 
 Пресет — как §253: один блок, все DNS-тела в превью; свитч → var
 `dns_enable` (пишет `varsValues` через `saveCustomRules`); пресет без var —

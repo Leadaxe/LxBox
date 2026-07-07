@@ -575,10 +575,11 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                   ].join(' · '),
                 )
               : null,
-          // Force-строка только когда галка стоит (вариант A). Свитч на ней
-          // = выключить Force прямо из DNS Settings. Галка активна →
-          // serverless-mirror собран → forceBody не null (fallback-статика
-          // defensive, на случай гейта превью).
+          // §257: Force-строка только когда галка стоит (вариант A). У неё
+          // НЕ свитч, а крестик-удаление (снял = убрал, помнить нечего).
+          // Убрав Force и не имея server-аспекта → правило уходит из секции
+          // (_toggleRuleForceIpv4(false) обнуляет dns). Галка активна →
+          // serverless-mirror собран → forceBody не null (fallback defensive).
           forceIpv4Row: hasForceAspect
               ? DnsAspectRow(
                   body: forceBody ??
@@ -588,7 +589,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                         'rcode': 'NOERROR',
                       },
                   enabled: true,
-                  onToggle: (v) => _toggleRuleForceIpv4(cr, v),
+                  onRemove: () => _toggleRuleForceIpv4(cr, false),
                 )
               : null,
         ));

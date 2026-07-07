@@ -411,14 +411,24 @@ class CustomRuleEditController extends ChangeNotifier {
   /// (повторное включение не теряет выбор). Первое включение без выбора —
   /// преселект `google_udp` (дефолтный резолвер) или первый доступный tag.
   void setDnsEnabled(bool v) {
+    if (!v) {
+      // §257: снятие галки «Send DNS to dedicated server» = удалить сервер
+      // (не просто выключить). serverTag стирается — правило перестаёт нести
+      // server-аспект и уходит из DNS Settings (если Force тоже нет → dns
+      // обнуляется, не копим мёртвый RuleDns).
+      final force = _dns?.forceIpv4 ?? false;
+      _dns = force ? const RuleDns(forceIpv4: true) : null;
+      notifyListeners();
+      return;
+    }
     var tag = _dns?.serverTag ?? '';
-    if (v && tag.isEmpty) {
+    if (tag.isEmpty) {
       tag = _dnsServerTags.contains('google_udp')
           ? 'google_udp'
           : (_dnsServerTags.isNotEmpty ? _dnsServerTags.first : '');
     }
     // §256: copyWith сохраняет forceIpv4 (ортогонален dedicated-серверу).
-    _dns = (_dns ?? const RuleDns()).copyWith(enabled: v, serverTag: tag);
+    _dns = (_dns ?? const RuleDns()).copyWith(enabled: true, serverTag: tag);
     notifyListeners();
   }
 
