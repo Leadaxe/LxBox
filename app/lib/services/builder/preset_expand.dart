@@ -151,6 +151,17 @@ PresetFragments expandPreset(
     varsMap[v.name] = (gv != null && gv.isNotEmpty) ? gv : null;
   }
 
+  // §264 — глобальные vars как FALLBACK: правила пресета могут содержать
+  // глобальные плейсхолдеры, не объявленные среди preset.vars — прежде всего
+  // `@vpn_mode` в `#if`-гейте inbound (`tun-in`/`mixed-in`). Раньше эти правила
+  // жили в `config.route.rules` (глобальный substitute, где vpn_mode есть);
+  // переехав в пресет traffic-processing (§264), они потеряли бы доступ →
+  // `#if @vpn_mode` не резолвится → inbound[] пустеет. Подмешиваем globalVars,
+  // НЕ перетирая локальные preset-vars (putIfAbsent).
+  for (final e in globalVars.entries) {
+    varsMap.putIfAbsent(e.key, () => e.value);
+  }
+
   final expandedRuleSets = <Map<String, dynamic>>[];
   for (final rs in preset.ruleSets) {
     // §045: `enabled: "@var"` convention — фрагмент пропускается если
