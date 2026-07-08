@@ -121,9 +121,9 @@ wizard_template.json
 │   │   ├─ find_process            bool          true → package_name detection включён
 │   │   ├─ default_domain_resolver "@dns_default_domain_resolver"
 │   │   ├─ rules[]                 list[3]       base routing rules
-│   │   │   ├─ {action:"sniff",   inbound:"tun-in", timeout:"1s"}   §228 — sniff ПЕРЕД resolve (FakeIP)
+│   │   │   ├─ {action:"sniff",   inbound:"tun-in", timeout:"1s"}   §228 — sniff ПЕРЕД resolve (FakeIP); #if @sniff_enabled
 │   │   │   ├─ {protocol:"dns",   action:"hijack-dns"}
-│   │   │   └─ {action:"resolve", inbound:"tun-in", strategy:"@resolve_strategy"}
+│   │   │   └─ {action:"resolve", inbound:"tun-in", strategy:"@resolve_strategy"}   §263 — #if @resolve_enabled (off для FakeIP)
 │   │   ├─ rule_set[]              list          (в шаблоне ключа НЕТ — создаётся билдером
 │   │   │                                         из selectable_rules[].rule_set)
 │   │   ├─ final                   tag           default selector ("vpn-1")
@@ -537,8 +537,10 @@ Strategy (тумблер — разовый эффект, не форс).
     "rules": [
       // §228: sniff ПЕРЕД resolve — sniff извлекает домен до того, как resolve
       // сработает; критично для FakeIP (resolve по фейк-IP 198.18.x.x бессмыслен).
-      // sniff-правило обёрнуто в #if по @sniff_enabled (см. § #if ниже) — здесь
-      // показано резолвнутым (true-ветка); при false элемент выпадает.
+      // sniff- и resolve-правила обёрнуты в #if по @sniff_enabled / @resolve_enabled
+      // (§263, см. § #if ниже) — здесь показаны резолвнутыми (true-ветка); при
+      // false элемент выпадает. resolve_enabled=false нужен для FakeIP: real-lookup
+      // на route-слое идёт мимо FakeIP через default_domain_resolver.
       {"action": "sniff",   "inbound": "tun-in", "timeout": "1s"},
       {"protocol": "dns", "action": "hijack-dns"},
       {"action": "resolve", "inbound": "tun-in", "strategy": "@resolve_strategy"}
