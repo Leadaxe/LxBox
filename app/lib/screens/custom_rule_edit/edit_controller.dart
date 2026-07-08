@@ -98,6 +98,14 @@ class CustomRuleEditController extends ChangeNotifier {
   /// proxy/vpn_proxy, §119). Гейтит чекбокс `Proxy interface` в INBOUND-секции.
   /// Читается async в `_init` через [SettingsStorage.getVpnMode].
   bool _hasMixedInbound = false;
+
+  /// §264 — глобальные vars для превью пресета в View-табе (expandPreset
+  /// globalVars): `@vpn_mode`/`@resolve_strategy` в правилах пресета
+  /// (traffic-processing) резолвятся из глобали, иначе `#if @vpn_mode` не
+  /// срабатывает → inbound[] пустеет в превью. Заполняется в `_loadVpnMode`.
+  Map<String, String> _globalVars = const {};
+  Map<String, String> get globalVars => _globalVars;
+
   Map<String, String> _presetSrsPaths = const {};
   SrsDownloadState _srsState = SrsDownloadState.none;
   final Set<String> _boolVarDownloading = <String>{};
@@ -264,8 +272,15 @@ class CustomRuleEditController extends ChangeNotifier {
   /// в INBOUND-секции. `mixed-in` существует только в proxy/vpn_proxy (§119).
   Future<void> _loadVpnMode() async {
     final cfg = await SettingsStorage.getVpnMode();
+    final userVars = await SettingsStorage.getAllVars();
     if (_disposed) return;
     _hasMixedInbound = cfg.hasMixed;
+    // §264 — globalVars для превью пресета: userVars (resolve_strategy и др.)
+    // + vpn_mode из VpnModeConfig (он приходит не через userVars, а прямым
+    // присваиванием в билдере — build_config.dart). Template-дефолты
+    // недостающих vars здесь не подмешиваем: для превью inbound достаточно
+    // vpn_mode, а resolve_strategy юзер видит по своему значению.
+    _globalVars = {...userVars, 'vpn_mode': cfg.mode};
     notifyListeners();
   }
 
