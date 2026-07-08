@@ -359,9 +359,16 @@ class _PresetVarWidget extends StatelessWidget {
         // Если var управляет remote rule_set'ом (`enabled: "@<v.name>"`):
         // toggle-on auto-downloads .srs; на fail откатываем + caller
         // показывает snackbar через `onBoolVarFailed`.
-        final hasExplicit = c.varsValues.containsKey(v.name);
-        final stored = c.varsValues[v.name];
-        final raw = hasExplicit ? (stored ?? '') : v.defaultValue;
+        // §265 — ref-var (напр. resolve_enabled): значение из globalVars
+        // (userVars), запись через setGlobalVar; обычная — varsValues.
+        final String raw;
+        if (v.isRef) {
+          raw = c.globalVars[v.ref] ?? v.defaultValue;
+        } else {
+          final hasExplicit = c.varsValues.containsKey(v.name);
+          final stored = c.varsValues[v.name];
+          raw = hasExplicit ? (stored ?? '') : v.defaultValue;
+        }
         final current = raw.toLowerCase() == 'true';
         final downloading = c.boolVarDownloading.contains(v.name);
         return Padding(
@@ -398,6 +405,11 @@ class _PresetVarWidget extends StatelessWidget {
                 Switch(
                   value: current,
                   onChanged: (val) async {
+                    // §265 — ref-var пишем в глобальный userVars.
+                    if (v.isRef) {
+                      await c.setGlobalVar(v.ref, val ? 'true' : 'false');
+                      return;
+                    }
                     final failed = await c.onBoolVarToggle(v, val);
                     if (failed) onBoolVarFailed(label);
                   },
