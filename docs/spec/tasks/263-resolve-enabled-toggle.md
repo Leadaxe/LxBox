@@ -1,6 +1,7 @@
 # §263 — тумблер «Resolve destination IP» (гейт глобального route-resolve)
 
-**Статус:** Реализовано (не device-verified)
+**Статус:** Реализовано, device-verified (CPH2411, 08.07.2026) — FakeIP + resolve_enabled=false
+на холодном рестарте: `router: lookup` в чёрную дыру пропали, трафик держится на fake-IP.
 **Зависит от:** §120 (декларативный `#if`-шаблон), §246/§253 (Force IPv4 на route-resolve),
 пресет FakeIP (§228 + §дополнение HTTPS/SVCB-глушилки).
 **Файлы:** `assets/wizard_template.json` (var-декларация + обёртка правила). Кода в
