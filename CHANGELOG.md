@@ -6,6 +6,96 @@
 
 ---
 
+## [2.15.0] — 2026-07-09
+
+### Added
+
+- **§264 — Traffic Processing: единый пресет предобработки трафика**. Sniff,
+  hijack-DNS и resolve собраны в один закреплённый пресет **Traffic
+  Processing** (первый в списке правил, `pinned: 0` — `sniff` обязан быть
+  первым). Пресет **нельзя выключить/удалить/подвинуть** (`locked`): свич
+  disabled, drag-handle и delete скрыты. Настройки в одном месте: Packet
+  sniffing, Sniff timeout (был хардкод `1s`), Hijack DNS, Resolve destination
+  IP, Resolve strategy. Все пресеты переведены на объект `ui`
+  (label/description/default/locked/pinned), плоские поля убраны. Нормализация
+  в билдере (`normalize_pinned_presets`) гарантирует наличие+позицию пресета
+  для существующих юзеров (upgrade-safe).
+- **§265 — ref-vars и системная секция `internal`**. Синтаксис `{"ref":
+  "<var>"}` — пресет ссылается на глобальную переменную вместо собственной
+  копии (значение в общем `userVars`, метаданные из целевой). Секция `internal`
+  (chapter не рендерится ни одним экраном) хранит `resolve_enabled` /
+  `resolve_strategy` — их **нет в VPN Settings**, они видны и правятся только
+  в правиле Traffic Processing.
+- **§266 — FakeIP автоматически глушит route-resolve**. Псевдо-переменная
+  `@rule_enable` (включён ли пресет) + `on_change`: пока FakeIP активен
+  (`@rule_enable AND @dns_enable`), `resolve_enabled` выключается автоматически
+  — route-resolve обесценивает FakeIP (§263) и утыкается в системный DNS.
+  Выключишь FakeIP или его DNS-тумблер — resolve возвращается. Движок
+  `preset_on_change` общий (любой пресет), срабатывает из всех точек: создание
+  пресета, свич в списке, редактор, DNS Settings.
+- **§263 — тумблер Resolve destination IP + FakeIP глушит HTTPS/SVCB**. Гейт
+  глобального route-resolve (переехал в §264); FakeIP-пресет отвечает пустым
+  `NOERROR` на HTTPS/SVCB-запросы (type 65/64), чтобы они не текли в системный
+  DNS.
+- **§262 — детектор здоровья DNS в профайлере + баннер решений**. Постоянный
+  детектор в `TrafficProfiler` (не разовое окно на старте, как выпиленный §259):
+  видит весь поток DNS-событий, пока идёт запись. При массовом провале резолва
+  на живом туннеле показывает баннер на вкладке Live с готовыми действиями —
+  Route DNS through VPN / Use operator DNS. Опирается на §261 (DNS-события
+  теперь неотделимы от профайлера).
+- **§258 — View-экран ноды**. Вкладки Overview/JSON + кликабельная рантайм-
+  цепочка detour.
+- **§257 — DNS-блок правила: dns_enable-тумблер + объединённый Server/Force
+  IPv4**. Мастер-тумблер DNS-аспекта пресета; Server-строка двухступенчатая,
+  Force IPv4 виден в DNS Settings при взведённой галке.
+- **⚠️-предупреждения в тултипах** Hijack DNS и Packet sniffing: что именно
+  ломается при отключении (FakeIP/DNS-правила; protocol-матч BitTorrent/TLS/
+  QUIC и domain-матч без FakeIP).
+
+### Fixed
+
+- **§264 — FakeIP не прописывал DNS** (device-caught). Псевдо-переменная
+  `rule_enable` без `default_value` считалась required → развёртка пресета
+  прерывалась молча, fakeip-сервер и dns_rules не эмитились. FakeIP выглядел
+  включённым, но не работал. Фикс: `default_value` + `required: false`.
+- **§264 — коммент-ключ в `config.route` ронял старт ядра**. sing-box
+  strict-decode не знает поля `//` → fatal cold-start.
+- **§264 — `@vpn_mode` не резолвился в правилах пресета** → пустой `inbound`
+  у sniff/resolve. Глобальные vars теперь прокидываются в развёртку пресета.
+- **§264 — пресет не появлялся в списке правил** у существующих юзеров
+  (нормализация жила только в билдере; UI/storage её не видели).
+- **§264 — locked-гейты в редакторе правила**: свич выключения и delete-
+  иконка были доступны для locked-пресета; имя пресета теперь read-only.
+
+### Changed
+
+- **§264 — базовые sniff/hijack-dns/resolve убраны из `config.route.rules`**
+  шаблона (переехали в пресет Traffic Processing). `resolve_enabled` /
+  `resolve_strategy` убраны из секции Network (VPN Settings) — теперь в
+  секции `internal`, доступны через пресет.
+- **§263 частично заменён §264** — `resolve_enabled` переехал из VPN Settings
+  в пресет Traffic Processing (поведение то же).
+- **§261 — DNS-стрим переведён на command-мультиплекс CommandClient** (смена
+  парадигмы обвязки). Раньше DNS-журнал (§180, ядро SPEC 018) жил отдельной
+  ручной подпиской `subscribeDNSQueries()` → `DnsQuerySubscription` /
+  `DnsQueryHandler`, повешенной на живой `profilerClient` вне мультиплекса.
+  Такая подписка **не переживала уход в фон / Doze**: gRPC-стрим не был частью
+  `Connect()`-мультиплекса, поэтому при реконнекте ядро переподнимало
+  connections, но не DNS — поток глох (симптом: DNS-события шли ~47с после
+  старта и умирали навсегда, детектор дальше слушал пустоту). Теперь DNS —
+  обычный член мультиплекса: `addCommand(CommandDNS)` + `setDNSIncludeAnswers`,
+  события приходят через `ProfilerHandler.writeDNSQuery` (тело 1:1 из бывшего
+  `DnsHandler.onQuery`) и **живут / умирают / реконнектятся вместе с клиентом**,
+  идентично `CommandConnections`. Клиентский reconnect-хук из отменённого §260
+  (`profilerWanted` + патч в `disconnected`) удалён за ненадобностью — корень
+  починен в ядре. Требует `libbox` ≥ `v1.14.0-lx.3` (SPEC 018 v2, ветка
+  `lx-spec018-dns-multiplex`). Классы `DnsQuerySubscription` / `DnsQueryHandler`
+  и метод `subscribeDNSQueries` из обвязки удалены.
+- Утилита `format_wizard_template.py` + раздел Formatting style в TEMPLATE.md
+  — правила оформления шаблона.
+
+---
+
 ## [2.14.0] — 2026-07-07
 
 ### Added
