@@ -99,6 +99,9 @@ List<AppBanner> activeBanners(
       onTap: a.onConfirmStop,
     ));
   }
+  // §259 — детектор direct-DNS-глушения рисует СВОЙ баннер СНИЗУ (разовый,
+  // сворачивается в лист), не через этот верхний стек — см.
+  // DnsDirectBlockedBanner в home_screen.
   // §166 — lastError больше НЕ показывается верхним баннером: ошибки идут
   // всплывашкой СНИЗУ (SnackBar в home_screen._onControllerChange). Баннер
   // сверху перекрывал контент и был навязчив. config_load_error (выше) —

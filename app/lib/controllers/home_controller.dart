@@ -26,9 +26,10 @@ import '../services/subscription/auto_updater.dart';
 part 'home_controller/config_io.dart';
 part 'home_controller/heartbeat.dart';
 part 'home_controller/ping_orchestration.dart';
+part 'home_controller/dns_direct_detector.dart';
 
 class HomeController extends ChangeNotifier
-    with _ConfigIoMixin, _HeartbeatMixin, _PingMixin {
+    with _ConfigIoMixin, _HeartbeatMixin, _PingMixin, _DnsDirectDetectorMixin {
   HomeController({AutoUpdater? autoUpdater}) : _autoUpdater = autoUpdater;
 
   @override
@@ -207,6 +208,7 @@ class HomeController extends ChangeNotifier
     _disposed = true; // §141 P1.9a — до super.dispose, гейтит async-колбэки
     _stopHeartbeat();
     _autoPingTimer?.cancel();
+    _cancelDnsDirectDetector(); // §259
     _transientTimeoutTimer?.cancel();
     _statusSub?.cancel();
     _ccStatusSub?.cancel();
@@ -268,6 +270,9 @@ class HomeController extends ChangeNotifier
         tunnel: tunnel,
         connectedSince: DateTime.now(),
         configChangedNeedRestart: false,
+        // §259 — свежий старт: сбрасываем прошлый вердикт детектора, окно
+        // оценит заново.
+        dnsDirectBlocked: false,
         // §250 — успешный старт = ЕДИНСТВЕННОЕ место очистки lastStartError
         // (clearError/оптимистичные lastError:'' его не трогают).
         lastStartError: '',
@@ -292,6 +297,9 @@ class HomeController extends ChangeNotifier
       // AutoUpdater триггер #2: через 2 мин после connected.
       _autoUpdater?.onVpnConnected();
       unawaited(_scheduleAutoPing());
+      // §259 — окно детектора direct-DNS-глушения (6с). Слушает §180-поток,
+      // при вердикте поднимет dnsDirectBlocked → баннер.
+      unawaited(_scheduleDnsDirectDetector());
       // §047 — outgoing lifecycle event (gated, default OFF).
       AutomationEventEmitter.I.emitVpnConnected();
     } else if (tunnel == TunnelStatus.disconnected ||
@@ -322,6 +330,8 @@ class HomeController extends ChangeNotifier
       cancelMassPing();
       _autoPingTimer?.cancel();
       _autoPingTimer = null;
+      // §259 — гасим окно детектора direct-DNS (освобождает profiler-refcount).
+      _cancelDnsDirectDetector();
       // §122 — гасим CommandClient-стримы и screenClient (disconnectScreen).
       // На следующем `connected` пересоберём (`_startCcStreams`).
       _stopCcStreams();
@@ -352,6 +362,8 @@ class HomeController extends ChangeNotifier
           traffic: TrafficSnapshot.zero,
           connectedSince: null,
           configChangedNeedRestart: false,
+          // §259 — туннель down: вердикт детектора неактуален.
+          dnsDirectBlocked: false,
         ),
       );
       // Haptic — на революд/краш тяжёлый, на user-инициированный stop лёгкий.
