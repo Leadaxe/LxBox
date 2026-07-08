@@ -675,12 +675,18 @@
       "default": false,
       "vars": [
         {"name": "dns_enable",  "type": "bool",        "default_value": "true",   "title": "DNS",         "tooltip": "Apply this preset's FakeIP DNS handling. Turn off to disable FakeIP without removing the preset."},
-        {"name": "dns_server",  "type": "dns_servers",  "default_value": "fakeip", "wizard_ui": "hidden", "title": "FakeIP server", "tooltip": "The FakeIP allocator. Internal — bound to the fakeip DNS server."}
+        {"name": "dns_server",  "type": "dns_servers",  "default_value": "fakeip", "wizard_ui": "hidden", "title": "FakeIP server", "tooltip": "The FakeIP allocator. Internal — bound to the fakeip DNS server."},
+        {"name": "force", "type": "bool", "default_value": "true", "title": "Block HTTPS records", "tooltip": "Reply empty to HTTPS/SVCB DNS records (RFC 9460) so apps fall back to plain A/AAAA. Keeps these queries from leaking to the fallback DNS."}
       ],
       "dns_servers": [
         {"type": "fakeip", "tag": "fakeip", "inet4_range": "198.18.0.0/15", "inet6_range": "fc00::/18", "description": "FakeIP allocator"}
       ],
-      "dns_rule": {"query_type": ["A", "AAAA"], "server": "@dns_server"}
+      "dns_rules": [
+        {"#if": {"and": ["@force"], "value": {
+          "query_type": ["HTTPS", "SVCB"], "action": "predefined", "rcode": "NOERROR"
+        }}},
+        {"query_type": ["A", "AAAA"], "server": "@dns_server"}
+      ]
     },
     {
       "preset_id": "ru-inside",
