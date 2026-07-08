@@ -79,6 +79,10 @@ bool _dnsEnableValue(SelectableRule preset, CustomRulePreset cr) {
     }
   }
   if (declared == null) return true; // нет var → DNS всегда on
+  // §265 — dns_enable как ref: значение в userVars, не varsValues. Здесь
+  // namespace on_change уже содержит dns_enable из этой же функции, поэтому
+  // ref-случай ловим на default (defensive: dns_enable сейчас обычная var).
+  if (declared.isRef) return true;
   final explicit = cr.varsValues['dns_enable'];
   if (explicit != null && explicit.isNotEmpty) return explicit == 'true';
   final def = declared.defaultValue;

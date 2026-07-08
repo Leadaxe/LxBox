@@ -1,3 +1,4 @@
+import '../../config/consts.dart' show kBlockOutboundTag, kDirectOutboundTag;
 import '../../models/channel.dart';
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
@@ -44,7 +45,7 @@ class RoutingHelpers {
   /// держим его последним, direct — первым.
   static List<RoutingOutboundOption> outboundOptions(List<Channel> channels) {
     final opts = <RoutingOutboundOption>[
-      const RoutingOutboundOption(label: 'direct', tag: 'direct-out'),
+      const RoutingOutboundOption(label: 'direct', tag: kDirectOutboundTag),
     ];
     for (final c in channels) {
       if (c.isDetour) continue;
@@ -54,7 +55,7 @@ class RoutingHelpers {
       }
     }
     opts.add(const RoutingOutboundOption(
-        label: 'block', tag: 'block', danger: true));
+        label: 'block', tag: kBlockOutboundTag, danger: true));
     return opts;
   }
 
@@ -95,15 +96,19 @@ class RoutingHelpers {
       String resolved = raw;
       if (raw.startsWith('@')) {
         final varName = raw.substring(1);
-        final stored = rule.varsValues[varName];
-        if (stored != null && stored.isNotEmpty) {
-          resolved = stored;
+        final v = preset.vars.firstWhere(
+          (x) => x.name == varName,
+          orElse: () => WizardVar(name: '', type: '', defaultValue: 'true'),
+        );
+        final def = v.defaultValue.isNotEmpty ? v.defaultValue : 'true';
+        // §265 — ref-var: значение в глобальном userVars, не в varsValues.
+        // Pure-хелпер userVars не читает → fallback на default (defensive:
+        // rule_set.enabled-гейты используют dns_enable-паттерн, не ref).
+        if (v.isRef) {
+          resolved = def;
         } else {
-          final v = preset.vars.firstWhere(
-            (x) => x.name == varName,
-            orElse: () => WizardVar(name: '', type: '', defaultValue: 'true'),
-          );
-          resolved = v.defaultValue.isNotEmpty ? v.defaultValue : 'true';
+          final stored = rule.varsValues[varName];
+          resolved = (stored != null && stored.isNotEmpty) ? stored : def;
         }
       }
       return resolved.toLowerCase() == 'true';
@@ -136,7 +141,7 @@ class RoutingHelpers {
   static String presetOut(CustomRule rule, SelectableRule? preset) {
     final explicit = rule.varsValues['outbound'];
     if (explicit != null && explicit.isNotEmpty) return explicit;
-    if (preset == null) return 'direct-out';
+    if (preset == null) return kDirectOutboundTag;
     for (final v in preset.vars) {
       if (v.name == 'outbound') return v.defaultValue;
     }
@@ -148,7 +153,7 @@ class RoutingHelpers {
     if (literal is String && literal.isNotEmpty && !literal.startsWith('@')) {
       return literal;
     }
-    return 'direct-out';
+    return kDirectOutboundTag;
   }
 
   static String ruleSubtitle(CustomRule rule, SelectableRule? preset) {
@@ -157,6 +162,13 @@ class RoutingHelpers {
       // §045: только non-default vars; preset.label дублирует title (rule.name)
       final extras = <String>[];
       for (final v in preset.vars) {
+        // §265 — ref-var: её значение в ГЛОБАЛЬНОМ userVars, не в varsValues.
+        // Subtitle читает varsValues → показал бы застрявшее/неверное значение
+        // (напр. resolve_enabled: true, когда глобаль уже false). Ref-vars из
+        // подписи исключаем — их состояние не место в subtitle правила.
+        if (v.isRef) continue;
+        // §266 — hidden-var (rule_enable и т.п.) служебная, не для показа.
+        if (v.wizardUI == 'hidden') continue;
         final value = rule.varsValues[v.name] ?? v.defaultValue;
         if (value.isEmpty || value == v.defaultValue) continue;
         extras.add('${v.name}: $value');

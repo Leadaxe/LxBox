@@ -266,20 +266,30 @@ class _PresetVarWidget extends StatelessWidget {
     Widget control;
     switch (v.type) {
       case 'outbound':
-        final current = c.varsValues[v.name] ?? v.defaultValue;
+        // §265 — ref-var: значение/запись через глобальный userVars.
+        final current = v.isRef
+            ? (c.globalVars[v.ref] ?? v.defaultValue)
+            : (c.varsValues[v.name] ?? v.defaultValue);
         control = OutboundPicker(
           value: current,
           options: outboundOptions,
-          onChanged: (val) => c.setVarValue(v.name, val),
+          onChanged: (val) =>
+              v.isRef ? c.setGlobalVar(v.ref, val) : c.setVarValue(v.name, val),
           dense: false,
         );
       case 'dns_servers':
         // Семантика (§033): varsValues содержит ключ → explicit выбор
         // (включая пустую строку = "— default DNS" для optional); ключ
         // отсутствует → применяется `default_value` пресета.
-        final hasExplicit = c.varsValues.containsKey(v.name);
-        final stored = c.varsValues[v.name];
-        final currentKey = hasExplicit ? (stored ?? '') : v.defaultValue;
+        // §265 — ref-var: значение из глобального userVars.
+        final String currentKey;
+        if (v.isRef) {
+          currentKey = c.globalVars[v.ref] ?? v.defaultValue;
+        } else {
+          final hasExplicit = c.varsValues.containsKey(v.name);
+          final stored = c.varsValues[v.name];
+          currentKey = hasExplicit ? (stored ?? '') : v.defaultValue;
+        }
         final items = <DropdownMenuItem<String>>[];
         if (!v.required) {
           items.add(const DropdownMenuItem<String>(
@@ -308,7 +318,7 @@ class _PresetVarWidget extends StatelessWidget {
           items: items,
           onChanged: (val) {
             if (val == null) return;
-            c.setVarValue(v.name, val);
+            v.isRef ? c.setGlobalVar(v.ref, val) : c.setVarValue(v.name, val);
           },
         );
       case 'enum':
