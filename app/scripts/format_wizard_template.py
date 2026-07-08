@@ -56,27 +56,24 @@ def format_var(v: dict[str, Any], level: int, *, trailing_comma: bool) -> list[s
         lines.append(pad(level + 1) + f'"default_value": {json.dumps(v["default_value"], ensure_ascii=False)},')
 
     if "options" in v:
-        lines.append(pad(level + 1) + '"options": [')
         opts = v["options"]
-        for i, o in enumerate(opts):
-            tc = i < len(opts) - 1
-            if isinstance(o, str):
-                lines.append(pad(level + 2) + json.dumps(o, ensure_ascii=False) + ("," if tc else ""))
-            else:
-                lines.append(pad(level + 2) + compact(o) + ("," if tc else ""))
-        lines.append(pad(level + 1) + "],")
+        if opts and all(isinstance(o, str) for o in opts):
+            lines.append(pad(level + 1) + f'"options": {compact(opts)},')
+        else:
+            lines.append(pad(level + 1) + '"options": [')
+            for i, o in enumerate(opts):
+                lines.append(pad(level + 2) + compact(o) + ("," if i < len(opts) - 1 else ""))
+            lines.append(pad(level + 1) + "],")
 
     if "on_change" in v:
         oc = v["on_change"]
-        lines.append(pad(level + 1) + '"on_change": {')
-        lines.append(pad(level + 2) + '"set": {')
+        lines.append(pad(level + 1) + '"on_change": { "set": {')
         set_obj = oc["set"]
         keys = list(set_obj.keys())
         for i, sk in enumerate(keys):
             tc = "," if i < len(keys) - 1 else ""
             lines.append(pad(level + 3) + f'{json.dumps(sk, ensure_ascii=False)}: {format_if_scalar(set_obj[sk]["#if"])}{tc}')
-        lines.append(pad(level + 2) + "}")
-        lines.append(pad(level + 1) + "},")
+        lines.append(pad(level + 1) + "}},")
 
     lines[-1] = lines[-1].rstrip(",")
     lines.append(pad(level) + "}" + ("," if trailing_comma else ""))
@@ -99,17 +96,7 @@ def format_dns_server(entry: dict[str, Any], level: int, *, trailing_comma: bool
     ]
     if "vars" in entry:
         lines.extend(format_var_array(entry["vars"], level + 1))
-    srv = entry["server"]
-    lines.append(pad(level + 1) + '"server": {')
-    srv_keys = list(srv.keys())
-    for i, sk in enumerate(srv_keys):
-        sv = srv[sk]
-        tc = "," if i < len(srv_keys) - 1 else ""
-        if sk == "tls":
-            lines.append(pad(level + 2) + f'"tls": {compact(sv)}{tc}')
-        else:
-            lines.append(pad(level + 2) + f'"{sk}": {json.dumps(sv, ensure_ascii=False)}{tc}')
-    lines.append(pad(level + 1) + "}")
+    lines.append(pad(level + 1) + f'"server": {compact(entry["server"])}')
     lines.append(pad(level) + "}" + ("," if trailing_comma else ""))
     return lines
 
@@ -182,16 +169,6 @@ def format_rule_set(rs: dict[str, Any], level: int, *, trailing_comma: bool) -> 
         meta = ", ".join(f'"{k}": {json.dumps(rs[k], ensure_ascii=False)}' for k in ("tag", "type") if k in rs)
         lines = [pad(level) + "{ " + meta + ",", pad(level + 1) + '"rules": [']
         for i, rule in enumerate(rs["rules"]):
-            if len(rule) == 1:
-                rk, rv = next(iter(rule.items()))
-                if isinstance(rv, list) and len(rv) > 4:
-                    lines.append(pad(level + 2) + "{")
-                    lines.append(pad(level + 3) + f'"{rk}": [')
-                    for j, item in enumerate(rv):
-                        lines.append(pad(level + 4) + json.dumps(item, ensure_ascii=False) + ("," if j < len(rv) - 1 else ""))
-                    lines.append(pad(level + 3) + "]")
-                    lines.append(pad(level + 2) + "}" + ("," if i < len(rs["rules"]) - 1 else ""))
-                    continue
             lines.append(pad(level + 2) + compact(rule) + ("," if i < len(rs["rules"]) - 1 else ""))
         lines.append(pad(level + 1) + "]")
         lines.append(pad(level) + "}" + ("," if trailing_comma else ""))
@@ -207,22 +184,7 @@ def format_rule_set(rs: dict[str, Any], level: int, *, trailing_comma: bool) -> 
 
 
 def format_dns_server_flat(s: dict[str, Any], level: int, *, trailing_comma: bool) -> list[str]:
-    order = ["type", "tag", "server", "server_port", "path", "inet4_range", "inet6_range", "description"]
-    keys = [k for k in order if k in s]
-    if "tls" in s:
-        keys.append("tls")
-    if "detour" in s:
-        keys.append("detour")
-    lines = [pad(level) + "{"]
-    for i, k in enumerate(keys):
-        v = s[k]
-        tc = "," if i < len(keys) - 1 else ""
-        if k == "tls":
-            lines.append(pad(level + 1) + f'"tls": {compact(v)}{tc}')
-        else:
-            lines.append(pad(level + 1) + f'"{k}": {json.dumps(v, ensure_ascii=False)}{tc}')
-    lines.append(pad(level) + "}" + ("," if trailing_comma else ""))
-    return lines
+    return [pad(level) + compact(s) + ("," if trailing_comma else "")]
 
 
 def format_preset(p: dict[str, Any], level: int, *, trailing_comma: bool) -> list[str]:
@@ -312,11 +274,9 @@ def format_template(data: dict[str, Any]) -> str:
     sto = data["speed_test_options"]
     out.append(pad(1) + '"speed_test_options": {')
     out.append(pad(2) + '"servers": [')
-    for i, s in enumerate(sto["servers"]):
-        lines = json.dumps(s, ensure_ascii=False, indent=2).split("\n")
-        for j, ln in enumerate(lines):
-            tc = "," if j == len(lines) - 1 and i < len(sto["servers"]) - 1 else ""
-            out.append(pad(3) + ln.strip() + tc)
+    servers = sto["servers"]
+    for i, s in enumerate(servers):
+        out.append(pad(3) + compact(s) + ("," if i < len(servers) - 1 else ""))
     out.append(pad(2) + "],")
     out.append(pad(2) + f'"stream_options": {compact(sto["stream_options"])},')
     out.append(pad(2) + f'"default_streams": {sto["default_streams"]}')
