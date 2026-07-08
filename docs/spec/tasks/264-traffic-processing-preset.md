@@ -6,7 +6,7 @@
 storage + UI), но ядро НЕ трогаем.
 **Зависит от:** §120 (декларативный `#if`-шаблон, section-vars), §125 (паттерн неудаляемого
 `vpn-1` — референс для `locked`/`pinned`), §263 (тумблер `resolve_enabled` — переезжает сюда
-из секции Network).
+из секции Network), **§265** (ref-vars — `resolve_strategy` остаётся глобальной, пресет ссылает).
 **Заменяет частично:** §263 — `resolve_enabled` переносится из секции Network в этот пресет
 (поведение то же, дом другой).
 
@@ -73,21 +73,31 @@ Processing»**, который:
 
 ## 3. Vars пресета (5 штук)
 
-Переносятся из секции Network + два новых (`sniff_timeout`, `hijack_dns_enabled`). Имена
-var'ов СОХРАНЯЮТСЯ (`sniff_enabled`, `resolve_enabled`, `resolve_strategy`) — var-namespace
-плоский, `build_config.dart:108` читает `userVars[name]` по имени, поэтому значения
-существующих юзеров ПОДХВАТЯТСЯ (не дропаются — уточнение к первичной договорённости).
+`sniff_enabled` / `sniff_timeout` / `hijack_dns_enabled` / `resolve_enabled` — **собственные**
+vars пресета (объявляются в нём, значение в `rule.varsValues`). `resolve_strategy` — **ref-var**
+(остаётся глобальной, пресет только ссылается — см. §3.1).
 
 | var | type | default | title | примечание |
 |---|---|---|---|---|
-| `sniff_enabled` | bool | true | Packet sniffing | из Network |
-| `sniff_timeout` | enum | 1s | Sniff timeout | НОВЫЙ (был хардкод `timeout:"1s"`); options 100ms/300ms/500ms/1s/3s |
-| `hijack_dns_enabled` | bool | true | Hijack DNS | НОВЫЙ; тултип-WARNING: off ломает FakeIP и все DNS-rules |
-| `resolve_enabled` | bool | true | Resolve destination IP | из Network (§263) |
-| `resolve_strategy` | enum | ipv4_only | Resolve strategy | из Network |
+| `sniff_enabled` | bool | true | Packet sniffing | из Network, собственная |
+| `sniff_timeout` | enum | 1s | Sniff timeout | НОВАЯ (был хардкод `timeout:"1s"`); options 100ms/300ms/500ms/1s/3s |
+| `hijack_dns_enabled` | bool | true | Hijack DNS | НОВАЯ; тултип-WARNING: off ломает FakeIP и все DNS-rules |
+| `resolve_enabled` | bool | true | Resolve destination IP | из Network (§263), собственная |
+| `resolve_strategy` | **ref** | — | (из глобали) | `{"ref":"resolve_strategy"}` — см. §3.1 |
 
-Vars пресета редактируются в редакторе правила (не в секции Core). Механизм — существующий
-preset-var UI (как у `ru-direct`: `@force_ipv4`, `@outbound`).
+Собственные vars редактируются в редакторе правила (preset-var UI, как `ru-direct`).
+
+### 3.1. `resolve_strategy` — ref-var (см. §265)
+
+`resolve_strategy` остаётся ГЛОБАЛЬНОЙ (её читает и `config.dns.strategy` через
+`@resolve_strategy`, wizard_template ~L365, и route-resolve пресета). Пресет её только
+**ссылает** синтаксисом `{"ref": "resolve_strategy"}` — механизм ref-vars описан отдельной
+таской **[§265](265-ref-vars.md)**. Значение живёт в глобальном `userVars`, не в varsValues
+пресета; единый источник для DNS-стратегии и route-resolve.
+
+§264 зависит от §265: реализация ref-var — предусловие для этого пресета. Если §265 ещё не
+готова — `resolve_strategy` временно объявляется собственной preset-var (дубль-декларация,
+работает по flat-namespace, но метаданные дублируются) до внедрения ref.
 
 ## 4. Route-правила пресета
 
