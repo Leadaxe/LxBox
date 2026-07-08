@@ -1,3 +1,4 @@
+import '../config/consts.dart' show kDirectOutboundTag;
 import '../services/parser/uri_utils.dart' show newUuidV4;
 
 /// Sealed-иерархия пользовательских правил маршрутизации (spec §030, v1.4.1
@@ -463,7 +464,7 @@ class CustomRuleInline extends CustomRule {
     this.inbounds = const [],
     this.wifiSsids = const [],
     List<String> wifiBssids = const [],
-    this.outbound = 'direct-out',
+    this.outbound = kDirectOutboundTag,
     this.dns,
     this.resolve,
   }) : wifiBssids = _normalizeBssids(wifiBssids);
@@ -676,7 +677,7 @@ class CustomRuleSrs extends CustomRule {
     this.inbounds = const [],
     this.wifiSsids = const [],
     List<String> wifiBssids = const [],
-    this.outbound = 'direct-out',
+    this.outbound = kDirectOutboundTag,
     this.dns,
     this.resolve,
   }) : wifiBssids = _normalizeBssids(wifiBssids);
@@ -1008,7 +1009,7 @@ String? _id(Map<String, dynamic> j) {
 
 /// Читает `outbound`, fallback на legacy-поле `target` (до 1.4.1 rename).
 String _outbound(Map<String, dynamic> j) =>
-    (j['outbound'] as String?) ?? (j['target'] as String?) ?? 'direct-out';
+    (j['outbound'] as String?) ?? (j['target'] as String?) ?? kDirectOutboundTag;
 
 List<String> _stringList(dynamic v) {
   if (v is! List) return const [];

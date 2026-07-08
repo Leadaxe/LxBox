@@ -18,33 +18,27 @@ void main() {
 
   String mainPath() => '${tmp.path}/lxbox_settings.json';
 
-  // template: vpn-1 (direct+auto), vpn-2 (direct), vpn-3, ✨auto (глобальный).
-  List<PresetGroup> template() => [
-        PresetGroup(
-          tag: 'vpn-1',
-          type: 'selector',
-          label: 'Главный',
-          addOutbounds: const ['direct-out', '✨auto'],
+  // §267 — group_templates: общий channel-шаблон (direct+auto) для всех каналов
+  // + default_channels vpn-1/vpn-2/vpn-3 + auto-подгруппа. Все каналы одинаковы
+  // (единый include), в отличие от старой per-group add_outbounds.
+  GroupTemplates template() => GroupTemplates(
+        channel: ChannelTemplate(
+          include: const ['direct', 'auto'],
           options: const {'interrupt_exist_connections': true},
         ),
-        PresetGroup(
-          tag: 'vpn-2',
-          type: 'selector',
-          label: 'Стриминг',
-          defaultEnabled: false,
-          addOutbounds: const ['direct-out'],
-        ),
-        PresetGroup(tag: 'vpn-3', type: 'selector', defaultEnabled: false),
-        PresetGroup(
-          tag: '✨auto',
-          type: 'urltest',
+        auto: AutoTemplate(
           options: const {
             'url': 'https://cp.cloudflare.com/generate_204',
             'interval': '5m',
             'tolerance': 50,
           },
         ),
-      ];
+        defaultChannels: [
+          DefaultChannel(tag: 'vpn-1', label: 'Главный', defaultEnabled: true),
+          DefaultChannel(tag: 'vpn-2', label: 'Стриминг', defaultEnabled: false),
+          DefaultChannel(tag: 'vpn-3', defaultEnabled: false),
+        ],
+      );
 
   setUp(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -78,25 +72,28 @@ void main() {
     await SettingsStorage.migrateChannelsIfNeeded(template());
 
     final channels = await SettingsStorage.getChannels();
-    // ✨auto НЕ канал → 3 канала (vpn-1/2/3)
+    // §267 — default_channels vpn-1/2/3 → 3 канала (auto не канал — подгруппа).
     expect(channels.map((c) => c.tag), ['vpn-1', 'vpn-2', 'vpn-3']);
 
     final vpn1 = channels.firstWhere((c) => c.tag == 'vpn-1');
     expect(vpn1.enabled, true); // vpn-1 форсим
-    expect(vpn1.includeDirect, true); // add_outbounds ∋ direct-out
-    expect(vpn1.auto, isNotNull); // add_outbounds ∋ ✨auto → двойник
+    expect(vpn1.includeDirect, true); // channel.include ∋ direct
+    expect(vpn1.auto, isNotNull); // channel.include ∋ auto → двойник
     expect(vpn1.auto!.url, 'https://cp.cloudflare.com/generate_204');
     expect(vpn1.auto!.idleTimeout, '30m');
     expect(vpn1.auto!.interruptExistConnections, false);
     expect(vpn1.interruptExistConnections, true);
 
+    // §267 — все каналы собираются из общего channel-шаблона (единый include),
+    // поэтому includeDirect/auto одинаковы у всех; различаются только
+    // tag/label/enabled из default_channels.
     final vpn2 = channels.firstWhere((c) => c.tag == 'vpn-2');
     expect(vpn2.enabled, false); // defaultEnabled false
     expect(vpn2.includeDirect, true);
-    expect(vpn2.auto, isNull); // нет ✨auto в add_outbounds
+    expect(vpn2.auto, isNotNull);
 
     final vpn3 = channels.firstWhere((c) => c.tag == 'vpn-3');
-    expect(vpn3.includeDirect, false);
+    expect(vpn3.includeDirect, true);
     expect(vpn3.defaultFilter, ''); // Решение 6
     expect(vpn3.nodeFilter, '');
   });
@@ -135,22 +132,17 @@ void main() {
     // preset.options (var-substitution идёт позже, в билдере). seedAuto не
     // должен делать `as num?`-каст строки "@urltest_tolerance" → краш миграции
     // → вечный прелоадер Routing (баг dev.91).
-    final placeholderTemplate = [
-      PresetGroup(
-        tag: 'vpn-1',
-        type: 'selector',
-        addOutbounds: const ['✨auto'],
-      ),
-      PresetGroup(
-        tag: '✨auto',
-        type: 'urltest',
+    final placeholderTemplate = GroupTemplates(
+      channel: ChannelTemplate(include: const ['auto']),
+      auto: AutoTemplate(
         options: const {
           'url': '@urltest_url',
           'interval': '@urltest_interval',
           'tolerance': '@urltest_tolerance', // СТРОКА-плейсхолдер!
         },
       ),
-    ];
+      defaultChannels: [DefaultChannel(tag: 'vpn-1')],
+    );
     await seedFile({});
     await SettingsStorage.migrateChannelsIfNeeded(placeholderTemplate);
 
@@ -164,14 +156,13 @@ void main() {
   });
 
   test('✨auto с tolerance числом-в-строке → парсится', () async {
-    final t = [
-      PresetGroup(tag: 'vpn-1', type: 'selector', addOutbounds: const ['✨auto']),
-      PresetGroup(
-        tag: '✨auto',
-        type: 'urltest',
+    final t = GroupTemplates(
+      channel: ChannelTemplate(include: const ['auto']),
+      auto: AutoTemplate(
         options: const {'tolerance': '30'}, // число-в-строке
       ),
-    ];
+      defaultChannels: [DefaultChannel(tag: 'vpn-1')],
+    );
     await seedFile({});
     await SettingsStorage.migrateChannelsIfNeeded(t);
     final vpn1 = (await SettingsStorage.getChannels())

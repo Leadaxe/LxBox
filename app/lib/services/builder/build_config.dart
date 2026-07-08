@@ -47,7 +47,7 @@ class BuildSettings {
   final String routeFinal;
 
   /// §125 — каналы роутинга (source-of-truth состава). Пусто = старое
-  /// поведение через template.presetGroups (для тестов без storage).
+  /// поведение через template.groupTemplates (для тестов без storage).
   final List<Channel> channels;
 
   /// §046: OS-level split-tunneling apps list. `null` = pipeline возьмёт
@@ -199,14 +199,14 @@ Future<BuildResult> buildConfig({
       ctx.selectorEntries.map((e) => e.tag).toList(growable: false);
 
   // §125 — каналы из storage (source-of-truth). Если пусто (тесты без storage /
-  // первый билд до миграции) — синтезируем из template.presetGroups через ту же
-  // seed-логику, что и one-shot миграция, чтобы билдер всегда работал с
+  // первый билд до миграции) — синтезируем из template.groupTemplates через ту
+  // же seed-логику, что и one-shot миграция, чтобы билдер всегда работал с
   // List<Channel> единообразно. autoTags больше не нужен: каждый канал делает
   // свой urltest-двойник по своему node-set.
   final channels = settings.channels.isNotEmpty
       ? settings.channels
       : _channelsFromTemplate(
-          template.presetGroups, settings.enabledGroups, resolve);
+          template.groupTemplates, settings.enabledGroups, resolve);
 
   // §248/§254 — эмитированные узлы (те же map-объекты уходят в config ниже):
   // AWG-advisory читает типы. detour больше НЕ правится in-place (§254 —
@@ -369,8 +369,8 @@ Future<BuildResult> buildConfig({
         if (c.isDetour) ...[c.tag, c.autoTag],
     };
     final validFinals = <String>{
-      'direct-out',
-      'block', // §201 — block системный outbound, валидная route_final-мишень
+      kDirectOutboundTag,
+      kBlockOutboundTag, // §201 — block системный outbound, валидная route_final-мишень
       for (final o in presetOutbounds)
         if (o['tag'] is String) o['tag'] as String,
     }..removeAll(detourChannelTags);
@@ -460,7 +460,7 @@ class _BuildCtx implements EmitContext {
   _BuildCtx(this._vars, this._ruleSets);
   final TemplateVars _vars;
   final RuleSetRegistry _ruleSets;
-  final _taken = <String>{'direct-out', 'dns-out', 'block-out'};
+  final _taken = <String>{kDirectOutboundTag, 'dns-out', 'block-out'};
 
   final outbounds = <Outbound>[];
   final endpoints = <Endpoint>[];
@@ -574,10 +574,10 @@ List<Map<String, dynamic>> _buildChannelGroups({
     // selector outbounds: ноды + (direct?) + (block?) + (<tag>-auto если эмит)
     final selectorOutbounds = <String>[
       ...nodes,
-      if (c.includeDirect) 'direct-out',
+      if (c.includeDirect) kDirectOutboundTag,
       // §248 — block в detour-прослойке запрещён (Q1): parse-гейт fromJson
       // коэрсит include_block при чтении, здесь — defense-in-depth.
-      if (c.includeBlock && !c.isDetour) 'block',
+      if (c.includeBlock && !c.isDetour) kBlockOutboundTag,
       if (emitAuto) c.autoTag,
     ];
     // §201 — пустой набор (regex не матчит / нет нод) → fallback на [block,
@@ -589,8 +589,9 @@ List<Map<String, dynamic>> _buildChannelGroups({
     // бы «upstream недоступен» в «весь детурящийся флот мёртв».
     final emptyFallback = selectorOutbounds.isEmpty;
     if (emptyFallback) {
-      selectorOutbounds
-          .addAll(c.isDetour ? ['direct-out'] : ['block', 'direct-out']);
+      selectorOutbounds.addAll(c.isDetour
+          ? [kDirectOutboundTag]
+          : [kBlockOutboundTag, kDirectOutboundTag]);
     }
     // §200 — предупреждаем, если ИМЕННО фильтр канала отсёк все ноды (фильтр
     // непустой, но 0 совпадений). Канал свалился на block — юзеру важно знать.
@@ -612,7 +613,7 @@ List<Map<String, dynamic>> _buildChannelGroups({
     };
     // §201/§248 — fallback пустого канала: block (обычный) / direct (detour).
     if (emptyFallback) {
-      selector['default'] = c.isDetour ? 'direct-out' : 'block';
+      selector['default'] = c.isDetour ? kDirectOutboundTag : kBlockOutboundTag;
     }
     // §141 — default = первая нода канала, чей итоговый tag матчит defaultFilter.
     // Не матчит/пусто → default не выставляется (sing-box берёт первую опцию).
@@ -705,13 +706,13 @@ void _warnAwgDetourViaWgChannels({
   }
 }
 
-/// §125 fallback — синтез `List<Channel>` из `template.presetGroups`, когда
+/// §125 fallback — синтез `List<Channel>` из `template.groupTemplates`, когда
 /// storage ещё пуст (тесты без storage / первый билд до миграции). Та же
 /// seed-логика, что и one-shot миграция `_migrateChannelsIfNeeded`, но auto-
-/// параметры резолвятся через [resolve] (@urltest_* vars). ✨auto-preset не
-/// канал — пропускается.
+/// параметры резолвятся через [resolve] (@urltest_* vars). §267 — итерируем
+/// `default_channels`, auto-подгруппа при `channel.include ∋ auto`.
 List<Channel> _channelsFromTemplate(
-  List<PresetGroup> presets,
+  GroupTemplates gt,
   Set<String> enabledGroupTags,
   VarResolver resolve,
 ) {
@@ -728,16 +729,17 @@ List<Channel> _channelsFromTemplate(
         interruptExistConnections: false,
       );
 
+  final hasAuto = gt.channel.include.contains('auto');
   final out = <Channel>[];
-  for (final p in presets) {
-    if (p.tag == kAutoOutboundTag) continue;
-    final enabled = p.tag == 'vpn-1'
+  for (final dc in gt.defaultChannels) {
+    final enabled = dc.tag == 'vpn-1'
         ? true
         : (enabledGroupTags.isEmpty
-            ? p.defaultEnabled
-            : enabledGroupTags.contains(p.tag));
-    final auto = p.addOutbounds.contains(kAutoOutboundTag) ? seedAuto() : null;
-    out.add(Channel.seedFromPreset(p, enabled: enabled, auto: auto));
+            ? dc.defaultEnabled
+            : enabledGroupTags.contains(dc.tag));
+    final auto = hasAuto ? seedAuto() : null;
+    out.add(
+        Channel.seedFromDefault(dc, gt.channel, enabled: enabled, auto: auto));
   }
   return out;
 }

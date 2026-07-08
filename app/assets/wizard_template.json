@@ -142,40 +142,32 @@
     "stream_options": [1, 4, 10],
     "default_streams": 4
   },
-  "preset_groups": [
-    {
-      "tag": "@auto_proxy_tag",
+  "group_templates": {
+    "magic_nodes": {
+      "auto": {"title": "Auto", "source": "generate", "tpl": "{parent_tag}-auto"},
+      "direct": {"title": "Direct", "source": "preset", "tag": "direct-out"},
+      "block": {"title": "Block", "source": "preset", "tag": "block"}
+    },
+    "channel": {
+      "type": "selector",
+      "include": ["direct", "auto"],
+      "options": {
+        "interrupt_exist_connections": true
+      }
+    },
+    "auto": {
       "type": "urltest",
-      "label": "Include Auto",
-      "default_enabled": true,
       "options": {
         "url": "@urltest_url",
         "interval": "@urltest_interval",
         "tolerance": "@urltest_tolerance",
         "interrupt_exist_connections": true
-      },
-      "add_outbounds": []
-    },
-    {
-      "tag": "vpn-1",
-      "type": "selector",
-      "label": "VPN ①",
-      "default_enabled": true,
-      "options": {
-        "interrupt_exist_connections": true
-      },
-      "add_outbounds": ["direct-out", "@auto_proxy_tag"]
-    },
-    {
-      "tag": "vpn-2",
-      "type": "selector",
-      "label": "VPN ②",
-      "default_enabled": false,
-      "options": {
-        "interrupt_exist_connections": true
-      },
-      "add_outbounds": ["direct-out", "@auto_proxy_tag"]
+      }
     }
+  },
+  "default_channels": [
+    {"tag": "vpn-1", "label": "VPN ①", "default_enabled": true},
+    {"tag": "vpn-2", "label": "VPN ②", "default_enabled": false}
   ],
   "sections": [
     {
@@ -186,8 +178,7 @@
         { "name": "log_level", "type": "enum", "wizard_ui": "edit", "title": "Log level", "tooltip": "Verbosity of sing-box logs",
           "default_value": "warn",
           "options": ["trace", "debug", "info", "warn", "error", "fatal", "panic"]
-        },
-        {"name": "auto_proxy_tag", "type": "text", "default_value": "✨auto", "wizard_ui": "hidden", "title": "Auto proxy tag", "tooltip": "Internal — tag of the URLTest group. Read-only."}
+        }
       ]
     },
     {

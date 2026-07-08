@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../config/consts.dart' show kDirectOutboundTag;
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
@@ -813,7 +814,7 @@ class _RoutingScreenState extends State<RoutingScreen>
   int _computeInsertIndex(CustomRule newRule) {
     final outbound = _effectiveOutboundOf(newRule);
     if (outbound == kOutboundReject) return 0;
-    if (outbound == 'direct-out') {
+    if (outbound == kDirectOutboundTag) {
       var i = 0;
       while (i < _customRules.length &&
           _effectiveOutboundOf(_customRules[i]) == kOutboundReject) {

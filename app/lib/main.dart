@@ -73,7 +73,7 @@ void main() async {
     // конфига, чтобы билдер (после F1) читал channels[] как source-of-truth.
     // best-effort: ошибка не валит запуск (try выше).
     await SettingsStorage.migrateChannelsIfNeeded(
-        (await TemplateLoader.load()).presetGroups);
+        (await TemplateLoader.load()).groupTemplates);
     // §228 — ремап переименованных preset_id (bittorrent-direct→bittorrent,
     // private-ip-direct→private-ip, block_unknown→unknown-traffic) в
     // сохранённых custom_rules. ДО seed'а дефолтных пресетов и первого билда,
