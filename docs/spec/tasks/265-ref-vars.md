@@ -1,8 +1,9 @@
 # §265 — Ref-vars: переменная по ссылке в пресетах (`{"ref": "<global-var>"}`)
 
-**Статус:** РЕАЛИЗОВАНО (не скомпилировано/не протестировано) — модель (`WizardVar.ref`/`isRef`,
-`WizardTemplate.globalVar`), билдер (`expandPreset` получил `globalVars`, ref-резолв из глобали),
-UI (ref-var скрыт из редактора правила). Первый потребитель — §264 (`resolve_strategy`).
+**Статус:** РЕАЛИЗОВАНО, DEVICE-VERIFIED (CPH2411, 09.07.2026) — ref-vars (`resolve_enabled`/
+`resolve_strategy`) из internal-секции показываются и правятся В ПРЕСЕТЕ, значение в глобальном
+userVars. Модель (`WizardVar.ref`/`isRef`, `WizardTemplate.globalVar`) + билдер (`globalVars`
+в `expandPreset`) + UI (ref bool/enum контролы читают/пишут userVars).
 **Тип:** generic-механизм движка vars (§120) — пресет ссылается на существующую глобальную
 var вместо объявления собственной. Модель + UI-рендер + резолв. Ядро НЕ трогаем.
 **Зависит от:** §120 (typed vars + `#if`-движок, section-vars, flat-namespace).
