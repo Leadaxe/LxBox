@@ -865,7 +865,8 @@ class TrafficProfiler extends ChangeNotifier {
     if (_ccConnSub != null) return;
     // Поднимаем независимый profilerClient (фоновый, §164). Шлёт первый
     // снапшот сразу + далее push'ом — _ingestCcConnections их обработает.
-    unawaited(_cc.connectProfiler());
+    // §259 — через refcount (второй держатель — dns-direct-детектор).
+    unawaited(_cc.acquireProfiler());
     _ccConnSub = _cc.connections.listen(
       _ingestCcConnections,
       // Ошибка стрима (канал недоступен / native не готов) — не валим
@@ -895,7 +896,7 @@ class TrafficProfiler extends ChangeNotifier {
     _ccConnSub = null;
     _ccDnsSub?.cancel(); // §180
     _ccDnsSub = null;
-    unawaited(_cc.disconnectProfiler());
+    unawaited(_cc.releaseProfiler()); // §259 — refcount
   }
 
   /// §168 — обработка снапшота CommandClient connections: эмит tcp/udp

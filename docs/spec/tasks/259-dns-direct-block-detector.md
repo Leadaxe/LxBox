@@ -1,13 +1,13 @@
 # §259 — детектор «DNS глушится на direct-маршруте» + попап выбора резолвера
 
-> **СТАТУС: СОГЛАСОВАНО, готово к реализации** (08.07.2026). Родился из
-> разбора жалобы пользователя 4PDA (Билайн, «режим БС»): на мобильной сети
-> сайты не открываются, хотя пинг есть; лечится ручным заворотом DNS в VPN.
-> Формула детектора выверена по коду ядра. Device-пункт §7.1 (значение
-> `outbound` на живом баге) — **не блокер**: формула корректна при обоих
-> исходах (`пусто` ИЛИ `direct` → is_direct); снять оппортунистически, когда
-> появится доступ к затронутой сети (у владельца Билайн-устройства нет —
-> баг известен со слов пользователя).
+> **СТАТУС: РЕАЛИЗОВАНО** (08.07.2026), НЕ device-verified. Родился из разбора
+> жалобы пользователя 4PDA (Билайн, «режим БС»): на мобильной сети сайты не
+> открываются, хотя пинг есть; лечится ручным заворотом DNS в VPN. Формула
+> детектора выверена по коду ядра; реализация прошла adversarial-ревью
+> (6 lifecycle-багов закрыто). Device-пункт §7.1 (значение `outbound` на живом
+> баге) — **не блокер**: формула корректна при обоих исходах (`пусто` ИЛИ
+> `direct` → is_direct); снять оппортунистически при доступе к затронутой сети
+> (у владельца Билайн-устройства нет — баг известен со слов пользователя).
 
 ## Проблема (реальный кейс, пользователь 4PDA, сеть Билайн)
 
@@ -88,7 +88,7 @@ DNS оператору всем Wi-Fi-пользователям). Вместо 
 ### Итоговая формула
 
 ```
-# окно 6 секунд после TunnelStatus.connected, слушаем CcDnsQuery-поток
+# окно ≤10с после TunnelStatus.connected, слушаем CcDnsQuery-поток
 
 is_direct    = q.outbound пуст  ИЛИ  любой tag в q.outbound содержит "direct"
                  # server.Detour == "" → outbound пуст → это direct (дефолт)
@@ -98,25 +98,51 @@ is_glush     = q.source == "failed" && q.rcode == -1 &&
                q.error НЕ содержит ("loopback" | "rejected")
                  # rcode==-1 = RcodeNoAnswer (нет ответа): timeout/network/
                  # loopback/rejected-cached. Два локальных отказа отсеиваем по
-                 # имени (тексты стабильны, заданы в client.go:214/221) —
-                 # остаётся реальный сетевой облом (что нам и нужно).
+                 # имени (тексты стабильны, заданы в client.go:214/221).
 
-# аккумуляция за окно:
-fail_domains = { q.domain : is_glush && is_direct }        # SET по домену
-success_any  = ∃ q : q.source ∈ {"exchanged","refreshed"} && q.rcode == 0
-                 # is_live нужен ТОЛЬКО здесь: отсекает cached/optimistic
-                 # (старый успех из кэша, который замаскировал бы живой провал)
+is_live_ok   = q.source ∈ {"exchanged","refreshed"} && q.rcode == 0
+                 # живой успех (НЕ cached/optimistic)
 
-# решение по закрытию окна:
-success_any                            → DNS жив, молчим
-|fail_domains| >= 2  &&  !success_any  → dnsDirectBlocked = true → баннер
-иначе                                  → молчим (мало данных / туннель виноват)
+# аккумуляция за окно (дедуп по домену):
+fail_domains  = { q.domain : is_glush && is_direct }        # мёртвые direct
+ok_direct     = { q.domain : is_live_ok && is_direct }      # живые direct
+total_direct  = fail_domains ∪ ok_direct                    # ТОЛЬКО direct
+
+# ВЕРДИКТ:
+blocked = |fail_domains| >= 3
+          && |fail_domains| / |total_direct| > 0.30
 ```
 
-**Почему set по домену, а не счётчик событий**: один мёртвый домен даёт 2
-события (A + AAAA), оба `rcode==-1`. Порог по событиям выстрелил бы от
-полутора доменов. `|fail_domains| >= 2` = минимум два РАЗНЫХ мёртвых домена
-при нуле успехов — консервативно, против ложных тревог.
+**Порог + доля, а не «нет успехов» (ключевое для белых списков).** Оператор
+глушит НУЖНОЕ выборочно; разрешённые домены (yandex) резолвятся успешно —
+успехи и провалы идут вперемешку через один direct-сервер. Старое
+`success_any → молчим` тут промолчало бы (yandex-успех есть), пропустив баг.
+Разделитель фона (реклама/аналитика законно дохнет) от глушения — **доля
+мёртвых среди direct-доменов**. Знаменатель — ТОЛЬКО direct: VPN-домены
+работают by design и размыли бы долю.
+
+**Дедуп по домену** (set, не счётчик): A + AAAA одного домена = 1 (оба
+`rcode==-1`), иначе порог брался бы от «полутора» доменов.
+
+**«3 из 3» = тревога** (100% direct мертво, ничего живого) — согласовано: наш
+баг в чистом виде.
+
+### Ранний выход (тайминг)
+
+Окно 10с — **потолок**, не фиксированная задержка:
+- **ранний успех**: `≥20 живых успехов && 0 мёртвых direct` → сеть чиста,
+  закрываем окно немедленно, гасим profilerClient (не держим зря);
+- **ранний вердикт**: как только `blocked` истинно на приходящем событии —
+  закрываем и показываем баннер, не досиживая до 10с;
+- иначе — досиживаем до потолка.
+
+### Точные поля `CcDnsQuery` (`cc_channel.dart:560-647`)
+`domain`, `source` (exchanged/cached/optimistic/refreshed/rejected/failed),
+`rcode` (signed; `-1` = нет ответа), `failed`, `error`, `outbound` (List).
+Все нужные поля уже есть — правок ядра/Kotlin/модели НЕ требуется.
+
+> Гейт по трафику («>N байт прошло за сессию») обсуждался, отложен владельцем —
+> формула точку расширения оставляет (добавить условие в `DnsDirectStats.blocked`).
 
 ### Точные поля `CcDnsQuery` (`cc_channel.dart:560-647`)
 `domain`, `source` (exchanged/cached/optimistic/refreshed/rejected/failed),
@@ -136,66 +162,64 @@ success_any                            → DNS жив, молчим
 | Флаг состояния | `models/home_state.dart` | `final bool dnsDirectBlocked` (default false) + в `copyWith` (образец: `configChangedNeedRestart`) |
 | Сброс флага | `home_controller.dart` | при новом старте и disconnect → `dnsDirectBlocked: false` |
 
-### ⚠️ Тонкость: profilerClient (рефкаунт)
+### profilerClient — рефкаунт (реализовано)
 
 §180 DNS-события из ядра идут только когда **поднят profilerClient**
 (`ccConnectProfiler` включает native `subscribeDNSQueries`). `dnsQueries` —
 broadcast-поток; `.listen()` безопасен, но если профайлер не активен —
-**событий не будет** и детектор ослепнет.
+событий не будет. Второй держатель — `traffic_profiler`.
 
-`connectProfiler`/`disconnectProfiler` (`cc_channel.dart:172`) — **без
-рефкаунта на Dart-стороне**. Наивный `disconnectProfiler()` в конце окна
-оборвёт подписку активному профайлеру (открытый экран Profiler).
+Реализация: `CcChannel.acquireProfiler()`/`releaseProfiler()` — refcount
+(native `connectProfiler` на 0→1, `disconnectProfiler` на 1→0).
+`traffic_profiler` мигрирован на них. Детектор держит свой ref на время окна,
+не оборвав активный профайлер.
 
-**Требование**: детектор поднимает profilerClient на время окна и опускает
-его, ТОЛЬКО если поднял сам (профайлер-экран не был активен). Реализовать
-простой рефкаунт/флаг «profiler держится детектором» в `CcChannel` или мьютекс
-на уровне контроллера. Не оборвать `traffic_profiler`.
+### Lifecycle-фиксы (adversarial-ревью)
 
-## Встраивание — UI (баннер + bottom sheet)
+Ревью нашло **race двойного `connected`** без промежуточного disconnect
+(cold-reopen swipe-keep: live Started-broadcast + pull `getVpnStatus`):
+второй запуск окна двойным acquire утекал profiler-ref и осиротял sub/timer
+(флаг `held` ставился ПОСЛЕ `await acquireProfiler`).
 
-Система баннеров — `screens/home/widgets/app_banner.dart`.
+Фикс: **generation-токен** `_dnsDetectGen`. Каждый запуск инкрементит его и
+захватывает свой `gen`; все continuation'ы после await и таймер-callback'и
+проверяют `gen == _dnsDetectGen` — устаревший освобождает ровно свой ref и
+выходит. Ровно одно активное окно. Свой ref считается отдельно
+(`_dnsDetectHeldRefs`, 0/1) — симметрия acquire/release без ухода в минус.
 
-**Баннер** (в `activeBanners()`, перед `return`):
+## Встраивание — UI (разовый нижний баннер)
+
+Баннер — **разовый, снизу**, НЕ через верхний `activeBanners`-стек.
+
+**Механика разовости**: флаг `dnsDirectBlocked` — триггер-событие, не
+залипающее состояние. `home_screen._onControllerChange` ловит edge
+`false→true`, **сразу** зовёт `consumeDnsDirectBlocked()` (гасит флаг) и
+показывает баннер. Флаг живёт от вердикта до показа (миллисекунды).
+
+> Это попутно закрывает ревью-находки «флаг застрял true при reloadVpn / смене
+> сети без рестарта» — раньше флаг сбрасывался только в connected/disconnected,
+> минуя `reloadVpn`/`resetNetwork` (§030). Как триггер он не залипает вовсе.
+
+**UX (согласовано с владельцем)** — `dns_direct_blocked_sheet.dart`:
 ```
-if (s.dnsDirectBlocked) → AppBanner(
-  key: 'dns_direct_blocked',
-  message: 'DNS not responding on this network — tap to fix',
-  icon: Icons.dns_outlined,
-  palette: BannerPalette.warning,
-  onTap: a.onDnsBlockedHelp,   // новый колбэк в BannerActions
-)
+компактный баннер снизу:  ⚠ DNS problems detected   [Hide]
+   │ тап                  │ 5с без действий / [Hide]
+   ▼                      ▼
+детальный лист            исчез СОВСЕМ (разовый; в сессию больше не появится)
+(выезжает снизу вверх):
+  ⚠ DNS server not reachable
+  <пояснение>
+  [ Route DNS through VPN ]   (recommended)
+  [ Use operator's DNS ]
+  [ Not now ]
 ```
-`BannerActions` (`app_banner.dart:46`) — добавить `onDnsBlockedHelp`;
-прокинуть из `home_controls.dart` (открывает bottom sheet).
+- компактный баннер: авто-скрытие 5с ИЛИ тап `Hide` → закрыт;
+- тап по баннеру → детальный лист с двумя действиями;
+- разовый: показан один раз при вердикте, потом не возвращается в эту сессию
+  (детектор перезапустится на следующем старте VPN).
 
-**Bottom sheet** — образец `screens/home/widgets/detour_cycle_sheet.dart`
-(ручка-handle + header + `showModalBottomSheet(isScrollControlled:true)`):
-
-```
-────────── ручка ──────────
-⚠  DNS server not reachable
-
-Your operator seems to block direct DNS queries on this
-network. Choose how to resolve names:
-
-┌────────────────────────────────────────────┐
-│  Route DNS through VPN        (recommended) │  → действие 1
-└────────────────────────────────────────────┘
-  Queries go inside the tunnel — private, and
-  works past the operator's block.
-
-┌────────────────────────────────────────────┐
-│  Use operator's DNS                         │  → действие 2
-└────────────────────────────────────────────┘
-  Works everywhere, but your operator sees
-  every domain you visit.
-
-              [ Not now ]
-```
-
-> Тексты — черновик (English-only по правилу проекта). Отшлифовать при
-> реализации; §NNN в видимые строки НЕ писать.
+> Тексты — черновик (English-only по правилу проекта). §NNN в видимые строки
+> НЕ писать.
 
 ## Действия кнопок
 

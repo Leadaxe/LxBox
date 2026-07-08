@@ -97,5 +97,15 @@ void main() {
       expect(list.map((b) => b.key).toList(),
           ['restart', 'config_load_error']);
     });
+
+    test('§259 — dnsDirectBlocked НЕ даёт верхнюю плашку (баннер идёт снизу)',
+        () {
+      // §259 рисует свой разовый баннер СНИЗУ (не через activeBanners).
+      final s = HomeState(
+        tunnel: TunnelStatus.connected,
+        dnsDirectBlocked: true,
+      );
+      expect(keys(s), isEmpty);
+    });
   });
 }
