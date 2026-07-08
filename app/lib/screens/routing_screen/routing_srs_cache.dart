@@ -50,6 +50,23 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     _template = template;
 
     await _seedDefaultPresets(template);
+
+    // §264 — нормализация pinned-пресетов на UI/storage-уровне. `_seedDefaultPresets`
+    // сидит дефолты только при первой установке (`hasDefaultsSeeded` guard); у
+    // существующих юзеров новый locked+pinned пресет (traffic-processing) НЕ
+    // засеется и не появится в списке правил, хотя билдер добавляет его правила
+    // в route.rules на лету. Нормализуем здесь: докидываем недостающий pinned +
+    // ставим первым; если список изменился — персистим (закрепляем в storage,
+    // чтобы пресет видели все потребители: Routing UI, Debug API /rules, DNS-экран).
+    final normalized =
+        normalizePinnedPresets(_customRules, template.selectableRules, template);
+    if (!_sameRuleOrder(normalized, _customRules)) {
+      _customRules
+        ..clear()
+        ..addAll(normalized);
+      await SettingsStorage.saveCustomRules(_customRules);
+    }
+
     await _refreshSrsCache();
 
     setState(() {
@@ -125,6 +142,17 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     // Не критично по времени, не влияет на UI — unawaited'им.
     unawaited(RuleSetDownloader.pruneOrphans(activeDiskIds));
     if (changed) _markDirty();
+  }
+
+  /// §264 — совпадают ли два списка правил по порядку и составу (по `id`).
+  /// Чтобы не персистить, когда нормализация ничего не изменила (pinned уже
+  /// на месте) — избегаем лишней записи в storage на каждом открытии экрана.
+  bool _sameRuleOrder(List<CustomRule> a, List<CustomRule> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id) return false;
+    }
+    return true;
   }
 
   /// Fresh-install seed: засеять `_customRules` из `template.selectableRules`

@@ -7,6 +7,7 @@ import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
+import '../services/builder/normalize_pinned_presets.dart';
 import '../services/rule_set_downloader.dart';
 import '../services/selectable_to_custom.dart';
 import '../services/settings_storage.dart';
