@@ -557,6 +557,14 @@ class CustomRuleEditController extends ChangeNotifier {
     final p = preset;
     if (p == null) return false;
 
+    // §265 — ref-var пишется в ГЛОБАЛЬНЫЙ userVars, не в varsValues пресета.
+    // UI-слой (bool-case) уже роутит ref через setGlobalVar до вызова, но
+    // guard на случай прямого вызова: не даём ref-значению утечь в varsValues.
+    if (v.isRef) {
+      await setGlobalVar(v.ref, val ? 'true' : 'false');
+      return false;
+    }
+
     if (!val) {
       _varsValues[v.name] = 'false';
       notifyListeners();

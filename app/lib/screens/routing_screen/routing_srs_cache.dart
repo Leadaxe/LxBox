@@ -33,7 +33,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     // из template, чтобы экран не был пустым.
     final stored = await SettingsStorage.getChannels();
     if (stored.isEmpty) {
-      await SettingsStorage.migrateChannelsIfNeeded(template.presetGroups);
+      await SettingsStorage.migrateChannelsIfNeeded(template.groupTemplates);
       _channels.addAll(await SettingsStorage.getChannels());
     } else {
       _channels.addAll(stored);
@@ -51,6 +51,14 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
 
     await _seedDefaultPresets(template);
 
+    // §265/§266 — вычистить осиротевшие ref-var значения из varsValues пресетов
+    // (напр. resolve_enabled застряла в varsValues с тех пор, как была обычной
+    // preset-var — теперь ref, значение в userVars). Иначе subtitle/Debug API
+    // показывают неверное значение из varsValues.
+    final stripped =
+        stripRefVarsFromVarsValues(_customRules, template.selectableRules);
+    final strippedChanged = !identical(stripped, _customRules);
+
     // §264 — нормализация pinned-пресетов на UI/storage-уровне. `_seedDefaultPresets`
     // сидит дефолты только при первой установке (`hasDefaultsSeeded` guard); у
     // существующих юзеров новый locked+pinned пресет (traffic-processing) НЕ
@@ -59,8 +67,9 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     // ставим первым; если список изменился — персистим (закрепляем в storage,
     // чтобы пресет видели все потребители: Routing UI, Debug API /rules, DNS-экран).
     final normalized =
-        normalizePinnedPresets(_customRules, template.selectableRules, template);
-    if (!_sameRuleOrder(normalized, _customRules)) {
+        normalizePinnedPresets(stripped, template.selectableRules, template);
+    final orderChanged = !_sameRuleOrder(normalized, _customRules);
+    if (strippedChanged || orderChanged) {
       _customRules
         ..clear()
         ..addAll(normalized);

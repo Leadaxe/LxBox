@@ -73,3 +73,47 @@ List<CustomRule> normalizePinnedPresets(
 
   return [...head, ...tail];
 }
+
+/// §265/§266 — вычистить ref-var значения из `varsValues` пресетов.
+///
+/// Ref-var (`{"ref": name}`) хранит значение в ГЛОБАЛЬНОМ userVars, НЕ в
+/// varsValues. Но при переезде обычной preset-var в ref (напр. `resolve_enabled`
+/// стала ref в §265) старое значение остаётся в varsValues осиротевшим — и
+/// subtitle/Debug API/любой varsValues-читатель показывает застрявшее неверное
+/// значение (resolve_enabled: true, когда глобаль уже false).
+///
+/// Проходим по каждому preset-правилу: если в его varsValues есть ключ, который
+/// в шаблоне объявлен как ref-var, — удаляем. Возвращает новый список (или тот
+/// же, если чистить нечего — вызывающий сравнивает и персистит только при
+/// изменении). Идемпотентна.
+List<CustomRule> stripRefVarsFromVarsValues(
+  List<CustomRule> customRules,
+  List<SelectableRule> selectableRules,
+) {
+  // presetId → множество имён ref-vars этого пресета.
+  final refNamesByPreset = <String, Set<String>>{};
+  for (final sr in selectableRules) {
+    final refs = {for (final v in sr.vars) if (v.isRef) v.ref};
+    if (refs.isNotEmpty) refNamesByPreset[sr.presetId] = refs;
+  }
+  if (refNamesByPreset.isEmpty) return customRules;
+
+  var changed = false;
+  final out = <CustomRule>[];
+  for (final cr in customRules) {
+    if (cr is CustomRulePreset) {
+      final refs = refNamesByPreset[cr.presetId];
+      if (refs != null && cr.varsValues.keys.any(refs.contains)) {
+        final cleaned = {
+          for (final e in cr.varsValues.entries)
+            if (!refs.contains(e.key)) e.key: e.value,
+        };
+        out.add(cr.copyWith(varsValues: cleaned));
+        changed = true;
+        continue;
+      }
+    }
+    out.add(cr);
+  }
+  return changed ? out : customRules;
+}

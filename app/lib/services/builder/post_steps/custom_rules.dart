@@ -111,6 +111,11 @@ bool presetDnsEnableVar(CustomRulePreset cr, SelectableRule preset) {
     }
   }
   if (declared == null) return true;
+  // §265 — если dns_enable вдруг объявлена как ref-var, её значение в
+  // глобальном userVars, НЕ в varsValues. Здесь (билдер) userVars не читаем —
+  // возвращаем default, чтобы не взять застрявшее varsValues-значение. Сейчас
+  // dns_enable у всех пресетов — обычная var, ветка defensive.
+  if (declared.isRef) return true;
   final explicit = cr.varsValues['dns_enable'];
   if (explicit != null && explicit.isNotEmpty) return explicit == 'true';
   final def = declared.defaultValue;
