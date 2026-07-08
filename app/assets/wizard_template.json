@@ -933,7 +933,6 @@
     "route": {
       "find_process": true,
       "default_domain_resolver": "@dns_default_domain_resolver",
-      "//": "§264 — sniff/hijack-dns/resolve переехали в locked-пресет traffic-processing (pinned:0 → они первые в route.rules; sniff обязан быть первым). НЕ добавлять базовые правила сюда — они придут из пресета.",
       "rules": [],
       "final": "vpn-1",
       "auto_detect_interface": "@auto_detect_interface"
