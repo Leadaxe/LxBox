@@ -44,9 +44,11 @@ wizard_template ~L365) И в route-resolve правиле. Пресет Traffic 
 - **Storage — глобальный.** Ref-var читает/пишет `settings.userVars[<ref>]`, НЕ
   `rule.varsValues`. Единый источник значения: правка в UI пресета = правка глобали. И
   `config.dns.strategy`, и route-правило пресета видят одно значение.
-- **UI.** В редакторе правила (`preset_params_tab.dart`) ref-var рисуется контролом целевой
-  глобали (напр. enum-picker). Onchange пишет в userVars (через `SettingsStorage.setVar`), не в
-  `CustomRulePreset.varsValues`.
+- **UI.** В редакторе правила (`preset_params_tab.dart`) ref-var ПОКАЗЫВАЕТСЯ контролом целевой
+  глобали (напр. enum-picker resolve_strategy). Контроллер резолвит определение глобали в
+  `refVarDefs` (`_loadVpnMode` → `template.globalVar`); контрол берёт метаданные оттуда, значение
+  читает из `globalVars[ref]`, пишет через `setGlobalVar` → `SettingsStorage.setVar` (глобальный
+  userVars), НЕ в `varsValues`. Битая ссылка (нет глобали) → var пропускается.
 - **Expansion.** `@<ref>` в route-правиле пресета резолвится из flat-`vars` штатно — значение
   уже в userVars → в flat-vars (`build_config.dart:108`). Ref-var в `preset_expand`
   varsValues-подстановке НЕ участвует (значения нет в varsValues).
