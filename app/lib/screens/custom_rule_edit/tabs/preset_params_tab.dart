@@ -165,20 +165,26 @@ class PresetParamsTab extends StatelessWidget {
         Row(
           children: [
             Expanded(
+              // §264 — имя пресета read-only: это snapshot `preset.label` из
+              // шаблона (🔒, STORAGE §030), юзер его не правит. Раньше поле было
+              // редактируемым — рассинхрон с label. Пресеты сюда попадают всегда,
+              // поэтому readOnly безусловно.
               child: TextField(
                 controller: c.nameCtrl,
+                readOnly: true,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   labelText: 'Name',
                   isDense: true,
-                  prefixIcon: Icon(Icons.label_outline, size: 18),
+                  prefixIcon: Icon(Icons.lock_outline, size: 18),
                 ),
               ),
             ),
             const SizedBox(width: 8),
             Switch(
               value: c.enabled,
-              onChanged: c.setEnabled,
+              // §264 — locked-пресет нельзя выключить (disabled и в редакторе).
+              onChanged: preset.locked ? null : c.setEnabled,
             ),
           ],
         ),
