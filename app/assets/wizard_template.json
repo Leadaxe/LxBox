@@ -250,12 +250,10 @@
         {"name": "tun_address", "type": "text", "default_value": "172.16.0.1/30", "wizard_ui": "edit", "title": "IPv4 address", "tooltip": "TUN interface address (CIDR)"},
         { "name": "ipv6_enabled", "type": "bool", "wizard_ui": "edit", "title": "Enable IPv6", "tooltip": "Add an IPv6 address to the tunnel. Off by default — turn on only if your network has working IPv6. Turning on sets resolution to prefer IPv4, turning off forces IPv4-only — you can change the strategy in DNS Settings.",
           "default_value": "false",
-          "on_change": {
-            "set": {
+          "on_change": { "set": {
               "@dns_strategy": {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv4", "else": "ipv4_only"}},
               "@resolve_strategy": {"#if": {"and": ["@ipv6_enabled"], "value": "prefer_ipv4", "else": "ipv4_only"}}
-            }
-          }
+          }}
         },
         {"name": "tun_address6", "type": "text", "default_value": "fdfe:dcba:9876::1/126", "wizard_ui": "edit", "title": "IPv6 address", "tooltip": "TUN interface IPv6 address (CIDR). Applied only when Enable IPv6 is on."},
         {"name": "route_address_enable", "type": "bool", "default_value": "false", "wizard_ui": "edit", "title": "Custom tunnel routes", "tooltip": "Route all IPv4 and IPv6 through the tunnel via explicit half-ranges instead of sing-box defaults. Off by default — turn on only if the default routing misbehaves."},
@@ -381,7 +379,7 @@
           "default_value": "300ms",
           "options": ["100ms", "300ms", "500ms", "1s", "3s"]
         },
-        {"name": "hijack_dns_enabled", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Hijack DNS", "tooltip": "Route all DNS queries through the tunnel's DNS engine. WARNING: turning this off disables FakeIP and all DNS rules — apps query their own DNS directly, uncontrolled. Keep on unless you know exactly why."},
+        {"name": "hijack_dns_enabled", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Hijack DNS", "tooltip": "Route all DNS queries through the tunnel's DNS engine.\n⚠️ WARNING: turning this off disables FakeIP and all DNS rules — apps query their own DNS directly, uncontrolled. Keep on unless you know exactly why."},
         {"ref": "resolve_enabled"},
         {"ref": "resolve_strategy"}
       ],
@@ -483,19 +481,15 @@
       "vars": [
         { "name": "rule_enable", "type": "bool", "wizard_ui": "hidden", "required": false,
           "default_value": "true",
-          "on_change": {
-            "set": {
+          "on_change": { "set": {
               "@resolve_enabled": {"#if": {"and": ["@rule_enable", "@dns_enable"], "value": "false", "else": "true"}}
-            }
-          }
+          }}
         },
         { "name": "dns_enable", "type": "bool", "title": "DNS", "tooltip": "Apply this preset's FakeIP DNS handling. Turn off to disable FakeIP without removing the preset.",
           "default_value": "true",
-          "on_change": {
-            "set": {
+          "on_change": { "set": {
               "@resolve_enabled": {"#if": {"and": ["@rule_enable", "@dns_enable"], "value": "false", "else": "true"}}
-            }
-          }
+          }}
         },
         {"name": "dns_server", "type": "dns_servers", "default_value": "fakeip", "wizard_ui": "hidden", "title": "FakeIP server", "tooltip": "The FakeIP allocator. Internal — bound to the fakeip DNS server."},
         {"name": "force", "type": "bool", "default_value": "true", "title": "Block HTTPS records", "tooltip": "Reply empty to HTTPS/SVCB DNS records (RFC 9460) so apps fall back to plain A/AAAA. Keeps these queries from leaking to the fallback DNS."}
