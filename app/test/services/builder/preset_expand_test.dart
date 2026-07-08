@@ -804,7 +804,7 @@ void main() {
     test('SelectableRule.fromJson: rule-массив нормализуется в rules', () {
       final sr = SelectableRule.fromJson({
         'preset_id': 'x',
-        'label': 'X',
+        'ui': {'label': 'X'},
         'rule': [
           {'rule_set': 'a', 'action': 'resolve', 'strategy': 'ipv4_only'},
           {'rule_set': 'a', 'outbound': 'direct-out'},
@@ -818,7 +818,7 @@ void main() {
         'как в шаблоне ru-direct', () {
       final sr = SelectableRule.fromJson({
         'preset_id': 'x',
-        'label': 'X',
+        'ui': {'label': 'X'},
         'rules': [
           {'rule_set': 'a', 'action': 'resolve', 'strategy': 'ipv4_only'},
           {'rule_set': 'a', 'outbound': 'direct-out'},
@@ -833,7 +833,7 @@ void main() {
     test('SelectableRule.fromJson: legacy Map → один элемент rules', () {
       final sr = SelectableRule.fromJson({
         'preset_id': 'x',
-        'label': 'X',
+        'ui': {'label': 'X'},
         'rule': {'rule_set': 'a', 'outbound': 'direct-out'},
       });
       expect(sr.rules.single, {'rule_set': 'a', 'outbound': 'direct-out'});
@@ -842,7 +842,7 @@ void main() {
 
     test('SelectableRule.fromJson: rule отсутствует → rules пуст, '
         'terminalRule пустой Map', () {
-      final sr = SelectableRule.fromJson({'preset_id': 'x', 'label': 'X'});
+      final sr = SelectableRule.fromJson({'preset_id': 'x', 'ui': {'label': 'X'}});
       expect(sr.rules, isEmpty);
       expect(sr.terminalRule, isEmpty);
     });
@@ -1053,7 +1053,7 @@ void main() {
         'legacy dns_rule (Map) — тоже', () {
       final fromList = SelectableRule.fromJson({
         'preset_id': 'x',
-        'label': 'X',
+        'ui': {'label': 'X'},
         'dns_rules': [
           {'rule_set': 'a', 'server': 's'},
           {'rule_set': 'a', 'action': 'predefined'},
@@ -1064,7 +1064,7 @@ void main() {
 
       final fromMap = SelectableRule.fromJson({
         'preset_id': 'x',
-        'label': 'X',
+        'ui': {'label': 'X'},
         'dns_rule': {'rule_set': 'a', 'server': 's'},
       });
       expect(fromMap.dnsRules.length, 1);
@@ -1075,7 +1075,7 @@ void main() {
         () {
       final r = SelectableRule.fromJson({
         'preset_id': 'x',
-        'label': 'X',
+        'ui': {'label': 'X'},
         'dns_rule': {'rule_set': 'legacy', 'server': 's'},
         'dns_rules': [
           {'rule_set': 'a', 'server': 's'},

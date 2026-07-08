@@ -95,11 +95,17 @@ PresetFragments expandPreset(
   CustomRulePreset rule,
   SelectableRule preset, {
   Map<String, String> srsPaths = const {},
+  Map<String, String> globalVars = const {},
 }) {
   final warnings = <String>[];
 
   final varsMap = <String, dynamic>{};
   for (final v in preset.vars) {
+    // §265 — ref-var: значение НЕ в rule.varsValues (оно в глобальном
+    // userVars). Локальный varsMap пресета его не несёт: `@<ref>` в правилах
+    // пресета резолвится позже из flat-vars build_config'а (globalVars,
+    // передаются отдельно — см. параметр globalVars ниже).
+    if (v.isRef) continue;
     // Семантика (spec §033):
     // - varsValues содержит ключ → юзер явно выбрал значение (включая "")
     //     - непустое → используется
@@ -132,6 +138,17 @@ PresetFragments expandPreset(
     } else {
       varsMap[v.name] = null;
     }
+  }
+
+  // §265 — ref-vars: подмешиваем значение из глобального userVars по имени
+  // (globalVars) в локальный varsMap, чтобы `@<ref>` в правилах пресета
+  // резолвился глобальным значением (напр. `@resolve_strategy` в route-resolve
+  // = та же настройка, что и `config.dns.strategy`). Пустое/отсутствующее →
+  // null (фрагмент с `@ref` выпадет, как optional-var).
+  for (final v in preset.vars) {
+    if (!v.isRef) continue;
+    final gv = globalVars[v.ref];
+    varsMap[v.name] = (gv != null && gv.isNotEmpty) ? gv : null;
   }
 
   final expandedRuleSets = <Map<String, dynamic>>[];

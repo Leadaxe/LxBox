@@ -71,8 +71,13 @@ class PresetParamsTab extends StatelessWidget {
 
     // Hidden-vars (wizard_ui: hidden) не редактируются юзером — их значение
     // приходит из default_value при раскрытии пресета. Из редактора исключаем.
-    final visibleVars =
-        preset.vars.where((v) => v.wizardUI != 'hidden').toList();
+    // §265 — ref-vars тоже исключаем: их значение глобальное (userVars),
+    // юзер правит его в секции-владельце (напр. resolve_strategy в Network →
+    // VPN Settings), не в редакторе правила. Здесь показывать нечего —
+    // per-preset varsValues их не хранит.
+    final visibleVars = preset.vars
+        .where((v) => v.wizardUI != 'hidden' && !v.isRef)
+        .toList();
 
     return ListView(
       padding: EdgeInsets.fromLTRB(

@@ -474,7 +474,7 @@ builder/                     # NodeSpec + template → sing-box config
   validator.dart             #   validateConfig: dangling refs, empty urltest → ValidationResult
   post_steps.dart            #   barrel (part): шесть post-обработок ниже
   post_steps/tls_transforms.dart  #   applyMixedCaseSni + applyTlsFragment (§028)
-  post_steps/custom_rules.dart    #   applyAllCustomRules (preset/inline/srs в storage order, §062)
+  post_steps/custom_rules.dart    #   applyAllCustomRules (preset/inline/srs в storage order, §062; pinned-пресеты §264 нормализуются в начало через normalize_pinned_presets)
   post_steps/dns_rules.dart       #   applyCustomDns / resolveDnsRulesList (§061+§033)
   post_steps/dns_servers.dart     #   resolveDnsServersList/Bodies (§043+§044)
   post_steps/heal_dangling_detours.dart # §172 healDanglingDetours: detour∉allTags снимается (warning),

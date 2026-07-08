@@ -2,12 +2,18 @@
 
 **Статус:** Реализовано, device-verified (CPH2411, 08.07.2026) — FakeIP + resolve_enabled=false
 на холодном рестарте: `router: lookup` в чёрную дыру пропали, трафик держится на fake-IP.
+**SUPERSEDED §264** — `resolve_enabled` переехал из секции Network в locked-пресет
+`traffic-processing` (собственной var пресета). Механика `#if`-гейта та же — правило `resolve`
+теперь живёт в пресете `traffic-processing` под своим `#if @resolve_enabled`, а var объявлена
+внутри пресета, а не в секции Network. См. [264-traffic-processing-preset.md](264-traffic-processing-preset.md).
 **Зависит от:** §120 (декларативный `#if`-шаблон), §246/§253 (Force IPv4 на route-resolve),
 пресет FakeIP (§228 + §дополнение HTTPS/SVCB-глушилки).
 **Файлы:** `assets/wizard_template.json` (var-декларация + обёртка правила). Кода в
 билдере/storage/UI НЕ добавлялось — var подхватывается существующим механизмом
-section-vars.
-**Тип:** новая настройка ядра (bool-var в секции Network / chapter `core`).
+section-vars. (Историческое: после §264 var+правило `resolve` перенесены в пресет
+`traffic-processing`.)
+**Тип:** новая настройка ядра (bool-var в секции Network / chapter `core`). _Историческое —_
+_после §264 var переехала в locked-пресет `traffic-processing` (собственная var пресета)._
 
 ---
 
@@ -35,6 +41,11 @@ FakeIP-стора). `resolve inbound:tun-in` форсит настоящий р�
 По аналогии с `@sniff_enabled` (§120) — bool-var `resolve_enabled` в секции Network
 (chapter `core` = VPN Settings → Core), гейтящий глобальное resolve-правило через `#if`.
 
+> _Историческое (до §264):_ здесь описано исходное размещение var в секции Network.
+> После §264 `resolve_enabled` объявлена внутри locked-пресета `traffic-processing`
+> (собственная var пресета), а не в секции Network; сам `#if`-гейт правила `resolve`
+> не изменился.
+
 - `default_value: "true"` → поведение по умолчанию не меняется (правило остаётся для всех
   существующих конфигов; GeoIP-роутинг и Force IPv4 работают как раньше).
 - Выключить → правило выпадает (`#if`-walker дропает array-element при false, как у sniff).
@@ -47,6 +58,10 @@ section-var с `wizard_ui: "edit"` рендерится тумблером че�
 `settings_screen.dart`. Нового кода не требуется.
 
 ## 2. Изменения в шаблоне
+
+> _Историческое (до §264):_ ниже — исходное размещение var в секции `Network`.
+> После §264 var перенесена в пресет `traffic-processing`, а обёрнутое правило `resolve`
+> переехало из `config.route.rules` в тело того же пресета (см. 264).
 
 **Var** (секция `Network`, chapter `core`, после `sniff_enabled`):
 

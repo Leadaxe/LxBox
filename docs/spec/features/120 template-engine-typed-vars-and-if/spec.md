@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Реализовано (Часть 1+2 + §119-миграция); template-load-валидация `#if` — отдельным шагом |
+| Статус | Реализовано (Часть 1+2 + §119-миграция + §264 traffic-processing preset + §265 ref-vars); template-load-валидация `#if` — отдельным шагом |
 | Дата старта | 2026-06-22 |
 | Связанные spec'ы | [`026 parser v2`](../026%20parser%20v2/spec.md) — var-substitution pipeline живёт здесь; [`119 vpn-mode`](../119%20vpn-mode/spec.md) — `applyVpnMode` поглощается `#if`, `tun-in`/`mixed-in` уходят в шаблон; [`033 preset bundles`](../033%20preset%20bundles/spec.md) — `selectable_rules[].vars`, существующий `enabled:"@var"`-гейтинг поглощается `#if`; [`045 tls ech`](../045%20tls%20ech/spec.md) — ввёл `enabled:"@var"` convention в `preset_expand`; [`046 tunnel apps split-tunneling`](../046%20tunnel%20apps%20split-tunneling/spec.md) — `applyTunPackages` ищет `tun-in` в готовом `inbounds[]`, фазовая зависимость с `#if` |
 | Прообраз | singbox-launcher `SPECS/067-F-N-TEMPLATE_EXPRESSIONS` — десктопный Go-движок; берём **дизайн** (`#if`, predicates, naming-дисциплина `#`/`@`/bare), НЕ код и НЕ формат шаблона |
@@ -146,6 +146,48 @@ dynamic coerceVarValue(String raw, String type) {
 совместимость не требуется (решено с заказчиком): старые сохранённые значения
 читаются тем же `userVars[name]`, просто теперь коэрсятся по `node.type`, а не по
 содержимому. В состоянии хранится **только значение**; вся типизация — из шаблона.
+
+### Ref-vars (§265)
+
+Var-запись в `vars[]` может быть не декларацией, а **ссылкой** на уже
+объявленную глобальную var:
+
+```jsonc
+{ "ref": "resolve_strategy" }
+```
+
+**Семантика.** Это не новый тип var, а **generic-механизм переиспользования**:
+запись `{"ref":"<global-name>"}` не несёт собственных метаданных — `type` /
+`options` / `title` / `tooltip` / `default` **НЕ дублируются**, а берутся из
+целевой глобальной var. Значение живёт в **глобальном `userVars`** (не в
+`rule.varsValues` пресета) — единый источник правды: правит его секция-владелец
+глобали, а ref-запись лишь подключает ту же var в другом месте.
+
+| Аспект | Обычная var | Ref-var `{"ref":"X"}` |
+|---|---|---|
+| Метаданные (`type`/`options`/…) | своя декларация | из глобали `X` (`WizardTemplate.globalVar("X")`) |
+| Хранилище значения | `settings.userVars[name]` / `rule.varsValues` пресета | глобальный `settings.userVars["X"]` |
+| Кто правит | владелец записи | секция-владелец глобали |
+| Рендер в UI | обычный | **не рендерится** в редакторе-владельце ссылки |
+
+**Модель.** `WizardVar` получил поле `ref` + геттер `isRef`;
+`WizardVar.fromJson` парсит форму `{"ref":...}`; `WizardTemplate.globalVar(name)`
+находит глобальную ноду по имени. Ref-var с `isRef==true` несёт только имя цели —
+за метаданными всегда идём в глобаль.
+
+**Билдер.** `expandPreset` получил параметр `globalVars`. В цикле по
+`varsValues` пресета ref-vars **пропускаются** (у них нет локального значения) и
+**подмешиваются из `globalVars`**, так что `@ref` в теле пресета резолвится
+глобально — тем же значением, что видит секция-владелец.
+
+**UI.** Ref-var **не рендерится** в редакторе правила: её метаданные и значение
+принадлежат секции-владельцу глобали, там она и правится (иначе — два поля на одну
+var с рассинхроном).
+
+**Первое применение (§264).** Пресет `traffic-processing` ссылается на глобаль
+`resolve_strategy` (осталась в секции Network) через `{"ref":"resolve_strategy"}`
+вместо собственной копии — режим resolve и его стратегия остаются единым
+источником правды.
 
 ### Изменения в шаблоне (Часть 1)
 
@@ -387,6 +429,82 @@ load, но runtime-обход дропнутой ветки = лишняя ра�
 sniff-rule оборачивается `{"#if": {"and": ["@sniff_enabled"], "value": {...}}}`.
 Шаг-removal удаляется.
 
+> **Обновлено §264.** Механика `#if` над `sniff_enabled` осталась той же, но сам
+> **var-объявление переехало из секции Network в locked-пресет
+> `traffic-processing`** (см. [§264 Traffic Processing preset](#264-traffic-processing-preset)).
+> Вместе с ним переехали базовые правила `sniff`/`hijack-dns`/`resolve` из
+> `config.route.rules` шаблона (теперь `[]`) — каждое под своим `#if` **внутри
+> пресета**. `resolve_enabled` также переехал в пресет собственным var;
+> `resolve_strategy` **осталась** в секции Network, пресет ссылается на неё через
+> ref-var `{"ref":"resolve_strategy"}` (см. [Ref-vars (§265)](#ref-vars-265)).
+> Сам `#if`-движок не меняется — меняется только **владелец** объявления var.
+
+---
+
+## §264 Traffic Processing preset (применение Части 2 + §265)
+
+Базовые правила обработки трафика (`sniff` / `hijack-dns` / `resolve`) переезжают
+из хардкода `config.route.rules` шаблона в **новый locked/pinned пресет
+`traffic-processing`** — первый в `selectable_rules`. Это делает раскладку sniff
+и resolve видимой и настраиваемой в UI, но защищённой от поломки (locked/pinned).
+
+### Метаданные пресетов → объект `ui`
+
+Плоские `label`/`description`/`default` у пресета **заменены** на объект:
+
+```jsonc
+"ui": { "label": "...", "description": "...", "default": true,
+        "locked": true, "pinned": 0 }
+```
+
+- **Все 8 пресетов** переведены на `ui`; плоские `label`/`description`/`default`
+  из шаблона **убраны**, fallback в `SelectableRule.fromJson` **снят** — читается
+  **только** `ui`.
+- `locked: true` — свич disabled, пресет нельзя удалить и нельзя двигать (в UI
+  нет drag-handle).
+- `pinned: 0` — пресет всегда на позиции 0 и в списке, и в `route.rules`
+  (критично: `sniff` обязан быть первым правилом).
+
+### `config.route.rules` → пустой
+
+`config.route.rules` в шаблоне теперь `[]`. Правила `sniff`/`hijack-dns`/`resolve`
+**переехали в пресет** `traffic-processing`, каждое под своим `#if` (та же
+`#if`-механика Части 2 — array-element/gate).
+
+### Vars пресета `traffic-processing`
+
+| name | type | прим. |
+|---|---|---|
+| `sniff_enabled` | `bool` | переехал из секции Network |
+| `sniff_timeout` | `enum` | **новая**: `100ms`/`300ms`/`500ms`/`1s`/`3s` (был хардкод `timeout:"1s"`) |
+| `hijack_dns_enabled` | `bool` | **новая**: WARNING-тултип — off ломает FakeIP |
+| `resolve_enabled` | `bool` | переехал из секции Network |
+| `{"ref":"resolve_strategy"}` | — | ref-var на глобаль (§265); стратегия остаётся в Network |
+
+Из секции Network (chapter core) **убраны** vars `sniff_enabled` и
+`resolve_enabled` (переехали в пресет собственными vars). `resolve_strategy`
+**осталась** в Network — пресет ссылается на неё через ref-var (§265).
+`auto_detect_interface` осталась в Network.
+
+### Нормализация pinned-пресета
+
+`normalize_pinned_presets.dart` гарантирует **наличие и позицию** pinned-пресета
+в `selectable_rules` — на fresh-конфиге, restore из backup и upgrade со старой
+раскладки (upgrade-safe): если пресет отсутствует, добавляется; если не на
+позиции `pinned`, переставляется.
+
+### Debug API
+
+`serializers/rules.dart`: в сериализацию пресета добавлены поля `locked` и
+`pinned` (симметрия read с новой моделью).
+
+### §263 superseded
+
+§263 (тумблер `resolve_enabled` в секции Network) **вытеснен** этой фичей:
+`resolve_enabled` теперь var пресета `traffic-processing`, а не отдельный тумблер
+Network. Механика гейта (`inbound:tun-in` по `@resolve_enabled`) сохраняется —
+меняется только владелец var.
+
 ---
 
 ## Фазировка (критично — порядок с post-steps)
@@ -507,6 +625,16 @@ array-element-drop `#if` ложится на него естественно.
 | `app/assets/wizard_template.json` | `tun_mtu`→`int`; `inbounds[]` tun/mixed через `#if`; route-rules `inbound` через `#if`; sniff-rule через `#if`; новые vars `vpn_mode`/`proxy_*` |
 | `docs/TEMPLATE.md` | раздел про `#if` + var-types + coerce-семантику; обновить §119-описание (mixed-in теперь в шаблоне) |
 | `docs/ARCHITECTURE.md` | Parser v2 pipeline: `#if`-walker в substitution-фазе |
+| **§265 ref-vars** | |
+| `app/lib/models/parser_config.dart` | `WizardVar.ref` + `isRef` + `fromJson({"ref":...})`; `WizardTemplate.globalVar(name)` |
+| `app/lib/services/builder/preset_expand.dart` | `expandPreset` принимает `globalVars`; ref-vars пропускаются в `varsValues`-цикле, подмешиваются из `globalVars` |
+| *(UI редактора правила)* | ref-var не рендерится (правится в секции-владельце глобали) |
+| **§264 traffic-processing preset** | |
+| `app/assets/wizard_template.json` | новый locked/pinned пресет `traffic-processing` первым в `selectable_rules`; метаданные всех 8 пресетов → объект `ui{label,description,default,locked,pinned}`; плоские label/description/default убраны; `config.route.rules`→`[]` (sniff/hijack-dns/resolve переехали в пресет под `#if`); из секции Network убраны vars `sniff_enabled`/`resolve_enabled` (`resolve_strategy` осталась); vars пресета: `sniff_enabled`/`sniff_timeout`(enum,новая)/`hijack_dns_enabled`(bool,новая)/`resolve_enabled`/`{"ref":"resolve_strategy"}` |
+| `app/lib/models/…` `SelectableRule` | чтение `ui.{label,description,default,locked,pinned}`; fallback на плоские поля СНЯТ |
+| `app/lib/services/builder/normalize_pinned_presets.dart` | **НОВЫЙ** — гарантирует наличие+позицию pinned-пресета (fresh/restore/upgrade-safe) |
+| `app/lib/…/serializers/rules.dart` | Debug API: `locked`/`pinned` в сериализацию пресета |
+| *(UI списка пресетов)* | locked → свич disabled, нет удаления, нет drag-handle; pinned → позиция 0 |
 
 ---
 

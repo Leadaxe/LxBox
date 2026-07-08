@@ -36,6 +36,16 @@ class WizardTemplate {
   List<VarSection> sectionsFor(String chapter) =>
       varSections.where((s) => s.chapter == chapter).toList(growable: false);
 
+  /// §265 — первичная декларация глобальной var по имени (обычная, НЕ ref).
+  /// Ref-var (`{"ref": name}`) подтягивает отсюда type/options/title/tooltip/
+  /// default. `null` — глобали нет (битая ссылка → UI скрывает контрол).
+  WizardVar? globalVar(String name) {
+    for (final v in vars) {
+      if (v.name == name && !v.isRef) return v;
+    }
+    return null;
+  }
+
   factory WizardTemplate.fromJson(Map<String, dynamic> json) {
     final pcJson = json['parser_config'] as Map<String, dynamic>? ?? {};
     final rulesJson = json['selectable_rules'] as List<dynamic>? ?? [];
@@ -180,6 +190,7 @@ class WizardVar {
     this.chapter = 'core',
     this.required = true,
     this.onChange,
+    this.ref = '',
   });
 
   final String name;
@@ -209,6 +220,17 @@ class WizardVar {
   /// переопределить вручную; это разовый эффект переключения, не форс).
   final Map<String, dynamic>? onChange;
 
+  /// §265 — ref-var: если непустое, эта запись `vars[]` — не декларация, а
+  /// ССЫЛКА на глобальную var с именем `ref` (объявленную в секции). Значение
+  /// живёт в глобальном `userVars[ref]`, НЕ в `rule.varsValues`; метаданные
+  /// (type/options/title/tooltip/default) подтягиваются из целевой var через
+  /// [WizardTemplate.globalVar]. Пресет ссылается на общую настройку, не
+  /// заводя копию (пример: `resolve_strategy` — она же питает `dns.strategy`).
+  final String ref;
+
+  /// §265 — эта var-запись есть ссылка на глобальную (не собственная декларация).
+  bool get isRef => ref.isNotEmpty;
+
   bool get isEditable => wizardUI == 'edit';
 
   /// Legacy-aware accessor: только `value`-part каждой опции. Для кода,
@@ -221,6 +243,21 @@ class WizardVar {
     String section = '',
     String chapter = 'core',
   }) {
+    // §265 — ref-var: `{"ref": "<global-name>"}`. Метаданные не несёт —
+    // `name` = ref, остальное подтянется из целевой глобали через
+    // WizardTemplate.globalVar на этапе рендера/резолва.
+    final refName = json['ref'] as String? ?? '';
+    if (refName.isNotEmpty) {
+      return WizardVar(
+        name: refName,
+        type: 'text', // placeholder; реальный тип — у целевой глобали
+        defaultValue: '',
+        section: section,
+        chapter: chapter,
+        ref: refName,
+      );
+    }
+
     var defVal = json['default_value'];
     String defaultStr;
     if (defVal is Map) {
@@ -277,6 +314,8 @@ class SelectableRule {
     required this.presetId,
     this.description = '',
     this.defaultEnabled = false,
+    this.locked = false,
+    this.pinned,
     this.ruleSets = const [],
     dynamic rule,
     this.vars = const [],
@@ -288,6 +327,19 @@ class SelectableRule {
   final String label;
   final String description;
   final bool defaultEnabled;
+
+  /// §264 — locked: пресет нельзя выключить/удалить/подвинуть (свич disabled,
+  /// нет delete, drag off). Продуктовый инвариант (как `vpn-1` §125).
+  final bool locked;
+
+  /// §264 — pinned: фиксированная позиция в списке правил и в `route.rules`.
+  /// `0` = всегда первый (критично для traffic-processing: `sniff` обязан быть
+  /// первым правилом). `null` = не пиннится (обычный пресет, порядок свободный).
+  final int? pinned;
+
+  /// §264 — пресет закреплён на фиксированной позиции (pinned != null).
+  bool get isPinned => pinned != null;
+
   final List<Map<String, dynamic>> ruleSets;
 
   /// Route-правила пресета в порядке шаблона (§246).
@@ -364,14 +416,22 @@ class SelectableRule {
     final presetId = (json['preset_id'] as String?) ?? '';
     if (presetId.isEmpty) {
       throw FormatException(
-        'SelectableRule "${json['label'] ?? '<no-label>'}" missing required '
-        '`preset_id` (legacy entries without preset_id are no longer supported)',
+        'SelectableRule "${json['ui']?['label'] ?? '<no-label>'}" missing '
+        'required `preset_id` (legacy entries without preset_id are no longer '
+        'supported)',
       );
     }
+    // §264 — метаданные пресета живут ТОЛЬКО в объекте `ui`
+    // (label/description/default/locked/pinned). Плоские поля больше не
+    // читаются — все пресеты шаблона переведены на `ui`. Отсутствие `ui` →
+    // пустые дефолты (пресет без имени = баг шаблона, поймает тест).
+    final ui = json['ui'] as Map<String, dynamic>? ?? const {};
     return SelectableRule(
-      label: json['label'] as String? ?? '',
-      description: json['description'] as String? ?? '',
-      defaultEnabled: json['default'] as bool? ?? false,
+      label: ui['label'] as String? ?? '',
+      description: ui['description'] as String? ?? '',
+      defaultEnabled: ui['default'] as bool? ?? false,
+      locked: ui['locked'] as bool? ?? false,
+      pinned: ui['pinned'] as int?,
       ruleSets: (json['rule_set'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??

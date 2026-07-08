@@ -120,10 +120,10 @@ wizard_template.json
 │   ├─ route                       object{5 keys}
 │   │   ├─ find_process            bool          true → package_name detection включён
 │   │   ├─ default_domain_resolver "@dns_default_domain_resolver"
-│   │   ├─ rules[]                 list[3]       base routing rules
-│   │   │   ├─ {action:"sniff",   inbound:"tun-in", timeout:"1s"}   §228 — sniff ПЕРЕД resolve (FakeIP); #if @sniff_enabled
-│   │   │   ├─ {protocol:"dns",   action:"hijack-dns"}
-│   │   │   └─ {action:"resolve", inbound:"tun-in", strategy:"@resolve_strategy"}   §263 — #if @resolve_enabled (off для FakeIP)
+│   │   ├─ rules[]                 list[0]       [] — §264: sniff/hijack-dns/resolve
+│   │   │                                         ПЕРЕЕХАЛИ в locked-пресет traffic-processing
+│   │   │                                         (pinned:0 → первые в route.rules).
+│   │   │                                         В шаблоне route.rules пуст.
 │   │   ├─ rule_set[]              list          (в шаблоне ключа НЕТ — создаётся билдером
 │   │   │                                         из selectable_rules[].rule_set)
 │   │   ├─ final                   tag           default selector ("vpn-1")
@@ -133,14 +133,18 @@ wizard_template.json
 │                                                  (clash_api УДАЛЁН в §122 — блок в кастомном шаблоне
 │                                                   роняет старт ядра: "clash api is not included in this build")
 │
-└─ selectable_rules[]              list[7]       КАТАЛОГ preset'ов
+└─ selectable_rules[]              list[8]       КАТАЛОГ preset'ов
     └─ <Preset>                    object
         ├─ preset_id               string        id для ссылки из custom_rules (§030)
-        ├─ label                   string        UI display
-        ├─ description             string
-        ├─ default                 bool?         вкл у новых юзеров?
+        ├─ ui                      object          §264 — метаданные пресета (плоские
+        │   ├─ label               string        UI display                label/description/
+        │   ├─ description         string        тултип                     default УБРАНЫ,
+        │   ├─ default             bool?         вкл у новых юзеров?         fallback СНЯТ):
+        │   ├─ locked              bool?         §264 — нельзя выкл/удалить/двигать
+        │   └─ pinned              int?          §264 — фикс-позиция в списке и route.rules
         ├─ vars[]                  list?         переменные видимые когда preset enabled
-        │                                        (тот же shape что sections[*].vars[*])
+        │                                        (тот же shape что sections[*].vars[*];
+        │                                         §265: элемент может быть {"ref":"<global>"})
         ├─ rule_set[]              list?         sing-box rule-set definitions
         │   └─ <SingboxRuleSet>    object
         │       ├─ tag             string
@@ -479,6 +483,15 @@ Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `
 }
 ```
 
+> **§264/§265 — `resolve_strategy` осталась глобальной var в секции `Network`**, но
+> route-resolve-правило переехало в locked-пресет `traffic-processing` (см.
+> §264 ниже). Пресет ссылается на неё через ref-var `{"ref": "resolve_strategy"}`
+> (§265): метаданные и значение — из этой глобали, `@resolve_strategy` в правиле
+> резолвится глобально. `on_change` выше по-прежнему пишет её глобально, эффект
+> виден пресету. (Vars `sniff_enabled`/`resolve_enabled` из `Network` УБРАНЫ —
+> стали собственными vars пресета `traffic-processing`; §263-тумблер
+> `resolve_enabled` в `Network` этой фичей superseded.)
+
 Актуальная семантика тумблера IPv6 (§249): дефолт обеих strategy-vars —
 `ipv4_only` (IPv6 на tun выключен по умолчанию — AAAA приложениям не нужен);
 включение IPv6 переводит резолв в `prefer_ipv4` (v6 доступен, но v4-first —
@@ -535,15 +548,14 @@ Strategy (тумблер — разовый эффект, не форс).
     "find_process":            true,
     "default_domain_resolver": "@dns_default_domain_resolver",
     "rules": [
-      // §228: sniff ПЕРЕД resolve — sniff извлекает домен до того, как resolve
-      // сработает; критично для FakeIP (resolve по фейк-IP 198.18.x.x бессмыслен).
-      // sniff- и resolve-правила обёрнуты в #if по @sniff_enabled / @resolve_enabled
-      // (§263, см. § #if ниже) — здесь показаны резолвнутыми (true-ветка); при
-      // false элемент выпадает. resolve_enabled=false нужен для FakeIP: real-lookup
-      // на route-слое идёт мимо FakeIP через default_domain_resolver.
-      {"action": "sniff",   "inbound": "tun-in", "timeout": "1s"},
-      {"protocol": "dns", "action": "hijack-dns"},
-      {"action": "resolve", "inbound": "tun-in", "strategy": "@resolve_strategy"}
+      // §264: route.rules в шаблоне ПУСТ. Базовые sniff/hijack-dns/resolve
+      // ПЕРЕЕХАЛИ в locked-пресет traffic-processing (первый в selectable_rules,
+      // pinned:0 → билдер ставит его правила первыми в финальном route.rules).
+      // Порядок (sniff ПЕРЕД resolve) критичен для FakeIP: sniff извлекает домен
+      // до resolve (resolve по фейк-IP 198.18.x.x бессмыслен). Каждое из трёх
+      // правил обёрнуто в #if внутри пресета: @sniff_enabled / (протокол dns —
+      // hijack-dns) / @resolve_enabled (off для FakeIP — real-lookup идёт мимо
+      // FakeIP через default_domain_resolver). См. § selectable_rules ниже.
     ],
     "final":                  "vpn-1",
     "auto_detect_interface":  "@auto_detect_interface"
@@ -577,10 +589,15 @@ Strategy (тумблер — разовый эффект, не форс).
 ```jsonc
 {
   "preset_id":   "<unique-id>",        // referenced from custom_rules[].presetId
-  "label":       "<UI display>",
-  "description": "<тултип>",
-  "default":     <bool>?,              // default true → включён в новой установке
-  "vars": [ <Var>, … ]?,                // vars видимые только при включении этого preset'а
+  "ui": {                               // §264 — метаданные пресета. ОБЯЗАТЕЛЕН.
+    "label":       "<UI display>",      //   Плоские label/description/default на
+    "description": "<тултип>",          //   top-level УБРАНЫ; fallback в
+    "default":     <bool>?,             //   SelectableRule.fromJson СНЯТ — читается
+    "locked":      <bool>?,             //   ТОЛЬКО ui.
+    "pinned":      <int>?               //   locked/pinned — см. ниже.
+  },
+  "vars": [ <Var> | {"ref":"<global>"}, … ]?, // vars видимые только при включении preset'а;
+                                        //   §265: элемент-ссылка {"ref":"<имя глобали>"}
   "rule_set": [ <SingboxRuleSet>, … ]?, // rule_set'ы которые должны быть зарегистрированы
   "rule":     <SingboxRoutingRule>?,    // routing rule — legacy single (Map)
   "rules":    [ <SingboxRoutingRule>, … ]?, // §246: массив routing rules (канонический ключ; побеждает `rule`)
@@ -590,17 +607,37 @@ Strategy (тумблер — разовый эффект, не форс).
 }
 ```
 
-### Полевая матрица текущих 6 preset'ов
+### `ui` — метаданные пресета (§264)
 
-| `preset_id` | `default` | `vars` | `rule_set` | `rule` | `dns_rule(s)` | `dns_servers` |
-|---|---|---|---|---|---|---|
-| `block-ads` | false | — | ✓ (remote ads-all) | ✓ (action: reject) | — | — |
-| `ru-direct` | true | ✓ (outbound, dns_enable §257, dns_server, dns_ip, geoip_enabled, force_ipv4) | ✓ (inline `.ru` suffixes) | ✓ массив: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | ✓ массив: `[predefined-NOERROR ip_version:6 #if @force_ipv4, → @dns_server]` (§253) | ✓ (yandex_udp/doh/dot) |
-| `fakeip` | false | ✓ (dns_enable §257, dns_server — **hidden**) | — | — | ✓ (`query_type: [A,AAAA]` → `@dns_server`) | ✓ (type `fakeip`, ranges 198.18/15 + fc00::/18) |
-| `ru-inside` | (false) | ✓ (outbound, force_ipv4) | ✓ (remote ru-inside) | ✓ массив: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | — | — |
-| `bittorrent` | true | ✓ (outbound) | — | ✓ (`protocol: bittorrent` → `@outbound`) | — | — |
-| `private-ip` | (false) | ✓ (outbound) | — | ✓ (`ip_is_private` → `@outbound`) | — | — |
-| `unknown-traffic` | false | ✓ (`outbound`=reject) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
+С §264 label/description/default/locked/pinned живут в объекте `ui` (**ОБЯЗАТЕЛЕН**;
+плоские top-level `label`/`description`/`default` из шаблона убраны, fallback в
+`SelectableRule.fromJson` снят — читается только `ui`). Все 8 пресетов переведены на `ui`.
+
+| `ui.*` | Тип | Назначение |
+|---|---|---|
+| `label` | string | UI display. |
+| `description` | string | Тултип. |
+| `default` | bool? | default true → включён в новой установке. |
+| `locked` | bool? | §264 — пресет **нельзя выключить** (свич disabled), **нельзя удалить**, **нельзя двигать** (нет drag-handle). Единственный locked-пресет — `traffic-processing`. |
+| `pinned` | int? | §264 — **фиксированная позиция** в списке пресетов И в финальном `config.route.rules`. `pinned:0` = всегда позиция 0 (критично: sniff обязан быть первым). Нормализация `normalize_pinned_presets.dart` гарантирует наличие+позицию pinned-пресета (fresh/restore/upgrade-safe). Debug API (`serializers/rules.dart`) сериализует `locked`/`pinned`. |
+
+### Полевая матрица текущих 8 preset'ов
+
+Метаданные — из `ui.*` (§264): `default`/`locked`/`pinned`. `traffic-processing` —
+первый в каталоге (locked, pinned:0), несёт базовые sniff/hijack-dns/resolve.
+
+| `preset_id` | `ui.default` | `ui.locked` | `ui.pinned` | `vars` | `rule_set` | `rule(s)` | `dns_rule(s)` | `dns_servers` |
+|---|---|---|---|---|---|---|---|---|
+| `traffic-processing` | true | true | 0 | ✓ (sniff_enabled, sniff_timeout §264 enum 100ms/300ms/500ms/1s/3s, hijack_dns_enabled §264 bool WARNING-тултип, resolve_enabled, `{"ref":"resolve_strategy"}` §265) | — | ✓ массив: `[sniff #if @sniff_enabled, hijack-dns, resolve strategy:@resolve_strategy #if @resolve_enabled]` | — | — |
+| `block-ads` | false | — | — | — | ✓ (remote ads-all) | ✓ (action: reject) | — | — |
+| `ru-direct` | true | — | — | ✓ (outbound, dns_enable §257, dns_server, dns_ip, geoip_enabled, force_ipv4) | ✓ (inline `.ru` suffixes) | ✓ массив: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | ✓ массив: `[predefined-NOERROR ip_version:6 #if @force_ipv4, → @dns_server]` (§253) | ✓ (yandex_udp/doh/dot) |
+| `fakeip` | false | — | — | ✓ (dns_enable §257, dns_server — **hidden**) | — | — | ✓ (`query_type: [A,AAAA]` → `@dns_server`) | ✓ (type `fakeip`, ranges 198.18/15 + fc00::/18) |
+| `ru-inside` | (false) | — | — | ✓ (outbound, force_ipv4) | ✓ (remote ru-inside) | ✓ массив: `[resolve ipv4_only #if @force_ipv4, @outbound]` (§246) | — | — |
+| `bittorrent` | true | — | — | ✓ (outbound) | — | ✓ (`protocol: bittorrent` → `@outbound`) | — | — |
+| `private-ip` | (false) | — | — | ✓ (outbound) | — | ✓ (`ip_is_private` → `@outbound`) | — | — |
+| `unknown-traffic` | false | — | — | ✓ (`outbound`=reject) | ✓ (inline `unknown-apps`, invert `package_name_regex: "^"`) | ✓ (`@outbound`) | — | — |
+
+**`traffic-processing` (§264)** — locked/pinned пресет, ПЕРВЫЙ в `selectable_rules`. Несёт базовые route-правила `sniff` / `hijack-dns` / `resolve`, которые до §264 жили прямо в `config.route.rules` (теперь пуст). `pinned:0` гарантирует, что его правила идут первыми в финальном `config.route.rules` (sniff обязан быть первым — извлекает домен до resolve, критично для FakeIP). `locked:true` — свич disabled, нельзя удалить/двигать. Каждое из трёх правил гейтится собственным `#if` (array-element form): `sniff #if @sniff_enabled` / `hijack-dns` (безусловно) / `resolve #if @resolve_enabled`. Vars пресета: `sniff_enabled` (bool), `sniff_timeout` (enum 100ms/300ms/500ms/1s/3s — НОВАЯ, раньше был хардкод `timeout:"1s"`), `hijack_dns_enabled` (bool — НОВАЯ, WARNING-тултип: off ломает FakeIP), `resolve_enabled` (bool), `{"ref":"resolve_strategy"}` (§265 ref-var — значение и метаданные из глобали `resolve_strategy` в секции `Network`). Отключение `hijack_dns_enabled` убирает hijack-dns-правило; ⚠ без hijack-dns DNS-запросы не перехватываются → FakeIP не работает. `resolve_enabled=false` нужен для FakeIP (real-lookup идёт мимо FakeIP через `default_domain_resolver`, §263). Нормализация `normalize_pinned_presets.dart` держит пресет в наличии и на позиции 0 при fresh install / restore / upgrade.
 
 `unknown-traffic` — reject/direct для трафика в туннеле, не атрибутированного ни одному установленному приложению (фоновые/чужие процессы). Инлайн `rule_set` `unknown-apps` матчит «всё, что НЕ приложение» через `invert: true` + `package_name_regex: "^"`.
 
@@ -608,7 +645,7 @@ Strategy (тумблер — разовый эффект, не форс).
 
 **`fakeip` (§228)** — FakeIP-DNS: `dns_servers` даёт сервер `type: fakeip` (диапазоны 198.18.0.0/15 + fc00::/18), `dns_rule` заворачивает все `A`/`AAAA`-запросы на него. Приложение получает placeholder-IP мгновенно (0 latency, нет pre-tunnel DNS-утечки), реальный резолв доменов происходит внутри туннеля. **Порядок в каталоге критичен:** `fakeip` стоит ПОСЛЕ `ru-direct` — билдер сохраняет порядок пресетов в `dns.rules[]`, поэтому ru-dns-правило матчится раньше и русские домены резолвятся по-настоящему (иначе они ушли бы в fakeip и `geoip-ru` по фейк-IP не сматчил бы → RU-трафик через VPN). Сервер вливается через **hidden-var** `dns_server` (см. «Магические переменные» ниже — без неё сервер не эмитится). Персистентность фейк-маппинга между реконнектами — `experimental.cache_file.store_fakeip: true` в базовом config (не пресетом; статичный флаг). `dns.independent_cache` НЕ ставим — deprecated в sing-box 1.14.
 
-### Магические переменные пресетов (§033, §228, §257)
+### Магические переменные пресетов (§033, §228, §257, §264, §265)
 
 Имена preset-vars **не произвольны**: несколько имён имеют специальную семантику — билдер и UI смотрят на них по имени/типу, а не только подставляют `@name`. Пропуск нужной «магической» переменной приводит к тому, что часть пресета **молча не работает** (регрессия §228 с FakeIP — сервер не вливался, потому что не было var `dns_server`).
 
@@ -617,6 +654,10 @@ Strategy (тумблер — разовый эффект, не форс).
 | `dns_server` (`type: dns_servers`) | `preset_expand.dart` | **Селектор** какой из `dns_servers[]` пресета влить в `config.dns.servers`. Билдер эмитит РОВНО ОДИН сервер — тот, чей `tag == varsValues['dns_server']` (или `default_value`). `dns_rules[*].server` ссылается на него через `@dns_server`. | `dns_servers[]` **не вливается вообще** (цикл гейтится наличием этой var). DNS-правило повиснет на несуществующий сервер → dangling → guard молча дропнет правило. Пресет ничего не делает для DNS. |
 | `outbound` (`type: outbound`) | `preset_expand.dart` + Routing UI | Значение для `@outbound` в `rule`/`dns_servers.detour`. UI рисует outbound-picker в строке пресета (см. `hasOutboundAffordance`). Дефолт `"reject"` → backstop-нормализация в `action:reject`. | Нет var:outbound И нет `rule` → `hasOutboundAffordance == false` → outbound-picker в строке **не рисуется** (DNS-only пресет — роутить нечего, picker был бы мёртвым). Это корректно, а не баг. |
 | `dns_enable` (`type: bool`) | `custom_rules.dart` (`presetDnsEnableVar`) + DNS Settings UI | §257: **мастер-тумблер DNS-блока** пресета (dns_servers + dns_rules + mirror-группа). Билдер гейтит DNS-аспект значением var (юзерский выбор → default_value → on); DNS Settings рисует свитч пресетной строки этим же предикатом и пишет var обратно. Заменил `isPresetDnsEnabled` из `dns_options.rules` (то поле `enabled` теперь мёртвое, запись — только позиционный якорь §117). | DNS-блок пресета **не тумблится** (всегда on, пока routing on); строка в DNS Settings — без свитча (нейтральная иконка). Норма для пресетов, которым тумблер не нужен. |
+
+**§265 — ref-vars (`{"ref": "<global>"}`).** Элемент `vars[]` пресета может быть **ссылкой** на глобальную var вместо декларации: `{"ref": "resolve_strategy"}`. Метаданные (`type`/`options`/`title`/`tooltip`/`default_value`) **не дублируются** — берутся из целевой глобали (`WizardTemplate.globalVar(name)`). Значение живёт в **глобальном** `userVars` (не в `rule.varsValues` пресета) — единый источник; `@resolve_strategy` в теле пресета резолвится глобально. В модели: `WizardVar` получил поле `ref` + геттер `isRef`, `WizardVar.fromJson` парсит `{"ref":…}`. В билдере: `expandPreset` получил параметр `globalVars` — ref-vars пропускаются в `varsValues`-цикле и подмешиваются из `globalVars`. В UI: ref-var **не рендерится** в редакторе правила (правится в секции-владельце, напр. `resolve_strategy` — в `Network`/DNS Settings). Применение (§264): `traffic-processing` ссылается на `resolve_strategy` через `{"ref":"resolve_strategy"}`.
+
+**§264 — новые vars пресета `traffic-processing`.** `sniff_timeout` (enum 100ms/300ms/500ms/1s/3s) заменил хардкод `timeout:"1s"` у sniff-правила. `hijack_dns_enabled` (bool) — тумблер hijack-dns-правила; ⚠ WARNING-тултип: выключение ломает FakeIP (DNS не перехватывается). Обе — обычные preset-vars (не «магические» — билдер только подставляет `@name` через `#if`), перечислены здесь для полноты каталога.
 
 **Правила при добавлении пресета:**
 
@@ -772,7 +813,7 @@ Update var.type таблицу в этом файле + добавить рен�
 
 ### Меняем `config.route.rules` базовые правила
 
-Может сломать routing для существующих юзеров — **проверять**: добавляется ли правило перед или после auto-discovery preset-rules. См. order matters в [§030].
+С §264 базовых правил в `config.route.rules` **больше нет** (ключ пуст) — sniff/hijack-dns/resolve переехали в locked-пресет `traffic-processing` (`pinned:0`). Правь их **там**, не в `config.route.rules`. Порядок первых правил критичен (sniff первым) — `pinned:0` + `normalize_pinned_presets.dart` держат пресет на позиции 0. Любое новое базовое route-правило для всех юзеров либо кладётся в этот пресет, либо (если условное) — как preset-rule. Может сломать routing для существующих юзеров — **проверять** порядок относительно auto-discovery preset-rules. См. order matters в [§030].
 
 ---
 

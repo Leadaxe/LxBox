@@ -128,6 +128,7 @@ List<String> _applyPresetSingle(
   List<SelectableRule> presets,
   _PresetSharedState state, {
   Map<String, String> presetSrsPaths = const {},
+  Map<String, String> globalVars = const {},
 }) {
   final warnings = <String>[];
   if (cr.presetId.isEmpty) return warnings;
@@ -166,7 +167,7 @@ List<String> _applyPresetSingle(
     }
   }
 
-  final raw = expandPreset(cr, match, srsPaths: srsSubset);
+  final raw = expandPreset(cr, match, srsPaths: srsSubset, globalVars: globalVars);
   warnings.addAll(raw.warnings);
 
   // Rule sets — identical-skip / first-wins через registry.
@@ -576,6 +577,7 @@ UnifiedApplyResult applyAllCustomRules(
   List<SelectableRule> presets, {
   Map<String, String> srsPaths = const {},
   Map<String, String> presetSrsPaths = const {},
+  Map<String, String> globalVars = const {},
 }) {
   final state = _PresetSharedState();
   final warnings = <String>[];
@@ -592,6 +594,7 @@ UnifiedApplyResult applyAllCustomRules(
           presets,
           state,
           presetSrsPaths: presetSrsPaths,
+          globalVars: globalVars,
         ));
       case CustomRuleInline():
         if (!cr.enabled) continue;
