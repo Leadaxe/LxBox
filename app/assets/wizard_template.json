@@ -162,8 +162,7 @@
       "label": "VPN ①",
       "default_enabled": true,
       "options": {
-        "interrupt_exist_connections": true,
-        "default": "@auto_proxy_tag"
+        "interrupt_exist_connections": true
       },
       "add_outbounds": ["direct-out", "@auto_proxy_tag"]
     },
@@ -173,7 +172,6 @@
       "label": "VPN ②",
       "default_enabled": false,
       "options": {
-        "default": "direct-out",
         "interrupt_exist_connections": true
       },
       "add_outbounds": ["direct-out", "@auto_proxy_tag"]
