@@ -1,8 +1,9 @@
 # §264 — Traffic Processing preset (locked/pinned пресет предобработки трафика)
 
-**Статус:** РЕАЛИЗОВАНО (не скомпилировано/не протестировано; не device-verified) —
-модель + шаблон + билдер + storage-нормализация + UI-гейты + Debug API + доки. Все пресеты
-переведены на `ui`-объект, плоский fallback снят. Осталось: compile/тесты/device-verify.
+**Статус:** РЕАЛИЗОВАНО, DEVICE-VERIFIED (CPH2411, 09.07.2026) — пресет первым+locked, resolve-vars
+только в правиле (ref из internal-секции), FakeIP DNS эмитится, on_change §266 глушит
+resolve_enabled (verified: userVars `resolve_enabled=false` при FakeIP on). Все пресеты на
+`ui`-объекте, плоский fallback снят.
 **Тип:** новый концепт — locked/pinned пресет + перенос базовых route-правил из шаблона в
 пресет + объект `ui` в схеме `selectable_rules`. Многослойно (модель + шаблон + билдер +
 storage + UI), но ядро НЕ трогаем.
