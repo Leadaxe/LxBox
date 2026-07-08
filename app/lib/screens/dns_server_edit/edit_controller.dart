@@ -4,6 +4,7 @@ import 'dart:io' show InternetAddress;
 import 'package:collection/collection.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../config/consts.dart' show kDirectOutboundTag;
 import '../../models/parser_config.dart' show WizardVar;
 import '../../widgets/outbound_picker.dart';
 import '../../widgets/var_values_model.dart';
@@ -122,7 +123,7 @@ class DnsServerEditController extends ChangeNotifier {
   /// body, не в varValues). Отсутствие ключа = direct-out (решение №2).
   String get inlineDetour {
     final d = _body['detour'];
-    return d is String && d.isNotEmpty ? d : 'direct-out';
+    return d is String && d.isNotEmpty ? d : kDirectOutboundTag;
   }
 
   /// §117 задача 4b — режим формы: `udp`/`tls`/`https`, либо null когда
@@ -240,7 +241,7 @@ class DnsServerEditController extends ChangeNotifier {
   /// ключ стирается (дефолт = отсутствие ключа; на билде normalizeDnsDetour
   /// сделал бы то же — храним каноничную форму сразу).
   void setInlineDetour(String tag) {
-    if (tag == 'direct-out' || tag.isEmpty) {
+    if (tag == kDirectOutboundTag || tag.isEmpty) {
       _body.remove('detour');
     } else {
       _body['detour'] = tag;

@@ -1,3 +1,4 @@
+import '../../config/consts.dart' show kDirectOutboundTag;
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
 import '../json_clone.dart';
@@ -508,7 +509,7 @@ void normalizeDnsDetour(
   final detour = server['detour'];
   if (detour is! String) return;
   if (detour.isEmpty ||
-      detour == 'direct-out' ||
+      detour == kDirectOutboundTag ||
       (knownOutbounds != null && !knownOutbounds.contains(detour))) {
     server.remove('detour');
   }

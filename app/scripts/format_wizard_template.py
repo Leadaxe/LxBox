@@ -282,20 +282,46 @@ def format_template(data: dict[str, Any]) -> str:
     out.append(pad(2) + f'"default_streams": {sto["default_streams"]}')
     out.append(pad(1) + "},")
 
-    out.append(pad(1) + '"preset_groups": [')
-    groups = data["preset_groups"]
-    for i, g in enumerate(groups):
-        out.append(pad(2) + "{")
-        for k in ("tag", "type", "label", "default_enabled"):
-            out.append(pad(3) + f'"{k}": {json.dumps(g[k], ensure_ascii=False)},')
-        out.append(pad(3) + '"options": {')
-        opts = g["options"]
-        opt_keys = list(opts.keys())
-        for j, ok in enumerate(opt_keys):
-            out.append(pad(4) + f'"{ok}": {json.dumps(opts[ok], ensure_ascii=False)}' + ("," if j < len(opt_keys) - 1 else ""))
-        out.append(pad(3) + "},")
-        out.append(pad(3) + f'"add_outbounds": {compact(g["add_outbounds"])}')
-        out.append(pad(2) + "}" + ("," if i < len(groups) - 1 else ""))
+    # §267 — group_templates (magic_nodes реестр + channel/auto шаблоны) +
+    # top-level default_channels. Заменили плоский preset_groups.
+    gt = data["group_templates"]
+    out.append(pad(1) + '"group_templates": {')
+    # magic_nodes: role → {title, source, tag?, tpl?} — по строке на роль.
+    nodes = gt["magic_nodes"]
+    node_keys = list(nodes.keys())
+    out.append(pad(2) + '"magic_nodes": {')
+    for i, role in enumerate(node_keys):
+        out.append(pad(3) + f'{json.dumps(role, ensure_ascii=False)}: {compact(nodes[role])}' + ("," if i < len(node_keys) - 1 else ""))
+    out.append(pad(2) + "},")
+    # channel: type + include (роли) + options.
+    ch = gt["channel"]
+    out.append(pad(2) + '"channel": {')
+    out.append(pad(3) + f'"type": {json.dumps(ch["type"], ensure_ascii=False)},')
+    out.append(pad(3) + f'"include": {compact(ch["include"])},')
+    out.append(pad(3) + '"options": {')
+    ch_opts = ch["options"]
+    ch_opt_keys = list(ch_opts.keys())
+    for j, ok in enumerate(ch_opt_keys):
+        out.append(pad(4) + f'"{ok}": {json.dumps(ch_opts[ok], ensure_ascii=False)}' + ("," if j < len(ch_opt_keys) - 1 else ""))
+    out.append(pad(3) + "}")
+    out.append(pad(2) + "},")
+    # auto: type + options (сырой urltest-шаблон с @var).
+    au = gt["auto"]
+    out.append(pad(2) + '"auto": {')
+    out.append(pad(3) + f'"type": {json.dumps(au["type"], ensure_ascii=False)},')
+    out.append(pad(3) + '"options": {')
+    au_opts = au["options"]
+    au_opt_keys = list(au_opts.keys())
+    for j, ok in enumerate(au_opt_keys):
+        out.append(pad(4) + f'"{ok}": {json.dumps(au_opts[ok], ensure_ascii=False)}' + ("," if j < len(au_opt_keys) - 1 else ""))
+    out.append(pad(3) + "}")
+    out.append(pad(2) + "}")
+    out.append(pad(1) + "},")
+
+    out.append(pad(1) + '"default_channels": [')
+    dchs = data["default_channels"]
+    for i, dc in enumerate(dchs):
+        out.append(pad(2) + compact(dc) + ("," if i < len(dchs) - 1 else ""))
     out.append(pad(1) + "],")
 
     out.append(pad(1) + '"sections": [')

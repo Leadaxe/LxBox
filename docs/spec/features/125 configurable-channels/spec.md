@@ -6,6 +6,16 @@
 > [STORAGE.md → channels](../../../STORAGE.md#channels--125)). Все развилки
 > решены (см. «Решения», бывшие open questions). Покрыто тестами
 > (`channel_test.dart`, `channels_migration_test.dart`, `channel_groups_test.dart`).
+>
+> **§267 (09.07.2026) — источник seed'а сменился.** Плоский `preset_groups[]`
+> заменён на `group_templates` (реестр `magic_nodes` + шаблоны `channel`/`auto`)
+> + `default_channels` (плоский список сида). Ниже по тексту `preset_groups` /
+> `PresetGroup` / `add_outbounds` описывают историческую схему §125; актуальный
+> сид: `default_channels[i].{tag,label,default_enabled}` + общий `channel`-шаблон
+> (`include` вместо `add_outbounds`), служебные ноды — `magic_nodes`. Модель:
+> `GroupTemplates`/`MagicNode`/`ChannelTemplate`/`AutoTemplate`/`DefaultChannel`
+> в [`parser_config.dart`](../../../app/lib/models/parser_config.dart). Детали —
+> [`docs/spec/tasks/267-group-templates-magic-nodes.md`](../../tasks/267-group-templates-magic-nodes.md).
 
 ## Контекст
 

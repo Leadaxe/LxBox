@@ -273,30 +273,29 @@ void main() {
     });
   });
 
-  group('Channel.seedFromPreset (миграция)', () {
-    test('структурные поля из пресета', () {
-      final p = PresetGroup(
-        tag: 'vpn-1',
-        type: 'selector',
-        label: 'Главный',
-        addOutbounds: const ['direct-out'],
+  group('Channel.seedFromDefault (миграция §267)', () {
+    test('структурные поля из default_channel + channel-шаблона', () {
+      final dc =
+          DefaultChannel(tag: 'vpn-1', label: 'Главный', defaultEnabled: true);
+      final tpl = ChannelTemplate(
+        include: const ['direct'],
         options: const {'interrupt_exist_connections': true},
       );
-      final c = Channel.seedFromPreset(p, enabled: true);
+      final c = Channel.seedFromDefault(dc, tpl, enabled: true);
       expect(c.tag, 'vpn-1');
       expect(c.label, 'Главный');
-      expect(c.includeDirect, true);
+      expect(c.includeDirect, true); // include ∋ direct
       expect(c.interruptExistConnections, true);
       expect(c.nodeFilter, '');
       expect(c.defaultFilter, ''); // Решение 6
-      expect(c.auto, isNull);
+      expect(c.auto, isNull); // auto передаётся снаружи; здесь не задан
     });
 
-    test('label fallback к tag когда пусто', () {
-      final p = PresetGroup(tag: 'vpn-3', type: 'selector');
-      final c = Channel.seedFromPreset(p, enabled: false);
+    test('label fallback к tag когда пусто; include пуст → без direct', () {
+      final dc = DefaultChannel(tag: 'vpn-3');
+      final c = Channel.seedFromDefault(dc, ChannelTemplate(), enabled: false);
       expect(c.label, 'vpn-3');
-      expect(c.includeDirect, false);
+      expect(c.includeDirect, false); // include пуст
     });
   });
 }

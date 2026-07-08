@@ -9,22 +9,19 @@ void main() {
   group('buildConfig — smoke', () {
     final template = WizardTemplate(
       parserConfig: ParserConfigBlock(),
-      presetGroups: [
-        PresetGroup(
-          tag: 'vpn-1',
-          type: 'selector',
-          options: {'default': kAutoOutboundTag},
-          defaultEnabled: true,
-          addOutbounds: ['direct-out', kAutoOutboundTag],
+      // §267 — group_templates: vpn-1 канал (direct+auto), auto-подгруппа.
+      groupTemplates: GroupTemplates(
+        channel: ChannelTemplate(
+          include: const ['direct', 'auto'],
+          options: const {'interrupt_exist_connections': true},
         ),
-        PresetGroup(
-          tag: kAutoOutboundTag,
-          type: 'urltest',
-          options: {'url': 'https://x', 'interval': '30s'},
-          defaultEnabled: true,
-          addOutbounds: const [],
+        auto: AutoTemplate(
+          options: const {'url': 'https://x', 'interval': '30s'},
         ),
-      ],
+        defaultChannels: [
+          DefaultChannel(tag: 'vpn-1', label: 'vpn-1', defaultEnabled: true),
+        ],
+      ),
       vars: const [],
       varSections: const [],
       config: {
@@ -253,7 +250,7 @@ void main() {
     // Template с required int-var `tol` (default "30"), плейсхолдер в config.
     WizardTemplate templateWithTol() => WizardTemplate(
           parserConfig: ParserConfigBlock(),
-          presetGroups: const [],
+          groupTemplates: GroupTemplates(),
           vars: [
             WizardVar(name: 'tol', type: 'int', defaultValue: '30'),
             WizardVar(

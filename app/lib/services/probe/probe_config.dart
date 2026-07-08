@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../config/consts.dart' show kDirectOutboundTag;
 import '../../models/server_list.dart';
 import '../../models/singbox_entry.dart';
 
@@ -32,12 +33,12 @@ const kProbeDnsTag = 'local-dns';
 
 ProbeConfig buildProbeConfig(FolderServers folder) {
   final outbounds = <Map<String, dynamic>>[
-    {'type': 'direct', 'tag': 'direct-out'},
+    {'type': 'direct', 'tag': kDirectOutboundTag},
   ];
   final endpoints = <Map<String, dynamic>>[];
   final tagByMember = <int, String>{};
   final brokenByMember = <int, String>{};
-  final usedTags = <String>{'direct-out', kProbeDnsTag};
+  final usedTags = <String>{kDirectOutboundTag, kProbeDnsTag};
 
   String allocate(String base) {
     final b = base.isEmpty ? 'node' : base;

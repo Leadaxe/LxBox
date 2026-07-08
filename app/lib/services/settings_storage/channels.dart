@@ -172,27 +172,31 @@ Future<int> _healDetourChannelRefs(String tag) async {
 // §125 F0.3 — Миграция enabled_groups[] → channels[] (one-shot, first-run seed).
 //
 // Guard-ключ `channels_migrated` (паттерн `_hasDefaultsSeeded`). Принимает
-// template.presetGroups параметром (storage-слой не знает про template —
+// template.groupTemplates параметром (storage-слой не знает про template —
 // вызывается из main() init с готовым шаблоном). Идемпотентна: повторный вызов
 // при уже существующем `channels` или поднятом флаге — no-op.
+//
+// §267 — сид собирается из `default_channels` (плоский список tag/label/enabled)
+// + общего `channel`-шаблона; auto-подгруппа заводится когда `channel.include`
+// содержит роль `auto`. Раньше итерировали `preset_groups` со скипом ✨auto —
+// теперь auto больше не «канал в списке», костыль-скип ушёл.
 // ---------------------------------------------------------------------------
 
-Future<void> _migrateChannelsIfNeeded(List<PresetGroup> presets) async {
+Future<void> _migrateChannelsIfNeeded(GroupTemplates gt) async {
   final data = await _load();
   if (data['channels'] is List) return; // уже есть — не трогаем
   if (data['channels_migrated'] == true) return; // мигрировано (пусто) — не пересеивать
 
   final enabled = await SettingsStorage.getEnabledGroups(); // legacy set
+  final hasAuto = gt.channel.include.contains('auto');
   final channels = <Channel>[];
-  for (final p in presets) {
-    if (p.tag == kAutoOutboundTag) continue; // глобальный ✨auto НЕ канал
-    final isEnabled = p.tag == 'vpn-1'
+  for (final dc in gt.defaultChannels) {
+    final isEnabled = dc.tag == 'vpn-1'
         ? true // vpn-1 форсим (продуктовый инвариант)
-        : (enabled.isEmpty ? p.defaultEnabled : enabled.contains(p.tag));
-    final auto = p.addOutbounds.contains(kAutoOutboundTag)
-        ? _seedAutoFromTemplate(presets)
-        : null;
-    channels.add(Channel.seedFromPreset(p, enabled: isEnabled, auto: auto));
+        : (enabled.isEmpty ? dc.defaultEnabled : enabled.contains(dc.tag));
+    final auto = hasAuto ? _seedAutoFromTemplate(gt.auto) : null;
+    channels.add(
+        Channel.seedFromDefault(dc, gt.channel, enabled: isEnabled, auto: auto));
   }
 
   data['channels'] = channels.map((c) => c.toJson()).toList();
@@ -201,15 +205,14 @@ Future<void> _migrateChannelsIfNeeded(List<PresetGroup> presets) async {
   await _save();
 }
 
-/// `ChannelAuto` из глобального ✨auto-пресета (его urltest-опции). Значения —
-/// из `presetGroups` где tag == ✨auto. ВНИМАНИЕ: `options` здесь — СЫРОЙ
-/// template (`@urltest_*`-плейсхолдеры НЕ резолвены — var-substitution идёт
-/// позже, в билдере). Поэтому значения могут быть `"@urltest_tolerance"`-строкой,
-/// числом ИЛИ числом-в-строке. Парсим терпимо: нерезолвенный `@`-плейсхолдер
-/// или мусор → дефолт. idle_timeout="30m", interrupt=false (мягкий urltest).
-ChannelAuto _seedAutoFromTemplate(List<PresetGroup> presets) {
-  final autoPreset = presets.where((p) => p.tag == kAutoOutboundTag).firstOrNull;
-  final opts = autoPreset?.options ?? const {};
+/// `ChannelAuto` из `group_templates.auto` (urltest-шаблон). ВНИМАНИЕ: `options`
+/// здесь — СЫРОЙ template (`@urltest_*`-плейсхолдеры НЕ резолвены — var-
+/// substitution идёт позже, в билдере). Поэтому значения могут быть
+/// `"@urltest_tolerance"`-строкой, числом ИЛИ числом-в-строке. Парсим терпимо:
+/// нерезолвенный `@`-плейсхолдер или мусор → дефолт. idle_timeout="30m",
+/// interrupt=false (мягкий urltest).
+ChannelAuto _seedAutoFromTemplate(AutoTemplate at) {
+  final opts = at.options;
 
   // Строка-значение, но не нерезолвенный `@var`-плейсхолдер.
   String? str(Object? v) {
