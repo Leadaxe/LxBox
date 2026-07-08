@@ -797,6 +797,112 @@ Inline-подстановка **не поддерживается**: `"prefix-@v
 
 ---
 
+## Formatting style (оформление `wizard_template.json`)
+
+Editorial-конвенции для **бандл**-шаблона (`app/assets/wizard_template.json`). Порядок
+ключей и переносы **не влияют** на loader/билдер — это читаемость для maintainer'ов.
+Семантика (`#if`, magic-vars, порядок правил) обязательна; оформление — нет, но держим
+единообразно. Кастомные/импортированные шаблоны эту секцию могут игнорировать.
+
+### Общий принцип
+
+**Компактно** (одна строка) — литералы и мелкие metadata-объекты. **Развёрнуто**
+(multiline) — выражения (`@…`, `#if`) и длинные списки. Критерий: строка с `@`-плейсхолдером
+или вложенным `#if` разворачивается; чистые литералы можно жать.
+
+### Vars (`sections[*].vars[]` и `selectable_rules[*].vars[]`)
+
+| Часть var | Оформление |
+|---|---|
+| «Шапка» — `name`, `type`, `wizard_ui`, `title`, `tooltip` | **Строка 1** (вместе) |
+| `default_value` | **Отдельная строка** с отступом |
+| `options[]` | **Multiline** — каждый элемент на своей строке (`{title,value}` или голая строка) |
+| ref-var (§265) `{"ref": "<name>"}` | **Одна строка** целиком (метаданных не несёт) |
+| Простой bool-var без options | **Одна строка** целиком |
+
+```jsonc
+{ "name": "resolve_strategy", "type": "enum", "wizard_ui": "edit", "title": "Resolve strategy", "tooltip": "IP version preference for DNS resolution",
+  "default_value": "ipv4_only",
+  "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"]
+},
+{ "name": "sniff_enabled", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Packet sniffing", "tooltip": "..." },
+{ "ref": "resolve_strategy" }
+```
+
+### `ui`-объект пресета (§264)
+
+Метаданные пресета (`label`/`description`/`default`/`locked`/`pinned`) — **одна строка**,
+если влезает; иначе `label`/`description` на строке 1, флаги (`default`/`locked`/`pinned`) —
+строкой ниже. Флаги-`false`/`pinned:null` НЕ пишем (дефолты модели).
+
+```jsonc
+"ui": {"label": "Traffic Processing", "description": "...", "default": true, "locked": true, "pinned": 0}
+```
+
+### JSON payload (`config`, `dns_servers`, `rule_set`)
+
+| Контекст | Правило |
+|---|---|
+| Поля с `@`-плейсхолдером | **одно поле — одна строка** |
+| Литералы (`type`, `tag`, `auto_route`, `server_port`) | можно вместе на одной строке |
+| Мелкие struct'ы ≤2–3 литерала (`direct-out`, hijack-dns) | **одна строка** |
+| Крупные объекты (`dns_options.servers[]`, preset `dns_servers[]`) | **multiline** — одно поле на строку |
+| `options`/`filters` **без** `@` | **одна строка** |
+
+### `#if`-конструкт (§120)
+
+| `value` / `else` | Оформление |
+|---|---|
+| **Скаляр** | `{"#if": {"and": [...], "value": "..."}}` — одна строка |
+| **Объект** | условие + `"value": {` на строке 1; тело ниже; закрытие `}}}` |
+
+```jsonc
+{"#if": {"and": ["@force_ipv4"], "value": {
+  "rule_set": ["ru-domains", "ru-services"], "ip_version": 6,
+  "action": "predefined", "rcode": "NOERROR"
+}}}
+```
+
+### Правила пресета (`rule`/`rules`, `dns_rule`/`dns_rules`)
+
+| Случай | Оформление |
+|---|---|
+| Одиночное правило-литерал (без `#if`, без `@`) | **одна строка** |
+| Правило под `#if` со скаляром | одна строка |
+| Правило под `#if` с объектом-`value` | multiline (условие → тело → `}}}`) |
+| `rule_set[]` inline/remote | строка 1: metadata (`tag`/`type`/`format`); строка 2: `rules`/`url` |
+| Длинные inline-suffix списки | одна строка если влезает; иначе переносы в массиве |
+
+```jsonc
+"dns_rules": [
+  {"#if": {"and": ["@force_ipv4"], "value": {
+    "query_type": ["HTTPS", "SVCB"], "action": "predefined", "rcode": "NOERROR"
+  }}},
+  {"rule_set": ["ru-domains", "ru-services"], "server": "@dns_server", "action": "route"}
+]
+```
+
+### Шпаргалка
+
+| | Одна строка | Multiline |
+|---|---|---|
+| var-шапка (`name`/`type`/`title`/`tooltip`) | ✓ | — |
+| `default_value` | — | ✓ |
+| `options[]` элементы | — | ✓ |
+| ref-var `{"ref":...}` | ✓ | — |
+| `ui`-объект пресета | ✓ (если влезает) | флаги ниже |
+| `@`-поле в payload | — | ✓ (по полю) |
+| `#if` + object `value` | условие | тело |
+| `#if` + скаляр | ✓ | — |
+| литеральное правило пресета | ✓ | — |
+
+> **Грабля:** НЕ вставлять коммент-ключи (`"//": "..."`) в `config`-блок — sing-box
+> strict-decode их не знает → fatal старт ядра (§264). Пояснения — в этом файле или спеке,
+> не в JSON конфига. В мета-секциях (`vars`/`sections`/`ui`) можно любые поля — они не идут
+> в config.
+
+---
+
 ## Когда что ломается
 
 ### Добавляем новый top-level ключ
