@@ -8,6 +8,7 @@ import '../models/channel.dart';
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../services/builder/normalize_pinned_presets.dart';
+import '../services/preset_on_change.dart';
 import '../services/rule_set_downloader.dart';
 import '../services/selectable_to_custom.dart';
 import '../services/settings_storage.dart';
@@ -437,6 +438,12 @@ class _RoutingScreenState extends State<RoutingScreen>
       _customRules.insert(insertAt, cr);
       _markDirty();
     });
+    // §266 — при создании пресета применяем on_change по начальному состоянию
+    // (@rule_enable = cr.enabled). FakeIP добавлен включённым → resolve_enabled
+    // сразу выставляется согласно положению (q2).
+    if (cr is CustomRulePreset) {
+      unawaited(applyPresetOnChange(rule, cr));
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(needsSrs
@@ -561,6 +568,12 @@ class _RoutingScreenState extends State<RoutingScreen>
           _customRules[index] = rule.withEnabled(v);
           _markDirty();
         });
+        // §266 — toggle пресета меняет @rule_enable → каскад on_change
+        // (напр. FakeIP вкл → resolve_enabled off).
+        final updated = _customRules[index];
+        if (updated is CustomRulePreset && preset != null) {
+          unawaited(applyPresetOnChange(preset, updated));
+        }
       },
       onOutboundChanged: (val) {
         setState(() {
