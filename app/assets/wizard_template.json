@@ -245,6 +245,14 @@
           "wizard_ui": "edit",
           "title": "Packet sniffing",
           "tooltip": "Detect protocol and domain from packets for accurate routing"
+        },
+        {
+          "name": "resolve_enabled",
+          "type": "bool",
+          "default_value": "true",
+          "wizard_ui": "edit",
+          "title": "Resolve destination IP",
+          "tooltip": "Resolve the sniffed domain to an IP before routing, so GeoIP and IP rules can match. Turn off when using FakeIP — the fake IP already carries the domain, and a real lookup here would bypass FakeIP and can fail on a broken resolver."
         }
       ]
     },
@@ -586,12 +594,14 @@
           "timeout": "1s"
         }}},
         { "protocol": "dns", "action": "hijack-dns" },
-        { "action": "resolve",
+        {"#if": {"and": ["@resolve_enabled"], "value": {
+          "action": "resolve",
           "inbound": [
             {"#if": {"and": [{"@vpn_mode": {"#in": ["vpn", "vpn_proxy"]}}],   "value": "tun-in"}},
             {"#if": {"and": [{"@vpn_mode": {"#in": ["proxy", "vpn_proxy"]}}], "value": "mixed-in"}}
           ],
-          "strategy": "@resolve_strategy" }
+          "strategy": "@resolve_strategy"
+        }}}
       ],
       "final": "vpn-1",
       "auto_detect_interface": "@auto_detect_interface"
