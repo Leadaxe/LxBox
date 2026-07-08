@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
 import '../../services/builder/post_steps.dart' show templateDnsServersByTag;
+import '../../services/preset_on_change.dart';
 import '../../services/rule_set_downloader.dart';
 import '../../services/settings_storage.dart';
 import '../../services/template_loader.dart';
@@ -352,6 +353,19 @@ class CustomRuleEditController extends ChangeNotifier {
     if (_enabled == v) return;
     _enabled = v;
     notifyListeners();
+    _applyPresetOnChange(); // §266 — @rule_enable сменился
+  }
+
+  /// §266 — каскад on_change пресета (пишет глобальные цели вроде
+  /// resolve_enabled в userVars). Псевдо-vars берутся из текущего snapshot
+  /// (enabled + varsValues). No-op для не-preset правил / пресета без on_change.
+  void _applyPresetOnChange() {
+    final p = preset;
+    if (p == null) return;
+    final snap = snapshot();
+    if (snap is CustomRulePreset) {
+      unawaited(applyPresetOnChange(p, snap));
+    }
   }
 
   void setIpIsPrivate(bool v) {
@@ -546,6 +560,7 @@ class CustomRuleEditController extends ChangeNotifier {
     if (!val) {
       _varsValues[v.name] = 'false';
       notifyListeners();
+      _applyPresetOnChange(); // §266 — dns_enable вход формулы on_change
       return false;
     }
 
@@ -557,6 +572,7 @@ class CustomRuleEditController extends ChangeNotifier {
     if (controlled.isEmpty) {
       _varsValues[v.name] = 'true';
       notifyListeners();
+      _applyPresetOnChange(); // §266
       return false;
     }
 
@@ -580,6 +596,7 @@ class CustomRuleEditController extends ChangeNotifier {
       _varsValues[v.name] = 'true';
       _presetSrsPaths = {..._presetSrsPaths};
       notifyListeners();
+      _applyPresetOnChange(); // §266
       return false;
     }
 
@@ -603,6 +620,7 @@ class CustomRuleEditController extends ChangeNotifier {
     if (!anyFailed) {
       _varsValues[v.name] = 'true';
       _presetSrsPaths = {..._presetSrsPaths, ...newPaths};
+      _applyPresetOnChange(); // §266
     }
     notifyListeners();
     return anyFailed;

@@ -481,7 +481,21 @@
       "preset_id": "fakeip",
       "ui": {"label": "FakeIP", "description": "Instant DNS via placeholder IPs; real names resolve inside the tunnel. Speeds up DNS and prevents pre-tunnel DNS leaks. Not a DPI bypass. Enable below special domains so GeoIP direct routing still works.", "default": false},
       "vars": [
-        {"name": "dns_enable", "type": "bool", "default_value": "true", "title": "DNS", "tooltip": "Apply this preset's FakeIP DNS handling. Turn off to disable FakeIP without removing the preset."},
+        { "name": "rule_enable", "type": "bool", "wizard_ui": "hidden",
+          "on_change": {
+            "set": {
+              "@resolve_enabled": {"#if": {"and": ["@rule_enable", "@dns_enable"], "value": "false", "else": "true"}}
+            }
+          }
+        },
+        { "name": "dns_enable", "type": "bool", "title": "DNS", "tooltip": "Apply this preset's FakeIP DNS handling. Turn off to disable FakeIP without removing the preset.",
+          "default_value": "true",
+          "on_change": {
+            "set": {
+              "@resolve_enabled": {"#if": {"and": ["@rule_enable", "@dns_enable"], "value": "false", "else": "true"}}
+            }
+          }
+        },
         {"name": "dns_server", "type": "dns_servers", "default_value": "fakeip", "wizard_ui": "hidden", "title": "FakeIP server", "tooltip": "The FakeIP allocator. Internal — bound to the fakeip DNS server."},
         {"name": "force", "type": "bool", "default_value": "true", "title": "Block HTTPS records", "tooltip": "Reply empty to HTTPS/SVCB DNS records (RFC 9460) so apps fall back to plain A/AAAA. Keeps these queries from leaking to the fallback DNS."}
       ],

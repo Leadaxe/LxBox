@@ -10,7 +10,9 @@ import '../services/builder/post_steps.dart';
 import '../services/builder/preset_expand.dart';
 import '../services/builder/rule_set_registry.dart';
 import '../services/template_loader.dart';
+import '../services/preset_on_change.dart';
 import '../services/settings_storage.dart';
+import '../vpn/box_vpn_client.dart';
 import '../widgets/outbound_picker.dart';
 import 'dns_server_edit_screen.dart';
 import 'dns_settings_screen/dns_server_resolver.dart';
@@ -829,9 +831,63 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                 _markDirty();
               }),
             ),
+
+          // §263 — сброс DNS-кэша ядра (cache.db). Внизу экрана, отдельным
+          // блоком: это разовое действие, не настройка конфига (не в rebuild).
+          const Divider(height: 32),
+          ListTile(
+            leading: Icon(Icons.cleaning_services_outlined,
+                color: Theme.of(context).colorScheme.error),
+            title: const Text('Clear DNS cache'),
+            subtitle: const Text(
+              'Flush FakeIP allocations and cached DNS responses. '
+              'Reloads the VPN if running.',
+            ),
+            onTap: _confirmClearDnsCache,
+          ),
         ],
       ),
     );
+  }
+
+  /// §263 — подтверждение + сброс DNS-кэша. При работающем VPN native удалит
+  /// cache.db и reload'нёт ядро (тоннель дропнется ~3с); при выключенном —
+  /// только удалит файл (чистый создастся на следующем старте).
+  Future<void> _confirmClearDnsCache() async {
+    final running = widget.homeController.state.tunnelUp;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear DNS cache?'),
+        content: Text(
+          'This deletes the DNS cache (FakeIP allocations and cached '
+          'responses).\n\n'
+          '${running ? 'The VPN will briefly reload to apply.' : 'It will be rebuilt clean on the next connect.'}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await BoxVpnClient().clearDnsCache();
+    if (!mounted) return;
+    messenger.showSnackBar(SnackBar(
+      content: Text(ok
+          ? (running
+              ? 'DNS cache cleared — reloading'
+              : 'DNS cache cleared')
+          : 'Could not clear DNS cache'),
+    ));
   }
 
   /// §043: Toggle enabled — обновляет `enabled` в ref'е, kind не меняется.
@@ -917,6 +973,15 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
       _markDirty();
     });
     unawaited(SettingsStorage.saveCustomRules(_customRules));
+    // §266 — dns_enable-тумблер входит в формулу on_change (@rule_enable AND
+    // @dns_enable) → каскад (FakeIP DNS off → resolve_enabled возвращается).
+    unawaited(() async {
+      final template = await TemplateLoader.load();
+      final match = template.selectableRules
+          .where((p) => p.presetId == presetId)
+          .firstOrNull;
+      if (match != null) await applyPresetOnChange(match, updated);
+    }());
   }
 
   /// §033: Delete inline user-rule.
