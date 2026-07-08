@@ -8,10 +8,7 @@
       {
         "description": "System DNS",
         "enabled": true,
-        "server": {
-          "type": "local",
-          "tag": "local_dns_resolver"
-        }
+        "server": {"type": "local", "tag": "local_dns_resolver"}
       },
       {
         "description": "Google DNS (direct)",
@@ -28,13 +25,7 @@
             ]
           }
         ],
-        "server": {
-          "type": "udp",
-          "tag": "google_udp",
-          "server_port": 53,
-          "server": "@dns_ip",
-          "detour": "@outbound"
-        }
+        "server": {"type": "udp", "tag": "google_udp", "server_port": 53, "server": "@dns_ip", "detour": "@outbound"}
       },
       {
         "description": "Google DoT",
@@ -51,13 +42,7 @@
             ]
           }
         ],
-        "server": {
-          "type": "tls",
-          "tag": "google_dot",
-          "server_port": 853,
-          "server": "@dns_ip",
-          "detour": "@outbound"
-        }
+        "server": {"type": "tls", "tag": "google_dot", "server_port": 853, "server": "@dns_ip", "detour": "@outbound"}
       },
       {
         "description": "Google DoH",
@@ -74,15 +59,7 @@
             ]
           }
         ],
-        "server": {
-          "type": "https",
-          "tag": "google_doh",
-          "server_port": 443,
-          "path": "/dns-query",
-          "tls": {"enabled": true, "server_name": "dns.google"},
-          "server": "@dns_ip",
-          "detour": "@outbound"
-        }
+        "server": {"type": "https", "tag": "google_doh", "server_port": 443, "path": "/dns-query", "tls": {"enabled": true, "server_name": "dns.google"}, "server": "@dns_ip", "detour": "@outbound"}
       },
       {
         "description": "Cloudflare UDP",
@@ -99,13 +76,7 @@
             ]
           }
         ],
-        "server": {
-          "type": "udp",
-          "tag": "cloudflare_udp",
-          "server_port": 53,
-          "server": "@dns_ip",
-          "detour": "@outbound"
-        }
+        "server": {"type": "udp", "tag": "cloudflare_udp", "server_port": 53, "server": "@dns_ip", "detour": "@outbound"}
       },
       {
         "description": "Cloudflare DoT",
@@ -122,13 +93,7 @@
             ]
           }
         ],
-        "server": {
-          "type": "tls",
-          "tag": "cloudflare_dot",
-          "server_port": 853,
-          "server": "@dns_ip",
-          "detour": "@outbound"
-        }
+        "server": {"type": "tls", "tag": "cloudflare_dot", "server_port": 853, "server": "@dns_ip", "detour": "@outbound"}
       },
       {
         "description": "Safe DNS (DoT)",
@@ -145,14 +110,7 @@
           },
           {"name": "dom_resolver", "type": "dns_servers", "default_value": "google_udp", "title": "Domain resolver", "tooltip": "DNS server used to resolve the Safe DNS hostname itself (AdGuard profiles use a domain address)."}
         ],
-        "server": {
-          "type": "tls",
-          "tag": "safe_dns_dot",
-          "server_port": 853,
-          "server": "@safe_profile",
-          "domain_resolver": "@dom_resolver",
-          "detour": "@outbound"
-        }
+        "server": {"type": "tls", "tag": "safe_dns_dot", "server_port": 853, "server": "@safe_profile", "domain_resolver": "@dom_resolver", "detour": "@outbound"}
       }
     ],
     "rules": []
@@ -170,59 +128,16 @@
   },
   "speed_test_options": {
     "servers": [
-      {
-      "name": "Cloudflare",
-      "download_url": "https://speed.cloudflare.com/__down?bytes=25000000",
-      "upload_url": "https://speed.cloudflare.com/__up",
-      "upload_method": "POST",
-      "ping_url": "https://speed.cloudflare.com/__down?bytes=0"
-      },
-      {
-      "name": "Hostkey (Moscow)",
-      "download_url": "https://spd-rudp.hostkey.ru/files/10mb.bin",
-      "ping_url": "https://spd-rudp.hostkey.ru/"
-      },
-      {
-      "name": "Selectel (RU)",
-      "download_url": "https://speedtest.selectel.ru/10MB",
-      "ping_url": "https://speedtest.selectel.ru/"
-      },
-      {
-      "name": "Hostkey (Frankfurt)",
-      "download_url": "https://spd-desrv.hostkey.com/files/10mb.bin",
-      "ping_url": "https://spd-desrv.hostkey.com/"
-      },
-      {
-      "name": "Hostkey (Amsterdam)",
-      "download_url": "https://spd-nlsrv.hostkey.com/files/10mb.bin",
-      "ping_url": "https://spd-nlsrv.hostkey.com/"
-      },
-      {
-      "name": "Hostkey (Helsinki)",
-      "download_url": "https://spd-fisrv.hostkey.com/files/10mb.bin",
-      "ping_url": "https://spd-fisrv.hostkey.com/"
-      },
-      {
-      "name": "Hostkey (New York)",
-      "download_url": "https://spd-uswb.hostkey.com/files/10mb.bin",
-      "ping_url": "https://spd-uswb.hostkey.com/"
-      },
-      {
-      "name": "Tele2 (EU)",
-      "download_url": "http://speedtest.tele2.net/10MB.zip",
-      "upload_url": "http://speedtest.tele2.net/upload.php",
-      "ping_url": "http://speedtest.tele2.net/"
-      },
-      {
-      "name": "OVH (France)",
-      "download_url": "https://proof.ovh.net/files/10Mb.dat",
-      "ping_url": "https://proof.ovh.net/"
-      },
-      {
-      "name": "ThinkBroadband (UK)",
-      "download_url": "http://ipv4.download.thinkbroadband.com/10MB.zip",
-      "ping_url": "http://ipv4.download.thinkbroadband.com/"
-      }
+      {"name": "Cloudflare", "download_url": "https://speed.cloudflare.com/__down?bytes=25000000", "upload_url": "https://speed.cloudflare.com/__up", "upload_method": "POST", "ping_url": "https://speed.cloudflare.com/__down?bytes=0"},
+      {"name": "Hostkey (Moscow)", "download_url": "https://spd-rudp.hostkey.ru/files/10mb.bin", "ping_url": "https://spd-rudp.hostkey.ru/"},
+      {"name": "Selectel (RU)", "download_url": "https://speedtest.selectel.ru/10MB", "ping_url": "https://speedtest.selectel.ru/"},
+      {"name": "Hostkey (Frankfurt)", "download_url": "https://spd-desrv.hostkey.com/files/10mb.bin", "ping_url": "https://spd-desrv.hostkey.com/"},
+      {"name": "Hostkey (Amsterdam)", "download_url": "https://spd-nlsrv.hostkey.com/files/10mb.bin", "ping_url": "https://spd-nlsrv.hostkey.com/"},
+      {"name": "Hostkey (Helsinki)", "download_url": "https://spd-fisrv.hostkey.com/files/10mb.bin", "ping_url": "https://spd-fisrv.hostkey.com/"},
+      {"name": "Hostkey (New York)", "download_url": "https://spd-uswb.hostkey.com/files/10mb.bin", "ping_url": "https://spd-uswb.hostkey.com/"},
+      {"name": "Tele2 (EU)", "download_url": "http://speedtest.tele2.net/10MB.zip", "upload_url": "http://speedtest.tele2.net/upload.php", "ping_url": "http://speedtest.tele2.net/"},
+      {"name": "OVH (France)", "download_url": "https://proof.ovh.net/files/10Mb.dat", "ping_url": "https://proof.ovh.net/"},
+      {"name": "ThinkBroadband (UK)", "download_url": "http://ipv4.download.thinkbroadband.com/10MB.zip", "ping_url": "http://ipv4.download.thinkbroadband.com/"}
     ],
     "stream_options": [1, 4, 10],
     "default_streams": 4
@@ -272,15 +187,7 @@
       "vars": [
         { "name": "log_level", "type": "enum", "wizard_ui": "edit", "title": "Log level", "tooltip": "Verbosity of sing-box logs",
           "default_value": "warn",
-          "options": [
-            "trace",
-            "debug",
-            "info",
-            "warn",
-            "error",
-            "fatal",
-            "panic"
-          ]
+          "options": ["trace", "debug", "info", "warn", "error", "fatal", "panic"]
         },
         {"name": "auto_proxy_tag", "type": "text", "default_value": "✨auto", "wizard_ui": "hidden", "title": "Auto proxy tag", "tooltip": "Internal — tag of the URLTest group. Read-only."}
       ]
@@ -290,16 +197,19 @@
       "chapter": "core",
       "description": "Connection and routing behavior",
       "vars": [
+        {"name": "auto_detect_interface", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Auto-detect interface", "tooltip": "Automatically detect the default network interface"}
+      ]
+    },
+    {
+      "name": "Internal",
+      "chapter": "internal",
+      "description": "Internal globals referenced by presets — not shown as VPN settings.",
+      "vars": [
+        {"name": "resolve_enabled", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Resolve destination IP", "tooltip": "Resolve the sniffed domain to an IP before routing, so GeoIP and IP rules can match. Turn off when using FakeIP — the fake IP already carries the domain, and a real lookup here would bypass FakeIP and can fail on a broken resolver."},
         { "name": "resolve_strategy", "type": "enum", "wizard_ui": "edit", "title": "Resolve strategy", "tooltip": "IP version preference for DNS resolution",
           "default_value": "ipv4_only",
-          "options": [
-            "prefer_ipv4",
-            "prefer_ipv6",
-            "ipv4_only",
-            "ipv6_only"
-          ]
-        },
-        {"name": "auto_detect_interface", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Auto-detect interface", "tooltip": "Automatically detect the default network interface"}
+          "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"]
+        }
       ]
     },
     {
@@ -309,32 +219,15 @@
       "vars": [
         { "name": "urltest_url", "type": "text", "wizard_ui": "edit", "title": "Test URL", "tooltip": "Endpoint for measuring proxy latency. Pick a preset or type any URL — 204 / tiny-body endpoints are best.",
           "default_value": "https://cp.cloudflare.com/generate_204",
-          "options": [
-            "https://cp.cloudflare.com/generate_204",
-            "https://www.gstatic.com/generate_204",
-            "https://captive.apple.com/hotspot-detect.html"
-          ]
+          "options": ["https://cp.cloudflare.com/generate_204", "https://www.gstatic.com/generate_204", "https://captive.apple.com/hotspot-detect.html"]
         },
         { "name": "urltest_interval", "type": "text", "wizard_ui": "edit", "title": "Test interval", "tooltip": "How often sing-box re-tests and re-picks. Lower → faster first pick after connect, but more background traffic (1m typical, 5m conservative).",
           "default_value": "5m",
-          "options": [
-            "30s",
-            "1m",
-            "3m",
-            "5m",
-            "10m",
-            "30m"
-          ]
+          "options": ["30s", "1m", "3m", "5m", "10m", "30m"]
         },
         { "name": "urltest_tolerance", "type": "int", "wizard_ui": "edit", "title": "Tolerance (ms)", "tooltip": "Only switch proxy if latency difference exceeds this",
           "default_value": "30",
-          "options": [
-            "10",
-            "30",
-            "50",
-            "100",
-            "200"
-          ]
+          "options": ["10", "30", "50", "100", "200"]
         }
       ]
     },
@@ -345,12 +238,7 @@
       "vars": [
         { "name": "dns_strategy", "type": "enum", "wizard_ui": "edit", "title": "Preferred IP version", "tooltip": "DNS resolution strategy",
           "default_value": "ipv4_only",
-          "options": [
-            "prefer_ipv4",
-            "prefer_ipv6",
-            "ipv4_only",
-            "ipv6_only"
-          ]
+          "options": ["prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"]
         },
         {"name": "dns_default_domain_resolver", "type": "text", "default_value": "google_udp", "wizard_ui": "fix", "title": "Default domain resolver", "tooltip": "Used by routing engine to resolve hostnames internally (outbound endpoints, routing rules). Not the resolver apps use. Recommended: cloudflare_udp, google_udp, or google_doh. Avoid local_dns_resolver here — system DNS leaks these lookups to your ISP, bypassing the VPN."},
         {"name": "dns_final", "type": "text", "default_value": "google_udp", "wizard_ui": "fix", "title": "DNS final", "tooltip": "Default fallback DNS server. Used when an app's DNS query doesn't match any DNS rule. For privacy, prefer encrypted: google_doh, cloudflare_dot. For speed: cloudflare_udp, google_udp. local_dns_resolver (system DNS) is safe here."}
@@ -379,11 +267,7 @@
         {"name": "tun_strict_route", "type": "bool", "default_value": "false", "wizard_ui": "edit", "title": "Strict route", "tooltip": "May break connectivity on some devices"},
         { "name": "tun_stack", "type": "enum", "wizard_ui": "edit", "title": "Stack", "tooltip": "system (default), gvisor (userspace), mixed",
           "default_value": "system",
-          "options": [
-            "system",
-            "gvisor",
-            "mixed"
-          ]
+          "options": ["system", "gvisor", "mixed"]
         }
       ]
     },
@@ -497,16 +381,10 @@
         {"name": "sniff_enabled", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Packet sniffing", "tooltip": "Detect protocol and domain from packets for accurate routing."},
         { "name": "sniff_timeout", "type": "enum", "wizard_ui": "edit", "title": "Sniff timeout", "tooltip": "How long to wait for the domain to appear in the packet before giving up.",
           "default_value": "300ms",
-          "options": [
-            "100ms",
-            "300ms",
-            "500ms",
-            "1s",
-            "3s"
-          ]
+          "options": ["100ms", "300ms", "500ms", "1s", "3s"]
         },
         {"name": "hijack_dns_enabled", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Hijack DNS", "tooltip": "Route all DNS queries through the tunnel's DNS engine. WARNING: turning this off disables FakeIP and all DNS rules — apps query their own DNS directly, uncontrolled. Keep on unless you know exactly why."},
-        {"name": "resolve_enabled", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Resolve destination IP", "tooltip": "Resolve the sniffed domain to an IP before routing, so GeoIP and IP rules can match. Turn off when using FakeIP — the fake IP already carries the domain, and a real lookup here would bypass FakeIP and can fail on a broken resolver."},
+        {"ref": "resolve_enabled"},
         {"ref": "resolve_strategy"}
       ],
       "rule": [
@@ -569,48 +447,12 @@
       "rule_set": [
         { "tag": "ru-domains", "type": "inline",
           "rules": [
-            {
-              "domain_suffix": [
-                "ru",
-                "su",
-                "xn--p1ai",
-                "xn--p1acf",
-                "xn--80adxhks",
-                "moscow",
-                "tatar",
-                "xn--d1acj3b",
-                "xn--80asehdb",
-                "xn--80aswg",
-                "xn--c1avg",
-                "xn--j1aef"
-              ]
-            }
+            {"domain_suffix": ["ru", "su", "xn--p1ai", "xn--p1acf", "xn--80adxhks", "moscow", "tatar", "xn--d1acj3b", "xn--80asehdb", "xn--80aswg", "xn--c1avg", "xn--j1aef"]}
           ]
         },
         { "tag": "ru-services", "type": "inline",
           "rules": [
-            {
-              "domain_suffix": [
-                "userapi.com",
-                "avito.st",
-                "yandex.net",
-                "yandex.com",
-                "yastatic.net",
-                "2gis.com",
-                "okko.tv",
-                "premier.one",
-                "lenta.com",
-                "vk.com",
-                "vk-portal.net",
-                "gismeteo.com",
-                "lmru.tech",
-                "mradx.net",
-                "wbstatic.net",
-                "wildberries.by",
-                "trbcdn.net",
-                "sberbank.com"
-              ]
-            }
+            {"domain_suffix": ["userapi.com", "avito.st", "yandex.net", "yandex.com", "yastatic.net", "2gis.com", "okko.tv", "premier.one", "lenta.com", "vk.com", "vk-portal.net", "gismeteo.com", "lmru.tech", "mradx.net", "wbstatic.net", "wildberries.by", "trbcdn.net", "sberbank.com"]}
           ]
         },
         { "tag": "geoip-ru", "enabled": "@geoip_enabled", "type": "remote", "format": "binary", "update_interval": "168h",
@@ -632,33 +474,9 @@
         {"rule_set": ["ru-domains", "ru-services"], "server": "@dns_server", "action": "route"}
       ],
       "dns_servers": [
-        {
-          "type": "udp",
-          "tag": "yandex_udp",
-          "server": "@dns_ip",
-          "server_port": 53,
-          "description": "Yandex UDP (IP from above)",
-          "detour": "@outbound"
-        },
-        {
-          "type": "https",
-          "tag": "yandex_doh",
-          "server": "77.88.8.88",
-          "server_port": 443,
-          "path": "/dns-query",
-          "description": "Yandex Safe DoH",
-          "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"},
-          "detour": "@outbound"
-        },
-        {
-          "type": "tls",
-          "tag": "yandex_dot",
-          "server": "77.88.8.88",
-          "server_port": 853,
-          "description": "Yandex Safe DoT",
-          "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"},
-          "detour": "@outbound"
-        }
+        {"type": "udp", "tag": "yandex_udp", "server": "@dns_ip", "server_port": 53, "description": "Yandex UDP (IP from above)", "detour": "@outbound"},
+        {"type": "https", "tag": "yandex_doh", "server": "77.88.8.88", "server_port": 443, "path": "/dns-query", "description": "Yandex Safe DoH", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@outbound"},
+        {"type": "tls", "tag": "yandex_dot", "server": "77.88.8.88", "server_port": 853, "description": "Yandex Safe DoT", "tls": {"enabled": true, "server_name": "safe.dot.dns.yandex.net"}, "detour": "@outbound"}
       ]
     },
     {
@@ -674,13 +492,7 @@
         {"query_type": ["A", "AAAA"], "server": "@dns_server"}
       ],
       "dns_servers": [
-        {
-          "type": "fakeip",
-          "tag": "fakeip",
-          "inet4_range": "198.18.0.0/15",
-          "inet6_range": "fc00::/18",
-          "description": "FakeIP allocator"
-        }
+        {"type": "fakeip", "tag": "fakeip", "inet4_range": "198.18.0.0/15", "inet6_range": "fc00::/18", "description": "FakeIP allocator"}
       ]
     },
     {
