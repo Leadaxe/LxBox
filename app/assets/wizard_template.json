@@ -374,7 +374,7 @@
       "preset_id": "traffic-processing",
       "ui": {"label": "Traffic Processing", "description": "Core packet handling: sniff the domain, hijack DNS into the tunnel, resolve destinations for routing. Applied first, before all other rules.", "default": true, "locked": true, "pinned": 0},
       "vars": [
-        {"name": "sniff_enabled", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Packet sniffing", "tooltip": "Detect protocol and domain from packets for accurate routing."},
+        {"name": "sniff_enabled", "type": "bool", "default_value": "true", "wizard_ui": "edit", "title": "Packet sniffing", "tooltip": "Detect protocol and domain from packets for accurate routing.\n⚠️ WARNING: turning this off makes protocol/domain rules unmatchable — e.g. BitTorrent and domain-based presets stop working (the core can no longer tell what a connection is)."},
         { "name": "sniff_timeout", "type": "enum", "wizard_ui": "edit", "title": "Sniff timeout", "tooltip": "How long to wait for the domain to appear in the packet before giving up.",
           "default_value": "300ms",
           "options": ["100ms", "300ms", "500ms", "1s", "3s"]
