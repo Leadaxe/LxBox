@@ -15,6 +15,7 @@ import '../rule_set_downloader.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
 import 'if_engine.dart';
+import 'normalize_pinned_presets.dart';
 import 'post_steps.dart';
 import 'rule_set_registry.dart';
 import 'server_list_build.dart';
@@ -238,10 +239,21 @@ Future<BuildResult> buildConfig({
     ];
   }
 
+  // §264 — нормализация pinned-пресетов: гарантирует, что locked+pinned
+  // пресет (traffic-processing) присутствует и стоит первым, независимо от
+  // storage (fresh/restore/upgrade). Критично для порядка route.rules (sniff
+  // первым). Одноразово здесь → все нижеследующие проходы видят нормализованный
+  // список.
+  final customRules = normalizePinnedPresets(
+    settings.customRules,
+    template.selectableRules,
+    template,
+  );
+
   // Pre-resolve srs local paths (sing-box получает file:// — rule set
   // `{type: local, path: …}`). Удалённо ничего не качается.
   final srsPaths = <String, String>{};
-  for (final cr in settings.customRules) {
+  for (final cr in customRules) {
     if (cr.kind != CustomRuleKind.srs) continue;
     final p = await RuleSetDownloader.cachedPath(cr.id);
     if (p != null) srsPaths[cr.id] = p;
@@ -257,7 +269,7 @@ Future<BuildResult> buildConfig({
   // spec §011 требует `type: local, path: <кэш>` вместо `type: remote`.
   // Ключ плоский: `<presetId>|<rule_set_tag>`.
   final presetSrsPaths = <String, String>{};
-  for (final cr in settings.customRules) {
+  for (final cr in customRules) {
     if (cr is! CustomRulePreset) continue;
     if (cr.presetId.isEmpty) continue;
     SelectableRule? preset;
@@ -293,7 +305,7 @@ Future<BuildResult> buildConfig({
   // считается active'ным для DNS-правил, поэтому его kind:preset запись в
   // dns_options.rules orphan-чистится (симметрия с серверами).
   final activePresetIdsWithDnsRule = <String>{
-    for (final cr in settings.customRules)
+    for (final cr in customRules)
       if (cr is CustomRulePreset && cr.enabled && cr.presetId.isNotEmpty)
         if (template.selectableRules
             .any((p) => p.presetId == cr.presetId && p.dnsRules.isNotEmpty))
@@ -316,10 +328,11 @@ Future<BuildResult> buildConfig({
   // kind'ами (старый pipeline разделял на 2 прохода что ломало порядок).
   final unifiedApply = applyAllCustomRules(
     ruleSets,
-    settings.customRules,
+    customRules,
     template.selectableRules,
     srsPaths: srsPaths,
     presetSrsPaths: presetSrsPaths,
+    globalVars: vars, // §265 — ref-vars резолвятся из flat global vars
   );
   emitWarnings.addAll(unifiedApply.warnings);
 

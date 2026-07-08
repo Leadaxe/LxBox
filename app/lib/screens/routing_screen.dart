@@ -33,6 +33,7 @@ class RoutingScreen extends StatefulWidget {
     required this.subController,
     required this.homeController,
     this.focusChannelTag,
+    this.initialPresetsTab = false,
   });
 
   final SubscriptionController subController;
@@ -41,6 +42,10 @@ class RoutingScreen extends StatefulWidget {
   /// §258 — при открытии показать канал с этим тегом и мигнуть его тайлом
   /// (навигация «хоп рантайм-цепочки → канал», openTagOwner). null = нет.
   final String? focusChannelTag;
+
+  /// §262 — открыть сразу на табе Presets (каталог пресетов). Навигация из
+  /// листа DNS-health «Enable FakeIP» → юзер видит каталог, находит FakeIP.
+  final bool initialPresetsTab;
 
   @override
   State<RoutingScreen> createState() => _RoutingScreenState();
@@ -164,6 +169,8 @@ class _RoutingScreenState extends State<RoutingScreen>
 
     return DefaultTabController(
       length: 4,
+      // §262 — таб Presets (index 1) первым при навигации из DNS-health листа.
+      initialIndex: widget.initialPresetsTab ? 1 : 0,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Routing'),
@@ -457,10 +464,37 @@ class _RoutingScreenState extends State<RoutingScreen>
     setState(() {
       // ReorderableListView передаёт newIndex сдвинутым на 1 если move вниз.
       if (newIndex > oldIndex) newIndex -= 1;
+      // §264 — pinned-инвариант: locked/pinned пресеты (traffic-processing)
+      // держатся в начале списка. Число таких «шапочных» правил = pinnedCount.
+      final pinnedCount = _pinnedRuleCount();
+      // Нельзя двигать сам pinned-пресет (drag-handle у него скрыт, но защита
+      // на случай программного вызова).
+      if (oldIndex < pinnedCount) return;
+      // Нельзя вставить обычное правило ВЫШЕ pinned-шапки — clamp к первой
+      // свободной позиции.
+      if (newIndex < pinnedCount) newIndex = pinnedCount;
       final moved = _customRules.removeAt(oldIndex);
       _customRules.insert(newIndex, moved);
       _markDirty();
     });
+  }
+
+  /// §264 — сколько правил в начале списка являются locked/pinned пресетами
+  /// (держатся сверху, не двигаются). Нормализация билдера ставит их первыми,
+  /// экран поддерживает инвариант при reorder.
+  int _pinnedRuleCount() {
+    var n = 0;
+    for (final rule in _customRules) {
+      final preset = rule.kind == CustomRuleKind.preset
+          ? _presetFor(rule.presetId)
+          : null;
+      if (preset?.locked == true) {
+        n++;
+      } else {
+        break;
+      }
+    }
+    return n;
   }
 
   Widget _buildCustomRuleTile(int index) {
@@ -506,6 +540,7 @@ class _RoutingScreenState extends State<RoutingScreen>
       pickerDisabled: pickerDisabled,
       showOutbound: showOutbound,
       touchesDns: touchesDns,
+      locked: preset?.locked ?? false,
       statusButton: statusButton,
       onTap: () => _openCustomRuleEditor(index),
       onLongPressStart: (pos) => _showRuleContextMenu(index, pos),

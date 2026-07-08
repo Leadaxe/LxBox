@@ -112,6 +112,9 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
             'label': preset.label,
             'description': preset.description,
             'default_enabled': preset.defaultEnabled,
+            // §264 — locked/pinned метаданные (симметрия Debug API).
+            'locked': preset.locked,
+            if (preset.isPinned) 'pinned': preset.pinned,
             'inline_rule_sets': inlineCount,
             'remote_rule_sets': remoteRuleSets,
             'has_dns_rule': preset.dnsRules.isNotEmpty,
