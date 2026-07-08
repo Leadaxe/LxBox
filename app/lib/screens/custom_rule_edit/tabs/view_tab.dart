@@ -40,20 +40,26 @@ class ViewTab extends StatelessWidget {
             globalVars: c.globalVars, // §264 — @vpn_mode/@resolve_strategy в превью
           );
           warnings = fragments.warnings;
+          // §264 — показываем только НЕПУСТЫЕ секции: пресет без DNS/rule_set
+          // (напр. traffic-processing — только route-правила) не должен рисовать
+          // пустые `servers: []` / `rule_set: []` — это читается как «есть», а
+          // их нет. Собираем блоки условно.
+          final dnsOptions = <String, dynamic>{
+            if (fragments.dnsServers.isNotEmpty) 'servers': fragments.dnsServers,
+            // §253: пресет может эмитить несколько DNS-правил
+            // (напр. AAAA-гейт + маршрут у ru-direct при Force IPv4).
+            if (fragments.dnsRules.isNotEmpty) 'rules': fragments.dnsRules,
+          };
+          final route = <String, dynamic>{
+            if (fragments.ruleSets.isNotEmpty) 'rule_set': fragments.ruleSets,
+            // §246: пресет может эмитить несколько route-правил
+            // (напр. resolve + route у ru-direct).
+            if (fragments.routingRules.isNotEmpty)
+              'rules': fragments.routingRules,
+          };
           json = const JsonEncoder.withIndent('  ').convert({
-            'dns_options': {
-              'servers': fragments.dnsServers,
-              // §253: пресет может эмитить несколько DNS-правил
-              // (напр. AAAA-гейт + маршрут у ru-direct при Force IPv4).
-              if (fragments.dnsRules.isNotEmpty) 'rules': fragments.dnsRules,
-            },
-            'route': {
-              'rule_set': fragments.ruleSets,
-              // §246: пресет может эмитить несколько route-правил
-              // (напр. resolve + route у ru-direct).
-              if (fragments.routingRules.isNotEmpty)
-                'rules': fragments.routingRules,
-            },
+            if (dnsOptions.isNotEmpty) 'dns_options': dnsOptions,
+            if (route.isNotEmpty) 'route': route,
           });
         }
       } else {
