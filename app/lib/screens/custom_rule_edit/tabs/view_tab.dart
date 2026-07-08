@@ -37,6 +37,7 @@ class ViewTab extends StatelessWidget {
             snap as CustomRulePreset,
             preset,
             srsPaths: c.presetSrsPaths,
+            globalVars: c.globalVars, // §264 — @vpn_mode/@resolve_strategy в превью
           );
           warnings = fragments.warnings;
           json = const JsonEncoder.withIndent('  ').convert({
