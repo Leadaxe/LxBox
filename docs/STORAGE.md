@@ -260,6 +260,8 @@ Per-key спеки и shape — в разделах ниже.
 | `haptic_enabled` | `'true'` | §029 | Тактильный отклик UI. Живёт в `vars` (`HapticService.prefsKey`), НЕ в SharedPreferences. |
 | `notif_perm_prompted_v1` | `'false'` | §128 | One-shot: промпт разрешения уведомлений показан. |
 | `allow_rotation` | `'false'` | [§220] | Снятие портретной фиксации: `'true'` → пустой preferred-orientations (ориентацию решает системный auto-rotate). Default — жёсткий портрет. Toggle в App Settings → General → Behavior. |
+| `resolve_enabled` | template | §263/§265 | Гейт route-resolve-правила пресета `traffic-processing`. Var секции `internal` (в VPN Settings не видна), редактируется в правиле через ref-var. Гасится on_change при вкл. FakeIP (§266). |
+| `resolve_strategy` | template | §249/§265 | IP-версия route-resolve (`ipv4_only`/`prefer_ipv4`/…). Var секции `internal`, ref-var в `traffic-processing`. Пишется on_change тумблера IPv6. |
 | `<custom>` | — | — | Любые юзерские template-vars, выставленные через UI / `PUT /settings/vars/<key>`. |
 
 > Полный код-список app-флагов — `SettingsStorage._appFeatureFlagVars`; держать таблицу в синхроне с ним.
@@ -456,6 +458,16 @@ OR-семантика внутри category, AND между. `protocols` и `ipI
 ```
 
 `name` — read-only в UI (🔒), периодически синхронизируется с `preset.label` из шаблона. Содержимое разворачивается на каждом `buildConfig` через `expandPreset` ([§033]). `outbound` хранится в `varsValues['outbound']` как universal override ([§033] Expansion §5).
+
+> **§265 — ref-var значения НЕ в `varsValues`.** Если пресет объявляет var как
+> `{"ref":"<global>"}` (напр. `traffic-processing` → `resolve_enabled`/
+> `resolve_strategy`), её значение живёт в **глобальном** `vars`
+> (top-level, `setVar`/`getAllVars`), а НЕ в `varsValues` пресета — единый
+> источник, чтобы правка в правиле и в секции-владельце не расходились.
+> `varsValues` не должен содержать ref-имён; `stripRefVarsFromVarsValues`
+> (`normalize_pinned_presets.dart`) вычищает застрявшие копии на загрузке Routing
+> (иначе subtitle/Debug показывали устаревшее значение — `366beec`). См.
+> TEMPLATE.md § «ref-vars».
 
 ### Backward-compat
 
@@ -779,9 +791,10 @@ Debug API handlers — идут через единую дверь `SettingsStor
 ## `channels` — [§125] каналы роутинга (template→storage)
 
 Каналы (`vpn-1..vpn-10`) переехали из статичного `wizard_template.json`
-(`preset_groups[]`) в storage. Template стал **seed'ом** — значениями по
-умолчанию на первом запуске. После миграции состав каналов живёт в `channels[]`
-и редактируется юзером (Routing → таб Channels → редактор канала).
+(§267 — `group_templates` + `default_channels`; до §267 — `preset_groups[]`) в
+storage. Template стал **seed'ом** — значениями по умолчанию на первом запуске.
+После миграции состав каналов живёт в `channels[]` и редактируется юзером
+(Routing → таб Channels → редактор канала).
 
 - `tag` — **системный immutable** id (`vpn-1`..`vpn-10`), автогенерируется при
   создании (первый свободный `vpn-N`), юзер правит только `label`. Стабильный
@@ -823,9 +836,10 @@ Debug API handlers — идут через единую дверь `SettingsStor
   всегда присутствует в `config.outbounds[]` как системный outbound и валиден
   как `route_final`.
 - **Миграция** (one-shot, guard `channels_migrated`): seed из
-  `template.presetGroups` — `enabled_groups[]`/`default_enabled` → `enabled`
-  (vpn-1 форсим true); `add_outbounds ∋ direct-out` → `include_direct`;
-  `add_outbounds ∋ ✨auto` → `auto` из `@urltest_*` vars; `default_filter=''`.
+  `template.groupTemplates` (§267) — `default_channels[i].default_enabled` /
+  legacy `enabled_groups[]` → `enabled` (vpn-1 форсим true); `channel.include ∋
+  direct` → `include_direct`; `channel.include ∋ auto` → `auto` из auto-шаблона
+  (`@urltest_*` vars); `default_filter=''`.
   Глобальный `✨auto`-preset **не** мигрируется (он больше не канал — каждый
   канал делает свой двойник). `enabled_groups[]` после миграции депрекейтится.
 - **Деградация ссылок** (heal): канал перестал быть валидной мишенью данного
