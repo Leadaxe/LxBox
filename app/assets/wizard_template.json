@@ -481,7 +481,8 @@
       "preset_id": "fakeip",
       "ui": {"label": "FakeIP", "description": "Instant DNS via placeholder IPs; real names resolve inside the tunnel. Speeds up DNS and prevents pre-tunnel DNS leaks. Not a DPI bypass. Enable below special domains so GeoIP direct routing still works.", "default": false},
       "vars": [
-        { "name": "rule_enable", "type": "bool", "wizard_ui": "hidden",
+        { "name": "rule_enable", "type": "bool", "wizard_ui": "hidden", "required": false,
+          "default_value": "true",
           "on_change": {
             "set": {
               "@resolve_enabled": {"#if": {"and": ["@rule_enable", "@dns_enable"], "value": "false", "else": "true"}}

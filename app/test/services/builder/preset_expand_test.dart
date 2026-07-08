@@ -653,6 +653,25 @@ void main() {
       expect(_fakeip().hasOutboundAffordance, isFalse);
     });
 
+    // §266 — РЕАЛЬНЫЙ шаблон (не реплика): регрессия «rule_enable без
+    // default_value = required-var unset → expandPreset прерывал весь пресет,
+    // fakeip-DNS не эмитился». Синтетический _fakeip() это не ловил (нет
+    // rule_enable). Гоняем настоящий wizard_template.json.
+    test('РЕАЛЬНЫЙ fakeip: dns_servers + dns_rules эмитятся (rule_enable не '
+        'ломает развёртку)', () {
+      final raw = File('assets/wizard_template.json').readAsStringSync();
+      final tpl =
+          WizardTemplate.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      final fakeip =
+          tpl.selectableRules.firstWhere((r) => r.presetId == 'fakeip');
+      final cr = CustomRulePreset(
+          name: 'FakeIP', presetId: 'fakeip', enabled: true);
+      final f = expandPreset(cr, fakeip, globalVars: {'vpn_mode': 'vpn'});
+      expect(f.warnings, isEmpty, reason: 'rule_enable не должна ронять пресет');
+      expect(f.dnsServers.any((s) => s['type'] == 'fakeip'), isTrue);
+      expect(f.dnsRules.isNotEmpty, isTrue);
+    });
+
     test('ru-direct.hasOutboundAffordance == true (есть var:outbound и rule)',
         () {
       expect(_ruDirect().hasOutboundAffordance, isTrue);
