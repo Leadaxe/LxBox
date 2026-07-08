@@ -106,6 +106,13 @@ class CustomRuleEditController extends ChangeNotifier {
   Map<String, String> _globalVars = const {};
   Map<String, String> get globalVars => _globalVars;
 
+  /// §265 — резолвленные определения ref-vars пресета: имя ref → `WizardVar`
+  /// целевой глобали (type/options/title/tooltip из секции-владельца). UI
+  /// (preset_params_tab) рисует по ним контрол, значение читает/пишет в
+  /// глобальный userVars (`globalVars` / `setGlobalVar`), НЕ в varsValues.
+  Map<String, WizardVar> _refVarDefs = const {};
+  Map<String, WizardVar> get refVarDefs => _refVarDefs;
+
   Map<String, String> _presetSrsPaths = const {};
   SrsDownloadState _srsState = SrsDownloadState.none;
   final Set<String> _boolVarDownloading = <String>{};
@@ -273,14 +280,40 @@ class CustomRuleEditController extends ChangeNotifier {
   Future<void> _loadVpnMode() async {
     final cfg = await SettingsStorage.getVpnMode();
     final userVars = await SettingsStorage.getAllVars();
+    final template = await TemplateLoader.load();
     if (_disposed) return;
     _hasMixedInbound = cfg.hasMixed;
-    // §264 — globalVars для превью пресета: userVars (resolve_strategy и др.)
-    // + vpn_mode из VpnModeConfig (он приходит не через userVars, а прямым
-    // присваиванием в билдере — build_config.dart). Template-дефолты
-    // недостающих vars здесь не подмешиваем: для превью inbound достаточно
-    // vpn_mode, а resolve_strategy юзер видит по своему значению.
-    _globalVars = {...userVars, 'vpn_mode': cfg.mode};
+
+    // §265 — резолвим ref-vars пресета: для каждой `{"ref": name}` берём
+    // определение глобали из template + значение (userVars или её default).
+    final refDefs = <String, WizardVar>{};
+    final refDefaults = <String, String>{};
+    final p = preset;
+    if (p != null) {
+      for (final v in p.vars) {
+        if (!v.isRef) continue;
+        final global = template.globalVar(v.ref);
+        if (global == null) continue; // битая ссылка → UI пропустит
+        refDefs[v.ref] = global;
+        refDefaults[v.ref] = global.defaultValue;
+      }
+    }
+    _refVarDefs = refDefs;
+
+    // §264 — globalVars: template-дефолты ref-целей (fallback) < userVars
+    // (юзерский выбор) + vpn_mode из VpnModeConfig (он приходит не через
+    // userVars, а прямым присваиванием в билдере). Дефолты нужны, чтобы
+    // ref-var контрол показывал текущее значение, даже если юзер её не трогал.
+    _globalVars = {...refDefaults, ...userVars, 'vpn_mode': cfg.mode};
+    notifyListeners();
+  }
+
+  /// §265 — запись значения ref-var (глобальной) в userVars. В отличие от
+  /// [setVarValue] (varsValues пресета), пишет в глобальный storage —
+  /// единый источник (напр. resolve_strategy питает и config.dns.strategy).
+  Future<void> setGlobalVar(String name, String val) async {
+    await SettingsStorage.setVar(name, val);
+    _globalVars = {..._globalVars, name: val};
     notifyListeners();
   }
 

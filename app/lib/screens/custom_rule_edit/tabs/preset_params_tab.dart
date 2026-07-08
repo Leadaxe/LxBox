@@ -71,13 +71,31 @@ class PresetParamsTab extends StatelessWidget {
 
     // Hidden-vars (wizard_ui: hidden) не редактируются юзером — их значение
     // приходит из default_value при раскрытии пресета. Из редактора исключаем.
-    // §265 — ref-vars тоже исключаем: их значение глобальное (userVars),
-    // юзер правит его в секции-владельце (напр. resolve_strategy в Network →
-    // VPN Settings), не в редакторе правила. Здесь показывать нечего —
-    // per-preset varsValues их не хранит.
-    final visibleVars = preset.vars
-        .where((v) => v.wizardUI != 'hidden' && !v.isRef)
-        .toList();
+    // §265 — ref-vars ПОКАЗЫВАЕМ, но подставляем определение целевой глобали
+    // (type/options/title/tooltip из секции-владельца, резолвлено контроллером
+    // в refVarDefs), сохраняя `ref` — контрол читает/пишет глобальный userVars,
+    // не varsValues. Битая ссылка (нет в refVarDefs) → пропускаем.
+    final visibleVars = <WizardVar>[];
+    for (final v in preset.vars) {
+      if (v.wizardUI == 'hidden') continue;
+      if (v.isRef) {
+        final g = c.refVarDefs[v.ref];
+        if (g == null) continue;
+        visibleVars.add(WizardVar(
+          name: g.name,
+          type: g.type,
+          defaultValue: g.defaultValue,
+          wizardUI: g.wizardUI,
+          options: g.options,
+          title: g.title,
+          tooltip: g.tooltip,
+          required: g.required,
+          ref: v.ref, // помечаем как ref → контрол пойдёт в globalVars
+        ));
+      } else {
+        visibleVars.add(v);
+      }
+    }
 
     return ListView(
       padding: EdgeInsets.fromLTRB(
@@ -294,9 +312,16 @@ class _PresetVarWidget extends StatelessWidget {
           },
         );
       case 'enum':
-        final hasExplicit = c.varsValues.containsKey(v.name);
-        final stored = c.varsValues[v.name];
-        final currentKey = hasExplicit ? (stored ?? '') : v.defaultValue;
+        // §265 — ref-var: значение из глобального userVars (globalVars),
+        // запись через setGlobalVar; обычная var — из varsValues/setVarValue.
+        final String currentKey;
+        if (v.isRef) {
+          currentKey = c.globalVars[v.ref] ?? v.defaultValue;
+        } else {
+          final hasExplicit = c.varsValues.containsKey(v.name);
+          final stored = c.varsValues[v.name];
+          currentKey = hasExplicit ? (stored ?? '') : v.defaultValue;
+        }
         final items = <DropdownMenuItem<String>>[];
         if (!v.required) {
           items.add(const DropdownMenuItem<String>(
@@ -322,7 +347,11 @@ class _PresetVarWidget extends StatelessWidget {
           items: items,
           onChanged: (val) {
             if (val == null) return;
-            c.setVarValue(v.name, val);
+            if (v.isRef) {
+              c.setGlobalVar(v.ref, val);
+            } else {
+              c.setVarValue(v.name, val);
+            }
           },
         );
       case 'bool':
