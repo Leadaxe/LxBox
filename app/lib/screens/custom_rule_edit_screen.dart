@@ -322,12 +322,15 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
                 onPressed: _handleBack,
               ),
               actions: [
-                IconButton(
-                  tooltip: 'Delete rule',
-                  icon: Icon(Icons.delete_outline,
-                      color: Theme.of(context).colorScheme.error),
-                  onPressed: _delete,
-                ),
+                // §264 — locked-пресет (traffic-processing) нельзя удалить:
+                // delete-иконку скрываем.
+                if (!(_ctrl.preset?.locked ?? false))
+                  IconButton(
+                    tooltip: 'Delete rule',
+                    icon: Icon(Icons.delete_outline,
+                        color: Theme.of(context).colorScheme.error),
+                    onPressed: _delete,
+                  ),
                 _SaveIconButton(controller: _ctrl, onPressed: _save),
               ],
               bottom: const TabBar(
