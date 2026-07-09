@@ -16,7 +16,6 @@ PresetApplyResult applyPresetBundles(
   List<CustomRule> rules,
   List<SelectableRule> presets, {
   Map<String, String> presetSrsPaths = const {},
-  Map<String, bool> isPresetDnsEnabled = const {},
 }) {
   // §062: shim вокруг `_applyPresetSingle` — обходит ТОЛЬКО preset rules
   // в storage order (фильтруя inline/srs). Сохраняет старый publi API +
@@ -32,7 +31,6 @@ PresetApplyResult applyPresetBundles(
       presets,
       state,
       presetSrsPaths: presetSrsPaths,
-      isPresetDnsEnabled: isPresetDnsEnabled,
     ));
   }
   return PresetApplyResult(
@@ -96,28 +94,55 @@ class DnsMirrorEntry {
   final Map<String, dynamic> body;
 }
 
+/// §257 — магическая var `dns_enable`: единственный тумблер DNS-блока
+/// пресета (серверы + DNS-правила + mirror-группа). Семантика:
+/// - пресет НЕ объявляет var → `true` (DNS всегда on, пока routing on);
+/// - юзер выставил значение в varsValues → оно ('true'/'false');
+/// - иначе → default_value из шаблона (пустой default → on).
+///
+/// Публичный: DNS Settings рисует свитч пресетной строки этим же предикатом
+/// (единая точка истины билдера и UI).
+bool presetDnsEnableVar(CustomRulePreset cr, SelectableRule preset) {
+  WizardVar? declared;
+  for (final v in preset.vars) {
+    if (v.name == 'dns_enable') {
+      declared = v;
+      break;
+    }
+  }
+  if (declared == null) return true;
+  // §265 — если dns_enable вдруг объявлена как ref-var, её значение в
+  // глобальном userVars, НЕ в varsValues. Здесь (билдер) userVars не читаем —
+  // возвращаем default, чтобы не взять застрявшее varsValues-значение. Сейчас
+  // dns_enable у всех пресетов — обычная var, ветка defensive.
+  if (declared.isRef) return true;
+  final explicit = cr.varsValues['dns_enable'];
+  if (explicit != null && explicit.isNotEmpty) return explicit == 'true';
+  final def = declared.defaultValue;
+  return def.isEmpty || def == 'true';
+}
+
 /// §062: обработка одного preset rule. Регистрирует rule_sets через
 /// `registry.tryRegisterRuleSet` (identical-skip / first-wins warning),
 /// routing rule — если route-aspect enabled, DNS аспекты — если dns-aspect
-/// enabled. Cross-preset DNS-server dedup через [state].dnsServerByTag.
+/// enabled (§257: магическая var `dns_enable`). Cross-preset DNS-server
+/// dedup через [state].dnsServerByTag.
 List<String> _applyPresetSingle(
   CustomRulePreset cr,
   RuleSetRegistry registry,
   List<SelectableRule> presets,
   _PresetSharedState state, {
   Map<String, String> presetSrsPaths = const {},
-  Map<String, bool> isPresetDnsEnabled = const {},
+  Map<String, String> globalVars = const {},
 }) {
   final warnings = <String>[];
   if (cr.presetId.isEmpty) return warnings;
 
   final routeEnabled = cr.enabled;
-  // §121: routing-тоггл = король. Независимый DNS-флаг (§033) действует только
+  // §121: routing-тоггл = король. Независимый DNS-флаг действует только
   // пока routing включён — выключенный пресет не порождает ни серверы, ни
   // правила, ни mirror-lock'и (как будто его нет в конфиге).
-  final dnsEnabled = routeEnabled && (isPresetDnsEnabled[cr.presetId] ?? false);
-  // Routing off + DNS gated off → пресет мёртв целиком.
-  if (!routeEnabled && !dnsEnabled) return warnings;
+  if (!routeEnabled) return warnings;
 
   SelectableRule? match;
   for (final p in presets) {
@@ -131,6 +156,12 @@ List<String> _applyPresetSingle(
     return warnings;
   }
 
+  // §257: DNS-аспект пресета гейтится магической var `dns_enable`
+  // (заменила isPresetDnsEnabled из dns_options.rules — один источник
+  // истины вместо двух тумблеров на один флаг). Нет var в шаблоне →
+  // DNS всегда on, пока routing on (fakeip и пресеты без опционального DNS).
+  final dnsEnabled = presetDnsEnableVar(cr, match);
+
   // Из плоской мапы `presetSrsPaths["<presetId>|<tag>"]` собираем subset
   // для текущего пресета: tag → path.
   final srsSubset = <String, String>{};
@@ -141,7 +172,7 @@ List<String> _applyPresetSingle(
     }
   }
 
-  final raw = expandPreset(cr, match, srsPaths: srsSubset);
+  final raw = expandPreset(cr, match, srsPaths: srsSubset, globalVars: globalVars);
   warnings.addAll(raw.warnings);
 
   // Rule sets — identical-skip / first-wins через registry.
@@ -551,24 +582,24 @@ UnifiedApplyResult applyAllCustomRules(
   List<SelectableRule> presets, {
   Map<String, String> srsPaths = const {},
   Map<String, String> presetSrsPaths = const {},
-  Map<String, bool> isPresetDnsEnabled = const {},
+  Map<String, String> globalVars = const {},
 }) {
   final state = _PresetSharedState();
   final warnings = <String>[];
   for (final cr in rules) {
     switch (cr) {
       case CustomRulePreset():
-        // §121: routing-тоггл = король. `_applyPresetSingle` gate'ит DNS-аспект
-        // через `dnsEnabled = cr.enabled && isPresetDnsEnabled[...]`, поэтому
-        // выключенный preset (cr.enabled=false) внутри сам отсекается целиком
-        // (ни routing, ни DNS, ни mirror). Skip снаружи не нужен.
+        // §121: routing-тоггл = король. `_applyPresetSingle` внутри сам
+        // отсекает выключенный preset (cr.enabled=false) целиком (ни routing,
+        // ни DNS, ни mirror), а DNS-аспект гейтит магической var `dns_enable`
+        // (§257). Skip снаружи не нужен.
         warnings.addAll(_applyPresetSingle(
           cr,
           registry,
           presets,
           state,
           presetSrsPaths: presetSrsPaths,
-          isPresetDnsEnabled: isPresetDnsEnabled,
+          globalVars: globalVars,
         ));
       case CustomRuleInline():
         if (!cr.enabled) continue;

@@ -284,13 +284,15 @@ class NodeRow extends StatelessWidget {
           ),
         if (onViewJson != null) const PopupMenuDivider(),
         if (onViewJson != null)
+          // §258 — экран стал Overview/JSON, пункт переименован в View
+          // details (внутреннее значение 'view_json' не трогаем).
           PopupMenuItem<String>(
             value: 'view_json',
             child: ListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.code, size: 20),
-              title: const Text('View JSON'),
+              leading: const Icon(Icons.info_outline, size: 20),
+              title: const Text('View details'),
             ),
           ),
         if (showCopy) const PopupMenuDivider(),

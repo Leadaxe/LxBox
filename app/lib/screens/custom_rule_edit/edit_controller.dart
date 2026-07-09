@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
 import '../../services/builder/post_steps.dart' show templateDnsServersByTag;
+import '../../services/preset_on_change.dart';
 import '../../services/rule_set_downloader.dart';
 import '../../services/settings_storage.dart';
 import '../../services/template_loader.dart';
@@ -98,6 +99,21 @@ class CustomRuleEditController extends ChangeNotifier {
   /// proxy/vpn_proxy, §119). Гейтит чекбокс `Proxy interface` в INBOUND-секции.
   /// Читается async в `_init` через [SettingsStorage.getVpnMode].
   bool _hasMixedInbound = false;
+
+  /// §264 — глобальные vars для превью пресета в View-табе (expandPreset
+  /// globalVars): `@vpn_mode`/`@resolve_strategy` в правилах пресета
+  /// (traffic-processing) резолвятся из глобали, иначе `#if @vpn_mode` не
+  /// срабатывает → inbound[] пустеет в превью. Заполняется в `_loadVpnMode`.
+  Map<String, String> _globalVars = const {};
+  Map<String, String> get globalVars => _globalVars;
+
+  /// §265 — резолвленные определения ref-vars пресета: имя ref → `WizardVar`
+  /// целевой глобали (type/options/title/tooltip из секции-владельца). UI
+  /// (preset_params_tab) рисует по ним контрол, значение читает/пишет в
+  /// глобальный userVars (`globalVars` / `setGlobalVar`), НЕ в varsValues.
+  Map<String, WizardVar> _refVarDefs = const {};
+  Map<String, WizardVar> get refVarDefs => _refVarDefs;
+
   Map<String, String> _presetSrsPaths = const {};
   SrsDownloadState _srsState = SrsDownloadState.none;
   final Set<String> _boolVarDownloading = <String>{};
@@ -264,8 +280,41 @@ class CustomRuleEditController extends ChangeNotifier {
   /// в INBOUND-секции. `mixed-in` существует только в proxy/vpn_proxy (§119).
   Future<void> _loadVpnMode() async {
     final cfg = await SettingsStorage.getVpnMode();
+    final userVars = await SettingsStorage.getAllVars();
+    final template = await TemplateLoader.load();
     if (_disposed) return;
     _hasMixedInbound = cfg.hasMixed;
+
+    // §265 — резолвим ref-vars пресета: для каждой `{"ref": name}` берём
+    // определение глобали из template + значение (userVars или её default).
+    final refDefs = <String, WizardVar>{};
+    final refDefaults = <String, String>{};
+    final p = preset;
+    if (p != null) {
+      for (final v in p.vars) {
+        if (!v.isRef) continue;
+        final global = template.globalVar(v.ref);
+        if (global == null) continue; // битая ссылка → UI пропустит
+        refDefs[v.ref] = global;
+        refDefaults[v.ref] = global.defaultValue;
+      }
+    }
+    _refVarDefs = refDefs;
+
+    // §264 — globalVars: template-дефолты ref-целей (fallback) < userVars
+    // (юзерский выбор) + vpn_mode из VpnModeConfig (он приходит не через
+    // userVars, а прямым присваиванием в билдере). Дефолты нужны, чтобы
+    // ref-var контрол показывал текущее значение, даже если юзер её не трогал.
+    _globalVars = {...refDefaults, ...userVars, 'vpn_mode': cfg.mode};
+    notifyListeners();
+  }
+
+  /// §265 — запись значения ref-var (глобальной) в userVars. В отличие от
+  /// [setVarValue] (varsValues пресета), пишет в глобальный storage —
+  /// единый источник (напр. resolve_strategy питает и config.dns.strategy).
+  Future<void> setGlobalVar(String name, String val) async {
+    await SettingsStorage.setVar(name, val);
+    _globalVars = {..._globalVars, name: val};
     notifyListeners();
   }
 
@@ -304,6 +353,19 @@ class CustomRuleEditController extends ChangeNotifier {
     if (_enabled == v) return;
     _enabled = v;
     notifyListeners();
+    _applyPresetOnChange(); // §266 — @rule_enable сменился
+  }
+
+  /// §266 — каскад on_change пресета (пишет глобальные цели вроде
+  /// resolve_enabled в userVars). Псевдо-vars берутся из текущего snapshot
+  /// (enabled + varsValues). No-op для не-preset правил / пресета без on_change.
+  void _applyPresetOnChange() {
+    final p = preset;
+    if (p == null) return;
+    final snap = snapshot();
+    if (snap is CustomRulePreset) {
+      unawaited(applyPresetOnChange(p, snap));
+    }
   }
 
   void setIpIsPrivate(bool v) {
@@ -411,14 +473,24 @@ class CustomRuleEditController extends ChangeNotifier {
   /// (повторное включение не теряет выбор). Первое включение без выбора —
   /// преселект `google_udp` (дефолтный резолвер) или первый доступный tag.
   void setDnsEnabled(bool v) {
+    if (!v) {
+      // §257: снятие галки «Send DNS to dedicated server» = удалить сервер
+      // (не просто выключить). serverTag стирается — правило перестаёт нести
+      // server-аспект и уходит из DNS Settings (если Force тоже нет → dns
+      // обнуляется, не копим мёртвый RuleDns).
+      final force = _dns?.forceIpv4 ?? false;
+      _dns = force ? const RuleDns(forceIpv4: true) : null;
+      notifyListeners();
+      return;
+    }
     var tag = _dns?.serverTag ?? '';
-    if (v && tag.isEmpty) {
+    if (tag.isEmpty) {
       tag = _dnsServerTags.contains('google_udp')
           ? 'google_udp'
           : (_dnsServerTags.isNotEmpty ? _dnsServerTags.first : '');
     }
     // §256: copyWith сохраняет forceIpv4 (ортогонален dedicated-серверу).
-    _dns = (_dns ?? const RuleDns()).copyWith(enabled: v, serverTag: tag);
+    _dns = (_dns ?? const RuleDns()).copyWith(enabled: true, serverTag: tag);
     notifyListeners();
   }
 
@@ -485,9 +557,18 @@ class CustomRuleEditController extends ChangeNotifier {
     final p = preset;
     if (p == null) return false;
 
+    // §265 — ref-var пишется в ГЛОБАЛЬНЫЙ userVars, не в varsValues пресета.
+    // UI-слой (bool-case) уже роутит ref через setGlobalVar до вызова, но
+    // guard на случай прямого вызова: не даём ref-значению утечь в varsValues.
+    if (v.isRef) {
+      await setGlobalVar(v.ref, val ? 'true' : 'false');
+      return false;
+    }
+
     if (!val) {
       _varsValues[v.name] = 'false';
       notifyListeners();
+      _applyPresetOnChange(); // §266 — dns_enable вход формулы on_change
       return false;
     }
 
@@ -499,6 +580,7 @@ class CustomRuleEditController extends ChangeNotifier {
     if (controlled.isEmpty) {
       _varsValues[v.name] = 'true';
       notifyListeners();
+      _applyPresetOnChange(); // §266
       return false;
     }
 
@@ -522,6 +604,7 @@ class CustomRuleEditController extends ChangeNotifier {
       _varsValues[v.name] = 'true';
       _presetSrsPaths = {..._presetSrsPaths};
       notifyListeners();
+      _applyPresetOnChange(); // §266
       return false;
     }
 
@@ -545,6 +628,7 @@ class CustomRuleEditController extends ChangeNotifier {
     if (!anyFailed) {
       _varsValues[v.name] = 'true';
       _presetSrsPaths = {..._presetSrsPaths, ...newPaths};
+      _applyPresetOnChange(); // §266
     }
     notifyListeners();
     return anyFailed;

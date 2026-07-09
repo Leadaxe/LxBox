@@ -1,17 +1,37 @@
 import 'package:flutter/material.dart';
 
-/// §125 — отображение служебных нод (direct / auto) человекочитаемым
+/// §125/§267 — отображение служебных нод (direct / auto / block) человекочитаемым
 /// label'ом + иконкой вместо голого tag'а.
 ///
 /// Тип берётся ТОЧНО из сохранённого конфига (`ParsedConfig.byTag[tag].type`),
-/// а не по маске имени: `direct` → «Direct», `urltest` → «Auto». Так теги
-/// auto-двойников (`vpn-1-auto`, ...) и `direct-out` подменяются надёжно,
-/// без зависимости от их конкретного имени.
+/// а не по маске имени. Так теги auto-двойников (`vpn-1-auto`, ...) и `direct-out`
+/// подменяются надёжно, без зависимости от их конкретного имени.
+///
+/// §267 — служебная нода описана в шаблоне (`group_templates.magic_nodes`) по
+/// role-ключу. Здесь ветвимся по role (см. `_roleForOutboundType` — маппинг
+/// sing-box outbound-type → role). `label` — зеркало `magic_nodes.*.title`
+/// (`Auto`/`Direct`/`Block`); иконка остаётся в коде (IconData не сериализуется
+/// в шаблон и тришейкается компилятором).
 class SpecialNodeDisplay {
   const SpecialNodeDisplay({required this.label, required this.icon});
 
   final String label;
   final IconData icon;
+}
+
+/// Маппинг sing-box outbound-`type` → role служебной ноды `magic_nodes`.
+/// `null` — обычная прокси-нода (не служебная).
+String? _roleForOutboundType(String? outboundType) {
+  switch (outboundType) {
+    case 'urltest':
+      return 'auto';
+    case 'direct':
+      return 'direct';
+    case 'block':
+      return 'block';
+    default:
+      return null;
+  }
 }
 
 /// Возвращает display-подмену для служебной ноды по её outbound-[type] из
@@ -21,13 +41,13 @@ class SpecialNodeDisplay {
 /// - `urltest` → «Auto» (latency-test группа, авто-выбор быстрейшего).
 /// - `block`   → «Block» (дроп трафика, §201).
 SpecialNodeDisplay? specialNodeDisplayForType(String? outboundType) {
-  switch (outboundType) {
+  final role = _roleForOutboundType(outboundType);
+  switch (role) {
     case 'direct':
       return const SpecialNodeDisplay(label: 'Direct', icon: Icons.public);
-    case 'urltest':
+    case 'auto':
       // ✨ — узнаваемая иконка auto (как был эмодзи в старом теге '✨auto').
-      return const SpecialNodeDisplay(
-          label: 'Auto', icon: Icons.auto_awesome);
+      return const SpecialNodeDisplay(label: 'Auto', icon: Icons.auto_awesome);
     case 'block':
       return const SpecialNodeDisplay(label: 'Block', icon: Icons.block);
     default:

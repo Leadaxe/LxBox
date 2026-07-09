@@ -343,6 +343,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 BoxVpnService.resetNetwork(context)
                 result.success(true)
             }
+            "clearDnsCache" -> {
+                // §263 — удалить cache.db (FakeIP + DNS RDRC). Running → reload
+                // (ядро создаст чистый cache.db); off → только delete файла.
+                BoxVpnService.clearDnsCache(context)
+                result.success(true)
+            }
             "setNotificationTitle" -> {
                 val title = call.argument<String>("title") ?: "L×Box"
                 // §223 — лейбл поменялся при живом туннеле → перерисовать шторку

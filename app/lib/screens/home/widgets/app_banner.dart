@@ -99,6 +99,8 @@ List<AppBanner> activeBanners(
       onTap: a.onConfirmStop,
     ));
   }
+  // §262 — детектор здоровья DNS рисует свой баннер в Live-профайлере
+  // (live_events_tab), не через этот верхний стек.
   // §166 — lastError больше НЕ показывается верхним баннером: ошибки идут
   // всплывашкой СНИЗУ (SnackBar в home_screen._onControllerChange). Баннер
   // сверху перекрывал контент и был навязчив. config_load_error (выше) —

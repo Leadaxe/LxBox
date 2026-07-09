@@ -17,7 +17,7 @@ import 'package:lxbox/services/parser/uri_parsers.dart';
 void main() {
   WizardTemplate template() => WizardTemplate(
         parserConfig: ParserConfigBlock(),
-        presetGroups: const [],
+        groupTemplates: GroupTemplates(),
         vars: const [],
         varSections: const [],
         config: {

@@ -5,7 +5,8 @@
 | Статус | **Active** (v1.4.0) |
 | Дата | 2026-04-20 |
 | Зависимости | [`tasks/059-routing-v1-superseded`](../../tasks/059-routing-v1-superseded/spec.md) (заменил этой спекой), [`011 local ruleset cache`](../011%20local%20ruleset%20cache/spec.md), [`026 parser v2`](../026%20parser%20v2/spec.md), [`027 subscription auto update`](../027%20subscription%20auto%20update/spec.md) |
-| Убито/поглощено | **App Rules (AppRule)** — влиты в CustomRule.packages. **Selectable Rules toggle-механизм** — теперь каталог с "Copy to Rules". |
+| Убито/поглощено | **App Rules (AppRule)** — влиты в CustomRule.packages. **Selectable Rules toggle-механизм** — теперь каталог с "Copy to Rules". **§263** (resolve_enabled в Network) — superseded §264 (var пресета `traffic-processing`). |
+| Обновления | **§264** Traffic Processing preset (locked/pinned) + метаданные пресетов в `ui`; **§265** ref-vars. |
 
 ---
 
@@ -177,6 +178,59 @@ OutboundPicker и match-секции (domain/port/wifi/dns) в UI скрыты. 
 
 ---
 
+## Traffic Processing preset (§264)
+
+Locked/pinned пресет `traffic-processing` — первый (`pinned: 0`) в `selectable_rules`. Несёт базовую обработку пакетов, которая раньше жила прямо в шаблонном `config.route.rules`: `sniff` → `hijack-dns` → `resolve`. Каждое правило под своим `#if` (см. `wizard_template.json`).
+
+**Что переехало из шаблона:**
+- `config.route.rules` в шаблоне теперь **пуст** (`[]`). Базовые `sniff`/`hijack-dns`/`resolve` перенесены в пресет как его `rule`-массив, каждое за своим `#if`.
+- Из секции **Network** (chapter `core`) убраны vars `sniff_enabled` и `resolve_enabled` — они стали vars самого пресета. `resolve_strategy` **осталась** в Network (пресет ссылается на неё ref-var'ом, см. §265). `auto_detect_interface` осталась.
+- §263 (тумблер `resolve_enabled` в Network) этой фичей **superseded** — `resolve_enabled` теперь var пресета.
+
+**Vars пресета:**
+
+| var | тип | заметка |
+|-----|-----|---------|
+| `sniff_enabled` | bool | — |
+| `sniff_timeout` | enum `100ms/300ms/500ms/1s/3s` | НОВАЯ — раньше `timeout:1s` был хардкодом |
+| `hijack_dns_enabled` | bool | НОВАЯ — WARNING-тултип: off ломает FakeIP и все DNS-правила (приложения резолвят свой DNS напрямую) |
+| `resolve_enabled` | bool | — |
+| `{"ref":"resolve_strategy"}` | ref-var | ссылка на глобаль Network (§265) |
+
+### Метаданные пресетов — объект `ui`
+
+**Все 8 пресетов** переведены на вложенный объект `ui`: `{label, description, default, locked, pinned}`. Плоские `label`/`description`/`default` **убраны** из шаблона; fallback на них в `SelectableRule.fromJson` **снят** — читается только `ui.*` (отсутствие `ui` → пустые дефолты; безымянный пресет = баг шаблона, ловит тест).
+
+### Механика locked / pinned
+
+Два ортогональных флага в `ui` (модель — `SelectableRule.locked` / `SelectableRule.pinned`, геттер `isPinned = pinned != null`). Референс механики неудаляемости — `vpn-1` (§125, неудаляемый канал).
+
+**`locked: true`** — пресет нельзя выключить, удалить или подвинуть:
+- Switch **disabled** (`onChanged: null`) — нельзя выключить.
+- long-press **не открывает** context-menu (`onLongPressStart: null`) — нет Delete/reorder.
+- **нет drag-handle** — вместо grab-strip пустой отступ (`CustomRuleTile.locked`), tile не таскается.
+
+**`pinned: N`** — фиксированная позиция `N` в списке правил **И** в `route.rules`. `traffic-processing` = `pinned: 0` (всегда первый). Критично: `sniff` обязан быть **первым** правилом (извлекает домен до матчинга роутинга), а `applyAllCustomRules` эмитит правила в storage-order — значит pinned-пресет должен физически идти первым в storage.
+
+Инвариант держат три слоя:
+- **Билдер** (`lib/services/builder/normalize_pinned_presets.dart`, `normalizePinnedPresets`) — единый источник правды: seed'ит отсутствующий pinned-пресет (по `defaultEnabled`) и сортирует pinned-пресеты в начало по возрастанию `pinned`, хвост сохраняет относительный порядок. Fresh install / backup-restore / ручная правка Debug API / апгрейд со старого storage (где пресета не было) — все получают инвариант. Идемпотентна.
+- **Экран** (`routing_screen.dart`) — `_pinnedRuleCount()` считает «шапку» из locked-пресетов; `_onReorderCustomRule` не даёт двигать сам pinned-пресет (`oldIndex < pinnedCount → return`) и clamp'ит вставку обычного правила ниже шапки (`newIndex < pinnedCount → newIndex = pinnedCount`).
+- **Debug API** (`lib/services/debug/serializers/rules.dart`) — preset-variant сериализует `locked` (+`pinned` если `isPinned`) для симметрии.
+
+> Cross-ref: детали ref-var механики — §265 ниже; таск-спеки [task 264](../../tasks/264-traffic-processing-preset.md), [task 265](../../tasks/265-ref-vars.md).
+
+## Ref-vars (§265)
+
+Запись в `vars[]` вида `{"ref": "<global-name>"}` — **не декларация**, а ссылка на глобальную var (объявленную в секции), с тем же именем. Позволяет пресету переиспользовать общую настройку, не заводя копию (`traffic-processing` ссылается на `resolve_strategy`, которая же питает `dns.strategy`).
+
+- **Метаданные не дублируются** — `type`/`options`/`title`/`tooltip`/`default` берутся из целевой глобали через `WizardTemplate.globalVar(name)` (она ищет non-ref var с этим именем).
+- **Значение — в глобальном `userVars`**, НЕ в `rule.varsValues` пресета. Единый источник: правка глобали в её секции-владельце меняет и то, где var используется через ref.
+- **Модель:** `WizardVar.ref` + геттер `isRef`; `WizardVar.fromJson` парсит `{"ref":...}` (name = ref, тип-placeholder, остальное подтянется на рендере/резолве).
+- **Билдер:** `expandPreset` получил параметр `globalVars`; ref-vars пропускаются в `varsValues`-цикле и подмешиваются из `globalVars`, так что `@resolve_strategy` резолвится глобально.
+- **UI:** ref-var **не рендерится** в редакторе правила — правится в секции-владельце (Network).
+
+---
+
 ## Migration (one-shot)
 
 ### AppRule → CustomRule.packages
@@ -210,9 +264,11 @@ Routing
 **Channels** — proxy groups + `route.final` selector (не изменилось).
 
 **Presets** — read-only каталог. Каждый пресет из `wizard_template.json selectable_rules`:
-- Label + description
+- Label + description (из объекта `ui`, см. §264)
 - Кнопка **Copy to Rules** (или "In Rules" disabled, если по имени уже есть)
 - Конвертит через `selectableRuleToCustom`, для srs'ов создаёт disabled rule (юзер должен скачать SRS сначала)
+
+Locked/pinned пресет `traffic-processing` (§264) присутствует в списке правил всегда (seed'ится билдером) и стоит на позиции `0` — в Rules он неудаляем/неперемещаем, а его Switch disabled (механика — раздел «Traffic Processing preset» выше).
 
 **Rules** — реестр пользовательских `CustomRule`. ReorderableListView.builder:
 - Каждый tile: `|| drag-handle | Switch | Name + summary (2 строки) | ☁ (srs only) | OutboundPicker ▾ |`
@@ -321,9 +377,13 @@ SRS файлы — в `$documents/rule_sets/<id>.srs`. Не в json, on-disk bin
 | Файл | Что |
 |------|-----|
 | `lib/models/custom_rule.dart` | Модель `CustomRule` + `CustomRuleKind` + `kRejectTarget` + `kKnownProtocols` |
+| `lib/models/parser_config.dart` | `SelectableRule.locked`/`.pinned`/`isPinned` + `ui`-объект в `fromJson` (§264); `WizardVar.ref`/`isRef` + `WizardTemplate.globalVar` (§265) |
+| `lib/services/debug/serializers/rules.dart` | Debug API: сериализация preset-правила + поля `locked`/`pinned` (§264) |
+| `lib/screens/routing_screen/widgets/custom_rule_tile.dart` | Tile: locked → disabled switch, нет context-menu, нет drag-handle (§264) |
 | `lib/services/builder/post_steps.dart` | `applyCustomRules(registry, rules, {srsPaths})` → `List<String>` (warnings) |
 | `lib/services/builder/rule_set_registry.dart` | Централизованный `tag` allocator с auto-suffix |
-| `lib/services/builder/build_config.dart` | Pre-resolve srsPaths через RuleSetDownloader → вызов applyCustomRules |
+| `lib/services/builder/build_config.dart` | Pre-resolve srsPaths через RuleSetDownloader → вызов applyCustomRules; вызов `normalizePinnedPresets` перед emit (§264) |
+| `lib/services/builder/normalize_pinned_presets.dart` | `normalizePinnedPresets` — seed + сортировка pinned-пресетов в начало (§264) |
 | `lib/services/rule_set_downloader.dart` | `download(id,url)`, `cachedPath(id)`, `isCached(id)`, `delete(id)`, `lastUpdated(id)` |
 | `lib/services/selectable_to_custom.dart` | Конвертер SelectableRule → CustomRule (для Copy to Rules + миграции) |
 | `lib/services/settings_storage.dart` | `getCustomRules`, `saveCustomRules`, `_absorbLegacyAppRules`, `hasPresetsMigrated`, `markPresetsMigrated` |

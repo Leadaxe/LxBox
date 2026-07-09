@@ -112,7 +112,11 @@ class HomeDrawer extends StatelessWidget {
               enabled: controller.state.tunnelUp,
               onTap: () => _go(
                 context,
-                StatsScreen(configRaw: controller.state.configRaw),
+                StatsScreen(
+                  configRaw: controller.state.configRaw,
+                  subController: subController,
+                  homeController: controller,
+                ),
               ),
             ),
             ListTile(
