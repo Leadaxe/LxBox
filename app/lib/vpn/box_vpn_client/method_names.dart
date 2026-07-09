@@ -82,6 +82,8 @@ class _Methods {
   // Recovery actions (specs 030, 031)
   static const reloadVPN = 'reloadVPN';
   static const resetNetwork = 'resetNetwork';
+  // §263 — сброс DNS-кэша ядра (cache.db: FakeIP-аллокации + DNS RDRC).
+  static const clearDnsCache = 'clearDnsCache';
 
   // §047 Automation API — Dart → native control + outgoing emit.
   static const setAutomationEnabled = 'setAutomationEnabled';
