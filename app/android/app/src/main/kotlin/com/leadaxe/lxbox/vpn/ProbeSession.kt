@@ -7,6 +7,7 @@ import io.nekohasekai.libbox.CommandClientOptions
 import io.nekohasekai.libbox.CommandServer
 import io.nekohasekai.libbox.CommandServerHandler
 import io.nekohasekai.libbox.ConnectionEvents
+import io.nekohasekai.libbox.DnsQuery
 import io.nekohasekai.libbox.LogIterator
 import io.nekohasekai.libbox.OutboundGroupIterator
 import io.nekohasekai.libbox.OutboundGroupItemIterator
@@ -166,5 +167,7 @@ object ProbeSession : CommandServerHandler {
         override fun writeGroups(groups: OutboundGroupIterator?) { runCatching { } }
         override fun writeOutbounds(outbounds: OutboundGroupItemIterator?) { runCatching { } }
         override fun writeConnectionEvents(message: ConnectionEvents?) { runCatching { } }
+        // §261 — CommandClientHandler расширен writeDNSQuery. Probe DNS не слушает.
+        override fun writeDNSQuery(query: DnsQuery?) { runCatching { } }
     }
 }

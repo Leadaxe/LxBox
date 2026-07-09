@@ -573,7 +573,8 @@ class CcConnection {
       );
 }
 
-/// §180 — структурное DNS-событие из ядра (SPEC 018, `subscribeDNSQueries`).
+/// §180 — структурное DNS-событие из ядра (SPEC 018 v2, §261: команда
+/// `CommandDNS` в мультиплексе profilerClient, приходит через `writeDNSQuery`).
 /// Заменяет текстовый парсинг core-лога: атрибуция к приложению (`packageName`)
 /// приходит ИЗ ЯДРА (processInfo), не сшивается по connId.
 class CcDnsQuery {
