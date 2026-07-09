@@ -68,7 +68,6 @@ class HomeState {
     this.configLoadError = false,
     this.lastStartError = '',
     this.lastStartErrorAt,
-    this.dnsDirectBlocked = false,
   }) : configModel = configModel ?? ParsedConfig.parse(configRaw);
 
   final String configRaw;
@@ -142,12 +141,6 @@ class HomeState {
 
   /// §250 — когда [lastStartError] был записан (null, если пусто).
   final DateTime? lastStartErrorAt;
-
-  /// §259 — детектор direct-DNS-глушения (окно после старта) вынес вердикт:
-  /// живые DNS-запросы через direct массово не доходят (типично «режим БС»
-  /// мобильного оператора). Драйвит баннер «DNS not responding» + попап
-  /// выбора резолвера. Сбрасывается на новом старте и disconnect.
-  final bool dnsDirectBlocked;
 
   bool get tunnelUp => tunnel.isUp;
 
@@ -308,7 +301,6 @@ class HomeState {
     bool? configLoadError,
     String? lastStartError,
     Object? lastStartErrorAt = _unset,
-    bool? dnsDirectBlocked,
   }) {
     return HomeState(
       configRaw: configRaw ?? this.configRaw,
@@ -352,7 +344,6 @@ class HomeState {
       lastStartErrorAt: identical(lastStartErrorAt, _unset)
           ? this.lastStartErrorAt
           : lastStartErrorAt as DateTime?,
-      dnsDirectBlocked: dnsDirectBlocked ?? this.dnsDirectBlocked,
     );
   }
 }

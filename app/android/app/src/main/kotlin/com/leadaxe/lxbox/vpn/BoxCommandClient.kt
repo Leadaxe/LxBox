@@ -10,8 +10,6 @@ import io.nekohasekai.libbox.CommandClientOptions
 import io.nekohasekai.libbox.ConnectionEvents
 import io.nekohasekai.libbox.Connections
 import io.nekohasekai.libbox.DnsQuery
-import io.nekohasekai.libbox.DnsQueryHandler
-import io.nekohasekai.libbox.DnsQuerySubscription
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.LogIterator
 import io.nekohasekai.libbox.OutboundGroup
@@ -37,8 +35,9 @@ import java.util.concurrent.atomic.AtomicReference
 ///    0.1с (Stats). Питает скорость в шапке + Stats-счётчики.
 ///  - `screenClient`   — `CommandOutbounds`+`CommandGroup`+`CommandConnections`.
 ///    refcount по открытию экрана узлов/stats/conn; §164 спит в фоне (pauseScreen).
-///  - `profilerClient` — `CommandConnections`. connect/disconnect по recording
-///    (§048). Живёт в фоне ПОКА идёт запись (recording). См. feature 123.
+///  - `profilerClient` — `CommandConnections` + `CommandDNS` (§261, SPEC 018 v2:
+///    DNS-стрим в мультиплексе). connect/disconnect по recording (§048). Живёт в
+///    фоне ПОКА идёт запись; DNS авто-реконнектится с клиентом. См. feature 123.
 ///  - `pingClient`     — голый `PingHandler`, БЕЗ подписок (§175). §209: носитель
 ///    ВСЕХ unary RPC (urlTestOutbound + getPool/getGroups/getRules + select/
 ///    close*). lifecycle-НЕзависим — pause не трогает → unary работают в фоне.
@@ -89,10 +88,10 @@ class BoxCommandClient {
     // rc.5: disconnect отменяет уже-ушедшие в dial тесты), НЕ задевая
     // status/screen/profiler-стримы. Поднимается лениво под прогон.
     private val pingClient = AtomicReference<CommandClient?>(null)
-    // §180 — DNS-подписка (ядро SPEC 018). НЕ отдельный клиент: метод-подписка
-    // `subscribeDNSQueries(includeAnswers, handler)` вешается на ЖИВОЙ
-    // profilerClient, возвращает DnsQuerySubscription (закрываем в disconnect).
-    private val dnsSubscription = AtomicReference<DnsQuerySubscription?>(null)
+    // §261 — DNS больше НЕ отдельная подписка: это команда мультиплекса
+    // (addCommand(CommandDNS)), приходит через ProfilerHandler.writeDNSQuery,
+    // живёт/умирает/реконнектится вместе с profilerClient. Поля dnsSubscription
+    // нет — закрывать нечего.
 
     /// §2.8 reset-синхронизация: каждый connect инкрементит поколение; снапшоты/события
     /// из устаревшего поколения игнорируются (защита от гонки connect/disconnect, §141 P1.2).
@@ -256,8 +255,7 @@ class BoxCommandClient {
     /// §2.8 — `profilerClient` поднимается при `startGlobalRecording` (§048).
     fun connectProfiler() = connectProfilerClient()
     fun disconnectProfiler() {
-        // §180 — закрыть DNS-подписку ДО disconnect клиента (она на нём висит).
-        dnsSubscription.getAndSet(null)?.runCatching { close() }
+        // §261 — DNS в мультиплексе, гаснет с клиентом. Отдельной подписки нет.
         disconnectClient(profilerClient, "disconnectProfiler")
     }
 
@@ -267,7 +265,6 @@ class BoxCommandClient {
         screenRefs.set(0) // §122 — туннель умер, все экраны логически отвалились
         screenPaused = false // §164 — сброс lifecycle-флагов на teardown
         statusPaused = false
-        dnsSubscription.getAndSet(null)?.runCatching { close() } // §180
         disconnectClient(statusClient, "shutdownAll")
         disconnectClient(screenClient, "shutdownAll")
         disconnectClient(profilerClient, "shutdownAll")
@@ -314,20 +311,19 @@ class BoxCommandClient {
         val gen = profilerGen.incrementAndGet()
         ensureAccumulator(profilerAccumulator)
         runCatching {
+            // §261 — DNS теперь ЧЛЕН мультиплекса (SPEC 018 v2), рядом с
+            // CommandConnections: живёт на общем c.ctx, поднимается/умирает с
+            // profilerClient, авто-восстанавливается через Connect() при обрыве
+            // (фон/Doze). Отдельной подписки/reconnect-хука больше нет.
+            // setDNSIncludeAnswers(true) — CNAME-цепочка (Q3, как includeAnswers).
             val options = CommandClientOptions().apply {
                 addCommand(Libbox.CommandConnections)
+                addCommand(Libbox.CommandDNS)
+                setDNSIncludeAnswers(true)
             }
             val client = CommandClient(ProfilerHandler(gen), options)
             client.connect()
             profilerClient.getAndSet(client)?.runCatching { disconnect() }
-            // §180 — DNS-стрим (ядро SPEC 018): метод-подписка на ЖИВОМ
-            // profilerClient. includeAnswers=true (Q3 — нужна CNAME-цепочка).
-            // forward-compat: старое ядро без subscribeDNSQueries → runCatching
-            // проглотит, DNS-стрим пуст (fallback нет — §180 вариант A).
-            runCatching {
-                val sub = client.subscribeDNSQueries(true, DnsHandler())
-                dnsSubscription.getAndSet(sub)?.runCatching { close() }
-            }.onFailure { Log.w(TAG, "subscribeDNSQueries failed (gen=$gen): ${it.message}") }
         }.onFailure { Log.w(TAG, "connectProfiler failed (gen=$gen): ${it.message}") }
     }
 
@@ -607,6 +603,9 @@ class BoxCommandClient {
         override fun writeGroups(groups: OutboundGroupIterator?) { runCatching { } }
         override fun writeOutbounds(outbounds: OutboundGroupItemIterator?) { runCatching { } }
         override fun writeConnectionEvents(message: ConnectionEvents?) { runCatching { } }
+        // §261 — CommandClientHandler расширен writeDNSQuery. Только ProfilerHandler
+        // слушает DNS реально; остальные (status/screen/ping) — no-op.
+        override fun writeDNSQuery(query: DnsQuery?) { runCatching { } }
     }
 
     /// statusClient — только writeStatus + реконнект на disconnected.
@@ -677,23 +676,16 @@ class BoxCommandClient {
     }
 
     /// profilerClient — только connections (для §048 per-app live).
+    /// §261 — profilerClient слушает connections И DNS через мультиплекс
+    /// (оба — команды в options). writeConnectionEvents — дельты соединений;
+    /// writeDNSQuery — per-event DNS-резолв (SPEC 018 v2), тело 1:1 из бывшего
+    /// DnsHandler.onQuery. JNI-no-throw (§050/§151): body в runCatching.
     private inner class ProfilerHandler(gen: Int) : BaseHandler(gen) {
         override fun writeConnectionEvents(message: ConnectionEvents?) {
             applyConnectionEvents(message, profilerGen, gen, profilerAccumulator)
         }
-    }
 
-    /// §175 — pingClient: подписок нет, только unary `urlTestOutbound`. Все
-    /// 11 колбэков — no-op из BaseHandler (fail-safe try/catch).
-    private inner class PingHandler : BaseHandler(0)
-
-    /// §180 — DnsQueryHandler (ядро SPEC 018). `onQuery` на каждый DNS-резолв
-    /// (включая провалы: failed=true). Структурная атрибуция к процессу из ядра
-    /// (processInfo) — больше не сшиваем по connId из текстового лога.
-    /// Контракт JNI-no-throw (§050/§151): колбэк НЕ должен бросать через JNI →
-    /// весь body в runCatching.
-    private inner class DnsHandler : DnsQueryHandler {
-        override fun onQuery(query: DnsQuery?) {
+        override fun writeDNSQuery(query: DnsQuery?) {
             runCatching {
                 val q = query ?: return
                 if (BoxVpnService.ccDnsQueriesSink == null) return
@@ -709,7 +701,7 @@ class BoxCommandClient {
                     }
                 }
                 // §180 — answers[] (Q3): ВЕСЬ response.Answer (CNAME-hops + A/AAAA),
-                // включён через includeAnswers=true при подписке. Итератор как chain().
+                // включён через setDNSIncludeAnswers(true). Итератор как chain().
                 val answers = ArrayList<Map<String, Any>>()
                 runCatching {
                     val it = q.answers()
@@ -760,13 +752,13 @@ class BoxCommandClient {
                     "outbound" to outbound,
                     "answers" to answers,
                 ))
-            }.onFailure { Log.w(TAG, "DnsHandler.onQuery failed: ${it.message}") }
-        }
-
-        override fun onError(error: String?) {
-            Log.w(TAG, "DnsQuery stream error: $error")
+            }.onFailure { Log.w(TAG, "writeDNSQuery failed: ${it.message}") }
         }
     }
+
+    /// §175 — pingClient: подписок нет, только unary `urlTestOutbound`. Все
+    /// колбэки — no-op из BaseHandler (fail-safe try/catch).
+    private inner class PingHandler : BaseHandler(0)
 
     /// §3.2 — применить дельты к аккумулятору, эмитить снапшот. getReset()=replace.
     ///

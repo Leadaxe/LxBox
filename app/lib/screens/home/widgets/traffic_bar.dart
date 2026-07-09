@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../controllers/home_controller.dart';
+import '../../../controllers/subscription_controller.dart';
 import '../../../models/home_state.dart';
 import '../../../services/format_utils.dart';
 import '../../../services/traffic_profiler.dart';
@@ -13,10 +14,19 @@ import '../../stats_screen.dart';
 /// Перерисовывается на `TrafficProfiler.I` (recording-флаги) через внутренний
 /// `AnimatedBuilder`; трафик/uptime приходят из переданного [state].
 class TrafficBar extends StatelessWidget {
-  const TrafficBar({super.key, required this.state, required this.controller});
+  const TrafficBar({
+    super.key,
+    required this.state,
+    required this.controller,
+    this.subController,
+  });
 
   final HomeState state;
   final HomeController controller;
+
+  // §262 — прокидывается в StatsScreen → Live-таб для навигационных кнопок
+  // DNS-health листа. null → кнопки навигации не показываются.
+  final SubscriptionController? subController;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +49,8 @@ class TrafficBar extends StatelessWidget {
             builder: (_) => StatsScreen(
               configRaw: controller.state.configRaw,
               initialTab: initial,
+              subController: subController,
+              homeController: controller,
             ),
           ),
         );

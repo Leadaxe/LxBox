@@ -18,7 +18,6 @@ import 'subscriptions_screen.dart';
 import 'home/widgets/progress_banner.dart';
 import 'home/widgets/nodes_header.dart';
 import 'home/widgets/home_drawer.dart';
-import 'home/widgets/dns_direct_blocked_sheet.dart';
 import 'home/widgets/home_controls.dart';
 import 'home/widgets/node_list.dart';
 import 'home/widgets/status_chip.dart';
@@ -137,7 +136,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// вся мутация state/timers/animations идёт через этот listener.
   TunnelStatus _prevTunnel = TunnelStatus.disconnected;
   String _prevError = '';
-  bool _prevDnsBlocked = false; // §259 — edge-детект вердикта детектора
 
   @override
   void initState() {
@@ -314,24 +312,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // (gate внутри: foreground + сессия ≥5мин + суммарно ≥3ч). Терминальный.
     if (isUp) unawaited(_maybeShowSupport());
 
-    // §259 — детектор вынес вердикт «direct-DNS глушится» (edge false→true):
-    // показываем разовый нижний баннер и СРАЗУ потребляем флаг (баннер
-    // одноразовый; consume делает флаг триггером, а не залипающим состоянием).
-    if (!_prevDnsBlocked && state.dnsDirectBlocked) {
-      _controller.consumeDnsDirectBlocked();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        unawaited(showDnsDirectBlockedBanner(
-          context,
-          controller: _controller,
-          subController: _subController,
-        ));
-      });
-    }
-
     _prevTunnel = now;
     _prevError = nowError;
-    _prevDnsBlocked = state.dnsDirectBlocked;
   }
 
   bool _permissionDialogShowing = false;
@@ -572,7 +554,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                 // §095 Filter mode — при открытой фильтр-панели прячем
                 // стат-полосу + Nodes-хедер, освобождая зону под ноды.
                 if (state.tunnelUp && !_filter.panelExpanded)
-                  TrafficBar(state: state, controller: _controller),
+                  TrafficBar(
+                    state: state,
+                    controller: _controller,
+                    subController: _subController,
+                  ),
                 if (_subController.busy && _subController.progressMessage.isNotEmpty)
                   ProgressBanner(message: _subController.progressMessage),
                 // §095 — NODES-строка только когда подключено И фильтр закрыт.

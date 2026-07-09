@@ -21,8 +21,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../controllers/home_controller.dart';
+import '../controllers/subscription_controller.dart';
 import '../services/traffic_profiler.dart';
 import '../widgets/core_logs_hint_banner.dart';
+import 'live_events_tab/dns_health_banner.dart';
 import 'live_events_tab/recording_header.dart';
 import 'live_events_tab/unattributed_banner.dart';
 import 'per_app_trace_tab/session_json.dart';
@@ -31,7 +34,12 @@ import 'stats_screen/profiler_filters.dart';
 import 'stats_screen/trace_explorer.dart';
 
 class LiveEventsTab extends StatefulWidget {
-  const LiveEventsTab({super.key});
+  const LiveEventsTab({super.key, this.subController, this.homeController});
+
+  // §262 — прокидываются в DNS-health баннер для навигационных кнопок листа
+  // (Open DNS settings / Enable FakeIP). null → лист чисто информационный.
+  final SubscriptionController? subController;
+  final HomeController? homeController;
 
   @override
   State<LiveEventsTab> createState() => _LiveEventsTabState();
@@ -197,6 +205,12 @@ class _LiveEventsTabState extends State<LiveEventsTab> {
         const CoreLogsHintBanner(),
         if (TrafficProfiler.I.unattributedBannerActive)
           const UnattributedBanner(),
+        // §262 — деградация DNS при живой связи: тап открывает лист-подсказку.
+        if (TrafficProfiler.I.dnsHealthUnhealthy)
+          DnsHealthBanner(
+            subController: widget.subController,
+            homeController: widget.homeController,
+          ),
         Expanded(
           child: TraceExplorer(
             // System-wide: unattributed события уже внутри globalRollingBuffer
