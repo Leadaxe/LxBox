@@ -70,7 +70,7 @@ Long-press на `NodeRow` показывает popup menu:
 |-------|----------|
 | **Ping** | Запускает пинг конкретного узла |
 | **Use this node** | Переключает текущий outbound на выбранный узел через Clash API |
-| **View JSON** | Открывает read-only страницу с форматированным JSON outbound/endpoint. Если у узла есть detour — выдаёт массив `[node, detour1, detour2, ...]` (рекурсивный обход по `detour`) |
+| **View details** | §258 — экран с вкладками **Overview** (основные параметры + рантайм-цепочка detour «по ходу пакета», хопы кликабельны → экран владельца/канала) и **JSON** (read-only форматированный JSON outbound/endpoint; при detour — массив `[node, detour1, detour2, ...]`, рекурсивный обход по `detour`). До §258 пункт назывался «View JSON» |
 | **Copy URI** | Канонический URI: `vless://`, `wireguard://`, `hy2://`, etc через `node.toUri()` (round-trip parser v2). Если NodeSpec не находится по display-tag (control-узел / collision-suffix) — snackbar `No source URI for this node` |
 | **Copy server (JSON)** | Копирует outbound узла в JSON (без поля `detour`) |
 | **Copy detour** | Копирует только detour-outbound (скрыт для узлов без detour) |

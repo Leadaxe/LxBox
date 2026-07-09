@@ -653,6 +653,25 @@ void main() {
       expect(_fakeip().hasOutboundAffordance, isFalse);
     });
 
+    // §266 — РЕАЛЬНЫЙ шаблон (не реплика): регрессия «rule_enable без
+    // default_value = required-var unset → expandPreset прерывал весь пресет,
+    // fakeip-DNS не эмитился». Синтетический _fakeip() это не ловил (нет
+    // rule_enable). Гоняем настоящий wizard_template.json.
+    test('РЕАЛЬНЫЙ fakeip: dns_servers + dns_rules эмитятся (rule_enable не '
+        'ломает развёртку)', () {
+      final raw = File('assets/wizard_template.json').readAsStringSync();
+      final tpl =
+          WizardTemplate.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      final fakeip =
+          tpl.selectableRules.firstWhere((r) => r.presetId == 'fakeip');
+      final cr = CustomRulePreset(
+          name: 'FakeIP', presetId: 'fakeip', enabled: true);
+      final f = expandPreset(cr, fakeip, globalVars: {'vpn_mode': 'vpn'});
+      expect(f.warnings, isEmpty, reason: 'rule_enable не должна ронять пресет');
+      expect(f.dnsServers.any((s) => s['type'] == 'fakeip'), isTrue);
+      expect(f.dnsRules.isNotEmpty, isTrue);
+    });
+
     test('ru-direct.hasOutboundAffordance == true (есть var:outbound и rule)',
         () {
       expect(_ruDirect().hasOutboundAffordance, isTrue);
@@ -804,7 +823,7 @@ void main() {
     test('SelectableRule.fromJson: rule-массив нормализуется в rules', () {
       final sr = SelectableRule.fromJson({
         'preset_id': 'x',
-        'label': 'X',
+        'ui': {'label': 'X'},
         'rule': [
           {'rule_set': 'a', 'action': 'resolve', 'strategy': 'ipv4_only'},
           {'rule_set': 'a', 'outbound': 'direct-out'},
@@ -818,7 +837,7 @@ void main() {
         'как в шаблоне ru-direct', () {
       final sr = SelectableRule.fromJson({
         'preset_id': 'x',
-        'label': 'X',
+        'ui': {'label': 'X'},
         'rules': [
           {'rule_set': 'a', 'action': 'resolve', 'strategy': 'ipv4_only'},
           {'rule_set': 'a', 'outbound': 'direct-out'},
@@ -833,7 +852,7 @@ void main() {
     test('SelectableRule.fromJson: legacy Map → один элемент rules', () {
       final sr = SelectableRule.fromJson({
         'preset_id': 'x',
-        'label': 'X',
+        'ui': {'label': 'X'},
         'rule': {'rule_set': 'a', 'outbound': 'direct-out'},
       });
       expect(sr.rules.single, {'rule_set': 'a', 'outbound': 'direct-out'});
@@ -842,7 +861,7 @@ void main() {
 
     test('SelectableRule.fromJson: rule отсутствует → rules пуст, '
         'terminalRule пустой Map', () {
-      final sr = SelectableRule.fromJson({'preset_id': 'x', 'label': 'X'});
+      final sr = SelectableRule.fromJson({'preset_id': 'x', 'ui': {'label': 'X'}});
       expect(sr.rules, isEmpty);
       expect(sr.terminalRule, isEmpty);
     });
@@ -1053,7 +1072,7 @@ void main() {
         'legacy dns_rule (Map) — тоже', () {
       final fromList = SelectableRule.fromJson({
         'preset_id': 'x',
-        'label': 'X',
+        'ui': {'label': 'X'},
         'dns_rules': [
           {'rule_set': 'a', 'server': 's'},
           {'rule_set': 'a', 'action': 'predefined'},
@@ -1064,7 +1083,7 @@ void main() {
 
       final fromMap = SelectableRule.fromJson({
         'preset_id': 'x',
-        'label': 'X',
+        'ui': {'label': 'X'},
         'dns_rule': {'rule_set': 'a', 'server': 's'},
       });
       expect(fromMap.dnsRules.length, 1);
@@ -1075,7 +1094,7 @@ void main() {
         () {
       final r = SelectableRule.fromJson({
         'preset_id': 'x',
-        'label': 'X',
+        'ui': {'label': 'X'},
         'dns_rule': {'rule_set': 'legacy', 'server': 's'},
         'dns_rules': [
           {'rule_set': 'a', 'server': 's'},

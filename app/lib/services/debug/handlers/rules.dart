@@ -1,3 +1,4 @@
+import '../../../config/consts.dart' show kDirectOutboundTag;
 import '../../../models/custom_rule.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
@@ -230,7 +231,7 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
   if (name.trim().isEmpty) throw const BadRequest('field "name" required');
   final kind = _fieldKind(j, 'kind') ?? CustomRuleKind.inline;
   final enabled = fieldBool(j, 'enabled') ?? true;
-  final outbound = fieldString(j, 'outbound') ?? 'direct-out';
+  final outbound = fieldString(j, 'outbound') ?? kDirectOutboundTag;
 
   // §051 — общие wifi-условия. Валидируем BSSID format строго (на read-side
   // в model — tolerant lower-case). Empty list / null → no condition.

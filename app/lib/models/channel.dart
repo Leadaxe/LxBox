@@ -11,7 +11,7 @@
 //
 // Спека: docs/spec/features/125 configurable-channels/spec.md.
 
-import 'parser_config.dart' show PresetGroup;
+import 'parser_config.dart' show ChannelTemplate, DefaultChannel;
 
 /// Максимум каналов (Решение 5). vpn-1 неудаляем, N∈1..10.
 const int kMaxChannels = 10;
@@ -197,7 +197,8 @@ class ChannelAuto {
 }
 
 /// Пользовательский канал роутинга. Хранится в `channels[]`. На первом запуске
-/// seeded из `template.presetGroups` (см. миграцию).
+/// seeded из `template.groupTemplates` (`default_channels` + `channel`-шаблон;
+/// см. миграцию, §267).
 class Channel {
   const Channel({
     required this.tag,
@@ -255,6 +256,11 @@ class Channel {
   final bool isDetour;
 
   /// Производный tag urltest-двойника. В storage НЕ хранится.
+  ///
+  /// §267 — источник истины формулы = `magic_nodes.auto.tpl` в шаблоне
+  /// (`'{parent_tag}-auto'`), эквивалентно `resolveTpl(tpl, tag)`. Значение
+  /// здесь захардкожено (дефис!): менять нельзя — сломает матч auto-двойников
+  /// (`vpn-1-auto`) в фильтрах/сортировке. Инвариант равенства покрыт тестом.
   String get autoTag => '$tag-auto';
 
   /// vpn-1 — продуктово-привилегированный: всегда enabled, неудаляемый,
@@ -329,24 +335,27 @@ class Channel {
         'detour': isDetour, // §248
       };
 
-  /// Seed-канал из template-пресета (миграция first-run). `auto` берётся из
-  /// `add_outbounds ∋ ✨auto` снаружи (нужен доступ к urltest-vars), здесь —
-  /// только структурные поля. См. `_migrateChannelsIfNeeded`.
-  static Channel seedFromPreset(
-    PresetGroup p, {
+  /// §267 — seed-канал из `default_channels[i]` + общего `channel`-шаблона
+  /// (миграция first-run). `auto` берётся снаружи (нужен доступ к urltest-vars),
+  /// здесь — только структурные поля. `include` содержит role-ключи
+  /// `magic_nodes` (`direct`/`auto`/`block`) — это роли, НЕ теги. См.
+  /// `_migrateChannelsIfNeeded`.
+  static Channel seedFromDefault(
+    DefaultChannel dc,
+    ChannelTemplate tpl, {
     required bool enabled,
     ChannelAuto? auto,
   }) =>
       Channel(
-        tag: p.tag,
-        label: p.label.isEmpty ? p.tag : p.label,
+        tag: dc.tag,
+        label: dc.label.isEmpty ? dc.tag : dc.label,
         enabled: enabled,
-        includeDirect: p.addOutbounds.contains('direct-out'),
-        includeBlock: p.addOutbounds.contains('block'), // §201 (в template нет → false)
+        includeDirect: tpl.include.contains('direct'),
+        includeBlock: tpl.include.contains('block'), // §201 (в дефолте нет → false)
         nodeFilter: '',
         defaultFilter: '', // Решение 6 — старый default не regex, не мигрируем
         interruptExistConnections:
-            p.options['interrupt_exist_connections'] as bool? ?? true,
+            tpl.options['interrupt_exist_connections'] as bool? ?? true,
         auto: auto,
       );
 }

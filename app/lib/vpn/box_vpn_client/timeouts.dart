@@ -50,6 +50,10 @@ class _Timeouts {
   /// `resetNetwork` — лёгкий reset, должен быть мгновенным. Запас.
   static const resetNet = Duration(seconds: 5);
 
+  /// §263 `clearDnsCache` — удалить cache.db + (при running) reload ядра ~3с.
+  /// Запас на slow devices, как у reload.
+  static const dnsCache = Duration(seconds: 10);
+
   /// §207 goroutine/heap/block/mutex снимки — мгновенные текстовые pprof-дампы
   /// (без блокирующего ожидания). 5s — щедрый запас на поднятие сервера, GET и
   /// маршалинг дампа через MethodChannel.

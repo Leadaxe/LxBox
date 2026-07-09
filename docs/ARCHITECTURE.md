@@ -220,7 +220,7 @@ Asset-шаблон, который читается один раз через `
 | `dns_options.servers` | Canonical DNS-серверы (system/google/cloudflare/quad9/adguard). Storage хранит kind-refs `{enabled, kind: inline\|preset\|template, tag, description?, body?}` (§043 + §044). Body для kind:inline — partial sing-box shape **без** tag/description/enabled (они на ref-level; tag синтезируется на build-time). Резолвится в bodies через `resolveDnsServersBodies`. | `applyCustomDns` через `resolveDnsServersList` |
 | `dns_options.rules` | Дефолтные DNS-rules. Storage — kind-refs (§061 dns-rules-refactor, бывший feature §041) (`inline\|srs\|preset\|template`). Catch-all удалён в task §039 (empty-template-dns-rules) — fall-through идёт через `dns.final`. | `applyCustomDns`: bundle-rules через `resolveDnsRulesList` |
 | `ping_options`, `speed_test_options` | UI-фичи (HomeScreen, SpeedTest) | не попадают в sing-box конфиг |
-| `preset_groups` | §125 — **SEED** для `channels[]` (на первом запуске). Билдер каналы читает из storage `channels[]`, НЕ из template. | `_buildChannelGroups(channels)` в `build_config.dart` (бывш. `_buildPresetGroups`) |
+| `group_templates` + `default_channels` | §125/§267 — **SEED** для `channels[]` (на первом запуске). Билдер каналы читает из storage `channels[]`, НЕ из template. §267 заменил плоский `preset_groups`. | `_buildChannelGroups(channels)` в `build_config.dart` (бывш. `_buildPresetGroups`) |
 | `config` | База sing-box конфига: log, inbounds, route-skeleton | deep-copy'ится в начале `buildConfig` |
 | `sections[].vars[]` | Глобальные переменные UI — chapter: `core` / `routing` / `dns` | `TemplateVarListView` рендерит в SettingsScreen/RoutingScreen; `@name` подставляется в config через `_substituteVars` |
 | `selectable_rules` | Каталог пресет-правил (legacy inline + bundle — spec 033) | вкладка Presets в `RoutingScreen` |
@@ -312,7 +312,7 @@ wizard_template.json
   │         └─ local rule_set по cached path + routing rule (spec 030)
   ├── dns_options  ──► applyCustomDns(template + extras)                      ──► config.dns
   └── channels[] (storage) ──► _buildChannelGroups(per-channel node_filter)  ──► config.outbounds
-      (§125: каналы из channels[], seed из preset_groups; +block/direct опции, auto-двойник)
+      (§125/§267: каналы из channels[], seed из group_templates+default_channels; +block/direct опции, auto-двойник)
 ```
 
 **Почему DoH/DoT в bundle хардкодят `server: "77.88.8.88"` + `tls.server_name`:**
@@ -469,12 +469,13 @@ parser/                      # Parser v2 (text → NodeSpec)
 builder/                     # NodeSpec + template → sing-box config
   build_config.dart          #   buildConfig() orchestrator → BuildResult; _BuildCtx (EmitContext + tag allocator)
   server_list_build.dart     #   per-subscription emit: detour policy, tag allocation, selector/auto регистрация
-  preset_expand.dart         #   expandPreset (CustomRulePreset → fragments, @var) + mergeFragments (§033)
+  preset_expand.dart         #   expandPreset (CustomRulePreset → fragments, @var) + mergeFragments (§033);
+                             #   §265: param globalVars — ref-vars {"ref":…} берут значение из глобального userVars, не varsValues
   rule_set_registry.dart     #   реестр route.rule_set + route.rules; tag-уникальность
   validator.dart             #   validateConfig: dangling refs, empty urltest → ValidationResult
   post_steps.dart            #   barrel (part): шесть post-обработок ниже
   post_steps/tls_transforms.dart  #   applyMixedCaseSni + applyTlsFragment (§028)
-  post_steps/custom_rules.dart    #   applyAllCustomRules (preset/inline/srs в storage order, §062)
+  post_steps/custom_rules.dart    #   applyAllCustomRules (preset/inline/srs в storage order, §062; pinned-пресеты §264 нормализуются в начало через normalize_pinned_presets)
   post_steps/dns_rules.dart       #   applyCustomDns / resolveDnsRulesList (§061+§033)
   post_steps/dns_servers.dart     #   resolveDnsServersList/Bodies (§043+§044)
   post_steps/heal_dangling_detours.dart # §172 healDanglingDetours: detour∉allTags снимается (warning),
@@ -725,7 +726,8 @@ app/assets/wizard_template.json     # rootBundle.loadString(), template_loader.d
 ├── dns_options             # §043+§044 — default DNS servers + rules
 ├── ping_options            # §040 — default URL + presets
 ├── speed_test_options      # §015 — speed-test endpoints
-├── preset_groups[]         # §125 — SEED для channels[] (vpn-1..4, ✨auto); билдер читает channels[] из storage
+├── group_templates         # §267 — magic_nodes реестр + channel/auto шаблоны (SEED для channels[])
+├── default_channels[]      # §267 — сид каналов (vpn-1..2); билдер читает channels[] из storage
 ├── sections[]              # §022 — Wizard UI chapters (vars сгруппированы по темам)
 ├── config                  # нативная sing-box-секция с @var-плейсхолдерами
 │   ├── log / dns / inbounds / endpoints / outbounds / experimental
@@ -1370,6 +1372,7 @@ HomeScreen
 | **Cohesion over line-count + `part`/`mixin` декомпозиция** (§089) | Монстры (home_screen 2370, home_controller 1089, …) раздроблены не по числу строк, а по ответственности: тонкий экран + `<screen>/widgets/` + presenter/VM; контроллер + `part`-mixin'ы (та же библиотека → library-private доступ сохранён, поведение bit-identical). ~600 строк легитимны для cohesive-файла; крупные исключения задокументированы (см. [Обзор](#принцип-cohesion-over-line-count-089)). |
 | **`ConfigNode` структурная мета вместо reverse-parse тега** (§091, реализовано) | `config-tag == нода в Clash`; протокол/detour достаются из конфига по тегу без reverse-map. Один `ParsedConfig` (parsed раз на `configRaw`, поле `HomeState.configModel`) заменил `ConfigCache.protoByTag/detourTags` + `ConfigIntrospection` + reverse-map `subscriptionsOfTag` (теперь prefix-фильтр, `home/subscription_lookup.dart`). Класс багов §077/§079/§080 устранён структурно. §102/§103 — eager `transportLabel`/`securityLabel` для subtitle и variant-фильтра. +14 тестов. |
 | **`VarValuesModel` — per-key реактивная модель настроек** (§232) | Однонаправленный поток а-ля Vue («props down, events up»): значения template-vars экрана живут в `VarValuesModel` (`Map<String, ValueNotifier>` + dirty-set), каждое поле `TemplateVarListView` подписано `ValueListenableBuilder`'ом на СВОЙ ключ — программные изменения (`on_change`: галка ipv6 → стратегии) видны в UI мгновенно и точечно. Заменила ДВЕ рассинхронизирующиеся копии (`_varValues` в State + приватная `_values` виджета), из-за которых on_change-записи терялись. `model.set` — только память; storage пишет ЕДИНСТВЕННОЕ место — `_persist` на dispose/paused по `dirtyKeys` (уточнение lazy-паттерна §076: до выхода изменения нигде, кроме модели). Кросс-экранная доставка (dns_strategy на DNS Settings) — через cache при следующем `_load()` того экрана; app-global модель отвергнута (экраны не co-mounted). §161-edge: пустое required — `set(markDirty:false)`+`unstage`, до storage не доезжает. |
+| **`preset_on_change.dart` — on_change ПРЕСЕТА** (§266) | Отдельный от §232 движок: источник — не значение var, а **состояние пресета** (псевдо-vars `@rule_enable`=`cr.enabled`, `@dns_enable`=`presetDnsEnableVar`); приёмник — **глобальный `userVars`** (`SettingsStorage.setVar`, сразу на диск), не in-memory модель. `applyPresetOnChange(preset, cr)` собирает on_change со всех vars пресета, резолвит `#if`-цель в namespace `{...userVars, rule_enable, dns_enable}` через `evalIfScalar`, пишет каждую цель. Применение: FakeIP гасит `resolve_enabled` пока активен (`@rule_enable AND @dns_enable → false`). Зовётся из **5 точек** смены состояния (routing-свич/создание, редактор `onBoolVarToggle`, DNS Settings `_togglePresetDnsEnable`) — пропуск любой = цель не пересчитается на этом пути. Псевдо-var **обязана** нести `default_value`+`required:false`, иначе `expandPreset` выходит рано и DNS-блок пресета молча не эмитится (`29fe61c`). См. TEMPLATE.md § «on_change пресета». |
 
 ---
 

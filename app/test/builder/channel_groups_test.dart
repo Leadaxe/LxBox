@@ -14,7 +14,7 @@ void main() {
   // template без preset-групп: каналы целиком из settings.channels.
   WizardTemplate template() => WizardTemplate(
         parserConfig: ParserConfigBlock(),
-        presetGroups: const [],
+        groupTemplates: GroupTemplates(),
         vars: const [],
         varSections: const [],
         config: {

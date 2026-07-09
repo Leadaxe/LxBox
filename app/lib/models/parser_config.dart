@@ -2,7 +2,7 @@
 class WizardTemplate {
   WizardTemplate({
     required this.parserConfig,
-    required this.presetGroups,
+    required this.groupTemplates,
     required this.vars,
     required this.varSections,
     required this.config,
@@ -13,7 +13,7 @@ class WizardTemplate {
   });
 
   final ParserConfigBlock parserConfig;
-  final List<PresetGroup> presetGroups;
+  final GroupTemplates groupTemplates; // §267 (было: List<PresetGroup> presetGroups)
   final List<WizardVar> vars;
   final Map<String, dynamic> config;
   final List<SelectableRule> selectableRules;
@@ -36,10 +36,24 @@ class WizardTemplate {
   List<VarSection> sectionsFor(String chapter) =>
       varSections.where((s) => s.chapter == chapter).toList(growable: false);
 
+  /// §265 — первичная декларация глобальной var по имени (обычная, НЕ ref).
+  /// Ref-var (`{"ref": name}`) подтягивает отсюда type/options/title/tooltip/
+  /// default. `null` — глобали нет (битая ссылка → UI скрывает контрол).
+  WizardVar? globalVar(String name) {
+    for (final v in vars) {
+      if (v.name == name && !v.isRef) return v;
+    }
+    return null;
+  }
+
   factory WizardTemplate.fromJson(Map<String, dynamic> json) {
     final pcJson = json['parser_config'] as Map<String, dynamic>? ?? {};
     final rulesJson = json['selectable_rules'] as List<dynamic>? ?? [];
-    final groupsJson = json['preset_groups'] as List<dynamic>? ?? [];
+    // §267 — group_templates + top-level default_channels (было preset_groups).
+    final groupTemplatesJson =
+        json['group_templates'] as Map<String, dynamic>? ?? const {};
+    final defaultChannelsJson =
+        json['default_channels'] as List<dynamic>? ?? const [];
 
     // Парсим nested `sections` — секция → chapter → vars.
     // Каждая WizardVar наследует chapter+section от своей секции-родителя.
@@ -64,10 +78,8 @@ class WizardTemplate {
 
     return WizardTemplate(
       parserConfig: ParserConfigBlock.fromJson(pcJson),
-      presetGroups: groupsJson
-          .whereType<Map<String, dynamic>>()
-          .map(PresetGroup.fromJson)
-          .toList(),
+      groupTemplates:
+          GroupTemplates.fromJson(groupTemplatesJson, defaultChannelsJson),
       vars: allVars,
       varSections: sections,
       config: json['config'] as Map<String, dynamic>? ?? {},
@@ -100,39 +112,164 @@ class ParserConfigBlock {
   }
 }
 
-/// A fixed preset outbound group (replaces the old OutboundConfig with filters).
-/// All subscription nodes are added to every enabled group.
-class PresetGroup {
-  PresetGroup({
-    required this.tag,
-    required this.type,
-    this.label = '',
-    this.defaultEnabled = true,
-    this.options = const {},
-    this.addOutbounds = const [],
+// §267 — `group_templates` + `default_channels` заменяют плоский `preset_groups`.
+//
+// Раньше `preset_groups` сваливал в один массив три разнородные сущности
+// (шаблон auto-подгруппы под фейковым tag `@auto_proxy_tag`, каналы vpn-N) и
+// читался только как seed первой миграции. Теперь разделено на:
+//   - `magic_nodes` — реестр служебных нод (auto/direct/block) по role-ключу;
+//   - `channel`/`auto` — шаблоны сборки канала и его urltest-подгруппы;
+//   - `default_channels` — плоский список каналов для сида первого запуска.
+//
+// Полное описание — docs/spec/tasks/267-group-templates-magic-nodes.md.
+
+/// §267 — служебная нода из `group_templates.magic_nodes`. Ключ мапы = `role`.
+///
+/// `source` (`generate`/`preset`) — как нода рождается: `generate` — билдер
+/// синтезирует её per-channel (auto/urltest, статического tag нет — тег из
+/// `tpl`); `preset` — готовый объект уже лежит в `config.outbounds` (direct/
+/// block, `tag` — ссылка на него). НЕ путать с sing-box outbound-`type`
+/// (`urltest`/`direct`/`block`) — это другая ось.
+class MagicNode {
+  MagicNode({
+    required this.role,
+    required this.title,
+    required this.source,
+    this.tag,
+    this.tpl,
   });
 
-  final String tag;
-  final String type; // selector, urltest
-  final String label;
-  final bool defaultEnabled;
-  final Map<String, dynamic> options;
-  final List<String> addOutbounds;
+  final String role; // 'auto' | 'direct' | 'block' (ключ мапы)
+  final String title; // human-label для UI (special_node_display)
+  final String source; // 'generate' | 'preset'
+  final String? tag; // preset: ссылка на config.outbounds; generate: null
+  final String? tpl; // generate: шаблон тега ('{parent_tag}-auto'); preset: null
 
-  factory PresetGroup.fromJson(Map<String, dynamic> json) {
-    return PresetGroup(
-      tag: json['tag'] as String? ?? '',
-      type: json['type'] as String? ?? 'selector',
-      label: json['label'] as String? ?? '',
-      defaultEnabled: json['default_enabled'] as bool? ?? true,
-      options: json['options'] as Map<String, dynamic>? ?? const {},
-      addOutbounds: (json['add_outbounds'] as List<dynamic>?)
-              ?.map((e) => e as String)
-              .toList() ??
-          const [],
+  factory MagicNode.fromJson(String role, Map<String, dynamic> json) {
+    return MagicNode(
+      role: role,
+      title: json['title'] as String? ?? '',
+      source: json['source'] as String? ?? 'preset',
+      tag: json['tag'] as String?,
+      tpl: json['tpl'] as String?,
     );
   }
 }
+
+/// §267 — шаблон обычного канала (selector) из `group_templates.channel`.
+/// `include` — role-ключи `magic_nodes`, показываемые в selector канала
+/// (`direct`/`auto`); `block` по умолчанию не включён.
+class ChannelTemplate {
+  ChannelTemplate({
+    this.type = 'selector',
+    this.include = const [],
+    this.options = const {},
+  });
+
+  final String type; // 'selector'
+  final List<String> include; // role-ключи magic_nodes
+  final Map<String, dynamic> options;
+
+  factory ChannelTemplate.fromJson(Map<String, dynamic> json) {
+    return ChannelTemplate(
+      type: json['type'] as String? ?? 'selector',
+      include: (json['include'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
+      options: json['options'] as Map<String, dynamic>? ?? const {},
+    );
+  }
+}
+
+/// §267 — шаблон auto-подгруппы (urltest) из `group_templates.auto`.
+/// `options` — сырой template (`@urltest_*`-плейсхолдеры НЕ резолвены; var-
+/// substitution идёт позже, в билдере/seed'е).
+class AutoTemplate {
+  AutoTemplate({this.type = 'urltest', this.options = const {}});
+
+  final String type; // 'urltest'
+  final Map<String, dynamic> options;
+
+  factory AutoTemplate.fromJson(Map<String, dynamic> json) {
+    return AutoTemplate(
+      type: json['type'] as String? ?? 'urltest',
+      options: json['options'] as Map<String, dynamic>? ?? const {},
+    );
+  }
+}
+
+/// §267 — один канал для сида первого запуска из `default_channels[i]`.
+class DefaultChannel {
+  DefaultChannel({
+    required this.tag,
+    this.label = '',
+    this.defaultEnabled = true,
+  });
+
+  final String tag;
+  final String label;
+  final bool defaultEnabled;
+
+  factory DefaultChannel.fromJson(Map<String, dynamic> json) {
+    return DefaultChannel(
+      tag: json['tag'] as String? ?? '',
+      label: json['label'] as String? ?? '',
+      defaultEnabled: json['default_enabled'] as bool? ?? true,
+    );
+  }
+}
+
+/// §267 — верхнеуровневый блок `group_templates` + top-level `default_channels`.
+/// `magicNodes` — реестр по role-ключу; `channel`/`auto` — шаблоны сборки;
+/// `defaultChannels` — сид первого запуска (собирается из top-level ключа,
+/// НЕ внутри `group_templates`).
+class GroupTemplates {
+  GroupTemplates({
+    this.magicNodes = const {},
+    ChannelTemplate? channel,
+    AutoTemplate? auto,
+    this.defaultChannels = const [],
+  })  : channel = channel ?? ChannelTemplate(),
+        auto = auto ?? AutoTemplate();
+
+  final Map<String, MagicNode> magicNodes; // role → node
+  final ChannelTemplate channel;
+  final AutoTemplate auto;
+  final List<DefaultChannel> defaultChannels;
+
+  factory GroupTemplates.fromJson(
+    Map<String, dynamic> groupTemplatesJson,
+    List<dynamic> defaultChannelsJson,
+  ) {
+    final nodesJson =
+        groupTemplatesJson['magic_nodes'] as Map<String, dynamic>? ?? const {};
+    final magicNodes = <String, MagicNode>{};
+    for (final entry in nodesJson.entries) {
+      final v = entry.value;
+      if (v is Map<String, dynamic>) {
+        magicNodes[entry.key] = MagicNode.fromJson(entry.key, v);
+      }
+    }
+    return GroupTemplates(
+      magicNodes: magicNodes,
+      channel: ChannelTemplate.fromJson(
+          groupTemplatesJson['channel'] as Map<String, dynamic>? ?? const {}),
+      auto: AutoTemplate.fromJson(
+          groupTemplatesJson['auto'] as Map<String, dynamic>? ?? const {}),
+      defaultChannels: defaultChannelsJson
+          .whereType<Map<String, dynamic>>()
+          .map(DefaultChannel.fromJson)
+          .toList(),
+    );
+  }
+}
+
+/// §267 — резолв `magic_nodes.*.tpl` для `generate`-ноды: подставляет tag
+/// родительского канала в шаблон. Формализует нынешний `Channel.autoTag`.
+/// `resolveTpl('{parent_tag}-auto', 'vpn-1') == 'vpn-1-auto'`.
+String resolveTpl(String tpl, String parentTag) =>
+    tpl.replaceAll('{parent_tag}', parentTag);
 
 /// Один вариант для `enum`/`text-with-suggestions` var'ов.
 ///
@@ -180,6 +317,7 @@ class WizardVar {
     this.chapter = 'core',
     this.required = true,
     this.onChange,
+    this.ref = '',
   });
 
   final String name;
@@ -209,6 +347,17 @@ class WizardVar {
   /// переопределить вручную; это разовый эффект переключения, не форс).
   final Map<String, dynamic>? onChange;
 
+  /// §265 — ref-var: если непустое, эта запись `vars[]` — не декларация, а
+  /// ССЫЛКА на глобальную var с именем `ref` (объявленную в секции). Значение
+  /// живёт в глобальном `userVars[ref]`, НЕ в `rule.varsValues`; метаданные
+  /// (type/options/title/tooltip/default) подтягиваются из целевой var через
+  /// [WizardTemplate.globalVar]. Пресет ссылается на общую настройку, не
+  /// заводя копию (пример: `resolve_strategy` — она же питает `dns.strategy`).
+  final String ref;
+
+  /// §265 — эта var-запись есть ссылка на глобальную (не собственная декларация).
+  bool get isRef => ref.isNotEmpty;
+
   bool get isEditable => wizardUI == 'edit';
 
   /// Legacy-aware accessor: только `value`-part каждой опции. Для кода,
@@ -221,6 +370,21 @@ class WizardVar {
     String section = '',
     String chapter = 'core',
   }) {
+    // §265 — ref-var: `{"ref": "<global-name>"}`. Метаданные не несёт —
+    // `name` = ref, остальное подтянется из целевой глобали через
+    // WizardTemplate.globalVar на этапе рендера/резолва.
+    final refName = json['ref'] as String? ?? '';
+    if (refName.isNotEmpty) {
+      return WizardVar(
+        name: refName,
+        type: 'text', // placeholder; реальный тип — у целевой глобали
+        defaultValue: '',
+        section: section,
+        chapter: chapter,
+        ref: refName,
+      );
+    }
+
     var defVal = json['default_value'];
     String defaultStr;
     if (defVal is Map) {
@@ -277,6 +441,8 @@ class SelectableRule {
     required this.presetId,
     this.description = '',
     this.defaultEnabled = false,
+    this.locked = false,
+    this.pinned,
     this.ruleSets = const [],
     dynamic rule,
     this.vars = const [],
@@ -288,6 +454,19 @@ class SelectableRule {
   final String label;
   final String description;
   final bool defaultEnabled;
+
+  /// §264 — locked: пресет нельзя выключить/удалить/подвинуть (свич disabled,
+  /// нет delete, drag off). Продуктовый инвариант (как `vpn-1` §125).
+  final bool locked;
+
+  /// §264 — pinned: фиксированная позиция в списке правил и в `route.rules`.
+  /// `0` = всегда первый (критично для traffic-processing: `sniff` обязан быть
+  /// первым правилом). `null` = не пиннится (обычный пресет, порядок свободный).
+  final int? pinned;
+
+  /// §264 — пресет закреплён на фиксированной позиции (pinned != null).
+  bool get isPinned => pinned != null;
+
   final List<Map<String, dynamic>> ruleSets;
 
   /// Route-правила пресета в порядке шаблона (§246).
@@ -364,14 +543,22 @@ class SelectableRule {
     final presetId = (json['preset_id'] as String?) ?? '';
     if (presetId.isEmpty) {
       throw FormatException(
-        'SelectableRule "${json['label'] ?? '<no-label>'}" missing required '
-        '`preset_id` (legacy entries without preset_id are no longer supported)',
+        'SelectableRule "${json['ui']?['label'] ?? '<no-label>'}" missing '
+        'required `preset_id` (legacy entries without preset_id are no longer '
+        'supported)',
       );
     }
+    // §264 — метаданные пресета живут ТОЛЬКО в объекте `ui`
+    // (label/description/default/locked/pinned). Плоские поля больше не
+    // читаются — все пресеты шаблона переведены на `ui`. Отсутствие `ui` →
+    // пустые дефолты (пресет без имени = баг шаблона, поймает тест).
+    final ui = json['ui'] as Map<String, dynamic>? ?? const {};
     return SelectableRule(
-      label: json['label'] as String? ?? '',
-      description: json['description'] as String? ?? '',
-      defaultEnabled: json['default'] as bool? ?? false,
+      label: ui['label'] as String? ?? '',
+      description: ui['description'] as String? ?? '',
+      defaultEnabled: ui['default'] as bool? ?? false,
+      locked: ui['locked'] as bool? ?? false,
+      pinned: ui['pinned'] as int?,
       ruleSets: (json['rule_set'] as List<dynamic>?)
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??

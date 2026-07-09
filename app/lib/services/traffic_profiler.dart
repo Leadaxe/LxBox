@@ -51,6 +51,7 @@ import 'package:flutter/foundation.dart';
 
 import '../vpn/cc_channel.dart';
 import 'app_log.dart';
+import 'dns_health_detector.dart'; // §262 — детектор здоровья DNS
 import 'format_utils.dart'; // §181 — formatDuration в routingLine
 import 'selector_info.dart'; // §251 — fold «селектор (выбор)» в routingLine
 import 'settings_storage.dart';
@@ -270,6 +271,37 @@ class TrafficProfiler extends ChangeNotifier {
 
   bool get unattributedBannerActive =>
       recentUnattributedCount > _unattributedBannerThreshold;
+
+  // ─────────────────────── §262 — детектор здоровья DNS ───────────────────────
+  // Скользящее окно [kDnsHealthWindow] по _globalRollingBuffer. Вердикт
+  // unhealthy = fail-доля ≥20% + ≥3 fail + есть conn-активность (связь жива).
+  // Драйвит баннер в Live-профайлере (live_events_tab) + попап 3 решений.
+
+  DnsHealthStats _computeDnsHealth() {
+    final now = DateTime.now();
+    final stats = DnsHealthStats();
+    for (final e in _globalRollingBuffer) {
+      final ageMs = now.difference(e.ts).inMilliseconds;
+      if (ageMs > kDnsHealthWindow.inMilliseconds) continue;
+      final kind = switch (e.kind) {
+        TrafficEventKind.dnsResolve => DnsHealthEventKind.dnsResolve,
+        TrafficEventKind.dnsFail => DnsHealthEventKind.dnsFail,
+        TrafficEventKind.tcpOpen ||
+        TrafficEventKind.udpOpen ||
+        TrafficEventKind.tcpClose =>
+          DnsHealthEventKind.connActivity,
+      };
+      stats.add(DnsHealthSample(kind: kind, ageMs: ageMs));
+    }
+    return stats;
+  }
+
+  /// §262 — вердикт детектора (для баннера). true = DNS деградировал при живой
+  /// связи.
+  bool get dnsHealthUnhealthy => _computeDnsHealth().unhealthy;
+
+  /// §262 — доля fail за окно (для текста баннера «N% queries failing»).
+  int get dnsHealthFailPercent => (_computeDnsHealth().failRatio * 100).round();
 
   /// Start session for [targetPackage]. If уже active — finalize старый
   /// и стартуем новый. Если [verbose] = true — sets `log_level=debug`
@@ -499,16 +531,26 @@ class TrafficProfiler extends ChangeNotifier {
 
     // Trim global rolling buffer по time window'у.
     final globalCutoff = now.subtract(_globalRollingWindow);
+    var trimmed = false;
     while (_globalRollingBuffer.isNotEmpty &&
         _globalRollingBuffer.first.ts.isBefore(globalCutoff)) {
       _globalRollingBuffer.removeFirst();
+      trimmed = true;
     }
     // Trim unattributed ring (тоже time-based, но cap=50 защищает от busy
     // bursts).
     while (_globalUnattributedEvents.isNotEmpty &&
         _globalUnattributedEvents.first.ts.isBefore(globalCutoff)) {
       _globalUnattributedEvents.removeFirst();
+      trimmed = true;
     }
+
+    // §262 — тримминг мог погасить вердикт детектора здоровья DNS
+    // (dnsHealthUnhealthy) или unattributed-баннера: события «остыли» и
+    // выпали из окна, но без нового event'а UI об этом не узнает (SSE-фид
+    // молчит). Нотифицируем listeners, чтобы баннеры пересчитались. Только
+    // при реальном тримминге — на idle-тике зря не будим UI.
+    if (trimmed) notifyListeners();
   }
 
   // ─── §180: структурный DNS из ядра (SPEC 018) ────────────────────────
@@ -556,8 +598,9 @@ class TrafficProfiler extends ChangeNotifier {
     return value.endsWith('.') ? value.substring(0, value.length - 1) : value;
   }
 
-  /// §180 — батч DNS-событий из ядра (SPEC 018 `subscribeDNSQueries`). Заменяет
-  /// текстовый `_handleDnsLine`/`_handleDnsFailLine`. Атрибуция к приложению —
+  /// §180 — батч DNS-событий из ядра (SPEC 018 v2, §261: `CommandDNS`-команда
+  /// мультиплекса). Заменяет текстовый `_handleDnsLine`/`_handleDnsFailLine`.
+  /// Атрибуция к приложению —
   /// `q.packageName` ИЗ ЯДРА (processInfo), не connId-сшивка (корень §177-баннера).
   void _ingestDnsQueries(List<CcDnsQuery> queries) {
     // Обрабатываем если есть session ИЛИ global recording (как connections).
@@ -865,7 +908,8 @@ class TrafficProfiler extends ChangeNotifier {
     if (_ccConnSub != null) return;
     // Поднимаем независимый profilerClient (фоновый, §164). Шлёт первый
     // снапшот сразу + далее push'ом — _ingestCcConnections их обработает.
-    unawaited(_cc.connectProfiler());
+    // §259 — через refcount (второй держатель — dns-direct-детектор).
+    unawaited(_cc.acquireProfiler());
     _ccConnSub = _cc.connections.listen(
       _ingestCcConnections,
       // Ошибка стрима (канал недоступен / native не готов) — не валим
@@ -895,7 +939,7 @@ class TrafficProfiler extends ChangeNotifier {
     _ccConnSub = null;
     _ccDnsSub?.cancel(); // §180
     _ccDnsSub = null;
-    unawaited(_cc.disconnectProfiler());
+    unawaited(_cc.releaseProfiler()); // §259 — refcount
   }
 
   /// §168 — обработка снапшота CommandClient connections: эмит tcp/udp

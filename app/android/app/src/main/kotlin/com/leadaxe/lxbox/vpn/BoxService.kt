@@ -130,6 +130,18 @@ class BoxService(
                     runCatching { commandServer.get()?.resetNetwork() }
                         .onFailure { Log.e(TAG, "ACTION_RESET_NETWORK failed", it) }
                 }
+                BoxVpnService.ACTION_CLEAR_DNS_CACHE -> {
+                    // §263 — удалить cache.db, затем serviceReload: startOrReloadService
+                    // закрывает старый box-инстанс (освобождает fd cache.db) и
+                    // поднимает новый, который создаёт чистый cache.db. Delete
+                    // перед reload — старый инстанс ещё держит unlink'нутый inode,
+                    // новый пишет в свежий файл. Тоннель дропается ~3с (как reload).
+                    Log.d(TAG, "[vpn] receiver: ACTION_CLEAR_DNS_CACHE → delete cache.db + serviceReload()")
+                    runCatching {
+                        BoxVpnService.deleteCacheDbFile()
+                        serviceReload()
+                    }.onFailure { Log.e(TAG, "ACTION_CLEAR_DNS_CACHE failed", it) }
+                }
                 BoxVpnService.ACTION_UPDATE_NOTIFICATION -> {
                     // §223 — live-перерисовка лейблов (#20) тем же show()-путём,
                     // что и connect-рендер (builder переиспользуется → кнопки §182
@@ -195,6 +207,7 @@ class BoxService(
                 addAction(BoxVpnService.ACTION_RECONNECT)   // §182
                 addAction(BoxVpnService.ACTION_RELOAD)
                 addAction(BoxVpnService.ACTION_RESET_NETWORK)
+                addAction(BoxVpnService.ACTION_CLEAR_DNS_CACHE)   // §263
                 addAction(BoxVpnService.ACTION_UPDATE_NOTIFICATION)   // §223
 
                 when (mode) {

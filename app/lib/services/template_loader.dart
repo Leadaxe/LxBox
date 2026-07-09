@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
 
+import '../config/consts.dart';
 import '../models/parser_config.dart';
 import 'builder/if_engine.dart' show validateIfConstructs;
 
@@ -17,15 +18,6 @@ class TemplateLoader {
     final raw = await rootBundle.loadString('assets/wizard_template.json');
     final json = jsonDecode(raw) as Map<String, dynamic>;
 
-    // Pre-substitute hidden/non-editable vars в preset_groups (и прочих
-    // субтри, которые build_config не трогает через `_substituteVars`).
-    // Для `@auto_proxy_tag` и подобных — должны дойти до PresetGroup.tag
-    // как литерал, а не "@auto_proxy_tag" плейсхолдер.
-    final hidden = _hiddenDefaults(json['sections'] as List<dynamic>?);
-    if (hidden.isNotEmpty) {
-      _substituteInPlace(json['preset_groups'], hidden);
-    }
-
     final template = WizardTemplate.fromJson(json);
 
     // §120: валидация #if-конструкций против объявленных var-нод. Кривой #if
@@ -36,55 +28,29 @@ class TemplateLoader {
     };
     validateIfConstructs(template.config, byName);
 
+    // §267: инвариант зеркал magic_nodes ↔ consts.dart. Тот же принцип, что
+    // validateIfConstructs — расхождение в bundled-шаблоне = баг разработчика,
+    // бросаем на load, а не молча ломаем маршрутизацию.
+    assertMagicNodeMirrors(template.groupTemplates);
+
     _cached = template;
     return _cached!;
   }
+}
 
-  /// Собирает `Map<name, default>` для vars где `wizard_ui == "hidden"`.
-  /// Обходит nested-структуру `sections[].vars[]`. Редактируемые vars
-  /// (edit/fix) подставляются позже `build_config`'ом на уровне `config`.
-  static Map<String, String> _hiddenDefaults(List<dynamic>? sectionsJson) {
-    final out = <String, String>{};
-    if (sectionsJson == null) return out;
-    for (final section in sectionsJson.whereType<Map<String, dynamic>>()) {
-      final vars = section['vars'] as List<dynamic>? ?? const [];
-      for (final item in vars.whereType<Map<String, dynamic>>()) {
-        if (item['wizard_ui'] != 'hidden') continue;
-        final name = item['name'];
-        final def = item['default_value'];
-        if (name is String && def != null) out[name] = def.toString();
-      }
-    }
-    return out;
-  }
-
-  /// In-place рекурсивная замена строк `@<name>` на `vars[<name>]` в
-  /// любом вложенном JSON-узле (Map / List / scalar).
-  static void _substituteInPlace(dynamic obj, Map<String, String> vars) {
-    if (obj is Map<String, dynamic>) {
-      for (final k in obj.keys.toList()) {
-        final v = obj[k];
-        if (v is String) {
-          obj[k] = _sub(v, vars);
-        } else {
-          _substituteInPlace(v, vars);
-        }
-      }
-    } else if (obj is List) {
-      for (var i = 0; i < obj.length; i++) {
-        final v = obj[i];
-        if (v is String) {
-          obj[i] = _sub(v, vars);
-        } else {
-          _substituteInPlace(v, vars);
-        }
-      }
-    }
-  }
-
-  static String _sub(String v, Map<String, String> vars) {
-    if (!v.startsWith('@')) return v;
-    final name = v.substring(1);
-    return vars[name] ?? v;
+/// §267 — сверяет `magic_nodes.*.tag` (source of truth) против const-зеркал
+/// в `consts.dart`. Расхождение (переименовали tag в шаблоне, забыли const)
+/// → бросаем StateError на старте с ясной ошибкой вместо тихой поломки
+/// роутинга. `auto` — производная нода (tag собирается per-channel из tpl),
+/// её `kAutoOutboundTag` = имя-заготовка, сверяется тестом на resolveTpl.
+///
+/// Top-level (не приватная) — чтобы покрывалась unit-тестом напрямую, без
+/// мока rootBundle/asset-load.
+void assertMagicNodeMirrors(GroupTemplates gt) {
+  final direct = gt.magicNodes['direct']?.tag;
+  final block = gt.magicNodes['block']?.tag;
+  if (direct != kDirectOutboundTag || block != kBlockOutboundTag) {
+    throw StateError(
+        'magic_nodes tag mismatch with consts.dart mirror — update consts.dart');
   }
 }

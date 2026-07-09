@@ -102,16 +102,31 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
           }
         }
       }
+      // §265 — ref-var значения живут в глобальном userVars, не в varsValues.
+      // Если в varsValues затесались ref-ключи (осиротевшие с переезда var в
+      // ref) — не показываем их: они не отражают реального значения.
+      final refNames = preset == null
+          ? const <String>{}
+          : {for (final v in preset.vars) if (v.isRef) v.name};
+      final cleanVarsValues = refNames.isEmpty
+          ? r.varsValues
+          : {
+              for (final e in r.varsValues.entries)
+                if (!refNames.contains(e.key)) e.key: e.value,
+            };
       return {
         ...base,
         'preset_id': r.presetId,
-        if (r.varsValues.isNotEmpty) 'vars_values': r.varsValues,
+        if (cleanVarsValues.isNotEmpty) 'vars_values': cleanVarsValues,
         'effective_outbound': r.outbound,
         if (preset != null)
           'preset': {
             'label': preset.label,
             'description': preset.description,
             'default_enabled': preset.defaultEnabled,
+            // §264 — locked/pinned метаданные (симметрия Debug API).
+            'locked': preset.locked,
+            if (preset.isPinned) 'pinned': preset.pinned,
             'inline_rule_sets': inlineCount,
             'remote_rule_sets': remoteRuleSets,
             'has_dns_rule': preset.dnsRules.isNotEmpty,

@@ -20,6 +20,7 @@ class CustomRuleTile extends StatelessWidget {
     required this.pickerDisabled,
     this.showOutbound = true,
     this.touchesDns = false,
+    this.locked = false,
     required this.statusButton,
     required this.onTap,
     required this.onLongPressStart,
@@ -45,6 +46,11 @@ class CustomRuleTile extends StatelessWidget {
   /// `dnsMirrorActive || forceIpv4Active` (§256 — Force IPv4 тоже DNS-аспект).
   final bool touchesDns;
 
+  /// §264 — locked-пресет (traffic-processing): свич disabled, контекст-меню
+  /// (delete/reorder) недоступно. Продуктовый инвариант — правило нельзя
+  /// выключить/удалить/подвинуть.
+  final bool locked;
+
   /// ☁-кнопка статуса (SRS либо preset) — null если правилу не нужен SRS.
   final Widget? statusButton;
 
@@ -60,7 +66,9 @@ class CustomRuleTile extends StatelessWidget {
 
     final content = GestureDetector(
       onTap: onTap,
-      onLongPressStart: (d) => onLongPressStart(d.globalPosition),
+      // §264 — locked: контекст-меню (delete/reorder) недоступно.
+      onLongPressStart:
+          locked ? null : (d) => onLongPressStart(d.globalPosition),
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
@@ -71,7 +79,8 @@ class CustomRuleTile extends StatelessWidget {
               children: [
                 Switch(
                   value: rule.enabled,
-                  onChanged: onSwitchChanged,
+                  // §264 — locked-пресет нельзя выключить (disabled свич).
+                  onChanged: locked ? null : onSwitchChanged,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -141,7 +150,12 @@ class CustomRuleTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ReorderGrabStrip(index: index),
+          // §264 — locked-пресет не двигается: вместо grab-strip пустой отступ
+          // (ширина = 18 + margin 6×2, выравнивание с остальными tile).
+          if (locked)
+            const SizedBox(width: 30)
+          else
+            ReorderGrabStrip(index: index),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -172,6 +172,25 @@ class CcChannel {
   Future<void> connectProfiler() => _invoke('ccConnectProfiler');
   Future<void> disconnectProfiler() => _invoke('ccDisconnectProfiler');
 
+  // §259 — refcount поверх profilerClient. У profiler-стрима (в т.ч.
+  // DNS-журнала §180) теперь ДВА потенциальных держателя: traffic_profiler
+  // (recording/live) и dns-direct-детектор (окно после старта). Голый
+  // `disconnectProfiler()` одного держателя оборвал бы native-подписку
+  // другому. acquire/release ведут счётчик: native connect зовётся на 0→1,
+  // native disconnect — на 1→0. Идемпотентно на уровне вызывающих (у каждого
+  // своё «взял/отдал»); отрицательный дисбаланс защищён clamp'ом.
+  int _profilerRefs = 0;
+  Future<void> acquireProfiler() async {
+    _profilerRefs++;
+    if (_profilerRefs == 1) await connectProfiler();
+  }
+
+  Future<void> releaseProfiler() async {
+    if (_profilerRefs == 0) return; // защита от лишнего release
+    _profilerRefs--;
+    if (_profilerRefs == 0) await disconnectProfiler();
+  }
+
   /// §175 — отмена масс-пинга: disconnect отдельного pingClient → ядро рвёт
   /// per-call ctx in-flight URLTest'ов (не дожидаясь TCPTimeout), не задевая
   /// status/screen/profiler-стримы. Следующий urlTestOutbound поднимет свежий.
@@ -554,7 +573,8 @@ class CcConnection {
       );
 }
 
-/// §180 — структурное DNS-событие из ядра (SPEC 018, `subscribeDNSQueries`).
+/// §180 — структурное DNS-событие из ядра (SPEC 018 v2, §261: команда
+/// `CommandDNS` в мультиплексе profilerClient, приходит через `writeDNSQuery`).
 /// Заменяет текстовый парсинг core-лога: атрибуция к приложению (`packageName`)
 /// приходит ИЗ ЯДРА (processInfo), не сшивается по connId.
 class CcDnsQuery {

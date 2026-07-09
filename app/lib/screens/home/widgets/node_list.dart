@@ -283,7 +283,8 @@ class HomeNodeList extends StatelessWidget {
             onActivate: () => unawaited(controller.switchNode(tag)),
             onPing: () => unawaited(controller.runNodeUrltest(tag)),
             onCopyUri: () => copyNodeUri(context, tag, subController),
-            onViewJson: () => viewOutboundJson(context, tag, state),
+            onViewJson: () => viewOutboundJson(context, tag, state,
+                subController: subController, homeController: controller),
             onRunUrltest: isUrltestGroup
                 ? () => unawaited(controller.runGroupUrltest(tag))
                 : null,

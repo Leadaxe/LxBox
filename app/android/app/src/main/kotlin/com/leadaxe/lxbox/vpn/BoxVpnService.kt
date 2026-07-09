@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
+import java.io.File
 import androidx.core.content.ContextCompat
 import io.nekohasekai.libbox.TunOptions
 import kotlinx.coroutines.CompletableDeferred
@@ -36,6 +37,8 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         const val ACTION_FORCE_STOP = "com.leadaxe.lxbox.ACTION_FORCE_STOP"
         const val ACTION_RELOAD = "com.leadaxe.lxbox.ACTION_RELOAD"
         const val ACTION_RESET_NETWORK = "com.leadaxe.lxbox.ACTION_RESET_NETWORK"
+        /// §263 — сброс DNS-кэша: удалить cache.db + reload (если running).
+        const val ACTION_CLEAR_DNS_CACHE = "com.leadaxe.lxbox.ACTION_CLEAR_DNS_CACHE"
         /// §182 — кнопка Reconnect в foreground-уведомлении: native-side
         /// reconnect (stopAwait→start), переживает убитый UI-движок.
         const val ACTION_RECONNECT = "com.leadaxe.lxbox.ACTION_RECONNECT"
@@ -150,6 +153,36 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
             context.sendBroadcast(
                 Intent(ACTION_RESET_NETWORK).setPackage(context.packageName)
             )
+        }
+
+        /// §263 — сброс DNS-кэша. Running: broadcast → receiver удалит cache.db
+        /// в правильном окне и reload'нёт (ядро создаст чистый). Off: broadcast
+        /// некому ловить (receiver жив только у работающего сервиса) → удаляем
+        /// файл прямо здесь; чистый cache.db создастся при следующем старте.
+        fun clearDnsCache(context: Context) {
+            Log.d(TAG, "[vpn] companion.clearDnsCache() current status=${currentStatus.name}")
+            if (currentStatus == VpnStatus.Started ||
+                currentStatus == VpnStatus.Starting
+            ) {
+                context.sendBroadcast(
+                    Intent(ACTION_CLEAR_DNS_CACHE).setPackage(context.packageName)
+                )
+            } else {
+                deleteCacheDbFile()
+            }
+        }
+
+        /// §263 — удалить cache.db (FakeIP-аллокации + DNS RDRC). Путь =
+        /// `filesDir/cache.db` (basePath ядра, см. BoxApplication.setup).
+        /// Идемпотентно: нет файла (свежая установка / уже чисто) → no-op.
+        internal fun deleteCacheDbFile() {
+            val f = File(BoxApplication.application.filesDir, "cache.db")
+            if (!f.exists()) {
+                Log.i(TAG, "[dns] cache.db absent — nothing to clear")
+                return
+            }
+            val ok = runCatching { f.delete() }.getOrDefault(false)
+            Log.i(TAG, "[dns] cache.db delete=$ok (${f.absolutePath})")
         }
 
         /// §223 — попросить работающий сервис перерисовать foreground-уведомление

@@ -244,6 +244,22 @@ interface PlatformInterfaceWrapper : PlatformInterface {
 
     override fun closeNeighborMonitor(listener: io.nekohasekai.libbox.NeighborUpdateListener) {}
 
+    // ─── 1.14.0-lx.3 (rc.2): platform-bridge (upstream L3-forwarding) ────
+    // Апстрим влил "bridge outbound" — платформенный L3-мост, где ОС отдаёт
+    // ядру отдельный TUN-fd под egress. Android VPN-клиент его не использует
+    // (весь трафик уже идёт через наш единственный VpnService-TUN). Контракт
+    // §050/§151: `usePlatformBridge` БЕЗ `throws` → безопасный `false`, ядро
+    // мост не строит; `createBridge` С `throws Exception` (как openShellSession)
+    // — ядро его не позовёт при false, но контракт требует реализацию.
+
+    /** Не используем platform-bridge — весь трафик через VpnService-TUN. */
+    override fun usePlatformBridge(): Boolean = false
+
+    override fun createBridge(
+        options: io.nekohasekai.libbox.BridgeOptions
+    ): io.nekohasekai.libbox.BridgeSession =
+        throw UnsupportedOperationException("platform bridge not used on Android")
+
     private class StringArray(private val iter: Iterator<String>) : StringIterator {
         override fun hasNext() = iter.hasNext()
         // §151 F1 — JNI no-throw: `StringIterator.Next()` — Go-метод БЕЗ `error`,

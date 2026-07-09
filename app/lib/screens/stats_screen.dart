@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../controllers/home_controller.dart';
+import '../controllers/subscription_controller.dart';
 import '../models/config_node.dart';
 import '../services/format_utils.dart';
 import '../services/traffic_profiler.dart';
@@ -26,10 +28,17 @@ class StatsScreen extends StatefulWidget {
     super.key,
     this.configRaw = '',
     this.initialTab = StatsTab.overview,
+    this.subController,
+    this.homeController,
   });
 
   final String configRaw;
   final StatsTab initialTab;
+
+  // §262 — прокидываются в Live-таб → DNS-health баннер для навигационных
+  // кнопок (Open DNS settings / Enable FakeIP). null → лист без кнопок.
+  final SubscriptionController? subController;
+  final HomeController? homeController;
 
   @override
   State<StatsScreen> createState() => _StatsScreenState();
@@ -295,7 +304,10 @@ class _StatsScreenState extends State<StatsScreen> {
               ),
               const ConnectionsView(),
               const PerAppTraceTab(),
-              const LiveEventsTab(),
+              LiveEventsTab(
+                subController: widget.subController,
+                homeController: widget.homeController,
+              ),
             ],
           ),
         ),

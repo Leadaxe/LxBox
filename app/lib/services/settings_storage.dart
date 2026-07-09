@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-import '../config/consts.dart';
 import '../models/background_mode.dart';
 import '../models/channel.dart';
 import '../models/custom_rule.dart';
@@ -269,8 +268,8 @@ class SettingsStorage {
 
   // ---------------------------------------------------------------------------
   // §125 — Каналы роутинга (channels[]). Заменяют enabled_groups[] + статичные
-  // template.presetGroups как source-of-truth. На первом запуске seeded из
-  // template (migrateChannelsIfNeeded). vpn-1 неудаляем, лимит 10.
+  // template-пресеты как source-of-truth. На первом запуске seeded из template
+  // (migrateChannelsIfNeeded; §267 — из group_templates). vpn-1 неудаляем, лимит 10.
   // ---------------------------------------------------------------------------
 
   static Future<List<Channel>> getChannels() => _getChannels();
@@ -293,9 +292,10 @@ class SettingsStorage {
       _deleteChannel(tag);
 
   /// One-shot миграция enabled_groups[] → channels[] (seed из template).
+  /// §267 — сид из `template.groupTemplates` (default_channels + channel-шаблон).
   /// Идемпотентна. Зовётся из main() init до первого билда.
-  static Future<void> migrateChannelsIfNeeded(List<PresetGroup> presets) =>
-      _migrateChannelsIfNeeded(presets);
+  static Future<void> migrateChannelsIfNeeded(GroupTemplates gt) =>
+      _migrateChannelsIfNeeded(gt);
 
   /// §228 — one-shot ремап переименованных preset_id в custom_rules.
   /// Идемпотентна. Зовётся из main() init ДО seed'а дефолтных пресетов.

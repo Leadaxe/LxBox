@@ -655,6 +655,20 @@ class BoxVpnClient {
     return ok ?? false;
   }
 
+  /// §263 — сбросить DNS-кэш ядра: удалить `cache.db` (FakeIP-аллокации +
+  /// DNS RDRC). При работающем туннеле native затем reload'ит рантайм
+  /// (`serviceReload` → ядро пересоздаёт чистый cache.db, тоннель дропается
+  /// ~3с); при выключенном VPN — только удаление файла (чистый создастся на
+  /// следующем старте). См. `docs/spec/tasks/263-clear-dns-cache.md`.
+  Future<bool> clearDnsCache() async {
+    final ok = await _invoke<bool>(
+      _Methods.clearDnsCache,
+      timeout: _Timeouts.dnsCache,
+      onTimeoutValue: false,
+    );
+    return ok ?? false;
+  }
+
   // ---------------------------------------------------------------------------
   // Status stream
   // ---------------------------------------------------------------------------
