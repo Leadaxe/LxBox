@@ -57,6 +57,10 @@ void applyTlsFragment(Map<String, dynamic> config, Map<String, String> vars) {
   for (final ob in outbounds) {
     if (ob is! Map<String, dynamic>) continue;
     if (ob.containsKey('detour')) continue;
+    // §270 — naive-outbound отвергает fragment/record_fragment на уровне ядра
+    // (fatal «fragment is not supported on naive outbound»). naive принимает в
+    // TLS только enabled/server_name — глобальный fragment ему не наложить.
+    if (ob['type'] == 'naive') continue;
     final tls = ob['tls'];
     if (tls is! Map<String, dynamic>) continue;
     if (tls['enabled'] != true) continue;
