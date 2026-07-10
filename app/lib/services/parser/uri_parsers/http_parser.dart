@@ -12,11 +12,14 @@ import 'naive_parser.dart';
 /// Обе схемы: `proxy-http://` (plain) и `proxy-https://` (TLS). Кастомная
 /// схема вместо голых `http(s)://` — те перехватываются `isSubscriptionUrl`
 /// раньше `isDirectLink`, а в телах подписок промо-ссылки стали бы «нодами».
+/// §268 — плюс-формы `proxy+http://` / `proxy+https://` эквивалентны.
 HttpSpec? parseHttpProxy(String uri) {
   final p = Uri.tryParse(uri);
   if (p == null || p.host.isEmpty) return null;
 
-  final secure = p.scheme.toLowerCase() == 'proxy-https';
+  // TLS-дискриминатор — суффикс `https` (покрывает и дефис-, и плюс-форму);
+  // `proxy-http` / `proxy+http` → plain.
+  final secure = p.scheme.toLowerCase().endsWith('https');
 
   // userinfo как у socks: user | user:pass | :pass (только пароль).
   final userParts = p.userInfo.split(':');

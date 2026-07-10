@@ -27,10 +27,17 @@ bool isDirectLink(String input) {
       t.startsWith('awg://') ||
       t.startsWith('socks5://') ||
       t.startsWith('socks://') ||
+      // §268 — naive/masque парсер знал, а классификатор импорта — нет:
+      // ссылки падали на «not a subscription URL, proxy link, or JSON».
+      t.startsWith('naive+https://') ||
+      t.startsWith('masque://') ||
       // §222 — кастомная схема HTTP(S)-прокси: голые http(s):// заняты
       // isSubscriptionUrl (проверяется раньше в addFromInput).
+      // §268 — плюс-алиасы для единообразия с naive+https.
       t.startsWith('proxy-http://') ||
-      t.startsWith('proxy-https://');
+      t.startsWith('proxy-https://') ||
+      t.startsWith('proxy+http://') ||
+      t.startsWith('proxy+https://');
 }
 
 bool isWireGuardConfig(String input) {
