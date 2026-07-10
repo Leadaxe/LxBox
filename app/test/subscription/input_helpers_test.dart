@@ -44,6 +44,8 @@ void main() {
       // §268 — ранее выпадали из классификатора импорта.
       'naive+https': 'naive+https://u:p@h:443',
       'masque': 'masque://u@h:443',
+      // §269 — AnyTLS.
+      'anytls': 'anytls://p@h:443',
       // §268 — плюс-алиасы proxy для единообразия с naive+https.
       'proxy+http': 'proxy+http://h:8080',
       'proxy+https': 'proxy+https://h:8443',

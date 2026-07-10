@@ -569,6 +569,79 @@ NaïveProxy outbound is gated behind the sing-box build tag `with_naive_outbound
 
 ---
 
+## 5.6 AnyTLS
+
+Anti-DPI protocol (sing-box `type: "anytls"`, core ≥ 1.12.0): native
+multiplexing with flexible padding over a plain TLS connection. Structurally
+close to Trojan — `password` + TLS over TCP, no separate transport wrapper
+(multiplexing is internal). Added in §269.
+
+### URI Format
+
+```
+anytls://<password>@<host>:<port>/?<params>#<label>
+```
+
+AnyTLS has **no standardized share-URI** (sing-box documents JSON only). L×Box
+accepts the de-facto Trojan-style form used by Karing / v2rayN mods.
+
+| Component | Purpose | Default |
+|-----------|---------|---------|
+| userinfo `password` | Auth credential | required (empty → parse fails) |
+| `host` | Server address (FQDN or IP, IPv6 in brackets) | required |
+| `port` | TCP port | `443` |
+| Query: `sni` / `peer` / `host` | TLS server name | `host` |
+| Query: `fp` | uTLS fingerprint | `random` |
+| Query: `pbk` / `sid` | REALITY public key / short ID (valid X25519 → REALITY, else plain TLS, §169) | none |
+| Query: `alpn` | comma-separated ALPN list | none |
+| Query: `allowInsecure` / `insecure` | Skip cert verify (warns) | `false` |
+| Query: `idle_session_check_interval` | Go-duration (`"30s"`) | core default (30s) |
+| Query: `idle_session_timeout` | Go-duration (`"30s"`) | core default (30s) |
+| Query: `min_idle_session` | int | core default (0) |
+| Fragment `#label` | Display name | derived from `host:port` |
+
+### Examples
+
+```
+anytls://password@server.example.com:8443#AT-01
+anytls://pw@server.example.com                                             # port 443
+anytls://pw@h.example:8443?sni=cdn.example.com&alpn=h2,http/1.1#TLS-tuned
+anytls://pw@h.example:8443?idle_session_timeout=30s&min_idle_session=2#Idle
+```
+
+### Generated sing-box Outbound
+
+```json
+{
+  "type": "anytls",
+  "tag": "<label or anytls-host-port>",
+  "server": "<host>",
+  "server_port": <port>,
+  "password": "<pass>",
+  "tls": { "enabled": true, "server_name": "<host>" },
+  "idle_session_timeout": "30s",
+  "min_idle_session": 2
+}
+```
+
+### Behaviour Notes
+
+- TLS is **always** enabled — `security=none` in the URI is ignored, and a
+  sing-box JSON entry without a `tls` block is coerced to `enabled: true`
+  (`server_name = host`). AnyTLS without TLS is meaningless.
+- idle fields (`idle_session_check_interval` / `idle_session_timeout` /
+  `min_idle_session`) are optional; when absent they are omitted from the
+  outbound so the core applies its own defaults. They round-trip through the
+  URI as query params.
+- No `transport` block — AnyTLS multiplexes internally, unlike Trojan/VLESS.
+
+### Reference
+
+- sing-box outbound: https://sing-box.sagernet.org/configuration/outbound/anytls/
+- LxBox spec: [`docs/spec/tasks/269-anytls-protocol.md`](spec/tasks/269-anytls-protocol.md)
+
+---
+
 ## 6. SSH
 
 ### URI Format

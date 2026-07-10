@@ -280,6 +280,28 @@ NodeSpec? parseSingboxEntry(Map<String, dynamic> entry) {
         tls: _tlsFromSingbox(entry['tls'], server),
         transport: _transportFromSingbox(entry['transport']),
       );
+    case 'anytls': // §269
+      if (server.isEmpty || port == 0) return null;
+      // AnyTLS всегда поверх TLS: если tls-блок отсутствует/выключен —
+      // подставляем минимальный enabled (serverName=server).
+      var anyTls = _tlsFromSingbox(entry['tls'], server);
+      if (!anyTls.enabled) {
+        anyTls = TlsSpec(enabled: true, serverName: server);
+      }
+      return AnyTlsSpec(
+        id: newUuidV4(),
+        tag: tag.isEmpty ? 'anytls-$server-$port' : tag,
+        label: label,
+        server: server,
+        port: port,
+        rawUri: '',
+        password: entry['password']?.toString() ?? '',
+        tls: anyTls,
+        idleSessionCheckInterval:
+            entry['idle_session_check_interval']?.toString() ?? '',
+        idleSessionTimeout: entry['idle_session_timeout']?.toString() ?? '',
+        minIdleSession: (entry['min_idle_session'] as num?)?.toInt(),
+      );
     case 'shadowsocks':
       if (server.isEmpty || port == 0) return null;
       return ShadowsocksSpec(

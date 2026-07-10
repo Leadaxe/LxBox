@@ -31,6 +31,8 @@ bool isDirectLink(String input) {
       // ссылки падали на «not a subscription URL, proxy link, or JSON».
       t.startsWith('naive+https://') ||
       t.startsWith('masque://') ||
+      // §269 — AnyTLS.
+      t.startsWith('anytls://') ||
       // §222 — кастомная схема HTTP(S)-прокси: голые http(s):// заняты
       // isSubscriptionUrl (проверяется раньше в addFromInput).
       // §268 — плюс-алиасы для единообразия с naive+https.
