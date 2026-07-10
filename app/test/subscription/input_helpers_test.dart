@@ -35,8 +35,18 @@ void main() {
       'ssh': 'ssh://u@h:22',
       'wireguard': 'wireguard://...',
       'wg': 'wg://...',
+      'awg': 'awg://...',
       'socks5': 'socks5://u:p@h:1080',
       'socks': 'socks://h:1080',
+      // §222 — HTTP(S) CONNECT proxy (дефис-формы).
+      'proxy-http': 'proxy-http://h:8080',
+      'proxy-https': 'proxy-https://h:8443',
+      // §268 — ранее выпадали из классификатора импорта.
+      'naive+https': 'naive+https://u:p@h:443',
+      'masque': 'masque://u@h:443',
+      // §268 — плюс-алиасы proxy для единообразия с naive+https.
+      'proxy+http': 'proxy+http://h:8080',
+      'proxy+https': 'proxy+https://h:8443',
     };
     for (final e in schemes.entries) {
       test('${e.key}:// → true', () {

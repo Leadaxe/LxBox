@@ -70,6 +70,38 @@ void main() {
     });
   });
 
+  group('§268 — плюс-алиасы proxy+http / proxy+https', () {
+    test('proxy+http эквивалентен proxy-http (plain, TLS off)', () {
+      final plus = parseUri('proxy+http://alice:pw@h.example:8080#P')
+          as HttpSpec;
+      final dash = parseUri('proxy-http://alice:pw@h.example:8080#P')
+          as HttpSpec;
+      expect(plus.server, dash.server);
+      expect(plus.port, dash.port);
+      expect(plus.username, dash.username);
+      expect(plus.password, dash.password);
+      expect(plus.tls.enabled, isFalse);
+      expect(dash.tls.enabled, isFalse);
+    });
+
+    test('proxy+https эквивалентен proxy-https (TLS on)', () {
+      final plus = parseUri('proxy+https://alice:pw@h.example:8443'
+          '?sni=proxy.corp#S') as HttpSpec;
+      final dash = parseUri('proxy-https://alice:pw@h.example:8443'
+          '?sni=proxy.corp#S') as HttpSpec;
+      expect(plus.tls.enabled, isTrue);
+      expect(dash.tls.enabled, isTrue);
+      expect(plus.tls.serverName, 'proxy.corp');
+      expect(plus.server, dash.server);
+      expect(plus.port, dash.port);
+    });
+
+    test('дефолтные порты сохраняются для плюс-формы', () {
+      expect((parseUri('proxy+http://p.example') as HttpSpec).port, 80);
+      expect((parseUri('proxy+https://p.example') as HttpSpec).port, 443);
+    });
+  });
+
   group('parseHttpProxy — TLS (proxy-https)', () {
     test('sni/fp/alpn/insecure по trojan-конвенциям', () {
       final h = parseUri('proxy-https://h.example:8443'
