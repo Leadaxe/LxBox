@@ -216,6 +216,59 @@ String toUriTrojan(TrojanSpec s) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// AnyTLS (§269)
+// ════════════════════════════════════════════════════════════════════════════
+
+Outbound emitAnyTls(AnyTlsSpec s, TemplateVars vars) {
+  final out = _baseOutbound('anytls', s)..['password'] = s.password;
+  // AnyTLS всегда поверх TLS — эмитим tls-блок безусловно (в отличие от trojan,
+  // где может быть {enabled:false}).
+  out['tls'] = s.tls.toSingbox();
+  if (s.idleSessionCheckInterval.isNotEmpty) {
+    out['idle_session_check_interval'] = s.idleSessionCheckInterval;
+  }
+  if (s.idleSessionTimeout.isNotEmpty) {
+    out['idle_session_timeout'] = s.idleSessionTimeout;
+  }
+  if (s.minIdleSession != null) {
+    out['min_idle_session'] = s.minIdleSession;
+  }
+  _addDetour(out, s);
+  return Outbound(out);
+}
+
+String toUriAnyTls(AnyTlsSpec s) {
+  // AnyTLS всегда TLS. idle-поля несём в query для round-trip parity
+  // (URI-стандарта у anytls нет, форма — trojan/vless-подобная).
+  final q = <String, String>{};
+  // REALITY (pbk/sid) — как у vless, иначе round-trip терял бы REALITY-блок,
+  // приходящий из sing-box JSON.
+  if (s.tls.reality != null) {
+    q['security'] = 'reality';
+    q['pbk'] = s.tls.reality!.publicKey;
+    if (s.tls.reality!.shortId.isNotEmpty) {
+      q['sid'] = s.tls.reality!.shortId;
+    }
+  } else {
+    q['security'] = 'tls';
+  }
+  if (s.tls.serverName != null) q['sni'] = s.tls.serverName!;
+  if (s.tls.fingerprint != null) q['fp'] = s.tls.fingerprint!;
+  if (s.tls.alpn.isNotEmpty) q['alpn'] = s.tls.alpn.join(',');
+  if (s.tls.insecure) q['allowInsecure'] = '1';
+  if (s.idleSessionCheckInterval.isNotEmpty) {
+    q['idle_session_check_interval'] = s.idleSessionCheckInterval;
+  }
+  if (s.idleSessionTimeout.isNotEmpty) {
+    q['idle_session_timeout'] = s.idleSessionTimeout;
+  }
+  if (s.minIdleSession != null) {
+    q['min_idle_session'] = s.minIdleSession.toString();
+  }
+  return _buildUri('anytls', s.password, s.server, s.port, q, s.label);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // Shadowsocks
 // ════════════════════════════════════════════════════════════════════════════
 

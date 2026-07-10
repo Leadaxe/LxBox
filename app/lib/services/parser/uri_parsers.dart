@@ -1,5 +1,6 @@
 import '../../models/node_spec.dart';
 import 'uri_utils.dart';
+import 'uri_parsers/anytls_parser.dart';
 import 'uri_parsers/http_parser.dart';
 import 'uri_parsers/hysteria2_parser.dart';
 import 'uri_parsers/masque_parser.dart';
@@ -15,6 +16,7 @@ import 'uri_parsers/wireguard_parser.dart';
 
 // Per-protocol parsers live under uri_parsers/. Re-exported here so existing
 // imports of 'uri_parsers.dart' keep resolving every parse* entry point.
+export 'uri_parsers/anytls_parser.dart';
 export 'uri_parsers/http_parser.dart';
 export 'uri_parsers/hysteria2_parser.dart';
 export 'uri_parsers/masque_parser.dart';
@@ -50,6 +52,8 @@ NodeSpec? parseUri(String uri) {
         return parseHysteria2(t);
       case 'naive+https':
         return parseNaive(t);
+      case 'anytls': // §269 — AnyTLS (trojan-подобная URI-форма)
+        return parseAnyTls(t);
       case 'tuic':
         return parseTuic(t);
       case 'ssh':

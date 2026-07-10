@@ -132,6 +132,37 @@ void main() {
       expect((a['tls'] as Map)['record_fragment'], true);
     });
 
+    test('§270 — tls_fragment пропускает naive (ядро отвергает fragment)', () async {
+      final vless = parseUri('vless://u@h:443?type=tcp&security=tls&sni=h#V')!;
+      final naive = parseUri('naive+https://p@n.example:443#N')!;
+      final list = UserServer(
+        id: 'u4',
+        name: 'F',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        nodes: [vless, naive],
+      );
+      final result = await buildConfig(
+        lists: [list],
+        template: template,
+        settings: const BuildSettings(userVars: {
+          'clash_api': '127.0.0.1:9090',
+          'tls_fragment': 'true',
+          'tls_record_fragment': 'true',
+        }),
+      );
+      final outs = result.config['outbounds'] as List;
+      final v = outs.firstWhere((o) => (o as Map)['tag'] == 'V') as Map;
+      final n = outs.firstWhere((o) => (o as Map)['tag'] == 'N') as Map;
+      // vless получает fragment, naive — нет (иначе ядро: fatal).
+      expect((v['tls'] as Map)['fragment'], true);
+      expect((n['tls'] as Map).containsKey('fragment'), isFalse);
+      expect((n['tls'] as Map).containsKey('record_fragment'), isFalse);
+    });
+
     test('duplicate node tags across and within lists get -N suffix + prefix applied', () async {
       final a1 = parseUri('vless://u1@h1:443?type=ws&security=tls#Frankfurt')!;
       final a2 = parseUri('vless://u2@h2:443?type=ws&security=tls#Frankfurt')!;
