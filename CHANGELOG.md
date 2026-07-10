@@ -6,6 +6,24 @@
 
 ---
 
+## [2.15.2] — 2026-07-10
+
+### Added
+
+- **§269 — протокол AnyTLS**. Полная поддержка AnyTLS (sing-box `type: anytls`):
+  модель `AnyTlsSpec`, URI-парсер (`anytls://password@host:port?...`), разбор
+  sing-box JSON, эмиттер. TLS всегда включён; REALITY (`pbk`/`sid`), uTLS, ALPN,
+  поля idle-сессий. Импорт через вставку / «Add server» / QR. Закрывает #38.
+
+### Fixed
+
+- **§270 — TLS Fragment ломал naive-узлы**. Post-step TLS Fragment проставлял
+  `tls.fragment` всем TLS-узлам, но ядро отвергает его для naive fatal
+  (`fragment is not supported on naive outbound`). Fragment больше не
+  применяется к naive.
+
+---
+
 ## [2.15.1] — 2026-07-10
 
 ### Fixed
