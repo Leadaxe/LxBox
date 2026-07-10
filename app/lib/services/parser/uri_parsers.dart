@@ -59,6 +59,8 @@ NodeSpec? parseUri(String uri) {
         return parseSocks(t);
       case 'proxy-http': // §222 — HTTP(S) CONNECT proxy
       case 'proxy-https':
+      case 'proxy+http': // §268 — плюс-алиасы (единообразие с naive+https)
+      case 'proxy+https':
         return parseHttpProxy(t);
       case 'wg':
       case 'wireguard':
