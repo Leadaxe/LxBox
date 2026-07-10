@@ -117,6 +117,9 @@ void main() {
             id: '11', tag: 't', label: 'l', server: 's', port: 443, rawUri: 'u',
             privateKeyDer: 'pk', publicKeyDer: 'pub',
             localAddresses: const ['172.16.0.2/32']),
+        AnyTlsSpec(
+            id: '13', tag: 't', label: 'l', server: 's', port: 443, rawUri: 'u',
+            password: 'p'),
       ];
 
       for (final s in specs) {
@@ -133,6 +136,7 @@ void main() {
           WireguardSpec() => 'wireguard',
           NaiveSpec() => 'naive',
           MasqueSpec() => 'masque',
+          AnyTlsSpec() => 'anytls',
         };
         expect(p, s.protocol);
       }

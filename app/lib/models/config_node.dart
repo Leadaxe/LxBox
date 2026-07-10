@@ -87,7 +87,10 @@ class ConfigNode {
       final t = tr['type'];
       if (t is String && t.isNotEmpty) return t == 'http' ? 'h2' : t;
     }
-    if (const {'vless', 'vmess', 'trojan'}.contains(type)) return 'tcp';
+    // §269 — anytls: TCP-over-TLS без transport-обёртки (как trojan).
+    if (const {'vless', 'vmess', 'trojan', 'anytls'}.contains(type)) {
+      return 'tcp';
+    }
     return null;
   }
 
