@@ -202,6 +202,46 @@ final class TrojanSpec extends NodeSpec {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// AnyTLS (§269)
+// ════════════════════════════════════════════════════════════════════════════
+// password + TLS, TCP-based. Мультиплекс/padding — нативно в протоколе, своего
+// transport-блока нет (в отличие от Trojan). AnyTLS всегда поверх TLS.
+// idle-поля — Go-duration строки ("30s"); пусто = дефолт ядра.
+
+final class AnyTlsSpec extends NodeSpec {
+  final String password;
+  final TlsSpec tls;
+  final String idleSessionCheckInterval;
+  final String idleSessionTimeout;
+  final int? minIdleSession;
+
+  AnyTlsSpec({
+    required super.id,
+    required super.tag,
+    required super.label,
+    required super.server,
+    required super.port,
+    required super.rawUri,
+    required this.password,
+    this.tls = TlsSpec.disabled,
+    this.idleSessionCheckInterval = '',
+    this.idleSessionTimeout = '',
+    this.minIdleSession,
+    super.chained,
+    super.warnings,
+  });
+
+  @override
+  String get protocol => 'anytls';
+
+  @override
+  SingboxEntry emit(TemplateVars vars) => e.emitAnyTls(this, vars);
+
+  @override
+  String toUri() => e.toUriAnyTls(this);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // Shadowsocks
 // ════════════════════════════════════════════════════════════════════════════
 
