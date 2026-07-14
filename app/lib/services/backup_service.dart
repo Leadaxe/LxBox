@@ -220,7 +220,8 @@ class BackupApplyResult {
 ///   "source_app_version": "...",
 ///   "storage": { ...lxbox_settings.json целиком... },
 ///   "vpn_settings": { auto_start, keep_on_exit, background_mode,
-///                     core_logs_enabled, allow_bypass }
+///                     core_logs_enabled, allow_bypass, auto_redirect,
+///                     memory_limit }
 /// }
 /// ```
 ///

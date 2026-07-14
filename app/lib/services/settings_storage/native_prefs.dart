@@ -1,6 +1,6 @@
 part of '../settings_storage.dart';
 
-// §189 — native_prefs: JSON-зеркало шести Android-prefs (`boxvpn_boot.*`).
+// §189 — native_prefs: JSON-зеркало Android-prefs (`boxvpn_boot.*`).
 //
 // Модель: lxbox_settings.json = ИСТОЧНИК ИСТИНЫ (диск); native SharedPreferences
 // = рабочая копия (оперативка) для Dart-less моментов (BOOT_COMPLETED, swipe
@@ -14,7 +14,7 @@ part of '../settings_storage.dart';
 // Все писатели (UI, импорт, Debug API) идут через этот слой — иначе их прямые
 // native-записи эфемерны (sync откатит на следующем старте).
 //
-// Storage key: `native_prefs`. Шесть полей — см. NativePrefsKeys.
+// Storage key: `native_prefs`. Состав полей — см. NativePrefsKeys.
 
 /// Ключи секции `native_prefs` (= wire-имена бэкапа, обратная совместимость).
 class NativePrefsKeys {
@@ -24,6 +24,7 @@ class NativePrefsKeys {
   static const coreLogsEnabled = 'core_logs_enabled';
   static const allowBypass = 'allow_bypass';
   static const autoRedirect = 'auto_redirect';
+  static const memoryLimit = 'memory_limit'; // §271 — String (auto/off/МБ строкой)
 
   static const bools = <String>{
     autoStart,
@@ -39,6 +40,7 @@ class NativePrefsKeys {
     coreLogsEnabled,
     allowBypass,
     autoRedirect,
+    memoryLimit,
   };
 }
 
@@ -52,6 +54,7 @@ const Map<String, Object> _nativePrefsDefaults = {
   NativePrefsKeys.coreLogsEnabled: false,
   NativePrefsKeys.allowBypass: false,
   NativePrefsKeys.autoRedirect: false,
+  NativePrefsKeys.memoryLimit: MemoryLimitSetting.auto, // §271
 };
 
 /// Весь снимок секции `native_prefs` (для UI / бэкапа). Пусто → дефолты.
@@ -93,12 +96,27 @@ Future<void> _setNativeBackgroundMode(String wireValue) async {
   await BoxVpnClient().setBackgroundMode(BackgroundMode.fromNative(wireValue));
 }
 
+/// memory_limit (§271, String wireValue) из JSON-зеркала.
+Future<String> _getNativeMemoryLimit() async {
+  final p = await _getNativePrefs();
+  final v = p[NativePrefsKeys.memoryLimit];
+  return MemoryLimitSetting.normalize(v is String ? v : null);
+}
+
+/// Записать memory_limit: JSON + зеркало в native (native применяет к
+/// работающему ядру немедленно через reloadSetupOptions).
+Future<void> _setNativeMemoryLimit(String wireValue) async {
+  final v = MemoryLimitSetting.normalize(wireValue);
+  await _writeNativeJson(NativePrefsKeys.memoryLimit, v);
+  await BoxVpnClient().setMemoryLimit(v);
+}
+
 // ──────────────────── backup-блок (единая сериализация) ────────────────────
 // Единственное место, знающее состав/дефолты/типы блока vpn_settings бэкапа.
 // backup_service И debug-handler делегируют сюда (без дублей). Wire-ключи =
 // NativePrefsKeys-значения (стабильны — старые бэкапы импортируются).
 
-/// Снимок всех 6 ключей для бэкапа (из JSON-зеркала, дефолты из единого места).
+/// Снимок всех ключей для бэкапа (из JSON-зеркала, дефолты из единого места).
 Future<Map<String, dynamic>> _exportToBackupMap() async {
   final p = await _getNativePrefs();
   return {
@@ -122,6 +140,10 @@ Future<int> _applyFromBackupMap(
         // Нормализация/валидация через BackgroundMode (не голый каст).
         await _setNativeBackgroundMode(
             BackgroundMode.fromNative(data[key]?.toString()).wireValue);
+      } else if (key == NativePrefsKeys.memoryLimit) {
+        // §271 — нормализация через MemoryLimitSetting (мусор → auto).
+        await _setNativeMemoryLimit(
+            MemoryLimitSetting.normalize(data[key]?.toString()));
       } else {
         await _setNativeBool(key, data[key] == true);
       }
@@ -200,6 +222,7 @@ Future<void> _bootstrapFromNative() async {
     NativePrefsKeys.coreLogsEnabled: await vpn.getCoreLogsEnabled(),
     NativePrefsKeys.allowBypass: await vpn.getAllowBypass(),
     NativePrefsKeys.autoRedirect: await vpn.getAutoRedirect(),
+    NativePrefsKeys.memoryLimit: await vpn.getMemoryLimit(), // §271
   };
   final data = await _load();
   data['native_prefs'] = section;
@@ -223,6 +246,13 @@ Future<void> _syncJsonToNative() async {
     if (haveBg != wantBg) {
       await vpn.setBackgroundMode(BackgroundMode.fromNative(wantBg));
     }
+  }
+  // §271 — memory_limit: диск перезаливает native, как и остальные ключи.
+  final wantMl = json[NativePrefsKeys.memoryLimit];
+  if (wantMl is String) {
+    final normMl = MemoryLimitSetting.normalize(wantMl);
+    final haveMl = await vpn.getMemoryLimit();
+    if (haveMl != normMl) await vpn.setMemoryLimit(normMl);
   }
 }
 

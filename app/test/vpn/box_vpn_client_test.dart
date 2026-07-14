@@ -67,6 +67,34 @@ void main() {
     });
   });
 
+  // §271 — memory limit: контракт wire-значений + нормализация ответов native.
+  group('BoxVpnClient memory limit (§271)', () {
+    test('setMemoryLimit passes value to native', () async {
+      await BoxVpnClient().setMemoryLimit('512');
+      expect(calls.single.method, equals('setMemoryLimit'));
+      expect(calls.single.arguments, equals({'value': '512'}));
+    });
+
+    test('setMemoryLimit normalizes garbage to auto before sending', () async {
+      await BoxVpnClient().setMemoryLimit('banana');
+      expect(calls.single.arguments, equals({'value': 'auto'}));
+    });
+
+    test('getMemoryLimit normalizes unknown native value to auto', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        return 'legacy-junk';
+      });
+      expect(await BoxVpnClient().getMemoryLimit(), equals('auto'));
+    });
+
+    test('getMemoryLimit returns valid native value as is', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        return 'off';
+      });
+      expect(await BoxVpnClient().getMemoryLimit(), equals('off'));
+    });
+  });
+
   group('BoxVpnClient.areNotificationsEnabled / isIgnoringBatteryOptimizations', () {
     test('both return native booleans', () async {
       final notif = await BoxVpnClient().areNotificationsEnabled();
