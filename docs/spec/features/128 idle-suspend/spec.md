@@ -19,10 +19,12 @@
 ## UX
 
 VPN Settings → вкладка **System** → секция **Optimization** (заголовок в стиле
-Core через `TemplateSectionHeader`). Два однородных рычага, оба — заголовок +
-описание + `RadioGroup` списком под ним:
+Core через `TemplateSectionHeader`). Три однородных рычага, каждый — заголовок +
+описание + контрол под ним:
 
 - **Suspend idle tunnels** — выбор порога списком (пресеты).
+- **Memory limit** (§271) — dropdown лимита памяти ядра (Auto/Off/МБ),
+  применяется к работающему ядру немедленно.
 - **Tunnel sleep mode** — когда паузить туннель целиком (background mode, §124).
 
 Пресеты idle-suspend (RadioGroup, выбор применяется сразу по тапу):

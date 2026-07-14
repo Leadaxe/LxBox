@@ -72,6 +72,10 @@ class _Methods {
   static const getBackgroundMode = 'getBackgroundMode';
   static const setBackgroundMode = 'setBackgroundMode';
 
+  // Memory limit (§271)
+  static const getMemoryLimit = 'getMemoryLimit';
+  static const setMemoryLimit = 'setMemoryLimit';
+
   // Quick Connect
   static const requestAddTile = 'requestAddTile';
 

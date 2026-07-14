@@ -44,6 +44,15 @@ class BootReceiver : BroadcastReceiver() {
         /// не ломается). proxy-фикс активируется только при явном has_tun=false.
         private const val KEY_HAS_TUN = "has_tun"
 
+        /// §271 — memory limit ядра (SetupOptions.oomMemoryLimit). Wire-значения:
+        /// "auto" (по RAM устройства), "off" (без лимита, oom-killer остаётся в
+        /// Available-режиме), либо число мегабайт строкой ("200"/"384"/"512"/"768").
+        /// Default "auto". Разрешение в байты — BoxApplication.resolveMemoryLimitBytes.
+        private const val KEY_MEMORY_LIMIT = "memory_limit"
+
+        const val MEMORY_LIMIT_AUTO = "auto"
+        const val MEMORY_LIMIT_OFF = "off"
+
         /// Три режима фоновой работы tunnel'а. По умолчанию "never" — максимум
         /// стабильности, минимум экономии батареи. VPN-пользователи обычно
         /// выбирают надёжность (пуши, длинные TCP-сокеты), поэтому default
@@ -54,6 +63,16 @@ class BootReceiver : BroadcastReceiver() {
         const val BG_MODE_NEVER = "never"
         const val BG_MODE_LAZY = "lazy"
         const val BG_MODE_ALWAYS = "always"
+
+        fun setMemoryLimit(context: Context, value: String) {
+            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .edit().putString(KEY_MEMORY_LIMIT, value).apply()
+        }
+
+        fun getMemoryLimit(context: Context): String {
+            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_MEMORY_LIMIT, MEMORY_LIMIT_AUTO) ?: MEMORY_LIMIT_AUTO
+        }
 
         fun setBackgroundMode(context: Context, mode: String) {
             context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)

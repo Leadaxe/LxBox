@@ -96,16 +96,17 @@ class BoxApplication : Application() {
             // §043: forwarding sing-box логов в `writeDebugMessage`.
             // `daemon/started_service.go:1048-1050` gates за `if s.debug`.
             debug = BootReceiver.isCoreLogsEnabled(context)
-            // §173 — OOM-killer: замена удалённому в 1.14 `Libbox.setMemoryLimit`.
+            // §173/§271 — OOM-killer: замена удалённому в 1.14 `Libbox.setMemoryLimit`.
             // libbox 1.14 конфигурит память декларативно через SetupOptions.
-            // ВАЖНО (setup.go:85-91): на Android `oomKillerEnabled=true` БЕЗ
-            // явного `oomMemoryLimit` = НЕТ лимита (`SetMemoryLimit(MaxInt64)`;
-            // дефолт есть только у iOS NetEx). Поэтому задаём лимит явно —
-            // ядро ставит Go soft-limit = limit*3/4 (~150MB), GC агрессивнее →
-            // меньше шансов попасть под Android lowmemorykiller на слабых
-            // устройствах. Раньше (до 1.14) это делал `setMemoryLimit(true)`.
+            // Лимит настраиваемый (§271, prefs `memory_limit`): хардкод 200MB
+            // (§173) душил GC на конфигах с большой кучей (WG-пулы) → GC-шторм
+            // и перегрев CPU. Семантика ядра (setup.go:85-94): limit>0 →
+            // Go soft-limit = limit*3/4; limit=0 на Android = БЕЗ лимита
+            // (`SetMemoryLimit(MaxInt64)`), oom-killer при этом остаётся в
+            // Available-режиме (следит за системной свободной памятью) —
+            // анти-LMK-страховка сохраняется при любом значении.
             oomKillerEnabled = true
-            oomMemoryLimit = 200L * 1024 * 1024 // 200 MB → soft-limit ~150 MB
+            oomMemoryLimit = resolveMemoryLimitBytes(context)
             // §038/§173 — crash/stderr-канал: замена удалённому `redirectStderr`.
             // Непустой source → ядро редиректит stderr в
             // `workingPath/CrashReport-lxbox.log` (setup.go:102) — восстанавливает
@@ -117,6 +118,38 @@ class BoxApplication : Application() {
 
     companion object {
         private const val TAG = "BoxApplication"
+
+        /** §271 — пресеты МБ, зеркало MemoryLimitSetting.values (Dart). */
+        private val MEMORY_LIMIT_PRESETS_MB = setOf(200L, 384L, 512L, 768L)
+
+        /**
+         * §271 — prefs-значение memory limit → байты для SetupOptions.oomMemoryLimit.
+         * "off" → 0 (на Android ядро трактует 0 как «без лимита», setup.go:90-91);
+         * "auto" → лесенка по физическому RAM устройства (totalMem у «4GB»-класса
+         * ≈3.7GiB, у «8GB» ≈7.5GiB — пороги ниже маркетинговых);
+         * пресетное число → мегабайты. Всё прочее (включая непресетные числа,
+         * например из prefs будущей/чужой версии) ведёт себя как "auto" — тот же
+         * fallback, что у MemoryLimitSetting.normalize на Dart-стороне, иначе
+         * значение, невидимое для §189-sync, стало бы действующим лимитом.
+         */
+        fun resolveMemoryLimitBytes(context: Context): Long {
+            val value = BootReceiver.getMemoryLimit(context)
+            value.toLongOrNull()?.let { mb ->
+                if (mb in MEMORY_LIMIT_PRESETS_MB) return mb * 1024 * 1024
+            }
+            if (value == BootReceiver.MEMORY_LIMIT_OFF) return 0L
+            // "auto" (и любой неизвестный wire) — по общему RAM устройства.
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val mi = android.app.ActivityManager.MemoryInfo()
+            am.getMemoryInfo(mi)
+            val gib = 1024L * 1024 * 1024
+            val autoMb = when {
+                mi.totalMem < 7L * gib / 2 -> 200L // < 3.5 GiB — прежний §173-лимит
+                mi.totalMem < 7L * gib -> 384L
+                else -> 512L
+            }
+            return autoMb * 1024 * 1024
+        }
 
         // `lateinit var ... private set` не работает в Kotlin companion —
         // setter недоступен из enclosing class. internal видимости хватает.
