@@ -376,6 +376,39 @@ void main() {
     expect(restored.firstWhere((c) => c.tag == 'vpn-1').isDetour, isFalse);
   });
 
+  test('§274 — detour+include_block переживают round-trip оба', () async {
+    // §274 снял взаимоисключение ролей §248: detour-канал — валидная цель
+    // правил, парс-гейт fromJson больше не коэрсит include_block у detour.
+    // Оба поля обязаны пережить export→restore как есть.
+    await seedStorage({
+      'channels': [
+        {'tag': 'vpn-1', 'label': 'Main', 'enabled': true},
+        {
+          'tag': 'vpn-2',
+          'label': 'Relay',
+          'enabled': true,
+          'detour': true,
+          'include_block': true,
+        },
+      ],
+      'channels_migrated': true,
+    });
+    final svc = const BackupService();
+    final exported = await svc.buildExport(include: {BackupCategory.routing});
+
+    await SettingsStorage.replaceRaw({});
+    final contents = await svc.parseImport(exported);
+    final apply = await svc.applyImport(contents,
+        merge: false, include: {BackupCategory.routing});
+    expect(apply.errors, isEmpty);
+
+    final restored = await SettingsStorage.getChannels();
+    final vpn2 = restored.firstWhere((c) => c.tag == 'vpn-2');
+    expect(vpn2.isDetour, isTrue);
+    expect(vpn2.includeBlock, isTrue,
+        reason: 'include_block у detour-канала не должен коэрситься (§274)');
+  });
+
   group('§159 — allowlist (default-deny) на импорте', () {
     test('replaceRaw отбрасывает чужеродный top-level ключ', () async {
       final dropped = await SettingsStorage.replaceRaw({

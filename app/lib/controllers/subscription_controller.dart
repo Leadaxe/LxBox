@@ -87,6 +87,16 @@ class SubscriptionController extends ChangeNotifier {
   List<ValidationIssue> _lastFatalIssues = const [];
   List<ValidationIssue> get lastFatalIssues => _lastFatalIssues;
 
+  /// §274 — каналы, чей node_filter отсёк все ноды в последней УСПЕШНОЙ
+  /// сборке (display-имена; канал схлопнулся в block-fallback). [stamp]
+  /// монотонно растёт на каждой сборке с непустым списком — Home дедупит
+  /// по нему транзиентный SnackBar (один показ на сборку, не на rebuild
+  /// виджетов).
+  List<String> _channelsWithoutNodes = const [];
+  List<String> get channelsWithoutNodes => _channelsWithoutNodes;
+  int _channelsWithoutNodesStamp = 0;
+  int get channelsWithoutNodesStamp => _channelsWithoutNodesStamp;
+
   String _progressMessage = '';
   String get progressMessage => _progressMessage;
 
@@ -1411,6 +1421,14 @@ class SubscriptionController extends ChangeNotifier {
         AppLog.I.error('Validation: ${issue.message}');
       }
       throw FatalValidationException(fatal);
+    }
+    // §274 — пустые каналы (фильтр отсёк все ноды) → транзиентный SnackBar
+    // на Home. Только успешная сборка: при fatal юзер получает свой sheet,
+    // дублировать шум не надо.
+    _channelsWithoutNodes = result.channelsWithoutNodes;
+    if (_channelsWithoutNodes.isNotEmpty) {
+      _channelsWithoutNodesStamp++;
+      notifyListeners();
     }
     return result.configJson;
   }

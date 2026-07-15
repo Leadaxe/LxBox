@@ -292,8 +292,8 @@ class _RoutingScreenState extends State<RoutingScreen>
 
   /// §248 Q3 — heal молчаливым не бывает: SnackBar со счётчиками вылеченных
   /// ссылок после мутации канала. [ruleLead] — вводная для rules-части
-  /// («disabled» / «deleted» / «is now a detour channel»). Оба счётчика
-  /// ненулевые → один суммарный SnackBar. Нулевые → тишина.
+  /// («disabled» / «deleted»; §274 убрал flag-set-heal и его вводную).
+  /// Оба счётчика ненулевые → один суммарный SnackBar. Нулевые → тишина.
   void _notifyHealed(Channel channel, ChannelHealResult healed,
       {required String ruleLead}) {
     if (healed.rules == 0 && healed.detours == 0) return;
@@ -376,8 +376,8 @@ class _RoutingScreenState extends State<RoutingScreen>
       _notifyHealed(channel, healed, ruleLead: 'deleted');
     } else if (result.saved != null) {
       final saved = result.saved!;
-      // §202/§248 — persist через updateChannel: disable и смена detour-роли
-      // лечат ссылки покинутого рода, счётчики — в SnackBar ниже.
+      // §202/§248/§274 — persist через updateChannel: disable лечит оба рода
+      // ссылок, flag-unset — detour-ссылки; счётчики — в SnackBar ниже.
       final healed = await SettingsStorage.updateChannel(saved);
       if (!mounted) return;
       await _resyncHealedRefs(saved.tag, healed);
@@ -388,11 +388,11 @@ class _RoutingScreenState extends State<RoutingScreen>
         _invalidateOutboundOptions();
       });
       _markDirty();
-      // rules-ссылки лечатся и при disable, и при flag-set (§248) — вводную
-      // выбираем по фактическому переходу (disable покрывает оба рода).
-      final disabled = channel.enabled && !saved.enabled;
-      _notifyHealed(saved, healed,
-          ruleLead: disabled ? 'disabled' : 'is now a detour channel');
+      // §274 — rules-ссылки лечатся только при disable (flag-set больше не
+      // heal-триггер: detour-флаг — разрешение, канал остаётся целью
+      // правил). ruleLead поэтому один; detours-часть (flag-unset) свою
+      // вводную берёт в _notifyHealed.
+      _notifyHealed(saved, healed, ruleLead: 'disabled');
     }
     // §125 — обновить tag→label кеш для home-dropdown (label мог измениться,
     // канал мог удалиться). stageChanges уже застейджила channels; здесь только

@@ -145,10 +145,10 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     final channels = await SettingsStorage.getChannels();
     final outboundOptions = <OutboundOption>[
       const OutboundOption(value: 'direct-out', label: 'direct'),
+      // §274 — ⚙-префикс detour-канала как во всех пикерах (displayLabel).
       for (final c in channels)
         if (c.enabled || c.isRequired)
-          OutboundOption(
-              value: c.tag, label: c.label.isNotEmpty ? c.label : c.tag),
+          OutboundOption(value: c.tag, label: c.displayLabel),
     ];
 
     // §033: build template rules map by name

@@ -11,8 +11,9 @@ part of '../settings_storage.dart';
 // (`_migrateChannelsIfNeeded`) на первом запуске seed'ит channels из template.
 
 /// §248 — счётчики вылеченных ссылок при мутации канала (SnackBar в UI,
-/// тело ответа Debug API). `rules` — route_final/custom-rule → vpn-1;
-/// `detours` — overrideDetour/member.detour → '' (None).
+/// тело ответа Debug API). `rules` — route_final/custom-rule → vpn-1
+/// (только disable/delete, §274 снял flag-set-триггер); `detours` —
+/// overrideDetour/member.detour → '' (None) при disable/delete/flag-unset.
 typedef ChannelHealResult = ({int rules, int detours});
 
 Future<List<Channel>> _getChannels() async {
@@ -58,24 +59,21 @@ Future<ChannelHealResult> _updateChannel(Channel channel) async {
   // vpn-1). Решение B (28.06.2026): необратимо — повторное включение канала
   // НЕ воскрешает старую ссылку (правила привязаны к активной конфигурации).
   //
-  // §248 — смена detour-роли лечит ссылки рода, который канал ПОКИДАЕТ:
-  // flag-set → rules-ссылки → vpn-1 (канал больше не цель правил);
-  // flag-unset → detour-ссылки → '' (канал больше не detour-мишень).
-  // Disable лечит ОБА рода (канал перестаёт быть какой-либо мишенью).
-  // Та же необратимость Решения B.
+  // §248/§274 — flag-unset лечит detour-ссылки → '' (канал уходит из пикера
+  // §239, ссылки на него как detour-мишень теряют смысл). Flag-SET rules НЕ
+  // лечит (§274): detour-флаг — разрешение, канал остаётся валидной целью
+  // правил. Disable лечит ОБА рода (канал перестаёт быть какой-либо
+  // мишенью). Та же необратимость Решения B.
   final was = channels[i];
   channels[i] = channel;
   final disabling = was.enabled && !channel.enabled;
-  final flagSet = !was.isDetour && channel.isDetour;
   final flagUnset = was.isDetour && !channel.isDetour;
   var rules = 0;
   var detours = 0;
-  if (disabling || flagSet || flagUnset) {
+  if (disabling || flagUnset) {
     await _setChannels(channels, flush: false); // единый flush ниже
-    if (disabling || flagSet) rules = await _healChannelRefs(channel.tag);
-    if (disabling || flagUnset) {
-      detours = await _healDetourChannelRefs(channel.tag);
-    }
+    if (disabling) rules = await _healChannelRefs(channel.tag);
+    detours = await _healDetourChannelRefs(channel.tag);
     await _save();
   } else {
     await _setChannels(channels);
@@ -99,13 +97,14 @@ Future<ChannelHealResult> _deleteChannel(String tag) async {
 }
 
 /// Перевод rules-ссылок на канал → 'vpn-1'. Вызывается, когда канал
-/// перестаёт быть валидной route-мишенью: удалён (§125 F4.5), выключен
-/// (§202) ИЛИ стал detour-прослойкой (§248 flag-set). Возвращает число
-/// вылеченных ссылок. Всё flush:false — атомарный `_save()` на вызывающем.
+/// перестаёт быть валидной route-мишенью: удалён (§125 F4.5) или выключен
+/// (§202). Detour-flag-set больше НЕ триггер (§274: флаг — разрешение,
+/// канал остаётся целью правил). Возвращает число вылеченных ссылок.
+/// Всё flush:false — атомарный `_save()` на вызывающем.
 ///
 /// §248 — ссылка «на канал» = его тег ИЛИ тег auto-двойника `<tag>-auto`:
 /// UI-пикеры двойник не предлагают, но Debug API / правленный backup могут
-/// записать что угодно (симметрия с validFinals-гейтом билдера).
+/// записать что угодно.
 Future<int> _healChannelRefs(String deletedTag) async {
   final autoTag = '$deletedTag-auto';
   var count = 0;

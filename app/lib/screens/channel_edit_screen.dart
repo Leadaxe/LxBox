@@ -337,11 +337,11 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
               value: _includeDirect,
               onChanged: (v) => setState(() => _includeDirect = v ?? false),
             ),
-            // §248 — detour-прослойка. vpn-1 — резервная мишень heal-путей,
-            // detour для него запрещён → галку не показываем вовсе. block в
-            // прослойке запрещён («upstream недоступен» ≠ «весь флот мёртв»)
-            // → при включении Include block скрываем И сбрасываем стейт
-            // сразу, чтобы Save не унёс includeBlock=true.
+            // §248/§274 — detour-флаг = разрешение выбирать канал как
+            // detour-мишень; роль в правилах ортогональна. vpn-1 — главный
+            // канал и heal-резерв, detour для него запрещён → галку не
+            // показываем вовсе. Include block с detour совместим (§274 снял
+            // запрет Q1).
             if (!c.isRequired)
               CheckboxListTile(
                 dense: true,
@@ -351,28 +351,23 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                 title: const Text('Use as detour',
                     style: TextStyle(fontSize: 14)),
                 subtitle: const Text(
-                    'detour target for servers and folders — '
-                    'removed from rule targets',
+                    'can be picked as a detour target for servers and folders',
                     style: TextStyle(fontSize: 11)),
                 value: _isDetour,
-                onChanged: (v) => setState(() {
-                  _isDetour = v ?? false;
-                  if (_isDetour) _includeBlock = false;
-                }),
+                onChanged: (v) => setState(() => _isDetour = v ?? false),
               ),
-            if (!_isDetour)
-              CheckboxListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                visualDensity: VisualDensity.compact,
-                title: const Text('Include block',
-                    style: TextStyle(fontSize: 14)),
-                subtitle: const Text('drop traffic option in the selector',
-                    style: TextStyle(fontSize: 11)),
-                value: _includeBlock,
-                onChanged: (v) => setState(() => _includeBlock = v ?? false),
-              ),
+            CheckboxListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              visualDensity: VisualDensity.compact,
+              title: const Text('Include block',
+                  style: TextStyle(fontSize: 14)),
+              subtitle: const Text('drop traffic option in the selector',
+                  style: TextStyle(fontSize: 11)),
+              value: _includeBlock,
+              onChanged: (v) => setState(() => _includeBlock = v ?? false),
+            ),
             CheckboxListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,

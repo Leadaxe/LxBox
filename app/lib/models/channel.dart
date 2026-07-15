@@ -11,6 +11,7 @@
 //
 // Спека: docs/spec/features/125 configurable-channels/spec.md.
 
+import '../config/consts.dart' show kDetourTagPrefix;
 import 'parser_config.dart' show ChannelTemplate, DefaultChannel;
 
 /// Максимум каналов (Решение 5). vpn-1 неудаляем, N∈1..10.
@@ -251,13 +252,40 @@ class Channel {
   /// urltest-двойник. null → галка ВЫКЛ, `<tag>-auto` не эмитится.
   final ChannelAuto? auto;
 
-  /// §248 — канал = detour-прослойка: цель detour серверов/папок/подписок
-  /// (пикер §239), исключён из целей правил (route_final / custom-rule
-  /// outbound). Маркер в UI — префикс ⚙. Инварианты («vpn-1 не detour»,
-  /// «detour ⇒ includeBlock=false») принуждаются в [Channel.fromJson] —
-  /// restore из backup пишет raw JSON мимо UI/storage/API, только read-time
-  /// коэрс закрывает все пути.
+  /// §248/§274 — РАЗРЕШЕНИЕ выбирать канал как detour-мишень для
+  /// серверов/папок/подписок (пикер §239). Роль в правилах ортогональна:
+  /// канал с флагом остаётся валидной целью route_final / custom-rule
+  /// outbound (§274 снял взаимоисключение ролей §248). Маркер в UI —
+  /// префикс ⚙ ([displayLabel]). Единственный инвариант («vpn-1 не
+  /// detour») принуждается в [Channel.fromJson] — restore из backup пишет
+  /// raw JSON мимо UI/storage/API, только read-time коэрс закрывает все пути.
   final bool isDetour;
+
+  /// §274 — ⚙ живёт в САМОМ label (storage), как ⚙-метка в тегах
+  /// detour-серверов §080/§090: [normalizeLabel] в [copyWith]/[fromJson]
+  /// переименовывает канал при смене флага (set → '⚙ <label>', unset →
+  /// префикс срезается; ⚙ зарезервирован как маркер — руками его не снять,
+  /// нормализация вернёт). Display-сайты берут имя отсюда: это label (или
+  /// tag, если label пуст) + страховочный префикс для объектов, созданных
+  /// прямым конструктором мимо нормализации. Дедуп гарантирован.
+  String get displayLabel {
+    final base = label.isNotEmpty ? label : tag;
+    if (!isDetour || base.startsWith(kDetourTagPrefix)) return base;
+    return '$kDetourTagPrefix$base';
+  }
+
+  /// §274 — единая точка «переименования» detour-канала: label обязан
+  /// начинаться с [kDetourTagPrefix] при [isDetour] и НЕ начинаться без
+  /// него. Пустой label не трогаем (display-фолбэк на tag — в
+  /// [displayLabel]). Зовётся из [copyWith] (редактор, Debug API, storage)
+  /// и [fromJson] (restore из backup / ручная правка файла).
+  static String normalizeLabel(String label, bool isDetour) {
+    if (label.isEmpty) return label;
+    final marked = label.startsWith(kDetourTagPrefix);
+    if (isDetour && !marked) return '$kDetourTagPrefix$label';
+    if (!isDetour && marked) return label.substring(kDetourTagPrefix.length);
+    return label;
+  }
 
   /// Производный tag urltest-двойника. В storage НЕ хранится.
   ///
@@ -286,7 +314,8 @@ class Channel {
   }) =>
       Channel(
         tag: tag, // immutable — не параметр copyWith
-        label: label ?? this.label,
+        // §274 — смена detour-флага переименовывает канал (⚙ в label).
+        label: normalizeLabel(label ?? this.label, isDetour ?? this.isDetour),
         enabled: enabled ?? this.enabled,
         includeDirect: includeDirect ?? this.includeDirect,
         includeBlock: includeBlock ?? this.includeBlock,
@@ -302,17 +331,19 @@ class Channel {
   factory Channel.fromJson(Map<String, dynamic> json) {
     final rawAuto = json['auto'];
     final tag = json['tag'] as String? ?? '';
-    // §248 — parse-гейт (единственная точка, которую не обходит restore из
-    // backup / ручная правка файла): vpn-1 — резервная мишень heal-путей,
-    // detour-роль ему запрещена; block в detour-прослойке запрещён (Q1) —
-    // «upstream недоступен» не должен превращаться в «весь флот мёртв».
+    // §248/§274 — parse-гейт (единственная точка, которую не обходит restore
+    // из backup / ручная правка файла): vpn-1 — главный канал, дефолтная
+    // мишень всего и heal-резерв, detour-флаг ему запрещён (продуктовое
+    // решение). Коэрция include_block у detour-канала снята §274 —
+    // комбинация легальна.
     final isDetour = tag != 'vpn-1' && (json['detour'] as bool? ?? false);
     return Channel(
       tag: tag,
-      label: json['label'] as String? ?? tag,
+      // §274 — read-time нормализация ⚙-префикса (restore/ручная правка).
+      label: normalizeLabel(json['label'] as String? ?? tag, isDetour),
       enabled: json['enabled'] as bool? ?? true,
       includeDirect: json['include_direct'] as bool? ?? false,
-      includeBlock: !isDetour && (json['include_block'] as bool? ?? false),
+      includeBlock: json['include_block'] as bool? ?? false,
       nodeFilter: json['node_filter'] as String? ?? '',
       nodeFilterInvert: json['node_filter_invert'] as bool? ?? false,
       defaultFilter: json['default_filter'] as String? ?? '',

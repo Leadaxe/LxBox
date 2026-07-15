@@ -230,7 +230,7 @@ void main() {
     });
   });
 
-  group('§248 — detour-роль канала', () {
+  group('§248/§274 — detour-роль канала', () {
     test('GET/PATCH roundtrip поля detour', () async {
       await channelsHandler(req('POST', '/channels'), ctx()); // vpn-2
       final r1 = await channelsHandler(
@@ -252,52 +252,54 @@ void main() {
       );
     });
 
-    test('detour + include_block в одном body → 409', () async {
+    test('detour + include_block в одном body — совместимы (§274)', () async {
       await channelsHandler(req('POST', '/channels'), ctx()); // vpn-2
-      await expectLater(
-        channelsHandler(
-          req('PATCH', '/channels/vpn-2',
-              body: {'detour': true, 'include_block': true}),
-          ctx(),
-        ),
-        throwsA(isA<Conflict>()),
+      final r = await channelsHandler(
+        req('PATCH', '/channels/vpn-2',
+            body: {'detour': true, 'include_block': true}),
+        ctx(),
       );
+      expect(asMap(r)['detour'], isTrue);
+      expect(asMap(r)['include_block'], isTrue);
+      final stored = (await SettingsStorage.getChannels())
+          .firstWhere((c) => c.tag == 'vpn-2');
+      expect(stored.isDetour, isTrue);
+      expect(stored.includeBlock, isTrue);
     });
 
-    test('include_block:true на уже-detour канале → 409', () async {
+    test('include_block:true на уже-detour канале — принимается (§274)',
+        () async {
       await channelsHandler(
           req('POST', '/channels', body: {'detour': true}), ctx()); // vpn-2
-      await expectLater(
-        channelsHandler(
-            req('PATCH', '/channels/vpn-2', body: {'include_block': true}),
-            ctx()),
-        throwsA(isA<Conflict>()),
-      );
+      final r = await channelsHandler(
+          req('PATCH', '/channels/vpn-2', body: {'include_block': true}),
+          ctx());
+      expect(asMap(r)['include_block'], isTrue);
+      expect(asMap(r)['detour'], isTrue);
     });
 
-    test('detour:true на канале с сохранённым include_block → нормализация',
-        () async {
-      // Унаследованный из storage block молча снимается (merge-философия:
-      // PATCH одним полем не обязан знать про ранее выставленные галки).
+    test('detour:true не трогает сохранённый include_block (§274)', () async {
+      // Запрет Q1 снят §274: PATCH одним полем detour не нормализует
+      // ранее выставленный include_block — галка выживает.
       await channelsHandler(
           req('POST', '/channels', body: {'include_block': true}), ctx());
       final r = await channelsHandler(
           req('PATCH', '/channels/vpn-2', body: {'detour': true}), ctx());
       expect(asMap(r)['detour'], isTrue);
-      expect(asMap(r)['include_block'], isFalse);
+      expect(asMap(r)['include_block'], isTrue);
       final stored = (await SettingsStorage.getChannels())
           .firstWhere((c) => c.tag == 'vpn-2');
       expect(stored.isDetour, isTrue);
-      expect(stored.includeBlock, isFalse);
+      expect(stored.includeBlock, isTrue);
     });
 
-    test('healed в PATCH: flag-set лечит rules-ссылки на канал', () async {
+    test('healed в PATCH: flag-set НЕ лечит rules-ссылки (§274)', () async {
       await channelsHandler(req('POST', '/channels'), ctx()); // vpn-2
       await SettingsStorage.saveRouteFinal('vpn-2');
       final r = await channelsHandler(
           req('PATCH', '/channels/vpn-2', body: {'detour': true}), ctx());
-      expect(asMap(r)['healed'], {'rules': 1, 'detours': 0});
-      expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
+      expect(asMap(r)['healed'], {'rules': 0, 'detours': 0});
+      expect(await SettingsStorage.getRouteFinal(), 'vpn-2');
     });
 
     test('healed в DELETE: rules → vpn-1, detour-ссылки → \'\'', () async {

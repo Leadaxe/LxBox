@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../config/consts.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
 import '../models/node_spec.dart';
@@ -39,7 +38,7 @@ String detourChannelDisplay(String stored, List<Channel> channels) {
       final pick = (selected != null && selected.isNotEmpty)
           ? ' ($selected)'
           : '';
-      return '$kDetourTagPrefix${c.label}$pick';
+      return '${c.displayLabel}$pick'; // §274 — ⚙ централизован в displayLabel
     }
   }
   return stored;
@@ -55,8 +54,8 @@ String detourChannelDisplay(String stored, List<Channel> channels) {
 ///  - detour-канал (tag/autoTag) → терминальный хоп `⚙ label (выбор)` —
 ///    за каналом выбор динамический;
 ///  - свободная одиночка (display-form) → дальше по её `overrideDetour`.
-/// Storage может содержать цикл до сборки (билдер рвёт edge-strip'ом §248) —
-/// гейт visited + потолок 6 хопов. Превью best-effort: сложные политики
+/// Storage может содержать цикл до сборки (§254 — цикл ловит validateConfig
+/// как fatal) — гейт visited + потолок 6 хопов. Превью best-effort: сложные политики
 /// (append/replace, register) не разворачиваем — это про ЛИЧНУЮ ось цели.
 List<String> detourPathHops(
   String stored, {
@@ -119,7 +118,7 @@ String _channelTitle(Channel c) {
   final selected = SelectorInfo.I.selectedOf(c.tag);
   final pick =
       (selected != null && selected.isNotEmpty) ? ' ($selected)' : '';
-  return '$kDetourTagPrefix${c.label}$pick';
+  return '${c.displayLabel}$pick'; // §274 — ⚙ централизован в displayLabel
 }
 
 /// §248 — каналы для секции Channels пикера: enabled && isDetour. Омонимия:
@@ -279,8 +278,7 @@ Future<DetourTarget?> showDetourTargetPicker(
                     onTap: () => Navigator.pop(
                         ctx,
                         DetourTarget(
-                            storeValue: c.tag,
-                            display: kDetourTagPrefix + c.label)),
+                            storeValue: c.tag, display: c.displayLabel)),
                   ),
               ],
               if (free.isNotEmpty) ...[
