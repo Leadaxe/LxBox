@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/background_mode.dart';
+import '../models/memory_limit_setting.dart';
 import '../models/parser_config.dart';
 import '../services/builder/if_engine.dart';
 import '../services/settings_storage.dart';
@@ -59,6 +60,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   // closeConnection). Без Restart-баннера.
   bool _interruptOnSwitch = false;
   String _idleSuspend = ''; // §215 — route.lx_idle_suspend threshold ("" = off)
+  // §271 — memory limit ядра (native_prefs, wire-значения MemoryLimitSetting).
+  String _memoryLimit = MemoryLimitSetting.auto;
 
   @override
   void initState() {
@@ -115,11 +118,13 @@ class _SettingsScreenState extends State<SettingsScreen>
         await SettingsStorage.getNativeBackgroundMode());
     final interruptOnSwitch = await SettingsStorage.getInterruptOnSwitch();
     final idleSuspend = await SettingsStorage.getIdleSuspend(); // §215
+    final memoryLimit = await SettingsStorage.getNativeMemoryLimit(); // §271
     setState(() {
       _template = template;
       _backgroundMode = bgMode;
       _interruptOnSwitch = interruptOnSwitch;
       _idleSuspend = idleSuspend;
+      _memoryLimit = memoryLimit;
       _vpnLoaded = true;
       _loading = false;
     });
@@ -153,6 +158,22 @@ class _SettingsScreenState extends State<SettingsScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Applies on next connect.'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// §271 — memory limit ядра. НЕ config-significant (не входит в sing-box
+  /// JSON): native применяет к работающему ядру немедленно через
+  /// reloadSetupOptions — без Restart-баннера и «next connect».
+  Future<void> _applyMemoryLimit(String value) async {
+    if (value == _memoryLimit) return;
+    setState(() => _memoryLimit = value);
+    await SettingsStorage.setNativeMemoryLimit(value);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Applied.'),
         duration: Duration(seconds: 3),
       ),
     );
@@ -298,6 +319,54 @@ class _SettingsScreenState extends State<SettingsScreen>
             onChanged: (String? v) {
               if (!_vpnLoaded || v == null) return;
               unawaited(_applyIdleSuspend(v));
+            },
+          ),
+        ),
+        // §271 — memory limit ядра. Применяется к работающему ядру сразу.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Memory limit',
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Caps the VPN core\'s memory. A cap that is too low keeps the '
+                'processor busy with garbage collection and heats the phone. '
+                'Auto sizes the cap to this device\'s RAM; Off removes the cap '
+                'but keeps low-memory monitoring. Applies immediately.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: DropdownButtonFormField<String>(
+            initialValue: _memoryLimit,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: const [
+              DropdownMenuItem<String>(
+                  value: MemoryLimitSetting.auto,
+                  child: Text('Auto (recommended)')),
+              DropdownMenuItem<String>(
+                  value: MemoryLimitSetting.off, child: Text('Off')),
+              DropdownMenuItem<String>(value: '200', child: Text('200 MB')),
+              DropdownMenuItem<String>(value: '384', child: Text('384 MB')),
+              DropdownMenuItem<String>(value: '512', child: Text('512 MB')),
+              DropdownMenuItem<String>(value: '768', child: Text('768 MB')),
+            ],
+            onChanged: (String? v) {
+              if (!_vpnLoaded || v == null) return;
+              unawaited(_applyMemoryLimit(v));
             },
           ),
         ),

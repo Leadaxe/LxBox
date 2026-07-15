@@ -528,6 +528,32 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 BootReceiver.setBackgroundMode(context, mode)
                 result.success(null)
             }
+            "getMemoryLimit" -> {
+                result.success(BootReceiver.getMemoryLimit(context))
+            }
+            "setMemoryLimit" -> {
+                // §271 — persist + мгновенное применение к работающему ядру.
+                // `reloadSetupOptions` читает ТОЛЬКО три OOM-поля (setup.go:80-96)
+                // и сразу вызывает debug.SetMemoryLimit — GC-потолок меняется без
+                // переподключения VPN. Порог RSS-мониторинга oom-killer-сервиса
+                // защёлкнут в CommandServer текущей сессии; BoxService создаёт
+                // новый CommandServer на каждый старт сервиса → порог подтянется
+                // при следующем подключении VPN.
+                val value = call.argument<String>("value") ?: BootReceiver.MEMORY_LIMIT_AUTO
+                BootReceiver.setMemoryLimit(context, value)
+                val appContext = context
+                pluginScope.launch(Dispatchers.IO) {
+                    runCatching {
+                        BoxApplication.libboxReady.await()
+                        val opts = io.nekohasekai.libbox.SetupOptions().apply {
+                            oomKillerEnabled = true
+                            oomMemoryLimit = BoxApplication.resolveMemoryLimitBytes(appContext)
+                        }
+                        io.nekohasekai.libbox.Libbox.reloadSetupOptions(opts)
+                    }.onFailure { Log.w(TAG, "reloadSetupOptions failed: ${it.message}") }
+                }
+                result.success(null)
+            }
             "openNotificationSettings" -> {
                 // API 26+ имеет прямой action ACTION_APP_NOTIFICATION_SETTINGS,
                 // он передаёт пакет через extra, а не через data URI.

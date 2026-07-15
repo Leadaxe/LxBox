@@ -136,14 +136,16 @@ lxbox_settings.json                          # SettingsStorage (Dart), глав�
 ├─ masque_account                object?       §130 — кеш MASQUE-WARP аккаунта (см. раздел ниже)
 ├─ tun_apps                      object        §046 — split-tunneling (см. раздел ниже)
 ├─ vpn_mode                      object?       §119 — режим inbound (см. раздел ниже)
-└─ native_prefs                  object        §189 — ЗЕРКАЛО шести Android-prefs (`boxvpn_boot.*`).
+└─ native_prefs                  object        §189 — ЗЕРКАЛО Android-prefs (`boxvpn_boot.*`).
     │                                            JSON = источник истины (диск); native = рабочая копия.
     ├─ auto_start                bool          default false  — auto-start VPN на boot
     ├─ keep_on_exit              bool          default true   — §188: не глушить tun при swipe-kill
     ├─ background_mode           string        default "never" — never|lazy|always (Doze-поведение)
     ├─ core_logs_enabled         bool          default false  — forward sing-box-логов
     ├─ allow_bypass              bool          default false  — Allow VPN bypass (§069)
-    └─ auto_redirect             bool          default false  — auto-redirect
+    ├─ auto_redirect             bool          default false  — auto-redirect
+    └─ memory_limit              string        default "auto" — §271: лимит памяти ядра
+                                                 (auto|off|"200"|"384"|"512"|"768" МБ)
 
 # §159 — все legacy-ключи (proxy_sources / app_rules / enabled_rules /
 # rule_outbounds / node_overrides / show_detour_servers / vars.auto_rebuild)
@@ -734,7 +736,7 @@ CRUD: `getWifiHistory()` / `addToWifiHistory(ssid, bssid)` / `removeFromWifiHist
 
 ## `native_prefs` — [§189] зеркало `boxvpn_boot.*`
 
-JSON-зеркало шести Android-prefs, которые исторически жили **только** в native
+JSON-зеркало Android-prefs, которые исторически жили **только** в native
 `SharedPreferences` (`boxvpn_boot.*`). Реализация — `lib/services/settings_storage/native_prefs.dart`.
 
 ```jsonc
@@ -744,7 +746,8 @@ JSON-зеркало шести Android-prefs, которые историчес�
   "background_mode":   "never",  // never | lazy | always — Doze-поведение туннеля
   "core_logs_enabled": false,    // forward sing-box-логов в Dart
   "allow_bypass":      false,    // §069 — Allow VPN bypass
-  "auto_redirect":     false     // auto-redirect
+  "auto_redirect":     false,    // auto-redirect
+  "memory_limit":      "auto"    // §271 — лимит памяти ядра: auto | off | МБ строкой
 }
 ```
 
@@ -759,7 +762,9 @@ swipe `onTaskRemoved`, `openTun`/`establish`. native читает свою ко�
 зеркалит в native через method-channel. Все писатели — UI
 (`vpn_mode_tab`/`settings_screen`/`app_settings_screen`), импорт (`backup_service`),
 Debug API handlers — идут через единую дверь `SettingsStorage.setNativeBool` /
-`setNativeBackgroundMode`. Прямые native-записи в обход этого слоя эфемерны:
+`setNativeBackgroundMode` / `setNativeMemoryLimit` (§271: native применяет
+лимит к работающему ядру немедленно через `Libbox.reloadSetupOptions`).
+Прямые native-записи в обход этого слоя эфемерны:
 старт-`sync` (ниже) откатит их на следующем запуске.
 
 **Старт** (`SettingsStorage.bootstrapAndSyncNativePrefs()`, зовётся из `main.dart`
