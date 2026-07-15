@@ -291,8 +291,10 @@ flag-set — честный 0 (формат ответа не меняется).
 
 - Комментарий detour_target_picker.dart:58 упоминает мёртвый edge-strip
   §248 — вычищен попутно при реализации.
-- features/125 spec.md:390 («detour-ссылки → vpn-1») устарел ещё при §248 —
-  вне скоупа, по желанию отдельной микроправкой.
+- ~~features/125 spec.md:390 («detour-ссылки → vpn-1») устарел ещё при §248 —
+  вне скоупа, по желанию отдельной микроправкой.~~ → **исправлено** попутно с
+  [§275](275-channel-mutations-detour-resync.md) (v2.15.6): detour-ссылки
+  лечатся в `''` (None), не в `vpn-1`.
 - ~~**Pre-existing (§248-эра, не §274)**: Debug API `_create`
   (handlers/channels.dart:~91-96) не зовёт `syncDetourChannelRefsCleared`
   при `healed.detours > 0` (в отличие от `_update`/`_delete`) — re-create
