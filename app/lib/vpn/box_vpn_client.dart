@@ -151,16 +151,27 @@ class BoxVpnClient {
   /// только переходы; если Flutter-процесс перезапустился, а сервис всё ещё
   /// `Started` — без явного pull'а UI останется в `Disconnected`.
   ///
-  /// Парсинг raw-string'а в `TunnelStatus` — здесь, downstream работает с
-  /// typed enum. На неизвестный raw → `unknown`, на null/timeout → `disconnected`
+  /// Парсинг ответа в `TunnelStatus` — здесь, downstream работает с typed enum.
+  /// На неизвестный raw → `unknown`, на null/timeout → `disconnected`
   /// (defensive, чтобы UI не залип).
+  ///
+  /// §276 — native отдаёт `{"status": ..., "revoked": bool}`: голого статуса
+  /// мало, `Stopped` после перехвата слота чужим VPN надо отличать от штатного
+  /// стопа. String-ветка — совместимость со старым native (например, engine
+  /// пере-attach'ился к сервису, поднятому до обновления).
   Future<TunnelStatus> getVpnStatus() async {
-    final s = await _invoke<String>(
+    final res = await _invoke<Object>(
       _Methods.getVpnStatus,
       timeout: _Timeouts.status,
       onTimeoutValue: null,
     );
-    if (s == null || s.isEmpty) return TunnelStatus.disconnected;
+    if (res is Map) {
+      final s = res['status']?.toString() ?? '';
+      if (s.isEmpty) return TunnelStatus.disconnected;
+      return TunnelStatus.fromNative(s, revoked: res['revoked'] == true);
+    }
+    final s = res?.toString() ?? '';
+    if (s.isEmpty) return TunnelStatus.disconnected;
     return TunnelStatus.fromNative(s);
   }
 
