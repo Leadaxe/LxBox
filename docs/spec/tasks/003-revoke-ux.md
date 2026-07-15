@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Done (code + build) / pending manual verification |
+| Статус | Done (code + build); UX не работал до §276 — см. post-mortem внизу |
 | Дата старта | 2026-04-20 |
 | Дата завершения | 2026-04-20 |
 | Коммиты | `82b5b49` feat(vpn): revoke UX + lifecycle resume re-sync |
@@ -142,6 +142,22 @@ _clash = null;
 4. Нажать Start в SnackBar. Ожидание: system dialog «VPN connection request». Approve.
 5. Ожидание: L×Box поднимается, конкурент получает onRevoke и ложится.
 6. Проверить logcat: native path прошёл через VpnService.prepare, onActivityResult, BoxVpnService.start.
+
+## Post-mortem (§276, 16.07.2026)
+
+Весь UX этой таски — SnackBar, нейтральный чип, сброс Clash-endpoint — **не срабатывал ни
+разу**: `TunnelStatus.revoked` был недостижим. Dart ждал статус-строку `'Revoked'`, а native
+её не слал никогда (`VpnStatus` = `Stopped/Starting/Started/Stopping`; `git log -S "Revoked"
+-- app/android/` пуст за всю историю). Реальный revoke приезжал как `Stopped` + error-строка
+→ маппился в `disconnected` → юзер видел сырую плашку `Stopped: VPN revoked by another app`.
+
+Почему не заметили: ручной тест из раздела «Верификация» ниже (два VPN на устройстве) так и
+не был выполнен — статус таски годами стоял «pending manual verification». Единственный тест
+на эту ветку сам фабриковал строку `'Revoked'`, то есть кодировал несуществующий контракт.
+
+Починено в [276](./276-revoked-status-contract.md): revoke = `Stopped` + флаг `revoked`,
+`fromNative` собирает `revoked` из пары. Кейс «Silent revoke без broadcast» из «намеренно НЕ
+покрыто» тоже закрыт — `getVpnStatus` теперь отдаёт признак revoke на resume.
 
 ## Нерешённое / follow-up
 

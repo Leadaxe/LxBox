@@ -2,8 +2,9 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | In progress |
+| Статус | Done (закрыт в §276) |
 | Дата старта | 2026-07-02 |
+| Дата завершения | 2026-07-16 |
 | Связанные spec'ы | [`012 native vpn service`](../features/012%20native%20vpn%20service/spec.md) |
 | Связанные задачи | [002](./002-blocking-stopvpn-intent-reset.md) (blocking stopVPN), [129](./129-vpnservice-force-stop-on-stuck-core.md)/[140](./140-force-stop-port-race-and-connecting-timeout.md) (force-stop), [182](./182-notification-action-buttons.md) (native reconnect) |
 
@@ -50,6 +51,15 @@
 | `tunnel_status.dart` (label) | `Revoked by another VPN` | `Taken by another VPN` |
 
 SnackBar уже имеет action «Start» → `controller.start()` — оставляем.
+
+> **Post-mortem (§276, 16.07.2026).** Коммит `528484d` переписал только Dart-строки и
+> пропустил четвёртую — нативную (`BoxService.kt`, `onRevoke`). Но главное вскрылось
+> позже: **ни одна из этих строк никогда не показывалась**. `TunnelStatus.revoked` был
+> недостижим — Dart ждал статус-строку `'Revoked'`, которой native не слал ни разу за всю
+> историю репозитория (`VpnStatus` = 4 значения). Юзер вместо текстов §224 видел сырую
+> native-строку с префиксом `Stopped: `. Контракт починен в [276](./276-revoked-status-contract.md)
+> (revoke = `Stopped` + флаг `revoked`), там же дописана нативная строка — после чего
+> тексты этой таски наконец заработали.
 
 Правила проекта соблюдены: строки английские; нет §NNN в видимом тексте; самодостаточны (юзер понимает причину без знания внутренностей).
 

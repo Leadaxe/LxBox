@@ -270,7 +270,16 @@ class BoxService(
             receiverRegistered = false
         }
         notification.stop()
-        setStatus(VpnStatus.Stopped, error = "VPN revoked by another app")
+        // §276 — revoked=true поднимает TunnelStatus.revoked в Dart (SnackBar со
+        // Start + чип «Taken by another VPN»). §224 — текст самодостаточный:
+        // Dart его перекрывает, но native-строка уходит в lastStartError и
+        // Debug API (§250), сырой оставлять нельзя.
+        setStatus(
+            VpnStatus.Stopped,
+            error = "Another VPN app took the system VPN slot " +
+                "(e.g. an always-on VPN). Start again to reconnect.",
+            revoked = true,
+        )
         serviceScope.cancel()
         service.stopSelf()
     }
@@ -546,7 +555,14 @@ class BoxService(
         }
     }
 
-    private fun setStatus(newStatus: VpnStatus, error: String? = null) {
+    /// §276 — [revoked] = «Stopped пришёл из onRevoke» (слот забрало другое
+    /// VPN-приложение). Не отдельное значение VpnStatus: см. EXTRA_REVOKED.
+    /// Всегда идёт в паре с [error], поэтому dedup-guard ниже его не глотает.
+    private fun setStatus(
+        newStatus: VpnStatus,
+        error: String? = null,
+        revoked: Boolean = false,
+    ) {
         // §122 — дедупликация. Несколько teardown-путей (doStop/doForceStop/
         // onRevoke/exit) могут выстрелить `setStatus(Stopped)` повторно, в т.ч.
         // запоздалый `Stopped` ПОСЛЕ нового `Started` при быстром reconnect.
@@ -560,8 +576,11 @@ class BoxService(
         }
         Log.d(TAG, "[vpn] setStatus(${newStatus.name})${if (error != null) " error=$error" else ""} — sendBroadcast")
         status = newStatus
-        BoxVpnService.setCurrentStatus(newStatus)
+        BoxVpnService.setCurrentStatus(newStatus, revoked)
 
+        // §276 — revoke НЕ меняет teardown: статус остаётся Stopped, поэтому
+        // stopCompleter разблокируется как обычно (stopVPN/reconnect/force-stop
+        // не виснут).
         if (newStatus == VpnStatus.Stopped) {
             BoxVpnService.completeStopIfWaiting()
         }
@@ -570,6 +589,7 @@ class BoxService(
                 `package` = service.packageName
                 putExtra(BoxVpnService.EXTRA_STATUS, newStatus.name)
                 if (error != null) putExtra("error", error)
+                if (revoked) putExtra(BoxVpnService.EXTRA_REVOKED, true)
             }
         )
         runCatching { LxBoxTileService.refreshTile(service.applicationContext) }
