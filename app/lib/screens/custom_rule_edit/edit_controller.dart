@@ -88,6 +88,7 @@ class CustomRuleEditController extends ChangeNotifier {
   late CustomRuleKind _kind;
   late String _outbound;
   late Set<String> _protocols;
+  late Set<String> _network;
   late List<String> _packages;
   late List<WifiEntry> _wifiNetworks;
   late Map<String, String> _varsValues;
@@ -140,6 +141,9 @@ class CustomRuleEditController extends ChangeNotifier {
   CustomRuleKind get kind => _kind;
   String get outbound => _outbound;
   Set<String> get protocols => _protocols;
+
+  /// §240 — выбранные L4-транспорты (`network`: tcp/udp/icmp).
+  Set<String> get network => _network;
   List<String> get packages => _packages;
   List<WifiEntry> get wifiNetworks => _wifiNetworks;
   Map<String, String> get varsValues => _varsValues;
@@ -179,7 +183,8 @@ class CustomRuleEditController extends ChangeNotifier {
   bool get dnsGateBlocked =>
       norm.normalizedPorts(portCtrl.text).isNotEmpty ||
       norm.normalizedPortRanges(portRangeCtrl.text).isNotEmpty ||
-      _protocols.isNotEmpty;
+      _protocols.isNotEmpty ||
+      _network.isNotEmpty;
 
   // ─── Init / dispose ──────────────────────────────────────────────────
 
@@ -217,6 +222,7 @@ class CustomRuleEditController extends ChangeNotifier {
     _kind = r.kind;
     _outbound = r.outbound;
     _protocols = r.protocols.toSet();
+    _network = r.network.toSet();
     _packages = List.of(r.packages);
     _wifiNetworks = unzipWifiEntries(r.wifiSsids, r.wifiBssids);
     _varsValues = Map<String, String>.from(r.varsValues);
@@ -427,6 +433,24 @@ class CustomRuleEditController extends ChangeNotifier {
     } else {
       if (!_protocols.remove(p)) return;
     }
+    notifyListeners();
+  }
+
+  /// §240 — toggle L4-транспорта (`network`: tcp/udp/icmp).
+  void toggleNetwork(String n, bool checked) {
+    if (checked) {
+      if (!_network.add(n)) return;
+    } else {
+      if (!_network.remove(n)) return;
+    }
+    notifyListeners();
+  }
+
+  /// §240 — сброс обеих осей (network + protocol) из попапа «Clear all».
+  void clearNetworkAndProtocol() {
+    if (_network.isEmpty && _protocols.isEmpty) return;
+    _network.clear();
+    _protocols.clear();
     notifyListeners();
   }
 
@@ -668,6 +692,7 @@ class CustomRuleEditController extends ChangeNotifier {
           portRanges: norm.normalizedPortRanges(portRangeCtrl.text),
           packages: List.of(_packages),
           protocols: _protocols.toList()..sort(),
+          network: _network.toList()..sort(),
           ipIsPrivate: _ipIsPrivate,
           sourceIpCidrs: norm.normalizedCidrs(sourceIpCidrCtrl.text),
           sourceIpIsPrivate: _sourceIpIsPrivate,
@@ -696,6 +721,7 @@ class CustomRuleEditController extends ChangeNotifier {
           portRanges: norm.normalizedPortRanges(portRangeCtrl.text),
           packages: List.of(_packages),
           protocols: _protocols.toList()..sort(),
+          network: _network.toList()..sort(),
           ipIsPrivate: _ipIsPrivate,
           sourceIpCidrs: norm.normalizedCidrs(sourceIpCidrCtrl.text),
           sourceIpIsPrivate: _sourceIpIsPrivate,

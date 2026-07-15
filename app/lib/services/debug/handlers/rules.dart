@@ -122,6 +122,8 @@ Future<DebugResponse> _update(
   setIfPresent('portRanges', fieldStringList(body, 'port_ranges'));
   setIfPresent('packages', fieldStringList(body, 'packages'));
   setIfPresent('protocols', fieldStringList(body, 'protocols'));
+  // §240 — L4-транспорт (tcp/udp/icmp).
+  setIfPresent('network', fieldStringList(body, 'network'));
   setIfPresent('ipIsPrivate', fieldBool(body, 'ip_is_private'));
   // §030/new_fields — source-ось + inbound.
   setIfPresent('sourceIpCidrs', fieldStringList(body, 'source_ip_cidrs'));
@@ -260,6 +262,7 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         portRanges: fieldStringList(j, 'port_ranges') ?? const [],
         packages: fieldStringList(j, 'packages') ?? const [],
         protocols: fieldStringList(j, 'protocols') ?? const [],
+        network: fieldStringList(j, 'network') ?? const [],
         ipIsPrivate: fieldBool(j, 'ip_is_private') ?? false,
         sourceIpCidrs: sourceIpCidrs,
         sourceIpIsPrivate: sourceIpIsPrivate,
@@ -279,6 +282,7 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
         portRanges: fieldStringList(j, 'port_ranges') ?? const [],
         packages: fieldStringList(j, 'packages') ?? const [],
         protocols: fieldStringList(j, 'protocols') ?? const [],
+        network: fieldStringList(j, 'network') ?? const [],
         ipIsPrivate: fieldBool(j, 'ip_is_private') ?? false,
         sourceIpCidrs: sourceIpCidrs,
         sourceIpIsPrivate: sourceIpIsPrivate,

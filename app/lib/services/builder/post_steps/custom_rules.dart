@@ -346,6 +346,7 @@ List<String> _applySrsSingle(
       portRanges: cr.portRanges,
       packages: cr.packages,
       protocols: cr.protocols,
+      network: cr.network,
       ipIsPrivate: cr.ipIsPrivate,
       sourceIpCidrs: cr.sourceIpCidrs,
       sourceIpIsPrivate: cr.sourceIpIsPrivate,
@@ -363,6 +364,7 @@ List<String> _applySrsSingle(
       portRanges: cr.portRanges,
       packages: cr.packages,
       protocols: cr.protocols,
+      network: cr.network,
       ipIsPrivate: cr.ipIsPrivate,
       // §030/new_fields — у srs нет своего headless match → source/inbound
       // (вкл. source_ip_cidr) ВСЕ на routing-rule level.
@@ -505,6 +507,7 @@ List<String> _applyInlineSingle(
     // поля (protocol / ip_is_private / source_ip_is_private / inbound) —
     // эмитим routing rule без rule_set, иначе правило пустое, скипаем.
     if (cr.protocols.isEmpty &&
+        cr.network.isEmpty &&
         !cr.ipIsPrivate &&
         !cr.sourceIpIsPrivate &&
         cr.inbounds.isEmpty) {
@@ -514,6 +517,7 @@ List<String> _applyInlineSingle(
       '',
       cr.outbound,
       protocols: cr.protocols,
+      network: cr.network,
       ipIsPrivate: cr.ipIsPrivate,
       sourceIpIsPrivate: cr.sourceIpIsPrivate,
       inbounds: cr.inbounds,
@@ -536,6 +540,7 @@ List<String> _applyInlineSingle(
       tag,
       cr.resolve!,
       protocols: cr.protocols,
+      network: cr.network,
       ipIsPrivate: cr.ipIsPrivate,
       sourceIpIsPrivate: cr.sourceIpIsPrivate,
       inbounds: cr.inbounds,
@@ -554,6 +559,7 @@ List<String> _applyInlineSingle(
       tag,
       cr.outbound,
       protocols: cr.protocols,
+      network: cr.network,
       ipIsPrivate: cr.ipIsPrivate,
       sourceIpIsPrivate: cr.sourceIpIsPrivate,
       inbounds: cr.inbounds,
@@ -658,6 +664,7 @@ Map<String, dynamic> _outboundToRoute(
   List<String>? portRanges,
   List<String>? packages,
   List<String>? protocols,
+  List<String>? network,
   bool ipIsPrivate = false,
   List<String>? sourceIpCidrs,
   bool sourceIpIsPrivate = false,
@@ -673,6 +680,8 @@ Map<String, dynamic> _outboundToRoute(
   }
   if (packages != null && packages.isNotEmpty) rule['package_name'] = packages;
   if (protocols != null && protocols.isNotEmpty) rule['protocol'] = protocols;
+  // §240 — L4-транспорт. AND с protocol/rule_set, OR внутри списка.
+  if (network != null && network.isNotEmpty) rule['network'] = network;
   if (ipIsPrivate) rule['ip_is_private'] = true;
   // §030/new_fields — source-IP-CIDR на routing-rule level. Для inline он
   // обычно живёт в headless match (sing-box 1.14 принимает), но для srs/
@@ -721,6 +730,7 @@ Map<String, dynamic> _resolveToRoute(
   List<String>? portRanges,
   List<String>? packages,
   List<String>? protocols,
+  List<String>? network,
   bool ipIsPrivate = false,
   List<String>? sourceIpCidrs,
   bool sourceIpIsPrivate = false,
@@ -735,6 +745,9 @@ Map<String, dynamic> _resolveToRoute(
     portRanges: portRanges,
     packages: packages,
     protocols: protocols,
+    // §240×§247 — матч resolve-правила обязан совпадать с терминальным,
+    // иначе резолв цеплял бы трафик другого транспорта.
+    network: network,
     ipIsPrivate: ipIsPrivate,
     sourceIpCidrs: sourceIpCidrs,
     sourceIpIsPrivate: sourceIpIsPrivate,
