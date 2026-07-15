@@ -2,8 +2,9 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Реализовано (код + тесты + debug-сборка); device-верификация на CPH2411 — pending |
+| Статус | Done — device-verified (CPH2411, `2.15.7-dev.2`, 16.07.2026) |
 | Дата старта | 2026-07-16 |
+| Дата завершения | 2026-07-16 |
 | Связанные spec'ы | [`012 native vpn service`](../features/012%20native%20vpn%20service/spec.md), [`003 home screen`](../features/003%20home%20screen/spec.md) |
 | Связанные задачи | [003](./003-revoke-ux.md) (revoke UX), [224](./224-foreign-vpn-revoke-ux.md) (честный текст, In progress), [241](./241-foreign-vpn-settings-button.md) (VPN settings), [211](./211-foreign-vpn-switch-dialog.md) (pre-check), [140](./140-force-stop-port-race-and-connecting-timeout.md) (stopCompleter) |
 
@@ -140,9 +141,17 @@ teardown-путей**, `stopCompleter` переносить нельзя.
 - `flutter analyze` (весь проект, не только `lib/`) — clean
 - `flutter test` — 1768+ зелёных, включая новые
 - **Device (CPH2411, там уже стоит v2rayNG):** поднять LxBox VPN → включить VPN в v2rayNG →
-  ожидание: SnackBar «Another VPN app took over the connection» с кнопкой Start, чип
-  «Taken by another VPN», в шторке/`lastError` текст §224 без префикса `Stopped: `.
-  **Это будет первая в истории проекта живая проверка revoke-UX.**
+  ожидание: плашка `lastError` с текстом §224 **без** префикса `Stopped: ` + SnackBar
+  «Another VPN app took over the connection» с кнопкой Start.
+  **Первая в истории проекта живая проверка revoke-UX.**
+
+  Чип при этом показывает **«Disconnected»** — это НЕ баг: §003 намеренно маппит revoked в
+  нейтральный off-state (`status_chip.dart:35`), чтобы не пугать красной пилюлей; факт
+  перехвата несут плашка и SnackBar. `TunnelStatus.revoked.label` («Taken by another VPN»)
+  до чипа не доезжает — он используется в других местах.
+
+  **Результат (16.07.2026, `2.15.7-dev.2`):** плашка показывает текст §224 — контракт
+  починен, ветка `revoked` достижима впервые. Чип «Disconnected» — как задумано выше.
 - Регресс teardown: Stop→Start, Reconnect из шторки (§182), force-stop (§129/§140) — не
   виснут (проверяем, что `stopCompleter` цел).
 
