@@ -399,6 +399,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
             items: const [
               DropdownMenuItem<String>(value: '', child: Text('Off')),
+              DropdownMenuItem<String>(value: '5m', child: Text('5 minutes')),
               DropdownMenuItem<String>(value: '15m', child: Text('15 minutes')),
               DropdownMenuItem<String>(value: '30m', child: Text('30 minutes')),
               DropdownMenuItem<String>(value: '1h', child: Text('1 hour')),
