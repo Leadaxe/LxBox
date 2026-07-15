@@ -300,39 +300,27 @@ Future<void> reconnect() async {
 - Лейбл «Reconnect» в off-state заменяется на «Connect»; «Rebuild config + reconnect» — на «Rebuild config + connect». Действие одно и то же (`reconnect()` само разветвляется).
 - Rebuild всегда очищает `_subController.configDirty` (как и существующий `_rebuildAndClearDirty`). Sticky-флаг `configStaleSinceStart` сбрасывается intent-based путём в `_stopInternal`/`_startInternal` (reset по намерению), плюс остаётся reset на tunnel-транзите в `_handleStatusEvent` как defense in depth.
 
-## 8c. Revoke UX — «VPN taken by another app»
+## 8c. Revoke UX — слот забрало другое VPN-приложение
 
-**Status:** Реализовано (v1.4.0)
+**Status:** Реализовано (v1.4.0), контракт починен в [§276](../../tasks/276-revoked-status-contract.md) (v2.15.8)
 
-Когда другое VPN-приложение захватывает слот (Android позволяет только одному VPN активным) — native ловит `VpnService.onRevoke()` → `setStatus(Stopped, error='VPN revoked by another app')` → Dart получает `TunnelStatus.revoked`.
+Android держит один VPN-слот. Когда его захватывает другое VPN-приложение, native ловит `VpnService.onRevoke()` → `setStatus(Stopped, error = <текст про перехват слота>, revoked = true)` → Dart собирает `TunnelStatus.revoked`.
+
+> **§276.** Revoke едет как `Stopped` + флаг `revoked`, а НЕ отдельным значением статуса: терминальный статус обязан остаться `Stopped`, на нём висит весь teardown в native. До §276 Dart ждал статус-строку `'Revoked'`, которую native не слал никогда — из-за чего `TunnelStatus.revoked` был недостижим, и весь UX этого раздела не работал ни на одном устройстве. Контракт — см. [`012 native vpn service`](../012%20native%20vpn%20service/spec.md).
 
 ### UI
 
-- **SnackBar** при transition `prevTunnel != revoked && state.tunnel == revoked`:
-  - Текст: *«VPN taken by another app»*
-  - Action: **Start** — вызывает `_controller.start()`. Проходит через existing `VpnPlugin.startVpn` путь: `VpnService.prepare(activity)` возвращает non-null intent (слот занят) → `startActivityForResult` → system dialog «VPN connection request» → approve → конкурент получает свой `onRevoke` → мы поднимаемся.
-  - Duration: 5s. Перед показом `clearSnackBars()` — не спам при нескольких revoke подряд.
-- **Status chip** маппится как обычный Disconnected (иконка `shield_outlined`, нейтральный фон, label «Disconnected»). Внутреннее значение `state.tunnel == revoked` **сохраняется** — оно нужно для side-effect detection в HomeScreen listener'е.
+- **Всплывашка снизу** с текстом причины — через общий обработчик ошибок §166 (`lastError` → SnackBar, floating, 5s). Текст: *«Another VPN app took the system VPN slot (e.g. an always-on VPN). Start again to reconnect.»* — самодостаточный (§224): объясняет, что слот занял другой VPN (частая причина — Always-on / kill-switch), и что делать.
+- **Status chip** маппится как обычный Disconnected (иконка `shield_outlined`, нейтральный фон, label «Disconnected») — `status_chip.dart`. Нейтральный off-state вместо пугающей красной пилюли; факт перехвата несёт всплывашка. Внутреннее `state.tunnel == revoked` **сохраняется** — на нём завязан cleanup в `_handleStatusEvent`.
+- **Специализированного revoke-SnackBar с кнопкой Start больше нет** (удалён в §276). Он дублировал §166 на одном событии: показывался первым, затем §166 делал `hideCurrentSnackBar()` и перебивал его тем же текстом — юзер видел мельк на 1-2 секунды. Кнопка Start не нужна: главная кнопка Start рядом на экране.
 
-Listener на `HomeController` — отдельный (не AnimatedBuilder), для side-effect'ов вне build-фазы:
+Отдельный listener на `HomeController` (`_onControllerChange`, не AnimatedBuilder) остаётся — side-effect'ы должны быть вне build-фазы. `_prevTunnel` в нём используется для §105 (учёт активного времени туннеля), `removeListener` в `dispose`.
 
-```dart
-_controller.addListener(_onControllerChange);
-// ...
-void _onControllerChange() {
-  final now = _controller.state.tunnel;
-  if (_prevTunnel != TunnelStatus.revoked && now == TunnelStatus.revoked) {
-    _showRevokedSnackBar();
-  }
-  _prevTunnel = now;
-}
-```
-
-`removeListener` в `dispose`.
+Если юзер жмёт Start, пока слот ещё занят, — pre-check `isForeignVpnActive()` показывает диалог «Another VPN is active» с кнопкой **VPN settings** ([§211](../../tasks/211-foreign-vpn-switch-dialog.md) / [§241](../../tasks/241-foreign-vpn-settings-button.md)): имя перехватчика из приложения недостижимо (`getOwnerUid` = `@hide`), но на системном VPN-экране активный VPN помечен как Connected.
 
 ### Cleanup в `_handleStatusEvent` revoked-branch
 
-`_clash = null` — endpoint прошлой сессии держал secret убитого sing-box и port который Android мог переиспользовать. Пересоздаётся на следующем `connected` через `_refreshClashAfterTunnel` → `_rebuildClashEndpoint`. Все callers `_clash` в коде уже идут через null-check, safe.
+Общий с `disconnected` контракт «tunnel down»: гасятся CommandClient-стримы (`_stopCcStreams`, §122), сбрасываются `RuleNameResolver`, выборы групп (`SelectorInfo.clearSelected`, §251), traffic/`connectedSince`. Симметрично `_onTunnelDead` (heartbeat-путь) — через какой бы путь ни попали в «tunnel down», state в одинаковом финальном виде.
 
 ### Инварианты
 

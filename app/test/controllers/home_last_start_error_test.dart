@@ -45,11 +45,13 @@ void main() {
   late HomeController controller;
 
   TunnelStatusEvent event(TunnelStatus status, {String? reason}) {
+    // §276 — raw обязан совпадать с тем, что реально шлёт native: enum
+    // `VpnStatus` = 4 значения, строки 'Revoked' среди них нет. Revoke едет
+    // как `Stopped` + флаг `revoked`.
     final raw = switch (status) {
       TunnelStatus.connected => 'Started',
       TunnelStatus.connecting => 'Starting',
-      TunnelStatus.disconnected => 'Stopped',
-      TunnelStatus.revoked => 'Revoked',
+      TunnelStatus.disconnected || TunnelStatus.revoked => 'Stopped',
       _ => status.name,
     };
     return TunnelStatusEvent(status: status, raw: raw, errorReason: reason);

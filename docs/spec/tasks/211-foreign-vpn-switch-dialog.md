@@ -101,4 +101,4 @@ if (await _vpn.isForeignVpnActive() && mounted) {
 ## Связанные
 
 - §192 — proxy-prepare-revokes-foreign-vpn (тот же класс проблемы, другой угол).
-- §012 — `showRevokedSnackBar` (обратное: НАС отозвал чужой VPN).
+- §012 — revoke-путь (обратное: НАС отозвал чужой VPN). `showRevokedSnackBar` удалён в §276 как дубль общего обработчика ошибок §166; текст перехвата показывает он.

@@ -48,10 +48,18 @@
 **EventChannel**: `"com.leadaxe.lxbox/status_events"`
 
 ```json
-{"status": "Started" | "Starting" | "Stopped" | "Stopping" | "Revoked", "error": "..."?}
+{"status": "Started" | "Starting" | "Stopped" | "Stopping", "error": "..."?, "revoked": true?}
 ```
 
-`error` опционально — наполняется например при `Revoked` с текстом `"VPN revoked by another app"`.
+`status` — ровно четыре значения `VpnStatus` (`VpnStatus.kt`), пятого не бывает.
+
+`error` опционально — текст причины остановки (ошибка ядра, перехват слота).
+
+`revoked` (§276) опционально, только `true` и только рядом со `Stopped` — слот забрало
+другое VPN-приложение (native `onRevoke`). Отдельным значением `status` это не едет
+намеренно: revoke терминален, а на `== Stopped` завязан весь teardown (`stopCompleter`,
+guard в `onStartCommand`, `isForeignVpnActive`) — пятый статус подвесил бы `stopVPN` до
+таймаута. Dart собирает `TunnelStatus.revoked` из пары `(Stopped, revoked: true)`.
 
 ## Status pipeline reliability (v1.4.0)
 
@@ -122,9 +130,11 @@ Caller в Dart получает control только после `setStatus(Stopp
 
 ### 4. Revoke path
 
-`onRevoke()` в service отзывает VPN корректно — cleanup + `setStatus(VpnStatus.Stopped, error = "VPN revoked by another app")` + `stopSelf()`. UX-сторона обрабатывает transition в `TunnelStatus.revoked` через SnackBar (§ `003 home screen §8c`).
+`onRevoke()` в service отзывает VPN корректно — cleanup + `setStatus(VpnStatus.Stopped, error = <текст про перехват слота>, revoked = true)` + `stopSelf()`. UX-сторона обрабатывает transition в `TunnelStatus.revoked` через SnackBar (§ `003 home screen §8c`).
 
-`stopCompleter` — если ждался в этот момент — получает complete (setStatus(Stopped) всё равно вызывается).
+`stopCompleter` — если ждался в этот момент — получает complete (setStatus(Stopped) всё равно вызывается; revoke — это флаг поверх `Stopped`, а не отдельный статус, см. §276).
+
+Признак перехвата переживает фон: companion `BoxVpnService.currentRevoked` отдаётся pull-методом `getVpnStatus` (§276) — broadcast'ятся только переходы, поэтому UI, вернувшийся из background'а после revoke, узнаёт о нём именно оттуда.
 
 ### 5. Что остаётся unreliable
 

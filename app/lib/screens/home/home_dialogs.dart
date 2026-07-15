@@ -92,26 +92,6 @@ Future<bool?> showForeignVpnDialog(BuildContext context) {
 /// Текст самодостаточный: юзер не должен думать, что это «своё же прошлое
 /// подключение». Имя перехватчика Android через публичный API не отдаёт.
 /// Action «Start» перезапускает через [controller].
-void showRevokedSnackBar(BuildContext context, HomeController controller) {
-  if (!context.mounted) return;
-  final messenger = ScaffoldMessenger.maybeOf(context);
-  if (messenger == null) return;
-  messenger
-    ..clearSnackBars()
-    ..showSnackBar(
-      SnackBar(
-        content: const Text(
-          'Another VPN app took over the connection. Tap Start to reconnect.',
-        ),
-        duration: const Duration(seconds: 5),
-        action: SnackBarAction(
-          label: 'Start',
-          onPressed: () => unawaited(controller.start()),
-        ),
-      ),
-    );
-}
-
 /// Диалог-объяснение про location/wifi permission (§050): config содержит
 /// `wifi_ssid`/`wifi_bssid` правила → нужен доступ к Wi-Fi state. [permName] —
 /// comma-separated список permission'ов из BoxService alert prefix.
