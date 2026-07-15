@@ -276,12 +276,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       _connectingAnim.reset();
     }
 
-    // Revoke → SnackBar.
-    if (_prevTunnel != TunnelStatus.revoked &&
-        now == TunnelStatus.revoked) {
-      showRevokedSnackBar(context, _controller);
-    }
-
     // §050 — structured alert prefix `alert:permission_location:<perm>` →
     // show AlertDialog with "Open Settings" button instead of plain error.
     // Background: ACCESS_BACKGROUND_LOCATION on API 30+ can only be granted
