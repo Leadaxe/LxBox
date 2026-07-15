@@ -51,15 +51,17 @@ Future<void> _saveIdleSuspend(String threshold, {bool flush = true}) async {
 // Второе, ДЛИННОЕ окно простоя для ДОСТИЖИМЫХ эндпоинтов (члены пула,
 // выбранный узел, final): после него они тоже гасятся; пробуждение — лениво
 // первым дайлом (+1 RTT). Duration-строка. Пусто = выключено (достижимые не
-// засыпают — поведение до §272). Дефолт "30m" = idle_timeout urltest-групп,
-// чтобы пробы гарантированно молчали к моменту сна (без probe-флапа).
+// засыпают — поведение до §272). Дефолт "5m" (решение владельца, 2026-07-15):
+// агрессивная экономия; цена — при значении < idle_timeout каналов возможны
+// 1-2 probe-флапа в хвосте засыпания (пробы ещё живы, когда туннель уже спит)
+// — не поломка, см. docs-lx/lx-energy.ru.md §8 ядра.
 // Ядро требует lx_idle_suspend включённым и reachable >= lx_idle_suspend —
 // генератор эмитит поле только при непустом базовом пороге.
 // ---------------------------------------------------------------------------
 
 Future<String> _getIdleSuspendReachable() async {
   final data = await _load();
-  return (data['route_idle_suspend_reachable'] as String?) ?? '30m';
+  return (data['route_idle_suspend_reachable'] as String?) ?? '5m';
 }
 
 Future<void> _saveIdleSuspendReachable(String threshold,
