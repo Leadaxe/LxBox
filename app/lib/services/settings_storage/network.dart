@@ -44,6 +44,56 @@ Future<void> _saveIdleSuspend(String threshold, {bool flush = true}) async {
   if (flush) await _save();
 }
 
+// ---------------------------------------------------------------------------
+// §272 — reachable idle-suspend window (route.lx_idle_suspend_reachable,
+// kernel SPEC 020 rev. 2026-07-15)
+//
+// Второе, ДЛИННОЕ окно простоя для ДОСТИЖИМЫХ эндпоинтов (члены пула,
+// выбранный узел, final): после него они тоже гасятся; пробуждение — лениво
+// первым дайлом (+1 RTT). Duration-строка. Пусто = выключено (достижимые не
+// засыпают — поведение до §272). Дефолт "30m" = idle_timeout urltest-групп,
+// чтобы пробы гарантированно молчали к моменту сна (без probe-флапа).
+// Ядро требует lx_idle_suspend включённым и reachable >= lx_idle_suspend —
+// генератор эмитит поле только при непустом базовом пороге.
+// ---------------------------------------------------------------------------
+
+Future<String> _getIdleSuspendReachable() async {
+  final data = await _load();
+  return (data['route_idle_suspend_reachable'] as String?) ?? '30m';
+}
+
+Future<void> _saveIdleSuspendReachable(String threshold,
+    {bool flush = true}) async {
+  final data = await _load();
+  data['route_idle_suspend_reachable'] = threshold;
+  SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
+  if (flush) await _save();
+}
+
+// ---------------------------------------------------------------------------
+// §272 — passive health check (urltest.passive_check, kernel SPEC 019)
+//
+// Успешный TCP-дайл через узел = доказательство живости; пока оно свежо
+// (< interval), периодические пробы группы пропускаются — активная группа
+// перестаёт будить спящие узлы. Пишется в urltest-двойники каналов.
+// Дефолт true (энергоэкономия из коробки). ⚠ Требует ядра с ревизией SPEC 019
+// 2026-07-15 — на старом ядре незнакомое поле роняет конфиг (KERNEL.md #2).
+// ---------------------------------------------------------------------------
+
+Future<bool> _getPassiveCheck() async {
+  final data = await _load();
+  return (data['urltest_passive_check'] as bool?) ?? true;
+}
+
+Future<void> _savePassiveCheck(bool enabled, {bool flush = true}) async {
+  final data = await _load();
+  data['urltest_passive_check'] = enabled;
+  SettingsStorage._cache = data;
+  SettingsStorage.markConfigDirty(); // §113
+  if (flush) await _save();
+}
+
 
 Future<List<Map<String, dynamic>>> _getDnsServers() async {
   final data = await _load();
