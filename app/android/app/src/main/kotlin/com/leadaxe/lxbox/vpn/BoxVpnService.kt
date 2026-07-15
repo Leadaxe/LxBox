@@ -47,6 +47,14 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         const val BROADCAST_STATUS = "com.leadaxe.lxbox.BROADCAST_STATUS"
         const val EXTRA_STATUS = "status"
 
+        /// §276 — признак «туннель отобрало другое VPN-приложение». Едет рядом с
+        /// EXTRA_STATUS=Stopped, а НЕ отдельным значением VpnStatus: revoke —
+        /// терминальное состояние, и весь teardown (stopCompleter, onStartCommand
+        /// guard, isForeignVpnActive) завязан на `== Stopped`. Отдельный статус
+        /// подвесил бы stopVPN до таймаута (§224: setStatus(Stopped) —
+        /// единственная детерминированная точка всех teardown-путей).
+        const val EXTRA_REVOKED = "revoked"
+
         /// Mirror of the live service status, readable from anywhere.
         /// VpnPlugin.getVpnStatus читает это чтобы Flutter мог пересинхрониться
         /// после re-attach (process killed но service выжил из-за keep-on-exit).
@@ -72,9 +80,24 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         var tunnelStartedElapsedMs: Long = 0L
             private set
 
+        /// §276 — зеркало «последний Stopped пришёл из onRevoke». Нужно для
+        /// pull-пути (`getVpnStatus` на resume): broadcast'ятся только переходы,
+        /// и без этого поля UI, вернувшийся из фона после перехвата, увидел бы
+        /// голый Stopped и показал нейтральный Disconnected (кейс, помеченный
+        /// в §003 как «намеренно не покрыто»).
+        @Volatile
+        var currentRevoked: Boolean = false
+            private set
+
         /// Internal — для BoxService.setStatus() обновлять companion-state.
-        internal fun setCurrentStatus(s: VpnStatus) {
+        internal fun setCurrentStatus(s: VpnStatus, revoked: Boolean = false) {
             currentStatus = s
+            // §276 — Starting/Started снимают метку: туннель снова наш. На
+            // Stopped метка приходит из setStatus (true только от onRevoke).
+            currentRevoked = when (s) {
+                VpnStatus.Starting, VpnStatus.Started -> false
+                else -> revoked
+            }
             // §187 — фиксируем старт ОДИН раз на переходе в Started (не
             // перетирать при дедуп-повторе). Сброс на Stopped → uptime обнулится.
             when (s) {

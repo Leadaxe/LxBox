@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/background_mode.dart';
+import 'package:lxbox/models/tunnel_status.dart';
 import 'package:lxbox/vpn/box_vpn_client.dart';
 
 /// Narrow contract tests для MethodChannel'а VpnPlugin.
@@ -248,6 +249,42 @@ void main() {
         BoxVpnClient().captureCpuProfile(),
         throwsA(isA<PlatformException>()),
       );
+    });
+  });
+
+  /// §276 — pull-путь (`getVpnStatus`) на resume. Broadcast'ятся только
+  /// переходы, поэтому UI, вернувшийся из фона после перехвата слота, узнаёт о
+  /// revoke только отсюда. Native отдаёт map; голая строка — старый контракт.
+  group('getVpnStatus', () {
+    test('map со Stopped + revoked → revoked (перехват пережил фон)', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        return <String, Object>{'status': 'Stopped', 'revoked': true};
+      });
+      expect(await BoxVpnClient().getVpnStatus(), TunnelStatus.revoked);
+    });
+
+    test('map со Stopped без флага → disconnected', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        return <String, Object>{'status': 'Stopped', 'revoked': false};
+      });
+      expect(await BoxVpnClient().getVpnStatus(), TunnelStatus.disconnected);
+    });
+
+    test('map со Started → connected', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        return <String, Object>{'status': 'Started', 'revoked': false};
+      });
+      expect(await BoxVpnClient().getVpnStatus(), TunnelStatus.connected);
+    });
+
+    test('голая строка от старого native → парсится (совместимость)', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async => 'Started');
+      expect(await BoxVpnClient().getVpnStatus(), TunnelStatus.connected);
+    });
+
+    test('null/timeout → disconnected (UI не залипает)', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async => null);
+      expect(await BoxVpnClient().getVpnStatus(), TunnelStatus.disconnected);
     });
   });
 }
