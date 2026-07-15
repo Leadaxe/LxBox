@@ -8,8 +8,8 @@ import '../sections/dns_section.dart';
 import '../sections/inbound_section.dart';
 import '../sections/json_section.dart';
 import '../sections/match_section.dart';
+import '../sections/network_protocol_section.dart';
 import '../sections/port_section.dart';
-import '../sections/protocol_section.dart';
 import '../sections/srs_section.dart';
 import '../sections/wifi_section.dart';
 import 'preset_params_tab.dart';
@@ -195,9 +195,12 @@ class ParamsTab extends StatelessWidget {
             portCtrl: c.portCtrl,
             portRangeCtrl: c.portRangeCtrl,
           ),
-          ProtocolSection(
-            selected: c.protocols,
-            onToggle: c.toggleProtocol,
+          NetworkProtocolSection(
+            networks: c.network,
+            protocols: c.protocols,
+            onToggleNetwork: c.toggleNetwork,
+            onToggleProtocol: c.toggleProtocol,
+            onClearAll: c.clearNetworkAndProtocol,
           ),
           if (c.kind == CustomRuleKind.inline ||
               c.kind == CustomRuleKind.srs)
