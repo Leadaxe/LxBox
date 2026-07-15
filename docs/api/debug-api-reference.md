@@ -444,11 +444,11 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
 curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   -d '{"auto":null}' "$BASE/channels/vpn-2"
 
-# Сделать канал detour-прослойкой (§248): исчезает из целей правил,
-# появляется в пикерах detour; rules-ссылки на него лечатся сразу
+# Разрешить канал как detour-мишень (§248/§274): появляется в пикерах detour;
+# целью правил остаётся, существующие ссылки правил не трогаются
 curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   -d '{"detour":true}' "$BASE/channels/vpn-2?rebuild=true"
-# → {"tag":"vpn-2",...,"detour":true,"healed":{"rules":1,"detours":0},"rebuilt":true,...}
+# → {"tag":"vpn-2",...,"detour":true,"healed":{"rules":0,"detours":0},"rebuilt":true,...}
 ```
 
 **Quirks:**
@@ -457,23 +457,30 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   Полный reset — прислать все поля явно. `"auto": null` — снять галку.
 - `tag` immutable (системный id) → передан в PATCH → 400. Юзер-имя — `label`.
 - `PATCH vpn-1 {"enabled":false}` и `DELETE /channels/vpn-1` → 409 `conflict`.
-- `detour` (§248): `PATCH vpn-1 {"detour":true}` → 409 `conflict` (vpn-1 —
-  резервная мишень heal-путей). `include_block:true` вместе с `detour:true` в
-  одном body, либо на уже detour-канале → 409 `conflict` (block в прослойке
-  запрещён). `detour:true` на канале с сохранённым `include_block:true` —
-  include_block молча нормализуется в `false` (merge-философия PATCH).
+- `detour` (§248/§274): `PATCH vpn-1 {"detour":true}` → 409 `conflict`
+  (vpn-1 — главный канал и heal-резерв, продуктовое решение).
+  `include_block` с `detour` совместим (§274 снял 409 и тихую нормализацию):
+  оба поля принимаются и сохраняются в любой комбинации.
+- **Переименование при смене `detour`** (§274): префикс `⚙ ` в `label`
+  зарезервирован как маркер detour-канала (как ⚙-метка в тегах
+  detour-серверов). `detour:true` дописывает его в сохранённый `label`,
+  `detour:false` срезает; присланный `label` нормализуется так же (маркер у
+  не-detour канала молча срезается). Ответ мутации несёт УЖЕ
+  нормализованный `label` — он может отличаться от присланного; скрипты,
+  матчащие каналы, должны ключеваться по `tag` (он для этого и immutable).
 - Ответы мутаций (POST/PATCH/DELETE) содержат `"healed": {"rules": N,
   "detours": M}` — счётчики вылеченных ссылок (API-аналог UI-SnackBar'а):
-  `rules` — route_final / custom-rule outbound → `vpn-1` (disable, delete,
-  detour flag-set); `detours` — `override_detour` / `members[].detour` → `''`
-  (disable, delete, detour flag-unset). Ссылкой «на канал» считается его tag
-  И tag urltest-двойника `<tag>-auto`.
+  `rules` — route_final / custom-rule outbound → `vpn-1` (disable, delete;
+  §274: detour flag-set НЕ heal-триггер — канал остаётся целью правил,
+  `rules` при `{"detour":true}` всегда 0); `detours` — `override_detour` /
+  `members[].detour` → `''` (disable, delete, detour flag-unset). Ссылкой
+  «на канал» считается его tag И tag urltest-двойника `<tag>-auto`.
 - Выключение канала (enabled:false) деградирует ссылки сразу и **необратимо**
   — повторное включение старую ссылку не воскрешает (§202, Решение B).
 - `node_filter`/`default_filter` валидируются как regex → битый паттерн 400
   (иначе уронил бы сборку конфига).
 - POST с PATCH-полями применяет их **после** создания: конфликтный body
-  (например `detour:true` + `include_block:true`) вернёт 409, но канал уже
+  (например невалидный regex в `node_filter`) вернёт ошибку, но канал уже
   создан — с `label` из body (если был) и дефолтами остальных полей;
   прочие PATCH-поля body не применены.
 

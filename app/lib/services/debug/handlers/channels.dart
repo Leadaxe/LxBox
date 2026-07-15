@@ -10,9 +10,10 @@ import '_shared.dart';
 ///
 /// Тонкая обёртка над `SettingsStorage.getChannels / addChannel /
 /// updateChannel / deleteChannel` — та же семантика, что у UI:
-/// vpn-1 неудаляем и всегда enabled, лимит [kMaxChannels], удаление /
-/// выключение / смена detour-роли канала лечит ссылки в storage
-/// (rules-ссылки → vpn-1, §202-механика; detour-ссылки → '', §248);
+/// vpn-1 неудаляем и всегда enabled, лимит [kMaxChannels]. Heal ссылок в
+/// storage: rules-ссылки → vpn-1 при удалении/выключении (§202-механика;
+/// установка detour-флага rules НЕ лечит — §274, флаг = разрешение);
+/// detour-ссылки → '' при удалении/выключении/снятии флага (§248);
 /// счётчики вылеченного — блок `healed` в ответах мутаций.
 ///
 /// Routes:
@@ -230,25 +231,16 @@ Channel? _applyPatch(Channel ch, Map<String, dynamic> body) {
   final nodeFilterInvert = fieldBool(body, 'node_filter_invert');
   final interrupt = fieldBool(body, 'interrupt_exist_connections');
 
-  // §248 — роль detour-прослойки. vpn-1 — резервная мишень heal-путей,
-  // detour ему запрещён; block в прослойке запрещён («upstream недоступен»
-  // не должен превращаться в «весь флот мёртв»). Явный include_block:true
-  // при detour-роли — отказ; унаследованный из storage при включении detour
-  // — молча нормализуем в false (merge-философия: PATCH одним полем не
-  // обязан знать про ранее выставленные галки).
+  // §248/§274 — detour-флаг = разрешение выбирать канал как detour-мишень;
+  // роль в правилах ортогональна, include_block совместим (запрет Q1 снят
+  // §274). vpn-1 — главный канал (дефолтная мишень всего и heal-резерв),
+  // detour ему запрещён: продуктовое решение.
   final detour = fieldBool(body, 'detour');
   if (detour == true && ch.isRequired) {
     throw Conflict(
-      'channel ${ch.tag} is the fallback rule target and cannot be a detour channel',
+      'channel ${ch.tag} is the primary channel and cannot be a detour channel',
     );
   }
-  if (includeBlock == true && (detour ?? ch.isDetour)) {
-    throw const Conflict(
-      'a detour channel cannot include block '
-      '("detour" and "include_block" are mutually exclusive)',
-    );
-  }
-  final dropBlock = detour == true && ch.includeBlock;
 
   final changed = label != null ||
       enabled != null ||
@@ -267,7 +259,7 @@ Channel? _applyPatch(Channel ch, Map<String, dynamic> body) {
     label: label,
     enabled: enabled,
     includeDirect: includeDirect,
-    includeBlock: dropBlock ? false : includeBlock,
+    includeBlock: includeBlock,
     nodeFilter: nodeFilter,
     nodeFilterInvert: nodeFilterInvert,
     defaultFilter: defaultFilter,

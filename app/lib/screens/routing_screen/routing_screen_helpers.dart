@@ -38,20 +38,19 @@ class RoutingHelpers {
 
   /// §125 — outbound-опции для селекторов экрана Routing из списка каналов
   /// (storage). vpn-1 всегда присутствует (required-инвариант), выключенные
-  /// каналы скрыты. §248 — detour-канал не цель правил/route final (роли
-  /// применения взаимоисключающие): в опции не попадает; единственная точка
-  /// закрывает route final, тайлы правил, редактор правила и outbound-var
-  /// пресетов. §201 — block всегда доступен (системный), красный как reject;
-  /// держим его последним, direct — первым.
+  /// каналы скрыты. §274 — все enabled-каналы валидные цели правил, включая
+  /// detour-каналы (взаимоисключение ролей §248 снято); detour-канал виден
+  /// с ⚙-префиксом ([Channel.displayLabel]). Единственная точка закрывает
+  /// route final, тайлы правил, редактор правила и outbound-var пресетов.
+  /// §201 — block всегда доступен (системный), красный как reject; держим
+  /// его последним, direct — первым.
   static List<RoutingOutboundOption> outboundOptions(List<Channel> channels) {
     final opts = <RoutingOutboundOption>[
       const RoutingOutboundOption(label: 'direct', tag: kDirectOutboundTag),
     ];
     for (final c in channels) {
-      if (c.isDetour) continue;
       if (c.enabled || c.isRequired) {
-        opts.add(RoutingOutboundOption(
-            label: c.label.isNotEmpty ? c.label : c.tag, tag: c.tag));
+        opts.add(RoutingOutboundOption(label: c.displayLabel, tag: c.tag));
       }
     }
     opts.add(const RoutingOutboundOption(

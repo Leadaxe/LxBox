@@ -434,8 +434,10 @@ class HomeNodeList extends StatelessWidget {
       await controller.saveParsedConfig(config);
     }
     if (!context.mounted) return;
-    // §248 — heal молчаливым не бывает (Q3): смена detour-роли/disable из
-    // этого пути тоже лечит ссылки — досказываем счётчики в том же SnackBar.
+    // §248 Q3 — heal молчаливым не бывает: flag-unset из этого пути лечит
+    // detour-ссылки (rules-часть достижима только с disable/delete, которых
+    // здесь нет; §274 убрал flag-set-heal) — досказываем счётчики в том же
+    // SnackBar.
     final healedParts = <String>[
       if (healed.rules > 0)
         '${healed.rules} rule reference(s) switched to vpn-1',

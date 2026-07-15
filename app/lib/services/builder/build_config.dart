@@ -30,12 +30,19 @@ class BuildResult {
   final ValidationResult validation;
   final List<String> emitWarnings;
   final Map<String, String> generatedVars; // подмножество vars, которые сгенерились в процессе
+
+  /// §274 — display-имена каналов, у которых непустой node_filter отсёк все
+  /// ноды (канал живёт на fallback-опциях: block-default, либо
+  /// direct/block по include-галкам). UI показывает по ним транзиентный
+  /// SnackBar; фактический исход — в тексте [emitWarnings]/AppLog.
+  final List<String> channelsWithoutNodes;
   const BuildResult({
     required this.configJson,
     required this.config,
     required this.validation,
     required this.emitWarnings,
     required this.generatedVars,
+    this.channelsWithoutNodes = const [],
   });
 }
 
@@ -231,11 +238,13 @@ Future<BuildResult> buildConfig({
     for (final e in ctx.endpoints) e.map,
   ];
 
+  final channelsWithoutNodes = <String>[]; // §274 — для SnackBar на Home
   final presetOutbounds = _buildChannelGroups(
     channels: channels,
     selectorTags: selectorTags,
     nodeEntries: nodeEntries,
     emitWarnings: emitWarnings,
+    channelsWithoutNodes: channelsWithoutNodes,
     passiveCheck: settings.passiveCheck, // §272
   );
 
@@ -380,27 +389,19 @@ Future<BuildResult> buildConfig({
   // auto-двойник `<tag>-auto` эмитится лишь при `auto != null && nodes.isNotEmpty`
   // (см. `_buildChannelGroups`), поэтому статичный `autoTag` для канала с пустым
   // node-set давал бы висячую ссылку в конфиге (fatal в sing-box).
+  // §274 — detour-каналы валидные rules-мишени (вычитание detourChannelTags
+  // из validFinals снято вместе с взаимоисключением ролей §248).
   if (settings.routeFinal.isNotEmpty) {
-    // §248 — detour-каналы (и их auto-двойники) — не rules-мишени: убираем
-    // из validFinals. Отдельный warning: канал СУЩЕСТВУЕТ (эмитится, виден
-    // на Home) — «no longer exists» здесь ложь. UI такой выбор не даёт,
-    // ссылка возможна через restore из backup / Debug API.
-    final detourChannelTags = <String>{
-      for (final c in channels)
-        if (c.isDetour) ...[c.tag, c.autoTag],
-    };
     final validFinals = <String>{
       kDirectOutboundTag,
       kBlockOutboundTag, // §201 — block системный outbound, валидная route_final-мишень
       for (final o in presetOutbounds)
         if (o['tag'] is String) o['tag'] as String,
-    }..removeAll(detourChannelTags);
+    };
     var finalTag = settings.routeFinal;
     if (!validFinals.contains(finalTag)) {
-      emitWarnings.add(detourChannelTags.contains(finalTag)
-          ? 'Route final "$finalTag" is a detour channel and cannot be a '
-              'rule target — switched to vpn-1.'
-          : 'Route final "$finalTag" no longer exists — switched to vpn-1.');
+      emitWarnings.add(
+          'Route final "$finalTag" no longer exists — switched to vpn-1.');
       finalTag = 'vpn-1';
     }
     route['final'] = finalTag;
@@ -472,6 +473,7 @@ Future<BuildResult> buildConfig({
     validation: validation,
     emitWarnings: emitWarnings,
     generatedVars: generatedVars,
+    channelsWithoutNodes: channelsWithoutNodes,
   );
 }
 
@@ -543,6 +545,7 @@ List<Map<String, dynamic>> _buildChannelGroups({
   required List<String> selectorTags,
   required List<Map<String, dynamic>> nodeEntries,
   required List<String> emitWarnings,
+  required List<String> channelsWithoutNodes, // §274 — display-имена, out-параметр
   bool passiveCheck = false, // §272 — urltest.passive_check в auto-двойники
 }) {
   // §125 — единственный слой фильтрации нод теперь per-channel regex
@@ -597,34 +600,36 @@ List<Map<String, dynamic>> _buildChannelGroups({
     final selectorOutbounds = <String>[
       ...nodes,
       if (c.includeDirect) kDirectOutboundTag,
-      // §248 — block в detour-прослойке запрещён (Q1): parse-гейт fromJson
-      // коэрсит include_block при чтении, здесь — defense-in-depth.
-      if (c.includeBlock && !c.isDetour) kBlockOutboundTag,
+      if (c.includeBlock) kBlockOutboundTag, // §274 — совместим с detour
       if (emitAuto) c.autoTag,
     ];
-    // §201 — пустой набор (regex не матчит / нет нод) → fallback на [block,
-    // direct-out] с default=block (безопаснее блокировать, чем выпускать мимо
-    // VPN; direct остаётся доступной опцией). selector не должен быть пустой
-    // группой (fatal в sing-box).
-    // §248 — у detour-канала fallback = [direct-out] с default=direct-out
-    // (Q1): хоп исчезает, детурящиеся серверы ходят напрямую; block превратил
-    // бы «upstream недоступен» в «весь детурящийся флот мёртв».
+    // §201/§274 — пустой набор (regex не матчит / нет нод) → fallback на
+    // [block, direct-out] с default=block для ВСЕХ каналов (безопаснее
+    // блокировать, чем выпускать мимо VPN; direct остаётся доступной
+    // опцией). Detour-исключение §248 Q1 ([direct], «нет хопа») снято:
+    // detour-канал может одновременно быть целью правил, и direct-fallback
+    // молча выпускал бы rule-трафик мимо VPN. selector не должен быть
+    // пустой группой (fatal в sing-box).
     final emptyFallback = selectorOutbounds.isEmpty;
     if (emptyFallback) {
-      selectorOutbounds.addAll(c.isDetour
-          ? [kDirectOutboundTag]
-          : [kBlockOutboundTag, kDirectOutboundTag]);
+      selectorOutbounds.addAll([kBlockOutboundTag, kDirectOutboundTag]);
     }
-    // §200 — предупреждаем, если ИМЕННО фильтр канала отсёк все ноды (фильтр
-    // непустой, но 0 совпадений). Канал свалился на block — юзеру важно знать.
-    // Пустой фильтр с 0 нод (нет подписки) НЕ варним — это не вина фильтра.
+    // §200/§274 — предупреждаем, если ИМЕННО фильтр канала отсёк все ноды
+    // (фильтр непустой, но 0 совпадений): в AppLog текстом, в UI
+    // транзиентным SnackBar (channelsWithoutNodes). Текст отражает
+    // ФАКТИЧЕСКИЙ исход: при emptyFallback ядро берёт default=block, иначе
+    // (include_direct/include_block без нод) — ПЕРВУЮ опцию списка, и при
+    // include_direct это direct-out (юзер сам включил опцию — трафик идёт
+    // мимо VPN, врать «blocked» нельзя). Пустой фильтр с 0 нод (нет
+    // подписки) НЕ варним — это не вина фильтра.
     if (nodes.isEmpty && c.nodeFilter.isNotEmpty && selectorTags.isNotEmpty) {
-      final label = c.label.isNotEmpty ? c.label : c.tag;
-      emitWarnings.add(c.isDetour
-          ? 'Detour channel "$label" (${c.tag}): no nodes matched — '
-              'detour falls back to direct (no hop).'
-          : 'Channel "$label" (${c.tag}): node filter matched no nodes — '
-              'traffic is blocked (default), or use direct.');
+      final effective =
+          emptyFallback ? kBlockOutboundTag : selectorOutbounds.first;
+      emitWarnings.add(
+          'Channel "${c.displayLabel}" (${c.tag}): node filter matched no '
+          'nodes — ${effective == kDirectOutboundTag ? 'traffic goes direct (no VPN hop)' : 'traffic is blocked (default)'}. '
+          'Check its node filter.');
+      channelsWithoutNodes.add(c.displayLabel);
     }
 
     final selector = <String, dynamic>{
@@ -633,9 +638,9 @@ List<Map<String, dynamic>> _buildChannelGroups({
       'outbounds': selectorOutbounds,
       'interrupt_exist_connections': c.interruptExistConnections,
     };
-    // §201/§248 — fallback пустого канала: block (обычный) / direct (detour).
+    // §201/§274 — fallback пустого канала: block для всех.
     if (emptyFallback) {
-      selector['default'] = c.isDetour ? kDirectOutboundTag : kBlockOutboundTag;
+      selector['default'] = kBlockOutboundTag;
     }
     // §141 — default = первая нода канала, чей итоговый tag матчит defaultFilter.
     // Не матчит/пусто → default не выставляется (sing-box берёт первую опцию).

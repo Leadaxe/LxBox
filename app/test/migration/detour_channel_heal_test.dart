@@ -9,12 +9,14 @@ import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
-/// §248 — storage-heal ссылок при смене detour-роли канала (Решение B §202,
-/// необратимо): flag-set → rules-ссылки (route_final/правила) → vpn-1;
-/// flag-unset/disable/delete → detour-ссылки (overrideDetour одиночки/
-/// подписки/папки + FolderMember.detour) → ''. Ссылка «на канал» = tag ИЛИ
-/// `<tag>-auto`. Интра-омонимы (значение = bare-тег члена той же папки)
-/// пропускаются. Harness — как channel_heal_refs_test.dart.
+/// §248/§274 — storage-heal ссылок при смене detour-роли канала (Решение B
+/// §202, необратимо): flag-unset/disable/delete → detour-ссылки
+/// (overrideDetour одиночки/подписки/папки + FolderMember.detour) → '';
+/// disable/delete дополнительно лечат rules-ссылки (route_final/правила) →
+/// vpn-1. Flag-SET ничего НЕ лечит (§274: флаг — разрешение, канал остаётся
+/// целью правил). Ссылка «на канал» = tag ИЛИ `<tag>-auto`. Интра-омонимы
+/// (значение = bare-тег члена той же папки) пропускаются. Harness — как
+/// channel_heal_refs_test.dart.
 void main() {
   late Directory tmp;
   const channel = MethodChannel('plugins.flutter.io/path_provider');
@@ -164,7 +166,8 @@ void main() {
     expect(res.detours, 4);
   });
 
-  group('flag-set: rules-ссылки → vpn-1', () {
+  // Стерегут регресс назад к §248-семантике (flag-set лечил rules → vpn-1).
+  group('§274 — flag-set НЕ лечит rules-ссылки', () {
     Future<void> seedRulesRefsOnVpn3({String routeFinal = 'vpn-3'}) async {
       final data = {
         'channels_migrated': true,
@@ -193,29 +196,29 @@ void main() {
       SettingsStorage.resetCacheForTesting();
     }
 
-    test('route_final + inline + preset varsValues + srs → vpn-1, счётчик 4',
+    test('route_final + inline + preset varsValues + srs целы, счётчики 0',
         () async {
       await seedRulesRefsOnVpn3();
 
       final res = await SettingsStorage.updateChannel(
           (await vpn3()).copyWith(isDetour: true));
 
-      expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
+      expect(await SettingsStorage.getRouteFinal(), 'vpn-3');
       final rules = await SettingsStorage.getCustomRules();
-      expect(rules.map((r) => r.outbound), everyElement('vpn-1'));
-      // srs-правило вылечено наравне с inline/preset (kind-agnostic heal).
-      expect(rules.whereType<CustomRuleSrs>().single.outbound, 'vpn-1');
-      expect(res.rules, 4);
+      expect(rules.map((r) => r.outbound), everyElement('vpn-3'));
+      // srs-правило цело наравне с inline/preset — heal вообще не вызывался.
+      expect(rules.whereType<CustomRuleSrs>().single.outbound, 'vpn-3');
+      expect(res.rules, 0);
       expect(res.detours, 0);
     });
 
-    test('route_final на auto-двойник тоже лечится', () async {
+    test('route_final на auto-двойник тоже цел', () async {
       await seedRulesRefsOnVpn3(routeFinal: 'vpn-3-auto');
 
       await SettingsStorage.updateChannel(
           (await vpn3()).copyWith(isDetour: true));
 
-      expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
+      expect(await SettingsStorage.getRouteFinal(), 'vpn-3-auto');
     });
   });
 }

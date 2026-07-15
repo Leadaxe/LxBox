@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../config/consts.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
@@ -306,10 +305,10 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   Widget _hopRow(BuildContext context, RuntimeHop hop,
       {required bool isSelf}) {
     final cs = Theme.of(context).colorScheme;
+    // §274 — ⚙ по флагу канала (displayLabel), а не по факту «хоп — канал»:
+    // единый source-of-truth маркера.
     final ch = hop.channel;
-    final title = ch != null
-        ? '$kDetourTagPrefix${ch.label.isNotEmpty ? ch.label : ch.tag}'
-        : hop.tag;
+    final title = ch != null ? ch.displayLabel : hop.tag;
     final subtitle = [
       if (hop.isUnknown) 'not in config' else hop.type,
       if (hop.viaSelection) 'current pick',

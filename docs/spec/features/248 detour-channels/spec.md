@@ -10,6 +10,12 @@
 > Идея владельца: канал §125 с галкой «Use as detour» становится переключаемой
 > detour-прослойкой для серверов/папок/подписок и исчезает из выбора целей
 > правил. Ядро не трогаем.
+>
+> **ЧАСТИЧНО ОТМЕНЕНО таской §274**
+> (`docs/spec/tasks/274-detour-role-to-permission.md`, 15.07.2026): detour —
+> **разрешение**, не роль. Взаимоисключение ролей, Q1 (запрет include_block),
+> flag-set-heal и validFinals-вычитание сняты; fallback пустого канала
+> унифицирован в block-first. Update-блоки — в затронутых секциях ниже.
 
 ## Зачем
 
@@ -35,6 +41,10 @@
   (route_final / custom-rule outbound), detour-канал = цель detour. Механизмы
   состава (node_filter, invert, default, auto/urltest, include direct) — общие.
 
+> **§274: отменено.** Роли ортогональны: флаг `detour` лишь разрешает выбирать
+> канал в пикере §239; целью правил канал остаётся всегда. Обратный фильтр
+> пикера (только detour-каналы в секции Channels) сохраняется.
+
 ## Модель
 
 `Channel.isDetour: bool`, JSON-ключ `detour`, default `false` (отсутствие
@@ -57,6 +67,13 @@
    Известный риск AWG→WG прикрыт advisory-warning'ом билдера (см. Билдер),
    не запретом.
 
+> **§274: инварианты 2–3 частично отменены.** Q1 снят — `detour ×
+> includeBlock` разрешены полностью (парс-коэрция include_block удалена,
+> UI-галка Include block видна всегда, 409/нормализация Debug API сняты).
+> Из parse-гейта остался ТОЛЬКО инвариант 1 (vpn-1 не detour; обоснование
+> переформулировано: продуктовое — главный канал, дефолтная мишень и
+> heal-резерв). Инвариант 4 (Q2) — без изменений.
+
 ## Билдер (`_buildChannelGroups`, build_config.dart)
 
 Selector и auto-двойник эмитятся как у обычного канала, кроме:
@@ -68,6 +85,14 @@ Selector и auto-двойник эмитятся как у обычного ка
   (Q1). У обычного канала остаётся §201-поведение `[block, direct-out]`
   c default=block. Warning (self-contained, EN):
   `Detour channel "<label>" (<tag>): no nodes matched — detour falls back to direct (no hop).`
+
+> **§274: оба гейта отменены.** block эмитится при `includeBlock=true` у
+> любого канала. Fallback пустого канала унифицирован: `[block, direct-out]`
+> c default=block для ВСЕХ (direct-fallback у прослойки, ставшей целью
+> правил, молча выпускал бы rule-трафик мимо VPN — §201-принцип победил).
+> Warning один: `Channel "<displayLabel>" (<tag>): node filter matched no
+> nodes — traffic is blocked (default). Check its node filter.` Плюс
+> транзиентный SnackBar на Home (`BuildResult.channelsWithoutNodes`).
 
 ### Detour-циклы → fatal с виновниками (§254, заменяет edge-strip)
 
@@ -101,6 +126,10 @@ Circular outbound dependency — **fatal старта sing-box** (ядро от�
   двойник туда попадает) → fallback vpn-1. Отдельный warning — существующий
   «no longer exists» здесь ложен (канал существует):
   `Route final "<tag>" is a detour channel and cannot be a rule target — switched to vpn-1.`
+
+> **§274: отменено.** Вычитание detour-тегов из validFinals и «detour»-warning
+> сняты — route_final = detour-канал валиден. §219-механика (validFinals из
+> фактических presetOutbounds, «no longer exists» → vpn-1) — без изменений.
 - **AWG→WG advisory** (Q2-риск): если узел AmneziaWG детурится через канал,
   чей node-set содержит WireGuard-ноды, — эмитится warning (известный кейс
   «AWG с detour на wireguard вешает ядро на Android»; прямую ссылку §130-гейт
@@ -126,6 +155,14 @@ Circular outbound dependency — **fatal старта sing-box** (ядро от�
   Одна точка закрывает route final, тайлы правил, редактор правила и
   outbound-var пресетов. Кэш-инвалидация (§219) уже срабатывает на любую
   мутацию каналов.
+
+> **§274: пропуск снят.** Все enabled-каналы — опции целей правил; label =
+> `Channel.displayLabel` (⚙ у detour-канала). Та же точка, тот же кэш.
+> ⚙ теперь живёт в САМОМ label (storage): смена флага переименовывает канал
+> (`Channel.normalizeLabel` в copyWith/fromJson — как ⚙-метка в тегах
+> detour-серверов), `displayLabel` — страховка для пустого label. Маркер
+> добавлен также в DNS outbound-пикер (dns_settings_screen), который
+> detour-каналы никогда и не фильтровал.
 
 ### Омонимия канальных тегов и bare-тегов членов
 
@@ -164,6 +201,10 @@ Circular outbound dependency — **fatal старта sing-box** (ядро от�
 | disable | → `vpn-1` (существующее §202) | → `''` (новое) |
 | delete | → `vpn-1` (существующее) | → `''` (новое) |
 
+> **§274: строка «detour false→true» отменена** — flag-set ничего не лечит
+> (канал остаётся целью правил), healed.rules при flag-set — честный 0.
+> Остальные три строки — без изменений.
+
 - **Дыра preset-override — ЗАКРЫТА отдельной задачей, пункт снят из скоупа**
   (commit `bcf9414`, ветка `claude/sweet-germain-b47da9`, 06.07.2026):
   `_healChannelRefs` теперь kind-agnostic — матчит по общему getter'у
@@ -191,7 +232,8 @@ Circular outbound dependency — **fatal старта sing-box** (ядро от�
   disable/delete лечат ОБА рода):
   - вводная по событию: `Channel "<label>" disabled` / `… deleted` /
     `… is now a detour channel` (rules > 0), `Channel "<label>" is no longer
-    a detour target` (только detours);
+    a detour target` (только detours); **(§274: вводная «is now a detour
+    channel» удалена — flag-set больше не heal-триггер)**;
   - части счётчиков: `N rule reference(s) switched to vpn-1`,
     `M detour reference(s) reset to None` — оба ненулевые склеиваются в один
     SnackBar через запятую;
@@ -210,6 +252,11 @@ Circular outbound dependency — **fatal старта sing-box** (ядро от�
   Include block скрывается и сбрасывается; Include direct-out остаётся —
   для прослойки это легитимная опция «без хопа». Для `vpn-1` галка не
   показывается.
+
+> **§274:** Include block больше НЕ скрывается и НЕ сбрасывается (совместим
+> с detour). Subtitle галки: `can be picked as a detour target for servers
+> and folders` (упоминание «removed from rule targets» удалено). Гейт vpn-1
+> остаётся.
 - **Вкладка Channels**: тайл detour-канала получает префикс `⚙ ` перед label.
 - **Home** (Q4): detour-канал НЕ прячем — управление им с главного экрана и
   есть смысл фичи. В `_channelLabels` (home_controller.dart) label получает
@@ -230,6 +277,12 @@ Circular outbound dependency — **fatal старта sing-box** (ядро от�
   - heal-побочки те же, что в UI; счётчики healed-ссылок — в теле ответа.
 - `docs/api/debug-api-reference.md` — обновить.
 
+> **§274:** 409 на `include_block × detour` и dropBlock-нормализация СНЯТЫ —
+> комбинация принимается и сохраняется. 409 для vpn-1+detour остаётся
+> (текст: `…is the primary channel and cannot be a detour channel`).
+> `healed.rules` при `detour:true` — всегда 0 (flag-set не лечит); формат
+> ответа не менялся. help.dart переписан.
+
 ## Storage / Backup
 
 - Новое поле живёт **внутри** существующего top-level ключа `channels` —
@@ -241,11 +294,14 @@ Circular outbound dependency — **fatal старта sing-box** (ядро от�
     (селектор существует, конфиг валиден; route_final прикрыт
     validFinals-гейтом, custom-rule outbound — нет). Лечится при следующей
     мутации этого канала; пикер правила показывает визуальный fallback §219;
+    **(§274: это теперь ШТАТНОЕ поведение, не деградация — validFinals-гейт
+    и мутационный heal сняты, пикер правила предлагает канал сам)**;
   - восстановленная detour-ссылка на выключенный/удалённый канал деградирует
     билдером (§172: селектор не эмитится → dangling → срезана с warning) и
     остаётся видимой в Node Settings до правки.
   - Инварианты модели (vpn-1, include_block) restore НЕ обходит —
-    parse-гейт (Модель, п.3).
+    parse-гейт (Модель, п.3). **(§274: include_block-коэрция снята, остался
+    только vpn-1-инвариант.)**
 - `docs/STORAGE.md` — дополнить схему канала полем `detour`.
 - `wizard_template.json` не меняется (seed-каналы без флага, parse-default
   false) — vc-бамп не нужен.
@@ -288,6 +344,12 @@ Circular outbound dependency — **fatal старта sing-box** (ядро от�
 
 ## Тесты
 
+> **§274:** тест-контракты гейтов ниже инвертированы (block эмитится;
+> fallback пустого канала `[block, direct]` у всех; route_final =
+> detour-канал валиден; parse-гейт include_block снят; flag-set-heal
+> зафиксирован как no-op; Debug API принимает комбинацию) — см. раздел
+> «Тесты» таски §274. Циклы/AWG/омонимия/flag-unset — без изменений.
+
 - **Builder / циклы**: прямой цикл (S ∈ C, S.detour=C) → detour у S снят,
   S ОСТАЛСЯ в C, warning; цикл через auto-двойник (S.detour=`<tag>-auto`) —
   то же; транзитивный через цепочку узлов; межканальный через C2; цикл со
@@ -324,7 +386,8 @@ Circular outbound dependency — **fatal старта sing-box** (ядро от�
 же X** → relay'и едут напрямую (edge-strip), остальной флот — через
 выбранный в vpn-2 relay; переключение vpn-2 на Home мгновенно пересаживает
 флот; auto-режим самонаводится по urltest; vpn-2 отсутствует в выборе целей
-правил и route final; снятие галки detour чистит overrideDetour подписки
+правил и route final **(§274: наоборот — vpn-2 ПРИСУТСТВУЕТ в выборе с
+⚙-префиксом)**; снятие галки detour чистит overrideDetour подписки
 (None/direct) с уведомлением о числе сброшенных ссылок и без падения конфига.
 
 ## Что НЕ делаем
