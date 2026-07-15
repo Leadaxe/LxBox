@@ -279,6 +279,26 @@ Sing-box matches **первым попавшимся правилом** (top-dow
 
 Если в logcat видишь `PIW: readWIFIState: <unknown ssid>` (debug log из [PlatformInterfaceWrapper](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/vpn/PlatformInterfaceWrapper.kt:139)) — значит permission grants есть (нет SecurityException), но `WifiInfo.ssid` вернул `"<unknown ssid>"`. На Android 13+ это означает **отсутствие `NEARBY_WIFI_DEVICES`** даже если ACCESS_FINE_LOCATION granted (Google разделил wi-fi info и location в API 33). Действие: добавить `NEARBY_WIFI_DEVICES` в Manifest + grant через runtime prompt.
 
+### «VPN сам отваливается / "Another VPN app took the system VPN slot"»
+
+Android держит **ОДИН** VPN-слот. Этот текст (§224/§276) = системный `VpnService.onRevoke()`, а его Android адресует **только** когда слот перехватил другой `VpnService`. Саморевок исключён (§224: один `ServiceRecord` без `android:process`; fd закрывается синхронно до разблокировки Dart). Смерть процесса по LMK даёт `SIGKILL` — Java-код не исполняется, broadcast не уходит, `START_NOT_STICKY` не рестартит → туннель пропал бы **молча, без этой строки**. Раз строка есть — перехватчик реален, ищем его.
+
+1. **Кто владеет слотом прямо сейчас** — единственный надёжный источник:
+   ```bash
+   adb shell dumpsys vpn_management | grep -iE "Active package|VpnTransportInfo|session"
+   ```
+   `getOwnerUid()` из приложения недостижим (`@hide`, privacy by design) — поэтому в UI имя не показываем, а даём кнопку «VPN settings» (§241): на системном экране активный VPN помечен как Connected.
+2. **Хронология захвата** (кто и когда поднялся):
+   ```bash
+   adb shell dumpsys usagestats | grep -iE "FOREGROUND_SERVICE_START|DEVICE_STARTUP|USER_UNLOCKED"
+   ```
+3. **Типичные перехватчики:**
+   - второй VPN-клиент с **Always-on / kill-switch** — переустанавливает туннель по таймеру/смене сети → выглядит как «падает раз в N минут»;
+   - **автозапуск при загрузке** у чужого VPN. Грабля (кейс v2rayNG, §241): BOOT_COMPLETED откладывается Direct Boot'ом до USER_UNLOCKED, захват приходит через ~1-2 мин после разблокировки → читается как «VPN сам упал спустя минуту», а не как boot-гонка. Настройка называется не «автозагрузка», а «Автоподключение при запуске» (`pref_is_booted`);
+   - **Samsung Secure Wi-Fi** (`com.samsung.android.fast`) — встроенный VpnService, умеет включаться сам на Wi-Fi;
+   - на слабых устройствах LMK убивает **чужой** VPN, тот рестартует по своему auto-start и забирает слот — LMK тут триггер, но ревокер всё равно чужое приложение.
+4. Наш pre-check `isForeignVpnActive()` (§211) ловит только занятый слот **перед** ручным стартом — перехват в уже работающей сессии он не видит по определению.
+
 ### Workflow при незнакомом баге
 
 1. `./scripts/lxbox-diag.sh` (или вручную параллельно)
