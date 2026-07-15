@@ -275,6 +275,50 @@ void main() {
       // Kill-switch: поле не пишется, дефолт ядра (idle-тик не запущен).
       expect(route.containsKey('lx_idle_suspend'), false);
     });
+
+    // §272 — reachable-окно (route.lx_idle_suspend_reachable) эмитится только
+    // вместе с базовым порогом: ядро отвергает reachable без lx_idle_suspend.
+    test('§272 reachable пишется только при включённом idleSuspend', () async {
+      final wg = parseWireguardUri(
+        'wireguard://pk_a@wg.example.com:51820?publickey=pk_b&address=10.0.0.2%2F32&mtu=1420#WG',
+      )!;
+      final list = UserServer(
+        id: 'u7',
+        name: 'WG',
+        enabled: true,
+        tagPrefix: '',
+        detourPolicy: DetourPolicy.defaults,
+        origin: UserSource.paste,
+        createdAt: DateTime.now(),
+        nodes: [wg],
+      );
+      // Оба порога заданы → оба в route.
+      final both = await buildConfig(
+        lists: [list],
+        template: template,
+        settings: const BuildSettings(
+          userVars: {'clash_api': '127.0.0.1:9090'},
+          idleSuspend: '30s',
+          idleSuspendReachable: '30m',
+        ),
+      );
+      final bothRoute = both.config['route'] as Map;
+      expect(bothRoute['lx_idle_suspend'], '30s');
+      expect(bothRoute['lx_idle_suspend_reachable'], '30m');
+
+      // Базовый выключен → reachable подавлен (иначе ядро упало бы на старте).
+      final orphan = await buildConfig(
+        lists: [list],
+        template: template,
+        settings: const BuildSettings(
+          userVars: {'clash_api': '127.0.0.1:9090'},
+          idleSuspendReachable: '30m',
+        ),
+      );
+      final orphanRoute = orphan.config['route'] as Map;
+      expect(orphanRoute.containsKey('lx_idle_suspend'), false);
+      expect(orphanRoute.containsKey('lx_idle_suspend_reachable'), false);
+    });
   });
 
   group('buildConfig — §161 empty required-var → default backstop', () {

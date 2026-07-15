@@ -93,7 +93,11 @@ int clampChannelPool(int v) => v < 1 ? 1 : v;
 class ChannelAuto {
   const ChannelAuto({
     this.url = 'https://cp.cloudflare.com/generate_204',
-    this.interval = '5m',
+    // §272 — 15m вместо 5m: на mobile каждый цикл проб дайлит узлы (будит
+    // спящие, SPEC 020); с passive_check пробы при живом трафике и так
+    // пропускаются, interval задаёт лишь скорость реакции на смерть узла.
+    // Существующие каналы хранят своё значение в JSON — их это не меняет.
+    this.interval = '15m',
     this.tolerance = 50,
     this.idleTimeout = '30m',
     this.interruptExistConnections = false,

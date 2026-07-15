@@ -64,6 +64,18 @@ class BuildSettings {
   /// idle-тик не запускается).
   final String idleSuspend;
 
+  /// §272: второе, длинное окно простоя для ДОСТИЖИМЫХ эндпоинтов
+  /// (ядро SPEC 020 rev. 2026-07-15, `route.lx_idle_suspend_reachable`).
+  /// Пусто = достижимые не засыпают. Эмитится ТОЛЬКО при непустом
+  /// [idleSuspend] — ядро отвергает reachable без базового порога.
+  final String idleSuspendReachable;
+
+  /// §272: passive health check (ядро SPEC 019, `urltest.passive_check`) —
+  /// пишется в urltest-двойники каналов. Пока свежий успешный TCP-дайл
+  /// подтверждает узел, периодические пробы группы пропускаются.
+  /// ⚠ Требует ядра >= ревизии 2026-07-15 (незнакомое поле роняет конфиг).
+  final bool passiveCheck;
+
   const BuildSettings({
     this.userVars = const {},
     this.enabledGroups = const {},
@@ -73,6 +85,8 @@ class BuildSettings {
     this.tunApps,
     this.vpnMode,
     this.idleSuspend = '',
+    this.idleSuspendReachable = '',
+    this.passiveCheck = false,
   });
 }
 
@@ -222,6 +236,7 @@ Future<BuildResult> buildConfig({
     selectorTags: selectorTags,
     nodeEntries: nodeEntries,
     emitWarnings: emitWarnings,
+    passiveCheck: settings.passiveCheck, // §272
   );
 
   final baseOutbounds = config['outbounds'] as List<dynamic>? ?? const [];
@@ -349,6 +364,12 @@ Future<BuildResult> buildConfig({
   final idle = settings.idleSuspend.trim();
   if (idle.isNotEmpty) {
     route['lx_idle_suspend'] = idle;
+    // §272 — reachable-окно валидно ТОЛЬКО при включённом базовом пороге
+    // (ядро: "lx_idle_suspend_reachable requires lx_idle_suspend").
+    final reachable = settings.idleSuspendReachable.trim();
+    if (reachable.isNotEmpty) {
+      route['lx_idle_suspend_reachable'] = reachable;
+    }
   }
 
   // §125 — деградация dangling route_final → vpn-1. Ссылка на удалённый канал
@@ -522,6 +543,7 @@ List<Map<String, dynamic>> _buildChannelGroups({
   required List<String> selectorTags,
   required List<Map<String, dynamic>> nodeEntries,
   required List<String> emitWarnings,
+  bool passiveCheck = false, // §272 — urltest.passive_check в auto-двойники
 }) {
   // §125 — единственный слой фильтрации нод теперь per-channel regex
   // (node_filter). Глобальный excluded_nodes (§048) удалён.
@@ -641,6 +663,13 @@ List<Map<String, dynamic>> _buildChannelGroups({
         'idle_timeout': a.idleTimeout,
         'interrupt_exist_connections': a.interruptExistConnections,
       };
+      // §272 — passive health check (ядро SPEC 019): пока свежий успешный
+      // TCP-дайл подтверждает узел, периодические пробы пропускаются —
+      // активная группа не будит спящие узлы. Эмитим только при true
+      // (omitempty-семантика: отсутствие = false = апстрим-поведение).
+      if (passiveCheck) {
+        urltest['passive_check'] = true;
+      }
       // §208 — round_robin: дописываем `mode` + `balancer{}` (ядро SPEC 019).
       // least_test → НИЧЕГО не пишем (бит-в-бит апстрим, нулевой diff). `balancer`
       // без round_robin роняет старт ядра, поэтому только под round_robin.
@@ -723,7 +752,7 @@ List<Channel> _channelsFromTemplate(
 
   ChannelAuto seedAuto() => ChannelAuto(
         url: s('urltest_url', 'https://cp.cloudflare.com/generate_204'),
-        interval: s('urltest_interval', '5m'),
+        interval: s('urltest_interval', '15m'), // §272 — батарея: см. channel.dart
         tolerance: int.tryParse(s('urltest_tolerance', '50')) ?? 50,
         idleTimeout: '30m',
         interruptExistConnections: false,
