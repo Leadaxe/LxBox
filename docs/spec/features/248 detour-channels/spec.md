@@ -182,9 +182,18 @@ Circular outbound dependency — **fatal старта sing-box** (ядро от�
   который воскресил бы вылеченную ссылку на диске. Общее ядро сброса —
   `clearDetourChannelRefs` (server_list.dart); storage-heal и
   `SubscriptionController.syncDetourChannelRefsCleared(tag)` зеркальны.
-  Все вызыватели `updateChannel`/`deleteChannel` при `healed.detours > 0`
-  обязаны звать ресинк (routing_screen `_resyncHealedRefs`, node_list,
-  Debug-handler через `ctx.registry.sub`).
+  **§275 — ресинк больше не обязанность вызывающего**: мутации каналов идут
+  через `ChannelMutations.add/update/delete` (services/channel_mutations.dart),
+  где storage-heal и ресинк — одна операция. Голые
+  `SettingsStorage.addChannel/updateChannel/deleteChannel` помечены
+  `@visibleForTesting`: вызов из `lib/` мимо сервиса — предупреждение analyze'а
+  (CI гоняет его на весь проект). Прежняя формулировка «все вызыватели обязаны
+  звать ресинк» держалась на внимательности и разъехалась: POST `/channels`
+  лечил storage и не зеркалил при живом правильном образце в том же файле —
+  нарушение невидимо (storage корректен, тесты зелёные), стреляет через
+  несвязанный `_persist()` позже. Не закрыто механизмом: `setChannels` (сырой
+  bulk-overwrite мимо heal'а) и `sub == null` (законно — без контроллера нет и
+  `_entries`).
 - **Обратная связь (Q3: heal «с warning»)**: heal молчаливым не бывает —
   UI показывает SnackBar со счётчиками, self-contained EN. Фактическая
   матрица (реализация покрывает больше кейсов, чем черновые два текста:
