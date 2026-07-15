@@ -485,7 +485,10 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                       controller: _autoIntervalCtrl,
                       decoration: const InputDecoration(
                         labelText: 'Interval',
-                        hintText: '5m',
+                        hintText: '15m',
+                        // §272 — каждый цикл дайлит серверы (будит спящие
+                        // туннели): большие значения экономят батарею.
+                        helperText: 'Larger values save battery',
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),

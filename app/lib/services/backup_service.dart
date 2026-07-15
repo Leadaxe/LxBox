@@ -32,6 +32,8 @@ const _topLevelRoutingKeys = {
   'preset_ids_remapped', // §228 — guard ремапа preset_id; в export иначе
   //                        миграция пере-сработает поверх restored custom_rules
   'route_idle_suspend', // §215 — idle-suspend threshold (route.lx_idle_suspend)
+  'route_idle_suspend_reachable', // §272 — reachable idle window
+  'urltest_passive_check', // §272 — passive health check
   'enabled_groups', // §125 — DEPRECATED (legacy, читается только миграцией)
   'tun_apps',
   'vpn_mode',
