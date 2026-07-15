@@ -60,6 +60,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   // closeConnection). Без Restart-баннера.
   bool _interruptOnSwitch = false;
   String _idleSuspend = ''; // §215 — route.lx_idle_suspend threshold ("" = off)
+  // §272 — route.lx_idle_suspend_reachable ("" = reachable never suspend)
+  String _idleSuspendReachable = '';
+  bool _passiveCheck = true; // §272 — urltest.passive_check
   // §271 — memory limit ядра (native_prefs, wire-значения MemoryLimitSetting).
   String _memoryLimit = MemoryLimitSetting.auto;
 
@@ -118,12 +121,17 @@ class _SettingsScreenState extends State<SettingsScreen>
         await SettingsStorage.getNativeBackgroundMode());
     final interruptOnSwitch = await SettingsStorage.getInterruptOnSwitch();
     final idleSuspend = await SettingsStorage.getIdleSuspend(); // §215
+    final idleSuspendReachable =
+        await SettingsStorage.getIdleSuspendReachable(); // §272
+    final passiveCheck = await SettingsStorage.getPassiveCheck(); // §272
     final memoryLimit = await SettingsStorage.getNativeMemoryLimit(); // §271
     setState(() {
       _template = template;
       _backgroundMode = bgMode;
       _interruptOnSwitch = interruptOnSwitch;
       _idleSuspend = idleSuspend;
+      _idleSuspendReachable = idleSuspendReachable;
+      _passiveCheck = passiveCheck;
       _memoryLimit = memoryLimit;
       _vpnLoaded = true;
       _loading = false;
@@ -153,6 +161,37 @@ class _SettingsScreenState extends State<SettingsScreen>
     if (value == _idleSuspend) return;
     setState(() => _idleSuspend = value);
     await SettingsStorage.saveIdleSuspend(value);
+    widget.subController.configDirty = true;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Applies on next connect.'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// §272 — reachable idle window (route.lx_idle_suspend_reachable).
+  /// Config-significant, применяется на следующем подключении.
+  Future<void> _applyIdleSuspendReachable(String value) async {
+    if (value == _idleSuspendReachable) return;
+    setState(() => _idleSuspendReachable = value);
+    await SettingsStorage.saveIdleSuspendReachable(value);
+    widget.subController.configDirty = true;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Applies on next connect.'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// §272 — passive health check (urltest.passive_check). Config-significant.
+  Future<void> _applyPassiveCheck(bool value) async {
+    if (value == _passiveCheck) return;
+    setState(() => _passiveCheck = value);
+    await SettingsStorage.savePassiveCheck(value);
     widget.subController.configDirty = true;
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -276,10 +315,13 @@ class _SettingsScreenState extends State<SettingsScreen>
           onChanged: _toggleInterruptOnSwitch,
         ),
         const Divider(height: 32),
+        // §272 — секция WireGuard connections: оба idle-suspend порога ядра
+        // (lx_idle_suspend / lx_idle_suspend_reachable, SPEC 020).
         const TemplateSectionHeader(
-          title: 'Optimization',
+          title: 'WireGuard connections',
           description:
-              'Memory and battery tuning for WireGuard tunnels and VPN lifecycle',
+              'Sleep WireGuard/AmneziaWG tunnels to save battery and memory. '
+              'Sleeping tunnels wake automatically on first use.',
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -320,6 +362,74 @@ class _SettingsScreenState extends State<SettingsScreen>
               if (!_vpnLoaded || v == null) return;
               unawaited(_applyIdleSuspend(v));
             },
+          ),
+        ),
+        // §272 — reachable idle window (route.lx_idle_suspend_reachable):
+        // усыпление ДОСТИЖИМЫХ туннелей (члены пула, выбранный узел) после
+        // долгого простоя. Активно только при включённом idle-suspend выше
+        // (ядро отвергает reachable без базового порога — генератор и так
+        // не эмитит, UI просто отражает зависимость).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Suspend active-route tunnels',
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Also put tunnels on the active route (pool members, the '
+                'selected node) to sleep after a long quiet period — e.g. '
+                'overnight. The first connection after sleep adds ~1 round '
+                'trip. Keep this at or above the channels\' idle timeout '
+                '(30 min by default).',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: DropdownButtonFormField<String>(
+            initialValue: _idleSuspendReachable,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: const [
+              DropdownMenuItem<String>(value: '', child: Text('Off')),
+              DropdownMenuItem<String>(value: '5m', child: Text('5 minutes')),
+              DropdownMenuItem<String>(value: '15m', child: Text('15 minutes')),
+              DropdownMenuItem<String>(value: '30m', child: Text('30 minutes')),
+              DropdownMenuItem<String>(value: '1h', child: Text('1 hour')),
+            ],
+            onChanged: (String? v) {
+              if (!_vpnLoaded || v == null || _idleSuspend.isEmpty) return;
+              unawaited(_applyIdleSuspendReachable(v));
+            },
+          ),
+        ),
+        const Divider(height: 32),
+        const TemplateSectionHeader(
+          title: 'Optimization',
+          description: 'Health checks, memory and VPN lifecycle',
+        ),
+        // §272 — passive health check (urltest.passive_check).
+        SwitchListTile(
+          value: _passiveCheck,
+          onChanged: (bool v) {
+            if (!_vpnLoaded) return;
+            unawaited(_applyPassiveCheck(v));
+          },
+          title: const Text('Passive health check'),
+          subtitle: const Text(
+            'Skip periodic server probes while your own traffic already '
+            'proves the connection works. Fewer wakeups and less battery; '
+            'ping numbers refresh less often.',
           ),
         ),
         // §271 — memory limit ядра. Применяется к работающему ядру сразу.

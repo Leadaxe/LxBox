@@ -210,9 +210,9 @@
           "default_value": "https://cp.cloudflare.com/generate_204",
           "options": ["https://cp.cloudflare.com/generate_204", "https://www.gstatic.com/generate_204", "https://captive.apple.com/hotspot-detect.html"]
         },
-        { "name": "urltest_interval", "type": "text", "wizard_ui": "edit", "title": "Test interval", "tooltip": "How often sing-box re-tests and re-picks. Lower → faster first pick after connect, but more background traffic (1m typical, 5m conservative).",
-          "default_value": "5m",
-          "options": ["30s", "1m", "3m", "5m", "10m", "30m"]
+        { "name": "urltest_interval", "type": "text", "wizard_ui": "edit", "title": "Test interval", "tooltip": "How often sing-box re-tests and re-picks. Lower → faster switching, but more background traffic and battery: each cycle dials the servers (waking suspended tunnels). 15m is the battery-friendly default.",
+          "default_value": "15m",
+          "options": ["30s", "1m", "3m", "5m", "10m", "15m", "30m"]
         },
         { "name": "urltest_tolerance", "type": "int", "wizard_ui": "edit", "title": "Tolerance (ms)", "tooltip": "Only switch proxy if latency difference exceeds this",
           "default_value": "30",
