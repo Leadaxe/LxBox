@@ -867,6 +867,12 @@ storage. Template стал **seed'ом** — значениями по умол�
   [`spec/features/248 detour-channels/`](spec/features/248%20detour-channels/).
 - CRUD: `getChannels` / `setChannels` / `addChannel` (throws при 10) /
   `updateChannel` / `deleteChannel` (throws для vpn-1) / `migrateChannelsIfNeeded`.
+- ⚠ **Мутации — через `services/channel_mutations.dart`**, не напрямую (§275):
+  `ChannelMutations.add/update/delete` делают storage-heal и зеркальный ресинк
+  in-memory `_entries` контроллера одной операцией — иначе следующий `_persist()`
+  воскрешает вылеченные detour-ссылки. `addChannel`/`updateChannel`/`deleteChannel`
+  помечены `@visibleForTesting`: вызов из `lib/` мимо сервиса — ошибка analyze.
+  `setChannels` — сырой bulk-overwrite без heal'а (для persist'а списка целиком).
 
 Спеки: [`docs/spec/features/125 configurable-channels/`](spec/features/125%20configurable-channels/),
 [`docs/spec/features/248 detour-channels/`](spec/features/248%20detour-channels/)
