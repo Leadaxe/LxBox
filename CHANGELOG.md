@@ -6,6 +6,24 @@
 
 ---
 
+## [2.15.4] — 2026-07-15
+
+### Added
+
+- **§272 — энергосвязка с ядром v1.14.0-lx.4-rc.2**: секция VPN Settings →
+  System → **WireGuard connections** (Suspend idle tunnels 30s / Suspend
+  active-route tunnels 5m — `route.lx_idle_suspend[_reachable]`); **Passive
+  health check** (вкл. по умолчанию, `urltest.passive_check`) — пробы молчат,
+  пока живой трафик подтверждает сервер; интервал health-check новых каналов
+  5m → 15m (три источника дефолта + подсказка в редакторе канала).
+
+### Changed
+
+- Ядро (libbox) v1.14.0-lx.3 → **v1.14.0-lx.4-rc.2**: энергоревизия
+  idle-suspend × urltest (pause-wake воскрешение, обрывы живых соединений,
+  AWG-over-WG guard-дыры, probe-хвост брошенных групп; полный список — в
+  lx-changelog ядра). §273 — разбор клиент-аудита (config-generator ось).
+
 ## [2.15.3] — 2026-07-15
 
 ### Added
