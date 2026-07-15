@@ -316,6 +316,7 @@ Rules матчатся **first-wins** сверху вниз, так что reord
   "port_ranges": ["8000:9000",":3000"],
   "packages": ["org.mozilla.firefox"],
   "protocols": ["tls","quic"],      // subset of sing-box known (tls/quic/http/...)
+  "network": ["tcp","udp"],         // L4 transport, subset of tcp/udp/icmp
   "ip_is_private": false,
   "srs_url": "https://...rule-set.srs",
   "target": "vpn-1|direct-out|reject"

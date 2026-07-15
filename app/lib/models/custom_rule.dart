@@ -81,6 +81,15 @@ sealed class CustomRule {
         CustomRuleSrs(:final protocols) => protocols,
         _ => const [],
       };
+
+  /// §240 — L4-транспорт (`network`: tcp/udp/icmp). Routing-rule level
+  /// (headless rule не выражает `network`), симметрично [protocols]. OR внутри
+  /// списка, AND с остальным правилом.
+  List<String> get network => switch (this) {
+        CustomRuleInline(:final network) => network,
+        CustomRuleSrs(:final network) => network,
+        _ => const [],
+      };
   bool get ipIsPrivate => switch (this) {
         CustomRuleInline(:final ipIsPrivate) => ipIsPrivate,
         CustomRuleSrs(:final ipIsPrivate) => ipIsPrivate,
@@ -153,7 +162,8 @@ sealed class CustomRule {
       (dns?.serverTag.isNotEmpty ?? false) &&
       ports.isEmpty &&
       portRanges.isEmpty &&
-      protocols.isEmpty;
+      protocols.isEmpty &&
+      network.isEmpty;
 
   /// §117: DNS-mirror **активен** — [dnsMirrorEligible] И галка DNS включена.
   /// Build (эмиссия) и UI (lifecycle-локи серверов) используют этот предикат.
@@ -165,7 +175,11 @@ sealed class CustomRule {
   /// `predefined` отвечает локально, серверу не нужна. Домен / приложение
   /// (`package_name`) / source_ip — работает.
   bool get forceIpv4Eligible =>
-      enabled && ports.isEmpty && portRanges.isEmpty && protocols.isEmpty;
+      enabled &&
+      ports.isEmpty &&
+      portRanges.isEmpty &&
+      protocols.isEmpty &&
+      network.isEmpty;
 
   /// §256: Force IPv4 **активна** — [forceIpv4Eligible] И галка включена.
   /// Build (эмиссия serverless-mirror'а) и UI (маркер) используют этот предикат.
@@ -435,6 +449,15 @@ const List<String> kKnownProtocols = [
   'tls',
 ];
 
+/// §240 — L4-транспорты для sing-box `network` field (route-rule level).
+/// Закрытый набор: по документации допустимы ровно `tcp`, `udp`, `icmp`
+/// (нет `icmpv6`, нет отдельного `ip_protocol`).
+const List<String> kKnownNetworks = [
+  'tcp',
+  'udp',
+  'icmp',
+];
+
 // ─── Inline ────────────────────────────────────────────────────────────
 
 /// Inline правило — юзер ввёл match-поля через «+ Add rule». Билдер
@@ -458,6 +481,7 @@ class CustomRuleInline extends CustomRule {
     this.portRanges = const [],
     this.packages = const [],
     this.protocols = const [],
+    this.network = const [],
     this.ipIsPrivate = false,
     this.sourceIpCidrs = const [],
     this.sourceIpIsPrivate = false,
@@ -492,6 +516,9 @@ class CustomRuleInline extends CustomRule {
   // Routing-rule-level AND (не в headless).
   @override
   List<String> protocols;   // subset of kKnownProtocols
+  /// §240 — L4-транспорт (subset of kKnownNetworks). Routing-rule level.
+  @override
+  List<String> network;
   @override
   bool ipIsPrivate;
 
@@ -547,6 +574,7 @@ class CustomRuleInline extends CustomRule {
     if (totalPorts > 0) parts.add('$totalPorts port');
     if (packages.isNotEmpty) parts.add('${packages.length} app');
     if (protocols.isNotEmpty) parts.add('${protocols.length} proto');
+    if (network.isNotEmpty) parts.add('${network.length} net');
     if (inbounds.isNotEmpty) parts.add('${inbounds.length} in');
     if (wifiSsids.isNotEmpty) parts.add('${wifiSsids.length} wifi');
     return parts.join(' · ');
@@ -566,6 +594,7 @@ class CustomRuleInline extends CustomRule {
         if (portRanges.isNotEmpty) 'portRanges': portRanges,
         if (packages.isNotEmpty) 'packages': packages,
         if (protocols.isNotEmpty) 'protocols': protocols,
+        if (network.isNotEmpty) 'network': network,
         if (ipIsPrivate) 'ipIsPrivate': true,
         if (sourceIpCidrs.isNotEmpty) 'sourceIpCidrs': sourceIpCidrs,
         if (sourceIpIsPrivate) 'sourceIpIsPrivate': true,
@@ -589,6 +618,7 @@ class CustomRuleInline extends CustomRule {
         portRanges: _stringList(j['portRanges']),
         packages: _stringList(j['packages']),
         protocols: _stringList(j['protocols']),
+        network: _stringList(j['network']),
         ipIsPrivate: (j['ipIsPrivate'] as bool?) ?? false,
         sourceIpCidrs: _stringList(j['sourceIpCidrs']),
         sourceIpIsPrivate: (j['sourceIpIsPrivate'] as bool?) ?? false,
@@ -611,6 +641,7 @@ class CustomRuleInline extends CustomRule {
     List<String>? portRanges,
     List<String>? packages,
     List<String>? protocols,
+    List<String>? network,
     bool? ipIsPrivate,
     List<String>? sourceIpCidrs,
     bool? sourceIpIsPrivate,
@@ -637,6 +668,7 @@ class CustomRuleInline extends CustomRule {
         portRanges: portRanges ?? this.portRanges,
         packages: packages ?? this.packages,
         protocols: protocols ?? this.protocols,
+        network: network ?? this.network,
         ipIsPrivate: ipIsPrivate ?? this.ipIsPrivate,
         sourceIpCidrs: sourceIpCidrs ?? this.sourceIpCidrs,
         sourceIpIsPrivate: sourceIpIsPrivate ?? this.sourceIpIsPrivate,
@@ -671,6 +703,7 @@ class CustomRuleSrs extends CustomRule {
     this.portRanges = const [],
     this.packages = const [],
     this.protocols = const [],
+    this.network = const [],
     this.ipIsPrivate = false,
     this.sourceIpCidrs = const [],
     this.sourceIpIsPrivate = false,
@@ -696,6 +729,9 @@ class CustomRuleSrs extends CustomRule {
   List<String> packages;
   @override
   List<String> protocols;
+  /// §240 — L4-транспорт (subset of kKnownNetworks). Routing-rule level.
+  @override
+  List<String> network;
   @override
   bool ipIsPrivate;
 
@@ -750,6 +786,7 @@ class CustomRuleSrs extends CustomRule {
         if (portRanges.isNotEmpty) 'portRanges': portRanges,
         if (packages.isNotEmpty) 'packages': packages,
         if (protocols.isNotEmpty) 'protocols': protocols,
+        if (network.isNotEmpty) 'network': network,
         if (ipIsPrivate) 'ipIsPrivate': true,
         if (sourceIpCidrs.isNotEmpty) 'sourceIpCidrs': sourceIpCidrs,
         if (sourceIpIsPrivate) 'sourceIpIsPrivate': true,
@@ -770,6 +807,7 @@ class CustomRuleSrs extends CustomRule {
         portRanges: _stringList(j['portRanges']),
         packages: _stringList(j['packages']),
         protocols: _stringList(j['protocols']),
+        network: _stringList(j['network']),
         ipIsPrivate: (j['ipIsPrivate'] as bool?) ?? false,
         sourceIpCidrs: _stringList(j['sourceIpCidrs']),
         sourceIpIsPrivate: (j['sourceIpIsPrivate'] as bool?) ?? false,
@@ -789,6 +827,7 @@ class CustomRuleSrs extends CustomRule {
     List<String>? portRanges,
     List<String>? packages,
     List<String>? protocols,
+    List<String>? network,
     bool? ipIsPrivate,
     List<String>? sourceIpCidrs,
     bool? sourceIpIsPrivate,
@@ -809,6 +848,7 @@ class CustomRuleSrs extends CustomRule {
         portRanges: portRanges ?? this.portRanges,
         packages: packages ?? this.packages,
         protocols: protocols ?? this.protocols,
+        network: network ?? this.network,
         ipIsPrivate: ipIsPrivate ?? this.ipIsPrivate,
         sourceIpCidrs: sourceIpCidrs ?? this.sourceIpCidrs,
         sourceIpIsPrivate: sourceIpIsPrivate ?? this.sourceIpIsPrivate,
