@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../config/consts.dart';
 import '../../../models/channel.dart';
 
 /// §125 — тайл канала на табе Channels. Switch слева (вкл/выкл), тап по телу →
@@ -32,17 +31,14 @@ class RoutingChannelTile extends StatelessWidget {
         : '$nodeCount node${nodeCount == 1 ? '' : 's'}';
     final autoStr = channel.auto != null ? ' · auto' : '';
     final reqStr = isRequired ? ' · required' : '';
-    // §248 — detour-канал помечаем ⚙-префиксом (тот же маркер «посредника»,
-    // что у detour-серверов). Display-only: storage/label не трогаем.
-    final label = channel.label.isNotEmpty ? channel.label : channel.tag;
-
     return ListTile(
       contentPadding: const EdgeInsets.only(left: 8, right: 8),
       leading: Switch(
         value: isRequired ? true : channel.enabled,
         onChanged: isRequired ? null : onToggle,
       ),
-      title: Text(channel.isDetour ? '$kDetourTagPrefix$label' : label),
+      // §274 — ⚙-префикс detour-канала централизован в displayLabel.
+      title: Text(channel.displayLabel),
       subtitle: Text(
         '${channel.tag} · $nodesStr$autoStr$reqStr',
         style: const TextStyle(fontSize: 12),

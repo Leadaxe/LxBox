@@ -1,4 +1,5 @@
 import '../../../models/channel.dart';
+import '../../channel_mutations.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
 import '../contract/errors.dart';
@@ -8,11 +9,13 @@ import '_shared.dart';
 
 /// §238 — `/channels/*` — CRUD каналов роутинга (§125).
 ///
-/// Тонкая обёртка над `SettingsStorage.getChannels / addChannel /
-/// updateChannel / deleteChannel` — та же семантика, что у UI:
-/// vpn-1 неудаляем и всегда enabled, лимит [kMaxChannels], удаление /
-/// выключение / смена detour-роли канала лечит ссылки в storage
-/// (rules-ссылки → vpn-1, §202-механика; detour-ссылки → '', §248);
+/// Тонкая обёртка над `ChannelMutations.add / update / delete` (§275 —
+/// storage-мутация + зеркальный ресинк `_entries` контроллера одной
+/// операцией) — та же семантика, что у UI:
+/// vpn-1 неудаляем и всегда enabled, лимит [kMaxChannels]. Heal ссылок в
+/// storage: rules-ссылки → vpn-1 при удалении/выключении (§202-механика;
+/// установка detour-флага rules НЕ лечит — §274, флаг = разрешение);
+/// detour-ссылки → '' при удалении/выключении/снятии флага (§248);
 /// счётчики вылеченного — блок `healed` в ответах мутаций.
 ///
 /// Routes:
@@ -77,7 +80,7 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   final label = fieldString(body, 'label');
   final Channel created;
   try {
-    created = await SettingsStorage.addChannel(label: label);
+    created = await ChannelMutations.add(label: label);
   } on StateError catch (e) {
     // Лимит каналов — precondition, юзер может удалить лишний и повторить.
     throw Conflict(e.message);
@@ -87,12 +90,13 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
   var ch = created;
   // Свежий tag обычно ни на что не ссылается (счётчики нули), но re-create
   // тега после restore из backup может встретить stale-ссылку — heal тот же,
-  // что у PATCH, поэтому и shape ответа единый.
+  // что у PATCH, поэтому и shape ответа единый. Достижимый путь: body с
+  // `enabled:false` даёт disabling-переход, а он лечит ОБА рода ссылок.
   ChannelHealResult healed = (rules: 0, detours: 0);
   final patched = _applyPatch(ch, body);
   if (patched != null) {
     ch = patched;
-    healed = await SettingsStorage.updateChannel(ch);
+    healed = await ChannelMutations.update(ch, ctx.registry.sub);
   }
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({
@@ -109,12 +113,7 @@ Future<DebugResponse> _update(String tag, DebugRequest req, DebugContext ctx) as
   if (ch == null) throw NotFound('channel: $tag');
 
   final next = _applyPatch(ch, body) ?? ch;
-  final healed = await SettingsStorage.updateChannel(next);
-  // §248 — зеркальный ресинк in-memory _entries контроллера: без него
-  // следующий _persist()/generateConfig() воскресил бы вылеченный storage.
-  if (healed.detours > 0) {
-    ctx.registry.sub?.syncDetourChannelRefsCleared(tag);
-  }
+  final healed = await ChannelMutations.update(next, ctx.registry.sub);
   final extras = await maybeRebuild(req, ctx);
   // §238-паттерн «снапшот в ответе»: healed-счётчики — API-аналог
   // UI-SnackBar'а о вылеченных ссылках (§202/§248), heal молчаливым не бывает.
@@ -130,13 +129,9 @@ Future<DebugResponse> _delete(String tag, DebugRequest req, DebugContext ctx) as
   if (!channels.any((c) => c.tag == tag)) throw NotFound('channel: $tag');
   final ChannelHealResult healed;
   try {
-    healed = await SettingsStorage.deleteChannel(tag);
+    healed = await ChannelMutations.delete(tag, ctx.registry.sub);
   } on StateError catch (e) {
     throw Conflict(e.message); // vpn-1 is not deletable
-  }
-  // §248 — зеркальный ресинк _entries контроллера (см. _update).
-  if (healed.detours > 0) {
-    ctx.registry.sub?.syncDetourChannelRefsCleared(tag);
   }
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({
@@ -230,25 +225,16 @@ Channel? _applyPatch(Channel ch, Map<String, dynamic> body) {
   final nodeFilterInvert = fieldBool(body, 'node_filter_invert');
   final interrupt = fieldBool(body, 'interrupt_exist_connections');
 
-  // §248 — роль detour-прослойки. vpn-1 — резервная мишень heal-путей,
-  // detour ему запрещён; block в прослойке запрещён («upstream недоступен»
-  // не должен превращаться в «весь флот мёртв»). Явный include_block:true
-  // при detour-роли — отказ; унаследованный из storage при включении detour
-  // — молча нормализуем в false (merge-философия: PATCH одним полем не
-  // обязан знать про ранее выставленные галки).
+  // §248/§274 — detour-флаг = разрешение выбирать канал как detour-мишень;
+  // роль в правилах ортогональна, include_block совместим (запрет Q1 снят
+  // §274). vpn-1 — главный канал (дефолтная мишень всего и heal-резерв),
+  // detour ему запрещён: продуктовое решение.
   final detour = fieldBool(body, 'detour');
   if (detour == true && ch.isRequired) {
     throw Conflict(
-      'channel ${ch.tag} is the fallback rule target and cannot be a detour channel',
+      'channel ${ch.tag} is the primary channel and cannot be a detour channel',
     );
   }
-  if (includeBlock == true && (detour ?? ch.isDetour)) {
-    throw const Conflict(
-      'a detour channel cannot include block '
-      '("detour" and "include_block" are mutually exclusive)',
-    );
-  }
-  final dropBlock = detour == true && ch.includeBlock;
 
   final changed = label != null ||
       enabled != null ||
@@ -267,7 +253,7 @@ Channel? _applyPatch(Channel ch, Map<String, dynamic> body) {
     label: label,
     enabled: enabled,
     includeDirect: includeDirect,
-    includeBlock: dropBlock ? false : includeBlock,
+    includeBlock: includeBlock,
     nodeFilter: nodeFilter,
     nodeFilterInvert: nodeFilterInvert,
     defaultFilter: defaultFilter,

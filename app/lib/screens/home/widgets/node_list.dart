@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/home_state.dart';
+import '../../../services/channel_mutations.dart';
 import '../../../services/settings_storage.dart';
 import '../../../services/haptic_service.dart';
 import '../../../services/subscription/auto_updater.dart';
@@ -421,12 +422,10 @@ class HomeNodeList extends StatelessWidget {
     if (result == null || result.saved == null || !context.mounted) return;
 
     // Применяем сохранённый канал + rebuild конфига (паттерн node_filter_screen).
-    final healed = await SettingsStorage.updateChannel(result.saved!);
-    // §248 — зеркальный ресинк _entries: generateConfig ниже идёт от
-    // in-memory контроллера, без ресинка он воскресил бы вылеченный storage.
-    if (healed.detours > 0) {
-      subController.syncDetourChannelRefsCleared(result.saved!.tag);
-    }
+    // §275 — ChannelMutations зеркалит detour-heal в _entries: generateConfig
+    // ниже идёт от in-memory контроллера, без ресинка он воскресил бы
+    // вылеченный storage.
+    final healed = await ChannelMutations.update(result.saved!, subController);
     await controller.refreshChannelLabels();
     if (!context.mounted) return;
     final config = await subController.generateConfig();
@@ -434,8 +433,10 @@ class HomeNodeList extends StatelessWidget {
       await controller.saveParsedConfig(config);
     }
     if (!context.mounted) return;
-    // §248 — heal молчаливым не бывает (Q3): смена detour-роли/disable из
-    // этого пути тоже лечит ссылки — досказываем счётчики в том же SnackBar.
+    // §248 Q3 — heal молчаливым не бывает: flag-unset из этого пути лечит
+    // detour-ссылки (rules-часть достижима только с disable/delete, которых
+    // здесь нет; §274 убрал flag-set-heal) — досказываем счётчики в том же
+    // SnackBar.
     final healedParts = <String>[
       if (healed.rules > 0)
         '${healed.rules} rule reference(s) switched to vpn-1',

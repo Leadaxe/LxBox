@@ -2,18 +2,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/channel.dart';
 import 'package:lxbox/screens/routing_screen/routing_screen_helpers.dart';
 
-/// §248 — outbound-опции экрана Routing ([RoutingHelpers.outboundOptions]):
-/// detour-канал исключён из целей правил/route final, direct первый,
-/// block последний (§201, danger).
+/// §248/§274 — outbound-опции экрана Routing
+/// ([RoutingHelpers.outboundOptions]): detour-канал — валидная цель
+/// правил/route final (§274 снял исключение §248), label = displayLabel
+/// (⚙-префикс у detour); direct первый, block последний (§201, danger).
 void main() {
-  test('detour-канал не попадает в опции, обычный попадает', () {
+  test('§274 — detour-канал попадает в опции с ⚙-префиксом, порядок сохранён',
+      () {
     final opts = RoutingHelpers.outboundOptions(const [
       Channel(tag: 'vpn-1', label: 'Main'),
       Channel(tag: 'vpn-2', label: 'Relay', isDetour: true),
       Channel(tag: 'vpn-3', label: 'Plain'),
     ]);
-    expect(opts.map((o) => o.tag), ['direct-out', 'vpn-1', 'vpn-3', 'block']);
-    // Label канала показывается как есть.
+    expect(opts.map((o) => o.tag),
+        ['direct-out', 'vpn-1', 'vpn-2', 'vpn-3', 'block']);
+    // Label detour-канала — displayLabel с ⚙-префиксом.
+    expect(opts.firstWhere((o) => o.tag == 'vpn-2').label, '⚙ Relay');
+    // Label обычного канала показывается как есть.
     expect(opts.firstWhere((o) => o.tag == 'vpn-3').label, 'Plain');
   });
 

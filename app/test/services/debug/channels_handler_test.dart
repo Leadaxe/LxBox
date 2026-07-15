@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/channel.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/debug/context.dart';
@@ -230,7 +231,7 @@ void main() {
     });
   });
 
-  group('§248 — detour-роль канала', () {
+  group('§248/§274 — detour-роль канала', () {
     test('GET/PATCH roundtrip поля detour', () async {
       await channelsHandler(req('POST', '/channels'), ctx()); // vpn-2
       final r1 = await channelsHandler(
@@ -252,52 +253,54 @@ void main() {
       );
     });
 
-    test('detour + include_block в одном body → 409', () async {
+    test('detour + include_block в одном body — совместимы (§274)', () async {
       await channelsHandler(req('POST', '/channels'), ctx()); // vpn-2
-      await expectLater(
-        channelsHandler(
-          req('PATCH', '/channels/vpn-2',
-              body: {'detour': true, 'include_block': true}),
-          ctx(),
-        ),
-        throwsA(isA<Conflict>()),
+      final r = await channelsHandler(
+        req('PATCH', '/channels/vpn-2',
+            body: {'detour': true, 'include_block': true}),
+        ctx(),
       );
+      expect(asMap(r)['detour'], isTrue);
+      expect(asMap(r)['include_block'], isTrue);
+      final stored = (await SettingsStorage.getChannels())
+          .firstWhere((c) => c.tag == 'vpn-2');
+      expect(stored.isDetour, isTrue);
+      expect(stored.includeBlock, isTrue);
     });
 
-    test('include_block:true на уже-detour канале → 409', () async {
+    test('include_block:true на уже-detour канале — принимается (§274)',
+        () async {
       await channelsHandler(
           req('POST', '/channels', body: {'detour': true}), ctx()); // vpn-2
-      await expectLater(
-        channelsHandler(
-            req('PATCH', '/channels/vpn-2', body: {'include_block': true}),
-            ctx()),
-        throwsA(isA<Conflict>()),
-      );
+      final r = await channelsHandler(
+          req('PATCH', '/channels/vpn-2', body: {'include_block': true}),
+          ctx());
+      expect(asMap(r)['include_block'], isTrue);
+      expect(asMap(r)['detour'], isTrue);
     });
 
-    test('detour:true на канале с сохранённым include_block → нормализация',
-        () async {
-      // Унаследованный из storage block молча снимается (merge-философия:
-      // PATCH одним полем не обязан знать про ранее выставленные галки).
+    test('detour:true не трогает сохранённый include_block (§274)', () async {
+      // Запрет Q1 снят §274: PATCH одним полем detour не нормализует
+      // ранее выставленный include_block — галка выживает.
       await channelsHandler(
           req('POST', '/channels', body: {'include_block': true}), ctx());
       final r = await channelsHandler(
           req('PATCH', '/channels/vpn-2', body: {'detour': true}), ctx());
       expect(asMap(r)['detour'], isTrue);
-      expect(asMap(r)['include_block'], isFalse);
+      expect(asMap(r)['include_block'], isTrue);
       final stored = (await SettingsStorage.getChannels())
           .firstWhere((c) => c.tag == 'vpn-2');
       expect(stored.isDetour, isTrue);
-      expect(stored.includeBlock, isFalse);
+      expect(stored.includeBlock, isTrue);
     });
 
-    test('healed в PATCH: flag-set лечит rules-ссылки на канал', () async {
+    test('healed в PATCH: flag-set НЕ лечит rules-ссылки (§274)', () async {
       await channelsHandler(req('POST', '/channels'), ctx()); // vpn-2
       await SettingsStorage.saveRouteFinal('vpn-2');
       final r = await channelsHandler(
           req('PATCH', '/channels/vpn-2', body: {'detour': true}), ctx());
-      expect(asMap(r)['healed'], {'rules': 1, 'detours': 0});
-      expect(await SettingsStorage.getRouteFinal(), 'vpn-1');
+      expect(asMap(r)['healed'], {'rules': 0, 'detours': 0});
+      expect(await SettingsStorage.getRouteFinal(), 'vpn-2');
     });
 
     test('healed в DELETE: rules → vpn-1, detour-ссылки → \'\'', () async {
@@ -357,6 +360,106 @@ void main() {
         ),
         throwsA(isA<BadRequest>()),
       );
+    });
+  });
+
+  /// §275 — зеркальный ресинк `_entries` контроллера после storage-heal
+  /// detour-ссылок. Storage лечится сам; без ресинка следующий `_persist()`
+  /// воскресил бы вылеченную ссылку на диске (heal показан юзеру и отменён).
+  /// Мутации идут через `ChannelMutations`, поэтому разделить heal и ресинк
+  /// хендлер не может — тесты пиннят это поведение на всех трёх глаголах.
+  group('§275 — detour-ресинк контроллера', () {
+    /// Одиночка со stale `overrideDetour` на [tag] + rawBody (без него
+    /// `entries` контроллера пусты — нода не парсится).
+    UserServer soloWithDetour(String tag) => UserServer(
+          id: 'u1',
+          name: 'Solo',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy(overrideDetour: tag),
+          origin: UserSource.paste,
+          createdAt: DateTime.now(),
+          rawBody: 'vless://u-a@h.com:443?type=ws&security=tls#solo-node',
+        );
+
+    /// Контроллер, поднятый на том же temp-storage и вложенный в registry —
+    /// хендлер берёт его из `ctx.registry.sub`.
+    Future<SubscriptionController> seedControllerWithStaleRef(String tag) async {
+      await SettingsStorage.saveServerLists([soloWithDetour(tag)]);
+      final c = SubscriptionController();
+      await c.init();
+      expect(c.entries.single.list.detourPolicy.overrideDetour, tag,
+          reason: 'stale-ссылка должна доехать до in-memory entries');
+      DebugRegistry.I.sub = c;
+      addTearDown(() => DebugRegistry.I.sub = null);
+      return c;
+    }
+
+    test('POST /channels: heal при enabled:false зеркалится в entries',
+        () async {
+      // Сценарий restore из backup: ссылка на vpn-2 есть, самого канала нет.
+      final c = await seedControllerWithStaleRef('vpn-2');
+
+      // POST с PATCH-полем enabled:false → disabling-переход → heal обоих
+      // родов ссылок. Это достижимый путь до detours > 0 на создании.
+      final r = await channelsHandler(
+          req('POST', '/channels', body: {'enabled': false}), ctx());
+      expect(asMap(r)['healed'], {'rules': 0, 'detours': 1});
+
+      // Storage вылечен...
+      final solo = (await SettingsStorage.getServerLists()).single;
+      expect(solo.detourPolicy.overrideDetour, '');
+      // ...и зеркало контроллера тоже — иначе _persist воскресит ссылку.
+      expect(c.entries.single.list.detourPolicy.overrideDetour, '',
+          reason: 'без ресинка следующий _persist воскресил бы vpn-2');
+    });
+
+    test('POST /channels: _persist после ресинка не воскрешает ссылку',
+        () async {
+      final c = await seedControllerWithStaleRef('vpn-2');
+      await channelsHandler(
+          req('POST', '/channels', body: {'enabled': false}), ctx());
+
+      // Любая контроллерная мутация с _persist пишет entries на диск.
+      await c.renameAt(0, 'Solo Renamed');
+      SettingsStorage.resetCacheForTesting(); // читаем реально с диска
+      final saved = (await SettingsStorage.getServerLists()).single;
+      expect(saved.name, 'Solo Renamed');
+      expect(saved.detourPolicy.overrideDetour, '',
+          reason: '_persist после ресинка не должен воскрешать ссылку');
+    });
+
+    test('PATCH /channels/{tag}: flag-unset зеркалится в entries', () async {
+      await channelsHandler(
+          req('POST', '/channels', body: {'detour': true}), ctx()); // vpn-2
+      final c = await seedControllerWithStaleRef('vpn-2');
+
+      final r = await channelsHandler(
+          req('PATCH', '/channels/vpn-2', body: {'detour': false}), ctx());
+      expect(asMap(r)['healed'], {'rules': 0, 'detours': 1});
+      expect(c.entries.single.list.detourPolicy.overrideDetour, '');
+    });
+
+    test('DELETE /channels/{tag}: heal зеркалится в entries', () async {
+      await channelsHandler(
+          req('POST', '/channels', body: {'detour': true}), ctx()); // vpn-2
+      final c = await seedControllerWithStaleRef('vpn-2');
+
+      final r = await channelsHandler(req('DELETE', '/channels/vpn-2'), ctx());
+      expect(asMap(r)['healed'], {'rules': 0, 'detours': 1});
+      expect(c.entries.single.list.detourPolicy.overrideDetour, '');
+    });
+
+    test('sub == null (UI не готов): heal storage без падения', () async {
+      await SettingsStorage.saveServerLists([soloWithDetour('vpn-2')]);
+      expect(DebugRegistry.I.sub, isNull);
+
+      final r = await channelsHandler(
+          req('POST', '/channels', body: {'enabled': false}), ctx());
+      expect(asMap(r)['healed'], {'rules': 0, 'detours': 1});
+      final solo = (await SettingsStorage.getServerLists()).single;
+      expect(solo.detourPolicy.overrideDetour, '',
+          reason: 'без контроллера нет и entries, которые разъезжаются');
     });
   });
 }

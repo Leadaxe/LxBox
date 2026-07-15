@@ -8,8 +8,11 @@ import 'package:lxbox/models/validation.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 
-/// §248 — detour-каналы в билдере: block-гейт, direct-fallback пустого
-/// detour-канала, autoTag-алиас, деградация route_final, AWG→WG advisory.
+/// §248/§274 — detour-каналы в билдере. §274 сменил семантику isDetour с
+/// «роли» на «разрешение»: block-опция совместима с detour, route_final и
+/// custom-rule могут целиться в detour-канал, fallback пустого канала един
+/// для всех — [block, direct-out] c default=block (§201/§274). Остались:
+/// autoTag-алиас, AWG→WG advisory.
 /// §254 — detour-циклы больше НЕ рвутся edge-strip'ом: детектор в
 /// validateConfig возвращает fatal DetourCycle с минимальным набором
 /// виновников (группа тестов «§254 — detour-циклы»). Harness — как в
@@ -69,11 +72,10 @@ void main() {
   Map<String, dynamic> byTag(BuildResult r, String tag) =>
       outs(r).firstWhere((o) => o['tag'] == tag);
 
-  group('§248 — block-гейт и пустой fallback', () {
-    test('block не эмитится у detour-канала даже при includeBlock=true',
-        () async {
-      // includeBlock=true при isDetour — несогласованное состояние (parse-гейт
-      // fromJson такое не пропустит), билдер-гейт = defense-in-depth.
+  group('§274 — block-опция и пустой fallback', () {
+    test('block эмитится у detour-канала при includeBlock=true', () async {
+      // §274 — запрет detour×includeBlock снят (isDetour = разрешение, не
+      // роль): block-опция эмитится в селектор detour-канала как у обычного.
       final r = await build([
         vlessServer(id: 'u', names: ['A']),
       ], [
@@ -81,11 +83,16 @@ void main() {
         const Channel(
             tag: 'vpn-2', label: 'Relay', isDetour: true, includeBlock: true),
       ]);
-      expect(byTag(r, 'vpn-2')['outbounds'], isNot(contains('block')));
+      expect(byTag(r, 'vpn-2')['outbounds'], contains('block'));
+      // У всех каналов есть ноды → список пустых каналов пуст.
+      expect(r.channelsWithoutNodes, isEmpty);
     });
 
-    test('пустой detour-канал → [direct-out] c default=direct-out + warning',
+    test('пустой detour-канал → [block, direct-out] c default=block + warning',
         () async {
+      // §274 — detour-исключение §248 Q1 ([direct-out], «нет хопа») снято:
+      // fallback пустого канала единый для всех — блокировать по умолчанию,
+      // direct остаётся доступной опцией.
       final r = await build([
         vlessServer(id: 'u', names: ['A']),
       ], [
@@ -97,12 +104,16 @@ void main() {
             nodeFilter: 'no-such-node'),
       ]);
       final vpn2 = byTag(r, 'vpn-2');
-      expect(vpn2['outbounds'], ['direct-out']);
-      expect(vpn2['default'], 'direct-out');
+      expect(vpn2['outbounds'], ['block', 'direct-out']);
+      expect(vpn2['default'], 'block');
+      // Единый текст warning'а; displayLabel detour-канала — с ⚙-префиксом.
       expect(
           r.emitWarnings,
           contains(contains(
-              'Detour channel "Relay" (vpn-2): no nodes matched')));
+              'Channel "⚙ Relay" (vpn-2): node filter matched no nodes')));
+      // §274 — display-имя попадает в channelsWithoutNodes (SnackBar на
+      // Home); канал с нодами (Main) в список не попадает.
+      expect(r.channelsWithoutNodes, ['⚙ Relay']);
     });
 
     test('пустой ОБЫЧНЫЙ канал — прежний §201 [block, direct-out]', () async {
@@ -115,6 +126,59 @@ void main() {
       final vpn2 = byTag(r, 'vpn-2');
       expect(vpn2['outbounds'], ['block', 'direct-out']);
       expect(vpn2['default'], 'block');
+      // §274 — display-имя пустого канала в channelsWithoutNodes.
+      expect(r.channelsWithoutNodes, ['X']);
+      // Warning говорит правду: emptyFallback → default=block.
+      expect(r.emitWarnings,
+          contains(contains('traffic is blocked (default)')));
+    });
+
+    test(
+        'include_direct × 0 нод: первая опция direct-out, warning честен '
+        '(«goes direct», НЕ «blocked»)', () async {
+      // Адверсарное ревью §274: [direct-out] непуст → emptyFallback НЕ
+      // срабатывает, default не ставится, ядро берёт первую опцию =
+      // direct-out. Текст warning обязан отражать фактический исход.
+      final r = await build([
+        vlessServer(id: 'u', names: ['A']),
+      ], [
+        const Channel(tag: 'vpn-1', label: 'Main'),
+        const Channel(
+            tag: 'vpn-2',
+            label: 'X',
+            includeDirect: true,
+            nodeFilter: 'no-such-node'),
+      ]);
+      final vpn2 = byTag(r, 'vpn-2');
+      expect(vpn2['outbounds'], ['direct-out']);
+      expect(vpn2.containsKey('default'), isFalse);
+      expect(r.emitWarnings,
+          contains(contains('traffic goes direct (no VPN hop)')));
+      expect(r.emitWarnings,
+          isNot(contains(contains('traffic is blocked'))));
+      expect(r.channelsWithoutNodes, ['X']);
+    });
+
+    test('негативные кейсы channelsWithoutNodes: не вина фильтра — не варним',
+        () async {
+      // (а) Пустой фильтр + есть ноды подписки → канал берёт все ноды.
+      final withNodes = await build([
+        vlessServer(id: 'u', names: ['A']),
+      ], [
+        const Channel(tag: 'vpn-1', label: 'Main'),
+      ]);
+      expect(withNodes.channelsWithoutNodes, isEmpty);
+      // (б) Непустой фильтр, но подписок нет вовсе (selectorTags пуст) —
+      // 0 нод не вина фильтра, SnackBar не показываем.
+      final noSubs = await build(<ServerList>[], [
+        const Channel(tag: 'vpn-1', label: 'Main', nodeFilter: 'anything'),
+      ]);
+      expect(noSubs.channelsWithoutNodes, isEmpty);
+      // (в) Пустой фильтр и нет подписок — тоже тишина.
+      final emptyAll = await build(<ServerList>[], [
+        const Channel(tag: 'vpn-1', label: 'Main'),
+      ]);
+      expect(emptyAll.channelsWithoutNodes, isEmpty);
     });
   });
 
@@ -354,13 +418,12 @@ void main() {
     });
   });
 
-  group('§248 — restore-деградация и омонимия', () {
-    test('custom-rule на detour-канал → конфиг валиден (принятая деградация)',
+  group('§274/§248 — custom-rule на detour-канал и омонимия', () {
+    test('custom-rule на detour-канал → конфиг валиден (штатно, §274)',
         () async {
-      // Restore из бэкапа пишет мимо storage-heal: правило может ссылаться
-      // на канал, ставший detour. Селектор vpn-2 в конфиге существует —
-      // валидатор не падает; storage-heal чинит ссылку при следующей
-      // мутации канала, билдер здесь только не должен ронять старт.
+      // §274 — isDetour это разрешение, не роль: detour-канал остаётся
+      // валидной целью custom-rule outbound. Селектор vpn-2 в конфиге
+      // существует, валидатор доволен, ссылку никто не «чинит».
       final r = await buildConfig(
         lists: [vlessServer(id: 'u', names: ['A'])],
         template: template(),
@@ -411,8 +474,10 @@ void main() {
     });
   });
 
-  group('§248 — route_final не бывает detour-каналом', () {
-    test('route_final=detour-канал → vpn-1 + отдельный warning', () async {
+  group('§274 — route_final может быть detour-каналом', () {
+    test('route_final=detour-канал остаётся, warning отсутствует', () async {
+      // §274 — вычитание detour-тегов из validFinals снято: detour-канал —
+      // валидная rules-мишень, route.final не переключается на vpn-1.
       final r = await build(
         [vlessServer(id: 'u', names: ['A'])],
         [
@@ -421,15 +486,17 @@ void main() {
         ],
         routeFinal: 'vpn-2',
       );
-      expect((r.config['route'] as Map)['final'], 'vpn-1');
+      expect((r.config['route'] as Map)['final'], 'vpn-2');
       expect(
-          r.emitWarnings,
-          contains(contains(
-              'Route final "vpn-2" is a detour channel and cannot be a rule '
-              'target')));
+          r.emitWarnings, isNot(contains(contains('is a detour channel'))));
+      expect(
+          r.emitWarnings, isNot(contains(contains('switched to vpn-1'))));
     });
 
-    test('route_final=auto-двойник detour-канала → vpn-1', () async {
+    test('route_final=auto-двойник detour-канала остаётся (двойник эмитится)',
+        () async {
+      // auto включён и ноды есть → 'vpn-2-auto' реально эмитится (§219) и
+      // потому валидная мишень.
       final r = await build(
         [vlessServer(id: 'u', names: ['A'])],
         [
@@ -442,8 +509,35 @@ void main() {
         ],
         routeFinal: 'vpn-2-auto',
       );
+      expect((r.config['route'] as Map)['final'], 'vpn-2-auto');
+      expect(
+          r.emitWarnings, isNot(contains(contains('is a detour channel'))));
+    });
+
+    test('route_final=НЕэмитящийся auto-двойник (0 нод) → vpn-1 + warning',
+        () async {
+      // §219 — auto-двойник без нод не эмитится, ссылка на него висячая:
+      // деградация «no longer exists — switched to vpn-1» осталась (§274
+      // снял только detour-запрет, не гейт по фактическим outbounds).
+      final r = await build(
+        [vlessServer(id: 'u', names: ['A'])],
+        [
+          const Channel(tag: 'vpn-1', label: 'Main'),
+          const Channel(
+              tag: 'vpn-2',
+              label: 'Relay',
+              isDetour: true,
+              nodeFilter: 'no-such-node',
+              auto: ChannelAuto()),
+        ],
+        routeFinal: 'vpn-2-auto',
+      );
       expect((r.config['route'] as Map)['final'], 'vpn-1');
-      expect(r.emitWarnings, contains(contains('is a detour channel')));
+      expect(
+          r.emitWarnings,
+          contains(contains(
+              'Route final "vpn-2-auto" no longer exists — switched to '
+              'vpn-1')));
     });
 
     test('route_final=обычный канал остаётся как есть', () async {
