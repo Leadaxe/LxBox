@@ -6,7 +6,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import '../config/consts.dart' show kDetourTagPrefix;
 import '../config/route_config.dart';
 import '../vpn/box_vpn_client.dart';
 import '../vpn/cc_channel.dart';
@@ -171,11 +170,10 @@ class HomeController extends ChangeNotifier
   Future<void> refreshChannelLabels() async {
     final channels = await SettingsStorage.getChannels();
     if (_disposed) return;
-    // §248 — detour-канал получает ⚙-префикс (display-only): в dropdown и
-    // заголовках видно, что переключаешь прослойку, а не канал правил.
+    // §248/§274 — detour-канал получает ⚙-префикс (display-only,
+    // централизован в displayLabel): маркер «разрешён как detour-мишень».
     _channelLabels = {
-      for (final c in channels)
-        c.tag: c.isDetour ? '$kDetourTagPrefix${c.label}' : c.label,
+      for (final c in channels) c.tag: c.displayLabel,
     };
     // §208 — auto-теги round_robin-каналов (для гейта «View pool»).
     _roundRobinAutoTags = {

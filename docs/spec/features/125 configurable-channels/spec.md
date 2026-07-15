@@ -387,8 +387,13 @@ CRUD требует снять захардкоженные предположе
 - Home-pin / выбранный канал на главной (`home_state`) — → `vpn-1`.
 - custom-rule `outbound` ([custom_rule.dart](../../../app/lib/models/custom_rule.dart),
   кроме `kOutboundReject`/`direct-out`) — → `vpn-1`.
-- detour-ссылки на канал-tag — heal в `vpn-1` (паттерн уже есть для outbound'ов:
-  [§172 heal-dangling-detour](../../tasks/172-heal-dangling-detour.md)).
+- detour-ссылки на канал-tag — heal в `''` (None/direct), **не** в `vpn-1`:
+  канал как detour-мишень заменять другим каналом нельзя, ссылка просто
+  снимается ([§248](../248%20detour-channels/spec.md); build-time страховка для
+  detour-полей — [§172 heal-dangling-detour](../../tasks/172-heal-dangling-detour.md)).
+  Мутации каналов идут через `ChannelMutations` — storage-heal и зеркальный
+  ресинк памяти контроллера одной операцией
+  ([§275](../../tasks/275-channel-mutations-detour-resync.md)).
 
 Реализация: одна точка нормализации в билдере (резолвит набор валидных channel-tag'ов
 и схлопывает все dangling-ссылки в `vpn-1` перед сборкой), плюс немедленная

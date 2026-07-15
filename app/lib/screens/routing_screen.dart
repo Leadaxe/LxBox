@@ -9,6 +9,7 @@ import '../models/channel.dart';
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../services/builder/normalize_pinned_presets.dart';
+import '../services/channel_mutations.dart';
 import '../services/preset_on_change.dart';
 import '../services/rule_set_downloader.dart';
 import '../services/selectable_to_custom.dart';
@@ -258,9 +259,9 @@ class _RoutingScreenState extends State<RoutingScreen>
   /// значения, а не затирает их устаревшим буфером экрана.
   Future<void> _toggleChannel(Channel channel, bool val) async {
     final next = channel.copyWith(enabled: val);
-    final healed = await SettingsStorage.updateChannel(next);
+    final healed = await ChannelMutations.update(next, widget.subController);
     if (!mounted) return;
-    await _resyncHealedRefs(channel.tag, healed);
+    await _resyncHealedRefs(healed);
     if (!mounted) return;
     setState(() {
       final i = _channels.indexWhere((c) => c.tag == channel.tag);
@@ -275,13 +276,11 @@ class _RoutingScreenState extends State<RoutingScreen>
   /// §248 — heal мог переписать route_final / custom-rule outbounds в storage
   /// (→ vpn-1); подтягиваем локальные буферы экрана, иначе следующий
   /// stageChanges затёр бы вылеченные значения устаревшим буфером.
-  /// Detour-ссылки живут в `_entries` контроллера (не в буферах экрана) —
-  /// зеркальный ресинк, иначе следующий `_persist()`/`generateConfig()`
-  /// воскресил бы вылеченный storage.
-  Future<void> _resyncHealedRefs(String tag, ChannelHealResult healed) async {
-    if (healed.detours > 0) {
-      widget.subController.syncDetourChannelRefsCleared(tag);
-    }
+  ///
+  /// §275 — detour-ссылки живут в `_entries` контроллера (не в буферах
+  /// экрана); их зеркальный ресинк делает `ChannelMutations` в той же
+  /// операции, что и storage-heal — здесь только буферы экрана.
+  Future<void> _resyncHealedRefs(ChannelHealResult healed) async {
     if (healed.rules == 0) return;
     final storedFinal = await SettingsStorage.getRouteFinal();
     _routeFinal = storedFinal.isNotEmpty ? storedFinal : 'vpn-1';
@@ -292,8 +291,8 @@ class _RoutingScreenState extends State<RoutingScreen>
 
   /// §248 Q3 — heal молчаливым не бывает: SnackBar со счётчиками вылеченных
   /// ссылок после мутации канала. [ruleLead] — вводная для rules-части
-  /// («disabled» / «deleted» / «is now a detour channel»). Оба счётчика
-  /// ненулевые → один суммарный SnackBar. Нулевые → тишина.
+  /// («disabled» / «deleted»; §274 убрал flag-set-heal и его вводную).
+  /// Оба счётчика ненулевые → один суммарный SnackBar. Нулевые → тишина.
   void _notifyHealed(Channel channel, ChannelHealResult healed,
       {required String ruleLead}) {
     if (healed.rules == 0 && healed.detours == 0) return;
@@ -343,7 +342,7 @@ class _RoutingScreenState extends State<RoutingScreen>
   }
 
   Future<void> _addChannel() async {
-    final created = await SettingsStorage.addChannel();
+    final created = await ChannelMutations.add();
     if (!mounted) return;
     setState(() {
       _channels.add(created);
@@ -364,9 +363,10 @@ class _RoutingScreenState extends State<RoutingScreen>
     if (result.wasDeleted) {
       // deleteChannel в storage лечит ссылки: rules → vpn-1 (§202),
       // detour-ссылки → None (§248). Счётчики — в SnackBar ниже.
-      final healed = await SettingsStorage.deleteChannel(channel.tag);
+      final healed =
+          await ChannelMutations.delete(channel.tag, widget.subController);
       if (!mounted) return;
-      await _resyncHealedRefs(channel.tag, healed);
+      await _resyncHealedRefs(healed);
       if (!mounted) return;
       setState(() {
         _channels.removeWhere((c) => c.tag == channel.tag);
@@ -376,11 +376,12 @@ class _RoutingScreenState extends State<RoutingScreen>
       _notifyHealed(channel, healed, ruleLead: 'deleted');
     } else if (result.saved != null) {
       final saved = result.saved!;
-      // §202/§248 — persist через updateChannel: disable и смена detour-роли
-      // лечат ссылки покинутого рода, счётчики — в SnackBar ниже.
-      final healed = await SettingsStorage.updateChannel(saved);
+      // §202/§248/§274 — persist канала: disable лечит оба рода ссылок,
+      // flag-unset — detour-ссылки; счётчики — в SnackBar ниже.
+      // §275 — ChannelMutations зеркалит detour-heal в _entries контроллера.
+      final healed = await ChannelMutations.update(saved, widget.subController);
       if (!mounted) return;
-      await _resyncHealedRefs(saved.tag, healed);
+      await _resyncHealedRefs(healed);
       if (!mounted) return;
       setState(() {
         final i = _channels.indexWhere((c) => c.tag == channel.tag);
@@ -388,11 +389,11 @@ class _RoutingScreenState extends State<RoutingScreen>
         _invalidateOutboundOptions();
       });
       _markDirty();
-      // rules-ссылки лечатся и при disable, и при flag-set (§248) — вводную
-      // выбираем по фактическому переходу (disable покрывает оба рода).
-      final disabled = channel.enabled && !saved.enabled;
-      _notifyHealed(saved, healed,
-          ruleLead: disabled ? 'disabled' : 'is now a detour channel');
+      // §274 — rules-ссылки лечатся только при disable (flag-set больше не
+      // heal-триггер: detour-флаг — разрешение, канал остаётся целью
+      // правил). ruleLead поэтому один; detours-часть (flag-unset) свою
+      // вводную берёт в _notifyHealed.
+      _notifyHealed(saved, healed, ruleLead: 'disabled');
     }
     // §125 — обновить tag→label кеш для home-dropdown (label мог измениться,
     // канал мог удалиться). stageChanges уже застейджила channels; здесь только

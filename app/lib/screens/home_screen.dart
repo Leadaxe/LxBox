@@ -180,6 +180,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _prevTunnel = _controller.state.tunnel;
     _prevError = _controller.state.lastError;
     _controller.addListener(_onControllerChange);
+    // §274 — «канал не нашёл узлов» после сборки конфига → транзиентный
+    // SnackBar (паттерн §166: всплывашка снизу, не баннер).
+    _prevNoNodesStamp = _subController.channelsWithoutNodesStamp;
+    _subController.addListener(_onChannelsWithoutNodes);
     // §076: global home-return observer триггерит auto-rebuild когда
     // юзер возвращается на home с любого settings screen'а.
     homeReturnObserver.setHandler(_onReturnToHome);
@@ -227,6 +231,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       info,
       onShown: () => _updateSnackbarShown = true,
     ));
+  }
+
+  /// §274 — сборка конфига нашла каналы с фильтром-без-совпадений (канал
+  /// схлопнулся в block): исчезающая всплывашка снизу. Дедуп по stamp —
+  /// один показ на сборку.
+  int _prevNoNodesStamp = 0;
+  void _onChannelsWithoutNodes() {
+    final stamp = _subController.channelsWithoutNodesStamp;
+    if (stamp == _prevNoNodesStamp) return;
+    _prevNoNodesStamp = stamp;
+    final names = _subController.channelsWithoutNodes;
+    if (names.isEmpty) return;
+    final msg = names.length == 1
+        ? 'Channel "${names.first}" matched no nodes — check its node filter.'
+        : '${names.length} channels matched no nodes — check their node '
+            'filters.';
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Без hideCurrentSnackBar: этот показ соседствует с actionable-снеками
+      // того же rebuild-флоу («Config rebuilt … restart VPN», heal-счётчики)
+      // — гасить их нельзя, встаём в очередь ScaffoldMessenger.
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 5),
+      ));
+    });
   }
 
   void _onControllerChange() {
@@ -402,6 +433,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _filter.removeListener(_onFilterChanged);
     _filter.dispose();
     _controller.removeListener(_onControllerChange);
+    _subController.removeListener(_onChannelsWithoutNodes);
     UpdateChecker.I.latest.removeListener(_onLatestUpdateChanged);
     WidgetsBinding.instance.removeObserver(this);
     homeReturnObserver.clearHandler();
