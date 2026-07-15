@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |------|----------|
-| Статус | Реализовано; analyze чист, 1882 тестов зелёные; device-verification pending |
+| Статус | РЕЛИЗ v2.15.6 (2026-07-15); device-verified на CPH2411 (сборка 2.15.5-dev.5) |
 | Дата старта | 2026-07-15 |
 | Дата завершения | 2026-07-15 |
 | Коммиты | develop, 15.07.2026 (один атомарный коммит кода+тестов+доков) |
@@ -293,12 +293,16 @@ flag-set — честный 0 (формат ответа не меняется).
   §248 — вычищен попутно при реализации.
 - features/125 spec.md:390 («detour-ссылки → vpn-1») устарел ещё при §248 —
   вне скоупа, по желанию отдельной микроправкой.
-- **Pre-existing (§248-эра, не §274)**: Debug API `_create`
+- ~~**Pre-existing (§248-эра, не §274)**: Debug API `_create`
   (handlers/channels.dart:~91-96) не зовёт `syncDetourChannelRefsCleared`
   при `healed.detours > 0` (в отличие от `_update`/`_delete`) — re-create
   тега после restore может дать воскрешение вылеченного storage из
   in-memory `_entries`. Найдено адверсарным ревью §274, вынесено отдельной
-  задачей.
+  задачей.~~ → **закрыто [§275](275-channel-mutations-detour-resync.md)**
+  (v2.15.6): достижимость подтверждена пробником и на устройстве (`POST
+  /channels {"enabled": false}` → disabling-переход → `detours: 1`); мутации
+  каналов переведены на `ChannelMutations` (heal + ресинк одной операцией),
+  голый storage закрыт `@visibleForTesting`.
 - UI-слой уведомления «канал без узлов» (stamp/listener/dedup в
   home_screen) покрыт только ручной верификацией — юнитов на
   ChangeNotifier-цепочку нет (билдер-слой покрыт).

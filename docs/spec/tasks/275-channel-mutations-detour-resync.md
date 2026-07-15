@@ -2,7 +2,7 @@
 
 | Поле | Значение |
 |---|---|
-| Статус | Готово, не device-verified (Debug API + внутренний инвариант; UI-пути не меняли поведение) |
+| Статус | РЕЛИЗ v2.15.6 (2026-07-15); DEVICE-VERIFIED на CPH2411 — полный цикл через Debug API |
 | Связанные спеки | §248 (detour-каналы, «Зеркальный ресинк контроллера (ОБЯЗАТЕЛЕН)»), §202 (heal rules-ссылок), §238 (Debug API `/channels`), §125 (каналы) |
 | Ядро | не затронуто |
 
@@ -119,4 +119,32 @@ detour-половина уехала в сервис.
 «без ресинка следующий `_persist` воскресил бы vpn-2». Тесты ловят баг, а не
 подогнаны под зелёный.
 
-Итог: `flutter analyze` — No issues found; `flutter test` — 1872 passed.
+Итог: `flutter analyze` — No issues found; `flutter test` — 1872 passed (после
+мержа с §274 в develop — 1887).
+
+## Device-verification (CPH2411, Android 15, 15.07.2026)
+
+Сборка `2.15.5-dev.5` (§274 + §275), ядро `v1.14.0-lx.5`. Полный цикл через
+Debug API на выключенном UserServer (боевой трафик не затронут):
+
+| Шаг | Результат |
+|---|---|
+| Создать vpn-6 (detour) + `override_detour: vpn-6` на сервер | ссылка на месте |
+| `DELETE /channels/vpn-6` | `healed: {rules: 0, detours: 1}`, ссылка → `''` |
+| Снова навесить `override_detour: vpn-6` (канала нет) | stale-ссылка = сцена restore из backup |
+| **`POST /channels {"enabled": false}`** | `healed: {rules: 0, detours: 1}` — **ветка достижима на живом устройстве** |
+| `PATCH /subs/{id}` → `tag_prefix` (дёргает `_persist`) | `tag_prefix` доехал до диска ⇒ `_persist` точно был |
+| Пере-чтение storage | `override_detour: ''` — **ссылка не воскресла** |
+
+Логика доказательства: `_persist` пишет весь `ServerList` из памяти вместе с
+`detourPolicy`; раз `tag_prefix` записался, а `override_detour` пуст — значит в
+памяти он тоже был пуст, то есть ресинк сработал. Без §275 `_persist` вернул бы
+`vpn-6` на диск.
+
+**Грабля проверки**: первым дёргали `PATCH /subs/{id}` с полем `name` — оно
+вернуло `null` и `_persist` не произошёл бы, а тест всё равно «позеленел» бы
+(нечему воскресать). Причина — §243: `UserServer.name` мёртв, слит в Tag.
+Рабочий триггер `_persist` — `tag_prefix`.
+
+За собой убрано: тестовый канал удалён, `tag_prefix` возвращён в `''`, каналов
+снова 5, туннель работает.

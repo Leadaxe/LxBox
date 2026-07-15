@@ -13,6 +13,9 @@ Debug API умел мутировать rules / subs / settings, но два б�
    vpn-1 неудаляем и всегда enabled, лимит 10, деградация ссылок
    route_final / custom-rule → vpn-1 при удалении/выключении — §202-механика
    внутри storage).
+   > С [§275](275-channel-mutations-detour-resync.md) (v2.15.6) хендлер зовёт не
+   > storage напрямую, а `ChannelMutations.add/update/delete` — heal и зеркальный
+   > ресинк `_entries` контроллера одной операцией. Семантика эндпоинтов та же.
 2. **Папки серверов §234** (`FolderServers` в `server_lists`) — CRUD
    `/folders/*` поверх публичных методов `SubscriptionController`
    (addFolder / deleteFolderAt / addMembersToFolder / addUrlSnapshotToFolder /
