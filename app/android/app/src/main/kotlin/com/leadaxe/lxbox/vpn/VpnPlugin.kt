@@ -131,10 +131,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             if (intent?.action != BoxVpnService.BROADCAST_STATUS) return
             val name = intent.getStringExtra(BoxVpnService.EXTRA_STATUS) ?: return
             val error = intent.getStringExtra("error")
-            Log.d(TAG, "[vpn] plugin.statusReceiver.onReceive name=$name${if (error != null) " error=$error" else ""} sink=${statusSink != null}")
+            // §276 — признак перехвата слота чужим VPN (едет рядом со Stopped).
+            val revoked = intent.getBooleanExtra(BoxVpnService.EXTRA_REVOKED, false)
+            Log.d(TAG, "[vpn] plugin.statusReceiver.onReceive name=$name${if (error != null) " error=$error" else ""}${if (revoked) " revoked=true" else ""} sink=${statusSink != null}")
             mainHandler.post {
                 val event = mutableMapOf<String, Any>("status" to name)
                 if (error != null) event["error"] = error
+                if (revoked) event[BoxVpnService.EXTRA_REVOKED] = true
                 // §155 — sink может указывать на мёртвый Dart-engine (process
                 // killed / engine detached между post и доставкой). success()
                 // тогда бросает DeadObjectException на main thread → краш всего
@@ -304,7 +307,15 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // Pull-метод для re-sync UI после reattach Flutter-процесса
                 // (broadcast'ятся только переходы — если service уже Started,
                 // новый плагин ничего не получит без явного запроса).
-                result.success(BoxVpnService.currentStatus.name)
+                // §276 — map вместо голой строки: иначе UI, вернувшийся из фона
+                // после перехвата слота, потеряет revoked и покажет нейтральный
+                // Disconnected вместо «Taken by another VPN».
+                result.success(
+                    mapOf(
+                        "status" to BoxVpnService.currentStatus.name,
+                        BoxVpnService.EXTRA_REVOKED to BoxVpnService.currentRevoked,
+                    )
+                )
             }
             // Есть ли сейчас активный ЧУЖОЙ VPN (другое приложение)? UI спрашивает
             // перед ручным стартом, чтобы показать «переключиться?» вместо молчаливого

@@ -69,10 +69,12 @@ Future<void> _resyncOnResume() async {
 
 ### Интеграция с P2 revoke UX
 
-Если native возвращает `Revoked`, а наш state был `connected` (пропустили broadcast onRevoke):
-- `_handleStatusEvent({'status': 'Revoked'})` → tunnel = revoked
+Если native сообщает о перехвате слота, а наш state был `connected` (пропустили broadcast onRevoke):
+- `_handleStatusEvent({'status': 'Stopped', 'revoked': true})` → tunnel = revoked
 - `_onControllerChange` в HomeScreen увидит transition `connected → revoked`
-- → SnackBar «VPN taken by another app»
+- → всплывашка снизу с текстом про перехват слота (общий обработчик §166)
+
+> **§276.** Раньше здесь было `{'status': 'Revoked'}` — такого статуса native не слал никогда (`VpnStatus` = 4 значения), поэтому pull на resume отдавал голый `Stopped` и revoke терялся. Теперь `getVpnStatus` возвращает `{status, revoked}`, и признак перехвата переживает фон.
 
 То есть P3 и P2 работают вместе: если юзер вернулся в app после того как кто-то перехватил tunnel пока мы были в background — получит тот же UX что и live revoke.
 

@@ -17,13 +17,16 @@ enum TunnelStatus {
 
   bool get isUp => this == connected;
 
-  static TunnelStatus fromNative(String raw) {
+  /// §276 — [revoked] приходит отдельным флагом рядом со `Stopped`, а НЕ
+  /// статус-строкой: native-`VpnStatus` — это лишь 4 значения, `"Revoked"` он
+  /// не слал никогда (весь revoke-UX был мёртвым кодом). Терминальный статус
+  /// остаётся `Stopped`, иначе teardown в native виснет — см. EXTRA_REVOKED.
+  static TunnelStatus fromNative(String raw, {bool revoked = false}) {
     return switch (raw) {
       'Started' => connected,
       'Starting' => connecting,
-      'Stopped' => disconnected,
+      'Stopped' => revoked ? TunnelStatus.revoked : disconnected,
       'Stopping' => stopping,
-      'Revoked' => revoked,
       _ => unknown,
     };
   }
@@ -61,7 +64,9 @@ class TunnelStatusEvent {
   factory TunnelStatusEvent.fromNative(Map<dynamic, dynamic> raw) {
     final rawStatus = raw['status']?.toString() ?? '';
     return TunnelStatusEvent(
-      status: TunnelStatus.fromNative(rawStatus),
+      // §276 — `revoked: true` рядом со `Stopped` = слот забрало другое
+      // VPN-приложение (native onRevoke), а не наш штатный стоп.
+      status: TunnelStatus.fromNative(rawStatus, revoked: raw['revoked'] == true),
       raw: rawStatus,
       errorReason: _extractReason(raw),
     );
