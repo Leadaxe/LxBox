@@ -354,7 +354,14 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                     'can be picked as a detour target for servers and folders',
                     style: TextStyle(fontSize: 11)),
                 value: _isDetour,
-                onChanged: (v) => setState(() => _isDetour = v ?? false),
+                // §274 — ⚙ живёт в самом label: переименовываем поле СРАЗУ,
+                // не дожидаясь Save (нормализация в _snapshot/copyWith —
+                // страховка). Пустой label не трогаем: display-фолбэк на tag.
+                onChanged: (v) => setState(() {
+                  _isDetour = v ?? false;
+                  _labelCtrl.text = Channel.normalizeLabel(
+                      _labelCtrl.text.trim(), _isDetour);
+                }),
               ),
             CheckboxListTile(
               dense: true,
