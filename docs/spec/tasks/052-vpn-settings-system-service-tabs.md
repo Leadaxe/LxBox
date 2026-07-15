@@ -174,6 +174,10 @@ Cons: muscle memory у current users; нужны UX-cues при первом ope
 | App Settings → Background tab → bottom RadioGroup | VPN Settings → System tab | `Tunnel sleep mode` (state, handler, UI — `BackgroundMode` enum import) |
 | App Settings → Background tab → "System setup" section | App Settings → Diagnostics tab | 5 ListTile (Battery / Notifications / Location / Nearby Wi-Fi / App info) — interactive c onTap, без переделки |
 
+> **UPD**: позже в System tab добавлены «Suspend idle tunnels» (§215) и
+> «Memory limit» (§271) — состав секции Optimization см.
+> `docs/spec/features/128 idle-suspend/spec.md` (раздел UX).
+
 Что **не** переехало:
 - `Auto-start on boot` — остался в App Settings → General (autostart app, не Builder API).
 - Tunnel apps — остался в Routing → 4-я вкладка (per-app routing с user-perspective).

@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/background_mode.dart';
 import '../models/channel.dart';
+import '../models/memory_limit_setting.dart';
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../models/server_list.dart';
@@ -756,6 +757,10 @@ class SettingsStorage {
       _setNativeBool(key, value);
   static Future<void> setNativeBackgroundMode(String wireValue) =>
       _setNativeBackgroundMode(wireValue);
+  // §271 — memory limit ядра (wire-значения в MemoryLimitSetting).
+  static Future<String> getNativeMemoryLimit() => _getNativeMemoryLimit();
+  static Future<void> setNativeMemoryLimit(String wireValue) =>
+      _setNativeMemoryLimit(wireValue);
 
   /// Старт: bootstrap (первый запуск §189 — seed native⇒JSON) или sync
   /// (JSON⇒native). Зовётся из app init до UI.

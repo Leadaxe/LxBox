@@ -54,6 +54,10 @@ crashReportSource = "lxbox"           // stderr → CrashReport-lxbox.log
 - **200 MB** (решение пользователя): soft-limit `200*3/4 ≈ 150 MB` → GC
   агрессивнее, меньше шансов под lowmemorykiller; мягче чем 100 MB (нет
   GC-thrashing на больших подписках), но безопаснее 256+ на устройствах 1-2GB.
+- **UPD §271**: хардкод 200 MB вызывал GC-шторм и перегрев CPU на конфигах с
+  большой живой кучей (WG-пулы) — лимит стал настраиваемым (VPN Settings →
+  System → Optimization → Memory limit; Auto по RAM устройства / Off / пресеты
+  МБ). См. `docs/spec/tasks/271-configurable-memory-limit.md`.
 - **crashReportSource="lxbox"**: восстанавливает stderr-диагностику §038,
   потерянную с удалением `redirectStderr` в 1.14.
 

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../models/app_info.dart';
 import '../models/background_mode.dart';
+import '../models/memory_limit_setting.dart';
 import '../models/tunnel_status.dart';
 import '../services/app_log.dart';
 import '../services/platform_channels.dart';
@@ -514,6 +515,30 @@ class BoxVpnClient {
     await _invoke<void>(
       _Methods.setBackgroundMode,
       args: {'mode': mode.wireValue},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: null,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Memory limit (§271)
+  // ---------------------------------------------------------------------------
+
+  /// Memory limit ядра — wire-значения в [MemoryLimitSetting]. Native применяет
+  /// новое значение к работающему ядру немедленно (reloadSetupOptions).
+  Future<String> getMemoryLimit() async {
+    final v = await _invoke<String>(
+      _Methods.getMemoryLimit,
+      timeout: _Timeouts.settings,
+      onTimeoutValue: null,
+    );
+    return MemoryLimitSetting.normalize(v);
+  }
+
+  Future<void> setMemoryLimit(String value) async {
+    await _invoke<void>(
+      _Methods.setMemoryLimit,
+      args: {'value': MemoryLimitSetting.normalize(value)},
       timeout: _Timeouts.settings,
       onTimeoutValue: null,
     );
