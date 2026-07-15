@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/background_mode.dart';
@@ -281,16 +282,29 @@ class SettingsStorage {
       _setChannels(channels, flush: flush);
 
   /// Добавить канал: первый свободный 'vpn-N' (N∈2..10). Throws при лимите 10.
+  ///
+  /// §275 — код приложения зовёт `ChannelMutations.add`: мутаторы каналов
+  /// парные с ресинком контроллера, здесь — только storage-половина.
+  @visibleForTesting
   static Future<Channel> addChannel({String? label}) => _addChannel(label: label);
 
   /// Обновить канал по [Channel.tag]. Throws если tag не найден.
   /// §248 — возвращает счётчики вылеченных ссылок (disable/flag-set →
   /// rules-ссылки → vpn-1; disable/flag-unset → detour-ссылки → '').
+  ///
+  /// §275 — код приложения зовёт `ChannelMutations.update`: detour-heal ОБЯЗАН
+  /// зеркалиться в `_entries` контроллера, иначе следующий `_persist()`
+  /// воскресит вылеченную ссылку. Голый вызов из `lib/` — предупреждение
+  /// analyze'а (это и есть страховка от «забыл ресинк»).
+  @visibleForTesting
   static Future<ChannelHealResult> updateChannel(Channel channel) =>
       _updateChannel(channel);
 
   /// Удалить канал. Throws для 'vpn-1'. Переводит rules-ссылки на 'vpn-1',
   /// §248 detour-ссылки — на '' (None); возвращает счётчики.
+  ///
+  /// §275 — код приложения зовёт `ChannelMutations.delete` (см. выше).
+  @visibleForTesting
   static Future<ChannelHealResult> deleteChannel(String tag) =>
       _deleteChannel(tag);
 
