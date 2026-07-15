@@ -315,10 +315,13 @@ class _SettingsScreenState extends State<SettingsScreen>
           onChanged: _toggleInterruptOnSwitch,
         ),
         const Divider(height: 32),
+        // §272 — секция WireGuard connections: оба idle-suspend порога ядра
+        // (lx_idle_suspend / lx_idle_suspend_reachable, SPEC 020).
         const TemplateSectionHeader(
-          title: 'Optimization',
+          title: 'WireGuard connections',
           description:
-              'Memory and battery tuning for WireGuard tunnels and VPN lifecycle',
+              'Sleep WireGuard/AmneziaWG tunnels to save battery and memory. '
+              'Sleeping tunnels wake automatically on first use.',
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -409,6 +412,11 @@ class _SettingsScreenState extends State<SettingsScreen>
               unawaited(_applyIdleSuspendReachable(v));
             },
           ),
+        ),
+        const Divider(height: 32),
+        const TemplateSectionHeader(
+          title: 'Optimization',
+          description: 'Health checks, memory and VPN lifecycle',
         ),
         // §272 — passive health check (urltest.passive_check).
         SwitchListTile(
