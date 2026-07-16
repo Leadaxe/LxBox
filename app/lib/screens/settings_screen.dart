@@ -368,7 +368,9 @@ class _SettingsScreenState extends State<SettingsScreen>
         // усыпление ДОСТИЖИМЫХ туннелей (члены пула, выбранный узел) после
         // долгого простоя. Активно только при включённом idle-suspend выше
         // (ядро отвергает reachable без базового порога — генератор и так
-        // не эмитит, UI просто отражает зависимость).
+        // не эмитит). §277 — зависимость выражена disabled-состоянием
+        // дропдауна, а НЕ ранним return в onChanged: немой гейт давал
+        // видимость выбора без сохранения («значение откатывается»).
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
           child: Column(
@@ -384,7 +386,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                 'selected node) to sleep after a long quiet period — e.g. '
                 'overnight. The first connection after sleep adds ~1 round '
                 'trip. Keep this at or above the channels\' idle timeout '
-                '(30 min by default).',
+                '(30 min by default). Requires "Suspend idle tunnels" to '
+                'be on.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -396,9 +399,12 @@ class _SettingsScreenState extends State<SettingsScreen>
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
           child: DropdownButtonFormField<String>(
             initialValue: _idleSuspendReachable,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
               isDense: true,
+              // §277 — зеркалит onChanged: в disabled-состоянии серым
+              // становится и рамка, не только контент.
+              enabled: _vpnLoaded && _idleSuspend.isNotEmpty,
             ),
             items: const [
               DropdownMenuItem<String>(value: '', child: Text('Off')),
@@ -407,10 +413,14 @@ class _SettingsScreenState extends State<SettingsScreen>
               DropdownMenuItem<String>(value: '30m', child: Text('30 minutes')),
               DropdownMenuItem<String>(value: '1h', child: Text('1 hour')),
             ],
-            onChanged: (String? v) {
-              if (!_vpnLoaded || v == null || _idleSuspend.isEmpty) return;
-              unawaited(_applyIdleSuspendReachable(v));
-            },
+            // §277 — onChanged: null = честный disabled (серый дропдаун),
+            // пока базовый порог выключен.
+            onChanged: (!_vpnLoaded || _idleSuspend.isEmpty)
+                ? null
+                : (String? v) {
+                    if (v == null) return;
+                    unawaited(_applyIdleSuspendReachable(v));
+                  },
           ),
         ),
         const Divider(height: 32),
