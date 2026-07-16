@@ -101,11 +101,41 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   /// Индекс entry по ссылке — список мог сместиться (reorder/delete).
   int get _index => widget.controller.entries.indexOf(widget.entry);
 
+  // §278 — entry может исчезнуть из controller.entries при открытом экране
+  // (DELETE /folders через Debug API §238; restore из backup → init()
+  // пересоздаёт все entries). Осиротевший экран выглядел рабочим, но каждое
+  // действие молча умирало в гейтах `if (_index < 0) return` — тот же
+  // анти-паттерн «немой гейт», что §277. Слушатель контроллера закрывает
+  // экран; сами гейты остаются защитой окна в один кадр до pop'а.
+  bool _leaving = false;
+
+  void _onEntriesChanged() {
+    if (_leaving || _index >= 0) return;
+    _leaving = true;
+    // notifyListeners может прийти во время build → pop после кадра.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final route = ModalRoute.of(context);
+      if (route == null || !route.isActive) return;
+      if (route.isCurrent) {
+        Navigator.pop(context);
+      } else {
+        // Экран не верхний (диалог/шит/пикер поверх) — снимаем именно наш
+        // роут, обычный pop снял бы чужой верхний.
+        Navigator.of(context).removeRoute(route);
+      }
+    });
+    // Пост-кадровый колбэк сам кадр не планирует — не полагаемся на то, что
+    // кадр запросят другие слушатели контроллера (home/subs-экраны).
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
     _nameCtrl = TextEditingController(text: widget.entry.name);
+    widget.controller.addListener(_onEntriesChanged); // §278
     unawaited(_loadThresholds());
     unawaited(_loadChannels());
     final focus = widget.focusMemberIndex;
@@ -154,6 +184,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
 
   @override
   void dispose() {
+    widget.controller.removeListener(_onEntriesChanged); // §278
     // Отмена доводит run() до finally → probeStop (сессия не повисает).
     _runner?.cancel();
     _tabCtrl.dispose();
@@ -475,6 +506,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   }
 
   Future<void> _editThresholds() async {
+    if (!mounted) return; // §278 — см. _editMember
     final g = TextEditingController(text: '${_thresholds.greenMs}');
     final y = TextEditingController(text: '${_thresholds.yellowMs}');
     final o = TextEditingController(text: '${_thresholds.orangeMs}');
@@ -582,8 +614,21 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
       if (mounted) Navigator.pop(context);
       return;
     }
-    await widget.controller
-        .deleteFolderAt(idx, keepServers: choice == 'keep');
+    // §278 — свой явный pop ниже; гасим авто-pop слушателя (двойной pop
+    // снял бы экран под нами).
+    _leaving = true;
+    try {
+      await widget.controller
+          .deleteFolderAt(idx, keepServers: choice == 'keep');
+    } catch (_) {
+      // deleteFolderAt мог упасть ПОСЛЕ removeAt (на _persist): notify и наш
+      // pop ниже не случатся, а защёлка навсегда заглушила бы авто-pop —
+      // экран стал бы вечным зомби с немыми гейтами. Снимаем и добираем
+      // осиротение вручную (упавший вызов сам не нотифицировал).
+      _leaving = false;
+      _onEntriesChanged();
+      rethrow;
+    }
     if (mounted) Navigator.pop(context);
   }
 
@@ -707,6 +752,9 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   // ───────────────────────── Member actions ─────────────────────────
 
   Future<void> _editMember(int memberIndex) async {
+    // §278 — тап из шита, пережившего removeRoute экрана: State unmounted,
+    // геттер context бросит на первой же строке (showDialog).
+    if (!mounted) return;
     final member = _folder.members[memberIndex];
     final ctl = TextEditingController(text: member.raw);
     final newRaw = await showDialog<String>(
@@ -744,6 +792,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   }
 
   Future<void> _moveMember(int memberIndex) async {
+    if (!mounted) return; // §278 — см. _editMember
     final toIndex = await showFolderPicker(context, widget.controller,
         excludeId: widget.entry.id);
     if (toIndex == null || !mounted) return;
@@ -767,6 +816,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
   }
 
   Future<void> _deleteMember(int memberIndex) async {
+    if (!mounted) return; // §278 — см. _editMember
     final member = _folder.members[memberIndex];
     final confirmed = await showDialog<bool>(
       context: context,

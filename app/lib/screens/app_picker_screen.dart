@@ -166,7 +166,10 @@ class _AppPickerScreenState extends State<AppPickerScreen> {
             PopupMenuButton<String>(
               onSelected: (v) {
                 // Bulk-actions бессмысленны пока список не загрузился.
-                if (_loading && v != 'system') return;
+                // §278 — export исключён из гейта: он читает только _selected
+                // (инициализирован синхронно из widget.selected), список
+                // приложений ему не нужен — а пункт меню и так enabled.
+                if (_loading && v != 'system' && v != 'export') return;
                 switch (v) {
                   case 'select_all': _selectAll();
                   case 'deselect_all': _deselectAll();
