@@ -167,6 +167,25 @@ Future<void> _bootstrapAndSyncNativePrefs() async {
   // §192 — has_tun = производное от vpn_mode (не настройка, не бэкапится).
   // Синхронизируем на старте: гейтит VpnService.prepare() (proxy → не звать).
   await _syncHasTunToNative();
+  // §279 — app_language: пере-пуш derived cache на каждом старте (как sync
+  // выше — диск-истина перезаливает native-копию).
+  await _mirrorAppLanguageToNative(await SettingsStorage.getAppLanguage());
+}
+
+/// §279 — зеркало `app_language` в native (`boxvpn_boot`). Документированное
+/// исключение из правила §189 «прямые native-записи эфемерны»: `app_language`
+/// НЕ член [NativePrefsKeys] (членство экспортировало бы его вторым
+/// представлением в vpn_settings-блок бэкапа с неопределённым precedence на
+/// import). Его boxvpn_boot-копия — derived cache: единственный источник
+/// истины — var в lxbox_settings.json; кэш пере-пушится setAppLanguage и
+/// bootstrapAndSyncNativePrefs. Best-effort: native-handler появляется в
+/// Phase 6 фичи l10n — до того вызов падает в notImplemented и глотается.
+Future<void> _mirrorAppLanguageToNative(String value) async {
+  try {
+    await BoxVpnClient().setAppLanguage(value);
+  } catch (_) {
+    // JSON остаётся истиной; native-поверхности догонят при следующем пуше.
+  }
 }
 
 /// §192 — зеркалить has_tun (из vpn_mode) в native. Вычисляемое, не в backup.

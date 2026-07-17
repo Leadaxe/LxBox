@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/home_screen.dart';
 import 'services/app_log.dart';
+import 'services/l10n/l10n.dart';
+import 'services/l10n/locale_controller.dart';
 import 'services/automation/automation_dispatcher.dart';
 import 'services/automation/event_emitter.dart';
 import 'services/clash_log_pump.dart';
@@ -68,6 +71,13 @@ void main() async {
     // ДО UI (UI читает native-тумблеры из JSON-зеркала) и ДО возможного
     // авто-старта VPN. best-effort: ошибка не валит запуск (try выше).
     await SettingsStorage.bootstrapAndSyncNativePrefs();
+    // §279 — язык приложения: применить сохранённую настройку ДО runApp
+    // (первый кадр локализован) и ДО seed-миграций ниже (seed-time метки
+    // резолвятся через активную локаль — TemplateLoader.load() кладёт кэш
+    // под effectiveTag). Observer ловит смену языка устройства при
+    // setting=='system' (didChangeLocales). best-effort (try выше).
+    LocaleController.I.bootstrap(await SettingsStorage.getAppLanguage());
+    WidgetsBinding.instance.addObserver(LocaleController.I);
     // §125 F0 — one-shot миграция enabled_groups[] → channels[] (seed состава
     // каналов из template на первом запуске). Идемпотентна. ДО первого билда
     // конфига, чтобы билдер (после F1) читал channels[] как source-of-truth.
@@ -203,9 +213,14 @@ class LxBoxApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // §279 — merged Listenable: смена локали = механизм themeNotifier
+    // (rebuild единственного MaterialApp, без remount и подъёма контроллеров).
     return AnimatedBuilder(
-      animation: themeNotifier,
+      animation: Listenable.merge([themeNotifier, LocaleController.I]),
       builder: (context, _) {
+        // §279 — L10n.current всегда отслеживает применяемую локаль (в т.ч.
+        // system-резолюцию: effective повторяет fallback supportedLocales→en).
+        L10n.current = lookupAppLocalizations(LocaleController.I.effective);
         return MaterialApp(
           title: 'L×Box',
           theme: ThemeData(
@@ -220,6 +235,18 @@ class LxBoxApp extends StatelessWidget {
             useMaterial3: true,
           ),
           themeMode: themeNotifier.mode,
+          // §279 — 'system' → locale: null (резолвит Flutter по языку
+          // устройства), явный выбор — фиксированная локаль.
+          locale: LocaleController.I.setting == 'system'
+              ? null
+              : LocaleController.I.effective,
+          supportedLocales: LocaleController.supportedLocales,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
           // §076: global observer срабатывает на возврат на home (root)
           // — auto-rebuild config'а если configDirty.
           navigatorObservers: [homeReturnObserver],

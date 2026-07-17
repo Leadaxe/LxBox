@@ -1,0 +1,11 @@
+# §279 — gen_l10n конфиг. Генерация — при `flutter pub get` (flutter:
+# generate: true в pubspec), вывод в lib/l10n/gen/ (.gitignore + analyzer
+# exclude). app_en.arb — template (источник истины, значения = сегодняшние
+# литералы дословно).
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-dir: lib/l10n/gen
+output-localization-file: app_localizations.dart
+nullable-getter: false
+required-resource-attributes: true
+untranslated-messages-file: build/l10n_untranslated.json

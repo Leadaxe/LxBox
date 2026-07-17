@@ -20,6 +20,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations: # §279 — l10n (gen_l10n + Global*Localizations)
+    sdk: flutter
+  intl: any # §279 — версию пинит flutter_localizations
   cupertino_icons: ^1.0.8
   http: ^1.2.2
   cryptography: ^2.7.0 # §025 — X25519 keygen; §130 — ECDSA P-256 keygen для MASQUE-WARP
@@ -41,6 +44,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  analyzer: any # §279 — AST-checkers tool/l10n (версию диктует Dart SDK)
   flutter_launcher_icons: ^0.14.4
   build_runner: ^2.4.13
   freezed: ^2.5.7
@@ -48,8 +52,11 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true # §279 — gen_l10n при pub get (см. l10n.yaml)
   assets:
     - assets/wizard_template.json
+    - assets/l10n/template/en.json # §279 — генерируемое зеркало display-текста шаблона
+    - assets/l10n/template/ru.json # §279 — русский overlay шаблона (наполняется в Phase 2)
     - assets/warp_endpoints.json # §136 — WARP endpoint/SNI random pools
     - assets/icons/app_icon.png
     - assets/icons/cloudflare.png # §025 — официальный логотип Cloudflare (Simple Icons, CC0)

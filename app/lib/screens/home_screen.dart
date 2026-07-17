@@ -276,20 +276,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       _connectingAnim.reset();
     }
 
-    // §050 — structured alert prefix `alert:permission_location:<perm>` →
-    // show AlertDialog with "Open Settings" button instead of plain error.
-    // Background: ACCESS_BACKGROUND_LOCATION on API 30+ can only be granted
-    // through Settings (not via runtime permission dialog), so we explain
-    // and offer button.
+    // §050 — location-permission stop → AlertDialog with "Open Settings"
+    // button instead of plain error. Background: ACCESS_BACKGROUND_LOCATION
+    // on API 30+ can only be granted through Settings (not via runtime
+    // permission dialog), so we explain and offer button. §279 — native
+    // string protocol parsed into typed StopReason at ingestion
+    // (HomeController), no string surgery here.
+    final nowReason = state.stopReason;
     if (nowError != _prevError &&
-        nowError.contains('alert:permission_location:') &&
+        nowReason is StopPermissionLocation &&
         !_permissionDialogShowing) {
       _permissionDialogShowing = true;
-      // Strip the "Stopped: " prefix that HomeController prepends.
-      final permName = nowError
-          .replaceFirst(RegExp(r'^Stopped:\s*'), '')
-          .replaceFirst('alert:permission_location:', '')
-          .trim();
+      final permName = nowReason.permissions;
       // Clear immediately so toast/snackbar для same error не показывается.
       _controller.clearError();
       WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -304,7 +302,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // config_load_error идут своими путями (dialog / отдельный banner-ключ).
     if (nowError != _prevError &&
         nowError.isNotEmpty &&
-        !nowError.contains('alert:permission_location:')) {
+        nowReason is! StopPermissionLocation) {
       final msg = nowError;
       _controller.clearError();
       WidgetsBinding.instance.addPostFrameCallback((_) {

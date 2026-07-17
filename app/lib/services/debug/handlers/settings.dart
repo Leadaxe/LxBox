@@ -1,4 +1,5 @@
 import '../../../models/background_mode.dart';
+import '../../l10n/locale_controller.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
 import '../contract/errors.dart';
@@ -252,6 +253,24 @@ const Set<String> _varBlocklist = {
   'debug_port',
 };
 
+// §279 — per-key side-effect registry: ключи, чья запись обязана пройти через
+// владеющий сервис (прецедент §275 — мутации только через владельца), а не
+// голый setVar (иначе сторадж и живое состояние расходятся до рестарта).
+// Generic-путь остаётся generic для остальных ключей.
+final _varPutHooks = <String, Future<void> Function(String value)>{
+  'app_language': (value) async {
+    if (!SettingsStorage.appLanguageValues.contains(value)) {
+      throw const BadRequest('app_language must be "system", "en" or "ru"');
+    }
+    await LocaleController.I.set(value);
+  },
+};
+
+final _varDeleteHooks = <String, Future<void> Function()>{
+  // DELETE = сброс к дефолту через тот же пайплайн (ключ остаётся с 'system').
+  'app_language': () => LocaleController.I.set('system'),
+};
+
 Future<DebugResponse> _putVar(String key, DebugRequest req, DebugContext ctx) async {
   if (_varBlocklist.contains(key)) {
     throw Conflict('var "$key" is managed via App Settings UI only');
@@ -261,7 +280,12 @@ Future<DebugResponse> _putVar(String key, DebugRequest req, DebugContext ctx) as
   if (value == null) {
     throw const BadRequest('field "value" required (string)');
   }
-  await SettingsStorage.setVar(key, value);
+  final hook = _varPutHooks[key];
+  if (hook != null) {
+    await hook(value);
+  } else {
+    await SettingsStorage.setVar(key, value);
+  }
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({
     'ok': true,
@@ -276,7 +300,12 @@ Future<DebugResponse> _deleteVar(String key, DebugRequest req, DebugContext ctx)
   if (_varBlocklist.contains(key)) {
     throw Conflict('var "$key" is managed via App Settings UI only');
   }
-  await SettingsStorage.removeVar(key);
+  final hook = _varDeleteHooks[key]; // §279 — side-effect registry
+  if (hook != null) {
+    await hook();
+  } else {
+    await SettingsStorage.removeVar(key);
+  }
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({
     'ok': true,

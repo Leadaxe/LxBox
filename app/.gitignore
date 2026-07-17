@@ -27,6 +27,8 @@ migrate_working_dir/
 #.vscode/
 
 # Flutter/Dart/Pub related
+# §279 — генерируемый gen_l10n вывод (см. l10n.yaml)
+/lib/l10n/gen/
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/

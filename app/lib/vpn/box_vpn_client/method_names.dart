@@ -76,6 +76,9 @@ class _Methods {
   static const getMemoryLimit = 'getMemoryLimit';
   static const setMemoryLimit = 'setMemoryLimit';
 
+  // §279 — app language mirror (boxvpn_boot); native handler — Phase 6 (l10n).
+  static const setAppLanguage = 'setAppLanguage';
+
   // Quick Connect
   static const requestAddTile = 'requestAddTile';
 

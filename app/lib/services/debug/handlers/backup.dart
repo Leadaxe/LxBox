@@ -1,5 +1,6 @@
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../l10n/locale_controller.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
 import '../contract/errors.dart';
@@ -76,6 +77,9 @@ Future<DebugResponse> _import(DebugRequest req, DebugContext ctx) async {
     final dropped = await SettingsStorage.replaceRaw(storage, merge: merge);
     applied['storage_keys'] = storage.length;
     if (dropped.isNotEmpty) applied['dropped_keys'] = dropped;
+    // §279 — restore мог привезти другой app_language: полный пайплайн смены
+    // локали через владеющий контроллер (не голое значение в сторадже).
+    await LocaleController.I.reloadFromStorage();
   } else if (storage != null) {
     throw const BadRequest('storage must be a JSON object');
   }

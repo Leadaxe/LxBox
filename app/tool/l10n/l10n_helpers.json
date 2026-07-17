@@ -1,0 +1,9 @@
+{
+  "_comment": "Display-parameter registry for hardcoded_check.dart: helper functions whose String args reach the user (snackbars/dialogs). A new snack/dialog helper must be registered here, otherwise literal args to it slip past the ratchet. 'positional' = 0-based indexes of display params, 'named' = display named params.",
+  "helpers": {
+    "showSnack": { "positional": [0], "named": [] },
+    "_diagSnack": { "positional": [0], "named": [] },
+    "_showError": { "positional": [0, 1], "named": [] },
+    "showDeleteConfirmDialog": { "positional": [], "named": ["title", "message", "confirmLabel"] }
+  }
+}

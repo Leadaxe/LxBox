@@ -50,11 +50,23 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
   double _progress = 0;
   List<_SpeedTestResult> get _history => _sessionHistory;
   int _streams = 4;
-  int _selectedServer = 0;
+
+  /// §279 — server selection is keyed by the stable template `id`, not by
+  /// list index (order/names may change between template versions).
+  String? _selectedServerId;
 
   // Loaded from wizard_template
   var _servers = <Map<String, dynamic>>[];
   var _streamOptions = <int>[1, 4, 10];
+
+  /// Index of the selected server; unknown/absent id falls back to the
+  /// default (first) server.
+  int get _selectedServer {
+    final i = _servers.indexWhere((s) => s['id'] == _selectedServerId);
+    return i >= 0 ? i : 0;
+  }
+
+  String _serverId(int i) => _servers[i]['id']?.toString() ?? '$i';
 
   @override
   void initState() {
@@ -381,8 +393,9 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
             Row(
               children: [
                 Expanded(
-                  child: DropdownButtonFormField<int>(
-                    initialValue: _selectedServer,
+                  child: DropdownButtonFormField<String>(
+                    initialValue:
+                        _servers.isEmpty ? null : _serverId(_selectedServer),
                     decoration: const InputDecoration(
                       labelText: 'Server',
                       isDense: true,
@@ -391,9 +404,9 @@ class _SpeedTestScreenState extends State<SpeedTestScreen> {
                     ),
                     style: TextStyle(fontSize: 13, color: cs.onSurface),
                     items: List.generate(_servers.length, (i) =>
-                      DropdownMenuItem(value: i, child: Text(_serverName(i))),
+                      DropdownMenuItem(value: _serverId(i), child: Text(_serverName(i))),
                     ),
-                    onChanged: (v) { if (v != null) setState(() => _selectedServer = v); },
+                    onChanged: (v) { if (v != null) setState(() => _selectedServerId = v); },
                   ),
                 ),
                 const SizedBox(width: 12),

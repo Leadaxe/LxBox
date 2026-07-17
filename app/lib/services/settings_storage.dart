@@ -180,6 +180,7 @@ class SettingsStorage {
     'haptic_enabled', // §029 — НЕ в SharedPreferences (вопреки старому STORAGE.md)
     'notif_perm_prompted_v1', // §128 — promt уведомлений показан
     'allow_rotation', // §220 — снятие портретной фиксации
+    'app_language', // §279 — язык приложения (system|en|ru); НЕ config-var
   };
 
   /// Полный allowlist для подключей `vars` при импорте: кодовые флаги ∪ все
@@ -577,6 +578,24 @@ class SettingsStorage {
 
   static Future<void> setAllowRotation(bool enabled) =>
       setVar('allow_rotation', enabled ? 'true' : 'false');
+
+  /// §279 — допустимые значения `app_language`. Неизвестное (hand-edited
+  /// бэкап, будущие языки) → 'system'.
+  static const appLanguageValues = {'system', 'en', 'ru'};
+
+  /// §279 — язык приложения. Default 'system' — следовать языку устройства.
+  /// Запись из кода приложения — только через LocaleController.set()
+  /// (владелец пайплайна); прямой setAppLanguage — storage-половина.
+  static Future<String> getAppLanguage() async {
+    final v = await getVar('app_language', 'system');
+    return appLanguageValues.contains(v) ? v : 'system';
+  }
+
+  static Future<void> setAppLanguage(String value) async {
+    final v = appLanguageValues.contains(value) ? value : 'system';
+    await setVar('app_language', v);
+    await _mirrorAppLanguageToNative(v);
+  }
 
   // ---------------------------------------------------------------------------
   // App update check (§036) — GitHub Releases polling on launch with 24h cap.

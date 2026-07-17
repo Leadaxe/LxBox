@@ -66,6 +66,7 @@ class WizardTemplate {
       final description = s['description'] as String? ?? '';
       sections.add(VarSection(
         title: name,
+        id: s['id'] as String? ?? '',
         description: description,
         chapter: chapter,
       ));
@@ -419,9 +420,15 @@ class WizardVar {
 class VarSection {
   VarSection({
     required this.title,
+    this.id = '',
     this.description = '',
     this.chapter = 'core',
   });
+
+  /// §279 — стабильный machine-id секции (адрес l10n-overlay). Display-поля
+  /// (`title`/`description`) станут переводимыми; join-ключом между секцией и
+  /// её vars остаётся `name` (=[title]) — id его НЕ заменяет.
+  final String id;
   final String title;
   final String description;
   final String chapter;

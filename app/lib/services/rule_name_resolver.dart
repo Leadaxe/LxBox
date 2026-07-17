@@ -1,4 +1,5 @@
 import '../models/custom_rule.dart';
+import '../models/parser_config.dart';
 
 /// §165 — резолвер человекочитаемого имени правила для Stats/Conns.
 ///
@@ -41,6 +42,14 @@ class RuleNameResolver {
   void clear() {
     _cache.clear();
     _rules.clear();
+  }
+
+  /// §279 — смена локали: сброс мемо-кэша (снапшоты resolve-результатов не
+  /// должны переживать переключение). Зовётся из LocaleController._applyLocale
+  /// после прогрева шаблона, БЕЗ ребилда конфига. Phase 2 (l10n) пере-дерайвит
+  /// здесь preset-label-части из [template] + custom_rules.
+  void relocalize(WizardTemplate? template) {
+    _cache.clear();
   }
 
   /// Человекочитаемое имя для `connection.rule`. Кэшируется (вкл. промахи).

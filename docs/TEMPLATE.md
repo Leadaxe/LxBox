@@ -55,11 +55,11 @@ wizard_template.json
 │   ├─ url                         string        global default (e.g. gstatic.com/generate_204)
 │   ├─ timeout_ms                  int           default 5000
 │   └─ presets[]                   list          dropdown options в Ping Settings UI
-│       └─ {name, url}             object
+│       └─ {id, name, url}         object        id — stable machine-id (§279)
 │
 ├─ speed_test_options              object{3 keys}       (§015)
 │   ├─ servers[]                   list[10]      Cloudflare, Selectel, Hetzner, OVH, etc.
-│   │   └─ {name, download_url, upload_url, upload_method, ping_url}
+│   │   └─ {id, name, download_url, upload_url, upload_method, ping_url}
 │   ├─ stream_options              list[3]       parallel-streams choices (e.g. [1,4,10])
 │   └─ default_streams             int           default 4
 │
@@ -84,9 +84,10 @@ wizard_template.json
 │       ├─ label                    string        UI display ("VPN ①")
 │       └─ default_enabled          bool          вкл в новой установке?
 │
-├─ sections[]                      list[7]       Wizard UI chapters (§022)
+├─ sections[]                      list[8]       Wizard UI chapters (§022)
 │   └─ <Section>                   object
-│       ├─ name                    string        "General", "DNS", "TUN", etc.
+│       ├─ id                      string        stable machine-id, kebab-case (§279: "general", "auto-proxy", …)
+│       ├─ name                    string        "General", "DNS", "TUN", etc. — внутренний join-ключ vars↔section
 │       ├─ chapter                 string        grouping ("core"|"routing"|"dns")
 │       ├─ description             string
 │       └─ vars[]                  list          переменные секции
@@ -288,8 +289,8 @@ Default URL/timeout для ping/mass-URLTest. Storage может override чер
   "url":        "https://www.gstatic.com/generate_204",   // global default
   "timeout_ms": 5000,
   "presets": [
-    {"name": "Google 204",   "url": "https://www.gstatic.com/generate_204"},
-    {"name": "Cloudflare",   "url": "..."},
+    {"id": "google-204", "name": "Google 204",   "url": "https://www.gstatic.com/generate_204"},
+    {"id": "cloudflare", "name": "Cloudflare",   "url": "..."},
     …
   ]
 }
@@ -299,7 +300,7 @@ Default URL/timeout для ping/mass-URLTest. Storage может override чер
 |---|---|
 | `url` | Default endpoint для ping. Юзер может override globally / per-group. |
 | `timeout_ms` | Default timeout. Bump'ится для slow networks. |
-| `presets[]` | Pre-configured options в Ping Settings UI dropdown — `{name, url}` пары. |
+| `presets[]` | Pre-configured options в Ping Settings UI dropdown — `{id, name, url}`. `id` — стабильный machine-id (§279, адрес для l10n); display-поле — `name`. |
 
 ---
 
@@ -311,6 +312,7 @@ Endpoints для speed-test screen. Не override'ится юзером (но ю
 {
   "servers": [
     {
+      "id":            "cloudflare",
       "name":          "Cloudflare",
       "download_url":  "https://speed.cloudflare.com/__down?bytes=25000000",
       "upload_url":    "https://speed.cloudflare.com/__up",
@@ -325,6 +327,8 @@ Endpoints для speed-test screen. Не override'ится юзером (но ю
 ```
 
 10 серверов в текущем template'е (Cloudflare, Selectel, Hetzner, OVH, etc.).
+`id` — стабильный machine-id (§279): runtime-выбор сервера на speed-test-экране
+ключуется по нему (не по индексу); неизвестный id → default (первый сервер).
 
 ---
 
@@ -441,6 +445,7 @@ Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `
 ```jsonc
 [
   {
+    "id":          "general",               // stable machine-id (§279, адрес l10n)
     "name":        "General",
     "chapter":     "core",                  // grouping тэг (UI tabs)
     "description": "Logging and core settings",
@@ -462,6 +467,11 @@ Storage source-of-truth: `channels[]` в `lxbox_settings.json` (§125). Legacy `
 ```
 
 8 секций в текущем template'е: `General`, `Network`, `Internal`, `Auto Proxy`, `DNS`, `TUN`, `VPN Mode`, `DPI Bypass`. Расфасованы по **4 chapter'ам** (`core`, `routing`, `dns`, `internal`).
+
+`id` — стабильный kebab-case machine-id (§279): `general`, `network`, `internal`,
+`auto-proxy`, `dns`, `tun`, `vpn-mode`, `dpi-bypass`. Служит адресом l10n-overlay
+для display-полей (`name`/`description`). Внутренним join-ключом секция↔vars
+остаётся `name` (`parser_config.dart`, `settings_screen.dart`) — `id` его не заменяет.
 
 ### `chapter` — кто рендерит секцию
 
