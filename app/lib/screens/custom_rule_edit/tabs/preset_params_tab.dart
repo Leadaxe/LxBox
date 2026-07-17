@@ -183,12 +183,15 @@ class PresetParamsTab extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              // §264 — имя пресета read-only: это snapshot `preset.label` из
-              // шаблона (🔒, STORAGE §030), юзер его не правит. Раньше поле было
-              // редактируемым — рассинхрон с label. Пресеты сюда попадают всегда,
-              // поэтому readOnly безусловно.
-              child: TextField(
-                controller: c.nameCtrl,
+              // §264 — имя пресета read-only: юзер его не правит. §279 —
+              // показываем LIVE display-имя (label локализованного шаблона +
+              // порядковый суффикс копии, передан RoutingScreen'ом), а не
+              // сохранённый снапшот из nameCtrl: снапшот заморожен на локали
+              // создания. nameCtrl не трогаем — save сохраняет снапшот.
+              child: TextFormField(
+                key: ValueKey('preset-name-${c.displayName ?? preset.label}'),
+                initialValue: c.displayName ??
+                    (preset.label.isNotEmpty ? preset.label : c.initial.name),
                 readOnly: true,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),

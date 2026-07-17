@@ -136,13 +136,11 @@ mixin _PingMixin on ChangeNotifier {
   /// после CRUD). Не уведомляет listeners — values используются on-demand.
   Future<void> reloadPingOptions() async {
     try {
-      final tpl = await TemplateLoader.load();
-      final tplOpts = tpl.pingOptions;
-      final tplUrl = tplOpts['url'];
-      final tplTimeout = tplOpts['timeout_ms'];
-      _templatePingUrl = (tplUrl is String) ? tplUrl : '';
+      // §279 — typed PingOptionsModel (defaultTimeoutMs == 0 → «не задан»).
+      final opts = (await TemplateLoader.load()).pingOptionsModel;
+      _templatePingUrl = opts.defaultUrl;
       _templatePingTimeoutMs =
-          (tplTimeout is num && tplTimeout > 0) ? tplTimeout.toInt() : 10000;
+          opts.defaultTimeoutMs > 0 ? opts.defaultTimeoutMs : 10000;
     } catch (e) {
       _addDebug(DebugSource.app, 'Template load (ping options): $e');
     }

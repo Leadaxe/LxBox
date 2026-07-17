@@ -1,1 +1,898 @@
-{}
+{
+  "channel.vpn-1.label": {
+    "text": "VPN ①",
+    "src": "a1cc3ddf"
+  },
+  "channel.vpn-2.label": {
+    "text": "VPN ②",
+    "src": "d6a593f8"
+  },
+  "dns_server.cloudflare_dot.description": {
+    "text": "Cloudflare DoT",
+    "src": "a32dbd9d"
+  },
+  "dns_server.cloudflare_dot.var.dns_ip.option.1.0.0.1": {
+    "text": "1.0.0.1 · Резервный v4",
+    "src": "6f38bea5"
+  },
+  "dns_server.cloudflare_dot.var.dns_ip.option.1.1.1.1": {
+    "text": "1.1.1.1 · Основной v4",
+    "src": "f68a6550"
+  },
+  "dns_server.cloudflare_dot.var.dns_ip.option.2606:4700:4700::1001": {
+    "text": "2606:4700:4700::1001 · Резервный v6",
+    "src": "4d7d976f"
+  },
+  "dns_server.cloudflare_dot.var.dns_ip.option.2606:4700:4700::1111": {
+    "text": "2606:4700:4700::1111 · Основной v6",
+    "src": "66b49ff8"
+  },
+  "dns_server.cloudflare_dot.var.dns_ip.title": {
+    "text": "IP-адрес DoT-сервера",
+    "src": "29619a95"
+  },
+  "dns_server.cloudflare_dot.var.dns_ip.tooltip": {
+    "text": "Адрес Cloudflare Public DNS для DNS-over-TLS (порт 853).",
+    "src": "ba0fba53"
+  },
+  "dns_server.cloudflare_dot.var.outbound.title": {
+    "text": "Исходящий канал",
+    "src": "02773216"
+  },
+  "dns_server.cloudflare_dot.var.outbound.tooltip": {
+    "text": "Через какой канал идут DNS-запросы к этому серверу",
+    "src": "5ee97e38"
+  },
+  "dns_server.cloudflare_udp.description": {
+    "text": "Cloudflare UDP",
+    "src": "c56897ba"
+  },
+  "dns_server.cloudflare_udp.var.dns_ip.option.1.0.0.1": {
+    "text": "1.0.0.1 · Резервный v4",
+    "src": "6f38bea5"
+  },
+  "dns_server.cloudflare_udp.var.dns_ip.option.1.1.1.1": {
+    "text": "1.1.1.1 · Основной v4",
+    "src": "f68a6550"
+  },
+  "dns_server.cloudflare_udp.var.dns_ip.option.2606:4700:4700::1001": {
+    "text": "2606:4700:4700::1001 · Резервный v6",
+    "src": "4d7d976f"
+  },
+  "dns_server.cloudflare_udp.var.dns_ip.option.2606:4700:4700::1111": {
+    "text": "2606:4700:4700::1111 · Основной v6",
+    "src": "66b49ff8"
+  },
+  "dns_server.cloudflare_udp.var.dns_ip.title": {
+    "text": "IP-адрес UDP-сервера",
+    "src": "197d92d8"
+  },
+  "dns_server.cloudflare_udp.var.dns_ip.tooltip": {
+    "text": "Адрес Cloudflare Public DNS. IPv4 — универсально; IPv6 — если ваша сеть его поддерживает.",
+    "src": "40e2fe49"
+  },
+  "dns_server.cloudflare_udp.var.outbound.title": {
+    "text": "Исходящий канал",
+    "src": "02773216"
+  },
+  "dns_server.cloudflare_udp.var.outbound.tooltip": {
+    "text": "Через какой канал идут DNS-запросы к этому серверу",
+    "src": "5ee97e38"
+  },
+  "dns_server.google_doh.description": {
+    "text": "Google DoH",
+    "src": "ff174138"
+  },
+  "dns_server.google_doh.var.dns_ip.option.2001:4860:4860::8844": {
+    "text": "2001:4860:4860::8844 · Резервный v6",
+    "src": "74e7fbb7"
+  },
+  "dns_server.google_doh.var.dns_ip.option.2001:4860:4860::8888": {
+    "text": "2001:4860:4860::8888 · Основной v6",
+    "src": "d2a68056"
+  },
+  "dns_server.google_doh.var.dns_ip.option.8.8.4.4": {
+    "text": "8.8.4.4 · Резервный v4",
+    "src": "5469aeaf"
+  },
+  "dns_server.google_doh.var.dns_ip.option.8.8.8.8": {
+    "text": "8.8.8.8 · Основной v4",
+    "src": "0111e679"
+  },
+  "dns_server.google_doh.var.dns_ip.title": {
+    "text": "IP-адрес DoH-сервера",
+    "src": "d2ed2186"
+  },
+  "dns_server.google_doh.var.dns_ip.tooltip": {
+    "text": "IP-адрес Google Public DNS для DoH по IP. TLS SNI закреплён как dns.google.",
+    "src": "6ca0e47b"
+  },
+  "dns_server.google_doh.var.outbound.title": {
+    "text": "Исходящий канал",
+    "src": "02773216"
+  },
+  "dns_server.google_doh.var.outbound.tooltip": {
+    "text": "Через какой канал идут DNS-запросы к этому серверу",
+    "src": "5ee97e38"
+  },
+  "dns_server.google_dot.description": {
+    "text": "Google DoT",
+    "src": "02071e6a"
+  },
+  "dns_server.google_dot.var.dns_ip.option.2001:4860:4860::8844": {
+    "text": "2001:4860:4860::8844 · Резервный v6",
+    "src": "74e7fbb7"
+  },
+  "dns_server.google_dot.var.dns_ip.option.2001:4860:4860::8888": {
+    "text": "2001:4860:4860::8888 · Основной v6",
+    "src": "d2a68056"
+  },
+  "dns_server.google_dot.var.dns_ip.option.8.8.4.4": {
+    "text": "8.8.4.4 · Резервный v4",
+    "src": "5469aeaf"
+  },
+  "dns_server.google_dot.var.dns_ip.option.8.8.8.8": {
+    "text": "8.8.8.8 · Основной v4",
+    "src": "0111e679"
+  },
+  "dns_server.google_dot.var.dns_ip.title": {
+    "text": "IP-адрес DoT-сервера",
+    "src": "29619a95"
+  },
+  "dns_server.google_dot.var.dns_ip.tooltip": {
+    "text": "Адрес Google Public DNS для DNS-over-TLS (порт 853).",
+    "src": "87c074b5"
+  },
+  "dns_server.google_dot.var.outbound.title": {
+    "text": "Исходящий канал",
+    "src": "02773216"
+  },
+  "dns_server.google_dot.var.outbound.tooltip": {
+    "text": "Через какой канал идут DNS-запросы к этому серверу",
+    "src": "5ee97e38"
+  },
+  "dns_server.google_udp.description": {
+    "text": "Google DNS (напрямую)",
+    "src": "ebf77acc"
+  },
+  "dns_server.google_udp.var.dns_ip.option.2001:4860:4860::8844": {
+    "text": "2001:4860:4860::8844 · Резервный v6",
+    "src": "74e7fbb7"
+  },
+  "dns_server.google_udp.var.dns_ip.option.2001:4860:4860::8888": {
+    "text": "2001:4860:4860::8888 · Основной v6",
+    "src": "d2a68056"
+  },
+  "dns_server.google_udp.var.dns_ip.option.8.8.4.4": {
+    "text": "8.8.4.4 · Резервный v4",
+    "src": "5469aeaf"
+  },
+  "dns_server.google_udp.var.dns_ip.option.8.8.8.8": {
+    "text": "8.8.8.8 · Основной v4",
+    "src": "0111e679"
+  },
+  "dns_server.google_udp.var.dns_ip.title": {
+    "text": "IP-адрес UDP-сервера",
+    "src": "197d92d8"
+  },
+  "dns_server.google_udp.var.dns_ip.tooltip": {
+    "text": "Адрес Google Public DNS. IPv4 — универсально; IPv6 — если ваша сеть его поддерживает.",
+    "src": "db8c3c76"
+  },
+  "dns_server.google_udp.var.outbound.title": {
+    "text": "Исходящий канал",
+    "src": "02773216"
+  },
+  "dns_server.google_udp.var.outbound.tooltip": {
+    "text": "Через какой канал идут DNS-запросы к этому серверу",
+    "src": "5ee97e38"
+  },
+  "dns_server.local_dns_resolver.description": {
+    "text": "Системный DNS",
+    "src": "fac9b386"
+  },
+  "dns_server.safe_dns_dot.description": {
+    "text": "Безопасный DNS (DoT)",
+    "src": "24b09f98"
+  },
+  "dns_server.safe_dns_dot.var.dom_resolver.title": {
+    "text": "Резолвер домена",
+    "src": "3ae8fef9"
+  },
+  "dns_server.safe_dns_dot.var.dom_resolver.tooltip": {
+    "text": "DNS-сервер, который резолвит сам домен безопасного DNS (профили AdGuard используют доменный адрес).",
+    "src": "6acd4483"
+  },
+  "dns_server.safe_dns_dot.var.outbound.title": {
+    "text": "Исходящий канал",
+    "src": "02773216"
+  },
+  "dns_server.safe_dns_dot.var.outbound.tooltip": {
+    "text": "Через какой канал идут DNS-запросы к этому серверу",
+    "src": "5ee97e38"
+  },
+  "dns_server.safe_dns_dot.var.safe_profile.option.9.9.9.9": {
+    "text": "Quad9 · защита от вредоносного ПО",
+    "src": "25650370"
+  },
+  "dns_server.safe_dns_dot.var.safe_profile.option.dns.adguard-dns.com": {
+    "text": "AdGuard · блокировка рекламы",
+    "src": "f58c5503"
+  },
+  "dns_server.safe_dns_dot.var.safe_profile.option.family.adguard-dns.com": {
+    "text": "AdGuard Family · реклама + 18+",
+    "src": "e0659f31"
+  },
+  "dns_server.safe_dns_dot.var.safe_profile.title": {
+    "text": "Профиль защиты",
+    "src": "33f81a90"
+  },
+  "dns_server.safe_dns_dot.var.safe_profile.tooltip": {
+    "text": "DNS-over-TLS со встроенной блокировкой: вредоносное ПО (Quad9), реклама (AdGuard) или реклама и контент 18+ (AdGuard Family).",
+    "src": "09fa16f8"
+  },
+  "magic.auto.title": {
+    "text": "Авто",
+    "src": "02862497"
+  },
+  "magic.block.title": {
+    "text": "Блокировка",
+    "src": "211d0bb8"
+  },
+  "magic.direct.title": {
+    "text": "Напрямую",
+    "src": "002c7c68"
+  },
+  "ping.apple.name": {
+    "text": "Apple",
+    "src": "f223faa9"
+  },
+  "ping.cloudflare.name": {
+    "text": "Cloudflare",
+    "src": "f9191531"
+  },
+  "ping.firefox.name": {
+    "text": "Firefox",
+    "src": "2f262335"
+  },
+  "ping.google-204.name": {
+    "text": "Google 204",
+    "src": "5a993605"
+  },
+  "ping.yandex.name": {
+    "text": "Яндекс",
+    "src": "2e6e0185"
+  },
+  "preset.bittorrent.description": {
+    "text": "Маршрутизация BitTorrent-трафика. По умолчанию — напрямую; можно направить в отдельный канал.",
+    "src": "0e78ceec"
+  },
+  "preset.bittorrent.label": {
+    "text": "BitTorrent",
+    "src": "7b0c2dec"
+  },
+  "preset.bittorrent.var.outbound.title": {
+    "text": "Исходящий канал",
+    "src": "02773216"
+  },
+  "preset.bittorrent.var.outbound.tooltip": {
+    "text": "Куда направлять BitTorrent: напрямую — мимо VPN, либо выберите канал, чтобы пустить его через туннель.",
+    "src": "97d80ac5"
+  },
+  "preset.block-ads.description": {
+    "text": "Блокирует рекламные подключения. Загружает набор правил (~1 МБ).",
+    "src": "766d8400"
+  },
+  "preset.block-ads.label": {
+    "text": "Блокировка рекламы",
+    "src": "c4bd1721"
+  },
+  "preset.fakeip.description": {
+    "text": "Мгновенный DNS через IP-заглушки; реальные имена резолвятся внутри туннеля. Ускоряет DNS и исключает утечки DNS до туннеля. Не является обходом DPI. Включайте ниже особых доменов, чтобы прямая маршрутизация по GeoIP продолжала работать.",
+    "src": "fc96de47"
+  },
+  "preset.fakeip.dns_server.fakeip.description": {
+    "text": "Аллокатор FakeIP",
+    "src": "036560b6"
+  },
+  "preset.fakeip.label": {
+    "text": "FakeIP",
+    "src": "d35647bb"
+  },
+  "preset.fakeip.var.dns_enable.title": {
+    "text": "DNS",
+    "src": "020965a2"
+  },
+  "preset.fakeip.var.dns_enable.tooltip": {
+    "text": "Применять FakeIP-обработку DNS этого пресета. Выключите, чтобы отключить FakeIP, не удаляя пресет.",
+    "src": "218744d5"
+  },
+  "preset.fakeip.var.dns_server.title": {
+    "text": "Сервер FakeIP",
+    "src": "5eb918d4"
+  },
+  "preset.fakeip.var.dns_server.tooltip": {
+    "text": "Аллокатор FakeIP. Внутренний — привязан к DNS-серверу fakeip.",
+    "src": "53a137a5"
+  },
+  "preset.fakeip.var.force.title": {
+    "text": "Блокировать HTTPS-записи",
+    "src": "c0611865"
+  },
+  "preset.fakeip.var.force.tooltip": {
+    "text": "Отвечать пустым ответом на DNS-записи HTTPS/SVCB (RFC 9460), чтобы приложения откатывались на обычные A/AAAA. Не даёт этим запросам утекать в резервный DNS.",
+    "src": "048a9219"
+  },
+  "preset.private-ip.description": {
+    "text": "Маршрутизация частных диапазонов IP (LAN). По умолчанию — напрямую; можно направить в канал, чтобы добираться до роутеров и устройств через локальный VPN.",
+    "src": "11b07633"
+  },
+  "preset.private-ip.label": {
+    "text": "Частные IP",
+    "src": "b4b0ac27"
+  },
+  "preset.private-ip.var.outbound.title": {
+    "text": "Исходящий канал",
+    "src": "02773216"
+  },
+  "preset.private-ip.var.outbound.tooltip": {
+    "text": "Куда направлять частные/LAN-адреса: напрямую — для локального доступа, либо в канал — чтобы добраться до удалённой LAN через VPN.",
+    "src": "56385359"
+  },
+  "preset.ru-direct.description": {
+    "text": "Направляет напрямую российские TLD (.ru/.su/IDN), CDN сервисов (Яндекс/VK/Авито/2ГИС/банки и др.) и российские диапазоны IP.",
+    "src": "4e950d7f"
+  },
+  "preset.ru-direct.dns_server.yandex_doh.description": {
+    "text": "Яндекс DoH (безопасный)",
+    "src": "6580c04c"
+  },
+  "preset.ru-direct.dns_server.yandex_dot.description": {
+    "text": "Яндекс DoT (безопасный)",
+    "src": "9e4a4108"
+  },
+  "preset.ru-direct.dns_server.yandex_udp.description": {
+    "text": "Яндекс UDP (IP из настройки выше)",
+    "src": "3060343d"
+  },
+  "preset.ru-direct.label": {
+    "text": "Российские домены и IP",
+    "src": "143092a0"
+  },
+  "preset.ru-direct.var.dns_enable.title": {
+    "text": "DNS",
+    "src": "020965a2"
+  },
+  "preset.ru-direct.var.dns_enable.tooltip": {
+    "text": "Отправлять совпавшие домены на DNS-сервер этого пресета и применять DNS-опции вроде «Принудительно IPv4». Выключите, чтобы сохранить маршрутизацию без изменений DNS.",
+    "src": "67f69d85"
+  },
+  "preset.ru-direct.var.dns_ip.option.2a02:6b8:0:1::feed:bad": {
+    "text": "2a02:6b8:0:1::feed:bad · Безопасный v6 альт.",
+    "src": "346eddba"
+  },
+  "preset.ru-direct.var.dns_ip.option.2a02:6b8::feed:0ff": {
+    "text": "2a02:6b8::feed:0ff · Базовый v6",
+    "src": "e5e71934"
+  },
+  "preset.ru-direct.var.dns_ip.option.2a02:6b8::feed:a11": {
+    "text": "2a02:6b8::feed:a11 · Семейный v6",
+    "src": "41529002"
+  },
+  "preset.ru-direct.var.dns_ip.option.2a02:6b8::feed:bad": {
+    "text": "2a02:6b8::feed:bad · Безопасный v6",
+    "src": "6b317444"
+  },
+  "preset.ru-direct.var.dns_ip.option.77.88.8.1": {
+    "text": "77.88.8.1 · Базовый альт.",
+    "src": "ac566d0d"
+  },
+  "preset.ru-direct.var.dns_ip.option.77.88.8.2": {
+    "text": "77.88.8.2 · Безопасный альт.",
+    "src": "388aae0c"
+  },
+  "preset.ru-direct.var.dns_ip.option.77.88.8.3": {
+    "text": "77.88.8.3 · Семейный альт.",
+    "src": "2e53b3f5"
+  },
+  "preset.ru-direct.var.dns_ip.option.77.88.8.7": {
+    "text": "77.88.8.7 · Семейный",
+    "src": "9b13c171"
+  },
+  "preset.ru-direct.var.dns_ip.option.77.88.8.8": {
+    "text": "77.88.8.8 · Базовый",
+    "src": "c66b8d2d"
+  },
+  "preset.ru-direct.var.dns_ip.option.77.88.8.88": {
+    "text": "77.88.8.88 · Безопасный",
+    "src": "cad7830f"
+  },
+  "preset.ru-direct.var.dns_ip.title": {
+    "text": "IP-адрес UDP-сервера",
+    "src": "197d92d8"
+  },
+  "preset.ru-direct.var.dns_ip.tooltip": {
+    "text": "Действует только для UDP. DoH и DoT закреплены за 77.88.8.88 с SNI safe.dot.dns.yandex.net.",
+    "src": "f257662f"
+  },
+  "preset.ru-direct.var.dns_server.title": {
+    "text": "DNS-сервер",
+    "src": "95c16f9b"
+  },
+  "preset.ru-direct.var.dns_server.tooltip": {
+    "text": "Рекомендуется базовый UDP — самый стабильный. DoH/DoT могут фильтроваться провайдерами.",
+    "src": "bc982431"
+  },
+  "preset.ru-direct.var.force_ipv4.title": {
+    "text": "Принудительно IPv4",
+    "src": "e4194f46"
+  },
+  "preset.ru-direct.var.force_ipv4.tooltip": {
+    "text": "Резолвить российские домены только в IPv4. Предотвращает мёртвые IPv6-подключения в сетях без рабочего глобального IPv6. Работает через DNS-правило этого пресета — держите переключатель DNS включённым. Выключите, если в вашей сети IPv6 работает.",
+    "src": "cca28e95"
+  },
+  "preset.ru-direct.var.geoip_enabled.title": {
+    "text": "GeoIP-диапазоны (резерв)",
+    "src": "09aa4ae7"
+  },
+  "preset.ru-direct.var.geoip_enabled.tooltip": {
+    "text": "Сопоставлять не только домены, но и IP российских автономных систем — ловит случаи CDN/QUIC/ECH, когда определение домена не срабатывает. При первом использовании автоматически загружает geoip-ru.srs (~150 КБ).",
+    "src": "aa14dacd"
+  },
+  "preset.ru-direct.var.outbound.title": {
+    "text": "Исходящий канал",
+    "src": "02773216"
+  },
+  "preset.ru-direct.var.outbound.tooltip": {
+    "text": "Куда направлять трафик российских доменов и IP",
+    "src": "062906c6"
+  },
+  "preset.ru-inside.description": {
+    "text": "Сервисы, доступные только внутри России. По умолчанию — напрямую; можно направить через канал, чтобы пользоваться ими из-за рубежа.",
+    "src": "824015b5"
+  },
+  "preset.ru-inside.label": {
+    "text": "Сервисы только для России",
+    "src": "b2e04d4c"
+  },
+  "preset.ru-inside.var.force_ipv4.title": {
+    "text": "Принудительно IPv4",
+    "src": "e4194f46"
+  },
+  "preset.ru-inside.var.force_ipv4.tooltip": {
+    "text": "Резолвить эти домены только в IPv4. Предотвращает мёртвые IPv6-подключения в сетях без рабочего глобального IPv6. Выключите, если в вашей сети IPv6 работает.",
+    "src": "4d272add"
+  },
+  "preset.ru-inside.var.outbound.title": {
+    "text": "Исходящий канал",
+    "src": "02773216"
+  },
+  "preset.ru-inside.var.outbound.tooltip": {
+    "text": "Куда направлять сервисы, доступные только в России: напрямую — в российской сети, либо через российский канал — чтобы открывать их из-за рубежа.",
+    "src": "7be0ffda"
+  },
+  "preset.traffic-processing.description": {
+    "text": "Базовая обработка пакетов: определение домена, перехват DNS в туннель, резолв адресов назначения для маршрутизации. Применяется первым, до всех остальных правил.",
+    "src": "8ffe6b96"
+  },
+  "preset.traffic-processing.label": {
+    "text": "Обработка трафика",
+    "src": "8f4bc045"
+  },
+  "preset.traffic-processing.var.hijack_dns_enabled.title": {
+    "text": "Перехват DNS",
+    "src": "4eb4c4bd"
+  },
+  "preset.traffic-processing.var.hijack_dns_enabled.tooltip": {
+    "text": "Направлять все DNS-запросы через DNS-движок туннеля.\n⚠️ ВНИМАНИЕ: выключение отключает FakeIP и все DNS-правила — приложения будут напрямую и бесконтрольно обращаться к своим DNS. Не выключайте, если точно не знаете, зачем.",
+    "src": "0066b8c1"
+  },
+  "preset.traffic-processing.var.sniff_enabled.title": {
+    "text": "Анализ пакетов",
+    "src": "ae7fcfb5"
+  },
+  "preset.traffic-processing.var.sniff_enabled.tooltip": {
+    "text": "Определять протокол и домен из пакетов для точной маршрутизации.\n⚠️ ВНИМАНИЕ: выключение прекращает сопоставление по протоколу (например BitTorrent, TLS, QUIC), а без включённого FakeIP — и по домену.",
+    "src": "8c71c326"
+  },
+  "preset.traffic-processing.var.sniff_timeout.title": {
+    "text": "Тайм-аут анализа",
+    "src": "976ad337"
+  },
+  "preset.traffic-processing.var.sniff_timeout.tooltip": {
+    "text": "Сколько ждать появления домена в пакете, прежде чем прекратить попытки.",
+    "src": "f5eae2b9"
+  },
+  "preset.unknown-traffic.description": {
+    "text": "Блокирует трафик в туннеле, не отнесённый ни к одному установленному приложению (фоновые/чужие процессы). Либо направьте его напрямую в обход VPN.",
+    "src": "9699abc4"
+  },
+  "preset.unknown-traffic.label": {
+    "text": "Неизвестный трафик",
+    "src": "f2632f05"
+  },
+  "preset.unknown-traffic.var.outbound.title": {
+    "text": "исходящий канал",
+    "src": "fed5e6c7"
+  },
+  "preset.unknown-traffic.var.outbound.tooltip": {
+    "text": "Блокировка — трафик отбрасывается. Либо выберите «Напрямую», чтобы отправить его мимо VPN.",
+    "src": "584c917c"
+  },
+  "section.auto-proxy.description": {
+    "text": "Настройка URLTest для группы ✨Авто",
+    "src": "231b2b7c"
+  },
+  "section.auto-proxy.name": {
+    "text": "Автопрокси",
+    "src": "ec0a7814"
+  },
+  "section.dns.description": {
+    "text": "Разрешение доменных имён",
+    "src": "4226d14b"
+  },
+  "section.dns.name": {
+    "text": "DNS",
+    "src": "020965a2"
+  },
+  "section.dpi-bypass.description": {
+    "text": "Фрагментация TLS для обхода блокировок",
+    "src": "972af870"
+  },
+  "section.dpi-bypass.name": {
+    "text": "Обход DPI",
+    "src": "c7ad5af3"
+  },
+  "section.general.description": {
+    "text": "Логирование и настройки ядра",
+    "src": "1a30e55d"
+  },
+  "section.general.name": {
+    "text": "Общие",
+    "src": "c910d474"
+  },
+  "section.internal.description": {
+    "text": "Внутренние глобальные переменные, на которые ссылаются пресеты, — не показываются в настройках VPN.",
+    "src": "d66b8a01"
+  },
+  "section.internal.name": {
+    "text": "Внутренние",
+    "src": "2ea1842b"
+  },
+  "section.network.description": {
+    "text": "Поведение подключений и маршрутизации",
+    "src": "d85170de"
+  },
+  "section.network.name": {
+    "text": "Сеть",
+    "src": "1744b964"
+  },
+  "section.tun.description": {
+    "text": "Виртуальный сетевой интерфейс",
+    "src": "2224aa8d"
+  },
+  "section.tun.name": {
+    "text": "TUN",
+    "src": "3f60f52a"
+  },
+  "section.vpn-mode.description": {
+    "text": "Переменные входящего локального прокси (скрыты — значения берутся из VpnModeConfig)",
+    "src": "054f02cf"
+  },
+  "section.vpn-mode.name": {
+    "text": "Режим VPN",
+    "src": "3c281a14"
+  },
+  "speed.cloudflare.name": {
+    "text": "Cloudflare",
+    "src": "f9191531"
+  },
+  "speed.hostkey-amsterdam.name": {
+    "text": "Hostkey (Амстердам)",
+    "src": "d19f4870"
+  },
+  "speed.hostkey-frankfurt.name": {
+    "text": "Hostkey (Франкфурт)",
+    "src": "bda0cda7"
+  },
+  "speed.hostkey-helsinki.name": {
+    "text": "Hostkey (Хельсинки)",
+    "src": "1f1d3838"
+  },
+  "speed.hostkey-moscow.name": {
+    "text": "Hostkey (Москва)",
+    "src": "14923d8f"
+  },
+  "speed.hostkey-new-york.name": {
+    "text": "Hostkey (Нью-Йорк)",
+    "src": "1c1a3794"
+  },
+  "speed.ovh-france.name": {
+    "text": "OVH (Франция)",
+    "src": "d56d69fc"
+  },
+  "speed.selectel-ru.name": {
+    "text": "Selectel (RU)",
+    "src": "5e38a2f2"
+  },
+  "speed.tele2-eu.name": {
+    "text": "Tele2 (EU)",
+    "src": "fe864bd7"
+  },
+  "speed.thinkbroadband-uk.name": {
+    "text": "ThinkBroadband (Великобритания)",
+    "src": "4af5c992"
+  },
+  "var.auto_detect_interface.title": {
+    "text": "Автоопределение интерфейса",
+    "src": "2203051c"
+  },
+  "var.auto_detect_interface.tooltip": {
+    "text": "Автоматически определять сетевой интерфейс по умолчанию",
+    "src": "eb7c5343"
+  },
+  "var.dns_default_domain_resolver.title": {
+    "text": "Резолвер доменов по умолчанию",
+    "src": "da4e8970"
+  },
+  "var.dns_default_domain_resolver.tooltip": {
+    "text": "Используется движком маршрутизации для внутреннего резолва имён (адреса серверов, правила маршрутизации). Это не резолвер для приложений. Рекомендуется: cloudflare_udp, google_udp или google_doh. Избегайте здесь local_dns_resolver — системный DNS отдаёт эти запросы провайдеру в обход VPN.",
+    "src": "bd665987"
+  },
+  "var.dns_final.title": {
+    "text": "Финальный DNS",
+    "src": "d90db54b"
+  },
+  "var.dns_final.tooltip": {
+    "text": "Резервный DNS-сервер по умолчанию. Используется, когда DNS-запрос приложения не совпал ни с одним DNS-правилом. Для приватности выбирайте шифрованные: google_doh, cloudflare_dot. Для скорости: cloudflare_udp, google_udp. local_dns_resolver (системный DNS) здесь безопасен.",
+    "src": "83830be1"
+  },
+  "var.dns_strategy.title": {
+    "text": "Предпочитаемая версия IP",
+    "src": "21fd13a9"
+  },
+  "var.dns_strategy.tooltip": {
+    "text": "Стратегия резолва DNS",
+    "src": "1e3cc89e"
+  },
+  "var.ipv6_enabled.title": {
+    "text": "Включить IPv6",
+    "src": "a8cbd133"
+  },
+  "var.ipv6_enabled.tooltip": {
+    "text": "Добавить туннелю IPv6-адрес. По умолчанию выключено — включайте, только если в вашей сети работает IPv6. Включение переводит резолв в режим «предпочитать IPv4», выключение — в «только IPv4»; стратегию можно поменять в настройках DNS.",
+    "src": "794cbc11"
+  },
+  "var.log_level.title": {
+    "text": "Уровень логирования",
+    "src": "886e6023"
+  },
+  "var.log_level.tooltip": {
+    "text": "Подробность логов sing-box",
+    "src": "0d78c554"
+  },
+  "var.proxy_auth.title": {
+    "text": "Требовать авторизацию",
+    "src": "745a6639"
+  },
+  "var.proxy_auth.tooltip": {
+    "text": "Требует ли локальный прокси логин и пароль. Принудительно включается при прослушивании не на loopback.",
+    "src": "ee1b4f01"
+  },
+  "var.proxy_listen.option.0.0.0.0": {
+    "text": "0.0.0.0 — все интерфейсы (LAN)",
+    "src": "9c2d787e"
+  },
+  "var.proxy_listen.option.127.0.0.1": {
+    "text": "127.0.0.1 — только это устройство",
+    "src": "9a139ac0"
+  },
+  "var.proxy_listen.title": {
+    "text": "Адрес прослушивания",
+    "src": "edc8737a"
+  },
+  "var.proxy_listen.tooltip": {
+    "text": "IPv4-адрес, на котором слушает локальный прокси. Выше — подсказки; допустим любой корректный IPv4 (например, конкретный LAN-адрес). Всё, кроме 127.x, доступно из сети и принудительно включает авторизацию.",
+    "src": "c94c0b6b"
+  },
+  "var.proxy_pass.title": {
+    "text": "Пароль прокси",
+    "src": "3978a115"
+  },
+  "var.proxy_pass.tooltip": {
+    "text": "Пароль для авторизации на прокси. Генерируется автоматически при включении авторизации.",
+    "src": "c8793f25"
+  },
+  "var.proxy_port.title": {
+    "text": "Порт прослушивания",
+    "src": "cb689659"
+  },
+  "var.proxy_port.tooltip": {
+    "text": "Порт локального прокси (1024..65535).",
+    "src": "dcd55809"
+  },
+  "var.proxy_type.option.http": {
+    "text": "Только HTTP",
+    "src": "718c2bed"
+  },
+  "var.proxy_type.option.mixed": {
+    "text": "Смешанный — HTTP + SOCKS5 на одном порту",
+    "src": "5b0f3617"
+  },
+  "var.proxy_type.option.socks": {
+    "text": "Только SOCKS5",
+    "src": "6a281035"
+  },
+  "var.proxy_type.title": {
+    "text": "Протокол локального прокси",
+    "src": "2bd62b90"
+  },
+  "var.proxy_type.tooltip": {
+    "text": "Тип входящего подключения для порта локального прокси.",
+    "src": "38da1ea2"
+  },
+  "var.proxy_user.title": {
+    "text": "Имя пользователя прокси",
+    "src": "4d4135dc"
+  },
+  "var.proxy_user.tooltip": {
+    "text": "Имя пользователя для авторизации на прокси (когда она включена).",
+    "src": "91c02d8d"
+  },
+  "var.resolve_enabled.title": {
+    "text": "Резолвить IP назначения",
+    "src": "344e22d0"
+  },
+  "var.resolve_enabled.tooltip": {
+    "text": "Резолвить обнаруженный домен в IP до маршрутизации, чтобы срабатывали правила GeoIP и IP. Выключите при использовании FakeIP — фиктивный IP уже несёт домен, а реальный запрос здесь обойдёт FakeIP и может не сработать на неисправном резолвере.",
+    "src": "21077fad"
+  },
+  "var.resolve_strategy.title": {
+    "text": "Стратегия резолва",
+    "src": "6316352b"
+  },
+  "var.resolve_strategy.tooltip": {
+    "text": "Предпочтение версии IP при резолве DNS",
+    "src": "6ae5eae4"
+  },
+  "var.route_address_enable.title": {
+    "text": "Свои маршруты туннеля",
+    "src": "01023ca3"
+  },
+  "var.route_address_enable.tooltip": {
+    "text": "Направлять весь IPv4 и IPv6 через туннель явными полудиапазонами вместо значений sing-box по умолчанию. По умолчанию выключено — включайте, только если стандартная маршрутизация работает неправильно.",
+    "src": "662d5c1a"
+  },
+  "var.tls_fragment.title": {
+    "text": "Фрагментация TLS",
+    "src": "9da29252"
+  },
+  "var.tls_fragment.tooltip": {
+    "text": "Разбивать TLS ClientHello на мелкие TCP-сегменты",
+    "src": "50deaf44"
+  },
+  "var.tls_fragment_fallback_delay.title": {
+    "text": "Резервная задержка",
+    "src": "cabf0ebb"
+  },
+  "var.tls_fragment_fallback_delay.tooltip": {
+    "text": "Время ожидания, когда автоопределение не сработало",
+    "src": "52ccf594"
+  },
+  "var.tls_mixed_case_sni.title": {
+    "text": "SNI в смешанном регистре",
+    "src": "3807e63a"
+  },
+  "var.tls_mixed_case_sni.tooltip": {
+    "text": "Случайный регистр букв в server_name (WwW.gOoGle.CoM). Обходит простой DPI с точным сравнением; бесполезно против фильтрации уровня GFW",
+    "src": "1eeb22d1"
+  },
+  "var.tls_record_fragment.title": {
+    "text": "Фрагментация TLS-записей",
+    "src": "29f76292"
+  },
+  "var.tls_record_fragment.tooltip": {
+    "text": "Разбивать рукопожатие на несколько TLS-записей (попробуйте сначала это)",
+    "src": "af4d78a3"
+  },
+  "var.tun_address.title": {
+    "text": "IPv4-адрес",
+    "src": "fa2e69b5"
+  },
+  "var.tun_address.tooltip": {
+    "text": "Адрес интерфейса TUN (CIDR)",
+    "src": "0de786ff"
+  },
+  "var.tun_address6.title": {
+    "text": "IPv6-адрес",
+    "src": "e253c621"
+  },
+  "var.tun_address6.tooltip": {
+    "text": "IPv6-адрес интерфейса TUN (CIDR). Применяется, только когда включён IPv6.",
+    "src": "b6793911"
+  },
+  "var.tun_auto_route.title": {
+    "text": "Автомаршрут",
+    "src": "294a9dd6"
+  },
+  "var.tun_auto_route.tooltip": {
+    "text": "Доверить sing-box управление таблицей маршрутизации",
+    "src": "b3a8efc9"
+  },
+  "var.tun_mtu.title": {
+    "text": "MTU",
+    "src": "c5599efa"
+  },
+  "var.tun_mtu.tooltip": {
+    "text": "Для мобильной сети и Wi-Fi рекомендуется 1492",
+    "src": "39b8b6c4"
+  },
+  "var.tun_name.title": {
+    "text": "Интерфейс TUN",
+    "src": "12a9b5b2"
+  },
+  "var.tun_name.tooltip": {
+    "text": "системное имя",
+    "src": "d4a89d64"
+  },
+  "var.tun_stack.title": {
+    "text": "Стек",
+    "src": "e5516412"
+  },
+  "var.tun_stack.tooltip": {
+    "text": "system (по умолчанию), gvisor (пользовательское пространство), mixed",
+    "src": "79236c41"
+  },
+  "var.tun_strict_route.title": {
+    "text": "Строгий маршрут",
+    "src": "b6835101"
+  },
+  "var.tun_strict_route.tooltip": {
+    "text": "На некоторых устройствах может нарушать связь",
+    "src": "5952e9f8"
+  },
+  "var.urltest_interval.title": {
+    "text": "Интервал теста",
+    "src": "1882ed6e"
+  },
+  "var.urltest_interval.tooltip": {
+    "text": "Как часто sing-box перепроверяет серверы и делает выбор заново. Меньше → быстрее переключение, но больше фонового трафика и расхода батареи: каждый цикл опрашивает серверы (пробуждая приостановленные туннели). 15 минут — щадящий для батареи вариант по умолчанию.",
+    "src": "0f9dba52"
+  },
+  "var.urltest_tolerance.title": {
+    "text": "Допуск (мс)",
+    "src": "b9bcf5fe"
+  },
+  "var.urltest_tolerance.tooltip": {
+    "text": "Переключать прокси, только если разница задержек превышает это значение",
+    "src": "985640f3"
+  },
+  "var.urltest_url.title": {
+    "text": "URL теста",
+    "src": "2a924526"
+  },
+  "var.urltest_url.tooltip": {
+    "text": "Адрес для измерения задержки прокси. Выберите готовый вариант или введите любой URL — лучше всего эндпоинты с ответом 204 или крошечным телом.",
+    "src": "0e09b949"
+  },
+  "var.vpn_mode.option.proxy": {
+    "text": "Прокси — только локальный порт, без TUN",
+    "src": "23e3a7fb"
+  },
+  "var.vpn_mode.option.vpn": {
+    "text": "VPN — туннель для всей системы",
+    "src": "7e1ddc3b"
+  },
+  "var.vpn_mode.option.vpn_proxy": {
+    "text": "VPN + Прокси — оба режима",
+    "src": "b79bb32d"
+  },
+  "var.vpn_mode.title": {
+    "text": "Режим VPN",
+    "src": "1cb1b7ea"
+  },
+  "var.vpn_mode.tooltip": {
+    "text": "Как ядро перехватывает трафик. Задаётся в настройках VPN → Режим.",
+    "src": "6abac90f"
+  }
+}

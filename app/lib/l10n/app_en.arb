@@ -19,5 +19,9 @@
   "settingsLanguageSystem": "System default",
   "@settingsLanguageSystem": {
     "description": "Language picker option: follow the device language (fall back to English when unsupported)."
+  },
+  "dnsMyDnsSeedName": "My DNS",
+  "@dnsMyDnsSeedName": {
+    "description": "DNS Settings: default description seeded into the editor when the user adds a new custom DNS server. Becomes user data after saving."
   }
 }

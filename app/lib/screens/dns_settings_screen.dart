@@ -9,6 +9,8 @@ import '../models/parser_config.dart';
 import '../services/builder/post_steps.dart';
 import '../services/builder/preset_expand.dart';
 import '../services/builder/rule_set_registry.dart';
+import '../services/l10n/l10n.dart';
+import '../services/l10n/template_aware_state.dart';
 import '../services/template_loader.dart';
 import '../services/preset_on_change.dart';
 import '../services/settings_storage.dart';
@@ -46,7 +48,10 @@ class DnsSettingsScreen extends StatefulWidget {
 }
 
 class _DnsSettingsScreenState extends State<DnsSettingsScreen>
-    with WidgetsBindingObserver, LazyPersistMixin<DnsSettingsScreen> {
+    with
+        WidgetsBindingObserver,
+        LazyPersistMixin<DnsSettingsScreen>,
+        TemplateAwareState<DnsSettingsScreen> {
   @override
   SubscriptionController get lazyController => widget.subController;
 
@@ -112,9 +117,14 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   String _dnsFinal = '';
   String _defaultResolver = '';
 
+  // §279 — _load() стартует из onLocaleTemplateFetch (TemplateAwareState):
+  // первый вызов — до первого build; смена локали — повторный _load()
+  // (безопасно: буферы экрана staged в SettingsStorage-кэш на каждую мутацию
+  // через markDirty→stageChanges, перечитывание вернёт их же, а
+  // template-derived display-данные — описания серверов, label'ы пресетов —
+  // пере-дерайвятся из свежелокализованного шаблона).
   @override
-  void initState() {
-    super.initState();
+  void onLocaleTemplateFetch({required bool first}) {
     unawaited(_load());
   }
 
@@ -125,20 +135,20 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     final template = await TemplateLoader.load();
     final vars = await SettingsStorage.getAllVars();
 
-    // Parse dns_options from template
-    final templateDns = template.dnsOptions;
-    final templateServersRaw = (templateDns['servers'] as List<dynamic>? ?? [])
-        .whereType<Map<String, dynamic>>()
-        .map((s) => Map<String, dynamic>.from(s))
-        .toList();
-    final templateRulesRaw = (templateDns['rules'] as List<dynamic>? ?? [])
-        .whereType<Map<String, dynamic>>()
-        .toList();
+    // Parse dns_options from template (§279 — typed DnsOptionsModel; raw
+    // остаётся только у machine-полей `rules`).
+    final templateServersRaw = [
+      for (final s in template.dnsOptionsModel.servers) s.wrapper,
+    ];
+    final templateRulesRaw =
+        (template.dnsOptions['rules'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
 
     // §043: storage хранит kind-discriminated refs (симметрия с DNS rules).
     // Resolver делает auto-discovery + orphan cleanup + legacy migration.
     // §117: template-серверы — обёртки `{description, enabled, vars?, server}`.
-    final templateByTag = templateDnsServersByTag(templateServersRaw);
+    final templateByTag = template.dnsOptionsModel.wrappersByTag;
 
     // §125: активные каналы для outbound-пикера vars (storage, не template).
     // vpn-1 присутствует required-инвариантом модели.
@@ -371,7 +381,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
         'enabled': true,
         'kind': 'inline',
         'tag': 'dns_new',
-        'description': 'My DNS',
+        // §279 seed-time-локализация: метка резолвится через активную локаль
+        // в момент создания (дальше — user data, ретроактивно не мигрируется).
+        'description': context.l.dnsMyDnsSeedName,
         'body': <String, dynamic>{'type': 'udp'},
       },
       outboundOptions: _outboundOptions,

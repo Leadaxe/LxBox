@@ -40,11 +40,17 @@ class CustomRuleEditScreen extends StatefulWidget {
     required this.outboundOptions,
     required this.existingNames,
     this.preset,
+    this.displayName,
   });
 
   final CustomRule initial;
   final List<OutboundOption> outboundOptions;
   final Set<String> existingNames;
+
+  /// §279 (§3.5.1) — live display-имя preset-правила (label из локализованного
+  /// шаблона + порядковый суффикс копии) для read-only Name-поля. null —
+  /// не preset-правило либо fallback на `initial.name`/`preset.label`.
+  final String? displayName;
 
   /// Bundle-пресет (spec §033). Обязателен когда `initial.kind == preset` —
   /// форма рендерит его `vars` для юзер-ввода. Null для preset-правила =
@@ -66,6 +72,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
       initial: widget.initial,
       preset: widget.preset,
       existingNames: widget.existingNames,
+      displayName: widget.displayName,
     );
   }
 
@@ -78,6 +85,14 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
   // ─── Save / delete / back ────────────────────────────────────────────
 
   Future<void> _save() async {
+    // §279 — у preset-правила `name` — снапшот label'а (fallback, display
+    // резолвит live); поле read-only, дедуп/переименование НЕ применяем —
+    // иначе display-резолвнутый existingNames переписал бы снапшот.
+    if (widget.initial.kind == CustomRuleKind.preset) {
+      Navigator.pop(
+          context, _CustomRuleEditResult.saved(_ctrl.snapshot()));
+      return;
+    }
     final name = _ctrl.nameCtrl.text.trim();
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -126,7 +141,9 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
     final confirmed = await showDeleteConfirmDialog(
       context,
       title: 'Delete rule?',
-      message: 'Remove "${widget.initial.name}" permanently?',
+      // §279 — display-имя (live-label пресета), fallback — снапшот.
+      message:
+          'Remove "${widget.displayName ?? widget.initial.name}" permanently?',
     ); // §219
     if (confirmed == true && mounted) {
       Navigator.pop(context, _CustomRuleEditResult.deleted());
@@ -406,6 +423,7 @@ Future<CustomRuleEditResult?> openCustomRuleEditor(
   required List<OutboundOption> outboundOptions,
   required Set<String> existingNames,
   SelectableRule? preset,
+  String? displayName,
 }) async {
   final result = await Navigator.push<_CustomRuleEditResult>(
     context,
@@ -415,6 +433,7 @@ Future<CustomRuleEditResult?> openCustomRuleEditor(
         outboundOptions: outboundOptions,
         existingNames: existingNames,
         preset: preset,
+        displayName: displayName,
       ),
     ),
   );

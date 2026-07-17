@@ -282,8 +282,11 @@ class HomeController extends ChangeNotifier
       // §165 — наполнить резолвер имён правил из custom_rules (для Stats/Conns
       // «Traffic by Rule»: c.rule ядра → title правила). Конфиг уже актуален
       // (раз connected) → правила те же, что зашиты в running-конфиг.
-      unawaited(SettingsStorage.getCustomRules()
-          .then((r) => RuleNameResolver.I.setRules(r)));
+      // §279 — template даёт live-label'ы preset-правил (локализованный кэш;
+      // холодный кэш → fallback на name-снапшоты, relocalize догонит).
+      unawaited(SettingsStorage.getCustomRules().then((r) =>
+          RuleNameResolver.I
+              .setRules(r, template: TemplateLoader.cachedOrNull())));
       _startHeartbeat();
       _heartbeatFailNotified = false;
       HapticService.I.onVpnConnected();

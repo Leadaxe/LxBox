@@ -2,6 +2,7 @@ import '../../config/consts.dart' show kBlockOutboundTag, kDirectOutboundTag;
 import '../../models/channel.dart';
 import '../../models/custom_rule.dart';
 import '../../models/parser_config.dart';
+import '../../services/rule_display_names.dart';
 
 /// Remote `rule_set` пресета (type=remote + url).
 class PresetRemoteRuleSet {
@@ -181,15 +182,19 @@ class RoutingHelpers {
         : '$summary — tap to edit';
   }
 
+  /// §279 (§3.5.1) — дедуп по DISPLAY-резолвнутым именам: live-label'ы
+  /// preset-строк (из локализованного [template]) + сохранённые снапшоты.
+  /// Иначе inline-правило можно назвать ровно как видимый label пресета и
+  /// получить визуальный дубль. [template] null (холодный кэш) → сравнение
+  /// только по сохранённым именам (как раньше).
   static String uniqueCustomRuleName(
     String requested,
     String selfId,
     List<CustomRule> customRules,
+    WizardTemplate? template,
   ) {
-    final others = customRules
-        .where((r) => r.id != selfId)
-        .map((r) => r.name)
-        .toSet();
+    final others =
+        visibleRuleNames(customRules, template, excludeId: selfId);
     if (!others.contains(requested)) return requested;
     var i = 2;
     while (others.contains('$requested ($i)')) {

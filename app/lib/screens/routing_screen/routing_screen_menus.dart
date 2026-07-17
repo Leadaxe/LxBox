@@ -80,13 +80,16 @@ Future<String?> showRuleContextMenu(
 
 /// Confirm-dialog удаления custom-rule. §219 — тонкая обёртка над общим
 /// showDeleteConfirmDialog (ui_helpers). Возвращает true если юзер подтвердил.
+/// §279 — [displayName] — live display-имя (label пресета из локализованного
+/// шаблона); null → сохранённое `rule.name`.
 Future<bool?> showDeleteCustomRuleDialog(
   BuildContext context,
-  CustomRule rule,
-) {
+  CustomRule rule, {
+  String? displayName,
+}) {
   return showDeleteConfirmDialog(
     context,
     title: 'Delete rule?',
-    message: 'Remove "${rule.name}" permanently?',
+    message: 'Remove "${displayName ?? rule.name}" permanently?',
   );
 }

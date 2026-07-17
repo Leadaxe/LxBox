@@ -8,6 +8,7 @@ import '../models/background_mode.dart';
 import '../models/memory_limit_setting.dart';
 import '../models/parser_config.dart';
 import '../services/builder/if_engine.dart';
+import '../services/l10n/template_aware_state.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
 import '../widgets/template_var_list.dart';
@@ -35,7 +36,9 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, TemplateAwareState<SettingsScreen> {
+  // §279 — заполняется через TemplateAwareState (didChangeDependencies по
+  // локали), НЕ в initState: смена языка перечитывает локализованный шаблон.
   WizardTemplate? _template;
   // §232 — реактивная модель значений vars (per-key ValueNotifier). Единый
   // источник истины для экрана: поля TemplateVarListView подписаны каждый на
@@ -70,7 +73,25 @@ class _SettingsScreenState extends State<SettingsScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    unawaited(_load());
+    // _load() стартует из onLocaleTemplateFetch (TemplateAwareState, §279).
+  }
+
+  /// §279 — первый вызов (до первого build) — полная загрузка; смена локали —
+  /// только refetch шаблона (модель значений var'ов — machine-ключи, staged
+  /// правки юзера не трогаем).
+  @override
+  void onLocaleTemplateFetch({required bool first}) {
+    if (first) {
+      unawaited(_load());
+    } else {
+      unawaited(_refetchTemplate());
+    }
+  }
+
+  Future<void> _refetchTemplate() async {
+    final template = await TemplateLoader.load();
+    if (!mounted) return;
+    setState(() => _template = template);
   }
 
   @override

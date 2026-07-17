@@ -14,6 +14,7 @@ class CustomRuleTile extends StatelessWidget {
     super.key,
     required this.index,
     required this.rule,
+    required this.displayName,
     required this.options,
     required this.subtitle,
     required this.pickerValue,
@@ -30,6 +31,12 @@ class CustomRuleTile extends StatelessWidget {
 
   final int index;
   final CustomRule rule;
+
+  /// §279 (§3.5.1) — live display-имя (label пресета из локализованного
+  /// шаблона + порядковый суффикс копии; для inline/srs — `rule.name`).
+  /// Резолвится экраном (`ruleDisplayName`), тайл только рендерит.
+  final String displayName;
+
   final List<RoutingOutboundOption> options;
   final String subtitle;
   final String pickerValue;
@@ -84,7 +91,7 @@ class CustomRuleTile extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(rule.name,
+                  child: Text(displayName,
                       style: TextStyle(
                         fontWeight: FontWeight.w500,
                         color: rule.enabled ? null : cs.onSurfaceVariant,
