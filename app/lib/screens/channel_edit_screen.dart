@@ -511,7 +511,7 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                         border: const OutlineInputBorder(),
                         isDense: true,
                         helperText: _autoMode == UrltestMode.roundRobin
-                            ? 'used in Fastest mode'
+                            ? context.l.channelEditUsedInFastestHelper
                             : null,
                         helperStyle: const TextStyle(fontSize: 10),
                       ),
@@ -630,7 +630,9 @@ class _ChannelEditScreenState extends State<ChannelEditScreen> {
                 labelText: context.l.channelEditPoolSizeLabel,
                 border: const OutlineInputBorder(),
                 isDense: true,
-                helperText: nodeCount > 0 ? 'of $nodeCount nodes' : null,
+                helperText: nodeCount > 0
+                    ? context.l.channelEditOfNodesHelper(nodeCount)
+                    : null,
                 helperStyle: const TextStyle(fontSize: 10),
               ),
               style: const TextStyle(fontSize: 13),

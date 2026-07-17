@@ -299,8 +299,8 @@ class _UpdateBlockState extends State<_UpdateBlock> {
                     Expanded(
                       child: Text(
                         info != null
-                            ? '${info.tag} available'
-                            : 'No updates pending',
+                            ? context.l.aboutUpdateAvailable(info.tag)
+                            : context.l.aboutNoUpdatesPending,
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
                     ),

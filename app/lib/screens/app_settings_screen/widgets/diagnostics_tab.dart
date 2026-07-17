@@ -113,8 +113,8 @@ class DiagnosticsTab extends StatelessWidget {
           ),
           title: Text(context.l.appSettingsDiagBatteryTitle),
           subtitle: Text(batteryWhitelisted
-              ? 'Whitelisted — VPN can run in background'
-              : 'Restricted — Android may pause VPN in idle. Tap to grant.'),
+              ? context.l.appSettingsDiagBatteryWhitelisted
+              : context.l.appSettingsDiagBatteryRestricted),
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: onBatteryTap,
         ),
@@ -129,8 +129,8 @@ class DiagnosticsTab extends StatelessWidget {
           ),
           title: Text(context.l.appSettingsDiagNotificationsTitle),
           subtitle: Text(notificationsEnabled
-              ? 'Allowed — foreground service shows VPN status'
-              : 'Blocked — Android may throttle the VPN service. Tap to allow.'),
+              ? context.l.appSettingsDiagNotifAllowed
+              : context.l.appSettingsDiagNotifBlocked),
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: onNotificationsTap,
         ),
@@ -149,8 +149,8 @@ class DiagnosticsTab extends StatelessWidget {
           ),
           title: Text(context.l.appSettingsDiagLocationTitle),
           subtitle: Text(backgroundLocationGranted
-              ? 'Granted — sing-box can read Wi-Fi state for routing rules'
-              : 'Required for Wi-Fi-based routing rules. Tap to grant.'),
+              ? context.l.appSettingsDiagLocationGranted
+              : context.l.appSettingsDiagLocationRequired),
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: onBackgroundLocationTap,
         ),
@@ -165,8 +165,8 @@ class DiagnosticsTab extends StatelessWidget {
           ),
           title: Text(context.l.appSettingsDiagNearbyWifiTitle),
           subtitle: Text(nearbyWifiGranted
-              ? 'Granted — real SSID/BSSID accessible'
-              : 'Android 13+ requires this for SSID. Tap to grant.'),
+              ? context.l.appSettingsDiagNearbyWifiGranted
+              : context.l.appSettingsDiagNearbyWifiRequired),
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: onNearbyWifiTap,
         ),
@@ -185,8 +185,8 @@ class DiagnosticsTab extends StatelessWidget {
           title: Text(context.l.appSettingsDiagDebugApiTitle),
           subtitle: Text(
             debugEnabled
-                ? 'Exposed on http://127.0.0.1:$debugPort (adb forward only)'
-                : 'Runtime HTTP server for adb-forwarded debugging.',
+                ? context.l.appSettingsDiagDebugApiOn(debugPort)
+                : context.l.appSettingsDiagDebugApiOff,
           ),
           secondary: const Icon(Icons.bug_report),
           value: debugEnabled,
@@ -261,8 +261,8 @@ class DiagnosticsTab extends StatelessWidget {
             title: Text(context.l.appSettingsDiagLockConfigTitle),
             subtitle: Text(
               configLocked
-                  ? 'Pinned. UI actions skip config rebuild — useful when testing PUT /config overrides.'
-                  : 'Off — UI actions rebuild config from settings as usual.',
+                  ? context.l.appSettingsDiagLockConfigOn
+                  : context.l.appSettingsDiagLockConfigOff,
             ),
             secondary: const Icon(Icons.lock_outline),
             value: configLocked,
@@ -285,8 +285,8 @@ class DiagnosticsTab extends StatelessWidget {
             title: Text(context.l.appSettingsDiagForwardLogsTitle),
             subtitle: Text(
               coreLogsEnabled
-                  ? 'Visible in Debug → Core.'
-                  : 'Off.',
+                  ? context.l.appSettingsDiagForwardLogsOn
+                  : context.l.appSettingsDiagForwardLogsOff,
             ),
             secondary: const Icon(Icons.terminal),
             value: coreLogsEnabled,
@@ -370,8 +370,8 @@ class DiagnosticsTab extends StatelessWidget {
           title: Text(context.l.appSettingsDiagAutoRecordTitle),
           subtitle: Text(
             autoRecordWifi
-                ? 'Networks where you stay ≥ 5 minutes appear in routing rule editor → Pick saved.'
-                : 'Off. Pick saved is populated only by Add current / Manual.',
+                ? context.l.appSettingsDiagAutoRecordOn
+                : context.l.appSettingsDiagAutoRecordOff,
           ),
           secondary: const Icon(Icons.history),
           value: autoRecordWifi,

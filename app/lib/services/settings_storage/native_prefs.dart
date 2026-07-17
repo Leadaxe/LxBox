@@ -167,9 +167,37 @@ Future<void> _bootstrapAndSyncNativePrefs() async {
   // §192 — has_tun = производное от vpn_mode (не настройка, не бэкапится).
   // Синхронизируем на старте: гейтит VpnService.prepare() (proxy → не звать).
   await _syncHasTunToNative();
+  // §279 Phase 6 (спека §6.4) — трёхсторонний reconciliation с LocaleManager
+  // (33+) ДО финального пере-пуша: смена per-app-языка в системных Settings
+  // побеждает сторадж; смена стораджа под ногами (restore / Debug API при
+  // мёртвом приложении) пере-пушится в LocaleManager, а не затирается.
+  await _reconcileAppLanguageWithSystem();
   // §279 — app_language: пере-пуш derived cache на каждом старте (как sync
   // выше — диск-истина перезаливает native-копию).
   await _mirrorAppLanguageToNative(await SettingsStorage.getAppLanguage());
+}
+
+/// §279 Phase 6 — применить решение чистой функции [reconcileAppLanguage].
+/// Best-effort: API < 33 / старый native / тест без mock'а → no-op.
+Future<void> _reconcileAppLanguageWithSystem() async {
+  try {
+    final state = await BoxVpnClient().getAppLanguageState();
+    if (state == null) return;
+    final stored = await SettingsStorage.getAppLanguage();
+    switch (reconcileAppLanguage(stored: stored, state: state)) {
+      case ReconcileSystemWins(:final newSetting):
+        // Система победила: пишем сторадж; native-зеркало + LocaleManager +
+        // last_pushed обновятся внутри setAppLanguage (тот же пуш-путь).
+        await SettingsStorage.setAppLanguage(newSetting);
+      case ReconcileStorageWins():
+        // Сторадж победил: пере-пушить хранимое значение в LocaleManager.
+        await _mirrorAppLanguageToNative(stored);
+      case ReconcileNoop():
+        break;
+    }
+  } catch (_) {
+    // Сторадж остаётся истиной; натив догонит при следующем пуше.
+  }
 }
 
 /// §279 — зеркало `app_language` в native (`boxvpn_boot`). Документированное

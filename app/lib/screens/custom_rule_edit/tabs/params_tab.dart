@@ -106,10 +106,14 @@ class ParamsTab extends StatelessWidget {
               padding: const EdgeInsets.only(top: 6, left: 4),
               child: Text(
                 c.resolve!.only
-                    ? '✳ Resolve only'
-                        '${c.resolve!.strategy.isNotEmpty ? ' · ${c.resolve!.strategy}' : ''}'
-                    : '✳ Resolve first'
-                        '${c.resolve!.strategy.isNotEmpty ? ' · ${c.resolve!.strategy}' : ''}',
+                    ? context.l.ruleEditResolveOnlySummary(
+                        c.resolve!.strategy.isNotEmpty
+                            ? ' · ${c.resolve!.strategy}'
+                            : '')
+                    : context.l.ruleEditResolveFirstSummary(
+                        c.resolve!.strategy.isNotEmpty
+                            ? ' · ${c.resolve!.strategy}'
+                            : ''),
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.primary),
               ),

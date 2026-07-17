@@ -447,8 +447,9 @@ class HomeNodeList extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
           content: Text(healedParts.isEmpty
-              ? 'Saved channel "$label"'
-              : 'Saved channel "$label" — ${healedParts.join('; ')}')),
+              ? context.l.homeChannelSavedSnack(label)
+              : context.l
+                  .homeChannelSavedHealedSnack(label, healedParts.join('; ')))),
     );
     if (state.tunnelUp && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

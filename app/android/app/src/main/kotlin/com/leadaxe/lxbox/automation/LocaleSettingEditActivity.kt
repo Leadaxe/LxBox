@@ -15,6 +15,8 @@ import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
+import com.leadaxe.lxbox.R
+import com.leadaxe.lxbox.vpn.L10n
 
 /// §047 Шаг 2 — «Custom…» edit-экран setting-плагина. Частые команды (Start /
 /// Stop / Toggle) host показывает отдельными one-tap строками
@@ -29,19 +31,20 @@ import android.widget.TextView
 /// / [LocaleApi.cachedGroups]).
 class LocaleSettingEditActivity : Activity() {
 
-    /// (cmd, label, extra-name or null, source-of-options).
+    /// (cmd, label-resource, extra-name or null, source-of-options).
+    /// §279 — cmd/extra = wire (Tasker-bundle), label — ресурс (L10n).
     private val commands = listOf(
-        Cmd("switch-node", "Switch node", "tag", Source.NODES),
-        Cmd("set-group", "Set group", "group", Source.GROUPS),
-        Cmd("urltest-group", "URL-test group", "group", Source.GROUPS),
-        Cmd("refresh-subs", "Refresh subscriptions", null, Source.NONE),
-        Cmd("rebuild-config", "Rebuild config", null, Source.NONE),
-        Cmd("reset-network", "Reset network", null, Source.NONE),
+        Cmd("switch-node", R.string.automation_cmd_switch_node, "tag", Source.NODES),
+        Cmd("set-group", R.string.automation_cmd_set_group, "group", Source.GROUPS),
+        Cmd("urltest-group", R.string.automation_cmd_urltest_group, "group", Source.GROUPS),
+        Cmd("refresh-subs", R.string.automation_cmd_refresh_subs, null, Source.NONE),
+        Cmd("rebuild-config", R.string.automation_cmd_rebuild_config, null, Source.NONE),
+        Cmd("reset-network", R.string.automation_cmd_reset_network, null, Source.NONE),
     )
 
     private enum class Source { NONE, NODES, GROUPS }
     private data class Cmd(
-        val cmd: String, val label: String, val extra: String?, val source: Source,
+        val cmd: String, val labelRes: Int, val extra: String?, val source: Source,
     )
 
     private lateinit var radioGroup: RadioGroup
@@ -54,7 +57,7 @@ class LocaleSettingEditActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        title = "L×Box"
+        title = L10n.str(this, R.string.app_name)
         nodes = LocaleApi.cachedNodes(this)
         groups = LocaleApi.cachedGroups(this)
 
@@ -65,7 +68,8 @@ class LocaleSettingEditActivity : Activity() {
         }
 
         content.addView(TextView(this).apply {
-            text = "L×Box command:"
+            text = L10n.str(this@LocaleSettingEditActivity,
+                R.string.automation_command_prompt)
             setPadding(0, 0, 0, pad / 2)
         })
 
@@ -73,7 +77,7 @@ class LocaleSettingEditActivity : Activity() {
         commands.forEachIndexed { idx, c ->
             radioGroup.addView(RadioButton(this).apply {
                 id = idx
-                text = c.label
+                text = L10n.str(this@LocaleSettingEditActivity, c.labelRes)
                 setPadding(0, pad / 3, 0, pad / 3)
             })
         }
@@ -96,7 +100,7 @@ class LocaleSettingEditActivity : Activity() {
         content.addView(extraInput)
 
         val save = Button(this).apply {
-            text = "Save"
+            text = L10n.str(this@LocaleSettingEditActivity, R.string.automation_save)
             gravity = Gravity.CENTER
             setOnClickListener { onSave() }
         }
@@ -114,7 +118,8 @@ class LocaleSettingEditActivity : Activity() {
     /// для prefill (выбрать в Spinner / вписать в EditText).
     private fun updateExtra(checkedId: Int, preset: String?) {
         val c = commands.getOrNull(checkedId)
-        if (c?.extra == null) {
+        val extra = c?.extra
+        if (c == null || extra == null) {
             extraLabel.visibility = View.GONE
             extraSpinner.visibility = View.GONE
             extraInput.visibility = View.GONE
@@ -125,7 +130,8 @@ class LocaleSettingEditActivity : Activity() {
             Source.GROUPS -> groups
             Source.NONE -> emptyList()
         }
-        extraLabel.text = "Value (${c.extra}):"
+        // Имя extra — wire-идентификатор (tag/group), в аргумент как есть.
+        extraLabel.text = L10n.str(this, R.string.automation_value_label, extra)
         extraLabel.visibility = View.VISIBLE
         if (options.isNotEmpty()) {
             // Spinner реальных значений из кеша.
@@ -172,11 +178,13 @@ class LocaleSettingEditActivity : Activity() {
         val idx = if (checkedId in commands.indices) checkedId else 0
         val c = commands[idx]
         val args = mutableMapOf<String, Any?>()
-        var blurb = c.label
+        // §279 — блёрб display-only (host матчит по extras): активная локаль.
+        val label = L10n.str(this, c.labelRes)
+        var blurb = label
         if (c.extra != null) {
             val value = currentExtraValue()
             args[c.extra] = value
-            if (value.isNotEmpty()) blurb = "${c.label} → $value"
+            if (value.isNotEmpty()) blurb = "$label → $value"
         }
         val data = Intent().apply {
             putExtra(LocaleApi.EXTRA_BUNDLE, LocaleApi.buildSettingBundle(c.cmd, args))

@@ -83,7 +83,9 @@ class SubscriptionsTab extends StatelessWidget {
           leading: const Icon(Icons.badge_outlined),
           title: Text(context.l.appSettingsSubsUaTitle),
           subtitle: Text(
-            userAgent.isEmpty ? 'Default · $defaultUserAgent' : userAgent,
+            userAgent.isEmpty
+                ? context.l.appSettingsSubsUaDefault(defaultUserAgent)
+                : userAgent,
             style: TextStyle(
               fontStyle: userAgent.isEmpty ? FontStyle.italic : null,
             ),
@@ -155,7 +157,7 @@ class SubscriptionsTab extends StatelessWidget {
       leading: Icon(icon),
       title: Text(label),
       subtitle: Text(
-        value.isEmpty ? '(empty)' : value,
+        value.isEmpty ? context.l.appSettingsSubsEmptyValue : value,
         style: TextStyle(
           fontFamily: monospace ? 'monospace' : null,
           fontSize: monospace ? 12 : null,

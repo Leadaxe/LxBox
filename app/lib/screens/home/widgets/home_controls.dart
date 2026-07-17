@@ -87,7 +87,9 @@ class HomeControls extends StatelessWidget {
                   state.tunnelUp ? Icons.stop_rounded : Icons.play_arrow_rounded,
                   size: 20,
                 ),
-                label: Text(state.tunnelUp ? 'Stop' : 'Start'),
+                label: Text(state.tunnelUp
+                    ? context.l.homeStopButton
+                    : context.l.homeStartButton),
               ),
               const SizedBox(width: 8),
               connectingAnimChild,

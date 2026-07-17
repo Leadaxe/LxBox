@@ -68,14 +68,18 @@
   "@homeConfigRebuilt": {
     "description": "Home: snackbar after the config was rebuilt while the tunnel is down; count = number of nodes in the new config.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "homeConfigRebuiltRestart": "{count, plural, one{Config rebuilt: {count} node — restart VPN to apply} other{Config rebuilt: {count} nodes — restart VPN to apply}}",
   "@homeConfigRebuiltRestart": {
     "description": "Home: snackbar after the config was rebuilt while the tunnel is up — a VPN restart is needed to apply it; count = number of nodes.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "homeStopVpnTitle": "Stop VPN?",
@@ -86,7 +90,9 @@
   "@homeStopVpnBody": {
     "description": "Home: body of the stop-VPN confirmation dialog; count = number of active connections that will be closed.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "homeStopVpnStop": "Stop",
@@ -113,8 +119,12 @@
   "@homeUpdateAvailable": {
     "description": "Home: update snackbar; tag = new release tag (e.g. v2.16.0), version = currently installed version.",
     "placeholders": {
-      "tag": {"type": "String"},
-      "version": {"type": "String"}
+      "tag": {
+        "type": "String"
+      },
+      "version": {
+        "type": "String"
+      }
     }
   },
   "homeUpdateView": "View",
@@ -209,7 +219,9 @@
   "@homeNodeNotFound": {
     "description": "Home: snackbar when the tapped node's outbound chain is missing from the parsed config; tag = node tag.",
     "placeholders": {
-      "tag": {"type": "String"}
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "homeNodeNoDetour": "No detour for this node",
@@ -236,7 +248,9 @@
   "@backupRestoreFailed": {
     "description": "Restore from backup: snackbar on unexpected failure; detail = humanized error text.",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "homeFilterShowNonMatching": "Show NON-matching",
@@ -259,7 +273,9 @@
   "@homeFilterMaxPingChip": {
     "description": "Home filter panel: summary chip for the active max-ping filter; ms = threshold in milliseconds.",
     "placeholders": {
-      "ms": {"type": "int"}
+      "ms": {
+        "type": "int"
+      }
     }
   },
   "homeFilterNonMatchingHidden": "Non-matching hidden",
@@ -302,7 +318,9 @@
   "@homeDetourLoopEdge": {
     "description": "Home detour-loop sheet: subtitle of a culprit node row showing its detour edge; detour = target tag. 'detour' is a config field name, keep as is.",
     "placeholders": {
-      "detour": {"type": "String"}
+      "detour": {
+        "type": "String"
+      }
     }
   },
   "homeChannelLabel": "Channel",
@@ -409,14 +427,18 @@
   "@homeApplyToTitle": {
     "description": "Home: title of the dialog saving the current regex filter into a channel; label = channel display name.",
     "placeholders": {
-      "label": {"type": "String"}
+      "label": {
+        "type": "String"
+      }
     }
   },
   "homeUseRegexAs": "Use \"{pattern}\" as…",
   "@homeUseRegexAs": {
     "description": "Home: body of the save-regex dialog asking which channel field to write; pattern = the regex text.",
     "placeholders": {
-      "pattern": {"type": "String"}
+      "pattern": {
+        "type": "String"
+      }
     }
   },
   "homeRegexAsFilter": "Filter",
@@ -479,7 +501,9 @@
   "@homePoolTitle": {
     "description": "Home: title of the round-robin pool dialog; title = group tag.",
     "placeholders": {
-      "title": {"type": "String"}
+      "title": {
+        "type": "String"
+      }
     }
   },
   "homePoolUnavailable": "Pool unavailable — tunnel not connected",
@@ -494,7 +518,9 @@
   "@homePoolSlot": {
     "description": "Home pool dialog: row prefix with the slot number; slot = 1-based index.",
     "placeholders": {
-      "slot": {"type": "int"}
+      "slot": {
+        "type": "int"
+      }
     }
   },
   "debugDnsEventsOff": "DNS / router events off",
@@ -517,7 +543,9 @@
   "@subDetourThisFolder": {
     "description": "Detour target picker: expandable section listing servers of the current folder; count = number of servers.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "subDetourThisFolderSub": "Chains inside the folder get the folder detour appended",
@@ -548,14 +576,18 @@
   "@routingRuleAddedSrs": {
     "description": "Routing snackbar: rule preset added but its rule-set file still needs downloading; label = preset display name.",
     "placeholders": {
-      "label": {"type": "String"}
+      "label": {
+        "type": "String"
+      }
     }
   },
   "routingRuleAdded": "Added \"{label}\" to Rules",
   "@routingRuleAdded": {
     "description": "Routing snackbar: rule preset added and ready; label = preset display name.",
     "placeholders": {
-      "label": {"type": "String"}
+      "label": {
+        "type": "String"
+      }
     }
   },
   "routingRejectOption": "Reject",
@@ -594,7 +626,9 @@
   "@routingWifiUsedIn": {
     "description": "Saved Wi-Fi networks sheet: subtitle listing which rules already use this network; rules = comma-separated rule names.",
     "placeholders": {
-      "rules": {"type": "String"}
+      "rules": {
+        "type": "String"
+      }
     }
   },
   "routingWifiNothingSaved": "Nothing saved yet. Use \"Add current\" / \"Manual\" or stay on a Wi-Fi network for 5 minutes.",
@@ -609,7 +643,9 @@
   "@routingWifiAddCount": {
     "description": "Saved Wi-Fi networks sheet: confirming button adding the selected networks; count = number selected.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "routingWifiAutoRecordOff": "Auto-record is off",
@@ -684,21 +720,27 @@
   "@settingsDurationSeconds": {
     "description": "Dropdown option: a duration in seconds (e.g. idle-suspend threshold).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "settingsDurationMinutes": "{count, plural, one{{count} minute} other{{count} minutes}}",
   "@settingsDurationMinutes": {
     "description": "Dropdown option: a duration in minutes (e.g. idle-suspend threshold).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "settingsDurationHours": "{count, plural, one{{count} hour} other{{count} hours}}",
   "@settingsDurationHours": {
     "description": "Dropdown option: a duration in hours (e.g. idle-suspend threshold).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "settingsIdleReachableTitle": "Suspend active-route tunnels",
@@ -733,7 +775,9 @@
   "@settingsMemoryLimitMb": {
     "description": "VPN Settings memory limit dropdown: fixed cap option; mb = megabytes.",
     "placeholders": {
-      "mb": {"type": "int"}
+      "mb": {
+        "type": "int"
+      }
     }
   },
   "settingsSleepModeTitle": "Tunnel sleep mode",
@@ -804,7 +848,9 @@
   "@appSettingsPprofProfiling": {
     "description": "App Settings, Diagnostics: snackbar while a blocking pprof capture runs; seconds = capture duration.",
     "placeholders": {
-      "seconds": {"type": "int"}
+      "seconds": {
+        "type": "int"
+      }
     }
   },
   "appSettingsPprofEmpty": "Profile was empty (timeout?).",
@@ -815,7 +861,9 @@
   "@appSettingsPprofCaptureFailed": {
     "description": "App Settings, Diagnostics: snackbar when the pprof capture threw; detail = humanized error text.",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "appSettingsQuitTitle": "Quit & reopen app?",
@@ -866,7 +914,9 @@
   "@appSettingsAutomationCopiedSnack": {
     "description": "App Settings, Automation: snackbar after copying an intent string; label = what was copied (e.g. the appSettingsAutomationCommandLabel).",
     "placeholders": {
-      "label": {"type": "String"}
+      "label": {
+        "type": "String"
+      }
     }
   },
   "appSettingsAutomationCommandLabel": "Command",
@@ -973,8 +1023,12 @@
   "@appSettingsDiagPortRange": {
     "description": "App Settings, Diagnostics: helper text under the port field showing the allowed range.",
     "placeholders": {
-      "min": {"type": "int"},
-      "max": {"type": "int"}
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
     }
   },
   "appSettingsDiagTokenNote": "Token is shown only here. It is NOT written to any file — use Copy to save. Server binds on 127.0.0.1 only; use `adb forward tcp:9269 tcp:9269`.",
@@ -1009,7 +1063,9 @@
   "@appSettingsDiagCaptureButton": {
     "description": "App Settings, Diagnostics: pprof capture button; label = profile kind (goroutine dump, CPU profile…), comes from code.",
     "placeholders": {
-      "label": {"type": "String"}
+      "label": {
+        "type": "String"
+      }
     }
   },
   "appSettingsDiagPprofHint": "Binary profiles (.pb): go tool pprof file.pb\nHeap inuse_space: go tool pprof -inuse_space heap-*.pb",
@@ -1176,14 +1232,18 @@
   "@subConfigRegenerated": {
     "description": "Servers screen: snackbar after a server/subscription add rebuilt the config; count = enabled node total.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "subConfigGenerated": "Config generated: {count} nodes",
   "@subConfigGenerated": {
     "description": "Servers screen: snackbar after 'update all' refetched subscriptions and generated the config; count = node total.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "subClipboardEmpty": "Clipboard is empty",
@@ -1202,21 +1262,27 @@
   "@subErrorSnack": {
     "description": "Servers screen: generic error snackbar; detail = formatted error text.",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "subImportIntoFolderTitle": "Import {count} files into folder",
   "@subImportIntoFolderTitle": {
     "description": "Servers screen: title of the folder-name dialog when importing several files at once; count = number of files.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "subImportEmptyFile": "{name}: empty file",
   "@subImportEmptyFile": {
     "description": "Servers screen: per-file error line in the multi-file import snackbar; name = file name.",
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "subUpdateAllTooltip": "Update all & generate",
@@ -1263,7 +1329,9 @@
   "@subCopiedUrl": {
     "description": "Servers screens: snackbar when a URL could not be opened in a browser and was copied to the clipboard instead; url = the URL.",
     "placeholders": {
-      "url": {"type": "String"}
+      "url": {
+        "type": "String"
+      }
     }
   },
   "subCopyUrl": "Copy URL",
@@ -1306,7 +1374,9 @@
   "@subDeleteRemoveBody": {
     "description": "Servers screens: body of the delete confirmation dialog; name = entry display name.",
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "subRenameMenu": "Rename…",
@@ -1325,8 +1395,12 @@
   "@subDeleteFolderBody": {
     "description": "Servers screen: body of the delete-folder dialog for a non-empty folder; count = member servers, name = folder name.",
     "placeholders": {
-      "count": {"type": "int"},
-      "name": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      }
     }
   },
   "subKeepServers": "Keep servers",
@@ -1389,7 +1463,9 @@
   "@subFolderServersCount": {
     "description": "Folder rows: member count subtitle; count = servers in the folder.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "subAddFromClipboardTitle": "Add from clipboard",
@@ -1404,7 +1480,9 @@
   "@subDetected": {
     "description": "Paste-from-clipboard confirm dialog: detected content kind; what = analysis title (e.g. proxy link type).",
     "placeholders": {
-      "what": {"type": "String"}
+      "what": {
+        "type": "String"
+      }
     }
   },
   "subTestServersUnavailable": "Test servers list unavailable",
@@ -1419,7 +1497,9 @@
   "@subListN": {
     "description": "Public test servers dialog: row title for the Nth server list; number = 1-based index.",
     "placeholders": {
-      "number": {"type": "int"}
+      "number": {
+        "type": "int"
+      }
     }
   },
   "subShareUrlTitle": "Share subscription URL",
@@ -1450,22 +1530,30 @@
   "@subEntryFolderServersOff": {
     "description": "Servers list row subtitle: folder member count with disabled count; count = total members, off = disabled members.",
     "placeholders": {
-      "count": {"type": "int"},
-      "off": {"type": "int"}
+      "count": {
+        "type": "int"
+      },
+      "off": {
+        "type": "int"
+      }
     }
   },
   "subEntryProtocolServer": "{protocol} server",
   "@subEntryProtocolServer": {
     "description": "Servers list row subtitle for a single server; protocol = uppercased protocol name (VLESS, WIREGUARD…).",
     "placeholders": {
-      "protocol": {"type": "String"}
+      "protocol": {
+        "type": "String"
+      }
     }
   },
   "subEntryNodesCount": "{count} nodes",
   "@subEntryNodesCount": {
     "description": "Servers list row subtitle / subscription meta: node count of a subscription.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "subEntryFileBadge": "file",
@@ -1480,7 +1568,9 @@
   "@subEntryFails": {
     "description": "Servers list row subtitle: consecutive fetch failure counter; count = failures.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "subEmptyGettingStarted": "Getting started",
@@ -1547,7 +1637,9 @@
   "@subExpires": {
     "description": "Subscription detail meta: expiry line; date = formatted expiry date.",
     "placeholders": {
-      "date": {"type": "String"}
+      "date": {
+        "type": "String"
+      }
     }
   },
   "subSupportChip": "Support",
@@ -1562,16 +1654,24 @@
   "@subTrafficUsed": {
     "description": "Subscription detail meta: traffic quota line; used/total = formatted byte amounts.",
     "placeholders": {
-      "used": {"type": "String"},
-      "total": {"type": "String"}
+      "used": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
     }
   },
   "subNodesCountWithDetour": "{count} +{detour}⚙ nodes",
   "@subNodesCountWithDetour": {
     "description": "Subscription detail meta: node count including detour chain nodes; count = nodes, detour = detour node count.",
     "placeholders": {
-      "count": {"type": "int"},
-      "detour": {"type": "int"}
+      "count": {
+        "type": "int"
+      },
+      "detour": {
+        "type": "int"
+      }
     }
   },
   "subUpdateToSeeNodes": "Update subscription to see nodes",
@@ -1586,7 +1686,9 @@
   "@subNodesWithWarnings": {
     "description": "Subscription detail Nodes tab: orange banner counting nodes with actionable warnings; count = nodes.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "subCopyNodeInfo": "Copy node info",
@@ -1657,14 +1759,18 @@
   "@subReplaceAllArrow": {
     "description": "Detour mode: subtitle of Add detour in replace-all mode; target = chosen outbound label.",
     "placeholders": {
-      "target": {"type": "String"}
+      "target": {
+        "type": "String"
+      }
     }
   },
   "subFillMissingArrow": "Fill missing → {target}",
   "@subFillMissingArrow": {
     "description": "Detour mode: subtitle of Add detour in fill-missing mode; target = chosen outbound label.",
     "placeholders": {
-      "target": {"type": "String"}
+      "target": {
+        "type": "String"
+      }
     }
   },
   "subOutbound": "Outbound",
@@ -1727,7 +1833,9 @@
   "@subDetourPathPreview": {
     "description": "Subscription/folder settings: packet path preview through the chosen detour; path = arrow-joined hop chain.",
     "placeholders": {
-      "path": {"type": "String"}
+      "path": {
+        "type": "String"
+      }
     }
   },
   "subSubscriptionHeader": "Subscription",
@@ -1782,7 +1890,9 @@
   "@subFetchFailed": {
     "description": "Subscription Source tab: error line when the live GET failed; detail = humanized error text.",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "subNoDataTapRefresh": "No data — tap refresh above",
@@ -1797,7 +1907,9 @@
   "@subShowAllHeaders": {
     "description": "Subscription Source tab: expand button revealing the remaining headers; count = hidden header count.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "subRawResponse": "Raw response",
@@ -1824,7 +1936,9 @@
   "@subInvalidJson": {
     "description": "Node settings: snackbar when the edited outbound JSON fails to parse; detail = formatted error text.",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "subInfoHeader": "Info",
@@ -1867,8 +1981,12 @@
   "@subNodePathPreview": {
     "description": "Node settings: packet path preview through the detour chain; path = arrow-joined hops, tag = this node's tag.",
     "placeholders": {
-      "path": {"type": "String"},
-      "tag": {"type": "String"}
+      "path": {
+        "type": "String"
+      },
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "subOutboundJsonHeader": "Outbound JSON",
@@ -1915,14 +2033,18 @@
   "@commonCopiedValue": {
     "description": "Generic snackbar after copying a value to the clipboard; value = the copied text.",
     "placeholders": {
-      "value": {"type": "String"}
+      "value": {
+        "type": "String"
+      }
     }
   },
   "commonShareFailed": "Share failed: {detail}",
   "@commonShareFailed": {
     "description": "Generic snackbar when sharing content via the system share sheet failed; detail = formatted error text.",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "commonReplace": "Replace",
@@ -1933,7 +2055,9 @@
   "@channelEditTitle": {
     "description": "Channel editor: AppBar title; tag = system channel tag (e.g. vpn-1).",
     "placeholders": {
-      "tag": {"type": "String"}
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "channelEditDeleteTooltip": "Delete channel",
@@ -1948,8 +2072,12 @@
   "@channelEditDeleteBody": {
     "description": "Channel editor: confirm dialog body; label = channel display name, tag = system tag. vpn-1 is a wire tag, keep as-is.",
     "placeholders": {
-      "label": {"type": "String"},
-      "tag": {"type": "String"}
+      "label": {
+        "type": "String"
+      },
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "channelEditTitleLabel": "Title",
@@ -2096,7 +2224,9 @@
   "@ruleEditNameInUse": {
     "description": "Rule editor: snackbar when the chosen name already exists; name = deduplicated name actually saved.",
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "ruleEditDeleteTitle": "Delete rule?",
@@ -2107,7 +2237,9 @@
   "@ruleEditDeleteBody": {
     "description": "Rule editor / Routing rules list: confirm dialog body; name = rule display name.",
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "ruleEditDeleteRule": "Delete rule",
@@ -2126,7 +2258,9 @@
   "@ruleEditSrsDownloadFailed": {
     "description": "Rule editor: snackbar when a preset bool-var toggle failed to download its rule-set; name = var display name.",
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "ruleEditTabParams": "Params",
@@ -2201,7 +2335,9 @@
   "@ruleEditDnsServerMissing": {
     "description": "Action & Resolve sheet: DNS-server dropdown entry for a saved tag that no longer exists; tag = server tag.",
     "placeholders": {
-      "tag": {"type": "String"}
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "ruleEditAdvancedDnsOptions": "Advanced DNS options",
@@ -2336,7 +2472,9 @@
   "@ruleEditPresetNotFoundBody": {
     "description": "Rule editor, preset tab: body of the broken-preset error box; presetId = stored preset id.",
     "placeholders": {
-      "presetId": {"type": "String"}
+      "presetId": {
+        "type": "String"
+      }
     }
   },
   "ruleEditBasedOnPreset": "Based on preset",
@@ -2363,7 +2501,9 @@
   "@ruleEditUnsupportedVarType": {
     "description": "Rule editor, preset tab: error text for a template var type this app version cannot render; type = raw var type.",
     "placeholders": {
-      "type": {"type": "String"}
+      "type": {
+        "type": "String"
+      }
     }
   },
   "ruleEditViewStorageShape": "storage shape (lxbox_settings.json)",
@@ -2414,8 +2554,12 @@
   "@routingAddChannel": {
     "description": "Routing screen, Channels tab: add-channel button; count = current channels, max = limit. Double space is intentional.",
     "placeholders": {
-      "count": {"type": "int"},
-      "max": {"type": "int"}
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
     }
   },
   "routingPresetsIntro": "Ready-made rules you can copy into Rules, then edit freely.",
@@ -2454,7 +2598,9 @@
   "@routingPresetNotFound": {
     "description": "Routing screen: snackbar when a preset rule references an unknown preset id; presetId = stored id.",
     "placeholders": {
-      "presetId": {"type": "String"}
+      "presetId": {
+        "type": "String"
+      }
     }
   },
   "commonRemove": "Remove",
@@ -2469,7 +2615,9 @@
   "@folderSkippedNotTested": {
     "description": "Folder detail: body of the VPN-is-running dialog; count = disabled members skipped by the test.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "folderPingUrlTimeoutMenu": "Ping URL & timeout…",
@@ -2512,15 +2660,21 @@
   "@folderNoSlowerServers": {
     "description": "Folder detail: snackbar when no tested server exceeds the entered threshold; ms = threshold.",
     "placeholders": {
-      "ms": {"type": "int"}
+      "ms": {
+        "type": "int"
+      }
     }
   },
   "folderDisabledSlow": "{count, plural, one{Disabled {count} server > {ms} ms} other{Disabled {count} servers > {ms} ms}}",
   "@folderDisabledSlow": {
     "description": "Folder detail: snackbar after disabling servers slower than the threshold; count = servers disabled, ms = threshold.",
     "placeholders": {
-      "count": {"type": "int"},
-      "ms": {"type": "int"}
+      "count": {
+        "type": "int"
+      },
+      "ms": {
+        "type": "int"
+      }
     }
   },
   "folderNoUnreachable": "No unreachable or broken servers in last test",
@@ -2535,7 +2689,9 @@
   "@folderDeleteUnreachableBody": {
     "description": "Folder detail: body of the delete-unreachable dialog; count = servers that failed the test.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "folderPingThresholdsTitle": "Ping color thresholds",
@@ -2598,7 +2754,9 @@
   "@folderDeleteServerBody": {
     "description": "Folder detail: body of the delete-member dialog; name = member display title.",
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "folderMenuEdit": "Edit…",
@@ -2641,42 +2799,54 @@
   "@folderTestingProgress": {
     "description": "Folder detail control bar: progress line while the server test runs; done = finished count.",
     "placeholders": {
-      "done": {"type": "int"}
+      "done": {
+        "type": "int"
+      }
     }
   },
   "folderSummaryOk": "{count} ok",
   "@folderSummaryOk": {
     "description": "Folder detail control bar: test summary chunk — servers that answered.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "folderSummaryErr": "{count} err",
   "@folderSummaryErr": {
     "description": "Folder detail control bar: test summary chunk — servers that failed.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "folderSummaryBroken": "{count} broken",
   "@folderSummaryBroken": {
     "description": "Folder detail control bar: test summary chunk — servers with broken/invalid config.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "folderSummaryNotTested": "{count} not tested",
   "@folderSummaryNotTested": {
     "description": "Folder detail control bar: test summary chunk — disabled servers skipped by the test.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "folderOffCount": "{count} off",
   "@folderOffCount": {
     "description": "Folder detail control bar: suffix chunk — disabled members count.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "folderHideFiltersTooltip": "Hide filters",
@@ -2743,7 +2913,9 @@
   "@subWizardAddedTag": {
     "description": "Add server wizard: snackbar after a form-based server was added; tag = the tag the user entered.",
     "placeholders": {
-      "tag": {"type": "String"}
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "subWizardAdded": "Added",
@@ -2774,7 +2946,9 @@
   "@subWizardTagHelp": {
     "description": "Add server wizard: help text under the tag field; tag = default tag used when the field is empty.",
     "placeholders": {
-      "tag": {"type": "String"}
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "subWizardHostLabel": "Host",
@@ -2829,7 +3003,9 @@
   "@dnsEditFixJsonFirst": {
     "description": "DNS server editor: snackbar when saving while the body JSON is invalid; detail = parser error.",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "dnsEditAddressRequired": "Server address is required",
@@ -2840,14 +3016,18 @@
   "@dnsEditTagInUse": {
     "description": "DNS server editor: snackbar when renaming to a tag that already exists; tag = entered tag.",
     "placeholders": {
-      "tag": {"type": "String"}
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "dnsEditTagExistsTitle": "Tag \"{tag}\" exists",
   "@dnsEditTagExistsTitle": {
     "description": "DNS server editor: title of the replace-confirmation dialog when adding a server whose tag already exists.",
     "placeholders": {
-      "tag": {"type": "String"}
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "dnsEditReplaceBody": "Replace the existing server with this one?",
@@ -2866,8 +3046,12 @@
   "@dnsEditResetBody": {
     "description": "DNS server editor: body of the reset dialog; kind = canonical source (template/preset, wire word), tag = server tag.",
     "placeholders": {
-      "kind": {"type": "String"},
-      "tag": {"type": "String"}
+      "kind": {
+        "type": "String"
+      },
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "dnsEditResetButton": "Reset",
@@ -2898,7 +3082,9 @@
   "@dnsFormCustomTypeNote": {
     "description": "DNS server editor form: note shown when the body type is not expressible by the form; type = raw sing-box server type.",
     "placeholders": {
-      "type": {"type": "String"}
+      "type": {
+        "type": "String"
+      }
     }
   },
   "dnsFormModeUdpDesc": "Plain UDP · port 53 · fast, unencrypted",
@@ -2969,7 +3155,9 @@
   "@dnsUsedBy": {
     "description": "DNS: lock note on a server referenced by an active preset or rule; label = preset/rule name.",
     "placeholders": {
-      "label": {"type": "String"}
+      "label": {
+        "type": "String"
+      }
     }
   },
   "dnsParamsOutboundDetour": "Outbound (detour)",
@@ -2984,7 +3172,9 @@
   "@dnsParamsPresetNote": {
     "description": "DNS server editor Params tab: note for preset-kind servers; label = preset label.",
     "placeholders": {
-      "label": {"type": "String"}
+      "label": {
+        "type": "String"
+      }
     }
   },
   "dnsServersHeader": "DNS Servers",
@@ -3047,7 +3237,9 @@
   "@dnsClearCacheBody": {
     "description": "DNS Settings: body of the clear-cache dialog; detail = dnsClearCacheReloadNote or dnsClearCacheNextConnectNote depending on tunnel state.",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "dnsClearCacheReloadNote": "The VPN will briefly reload to apply.",
@@ -3186,7 +3378,9 @@
   "@speedViaProxy": {
     "description": "Speed Test: indicator of the active node/group the test goes through; proxy = node or group tag.",
     "placeholders": {
-      "proxy": {"type": "String"}
+      "proxy": {
+        "type": "String"
+      }
     }
   },
   "speedDirectNoVpn": "Direct (no VPN)",
@@ -3217,7 +3411,9 @@
   "@speedServerN": {
     "description": "Speed Test: fallback name for a test server without a name; n = its index.",
     "placeholders": {
-      "n": {"type": "int"}
+      "n": {
+        "type": "int"
+      }
     }
   },
   "commonMore": "More",
@@ -3292,7 +3488,9 @@
   "@debugEntriesCopied": {
     "description": "Debug: snackbar after copying visible log entries; count = number of entries.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "debugStderrEmpty": "stderr is empty",
@@ -3355,21 +3553,27 @@
   "@backupExportedSnack": {
     "description": "Backup: snackbar after a successful export; bytes = size of the JSON file.",
     "placeholders": {
-      "bytes": {"type": "int"}
+      "bytes": {
+        "type": "int"
+      }
     }
   },
   "backupExportFailed": "Export failed: {detail}",
   "@backupExportFailed": {
     "description": "Backup: snackbar on export failure; detail = humanized error text.",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "backupImportFailed": "Import failed: {detail}",
   "@backupImportFailed": {
     "description": "Backup: snackbar on import failure; detail = humanized error text.",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "backupRestartNow": "Restart now",
@@ -3436,14 +3640,18 @@
   "@backupPreviewCreated": {
     "description": "Import preview: backup creation timestamp; date = formatted local date-time.",
     "placeholders": {
-      "date": {"type": "String"}
+      "date": {
+        "type": "String"
+      }
     }
   },
   "backupPreviewAppVersion": "App version: {version}",
   "@backupPreviewAppVersion": {
     "description": "Import preview: version of the app that created the backup.",
     "placeholders": {
-      "version": {"type": "String"}
+      "version": {
+        "type": "String"
+      }
     }
   },
   "backupPreviewIncludes": "Includes:",
@@ -3490,8 +3698,12 @@
   "@tunAppsClearBody": {
     "description": "Tunnel apps: clear confirmation body; count = number of apps, mode = current mode value (off/allow/deny).",
     "placeholders": {
-      "count": {"type": "int"},
-      "mode": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "mode": {
+        "type": "String"
+      }
     }
   },
   "tunAppsHelpTitle": "Tunnel apps — OS-level split",
@@ -3518,7 +3730,9 @@
   "@tunAppsInList": {
     "description": "Tunnel apps: header above the selected app list; count = number of apps.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "tunAppsAddApp": "Add app",
@@ -3561,14 +3775,18 @@
   "@appPickerCopiedSnack": {
     "description": "App picker: snackbar after exporting package names to the clipboard; count = number of packages.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "appPickerImportedSnack": "{count} packages imported",
   "@appPickerImportedSnack": {
     "description": "App picker: snackbar after importing package names from the clipboard; count = number of recognized packages.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "vpnModeTunnelOptions": "Tunnel options",
@@ -3719,8 +3937,12 @@
   "@statsConnActiveTotal": {
     "description": "Connections tab: header counter — live connections vs the whole set (live + closed history).",
     "placeholders": {
-      "active": {"type": "int"},
-      "total": {"type": "int"}
+      "active": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "statsConnCloseAll": "Close all",
@@ -3747,7 +3969,9 @@
   "@statsLiveShareEvents": {
     "description": "Live tab export sheet: share the recorded events as JSON; count = number of events.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "statsLiveCopyJson": "Copy JSON to clipboard",
@@ -3766,7 +3990,9 @@
   "@statsDnsHealthBanner": {
     "description": "Live tab: DNS degradation banner; percent = failing share of DNS queries in the last window.",
     "placeholders": {
-      "percent": {"type": "int"}
+      "percent": {
+        "type": "int"
+      }
     }
   },
   "statsDnsHealthTitle": "DNS queries are failing",
@@ -3789,7 +4015,9 @@
   "@statsUnattributedBanner": {
     "description": "Live tab: banner about events with no detected owner package in the last 30 seconds; count = events.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "statsTraceVerboseNextSession": "Verbose toggle takes effect on next session — stop and restart.",
@@ -3820,16 +4048,24 @@
   "@statsTraceStatsLine": {
     "description": "Per-app trace: compact session stats row — unique domains, unique IPs, event count.",
     "placeholders": {
-      "doms": {"type": "int"},
-      "ips": {"type": "int"},
-      "ev": {"type": "int"}
+      "doms": {
+        "type": "int"
+      },
+      "ips": {
+        "type": "int"
+      },
+      "ev": {
+        "type": "int"
+      }
     }
   },
   "statsTraceDropped": "· {count} dropped",
   "@statsTraceDropped": {
     "description": "Per-app trace: appended to the stats row when events were dropped from the session buffer.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "statsTraceNoSecondary": "No secondary packages",
@@ -3880,7 +4116,9 @@
   "@statsTraceUnattributedBanner": {
     "description": "Per-app trace: banner about unattributed events during a session; count = events in the last 30 seconds.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "statsTraceVerboseBanner": "Verbose core logs active — battery/CPU impact while session runs",
@@ -3891,23 +4129,33 @@
   "@statsTraceSavedSessions": {
     "description": "Per-app trace: header of the saved-sessions footer list; count = number of kept sessions.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "statsTraceSessionSubtitle": "{duration} · {doms} doms · {ips} ips",
   "@statsTraceSessionSubtitle": {
     "description": "Per-app trace: saved session subtitle — duration, unique domains, unique IPs.",
     "placeholders": {
-      "duration": {"type": "String"},
-      "doms": {"type": "int"},
-      "ips": {"type": "int"}
+      "duration": {
+        "type": "String"
+      },
+      "doms": {
+        "type": "int"
+      },
+      "ips": {
+        "type": "int"
+      }
     }
   },
   "statsTraceSystemWideHeader": "System-wide events (no owner detected) — {count}",
   "@statsTraceSystemWideHeader": {
     "description": "Per-app trace Live view: header of the dimmed system-wide (unattributed) events section.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "statsDnsCachedBadge": "cached",
@@ -3918,20 +4166,36 @@
   "@statsAggConnsCount": {
     "description": "Aggregated view: active/total connection counter on a domain row.",
     "placeholders": {
-      "active": {"type": "int"},
-      "total": {"type": "int"}
+      "active": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "statsAggIpSubtitle": "ports {ports} · {active}/{total} conns · ↑{up} ↓{down}{outbounds}",
   "@statsAggIpSubtitle": {
     "description": "Aggregated view: IP row subtitle — sorted ports list, active/total connections, traffic; outbounds is either empty or a pre-built ' · a / b' suffix.",
     "placeholders": {
-      "ports": {"type": "String"},
-      "active": {"type": "int"},
-      "total": {"type": "int"},
-      "up": {"type": "String"},
-      "down": {"type": "String"},
-      "outbounds": {"type": "String"}
+      "ports": {
+        "type": "String"
+      },
+      "active": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "up": {
+        "type": "String"
+      },
+      "down": {
+        "type": "String"
+      },
+      "outbounds": {
+        "type": "String"
+      }
     }
   },
   "statsAggNoConnections": "No connections.",
@@ -3942,7 +4206,9 @@
   "@statsAggConnectionsHeader": {
     "description": "Aggregate detail sheet: uppercase section header; count = connections in the list.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "statsMemoryTitle": "Memory",
@@ -3957,14 +4223,18 @@
   "@statsViaChain": {
     "description": "Stats overview tab: detour chain line under an outbound card; tag = next hop outbound tag.",
     "placeholders": {
-      "tag": {"type": "String"}
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "statsConnectionsCount": "{count, plural, one{{count} connection} other{{count} connections}}",
   "@statsConnectionsCount": {
     "description": "Stats overview tab: connection count under an outbound card.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "statsByRoutingRule": "By routing rule",
@@ -3975,7 +4245,9 @@
   "@statsConnsShort": {
     "description": "Stats overview tab: compact total connections subtitle of the by-rule card.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "statsNoRuleData": "No rule data",
@@ -4030,7 +4302,9 @@
   "@statsRetentionKeep": {
     "description": "Trace explorer: retention menu item; label = window size (1m / 10m / 1h).",
     "placeholders": {
-      "label": {"type": "String"}
+      "label": {
+        "type": "String"
+      }
     }
   },
   "statsGroupingTooltip": "Grouping",
@@ -4041,36 +4315,48 @@
   "@warnUnsupportedTransport": {
     "description": "Node warning: unknown transport replaced by a fallback; name/fallback = wire transport names.",
     "placeholders": {
-      "name": {"type": "String"},
-      "fallback": {"type": "String"}
+      "name": {
+        "type": "String"
+      },
+      "fallback": {
+        "type": "String"
+      }
     }
   },
   "warnUnsupportedProtocol": "Protocol \"{scheme}\" is not supported.",
   "@warnUnsupportedProtocol": {
     "description": "Node warning: unsupported URI scheme; scheme = wire value.",
     "placeholders": {
-      "scheme": {"type": "String"}
+      "scheme": {
+        "type": "String"
+      }
     }
   },
   "warnMissingField": "Required field \"{field}\" is missing.",
   "@warnMissingField": {
     "description": "Node warning: required config field absent; field = wire field name.",
     "placeholders": {
-      "field": {"type": "String"}
+      "field": {
+        "type": "String"
+      }
     }
   },
   "warnDeprecatedFlow": "Flow \"{flow}\" is deprecated.",
   "@warnDeprecatedFlow": {
     "description": "Node warning: deprecated VLESS flow value; flow = wire value.",
     "placeholders": {
-      "flow": {"type": "String"}
+      "flow": {
+        "type": "String"
+      }
     }
   },
   "warnVisionWithTransport": "Flow \"xtls-rprx-vision\" is incompatible with \"{transport}\" transport — flow dropped.",
   "@warnVisionWithTransport": {
     "description": "Node warning: vision flow dropped because a transport is set; transport = wire name.",
     "placeholders": {
-      "transport": {"type": "String"}
+      "transport": {
+        "type": "String"
+      }
     }
   },
   "warnInsecureTls": "TLS certificate verification is disabled.",
@@ -4085,23 +4371,33 @@
   "@warnXhttpParamReset": {
     "description": "Node warning frame: an XHTTP param was reset; field = wire param name, reason = one of the warnXhttpReason* phrases.",
     "placeholders": {
-      "field": {"type": "String"},
-      "reason": {"type": "String"}
+      "field": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
     }
   },
   "warnXhttpReasonInvalidEnum": "value \"{value}\" is not a valid {field}",
   "@warnXhttpReasonInvalidEnum": {
     "description": "XHTTP reset reason: rejected enum value; value/field = wire values.",
     "placeholders": {
-      "value": {"type": "String"},
-      "field": {"type": "String"}
+      "value": {
+        "type": "String"
+      },
+      "field": {
+        "type": "String"
+      }
     }
   },
   "warnXhttpReasonInvalidValue": "value \"{value}\" is not valid",
   "@warnXhttpReasonInvalidValue": {
     "description": "XHTTP reset reason: rejected placement value; value = wire value.",
     "placeholders": {
-      "value": {"type": "String"}
+      "value": {
+        "type": "String"
+      }
     }
   },
   "warnXhttpReasonPlacementPacketUp": "header/cookie placement requires packet-up mode",
@@ -4116,70 +4412,102 @@
   "@warnRowMore": {
     "description": "Node warning row: first warning plus a count of the remaining ones.",
     "placeholders": {
-      "message": {"type": "String"},
-      "count": {"type": "int"}
+      "message": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
     }
   },
   "warnDanglingOutboundRef": "Rule \"{rule}\" references missing outbound \"{tag}\".",
   "@warnDanglingOutboundRef": {
     "description": "Config validation (fatal): route rule points to a non-existent outbound; rule/tag = wire values.",
     "placeholders": {
-      "rule": {"type": "String"},
-      "tag": {"type": "String"}
+      "rule": {
+        "type": "String"
+      },
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "warnDanglingDetourRef": "Outbound \"{owner}\" detour references missing outbound \"{tag}\".",
   "@warnDanglingDetourRef": {
     "description": "Config validation (fatal): detour points to a non-existent outbound; owner/tag = wire tags.",
     "placeholders": {
-      "owner": {"type": "String"},
-      "tag": {"type": "String"}
+      "owner": {
+        "type": "String"
+      },
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "warnDanglingDnsServerRef": "{field} references missing DNS server \"{tag}\".",
   "@warnDanglingDnsServerRef": {
     "description": "Config validation (fatal): dns.final / default_domain_resolver points to a missing DNS server; field/tag = wire values.",
     "placeholders": {
-      "field": {"type": "String"},
-      "tag": {"type": "String"}
+      "field": {
+        "type": "String"
+      },
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "warnDetourCycleGroups": "Routing loop between groups: {cycle} — fix group membership to start the VPN.",
   "@warnDetourCycleGroups": {
     "description": "Config validation (fatal): detour cycle made only of groups; cycle = arrow-joined wire tags.",
     "placeholders": {
-      "cycle": {"type": "String"}
+      "cycle": {
+        "type": "String"
+      }
     }
   },
   "warnDetourCycleSingle": "Routing loop: \"{tag}\" points back into \"{detour}\" — change or remove its detour to start the VPN.",
   "@warnDetourCycleSingle": {
     "description": "Config validation (fatal): single culprit node closing a detour loop; tag/detour = wire tags.",
     "placeholders": {
-      "tag": {"type": "String"},
-      "detour": {"type": "String"}
+      "tag": {
+        "type": "String"
+      },
+      "detour": {
+        "type": "String"
+      }
     }
   },
   "warnDetourCycleMulti": "Routing loop: {count} nodes point back into their own chain — change or remove their detours to start the VPN: {tags}.",
   "@warnDetourCycleMulti": {
     "description": "Config validation (fatal): several culprit nodes close detour loops; count >= 2, tags = quoted comma-joined wire tags.",
     "placeholders": {
-      "count": {"type": "int"},
-      "tags": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "tags": {
+        "type": "String"
+      }
     }
   },
   "warnEmptyUrltestGroup": "URL-test group \"{tag}\" has no outbounds.",
   "@warnEmptyUrltestGroup": {
     "description": "Config validation (fatal): urltest group with an empty member list; tag = wire tag.",
     "placeholders": {
-      "tag": {"type": "String"}
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "warnInvalidDefault": "Selector \"{group}\" default \"{tag}\" is not in the options list.",
   "@warnInvalidDefault": {
     "description": "Config validation (fatal): selector default not among its options; group/tag = wire tags.",
     "placeholders": {
-      "group": {"type": "String"},
-      "tag": {"type": "String"}
+      "group": {
+        "type": "String"
+      },
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "errStopRevoked": "Another VPN app took the system VPN slot (e.g. an always-on VPN). Start again to reconnect.",
@@ -4190,56 +4518,72 @@
   "@errStoppedReason": {
     "description": "Stop reason snackbar frame: tunnel stopped with a native/kernel reason; detail = English wire payload.",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "errTimeoutShort": "timeout {seconds}s",
   "@errTimeoutShort": {
     "description": "formatUserError(TimeoutException): short timeout note; seconds = pre-formatted number (latin s suffix by policy).",
     "placeholders": {
-      "seconds": {"type": "String"}
+      "seconds": {
+        "type": "String"
+      }
     }
   },
   "errPlatformError": "platform error: {code}",
   "@errPlatformError": {
     "description": "formatUserError(PlatformException) without message; code = wire error code.",
     "placeholders": {
-      "code": {"type": "String"}
+      "code": {
+        "type": "String"
+      }
     }
   },
   "errReloadFailed": "Reload failed: {detail}",
   "@errReloadFailed": {
     "description": "Home: in-place VPN reload threw; detail = formatted error.",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "errSwitchFailed": "Switch failed: {detail}",
   "@errSwitchFailed": {
     "description": "Home: node switch threw; detail = formatted error.",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "errParseConfigFailed": "Failed to parse config: {detail}",
   "@errParseConfigFailed": {
     "description": "Config import: JSON parse failure; detail = parser message (English payload).",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "errReadFileFailed": "Failed to read file: {detail}",
   "@errReadFileFailed": {
     "description": "Config import: file read failure; detail = formatted error.",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "errFileError": "File error: {detail}",
   "@errFileError": {
     "description": "Generic file operation failure frame; detail = formatted error / OS payload.",
     "placeholders": {
-      "detail": {"type": "String"}
+      "detail": {
+        "type": "String"
+      }
     }
   },
   "errFailedToStartVpn": "Failed to start VPN",
@@ -4326,14 +4670,18 @@
   "@errNoConnectionToHost": {
     "description": "humanizeError(SocketException); host = wire hostname.",
     "placeholders": {
-      "host": {"type": "String"}
+      "host": {
+        "type": "String"
+      }
     }
   },
   "errTimedOutAfter": "Timed out after {seconds}s — server slow or unreachable",
   "@errTimedOutAfter": {
     "description": "humanizeError(TimeoutException) with known duration; latin s suffix by policy.",
     "placeholders": {
-      "seconds": {"type": "int"}
+      "seconds": {
+        "type": "int"
+      }
     }
   },
   "errRequestTimedOut": "Request timed out — server slow or unreachable",
@@ -4348,7 +4696,9 @@
   "@errHttpAccessDenied": {
     "description": "humanizeError HTTP 401/403; code = HTTP status.",
     "placeholders": {
-      "code": {"type": "int"}
+      "code": {
+        "type": "int"
+      }
     }
   },
   "errHttpNotFound": "Not found (404) — subscription URL may be removed",
@@ -4367,36 +4717,48 @@
   "@errHttpServerError": {
     "description": "humanizeError HTTP 5xx; code = HTTP status.",
     "placeholders": {
-      "code": {"type": "int"}
+      "code": {
+        "type": "int"
+      }
     }
   },
   "errHttpRejected": "Request rejected ({code})",
   "@errHttpRejected": {
     "description": "humanizeError other HTTP 4xx; code = HTTP status.",
     "placeholders": {
-      "code": {"type": "int"}
+      "code": {
+        "type": "int"
+      }
     }
   },
   "errHttpPlain": "HTTP {code}",
   "@errHttpPlain": {
     "description": "humanizeError fallback for unclassified HTTP codes.",
     "placeholders": {
-      "code": {"type": "int"}
+      "code": {
+        "type": "int"
+      }
     }
   },
   "errConfigInvalidOne": "Config invalid: {issues}",
   "@errConfigInvalidOne": {
     "description": "Fatal validation frame for a single issue; issues = rendered issue text.",
     "placeholders": {
-      "issues": {"type": "String"}
+      "issues": {
+        "type": "String"
+      }
     }
   },
   "errConfigInvalidMany": "Config invalid ({count} issues): {issues}",
   "@errConfigInvalidMany": {
     "description": "Fatal validation frame for several issues; issues = semicolon-joined rendered texts.",
     "placeholders": {
-      "count": {"type": "int"},
-      "issues": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "issues": {
+        "type": "String"
+      }
     }
   },
   "errFolderNotFound": "Folder not found",
@@ -4463,21 +4825,27 @@
   "@subStatusCached": {
     "description": "Subscription row status frame: node count restored from the HTTP cache; status = rendered count text.",
     "placeholders": {
-      "status": {"type": "String"}
+      "status": {
+        "type": "String"
+      }
     }
   },
   "subStatusUpdateFailed": "{count} nodes (update failed)",
   "@subStatusUpdateFailed": {
     "description": "Subscription row status: refresh failed, previous nodes kept; count = kept nodes.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "subStatusUpdateFailedZero": "{count} nodes (update failed: 0 parsed)",
   "@subStatusUpdateFailedZero": {
     "description": "Subscription row status: refresh returned a body that parsed to zero nodes; count = kept nodes.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "subStatusZeroNodes": "0 nodes",
@@ -4488,7 +4856,9 @@
   "@subStatusZeroNodesHint": {
     "description": "Subscription row status with a parser diagnosis; hint = English parser hint (machine payload).",
     "placeholders": {
-      "hint": {"type": "String"}
+      "hint": {
+        "type": "String"
+      }
     }
   },
   "subProgressBuildingConfig": "Building config...",
@@ -4535,21 +4905,27 @@
   "@homeDetourLoopLeadMany": {
     "description": "Detour-loop sheet lead text for several culprit nodes; count >= 2.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "homeChannelNoNodesOne": "Channel \"{name}\" matched no nodes — check its node filter.",
   "@homeChannelNoNodesOne": {
     "description": "Home snackbar after a rebuild: one channel's node filter matched nothing; name = channel label.",
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "homeChannelNoNodesMany": "{count} channels matched no nodes — check their node filters.",
   "@homeChannelNoNodesMany": {
     "description": "Home snackbar after a rebuild: several channels' node filters matched nothing.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "relTimeJustNow": "just now",
@@ -4560,14 +4936,18 @@
   "@relTimeMinutesAgo": {
     "description": "Relative timestamp: minutes ago; count = whole minutes (1..59).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "relTimeHoursAgo": "{count}h ago",
   "@relTimeHoursAgo": {
     "description": "Relative timestamp: hours ago; count = whole hours (1..23).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "relTimeYesterday": "yesterday",
@@ -4578,28 +4958,36 @@
   "@relTimeDaysAgo": {
     "description": "Relative timestamp: days ago; count = whole days (2..6).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "relTimeWeeksAgo": "{count}w ago",
   "@relTimeWeeksAgo": {
     "description": "Relative timestamp: weeks ago; count = whole weeks (1..4).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "relTimeMonthsAgo": "{count}mo ago",
   "@relTimeMonthsAgo": {
     "description": "Relative timestamp: months ago; count = whole months (1..12).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "relTimeYearsAgo": "{count}y ago",
   "@relTimeYearsAgo": {
     "description": "Relative timestamp: years ago; count = whole years.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "subUpdateStatusOk": "OK",
@@ -4614,7 +5002,9 @@
   "@subUpdateStatusFailedN": {
     "description": "Subscription detail, status tile: several consecutive refresh failures; count = failure streak.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "subUpdateStatusRefreshing": "Refreshing…",
@@ -4629,37 +5019,51 @@
   "@subStatusLastSuccess": {
     "description": "Subscription detail, status subtitle part: time of the last successful refresh; ago = relative time (e.g. '2h ago').",
     "placeholders": {
-      "ago": {"type": "String"}
+      "ago": {
+        "type": "String"
+      }
     }
   },
   "subStatusLastAttempt": "Last attempt: {ago}",
   "@subStatusLastAttempt": {
     "description": "Subscription detail, status subtitle part: time of the last refresh attempt (differs from last success); ago = relative time.",
     "placeholders": {
-      "ago": {"type": "String"}
+      "ago": {
+        "type": "String"
+      }
     }
   },
   "subIntervalEveryDays": "{count, plural, one{day} other{{count} days}}",
   "@subIntervalEveryDays": {
     "description": "Update-interval fragment embedded into 'auto-refresh every {interval}' / '({interval})': a whole number of days; count = days.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "subIntervalHoursLong": "{hours}h (auto-refresh every {interval})",
   "@subIntervalHoursLong": {
     "description": "Subscription detail, update-interval subtitle; hours = interval in hours, interval = human form ('day', '2 days', '36h').",
     "placeholders": {
-      "hours": {"type": "int"},
-      "interval": {"type": "String"}
+      "hours": {
+        "type": "int"
+      },
+      "interval": {
+        "type": "String"
+      }
     }
   },
   "subIntervalHoursShort": "{hours}h ({interval})",
   "@subIntervalHoursShort": {
     "description": "Subscription detail, update-interval menu option; hours = interval in hours, interval = human form ('day', '2 days').",
     "placeholders": {
-      "hours": {"type": "int"},
-      "interval": {"type": "String"}
+      "hours": {
+        "type": "int"
+      },
+      "interval": {
+        "type": "String"
+      }
     }
   },
   "subExpireUnlimited": "Unlimited",
@@ -4674,42 +5078,54 @@
   "@subExpireDaysLeft": {
     "description": "Subscription expiry value: days remaining; count = whole days.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "subExpireHoursLeft": "{count, plural, one{{count} hour left} other{{count} hours left}}",
   "@subExpireHoursLeft": {
     "description": "Subscription expiry value: hours remaining (less than a day); count = whole hours.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "ruleSummaryDomains": "{count, plural, one{{count} domain} other{{count} domains}}",
   "@ruleSummaryDomains": {
     "description": "Routing rule summary chip: exact-domain match count.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "ruleSummarySuffixes": "{count, plural, one{{count} suffix} other{{count} suffixes}}",
   "@ruleSummarySuffixes": {
     "description": "Routing rule summary chip: domain-suffix match count.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "ruleSummaryKeywords": "{count, plural, one{{count} keyword} other{{count} keywords}}",
   "@ruleSummaryKeywords": {
     "description": "Routing rule summary chip: domain-keyword (substring) match count.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "ruleSummaryCidrs": "{count, plural, one{{count} cidr} other{{count} cidrs}}",
   "@ruleSummaryCidrs": {
     "description": "Routing rule summary chip: destination IP CIDR count.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "ruleSummaryPrivateIp": "private ip",
@@ -4720,7 +5136,9 @@
   "@ruleSummarySources": {
     "description": "Routing rule summary chip: source IP CIDR count ('src' abbreviation).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "ruleSummaryPrivateSrc": "private src",
@@ -4731,49 +5149,63 @@
   "@ruleSummaryPorts": {
     "description": "Routing rule summary chip: port + port-range count.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "ruleSummaryApps": "{count, plural, one{{count} app} other{{count} apps}}",
   "@ruleSummaryApps": {
     "description": "Routing rule summary chip: Android package (per-app) match count.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "ruleSummaryProtos": "{count} proto",
   "@ruleSummaryProtos": {
     "description": "Routing rule summary chip: sniffed-protocol match count ('proto' abbreviation).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "ruleSummaryNets": "{count} net",
   "@ruleSummaryNets": {
     "description": "Routing rule summary chip: L4 network (tcp/udp/icmp) match count ('net' abbreviation).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "ruleSummaryInbounds": "{count} in",
   "@ruleSummaryInbounds": {
     "description": "Routing rule summary chip: inbound match count ('in' abbreviation).",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "ruleSummaryWifi": "{count} wifi",
   "@ruleSummaryWifi": {
     "description": "Routing rule summary chip: Wi-Fi SSID match count.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "ruleSummarySrs": "SRS: {host}",
   "@ruleSummarySrs": {
     "description": "Routing rule summary for a remote .srs rule-set; host = rule-set URL host (or the raw URL if it has no host).",
     "placeholders": {
-      "host": {"type": "String"}
+      "host": {
+        "type": "String"
+      }
     }
   },
   "routingRulePresetMissing": "Preset not found — tap to fix",
@@ -4788,7 +5220,9 @@
   "@routingRuleSummaryTapToEdit": {
     "description": "Routing rules list, rule subtitle; summary = short description of the rule's match fields or non-default vars.",
     "placeholders": {
-      "summary": {"type": "String"}
+      "summary": {
+        "type": "String"
+      }
     }
   },
   "routingRuleTapToAddFields": "Tap to add match fields",
@@ -4799,7 +5233,9 @@
   "@appSettingsGenUpdateAvailable": {
     "description": "Update-check result line: a newer release exists; tag = release tag (e.g. 'v2.15.11').",
     "placeholders": {
-      "tag": {"type": "String"}
+      "tag": {
+        "type": "String"
+      }
     }
   },
   "appSettingsGenUpToDate": "You're up to date",
@@ -4810,7 +5246,9 @@
   "@appSettingsGenUpdateCheckFailed": {
     "description": "Update-check result line: the check failed; message = error detail passthrough.",
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "appSettingsGenLastCheckNever": "Last check: never",
@@ -4821,14 +5259,18 @@
   "@appSettingsGenLastCheck": {
     "description": "Update-check status line; when = relative time of the last check (e.g. '2h ago').",
     "placeholders": {
-      "when": {"type": "String"}
+      "when": {
+        "type": "String"
+      }
     }
   },
   "aboutReleasedAgo": "Released {when}",
   "@aboutReleasedAgo": {
     "description": "About screen, update info: when the latest release was published; when = relative time (e.g. '3d ago').",
     "placeholders": {
-      "when": {"type": "String"}
+      "when": {
+        "type": "String"
+      }
     }
   },
   "aboutCachedInfo": "(cached info)",
@@ -4842,5 +5284,527 @@
   "routingWifiLastSeenUnknown": "unknown",
   "@routingWifiLastSeenUnknown": {
     "description": "Saved Wi-Fi picker, last-seen column: the stored timestamp is malformed."
+  },
+  "aboutUpdateAvailable": "{tag} available",
+  "@aboutUpdateAvailable": {
+    "description": "About screen, update row: a newer release is known; tag = release tag like v2.15.0.",
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutNoUpdatesPending": "No updates pending",
+  "@aboutNoUpdatesPending": {
+    "description": "About screen, update row: the app is on the latest known release."
+  },
+  "appPickerHideSystemApps": "Hide system apps",
+  "@appPickerHideSystemApps": {
+    "description": "App picker menu item: hide system apps from the list (shown while they are visible)."
+  },
+  "appPickerShowSystemApps": "Show system apps",
+  "@appPickerShowSystemApps": {
+    "description": "App picker menu item: include system apps in the list (shown while they are hidden)."
+  },
+  "appPickerLoadingApps": "Loading apps...",
+  "@appPickerLoadingApps": {
+    "description": "App picker: status line while the installed-apps list is loading."
+  },
+  "appPickerSelectedShown": "{selected} selected · {shown} shown",
+  "@appPickerSelectedShown": {
+    "description": "App picker: status line with selection counters.",
+    "placeholders": {
+      "selected": {
+        "type": "int"
+      },
+      "shown": {
+        "type": "int"
+      }
+    }
+  },
+  "appSettingsConfigLockedSnack": "Config locked. UI actions will not rebuild config.",
+  "@appSettingsConfigLockedSnack": {
+    "description": "App Settings: snackbar after enabling the debug config lock."
+  },
+  "appSettingsConfigUnlockedSnack": "Config unlocked. Next UI action will rebuild from settings.",
+  "@appSettingsConfigUnlockedSnack": {
+    "description": "App Settings: snackbar after disabling the debug config lock."
+  },
+  "appSettingsAutoRecordOnSnack": "Auto-record on. Networks added after 5 min of stay.",
+  "@appSettingsAutoRecordOnSnack": {
+    "description": "App Settings: snackbar after enabling Wi-Fi history auto-record."
+  },
+  "appSettingsAutoRecordOffSnack": "Auto-record off. Existing history kept.",
+  "@appSettingsAutoRecordOffSnack": {
+    "description": "App Settings: snackbar after disabling Wi-Fi history auto-record."
+  },
+  "appSettingsDiagBatteryWhitelisted": "Whitelisted — VPN can run in background",
+  "@appSettingsDiagBatteryWhitelisted": {
+    "description": "Diagnostics tab, battery row subtitle: optimization exemption granted."
+  },
+  "appSettingsDiagBatteryRestricted": "Restricted — Android may pause VPN in idle. Tap to grant.",
+  "@appSettingsDiagBatteryRestricted": {
+    "description": "Diagnostics tab, battery row subtitle: optimization exemption missing."
+  },
+  "appSettingsDiagNotifAllowed": "Allowed — foreground service shows VPN status",
+  "@appSettingsDiagNotifAllowed": {
+    "description": "Diagnostics tab, notifications row subtitle: permission granted."
+  },
+  "appSettingsDiagNotifBlocked": "Blocked — Android may throttle the VPN service. Tap to allow.",
+  "@appSettingsDiagNotifBlocked": {
+    "description": "Diagnostics tab, notifications row subtitle: permission missing."
+  },
+  "appSettingsDiagLocationGranted": "Granted — sing-box can read Wi-Fi state for routing rules",
+  "@appSettingsDiagLocationGranted": {
+    "description": "Diagnostics tab, background location row subtitle: permission granted."
+  },
+  "appSettingsDiagLocationRequired": "Required for Wi-Fi-based routing rules. Tap to grant.",
+  "@appSettingsDiagLocationRequired": {
+    "description": "Diagnostics tab, background location row subtitle: permission missing."
+  },
+  "appSettingsDiagNearbyWifiGranted": "Granted — real SSID/BSSID accessible",
+  "@appSettingsDiagNearbyWifiGranted": {
+    "description": "Diagnostics tab, nearby Wi-Fi row subtitle: permission granted."
+  },
+  "appSettingsDiagNearbyWifiRequired": "Android 13+ requires this for SSID. Tap to grant.",
+  "@appSettingsDiagNearbyWifiRequired": {
+    "description": "Diagnostics tab, nearby Wi-Fi row subtitle: permission missing."
+  },
+  "appSettingsDiagDebugApiOn": "Exposed on http://127.0.0.1:{port} (adb forward only)",
+  "@appSettingsDiagDebugApiOn": {
+    "description": "Diagnostics tab, Debug API row subtitle while enabled; port = configured TCP port.",
+    "placeholders": {
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "appSettingsDiagDebugApiOff": "Runtime HTTP server for adb-forwarded debugging.",
+  "@appSettingsDiagDebugApiOff": {
+    "description": "Diagnostics tab, Debug API row subtitle while disabled."
+  },
+  "appSettingsDiagLockConfigOn": "Pinned. UI actions skip config rebuild — useful when testing PUT /config overrides.",
+  "@appSettingsDiagLockConfigOn": {
+    "description": "Diagnostics tab, lock-config row subtitle while locked."
+  },
+  "appSettingsDiagLockConfigOff": "Off — UI actions rebuild config from settings as usual.",
+  "@appSettingsDiagLockConfigOff": {
+    "description": "Diagnostics tab, lock-config row subtitle while unlocked."
+  },
+  "appSettingsDiagForwardLogsOn": "Visible in Debug → Core.",
+  "@appSettingsDiagForwardLogsOn": {
+    "description": "Diagnostics tab, forward-core-logs row subtitle while enabled."
+  },
+  "appSettingsDiagForwardLogsOff": "Off.",
+  "@appSettingsDiagForwardLogsOff": {
+    "description": "Diagnostics tab, forward-core-logs row subtitle while disabled."
+  },
+  "appSettingsDiagAutoRecordOn": "Networks where you stay ≥ 5 minutes appear in routing rule editor → Pick saved.",
+  "@appSettingsDiagAutoRecordOn": {
+    "description": "Diagnostics tab, auto-record Wi-Fi row subtitle while enabled."
+  },
+  "appSettingsDiagAutoRecordOff": "Off. Pick saved is populated only by Add current / Manual.",
+  "@appSettingsDiagAutoRecordOff": {
+    "description": "Diagnostics tab, auto-record Wi-Fi row subtitle while disabled."
+  },
+  "appSettingsSubsUaDefault": "Default · {ua}",
+  "@appSettingsSubsUaDefault": {
+    "description": "Subscriptions tab, User-Agent row subtitle when no custom UA is set; ua = built-in default.",
+    "placeholders": {
+      "ua": {
+        "type": "String"
+      }
+    }
+  },
+  "appSettingsSubsEmptyValue": "(empty)",
+  "@appSettingsSubsEmptyValue": {
+    "description": "Subscriptions tab: subtitle placeholder for an identity header with no value."
+  },
+  "channelEditUsedInFastestHelper": "used in Fastest mode",
+  "@channelEditUsedInFastestHelper": {
+    "description": "Channel editor: helper under the tolerance field while Load balance mode is selected."
+  },
+  "channelEditOfNodesHelper": "of {count} nodes",
+  "@channelEditOfNodesHelper": {
+    "description": "Channel editor: helper under the pool size field; count = matched node count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "statsConnNoneToClose": "No active connections to close",
+  "@statsConnNoneToClose": {
+    "description": "Connections tab: snackbar when close-all finds nothing to close."
+  },
+  "statsConnClosedCount": "{count, plural, one{Closed {count} connection} other{Closed {count} connections}}",
+  "@statsConnClosedCount": {
+    "description": "Connections tab: snackbar after close-all; count = closed connections.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "statsConnKeepAllTooltip": "Keeping all closed (tap for 30s window)",
+  "@statsConnKeepAllTooltip": {
+    "description": "Connections tab: tooltip of the history toggle while accumulate mode is on."
+  },
+  "statsConnKeep30sTooltip": "Closed kept 30s (tap to keep all)",
+  "@statsConnKeep30sTooltip": {
+    "description": "Connections tab: tooltip of the history toggle while the 30s window is active."
+  },
+  "statsConnFallbackTitle": "(connection)",
+  "@statsConnFallbackTitle": {
+    "description": "Connection detail sheet: title fallback when the connection has no host/IP title."
+  },
+  "ruleEditResolveOnlySummary": "✳ Resolve only{suffix}",
+  "@ruleEditResolveOnlySummary": {
+    "description": "Rule editor, params tab: resolve summary line for resolve-only mode; suffix = optional \" · strategy\" tail (wire value).",
+    "placeholders": {
+      "suffix": {
+        "type": "String"
+      }
+    }
+  },
+  "ruleEditResolveFirstSummary": "✳ Resolve first{suffix}",
+  "@ruleEditResolveFirstSummary": {
+    "description": "Rule editor, params tab: resolve summary line for resolve-first mode; suffix = optional \" · strategy\" tail (wire value).",
+    "placeholders": {
+      "suffix": {
+        "type": "String"
+      }
+    }
+  },
+  "ruleEditItemsInvalidCount": "{count} · {invalid} invalid",
+  "@ruleEditItemsInvalidCount": {
+    "description": "Rule editor, items field counter: total entries and how many failed validation.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "invalid": {
+        "type": "int"
+      }
+    }
+  },
+  "ruleEditWifiNotConnected": "Not connected to Wi-Fi.",
+  "@ruleEditWifiNotConnected": {
+    "description": "Rule editor: snackbar when adding the current Wi-Fi while not connected to Wi-Fi."
+  },
+  "ruleEditWifiUnknownSsid": "Cannot read Wi-Fi info — try toggling Wi-Fi off/on.",
+  "@ruleEditWifiUnknownSsid": {
+    "description": "Rule editor: snackbar when the current SSID cannot be read."
+  },
+  "ruleEditWifiReadFailed": "Could not read current Wi-Fi ({reason}).",
+  "@ruleEditWifiReadFailed": {
+    "description": "Rule editor: snackbar for other Wi-Fi read failures; reason = wire error code.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "debugNoMatches": "No matches for \"{query}\"",
+  "@debugNoMatches": {
+    "description": "Debug screen: empty state while a search query filters out all events.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "debugNoEventsYet": "No events yet",
+  "@debugNoEventsYet": {
+    "description": "Debug screen: empty state before any log events arrive."
+  },
+  "dnsFormAddressHintHttps": "192.168.1.1 / dns.example.com / https://… URL",
+  "@dnsFormAddressHintHttps": {
+    "description": "DNS server editor: address field example hint for the HTTPS mode."
+  },
+  "dnsFormAddressHintPlain": "192.168.1.1 / dns.example.com",
+  "@dnsFormAddressHintPlain": {
+    "description": "DNS server editor: address field example hint for non-HTTPS modes."
+  },
+  "homeFilterDetourHidden": "Detour hidden",
+  "@homeFilterDetourHidden": {
+    "description": "Home filter chip tooltip: detour servers are currently hidden."
+  },
+  "homeFilterDetourOnly": "Detour only",
+  "@homeFilterDetourOnly": {
+    "description": "Home filter chip tooltip: only detour servers are currently shown."
+  },
+  "homeFilterHideDetourServers": "Hide detour servers",
+  "@homeFilterHideDetourServers": {
+    "description": "Home filter panel: label of the detour filter row while hide-mode is selected."
+  },
+  "homeFilterShowOnlyDetourServers": "Show only detour servers",
+  "@homeFilterShowOnlyDetourServers": {
+    "description": "Home filter panel: label of the detour filter row while show-only-mode is selected."
+  },
+  "homeStartButton": "Start",
+  "@homeStartButton": {
+    "description": "Home screen: main tunnel button label while the tunnel is down."
+  },
+  "homeStopButton": "Stop",
+  "@homeStopButton": {
+    "description": "Home screen: main tunnel button label while the tunnel is up."
+  },
+  "homeChannelSavedSnack": "Saved channel \"{label}\"",
+  "@homeChannelSavedSnack": {
+    "description": "Home: snackbar after saving a channel from the node list.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "homeChannelSavedHealedSnack": "Saved channel \"{label}\" — {healed}",
+  "@homeChannelSavedHealedSnack": {
+    "description": "Home: snackbar after saving a channel when references were healed; healed = joined description parts.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "healed": {
+        "type": "String"
+      }
+    }
+  },
+  "homeHideFiltersTooltip": "Hide filters",
+  "@homeHideFiltersTooltip": {
+    "description": "Home nodes header: tooltip on the filter toggle while the panel is open."
+  },
+  "homeShowFiltersTooltip": "Show filters",
+  "@homeShowFiltersTooltip": {
+    "description": "Home nodes header: tooltip on the filter toggle while the panel is closed."
+  },
+  "statsLiveRecording": "Recording system-wide events",
+  "@statsLiveRecording": {
+    "description": "Live events tab header: recording is active."
+  },
+  "statsLiveNotRecording": "Not recording",
+  "@statsLiveNotRecording": {
+    "description": "Live events tab header: recording is stopped."
+  },
+  "statsLiveDurationEvents": "{duration} · {count} events",
+  "@statsLiveDurationEvents": {
+    "description": "Live events tab header: elapsed recording time and event counter; duration = formatted mm:ss.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "statsLiveTapStartHint": "Tap START to begin capture. Recording continues when you leave this tab.",
+  "@statsLiveTapStartHint": {
+    "description": "Live events tab header: hint shown while not recording."
+  },
+  "statsRecStartButton": "START",
+  "@statsRecStartButton": {
+    "description": "Recording toggle button label (live events / per-app trace): start capture. Kept Latin in all locales — referenced as START in help texts."
+  },
+  "statsRecStopButton": "STOP",
+  "@statsRecStopButton": {
+    "description": "Recording toggle button label (live events / per-app trace): stop capture. Kept Latin in all locales — referenced as STOP in help texts."
+  },
+  "statsTraceStatusRecording": "Recording",
+  "@statsTraceStatusRecording": {
+    "description": "Per-app trace, session row: the session is still recording."
+  },
+  "statsTraceStatusStopped": "Stopped",
+  "@statsTraceStatusStopped": {
+    "description": "Per-app trace, session row: the session has finished."
+  },
+  "statsTraceNoOwner": "(no owner)",
+  "@statsTraceNoOwner": {
+    "description": "Per-app trace live view: placeholder when the event has no owning process."
+  },
+  "statsTracePauseTooltip": "Pause",
+  "@statsTracePauseTooltip": {
+    "description": "Trace explorer: tooltip of the live-feed pause button."
+  },
+  "statsTraceResumeTooltip": "Resume",
+  "@statsTraceResumeTooltip": {
+    "description": "Trace explorer: tooltip of the live-feed resume button."
+  },
+  "statsTraceFilterButton": "Filter",
+  "@statsTraceFilterButton": {
+    "description": "Trace explorer: filter button label with no active filters."
+  },
+  "statsTraceFilterButtonCount": "Filter ({count})",
+  "@statsTraceFilterButtonCount": {
+    "description": "Trace explorer: filter button label; count = active filter count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routingSrsDownloadedSnack": "Downloaded \"{name}\"",
+  "@routingSrsDownloadedSnack": {
+    "description": "Routing: snackbar after a single SRS rule file downloaded; name = rule name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "routingSrsDownloadFailedSnack": "Failed to download \"{name}\" — check URL/network",
+  "@routingSrsDownloadFailedSnack": {
+    "description": "Routing: snackbar when an SRS download fails; name = rule name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "routingSrsDownloadedCountSnack": "{count, plural, one{Downloaded \"{name}\" ({count} rule-set)} other{Downloaded \"{name}\" ({count} rule-sets)}}",
+  "@routingSrsDownloadedCountSnack": {
+    "description": "Routing: snackbar after all rule-sets of a preset downloaded; name = rule name, count = rule-set count.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routingSrsPartialSnack": "Partial: {ok} ok, {failed} failed for \"{name}\"",
+  "@routingSrsPartialSnack": {
+    "description": "Routing: snackbar when only part of the rule-sets downloaded.",
+    "placeholders": {
+      "ok": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "routingPresetInRules": "In Rules",
+  "@routingPresetInRules": {
+    "description": "Routing preset catalog tile: button state when the preset is already added to rules."
+  },
+  "routingPresetAddToRules": "Add to Rules",
+  "@routingPresetAddToRules": {
+    "description": "Routing preset catalog tile: button that copies the preset into rules."
+  },
+  "statsAggAxisDomain": "Domain",
+  "@statsAggAxisDomain": {
+    "description": "Aggregate detail sheet: badge for the domain aggregation axis."
+  },
+  "statsAggAxisIp": "IP",
+  "@statsAggAxisIp": {
+    "description": "Aggregate detail sheet: badge for the IP aggregation axis."
+  },
+  "statsFilterFinalChip": "final",
+  "@statsFilterFinalChip": {
+    "description": "Profiler filter sheet: chip for events matched by no rule (routed to Final). Kept Latin — mirrors the Final route terminology."
+  },
+  "statsEventFallbackTitle": "(event)",
+  "@statsEventFallbackTitle": {
+    "description": "Traffic event detail sheet: title fallback when the event has no host/IP title."
+  },
+  "tunAppsUninstalledSkipped": "{pkg} — uninstalled, auto-skipped",
+  "@tunAppsUninstalledSkipped": {
+    "description": "Tunnel apps list: subtitle for a selected package that is no longer installed; pkg = package name.",
+    "placeholders": {
+      "pkg": {
+        "type": "String"
+      }
+    }
+  },
+  "vpnModeAllowBypassOn": "Apps may use ConnectivityManager to bypass tun.",
+  "@vpnModeAllowBypassOn": {
+    "description": "VPN mode tab, allow-bypass subtitle while enabled."
+  },
+  "vpnModeAllowBypassOff": "Strict tunnel — all traffic goes through tun.",
+  "@vpnModeAllowBypassOff": {
+    "description": "VPN mode tab, allow-bypass subtitle while disabled."
+  },
+  "vpnModeListenPublicNote": "Reachable from other devices on the network — auth required.",
+  "@vpnModeListenPublicNote": {
+    "description": "VPN mode tab, proxy listen note for 0.0.0.0."
+  },
+  "vpnModeListenLocalNote": "Reachable only from this device.",
+  "@vpnModeListenLocalNote": {
+    "description": "VPN mode tab, proxy listen note for 127.0.0.1."
+  },
+  "vpnModeAuthRequiredPublic": "Required for LAN-exposed proxy (cannot be disabled).",
+  "@vpnModeAuthRequiredPublic": {
+    "description": "VPN mode tab, proxy auth subtitle while listening on 0.0.0.0."
+  },
+  "vpnModeAuthRecommended": "Recommended. Protects the local proxy port.",
+  "@vpnModeAuthRecommended": {
+    "description": "VPN mode tab, proxy auth subtitle while listening locally."
+  },
+  "vpnModeShowPasswordTooltip": "Show",
+  "@vpnModeShowPasswordTooltip": {
+    "description": "VPN mode tab: tooltip of the reveal-proxy-password button."
+  },
+  "vpnModeHidePasswordTooltip": "Hide",
+  "@vpnModeHidePasswordTooltip": {
+    "description": "VPN mode tab: tooltip of the hide-proxy-password button."
+  },
+  "warpAddedNodeSnack": "Added WARP node",
+  "@warpAddedNodeSnack": {
+    "description": "WARP wizard: snackbar after a free WARP account is registered and added."
+  },
+  "warpAddedPlusNodeSnack": "Added WARP+ node",
+  "@warpAddedPlusNodeSnack": {
+    "description": "WARP wizard: snackbar after a WARP+ account is registered and added."
+  },
+  "warpMasqueH2Note": "HTTP/2 over TCP — use where QUIC/UDP is blocked.",
+  "@warpMasqueH2Note": {
+    "description": "WARP wizard, MASQUE network note for the h2 transport."
+  },
+  "warpMasqueH3Note": "HTTP/3 over QUIC — the default, fastest path.",
+  "@warpMasqueH3Note": {
+    "description": "WARP wizard, MASQUE network note for the h3 transport."
+  },
+  "warpDecoyDomainVisible": "Domain (below) is visible on the wire as the {field}.",
+  "@warpDecoyDomainVisible": {
+    "description": "WARP wizard, decoy note: the domain is carried on the wire; field = protocol field name (DNS QNAME / SIP host, wire terms).",
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "warpDecoyNoHostname": "QUIC/STUN decoy carries no hostname — the domain below is cosmetic for this protocol.",
+  "@warpDecoyNoHostname": {
+    "description": "WARP wizard, decoy note for hostname-less decoy protocols."
+  },
+  "warpRegisteringButton": "Registering…",
+  "@warpRegisteringButton": {
+    "description": "WARP wizard: register button label while registration is in flight."
+  },
+  "warpRegisterButton": "Register",
+  "@warpRegisterButton": {
+    "description": "WARP wizard: register button label."
+  },
+  "warpRegisteredTitle": "Registered: WARP",
+  "@warpRegisteredTitle": {
+    "description": "WARP wizard, result card title for a free WARP account."
+  },
+  "warpRegisteredPlusTitle": "Registered: WARP+",
+  "@warpRegisteredPlusTitle": {
+    "description": "WARP wizard, result card title for a WARP+ account."
+  },
+  "homeNodeActiveTooltip": "Active",
+  "@homeNodeActiveTooltip": {
+    "description": "Node row: tooltip of the activate button while this node is already active."
+  },
+  "homeNodeUseTooltip": "Use node",
+  "@homeNodeUseTooltip": {
+    "description": "Node row: tooltip of the activate button."
   }
 }

@@ -234,8 +234,8 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(path != null
-            ? 'Downloaded "${rule.name}"'
-            : 'Failed to download "${rule.name}" — check URL/network'),
+            ? context.l.routingSrsDownloadedSnack(rule.name)
+            : context.l.routingSrsDownloadFailedSnack(rule.name)),
       ),
     );
     if (path != null) _markDirty();
@@ -273,8 +273,8 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(failed == 0
-            ? 'Downloaded "${rule.name}" ($ok rule-set${ok == 1 ? "" : "s"})'
-            : 'Partial: $ok ok, $failed failed for "${rule.name}"'),
+            ? context.l.routingSrsDownloadedCountSnack(rule.name, ok)
+            : context.l.routingSrsPartialSnack(ok, failed, rule.name)),
       ),
     );
     if (ok > 0) _markDirty();

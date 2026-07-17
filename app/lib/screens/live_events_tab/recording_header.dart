@@ -48,7 +48,9 @@ class LiveRecordingHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isRec ? 'Recording system-wide events' : 'Not recording',
+                  isRec
+                      ? context.l.statsLiveRecording
+                      : context.l.statsLiveNotRecording,
                   style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
@@ -56,9 +58,9 @@ class LiveRecordingHeader extends StatelessWidget {
                 ),
                 Text(
                   isRec
-                      ? '${formatDuration(duration)} · $eventCount events'
-                      : 'Tap START to begin capture. Recording continues '
-                          'when you leave this tab.',
+                      ? context.l.statsLiveDurationEvents(
+                          formatDuration(duration), eventCount)
+                      : context.l.statsLiveTapStartHint,
                   style: TextStyle(
                       fontSize: 11, color: cs.onSurfaceVariant),
                 ),
@@ -70,7 +72,9 @@ class LiveRecordingHeader extends StatelessWidget {
             onPressed: onToggle,
             icon: Icon(isRec ? Icons.stop : Icons.fiber_manual_record,
                 size: 18),
-            label: Text(isRec ? 'STOP' : 'START'),
+            label: Text(isRec
+                ? context.l.statsRecStopButton
+                : context.l.statsRecStartButton),
             style: FilledButton.styleFrom(
               backgroundColor: isRec ? cs.error : cs.primary,
               foregroundColor: isRec ? cs.onError : cs.onPrimary,

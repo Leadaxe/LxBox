@@ -181,7 +181,7 @@ class LiveView extends StatelessWidget {
                         child: Text(
                           (e.process ?? '').isNotEmpty
                               ? e.process!
-                              : '(no owner)',
+                              : context.l.statsTraceNoOwner,
                           style: TextStyle(
                               fontSize: 11,
                               color: (e.process ?? '').isNotEmpty

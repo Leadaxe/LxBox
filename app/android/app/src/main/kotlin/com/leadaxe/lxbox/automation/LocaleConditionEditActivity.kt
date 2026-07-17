@@ -13,17 +13,20 @@ import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
+import com.leadaxe.lxbox.R
+import com.leadaxe.lxbox.vpn.L10n
 
 /// §047 Шаг 2 — edit-экран condition-плагина («State → Plugin → L×Box»).
 /// Список проверок сразу (RadioGroup): VPN up / Active node = / Active group =.
 /// Для node/group показывается поле значения. Save → bundle + blurb.
 class LocaleConditionEditActivity : Activity() {
 
-    /// (check, label, needs value).
+    /// (check, label-resource, needs value).
+    /// §279 — check = wire (Tasker-bundle), label — ресурс (L10n).
     private val checks = listOf(
-        Triple("vpn-up", "VPN is up", false),
-        Triple("active-node", "Active node =", true),
-        Triple("active-group", "Active group =", true),
+        Triple("vpn-up", R.string.automation_check_vpn_up, false),
+        Triple("active-node", R.string.automation_check_active_node, true),
+        Triple("active-group", R.string.automation_check_active_group, true),
     )
 
     private lateinit var radioGroup: RadioGroup
@@ -32,7 +35,7 @@ class LocaleConditionEditActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        title = "L×Box"
+        title = L10n.str(this, R.string.app_name)
 
         val pad = (16 * resources.displayMetrics.density).toInt()
         val content = LinearLayout(this).apply {
@@ -41,15 +44,16 @@ class LocaleConditionEditActivity : Activity() {
         }
 
         content.addView(TextView(this).apply {
-            text = "L×Box condition:"
+            text = L10n.str(this@LocaleConditionEditActivity,
+                R.string.automation_condition_prompt)
             setPadding(0, 0, 0, pad / 2)
         })
 
         radioGroup = RadioGroup(this)
-        checks.forEachIndexed { idx, (_, label, _) ->
+        checks.forEachIndexed { idx, (_, labelRes, _) ->
             radioGroup.addView(RadioButton(this).apply {
                 id = idx
-                text = label
+                text = L10n.str(this@LocaleConditionEditActivity, labelRes)
                 setPadding(0, pad / 3, 0, pad / 3)
             })
         }
@@ -62,7 +66,8 @@ class LocaleConditionEditActivity : Activity() {
         content.addView(radioGroup)
 
         valueLabel = TextView(this).apply {
-            text = "Value:"
+            text = L10n.str(this@LocaleConditionEditActivity,
+                R.string.automation_value_plain)
             setPadding(0, pad, 0, 0)
             visibility = View.GONE
         }
@@ -74,7 +79,7 @@ class LocaleConditionEditActivity : Activity() {
         content.addView(valueInput)
 
         val save = Button(this).apply {
-            text = "Save"
+            text = L10n.str(this@LocaleConditionEditActivity, R.string.automation_save)
             gravity = Gravity.CENTER
             setOnClickListener { onSave() }
         }
@@ -103,8 +108,10 @@ class LocaleConditionEditActivity : Activity() {
     private fun onSave() {
         val checkedId = radioGroup.checkedRadioButtonId
         val idx = if (checkedId in checks.indices) checkedId else 0
-        val (check, blurbLabel, needsValue) = checks[idx]
+        val (check, labelRes, needsValue) = checks[idx]
         val value = if (needsValue) valueInput.text.toString().trim() else null
+        // §279 — блёрб display-only (host матчит по extras): активная локаль.
+        val blurbLabel = L10n.str(this, labelRes)
         val blurb = if (needsValue && !value.isNullOrEmpty()) {
             "$blurbLabel $value"
         } else {

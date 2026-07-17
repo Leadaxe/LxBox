@@ -399,7 +399,9 @@ class NodeRow extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 40),
-                tooltip: item.active ? 'Active' : 'Use node',
+                tooltip: item.active
+                    ? context.l.homeNodeActiveTooltip
+                    : context.l.homeNodeUseTooltip,
                 onPressed: canActivate ? onActivate : null,
                 icon: Icon(
                   item.active ? Icons.check_circle : Icons.play_circle_outline,

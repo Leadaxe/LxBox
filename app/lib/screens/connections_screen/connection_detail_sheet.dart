@@ -94,7 +94,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    title.isNotEmpty ? title : '(connection)',
+                    title.isNotEmpty ? title : context.l.statsConnFallbackTitle,
                     style: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w600),
                     softWrap: true,

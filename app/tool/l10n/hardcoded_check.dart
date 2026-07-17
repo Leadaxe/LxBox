@@ -7,23 +7,16 @@ import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/source/line_info.dart';
 
 import 'src/check_common.dart';
+import 'src/hardcoded_scan.dart';
 import 'src/sha256.dart';
 
 // §279 (спека §9.3) — ratchet против новых hardcoded display-строк.
 //
 // AST-скан lib/ (минус lib/l10n/gen/) по синтаксису, без резолюции типов.
-// Display-позиции:
-//   - первый позиционный аргумент Text(...);
-//   - именованные аргументы tooltip:/labelText:/hintText:/helperText: у любого
-//     вызова (semanticLabel сознательно НЕ входит);
-//   - SnackBarAction(label:), Tab(text:); SnackBar(content:)/AlertDialog(...)
-//     покрыты правилом Text — строка туда попадает только внутри Text(...);
-//   - хелперы из tool/l10n/l10n_helpers.json (display-параметры snack/dialog
-//     хелперов; новый хелпер обязан регистрироваться там). Self-check-эвристика
-//     кандидатов (String-параметр → ScaffoldMessenger) — позднее ужесточение.
-//
-// Пропускаются литералы: пустые/без букв (пунктуация, юниты) и строки с
-// комментарием `// l10n-exempt` на той же строке или строкой выше.
+// Display-позиции и рекурсия в ternary/switch-ветки — см.
+// src/hardcoded_scan.dart (логика вынесена в библиотеку и покрыта
+// test/tool/hardcoded_scan_test.dart). Self-check-эвристика кандидатов
+// в хелперы (String-параметр → ScaffoldMessenger) — позднее ужесточение.
 //
 // Baseline tool/l10n/hardcoded_baseline.json: {file: [hash...]} — hash =
 // первые 12 hex sha256 канонизированного текста (каждая ${...}-интерполяция
@@ -73,26 +66,7 @@ class _RenderAllowlist {
   bool l10nCurrentAllowed(String file) => _match(l10nCurrent, file);
 }
 
-const Set<String> _displayNamedArgs = {
-  'tooltip', 'labelText', 'hintText', 'helperText',
-};
-const Map<String, Set<String>> _calleeNamed = {
-  'SnackBarAction': {'label'},
-  'Tab': {'text'},
-};
-const Map<String, Set<int>> _calleePositional = {
-  'Text': {0},
-};
-
-final RegExp _letter = RegExp(r'\p{L}', unicode: true);
-
-class _Helper {
-  _Helper(this.positional, this.named);
-  final Set<int> positional;
-  final Set<String> named;
-}
-
-Map<String, _Helper> _loadHelpers() {
+Map<String, DisplayHelper> _loadHelpers() {
   final raw = jsonDecode(File(_helpersPath).readAsStringSync())
       as Map<String, dynamic>;
   final helpers = raw['helpers'] as Map<String, dynamic>;
@@ -100,118 +74,12 @@ Map<String, _Helper> _loadHelpers() {
     final m = cfg as Map<String, dynamic>;
     return MapEntry(
       name,
-      _Helper(
+      DisplayHelper(
         ((m['positional'] as List?) ?? const []).cast<int>().toSet(),
         ((m['named'] as List?) ?? const []).cast<String>().toSet(),
       ),
     );
   });
-}
-
-class _Site {
-  _Site(this.file, this.line, this.hash, this.preview);
-  final String file;
-  final int line;
-  final String hash;
-  final String preview;
-}
-
-String? _canonicalLiteral(Expression e) {
-  if (e is SimpleStringLiteral) return e.value;
-  if (e is AdjacentStrings) {
-    final buf = StringBuffer();
-    for (final s in e.strings) {
-      final part = _canonicalLiteral(s);
-      if (part == null) return null;
-      buf.write(part);
-    }
-    return buf.toString();
-  }
-  if (e is StringInterpolation) {
-    final buf = StringBuffer();
-    for (final el in e.elements) {
-      if (el is InterpolationString) {
-        buf.write(el.value);
-      } else {
-        buf.write('{}');
-      }
-    }
-    return buf.toString();
-  }
-  return null;
-}
-
-class _Visitor extends RecursiveAstVisitor<void> {
-  _Visitor(this.file, this.lineInfo, this.lines, this.helpers, this.sites);
-
-  final String file;
-  final LineInfo lineInfo;
-  final List<String> lines;
-  final Map<String, _Helper> helpers;
-  final List<_Site> sites;
-  final Set<int> _seenOffsets = {};
-
-  @override
-  void visitMethodInvocation(MethodInvocation node) {
-    _handleCall(node.methodName.name, node.argumentList);
-    super.visitMethodInvocation(node);
-  }
-
-  @override
-  void visitInstanceCreationExpression(InstanceCreationExpression node) {
-    // toSource() вместо NamedType.name — API последнего стабилен хуже.
-    final type = node.constructorName.type.toSource();
-    _handleCall(type.split('<').first.split('.').last, node.argumentList);
-    super.visitInstanceCreationExpression(node);
-  }
-
-  @override
-  void visitNamedExpression(NamedExpression node) {
-    if (_displayNamedArgs.contains(node.name.label.name)) {
-      _check(node.expression);
-    }
-    super.visitNamedExpression(node);
-  }
-
-  void _handleCall(String callee, ArgumentList args) {
-    final positional = <int>{
-      ...?_calleePositional[callee],
-      ...?helpers[callee]?.positional,
-    };
-    final named = <String>{
-      ...?_calleeNamed[callee],
-      ...?helpers[callee]?.named,
-    };
-    if (positional.isEmpty && named.isEmpty) return;
-
-    var idx = 0;
-    for (final a in args.arguments) {
-      if (a is NamedExpression) {
-        if (named.contains(a.name.label.name)) _check(a.expression);
-      } else {
-        if (positional.contains(idx)) _check(a);
-        idx++;
-      }
-    }
-  }
-
-  void _check(Expression e) {
-    final text = _canonicalLiteral(e);
-    if (text == null || text.trim().isEmpty) return;
-    if (!_letter.hasMatch(text)) return; // пунктуация/юниты: '—', '·'
-    if (!_seenOffsets.add(e.offset)) return;
-    final line = lineInfo.getLocation(e.offset).lineNumber;
-    if (_exempt(line)) return;
-    final short =
-        text.length > 60 ? '${text.substring(0, 57)}...' : text;
-    sites.add(_Site(file, line, sha256Hex(text).substring(0, 12), short));
-  }
-
-  bool _exempt(int line) {
-    bool has(int i) =>
-        i >= 0 && i < lines.length && lines[i].contains('// l10n-exempt');
-    return has(line - 1) || has(line - 2); // та же строка или строкой выше
-  }
 }
 
 /// §9.4 — visitor rendering-locality-правил (отдельный от ratchet-скана:
@@ -333,15 +201,15 @@ void main(List<String> args) {
   final helpers = _loadHelpers();
   final renderAllow = _RenderAllowlist.load();
   final files = dartFilesUnder('lib', excludeDirs: ['lib/l10n/gen']);
-  final sitesByFile = <String, List<_Site>>{};
+  final sitesByFile = <String, List<HardcodedSite>>{};
   for (final path in files) {
     final content = File(path).readAsStringSync();
+    // Ratchet-скан (src/hardcoded_scan.dart — вкл. рекурсию в ternary/switch).
+    final sites = scanForHardcodedStrings(
+        path: path, content: content, helpers: helpers);
+    // §9.4 — rendering-locality (fail-режим с Phase 4).
     final parsed =
         parseString(content: content, path: path, throwIfDiagnostics: false);
-    final sites = <_Site>[];
-    parsed.unit.accept(
-        _Visitor(path, parsed.lineInfo, content.split('\n'), helpers, sites));
-    // §9.4 — rendering-locality (fail-режим с Phase 4).
     parsed.unit.accept(_LocalityVisitor(path, parsed.lineInfo, renderAllow, r));
     if (sites.isNotEmpty) sitesByFile[path] = sites;
   }

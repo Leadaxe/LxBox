@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/parser_config.dart';
+import '../../../services/l10n/l10n.dart';
 
 /// Каталог пресетов (read-only) на табе Presets. Tap на "Add to Rules" →
 /// клонирует в Rules через caller-callback. `existing == true` → кнопка
@@ -36,7 +37,9 @@ class PresetCatalogTile extends StatelessWidget {
               ),
               TextButton.icon(
                 icon: Icon(existing ? Icons.check : Icons.add, size: 16),
-                label: Text(existing ? 'In Rules' : 'Add to Rules'),
+                label: Text(existing
+                    ? context.l.routingPresetInRules
+                    : context.l.routingPresetAddToRules),
                 onPressed: existing ? null : onCopy,
               ),
             ],

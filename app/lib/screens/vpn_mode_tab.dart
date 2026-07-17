@@ -394,8 +394,8 @@ class _VpnModeTabState extends State<VpnModeTab>
             title: Text(context.l.vpnModeAllowBypassTitle),
             subtitle: Text(
               _allowBypass
-                  ? 'Apps may use ConnectivityManager to bypass tun.'
-                  : 'Strict tunnel — all traffic goes through tun.',
+                  ? context.l.vpnModeAllowBypassOn
+                  : context.l.vpnModeAllowBypassOff,
             ),
             secondary: const Icon(Icons.alt_route),
             value: _allowBypass,
@@ -427,8 +427,8 @@ class _VpnModeTabState extends State<VpnModeTab>
           const SizedBox(height: 4),
           Text(
             _cfg.isPublicListen
-                ? 'Reachable from other devices on the network — auth required.'
-                : 'Reachable only from this device.',
+                ? context.l.vpnModeListenPublicNote
+                : context.l.vpnModeListenLocalNote,
             style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 16),
@@ -455,8 +455,8 @@ class _VpnModeTabState extends State<VpnModeTab>
             title: Text(_authNode.title),
             subtitle: Text(
               _cfg.isPublicListen
-                  ? 'Required for LAN-exposed proxy (cannot be disabled).'
-                  : 'Recommended. Protects the local proxy port.',
+                  ? context.l.vpnModeAuthRequiredPublic
+                  : context.l.vpnModeAuthRecommended,
             ),
             value: _cfg.effectiveAuth,
             // 0.0.0.0 → залочен on (onChanged null = disabled).
@@ -488,7 +488,9 @@ class _VpnModeTabState extends State<VpnModeTab>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      tooltip: _showPassword ? 'Hide' : 'Show',
+                      tooltip: _showPassword
+                          ? context.l.vpnModeHidePasswordTooltip
+                          : context.l.vpnModeShowPasswordTooltip,
                       icon: Icon(
                         _showPassword
                             ? Icons.visibility_off

@@ -243,10 +243,9 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen> {
           SnackBar(
             duration: const Duration(seconds: 3),
             content: Text(switch (reason) {
-              'no_wifi' => 'Not connected to Wi-Fi.',
-              'unknown_ssid' =>
-                'Cannot read Wi-Fi info — try toggling Wi-Fi off/on.',
-              _ => 'Could not read current Wi-Fi ($reason).',
+              'no_wifi' => context.l.ruleEditWifiNotConnected,
+              'unknown_ssid' => context.l.ruleEditWifiUnknownSsid,
+              _ => context.l.ruleEditWifiReadFailed(reason),
             }),
           ),
         );

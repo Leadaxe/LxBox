@@ -212,8 +212,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(locked
-            ? 'Config locked. UI actions will not rebuild config.'
-            : 'Config unlocked. Next UI action will rebuild from settings.'),
+            ? context.l.appSettingsConfigLockedSnack
+            : context.l.appSettingsConfigUnlockedSnack),
         duration: const Duration(seconds: 3),
       ),
     );
@@ -768,8 +768,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
       SnackBar(
         duration: const Duration(seconds: 2),
         content: Text(enabled
-            ? 'Auto-record on. Networks added after 5 min of stay.'
-            : 'Auto-record off. Existing history kept.'),
+            ? context.l.appSettingsAutoRecordOnSnack
+            : context.l.appSettingsAutoRecordOffSnack),
       ),
     );
   }
