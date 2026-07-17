@@ -192,6 +192,7 @@ class CustomRuleTile extends StatelessWidget {
         children: [
           Icon(Icons.dns_outlined, size: 12, color: c),
           const SizedBox(width: 3),
+          // l10n-exempt: acronym, same in all locales
           Text('DNS',
               style: TextStyle(
                   fontSize: 10, fontWeight: FontWeight.w600, color: c)),

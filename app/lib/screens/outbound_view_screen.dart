@@ -6,6 +6,7 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
 import '../models/config_node.dart';
+import '../services/l10n/l10n.dart';
 import '../services/runtime_chain.dart';
 import '../services/settings_storage.dart';
 import 'owner_navigation.dart';
@@ -91,7 +92,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       onOwnerNotFound: () {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Source not found in your lists')),
+          SnackBar(content: Text(context.l.outboundViewSourceNotFound)),
         );
       },
     ));
@@ -109,34 +110,38 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
         appBar: AppBar(
           title: Text('${widget.kind} · ${widget.tag}',
               overflow: TextOverflow.ellipsis),
-          bottom: const TabBar(
-            tabs: [Tab(text: 'Overview'), Tab(text: 'JSON')],
+          bottom: TabBar(
+            tabs: [
+              Tab(text: context.l.outboundViewTabOverview),
+              // l10n-exempt: acronym, same in all locales
+              const Tab(text: 'JSON'),
+            ],
           ),
           actions: [
             // §099 — без detour: простая кнопка Copy (JSON ноды). С detour:
             // выпадашка (Copy server JSON / Copy detour / Copy server + detour(s)).
             if (widget.detourCount > 0)
               PopupMenuButton<String>(
-                tooltip: 'Copy',
+                tooltip: context.l.commonCopy,
                 icon: const Icon(Icons.content_copy),
                 onSelected: widget.onCopy,
                 itemBuilder: (_) => [
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'server',
                     child: ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.content_copy, size: 20),
-                      title: Text('Copy server JSON'),
+                      leading: const Icon(Icons.content_copy, size: 20),
+                      title: Text(context.l.outboundViewCopyServerJson),
                     ),
                   ),
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'detour',
                     child: ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.alt_route, size: 20),
-                      title: Text('Copy detour'),
+                      leading: const Icon(Icons.alt_route, size: 20),
+                      title: Text(context.l.outboundViewCopyDetour),
                     ),
                   ),
                   PopupMenuItem(
@@ -152,7 +157,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
               )
             else
               IconButton(
-                tooltip: 'Copy JSON',
+                tooltip: context.l.subCopyJson,
                 icon: const Icon(Icons.content_copy),
                 onPressed: () => widget.onCopy('server'),
               ),
@@ -184,7 +189,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            'Live path in packet order. Tap a hop to open its source.',
+            context.l.outboundViewRouteHint,
             style: TextStyle(
               fontSize: 12,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -293,7 +298,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
       contentPadding: EdgeInsets.zero,
       leading: Icon(Icons.more_vert, size: 20, color: cs.onSurfaceVariant),
       title: Text(
-        'connect to see the full path',
+        context.l.outboundViewConnectToSee,
         style: TextStyle(
             fontSize: 12,
             fontStyle: FontStyle.italic,

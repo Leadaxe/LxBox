@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/l10n/l10n.dart';
 import '../filter_widgets.dart';
 import '../node_filter_view_model.dart';
 import '../node_list_presenter.dart';
@@ -107,7 +108,7 @@ class _FilterPanelState extends State<FilterPanel>
     final ms = f.activeMaxPingMs;
     if (ms != null) {
       chips.add(InputChip(
-        label: Text('≤${ms}ms'),
+        label: Text(context.l.homeFilterMaxPingChip(ms)),
         onPressed: () => _tab.animateTo(3),
         onDeleted: f.clearPing,
       ));
@@ -127,7 +128,7 @@ class _FilterPanelState extends State<FilterPanel>
     }
     if (f.nonMatchingHidden) {
       chips.add(InputChip(
-        tooltip: 'Non-matching hidden',
+        tooltip: context.l.homeFilterNonMatchingHidden,
         label: const Icon(Icons.visibility_off, size: 18),
         onPressed: () => _tab.animateTo(3),
         onDeleted: () => f.setShowNonMatching(true),
@@ -289,7 +290,7 @@ class _FilterPanelState extends State<FilterPanel>
                     // при выкл-фильтре (две ортогональные оси, как в спеке).
                     active: f.detourHide,
                     onToggle: f.toggleDetourHide,
-                    tooltip: 'Hide detour (on) / detour only (off)',
+                    tooltip: context.l.homeFilterDetourTooltip,
                   ),
                   const SizedBox(width: 4),
                   Expanded(
@@ -347,7 +348,7 @@ class _FilterPanelState extends State<FilterPanel>
                 ),
               ),
               IconButton(
-                tooltip: 'Close filters',
+                tooltip: context.l.homeFilterClose,
                 visualDensity: VisualDensity.compact,
                 onPressed: f.togglePanel,
                 icon: const Icon(Icons.close, size: 20),

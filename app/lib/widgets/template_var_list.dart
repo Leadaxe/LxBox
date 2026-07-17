@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/parser_config.dart';
+import '../services/l10n/l10n.dart';
 import 'outbound_picker.dart';
 import 'var_values_model.dart';
 
@@ -211,7 +212,7 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
           tooltip: v.tooltip,
           onChanged: (val) => _update(v.name, val),
           trailing: IconButton(
-            tooltip: 'Generate random',
+            tooltip: context.l.settingsGenerateRandom,
             icon: const Icon(Icons.refresh, size: 20),
             onPressed: () {
               final rng = Random.secure();
@@ -431,7 +432,7 @@ class _VarTextFieldState extends State<_VarTextField> {
     }
     if (widget.suggestions.isEmpty) return null;
     return PopupMenuButton<String>(
-      tooltip: 'Presets',
+      tooltip: context.l.settingsPresetsTooltip,
       icon: const Icon(Icons.arrow_drop_down),
       padding: EdgeInsets.zero,
       position: PopupMenuPosition.under,

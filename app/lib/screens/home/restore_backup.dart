@@ -9,6 +9,7 @@ import '../../controllers/subscription_controller.dart';
 import '../../services/app_log.dart';
 import '../../services/backup_service.dart';
 import '../../services/error_format.dart';
+import '../../services/l10n/l10n.dart';
 import '../../services/subscription/auto_updater.dart';
 
 /// Empty-state quick-restore flow.
@@ -44,7 +45,7 @@ Future<void> restoreFromBackup(
     if (raw == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not read file.')),
+          SnackBar(content: Text(context.l.backupCouldNotReadFile)),
         );
       }
       return;
@@ -59,12 +60,12 @@ Future<void> restoreFromBackup(
       showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Invalid backup'),
+          title: Text(ctx.l.backupInvalidTitle),
           content: Text(e.message),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
+              child: Text(ctx.l.commonOk),
             ),
           ],
         ),
@@ -120,7 +121,7 @@ Future<void> restoreFromBackup(
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Restore failed: ${formatUserError(e)}')),
+        SnackBar(content: Text(context.l.backupRestoreFailed(formatUserError(e)))),
       );
     }
   }

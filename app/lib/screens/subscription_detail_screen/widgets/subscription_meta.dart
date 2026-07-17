@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../controllers/subscription_controller.dart';
+import '../../../services/l10n/l10n.dart';
 import '../subscription_detail_format.dart';
 
 /// Header/meta block on the Nodes tab: url + copy, last-updated, node counts,
@@ -47,11 +48,11 @@ class SubscriptionMeta extends StatelessWidget {
                 ),
                 IconButton(
                   icon: const Icon(Icons.copy, size: 16),
-                  tooltip: 'Copy URL',
+                  tooltip: context.l.subCopyUrl,
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: url));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('URL copied')),
+                      SnackBar(content: Text(context.l.subUrlCopied)),
                     );
                   },
                 ),
@@ -74,8 +75,9 @@ class SubscriptionMeta extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 entry.detourCount > 0
-                    ? '${entry.nodeCount} +${entry.detourCount}⚙ nodes'
-                    : '${entry.nodeCount} nodes',
+                    ? context.l
+                        .subNodesCountWithDetour(entry.nodeCount, entry.detourCount)
+                    : context.l.subEntryNodesCount(entry.nodeCount),
                 style: theme.textTheme.bodySmall,
               ),
             ],
@@ -83,7 +85,7 @@ class SubscriptionMeta extends StatelessWidget {
           // Traffic quota
           if (entry.totalBytes > 0) ...[
             const SizedBox(height: 8),
-            _buildTrafficBar(entry, theme),
+            _buildTrafficBar(context, entry, theme),
           ],
           // Expire
           if (entry.expireTimestamp > 0) ...[
@@ -93,7 +95,7 @@ class SubscriptionMeta extends StatelessWidget {
                 Icon(Icons.event_outlined, size: 14, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 4),
                 Text(
-                  'Expires: ${formatExpire(entry.expireTimestamp)}',
+                  context.l.subExpires(formatExpire(entry.expireTimestamp)),
                   style: theme.textTheme.bodySmall,
                 ),
               ],
@@ -114,13 +116,13 @@ class SubscriptionMeta extends StatelessWidget {
                           ? const Color(0xFF2AABEE)
                           : null,
                     ),
-                    label: const Text('Support'),
+                    label: Text(context.l.subSupportChip),
                     onPressed: () => unawaited(onOpenUrl(entry.supportUrl)),
                   ),
                 if (entry.webPageUrl.isNotEmpty)
                   ActionChip(
                     avatar: const Icon(Icons.language, size: 16),
-                    label: const Text('Web page'),
+                    label: Text(context.l.subWebPageChip),
                     onPressed: () => unawaited(Future.sync(() => onOpenUrl(entry.webPageUrl))),
                   ),
               ],
@@ -131,7 +133,8 @@ class SubscriptionMeta extends StatelessWidget {
     );
   }
 
-  Widget _buildTrafficBar(SubscriptionEntry entry, ThemeData theme) {
+  Widget _buildTrafficBar(
+      BuildContext context, SubscriptionEntry entry, ThemeData theme) {
     final used = entry.uploadBytes + entry.downloadBytes;
     final total = entry.totalBytes;
     final pct = total > 0 ? (used / total).clamp(0.0, 1.0) : 0.0;
@@ -141,7 +144,7 @@ class SubscriptionMeta extends StatelessWidget {
         LinearProgressIndicator(value: pct),
         const SizedBox(height: 2),
         Text(
-          '${formatBytes(used)} / ${formatBytes(total)} used',
+          context.l.subTrafficUsed(formatBytes(used), formatBytes(total)),
           style: theme.textTheme.bodySmall,
         ),
       ],

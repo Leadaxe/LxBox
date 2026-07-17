@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../services/l10n/l10n.dart';
 import '../services/ui_helpers.dart';
 import '../widgets/outbound_picker.dart';
 import 'dns_server_edit/edit_controller.dart';
@@ -81,13 +82,14 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
       final tag = _ctrl.tagCtrl.text.trim();
       if (tag.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Tag is required')),
+          SnackBar(content: Text(context.l.dnsEditTagRequired)),
         );
         return;
       }
       if (_ctrl.jsonError != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fix body JSON first: ${_ctrl.jsonError}')),
+          SnackBar(
+              content: Text(context.l.dnsEditFixJsonFirst('${_ctrl.jsonError}'))),
         );
         return;
       }
@@ -95,7 +97,7 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
       if (_ctrl.serverMode != null &&
           _ctrl.addressCtrl.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Server address is required')),
+          SnackBar(content: Text(context.l.dnsEditAddressRequired)),
         );
         return;
       }
@@ -105,7 +107,7 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
           tag != (widget.resolved?.tag ?? '') &&
           widget.existingTags.contains(tag)) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Tag "$tag" is already in use')),
+          SnackBar(content: Text(context.l.dnsEditTagInUse(tag))),
         );
         return;
       }
@@ -115,16 +117,16 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
         final replace = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: Text('Tag "$tag" exists'),
-            content: const Text('Replace the existing server with this one?'),
+            title: Text(ctx.l.dnsEditTagExistsTitle(tag)),
+            content: Text(ctx.l.dnsEditReplaceBody),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
+                child: Text(ctx.l.commonCancel),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Replace'),
+                child: Text(ctx.l.commonReplace),
               ),
             ],
           ),
@@ -140,8 +142,8 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
     final tag = widget.resolved?.tag ?? '';
     final confirmed = await showDeleteConfirmDialog(
       context,
-      title: 'Delete DNS server?',
-      message: 'Remove "$tag" permanently?',
+      title: context.l.dnsEditDeleteTitle,
+      message: context.l.ruleEditDeleteBody(tag),
     ); // §219
     if (confirmed == true && mounted) {
       Navigator.pop(context, DnsServerEditResult.deleted());
@@ -157,18 +159,16 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Reset to default?'),
-        content: Text(
-            'Discard the override and restore the ${overrides.name} '
-            'definition of "${resolved.tag}"?'),
+        title: Text(ctx.l.dnsEditResetTitle),
+        content: Text(ctx.l.dnsEditResetBody(overrides.name, resolved.tag)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(ctx.l.commonCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Reset'),
+            child: Text(ctx.l.dnsEditResetButton),
           ),
         ],
       ),
@@ -218,7 +218,9 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
           length: 2,
           child: Scaffold(
             appBar: AppBar(
-              title: Text(_ctrl.isNew ? 'Add DNS Server' : 'Edit DNS Server'),
+              title: Text(_ctrl.isNew
+                  ? context.l.dnsEditAddTitle
+                  : context.l.dnsEditEditTitle),
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back),
                 onPressed: _handleBack,
@@ -226,21 +228,24 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
               actions: [
                 if (canReset)
                   IconButton(
-                    tooltip: 'Reset to default',
+                    tooltip: context.l.dnsEditResetTooltip,
                     icon: const Icon(Icons.restart_alt),
                     onPressed: _resetToCanonical,
                   ),
                 if (canDelete)
                   IconButton(
-                    tooltip: 'Delete server',
+                    tooltip: context.l.dnsEditDeleteServerTooltip,
                     icon: Icon(Icons.delete_outline,
                         color: Theme.of(context).colorScheme.error),
                     onPressed: _delete,
                   ),
                 _SaveIconButton(controller: _ctrl, onPressed: _save),
               ],
-              bottom: const TabBar(
-                tabs: [Tab(text: 'Params'), Tab(text: 'JSON')],
+              bottom: TabBar(
+                tabs: [
+                  Tab(text: context.l.ruleEditTabParams),
+                  Tab(text: context.l.dnsEditTabJson),
+                ],
               ),
             ),
             body: TabBarView(
@@ -271,7 +276,7 @@ class _SaveIconButton extends StatelessWidget {
       builder: (ctx, _) {
         final dirty = controller.isDirty();
         return IconButton(
-          tooltip: 'Save',
+          tooltip: ctx.l.commonSave,
           icon: Icon(Icons.save,
               color: dirty ? Theme.of(ctx).colorScheme.primary : null),
           onPressed: onPressed,

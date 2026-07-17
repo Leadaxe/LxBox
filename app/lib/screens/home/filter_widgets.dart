@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../services/l10n/l10n.dart';
+
 /// §048 — UI components для filter panel в node list header.
 /// Все слим, compact, default collapsed (см. spec).
 
@@ -85,7 +87,7 @@ class RegexFilterField extends StatelessWidget {
           child: NegateToggle(
             active: invert,
             onToggle: onInvertToggle,
-            tooltip: 'Show NON-matching',
+            tooltip: context.l.homeFilterShowNonMatching,
           ),
         ),
         const SizedBox(width: 4),
@@ -96,7 +98,7 @@ class RegexFilterField extends StatelessWidget {
             decoration: InputDecoration(
               isDense: true,
               contentPadding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
-              hintText: 'regex pattern',
+              hintText: context.l.homeFilterRegexHint,
               // §096 — invert переехал в ведущий [!] (NegateToggle слева от
               // поля); внутри prefix остаётся только лупа.
               prefixIcon: const SizedBox(
@@ -234,7 +236,7 @@ class MultiSelectChipsRow extends StatelessWidget {
         NegateToggle(
           active: invert,
           onToggle: onInvertToggle,
-          tooltip: 'Show NON-selected',
+          tooltip: context.l.homeFilterShowNonSelected,
         ),
         const SizedBox(width: 4),
         Expanded(
@@ -297,7 +299,7 @@ class PingFilterField extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 4),
-        const Text('Test ≤', style: TextStyle(fontSize: 12)),
+        Text(context.l.homeFilterTestLe, style: const TextStyle(fontSize: 12)),
         const SizedBox(width: 8),
         SizedBox(
           width: 80,
@@ -319,6 +321,7 @@ class PingFilterField extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 6),
+        // l10n-exempt: 'ms' — латинская единица в обеих локалях (spec §5)
         const Text('ms', style: TextStyle(fontSize: 12)),
         if (controller.text.isNotEmpty)
           IconButton(

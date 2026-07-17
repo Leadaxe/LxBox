@@ -10,6 +10,7 @@ import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../services/builder/normalize_pinned_presets.dart';
 import '../services/channel_mutations.dart';
+import '../services/l10n/l10n.dart';
 import '../services/l10n/template_aware_state.dart';
 import '../services/preset_on_change.dart';
 import '../services/rule_display_names.dart';
@@ -179,7 +180,7 @@ class _RoutingScreenState extends State<RoutingScreen>
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Routing')),
+        appBar: AppBar(title: Text(context.l.homeDrawerRouting)),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -193,15 +194,15 @@ class _RoutingScreenState extends State<RoutingScreen>
       initialIndex: widget.initialPresetsTab ? 1 : 0,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Routing'),
-          bottom: const TabBar(
+          title: Text(context.l.homeDrawerRouting),
+          bottom: TabBar(
             isScrollable: true,
             tabAlignment: TabAlignment.start,
             tabs: [
-              Tab(text: 'Channels'),
-              Tab(text: 'Presets'),
-              Tab(text: 'Rules'),
-              Tab(text: 'Tunnel apps'),
+              Tab(text: context.l.subDetourChannelsHeader),
+              Tab(text: context.l.settingsPresetsTooltip),
+              Tab(text: context.l.routingTabRules),
+              Tab(text: context.l.routingTabTunnelApps),
             ],
           ),
         ),

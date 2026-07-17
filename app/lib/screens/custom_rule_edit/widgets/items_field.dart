@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../services/l10n/l10n.dart';
 import '../normalizers.dart' as norm;
 
 /// §053 Stage 2 — multiline TextField + count badge + Paste/Clear actions.
@@ -98,7 +99,7 @@ class _ItemsFieldState extends State<ItemsField> {
     if (text.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Clipboard is empty')),
+        SnackBar(content: Text(context.l.subClipboardEmpty)),
       );
       return;
     }
@@ -207,8 +208,8 @@ class _ItemsFieldState extends State<ItemsField> {
             children: [
               TextButton.icon(
                 icon: const Icon(Icons.content_paste, size: 14),
-                label: const Text('Paste',
-                    style: TextStyle(fontSize: 12)),
+                label: Text(context.l.commonPaste,
+                    style: const TextStyle(fontSize: 12)),
                 onPressed: _pasteInto,
                 style: TextButton.styleFrom(
                   minimumSize: const Size(0, 28),
@@ -218,8 +219,8 @@ class _ItemsFieldState extends State<ItemsField> {
               if (widget.presets.isNotEmpty)
                 TextButton.icon(
                   icon: const Icon(Icons.list, size: 14),
-                  label: const Text('Presets',
-                      style: TextStyle(fontSize: 12)),
+                  label: Text(context.l.settingsPresetsTooltip,
+                      style: const TextStyle(fontSize: 12)),
                   onPressed: _showPresetMenu,
                   style: TextButton.styleFrom(
                     minimumSize: const Size(0, 28),
@@ -228,8 +229,8 @@ class _ItemsFieldState extends State<ItemsField> {
                 ),
               TextButton.icon(
                 icon: const Icon(Icons.clear, size: 14),
-                label: const Text('Clear',
-                    style: TextStyle(fontSize: 12)),
+                label: Text(context.l.commonClear,
+                    style: const TextStyle(fontSize: 12)),
                 onPressed: () => widget.controller.clear(),
                 style: TextButton.styleFrom(
                   minimumSize: const Size(0, 28),

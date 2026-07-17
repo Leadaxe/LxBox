@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../services/subscription/auto_updater.dart';
+import '../../../services/l10n/l10n.dart';
 import '../../subscriptions_screen.dart';
 
 /// Гайд пустого состояния главного экрана (нет конфига/нод): заголовок, FAB
@@ -36,14 +37,14 @@ class AddServerCta extends StatelessWidget {
                 size: 64, color: cs.onSurfaceVariant.withAlpha(140)),
             const SizedBox(height: 20),
             Text(
-              'Add a server',
+              context.l.homeAddServerTitle,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Connect a subscription or add a node manually to get started.',
+              context.l.homeAddServerSubtitle,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: cs.onSurfaceVariant,
@@ -63,7 +64,7 @@ class AddServerCta extends StatelessWidget {
                     ),
                   ),
                 ),
-                tooltip: 'Add a server',
+                tooltip: context.l.homeAddServerTitle,
                 child: const Icon(Icons.add, size: 32),
               ),
             ),
@@ -71,7 +72,7 @@ class AddServerCta extends StatelessWidget {
             TextButton.icon(
               onPressed: onRestoreFromBackup,
               icon: const Icon(Icons.restore, size: 18),
-              label: const Text('Restore from backup'),
+              label: Text(context.l.homeRestoreFromBackup),
               style: TextButton.styleFrom(
                 foregroundColor: cs.onSurfaceVariant,
               ),

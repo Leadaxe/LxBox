@@ -8,6 +8,7 @@ import '../models/home_state.dart';
 import '../models/validation.dart';
 import '../services/app_log.dart';
 import '../services/error_humanize.dart';
+import '../services/l10n/l10n.dart';
 import '../services/support/active_time_tracker.dart';
 import '../services/support/support_message.dart';
 import '../services/version_info.dart';
@@ -473,9 +474,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     if (!_controller.state.tunnelUp) return;
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Resumed — syncing tunnel…'),
-        duration: Duration(seconds: 2),
+      SnackBar(
+        content: Text(context.l.homeResumedSyncing),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -539,6 +540,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         final startEnabled = !state.busy && !state.tunnelUp && state.configRaw.isNotEmpty;
         final stopEnabled = !state.busy && state.tunnelUp;
         return Scaffold(
+          // l10n-exempt: brand name, идентичен во всех локалях
           appBar: AppBar(title: const Text('L×Box')),
           drawer: HomeDrawer(
             controller: _controller,
@@ -787,7 +789,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Config rebuilt: $nodeCount nodes${_controller.state.tunnelUp ? " — restart VPN to apply" : ""}',
+            _controller.state.tunnelUp
+                ? context.l.homeConfigRebuiltRestart(nodeCount)
+                : context.l.homeConfigRebuilt(nodeCount),
           ),
         ),
       );

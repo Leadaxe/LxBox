@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/l10n/l10n.dart';
 import '../../../services/settings_storage.dart';
 import '../../../vpn/pprof_profile.dart';
 
@@ -100,7 +101,8 @@ class DiagnosticsTab extends StatelessWidget {
     return ListView(
       padding: padding,
       children: [
-        Text('System setup', style: Theme.of(context).textTheme.titleMedium),
+        Text(context.l.appSettingsDiagSystemSetupHeader,
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         ListTile(
           leading: Icon(
@@ -109,7 +111,7 @@ class DiagnosticsTab extends StatelessWidget {
                 ? Colors.green
                 : Theme.of(context).colorScheme.error,
           ),
-          title: const Text('Battery optimization'),
+          title: Text(context.l.appSettingsDiagBatteryTitle),
           subtitle: Text(batteryWhitelisted
               ? 'Whitelisted — VPN can run in background'
               : 'Restricted — Android may pause VPN in idle. Tap to grant.'),
@@ -125,7 +127,7 @@ class DiagnosticsTab extends StatelessWidget {
                 ? Colors.green
                 : Theme.of(context).colorScheme.error,
           ),
-          title: const Text('Notifications'),
+          title: Text(context.l.appSettingsDiagNotificationsTitle),
           subtitle: Text(notificationsEnabled
               ? 'Allowed — foreground service shows VPN status'
               : 'Blocked — Android may throttle the VPN service. Tap to allow.'),
@@ -145,7 +147,7 @@ class DiagnosticsTab extends StatelessWidget {
                 ? Colors.green
                 : Theme.of(context).colorScheme.error,
           ),
-          title: const Text('Location (background)'),
+          title: Text(context.l.appSettingsDiagLocationTitle),
           subtitle: Text(backgroundLocationGranted
               ? 'Granted — sing-box can read Wi-Fi state for routing rules'
               : 'Required for Wi-Fi-based routing rules. Tap to grant.'),
@@ -161,7 +163,7 @@ class DiagnosticsTab extends StatelessWidget {
                 ? Colors.green
                 : Theme.of(context).colorScheme.error,
           ),
-          title: const Text('Nearby Wi-Fi devices'),
+          title: Text(context.l.appSettingsDiagNearbyWifiTitle),
           subtitle: Text(nearbyWifiGranted
               ? 'Granted — real SSID/BSSID accessible'
               : 'Android 13+ requires this for SSID. Tap to grant.'),
@@ -170,17 +172,17 @@ class DiagnosticsTab extends StatelessWidget {
         ),
         ListTile(
           leading: const Icon(Icons.settings_applications_outlined),
-          title: const Text('App info (OEM power settings)'),
-          subtitle: const Text(
-              'OEM-specific toggles to keep VPN alive in background.'),
+          title: Text(context.l.appSettingsDiagAppInfoTitle),
+          subtitle: Text(context.l.appSettingsDiagAppInfoSubtitle),
           trailing: const Icon(Icons.chevron_right, size: 18),
           onTap: onAppInfoTap,
         ),
         const Divider(height: 32),
-        Text('Developer', style: Theme.of(context).textTheme.titleMedium),
+        Text(context.l.appSettingsDiagDeveloperHeader,
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         SwitchListTile(
-          title: const Text('Debug API'),
+          title: Text(context.l.appSettingsDiagDebugApiTitle),
           subtitle: Text(
             debugEnabled
                 ? 'Exposed on http://127.0.0.1:$debugPort (adb forward only)'
@@ -197,7 +199,7 @@ class DiagnosticsTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Token',
+                  context.l.appSettingsDiagTokenLabel,
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
                 const SizedBox(height: 4),
@@ -213,13 +215,13 @@ class DiagnosticsTab extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Copy',
+                      tooltip: context.l.commonCopy,
                       icon: const Icon(Icons.copy, size: 18),
                       onPressed:
                           debugToken.isEmpty ? null : onCopyDebugToken,
                     ),
                     IconButton(
-                      tooltip: 'Regenerate',
+                      tooltip: context.l.commonRegenerate,
                       icon: const Icon(Icons.refresh, size: 18),
                       onPressed: onRegenerateDebugToken,
                     ),
@@ -230,9 +232,10 @@ class DiagnosticsTab extends StatelessWidget {
                   controller: debugPortCtl,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    labelText: 'Port',
-                    helperText:
-                        'Range ${SettingsStorage.debugPortMin}..${SettingsStorage.debugPortMax}',
+                    labelText: context.l.appSettingsDiagPortLabel,
+                    helperText: context.l.appSettingsDiagPortRange(
+                        SettingsStorage.debugPortMin,
+                        SettingsStorage.debugPortMax),
                     errorText: debugPortError.isEmpty
                         ? null
                         : debugPortError,
@@ -242,11 +245,9 @@ class DiagnosticsTab extends StatelessWidget {
                   onSubmitted: onDebugPortSubmitted,
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Token is shown only here. It is NOT written to any '
-                  'file — use Copy to save. Server binds on 127.0.0.1 '
-                  'only; use `adb forward tcp:9269 tcp:9269`.',
-                  style: TextStyle(fontSize: 12),
+                Text(
+                  context.l.appSettingsDiagTokenNote,
+                  style: const TextStyle(fontSize: 12),
                 ),
               ],
             ),
@@ -257,7 +258,7 @@ class DiagnosticsTab extends StatelessWidget {
         // toggle'ом). При выключении Debug API toggle выше — lock auto-снимется.
         if (debugEnabled)
           SwitchListTile(
-            title: const Text('Lock config (debug)'),
+            title: Text(context.l.appSettingsDiagLockConfigTitle),
             subtitle: Text(
               configLocked
                   ? 'Pinned. UI actions skip config rebuild — useful when testing PUT /config overrides.'
@@ -281,7 +282,7 @@ class DiagnosticsTab extends StatelessWidget {
               ? Theme.of(context).colorScheme.tertiaryContainer
               : Colors.transparent,
           child: SwitchListTile(
-            title: const Text('Forward sing-box logs'),
+            title: Text(context.l.appSettingsDiagForwardLogsTitle),
             subtitle: Text(
               coreLogsEnabled
                   ? 'Visible in Debug → Core.'
@@ -298,10 +299,7 @@ class DiagnosticsTab extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Setting is saved immediately, but `Libbox.setup` reads the '
-                '`debug` flag once per process. Stop/start VPN does NOT '
-                're-apply — force-stop the app (or use the button below) '
-                'and reopen.',
+                context.l.appSettingsDiagForwardLogsNote,
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -311,7 +309,7 @@ class DiagnosticsTab extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: loaded ? onQuitApp : null,
                 icon: const Icon(Icons.logout, size: 18),
-                label: const Text('Quit & reopen app'),
+                label: Text(context.l.appSettingsDiagQuitButton),
               ),
             ],
           ),
@@ -320,7 +318,8 @@ class DiagnosticsTab extends StatelessWidget {
         // PProfServer (goroutines / CPU / heap / allocs) — VPN must be
         // running. Captured file opens the system Share sheet.
         const Divider(height: 8),
-        Text('Profiling', style: Theme.of(context).textTheme.titleMedium),
+        Text(context.l.appSettingsDiagProfilingHeader,
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
@@ -328,8 +327,7 @@ class DiagnosticsTab extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Capture a diagnostic snapshot of the running core and share '
-                'it. Requires the VPN to be connected.',
+                context.l.appSettingsDiagProfilingBody,
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -348,13 +346,12 @@ class DiagnosticsTab extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : Icon(_iconFor(p.id), size: 18),
-                  label: Text('Capture ${p.label}'),
+                  label: Text(context.l.appSettingsDiagCaptureButton(p.label)),
                 ),
                 const SizedBox(height: 6),
               ],
               Text(
-                'Binary profiles (.pb): go tool pprof file.pb\n'
-                'Heap inuse_space: go tool pprof -inuse_space heap-*.pb',
+                context.l.appSettingsDiagPprofHint,
                 style: TextStyle(
                   fontSize: 11,
                   fontFamily: 'monospace',
@@ -370,7 +367,7 @@ class DiagnosticsTab extends StatelessWidget {
         // сети (магазин/проход). Toggle для тех кто не хочет logging.
         const Divider(height: 8),
         SwitchListTile(
-          title: const Text('Auto-record visited Wi-Fi networks'),
+          title: Text(context.l.appSettingsDiagAutoRecordTitle),
           subtitle: Text(
             autoRecordWifi
                 ? 'Networks where you stay ≥ 5 minutes appear in routing rule editor → Pick saved.'
@@ -383,8 +380,7 @@ class DiagnosticsTab extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
           child: Text(
-            'Stored locally only. Existing entries persist when you turn this off — '
-            'remove individually in Pick saved (long-press chip → Remove).',
+            context.l.appSettingsDiagAutoRecordNote,
             style: TextStyle(
               fontSize: 12,
               color: Theme.of(context).colorScheme.onSurfaceVariant,

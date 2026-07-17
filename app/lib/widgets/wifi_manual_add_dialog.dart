@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../screens/custom_rule_edit/validators.dart';
+import '../services/l10n/l10n.dart';
 import 'wifi_entry.dart';
 
 /// §053 Stage 1 — extract «Manual add Wi-Fi» dialog из
@@ -21,7 +22,7 @@ Future<WifiEntry?> showWifiManualAddDialog(BuildContext context) async {
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setDlgState) => AlertDialog(
-        title: const Text('Add Wi-Fi network'),
+        title: Text(ctx.l.routingWifiAddTitle),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -30,7 +31,8 @@ Future<WifiEntry?> showWifiManualAddDialog(BuildContext context) async {
               controller: ssidCtrl,
               autofocus: true,
               decoration: InputDecoration(
-                labelText: 'SSID',
+                labelText: ctx.l.routingWifiSsidLabel,
+                // l10n-exempt: пример SSID, не переводится
                 hintText: 'lexRouter',
                 errorText: ssidError,
                 isDense: true,
@@ -41,8 +43,10 @@ Future<WifiEntry?> showWifiManualAddDialog(BuildContext context) async {
             TextField(
               controller: bssidCtrl,
               decoration: InputDecoration(
-                labelText: 'BSSID (optional)',
+                labelText: ctx.l.routingWifiBssidLabel,
+                // l10n-exempt: пример MAC-адреса, не переводится
                 hintText: '38:2c:4a:cf:6d:5c',
+                // l10n-exempt: маска формата, одинакова во всех локалях
                 helperText: 'xx:xx:xx:xx:xx:xx',
                 errorText: errorText,
                 isDense: true,
@@ -55,7 +59,7 @@ Future<WifiEntry?> showWifiManualAddDialog(BuildContext context) async {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(null),
-            child: const Text('Cancel'),
+            child: Text(ctx.l.commonCancel),
           ),
           FilledButton(
             onPressed: () {
@@ -74,7 +78,7 @@ Future<WifiEntry?> showWifiManualAddDialog(BuildContext context) async {
               }
               Navigator.of(ctx).pop(WifiEntry(ssid, bssid));
             },
-            child: const Text('Add'),
+            child: Text(ctx.l.commonAdd),
           ),
         ],
       ),

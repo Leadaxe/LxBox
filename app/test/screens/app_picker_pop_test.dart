@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/screens/app_picker_screen.dart';
+import 'package:lxbox/services/l10n/l10n.dart';
 
 /// §108 — системный back / predictive-жест в AppPickerScreen обязан
 /// возвращать выбор (AppPickerResult) так же, как стрелка в AppBar.
@@ -29,6 +30,8 @@ void main() {
 
   Widget host(void Function(AppPickerResult?) onResult) {
     return MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Builder(
         builder: (context) => TextButton(
           onPressed: () async {

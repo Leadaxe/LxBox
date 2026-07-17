@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../services/app_info_cache.dart';
 import '../services/format_utils.dart';
+import '../services/l10n/l10n.dart';
 import '../services/rule_name_resolver.dart';
 import '../vpn/cc_channel.dart';
 import 'connections_screen/connection_detail_sheet.dart';
@@ -185,9 +186,9 @@ class _ConnectionsViewState extends State<ConnectionsView> {
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          duration: Duration(seconds: 2),
-          content: Text('Failed to close connections (tunnel down?)'),
+        SnackBar(
+          duration: const Duration(seconds: 2),
+          content: Text(context.l.statsConnCloseFailed),
         ),
       );
     }
@@ -232,12 +233,17 @@ class _ConnectionsViewState extends State<ConnectionsView> {
               // в _closedIds), всего = весь набор (живые + закрытая история).
               // Снимает путаницу разных счётчиков между экранами.
               Text(
-                '${list.where((c) => c.closedAt == 0 && !_closedIds.contains(c.id)).length} active / ${list.length} total',
+                context.l.statsConnActiveTotal(
+                    list
+                        .where((c) =>
+                            c.closedAt == 0 && !_closedIds.contains(c.id))
+                        .length,
+                    list.length),
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
               if (list.isNotEmpty)
                 IconButton(
-                  tooltip: 'Close all',
+                  tooltip: context.l.statsConnCloseAll,
                   icon: const Icon(Icons.close_rounded),
                   onPressed: _closeAll,
                 ),
@@ -248,7 +254,7 @@ class _ConnectionsViewState extends State<ConnectionsView> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : list.isEmpty
-                  ? const Center(child: Text('No active connections'))
+                  ? Center(child: Text(context.l.statsNoActiveConnections))
                   : ListView.separated(
                       itemCount: list.length,
                       separatorBuilder: (_, _) => const Divider(height: 1),
@@ -340,7 +346,7 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                       child: IconButton(
                         icon: const Icon(Icons.close, size: 14),
                         padding: EdgeInsets.zero,
-                        tooltip: 'Close',
+                        tooltip: context.l.commonClose,
                         onPressed: (closed || id.isEmpty)
                             ? null
                             : () => _closeConnection(id),
@@ -365,7 +371,7 @@ class _ConnectionsViewState extends State<ConnectionsView> {
                       ),
                       if (closed) ...[
                         const SizedBox(width: 6),
-                        Text('closed',
+                        Text(context.l.statsConnClosedBadge,
                             style: TextStyle(
                                 fontSize: 10, color: cs.onSurfaceVariant)),
                       ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/l10n/l10n.dart';
 import '../../../services/traffic_profiler.dart';
 import '../../../services/format_utils.dart';
 import 'aggregate_axis.dart';
@@ -131,7 +132,7 @@ class AggregatedView extends StatelessWidget {
       subtitle: Row(
         children: [
           // §160 — активные / всего соединений.
-          Text('$active/${d.connections} conns',
+          Text(context.l.statsAggConnsCount(active, d.connections),
               style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
           const SizedBox(width: 8),
           Text('↑${formatBytes(d.upBytes)} ↓${formatBytes(d.downBytes)}',
@@ -157,9 +158,13 @@ class AggregatedView extends StatelessWidget {
           overflow: TextOverflow.ellipsis),
       subtitle: Text(
         // §160 — активные / всего соединений.
-        'ports ${(ip.ports.toList()..sort()).join(", ")} · $active/${ip.connections} conns · '
-        '↑${formatBytes(ip.upBytes)} ↓${formatBytes(ip.downBytes)}'
-        '${ip.outbounds.isEmpty ? "" : " · ${ip.outbounds.join(" / ")}"}',
+        context.l.statsAggIpSubtitle(
+            (ip.ports.toList()..sort()).join(', '),
+            active,
+            ip.connections,
+            formatBytes(ip.upBytes),
+            formatBytes(ip.downBytes),
+            ip.outbounds.isEmpty ? '' : ' · ${ip.outbounds.join(" / ")}'),
         style: const TextStyle(fontSize: 11),
       ),
       trailing: Icon(Icons.chevron_right, size: 18, color: cs.onSurfaceVariant),

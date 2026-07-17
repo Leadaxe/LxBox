@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../controllers/home_controller.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/home_state.dart';
+import '../../../services/l10n/l10n.dart';
 import '../../routing_screen.dart';
 import '../node_filter_view_model.dart';
 
@@ -48,7 +49,7 @@ class NodesHeader extends StatelessWidget {
         child: Row(
           children: [
             Text(
-              'Nodes',
+              context.l.homeNodesTitle,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),

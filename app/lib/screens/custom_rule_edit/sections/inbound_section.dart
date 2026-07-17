@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/l10n/l10n.dart';
+
 /// §030/new_fields — INBOUND section: фильтр по inbound'у, через который
 /// пришёл пакет (`tun-in` — VpnService, `mixed-in` — локальный SOCKS/HTTP
 /// прокси, §119). AND с остальным правилом; эмитится на routing-rule level
@@ -68,14 +70,14 @@ class _InboundSectionState extends State<InboundSection> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'INBOUND',
+                        context.l.ruleEditInboundHeader,
                         style: t.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: t.colorScheme.primary,
                         ),
                       ),
                       Text(
-                        'AND. Which interface the packet came in on.',
+                        context.l.ruleEditInboundHint,
                         style: TextStyle(
                           fontSize: 12,
                           color: t.colorScheme.onSurfaceVariant,

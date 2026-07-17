@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../services/app_info_cache.dart';
 import '../../services/format_utils.dart';
+import '../../services/l10n/l10n.dart';
 import '../../services/traffic_profiler.dart';
 import '../../services/process_name.dart';
 import 'routing_section.dart';
@@ -435,7 +436,7 @@ class _TrafficEventDetailSheet extends StatelessWidget {
         width: double.infinity,
         child: OutlinedButton.icon(
           icon: const Icon(Icons.copy, size: 16),
-          label: const Text('Copy JSON'),
+          label: Text(context.l.subCopyJson),
           onPressed: () => _copy(
             context,
             const JsonEncoder.withIndent('  ').convert(event.toJson()),

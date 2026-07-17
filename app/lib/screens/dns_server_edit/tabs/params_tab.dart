@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/l10n/l10n.dart';
 import '../../../widgets/outbound_picker.dart';
 import '../../../widgets/template_var_list.dart';
 import '../../dns_settings_screen/resolved_server.dart';
@@ -35,32 +36,32 @@ class DnsServerParamsTab extends StatelessWidget {
           TextField(
             controller: c.tagCtrl,
             decoration: InputDecoration(
-              labelText: 'Tag',
+              labelText: context.l.subTagLabel,
               border: const OutlineInputBorder(),
               isDense: true,
               prefixIcon: const Icon(Icons.tag, size: 18),
               helperText: c.isNew
-                  ? 'Unique id — referenced by DNS rules / resolvers'
+                  ? context.l.dnsParamsTagHelpNew
                   // §117 задача 4b: rename каскадно обновляет все ссылки
                   // (DNS-правила, resolvers, domain_resolver'ы).
-                  : 'Renaming updates all references automatically',
+                  : context.l.dnsParamsTagHelpEdit,
             ),
           ),
           const SizedBox(height: 12),
         ],
         TextField(
           controller: c.descCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Description',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: context.l.dnsParamsDescriptionLabel,
+            border: const OutlineInputBorder(),
             isDense: true,
-            prefixIcon: Icon(Icons.label_outline, size: 18),
+            prefixIcon: const Icon(Icons.label_outline, size: 18),
           ),
         ),
         const SizedBox(height: 4),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Enabled'),
+          title: Text(context.l.dnsParamsEnabled),
           // §117 lifecycle (locked №7): реферимый сервер force-include'ится
           // build'ом — показываем ON, тоггл заблокирован.
           subtitle: c.locked
@@ -70,7 +71,7 @@ class DnsServerParamsTab extends StatelessWidget {
                     Icon(Icons.lock_outline, size: 14, color: cs.primary),
                     const SizedBox(width: 4),
                     Flexible(
-                      child: Text('used by ${c.lockedByLabel}',
+                      child: Text(context.l.dnsUsedBy(c.lockedByLabel),
                           style: TextStyle(fontSize: 12, color: cs.primary)),
                     ),
                   ],
@@ -101,12 +102,11 @@ class DnsServerParamsTab extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('Outbound (detour)',
+                      Text(context.l.dnsParamsOutboundDetour,
                           style: theme.textTheme.bodyLarge),
                       const SizedBox(height: 2),
                       Text(
-                        'Which channel carries DNS queries to this server. '
-                        'Direct — no detour key in the config.',
+                        context.l.dnsParamsOutboundDetourSub,
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: cs.onSurfaceVariant),
                       ),
@@ -136,9 +136,8 @@ class DnsServerParamsTab extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Registered by preset '
-                      '"${c.resolved?.presetLabel ?? ''}". Parameters are '
-                      'edited in the preset rule (Routing → Rules).',
+                      context.l.dnsParamsPresetNote(
+                          c.resolved?.presetLabel ?? ''),
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),
@@ -151,7 +150,7 @@ class DnsServerParamsTab extends StatelessWidget {
         const SizedBox(height: 12),
         FilledButton.icon(
           icon: const Icon(Icons.save, size: 18),
-          label: const Text('Save'),
+          label: Text(context.l.commonSave),
           onPressed: onSave,
         ),
       ],

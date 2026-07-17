@@ -8,6 +8,7 @@ import '../models/channel.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
 import '../services/error_humanize.dart';
+import '../services/l10n/l10n.dart';
 import '../services/settings_storage.dart';
 import '../services/subscription/sources.dart';
 import '../widgets/detour_target_picker.dart';
@@ -153,14 +154,14 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete subscription?'),
-        content: Text('Remove "${widget.entry.displayName}"?'),
+        title: Text(ctx.l.subDeleteSubscriptionTitle),
+        content: Text(ctx.l.subDeleteRemoveBody(widget.entry.displayName)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(ctx.l.commonCancel)),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: Theme.of(ctx).colorScheme.error),
-            child: const Text('Delete'),
+            child: Text(ctx.l.commonDelete),
           ),
         ],
       ),
@@ -181,7 +182,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     final opened = await UrlLauncher.open(url);
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Copied: $url')),
+        SnackBar(content: Text(context.l.subCopiedUrl(url))),
       );
     }
   }
@@ -209,9 +210,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                 controller: _nameCtrl,
                 autofocus: true,
                 style: theme.textTheme.titleLarge,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   border: InputBorder.none,
-                  hintText: 'Display name',
+                  hintText: context.l.subDisplayNameHint,
                 ),
                 onSubmitted: (_) => _toggleEdit(),
               )
@@ -222,27 +223,27 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
               ),
         actions: [
           IconButton(
-            tooltip: _editing ? 'Save' : 'Rename',
+            tooltip: _editing ? context.l.commonSave : context.l.commonRename,
             icon: Icon(_editing ? Icons.check : Icons.edit_outlined),
             onPressed: _toggleEdit,
           ),
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: context.l.commonRefresh,
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : () => _loadNodes(cacheOnly: false),
           ),
           IconButton(
-            tooltip: 'Delete',
+            tooltip: context.l.commonDelete,
             icon: const Icon(Icons.delete_outline),
             onPressed: _delete,
           ),
         ],
         bottom: TabBar(
           controller: _tabCtrl,
-          tabs: const [
-            Tab(text: 'Nodes'),
-            Tab(text: 'Settings'),
-            Tab(text: 'Source'),
+          tabs: [
+            Tab(text: context.l.homeNodesTitle),
+            Tab(text: context.l.subTabSettings),
+            Tab(text: context.l.subTabSource),
           ],
         ),
       ),
@@ -307,7 +308,9 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
         await Clipboard.setData(ClipboardData(text: list.url));
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('URL copied'), duration: Duration(seconds: 1)),
+          SnackBar(
+              content: Text(context.l.subUrlCopied),
+              duration: const Duration(seconds: 1)),
         );
       },
       onShowIntervalPicker: _showIntervalPicker,
@@ -333,7 +336,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
     final chosen = await showDialog<int>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Update interval'),
+        title: Text(ctx.l.subUpdateIntervalTitle),
         children: [
           for (final h in presets)
             SimpleDialogOption(
@@ -346,8 +349,8 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                     const SizedBox(width: 18),
                   const SizedBox(width: 8),
                   Text(switch (h) {
-                    < 0 => "Don't auto-update",
-                    0 => 'Never (respect server)',
+                    < 0 => ctx.l.subIntervalDontAuto,
+                    0 => ctx.l.subIntervalNeverRespect,
                     _ => '${h}h (${intervalHuman(h)})',
                   }),
                 ],

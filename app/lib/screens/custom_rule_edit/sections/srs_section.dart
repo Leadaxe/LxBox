@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../services/l10n/l10n.dart';
 import '../validators.dart' as v;
 import '../widgets/section_header.dart';
 
@@ -119,18 +120,20 @@ class _SrsSectionState extends State<SrsSection> {
           decoration: InputDecoration(
             border: const OutlineInputBorder(),
             isDense: true,
+            // l10n-exempt: example URL, locale-independent
             hintText: 'https://example.com/rules.srs',
             prefixIcon: IconButton(
               icon: const Icon(Icons.link, size: 18),
-              tooltip: 'Copy URL',
+              tooltip: context.l.subCopyUrl,
               onPressed: () async {
                 final text = widget.urlCtrl.text.trim();
                 if (text.isEmpty) return;
                 final messenger = ScaffoldMessenger.of(context);
+                final copied = context.l.subUrlCopied;
                 await Clipboard.setData(ClipboardData(text: text));
                 if (!mounted) return;
                 messenger.showSnackBar(
-                  const SnackBar(content: Text('URL copied')),
+                  SnackBar(content: Text(copied)),
                 );
               },
             ),
@@ -143,7 +146,8 @@ class _SrsSectionState extends State<SrsSection> {
         const SizedBox(height: 4),
         TextButton.icon(
           icon: const Icon(Icons.content_paste, size: 14),
-          label: const Text('Paste', style: TextStyle(fontSize: 12)),
+          label: Text(context.l.commonPaste,
+              style: const TextStyle(fontSize: 12)),
           onPressed: () async {
             final data = await Clipboard.getData(Clipboard.kTextPlain);
             final text = (data?.text ?? '').trim();

@@ -220,7 +220,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   Future<void> _downloadSrsForSrsRule(CustomRuleSrs rule) async {
     if (rule.srsUrl.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('SRS URL is empty')),
+        SnackBar(content: Text(context.l.routingSrsUrlEmpty)),
       );
       return;
     }
@@ -248,7 +248,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     final preset = _presetFor(rule.presetId);
     if (preset == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Preset "${rule.presetId}" not found')),
+        SnackBar(content: Text(context.l.routingPresetNotFound(rule.presetId))),
       );
       return;
     }

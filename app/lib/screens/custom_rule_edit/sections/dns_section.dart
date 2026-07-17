@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/custom_rule.dart';
+import '../../../services/l10n/l10n.dart';
 import '../widgets/section_header.dart';
 
 /// §117 задача 3 — DNS section: «DNS follows the rule».
@@ -64,8 +65,8 @@ class DnsSection extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           controlAffinity: ListTileControlAffinity.leading,
           visualDensity: VisualDensity.compact,
-          title: const Text('Send DNS to dedicated server',
-              style: TextStyle(fontSize: 13)),
+          title: Text(context.l.ruleEditDnsDedicated,
+              style: const TextStyle(fontSize: 13)),
           value: enabled,
           onChanged: gateBlocked ? null : (v) => onEnabledChanged(v ?? false),
         ),
@@ -73,8 +74,7 @@ class DnsSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(left: 12, bottom: 4),
             child: Text(
-              'Unavailable with port/protocol filters — they are unknown '
-              'at DNS-query time.',
+              context.l.ruleEditDnsGateBlocked,
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
           ),
@@ -84,9 +84,9 @@ class DnsSection extends StatelessWidget {
             child: DropdownButtonFormField<String>(
               initialValue: tags.contains(serverTag) ? serverTag : null,
               isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'DNS server',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: context.l.ruleEditDnsServerLabel,
+                border: const OutlineInputBorder(),
                 isDense: true,
               ),
               items: tags
@@ -106,8 +106,7 @@ class DnsSection extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(left: 12, top: 6),
               child: Text(
-                'Works only if the rule-set contains domains — IP-only '
-                'lists never match DNS queries.',
+                context.l.ruleEditDnsSrsNote,
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
             ),
@@ -119,11 +118,10 @@ class DnsSection extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           controlAffinity: ListTileControlAffinity.leading,
           visualDensity: VisualDensity.compact,
-          title: const Text('Force IPv4 (drop AAAA)',
-              style: TextStyle(fontSize: 13)),
+          title: Text(context.l.ruleEditForceIpv4,
+              style: const TextStyle(fontSize: 13)),
           subtitle: Text(
-            'Answer AAAA (IPv6) queries locally so matched traffic uses '
-            'IPv4. No DNS server required.',
+            context.l.ruleEditForceIpv4Sub,
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
           value: forceIpv4,

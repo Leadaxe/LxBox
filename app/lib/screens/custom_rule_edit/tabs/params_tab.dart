@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/custom_rule.dart';
+import '../../../services/l10n/l10n.dart';
 import '../../../widgets/outbound_picker.dart';
 import '../edit_controller.dart';
 import '../sections/apps_section.dart';
@@ -51,11 +52,11 @@ class ParamsTab extends StatelessWidget {
             Expanded(
               child: TextField(
                 controller: c.nameCtrl,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Name',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: context.l.ruleEditNameLabel,
                   isDense: true,
-                  prefixIcon: Icon(Icons.label_outline, size: 18),
+                  prefixIcon: const Icon(Icons.label_outline, size: 18),
                 ),
               ),
             ),
@@ -87,7 +88,7 @@ class ParamsTab extends StatelessWidget {
               if (c.resolveEligible) ...[
                 const SizedBox(width: 4),
                 IconButton(
-                  tooltip: 'Action & Resolve',
+                  tooltip: context.l.ruleEditActionResolveTitle,
                   icon: Icon(
                     Icons.settings_outlined,
                     color: c.resolve != null
@@ -123,7 +124,7 @@ class ParamsTab extends StatelessWidget {
           const SizedBox(height: 8),
         ],
         const Divider(),
-        Text('Source', style: theme.textTheme.titleSmall),
+        Text(context.l.subTabSource, style: theme.textTheme.titleSmall),
         const SizedBox(height: 4),
         RadioGroup<CustomRuleKind>(
           groupValue: c.kind,
@@ -131,14 +132,14 @@ class ParamsTab extends StatelessWidget {
             if (v == null) return;
             c.setKind(v);
           },
-          child: const Row(
+          child: Row(
             children: [
               Expanded(
                 child: RadioListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   value: CustomRuleKind.inline,
-                  title: Text('Inline'),
+                  title: Text(context.l.ruleEditSourceInline),
                 ),
               ),
               Expanded(
@@ -146,7 +147,7 @@ class ParamsTab extends StatelessWidget {
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   value: CustomRuleKind.srs,
-                  title: Text('Remote (.srs)'),
+                  title: Text(context.l.ruleEditSourceRemote),
                 ),
               ),
               Expanded(
@@ -154,7 +155,7 @@ class ParamsTab extends StatelessWidget {
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   value: CustomRuleKind.json,
-                  title: Text('Raw JSON'),
+                  title: Text(context.l.ruleEditSourceRawJson),
                 ),
               ),
             ],
@@ -236,7 +237,7 @@ class ParamsTab extends StatelessWidget {
         const SizedBox(height: 12),
         FilledButton.icon(
           icon: const Icon(Icons.save, size: 18),
-          label: const Text('Save'),
+          label: Text(context.l.commonSave),
           // §225 — json-режим: блокируем Save на невалидном/пустом теле.
           onPressed: c.jsonError == null ? actions.onSave : null,
         ),

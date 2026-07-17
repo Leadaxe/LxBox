@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/format_utils.dart';
+import '../../services/l10n/l10n.dart';
 import '../../services/traffic_profiler.dart';
 import '../per_app_trace_tab/widgets/aggregate_axis.dart';
 import '../per_app_trace_tab/widgets/aggregated_view.dart';
@@ -138,7 +139,7 @@ class _AggregateDetailSheet extends StatelessWidget {
                 if (conns.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text('No connections.',
+                    child: Text(context.l.statsAggNoConnections,
                         style: TextStyle(
                             fontSize: 12, color: cs.onSurfaceVariant)),
                   )
@@ -195,7 +196,7 @@ class _AggregateDetailSheet extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 14, bottom: 2),
       child: Text(
-        'CONNECTIONS ($count)',
+        context.l.statsAggConnectionsHeader(count),
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
@@ -338,7 +339,7 @@ class _AggregateDetailSheet extends StatelessWidget {
         width: double.infinity,
         child: OutlinedButton.icon(
           icon: const Icon(Icons.copy, size: 16),
-          label: const Text('Copy JSON'),
+          label: Text(context.l.subCopyJson),
           onPressed: () => _copy(context, _summaryJson(), message: 'JSON copied'),
         ),
       ),

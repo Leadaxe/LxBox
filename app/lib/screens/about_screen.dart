@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/l10n/l10n.dart';
 import '../services/relative_time.dart';
 import '../services/update_checker.dart';
 import '../services/url_launcher.dart' as ul;
@@ -20,7 +21,7 @@ class AboutScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('About')),
+      appBar: AppBar(title: Text(context.l.homeDrawerAbout)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -37,6 +38,7 @@ class AboutScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
+                  // l10n-exempt: app name
                   'L×Box',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w700,
@@ -44,6 +46,7 @@ class AboutScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
+                  // l10n-exempt: version literal, no translatable words
                   'v${VersionInfo.I.version}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: cs.onSurfaceVariant,
@@ -60,7 +63,7 @@ class AboutScreen extends StatelessWidget {
               children: [
                 ListTile(
                   leading: const Icon(Icons.code),
-                  title: const Text('Source Code'),
+                  title: Text(context.l.aboutSourceCode),
                   subtitle: const Text(_repoUrl),
                   trailing: const Icon(Icons.open_in_new, size: 18),
                   onTap: () => ul.UrlLauncher.open(_repoUrl),
@@ -82,7 +85,7 @@ class AboutScreen extends StatelessWidget {
                     };
                     return ListTile(
                       leading: const Icon(Icons.architecture),
-                      title: const Text('VPN core'),
+                      title: Text(context.l.aboutVpnCore),
                       subtitle: Text(subtitle),
                       trailing: const Icon(Icons.open_in_new, size: 18),
                       onTap: () => ul.UrlLauncher.open(_singboxUpstreamUrl),
@@ -94,7 +97,7 @@ class AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Credits',
+            context.l.aboutCredits,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -105,8 +108,9 @@ class AboutScreen extends StatelessWidget {
               children: [
                 ListTile(
                   leading: const Icon(Icons.person_outline),
+                  // l10n-exempt: project name
                   title: const Text('singbox-launcher'),
-                  subtitle: const Text('Config wizard and parser reference'),
+                  subtitle: Text(context.l.aboutLauncherSubtitle),
                   trailing: const Icon(Icons.open_in_new, size: 18),
                   onTap: () => ul.UrlLauncher.open(_singboxLauncherUrl),
                 ),
@@ -117,11 +121,11 @@ class AboutScreen extends StatelessWidget {
           FilledButton.icon(
             onPressed: () => _showDonateDialog(context),
             icon: const Icon(Icons.favorite),
-            label: const Text('Support the project'),
+            label: Text(context.l.aboutSupportProject),
           ),
           const SizedBox(height: 16),
           Text(
-            'Tech Stack',
+            context.l.aboutTechStack,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -131,11 +135,17 @@ class AboutScreen extends StatelessWidget {
             spacing: 6,
             runSpacing: 6,
             children: const [
+              // l10n-exempt: technology name
               Chip(label: Text('Flutter')),
+              // l10n-exempt: technology name
               Chip(label: Text('Dart')),
+              // l10n-exempt: technology name
               Chip(label: Text('sing-box')),
+              // l10n-exempt: technology name
               Chip(label: Text('libbox')),
+              // l10n-exempt: technology name
               Chip(label: Text('CommandClient')),
+              // l10n-exempt: technology name
               Chip(label: Text('Material 3')),
             ],
           ),
@@ -150,17 +160,18 @@ class AboutScreen extends StatelessWidget {
       builder: (ctx) => DefaultTabController(
         length: 2,
         child: AlertDialog(
-          title: const Text('Support L\u00D7Box'),
+          title: Text(context.l.aboutDonateTitle),
           contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
           content: SizedBox(
             width: double.maxFinite,
             height: 300,
             child: Column(
               children: [
-                const TabBar(
+                TabBar(
                   tabs: [
-                    Tab(text: 'Crypto'),
-                    Tab(text: 'Boosty'),
+                    Tab(text: context.l.aboutDonateTabCrypto),
+                    // l10n-exempt: brand name
+                    const Tab(text: 'Boosty'),
                   ],
                 ),
                 Expanded(
@@ -171,36 +182,40 @@ class AboutScreen extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 12),
                         child: ListView(
                           children: [
+                            // l10n-exempt: currency/network name
                             const Text('USDT (ERC20)', style: TextStyle(fontWeight: FontWeight.bold)),
                             const SizedBox(height: 4),
                             GestureDetector(
                               onTap: () => _copyToClipboard(ctx, '0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea'),
+                              // l10n-exempt: wallet address
                               child: const Text('0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea', style: TextStyle(fontSize: 11)),
                             ),
                             TextButton.icon(
                               onPressed: () => _copyToClipboard(ctx, '0xde9cff6A529f655E777d6Ce718eD26f9c99046Ea'),
                               icon: const Icon(Icons.copy, size: 14),
-                              label: const Text('Copy ERC20', style: TextStyle(fontSize: 12)),
+                              label: Text(context.l.aboutCopyErc20, style: const TextStyle(fontSize: 12)),
                             ),
                             const SizedBox(height: 12),
+                            // l10n-exempt: currency/network name
                             const Text('USDT (TRC20)', style: TextStyle(fontWeight: FontWeight.bold)),
                             const SizedBox(height: 4),
                             GestureDetector(
                               onTap: () => _copyToClipboard(ctx, 'TBBEANETx2YTysG1bwg3HjxZjiZWhhBWun'),
+                              // l10n-exempt: wallet address
                               child: const Text('TBBEANETx2YTysG1bwg3HjxZjiZWhhBWun', style: TextStyle(fontSize: 11)),
                             ),
                             TextButton.icon(
                               onPressed: () => _copyToClipboard(ctx, 'TBBEANETx2YTysG1bwg3HjxZjiZWhhBWun'),
                               icon: const Icon(Icons.copy, size: 14),
-                              label: const Text('Copy TRC20', style: TextStyle(fontSize: 12)),
+                              label: Text(context.l.aboutCopyTrc20, style: const TextStyle(fontSize: 12)),
                             ),
                           ],
                         ),
                       ),
                       // Boosty tab
-                      const Padding(
-                        padding: EdgeInsets.only(top: 16),
-                        child: Center(child: Text('Coming soon')),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Center(child: Text(context.l.aboutComingSoon)),
                       ),
                     ],
                   ),
@@ -209,7 +224,7 @@ class AboutScreen extends StatelessWidget {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(ctx.l.commonClose)),
           ],
         ),
       ),
@@ -219,7 +234,7 @@ class AboutScreen extends StatelessWidget {
   void _copyToClipboard(BuildContext context, String text) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Copied: $text')),
+      SnackBar(content: Text(context.l.commonCopiedValue(text))),
     );
   }
 }
@@ -298,7 +313,7 @@ class _UpdateBlockState extends State<_UpdateBlock> {
                     else
                       TextButton(
                         onPressed: _checkNow,
-                        child: const Text('Check now'),
+                        child: Text(context.l.appSettingsGenCheckNow),
                       ),
                   ],
                 ),
@@ -320,7 +335,7 @@ class _UpdateBlockState extends State<_UpdateBlock> {
                     child: TextButton.icon(
                       onPressed: () => ul.UrlLauncher.open(info.htmlUrl),
                       icon: const Icon(Icons.open_in_new, size: 16),
-                      label: const Text('View release'),
+                      label: Text(context.l.aboutViewRelease),
                     ),
                   ),
                 ],

@@ -583,9 +583,8 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
                   enabled: cr.dns!.enabled,
                   onToggle: (v) => _toggleRuleDns(cr, v),
                   note: [
-                    if (cr is CustomRuleSrs)
-                      'matches only domains in the rule-set',
-                    if (missing) 'server missing',
+                    if (cr is CustomRuleSrs) context.l.dnsNoteSrsDomainsOnly,
+                    if (missing) context.l.dnsNoteServerMissing,
                   ].join(' · '),
                 )
               : null,
@@ -662,7 +661,7 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('DNS Settings')),
+        appBar: AppBar(title: Text(context.l.homeDrawerDns)),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -677,14 +676,15 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     final rows = _ruleDisplayRows;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('DNS Settings')),
+      appBar: AppBar(title: Text(context.l.homeDrawerDns)),
       body: ListView(
         padding: EdgeInsets.fromLTRB(12, 12, 12, MediaQuery.of(context).padding.bottom + 24),
         children: [
           // --- Servers ---
           Row(
             children: [
-              Text('DNS Servers', style: theme.textTheme.titleMedium),
+              Text(context.l.dnsServersHeader,
+                  style: theme.textTheme.titleMedium),
               const Spacer(),
               IconButton(icon: const Icon(Icons.add), onPressed: _addServer),
             ],
@@ -703,15 +703,15 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           // --- Strategy ---
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Strategy'),
+            title: Text(context.l.dnsStrategyLabel),
             trailing: DropdownButton<String>(
               value: ['prefer_ipv4', 'prefer_ipv6', 'ipv4_only', 'ipv6_only'].contains(_strategy)
                   ? _strategy : 'ipv4_only',
               items: const [
-                DropdownMenuItem(value: 'prefer_ipv4', child: Text('prefer_ipv4')),
-                DropdownMenuItem(value: 'prefer_ipv6', child: Text('prefer_ipv6')),
-                DropdownMenuItem(value: 'ipv4_only', child: Text('ipv4_only')),
-                DropdownMenuItem(value: 'ipv6_only', child: Text('ipv6_only')),
+                DropdownMenuItem(value: 'prefer_ipv4', child: Text('prefer_ipv4')), // l10n-exempt: sing-box wire value
+                DropdownMenuItem(value: 'prefer_ipv6', child: Text('prefer_ipv6')), // l10n-exempt: sing-box wire value
+                DropdownMenuItem(value: 'ipv4_only', child: Text('ipv4_only')), // l10n-exempt: sing-box wire value
+                DropdownMenuItem(value: 'ipv6_only', child: Text('ipv6_only')), // l10n-exempt: sing-box wire value
               ],
               onChanged: (v) { if (v != null) setState(() { _strategy = v; _markDirty(); }); },
             ),
@@ -722,22 +722,22 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           // --- DNS Rules (§061 dns-rules-refactor) ---
           Row(
             children: [
-              Text('DNS Rules', style: theme.textTheme.titleMedium),
+              Text(context.l.dnsRulesHeader, style: theme.textTheme.titleMedium),
               const Spacer(),
               TextButton.icon(
                 onPressed: _addUserRule,
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add user rule'),
+                label: Text(context.l.dnsAddUserRule),
               ),
             ],
           ),
           const SizedBox(height: 4),
           if (_rules.isEmpty && mirrors.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(
-                'No DNS rules. Add user rules manually, or enable presets / template defaults.',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
+                context.l.dnsNoRulesNote,
+                style: const TextStyle(color: Colors.grey, fontSize: 13),
               ),
             )
           else
@@ -790,21 +790,12 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           // вызывается через protected JNI path для apps. Encrypted options
           // (`google_doh`, `*_dot`) рекомендуем для privacy.
           ResolverPicker(
-            title: 'DNS Final',
-            subtitle:
-                'For apps · default fallback when no DNS rule matches',
+            title: context.l.dnsFinalTitle,
+            subtitle: context.l.dnsFinalSubtitle,
             value: _dnsFinal,
             serverTags: serverTags,
             onChanged: (v) => setState(() { _dnsFinal = v; _markDirty(); }),
-            tooltip: 'Default fallback DNS server. Used when an app makes a '
-                'DNS query and no DNS rule above matches it. Every app DNS '
-                'query that isn\'t routed by a rule ends up here.\n\n'
-                'Recommended:\n'
-                '  • google_doh — encrypted (DoH)\n'
-                '  • cloudflare_dot / google_dot — encrypted (DoT)\n'
-                '  • cloudflare_udp / google_udp — fast plain UDP\n\n'
-                'local_dns_resolver works but reveals queries to your ISP. '
-                'Encrypted options keep them private.',
+            tooltip: context.l.dnsFinalTooltip,
             warnIfLocal: false,
           ),
 
@@ -816,22 +807,12 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           // → §047 deterioration через несколько часов uptime. Показываем
           // жёлтый ⚠ если выбран local_dns_resolver.
           ResolverPicker(
-            title: 'Default Domain Resolver',
-            subtitle:
-                'For routing · resolves hostnames inside sing-box (outbound '
-                'endpoints, routing rules)',
+            title: context.l.dnsDefaultResolverTitle,
+            subtitle: context.l.dnsDefaultResolverSubtitle,
             value: _defaultResolver,
             serverTags: serverTags,
             onChanged: (v) => setState(() { _defaultResolver = v; _markDirty(); }),
-            tooltip: 'Used by routing engine to resolve hostnames internally '
-                '(outbound endpoints, routing rules). Not the resolver apps '
-                'use.\n\n'
-                'Recommended:\n'
-                '  • cloudflare_udp — UDP to 1.1.1.1 (fast)\n'
-                '  • google_udp — UDP to 8.8.8.8 (fast)\n'
-                '  • google_doh — encrypted\n\n'
-                '⚠ local_dns_resolver here leaks lookups to your ISP — '
-                'system DNS bypasses the VPN.',
+            tooltip: context.l.dnsDefaultResolverTooltip,
             warnIfLocal: true,
           ),
           if (_defaultResolver == 'local_dns_resolver')
@@ -850,11 +831,8 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
           ListTile(
             leading: Icon(Icons.cleaning_services_outlined,
                 color: Theme.of(context).colorScheme.error),
-            title: const Text('Clear DNS cache'),
-            subtitle: const Text(
-              'Flush FakeIP allocations and cached DNS responses. '
-              'Reloads the VPN if running.',
-            ),
+            title: Text(context.l.dnsClearCacheTitle),
+            subtitle: Text(context.l.dnsClearCacheSubtitle),
             onTap: _confirmClearDnsCache,
           ),
         ],
@@ -870,20 +848,20 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Clear DNS cache?'),
+        title: Text(ctx.l.dnsClearCacheConfirmTitle),
         content: Text(
-          'This deletes the DNS cache (FakeIP allocations and cached '
-          'responses).\n\n'
-          '${running ? 'The VPN will briefly reload to apply.' : 'It will be rebuilt clean on the next connect.'}',
+          ctx.l.dnsClearCacheBody(running
+              ? ctx.l.dnsClearCacheReloadNote
+              : ctx.l.dnsClearCacheNextConnectNote),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(ctx.l.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Clear'),
+            child: Text(ctx.l.commonClear),
           ),
         ],
       ),
@@ -896,9 +874,9 @@ class _DnsSettingsScreenState extends State<DnsSettingsScreen>
     messenger.showSnackBar(SnackBar(
       content: Text(ok
           ? (running
-              ? 'DNS cache cleared — reloading'
-              : 'DNS cache cleared')
-          : 'Could not clear DNS cache'),
+              ? context.l.dnsCacheClearedReloading
+              : context.l.dnsCacheCleared)
+          : context.l.dnsCacheClearFailed),
     ));
   }
 

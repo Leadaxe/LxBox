@@ -51,7 +51,8 @@ class GeneralTab extends StatelessWidget {
     return ListView(
       padding: padding,
       children: [
-        Text('Appearance', style: Theme.of(context).textTheme.titleMedium),
+        Text(context.l.appSettingsGenAppearanceHeader,
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         RadioGroup<ThemeMode>(
           groupValue: themeNotifier.mode,
@@ -106,11 +107,12 @@ class GeneralTab extends StatelessWidget {
           ),
         ),
         const Divider(height: 32),
-        Text('Behavior', style: Theme.of(context).textTheme.titleMedium),
+        Text(context.l.appSettingsGenBehaviorHeader,
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         SwitchListTile(
-          title: const Text('Auto-start on boot'),
-          subtitle: const Text('Start VPN when device turns on'),
+          title: Text(context.l.appSettingsGenAutoStartTitle),
+          subtitle: Text(context.l.appSettingsGenAutoStartSubtitle),
           secondary: const Icon(Icons.power_settings_new),
           value: autoStart,
           onChanged: loaded ? onAutoStartChanged : null,
@@ -118,73 +120,68 @@ class GeneralTab extends StatelessWidget {
         // §220 — снятие портретной фиксации (планшетный фидбэк). Применяется
         // сразу, без рестарта; уважает системный auto-rotate.
         SwitchListTile(
-          title: const Text('Allow rotation'),
-          subtitle: const Text(
-              'Rotate to landscape when the device turns — handy on tablets. '
-              'Follows the system auto-rotate setting.'),
+          title: Text(context.l.appSettingsGenAllowRotationTitle),
+          subtitle: Text(context.l.appSettingsGenAllowRotationSubtitle),
           secondary: const Icon(Icons.screen_rotation),
           value: allowRotation,
           onChanged: loaded ? onAllowRotationChanged : null,
         ),
         const Divider(height: 32),
-        Text('Quick connect', style: Theme.of(context).textTheme.titleMedium),
+        Text(context.l.appSettingsGenQuickConnectHeader,
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         ListTile(
           leading: const Icon(Icons.dashboard_customize_outlined),
-          title: const Text('Quick Settings tile'),
-          subtitle: const Text(
-              'Add to status-bar shade for one-tap toggle. '
-              'Android 13+ shows a system prompt; on older versions edit the shade manually.'),
+          title: Text(context.l.appSettingsGenQsTileTitle),
+          subtitle: Text(context.l.appSettingsGenQsTileSubtitle),
           trailing: TextButton(
             onPressed: onAddQuickSettingsTile,
-            child: const Text('Add'),
+            child: Text(context.l.commonAdd),
           ),
         ),
-        const ListTile(
-          leading: Icon(Icons.touch_app_outlined),
-          title: Text('Home-screen shortcut'),
-          subtitle: Text(
-              'Long-press the L×Box icon on your home screen → choose "Toggle VPN".'),
+        ListTile(
+          leading: const Icon(Icons.touch_app_outlined),
+          title: Text(context.l.appSettingsGenShortcutTitle),
+          subtitle: Text(context.l.appSettingsGenShortcutSubtitle),
         ),
         const Divider(height: 32),
-        Text('Updates', style: Theme.of(context).textTheme.titleMedium),
+        Text(context.l.appSettingsGenUpdatesHeader,
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         SwitchListTile(
-          title: const Text('Check for updates on launch'),
-          subtitle: const Text(
-              'Pings github.com once a day to check for new releases. '
-              '"View" opens the release page in browser; install is manual.'),
+          title: Text(context.l.appSettingsGenCheckUpdatesTitle),
+          subtitle: Text(context.l.appSettingsGenCheckUpdatesSubtitle),
           secondary: const Icon(Icons.system_update_alt),
           value: autoCheckUpdates,
           onChanged: loaded ? onAutoCheckUpdatesChanged : null,
         ),
         const UpdateStatusRow(),
         const Divider(height: 32),
-        Text('Feedback', style: Theme.of(context).textTheme.titleMedium),
+        Text(context.l.appSettingsGenFeedbackHeader,
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         SwitchListTile(
-          title: const Text('Auto-ping after connect'),
-          subtitle: const Text(
-              'Ping nodes of active group 5s after VPN starts (once per connect)'),
+          title: Text(context.l.appSettingsGenAutoPingTitle),
+          subtitle: Text(context.l.appSettingsGenAutoPingSubtitle),
           secondary: const Icon(Icons.network_ping),
           value: autoPing,
           onChanged: loaded ? onAutoPingChanged : null,
         ),
         SwitchListTile(
-          title: const Text('Haptic feedback'),
-          subtitle: const Text('Vibrate on connect, disconnect and errors. Respects system "Touch feedback" setting'),
+          title: Text(context.l.appSettingsGenHapticTitle),
+          subtitle: Text(context.l.appSettingsGenHapticSubtitle),
           secondary: const Icon(Icons.vibration),
           value: haptic,
           onChanged: loaded ? onHapticChanged : null,
         ),
         const Divider(height: 32),
-        Text('Backup & restore', style: Theme.of(context).textTheme.titleMedium),
+        Text(context.l.appSettingsGenBackupHeader,
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         ListTile(
           leading: const Icon(Icons.import_export),
-          title: const Text('Backup & restore'),
-          subtitle: const Text(
-              'Export subscriptions, routing setup and preferences as JSON.'),
+          title: Text(context.l.appSettingsGenBackupHeader),
+          subtitle: Text(context.l.appSettingsGenBackupSubtitle),
           trailing: const Icon(Icons.chevron_right),
           contentPadding: EdgeInsets.zero,
           onTap: onOpenBackup,
