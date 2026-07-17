@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import '../vpn/cc_channel.dart';
 import 'config_node.dart';
 import 'debug_entry.dart';
+import 'stop_reason.dart';
 import 'traffic_snapshot.dart';
 import 'tunnel_status.dart';
 
 export 'config_node.dart';
+export 'stop_reason.dart';
 export 'traffic_snapshot.dart';
 
 export 'debug_entry.dart';
@@ -40,6 +42,7 @@ class HomeState {
     ParsedConfig? configModel,
     this.tunnel = TunnelStatus.disconnected,
     this.lastError = '',
+    this.stopReason,
     this.busy = false,
     this.ccGroups = const <CcGroup>[],
     this.groups = const <String>[],
@@ -79,6 +82,13 @@ class HomeState {
 
   final TunnelStatus tunnel;
   final String lastError;
+
+  /// §279 — типизированный разбор ТЕКУЩЕГО [lastError], когда тот пришёл из
+  /// stop-события native (parsed при ingestion, см. `StopReason.fromEvent`).
+  /// `null` — lastError пуст или записан другим сайтом (ping/start/reload
+  /// пишут произвольные строки). Инвариант поддерживает [copyWith]: любое
+  /// обновление lastError без явного stopReason сбрасывает поле в null.
+  final StopReason? stopReason;
   final bool busy;
 
   /// §122 — снапшот дерева групп из libbox CommandClient (`CcChannel.groups`).
@@ -278,6 +288,7 @@ class HomeState {
     String? configRaw,
     TunnelStatus? tunnel,
     String? lastError,
+    Object? stopReason = _unset,
     bool? busy,
     List<CcGroup>? ccGroups,
     List<String>? groups,
@@ -311,6 +322,11 @@ class HomeState {
           configRaw != null ? ParsedConfig.parse(configRaw) : configModel,
       tunnel: tunnel ?? this.tunnel,
       lastError: lastError ?? this.lastError,
+      // §279 — stopReason валиден только для lastError, вместе с которым был
+      // распарсен: смена lastError без явного stopReason обнуляет его.
+      stopReason: identical(stopReason, _unset)
+          ? (lastError != null ? null : this.stopReason)
+          : stopReason as StopReason?,
       busy: busy ?? this.busy,
       ccGroups: ccGroups ?? this.ccGroups,
       groups: groups ?? this.groups,

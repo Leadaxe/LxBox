@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../services/backup_service.dart';
 import '../services/error_format.dart';
+import '../services/l10n/locale_controller.dart';
 import '../services/ui_helpers.dart';
 import '../vpn/box_vpn_client.dart';
 import 'backup_screen/export_card.dart';
@@ -157,6 +158,9 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         merge: result.merge,
         include: result.include,
       );
+      // §279 — restore мог привезти другой app_language: применить через
+      // владеющий пайплайн (LocaleController), не дожидаясь рестарта.
+      await LocaleController.I.reloadFromStorage();
       if (!mounted) return;
       final summary = StringBuffer('Imported');
       final parts = <String>[];

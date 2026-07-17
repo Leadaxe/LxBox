@@ -6,7 +6,8 @@ import '../services/url_launcher.dart' as ul;
 ///
 /// Single source of truth для двух точек вызова:
 /// - `BoxService` → `stopAndAlert("alert:permission_location:...")` →
-///   `HomeScreen._handleStatusEvent` парсит prefix и зовёт этот dialog.
+///   HomeController парсит wire-строку в `StopPermissionLocation` (§279),
+///   `HomeScreen._onControllerChange` зовёт этот dialog по typed-значению.
 /// - `Settings → Background → System setup` row tap (Location / Nearby Wi-Fi):
 ///   когда permission denied, dialog объясняет зачем нужно + предлагает
 ///   runtime prompt для NEARBY_WIFI_DEVICES или Settings link для

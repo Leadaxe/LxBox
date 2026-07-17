@@ -112,6 +112,21 @@ jobs:
         if: ${{ github.event.inputs.test_path == '' }}
         run: flutter analyze
 
+      # §279 — l10n guard-rails (tool/l10n/README.md): template-overlay,
+      # ARB, hardcoded-ratchet. Двухступенчатость зашита в wiring: на
+      # tag-билдах warnings фатальны (--strict). kotlin_check до Phase 6 —
+      # report-only (нативные литералы ещё не извлечены в strings.xml),
+      # поэтому ему $STRICT сознательно не передаётся.
+      - name: L10n checks
+        if: ${{ github.event.inputs.test_path == '' }}
+        working-directory: app
+        run: |
+          STRICT=${{ startsWith(github.ref, 'refs/tags/') && '--strict' || '' }}
+          dart run tool/l10n/template_check.dart $STRICT
+          dart run tool/l10n/arb_check.dart $STRICT
+          dart run tool/l10n/hardcoded_check.dart
+          dart run tool/l10n/kotlin_check.dart
+
       - name: Test
         run: |
           TEST_PATH="${{ github.event.inputs.test_path }}"

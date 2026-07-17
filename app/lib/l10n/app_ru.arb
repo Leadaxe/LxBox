@@ -1,0 +1,8 @@
+{
+  "@@locale": "ru",
+  "commonCancel": "Отмена",
+  "commonSave": "Сохранить",
+  "commonOk": "ОК",
+  "settingsLanguageTitle": "Язык",
+  "settingsLanguageSystem": "Как в системе"
+}

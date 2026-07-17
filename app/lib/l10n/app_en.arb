@@ -1,0 +1,23 @@
+{
+  "@@locale": "en",
+  "commonCancel": "Cancel",
+  "@commonCancel": {
+    "description": "Generic dialog button: dismiss without applying changes."
+  },
+  "commonSave": "Save",
+  "@commonSave": {
+    "description": "Generic dialog button: confirm and persist changes."
+  },
+  "commonOk": "OK",
+  "@commonOk": {
+    "description": "Generic dialog button: acknowledge and close."
+  },
+  "settingsLanguageTitle": "Language",
+  "@settingsLanguageTitle": {
+    "description": "App Settings, General tab, Appearance block: title of the app language picker."
+  },
+  "settingsLanguageSystem": "System default",
+  "@settingsLanguageSystem": {
+    "description": "Language picker option: follow the device language (fall back to English when unsupported)."
+  }
+}

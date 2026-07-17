@@ -328,13 +328,19 @@ class HomeController extends ChangeNotifier
       // §251 — выборы групп протухли (туннель down); ТЕГИ остаются — история
       // профайлера/закрытых conns продолжает фолдиться корректно.
       SelectorInfo.I.clearSelected();
-      final reason = tunnel == TunnelStatus.revoked
-          ? 'Another VPN app took the system VPN slot (e.g. an always-on VPN). Start again to reconnect.'
-          : (event.errorReason != null ? 'Stopped: ${event.errorReason}' : '');
+      // §279 — строковый native-протокол (errorReason + revoked-флаг)
+      // парсится в typed StopReason здесь, при ingestion; UI ветвится по
+      // типу, не по подстрокам. `reason` — тот же English-рендер, что раньше.
+      final stopReason = StopReason.fromEvent(
+          revoked: tunnel == TunnelStatus.revoked,
+          errorReason: event.errorReason);
+      final reason = stopReason?.message() ?? '';
       _emit(
         _state.copyWith(
           tunnel: tunnel,
           lastError: reason.isNotEmpty ? reason : _state.lastError,
+          stopReason:
+              reason.isNotEmpty ? stopReason : _state.stopReason,
           // §250 — диагностический дубль для Debug API: живёт до следующего
           // УСПЕШНОГО старта (UI-consume через clearError его не затирает).
           // Пустой reason (чистый user-stop) НЕ затирает предыдущее значение —

@@ -555,6 +555,19 @@ class BoxVpnClient {
     );
   }
 
+  /// §279 — зеркалит выбранный язык приложения (`system|en|ru`) в
+  /// `boxvpn_boot`: native-поверхности (шторка, тайл, shortcuts) читают его
+  /// без Flutter. Native-handler появляется в Phase 6 фичи l10n — до того
+  /// вызов бросает notImplemented; caller (storage-зеркало) глотает.
+  Future<void> setAppLanguage(String tag) async {
+    await _invoke<void>(
+      _Methods.setAppLanguage,
+      args: {'tag': tag},
+      timeout: _Timeouts.settings,
+      onTimeoutValue: null,
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Quick Connect (spec 032)
   // ---------------------------------------------------------------------------

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../main.dart';
+import '../../../services/l10n/l10n.dart';
+import '../../../services/l10n/locale_controller.dart';
 import 'update_status_row.dart';
 
 /// General tab для App Settings.
@@ -72,6 +74,35 @@ class GeneralTab extends StatelessWidget {
                 secondary: Icon(icon),
               );
             }).toList(),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // §279 — выбор языка приложения; смена применяется мгновенно через
+        // LocaleController (полный пайплайн: ARB + template + rebuild).
+        Text(context.l.settingsLanguageTitle,
+            style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        RadioGroup<String>(
+          groupValue: LocaleController.I.setting,
+          onChanged: (v) { if (v != null) LocaleController.I.set(v); },
+          child: Column(
+            children: [
+              RadioListTile<String>(
+                value: 'system',
+                title: Text(context.l.settingsLanguageSystem),
+                secondary: const Icon(Icons.language),
+              ),
+              // Эндонимы: каждая метка на своём языке, сознательно не из ARB
+              // текущей локали.
+              const RadioListTile<String>(
+                value: 'en',
+                title: Text('English'), // l10n-exempt: endonym
+              ),
+              const RadioListTile<String>(
+                value: 'ru',
+                title: Text('Русский'), // l10n-exempt: endonym
+              ),
+            ],
           ),
         ),
         const Divider(height: 32),

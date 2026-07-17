@@ -210,7 +210,7 @@ Future<BuildResult> buildConfig({
     if (!list.enabled) continue;
     for (final node in list.nodes) {
       for (final w in node.warnings) {
-        final line = '${node.tag}: ${w.message}';
+        final line = '${node.tag}: ${w.message()}';
         if (!emitWarnings.contains(line)) emitWarnings.add(line);
       }
     }

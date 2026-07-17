@@ -27,7 +27,7 @@ class NodeWarningRow extends StatelessWidget {
         const SizedBox(width: 4),
         Expanded(
           child: Text(
-            more > 0 ? '${w.message} (+$more more)' : w.message,
+            more > 0 ? '${w.message()} (+$more more)' : w.message(),
             style: TextStyle(fontSize: 10, color: color),
           ),
         ),

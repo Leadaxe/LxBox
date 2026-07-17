@@ -8,21 +8,34 @@ enum WarningSeverity { info, warning, error }
 sealed class NodeWarning {
   const NodeWarning();
 
-  String get message;
+  String message();
   WarningSeverity get severity;
+
+  /// Поля данных подкласса для равенства/hashCode. Dedup — по runtimeType +
+  /// данным, НЕ по отрендеренной строке (§279: строка станет locale-зависимой,
+  /// равенство по ней ломало бы dedup при смене языка).
+  List<Object?> get props => const [];
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is NodeWarning &&
           runtimeType == other.runtimeType &&
-          message == other.message);
+          _propsEqual(props, other.props));
 
   @override
-  int get hashCode => Object.hash(runtimeType, message);
+  int get hashCode => Object.hashAll([runtimeType, ...props]);
 
   @override
-  String toString() => '$runtimeType($message)';
+  String toString() => '$runtimeType(${message()})';
+}
+
+bool _propsEqual(List<Object?> a, List<Object?> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }
 
 final class UnsupportedTransportWarning extends NodeWarning {
@@ -31,7 +44,10 @@ final class UnsupportedTransportWarning extends NodeWarning {
   const UnsupportedTransportWarning(this.name, this.fallback);
 
   @override
-  String get message =>
+  List<Object?> get props => [name, fallback];
+
+  @override
+  String message() =>
       'Transport "$name" is not supported by sing-box; using "$fallback" fallback (node may fail to connect).';
 
   @override
@@ -43,7 +59,10 @@ final class UnsupportedProtocolWarning extends NodeWarning {
   const UnsupportedProtocolWarning(this.scheme);
 
   @override
-  String get message => 'Protocol "$scheme" is not supported.';
+  List<Object?> get props => [scheme];
+
+  @override
+  String message() => 'Protocol "$scheme" is not supported.';
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -54,7 +73,10 @@ final class MissingFieldWarning extends NodeWarning {
   const MissingFieldWarning(this.field);
 
   @override
-  String get message => 'Required field "$field" is missing.';
+  List<Object?> get props => [field];
+
+  @override
+  String message() => 'Required field "$field" is missing.';
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
@@ -65,7 +87,10 @@ final class DeprecatedFlowWarning extends NodeWarning {
   const DeprecatedFlowWarning(this.flow);
 
   @override
-  String get message => 'Flow "$flow" is deprecated.';
+  List<Object?> get props => [flow];
+
+  @override
+  String message() => 'Flow "$flow" is deprecated.';
 
   @override
   WarningSeverity get severity => WarningSeverity.info;
@@ -79,7 +104,10 @@ final class VisionWithTransportWarning extends NodeWarning {
   const VisionWithTransportWarning(this.transport);
 
   @override
-  String get message =>
+  List<Object?> get props => [transport];
+
+  @override
+  String message() =>
       'Flow "xtls-rprx-vision" is incompatible with "$transport" transport — flow dropped.';
 
   @override
@@ -90,7 +118,7 @@ final class InsecureTlsWarning extends NodeWarning {
   const InsecureTlsWarning();
 
   @override
-  String get message => 'TLS certificate verification is disabled.';
+  String message() => 'TLS certificate verification is disabled.';
 
   /// Info, не warning — это часто **намеренный** выбор провайдера (REALITY,
   /// IP-литералы, self-signed). Не должен крадовать XHTTP-fallback и прочие
@@ -107,11 +135,27 @@ final class NaiveBuildTagWarning extends NodeWarning {
   const NaiveBuildTagWarning();
 
   @override
-  String get message =>
+  String message() =>
       'NaïveProxy is not included in this libbox build (rebuild with -tags with_naive_outbound).';
 
   @override
   WarningSeverity get severity => WarningSeverity.error;
+}
+
+/// §217 — причина сброса XHTTP-параметра (§279: enum вместо free-text —
+/// текст рендерится в [XhttpParamResetWarning.message], не хранится).
+enum XhttpResetReason {
+  /// Значение вне допустимого enum-множества ядра (placement/method).
+  invalidEnumValue,
+
+  /// `uplink_data_placement` вне множества body/auto/header/cookie.
+  invalidPlacementValue,
+
+  /// header/cookie placement валиден только в packet-up режиме.
+  placementRequiresPacketUp,
+
+  /// `uplink_http_method: GET` валиден только в packet-up режиме (meta.go:105).
+  getRequiresPacketUp,
 }
 
 /// §217 — XHTTP-параметр сброшен на дефолт, потому что его значение ядро
@@ -120,12 +164,27 @@ final class NaiveBuildTagWarning extends NodeWarning {
 /// (transport/v2rayxhttp/meta.go normalizeMeta). Нода остаётся рабочей.
 final class XhttpParamResetWarning extends NodeWarning {
   final String field;
-  final String reason;
-  const XhttpParamResetWarning(this.field, this.reason);
+  final XhttpResetReason reason;
+
+  /// Отвергнутое значение — только для invalid*-вариантов, иначе ''.
+  final String value;
+
+  const XhttpParamResetWarning(this.field, this.reason, {this.value = ''});
 
   @override
-  String get message =>
-      'XHTTP "$field" reset to default — $reason (would otherwise break the whole config).';
+  List<Object?> get props => [field, reason, value];
+
+  @override
+  String message() {
+    final why = switch (reason) {
+      XhttpResetReason.invalidEnumValue => 'value "$value" is not a valid $field',
+      XhttpResetReason.invalidPlacementValue => 'value "$value" is not valid',
+      XhttpResetReason.placementRequiresPacketUp =>
+        'header/cookie placement requires packet-up mode',
+      XhttpResetReason.getRequiresPacketUp => 'GET requires packet-up mode',
+    };
+    return 'XHTTP "$field" reset to default — $why (would otherwise break the whole config).';
+  }
 
   @override
   WarningSeverity get severity => WarningSeverity.warning;
