@@ -172,8 +172,7 @@ class _TrafficEventDetailSheet extends StatelessWidget {
 
     // Timing
     final local = e.ts.toLocal();
-    final started = '${local.year}-${_pad2(local.month)}-${_pad2(local.day)} '
-        '${formatTime(local)}';
+    final started = formatDateTime(local);
     out.addAll(_group(context, 'Timing', [
       _copyRow(context, 'Started', started),
       _copyRow(
@@ -453,6 +452,4 @@ class _TrafficEventDetailSheet extends StatelessWidget {
       SnackBar(content: Text(message), duration: const Duration(seconds: 1)),
     );
   }
-
-  static String _pad2(int n) => n.toString().padLeft(2, '0');
 }

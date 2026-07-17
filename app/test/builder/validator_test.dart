@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/validation.dart';
 import 'package:lxbox/services/builder/validator.dart';
+import 'package:lxbox/services/error_humanize.dart';
 
 void main() {
   group('validateConfig', () {
@@ -421,15 +422,15 @@ void main() {
   // §141 P0.1 — контракт FatalValidationException (бросается в
   // SubscriptionController._generate при hasFatal; ловится generateConfig →
   // humanizeError → _lastError; null возврат блокирует save).
+  // §279 — пользовательский рендер живёт в ValidationFatalMsg (через
+  // humanizeError), не в toString.
   group('FatalValidationException', () {
-    test('toString перечисляет сообщения issues, без "Exception:" префикса', () {
+    test('humanizeError перечисляет сообщения issues, полный список', () {
       final e = FatalValidationException([
         const DanglingOutboundRef('rules[0]', 'ghost'),
         const EmptyUrltestGroup('auto'),
       ]);
-      final s = e.toString();
-      // humanizeError обрезает ведущий "Exception:"/"Error:" — наш toString не
-      // должен начинаться с такого префикса, иначе смысл потеряется.
+      final s = humanizeError(e).renderEn();
       expect(s.startsWith('Exception'), isFalse);
       expect(s.startsWith('Error'), isFalse);
       expect(s, contains('2 issues'));
@@ -437,11 +438,12 @@ void main() {
       expect(s, contains('auto'));
     });
 
-    test('toString для одного issue — единственное число', () {
+    test('один issue — единственное число, без счётчика', () {
       final e = FatalValidationException(
           [const InvalidDefault('vpn-1', 'missing')]);
-      expect(e.toString(), startsWith('Config invalid: '));
-      expect(e.toString(), isNot(contains('issues')));
+      final s = humanizeError(e).renderEn();
+      expect(s, startsWith('Config invalid: '));
+      expect(s, isNot(contains('issues')));
     });
   });
 }

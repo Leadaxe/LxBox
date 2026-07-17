@@ -200,11 +200,15 @@ Future<DebugResponse> _addMembers(String id, DebugRequest req, DebugContext ctx)
     if (input.trim().isEmpty) throw const BadRequest('field "input" is empty');
     final err = await sub.addMembersToFolder(idx, input,
         nameFallback: fieldString(body, 'name_fallback'));
-    if (err.isNotEmpty) throw BadRequest('add members rejected: $err');
+    if (err != null) {
+      throw BadRequest('add members rejected: ${err.renderEn()}');
+    }
   } else {
     if (url!.trim().isEmpty) throw const BadRequest('field "url" is empty');
     final err = await sub.addUrlSnapshotToFolder(idx, url);
-    if (err.isNotEmpty) throw UpstreamError('url snapshot failed: $err');
+    if (err != null) {
+      throw UpstreamError('url snapshot failed: ${err.renderEn()}');
+    }
   }
 
   final after = (entry.list as FolderServers).members.length;
@@ -239,7 +243,7 @@ Future<DebugResponse> _updateMember(
 
   if (raw != null) {
     final err = await sub.updateMemberAt(idx, i, raw);
-    if (err.isNotEmpty) throw BadRequest('raw rejected: $err');
+    if (err != null) throw BadRequest('raw rejected: ${err.renderEn()}');
   }
   if (enabled != null) {
     await sub.setMembersEnabled(idx, {i}, enabled);
@@ -247,7 +251,7 @@ Future<DebugResponse> _updateMember(
   if (detour != null) {
     // §239 — контроллер отклоняет self/цикл интра-рёбер; пробрасываем отказ.
     final err = await sub.setMemberDetour(idx, i, detour);
-    if (err.isNotEmpty) throw BadRequest('detour rejected: $err');
+    if (err != null) throw BadRequest('detour rejected: ${err.renderEn()}');
   }
 
   final reveal = req.qBool('reveal');
@@ -349,7 +353,7 @@ Future<DebugResponse> _moveMember(
   final i = _memberIndex(idxSeg, folder);
   final (toIdx, toEntry, _) = _requireFolder(sub, to);
   final err = await sub.moveMemberToFolder(fromIdx, i, toIdx);
-  if (err.isNotEmpty) throw Conflict('move rejected: $err');
+  if (err != null) throw Conflict('move rejected: ${err.renderEn()}');
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({
     'ok': true,
@@ -373,7 +377,7 @@ Future<DebugResponse> _moveServerIn(String id, DebugRequest req, DebugContext ct
   if (serverIdx < 0) throw NotFound('server: $serverId');
   final err = await sub.moveServerToFolder(serverIdx, folderIdx);
   // Пред-проверки сняли not-found ветки; остаток — «не одиночный сервер».
-  if (err.isNotEmpty) throw Conflict('move rejected: $err');
+  if (err != null) throw Conflict('move rejected: ${err.renderEn()}');
   final extras = await maybeRebuild(req, ctx);
   return JsonResponse({
     'ok': true,

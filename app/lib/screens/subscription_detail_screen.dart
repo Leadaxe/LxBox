@@ -7,6 +7,7 @@ import '../controllers/subscription_controller.dart';
 import '../models/channel.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
+import '../models/ui_msg.dart';
 import '../services/error_humanize.dart';
 import '../services/l10n/l10n.dart';
 import '../services/settings_storage.dart';
@@ -40,14 +41,14 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
   late final TabController _tabCtrl;
   List<NodeSpec>? _nodes;
   bool _loading = true;
-  String? _error;
+  UiMsg? _error;
   bool _editing = false;
   late TextEditingController _nameCtrl;
   String _rawSource = '';
   Map<String, String> _rawHeaders = const {};
   bool _sourceLoaded = false;
   bool _sourceLoading = false;
-  String? _sourceError;
+  UiMsg? _sourceError;
   bool _showAllHeaders = false;
 
   // §248 — каналы: секция Channels в detour-пикере + подпись «⚙ <label>»
@@ -351,7 +352,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen> wit
                   Text(switch (h) {
                     < 0 => ctx.l.subIntervalDontAuto,
                     0 => ctx.l.subIntervalNeverRespect,
-                    _ => '${h}h (${intervalHuman(h)})',
+                    _ => ctx.l.subIntervalHoursShort(h, intervalHuman(ctx.l, h)),
                   }),
                 ],
               ),

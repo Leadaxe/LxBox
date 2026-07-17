@@ -204,8 +204,10 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
 
       if (!mounted) return;
       final err = widget.subController.lastError;
-      if (account == null || err.isNotEmpty) {
-        showSnack(err.isNotEmpty ? err : context.l.warpRegistrationFailed);
+      if (account == null || err != null) {
+        showSnack(err != null
+            ? err.render(context.l)
+            : context.l.warpRegistrationFailed);
         return;
       }
       setState(() => _result = account);
@@ -230,8 +232,10 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     );
     if (!mounted) return;
     final err = widget.subController.lastError;
-    if (account == null || err.isNotEmpty) {
-      showSnack(err.isNotEmpty ? err : context.l.warpMasqueRegistrationFailed);
+    if (account == null || err != null) {
+      showSnack(err != null
+          ? err.render(context.l)
+          : context.l.warpMasqueRegistrationFailed);
       return;
     }
     await widget.onAdded();

@@ -1,30 +1,41 @@
 import 'package:flutter/material.dart';
 
+import '../services/l10n/l10n.dart' show AppLocalizations;
 import '../vpn/cc_channel.dart';
 import 'config_node.dart';
 import 'debug_entry.dart';
 import 'stop_reason.dart';
 import 'traffic_snapshot.dart';
 import 'tunnel_status.dart';
+import 'ui_msg.dart';
 
 export 'config_node.dart';
 export 'stop_reason.dart';
 export 'traffic_snapshot.dart';
+export 'ui_msg.dart';
 
 export 'debug_entry.dart';
 export 'tunnel_status.dart';
 
 enum NodeSortMode {
-  defaultOrder('Default', Icons.swap_vert),
-  latencyAsc('Ping', Icons.signal_cellular_alt),
-  nameAsc('A–Z', Icons.sort_by_alpha),
+  defaultOrder(Icons.swap_vert),
+  latencyAsc(Icons.signal_cellular_alt),
+  nameAsc(Icons.sort_by_alpha),
   // §071/§100 — manual («Custom»). Теперь ВХОДИТ в tap-cycle (carousel, см.
   // `next`) И выбирается из sort-меню; активируется выбором/cycle ИЛИ drag'ом.
-  manual('Custom', Icons.drag_indicator);
+  manual(Icons.drag_indicator);
 
-  const NodeSortMode(this.label, this.icon);
-  final String label;
+  const NodeSortMode(this.icon);
   final IconData icon;
+
+  /// §279 — display-label режима (рендер по локали в момент показа).
+  /// Персист/Debug API используют `.name` (wire), не label.
+  String label(AppLocalizations l) => switch (this) {
+        defaultOrder => l.homeSortModeDefault,
+        latencyAsc => l.homeSortModePing,
+        nameAsc => l.homeSortModeAz,
+        manual => l.homeSortModeCustom,
+      };
 
   /// §100: cycle включает все 4 режима (carousel) —
   /// default → ping → A–Z → Custom(manual) → default.
@@ -41,7 +52,7 @@ class HomeState {
     this.configRaw = '',
     ParsedConfig? configModel,
     this.tunnel = TunnelStatus.disconnected,
-    this.lastError = '',
+    this.lastError,
     this.stopReason,
     this.busy = false,
     this.ccGroups = const <CcGroup>[],
@@ -81,7 +92,10 @@ class HomeState {
   final ParsedConfig configModel;
 
   final TunnelStatus tunnel;
-  final String lastError;
+
+  /// §279 Phase 4 — хранимая ошибка = [UiMsg] (лениво рендерится в build,
+  /// смена локали мгновенно перерендеривает). `null` = ошибки нет.
+  final UiMsg? lastError;
 
   /// §279 — типизированный разбор ТЕКУЩЕГО [lastError], когда тот пришёл из
   /// stop-события native (parsed при ingestion, см. `StopReason.fromEvent`).
@@ -143,7 +157,7 @@ class HomeState {
 
   /// §250 — диагностический дубль [lastError] для Debug API: причина
   /// последнего аварийного стопа/revoke. В отличие от [lastError] НЕ
-  /// расходуется UI (`clearError` §166 и оптимистичные `lastError: ''` в
+  /// расходуется UI (`clearError` §166 и оптимистичные `lastError: null` в
   /// start/stop/reload его не трогают); очищается ТОЛЬКО успешным стартом
   /// (`tunnel → connected`). In-memory by design — пусто после рестарта
   /// процесса.
@@ -287,7 +301,7 @@ class HomeState {
   HomeState copyWith({
     String? configRaw,
     TunnelStatus? tunnel,
-    String? lastError,
+    Object? lastError = _unset,
     Object? stopReason = _unset,
     bool? busy,
     List<CcGroup>? ccGroups,
@@ -321,11 +335,13 @@ class HomeState {
       configModel:
           configRaw != null ? ParsedConfig.parse(configRaw) : configModel,
       tunnel: tunnel ?? this.tunnel,
-      lastError: lastError ?? this.lastError,
+      lastError: identical(lastError, _unset)
+          ? this.lastError
+          : lastError as UiMsg?,
       // §279 — stopReason валиден только для lastError, вместе с которым был
       // распарсен: смена lastError без явного stopReason обнуляет его.
       stopReason: identical(stopReason, _unset)
-          ? (lastError != null ? null : this.stopReason)
+          ? (identical(lastError, _unset) ? this.stopReason : null)
           : stopReason as StopReason?,
       busy: busy ?? this.busy,
       ccGroups: ccGroups ?? this.ccGroups,

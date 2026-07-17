@@ -323,8 +323,9 @@ class _UpdateBlockState extends State<_UpdateBlock> {
                     padding: const EdgeInsets.only(left: 26),
                     child: Text(
                       info.publishedAt != null
-                          ? 'Released ${relativeTime(DateTime.now(), info.publishedAt!)}'
-                          : '(cached info)',
+                          ? context.l.aboutReleasedAgo(relativeTime(
+                              context.l, DateTime.now(), info.publishedAt!))
+                          : context.l.aboutCachedInfo,
                       style: TextStyle(
                           fontSize: 12, color: cs.onSurfaceVariant),
                     ),

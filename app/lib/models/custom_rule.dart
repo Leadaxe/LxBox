@@ -1,4 +1,5 @@
 import '../config/consts.dart' show kDirectOutboundTag;
+import '../services/l10n/l10n.dart' show AppLocalizations;
 import '../services/parser/uri_utils.dart' show newUuidV4;
 
 /// Sealed-иерархия пользовательских правил маршрутизации (spec §030, v1.4.1
@@ -37,8 +38,9 @@ sealed class CustomRule {
   Map<String, dynamic> toJson();
 
   /// Короткая сводка для subtitle на RoutingScreen. Пустая → UI покажет
-  /// заглушку "Tap to edit".
-  String get summary;
+  /// заглушку "Tap to edit". §279 Phase 5 — существительные-счётчики через
+  /// ARB-плюралы; принимает [AppLocalizations] (render-path по построению).
+  String summary(AppLocalizations l);
 
   // ─── Convenience getters — упрощают чтение в UI/builder без pattern-match.
   // Поля, которых нет в данном subclass, возвращают пустое/дефолтное
@@ -561,22 +563,28 @@ class CustomRuleInline extends CustomRule {
   CustomRuleKind get kind => CustomRuleKind.inline;
 
   @override
-  String get summary {
+  String summary(AppLocalizations l) {
     final parts = <String>[];
-    if (domains.isNotEmpty) parts.add('${domains.length} domain');
-    if (domainSuffixes.isNotEmpty) parts.add('${domainSuffixes.length} suffix');
-    if (domainKeywords.isNotEmpty) parts.add('${domainKeywords.length} keyword');
-    if (ipCidrs.isNotEmpty) parts.add('${ipCidrs.length} cidr');
-    if (ipIsPrivate) parts.add('private ip');
-    if (sourceIpCidrs.isNotEmpty) parts.add('${sourceIpCidrs.length} src');
-    if (sourceIpIsPrivate) parts.add('private src');
+    if (domains.isNotEmpty) parts.add(l.ruleSummaryDomains(domains.length));
+    if (domainSuffixes.isNotEmpty) {
+      parts.add(l.ruleSummarySuffixes(domainSuffixes.length));
+    }
+    if (domainKeywords.isNotEmpty) {
+      parts.add(l.ruleSummaryKeywords(domainKeywords.length));
+    }
+    if (ipCidrs.isNotEmpty) parts.add(l.ruleSummaryCidrs(ipCidrs.length));
+    if (ipIsPrivate) parts.add(l.ruleSummaryPrivateIp);
+    if (sourceIpCidrs.isNotEmpty) {
+      parts.add(l.ruleSummarySources(sourceIpCidrs.length));
+    }
+    if (sourceIpIsPrivate) parts.add(l.ruleSummaryPrivateSrc);
     final totalPorts = ports.length + portRanges.length;
-    if (totalPorts > 0) parts.add('$totalPorts port');
-    if (packages.isNotEmpty) parts.add('${packages.length} app');
-    if (protocols.isNotEmpty) parts.add('${protocols.length} proto');
-    if (network.isNotEmpty) parts.add('${network.length} net');
-    if (inbounds.isNotEmpty) parts.add('${inbounds.length} in');
-    if (wifiSsids.isNotEmpty) parts.add('${wifiSsids.length} wifi');
+    if (totalPorts > 0) parts.add(l.ruleSummaryPorts(totalPorts));
+    if (packages.isNotEmpty) parts.add(l.ruleSummaryApps(packages.length));
+    if (protocols.isNotEmpty) parts.add(l.ruleSummaryProtos(protocols.length));
+    if (network.isNotEmpty) parts.add(l.ruleSummaryNets(network.length));
+    if (inbounds.isNotEmpty) parts.add(l.ruleSummaryInbounds(inbounds.length));
+    if (wifiSsids.isNotEmpty) parts.add(l.ruleSummaryWifi(wifiSsids.length));
     return parts.join(' · ');
   }
 
@@ -769,10 +777,10 @@ class CustomRuleSrs extends CustomRule {
   CustomRuleKind get kind => CustomRuleKind.srs;
 
   @override
-  String get summary {
+  String summary(AppLocalizations l) {
     if (srsUrl.trim().isEmpty) return '';
     final host = Uri.tryParse(srsUrl)?.host;
-    return 'SRS: ${host?.isNotEmpty == true ? host : srsUrl}';
+    return l.ruleSummarySrs(host?.isNotEmpty == true ? host! : srsUrl);
   }
 
   @override
@@ -908,10 +916,11 @@ class CustomRulePreset extends CustomRule {
   CustomRuleKind get kind => CustomRuleKind.preset;
 
   @override
-  String get summary {
+  String summary(AppLocalizations l) {
     // Preset-факт уже виден в UI — read-only `name` (snapshot template-label'а)
     // плюс 🔒 иконка. Дублировать «preset: <id>» в subtitle не нужно.
     // Показываем только user-выставленные vars (если есть и непусты).
+    // `l` не нужен: var-имена/значения — wire-данные, не переводятся.
     if (presetId.isEmpty) return '';
     if (varsValues.isEmpty) return '';
     return varsValues.entries
@@ -1000,7 +1009,8 @@ class CustomRuleJson extends CustomRule {
   CustomRuleKind get kind => CustomRuleKind.json;
 
   @override
-  String get summary {
+  String summary(AppLocalizations l) {
+    // `l` не нужен: сырой JSON — wire-данные, не переводятся.
     final oneLine = json.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (oneLine.isEmpty) return '';
     return oneLine.length <= 48 ? oneLine : '${oneLine.substring(0, 48)}…';

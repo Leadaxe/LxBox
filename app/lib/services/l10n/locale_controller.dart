@@ -7,6 +7,7 @@ import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/widgets.dart';
+import 'package:intl/intl.dart' show Intl;
 
 import '../rule_name_resolver.dart';
 import '../settings_storage.dart';
@@ -43,6 +44,8 @@ class LocaleController extends ChangeNotifier with WidgetsBindingObserver {
     final loc = effective;
     _lastApplied = loc;
     L10n.current = lookupAppLocalizations(loc);
+    // §279 Phase 5 — intl-форматтеры дат (format_utils) берут локаль отсюда.
+    Intl.defaultLocale = loc.toLanguageTag();
   }
 
   /// Регистрируется в main(): WidgetsBinding.instance.addObserver(I).
@@ -76,6 +79,8 @@ class LocaleController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _applyLocale(Locale loc) async {
     _lastApplied = loc;
     L10n.current = lookupAppLocalizations(loc);
+    // §279 Phase 5 — intl-форматтеры дат (format_utils) берут локаль отсюда.
+    Intl.defaultLocale = loc.toLanguageTag();
     // Прогрев ДО notifyListeners: каждый rebuild видит тёплый кэш новой
     // локали, cachedOrNull не null ни в один момент переключения.
     await TemplateLoader.reload(loc.languageCode);

@@ -44,16 +44,19 @@ class _UpdateStatusRowState extends State<UpdateStatusRow> {
     );
     final dt = await SettingsStorage.getLastUpdateCheck();
     if (!mounted) return;
+    // §279 — screen-local transient render (mounted-гейт выше): строка живёт
+    // до следующего чека, смену локали не переживает сознательно.
+    final l = context.l;
     setState(() {
       _checking = false;
       _lastCheck = dt;
       switch (result.kind) {
         case UpdateCheckKind.newer:
-          _resultLine = '${result.info!.tag} available';
+          _resultLine = l.appSettingsGenUpdateAvailable(result.info!.tag);
         case UpdateCheckKind.upToDate:
-          _resultLine = "You're up to date";
+          _resultLine = l.appSettingsGenUpToDate;
         case UpdateCheckKind.failed:
-          _resultLine = 'Check failed: ${result.message ?? ''}';
+          _resultLine = l.appSettingsGenUpdateCheckFailed(result.message ?? '');
         case UpdateCheckKind.skipped:
           _resultLine = null;
       }
@@ -64,8 +67,9 @@ class _UpdateStatusRowState extends State<UpdateStatusRow> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final lastCheckText = _lastCheck == null
-        ? 'Last check: never'
-        : 'Last check: ${relativeTime(DateTime.now(), _lastCheck!)}';
+        ? context.l.appSettingsGenLastCheckNever
+        : context.l
+            .appSettingsGenLastCheck(relativeTime(context.l, DateTime.now(), _lastCheck!));
     return Padding(
       padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
       child: Row(

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../models/channel.dart';
+import '../../models/ui_msg.dart';
 import '../../models/custom_rule.dart';
 import '../../models/emit_context.dart';
 import '../../models/node_spec.dart' show Awg;
@@ -210,7 +211,7 @@ Future<BuildResult> buildConfig({
     if (!list.enabled) continue;
     for (final node in list.nodes) {
       for (final w in node.warnings) {
-        final line = '${node.tag}: ${w.message()}';
+        final line = '${node.tag}: ${w.renderEn()}';
         if (!emitWarnings.contains(line)) emitWarnings.add(line);
       }
     }

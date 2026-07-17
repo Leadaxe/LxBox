@@ -80,7 +80,7 @@ class _DetourCycleSheet extends StatelessWidget {
                 // Короткая ошибка + требование (решение владельца: списком,
                 // без авто-действий). Tap → к владельцу.
                 Text(
-                  _leadText(culpritCount),
+                  _leadText(context, culpritCount),
                   style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                 ),
                 const SizedBox(height: 12),
@@ -90,7 +90,7 @@ class _DetourCycleSheet extends StatelessWidget {
                     // culprit-нод нет, показываем message как есть.
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(issue.message,
+                      child: Text(issue.message(context.l),
                           style: const TextStyle(fontSize: 13)),
                     )
                   else
@@ -138,20 +138,14 @@ class _DetourCycleSheet extends StatelessWidget {
     );
   }
 
-  String _leadText(int culpritCount) {
+  String _leadText(BuildContext context, int culpritCount) {
     if (culpritCount == 0) {
       // Кольцо только из групп (selector/urltest ссылаются друг на друга) —
       // виновных нод нет, править состав групп.
-      return 'A routing loop was found between groups. Review the loop below '
-          'and break it, then start again.';
+      return context.l.homeDetourLoopLeadGroups;
     }
-    if (culpritCount == 1) {
-      return 'One node routes traffic back into its own chain. Tap it to open '
-          'its source, change or remove its detour, then start again.';
-    }
-    return '$culpritCount nodes route traffic back into their own chain. Tap a '
-        'node to open its source, change or remove its detour, then start '
-        'again.';
+    if (culpritCount == 1) return context.l.homeDetourLoopLeadOne;
+    return context.l.homeDetourLoopLeadMany(culpritCount);
   }
 }
 

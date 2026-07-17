@@ -206,9 +206,7 @@ class _ConnectionDetailSheet extends StatelessWidget {
       final startTime =
           DateTime.fromMillisecondsSinceEpoch(conn.createdAt);
       final local = startTime.toLocal();
-      timingStart =
-          '${local.year}-${_pad2(local.month)}-${_pad2(local.day)} '
-          '${formatTime(local)}';
+      timingStart = formatDateTime(local);
       final end = closed && conn.closedAt > 0
           ? DateTime.fromMillisecondsSinceEpoch(conn.closedAt)
           : DateTime.now();
@@ -386,6 +384,4 @@ class _ConnectionDetailSheet extends StatelessWidget {
       SnackBar(content: Text(message), duration: const Duration(seconds: 1)),
     );
   }
-
-  static String _pad2(int n) => n.toString().padLeft(2, '0');
 }

@@ -67,7 +67,7 @@ void main() {
         () async {
       final c = SubscriptionController();
       await c.addFromInput(wgIni, nameHint: 'proton-nl-42');
-      expect(c.lastError, '');
+      expect(c.lastError, isNull);
       final entry = c.entries.single;
       expect(entry.list, isA<UserServer>());
       expect(entry.name, ''); // §234-renameAt в name больше нет
@@ -79,7 +79,7 @@ void main() {
     test('без nameHint (вставка INI-текста) → прежний WireGuard', () async {
       final c = SubscriptionController();
       await c.addFromInput(wgIni);
-      expect(c.lastError, '');
+      expect(c.lastError, isNull);
       expect(c.entries.single.list.nodes.single.tag, '🏠 WireGuard');
     });
 
@@ -140,7 +140,7 @@ void main() {
       final c = SubscriptionController();
       await c.addFromInput('{"type":"vless","tag":"Json 🚀",'
           '"server":"h.example","server_port":443,"uuid":"u-2"}');
-      expect(c.lastError, '');
+      expect(c.lastError, isNull);
       expect(c.entries.single.name, '');
       expect(c.entries.single.displayName, 'Json 🚀');
     });
@@ -153,7 +153,7 @@ void main() {
       await c.addFolder('Proton');
       final err =
           await c.addMembersToFolder(0, wgIni, nameFallback: 'proton-nl-1');
-      expect(err, '');
+      expect(err, isNull);
       final folder = c.entries.single.list as FolderServers;
       final node = folder.members.single.node;
       expect(node, isNotNull);
@@ -168,7 +168,7 @@ void main() {
       await c.addFolder('AWG');
       final err =
           await c.addMembersToFolder(0, awgIni, nameFallback: 'awg2 export');
-      expect(err, '');
+      expect(err, isNull);
       final folder = c.entries.single.list as FolderServers;
       final node = folder.members.single.node as WireguardSpec;
       expect(node.tag, 'awg2 export');
@@ -202,7 +202,7 @@ void main() {
       await c.addFolder('Uri');
       final err =
           await c.addMembersToFolder(0, unnamed, nameFallback: 'from-file');
-      expect(err, '');
+      expect(err, isNull);
       final folder = c.entries.single.list as FolderServers;
       expect(folder.members.single.node!.tag, 'from-file');
     });

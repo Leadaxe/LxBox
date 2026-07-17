@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/backup_service.dart';
+import '../../services/format_utils.dart' show formatDateTime;
 import '../../services/l10n/l10n.dart';
 
 class ImportDialogResult {
@@ -35,7 +36,7 @@ Future<ImportDialogResult?> showImportPreview(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Text(
                       ctx.l.backupPreviewCreated(
-                          c.createdAt!.toLocal().toString().split('.')[0]),
+                          formatDateTime(c.createdAt!.toLocal())),
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),

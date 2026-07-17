@@ -136,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
   /// Ключевое: side-effects **НЕ** в `build` (анти-паттерн Flutter) —
   /// вся мутация state/timers/animations идёт через этот listener.
   TunnelStatus _prevTunnel = TunnelStatus.disconnected;
-  String _prevError = '';
+  UiMsg? _prevError;
 
   @override
   void initState() {
@@ -244,12 +244,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _prevNoNodesStamp = stamp;
     final names = _subController.channelsWithoutNodes;
     if (names.isEmpty) return;
-    final msg = names.length == 1
-        ? 'Channel "${names.first}" matched no nodes — check its node filter.'
-        : '${names.length} channels matched no nodes — check their node '
-            'filters.';
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      final msg = names.length == 1
+          ? context.l.homeChannelNoNodesOne(names.first)
+          : context.l.homeChannelNoNodesMany(names.length);
       // Без hideCurrentSnackBar: этот показ соседствует с actionable-снеками
       // того же rebuild-флоу («Config rebuilt … restart VPN», heal-счётчики)
       // — гасить их нельзя, встаём в очередь ScaffoldMessenger.
@@ -302,7 +301,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // snackbar + clearError, чтобы верхний banner не зажёгся. Location-alert и
     // config_load_error идут своими путями (dialog / отдельный banner-ключ).
     if (nowError != _prevError &&
-        nowError.isNotEmpty &&
+        nowError != null &&
         nowReason is! StopPermissionLocation) {
       final msg = nowError;
       _controller.clearError();
@@ -311,7 +310,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(
-            content: Text(msg),
+            content: Text(msg.render(context.l)),
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 5),
           ));
@@ -398,7 +397,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       // getVpnStatus и т.п.) или saveParsedConfig не должен убивать метод —
       // ниже единственный call-site AutoUpdater.start() во всём app.
       // Bootstrap скипается, работаем с прежним конфигом.
-      AppLog.I.error('Bootstrap skipped: ${humanizeError(e)}');
+      AppLog.I.error('Bootstrap skipped: ${humanizeError(e).renderEn()}');
     } finally {
       // §101 — AutoUpdater после bootstrap'а: его appStart-fetch'и персистят
       // настройки (mtime bump) и не должны попадать в окно сборки конфига.
@@ -585,8 +584,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
                     controller: _controller,
                     subController: _subController,
                   ),
-                if (_subController.busy && _subController.progressMessage.isNotEmpty)
-                  ProgressBanner(message: _subController.progressMessage),
+                if (_subController.busy &&
+                    _subController.progressMessage != null)
+                  ProgressBanner(
+                      message:
+                          _subController.progressMessage!.render(context.l)),
                 // §095 — NODES-строка только когда подключено И фильтр закрыт.
                 // STOP-режим: нод нет → фильтровать нечего → строку прячем.
                 if (state.tunnelUp && !_filter.panelExpanded) ...[

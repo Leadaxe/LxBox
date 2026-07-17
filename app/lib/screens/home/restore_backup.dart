@@ -121,7 +121,9 @@ Future<void> restoreFromBackup(
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l.backupRestoreFailed(formatUserError(e)))),
+        SnackBar(
+            content: Text(context.l
+                .backupRestoreFailed(formatUserError(e).render(context.l)))),
       );
     }
   }

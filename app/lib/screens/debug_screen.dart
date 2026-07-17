@@ -91,7 +91,7 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
       );
     } catch (e) {
       if (!mounted) return;
-      showSnack(context.l.commonShareFailed(formatUserError(e)));
+      showSnack(context.l.commonShareFailed(formatUserError(e).render(context.l)));
     } finally {
       if (mounted) setState(() => _buildingDump = false);
     }
@@ -116,7 +116,7 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
       );
     } catch (e) {
       if (!mounted) return;
-      showSnack(context.l.commonShareFailed(formatUserError(e)));
+      showSnack(context.l.commonShareFailed(formatUserError(e).render(context.l)));
     }
   }
 

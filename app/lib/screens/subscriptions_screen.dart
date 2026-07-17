@@ -191,7 +191,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       return;
     }
     await widget.subController.addFromInput(text);
-    if (widget.subController.lastError.isEmpty) {
+    if (widget.subController.lastError == null) {
       _inputController.clear();
       await _regenerateAndSave();
     }
@@ -237,11 +237,12 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
     if (confirmed != true || !mounted) return;
     await widget.subController.addFromInput(text);
-    if (widget.subController.lastError.isEmpty) {
+    final addErr = widget.subController.lastError;
+    if (addErr == null) {
       await _regenerateAndSave();
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.subController.lastError)),
+        SnackBar(content: Text(addErr.render(context.l))),
       );
     }
   }
@@ -303,17 +304,20 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         await widget.subController.addFromInput(text,
             nameHint: SubscriptionController.fileBaseName(file.name));
       }
-      if (widget.subController.lastError.isEmpty) {
+      final importErr = widget.subController.lastError;
+      if (importErr == null) {
         await _regenerateAndSave();
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.subController.lastError)),
+          SnackBar(content: Text(importErr.render(context.l))),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l.subErrorSnack(formatUserError(e)))),
+          SnackBar(
+              content: Text(context.l
+                  .subErrorSnack(formatUserError(e).render(context.l)))),
         );
       }
     }
@@ -348,10 +352,10 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         text,
         nameFallback: SubscriptionController.fileBaseName(file.name),
       );
-      if (err.isEmpty) {
+      if (err == null) {
         addedFiles++;
       } else {
-        errors.add('${file.name}: $err');
+        errors.add('${file.name}: ${err.render(l)}');
       }
     }
     if (!mounted) return;
@@ -464,15 +468,15 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
             body: Column(
               children: [
                 _buildInputBar(ctrl),
-                if (ctrl.lastError.isNotEmpty)
+                if (ctrl.lastError != null)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
-                      ctrl.lastError,
+                      ctrl.lastError!.render(context.l),
                       style: TextStyle(color: Theme.of(context).colorScheme.error),
                     ),
                   ),
-                if (ctrl.progressMessage.isNotEmpty)
+                if (ctrl.progressMessage != null)
                   Padding(
                     padding: const EdgeInsets.all(12),
                     child: Row(
@@ -483,7 +487,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                         const SizedBox(width: 8),
-                        Expanded(child: Text(ctrl.progressMessage)),
+                        Expanded(child: Text(ctrl.progressMessage!.render(context.l))),
                       ],
                     ),
                   ),

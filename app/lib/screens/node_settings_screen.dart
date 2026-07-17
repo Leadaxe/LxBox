@@ -227,11 +227,11 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     if (mi != null) {
       final err =
           await widget.subController.setMemberDetour(widget.index, mi, value);
-      if (err.isNotEmpty && mounted) {
+      if (err != null && mounted) {
         // §239 — отклонено (цикл/self): откатываем локальный выбор.
         setState(() => _detour = _member?.detour ?? '');
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(err)));
+            .showSnackBar(SnackBar(content: Text(err.render(context.l))));
       }
       return;
     }
@@ -275,7 +275,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
             .then((err) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(err.isEmpty ? context.l.commonSaved : err)),
+            SnackBar(
+                content: Text(err == null
+                    ? context.l.commonSaved
+                    : err.render(context.l))),
           );
         }));
         return;
@@ -289,7 +292,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l.subInvalidJson(formatUserError(e)))),
+          SnackBar(
+              content: Text(
+                  context.l.subInvalidJson(formatUserError(e).render(context.l)))),
         );
       }
     }

@@ -58,7 +58,9 @@ class _ConfigScreenState extends State<ConfigScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l.commonShareFailed(formatUserError(e)))),
+        SnackBar(
+            content: Text(
+                context.l.commonShareFailed(formatUserError(e).render(context.l)))),
       );
     }
   }
@@ -104,7 +106,9 @@ class _ConfigScreenState extends State<ConfigScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l.subErrorSnack(formatUserError(e)))),
+          SnackBar(
+              content: Text(
+                  context.l.subErrorSnack(formatUserError(e).render(context.l)))),
         );
       }
     }

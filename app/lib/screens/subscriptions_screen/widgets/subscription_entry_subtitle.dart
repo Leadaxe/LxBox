@@ -38,8 +38,8 @@ Widget? buildSubscriptionEntrySubtitle(
     statusText = node != null
         ? l.subEntryProtocolServer(node.protocol.toUpperCase())
         : '';
-  } else if (entry.status.isNotEmpty) {
-    statusText = entry.status;
+  } else if (entry.status != null) {
+    statusText = entry.status!.render(l);
   } else {
     statusText =
         entry.nodeCount > 0 ? l.subEntryNodesCount(entry.nodeCount) : '';
@@ -70,7 +70,7 @@ Widget? buildSubscriptionEntrySubtitle(
     final last = entry.lastUpdated;
     if (last != null) {
       parts.add(Icon(Icons.schedule, size: 12, color: muted));
-      parts.add(Text(SubscriptionEntry.formatAgo(last), style: textStyle));
+      parts.add(Text(SubscriptionEntry.formatAgo(l, last), style: textStyle));
     } else if (entry.lastUpdateStatus == UpdateStatus.never) {
       parts.add(Icon(Icons.schedule, size: 12, color: muted));
       parts.add(Text(l.subEntryNever, style: textStyle));

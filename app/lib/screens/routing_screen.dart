@@ -466,8 +466,8 @@ class _RoutingScreenState extends State<RoutingScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(needsSrs
-            ? 'Added "${rule.label}" — tap ☁ to download, then enable'
-            : 'Added "${rule.label}" to Rules'),
+            ? context.l.routingRuleAddedSrs(rule.label)
+            : context.l.routingRuleAdded(rule.label)),
       ),
     );
   }
@@ -857,7 +857,7 @@ class _RoutingScreenState extends State<RoutingScreen>
       RoutingHelpers.presetOut(rule, preset);
 
   String _ruleSubtitle(CustomRule rule, SelectableRule? preset) =>
-      RoutingHelpers.ruleSubtitle(rule, preset);
+      RoutingHelpers.ruleSubtitle(context.l, rule, preset);
 
   String _uniqueCustomRuleName(String requested, String selfId) =>
       RoutingHelpers.uniqueCustomRuleName(

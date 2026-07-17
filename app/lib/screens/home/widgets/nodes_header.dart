@@ -67,7 +67,7 @@ class NodesHeader extends StatelessWidget {
             // §070: sort = InkWell (tap=cycle, long-press=меню), не IconButton.
             // Amber-точка когда sort non-default; иконка в `manual` = ⠿ (§071).
             Tooltip(
-              message: state.sortMode.label,
+              message: state.sortMode.label(context.l),
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [

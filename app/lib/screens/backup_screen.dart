@@ -113,7 +113,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       showSnack(context.l.backupExportedSnack(json.length));
     } catch (e) {
       if (!mounted) return;
-      showSnack(context.l.backupExportFailed(formatUserError(e)));
+      showSnack(context.l.backupExportFailed(formatUserError(e).render(context.l)));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -216,7 +216,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       }
     } catch (e) {
       if (!mounted) return;
-      showSnack(context.l.backupImportFailed(formatUserError(e)));
+      showSnack(context.l.backupImportFailed(formatUserError(e).render(context.l)));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

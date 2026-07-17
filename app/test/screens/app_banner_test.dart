@@ -77,7 +77,7 @@ void main() {
     test('§166 — lastError НЕ даёт баннер (перенесён в SnackBar снизу)', () {
       // §166: ошибки (вкл. пинг) рисуются всплывашкой снизу, не верхним
       // красным баннером. activeBanners больше не содержит last_error.
-      final s = HomeState(lastError: 'boom');
+      final s = HomeState(lastError: const RawMsg('boom'));
       final list = activeBanners(s,
           configDirty: false, busy: false, actions: actions);
       expect(list.where((b) => b.key == 'last_error'), isEmpty,
@@ -89,7 +89,7 @@ void main() {
         tunnel: TunnelStatus.connected,
         configChangedNeedRestart: true,
         configLoadError: true,
-        lastError: 'boom',
+        lastError: const RawMsg('boom'),
       );
       final list = activeBanners(s,
           configDirty: false, busy: false, actions: actions);

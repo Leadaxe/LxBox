@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../models/node_spec.dart';
 import '../../../models/node_warning.dart';
+import '../../../models/ui_msg.dart';
 import '../../../services/l10n/l10n.dart';
 import 'node_warning_row.dart';
 
@@ -19,7 +20,7 @@ class SubscriptionNodeList extends StatelessWidget {
 
   final List<NodeSpec>? nodes;
   final bool loading;
-  final String? error;
+  final UiMsg? error;
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +30,8 @@ class SubscriptionNodeList extends StatelessWidget {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(error!, style: TextStyle(color: theme.colorScheme.error)),
+          child: Text(error!.render(context.l),
+              style: TextStyle(color: theme.colorScheme.error)),
         ),
       );
     }

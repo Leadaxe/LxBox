@@ -102,7 +102,7 @@ Future<DebugResponse> _import(DebugRequest req, DebugContext ctx) async {
         applied['rebuilt'] = true;
       } else {
         applied['rebuilt'] = false;
-        applied['rebuild_error'] = sub.lastError;
+        applied['rebuild_error'] = sub.lastError?.renderEn() ?? '';
       }
     }
   }

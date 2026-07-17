@@ -22,7 +22,7 @@ Map<String, Object?> serializeHomeState(HomeState s) {
       'active_connections': s.traffic.activeConnections,
     },
     'connected_since': s.connectedSince?.toUtc().toIso8601String(),
-    'last_error': s.lastError,
+    'last_error': s.lastError?.renderEn() ?? '',
     // §250 — причина последнего аварийного стопа/revoke; в отличие от
     // last_error не расходуется UI, чистится только успешным стартом.
     // In-memory — пусто после рестарта процесса.

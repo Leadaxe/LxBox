@@ -6,19 +6,23 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/services/error_format.dart';
 
+// §279 Phase 4 — форматтер возвращает UiMsg; тесты ассертят пиненный
+// английский рендер (renderEn), инвариант «строки те же, что до миграции».
+String fmt(Object e) => formatUserError(e).renderEn();
+
 void main() {
   group('formatUserError (§041)', () {
     test('TimeoutException — duration formatted as Ns', () {
-      expect(formatUserError(TimeoutException('x', const Duration(seconds: 10))),
+      expect(fmt(TimeoutException('x', const Duration(seconds: 10))),
           'timeout 10s');
-      expect(formatUserError(TimeoutException('x', const Duration(seconds: 5, milliseconds: 800))),
+      expect(fmt(TimeoutException('x', const Duration(seconds: 5, milliseconds: 800))),
           'timeout 5.8s');
-      expect(formatUserError(TimeoutException('x', const Duration(milliseconds: 500))),
+      expect(fmt(TimeoutException('x', const Duration(milliseconds: 500))),
           'timeout 0.5s');
     });
 
     test('TimeoutException — null duration → 0s', () {
-      expect(formatUserError(TimeoutException('x')), 'timeout 0s');
+      expect(fmt(TimeoutException('x')), 'timeout 0s');
     });
 
     test('FileSystemException — берём osError.message если есть', () {
@@ -27,12 +31,12 @@ void main() {
         '/some/path',
         const OSError('No such file or directory', 2),
       );
-      expect(formatUserError(e), 'No such file or directory');
+      expect(fmt(e), 'No such file or directory');
     });
 
     test('FileSystemException — fallback на message без osError', () {
       final e = FileSystemException('Cannot open file', '/some/path');
-      expect(formatUserError(e), 'Cannot open file');
+      expect(fmt(e), 'Cannot open file');
     });
 
     test('SocketException — osError.message', () {
@@ -40,12 +44,12 @@ void main() {
         'Failed host lookup',
         osError: const OSError('Connection refused', 61),
       );
-      expect(formatUserError(e), 'Connection refused');
+      expect(fmt(e), 'Connection refused');
     });
 
     test('FormatException — message без stack-debris', () {
       const e = FormatException('Unexpected character', '{...}', 5);
-      expect(formatUserError(e), 'Unexpected character');
+      expect(fmt(e), 'Unexpected character');
     });
 
     test('PlatformException — берём message если есть', () {
@@ -53,27 +57,27 @@ void main() {
         code: 'start_failed',
         message: 'vpn_service.prepare returned false',
       );
-      expect(formatUserError(e), 'vpn_service.prepare returned false');
+      expect(fmt(e), 'vpn_service.prepare returned false');
     });
 
     test('PlatformException — fallback на code если message пустой', () {
       final e = PlatformException(code: 'unknown');
-      expect(formatUserError(e), 'platform error: unknown');
+      expect(fmt(e), 'platform error: unknown');
     });
 
     test('Generic Exception — strip "Exception: " prefix', () {
-      expect(formatUserError(Exception('something broke')), 'something broke');
+      expect(fmt(Exception('something broke')), 'something broke');
     });
 
     test('Long Object.toString — truncate до 120 chars + …', () {
       final long = Exception('x' * 200);
-      final out = formatUserError(long);
+      final out = fmt(long);
       expect(out.length, 118); // 117 + '…'
       expect(out.endsWith('…'), isTrue);
     });
 
     test('Short fallback — without truncation', () {
-      expect(formatUserError(StateError('bad state')),
+      expect(fmt(StateError('bad state')),
           'Bad state: bad state');
     });
   });

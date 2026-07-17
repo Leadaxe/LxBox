@@ -5,6 +5,10 @@
 /// ОДИН раз при ingestion в HomeController. UI ветвится по типу (dialog для
 /// [StopPermissionLocation], snackbar для остальных), а не по string-хирургии.
 /// Неопознанные строки проходят как [StopError] verbatim (passthrough).
+library;
+
+import '../services/l10n/l10n.dart' show AppLocalizations;
+
 sealed class StopReason {
   const StopReason();
 
@@ -26,8 +30,9 @@ sealed class StopReason {
     return StopError(errorReason);
   }
 
-  /// Рендер причины — те же английские строки, что до §279.
-  String message();
+  /// §279 — рендер причины в момент показа. Machine-дубли (Debug API
+  /// `lastStartError`, AppLog) — `renderEn()` из ui_msg.dart.
+  String message(AppLocalizations l);
 
   List<Object?> get props => const [];
 
@@ -42,7 +47,7 @@ sealed class StopReason {
   int get hashCode => Object.hashAll([runtimeType, ...props]);
 
   @override
-  String toString() => '$runtimeType(${message()})';
+  String toString() => '$runtimeType(${props.join(', ')})';
 }
 
 bool _propsEqual(List<Object?> a, List<Object?> b) {
@@ -58,9 +63,7 @@ final class StopRevoked extends StopReason {
   const StopRevoked();
 
   @override
-  String message() =>
-      'Another VPN app took the system VPN slot (e.g. an always-on VPN). '
-      'Start again to reconnect.';
+  String message(AppLocalizations l) => l.errStopRevoked;
 }
 
 /// §050 — стоп из-за отсутствующего location-permission (API 30+ требует
@@ -79,7 +82,7 @@ final class StopPermissionLocation extends StopReason {
   List<Object?> get props => [permissions, raw];
 
   @override
-  String message() => 'Stopped: $raw';
+  String message(AppLocalizations l) => l.errStoppedReason(raw);
 }
 
 /// Прочие причины стопа — диагностический passthrough native/kernel-строки.
@@ -91,5 +94,5 @@ final class StopError extends StopReason {
   List<Object?> get props => [detail];
 
   @override
-  String message() => 'Stopped: $detail';
+  String message(AppLocalizations l) => l.errStoppedReason(detail);
 }

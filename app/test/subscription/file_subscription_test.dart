@@ -161,7 +161,7 @@ void main() {
 
       final err =
           await c.updateSourceAt(0, httpUrl: 'https://new.example/sub');
-      expect(err, isEmpty);
+      expect(err, isNull);
 
       final list = c.entries.single.list as SubscriptionServers;
       expect(list.url, 'https://new.example/sub');
@@ -192,7 +192,7 @@ void main() {
 
       final err =
           await c.updateSourceAt(0, httpUrl: 'https://broken.example/sub');
-      expect(err, isNotEmpty); // ошибка
+      expect(err, isNotNull); // ошибка
 
       final list = c.entries.single.list as SubscriptionServers;
       // url НЕ сменился, ноды/кэш старого источника целы.
@@ -219,7 +219,7 @@ void main() {
       await c.rehydrationDone;
 
       final err = await c.updateSourceAt(0, fileBody: threeNodes);
-      expect(err, isEmpty);
+      expect(err, isNull);
 
       final list = c.entries.single.list as SubscriptionServers;
       expect(isFileSubscription(list.url), isTrue);

@@ -279,7 +279,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
   Widget _buildSubscriptionInfo(BuildContext context, ThemeData theme) {
     final list = entry.list as SubscriptionServers;
     final cs = theme.colorScheme;
-    final label = statusLabel(list);
+    final label = statusLabel(context.l, list);
     final color = statusColor(list, cs);
 
     return Column(
@@ -322,7 +322,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
           subtitle: Text(switch (list.updateIntervalHours) {
             < 0 => context.l.subIntervalDontAutoLong,
             0 => context.l.subIntervalNeverRespectLong,
-            final h => '${h}h (auto-refresh every ${intervalHuman(h)})',
+            final h => context.l.subIntervalHoursLong(h, intervalHuman(context.l, h)),
           }),
           trailing: const Icon(Icons.edit, size: 18),
           onTap: onShowIntervalPicker,
@@ -330,7 +330,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
         ListTile(
           leading: Icon(statusIcon(list), size: 20, color: color),
           title: Text(label, style: TextStyle(color: color)),
-          subtitle: Text(subscriptionStatusSubtitle(list)),
+          subtitle: Text(subscriptionStatusSubtitle(context.l, list)),
         ),
         Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 8),
